@@ -41,10 +41,17 @@ Boolean Definition its own cut applies.
 What this does not check: that σ(f) computes f. That stays a Python conformance fact (each Boolean version is tested against
 its word Definition, completeness under Boolean-first), because credited work reads Boolean gate counts only.
 -/
-import Lean.Data.Json
-import Std.Data.HashMap
-import Std.Data.HashSet
-import Flock.Program
+module
+
+public import Lean.Data.Json
+public import Std.Data.HashMap
+public import Std.Data.HashSet
+public import Flock.Program
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Sigma
 
@@ -578,7 +585,7 @@ def checkBytes (word bits : ByteArray) : Except Refusal Report := do
     | .ok p => pure p
     | .error e => throw { code := "decode", why := s!"Boolean descriptor: {e}" }
   let link := match String.fromUTF8? bits with
-    | some t => match Json.parse t with
+    | some t => match JsonParse.parse t with
       | .ok j => (j.getObjVal? "word").toOption.getD Json.null
       | .error _ => Json.null
     | none => Json.null

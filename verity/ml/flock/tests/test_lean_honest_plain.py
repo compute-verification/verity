@@ -1,6 +1,6 @@
 """The honest plain session: the compiled Lean verifier accepts a plain (non-zk) session that the unmodified prover made
 in full against the rec proxy's coin server (`--coins os`), with the sample held to its own law (`--stratified 16`), and
-refuses the same session with one coin changed.
+refuses the same session with one coin changed, or verified as one on the keyed coin tree (`--coins tree`).
 
 It checks the compiled `flock-verify` only, on one record. It makes no Lean premise hold and proves nothing about the
 records a theorem quantifies over.
@@ -38,11 +38,11 @@ def store():
     return FIXTURE
 
 
-def _verify(root: Path, session: Path | None = None) -> dict:
+def _verify(root: Path, session: Path | None = None, coins: str = "os") -> dict:
     s = root / "stage"
     p = subprocess.run([str(BIN), "verify", "--statement", "verity/flock-circuit", "--circuit", str(s / "circuit.txt"),
                         "--public", str(s / f"pub-{N}.bin"), "--partition", str(s / "partition.json"), "--program",
-                        str(s / "program.json"), "--stratified", str(N), "--coins", "os", "--session",
+                        str(s / "program.json"), "--stratified", str(N), "--coins", coins, "--session",
                         str(session or root / "session")], capture_output=True, text=True)
     [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
     return v
@@ -69,3 +69,11 @@ def test_lean_refuses_the_session_with_its_first_challenge_changed(store, tmp_pa
     (s / "session.json").write_text(json.dumps(rec))
     v = _verify(store, s)
     assert (v["accepted"], v["why"]) == (False, "zerocheck: SumcheckFinalFailed"), v
+
+
+@pytest.mark.slow
+def test_lean_refuses_the_session_as_one_on_the_coin_tree(store):
+    """Verified as a session on the keyed coin tree (`--coins tree`), the OS-coin session is refused at `Hello`, which
+    names no tree and carries no prover nonce (R7): `test_lean_plain_tree.py` is the converse."""
+    v = _verify(store, coins="tree")
+    assert (v["accepted"], v["why"]) == (False, "S2/R7: Hello's coins.nonce is not 64 lowercase hex digits"), v

@@ -1,6 +1,8 @@
-import Mathlib.Data.List.Basic
-import Mathlib.Logic.Function.Basic
-import Definitions.Hash.Basic
+module
+
+public import Mathlib.Data.List.Basic
+public import Mathlib.Logic.Function.Basic
+public import Definitions.Hash.Basic
 
 /-!
 # Merkle trees (PROTOCOL.md §14)
@@ -16,6 +18,8 @@ leaf give a collision. `VerifiesL` is `Verifies` for any leaf scheme, and `Leaf.
 hm96's leaf (`Leaf.hm96`) binds its column with no assumption beyond `H`'s collisions (`hm96Leaf_bind`, its proof
 field). The binding of a whole opening is in `Proofs.Flock.Soundness.Merkle`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Merkle
 

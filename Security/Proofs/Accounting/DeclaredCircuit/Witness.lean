@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.DeclaredCircuit
-import Proofs.Accounting.RateAudit.SketchHonest
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.DeclaredCircuit
+public import Proofs.Accounting.RateAudit.SketchHonest
 
 /-!
 # An honest run meets every hypothesis of `DeclaredCircuitRequirement`
@@ -34,6 +36,8 @@ is at least its `N` tiles' bits (`credit_ge`), and the session's credit is at le
 * **The gate model's circuit** `Wc` is the empty list, restricted and within any nonnegative caps. That `Wc` and `W`
   are one circuit is the code's to hold, not `G`'s, and the run's carriers are empty whatever `Wc` is.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.DeclaredCircuitWitness
 

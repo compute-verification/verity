@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainLeafFork
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafFork
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # Knowledge soundness at the deployed plain verifier, with no premise
@@ -18,6 +20,8 @@ which the deployed decoders read at the model's plain leaf `leafPlain` (`plain_h
 * `plain_tableBoundθAt_all`, `plain_KS`: so KS at SHA-512 at the deployed plain verifier's trimmed record at the
   deployed relation holds with no hypothesis.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

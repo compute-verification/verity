@@ -1,5 +1,7 @@
-import Definitions.Pouw.RelativeSecurity
-import Definitions.Pouw.Assumptions.RelativeSecurity
+module
+
+public import Definitions.Pouw.RelativeSecurity
+public import Definitions.Pouw.Assumptions.RelativeSecurity
 
 /-!
 # Relative security's guarantees for the staged window (trusted)
@@ -26,6 +28,8 @@ error its own (`breakBound`), `ecr/sha-512` at that adversary's collision finder
 time, `⊤` where they fail it, and each value of its coins capped at 1
 (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover; CMP-33).
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.RelativeSecurity
 

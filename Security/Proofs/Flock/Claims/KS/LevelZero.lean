@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Rep
+module
+
+public import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
 # Level 0's request in an accepted Ligerito run
@@ -8,6 +10,8 @@ their positions. Here the same run also says which request comes first: level 0'
 round Ligerito draws them from, `k0 + 6` rounds in (`ligerito_refines_req0`, `ligerito_accepts_req0`,
 `ligerito_accepts_opening_req0`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
@@ -644,7 +648,7 @@ is level 0's, at the positions of the coins of the stream's round after zerochec
 `3 + (kLog − 6)`, the ring switch's `claims + 1` and Ligerito's `k0 + 6`. -/
 theorem rep_refines_req0 {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
     (h15 : 15 ≤ S.m) (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog)
-    (hfold : FoldRealizes st.fold S) (extra : List (Model.Claim 𝔽 S.m)) (sess : Session)
+    (hfold : FoldRealizes st.fold S) (extra : List (Model.Claim 𝔽 S.m)) (sess : RunRecord)
     (hext : ExtraRealizes st S sess.points extra) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (hα1 : ∀ i < sch.levels.size, ceilLog2 (sch.levels.getD i default).q ≠ 1) (hschm : sch.m = S.m)

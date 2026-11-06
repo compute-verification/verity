@@ -16,12 +16,18 @@ holds before the draw, so the prover never chooses it.
   tree under the value's domain) with row `i` salted by `salt`: SHAKE256 of `verity/one-stage/supplied-salt/v0`, the
   program's SHA-512 hex, the value's name and `i` (u32 little-endian), NUL between them, 192 bytes.
 -/
-import Flock.Canon
-import Flock.Firewall
-import Flock.Keccak
-import Flock.Program
-import Flock.Registered
-import SampledProofs.Registered
+module
+
+public import Flock.Canon
+public import Flock.Firewall
+public import Flock.Keccak
+public import Flock.Program
+public import Flock.Registered
+public import SampledProofs.Registered
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Supplied
 

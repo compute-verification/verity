@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.FlockLink
+module
+
+public import Proofs.Flock.Soundness.Audit.FlockLink
 
 /-!
 # Collision resistance alone: the definitions
@@ -14,6 +16,8 @@ of the same finders stopped at a budget `q` fixed in advance. These are the defi
   `2^256·(t'/q + q²/2^513)`.
 * `LinkCRStrict`: `SHA512CRStrict` for one prover's link finders (`Partition.LinkCR`'s finders), each stopped at `q`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

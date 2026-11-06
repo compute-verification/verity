@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainClash0
-import Proofs.Flock.Claims.KS.LevelsAll
+module
+
+public import Proofs.Flock.Claims.KS.PlainClash0
+public import Proofs.Flock.Claims.KS.LevelsAll
 
 /-!
 # The live self-clash past level 0
@@ -42,6 +44,8 @@ coins only.
 * `plainClashQL`, `plainSimLaterClashAt`: so a self-clash past level 0 at the concrete simulator's outcome gives
   `P`'s accepting run a raw clash, at every statement.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.AtDraw
 
@@ -115,7 +119,7 @@ records its proof's recursive caps, each request is below the schedule's levels 
 the positions of the coins of round `plainLevelRound`, one opened level-`ℓ` row per position. -/
 theorem accepts_reqsDK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeWithK keep With.std spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (r : ℕ), r < 2 →
@@ -179,7 +183,7 @@ theorem accepts_reqsDK (keep : Bool → Bool)
 
 /-- **An accepted rep at `dr` requests every later level**: `accepts_reqsDK` at `keep := id`. -/
 theorem accepts_reqsD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtD I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (r : ℕ), r < 2 →
@@ -209,7 +213,7 @@ model leaf `lf` are its reps' deployed ones**, at every level `ℓ ≥ 1`: each 
 its level-`ℓ` openings its `plainLevelColsOf` entries (`accepts_reqsDK`). -/
 theorem accepts_opensLDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeWithK keep With.std spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
@@ -270,7 +274,7 @@ reps' deployed ones**, at every level `ℓ ≥ 1`: each rep's caps its proof's r
 `plainLevelColsOf` entries (`accepts_reqsDK`); `accepts_opensLDLfK` at `leaf512`. -/
 theorem accepts_opensLDK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeWithK keep With.std spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
@@ -314,7 +318,7 @@ theorem accepts_opensLDK (keep : Bool → Bool)
 /-- **At flock-verify's acceptance at `dr`, each table's recorded caps and level-`ℓ` openings are its reps' deployed
 ones**, at every level `ℓ ≥ 1`: `accepts_opensLDK` at `keep := id`. -/
 theorem accepts_opensLD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtD I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
@@ -370,7 +374,7 @@ at the draw `d`: at its one table, that table's `fast100` schedule and one of it
 the rep's `plainLevelColsOf` entries at `t`'s proof file, at the shape `TxNoOffAt` reads, open one position to
 different columns. -/
 def LaterEntriesClash (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop :=
-  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule),
+  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule),
     setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decode spec t.record = .ok sess ∧
     _root_.Flock.fast100 st.m = some sch ∧ ∃ r < 2, ∃ s : StreamRec,
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r) = some s ∧
@@ -384,9 +388,9 @@ def LaterEntriesClash (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop 
 at the draw `d`: at its one table, that table's `fast100` schedule (`sch` as the model's), rep `r`'s record stream and
 `t`'s proof file decoded at the shape `TxNoOffAt` reads, `out`'s caps for rep `r` are the proof's recursive caps, and
 its level-`ℓ` openings, at every level `ℓ ≥ 1`, are the rep's `plainLevelColsOf` entries. -/
-def LaterEntriesAt (sch : Accounting.Schedule) (I : Exec.Inputs) (d : Json) (t : Exec.Transcript)
+def LaterEntriesAt (sch : FlockSoundness.Accounting.Schedule) (I : Exec.Inputs) (d : Json) (t : Exec.Transcript)
     (out : Model.OutCL 𝔽 Dig (List UInt8)) (r : ℕ) : Prop :=
-  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch' : _root_.Flock.Schedule),
+  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch' : _root_.Flock.Schedule),
     setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decode spec t.record = .ok sess ∧
     _root_.Flock.fast100 st.m = some sch' ∧ schedOf sch' = sch ∧ ∃ (s : StreamRec) (p : Proof),
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r) = some s ∧
@@ -400,7 +404,7 @@ def LaterEntriesAt (sch : Accounting.Schedule) (I : Exec.Inputs) (d : Json) (t :
 /-- **Two of one rep's level-`ℓ` entries at one position with different columns**, in `t` at the setup at `d`, the
 session the record decodes to through `keep` (`LaterEntriesClash`). -/
 def LaterEntriesClashK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop :=
-  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule),
+  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule),
     setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decodeWithK keep With.std spec t.record = .ok sess ∧
     _root_.Flock.fast100 st.m = some sch ∧ ∃ r < 2, ∃ s : StreamRec,
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r) = some s ∧
@@ -412,9 +416,9 @@ def LaterEntriesClashK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) (t : 
 
 /-- **Rep `r`'s recorded caps and later openings in `out` are the deployed rep's**, in `t` at the setup at `d`, the
 session the record decodes to through `keep` (`LaterEntriesAt`). -/
-def LaterEntriesAtK (keep : Bool → Bool) (sch : Accounting.Schedule) (I : Exec.Inputs) (d : Json)
+def LaterEntriesAtK (keep : Bool → Bool) (sch : FlockSoundness.Accounting.Schedule) (I : Exec.Inputs) (d : Json)
     (t : Exec.Transcript) (out : Model.OutCL 𝔽 Dig (List UInt8)) (r : ℕ) : Prop :=
-  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch' : _root_.Flock.Schedule),
+  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch' : _root_.Flock.Schedule),
     setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decodeWithK keep With.std spec t.record = .ok sess ∧
     _root_.Flock.fast100 st.m = some sch' ∧ schedOf sch' = sch ∧ ∃ (s : StreamRec) (p : Proof),
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r) = some s ∧
@@ -430,7 +434,7 @@ theorem laterEntriesClash_iff_K_id (I : Exec.Inputs) (d : Json) (t : Exec.Transc
   unfold LaterEntriesClash LaterEntriesClashK
   simp only [decodeWithK_id_std]
 
-theorem laterEntriesAt_iff_K_id (sch : Accounting.Schedule) (I : Exec.Inputs) (d : Json) (t : Exec.Transcript)
+theorem laterEntriesAt_iff_K_id (sch : FlockSoundness.Accounting.Schedule) (I : Exec.Inputs) (d : Json) (t : Exec.Transcript)
     (out : Model.OutCL 𝔽 Dig (List UInt8)) (r : ℕ) :
     LaterEntriesAt sch I d t out r ↔ LaterEntriesAtK id sch I d t out r := by
   unfold LaterEntriesAt LaterEntriesAtK
@@ -439,7 +443,7 @@ theorem laterEntriesAt_iff_K_id (sch : Accounting.Schedule) (I : Exec.Inputs) (d
 /-- **A self-clash past level 0 at the model leaf `lf` in an output whose reps' later openings are the deployed reps'
 is a clash of one rep's level-`ℓ` entries**, through `keep` (`laterEntriesClash_of`); the proof reads no leaf. -/
 theorem laterEntriesClashKLf_of (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
-    {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json}
+    {sch : FlockSoundness.Accounting.Schedule} {I : Exec.Inputs} {d : Json}
     {t : Exec.Transcript} {out : Model.OutCL 𝔽 Dig (List UInt8)} (he : ∀ r < 2, LaterEntriesAtK keep sch I d t out r)
     (hcl : FlockDeploy.KS.LaterClashLLf lf sch out) : LaterEntriesClashK keep I d t := by
   obtain ⟨r, hr2, ℓ, h1, -, -, u, hu, v, hv, huv, -, -, hne⟩ := hcl
@@ -452,14 +456,14 @@ theorem laterEntriesClashKLf_of (keep : Bool → Bool) (lf : Merkle.Leaf (List �
 
 /-- **A self-clash past level 0 in an output whose reps' later openings are the deployed reps' is a clash of one rep's
 level-`ℓ` entries**, through `keep` (`laterEntriesClash_of`); `laterEntriesClashKLf_of` at `leaf512`. -/
-theorem laterEntriesClashK_of (keep : Bool → Bool) {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json}
+theorem laterEntriesClashK_of (keep : Bool → Bool) {sch : FlockSoundness.Accounting.Schedule} {I : Exec.Inputs} {d : Json}
     {t : Exec.Transcript} {out : Model.OutCL 𝔽 Dig (List UInt8)} (he : ∀ r < 2, LaterEntriesAtK keep sch I d t out r)
     (hcl : FlockDeploy.KS.LaterClashL sch out) : LaterEntriesClashK keep I d t :=
   laterEntriesClashKLf_of keep leaf512 he hcl
 
 /-- **A self-clash past level 0 in an output whose reps' later openings are the deployed reps' is a clash of one rep's
 level-`ℓ` entries**: `laterEntriesClashK_of` at `keep := id`. -/
-theorem laterEntriesClash_of {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : Exec.Transcript}
+theorem laterEntriesClash_of {sch : FlockSoundness.Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : Exec.Transcript}
     {out : Model.OutCL 𝔽 Dig (List UInt8)} (he : ∀ r < 2, LaterEntriesAt sch I d t out r)
     (hcl : FlockDeploy.KS.LaterClashL sch out) : LaterEntriesClash I d t :=
   (laterEntriesClash_iff_K_id _ _ _).2 <|
@@ -1017,7 +1021,7 @@ the run's log (`plain_levelClash`), so the run has a raw clash (`PlainClashQ` at
 theorem plainClashQL {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,

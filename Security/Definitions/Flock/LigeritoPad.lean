@@ -1,4 +1,6 @@
-import Definitions.Flock.Session
+module
+
+public import Definitions.Flock.Session
 
 /-!
 # Ligerito with C-Flock ZK's padded level 0, in the clear
@@ -23,6 +25,8 @@ enforces the restart `T' = s + Σ_i ρ_i·e_i`. Here the verifier computes the r
 values it is sent. That the masked verifier accepts only if these relations hold is the inner
 proof's soundness, a separate statement.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 

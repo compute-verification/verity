@@ -1,5 +1,7 @@
-import Definitions.Flock.Game.Interleave
-import Proofs.Flock.Soundness.Game.Basic
+module
+
+public import Definitions.Flock.Game.Interleave
+public import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Two interactions run concurrently
@@ -14,6 +16,8 @@ The verifier accepts only if both interactions accept.
 probability that both interactions accept is at most the product of the two values, whatever the
 schedule. With a sound single rep, two reps on independent live coins therefore square the error.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

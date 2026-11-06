@@ -1,6 +1,8 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
-import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
-import Proofs.Pouw.PearlC.TTOutW1
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
+public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
+public import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
 # TT_OUT-FP4 at W1 is TT_OUT-FP4 at the cost model `W1.w1Priced`
@@ -10,6 +12,8 @@ Each FP4 form at W1 (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`) is the ab
 (`TTOutW1.w1Priced_queries`). The `_of_w1` lemmas give the forms the FP4 γ readers' reductions take, so each reader at
 W1 is its reduction at that cost model.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TTOutFp4W1
 

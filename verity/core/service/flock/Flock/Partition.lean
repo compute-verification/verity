@@ -3,9 +3,15 @@ PROTOCOL.md §16.7: the partition invariant on one circuit (`verity.ir.partition
 gates included, is certified by exactly one unit, cross-unit reads go only through committed values, and the committed
 set is the boundary set. The verifier checks it itself, on its own copy of the cut.
 -/
-import Lean.Data.Json
-import Std.Data.HashSet
-import Flock.Bytes
+module
+
+public import Lean.Data.Json
+public import Std.Data.HashSet
+public import Flock.Bytes
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Partition
 

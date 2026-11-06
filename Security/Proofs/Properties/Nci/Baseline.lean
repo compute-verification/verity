@@ -1,5 +1,7 @@
-import Proofs.Properties.Nci.BaselineSteps
-import Proofs.Properties.Nci.DescAgree
+module
+
+public import Proofs.Properties.Nci.BaselineSteps
+public import Proofs.Properties.Nci.DescAgree
 
 /-!
 # θ's provenance check's property, proved
@@ -8,6 +10,8 @@ import Proofs.Properties.Nci.DescAgree
 (`Proofs.Properties.Nci.BaselineSteps`) and, for each θ entry naming a node, the policy check's θ fold
 (`DescAgree.nodeThetaFold_ok`), which `NciCheck.Baseline.evaluate` runs first.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs
 

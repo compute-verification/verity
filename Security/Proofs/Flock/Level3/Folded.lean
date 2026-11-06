@@ -3,8 +3,12 @@ Level 3: the lincheck's `Stmt.folded` (PROTOCOL.md §10). `folded_eq`: when `Stm
 `Stmt.fold`'s with `β` at the pin, halved at `ts` in turn, whether it read the block's structure (`foldedPartial`, a
 templated unit's range from its template: `partialRangesT_eq`) or folded flat. The lemmas it reads are `FoldedBase`.
 -/
-import Proofs.Flock.Level3.FoldedBase
-import Proofs.Flock.Soundness.TmplShare
+module
+
+public import Proofs.Flock.Level3.FoldedBase
+public import Proofs.Flock.Soundness.TmplShare
+
+@[expose] public section
 
 open Flock
 

@@ -3,8 +3,12 @@ The refinement seam with the soundness lane's `Arith F K` (PROTOCOL.md §17.4): 
 executable's representation. An executable `F256` value `⟨c0, c1⟩` is `embed c0 + embed c1 · u` (`Arith.ofLimbs`), and `u`
 is a root of `Y^2 + Y + x⁻¹`.
 -/
-import Proofs.Flock.Level3.GF256
-import Mathlib.Tactic.LinearCombination
+module
+
+public import Proofs.Flock.Level3.GF256
+public import Mathlib.Tactic.LinearCombination
+
+@[expose] public section
 
 open Polynomial Flock
 

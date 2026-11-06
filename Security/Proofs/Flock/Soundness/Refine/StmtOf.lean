@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.Realizes
-import Proofs.Flock.Level3.Folded
+module
+
+public import Proofs.Flock.Soundness.Refine.Realizes
+public import Proofs.Flock.Level3.Folded
 
 /-!
 # The statement decoding, part 1: the executable's layout is a block R1CS (PROTOCOL.md §10, §16.1)
@@ -16,6 +18,8 @@ is the model statement those matrices make. Entry `(i, c)` of `A₀` or `B₀` c
 layout facts `StmtWF`: `6 ≤ k_log ≤ m`, the pin inside the block, and every range's slots between 2^6 and 2^k_log. The
 regions are a parameter here.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

@@ -1,13 +1,15 @@
-import Proofs.Flock.C3.RegLevels.ROpens
-import Proofs.Flock.C3.RegLevels.SrcUnits
-import Proofs.Flock.C3.RegLevels.Maps
-import Proofs.Flock.C3.Reps.SrcOpens
-import Proofs.Flock.C3.Reps.IoCols
-import Proofs.Flock.C3.Reps.ReadSib
-import Proofs.Flock.C3.Reps.SrcOK
-import Proofs.Flock.C3.PubRows.Shape
-import Proofs.Flock.C3.VStarList.Statements
-import Proofs.Flock.Soundness.Refine.Seam
+module
+
+public import Proofs.Flock.C3.RegLevels.ROpens
+public import Proofs.Flock.C3.RegLevels.SrcUnits
+public import Proofs.Flock.C3.RegLevels.Maps
+public import Proofs.Flock.C3.Reps.SrcOpens
+public import Proofs.Flock.C3.Reps.IoCols
+public import Proofs.Flock.C3.Reps.ReadSib
+public import Proofs.Flock.C3.Reps.SrcOK
+public import Proofs.Flock.C3.PubRows.Shape
+public import Proofs.Flock.C3.VStarList.Statements
+public import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # n11: R's openings at `pR`, read from the layers (`ROpensOfLayers`, `RRowsPinned`)
@@ -40,6 +42,8 @@ and R's shape at `fast100`'s schedule at R's `m` (`shape?_opening`).
   the woven steps have its kinds, messages and coin steps (`levelTie_of_maps`' `hk`, `hl` and its coins), and no tie
   changes them (`lg_tied_repsOfVals_ligOfVals`); `os_two_tied_repsOfVals_ligOfVals` is its `ho`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

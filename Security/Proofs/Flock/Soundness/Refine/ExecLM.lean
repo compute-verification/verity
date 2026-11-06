@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Refine.Exec
+module
+
+public import Proofs.Flock.Soundness.Refine.Exec
 -- `simp` over the range loops below needs `Std.Legacy.Range.mk.congr_simp`; LookupRows declares it, and the kernel
 -- replay rejects a second declaration.
-import Proofs.Flock.Level3.LookupRows
+public import Proofs.Flock.Level3.LookupRows
 
 /-!
 # Runs of the executable's Ligerito programs
@@ -12,6 +14,8 @@ transcript. A run that succeeds, `x st t = .ok ((a, st'), t')`, is taken apart o
 `TM`: `lbind_ok` peels a `bind`, and `lift_bind`, `lget_bind`, `lset_bind`, `lmodify_bind` peel the steps that read or
 write one of the two states.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

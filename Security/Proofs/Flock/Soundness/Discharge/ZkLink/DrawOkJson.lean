@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
-import Std.Data.TreeMap.Raw.Lemmas
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+public import Std.Data.TreeMap.Raw.Lemmas
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # The draw file `flock-verify draw` prints decodes to the draw it printed
@@ -14,9 +18,13 @@ law can make; the round trip claims nothing about the others.
 So `DrawFileZK`, the second half of `RecordCustodyZK` and of `RecordCustodyZKJ`, follows from each draw file being the
 JSON value `flock-verify draw` printed for the verifier's own draw (`drawFileZK_of_toJson`, `drawFileZK_of_toJson_subset`).
 That equality is of Lean `Json` values, whose objects are trees shaped by the order their keys were inserted in:
-`Json.parse` of the keys in sorted order, as `compress` prints them, gives `toJson`'s trees, and other orders give other
+`Flock.JsonParse.parse` of the keys in sorted order, as `compress` prints them, gives `toJson`'s trees, and other orders give other
 trees that `ofJson` reads alike.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockSoundness.Discharge.ZkLink
 

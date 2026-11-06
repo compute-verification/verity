@@ -1,6 +1,8 @@
-import Definitions.Flock.Accounting.Schedule
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Analysis.SpecialFunctions.Sqrt
+module
+
+public import Definitions.Flock.Accounting.Schedule
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Analysis.SpecialFunctions.Sqrt
 
 /-!
 # The soundness bound as a function of the parameters
@@ -24,6 +26,8 @@ codes (`irs_lambda_le_johnson_mds`): at radius `1 − √ρ − η` at most `1 /
 codewords. Flock's own accounting uses the sharper `1 / (2η√ρ)`; the difference moves the total
 by less than 0.001 bit.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 

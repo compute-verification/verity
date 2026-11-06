@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
-import Proofs.Flock.Soundness.Discharge.Hm.Site
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
+module
+
+public import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+public import Proofs.Flock.Soundness.Discharge.Hm.Site
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
 /-!
 # The headline at the executable, with every open guarantee named
@@ -23,6 +25,8 @@ session's inputs (`planAt`, `Sites.lean`), with:
 Its hypotheses on the statement's form (`ht`, `hc`, `hU`, `hpub`, `hpt`, `hscope`) are ones flock-verify refuses a statement
 failing (PROTOCOL.md §16.15), and `FailClosed.flock_headline_exec` takes none of them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Integrate
 

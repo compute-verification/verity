@@ -1,9 +1,11 @@
-import Definitions.NetworkCertifier.Guarantees.SampledCharge
-import Definitions.NetworkCertifier.Period
-import Definitions.NetworkCertifier.Tap
-import Definitions.Core.Assumptions
-import Mathlib.Data.Set.Card
-import Mathlib.Algebra.BigOperators.Fin
+module
+
+public import Definitions.NetworkCertifier.Guarantees.SampledCharge
+public import Definitions.NetworkCertifier.Period
+public import Definitions.NetworkCertifier.Tap
+public import Definitions.Core.Assumptions
+public import Mathlib.Data.Set.Card
+public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits
@@ -34,6 +36,8 @@ with the secret. The first part covers an extracted trace that leaves them outsi
 transfer gate is opened; the count charges a faulty proof block's rows through the Program, from the free inputs, the
 faulty sets, their committed bits and the timing. A proof block the sample missed is in the faulty set.
 -/
+
+@[expose] public section
 
 namespace NetTiming.Guarantees
 

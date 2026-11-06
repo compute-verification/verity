@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Tables.Steps
+module
+
+public import Proofs.Flock.Soundness.Discharge.Tables.Steps
 
 /-!
 # The simulation of a session of `J` tables (the transfer, R11c, at `--session-tables J`)
@@ -19,6 +21,8 @@ after its bytes, and every proof file after the last coin of every stream (the b
   with probability at most the model session's acceptance (every table's) against the simulated prover, whenever
   every table's decoder is right.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Tables
 

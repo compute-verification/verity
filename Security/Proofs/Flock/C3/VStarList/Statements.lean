@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.AuditC3
-import Proofs.Flock.C3.VStarList.Default
-import Proofs.Flock.C3.VStarList.Parse
+module
+
+public import Proofs.Flock.Recursive.AuditC3
+public import Proofs.Flock.C3.VStarList.Default
+public import Proofs.Flock.C3.VStarList.Parse
 
 /-!
 # Piece (h): V*'s statements over the verifier's list (gap 4(c)), and R's shape
@@ -19,6 +21,8 @@ R's shape is derived, not a hypothesis: each `rec-opening/m<m>-c<c>-p<j>` unit t
 `table_m` is transitive, through the outer program's `rec-opening` units, whose names the verifier compiles; the list's
 own `rec-opening` statements are at `mReg` (`mReg_of_list`, `Shape.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.VStarList
 

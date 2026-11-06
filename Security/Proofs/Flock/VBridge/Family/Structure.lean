@@ -1,7 +1,11 @@
-import Proofs.Flock.VBridge.Family.Rep
-import Proofs.Flock.VBridge.Family.Openings
-import Proofs.Flock.VBridge.Family.Files
-import Proofs.Flock.Soundness.Refine.Regions
+module
+
+public import Proofs.Flock.VBridge.Family.Rep
+public import Proofs.Flock.VBridge.Family.Openings
+public import Proofs.Flock.VBridge.Family.Files
+public import Proofs.Flock.Soundness.Refine.Regions
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The structure facts at V*'s shape
@@ -20,6 +24,8 @@ The family's shape facts, by evaluating V*'s and the verifier's Lean at `hsh` an
   its free bits (`RegionBytes`, which the verifier's `regionValue` checks, `Statement.lean:361`), and realize the
   model's there (`ofCircuit_extra`); and `RunsFrom`'s `foldKLog` and `kLog_le` from it (`kLogs_of_setup`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

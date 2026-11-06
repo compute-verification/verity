@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Level0
-import Proofs.Flock.Claims.Complete.Zk.Level0Run
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+public import Proofs.Flock.Claims.Complete.Zk.Level0Run
 
 /-!
 # The masked Ligerito prover's lane phase in closed form
@@ -15,6 +17,8 @@ has `ZkTables.Level0.LaneForm`'s record, masked out-of-domain value, lane messag
   coins the table and the weights are folded at the first `j`, message `i ≤ j` is `roundPoly` of their `i`-th folds
   masked, and at `j = k_0` the pair's sums and the blinded claim are those of the `k_0`-th (`LaneInv`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.L0
 

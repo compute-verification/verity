@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
-import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 
 /-!
 # The compiled `--zk` count curve at the hidden-output tables
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 `planAtZKH` as stated. The hidden-output binding enters through `place` and `vb`, which read the drawn units' places
 in `tableAtZKH`'s statements (`AcceptsZKAcceptedH`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

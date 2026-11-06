@@ -1,12 +1,14 @@
-import Proofs.Flock.Recursive.Compile
-import Proofs.Flock.Recursive.Statements
-import Proofs.Flock.Recursive.Premises
-import Proofs.Flock.Recursive.ExecClass
-import Proofs.Flock.Recursive.Firewall
-import Proofs.Flock.Recursive.Description
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Flock.RecResiduals
+module
+
+public import Proofs.Flock.Recursive.Compile
+public import Proofs.Flock.Recursive.Statements
+public import Proofs.Flock.Recursive.Premises
+public import Proofs.Flock.Recursive.ExecClass
+public import Proofs.Flock.Recursive.Firewall
+public import Proofs.Flock.Recursive.Description
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Flock.RecResiduals
 
 /-!
 # The recursive audit's property (trusted)
@@ -50,6 +52,8 @@ case: at a statement Lean's verifier refuses, (i)'s event is empty.
 C-Flock's definitions and the recursion's model are still in the proofs package, so the statement is here rather than
 in `Security/Properties/`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -206,10 +210,9 @@ it (`FirewallSends`), and V*'s staging (`SessionsPublic`, `SessionsCoined`, `Ses
 `hz`, `hR`, `hS`).
 
 (i) is in fork form and states no bits. The recursion's knowledge form, `Claims.Recursion.KS`, is at its level
-`Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128`
-target under every weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
-(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
+`Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
+least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense
+statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being
 candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 def RecursiveAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]

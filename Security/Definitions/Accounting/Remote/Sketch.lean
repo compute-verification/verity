@@ -1,4 +1,6 @@
-import Definitions.Accounting.RateAuditSketch
+module
+
+public import Definitions.Accounting.RateAuditSketch
 
 /-!
 # The receipts' sketch over a remote audit session: the seeds' keys and the passes' devices (trusted)
@@ -24,6 +26,8 @@ hash at its seed as a function (`RateSketch.Oracle`). `Session.coins` reads them
 device obtains the store's sectors only whole and as they are: those it holds on chip when the pass opens and those it
 reads from node memory, takes in over a link, or rebuilds (`Device.obtained`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Sketch
 

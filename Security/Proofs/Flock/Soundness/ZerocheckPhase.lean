@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.LincheckPhase
-import Proofs.Flock.Soundness.ListSize
-import Proofs.Flock.Soundness.OpeningPhase
+module
+
+public import Proofs.Flock.Soundness.LincheckPhase
+public import Proofs.Flock.Soundness.ListSize
+public import Proofs.Flock.Soundness.OpeningPhase
 
 /-!
 # The zerocheck phase (PROTOCOL.md §9.2)
@@ -20,6 +22,8 @@ and the pin's extension all true with small probability:
 
 `zerocheck_phase_of_card` takes the union over a list of at most `L` codewords.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

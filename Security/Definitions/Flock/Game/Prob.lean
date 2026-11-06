@@ -1,4 +1,6 @@
-import Definitions.Flock.Game.Interleave
+module
+
+public import Definitions.Flock.Game.Interleave
 
 /-!
 # Strategies of a relabelled or composed game
@@ -7,6 +9,8 @@ A strategy for `g.map f` is one for `g` (`Strategy.ofMap`), and a strategy for `
 to `g` (`Strategy.ofBind`). The strategy-level probability tools that use them (`prob_map`,
 `prob_bind_le`, the union bound) are in `Proofs.Flock.Soundness.Game.Prob`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

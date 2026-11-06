@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Final
+module
+
+public import Proofs.Flock.Soundness.Refine.Final
 
 /-!
 # The batched basis refines the model's (PROTOCOL.md §12.4)
@@ -11,6 +13,8 @@ is multiplication by `g` on a vector of bits (`applyMap_mul`). After the prefix 
 coordinates read as `0`/`1` points, the state is `Σ_w eq(point, w)·bits(eq(z, w))` (`bfcState`). The final
 contraction with `eq(r'')` is the model's `phi` (§12.4).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

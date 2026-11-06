@@ -1,6 +1,8 @@
-import Definitions.Claims
-import Flock.ProvedScope
-import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+module
+
+public import Definitions.Claims
+public import Flock.ProvedScope
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 
 /-!
 # The verifier's statement, read as `Claims.Flock.Stmt`
@@ -21,6 +23,8 @@ relation's fields, and the `Form` the scope check reads, each field the value `P
 * `Relation`: the readable relation's fields (`C`, `inp`, `out`, `pub`), which `toReadable` takes as a function of the
   parsed statement; the scope reads none of them. The deployed one is `relation` (`Scope.Tables`).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

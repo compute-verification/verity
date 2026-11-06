@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Family.Ends
-import Proofs.Flock.VBridge.Family.Opened
-import Proofs.Flock.VBridge.Family.Registrants
+module
+
+public import Proofs.Flock.VBridge.Family.Ends
+public import Proofs.Flock.VBridge.Family.Opened
+public import Proofs.Flock.VBridge.Family.Registrants
 
 /-!
 # VBridge G at V*'s family: `rec-acc`'s rows keyed by their registration, and the openings' tops
@@ -28,6 +30,8 @@ all three hold where no read is segmented, `siteRowsShared` at `ReadsUnsegmented
 `hTopsL_of_out` gives `HTopsL` from `TopsOutL`, the openings' `out` columns registered bits of the cap's entry, as
 `AccOutL` gives `acc_out`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

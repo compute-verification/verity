@@ -42,7 +42,10 @@ environment extension loaded, so none of the package's code runs), and replays t
     layers       a module under a `layers` prefix (other than its `except` modules) imports a module outside the layer's
                  `imports` prefixes; a `sealed` layer's modules are ruled only by the layers at or under it, and an
                  `imports` prefix that holds a sealed layer below it doesn't admit that layer's modules (a vocabulary
-                 `Definitions.Pouw` imports no `Definitions.Pouw.Guarantees`, which sits under it)
+                 `Definitions.Pouw` imports no `Definitions.Pouw.Guarantees`, which sits under it). A module no package of
+                 this repository builds (the toolchain's, a fetched dependency's) that the admitted imports and `Init`
+                 already reach is no import outside the layer: it brings nothing in (an `import all Init.Data.Array.Basic`
+                 a proof takes to see a body)
     assumptions  a named assumption (listed by name under `assumptions`: a definition of the spec stated as a `Prop`, taken
                  as a hypothesis or read in a guarantee's statement) has no `owner`, no guarantee reads it, or its
                  definition no longer has the digest its record holds; or the policy still lists assumption modules,
@@ -88,8 +91,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  by two
     replay       the kernel rejects a declaration of an audited module when `Replay.lean` sends them all to it again, on
                  one import of what they import from outside, one declaration per task on Lean's threads
-                 (`LEAN_NUM_THREADS`, by default the CPUs the audit may use): a declaration that skipped the kernel shows
-                 no axiom, and only this catches it (the `kernel` control); or the axioms found by walking the replayed
+                 (`LEAN_NUM_THREADS`, by default the CPUs the audit may use), one of a module under the module system
+                 that it stops on (its recursion) again on its imports' public parts, as `lean` checked it: a
+                 declaration that skipped the kernel shows no axiom, and only this catches it (the `kernel` control);
+                 or the axioms found by walking the replayed
                  environment differ from those the `.olean` files recorded; a replay killed by a signal is reported as a
                  kill. With `--replay-cache DIR`, a module that passed the replay with the same `.olean` files, every
                  module it imports transitively included, on the same toolchain and `Replay.lean` (`replay_keys`) joins it
@@ -202,9 +207,10 @@ UNCHECKED = re.compile(r"\b(debug\.skipKernelTC|skipKernelTC|debug\.byAsSorry|de
                        r"|bootstrap\.\w+|addDeclWithoutChecking|addDeclCore)\b")
 #: code a Lean file runs while it is compiled (an initializer, an `#eval`, a command or an elaborator: each can do IO, and a
 #: macro can expand to one); refused in a package's sources unless its module is listed under `compile_time`
-COMPILE_TIME = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:(?:private|protected|noncomputable|scoped|local|partial|unsafe)"
-                          r"[ \t]+)*(#eval!?|run_cmd|run_elab|run_meta|run_tac|initialize|builtin_initialize|elab|elab_rules|macro"
-                          r"|macro_rules|syntax|declare_syntax_cat)\b|@\[[^\]\n]*\b(command_elab|term_elab|tactic|macro|init"
+COMPILE_TIME = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*(?:(?:private|public|protected|meta|noncomputable|scoped|local"
+                          r"|partial|nonrec|unsafe)[ \t]+)*(#eval!?|run_cmd|run_elab|run_meta|run_tac|initialize"
+                          r"|builtin_initialize|elab|elab_rules|macro|macro_rules|syntax|declare_syntax_cat)\b"
+                          r"|@\[[^\]\n]*\b(command_elab|term_elab|tactic|macro|init"
                           r"|builtin_init|builtin_command_elab|builtin_term_elab|builtin_tactic|builtin_macro)\b")
 #: held by the first `setup.sh` of each toolchain in a run (`setup`)
 SETUP = threading.Lock()
@@ -214,6 +220,9 @@ _INSTALLED: set[str] = set()
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 #: the controls' own packages; `--all` does not audit them as the repository's
 FIXTURES = HERE / "tests" / "fixtures"
+#: each package of the controls with the violations its copies add: `modules` is written in Lean's module system, where
+#: proofs and unexposed bodies are only in each `.olean`'s private part
+CONTROLS = {"control": "violations.json", "modules": "module-violations.json"}
 #: name components of the declarations Lean generates for a definition (listed under `reads` with it, not by name)
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
@@ -398,7 +407,7 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
             f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
-#: `--artifacts`: the node's Lake artifact cache, which only a passing audit writes (`lean_audit.LakeArtifacts`)
+#: `--artifacts`: the node's Lake artifact cache, which only a passing run writes (`lean_audit.LakeArtifacts`)
 ARTIFACTS: Path | None = None
 #: `--dev-cache`: the dependencies come from the verified build cache, so the result is not a Lean verdict
 DEV_CACHE = False
@@ -427,18 +436,15 @@ def plugin_targets(pkg: Path) -> list[str]:
 
 def lake_env() -> dict[str, str]:
     """The environment of every `lake` and `setup.sh` the audit runs. `setup.sh` restores nothing from the build cache
-    (`cache.py`). Lake builds from source, or with `--artifacts` restores a module whose input hash it finds there: with
-    `LAKE_ARTIFACT_CACHE` unset, a package that configures no cache reads it and never writes it. With `--dev-cache`,
-    `setup.sh` restores Mathlib's cache and main's verified build (`cache.py get`) and Lake reads its local cache: the
-    replay still checks our packages' declarations, but a dependency's are taken as their `.olean` states them, which only
-    the gate's from-source build (the cache's root) and the nightly `--fresh` vouch for, so such a run is never a verdict."""
+    (`cache.py`). Lake builds from source; with `--artifacts`, each build step restores the modules `stage_build` staged for
+    it. With `--dev-cache`, `setup.sh` restores Mathlib's cache and main's verified build (`cache.py get`) and Lake reads its
+    local cache: the replay still checks our packages' declarations, but a dependency's are taken as their `.olean` states
+    them, which only the gate's from-source build (the cache's root) and the nightly `--fresh` vouch for, so such a run is
+    never a verdict."""
     env = dict(os.environ)
     env["PATH"] = f"{Path.home() / '.elan' / 'bin'}{os.pathsep}{env.get('PATH', '')}"
     env.setdefault("LEAN_NUM_THREADS", str(cores()))
-    if ARTIFACTS:
-        env.pop("LAKE_ARTIFACT_CACHE", None)
-        env["LAKE_CACHE_DIR"] = str(ARTIFACTS)
-    elif DEV_CACHE:
+    if DEV_CACHE:
         env.pop("LAKE_ARTIFACT_CACHE", None)
     else:
         env["LAKE_ARTIFACT_CACHE"] = "false"
@@ -885,12 +891,13 @@ def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[s
         needs.setdefault(beside, set()).update({into, m} - {beside})
         needs.setdefault(into, set()).update(reads)
         moves[old] = proof
+    headers = sibling("headers")
     for m, src in original.items():
-        imports = list(re.finditer(r"(?m)^import\s+(\S+)[ \t]*$", strip_comments(src)))
-        if more := sorted(needs.get(m, set()) - {i.group(1) for i in imports}):
-            cut = imports[-1].end() if imports else 0
-            lines = "\n".join(f"import {i}" for i in more)
-            src = src[:cut] + ("\n" + lines if imports else lines + "\n") + src[cut:]
+        if (h := headers.header(src)) is None:
+            raise ValueError(f"lift: {m}'s import header can't be read (a comment left open, or an import without a module)")
+        if more := sorted(needs.get(m, set()) - {i.module for i in h.imports}):
+            lines = "\n".join(f"{'public import' if h.module else 'import'} {i}" for i in more)
+            src = src[:h.end] + ("\n" + lines if h.end else lines + "\n") + src[h.end:]
         files[m].write_text("\n\n".join([src.rstrip("\n"), *added.get(m, [])]) + "\n")
     return moves
 
@@ -1296,6 +1303,15 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
 
     def admits(prefixes: list[str], i: str) -> bool:
         return any(under([p], i) and not any(s != p and under([p], s) and under([s], i) for s in sealed) for p in prefixes)
+    graph = {m: g["imports"] for m, g in facts.get("graph", {}).items()}
+
+    def reached(start: list[str]) -> set[str]:
+        seen, stack = set(), list(start)
+        while stack:
+            if (x := stack.pop()) not in seen:
+                seen.add(x)
+                stack += graph.get(x, [])
+        return seen
     for layer, rule in sorted(layers.items()):
         inside = [m for m in sorted(modules) if under([layer], m)
                   and not any(under([s], m) and not under([s], layer) for s in sealed)]
@@ -1308,8 +1324,10 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         for m in inside:
             if m in rule.get("except", []):
                 continue
+            held = [i for i in facts["imports"].get(m, []) if admits(rule["imports"], i) or i == "Init"]
+            reach = reached(held)
             for i in facts["imports"].get(m, []):
-                if not admits(rule["imports"], i) and i != "Init":
+                if i not in held and (i in own or i not in reach):
                     fails.append(Failure("layers.import", m, f"layers: {m} imports {i}, outside {layer}'s layer "
                                          f"({', '.join(rule['imports'])})"))
     if conflicts := facts.get("moved_conflicts"):
@@ -2124,7 +2142,8 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
                                  f"{'; '.join(f'({b})' for b in new)}: an inline hypothesis, neither a named assumption "
                                  f"the lock lists, another listed guarantee's statement nor a plain range (`0 < x`, "
                                  f"`0 ≤ x`, `x ≤ 1`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and numerals); "
-                                 f"{INLINE_FIX}"))
+                                 f"{INLINE_FIX}; or, where a merge or an older tree's `--update` dropped an entry the "
+                                 f"lock had for it, put that entry back as the earlier lock has it"))
     return fails, dict(sorted(kept.items())), offenders
 
 
@@ -3150,6 +3169,24 @@ def writable(pkg: Path) -> list[Path]:
     return [d / ".lake" for d in [pkg.resolve(), *path_deps(pkg)]]
 
 
+def stage_build(mk, pkg: Path, roots: list[str], dest: Path) -> tuple[dict[tuple[str, str], str], dict]:
+    """A Lake cache directory at ``dest`` for ``pkg``'s build (and its ``roots``, `lake build +R`): each module of it that
+    the node's artifact cache (`ARTIFACTS`) indexes under its key, its artifacts checked (``mk``: `module_keys`,
+    `stage`). Each build step reads it with `LAKE_CACHE_DIR` and `LAKE_ARTIFACT_CACHE` unset, under which Lake reads a
+    package's cache and never writes it, and inside the sandbox, where `ARTIFACTS` is read-only. The staged directories of
+    processes that are gone go first. Returns (the modules staged, as `stage` gives them, the report's `staged`: how many
+    of how many keyed, and the error where staging failed, which leaves ``dest`` empty and everything to be built)."""
+    try:
+        mk.sweep(ARTIFACTS)
+        shutil.rmtree(dest, ignore_errors=True)
+        staged, keyed = mk.stage(ARTIFACTS, pkg, roots, dest)
+        return staged, {"modules": len(staged), "keyed": keyed}
+    except OSError as e:
+        shutil.rmtree(dest, ignore_errors=True)
+        dest.mkdir(parents=True, exist_ok=True)
+        return {}, {"modules": 0, "keyed": 0, "error": str(e)}
+
+
 def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
     """``argv`` inside the build sandbox, writable only in the package's `writable` directories, and `ARTIFACTS` readable
     (``argv`` as is where there is no sandbox)."""
@@ -3486,23 +3523,56 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     t, _peak.bytes = time.monotonic(), 0
     if build:
         rep["sandbox"] = sandboxed()
-        jobs = [] if (n := build_threads(pkg)) is None else ["env", f"LEAN_NUM_THREADS={n}"]
+        n = build_threads(pkg)
+        mk = sibling("module_keys") if ARTIFACTS else None
+        cache = ARTIFACTS / mk.STAGE / f"{os.getpid()}-{tag}" if mk else None
+        pre = [*(["-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"] if cache else []),
+               *([f"LEAN_NUM_THREADS={n}"] if n is not None else [])]
+        jobs = ["env", *pre] if pre else []
         if n is not None:
             rep["build_threads"] = n
-        for step, argv in (("setup", None),
-                           ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts]) if (ts := plugin_targets(pkg))
-                                                      else [])),
-                           ("build", in_sandbox(pkg, [*jobs, "lake", "build"])),
-                           ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
-            if callable(argv) and not (argv := argv()):
-                continue
-            with contextlib.nullcontext() if argv is None else writing(pkg, log):
-                s = time.monotonic()
-                rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
-                rep["seconds"][step] = round(time.monotonic() - s, 1)
-            if rc:
-                rep["failures"].append(Failure(step, None, f"{step}: exit {rc}\n{text[-3000:]}"))
+        staged: dict[tuple[str, str], str] = {}
+        try:
+            for step, argv in (("setup", None), ("stage", None),
+                               ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts])
+                                                          if (ts := plugin_targets(pkg)) else [])),
+                               ("build", in_sandbox(pkg, [*jobs, "lake", "build"])),
+                               ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
+                if step == "stage":
+                    if cache:
+                        s = time.monotonic()
+                        staged, rep["staged"] = stage_build(mk, pkg, policy["roots"], cache)
+                        rep["seconds"][step] = round(time.monotonic() - s, 1)
+                    continue
+                if callable(argv) and not (argv := argv()):
+                    continue
+                with contextlib.nullcontext() if argv is None else writing(pkg, log):
+                    s = time.monotonic()
+                    rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
+                    rep["seconds"][step] = round(time.monotonic() - s, 1)
+                if rc:
+                    rep["failures"].append(Failure(step, None, f"{step}: exit {rc}\n{text[-3000:]}"))
+                    return reported(rep)
+            bad, unread = [], None
+            if staged:
+                # the traces it reads include a path dependency's, which another package's build may rewrite
+                with writing(pkg, log):
+                    try:
+                        bad = mk.misrestored(staged, pkg)
+                    except OSError as e:
+                        unread = (f"build: a trace of this build can't be read, so whether Lake restored a module from "
+                                  f"another's outputs is unknown: {e}")
+                    for _, trace, _ in bad:
+                        trace.unlink(missing_ok=True)
+            if bad or unread:
+                rep["failures"].append(Failure("build", None, unread or (
+                    "build: Lake finds a module in its cache by its package and input hash alone, and these modules have "
+                    "the input hash of another this build restored, so they may hold its outputs; their traces are "
+                    "removed, so the next build compiles them: " + ", ".join(f"{m} ({o}'s)" for m, _, o in bad[:10]))))
                 return reported(rep)
+        finally:
+            if cache:
+                shutil.rmtree(cache, ignore_errors=True)
     built()
     files = lean_modules(pkg)
     background = ThreadPoolExecutor(max_workers=5)
@@ -3690,13 +3760,18 @@ def packages(root: Path) -> list[Path]:
 
 
 def controls(toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
-    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added
-    (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs elan and the
-    toolchain with `setup.sh`."""
+    """Build each package of the controls (`CONTROLS`) with ``toolchain``: it must pass clean, and fail each check once a
+    violation is added (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs
+    elan and the toolchain with `setup.sh`."""
+    return [f for fixture in CONTROLS for f in controls_of(fixture, toolchain, out, install, log)]
+
+
+def controls_of(fixture: str, toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
+    """`controls` of the package ``fixture``."""
     fails = []
-    work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}"
+    work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}" / fixture
     shutil.rmtree(work, ignore_errors=True)
-    shutil.copytree(FIXTURES / "control", work / "pkg")
+    shutil.copytree(FIXTURES / fixture, work / "pkg")
     pkg = work / "pkg"
     (pkg / "lean-toolchain").write_text(toolchain + "\n")
     if install:
@@ -3705,13 +3780,13 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
             return [f"controls: installing {toolchain} failed:\n{text[-2000:]}"]
     rc, text = run(in_sandbox(pkg, ["lake", "build"]), pkg, work / "build.log")
     if rc:
-        return [f"controls: the clean fixture does not build with {toolchain}:\n{text[-2000:]}"]
+        return [f"controls: the clean fixture {fixture} does not build with {toolchain}:\n{text[-2000:]}"]
     reports = work / "reports"
     audit(pkg, reports, update=True, log=lambda *_: None)
     clean = audit(pkg, reports)["failures"]
     if clean:
-        fails.append("controls: the clean fixture fails the audit:\n" + "\n".join(clean))
-    expect = json.loads((FIXTURES / "violations.json").read_text())
+        fails.append(f"controls: the clean fixture {fixture} fails the audit:\n" + "\n".join(clean))
+    expect = json.loads((FIXTURES / CONTROLS[fixture]).read_text())
 
     def beside(failures: list[str]) -> list[str]:
         """The failures other than the dependency record's: it covers the imported modules, so a violation that adds an
@@ -3761,8 +3836,8 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
             fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))
         if wrong := [f for f in got if any(f.startswith(n) for n in v.get("not", []))]:
             fails.append(f"controls: `{name}` should not fail these:\n" + "\n".join(wrong))
-    log(f"audit: controls with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)}; builds "
-        f"{'in the sandbox' if sandboxed() else 'without a sandbox'})")
+    log(f"audit: controls of {fixture} with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)}; "
+        f"builds {'in the sandbox' if sandboxed() else 'without a sandbox'})")
     return fails
 
 
@@ -3812,8 +3887,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--replay-cache", type=Path, metavar="DIR", help="reuse the replay of each module that passed it with the "
                     "same .olean files, its imports' included, on the same toolchain (`replay_keys`), and store each one "
                     "checked here")
-    ap.add_argument("--artifacts", type=Path, metavar="DIR", help="Lake's artifact cache, which the builds read and never write "
-                    "(`lake_env`)")
+    ap.add_argument("--artifacts", type=Path, metavar="DIR", help="the node's Lake artifact cache (`lean_audit.LakeArtifacts`): "
+                    "each build restores the modules it indexes under their keys (`module_keys.py`), and never writes it "
+                    "(`stage_build`)")
     ap.add_argument("--closure", action="store_true", help="the replay also checks every module of the import closure, the "
                     "toolchain's, Mathlib's and ArkLib's included, that has not passed it under its key (with --replay-cache, "
                     "a warm run checks only what changed; `replay_step`)")
@@ -3948,6 +4024,8 @@ def main(argv: list[str]) -> int:
                       f"{rep['replay']['checked']} checked, {rep['replay']['reused']} reused; replay "
                       f"{rep['seconds'].get('replay')} s ({rep['replay']['phases']}), peak {rep['replay']['peak_gib']} GiB",
                       flush=True)
+            if s := rep.get("staged"):
+                print(f"  staged: {s['modules']} of its {s['keyed']} keyed modules from the artifact cache", flush=True)
             for f in rep["failures"]:
                 print("  " + f.replace("\n", "\n    "), flush=True)
             for n in rep.get("notes", []):

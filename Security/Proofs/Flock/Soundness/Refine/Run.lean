@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Game.Basic
-import Flock.Transcript
+module
+
+public import Proofs.Flock.Soundness.Game.Basic
+public import Flock.Transcript
 
 /-!
 # A run of a game, and the rounds a run of the executable consumes
@@ -17,6 +19,8 @@ is one: `g`, played with the prover's messages `ms` and the verifier's coins `cs
 On the executable's side, `consumed rs k k'` is the coins of rounds `k, …, k' − 1` of a replay transcript (PROTOCOL.md
 §6), and `RoundsWF` says every round's coin array has the round's coin count, as the record's check S12 ensures.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

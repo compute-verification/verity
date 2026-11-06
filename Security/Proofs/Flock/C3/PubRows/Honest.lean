@@ -1,11 +1,13 @@
-import Proofs.Flock.C3.PubRows.Prefix
-import Proofs.Flock.C3.HoloValues.Reps
-import Proofs.Flock.C3.Sparse.Session
-import Proofs.Flock.C3.Opening.Algebra
-import Proofs.Flock.C3.RegLevels.Chain
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.C3.PubRows.Frame
-import Proofs.Flock.C3.PubRows.Check
+module
+
+public import Proofs.Flock.C3.PubRows.Prefix
+public import Proofs.Flock.C3.HoloValues.Reps
+public import Proofs.Flock.C3.Sparse.Session
+public import Proofs.Flock.C3.Opening.Algebra
+public import Proofs.Flock.C3.RegLevels.Chain
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.C3.PubRows.Frame
+public import Proofs.Flock.C3.PubRows.Check
 
 /-!
 # n1: the public rows, the tape and the commitments at the honest family
@@ -25,6 +27,8 @@ import Proofs.Flock.C3.PubRows.Check
   the rows the verifier holds being the history's commitments (`HeldIs`, the record–history link, gap n1c): G's
   `hCommits_of` after `pubCommits_of_pubRows`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.PubRows
 

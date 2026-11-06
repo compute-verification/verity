@@ -1,10 +1,12 @@
-import PousCheck.Run
-import Properties.Pous
-import Properties.Pous.TimedAudit
-import Properties.Pous.MemoryChallenger
-import Properties.Identity
-import Definitions.Pous.Assumptions.P2
-import Definitions.Pous.P2.Cost
+module
+
+public import PousCheck.Run
+public import Properties.Pous
+public import Properties.Pous.TimedAudit
+public import Properties.Pous.MemoryChallenger
+public import Properties.Identity
+public import Definitions.Pous.Assumptions.P2
+public import Definitions.Pous.P2.Cost
 
 /-!
 # PoUS end to end: what an accepted run certifies, and P2's audit in the ring model
@@ -65,6 +67,8 @@ Two gaps stood between these statements and the deployed verifier:
 * **G-2**, fixed: the composed setup-to-challenger check is `PousCheck.Run.check`, and `RunCheckAccepts` is what its
   acceptance gives.
 -/
+
+@[expose] public section
 
 open MemoryChallenger MemoryChallenger.Properties
 open PousCheck PousCheck.Properties

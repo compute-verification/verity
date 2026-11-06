@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Event
-import Proofs.Flock.Soundness.Refine.Setup
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+public import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # flock-verify's acceptance sets up each table with `Stmt.setupH`
@@ -14,6 +16,8 @@ import Proofs.Flock.Soundness.Refine.Setup
 `setupH_public` records the two checks `setupH` makes on the public file that the layout's registered values read:
 `HmRow.checkPublic st.c st.pub` passed, and `st.regions` is `HmRow.regions st.c st.pub`.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ExtractWait
-import Proofs.Flock.Soundness.Assumptions
+module
+
+public import Proofs.Flock.Soundness.ExtractWait
+public import Proofs.Flock.Soundness.Assumptions
 
 /-!
 # The link finder: a trial, then further trials until one reads the same string
@@ -21,6 +23,8 @@ expectation, whatever `r` (`expect_finderCost_le`, a Wald identity). Under expec
 resistance for the finder (`Assumptions.SHA512CRExpected`), and when every success outputs a
 collision, `s + Σ_{v ≠ Xv} p v ≤ 2·E[trial cost]/2^256 + 1/(eM)` (`link_mass_le`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

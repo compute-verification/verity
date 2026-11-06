@@ -1,5 +1,7 @@
-import Difftest
-import PousCheck.Setup
+module
+
+public import Difftest
+public import PousCheck.Setup
 
 /-!
 # The setup difftest: `PousCheck`'s functions behind `Difftest.serve`
@@ -21,6 +23,8 @@ import PousCheck.Setup
 
 The setup check itself is the protocol `pous-setup` serves (`SetupProtocol`), which the harness drives as a protocol.
 -/
+
+@[expose] public section
 
 namespace PousCheck.SetupDifftest
 

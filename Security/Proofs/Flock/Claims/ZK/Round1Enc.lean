@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Round1Root
+module
+
+public import Proofs.Flock.Claims.ZK.Round1Root
 
 /-!
 # Round `1` of the masked session: its encoding
@@ -16,6 +18,8 @@ claims at the link points throw (`Masked.liveRun_round1`). Here:
 * `Flock.zk_deployZk_masked_exe_round1_gap`: so `Flock.zk_deployZk_masked_exe_sent_gap` at a plan whose round `1` is
   `enc1` asks `hstep` after the second round only.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.Masked
 

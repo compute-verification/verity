@@ -7,8 +7,14 @@ members' cuts, any other body the flat cut), and the Program's units (by Call, t
 Decoding the Program's descriptor and extracting each Call's graph (and so deciding separability) are not here yet: `Def`
 is the evaluator's input as extraction will produce it.
 -/
-import Flock.Partition
-import Flock.Steps
+module
+
+public import Flock.Partition
+public import Flock.Steps
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Qword
 

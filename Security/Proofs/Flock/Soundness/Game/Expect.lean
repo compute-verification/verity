@@ -1,6 +1,8 @@
-import Definitions.Flock.Game.Expect
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Rewinding
+module
+
+public import Definitions.Flock.Game.Expect
+public import Proofs.Flock.Soundness.Game.Basic
+public import Proofs.Flock.Soundness.Rewinding
 
 /-!
 # Expectations against a strategy, and the rewinding lemma for any run distribution
@@ -17,6 +19,8 @@ The proof is `Rewinding`'s counting argument with weights: at each position, a r
 off-plurality mass `b_p`, so the conflict mass at `p` is at least `b_p²`; and Cauchy–Schwarz over
 positions.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

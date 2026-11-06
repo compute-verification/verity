@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkSimW
+module
+
+public import Proofs.Flock.Claims.KS.ZkSimW
 
 /-!
 # A masked self-clash from two raw columns
@@ -11,6 +13,8 @@ log (`zk_selfClash_tiedJ`). So the self-clash clause of `ZkSimWJ` (`ZkClashRun`)
 an accepting run whose reps open two different columns at one position of some table, or a collision
 (`ZkRawClashRun`, `zkClashRun_of_raw`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

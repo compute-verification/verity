@@ -1,5 +1,7 @@
-import Definitions.Flock.Statement
-import Definitions.Flock.Game
+module
+
+public import Definitions.Flock.Statement
+public import Definitions.Flock.Game
 
 /-!
 # One rep before Ligerito: zerocheck, lincheck, the claims and the opening
@@ -13,6 +15,8 @@ The Merkle cap, the statement digest and the labels that round 0 absorbs (§9.1)
 prover choice in this model: the level-0 table is committed before the rep (the session's
 `Commit`, §16), and a rep's transcript binds it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 

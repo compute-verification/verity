@@ -4,11 +4,15 @@ circuit file and the public file: Δ, the regions and their claims, the lincheck
 Nothing here evaluates the computation: the region values are the layout's constants, the public digests and outputs, and
 hashes of pinned padding constants.
 -/
-import Flock.RowLeaf
-import Flock.Piop
-import Flock.Merkle
-import Flock.Record
-import Flock.TmplSplit
+module
+
+public import Flock.RowLeaf
+public import Flock.Piop
+public import Flock.Merkle
+public import Flock.Record
+public import Flock.TmplSplit
+
+@[expose] public section
 
 namespace Flock
 

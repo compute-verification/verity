@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.DeployReg
-import Proofs.Flock.Claims.Recursion.DeployScopeRuns
-import Proofs.Flock.Claims.Recursion.DeployLayout
-import Proofs.Flock.Claims.Recursion.InnerLeaf
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployReg
+public import Proofs.Flock.Claims.Recursion.DeployScopeRuns
+public import Proofs.Flock.Claims.Recursion.DeployLayout
+public import Proofs.Flock.Claims.Recursion.InnerLeaf
 
 /-!
 # V*'s cross-part facts at `deployRec`
@@ -53,6 +55,8 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
   inner setup always hashes (its digest and sigma), so off such a collision no inner replay at the parts' points accepts
   under `LogDecomp`; `VStarParts` asks for `LogDecompPub` instead, which admits those calls.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

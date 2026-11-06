@@ -1,4 +1,7 @@
-import Proofs.Properties.Nci.Novel
+module
+
+public import Proofs.Properties.Nci.Novel
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # Toward `Novel.ReadsExact`: what `Desc.analyze`'s pieces and segments name
@@ -104,6 +107,8 @@ by `carriesRead_shape`), so each read is `SegGood` (`segGood_of`). `RootGates` h
 segment is `SegNodes`, its gates of their widths, each piece's in one root node and a shifting segment's copies' in
 one (`RootNodes`, `rootGates_of`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
 
@@ -1641,11 +1646,11 @@ theorem readsOf_spec (P : Prog) (memo : Array Desc.Summary) (reads : Array (Arra
       (rs.any fun x => x.ps.any fun q => match q.tgt with | .gate _ => false | _ => true) = false)
     (fun k acc y hy => by
       obtain ⟨rs, hrs, hy⟩ := Walk.except_bind_ok hy
-      by_cases hb : (rs.any fun x => x.ps.any fun q => match q.tgt with | .gate _ => false | _ => true) = true
-      · rw [if_pos hb] at hy; exact absurd hy (by intro h; cases h)
-      · rw [if_neg hb] at hy
+      split at hy
+      · exact absurd hy (by intro h; cases h)
+      · rename_i hb
         simp only [pure, Except.pure, Except.ok.injEq] at hy
-        exact ⟨rs, ⟨hrs, by simpa using hb⟩, hy.symm⟩) _ #[] r hr
+        exact ⟨rs, ⟨hrs, Bool.eq_false_iff.2 hb⟩, hy.symm⟩) _ #[] r hr
   have hn : ((P.defs[P.root]!).body.nodes.size - 0 + 1 - 1) / 1 = nodeCount P := by
     simp [nodeCount, DescAgree.rootBody]
   rw [List.length_range', hn] at h1
@@ -9796,7 +9801,7 @@ theorem within_ite_swap {n : Nat} (as : Vector α n) (b : Bool) {lo hi i j : Nat
 
 /-- `qpartition`'s loop: below `i` the elements are below the pivot, from `i` to `k` not, the pivot at `hi`; it ends
 with the pivot at its result, below `hi` when some element from `i` is not below it. -/
-theorem qpartition_loop_spec {n : Nat} {lo hi : Nat} (hhi : hi < n) (pivot : α) :
+private theorem qpartition_loop_spec {n : Nat} {lo hi : Nat} (hhi : hi < n) (pivot : α) :
     ∀ (d : Nat) (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (∀ t (h : t < n), lo ≤ t → t < i → f as[t] < f pivot) →
       (∀ t (h : t < n), i ≤ t → t < k → f pivot ≤ f as[t]) →
@@ -9884,7 +9889,7 @@ theorem median_le {n : Nat} (as : Vector α n) (i j : Nat) (hi : i < n) (hj : j 
   · rename_i hc
     exact Nat.le_of_not_lt fun h => hc (decide_eq_true h)
 
-theorem qpartition_core {n : Nat} (as as3 : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hhi : hi < n) (hlh : lo < hi)
+private theorem qpartition_core {n : Nat} (as as3 : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hhi : hi < n) (hlh : lo < hi)
     (hmid : (lo + hi) / 2 < n) (hW : Within as as3 lo hi) (hmed : f as3[hi] ≤ f as3[(lo + hi) / 2]) :
     let r := Array.qpartition.loop (fun x y => decide (f x < f y)) lo hi hhi as3[hi] as3 lo lo (Nat.le_refl _)
       (Nat.le_refl _) w
@@ -9917,7 +9922,7 @@ theorem qpartition_spec {n : Nat} (as : Vector α n) (lo hi : Nat) (w : lo ≤ h
   · exact median_le f _ _ _ _ _
 
 /-- `qsort`'s `sort` of `[lo, hi]` sorts it by `f`, changing only it, to elements it held. -/
-theorem sort_spec {n : Nat} :
+private theorem sort_spec {n : Nat} :
     ∀ (d : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       Within as (Array.qsort.sort (fun x y => decide (f x < f y)) as lo hi w hlo hhi) lo hi ∧
       ∀ i j (hi' : i < n) (hj : j < n), lo ≤ i → i ≤ j → j ≤ hi →

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Ligerito
+module
+
+public import Proofs.Flock.Soundness.Refine.Ligerito
 
 /-!
 # A run of the executable's Ligerito is a run of the model's (PROTOCOL.md §13.3)
@@ -14,6 +16,8 @@ with the proof's messages (`ligMsgs`) and the rounds the executable consumed, en
 That the executable's final check makes the model's hold, and that a passed Merkle check is the model's path check
 (§14), are separate steps.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

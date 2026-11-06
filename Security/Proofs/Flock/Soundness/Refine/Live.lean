@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Tapes
+module
+
+public import Proofs.Flock.Soundness.Refine.Tapes
 
 /-!
 # The live session, and simulating it in the model
@@ -13,6 +15,8 @@ The **model** one is the compiled game the soundness theorems bound.
   plays against a live one, and `Sim.prob_le` compares the two probabilities.
 * `liveTable` is one table's live session on the Blake3 unsalted path, whose server retains every round's bytes.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

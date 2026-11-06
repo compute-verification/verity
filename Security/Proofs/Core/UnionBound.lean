@@ -1,5 +1,7 @@
-import Proofs.Pouw.Prob
-import Definitions.Claims
+module
+
+public import Proofs.Pouw.Prob
+public import Definitions.Claims
 
 /-!
 # The union bound over a product of coins
@@ -23,6 +25,8 @@ The probability over the product that some protocol fails is then at most the su
   `Claims.Pr`, which is `pr`: `Pr_eq_pr`); `pr_restrict_le` carries a bound proved over a block of the coordinates to the
   whole product.
 -/
+
+@[expose] public section
 
 namespace Pouw
 

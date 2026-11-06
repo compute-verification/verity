@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ExecRows
-import Flock.HmRow
+module
+
+public import Proofs.Flock.Soundness.ExecRows
+public import Flock.HmRow
 
 /-!
 # The rows Δ writes (`HmRow.delta`)
@@ -18,6 +20,8 @@ The first form is a constant row, and the others are input-port rows of net slot
 row, and that a slot constant gets exactly its two pairs, follow from the layout checks, which are next (the row-placement
 plan's W3).
 -/
+
+@[expose] public section
 
 open Flock
 namespace FlockSoundness

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.KSLin2Plain
-import Proofs.Flock.Claims.Recursion.LastBindsClosed
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin2Plain
+public import Proofs.Flock.Claims.Recursion.LastBindsClosed
 
 /-!
 # `KSLin2` at the intended choice, with the decoder's canonicity and the calls half proved
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.Recursion.LastBindsClosed
 `PlainCallsBindOrSlack` at SHA-512 from `plainCallsBindOrSlack_sha512`. What stays is the staging and V*'s parts at
 the dense shape, and the readers at `deployZkRec`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

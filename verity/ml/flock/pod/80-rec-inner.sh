@@ -46,7 +46,10 @@ DRAWN=(--program $D/program.json --stratified $N)
 # the schedule the proxy holds the session to, from the statement's public shape before the session (rec_live --schedule-for)
 $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
 python3 -m verity_flock.rec_live --schedule-for $O/statement.txt > $O/schedule.json || exit 1
-python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $O/inner --schedule $O/schedule.json --draw $D/draw.json > $O/proxy.log 2>&1 &
+# the session's send check is Lean's flock-firewall live, built beside the Lean verifier
+wait $LP; [ -x $FIREWALL_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
+python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $O/inner --schedule $O/schedule.json --draw $D/draw.json \
+  --lean $FIREWALL_BIN > $O/proxy.log 2>&1 &
 PP=$!
 ADDR=
 for i in $(seq 600); do ADDR=$(awk '/^SERVING/ {print $2}' $O/proxy.log); [ -n "$ADDR" ] && break; kill -0 $PP 2>/dev/null || break; sleep 0.5; done
@@ -60,7 +63,6 @@ SESS=$O/inner/session
 [ -f $SESS/session.json ] || { tail -20 $O/proxy.log $O/prove.err; exit 1; }
 $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" --sessions $SESS > $O/replay.txt 2>&1
 python3 -m verity_flock.rec_vstar $O/inner > $O/vstar.json 2> $O/vstar.err; echo "vstar exit $?"
-wait $LP
 $LEAN_BIN verify --statement verity/flock-circuit --circuit $D/circuit.txt --public $D/pub-$N.bin "${PART[@]}" "${DRAWN[@]}" --coins os --session $SESS > $O/lean.log 2>&1
 echo "lean exit $?"
 mkdir -p $O/inner/stage && cp $D/circuit.txt $D/pub-$N.bin $D/partition.json $D/program.json $D/draw.json $O/inner/stage/

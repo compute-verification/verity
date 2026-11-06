@@ -1,17 +1,21 @@
-import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.GCongr
-import Definitions.Pouw.PearlC.Defs
-import Proofs.Pouw.PearlC.Peel
-import Definitions.Pouw.PearlC.SaltDead
-import Proofs.Pouw.Fp8Atom.Fp32Proofs
+module
+
+public import Mathlib.Tactic.LinearCombination
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+public import Mathlib.Tactic.GCongr
+public import Definitions.Pouw.PearlC.Defs
+public import Proofs.Pouw.PearlC.Peel
+public import Definitions.Pouw.PearlC.SaltDead
+public import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
 # P3: Pearl-C's forming credit (staging, nothing pinned)
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Forming
 

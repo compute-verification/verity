@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Reps.OpensRead
+module
+
+public import Proofs.Flock.C3.Reps.OpensRead
 
 /-!
 # n9: R's openings, read from the layers' read wires (`OpensReadAt 2`)
@@ -16,6 +18,8 @@ rows and siblings (`openRow`), as `LevelTie`'s last conjunct has them. So the la
 * `opensReadAt_two_of_layers`: `OpensReadAt 2` at any source whose R openings are `prR`'s rows, from both;
   `opensReadAt_two_norm` at H's `tiedSrc (normSrc stp)` (`normOs` keeps strata 0–2).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

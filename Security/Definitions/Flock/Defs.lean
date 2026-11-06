@@ -1,8 +1,10 @@
-import Definitions.Flock.Session
-import Definitions.Flock.Accounting.Fast100
-import Mathlib.Algebra.Polynomial.Degree.Defs
-import Mathlib.Algebra.Polynomial.Eval.Defs
-import Mathlib.Algebra.CharP.Defs
+module
+
+public import Definitions.Flock.Session
+public import Definitions.Flock.Accounting.Fast100
+public import Mathlib.Algebra.Polynomial.Degree.Defs
+public import Mathlib.Algebra.Polynomial.Eval.Defs
+public import Mathlib.Algebra.CharP.Defs
 
 /-!
 # Shared definitions of the soundness statement
@@ -11,6 +13,8 @@ The arithmetic facts the proof uses (`Arith.Correct`), the committed values at t
 radius (`Committed`), and the doomed start of a rep (`RepDoomed`). Their lemmas are
 `Proofs/Flock/Soundness/Defs.lean`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

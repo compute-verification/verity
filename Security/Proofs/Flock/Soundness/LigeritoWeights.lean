@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.LigeritoFolds
+module
+
+public import Proofs.Flock.Soundness.LigeritoFolds
 
 /-!
 # Ligerito's weights: the algebra of the final check (PROTOCOL.md §13.4, §13.6)
@@ -11,6 +13,8 @@ hypercube gives the product of the factors' extensions (`sum_eqList_prod`). Two 
 * the novel-basis monomial `c ↦ X̂_c(ω)` extends to `Π_i (1 + p_i·(1 + Ŵ_i(ω)))`, the consistency
   weight of §13.4 (`sum_eqList_Xhat`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

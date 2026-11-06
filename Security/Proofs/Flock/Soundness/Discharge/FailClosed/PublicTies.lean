@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.One
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.One
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
 
 /-!
 # What an accepted statement's public file is tied to (`flock_verify_public_ties`)
@@ -13,6 +15,8 @@ check recomputes the frame-v3-sha512 trees natively; the circuit proves only the
 restates what it established as equalities, and `flock_verify_public_ties` states them of every statement an acceptance
 sets up, with or without `--zk` or `--registered F`, public or hidden outputs. No probability, no assumption.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 

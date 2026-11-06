@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Refine.Zerocheck
-import Proofs.Flock.Soundness.Refine.Realizes
-import Proofs.Flock.Level3.Folded
+module
+
+public import Proofs.Flock.Soundness.Refine.Zerocheck
+public import Proofs.Flock.Soundness.Refine.Realizes
+public import Proofs.Flock.Level3.Folded
 
 /-!
 # The lincheck refines the model's (PROTOCOL.md §10)
@@ -14,6 +16,8 @@ After the rounds the executable takes the 64 entries left from the statement (`C
 column vector halved at each round's challenge (`halve`, `FoldRealizes.folded`); the model folds it after the rounds
 (`foldAll`). `foldl_halve` shows the two agree on the 64 entries left.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

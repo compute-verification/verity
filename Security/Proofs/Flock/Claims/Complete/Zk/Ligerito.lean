@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Prover.Ligerito
-import Proofs.Flock.Claims.Complete.Zk.Tape
-import Flock.With.Zk
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Ligerito
+public import Proofs.Flock.Claims.Complete.Zk.Tape
+public import Flock.With.Zk
 
 /-!
 # The masked prover's Ligerito opening
@@ -22,6 +24,8 @@ reads it.
 * It returns the proof, level 0's hiding messages, and the lane phase's record (`L0Rec`, the verifier's), from which
   the prover builds the lane phase's constraints (`Zk.ligeritoConstraints`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

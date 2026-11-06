@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Replay.Steps
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Steps
 
 /-!
 # Zerocheck replays the honest prover's rounds
@@ -11,6 +13,8 @@ consuming exactly the prover's rounds, when the trace satisfies the block R1CS (
 * **The prover in closed form** (`zerocheckP_go`): its rounds (`Zc.rounds`), its proof (`Zc.proof`), its output
   (`Zc.out`), at the coins of the replies to its sends.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

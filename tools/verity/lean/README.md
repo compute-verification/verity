@@ -5,7 +5,7 @@ changed (`check.py --build PKG...`). Lean's jobs in `check` are here too: `lean_
 packages miss, their scratch tree, warm dependencies), `lean_changed.py` (the lean-changed step, a lane's fast path to its
 records, and its edit loop, `--try`) and `lean-deps.json` (the pinned dependency bundles). The audit needs the standard library, `lake` and the
 toolchain's `lean` and `leanc` (`Facts.lean` runs compiled); nothing here imports Verity, so another repository can copy the auditor (`check.py`, `Facts.lean`,
-`Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) and point it at its
+`Replay.lean`, `upstream.py`, `Upstream.lean`, `merge.py`, `headers.py`, `modules.py`, `sandbox.sh`, `setup.sh`, `cache.py`, `tests/`) for its
 own packages. The two jobs use `check`'s helpers (`tools/verity/check/common.py`, `lean_slot.py`), so they stay with this repository.
 `check` reuses a package's pass while the content of everything its audit reads is unchanged, not its path: each file under its
 path relative to the package, a package required by path as its own content, so a `git mv` of a package is no miss, and its
@@ -13,9 +13,9 @@ kept `.lake/build` follows it (`lean_audit.py`'s docstring has the key, `--expla
 
 No package code runs where the audit decides anything. The facts come from the `.olean` files read as data (`Facts.lean`
 imports with initializers disabled and no environment extension loaded), and the kernel replay (`Replay.lean`) loads them
-the same way. The only package code that runs is the build's and, after the facts and the replay, the tests' under `runs`
-(each deciding only its own pass), in a sandbox where the machine allows one; a test's data generator is the repository's
-code and runs outside it.
+the same way, a `module`'s from the private part holding its proofs. The only package code that runs is the build's and,
+after the facts and the replay, the tests' under `runs` (each deciding only its own pass), in a sandbox where the machine
+allows one; a test's data generator is the repository's code and runs outside it.
 
 ~~~text
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
@@ -58,7 +58,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
 - nor does the source of a module the package imports from a fetched package (`.lake/packages/*`: Mathlib, ArkLib and
   what they require), or the lakefile of a package it imports from, unless `dependency_unchecked` lists the module with
   the reason. The imported modules are the ones the `dependencies` record covers, and their sources are there once the
-  package is built, so the scan builds nothing: soundness's 3,900 imported dependency modules take about a second. The
+  package is built, so the scan builds nothing. The
   toolchain, which defines these options, is trusted, and a path dependency is a package of the repository, audited on
   its own. Among the pinned dependencies only doc-gen4's loader names one, and no audited package
   imports it;
@@ -124,8 +124,8 @@ another floor (0: none). Lake runs as many `lean` at once as `LEAN_NUM_THREADS`,
 or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, from the
 process's own cgroup, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
 replay runs at most one thread per `REPLAY_GIB_PER_THREAD` (4 GiB), one such replay at a time (`replay_threads`). An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
-is refused below `SPEC_FLOOR_GIB` (160 GiB): the replay's resident base is about 120 GiB whatever its threads (it died
-at 128 GiB with 16), and the refusal names `--kind lean-audit`, a 280 GiB shape.
+is refused below `SPEC_FLOOR_GIB` (160 GiB): the replay's resident base is about 120 GiB whatever its threads, and
+the refusal names `--kind lean-audit`, a 280 GiB shape.
 
 **The replay cache and the import closure.** Without `--closure` the replay trusts the package's dependencies (the
 toolchain's library, Mathlib, ArkLib) as their `.olean` files state them: a dependency module holding a theorem that
@@ -158,9 +158,9 @@ and `upstream.py --fetch` against ArkLib's head weekly, each as a recorded run o
 `.olean` files.
 
 `--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/verity/lean` suite runs them, only
-when `tools/verity/lean/` changes): `tests/fixtures/control`, built with each audited package's toolchain (`--build`
-installs it first, so a machine without elan works), must pass clean and fail once for each violation in
-`tests/fixtures/violations.json`. Among them:
+when `tools/verity/lean/` changes): `tests/fixtures/control` and `tests/fixtures/modules`, built with each audited package's
+toolchain (`--build` installs it first, so a machine without elan works), must pass clean and fail once for each violation
+in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
 
 - a false theorem added through `debug.skipKernelTC`, spelled so that no scan finds it, which must pass every check but
   the replay and fail the replay;
@@ -417,15 +417,15 @@ Two branches that each add guarantees both change `lean-audit.json`, usually in 
 conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python tools/verity/lean/merge.py --install` has registered
 it in the clone's git config. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency
 or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
-the digest is recomputed. Guarantees arrive byte for byte from their branches, and a hand-written section one side extends
-(a module added to `meaning`) is kept. A side written before guarantees were called that (`pins`) is read under today's
-names. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the other side's
-restatement both apply.
+the digest is recomputed. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the
+other side's restatement both apply.
 
 What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
 `reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
 them. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
-conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree.
+conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree. Git runs the driver
+from the worktree you merge into, and one whose rules are older than `origin/main`'s runs `origin/main`'s (`deferred`), so
+fetch `main` before you merge.
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the
@@ -461,11 +461,10 @@ A hit is a theorem whose statement mentions every constant under `mentions`. The
   the pinned revision. It matches the constants' last name parts as words in each theorem's statement (comments aside),
   and takes proved or not from the package's own transitive baseline. ArkLib keeps `scripts/axiom_baseline.json` current
   with its `validate.sh --axioms` gate. The audit runs this pass for every package with an `upstream` section: a bump
-  that brings a proof about a watched statement fails the audit until the proof is acknowledged. It takes a few seconds.
+  that brings a proof about a watched statement fails the audit until the proof is acknowledged.
 - **Exact.** `upstream.py PKG --lean` builds `imports` and runs `Upstream.lean`. That matches the constants in the
   elaborated types of everything imported, and walks each hit's proof for its axioms. It covers packages without a
-  baseline (VCVio, CompPoly), and catches what text matching misses. Run it at a bump. The first build of all of ArkLib
-  takes a while; after that the pass takes about half a minute.
+  baseline (VCVio, CompPoly), and catches what text matching misses. Run it at a bump; the first builds all of ArkLib.
 
 A proved hit not under its entry's `ack` is new, and the exit code is 1. Someone checks whether it discharges the
 assumption or replaces the hand proof, then records it with `--ack`: the list says what has been looked at, not what was
@@ -487,10 +486,10 @@ module docstring has the layout and the rules. In short:
 - A miss or a mismatch means building from source. So do a missing read credential (the `LEAN_CACHE_*` variables, else
   the same four lines in `~/.config/verity/lean-cache-read.env`, as the nodes' research user holds them), the kill switch
   (disabled, quarantined or unreachable), and `LEAN_CACHE=off`.
-- The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off`, and `LAKE_ARTIFACT_CACHE=false` unless check's audit
-  names its node's own Lake cache (`--artifacts`, `lean_audit.LakeArtifacts`), which only a passing audit on that node
-  writes and the sandboxed builds only read. A module is then built from source or restored from an earlier passing audit,
-  as a kept build's modules are: Lake's input hash decides which, in both.
+- The audit never reads the cache: `lake_env()` sets `LEAN_CACHE=off` and `LAKE_ARTIFACT_CACHE=false`. Check's audit and
+  a records run name their node's own Lake cache instead (`--artifacts`, `lean_audit.LakeArtifacts`), which only a
+  passing run there fills, from a build in the sandbox. Each build reads a copy staged for it of the modules whose key
+  (`module_keys.py`, the task graph's key of its compile) it indexes, and builds any other from source.
 - Only integration publishes, and only a clean checkout of a commit on `origin/main`. It builds with `cache.py build` inside
   its sandbox, then runs `cache.py publish` as root outside it, which hashes the staged files itself and signs with the
   bucket-scoped key (`/etc/verity/lean-cache.env`). The build's user wrote the stage, so the publisher follows no link

@@ -1,6 +1,8 @@
-import Definitions.Claims
-import Definitions.Pouw.RelativeSecurity
-import Definitions.Pouw.RelativeSecurityJ10R
+module
+
+public import Definitions.Claims
+public import Definitions.Pouw.RelativeSecurity
+public import Definitions.Pouw.RelativeSecurityJ10R
 
 /-!
 # Relative security's named premises for the staged window (trusted)
@@ -47,6 +49,8 @@ premise here is weakened for it. The charge counts every product of the call's p
 call's product, one whose products each serve several rows or columns, is charged fewer products and is outside the
 call's one-sided scope (charging purity at `jFrame`): K1 is not claimed there, as it isn't per unit.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 

@@ -1,13 +1,15 @@
-import Proofs.Flock.Claims.Witnesses.Shared
-import Proofs.Flock.Claims.Witnesses.Flock
-import Proofs.Flock.Claims.Witnesses.Sampling
-import Proofs.Flock.Claims.Witnesses.Recursion
-import Proofs.Flock.Claims.Witnesses.RecursionMeets
-import Proofs.Flock.Claims.Witnesses.RecursionLin
-import Proofs.Flock.Claims.Witnesses.RecursionLin2
-import Proofs.Flock.Claims.Witnesses.Stated
-import Proofs.Flock.Claims.Witnesses.Meets
-import Proofs.Flock.Claims.Witnesses.BindingMeets
+module
+
+public import Proofs.Flock.Claims.Witnesses.Shared
+public import Proofs.Flock.Claims.Witnesses.Flock
+public import Proofs.Flock.Claims.Witnesses.Sampling
+public import Proofs.Flock.Claims.Witnesses.Recursion
+public import Proofs.Flock.Claims.Witnesses.RecursionMeets
+public import Proofs.Flock.Claims.Witnesses.RecursionLin
+public import Proofs.Flock.Claims.Witnesses.RecursionLin2
+public import Proofs.Flock.Claims.Witnesses.Stated
+public import Proofs.Flock.Claims.Witnesses.Meets
+public import Proofs.Flock.Claims.Witnesses.BindingMeets
 
 /-!
 # Refutation witnesses
@@ -24,3 +26,5 @@ sampling `Binding`'s at the deployed sampling record (`SamplingDeploy.deploy`). 
 `Claims.Witness.Recursion.<Claim>_fails` and `<Claim>_meets`, their checkable antecedents met at the deployed record
 (`RecursionMeets`).
 -/
+
+@[expose] public section

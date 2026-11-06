@@ -1,4 +1,6 @@
-import Definitions.Claims.Recursion
+module
+
+public import Definitions.Claims.Recursion
 
 /-!
 # The recursion's KS with its deviation term linear
@@ -19,6 +21,8 @@ at most `√(k_I·k(x)·Pr[Be])`. Under `ExpectedCR` each root costs half of SHA
 `Pr[B_I]`). `BitsLin` is its bits under `StrictBirthday` at `B` and `ExpectedCR` at `B_I` and `Fdev`, and `KSBoundLin`
 is `KSLin` at the representation V* binds, as `KSBound` is `KS` there.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

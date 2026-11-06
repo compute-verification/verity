@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 
 /-!
 # flock-verify's tables at `count > 1`
@@ -10,6 +12,8 @@ units (without one, the population's every unit); they split into `count` nonemp
 `setupH`'s statement under `Tags.tableIdentity count j` at the subset draw of part `j`, the consecutive units
 `j·k … j·k + k − 1` with `k = units/count`.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

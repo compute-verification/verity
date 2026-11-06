@@ -1,5 +1,7 @@
-import Definitions.Pous.P2.Mutable
-import Definitions.Pous.Assumptions.P2
+module
+
+public import Definitions.Pous.P2.Mutable
+public import Definitions.Pous.Assumptions.P2
 
 /-!
 # PoUS as an obligation: the mutable store's audit window reduces to P2's audit of its snapshot (trusted)
@@ -21,6 +23,8 @@ The game has one snapshot per window: a store that changes between a window's ro
 A window certifies the state bound at some boundary, not at each: below `S₀` at `m` of its `k` boundaries passes with
 probability at most `(1 − p)^m + k·ε₀`.
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 

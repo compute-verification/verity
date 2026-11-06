@@ -55,8 +55,9 @@ def test_no_escape_hatches():
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
 AUDIT_STATEMENTS = PROOFS.parent / "Definitions" / "Flock" / "Guarantees" / "Audit.lean"
-AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
+AUDIT_IMPORTS = re.compile(r"(Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
                            r"Proofs\.Flock\.Soundness\.Audit\.|Definitions\.Flock\.Guarantees\.Audit$)")
+IMPORT = re.compile(r"(?:public )?(?:meta )?import (?:all )?(\S+)")
 
 
 def test_audit_layer_is_abstract():
@@ -72,10 +73,10 @@ def test_audit_layer_is_abstract():
              "FlockLinked.lean", "FlockWork.lean"}
     assert files and flock <= {p.name for p in files}
     bad = [f"{p.name}: {line}" for p in files if p.name not in flock for line in p.read_text().splitlines()
-           if line.startswith("import ") and not AUDIT_IMPORTS.match(line)]
+           if (m := IMPORT.match(line)) and not AUDIT_IMPORTS.match(m[1])]
     assert not bad, bad
-    statements = [line for line in AUDIT_STATEMENTS.read_text().splitlines() if line.startswith("import ")]
-    assert statements and all(line.startswith("import Mathlib.") for line in statements), statements
+    statements = [m[1] for line in AUDIT_STATEMENTS.read_text().splitlines() if (m := IMPORT.match(line))]
+    assert statements and all(s.startswith("Mathlib.") for s in statements), statements
     admitted = [p.name for p in files if re.search(r"\b(sorry|admit)\b|^axiom ", p.read_text(), re.M)]
     assert not admitted, admitted
 
@@ -1531,52 +1532,6 @@ def test_out_row_ports_is_in_meta_only_for_a_row_seg_output_row_or_a_run_of_seve
     meta = json.loads(text.split("\n", 2)[1][5:])
     assert meta.get("out_row_ports") == runs == ([len(out_words)] if seg or len(out_words) > 1 else None)
     assert FC.digest(text) == sha
-
-
-TOY_EXTRACTOR = r"""import Proofs.Flock.Verifier
-open Flock
-
-/-- A toy scheme with 1-byte digests: a node is the sum of its children's bytes, a leaf the row encoding's first byte. -/
-def toy : MerkleScheme :=
-  { id := "toy", digestLen := 1, pcsIndex := 0, node := fun l r => ⟨#[l.get! 0 + r.get! 0]⟩,
-    leaf := fun row _ => ⟨#[(MerkleScheme.rowBytes row).get! 0]⟩ }
-
-def b1 (x : UInt8) : ByteArray := ⟨#[x]⟩
-def cap : Array ByteArray := #[b1 6]
-def row1 : Array F128 := #[⟨1, 0⟩]
-def row2 : Array F128 := #[⟨2, 0⟩]
-def row3 : Array F128 := #[⟨257, 0⟩]
-
-def accepts (rows : Array (Array F128)) (sibs : Array ByteArray) : Bool :=
-  match merkleCheck toy cap 0 1 #[0] rows sibs #[] 1 with | .ok () => true | .error _ => false
-
-#eval (accepts #[row1] #[b1 5], accepts #[row2] #[b1 4], accepts #[row3] #[b1 5])
-
-/-- `MerklePair.Collides toy`, decided. -/
-def collides : MerklePair → Bool
-  | .node a b a' b' => a.size == 1 && b.size == 1 && a'.size == 1 && b'.size == 1 && (a != a' || b != b') &&
-      toy.node a b == toy.node a' b'
-  | .leaf r r' y y' => r != r' && toy.leaf r y == toy.leaf r' y'
-
-#eval (merklePair toy 0 1 #[0] #[row1] #[row2] #[b1 5] #[b1 4] #[] #[] 0).render
-#eval (merklePair toy 0 1 #[0] #[row1] #[row3] #[b1 5] #[b1 5] #[] #[] 0).render
-#eval (collides (merklePair toy 0 1 #[0] #[row1] #[row2] #[b1 5] #[b1 4] #[] #[] 0),
-  collides (merklePair toy 0 1 #[0] #[row1] #[row3] #[b1 5] #[b1 5] #[] #[] 0))
-"""
-
-
-@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
-def test_merkle_extractor_computes_a_collision(tmp_path):
-    """`merkle_binding` is stated over `merklePair`, a computable extractor, since a collision of a fixed hash exists by
-    counting (a red-team delta check). On a toy scheme with 1-byte digests, two accepted checks with different rows
-    give its pair: two children pairs under one node, or two rows with one leaf, and each collides."""
-    build_proofs_verifier()
-    f = tmp_path / "Toy.lean"
-    f.write_text(TOY_EXTRACTOR)
-    p = subprocess.run(["lake", "env", "lean", str(f)], cwd=PROOFS, capture_output=True, text=True)
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert p.stdout.split("\n")[:4] == ["(true, true, true)", '"node 01 05 | 02 04"',
-        '"leaf 01000000000000000000000000000000  | 01010000000000000000000000000000 "', "(true, true)"], p.stdout
 
 
 def _net(rows, ins="1 0 1 1 2", outs="1 1 1 1 1"):

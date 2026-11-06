@@ -5,6 +5,10 @@ probability `k/n ≥ q` whatever `n` the prover registers (`count_ge`), each of 
 (`count_dvd`), `k ≥ 1` once `q > 0` and `n ≥ 1` (`count_pos`), and `k ≤ n` whenever `T` divides `n` (`count_le`).
 -/
 
+module
+
+@[expose] public section
+
 namespace SampledProofs.Rate
 
 /-- `T·⌈NUM·n/(DEN·T)⌉`. -/

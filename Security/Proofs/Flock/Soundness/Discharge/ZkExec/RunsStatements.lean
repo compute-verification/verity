@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
-import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
-import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
 
 /-!
 # `RunsZC`'s decoder half: the `--zk` rep's frames and the messages they carry (statements)
@@ -30,6 +32,8 @@ by its wires (`wRestZ`: the non-ZK session's after round 0, the opening's, `wLIG
 * `ZkCut`: on rounds that retained `repFramesZ`'s chunks, the rep's messages, cut along `shapeZE` (`repShapeZ` at the
   executable's dimensions), are `decZ`'s groups of the rounds, with no tail: `RepRun`'s cut.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

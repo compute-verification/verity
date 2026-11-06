@@ -12,7 +12,14 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 `verity check tests|circuits|lean` runs only those parts and what their jobs need. `check.py`'s docstring lists the rest: shards,
 `--deferred STEP,...`, `--plan` and `--slots`.
 
-A job with `gate = false` in `ci.toml` is off the merge gate: a recorded check and its shards leave it out, and `research
+The runners (`suites.py`, `circuit-check`, `check.py`'s steps) report real verdicts and nothing else: a test, target or step
+that failed is failed, whoever is fixing it. What gates and what may stay red is drive's config, `policy.toml`
+(`research.policy`), which drive reads at the commit it judges. An allowance there (`[[allow]]`: an id, its owner, when it
+expires in UTC, and why) covers one suite, one test or one circuit-check failure: drive takes such a failure as not red (no
+culprit, no revert, no hold on `main`) until it expires, and then rings its owner and names the allowance. The quick tier
+applies `main`'s allowances the same way.
+
+A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
 checks `checked`'s tip, and doesn't hold `main`. A red `circuit-check` reverts its culprit at once and lands no PR touching its
 inputs until it passes; a red `ratchet-gate` reverts its culprit as any other after-landing red does. `circuit-check` goes back
@@ -69,15 +76,20 @@ commands:
 ~~~sh
 verity tasks list --json [--kind after-landing|preflight] [--changed BASE] [--circuit-shards M] [--gather | --costs FILE]
                          [--split-s S]
-verity tasks run ID [--out FILE] [--work DIR] [--circuit-shards M] [--timings FILE]
+verity tasks run ID [--out FILE] [--work DIR] [--graph art:ID|FILE | [--circuit-shards M] [--timings FILE]]
+verity tasks costs --graph art:ID|FILE [--graph ...] [--seconds FILE] [--out FILE]
 ~~~
 
 `list` prints the graph of the checked-out tree, uncommitted files included. `--kind after-landing` (the default) is every job
 in `ci.toml`, as drive's after-landing run checks it; `--kind preflight` is the jobs on the merge gate, a PR's preflight.
 `--changed BASE` keeps the tasks whose inputs the change from BASE's merge-base with HEAD touches, by `suites.py --changed`'s
 rule for a suite and by input paths for the rest, and the tasks they depend on. `--circuit-shards M` splits circuit-check into M
-tasks (default: its ci.toml `shards`). A suite whose cost is past `--split-s` seconds (default `shards.SPLIT_S`, 15 min) is
-listed in M = ceil(cost / S) parts by test file (at most one per file), each priced at its files' share of the suite's cost. The
+tasks (default: its ci.toml `shards`, or ceil(seconds / S) when `--costs` gives `circuit-check` more seconds than those cover).
+A suite whose cost is past `--split-s` seconds (default `shards.SPLIT_S`, 15 min) is listed in M = ceil(cost / S) parts by test
+file (at most one per file), each priced at its files' share of the suite's cost. The lister's own caches and `--gather`'s
+recorded checks measure a suite on other machines than the executor's worker slots, where it can take several times as long, so
+the executor lists with `--costs` from `costs` over the graph it ran last; then each part is about S of the executor's seconds.
+The
 document is `{"schema": "tasks/v1", "commit", "tree", "kind", "circuit_shards", "split_s", "splits": {suite: {"m", "seconds",
 "digest", "shares", "files", "timings"}}, "changed": {"base": the merge-base, "files": how many files changed} or null, "costs":
 [notes], "tasks": [...]}`, where `splits` names each split suite's partition (its digest, each part's share and files, and the
@@ -104,21 +116,40 @@ resolved lock entries and installed versions, Python, the platform, the base ima
 the environment check gives that step, a split suite's part `suites.part_key` (its own test files and the suite's shared
 inputs), and its argv pins the partition (`SUITE:K/M@digest`, which `suites.py` refuses on a machine whose record partitions
 otherwise); a Lake package's, `lean_audit.components` (its content and its path dependencies' and
-provers', the auditor's files, the toolchain pin) with Python and the base image; a job in `check.STEP_KEYS`, that step's key.
-So keys are of the machine that lists them: list on a worker. These have no key yet, and run whenever they're in the graph: the
+provers', the auditor's files, the toolchain pin) with Python and the base image; a job in `check.STEP_KEYS`, the git ids of its
+`inputs` paths (which cover what that step's key reads of the tree) under the environment a suite's key reads. What a step's
+key reads of the machine (the kernel release, `rustc -vV`, the slot's paths) check's own cache keys where the task runs, so a
+lister and a worker on other slots or hosts list one key. So keys are of the machine that lists them only as a suite's are
+(Python, the platform, the base image): list on a worker. These have no key yet, and run whenever they're in the graph: the
 builds (no declared inputs, read guard or keyed outputs), circuit-check's slices (it keys each target, from a task list only a
 run builds), and the jobs that keep no verdict (`lean-unit-cut`, `lean-changed`, `ratchet-gate`). The preflight is no task: a
 worker's `uv sync --locked` refuses a lock that isn't current, each suite fetches the fixtures it reads, and the repository's
 suite holds the lints.
 
-A split suite's part runs (`run`) on the partition `--timings` gives (`{suite: the listing's splits timings}`), so it runs the
-listed files under the listed key; without it, on this machine's timing record. A suite's verdict is the join of its parts'
-(`suites.combine_parts`).
-
 `run ID` runs that task here as `check.py` runs that part in a shard of its own (`check.run` with only that part, without the
 preflight), its `deps` beside it until artifacts are shared, and writes `{"schema", "id", "verdict": passed|failed|skipped,
 "key", "seconds", "outputs": {"dir", "files", "artifacts"}, "steps": [check's step records]}` to stdout or `--out`; the steps'
-progress goes to stderr. It exits 0 for passed or skipped, 1 for failed.
+progress goes to stderr. It exits 0 for passed or skipped, 1 for failed, 2 on a usage error or a refused graph.
+
+`--graph art:ID|FILE` names the graph ID was listed in: the executor's `tasks-graph/v1` artifact, fetched from the evidence
+store, or a file holding `list --json`'s document. The run takes the graph's `splits` (each suite's M, partition digest and
+timings) and `circuit_shards` instead of deciding them from this machine's record, so any id the graph lists, a suite listed
+whole or a part `SUITE:K/M`, runs the listed files under the listed key on any worker; a key that still differs (another
+tree or environment) is named on stderr. It refuses a graph whose `commit` isn't this tree's HEAD or that doesn't list ID.
+Without `--graph`, the tasks are this machine's: a split suite's part runs on the partition `--timings` gives (`{suite: the
+listing's splits timings}`), else on this machine's timing record. A suite's verdict is the join of its parts'
+(`suites.combine_parts`).
+
+`costs` writes `{task id: seconds}`, what the executor took for the tasks of a graph it ran (`--graph`, read as `run` reads
+one, of any commit), as `list --costs` reads it. Each task is priced from its newest `pass` verdict label on `task:<key>` (an
+unkeyed task's key is its check's, `research.executor.keyed`), whose `ref` is the run that earned it: the sum of the task's own
+steps' seconds in that run's `out/task-result.json` (not a dep's build run beside it), else the run's wall seconds, which also
+count its wait for a slot. `--seconds FILE` (`{task id: seconds}`, as the executor's queue records them) is taken over the
+store's. A split suite's parts are summed back to `JOB:SUITE` and circuit-check's slices to `circuit-check`, each over the
+share of the job the priced parts cover (the graph's partition's shares; a slice 1/M), so the next listing cuts them anew. A
+failed task and one the executor didn't run are unpriced, and stderr names them. Given several graphs, each id gets its most.
+Circuit-check assigns its targets to shards by the hash of each one's id and keeps each target's pass under its own key, so a
+changed shard count reruns no target.
 
 A recorded check publishes its live record (`live.py`) on the store's remote as each step ends and every few minutes, so
 it can be followed from any machine with the store's key, without its node: `verity ci ls` lists the recent checks, running

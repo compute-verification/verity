@@ -1,9 +1,11 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.ENNReal.BigOperators
-import Mathlib.Basic.ENNReal.Inv
-import Mathlib.Order.CompleteLattice.Basic
-import Definitions.Core.Game
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.ENNReal.BigOperators
+public import Mathlib.Basic.ENNReal.Inv
+public import Mathlib.Order.CompleteLattice.Basic
+public import Definitions.Core.Game
 
 /-!
 # Public-coin interactions with live coins
@@ -26,6 +28,8 @@ probability, over the verifier's uniform coins, that the output satisfies a pred
 prover is a mixture of deterministic ones, so every bound on `value` bounds it too
 (`prob_le_value`, in `Proofs.Flock.Soundness.Game.Basic`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

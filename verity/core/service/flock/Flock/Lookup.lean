@@ -8,7 +8,11 @@ padding to a word; the output word, bit `j` the XOR of its products; the constan
 Every row is explicit except the product rows' B side (about `bits · 2^(n−1)` entries for a table of `2^n` words), which the
 fold reads from the table directly (`Lookup.foldB`).
 -/
-import Flock.Net
+module
+
+public import Flock.Net
+
+@[expose] public section
 
 namespace Flock
 

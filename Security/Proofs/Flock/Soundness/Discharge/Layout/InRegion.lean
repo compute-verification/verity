@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
 
 /-!
 # The public words that the statement pins at the unit slots' public leaves
@@ -11,6 +13,8 @@ slot, each of its `8·2^s` leaves' 16-bit words, u16 LE (`inBytes_bit`): a publi
 `jj` column `16 jj + t` of the unit's leaf group (`inAddr`) is bit `t` of that word, for each leaf inside an in region
 (`in_pinned`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

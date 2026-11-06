@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Binding.E2E
-import Proofs.Flock.Soundness.ExecDrawOS
+module
+
+public import Proofs.Flock.Soundness.Binding.E2E
+public import Proofs.Flock.Soundness.ExecDrawOS
 
 /-!
 # The headline: the program's rows, SHA-512 throughout, the live draw
@@ -31,6 +33,8 @@ Its proof coins are the model's: uniform, drawn each round after the prover's me
 coins are those is A6 (`uniform/flock-coin-server`, `ASSUMPTIONS.md`), which the model embodies rather than a hypothesis
 states, and which covers only per-round OS coins: the circuit prover's seed-derived coins are outside the headline.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

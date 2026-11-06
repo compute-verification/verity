@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ComposeDag
-import Proofs.Flock.Soundness.ExecSetup
+module
+
+public import Proofs.Flock.Soundness.ComposeDag
+public import Proofs.Flock.Soundness.ExecSetup
 
 /-!
 # Composed rows, placed: what 1d and 1e hand to a table's class (`dp`)
@@ -20,6 +22,8 @@ those facts are one proposition, and they are discharged for a flat statement `S
 derives. For a typed flat class, whose unit net is built from those rows (`Typed.netOfD`), it is `netRows_flat`
 (`ExecFlatClass.lean`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

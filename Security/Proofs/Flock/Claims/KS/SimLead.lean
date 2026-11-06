@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.SlotLead
-import Proofs.Flock.Claims.Bridge.Returns
+module
+
+public import Proofs.Flock.Claims.KS.SlotLead
+public import Proofs.Flock.Claims.Bridge.Returns
 
 /-!
 # The simulated strategy leads with rep 0
@@ -18,6 +20,8 @@ branch's, answering the openings with `nul`.
 * `SchedL`: the live prover submits its next `r₀` rounds on rep 0, then only rep 1's;
 * `lead_simRJ`: so the simulated strategy, read at the table, leads with rep 0 for `r₀` coins.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

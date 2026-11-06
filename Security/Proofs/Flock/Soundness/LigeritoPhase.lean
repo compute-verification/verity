@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.LigeritoMid
+module
+
+public import Proofs.Flock.Soundness.LigeritoMid
 
 /-!
 # Ligerito is sound (PROTOCOL.md §13)
@@ -13,6 +15,8 @@ Ligerito accepts with probability at most `εLig`:
 bound `L` replaces `L₀`, and its queries cost `ε` beyond `queryError`. `ligerito_sound` is the
 instance at the radius itself.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

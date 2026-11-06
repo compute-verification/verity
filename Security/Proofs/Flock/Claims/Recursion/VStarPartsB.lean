@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarParts
-import Proofs.Flock.Claims.Recursion.VStarBound
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarParts
+public import Proofs.Flock.Claims.Recursion.VStarBound
 
 /-!
 # V*'s algebra and rec-open parts at the bound layout (option (d))
@@ -19,6 +21,8 @@ pieces, the commit strings its statement shows (`LayoutB.CmtAgrees`) and its sha
 (`RecDeploy.partOpensB_recRead`, through `partOpensB_layoutBTops`), and every route at `layoutBTops` drops it. The
 climbs' argument also escapes to a setup collision (`SetupColl`), which `PartOpensB`'s escape doesn't admit.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 

@@ -1,5 +1,7 @@
-import Definitions.Flock.Game.Expect
-import Definitions.Flock.Game.Interleave
+module
+
+public import Definitions.Flock.Game.Expect
+public import Definitions.Flock.Game.Interleave
 
 /-!
 # Lockstep coupling of an oracle game with its compiled game
@@ -20,6 +22,8 @@ pair index (`getPair`) when their slots are disjoint; the `getPair_*` facts here
 the embeddings carry. The lemmas (`expect_le_coupled`, `leafE_off_le` and the rest) are in
 `Proofs.Flock.Soundness.Game.Lock`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

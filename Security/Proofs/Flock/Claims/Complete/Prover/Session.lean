@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Prover.Ligerito
-import Proofs.Flock.Claims.Complete.Prover.Print
-import Proofs.Flock.VBridge.Family.Encode
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Ligerito
+public import Proofs.Flock.Claims.Complete.Prover.Print
+public import Proofs.Flock.VBridge.Family.Encode
 
 /-!
 # The honest prover's session: the reps, the proof files and the record
@@ -24,6 +26,8 @@ PROTOCOL.md §4–§8 and §16 from the prover's side, for the plain verifier (`
 In deployment the coin server writes the record and draws the coin tree's key; here the prover writes what the server
 would, so the record is the honest server's.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -63,7 +67,7 @@ def helloOf (spec : SessionSpec) : V (String × List (String × Json)) :=
   match spec.coinTree with
   | none => pure (spec.hello, [])
   | some ct => do
-    let some own := (Json.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
+    let some own := (Flock.JsonParse.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
     let nonce := zeros 64
     let coins := (own.getObjVal? "coins").toOption.getD Json.null
     let h ← canon (own.setObjVal! "coins" (coins.setObjVal! "nonce" (Json.str nonce)))

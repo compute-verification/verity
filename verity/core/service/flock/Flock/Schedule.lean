@@ -1,6 +1,10 @@
 /-
 PROTOCOL.md §15: the `fast100` Ligerito schedule, as data.
 -/
+module
+
+@[expose] public section
+
 namespace Flock
 
 structure Level where

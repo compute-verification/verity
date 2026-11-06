@@ -1,4 +1,6 @@
-import Proofs.Core.Game.Lock
+module
+
+public import Proofs.Core.Game.Lock
 
 /-!
 # One lockstep among identical games
@@ -12,6 +14,8 @@ carry over, and alignment is preserved (`Aligned.batchLock`).
 `value_batch_getD_le`: an event of one position's output is at most as likely, for an optimal
 prover, as the same event in that position's game alone.
 -/
+
+@[expose] public section
 
 namespace Verity
 

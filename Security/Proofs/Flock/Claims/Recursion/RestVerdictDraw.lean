@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.RestVerdictCustody
-import Proofs.Flock.Claims.Complete.ZkTables.Stmt
-import Proofs.Flock.Claims.JsonNorm
+module
+
+public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
+public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+public import Proofs.Flock.Claims.JsonNorm
 
 /-!
 # `hrest`'s base checks with the draw tied at several tables
@@ -13,6 +15,8 @@ file's parsed header, and the draw is tied only where that header carries the st
 
 `basesHold_of` is `basesHold` with custody proved (`custodyRecJ`) and the draw tied off one table.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

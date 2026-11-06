@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Family.Rep
-import Proofs.Flock.VBridge.Family.Openings
+module
+
+public import Proofs.Flock.VBridge.Family.Rep
+public import Proofs.Flock.VBridge.Family.Openings
 
 /-!
 # VBridge G at V*'s family: what a session's acceptance says of its registered reads
@@ -21,6 +23,8 @@ family's choice.
   rows `own` names (`RowsRegistered`); `hRowsAgree_of`: `HRowsAgree` from those, the two parts' columns keying one bit
   of rows at one registered root and position (`SameRow`), and one registrant row there (`RowsShared`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

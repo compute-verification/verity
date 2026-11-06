@@ -4,8 +4,12 @@ cap, with different rows, give an explicit collision of the scheme's hash: two d
 different rows, with one digest. Parametric in the scheme; for each scheme the verifier knows, such a collision is a SHA-256
 or SHA-512 collision (`MerkleScheme.collision_hash`). No random oracle.
 -/
-import Proofs.Flock.Verifier.Hash
-import Proofs.Flock.Verifier.Encode
+module
+
+public import Proofs.Flock.Verifier.Hash
+public import Proofs.Flock.Verifier.Encode
+
+@[expose] public section
 
 namespace Flock
 

@@ -1,4 +1,6 @@
-import Proofs.Properties.CertifierDevice.Late
+module
+
+public import Proofs.Properties.CertifierDevice.Late
 
 /-!
 # The certifier device, proved: a complete record is the Program's
@@ -8,6 +10,8 @@ handed at its handing bucket (`window_hands`), and the certifier was unfaulted a
 count is the Program's queue of the handing buckets so far (`hinv`). Each row is then the FIFO's release
 (`release`), which is `NetworkCertifier.expectedRow` of the frames handed through the record's publication.
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice.Proofs
 

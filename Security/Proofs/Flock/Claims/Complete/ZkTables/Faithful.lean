@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Ready
+module
+
+public import Proofs.Flock.Claims.Complete.Ready
 
 /-!
 # The masked prover as `flock-circuit --zk` runs it
@@ -22,6 +24,8 @@ two places, and agrees with it in its other refusals; `honestPR` is `honestP` wi
 
 `honestPR w` is `honestP (maskWOf x w ω.mask)` at every history no outer coin of which is `1` (`honestPR_next`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

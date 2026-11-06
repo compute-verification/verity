@@ -4,9 +4,15 @@ verifier draws the sampled units from its own randomness with exact samplers and
 statement carries the draw (the public header's `unit_draw`, under Σ) and the session record keeps it. Offline, the
 verifier checks that the two agree, that the draw is well formed, and that the statement's instances are the drawn units.
 -/
-import Lean.Data.Json
-import Std.Data.HashMap
-import Flock.Canon
+module
+
+public import Lean.Data.Json
+public import Std.Data.HashMap
+public import Flock.Canon
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Draw
 

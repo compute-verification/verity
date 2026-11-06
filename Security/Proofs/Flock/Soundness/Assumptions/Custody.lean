@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
-import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 
 /-!
 # The session's record custody without `--zk`
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 `RecordCustodyExec` at public outputs, `RecordCustodyExecH` at hidden ones. `--zk`'s are `Assumptions.Zk.RecordCustodyZK`
 and `RecordCustodyZKJ`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions
 

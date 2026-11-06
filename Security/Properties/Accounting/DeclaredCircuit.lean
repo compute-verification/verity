@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.DeclaredCircuit
-import Properties.RemoteAudit.Schedule
+module
+
+public import Definitions.Accounting.Guarantees.DeclaredCircuit
+public import Properties.RemoteAudit.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap
@@ -14,6 +16,8 @@ stated here because it reads the verifier's code, which the spec doesn't; its th
 `Security/Proofs/Accounting/DeclaredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
 layout steered there by `Properties.RemoteAudit.steered_of_checked`.
 -/
+
+@[expose] public section
 
 namespace Properties.DeclaredCircuit
 

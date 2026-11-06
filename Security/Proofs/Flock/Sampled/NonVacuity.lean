@@ -1,5 +1,9 @@
-import Mathlib.Data.Fintype.Card
-import Proofs.Flock.Sampled.Statements
+module
+
+public import Mathlib.Data.Fintype.Card
+public import Proofs.Flock.Sampled.Statements
+meta import Mathlib.Data.Fintype.Card
+meta import Proofs.Flock.Sampled.Statements
 
 /-!
 # F2's statements' hypotheses hold together
@@ -22,6 +26,8 @@ and one session of one slot holding the unit (`batch₁`, its slots routed in se
 * `zeroKnowledge_nonvacuous`, `zeroKnowledgeAt_nonvacuous`: `ZeroKnowledge`'s hypotheses at that instance, `menu₀` and
   the one-unit draw; `ZeroKnowledgeAt`'s, under the one-point law.
 -/
+
+@[expose] public section
 
 namespace FlockSampled
 

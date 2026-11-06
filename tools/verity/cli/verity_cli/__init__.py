@@ -14,6 +14,11 @@
                                     the check's task graph of this checkout (`tasks/v1`, check/tasks.py; its README's "Tasks")
     verity tasks run ID [--out FILE]
                                     run one task here as check runs it, and print its verdict, outputs, seconds and key
+    verity graph [--json] [--family F]
+                                    the fine-grained check's task graph of this checkout (`verity-graph/v2`, graph/README.md)
+    verity graph run ID --work DIR  run one task of it here and print its result (`verity-result/v1`)
+    verity graph check --local [--family F]
+                                    run the graph serially here, uncached: the reference executor
     verity example NAME [ARGS]      examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
                                     workload on its placement
     verity example --status         every example's protocol, workload, run and proof, and each one's next missing evidence
@@ -183,6 +188,10 @@ def main(argv: list[str] | None = None) -> int:
         return _runner("benchmarks", "bench", args[1:])
     if args[0] == "tasks":
         return _run([sys.executable, str(HERE / "check" / "tasks.py"), *args[1:]])
+    if args[0] == "graph":
+        from verity_graph.cli import main as graph
+
+        return graph(args[1:])
     if args[0] in ("run", "config"):
         from . import run
 

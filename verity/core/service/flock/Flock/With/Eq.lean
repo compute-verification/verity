@@ -3,7 +3,11 @@ The oracle copies under the deployed hashes: run in `V` with `Hashes.ofSha512 Sh
 verifier's function it copies, so `verifyWith Sha512.hash` is `verify` for every session whose tables' Merkle schemes are the
 registry's (`MerkleScheme.Named`).
 -/
-import Flock.With.Verify
+module
+
+public import Flock.With.Verify
+
+@[expose] public section
 
 namespace Flock
 
@@ -182,7 +186,7 @@ theorem ligeritoWith_std (ms : MerkleScheme) (h : ms.Named) (sch : Schedule) (T 
     queryLevelWith_std ms h]
   rfl
 
-theorem verifyRepWith_std (spec : SessionSpec) (st : Setup) (h : st.merkle.Named) (sch : Schedule) (sess : Session)
+theorem verifyRepWith_std (spec : SessionSpec) (st : Setup) (h : st.merkle.Named) (sch : Schedule) (sess : RunRecord)
     (i r : Nat) (bytes : ByteArray) : verifyRepWith std spec st sch sess i r bytes = verifyRep spec st sch sess i r bytes := by
   unfold verifyRepWith verifyRep
   simp only [monadLift_self, bindAndZerocheckWith_std, lincheckWith_std, ringSwitchWith_std, ligeritoWith_std _ h]

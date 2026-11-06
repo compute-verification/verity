@@ -1,4 +1,6 @@
-import Definitions.Pouw.RelativeSecurity
+module
+
+public import Definitions.Pouw.RelativeSecurity
 
 /-!
 # Per-stage coins with sampled proofs (trusted)
@@ -25,6 +27,8 @@ draw law with rational weights, and the round passes when every drawn unit's pro
   over `A × D` in every round. Route A's window is one (`hit`: the drawn unit is skipped); so is a one-σ round whose
   closure fails every steered unit drawn (`hit`: the drawn unit saves work, skipped or steered).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Audit.Extraction
-import Proofs.Flock.Soundness.Audit.Flock
-import Proofs.Flock.Soundness.SessionBatch
-import Proofs.Flock.Soundness.Lowering
+module
+
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Audit.Flock
+public import Proofs.Flock.Soundness.SessionBatch
+public import Proofs.Flock.Soundness.Lowering
 
 /-!
 # The Flock audit at the compiled layer, several tables per session
@@ -33,6 +35,8 @@ named assumption; `δ_link` stays named (`LinkSound`).
 
 `flock_batched_count`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

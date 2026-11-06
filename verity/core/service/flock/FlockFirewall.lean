@@ -4,13 +4,18 @@
 `flock-firewall coins`, the coin tree's opening checks a firewalled prover's coins pass, `Flock.Firewall.Coins.cmd`,
 `flock-firewall hello`, a firewalled session's `Hello` at a nonce it draws, `Flock.Firewall.Hello.cmd`,
 `flock-firewall session`, the firewall's session loop, which owns the auditor's connection, `Flock.Firewall.Session.cmd`,
-and `flock-firewall finish`, a firewalled rep's proof file computed by the firewall, `Flock.Firewall.Finish.cmd`. -/
-import Flock.Firewall
-import Flock.Firewall.Contract
-import Flock.Firewall.Finish
-import Flock.Firewall.Frame
-import Flock.Firewall.Hello
-import Flock.Firewall.Session
+`flock-firewall finish`, a firewalled rep's proof file computed by the firewall, `Flock.Firewall.Finish.cmd`, and
+`flock-firewall live`, the inner phase's send check on one live session, `Flock.Firewall.liveCmd`. -/
+module
+
+public import Flock.Firewall
+public import Flock.Firewall.Contract
+public import Flock.Firewall.Finish
+public import Flock.Firewall.Frame
+public import Flock.Firewall.Hello
+public import Flock.Firewall.Session
+
+@[expose] public section
 
 def main : List String → IO UInt32
   | "contract" :: files => Flock.Firewall.Contract.cmd files
@@ -20,4 +25,5 @@ def main : List String → IO UInt32
   | "hello" :: args => Flock.Firewall.Hello.cmd args
   | "session" :: args => Flock.Firewall.Session.cmd args
   | "finish" :: args => Flock.Firewall.Finish.cmd args
+  | "live" :: args => Flock.Firewall.liveCmd args
   | args => Flock.Firewall.cmd args

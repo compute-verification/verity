@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Compiled
-import Proofs.Flock.VBridge.Algebra.RingSwitch
-import Proofs.Flock.Soundness.Refine.RepConverse
+module
+
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.VBridge.Algebra.RingSwitch
+public import Proofs.Flock.Soundness.Refine.RepConverse
 
 /-!
 # Ring switching's checks at a rep, from E
@@ -19,6 +21,8 @@ carries the messages w holds (`decoded`):
 * the batched value `T` (Opening.lean:86) is the one w holds, and the switched claims (Opening.lean:87) are
   `verifierRows`', the two Ligerito reads.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Runs
 

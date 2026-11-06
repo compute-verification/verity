@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowECoin
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.Claims.Recursion.OpenLowerJointV
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowECoin
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
+public import Proofs.Flock.Claims.Recursion.OpenLowerJointV
 
 /-!
 # Row E's chain at the joint witnesses
@@ -20,6 +22,8 @@ and the targets read the accumulators `accRC` at that chain.
 * **Row E's target** (`targetE_accRC`): wherever `P` gives each piece its `accPiece`, `TargetE` at `accRC`. `chainC`
   reads the coins, so row E's target at a fixed chain (`targetE_rowD`) is taken at the coins' own chain.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Top
 

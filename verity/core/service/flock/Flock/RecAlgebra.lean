@@ -1,4 +1,6 @@
-import Flock.Ligerito
+module
+
+public import Flock.Ligerito
 
 /-!
 # V*'s algebra: `GfResiduals`' structure and its verifier rows
@@ -22,6 +24,8 @@ holds. This file restates how Python builds that unit's `S` and `v` (`verity_flo
 
 The verifier computes the S of each `rec-residuals/…` unit it checks with `structureOf` (`Flock.RecResiduals`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

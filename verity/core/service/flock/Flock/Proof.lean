@@ -1,8 +1,12 @@
 /-
 PROTOCOL.md §8: the proof container, `bincode 1.3` of `(Commitment, R1csProofLigerito)`.
 -/
-import Flock.Bytes
-import Flock.Schedule
+module
+
+public import Flock.Bytes
+public import Flock.Schedule
+
+@[expose] public section
 
 namespace Flock
 

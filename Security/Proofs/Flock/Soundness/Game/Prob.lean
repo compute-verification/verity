@@ -1,5 +1,7 @@
-import Definitions.Flock.Game.Prob
-import Proofs.Flock.Soundness.Game.Union
+module
+
+public import Definitions.Flock.Game.Prob
+public import Proofs.Flock.Soundness.Game.Union
 
 /-!
 # Probabilities for a fixed prover strategy
@@ -13,6 +15,8 @@ they use:
 * `prob_and_const`: an event conjoined with a fact fixed by the strategy;
 * `Strategy.ofMap`, `prob_map`: relabelling the output (`map`) keeps the game's strategies.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.Stacking
+module
+
+public import Definitions.Accounting.Guarantees.Stacking
 
 /-!
 # A declared circuit's space and bandwidth from an accepted audit (trusted)
@@ -19,6 +21,8 @@ weights and the filler are the registration audit's to count. Its theorem is
 `Accounting.SecurityProofs.DeclaredCircuitRequirement`, in `Security/Proofs/Accounting/DeclaredCircuit/Requirement.lean`
 with its pieces beside it.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowEAcc
-import Proofs.Flock.Claims.Recursion.CapLower
-import Proofs.Flock.Claims.Recursion.PartsVStar
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowEAcc
+public import Proofs.Flock.Claims.Recursion.CapLower
+public import Proofs.Flock.Claims.Recursion.PartsVStar
 
 /-!
 # The `rec-acc` chain at the layout of record (`DeployedR.layR`)
@@ -20,6 +22,8 @@ import Proofs.Flock.Claims.Recursion.PartsVStar
   `d = b ⊕ M·y`). This is the commits' step under hm96's salted digest: a climb to the registered `rec-acc` root starts
   at the commit string, not at `d`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -161,6 +165,10 @@ theorem accPort_deployed {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {c
       split_ifs at hread
       all_goals exact absurd hread Bool.false_ne_true
     | cap l N =>
+      simp only [accRead] at hread
+      split_ifs at hread
+      all_goals exact absurd hread Bool.false_ne_true
+    | link UB PB N =>
       simp only [accRead] at hread
       split_ifs at hread
       all_goals exact absurd hread Bool.false_ne_true

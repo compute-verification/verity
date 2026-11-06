@@ -1,8 +1,7 @@
-"""a5's sample on the verifier's own coins (`a5.py --coins verifier`, `a5_coins.VerifierCoins`): a window's `service.Stream` on
-them has the verifier as its coin source, and its outcome, with no coins' evidence, is accepted with the Lean verifier of
-record's whole run (`Run.run`, `coin_source` verifier) agreeing. `a5_coins.verifier_negatives` refuses each negative for its
-own reason: the bytes passed off as the challenger's, or as the verifier's with evidence, at the Lean run's select (`coins`);
-a resample (`drawn`) and a sample before the registration (`unknown`), with no coin read. A toy window of two templates."""
+"""a5's coins: a window's `service.Stream` samples only from the auditor's challenger's coins (`a5_coins.RankCoins`, or
+`Replay` of an honest sample's bytes for the negatives), refusing any other source (`service.NO_OWN_COINS`): the verifier
+samples no coins of its own. A sample on the challenger's bytes with no evidence is rejected by the Lean verifier of record's
+whole run (`Run.run`) at its select (`coins`). A toy window of two templates; and the session's connect."""
 
 from __future__ import annotations
 
@@ -53,12 +52,6 @@ class Clock:
         return self.now
 
 
-def fixed(byte: int):
-    """A deterministic stand-in for the Lean's OS coins: `n` copies of `byte`, read through `VerifierCoins` as the run
-    reads `verifier.coins`."""
-    return lambda n: bytes([byte]) * n
-
-
 def _ports() -> dict:
     part = P.partition(P.mixed_population_program([(t, COUNTS[P.template_id(t)]) for t in WINDOW]), QUERY)
     n = sum(COUNTS.values())
@@ -74,122 +67,40 @@ def _record() -> dict:
 
 
 def stream_of(coins) -> S.Stream:
-    name = "a5 test, challenger" if isinstance(coins, CC.ChallengerCoins) else "a5 test, verifier"
-    return S.Stream(SPEC, WINDOW, budget=1, delta=0.5, challenger=name, coins=coins, clock=Clock())
+    return S.Stream(SPEC, WINDOW, budget=1, delta=0.5, challenger="a5 test, challenger", coins=coins, clock=Clock())
 
 
 def register(stream: S.Stream) -> S.Registration:
     return stream.register(_record(), _ports(), window_root=ROOT, counts=COUNTS)
 
 
-def outcome(stream: S.Stream, draw: S.Draw, evidence: dict | None) -> tuple[S.Outcome, dict | None]:
+def test_a5s_stream_draws_on_no_coins_of_its_own():
+    """The verifier's own coins (the Lean's `IO.getRandomBytes`, `verifier.coins`) or any callable but a challenger's are
+    refused before the stream exists; the challenger's (`RankCoins`, `Replay`) are taken."""
+    for own in (V.coins, lambda n: bytes([0x5a]) * n, None):
+        with pytest.raises(ValueError, match="no coins of its own"):
+            stream_of(own)
+    assert isinstance(AC.Replay(b""), CC.ChallengerCoins) and issubclass(AC.RankCoins, CC.ChallengerCoins)
+    assert stream_of(AC.Replay(b"")).digest
+
+
+def test_the_challengers_bytes_with_no_evidence_are_rejected_by_the_lean_run():
+    """Bytes passed off as the challenger's with no log to show they are its: the outcome fails `run`, the Lean refusing
+    at its select (`coins`), and Python's `coins_reason` refuses the missing evidence."""
+    stream = stream_of(AC.Replay(bytes([0x5a]) * 4096))
+    draw = stream.select(register(stream))
     assert stream.deliver(draw, [SESSION]) is None
-    return stream.outcome(draw, VERDICTS, {"statement": "stub"}, coins=evidence), stream.records[-1]["audit"]
-
-
-def honest(byte: int = 0x5a) -> tuple[S.Stream, AC.VerifierCoins, S.Draw, S.Outcome, dict]:
-    coins = AC.VerifierCoins(fixed(byte))
-    stream = stream_of(coins)
-    draw = stream.select(register(stream))
-    got, audit = outcome(stream, draw, None)
-    return stream, coins, draw, got, audit
-
-
-def test_verifier_coins_default_to_the_leans_os_coins():
-    """With no source, `VerifierCoins` reads the service's default coins, the Lean's `IO.getRandomBytes`
-    (`verifier.coins`), and is no `ChallengerCoins`."""
-    coins = AC.VerifierCoins()
-    assert coins.source is V.coins and not isinstance(coins, CC.ChallengerCoins)
-
-
-def test_a_window_drawn_on_the_verifiers_coins_is_accepted_with_the_lean_run_agreeing():
-    """The stream's coin source is the verifier; its select reads the coins only after the registration (a stratum each,
-    PAIR's by its floor), `read` holds exactly the bytes the sample read, and the outcome with no evidence is accepted, the
-    Lean's `Run.run` agreeing (no `run` check failed)."""
-    stream, coins, draw, got, audit = honest()
-    assert stream.coin_source == "verifier"
-    assert draw.draw["law"] == "stratified" and len(draw.units) == 4 and 0 in draw.units
-    assert bytes(coins.read) and bytes(coins.read) == stream._entries[draw.registration.order].read
-    assert got.accepted and audit["accepted"] and "run" not in audit["checks"]
-    assert audit["verifiers"]["agree"]
-
-
-def test_a_verifier_draw_with_any_evidence_is_rejected_by_the_lean_run():
-    """`coins` is None on the verifier's own coins: an outcome given evidence fails `run`, the Lean refusing at its select."""
-    coins = AC.VerifierCoins(fixed(0x5a))
-    stream = stream_of(coins)
-    draw = stream.select(register(stream))
-    got, audit = outcome(stream, draw, AC.FOREIGN_EVIDENCE)
+    got = stream.outcome(draw, VERDICTS, {"statement": "stub"}, coins=None)
+    audit = stream.records[-1]["audit"]
     assert not got.accepted and not audit["checks"]["run"]["ok"]
     side = AC.lean_side(audit)
     assert (side["step"], side["codes"]) == AC.SELECT_COINS
-
-
-def test_every_verifier_coin_negative_is_refused_for_its_own_reason():
-    stream, coins, draw, got, _ = honest()
-    assert got.accepted
-    neg = AC.verifier_negatives(stream_of, register, stream, coins, draw, outcome, ROOT)
-    assert sorted(neg) == ["verifier-coins-before-the-registration", "verifier-coins-claimed-as-challenger",
-                           "verifier-coins-redraw", "verifier-coins-with-evidence"]
-    assert all(n["refused"] for n in neg.values()), neg
-    claimed, evidence = neg["verifier-coins-claimed-as-challenger"], neg["verifier-coins-with-evidence"]
-    assert claimed["source"] == "challenger" and claimed["python"] == CC.COINS_FORM and claimed["accepted"] is False
-    assert evidence["source"] == "verifier" and evidence["accepted"] is False and "python" not in evidence
-    for n in (claimed, evidence):
-        assert (n["lean"]["step"], n["lean"]["codes"]) == AC.SELECT_COINS
-    assert neg["verifier-coins-redraw"] == {"refused": True, "stream": ["drawn"], "coins_read": 0}
-    assert neg["verifier-coins-before-the-registration"] == {"refused": True, "stream": ["unknown"], "coins_read": 0}
-
-
-def test_a_negative_the_stream_accepts_is_not_counted_refused(monkeypatch):
-    """The refusal is the stream's, not the label's: where the replayed draw is the verifier's own with no evidence (the
-    honest run again), neither outcome negative counts as refused, even with the Lean's side read as refusing at select."""
-    stream, coins, draw, _, _ = honest()
-    monkeypatch.setattr(AC, "FOREIGN_EVIDENCE", None)
-    monkeypatch.setattr(AC, "Replay", AC.OwnReplay)
-    monkeypatch.setattr(AC, "lean_side", lambda audit: {"step": AC.SELECT_COINS[0], "codes": AC.SELECT_COINS[1]})
-    neg = AC.verifier_negatives(stream_of, register, stream, coins, draw, outcome, ROOT)
-    for name in ("verifier-coins-claimed-as-challenger", "verifier-coins-with-evidence"):
-        assert neg[name]["accepted"] is True and neg[name]["source"] == "verifier" and not neg[name]["refused"], neg[name]
-
-
-def test_an_outcome_negative_counts_refused_only_where_its_own_check_refuses(monkeypatch):
-    """A rejected outcome is not enough: a negative the Lean's run refuses elsewhere than its select's `coins` is not
-    refused, nor one passed off as the challenger's whose evidence Python's `coins_reason` would take."""
-    stream, coins, draw, _, _ = honest()
-    monkeypatch.setattr(AC, "SELECT_COINS", ("outcome", ["coins"]))
-    neg = AC.verifier_negatives(stream_of, register, stream, coins, draw, outcome, ROOT)
-    for name in ("verifier-coins-claimed-as-challenger", "verifier-coins-with-evidence"):
-        assert neg[name]["accepted"] is False and not neg[name]["refused"], neg[name]
-    monkeypatch.undo()
-    stream, coins, draw, _, _ = honest()
-    monkeypatch.setattr(CC, "coins_reason", lambda *_: None)
-    neg = AC.verifier_negatives(stream_of, register, stream, coins, draw, outcome, ROOT)
-    assert neg["verifier-coins-claimed-as-challenger"]["python"] is None
-    assert not neg["verifier-coins-claimed-as-challenger"]["refused"]
-    assert neg["verifier-coins-with-evidence"]["refused"]
-
-
-def test_a_select_counts_refused_only_for_its_own_code_with_no_coin_read():
-    def refuse(code):
-        raise S.Refused(S.Verdict(False, (code,), {code: None}))
-
-    read = [0]
-
-    def reads_then_refuses():
-        read[0] += 1
-        refuse("drawn")
-
-    assert AC.stream_refusal(lambda: refuse("drawn"), "drawn", lambda: read[0])["refused"]
-    assert not AC.stream_refusal(lambda: refuse("unknown"), "drawn", lambda: read[0])["refused"]
-    assert AC.stream_refusal(reads_then_refuses, "drawn", lambda: read[0]) == {"refused": False, "stream": ["drawn"],
-                                                                             "coins_read": 1}
-    assert AC.stream_refusal(lambda: None, "drawn", lambda: read[0]) == {"refused": False, "stream": None, "coins_read": 0}
+    assert CC.coins_reason(None, ROOT, bytes.fromhex(draw.registration.digest), b"\x5a", AC.lms_verify) is not None
 
 
 def test_the_replay_reads_no_more_than_the_honest_draw():
-    replay = AC.OwnReplay(b"\x01\x02\x03")
-    assert replay(2) == b"\x01\x02" and replay.at == 2
+    replay = AC.Replay(b"\x01\x02\x03")
+    assert replay(2) == b"\x01\x02"
     with pytest.raises(AC.Ch.CoinError, match="past the honest draw"):
         replay(2)
 

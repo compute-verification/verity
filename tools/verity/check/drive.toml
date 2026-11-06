@@ -29,7 +29,7 @@ landing_gates = ["tools/verity/check/gates/markdown_caps.py"]
 land = "review"
 # the branch the review landing fast-forwards and `next` is built on: "checked", whose tip drive's full check (`train.sh TIP
 # MACHINES`, recorded) checks after each landing; `main` moves only to a commit of `checked` whose check passed every
-# step on the merge gate (not circuit-check, `gate = false` in ci.toml), and a red step's culprit is reverted on `checked`,
+# step on the merge gate (not circuit-check, `off_gate` in policy.toml), and a red step's culprit is reverted on `checked`,
 # never on `main`. "main" lands on `main` and checks it after. Only drive's App pushes `checked`
 land_into = "checked"
 # the after-landing run reuses every pass whose declared inputs are unchanged, as any check does: it gates `main`, and a cold
@@ -42,11 +42,18 @@ after_landing_no_cache = false
 # most MAX shards) takes N and each shard's parts from the shard planner (`check.py --shard-plan`, made once a tip beside the
 # records step), each shard `train.sh --shard auto:K/N --shard-plan-file PLAN`, and runs unsharded when no plan is made
 after_landing_shards = 3
-# the task executor (`research.executor`): "off"; "shadow", each tip the after-landing run checks has its task graph (`verity tasks
-# list --json --kind after-landing`) enqueued too, at priority 1, and its verdicts compared with the run's, a record per tip
-# that `research queue shadow-report` prints; "on" (once 3 tips in a row agree fully) launches no run: the executor's verdicts
-# alone verify the tip, and `main` follows once every task passed
-executor = "off"
+# the task executor (`research.executor`): "off"; "shadow", each tip the after-landing run checks is enqueued too, at priority
+# 1, the executor listing its task graph on a worker (`verity tasks list --json --kind after-landing`, labelled `tasks_graph`
+# on commit:<sha>), and its verdicts compared with the run's by that graph's keys, a record per tip that `research queue
+# shadow-report` prints; "on" (once 3 tips in a row agree fully) launches no run: each tip is enqueued as graph/v2 (`verity
+# graph`, labelled `verity_graph` on commit:<sha>), its tasks' results (`result` on task:<key>) alone verify it, judged by
+# policy.toml as a run's failures are, and `main` follows once every task on the gate passed and the graph has a task of every
+# job `main` waits for; a red names the landing whose change touches what the failed task depends on
+executor = "shadow"
+# infra's enqueue command, the words of its argv (`research.executor.QueueTransport`), run with `--priority N --check
+# after-landing:SHA` (and `--schema verity-graph/v2` when on); unset, each tip the executor would check is recorded incomplete
+# in shadow, and told to CI when on
+# executor_enqueue = ["CMD", "ARG"]
 # the most review-landing Lean checks running at once: one, and those stacked above it on `next` for Lean changes it doesn't hold
 max_lean_checks = 10
 # a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members on `next` never move)
@@ -65,18 +72,23 @@ verdict_first = true
 # the after-landing run checks them, and a red one reverts its culprit. A landing off `next` rebuilds it, and each Lean check
 # of `next` that runs or passed moves to the same member's new commit when the trees differ in nothing `lowrisk_excludes`
 # names; the lane waits only while one can't move, and even then lands a marked fix of a red on `checked`, without rebuilding
-# `next` (the check's verdict moves with its prefix at the next sync). false: drive lands only on review
+# `next` (the check's verdict moves with its prefix at the next sync). Above the prefix such a check holds, it also lands a
+# member with a land verdict that changes no Lean and touches nothing a Lean check reads, whatever `lowrisk_excludes` say, and
+# the check moves across it. false: drive lands only on review
 lowrisk_lane = true
 lowrisk_per_tick = 20
 # what keeps a change off the low-risk lane: a directory from the root (ending in `/`), or a file name glob (any directory).
 # Lean, its locks and Lake files, the trusted hashes, the verifiers, and the soundness-path Python (AGENTS.md's SOUNDNESS_PATH
 # under verity/ml/); and the guards that hold everything else to those rules: the Lean check (tools/verity/lean/), the
 # whole-tree invariants (root tests/: the import boundaries, SOUNDNESS_PATH, verifier cost), the check and this file
-# (tools/verity/check/), the merge drivers (.gitattributes), and the landing rules themselves (drive.py, queue.py)
+# (tools/verity/check/), the merge drivers (.gitattributes), and the landing rules themselves (drive.py, queue.py); and what
+# runs with the control pod's or every agent's credentials once it is on main: infra/, the research tool (tools/research/),
+# the agent guard and its hooks (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
                     "verity/core/", "verity/ml/circuits/", "verity/ml/kernels/", "verity/ml/commitments/",
                     "verity/ml/crypto/", "verity/ml/randomness/",
-                    "tools/verity/lean/", "tests/", "tools/verity/check/", ".gitattributes", "drive.py", "queue.py"]
+                    "tools/verity/lean/", "tests/", "tools/verity/check/", ".gitattributes", "drive.py", "queue.py",
+                    "infra/", "tools/research/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
 # days an open PR not marked ready at its head stays idle (its head commit, and its ready, eject and review labels there) before
 # it is stale: `research queue status` says so and drive rings its owner once a day (`research.stale`); 0 is off
 stale_days = 3

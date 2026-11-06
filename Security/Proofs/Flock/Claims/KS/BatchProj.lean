@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.SlotBatch
+module
+
+public import Proofs.Flock.Claims.KS.SlotBatch
 
 /-!
 # A game's strategy out of an interleaving's
@@ -14,6 +16,8 @@ projection reaches something off `Dead'` too, and the `spent` case holds of ever
 * `projL`, `projL_live`, `followL_none`, `reach_projL`: the first game's, `FollowL` with the slot behind, and what it
   reaches.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game.Lock
 

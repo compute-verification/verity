@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Knowledge
-import Proofs.Flock.Soundness.Game.Batch
+module
+
+public import Proofs.Flock.Soundness.Knowledge
+public import Proofs.Flock.Soundness.Game.Batch
 
 /-!
 # A table inside a batched session (README.md §1.3)
@@ -22,6 +24,8 @@ everything after `Commit` `K` times, and fills the table from the table's openin
 (`extractTableS`). The session accepts while that extraction fails with probability at most
 `ε_c⁻ + K·adv₀ + N₀/(eK)`, the table theorem's form, with `adv₀` the level-0 finder in the session.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

@@ -1,8 +1,10 @@
-import PouwCheck.Inputs
-import PouwCheck.Pass
-import PouwWindow.Record
-import PouwWindow.Side
-import Identity.Domains
+module
+
+public import PouwCheck.Inputs
+public import PouwCheck.Pass
+public import PouwWindow.Record
+public import PouwWindow.Side
+public import Identity.Domains
 
 /-!
 # A unit's opening (`core_check.py`, "a unit's opening")
@@ -24,6 +26,8 @@ entry's side roots.
 Python's reading is kept where its outcome depends on it: hex as `bytes.fromhex` reads it, integers as `struct`
 packs them (a boolean is one), an entry as `Entry.from_json` reads it.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 

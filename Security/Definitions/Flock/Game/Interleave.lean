@@ -1,4 +1,6 @@
-import Definitions.Flock.Game
+module
+
+public import Definitions.Flock.Game
 
 /-!
 # Two interactions run concurrently
@@ -11,6 +13,8 @@ The verifier accepts only if both interactions accept.
 
 The repetition theorem (`value_interleave_le`, the error squares) is in `Proofs.Flock.Soundness.Game.Interleave`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

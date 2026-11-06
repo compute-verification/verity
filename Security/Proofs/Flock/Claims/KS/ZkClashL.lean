@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkClash0
+module
+
+public import Proofs.Flock.Claims.KS.ZkClash0
 
 /-!
 # The masked view's self-clash past level 0
@@ -17,6 +19,8 @@ plays no part: the collision is against the rep's recorded recursive cap.
 * `zk_KS_of_pads`, `zk_tableBoundJOnAccR_of_pads`, `zk_KSFlock_of_pads`: masked KS and the recursion's chain rest on the
   fork bounds and the view's pads clash.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.LigeritoQueries
-import Proofs.Flock.Soundness.JohnsonMCA
-import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+module
+
+public import Proofs.Flock.Soundness.LigeritoQueries
+public import Proofs.Flock.Soundness.JohnsonMCA
+public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
 
 /-!
 # Mutual correlated agreement at Ligerito's folds (PROTOCOL.md §13.3)
@@ -21,6 +23,8 @@ to Ligerito's coins:
   of `Model.foldColumn`). Paper Lemma 9's row union is the sum of the rounds' pair counts,
   `2^k − 1`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

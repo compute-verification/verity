@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundMergedLin
-import Proofs.Flock.Claims.Recursion.VCallsAt
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundMergedLin
+public import Proofs.Flock.Claims.Recursion.VCallsAt
 
 /-!
 # `Fdev`'s link over the draws' evaluations
@@ -14,6 +16,8 @@ draws' evaluations (`drawCalls`), which `FdevV`'s output searches:
 * `Bound.linkOutV_collO`, `Bound.Pr_badO_le_linV`, `Bound.Pr_badO_le_PrFdevV`: `P_O`'s bad draws at most
   `k_I·(Pr[FdevV] + 1/(M+1))`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

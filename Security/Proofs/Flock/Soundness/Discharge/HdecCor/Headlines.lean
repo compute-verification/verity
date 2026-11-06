@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Headline
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
-import Proofs.Flock.Soundness.Discharge.DecodeZL
-import Proofs.Flock.Soundness.Discharge.HiddenDec
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ
-import Proofs.Flock.Soundness.Discharge.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+public import Proofs.Flock.Soundness.Discharge.DecodeZL
+public import Proofs.Flock.Soundness.Discharge.HiddenDec
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ
+public import Proofs.Flock.Soundness.Discharge.Tables
 
 /-!
 # The headlines with R11b's message half discharged
@@ -24,6 +26,8 @@ openings, single coins, no final messages and `capOfRoot` at the values the deco
 (`c.outNet = c.unitNet`, `scopeOk`, the parse and load, retained rounds and leaves), which flock-verify refuses a statement
 failing (PROTOCOL.md §16.15).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HdecCor
 

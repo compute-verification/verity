@@ -1,6 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Zero.Delta
-import Proofs.Flock.Soundness.Discharge.Zero.Flat
-import Proofs.Flock.Soundness.Discharge.Zero.Cols
-import Proofs.Flock.Soundness.Discharge.Zero.Stack
-import Proofs.Flock.Soundness.Discharge.Zero.Uniform
-import Proofs.Flock.Soundness.Discharge.Zero.Typed
+module
+
+public import Proofs.Flock.Soundness.Discharge.Zero.Delta
+public import Proofs.Flock.Soundness.Discharge.Zero.Flat
+public import Proofs.Flock.Soundness.Discharge.Zero.Cols
+public import Proofs.Flock.Soundness.Discharge.Zero.Stack
+public import Proofs.Flock.Soundness.Discharge.Zero.Uniform
+public import Proofs.Flock.Soundness.Discharge.Zero.Typed
+
+@[expose] public section

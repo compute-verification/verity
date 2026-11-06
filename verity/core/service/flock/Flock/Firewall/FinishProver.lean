@@ -15,10 +15,14 @@ differ, each by a parameter or a line:
 The proof file's bytes are the analysis's `encZk` (`FlockSoundness.Discharge.ZkView.encZk`), `flock-circuit --zk`'s
 `bincode` of `(Commitment, R1csProofLigerito, InnerProof)`.
 -/
-import Flock.With.Verify
-import Flock.With.Zk
-import Flock.Zk
-import Flock.ZkProof
+module
+
+public import Flock.With.Verify
+public import Flock.With.Zk
+public import Flock.Zk
+public import Flock.ZkProof
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

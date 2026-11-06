@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Exec
-import Proofs.Flock.Soundness.Discharge.Layout
-import Proofs.Flock.Soundness.Discharge.Placed
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec
+public import Proofs.Flock.Soundness.Discharge.Layout
+public import Proofs.Flock.Soundness.Discharge.Placed
 
 /-!
 # The tables and sites of a one-table session
@@ -24,6 +26,8 @@ file, one table), at the draw the challenger writes for `S` (`dj S`, the draw's 
 * `sitesAt_bcSite`: e2e-layout's site fact `BcSite` at every satisfiable site: at a `DrawSetup` table by the rank, and at
   a refused table vacuously.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Integrate
 

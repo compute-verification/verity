@@ -1,4 +1,6 @@
-import Definitions.Flock.Rewinding
+module
+
+public import Definitions.Flock.Rewinding
 
 /-!
 # The rewinding lemma: openings off the plurality table cost collisions
@@ -23,6 +25,8 @@ are at least `b_p` of those because no value beats the plurality, so `#conflictA
 b_p²`. Each conflicting pair is counted at no more than `Q` positions, and Cauchy–Schwarz gives
 `(Σ b_p)² ≤ N Σ b_p²`.
 -/
+
+@[expose] public section
 
 open Finset
 

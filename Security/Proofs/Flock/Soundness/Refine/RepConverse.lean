@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Refine.Rep
-import Proofs.Flock.Soundness.Refine.LincheckConverse
-import Proofs.Flock.Soundness.Refine.OpeningConverse
-import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
+module
+
+public import Proofs.Flock.Soundness.Refine.Rep
+public import Proofs.Flock.Soundness.Refine.LincheckConverse
+public import Proofs.Flock.Soundness.Refine.OpeningConverse
+public import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
 
 /-!
 # One rep accepts when its stages' checks hold (PROTOCOL.md §9–§14)
@@ -19,6 +21,8 @@ returns (`rsT`, `rsSws`).
 `roundsOf` builds a record's rounds from their coin counts, coins and retained bytes; each round retains its bytes
 (`roundsOf_retains`), so the stages' frame hypotheses hold by construction at the bytes the stages frame.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
@@ -127,7 +131,7 @@ stream, the statement's extra claims at the link points are `extras`, the proof 
 `verifyRep` decodes with, its PCS parameters are the pinned ones, the rep's program returns from the stream's replay
 transcript at `t₄` (`prog_of_checks`), `t₄` consumed every recorded round, and the proof's cap is the committed
 `root_B`, then `verifyRep` returns that cap. -/
-theorem verifyRep_of_checks (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : Session) (i r : ℕ)
+theorem verifyRep_of_checks (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes : ByteArray) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
     (hs : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) =
       some stream)

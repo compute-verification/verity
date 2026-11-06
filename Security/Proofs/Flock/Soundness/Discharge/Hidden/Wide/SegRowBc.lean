@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCopies
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCopies
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
 
 /-!
 # A row's `b ‖ c` under its own prefix, whatever the other rows
@@ -9,6 +11,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
 columns those are `Wide.Copies`' (`Any.cv0_filterAll` … `Any.pad_filterAll`), so `Any.row_bc_tgt` is `row_bc_tgt` with
 only the row itself unsegmented.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
