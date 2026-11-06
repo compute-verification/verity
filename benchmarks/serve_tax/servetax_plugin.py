@@ -161,6 +161,86 @@ class TokenCommit:
         self.thread.join()
 
 
+class KvEdge:
+    """At each window edge (`tick`, at the model runner's first step ``window_s`` after the last edge), the paged KV cache
+    hashed where it lies: each distinct storage under its layers' tensors, viewed as rows of ``row_bytes``, hashed by the
+    GPU's row-table kernels (`row_tables_device.step_roots`: SHA-512 row digests, hm96 leaves, frame trees) on their side
+    stream, behind an event on the serving stream, in chunks of at most ``chunk_rows`` rows, so that nothing waits on the
+    host. The kernels' work is per 1,024-byte segment, so the row size changes the planning on the host, not the hashing.
+    The whole pool is hashed, free blocks too: an upper bound on hashing the blocks live at the edge. A block that a step
+    after the edge writes before the side stream reads it is hashed as written: a measurement of the cost, not a commitment
+    of the state. ``sink`` gets each edge's record once its last chunk is done (bytes, kernel ms)."""
+
+    def __init__(self, window_s: float, sink: Callable[[dict], None], row_bytes: int = 1 << 20, chunk_rows: int = 4096,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self.window_s, self.sink, self.clock = float(window_s), sink, clock
+        self.row_bytes, self.chunk_rows = int(row_bytes), int(chunk_rows)
+        self.edge = 0
+        self.last = clock()
+        self.pending: list[tuple[int, int, list[Any]]] = []
+
+    def rows(self, kv_caches: Iterable[Any]) -> list[Any]:
+        """Each distinct storage under the KV cache as (n, row_bytes) int8 rows (a last partial row dropped)."""
+        import torch
+
+        seen: dict[int, Any] = {}
+        for t in kv_caches:
+            for x in (t if isinstance(t, (list, tuple)) else (t,)):
+                s = x.untyped_storage()
+                if s.data_ptr() in seen:
+                    continue
+                flat = torch.empty(0, dtype=torch.int8, device=x.device).set_(s)
+                k = self.row_bytes
+                seen[s.data_ptr()] = flat[: flat.numel() // k * k].view(-1, k)
+        return list(seen.values())
+
+    def tick(self, kv_caches: Iterable[Any]) -> None:
+        self.reap()
+        if self.clock() - self.last < self.window_s:
+            return
+        from verity_vllm.commit import row_tables_device as RTD
+
+        self.last = self.clock()
+        launched, nbytes = [], 0
+        for r in self.rows(kv_caches):
+            for lo in range(0, r.shape[0], self.chunk_rows):
+                c = r[lo:lo + self.chunk_rows]
+                ids = [("kv", lo + i) for i in range(c.shape[0])]
+                scales = c.new_zeros(c.shape[0], dtype=_f32())
+                launched.append(RTD.step_roots(bytes(64), self.edge, {"kv": (ids, c, scales)}, bytes(32), timing=True))
+                nbytes += c.numel()
+        self.pending.append((self.edge, nbytes, launched))
+        self.edge += 1
+
+    def reap(self, wait: bool = False) -> None:
+        while self.pending and (wait or all(p.ready() for p in self.pending[0][2])):
+            edge, nbytes, launched = self.pending.pop(0)
+            ms = sum(p.kernel_ms() for p in launched)
+            self.sink({"edge": edge, "bytes": nbytes, "chunks": len(launched), "kernel_ms": round(ms, 3),
+                       "gb_per_s": round(nbytes / ms / 1e6, 1) if ms else None, "t": time.time()})
+
+
+def _f32() -> Any:
+    import torch
+
+    return torch.float32
+
+
+def _kv_runner(execute: Callable[..., Any], cfg: Mapping[str, Any]) -> Callable[..., Any]:
+    state: dict[str, Any] = {}
+
+    def execute_model(self: Any, *args: Any, **kwargs: Any) -> Any:
+        edge = state.get("edge")
+        if edge is None:
+            edge = state["edge"] = KvEdge(float(cfg.get("kv_window_s", cfg.get("window_s", 600))),
+                                          _lines(Path(cfg["out"]) / f"kv_edges.{os.getpid()}.jsonl"))
+            atexit.register(edge.reap, True)
+        out = execute(self, *args, **kwargs)
+        edge.tick(self.kv_caches)
+        return out
+    return execute_model
+
+
 def _lines(path: Path) -> Callable[[dict], None]:
     path.parent.mkdir(parents=True, exist_ok=True)
     fh = path.open("a")
@@ -234,6 +314,12 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
         hooks.wrap(sched, "finish_requests", gated_finish)
         hooks.patch(sched, "_verity_release", gate)
         done.append(gate)
+    if cfg.get("kv"):
+        import torch
+
+        from verity_vllm.commit import row_tables_device as RTD
+
+        RTD.DeviceLibrary.of(torch, torch.cuda.current_device())
     done.append(hooks)
     return done
 
@@ -279,4 +365,8 @@ def register() -> None:
     hooks.wrap(Scheduler, "__init__", lambda init: _init(init, cfg))
     if cfg.get("release_order"):
         hooks.wrap(EngineCoreProc, "_process_input_queue", _input)
+    if cfg.get("kv"):
+        from vllm.v1.worker.gpu_model_runner import GPUModelRunner
+
+        hooks.wrap(GPUModelRunner, "execute_model", lambda execute: _kv_runner(execute, cfg))
     _PLUGIN.append(hooks)

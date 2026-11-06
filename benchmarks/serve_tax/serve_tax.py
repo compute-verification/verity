@@ -80,6 +80,8 @@ ARMS = {
     "release-order": Arm("record", "+ admission in the certifier's release order", plugin=("record", "release_order")),
     "tick": Arm("record", "+ admission on the certified tick", plugin=("record",), tick=True),
     "tokens": Arm("tick", "+ each window's tokens committed (rows-sha512)", plugin=("record", "tokens"), tick=True),
+    "kv": Arm("tokens", "+ the paged KV cache hashed in place at each window edge", plugin=("record", "tokens", "kv"),
+              tick=True),
 }
 
 
@@ -142,12 +144,13 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int) -> list[str
             *(["--middleware", TICK_MIDDLEWARE] if arm.tick else [])]
 
 
-def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float) -> dict[str, str]:
+def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float) -> dict[str, str]:
     env = dict(os.environ, VLLM_SERVER_DEV_MODE="1",
                PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
                                            *filter(None, [os.environ.get("PYTHONPATH")])]))
     if arm.plugin:
-        env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s, **{k: True for k in arm.plugin}})
+        env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s, "kv_window_s": kv_window_s,
+                                      **{k: True for k in arm.plugin}})
     if arm.tick:
         if tick is None:
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
@@ -288,13 +291,13 @@ def run(a: argparse.Namespace) -> int:
     argv = server_argv(arm, model, checkpoint, port)
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
-            "plugin": list(arm.plugin), "tick": tick, "window_s": a.window_s, "rates": rates, "reps": a.reps,
+            "plugin": list(arm.plugin), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps,
             "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "versions": versions(), "host": os.uname().nodename,
             "run_id": os.environ.get("RESEARCH_RUN_ID"), "gpus": os.environ.get("CUDA_VISIBLE_DEVICES"), "loads": []}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     t = time.monotonic()
     with open(srv / "server.log", "wb") as log:
-        server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=server_env(arm, srv, site, tick, a.window_s),
+        server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=server_env(arm, srv, site, tick, a.window_s, a.kv_window_s),
                                   start_new_session=True)
     rc = 0
     try:
@@ -537,6 +540,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--drain-s", type=float, default=600.0)
     r.add_argument("--startup-s", type=float, default=1800.0)
     r.add_argument("--window-s", type=float, default=600.0, help="the Commit window the tokens arm closes at")
+    r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
     r.add_argument("--docs", type=int, default=20000)
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--tick-from", metavar="STEP_TRACE")

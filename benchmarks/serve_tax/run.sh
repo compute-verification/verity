@@ -22,6 +22,7 @@ case $MODEL_ID in
   *) echo "serve-tax: MODEL_ID is moonlight or glm53, not $MODEL_ID"; exit 2 ;;
 esac
 VENV=${VENV:-/workspace/cp/venv312}; PY=$VENV/bin/python
+export PATH="$VENV/bin:$PATH"   # the venv's ninja, which FlashInfer's JIT (vLLM's default sampler) runs
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 REPS=${REPS:-3}; SPAN_S=${SPAN_S:-60}; MAX_MIN=${MAX_MIN:-240}
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
