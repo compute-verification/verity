@@ -11,6 +11,7 @@ export type Credentials = {
   modelAuth(lane: string): Promise<ModelAuth>;
   github(subject: string): Promise<{ token: string; expiresAt: string } | null>;
   provisionGatewayKey(lane: string, monthlyUsd: number): Promise<{ keyId: string }>;
+  setGatewayBudget(lane: string, keyId: string, monthlyUsd: number): Promise<void>;
   gatewaySpend(): Promise<{ keyId: string; name: string; spendUsd: number; limitUsd: number | null }[]>;
 };
 
@@ -76,27 +77,34 @@ export function vercelCredentials(o: {
       return { token: j.token, expiresAt: j.expires_at };
     },
 
+    // https://vercel.com/docs/ai-gateway/observability-and-spend/budgets: the
+    // value is returned once, as apiKeyString; the budget endpoints take a
+    // token that belongs to a user.
     async provisionGatewayKey(lane, monthlyUsd) {
       const created = await vercel("POST", "/v1/api-keys", {
         purpose: "ai-gateway",
         name: `platform-lead-${lane}`,
-        metadata: { spendAttribution: "user" },
+        aiGatewayQuota: { limitAmount: monthlyUsd, refreshPeriod: "monthly" },
       });
-      const keyId = String(created.id ?? (created.apiKey as Record<string, unknown>)?.id);
-      const value = String(created.key ?? created.token ?? (created.apiKey as Record<string, unknown>)?.key);
-      await vercel("PATCH", `/v1/api-keys/${encodeURIComponent(keyId)}/quota`, { limitAmount: monthlyUsd, refreshPeriod: "monthly" });
+      const keyId = (created.apiKey as Record<string, unknown> | undefined)?.id;
+      const value = created.apiKeyString;
+      if (typeof keyId !== "string" || typeof value !== "string") throw new Error("POST /v1/api-keys returned no apiKey.id or apiKeyString");
       await o.store.setGatewayKey(lane, keyId, seal(o.secret, value));
       await o.store.recordGrant({ subject: lane, kind: "ai-gateway-key", scope: `monthly $${monthlyUsd}`, ref: keyId, expiresAt: null });
       return { keyId };
     },
 
+    async setGatewayBudget(lane, keyId, monthlyUsd) {
+      await vercel("PATCH", `/v1/api-keys/${encodeURIComponent(keyId)}/quota`, { limitAmount: monthlyUsd, refreshPeriod: "monthly" });
+      await o.store.recordGrant({ subject: lane, kind: "ai-gateway-key", scope: `monthly $${monthlyUsd}`, ref: keyId, expiresAt: null });
+    },
+
     async gatewaySpend() {
       const j = await vercel("GET", "/ai-gateway/budgets/list?scopeType=api-key");
-      const items = (j.budgets ?? j.items ?? []) as Record<string, unknown>[];
-      return items.map((b) => ({
-        keyId: String(b.scopeId ?? b.apiKeyId ?? ""),
+      return ((j.budgets ?? []) as Record<string, unknown>[]).map((b) => ({
+        keyId: String(b.scopeId ?? ""),
         name: String(b.name ?? ""),
-        spendUsd: Number(b.spend ?? b.currentSpend ?? 0),
+        spendUsd: Number(b.currentSpend ?? 0),
         limitUsd: b.limitAmount == null ? null : Number(b.limitAmount),
       }));
     },
@@ -121,6 +129,9 @@ export function localCredentials(store: Store): Credentials {
       await store.setGatewayKey(lane, keyId, "");
       await store.recordGrant({ subject: lane, kind: "ai-gateway-key", scope: `monthly $${monthlyUsd}`, ref: keyId, expiresAt: null });
       return { keyId };
+    },
+    async setGatewayBudget(lane, keyId, monthlyUsd) {
+      await store.recordGrant({ subject: lane, kind: "ai-gateway-key", scope: `monthly $${monthlyUsd}`, ref: keyId, expiresAt: null });
     },
     async gatewaySpend() {
       return [];
