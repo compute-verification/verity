@@ -82,8 +82,8 @@ fwd_def stW setup_stW (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse)
       HmNets.check c = .ok ())
     (hu1 : canon unitsJ = .ok s3) (hu2 : canon (HmRow.unitsEntry (cW ls lh H A B A' B' s1) #[0]) = .ok s3)
     (hd : canonUtf8 (hdrJ (hexOf H)) = .ok s4)
-    (hid : canonUtf8 tz.identity = .ok s6) (hhello : ∀ σ m, helloOf tz σ m coins1 = .ok (hello σ m)) :
-    Stmt.setupH tz (bytesOf ls lh) (pubOf (hexOf H)) coins1 [] none none none by
+    (hid : canonUtf8 tz.identity = .ok s6) (hhello : ∀ σ m, helloOf tz σ m coins0 = .ok (hello σ m)) :
+    Stmt.setupH tz (bytesOf ls lh) (pubOf (hexOf H)) coins0 [] none none none by
   [parse_cW ls lh H A B A' B' s1 hH hls hlh hps hph hc1 hc2 hck, load_pubV ls lh H A B A' B' s1 s3 s4 hu1 hu2 hd,
     checkPublic_cW ls lh H A B A' B' s1 s3 s4, bne_self, hid, hhello, unit_eq, delta_ab, crw_nil]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
@@ -111,8 +111,8 @@ fwd_def tabW setupTables_W (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sp
       HmNets.check c = .ok ())
     (hu1 : canon unitsJ = .ok s3) (hu2 : canon (HmRow.unitsEntry (cW ls lh H A B A' B' s1) #[0]) = .ok s3)
     (hd : canonUtf8 (hdrJ (hexOf H)) = .ok s4)
-    (hid : canonUtf8 tz.identity = .ok s6) (hhello : ∀ σ m, helloOf tz σ m coins1 = .ok (hello σ m)) :
-    Stmt.setupTables tz (bytesOf ls lh) (pubOf (hexOf H)) coins1 1 [] none none none none none none none by
+    (hid : canonUtf8 tz.identity = .ok s6) (hhello : ∀ σ m, helloOf tz σ m coins0 = .ok (hello σ m)) :
+    Stmt.setupTables tz (bytesOf ls lh) (pubOf (hexOf H)) coins0 1 [] none none none none none none none by
   [setup_stW ls lh H A B A' B' s1 s3 s4 s6 hello hH hls hlh hps hph hc1 hc2 hck hu1 hu2 hd hid hhello]
   block [HmNets.check, HmNets.shaLaid, HmNets.hmLaid, HmNets.sha512x3Net, HmNets.hm96Net, canon, canonUtf8, Net.parse,
     HmRow.parse, HmRow.loadPublic, HmRow.checkPublic, Stmt.setupH]

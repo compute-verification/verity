@@ -179,7 +179,7 @@ def wC (ls lh : HmNets.Laid) (H : ByteArray) : Raw :=
     stratified := none, closure := none, registered := none, publicInputs := none }
 
 def rC (ls lh : HmNets.Laid) (H : ByteArray) : Read :=
-  { I := { tags := t1, circuitFile := bytesOf ls lh, publicFile := pubOf (hexOf H), coins := coins0, count := 1,
+  { I := { tags := t0, circuitFile := bytesOf ls lh, publicFile := pubOf (hexOf H), coins := coins0, count := 1,
            tables := [], partition := none, program := none, work := none, stratified := none, closure := none },
     zk := true, draw := none, publicInputs := none, registered := false }
 
@@ -218,7 +218,7 @@ fwd_def setW setup_W (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) 
   shallow [metaText]
 
 theorem tags_rC (ls lh : HmNets.Laid) (H : ByteArray) : Read.tags (rC ls lh H) = tz := by
-  show Zk.tags (t1.withCoins coins1) (Zk.maskLogOf (bytesOf ls lh)) 1 = tz
+  show Zk.tags t0 (Zk.maskLogOf (bytesOf ls lh)) 1 = tz
   rw [maskLog_bytes]
   rfl
 
@@ -233,7 +233,7 @@ theorem setup_rC (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 
       HmNets.check c = .ok ())
     (hu1 : canon unitsJ = .ok s3) (hu2 : canon (HmRow.unitsEntry (cW ls lh H A B A' B' s1) #[0]) = .ok s3)
     (hd : canonUtf8 (hdrJ (hexOf H)) = .ok s4)
-    (hid : canonUtf8 tz.identity = .ok s6) (hhello : ∀ σ m, helloOf tz σ m coins1 = .ok (hello σ m)) :
+    (hid : canonUtf8 tz.identity = .ok s6) (hhello : ∀ σ m, helloOf tz σ m coins0 = .ok (hello σ m)) :
     Read.setup (rC ls lh H) = .ok (tabW ls lh H A B A' B' s1 s3 s4 s6 hello) := by
   unfold Read.setup
   rw [tags_rC]
@@ -408,12 +408,12 @@ theorem intJ_id : IntJ tz.identity = true := by decide +kernel
 
 theorem hid_of : canonUtf8 tz.identity = .ok s6C := canonUtf8_eq intJ_id
 
-def helloC (σ : ByteArray) (m : Nat) : String := (helloOf tz σ m coins1).toOption.getD ""
+def helloC (σ : ByteArray) (m : Nat) : String := (helloOf tz σ m coins0).toOption.getD ""
 
-theorem hello_isOk (σ : ByteArray) (m : Nat) : (helloOf tz σ m coins1).isOk = true :=
+theorem hello_isOk (σ : ByteArray) (m : Nat) : (helloOf tz σ m coins0).isOk = true :=
   canon_ok _ _ (Nat.lt_succ_self _) (by kernel_rfl)
 
-theorem hhello_of (σ : ByteArray) (m : Nat) : helloOf tz σ m coins1 = .ok (helloC σ m) := ok_of_isOk _ (hello_isOk σ m)
+theorem hhello_of (σ : ByteArray) (m : Nat) : helloOf tz σ m coins0 = .ok (helloC σ m) := ok_of_isOk _ (hello_isOk σ m)
 
 /-! ### The units entry -/
 

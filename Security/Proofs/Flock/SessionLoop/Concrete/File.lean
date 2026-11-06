@@ -187,9 +187,7 @@ theorem meta_parse : JsonParse.parseList metaChars = .ok mjC := by kernel_rfl
 
 def t0 : Tags := Tags.circuitEb90718f
 def coins0 : Coins := .tree (Zk.coinSpec (t0.tableNames 1))
-def t1 : Tags := t0.withCoins coins0
-def coins1 : Coins := .tree (Zk.coinSpec (t1.tableNames 1))
-def tz : Tags := Zk.tags (t1.withCoins coins1) 14 1
+def tz : Tags := Zk.tags t0 14 1
 
 def lines (ls lh : HmNets.Laid) : List String := fileLs "copy16" metaText unitLaid ls lh
 def bytesOf (ls lh : HmNets.Laid) : ByteArray := (joinNl (lines ls lh)).toUTF8

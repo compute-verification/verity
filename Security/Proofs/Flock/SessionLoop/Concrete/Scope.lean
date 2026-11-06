@@ -159,7 +159,7 @@ theorem parse_rC (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 
       HmNets.check c = .ok ())
     (hu1 : canon unitsJ = .ok s3) (hu2 : canon (HmRow.unitsEntry (cW ls lh H A B A' B' s1) #[0]) = .ok s3)
     (hd : canonUtf8 (hdrJ (hexOf H)) = .ok s4)
-    (hid : canonUtf8 tz.identity = .ok s6) (hhello : ∀ σ m, helloOf tz σ m coins1 = .ok (hello σ m)) :
+    (hid : canonUtf8 tz.identity = .ok s6) (hhello : ∀ σ m, helloOf tz σ m coins0 = .ok (hello σ m)) :
     Read.parse (rC ls lh H) = some { rC ls lh H with sts := #[stW ls lh H A B A' B' s1 s3 s4 s6 hello] } := by
   have hs : Read.setup (rC ls lh H) =
       .ok ((tabW ls lh H A B A' B' s1 s3 s4 s6 hello).1, #[stW ls lh H A B A' B' s1 s3 s4 s6 hello]) :=
