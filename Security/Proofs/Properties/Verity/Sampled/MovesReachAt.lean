@@ -64,7 +64,8 @@ theorem movesReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) :
-    MovesReach V θ F c k (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
+    MovesReach V θ F c k
+      (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
       (readingAt A.tables A.layout (record c) (recordDigest c)) σ (decodersAt reg A.layout)
       (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout (record c) (recordDigest c)) σ (labelAt θ)
         (afterAt V k θ F c σ) (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A))
