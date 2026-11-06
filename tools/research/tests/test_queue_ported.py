@@ -103,6 +103,22 @@ def test_a_pr_adding_lean_made_before_the_port_above_a_ported_base_gets_it_porte
     assert _show(world, "refs/heads/next", "Lib/New.lean") == _port(new)
 
 
+def test_a_merge_changing_nothing_the_codemod_reads_onto_a_ported_base_runs_no_codemod(world, tmp_path):
+    """The codemod's run over the whole tree takes about 20 s on drive's control pod, and a sync merges hundreds of times: a
+    merge that changes no `.lean` file, Lake file or the port's tooling onto a tree on the module system takes that tree's
+    porting as it is, and only the merge that brings Lean runs the codemod."""
+    argv, runs = tmp_path / "argv", tmp_path / "runs"
+    _move_main(world, {**_tooling(argv, f"open({str(runs)!r}, 'a').write('x')\n"),
+                       "Lib/Old.lean": "module\n\npublic import Init\n"})
+    new = "import Lib.Old\n"
+    world.gh.put(1, world.change({"a.txt": "a1\n"}))
+    world.gh.put(2, world.change({"Lib/New.lean": new}))
+    members, entries = world.queue().sync()
+    assert [m.pr for m in members] == [1, 2], {n: e.why for n, e in entries.items()}
+    assert runs.read_text() == "x", world.logs
+    assert _show(world, members[1].commit, "Lib/New.lean") == _port(new)
+
+
 def test_each_pin_recording_a_ported_file_records_its_ported_digest_and_keeps_every_other_byte(world, tmp_path):
     """A pin records a Lean source's digest (PoUS's TRUSTED.sha256, a JSON pin with vectors after it), so each file the
     codemod ports, the PR's or one below it, moves its record with it."""

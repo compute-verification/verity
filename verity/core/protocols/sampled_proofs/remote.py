@@ -93,6 +93,9 @@ any reply is read, so they must fit the stream's send buffer while the challenge
 SEQUENCE = ("a client's frames are hello, then open {label, index, after} per coin, tree {nonce, spec} per coin tree and "
             "tree-open {after, n, round, stream, tree} per round of one, then close")
 SESSION_ID = f"a session id is at most {Ch.MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'"
+#: an open's label past ASCII is refused in these words alone, since the refusal is how the session ended, which its close
+#: signs and writes
+LABEL = "an open's label is an ASCII string, one of the layout's family labels"
 
 
 def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -215,12 +218,15 @@ def close_session(session: Session, ended: str | None) -> ChallengerClose:
 def _release(head: dict, records: dict[str, LiveRecord], log: Any, lines: list[str]) -> LiveOpening:
     if head.get("type") != "open" or sorted(head) != ["after", "index", "label", "type"]:
         raise CoinError(SEQUENCE)
-    label, index, after = head["label"], head["index"], _root(head["after"])
-    record = records.get(label) if type(label) is str else None
+    label, index = head["label"], head["index"]
+    if type(label) is not str or not label.isascii():
+        raise CoinError(LABEL)
+    after = _root(head["after"])
+    record = records.get(label)
     if record is None:
         raise CoinError(f"the epoch's coins have no {label!r} family")
     if type(index) is not int or index != len(record.roots):
-        raise CoinError(f"the next {label} coin is {len(record.roots)}, not {index!r}")
+        raise CoinError(f"the next {label} coin is {len(record.roots)}, not {ascii(index)}")
     n = len(record.log)
     opening = record.record(after)
     try:
