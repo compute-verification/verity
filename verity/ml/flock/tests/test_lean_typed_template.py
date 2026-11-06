@@ -2,10 +2,10 @@
 Rust prover splits it: the instance type's root one slot per VU and each placed layout's slots its parts, with rows only
 through `deriveChecked`, the row wiring derived, and Δ in the prover's order (the flat entries, then per VU the inputs'
 copies, the parts' bound rows and the root's cross entries). A typed statement is a form the soundness proof does not
-cover (§16.15), so on the prover's recorded sessions the statement sets up and every case is refused: the honest ones for
+cover (`Flock.ProvedScope`), so on the prover's recorded sessions the statement sets up and every case is refused: the honest ones for
 its form, once every check has passed, and every other case for the check that catches it. That build has no zk patch, so
 its plain files are upstream's form, without the `zk_level0 = None` tag the deployed prover writes, and are read under
-`--upstream-plain` (PROTOCOL.md §8.1)."""
+`--upstream-plain` (`Flock.Proof`)."""
 from __future__ import annotations
 
 import hashlib
@@ -59,7 +59,7 @@ def test_the_verifier_reads_a_typed_template(gemm):
 @pytest.mark.slow
 def test_typed_expand_reads_the_public_output_form(gemm):
     """`typed-expand --statement` parses a `types@210d32e1` file as `verify` does; the default, `verity/flock-circuit/types`
-    with hidden outputs (PROTOCOL.md §16.13), refuses it."""
+    with hidden outputs (`HmOut`), refuses it."""
     root, _ = gemm
     circuit = root / "stage" / "circuit.txt"
 
