@@ -7240,6 +7240,12 @@
     "_private.RemoteAudit.P2Session.0.RemoteAudit.P2Session.hexesOf": "75eab5138d34c22340a311013dac1a6af5f98a1bf2de86ff1615e0150671b857"
    }
   },
+  "RemoteAudit.Schedule": {
+   "digest": "88b1323bf1319cc5131d7e73199f0c7fe85e6d5d47a57681f6d97165eead6fa1",
+   "definitions": {
+    "RemoteAudit.Schedule.Chunk": "a200504cd231847b5bfcd280188530f3568186228e0b05f84eed01739f63ef7d"
+   }
+  },
   "SampledProofs.ChallengerCoins": {
    "digest": "03072ec8a37e16be5ae26c2bece00be1836b489725d090c7a9873c817c3f4d8b",
    "definitions": {
