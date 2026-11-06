@@ -163,14 +163,15 @@ RELAYED = ("the relay's frames are hello with its secret, then tree {nonce, spec
 class TreeRelay:
     """The step's session as a drawn member's ``--zk`` server takes its session's coin tree from it (``flock-circuit serve
     --tree-from ADDRESS --tree-secret-file FILE``, `Draws.trees`): a thread of the manager's process listening on
-    127.0.0.1:0 (`address`), its secret fresh in `file`, mode 0600. It takes one connection whose hello carries the secret
-    (`remote.greet`, which answers a refused hello and hangs up; the next connection is then taken), closes its listener
-    and answers ``commitment {}``, which the client checks for its form alone. Each ``tree {nonce, spec}`` and ``tree-open
-    {after, n, round, stream, tree}`` frame is asked of the step's one client by `forward` in the draws' `turn`, and its
-    answer, or its refusal, goes back. A ``close`` ends the connection alone, answered ``closed``: the step's session stays
-    open until its ranks' sessions are done (`Draws.sessions_done`). Any other frame, a refusal or a broken stream ends the
-    connection with nothing more forwarded. `trees` and `rounds` count what it forwarded and `ended` says how it ended,
-    set before its last answer is sent; the file is removed once it has (`stop`)."""
+    127.0.0.1:0 (`address`), its secret fresh in `file`, mode 0600, which the server reads before it connects. It takes
+    one connection whose hello carries the secret (`remote.greet`, which answers a refused hello and hangs up; the next
+    connection is then taken), removes `file`, closes its listener and answers ``commitment {}``, which the client checks
+    for its form alone. Each ``tree {nonce, spec}`` and ``tree-open {after, n, round, stream, tree}`` frame is asked of
+    the step's one client by `forward` in the draws' `turn`, and its answer, or its refusal, goes back. A ``close`` ends
+    the connection alone, answered ``closed``: the step's session stays open until its ranks' sessions are done
+    (`Draws.sessions_done`). Any other frame, a refusal or a broken stream ends the connection with nothing more
+    forwarded. `trees` and `rounds` count what it forwarded and `ended` says how it ended, set before its last answer is
+    sent; a relay that ends before any hello carried the secret removes `file` then (`stop`)."""
 
     def __init__(self, file: Path, turn: threading.Lock, forward: Callable[[dict], dict]) -> None:
         self.file, self._turn, self._forward, self._secret = file, turn, forward, secrets.token_bytes(32)
@@ -185,8 +186,8 @@ class TreeRelay:
         threading.Thread(target=self._run, daemon=True).start()
 
     def _greeted(self) -> socket.socket | None:
-        """The first connection whose hello carries the secret, its listener then closed; None once stopped (`stop` shuts
-        the listener, which ends a wait for a connection)."""
+        """The first connection whose hello carries the secret, its secret's file then removed and its listener closed (it
+        takes no second connection); None once stopped (`stop` shuts the listener, which ends a wait for a connection)."""
         while True:
             try:
                 conn, _ = self._listener.accept()
@@ -199,6 +200,7 @@ class TreeRelay:
             with self._lock:
                 stopped = self._stopped
                 if why is None and not stopped:
+                    self.file.unlink(missing_ok=True)
                     self._listening = False
                     self._listener.close()
                     return conn
@@ -246,9 +248,9 @@ class TreeRelay:
 
     def stop(self, why: str) -> None:
         """End the relay (`why`, unless it has ended already): an in-flight frame finishes first and none is forwarded
-        after, a listener still waiting for its server is shut, and the secret file is removed. A server's connection is
-        left to end by itself: the step's session closes only once its member sessions are done (`Draws.sessions_done`),
-        their servers exited."""
+        after, a listener still waiting for its server is shut, and the secret's file, if no hello took it, is removed. A
+        server's connection is left to end by itself: the step's session closes only once its member sessions are done
+        (`Draws.sessions_done`), their servers exited."""
         with self._lock:
             if self.ended is None:
                 self.ended = why
@@ -488,7 +490,8 @@ class Draws:
 
     def evidence(self) -> dict:
         """The session's evidence once it has ended (`Session.finish`): {key, ledger, session, trusted} or {error}, each
-        with the `plan` it opened on (`start`)."""
+        with the `plan` it opened on (`start`), and once its client has closed it, what its relay forwarded (`relayed`,
+        None without one)."""
         self._ready.wait()
         return self._evidence
 
@@ -845,8 +848,9 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
     layout. The evidence's `plan` is the needs, the layout and the session's id (None when none opened). `main` is the
     verifier's own copy of main's first-parent history (`remote.main_lines`'s file: ``git rev-list --first-parent
     origin/main``). With `trees`, for one rank's audit, it is a trees session (`Draws`): open until the rank's member
-    sessions are done (`Draws.sessions_done`), its relay's secret fresh beside `dest` (``<dest>.relay-secret``) until the
-    relay ends."""
+    sessions are done (`Draws.sessions_done`), its relay's secret fresh in a directory of its own (``a5-relay-*`` in the
+    temporary directory, never under `dest`) until a hello carries it or the relay ends, and the directory removed when the
+    thread ends, however it ends; the evidence's `relayed` is what the relay forwarded (`Draws.relayed`)."""
     if trees and len(ranks) != 1:
         raise ValueError(f"a trees session relays one drawn member's coin trees (`Draws.trees`): start it for one rank's "
                          f"audit, not {len(ranks)} ranks'")
@@ -862,9 +866,10 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
                          f"not {challenger!r}")
     manager = _Manager(ctx=get_context("spawn"))
     manager.start()
-    draws = manager.Draws(root, ranks, str(dest.resolve().with_name(dest.name + ".relay-secret")) if trees else None)
+    relay = Path(tempfile.mkdtemp(prefix="a5-relay-")) if trees else None
+    draws = manager.Draws(root, ranks, None if relay is None else str(relay / "secret"))
 
-    def finish() -> None:
+    def run_session() -> None:
         needs = draws.wait_planned()
         plan: dict[str, Any] = {"needs": {str(r): n for r, n in sorted(needs.items())}, "families": None, "session": None}
         try:
@@ -892,7 +897,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
             draws.publish({"error": f"the challenger's session {session.session} gave no client: {e}", "plan": plan})
             return
         ended = draws.wait_closed()
-        released = draws.released()
+        released, relayed = draws.released(), draws.relayed()
         try:
             directory, ledger, pins_log, key = session.finish(dest)
             commitment_, roots = R.trusted_session(directory, [ledger], {"root": root}, key, lms_verify)
@@ -911,9 +916,17 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
                                        "close": ended, "ledger_sha512": hashlib.sha512(ledger.read_bytes()).hexdigest(),
                                        "pin": opened_pin(led, session.session), "pins_lines": len(pins),
                                        "main": {"tip": first_parent[0] if first_parent else None, "commits": len(first_parent)},
-                                       "pinned_session": pinned}, "plan": plan})
+                                       "pinned_session": pinned}, "plan": plan, "relayed": relayed})
         except (Ch.CoinError, OSError, ValueError, KeyError) as e:
-            draws.publish({"error": f"the challenger's session {session.session} gave no evidence: {e}", "plan": plan})
+            draws.publish({"error": f"the challenger's session {session.session} gave no evidence: {e}", "plan": plan,
+                           "relayed": relayed})
+
+    def finish() -> None:
+        try:
+            run_session()
+        finally:
+            if relay is not None:
+                shutil.rmtree(relay, ignore_errors=True)
     finisher = threading.Thread(target=finish, daemon=True)
     finisher.start()
     return manager, draws, finisher

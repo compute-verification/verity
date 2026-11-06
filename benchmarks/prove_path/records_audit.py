@@ -904,7 +904,7 @@ def audit(a: argparse.Namespace) -> int:
         row["activations"] = acts
     row["definitions"] = {t: _code(fn) for t, (_c, fn) in sets.items() if t in {m.template for m in mine.members}}
     row["loaded"] = sorted({m.split(".")[0] for m in sys.modules if m.startswith("verity")})
-    row["coins_session"] = {"trusted": published.get("trusted"), "error": published.get("error")}
+    row["coins_session"] = {x: published.get(x) for x in ("trusted", "error", "relayed")}
     if s.get("draw") is not None:
         rec, receipt = (json.loads((out / "window" / f).read_text()) for f in ("registration.json", "receipt.json"))
         bound = {"compiler": held["compiler"], "advice": held["advice"]} if held["compiler"] is not None else None

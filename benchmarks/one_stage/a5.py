@@ -1600,7 +1600,7 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
             finisher.join()
             published = a.coins.evidence()
             summary["challenger"].update(trusted=published.get("trusted"), error=published.get("error"),
-                                         **(published.get("plan") or {}))
+                                         relayed=published.get("relayed"), **(published.get("plan") or {}))
             manager.shutdown()
     summary["accepted"] = ok_all and sorted(summary["ranks"]) == sorted(str(r) for r in ranks) \
         and not summary.get("challenger", {}).get("error")
