@@ -8,7 +8,9 @@ public import Definitions.Core.Partition
 public import Definitions.Nci
 
 /-!
-# The inference-only policy's guarantees
+# The inference-only policy's lemmas
+
+These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
 Each is a `def G : Prop` over `Protocol`'s definitions and the assumptions, proved as
 `Nci.SecurityProofs.G : Nci.Guarantees.G`.
@@ -37,28 +39,6 @@ def Inference : Prop :=
   ∀ (c k : ℕ) (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)),
     d.D.Boolean → Assumptions.Sessions d P prompt c k → Complies c k d ∧ slowdown (Complies c k) d ≤ 1
 
-/-- **Updated matrix multiplications are throttled** (the draft's theorem, "Throttling updated matrix
-multiplications"): under compute-bounded incompressibility, every declared circuit `D ⊨ 𝒫` that runs updated matrix
-multiplications is larger than those multiplications by a factor of at least `F`. The multiplications have about `2G`
-gates: `G` products, and about as many additions. The policy is at `(c, k)`, `k` is the most an inference block reads,
-`F` is taken at the rate `k / c`, `b_w` and `b_a` are the widths of a weight entry and an activation entry, and `d` is
-the smallest inner dimension (a smaller `d` gives a smaller `F`). -/
-def UpdatedMatMul : Prop :=
-  ∀ (c k : ℕ) (b_w b_a : ℝ) (D : RegisteredCircuit) (ch : Chain D.D) (d : ℕ),
-    0 < c → 0 < k → 0 < b_w → 0 < b_a → Assumptions.InnerAtLeast ch d → Complies c k D →
-    Assumptions.ActivationsIncompressible D ch c k b_w b_a →
-    Assumptions.PartialSumsIncompressible D ch c k b_w b_a →
-      F (k / c) k b_w b_a d * (2 * ch.G) ≤ D.D.size D.D.computed
-
-/-- **Frontier training is throttled** (the draft, "From updated matrix multiplications to training"): let `T` be a
-training circuit in the class `𝒯`, so that every declared circuit that implements `T` and complies runs updated matrix
-multiplications, which take up a fraction `κ` of `size(T)` (the coverage `κ(T)`). If compute-bounded incompressibility
-holds for the multiplications each of them runs, then `ρ_𝒫(T) ≥ κ F`. -/
-def Training : Prop :=
-  ∀ (c k : ℕ) (b_w b_a κ : ℝ) (T : RegisteredCircuit) (d : ℕ),
-    0 < c → 0 < k → 0 < b_w → 0 < b_a → 0 < T.D.size T.D.computed → Assumptions.InClass T c k b_w b_a κ d →
-    ENNReal.ofReal (κ * F (k / c) k b_w b_a d) ≤ slowdown (Complies c k) T
-
 end Nci.Guarantees
 
 namespace Nci.SecurityProofs
@@ -77,24 +57,6 @@ def _root_.Nci.Guarantees.FullPositions : Prop :=
       (c.weightsUsed R).card * (univ.filter (c.Full R)).card ∧
     d * (univ.filter (c.Full R)).card ≤
       ((c.inputsUsed R).filter fun x => c.Full R x.2.1 ∧ ¬ c.LinkedWhole R x.1 x.2.1 x.2.2).card
-
-end Nci.SecurityProofs
-
-namespace Nci.SecurityProofs
-open Verity Finset
-
-open Classical in
-/-- **What an inference block reads** (the draft's proof of its theorem, "Throttling updated matrix multiplications"):
-"By the lemmas and incompressibility, `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits", for an inference block `R`
-of at most `c` computed gates that reads at most `k` fresh input bits, under `Assumptions.ActivationsSupport` at cap
-`k + b_w + b_a` for some committed values `θv` of the registered information. `p_R` is the number of weight entries `R`
-uses, `τ_R` its number of full positions, `Q_R` the number of input entries it uses at positions that are not full, and
-`d` the smallest inner dimension. -/
-def _root_.Nci.Guarantees.IuReads : Prop :=
-  ∀ (D : RegisteredCircuit) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) (d : ℕ) (hd : Assumptions.InnerAtLeast ch d) (hb_a : 0 ≤ b_a) (hb_w : 0 ≤ b_w) (θv : D.D.Transcript) (h : Assumptions.ActivationsSupport D θv ch (k + b_w + b_a) b_w b_a) (R : Finset (Fin D.D.N)) (hR : Small D c k R),
-    b_w * (ch.weightsUsed R).card +
-      b_a * (d * (univ.filter (ch.Full R)).card + ((ch.inputsUsed R).filter fun x => ¬ ch.Full R x.2.1).card) ≤
-    novelReads D R
 
 end Nci.SecurityProofs
 

@@ -362,7 +362,7 @@
         "Security/Definitions/Accounting/Requirement.lean",
         "Security/Definitions/Accounting/Responder.lean",
         "Security/Definitions/Accounting/Window.lean",
-        "Security/Definitions/Accounting/Assumptions/EncodeChain.lean",
+        "Security/Proofs/Accounting/Lemmas/EncodeChain.lean",
         "Security/Definitions/Accounting/Assumptions/RateAudit.lean",
         "Security/Definitions/Accounting/Assumptions/RateAuditDeployed.lean",
         "Security/Definitions/Accounting/Assumptions/Remote.lean",
