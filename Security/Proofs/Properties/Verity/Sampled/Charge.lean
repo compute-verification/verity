@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Properties.Verity.Sampled.Assembled
 public import Proofs.Properties.Verity.Sampled.LeafErr
 public import Proofs.Properties.Verity.Sampled.Walk
 
@@ -23,7 +24,7 @@ the potential from no tree open, the hiding term:
   and an opening pays its round's class error out of it: the device opens each round at most once.
 * **The stops' term** (`couplesErr_le_of_charge`, `couplesErr_sampleMap_le`): where each stop's opening asks for the
   count of coins the stop releases (`RoundCounts`, `LinkCounts`), the stops' term at the sample-coupled coin map is
-  within the hiding term.
+  within the hiding term, and the coupling, assembled, needs no bound on it (`couplingTarget_assembled_counts`).
 -/
 
 @[expose] public section
@@ -58,8 +59,8 @@ theorem avg_pathCharge_coin (Γ : Game α → ℝ≥0∞) {C : Type} {iF : Finty
     (s : Strategy (@Game.coin _ C iF iN k)) :
     avg (pathCharge Γ (@Game.coin _ C iF iN k) s) =
       Γ (@Game.coin _ C iF iN k) + avg fun c => avg (pathCharge Γ (k c) (s c)) := by
-  letI : ∀ c, Fintype (CoinTape (k c) (s c)) := fun c => CoinTape.fintype (k c) (s c)
-  haveI : ∀ c, Nonempty (CoinTape (k c) (s c)) := fun c => CoinTape.nonempty (k c) (s c)
+  let : ∀ c, Fintype (CoinTape (k c) (s c)) := fun c => CoinTape.fintype (k c) (s c)
+  have : ∀ c, Nonempty (CoinTape (k c) (s c)) := fun c => CoinTape.nonempty (k c) (s c)
   change avg (fun x : C × ((c : C) → CoinTape (k c) (s c)) =>
     Γ (@Game.coin _ C iF iN k) + pathCharge Γ (k x.1) (s x.1) (x.2 x.1)) = _
   rw [avg_add, avg_const, avg_prod]
@@ -361,7 +362,7 @@ theorem avg_pathCharge_relK_le {lg : β → List Release} (hE : RecordsLog lg E)
       refine avg_pathCharge_optGame_le _ (fun _ => hfz) fun T hT => ?_
       refine avg_pathCharge_optGame_le _ (fun _ => hfz) fun p hp => ?_
       obtain ⟨-, hp₂, hn⟩ := OpenTree.next_some hp
-      haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
+      have : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
       refine avg_pathCharge_coin_le _ (fun _ => treePotential e (ts.set i (T.bump p.1)))
         (openErr_opening_le e hE k fs ts f pre hf i s n b T p hn)
         (fun d => ih fs (ts.set i (T.bump p.1)) _ _
@@ -492,5 +493,30 @@ theorem couplesErr_sampleMap_le (A : Live) (rd : Reading A.rounds) (σ : Strateg
     (fun dr q hq s hs => openGap_add_openEmpty_le_openErr e (hR q hq dr s hs))
     (fun x _ => openGap_add_openEmpty_le_openErr_link e (hL x))
     ((avg_pathCharge_game_le e V θ F c σ).trans_eq (treePotential_nil e A))
+
+
+omit θ F c in
+/-- **The coupling, assembled, at the session's own coins, off the openings' counts**: `couplingTarget_assembled_src`
+with its stops' term within the hiding term by `couplesErr_sampleMap_le`, wherever at each commitment and strategy
+each stop's opening asks for the count of coins the stop releases (`RoundCounts`, `LinkCounts`). -/
+theorem couplingTarget_assembled_counts (k : Verity.Registration.Composite) (K : Constructions V)
+    (dev : Exchange → Properties.Challenger.History) (rd : Readings)
+    (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
+      Decoders A.rounds A.Reg)
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) (m : ℕ)
+    (A : Live) (θ : ByteArray) (F : Array ByteArray) (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
+    (hS : ∀ c, Binding.SignsPlay V dev θ F c) (hL : A.Lb 0 = m * 64)
+    (hRC : ∀ c σ, RoundCounts V θ F c A (rd A θ F c) σ (D A θ F c σ))
+    (hLC : ∀ c σ, LinkCounts V θ F c A (rd A θ F c) σ)
+    (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hW : WritesView A)
+    (hM : ∀ c σ, MovesReach V θ F c k
+      (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A (rd A θ F c) σ
+      (D A θ F c σ) (sampleMaps e V rd label (afterAt V k) (srcCoinsAt m) A θ F c σ)
+      (linkEmpty e (finish (V.signer θ) θ F c σ.1)) (roundEmpty e (finish (V.signer θ) θ F c σ.1))) :
+    CouplingTarget V k (K.assembled e dev k rd D label (afterAt V k) (srcCoinsAt m)) A θ F :=
+  couplingTarget_assembled_src e V k K dev rd D label m A θ F hP hS hL
+    (fun c σ => couplesErr_sampleMap_le e V θ F c A (rd A θ F c) σ (D A θ F c σ) (label θ F c σ)
+      (afterAt V k θ F c σ) (srcCoinsAt m A) (avg_srcCoinsAt hL) (hRC c σ) (hLC c σ))
+    hA hDg hW hM
 
 end Verity.Sampled
