@@ -24,6 +24,11 @@ The exfiltration bound at the footprint: on fixed inputs, the boundary traces `R
   With every admissible set at most `K` proof blocks and `H` bits, `|influenceTwo| ≤ 2^H·Σ_{j≤K} C(n, j)`; `H` from
   per-stratum widths; a code that decodes each of `M` messages from served outputs in the influence set has
   `|M| ≤ |influenceTwo|`, so exporting `β` bits needs `2^β ≤ 2^H·Σ_{j≤K} C(n, j)`.
+* `Design.Two.Pa_zero`, `footprint_congr`, `rTwo_congr`: **what `RTwo` reads**. At the zero footprint every cell
+  escapes, so the acceptance probability is the first stage's at the empty set. The footprint, and so `RTwo`, reads no
+  replay block's interior: two boundary traces that agree off the interiors are in `RTwo` together, so it says nothing
+  of whether the interiors were ever computed (`Witnesses/SamplingTwoWork.lean`: compute credit is not certified with
+  deferred interiors).
 * `CompiledTwo.exfil_of_ks`, `compilerExfilTwo`: **`CompilerExfilTwo`**: `RTwo` implies `RInflTwo`.
 -/
 
@@ -526,6 +531,106 @@ theorem card_decoded_le {M : Type} [Fintype M] (H : Msg → Msg) (Cm : Commitmen
         obtain ⟨m, -, rfl⟩ := mem_image.1 hz
         exact hy m
     _ ≤ _ := card_influenceTwo_le_uniform H Cm hs δ a hH hK
+
+/-! ## What `RTwo` reads -/
+
+/-- **The acceptance probability at the zero footprint** is the first stage's at the empty set: every cell escapes. -/
+theorem Design.Two.Pa_zero (d : Design.Two) (Pt : Partition) : d.Pa Pt (fun _ _ => 0) = d.replay.Pa d.part ∅ := by
+  have he : ∀ ρ, d.esc Pt (fun _ _ => 0) ρ = 1 := fun ρ => by
+    unfold Design.Two.esc
+    exact prod_eq_one fun t _ => escCell_zero _ _
+  unfold Design.Two.Pa
+  rw [sum_eq_single ∅]
+  · simp [he]
+  · intro T _ hT
+    obtain ⟨ρ, hρ⟩ := nonempty_iff_ne_empty.2 hT
+    have h0 : ∏ ρ ∈ T, (1 - d.esc Pt (fun _ _ => 0) ρ) = 0 := prod_eq_zero hρ (by simp [he])
+    rw [h0, zero_mul, mul_zero]
+  · intro h
+    exact absurd (empty_mem_powerset _) h
+
+/-- At a gate of replay block `ρ`, its values are the same under two committed traces that agree at every gate that
+is no replay block's interior. -/
+theorem refIn_congr_off {C : Prog} {Pρ : Partition} (hn : Pρ.gates.Nodup) {val val' : ℕ → Option Bool}
+    (hw : ∀ g, (∀ ρ r, Pρ.blocks[ρ]? = some r → g ∈ r → C.Boundary r g = true) → val g = val' g)
+    {ρ : ℕ} {r : List ℕ} (hr : Pρ.blocks[ρ]? = some r) (ι : ℕ → Bool) {g : ℕ} (hg : g ∈ r) :
+    C.refIn r val ι g = C.refIn r val' ι g := by
+  by_cases hb : C.Boundary r g = true
+  · rw [Prog.refIn_of_boundary hb, Prog.refIn_of_boundary hb]
+    refine hw g fun ρ' r' hr' hg' => ?_
+    have hρ := eq_of_mem_of_nodup hn hr' hr hg' hg
+    subst hρ
+    rw [Option.some.inj (hr'.symm.trans hr)]
+    exact hb
+  · unfold Prog.refIn
+    simp [hg, hb]
+
+/-- **The footprint reads no replay block's interior**: two boundary traces that open the same values at every gate
+that is no replay block's interior have the same footprint at every interior values. -/
+theorem footprint_congr (H : Msg → Msg) (Cm : CommitmentScheme Bool) {s : AuditStatement} {Pt Pρ : Partition}
+    (hP : Pt.Partitions s.prog) (hn : Pρ.gates.Nodup) {w w' : Wit}
+    (hw : ∀ g, (∀ ρ r, Pρ.blocks[ρ]? = some r → g ∈ r → s.prog.Boundary r g = true) →
+      w.val H Cm s g = w'.val H Cm s g) (ι : ℕ → ℕ → Bool) :
+    footprint H Cm s Pt Pρ w ι = footprint H Cm s Pt Pρ w' ι := by
+  classical
+  funext ρ t
+  unfold footprint wrongIn
+  refine congrArg card (filter_congr fun v hv => not_congr ?_)
+  obtain ⟨u, r, hu, hr, hur⟩ := cell_blocks hv
+  have hin : ∀ g ∈ r, s.prog.refIn r (w.val H Cm s) (ι ρ) g = s.prog.refIn r (w'.val H Cm s) (ι ρ) g :=
+    fun g hg => refIn_congr_off hn hw hr (ι ρ) hg
+  have hiff : s.prog.Correct (s.prog.refIn r (w.val H Cm s) (ι ρ)) u ↔
+      s.prog.Correct (s.prog.refIn r (w'.val H Cm s) (ι ρ)) u := by
+    refine s.prog.correct_congr (fun g hg => hin g (hur g hg)) fun g hg x hx i hi _ => ?_
+    by_cases hir : i ∈ r
+    · exact hin i hir
+    rw [Prog.refIn_of_not_mem hir, Prog.refIn_of_not_mem hir]
+    refine hw i fun ρ' r' hr' hi' => ?_
+    have hgr' : g ∉ r' := fun hg' => by
+      have hρ := eq_of_mem_of_nodup hn hr' hr hg' (hur g hg)
+      subst hρ
+      rw [Option.some.inj (hr'.symm.trans hr)] at hi'
+      exact hir hi'
+    exact Prog.boundary_of_read hgr' (hP.2.1 g (mem_gates hu hg)) hx hi
+  constructor
+  · rintro ⟨u', r', hu', hr', hc⟩
+    rw [hu, Option.some.injEq] at hu'
+    rw [hr, Option.some.injEq] at hr'
+    subst hu' hr'
+    exact ⟨_, _, hu, hr, hiff.1 hc⟩
+  · rintro ⟨u', r', hu', hr', hc⟩
+    rw [hu, Option.some.injEq] at hu'
+    rw [hr, Option.some.injEq] at hr'
+    subst hu' hr'
+    exact ⟨_, _, hu, hr, hiff.2 hc⟩
+
+/-- **`RTwo` is blind to the interiors**: on a statement in scope, two boundary traces that open the same values at
+every gate that is no replay block's interior are in `RTwo` together. What it takes holds whether or not the interiors
+were ever computed. -/
+theorem rTwo_congr (H : Msg → Msg) (Cm : CommitmentScheme Bool) {parse : Msg → Option AuditStatement}
+    {partition : AuditStatement → Option Partition} {two : AuditStatement → Option Design.Two} {δ : ℝ} {x : Msg}
+    {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hs : parse x = some s) (hPt : partition s = some Pt)
+    (hd : two s = some d) (hin : InScopeTwo Pt d s) {w w' : Wit}
+    (hw : ∀ g, (∀ ρ r, d.part.blocks[ρ]? = some r → g ∈ r → s.prog.Boundary r g = true) →
+      w.val H Cm s g = w'.val H Cm s g) :
+    RTwo H Cm parse partition two δ x w ↔ RTwo H Cm parse partition two δ x w' := by
+  have key : ∀ ι, footprint H Cm s Pt d.part w ι = footprint H Cm s Pt d.part w' ι :=
+    footprint_congr H Cm hin.2.1 hin.2.2.1 hw
+  constructor
+  · rintro ⟨s', Pt', d', hs', hPt', hd', ι, hM⟩
+    rw [hs, Option.some.injEq] at hs'
+    subst hs'
+    rw [hPt, Option.some.injEq] at hPt'
+    rw [hd, Option.some.injEq] at hd'
+    subst hPt' hd'
+    exact ⟨_, _, _, hs, hPt, hd, ι, by rw [← key ι]; exact hM⟩
+  · rintro ⟨s', Pt', d', hs', hPt', hd', ι, hM⟩
+    rw [hs, Option.some.injEq] at hs'
+    subst hs'
+    rw [hPt, Option.some.injEq] at hPt'
+    rw [hd, Option.some.injEq] at hd'
+    subst hPt' hd'
+    exact ⟨_, _, _, hs, hPt, hd, ι, by rw [key ι]; exact hM⟩
 
 end Claims.Sampling
 
