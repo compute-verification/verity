@@ -7,10 +7,12 @@ Checked today, against ``allowlists/p11_names.json``:
   version or lab token: ``v1``/``v2b``, ``fast``, ``poc``, ``m1``, ``b1``, ``tp2`` or ``G1`` as a whole
   ``_``/``-``/CamelCase-separated token.  Functions decorated with a Definition decorator (``@primitive(...)``) are
   exempt: their name is the hashed Definition name.
+* ``doc-board-id`` (a board id: ``M``, a hyphen and four digits, or ``F-r`` and digits), ``doc-lane`` (an opening
+  bracket followed by the word lane), ``doc-round`` (``R1`` and one more digit) and ``doc-date`` (an ISO date) in
+  module, class and function docstrings.  Counted per docstring and pattern; ``DOC_PATTERNS`` holds the expressions.
 
 Versioned strings that are hashed (Definition ids such as ``Gemm_v1``, schema ids such as
-``runtime-correspondence/v1``) are data, not names, and are not scanned.  Board ids, lanes, rounds and dates in prose are
-the repository's lane-text lint's (``tests/lint/test_repo_lane_text.py``), which reads every docstring and comment.
+``runtime-correspondence/v1``) are data, not names, and are not scanned.
 """
 from __future__ import annotations
 
@@ -24,6 +26,11 @@ NAME = "p11_names"
 RULE = "P11 (names say the job; versions only in hashed data)"
 BAD_TOKEN = re.compile(r"^(v[0-9]+[a-z]?|fast|poc|m[0-9]+|b[0-9]+|tp[0-9]+|g[1-8])$")
 DEFINITION_DECORATORS = frozenset({"primitive", "composite", "definition"})
+DOC_PATTERNS = (("doc-board-id", "M-nnnn", re.compile(r"\bM-\d{4}\b")),
+                ("doc-board-id", "F-rN", re.compile(r"\bF-r\d+")),
+                ("doc-lane", "[lane", re.compile(r"\[lane ")),
+                ("doc-round", "R1N", re.compile(r"\bR1\d\b")),
+                ("doc-date", "date", re.compile(r"\b20\d\d-[01]\d-[0-3]\d\b")))
 ENV_CALLS = frozenset({"os.environ.get", "os.getenv", "os.environ.setdefault", "os.environ.pop", "os.putenv"})
 OPTION = "verity_vllm.config.option"
 
@@ -81,6 +88,10 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
         elif isinstance(node, ast.Subscript) and aliases.resolve(node.value) == "os.environ" and R.is_str(node.slice) \
                 and bad_name(node.slice.value):
             emit("env-name", node, symbol, node.slice.value)
+    for symbol, doc, line in R.docstrings(tree):
+        for kind, label, rx in DOC_PATTERNS:
+            for _ in rx.finditer(doc):
+                out.append(R.Violation(rel, kind, symbol, label, line))
     return out
 
 
@@ -98,7 +109,9 @@ def scan() -> tuple[R.Violation, ...]:
 
 
 def test_no_new_violations() -> None:
-    R.assert_no_new(NAME, scan(), RULE, "Name the job, not the version or the milestone.")
+    R.assert_no_new(NAME, scan(), RULE,
+                    "Name the job, not the version or the milestone; board ids, lanes, rounds and dates go to the "
+                    "research store, not docstrings.")
 
 
 def test_allowlist_has_no_stale_entries() -> None:
@@ -113,7 +126,7 @@ def test_detectors_on_examples() -> None:
                         "embedding_shard", "rms_triton_model", "tp_stage")
             if bad_name(n)] == []
     src = (
-        "'''A module docstring is prose, not a name.'''\n"
+        "'''Lane tp2 [lane tp2] (window 2026-09-17), coord M-0451, rev F-r16-18, R17.'''\n"
         "import os\n"
         "from verity.ml.circuits.defs import primitive\n"
         "@primitive('Gemm', 1, [], None)\n"
@@ -125,6 +138,8 @@ def test_detectors_on_examples() -> None:
         "    fast_copy: bool = option('--fast-copy', env='VERITY_M1_DIR', action='store_true', default=False)\n"
     )
     got = sorted((v.kind, v.detail) for v in file_violations(src, "verity_vllm/tp/m1_capture.py"))
-    assert got == [("class-name", "PocRunner"), ("def-name", "build_v2"), ("env-name", "VERITY_M1_DIR"),
-                   ("env-name", "VERITY_TP2_MODE"), ("flag-name", "--fast-copy"), ("module-name", "m1_capture")], got
+    assert got == [("class-name", "PocRunner"), ("def-name", "build_v2"), ("doc-board-id", "F-rN"),
+                   ("doc-board-id", "M-nnnn"), ("doc-date", "date"), ("doc-lane", "[lane"), ("doc-round", "R1N"),
+                   ("env-name", "VERITY_M1_DIR"), ("env-name", "VERITY_TP2_MODE"), ("flag-name", "--fast-copy"),
+                   ("module-name", "m1_capture")], got
     assert file_violations("", "verity_vllm/tp/m1_capture.circuit-check.py") == []

@@ -98,7 +98,7 @@ def test_conformance_record_names_the_evidence():
 
 
 def test_scan_records_match_the_conformance_record():
-    """B0's and B1's scans of their stored traces, the JSON files this test reads, are what the record states."""
+    """The two store scans (the B0 and B1 files under the test's ``data/`` scan directory) are what the record states."""
     root = Path(__file__).resolve().parents[2] / "data" / "l8-nan-scan-2026-09-07"
     stated = CF.NAN_CANONICALISATION["recorded_traces_finite"]
     for config in ("B0", "B1"):
