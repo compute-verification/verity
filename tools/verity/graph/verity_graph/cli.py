@@ -3,9 +3,10 @@
     verity graph [--json] [--family F ...] [--root DIR]
                                   the graph (graph/v2: --json prints its canonical bytes); with --family, those families'
                                   tasks and every task they read
-    verity graph run ID --work DIR
+    verity graph run ID --work DIR [--graph FILE]
                                   run task ID here in work directory DIR (its reads already there) and print its result/v1;
-                                  exit 0 pass, 1 fail, 3 error
+                                  exit 0 pass, 1 fail, 3 error; with FILE, a listing of this checkout (`verity graph --json`)
+                                  or ID's part of it (`graph.part`), no lister runs
     verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events FILE]
                                   every task (or those families' and what they read) serially, in order, uncached, by the
                                   reference executor (`local.py`), its events/v1 lines (purpose adhoc) appended to FILE
@@ -46,9 +47,10 @@ def _list(args: list[str]) -> int:
     return 0
 
 
-def find(task_id: str) -> tuple[dict, dict]:
-    """(task ``task_id``, the part of this checkout's graph that running it needs: `graph.task_graph`)."""
-    doc = graph.task_graph(ROOT, task_id)
+def find(task_id: str, listed: Path | None = None) -> tuple[dict, dict]:
+    """(task ``task_id``, the part of this checkout's graph that running it needs: `graph.task_graph`, or from the graph/v2
+    file ``listed``, `graph.given`)."""
+    doc = graph.task_graph(ROOT, task_id) if listed is None else graph.given(ROOT, listed, task_id)
     return next(t for t in doc["tasks"] if t["id"] == task_id), doc
 
 
@@ -56,8 +58,10 @@ def _run(args: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="verity graph run", description="Run one task here and print its result/v1.")
     ap.add_argument("id", metavar="ID")
     ap.add_argument("--work", type=Path, required=True, help="its work directory, holding the artifacts it reads")
+    ap.add_argument("--graph", type=Path, metavar="FILE", help="a listing of this checkout (`verity graph --json`) or ID's part "
+                    "of it (`graph.part`), so that no lister runs")
     a = ap.parse_args(args)
-    task, doc = find(a.id)
+    task, doc = find(a.id, a.graph)
     res = runners.execute(task, doc, a.work.resolve())
     sys.stdout.buffer.write(contract.canonical(res) + b"\n")
     return EXIT[res["status"]]

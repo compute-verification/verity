@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Open
-import Proofs.Flock.VBridge.Residuals
-import Proofs.Flock.Soundness.Refine.Paths
+module
+
+public import Proofs.Flock.VBridge.Open
+public import Proofs.Flock.VBridge.Residuals
+public import Proofs.Flock.Soundness.Refine.Paths
 
 /-!
 # V*'s opening, both outputs
@@ -20,6 +22,8 @@ carries `a[k] + Σ_l c[k · LANES + l] · r[l]` for `k = 0, 1` (`rec_open.acc_re
 is `MerkleScheme.rowBytes`, each element's 16 bytes `le64(lo) ‖ le64(hi)`, which puts bit `j` of element `i` at bit
 `128 i + j`, where `sound_residualForms` reads it (`bitL_rowBytes`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

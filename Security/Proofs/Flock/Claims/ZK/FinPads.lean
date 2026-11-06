@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinExe
-import Proofs.Flock.Claims.ZK.Round1Root
+module
+
+public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.Round1Root
 
 /-!
 # The pads' opened columns and salts read from the views are the session's (`repOpenRest_pads`)
@@ -19,6 +21,8 @@ rep (`repHE`) both return at one history `l'`, their inner proofs open the same 
   `innerOff 3`'s, whose coins are the table's `qP`. Each queried position is then opened (`coinedOf_sP_val`), and there
   the views' commitment (`fillP`) is the session's.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

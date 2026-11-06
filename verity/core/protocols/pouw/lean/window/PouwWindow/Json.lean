@@ -1,6 +1,8 @@
-import PouwWindow.Draw
-import PouwWindow.Public
-import Lean.Data.Json
+module
+
+public import PouwWindow.Draw
+public import PouwWindow.Public
+public import Lean.Data.Json
 
 /-!
 # The window's values as JSON
@@ -8,6 +10,8 @@ import Lean.Data.Json
 A number is an integer only when written without a fraction or exponent, as Python's `json` writes an `int`. The items
 are written as Python writes them: `Work` as its dataclass fields, `Work.to_json`, the `sampling` item with `str(Fraction)`.
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 

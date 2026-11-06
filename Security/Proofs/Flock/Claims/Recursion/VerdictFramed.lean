@@ -1,7 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VerdictDecision
-import Proofs.Flock.Claims.Recursion.VerdictFramedJson
-import Proofs.Flock.Claims.Recursion.RepSqCounts
-import Proofs.Flock.Claims.Recursion.CallsAgree
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictDecision
+public import Proofs.Flock.Claims.Recursion.VerdictFramedJson
+public import Proofs.Flock.Claims.Recursion.RepSqCounts
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+import all Lean.Data.Json.Basic
 
 /-!
 # Row B's `framed` at a decision
@@ -18,6 +21,8 @@ which a dense inner statement's do (`DecAt.names_nodup_dense`):
   block, the framed bytes of its `j`-th chunk (`decR_framesR`, the `T` unique by `fitUnique`), at its schedule's count,
   which is the chunk's closing squeeze's (`sqCount_repFrames`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 
@@ -93,7 +98,7 @@ theorem find_name_arr {a : Array StreamRec} {name : String} {k : ℕ} (hk : k < 
 substituted, the decoder reads stream `k` at the `k`-th rep stream's name, and its rounds at the reader's counts and
 messages. -/
 theorem decoded_streams {hs : Hashes Flock.V} {H : Claims.Msg → Claims.Msg} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} {link : List ByteArray × List ByteArray} {sess : Session}
+    {mids : List (Claims.Msg × Coin)} {f : FinalP} {link : List ByteArray × List ByteArray} {sess : RunRecord}
     (hj : f.j = recJ spec sts link c₁ ms cs f.ps)
     (h : Record.decodeJWith hs spec (jAt H spec sts c₁ mids f) = .ok sess) :
     sess.streams.size = min spec.repStreams.size (recStreams spec sts ms cs).size ∧

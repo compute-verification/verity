@@ -1,6 +1,8 @@
-import Definitions.Nci.Guarantees.PackedTraining
-import Proofs.Nci.Packed
-import Proofs.Nci.Training
+module
+
+public import Definitions.Nci.Guarantees.PackedTraining
+public import Proofs.Nci.Packed
+public import Proofs.Nci.Training
 
 /-!
 # The partial-sum law with dark gates, on a chain with several products to a gate
@@ -11,6 +13,8 @@ Lemma 2 and the split entries' count for a `PackedChain`, then `PackedIncompress
 (`card_products_le_dark_packed`), which is where `k` enters the training form, as `2 k #dark`. At `k = 1` both are the
 per-product guarantees (`incompressibleContainedMatMulOn_of_packed`, `incompressibleContainedTrainingOn_of_packed`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

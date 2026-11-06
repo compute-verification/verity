@@ -2,7 +2,8 @@
 `RemoteAudit.P2Session`) with the Python's books beside it, over a channel to a prover serving the 9-block P2 store of
 `tests/test_p2.py`'s fixture: an honest prover accepted with its credited reads, under every unit or the registration's
 plan, one whose receipts skip a unit's reads, one whose openings are out of form and one that reads every unit when the
-plan is fewer rejected, and a request for another node refused before any coin; and the books' veto: a Lean that
+plan is fewer rejected, and a request for another node, or off the auditor's session parameters, refused before any
+coin, the party `main` starts holding its sessions to `SESSION` unless its flags name others; and the books' veto: a Lean that
 accepts a window the books reject, books that accept one the Lean rejects, a Lean whose answer isn't the books', one
 that fails mid-session, and a Lean that holds another store, each rejected or refused."""
 
@@ -13,6 +14,8 @@ import hashlib
 import json
 import shutil
 import socket
+import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -28,6 +31,8 @@ FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 SOURCE = b"the verifier's secret"
 NODE = b"p2-node-under-test"
 STEP_NS = 400
+TOY = {"windows": 2, "passes": 2, "samples": 4, "window_ns": 2 * STEP_NS, "deadline_ns": STEP_NS}
+"""The auditor's session parameters these sessions are held to (`p2_party.session`'s `auditor`)."""
 
 
 class Clock:
@@ -142,7 +147,8 @@ def run(exe: Path, store: p2.Store, prover_of, request: dict, plan: receipts.Pla
         with p2_lean.Lean(exe) as lean, b, b.makefile("rb") as r, b.makefile("wb") as w:
             reg, held = p2_party.hold(lean, data)
             got["answer"] = p2_party.session(r, w, reg, coins=b"\x07" * 64, lean=lean_of(lean), plan=held,
-                                             clock=clock, sleep_until=clock.sleep_until, host="auditor-under-test")
+                                             clock=clock, sleep_until=clock.sleep_until, host="auditor-under-test",
+                                             auditor=TOY)
 
     th = threading.Thread(target=verifier)
     th.start()
@@ -154,8 +160,7 @@ def run(exe: Path, store: p2.Store, prover_of, request: dict, plan: receipts.Pla
 
 
 def request(store: p2.Store, **kw) -> dict:
-    base = {"windows": 2, "passes": 2, "samples": 4, "window_ns": 2 * STEP_NS, "deadline_ns": STEP_NS}
-    return p2_party.request_of(store.registration.node, **{**base, **kw})
+    return p2_party.request_of(store.registration.node, **{**TOY, **kw})
 
 
 def test_a_plan_of_fewer_units_is_what_each_pass_reads_and_is_credited(exe, store) -> None:
@@ -198,6 +203,45 @@ def test_a_request_for_another_node_is_refused_before_any_coin(exe, store) -> No
     bad = request(store) | {"node": b"another-node".hex()}
     _, answer = run(exe, store, lambda c: Prover(store, c), bad)
     assert answer["verdict"] == "refused" and "node" in answer["reason"]
+
+
+@pytest.mark.parametrize("off", [{"deadline_ns": 2 * STEP_NS}, {"samples": 3}])
+def test_a_request_off_the_auditors_session_is_refused_before_any_coin(exe, store, off) -> None:
+    """A request for a longer allowance or fewer openings than the auditor's, which the Lean takes (it reads the
+    request alone), is refused by the books' veto before the registration or any coin is sent, naming the value."""
+    provers: list[Prover] = []
+
+    def prover_of(clock):
+        provers.append(Prover(store, clock))
+        return provers[-1]
+
+    (key, value), = off.items()
+    proved, answer = run(exe, store, prover_of, request(store, **off))
+    assert proved == answer and answer["verdict"] == "refused", answer
+    assert f"the request's {key} is not the auditor's ({value}, not {TOY[key]})" in answer["reason"]
+    assert provers[0].held is None and provers[0].ended is None
+
+
+def test_the_party_holds_its_sessions_to_the_served_parameters_unless_its_flags_name_others(exe, store,
+                                                                                            tmp_path) -> None:
+    """`main` as the auditor's gate starts it, with no session flags: the toy's request is refused naming each value
+    off `SESSION`, and a request of `SESSION`'s is held (the registration sent first); with flags naming the toy's
+    values, the toy's request is held."""
+    path = tmp_path / "registration.json"
+    path.write_text(json.dumps(p2_party.registration_json(store.registration)))
+
+    def first(req: dict, *flags: str) -> dict:
+        p = subprocess.run([sys.executable, "-m", p2_party.MODULE, "--registration", str(path), "--stdio",
+                            "--lean-exe", str(exe), *flags], input=json.dumps({"request": req}).encode() + b"\n",
+                           capture_output=True, check=True)
+        return json.loads(p.stdout.splitlines()[0])
+
+    refused = first(request(store))["answer"]
+    assert refused["verdict"] == "refused", refused
+    for k in ("deadline_ns", "passes", "samples", "window_ns", "windows"):
+        assert f"the request's {k} is not the auditor's ({TOY[k]}, not {p2_party.SESSION[k]})" in refused["reason"]
+    assert "hold" in first(p2_party.request_of(store.registration.node, **p2_party.SESSION))
+    assert "hold" in first(request(store), *[x for k, v in TOY.items() for x in ("--" + k.replace("_", "-"), str(v))])
 
 
 def test_a_lean_that_accepts_what_the_books_reject_is_vetoed(exe, store) -> None:
@@ -248,3 +292,32 @@ def test_a_lean_that_holds_another_store_is_refused(exe, store) -> None:
         assert p2_party.hold(lean, data) == (store.registration, receipts.Plan.whole(store.registration.blocks))
         with pytest.raises(ValueError, match="refuses"):
             p2_party.hold(lean, data)
+
+
+def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names(store, tmp_path) -> None:
+    """`--pous-record DIR --pous-session SID`: the registration of the setup the memory challenger kept for PoUS session
+    SID (`challenger_party.keep`), its whole store the plan; refused for an id out of form, a record of another session,
+    or one without a setup."""
+    from verity.core.protocols.pous import challenger_party as CP
+    from verity.core.protocols.pous import run as R
+
+    reg = store.registration
+    q = reg.params
+    point = R.Point(q, 1, 1)
+    request = CP.request_of(NODE.decode(), point, reg.root, audit=hashlib.sha512(b"a window's binding").digest(),
+                            published=R.Setup(q.blocks, reg.commitment, reg.root, reg.salt))
+    sid = hashlib.sha512(b"a PoUS session").digest()[:32]
+    CP.keep(tmp_path, sid, request)
+    doc = json.loads(p2_party.pous_record(tmp_path, sid.hex()))
+    assert p2_party.registration_of(doc) == reg and p2_party.plan_of(doc, reg) == receipts.Plan.whole(reg.blocks)
+    assert "plan" not in doc
+    with pytest.raises(ValueError, match="64 lowercase hex"):
+        p2_party.pous_record(tmp_path, "../" + sid.hex()[3:])
+    other = bytes(32)
+    (tmp_path / CP.SETUPS / f"{other.hex()}.json").write_text(json.dumps({"request": request, "session_id": sid.hex()}))
+    with pytest.raises(ValueError, match="names the session"):
+        p2_party.pous_record(tmp_path, other.hex())
+    bare = b"\x01" * 32
+    CP.keep(tmp_path, bare, CP.request_of(NODE.decode(), point, reg.root))
+    with pytest.raises(ValueError, match="has no setup"):
+        p2_party.pous_record(tmp_path, bare.hex())

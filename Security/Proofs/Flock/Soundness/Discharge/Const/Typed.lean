@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Placed.Typed
-import Proofs.Flock.Soundness.Discharge.Const.ConstCols
+module
+
+public import Proofs.Flock.Soundness.Discharge.Placed.Typed
+public import Proofs.Flock.Soundness.Discharge.Const.ConstCols
 
 /-!
 # `hConst` on the typed path
@@ -10,6 +12,8 @@ At a program of units' places from its tables' classes (`Placed.UProg.progPlaces
 constant input (`UProg.pairs_oneGate`). So only a unit's constant column sits on `oneOf hk`, as main's
 `UProg.constCols_of_classes` says at `derivedPlaces_of_classes`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Const.UProg
 

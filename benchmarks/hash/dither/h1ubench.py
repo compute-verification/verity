@@ -1,4 +1,4 @@
-"""H1 + fx1's fused unit (h1u.cu) on one H200 or B200: gated bit for bit against compute accounting's served_h1/receipts.py
+"""H1 + fx1's fused unit (h1u.cu) on one H200 or B200: gated bit for bit against vllm's `pouw_h1_receipts`
 (its `call_receipts`) and `h1tile.reference`, then timed interleaved with the plain int8 GEMM of the same
 call and H1's noise floor (h1noise.cu's midstate kernel), at Llama-3.1-8B's linears and M = 1, 32, 256, 2048, 8192.
 
@@ -39,9 +39,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "served_h1"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-import receipts as RC
 from h1bench import KEY_BLOCKS, auto_j, plain_arms
 from h1bench import Lib as NoiseLib
 from h1bench import gate as noise_gate
@@ -49,6 +47,7 @@ from hb_kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, 
 
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import seeds as SD
+from verity_vllm.protocols.pouw.h1 import receipts as RC
 
 SEED_WORDS = 4  # compressions a unit spends on seed_j and sigma_R
 
@@ -376,7 +375,7 @@ def main() -> int:
     rng = random.Random(0x4831F1)
     doc = {"schema": "dither-hb/h1u/v1", "device": clock.name, "sms": props.multi_processor_count, "l2_bytes": l2,
            "torch": torch.__version__, "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-           "reference": "served_h1/receipts.py, h1tile.reference",
+           "reference": "verity_vllm.protocols.pouw.h1.receipts, h1tile.reference",
            "libs": paths, "noise_libs": npaths,
            "shapes": []}
     doc["anchors"] = anchors(libs, rng)

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+module
+
+public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 
 /-!
 # A template instance's rows over every net, joined by Δ's wires
@@ -19,6 +21,8 @@ and its input padding rows. `order` appends, pass by pass, every column whose ro
 the rows are `Ordered` (`logical_ordered`) whatever the wires are: a column on a cycle of wires, or one that reads a
 column with no row, never enters the order. `instRows` is `Rows.compose` of them.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

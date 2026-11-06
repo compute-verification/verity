@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkPadsPair
+module
+
+public import Proofs.Flock.Claims.KS.ZkPadsPair
 
 /-!
 # The masked simulator's fork bound at `τ`, from its alignment and its clash
@@ -20,6 +22,8 @@ What is left at `τ` splits as at the caps:
 `zkAdvTau_le_of` and `zkSimForkLeTau_of` put these together. `ZkTauPair` proves the clash (`zkTauClash`), so the bound
 rests on the alignment alone (`zkSimForkLeTau_of_align`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

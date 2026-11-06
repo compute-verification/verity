@@ -7,7 +7,8 @@ tasks.py`, tasks/v1) is the coarse graph `check` runs today.
 
 ~~~sh
 verity graph [--json] [--family F ...] [--root DIR]   # the graph; --json prints its canonical bytes
-verity graph run ID --work DIR                         # run task ID in DIR, print its result/v1 (exit 0 pass, 1 fail, 3 error)
+verity graph run ID --work DIR [--graph FILE]          # run task ID in DIR, print its result/v1 (exit 0 pass, 1 fail, 3 error);
+                                                       # FILE: a listing of this checkout or ID's part of it: no lister runs
 verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events FILE]
                                                        # every task, serially, in order, uncached (exit 0: all passed);
                                                        # events/v1 to FILE (default DIR/events.jsonl), DIR/results.json
@@ -29,12 +30,12 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 | path | what |
 | --- | --- |
 | `verity_graph/contract.py` | schema names, `canonical`, `file_digest`, `env_digest`, `key`, `result_errors` |
-| `verity_graph/graph.py` | the listing: `tasks.toml`, the tree's files, each family's tasks completed and checked, digests, keys |
+| `verity_graph/graph.py` | the listing: `tasks.toml`, the tree's files, each family's tasks completed and checked, digests, keys; a task's part (`part`, `given`) |
 | `verity_graph/families/<family>.py` | a family's lister, `tasks(root: Path, files: list[str]) -> list[dict]` |
 | `verity_graph/runners/<kind>.py` | a kind's runner, `run(task: dict, work: Path) -> dict` |
 | `verity_graph/runners/__init__.py` | dispatch by kind, `call` (a command, logged and bounded by the task's timeout) and `execute` |
 | `verity_graph/local.py` | the serial reference executor |
-| `verity_graph/families/build.py`, `runners/lean_build.py`, `runners/flock_circuit_build.py`, `runners/lean_agreement.py` | the build family (below) |
+| `verity_graph/families/build.py` and its kinds' runners (`runners/lean_build.py`, `lean_unit_cut.py`, `lean_agreement.py`, `lean_suites.py`, `flock_circuit_build.py`, `flock_rust_tests.py`) | the build family (below) |
 | `tasks.toml` | `[env.<name>]` and `[family.<name>]` tables |
 | `tests/key_vectors.json` | the vectors Verity and the executor both reproduce |
 
@@ -96,9 +97,15 @@ it from the cases in that file, which is a change to the contract.
 
 The executor makes a fresh work directory, puts each artifact the task reads there at the path its producer's output
 declares (two reads or a read and an output that would land on one path are refused when listing), and runs the task's
-argv with `--work DIR` appended, from the checkout's root. `verity graph run` finds the task with `graph.task_graph`, which
-runs the family's lister but completes, digests and keys only the task and what it reads, runs its kind's runner through
-`runners.execute`, and prints result/v1 as one canonical line:
+argv with `--work DIR` appended, from the checkout's root. An executor lists the graph once and appends `--graph FILE` too,
+FILE holding that listing or the task's part of it, `graph.part(doc, id)`: the task, its env, the digests of its inputs and
+its env's spec files, and of each task it reads the id and the outputs it reads. A part grows with its task's own reads, not
+with the tree or with what lies under the task. Given FILE, `verity graph run` runs no lister (`graph.given`): it takes FILE
+when it holds the task, the outputs it reads and its env, and each file the task's key reads (its inputs and its env's spec
+files) has here the digest FILE names, whatever commit FILE names, so a checkout whose bytes differ refuses it (exit 2) rather
+than key a result from another tree's digests. Without FILE it finds the task with `graph.task_graph`, which runs the
+family's lister but completes, digests and keys only the task and what it reads. Then it runs the task's kind's runner
+through `runners.execute` and prints result/v1 as one canonical line:
 
 ~~~json
 {"schema": "verity-result/v1", "task": "<id>", "key": "sha512:<hex>", "status": "pass|fail|error",
@@ -134,31 +141,45 @@ The executor writes one JSON line per event; the dashboard reads only these and 
 
 ## The reference executor
 
-`verity graph check --local` runs the graph serially in `graph.order` (every task after the tasks it reads, ties by id), each
-task in a fresh work directory under `--work` with its reads copied from the run's artifact store (by digest), as its argv
-with `--work DIR`. It takes a result only when it is result/v1 of that task, its key is the one computed here from the
-reads' digests, it reports no undeclared read, and each output's bytes are the digest it names; anything else is an error.
-An error is retried `--retries` times (default 1) and never becomes a result; a fail is never retried; a task whose read
-didn't pass is cancelled. Each task's last result/v1 (its pass or fail, else its last error) is in `--work`'s `results.json`.
+`verity graph check --local` lists the graph once and runs it serially in `graph.order` (every task after the tasks it reads,
+ties by id), each task in a fresh work directory under `--work` with its reads copied from the run's artifact store (by
+digest), as its argv with `--work DIR --graph PART`, PART its part of that listing written beside DIR, so that no task's run
+lists again, on a dirty working tree too. It takes a result only when it is result/v1 of that task, its key is the one
+computed here from the reads' digests, it reports no undeclared read, and each output's bytes are the digest it names;
+anything else is an error. An error is retried `--retries` times (default 1) and never becomes a result; a fail is never
+retried; a task whose read didn't pass is cancelled. Each task's last result/v1 (its pass or fail, else its last error) is in
+`--work`'s `results.json`.
 
 ## The build family
 
-The check's steps that build the Flock verifier and run what it built, as `tools/verity/check/check.py` runs them:
+The check's steps that build the Flock verifier and run what it built, and C-Flock's Rust, as `tools/verity/check/check.py`
+runs them, one task a step:
 
 | task | env | runs | inputs | outputs |
 | --- | --- | --- | --- | --- |
 | `lean-build:verity/core/service/flock` | lean | `lake build` there (`suites.LAKE_BUILD`) | the package's files but its `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>` |
+| `lean-unit-cut:verity/ml/flock/verifier/unit_cut_agree.py` | py | `unit_cut_agree.py --lean VERIFY --out WORK/lean-unit-cut` | the script and its import closure (the test-file family's `Imports`) | `lean-unit-cut/result.json`, the cuts and how many agreed |
 | `lean-agreement:verity/ml/flock/verifier` | py | `check.py --lean-agreement WORK UPSTREAM INPUTS VERIFY` | that directory, and what `check.py` reads as it starts (`families/build.py`'s `CHECK_READS`) | `flock-agreement/ci/sets.json`, ci.py's verdicts per set |
+| `lean-suites:SUITE`, `lean-suites:SUITE:K/M` | py | `suites.py SUITE --lean-built --json ... --timeouts --jobs N --mem-gb G` on each suite of `suites.AFTER_LEAN`, or with `--files K/M` on each part of one `families/build.py`'s `PARTS` splits; a parallel suite on the family's slot, another in one process | the whole tree, as tasks/v1 keys a job that declares no inputs: those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
 | `flock-circuit-build:verity/ml/flock/live` | rust | `verity/ml/flock/check_build.sh` | the script, its patches and the live crate (`check.rust_tests_inputs`) | none: `cargo check` builds nothing a reader runs |
+| `flock-rust-tests:verity/ml/flock/live` | rust | `check_build.sh test`, cargo's jobs and test threads at the task's cores | as flock-circuit-build's | none |
 
 `lean-build`'s outputs sit at their paths in a built tree, where the suites that run them look (the Flock suite's
-`artifacts`); `lean-agreement` reads `flock-verify` and gets its path as its var `verify`. The agreement fetches the upstream
+`artifacts`); `lean-unit-cut` and `lean-agreement` read `flock-verify` and get its path as their var `verify`, and
+`lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A part's task
+(its var `files`) hands suites.py a timing record with none of the suite's files (`--timings`), so part K is every M-th test
+file by path from the K-th, the same wherever it runs, and the M parts hold each file once. A lean-suites fail names each
+failed suite with its failed tests (`detail.failed`), which drive names, allows and blames as that suite's red. A
+run that ran nothing is no pass: ci.py skipping every set of the agreement, a partition check that compared no cut, a suite
+suites.py didn't run. Each is an error, so no result. The agreement fetches the upstream
 build and inputs `upstream.json` pins (`research data fetch`, as ci.py fetches what it pins) and holds them to the pin's
 sha256, so the store and its client are no input. Those fetches and ci.py's read the store's remote that the runner's
 environment names: a `research run` job on a node with no store config of its own gets one with `--store-read`, and without
 one the task is an error that says so. Each runner reports a fail only for the tree's fault and an error for the
 machine's: a toolchain that didn't set up, a pin that didn't fetch, check.py's `cannot run here`, a command a signal killed,
-and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile.
+and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. Drive counts no
+lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a train.sh run beside
+the executor's check (`research.drive.SLIM_STEPS`).
 
 ## Writing a family
 
@@ -175,12 +196,17 @@ runs its commands through `runners.call(argv, work, cwd)`, which logs them and s
 
 ## Invariants
 
-Each has a test: `test_invariants.py` on the whole tree (slow), `test_graph.py` and `test_local.py` on a toy checkout.
+Each but 5 has a test: `test_invariants.py` on the whole tree (slow), `test_graph.py` and `test_local.py` on a toy checkout.
 
 1. `verity graph` gives the same bytes in two checkouts of one commit at different paths (two `git worktree`s, listed from
    different working directories and environments).
 2. It opens nothing outside the tree but the interpreter's own files (an audit hook on `open`, `os.listdir`, `os.scandir`).
 3. Keys reproduce `tests/key_vectors.json`.
 4. No `owner` field.
-5. It lists the whole graph in under 60 CPU seconds of one core.
+5. It lists the whole graph in under 60 CPU seconds of one core, as the tree is and with its Lean families at their size once
+   its modules are `module` files (`tests/ported_listing.py`: of each module a task reads, `olean` and `ir`; seven outputs a
+   module). It is measured on an idle machine (`verity graph --json` and `ported_listing.py` under `getrusage`), not in a
+   suite: on a node at load 160 the same listing takes twice the CPU seconds it takes idle (72 against 36), so a suite run
+   beside other work fails it whatever the tree.
 6. Errors never become results; a fail is never retried.
+7. The reference executor lists once: no task's run calls a lister, on a clean tree or a dirty one.

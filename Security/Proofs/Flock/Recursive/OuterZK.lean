@@ -1,9 +1,11 @@
-import Proofs.Flock.Recursive.Sessions
-import Proofs.Flock.Recursive.Private
-import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
-import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
-import Proofs.Flock.Recursive.OuterAbort
+module
+
+public import Proofs.Flock.Recursive.Sessions
+public import Proofs.Flock.Recursive.Private
+public import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+public import Proofs.Flock.Recursive.OuterAbort
 
 /-!
 # Recursion: V*'s outer sessions are zero knowledge, (ii)'s `_hOuter`
@@ -39,6 +41,8 @@ Left to the instance at V*'s staging: that each session's table is `coinedOf` at
 `ZkHidden.DrawSetupZHJ` there), its sizes fixed by V*'s statement (`hz`, `hR`, `hS`), and the honest witnesses
 (`Honest`, which (ii)'s `honest` carries).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.OuterZK
 

@@ -1,10 +1,14 @@
-import Definitions.Pouw.PearlC.Deadline
+module
+
+public import Definitions.Pouw.PearlC.Deadline
 
 /-!
 # The deadline's named assumption in Pearl-C's game (trusted; a `Prop` taken as a hypothesis, never an `axiom`)
 
 `Pouw.Assumptions.HonestClock` for Pearl-C's cost models and adversaries, which are types of their own.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

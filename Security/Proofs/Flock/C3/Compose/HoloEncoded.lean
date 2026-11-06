@@ -1,5 +1,8 @@
-import Proofs.Flock.C3.Compose.HoloCoinTys
-import Proofs.Flock.C3.Compose.LaterHeld
+module
+
+public import Proofs.Flock.C3.Compose.HoloCoinTys
+public import Proofs.Flock.C3.Compose.LaterHeld
+import all Init.Data.Repr
 
 /-!
 # The map's coins and points at candidate 3
@@ -14,6 +17,8 @@ history rounds' words as one array, while each of those rounds draws a coin of o
 0's coin rounds (`repStart`), the `j + p` that `StageHeld` reads; `holoSelOne_rep` selects rep `i`'s rounds of coins
 there.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.TS.FoldFanIn
-import Proofs.Accounting.TS.FanIn
-import Proofs.Pouw.Receipt
+module
+
+public import Definitions.Accounting.Guarantees.TS.FoldFanIn
+public import Proofs.Accounting.TS.FanIn
+public import Proofs.Pouw.Receipt
 
 /-!
 # The fan-in floor of a fold
@@ -12,6 +14,8 @@ import Proofs.Pouw.Receipt
 * `DuoFoldFanIn`, `Fx1FoldFanIn`: duo's and fx1's runs are injective in each word
   (`Pouw.SecurityProofs.Receipt.DuoRunWordInjective`, `Fx1RunWordInjective`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

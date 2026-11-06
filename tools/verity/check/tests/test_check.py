@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 from pathlib import Path
 
@@ -19,8 +20,8 @@ def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", [str(ROOT / "tools/verity/check/suites.py"), "--json", str(tmp_path / "suites.json")])
     assert names[1] == ("flock-circuit-build", [str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")])
-    assert names[2] == ("circuit-check", ["-m", "circuit_check", "--all"])
-    assert names[3] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
+    assert names[2] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
+    assert names[3] == ("circuit-check", ["-m", "circuit_check", "--all"])
     assert names[4] == ("lean", "skipped: verity/core/service/flock is not on this tree")
 
 
@@ -43,7 +44,7 @@ def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_cra
     patched = set()
     for p in sorted((ROOT / "verity" / "ml" / "flock").glob("flock-*-b684b12.patch")):
         patched |= {m.group(1) for line in p.read_text().splitlines() if (m := re.match(r"\+\+\+ b/crates/([a-z-]+)/", line))}
-    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)$", mode, re.M).group(1).split(" -p ")[1:]
+    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)(?: \\)?$", mode, re.M).group(1).split(" -p ")[1:]
     assert sorted(upstream) == sorted(patched - {"flock-live"}), "every crate a patch changes, and only those"
 
 
@@ -488,6 +489,10 @@ def test_the_ratchet_gate_step_fails_when_its_base_is_head_or_above_it(tmp_path,
         argv = gate(at)
         assert not isinstance(argv, str) and argv[4] == at, argv
     assert gate("0" * 40) == f"skipped: no base: {'0' * 40} names no commit here"
+    (out / "inputs" / CHECK.RATCHET_BASE_FILE).write_text(f"{below}\n")    # --ratchet-base: the gate's, over --base's
+    argv = CHECK.ratchet_gate(out, True)
+    assert not isinstance(argv, str) and argv[4] == below, argv
+    (out / "inputs" / CHECK.RATCHET_BASE_FILE).unlink()
     (out / "inputs" / CHECK.BASE_FILE).unlink()
     assert CHECK.ratchet_gate(out, True) == "skipped: no base: origin/main names no commit here"
 
@@ -706,9 +711,9 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV, raising=False)
-    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][1][1]
+    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][2][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
-    (pt,), (build, cc, rust), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
+    (pt,), (build, rust, cc), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
     assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, caps circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
@@ -791,7 +796,7 @@ def test_the_agreement_is_not_required_for_docs_alone():
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     rule = tool.CHECK.merge_requires["lean-agreement"]
-    docs = ["verity/ml/flock/verifier/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
+    docs = ["verity/ml/flock/live/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
     assert rule_touches(rule, [*docs, "verity/ml/flock/verifier/ci.py"]) == ["verity/ml/flock/"]
     assert rule_touches(rule, ["verity/ml/flock/verifier/DESIGN.md"]) == ["verity/ml/flock/"]      # only the two names are left out
@@ -868,6 +873,22 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
     assert "needs glibc 99.1" in CHECK.agreement_preflight({"upstream": {"glibc": "99.1"}}, [ok])
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 16)
     assert "may use 16 GB; the agreement needs 24" in CHECK.agreement_preflight({"upstream": {}}, [ok])
+
+
+def test_the_agreements_smoke_replay_expects_upstreams_own_verdict_where_a_case_records_a_divergence(tmp_path, monkeypatch):
+    """r20261027-131150-7678: set 16's honest session, which Lean refuses for completeness and upstream accepts
+    (`upstream_accepted`), failed the preflight because it was held to Lean's verdict. A case without the key expects its one
+    verdict of both."""
+    v = tmp_path / "verifier"
+    v.mkdir()
+    (v / "agree.py").write_text("def drawn(d):\n    return False\n\ndef upstream_cmd(a, public, extra):\n    return [a.upstream]\n")
+    sets = [{"pr83": c, "lean_statement": "s", "statement": {"circuit": f"art:{c}/c", "public": f"art:{c}/p"},
+             "sessions": [{"dir": f"art:{c}/honest", "expect": expect}]}
+            for c, expect in (("aa", {"accepted": False, "why": "setup: registered reads (complete): ", "upstream_accepted": True}),
+                              ("bb", {"accepted": True, "why": ""}))]
+    (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": sets}}))
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
+    assert {c: e for c, _, e in CHECK.upstream_smoke(tmp_path)} == {"aa": {"accepted": True}, "bb": {"accepted": True}}
 
 
 def _fake_run(monkeypatch, groups, pre=()):
@@ -1558,6 +1579,8 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
     p = train("--base", "main")
     assert p.returncode == 2 and "train: --base refused without --deferred" in p.stderr, p.stderr
+    p = train("--ratchet-base", "main")
+    assert p.returncode == 2 and "train: --ratchet-base refused without --deferred" in p.stderr, p.stderr
 
 
 def test_train_sh_copied_out_of_the_tree_finds_the_trees_settings(tmp_path):
@@ -1645,6 +1668,7 @@ def _train_repo(tmp_path):
         env.pop(k, None)
 
     def train(*a, **extra):
+        done.unlink(missing_ok=True)      # else `sleep` returns at once on an earlier call's launch, before this one's
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
                               cwd=tmp_path / "repo", env={**env, **extra})
 
@@ -1770,6 +1794,13 @@ def test_train_sh_hands_check_the_base_below_the_tip_that_drive_sends(tmp_path):
     argv.unlink()
     p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--base", "nope")
     assert p.returncode == 1 and "--base nope: no such commit" in p.stderr and not argv.exists(), p.stderr
+    # ratchet-gate's own base (`--ratchet-base`: the tip of drive's last run whose gate gave a verdict), beside `--base`
+    p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--base", "HEAD~1", "--ratchet-base", "HEAD~1")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--base"):] == ["--base", verified, "--ratchet-base", verified], (p.stderr, args)
+    argv.unlink()
+    p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--ratchet-base", "nope")
+    assert p.returncode == 1 and "--ratchet-base nope: no such commit" in p.stderr and not argv.exists(), p.stderr
 
 
 def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):

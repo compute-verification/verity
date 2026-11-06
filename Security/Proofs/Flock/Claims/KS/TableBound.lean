@@ -1,6 +1,10 @@
-import Proofs.Flock.Claims.KS.ConflictTied
-import Proofs.Flock.Claims.KS.Trace
-import Proofs.Flock.Claims.Scope.Deployed
+module
+
+public import Proofs.Flock.Claims.KS.ConflictTied
+public import Proofs.Flock.Claims.KS.Trace
+public import Proofs.Flock.Claims.Scope.Deployed
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # `TableBoundθ` statement by statement
@@ -22,6 +26,8 @@ full-width columns that does not extract is not committed (`plain_not_committed`
 (`zk_hwit`), where a table of witness-lane columns that does not extract is not `CommittedPad` (`zk_not_committed`);
 the masked scope admits several, where a trace of table 0 alone does not read as a witness of the others.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

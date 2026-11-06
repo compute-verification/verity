@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.DeployLayout
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployLayout
 
 /-!
 # The plain schedule's size, and the plain verifier's count at it
@@ -14,6 +16,8 @@ verifier's shape's, the plain verifier's count is `2 + 2R` (`k_plain`).
 statement's files (`RecSetup.checkShape`), and the plain verifier's one table is the files' under a named premise
 (`InnerSetupIsFiles`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

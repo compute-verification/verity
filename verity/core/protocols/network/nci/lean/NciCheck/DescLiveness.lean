@@ -1,5 +1,7 @@
-import NciCheck.Desc
-import NciCheck.DescDifftest
+module
+
+public import NciCheck.Desc
+public import NciCheck.DescDifftest
 
 /-!
 # The liveness cases of the description-sized check
@@ -12,6 +14,8 @@ the small one's (`same`) or has its novel reads per IU (`novel`, where the gates
 point: the big instances are past anything `NciCheck.Desc` walks one by one (`NciCheck.Desc.WALK`). The Lean audit runs it
 (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
+
+@[expose] public section
 
 namespace NciCheck.DescLiveness
 

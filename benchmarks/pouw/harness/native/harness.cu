@@ -1,11 +1,13 @@
 // The PoUW bench harness's device side (libpouw_harness.so): memory, operand fills, the read-only L2 flush, events and CUDA
 // graphs, the dependent chain's derive, the gates' device helpers, and the card's characterization kernels (tensor-core peak
 // rates, DRAM and L2 bandwidth); cuBLASLt is lt.cu's.  A C ABI for ctypes; every call returns 0 or an error code whose text
-// `ph_last_error` gives.  Build: build.sh (sm_120a).
+// `ph_last_error` gives.  Build: build.sh (sm_120a, or sm_90a with PH_ARCH=sm_90a).
 #include <cublasLt.h>
 #include <cuda_bf16.h>
 #include <cuda_fp8.h>
+#include <cuda_profiler_api.h>
 #include <cuda_runtime.h>
+#include <nvtx3/nvToolsExt.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -518,10 +520,23 @@ enum { MMA_BF16_F32 = 0, MMA_F16_F16 = 1, MMA_E4M3_F32 = 2, MMA_E4M3_F16 = 3, MM
        MMA_KINDS = 10 };
 
 constexpr int CHAINS = 8;
+// kind::f8f6f4 and the block-scaled kinds (4 to 8) are sm_120's; an sm_90a build has kinds 0-3 and 9
+constexpr bool sm120_kind(int kind) { return kind >= MMA_F8F6F4_E4M3_F32 && kind <= MMA_MXF4_E2M1_F32; }
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 1200
+#define PH_SM120_MMA 0
+#else
+#define PH_SM120_MMA 1
+#endif
 
 template <int KIND>
 __device__ __forceinline__ void mma_step(float (&d)[CHAINS][4], uint32_t (&h)[CHAINS][2], const uint32_t (&a)[4],
                                          const uint32_t (&b)[2], uint32_t sf) {
+#if !PH_SM120_MMA
+  if constexpr (sm120_kind(KIND)) {
+    __trap();
+  } else
+#endif
+  {
 #pragma unroll
   for (int c = 0; c < CHAINS; ++c) {
     if constexpr (KIND == MMA_BF16_F32) {
@@ -573,6 +588,7 @@ __device__ __forceinline__ void mma_step(float (&d)[CHAINS][4], uint32_t (&h)[CH
                    : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));
     }
   }
+  }
 }
 
 template <int KIND>
@@ -606,6 +622,12 @@ int ph_mma_chains() { return CHAINS; }
 // Launches blocks x threads of the `kind` peak kernel, `iters` iterations of CHAINS MMAs per warp, and times it.
 int ph_mma_peak(int kind, int blocks, int threads, int iters, float* out_scratch, float* ms, void* stream) {
   if (kind < 0 || kind >= MMA_KINDS) return fail_arg("ph_mma_peak: unknown kind");
+  if (sm120_kind(kind)) {
+    int dev = 0, major = 0;
+    CK(cudaGetDevice(&dev));
+    CK(cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, dev));
+    if (major < 12) return fail_arg("ph_mma_peak: kind::f8f6f4 and the block-scaled kinds are sm_120's");
+  }
   cudaStream_t s = cudaStream_t(stream);
   cudaEvent_t a, b;
   CK(cudaEventCreate(&a));
@@ -622,5 +644,19 @@ int ph_mma_peak(int kind, int blocks, int threads, int iters, float* out_scratch
 }
 
 int ph_info_size() { return int(sizeof(ph_info)); }
+
+// An NVTX range on the calling thread, for a profiler to cut its trace by (`bench.py --nvtx`); a no-op without one.
+int ph_nvtx_push(const char* text) { return nvtxRangePushA(text); }
+int ph_nvtx_pop() { return nvtxRangePop(); }
+
+// A profiler's capture range (`nsys profile --capture-range=cudaProfilerApi`; `bench.py --traced`); a no-op without one.
+int ph_profiler_start() {
+  CK(cudaProfilerStart());
+  return 0;
+}
+int ph_profiler_stop() {
+  CK(cudaProfilerStop());
+  return 0;
+}
 
 }  // extern "C"

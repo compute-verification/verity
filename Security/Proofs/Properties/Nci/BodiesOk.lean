@@ -1,6 +1,8 @@
-import Proofs.Properties.Nci.BodiesOk.Decoded
-import Proofs.Properties.Nci.BodiesOk.Order
-import Proofs.Properties.Nci.Resolve
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Decoded
+public import Proofs.Properties.Nci.BodiesOk.Order
+public import Proofs.Properties.Nci.Resolve
 
 /-!
 # `Resolve.BodiesOk`, proved
@@ -12,6 +14,8 @@ Definitions holding the root and closed under calls whose nodes name only parame
 (`order_closed`); every activation `Good` reaches has its Definition in that set (`good_closed`), so its references are
 `RefOk` (`body_ok`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

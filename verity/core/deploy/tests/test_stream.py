@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-from verity.core.deploy.party import Finish, Identity, Record, Send, Timer
+from verity.core.deploy.party import Finish, Identity, LogEntry, Send, Timer
 from verity.core.deploy.stream import Side, run
 from verity.core.wire import Message
 
@@ -60,7 +60,7 @@ class Pinger:
         self.seen.append((r.channel, r.message.type, r.at))
         m = r.message
         if m.type == "ClockReading":
-            return [Record({"ns": m.fields["ns"]}, "private")]
+            return [LogEntry({"ns": m.fields["ns"]}, "private")]
         if m.type == "Coins":
             return [Send("peer", Message("Ping", {"n": len(m.body)}))]
         if m.type == "Pong":
@@ -94,7 +94,7 @@ def test_a_party_over_its_own_bytes() -> None:
     assert party.seen == [("clock", "ClockReading", None), ("coins", "Coins", None), ("peer", "Pong", None),
                           ("clock", "ClockTimer", None)]
     assert clock.written[0] == 8, "the clock is read once the step that asked has sent its ping"
-    assert records == [Record({"ns": 100}, "private")] and clock.waited == [5_000] and done == Finish(5_100)
+    assert records == [LogEntry({"ns": 100}, "private")] and clock.waited == [5_000] and done == Finish(5_100)
 
 
 class Asks:
@@ -160,3 +160,6 @@ def test_one_session_with_a_side_of_its_own() -> None:
         side.talk({"rc": 4}, _shout)
     with pytest.raises(RuntimeError, match="the side on auditor exited 3 before it listened"):
         Side("auditor", (sys.executable, "-c", "import sys; sys.stdin.readline(); sys.exit(3)")).talk({}, _shout)
+    refuse = "import sys; sys.stdin.readline(); print('{\"refused\": \"a second session\"}'); sys.exit(1)"
+    with pytest.raises(RuntimeError, match="the side on auditor refused: a second session$"):
+        Side("auditor", (sys.executable, "-c", refuse)).talk({}, _shout)

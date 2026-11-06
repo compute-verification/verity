@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Layout
-import Proofs.Flock.Claims.Recursion.DeployZK
+module
+
+public import Proofs.Flock.Claims.ZK.Layout
+public import Proofs.Flock.Claims.Recursion.DeployZK
 
 /-!
 # The recursion's zero knowledge by sequential composition
@@ -25,6 +27,8 @@ part costs its own `ε₀` and rewinds nothing, and the sessions cost `Σ_s eB s
   sessions' relation there (`hW`). `zkmalRx`: at every statement, on statement-indexed tapes (`ZKmalRx`), with `nS x`
   sessions at `x`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

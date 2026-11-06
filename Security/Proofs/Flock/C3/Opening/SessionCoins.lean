@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Opening.Rows
-import Proofs.Flock.VBridge.Algebra.BitsOk
-import Proofs.Flock.VBridge.PartS
+module
+
+public import Proofs.Flock.C3.Opening.Rows
+public import Proofs.Flock.VBridge.Algebra.BitsOk
+public import Proofs.Flock.VBridge.PartS
 
 /-!
 # n4's coins: what `RecCoins.opening` accepted
@@ -14,6 +16,8 @@ that the S they build is `RecOpening.structureOf`'s ("the structure moved").
 * `structureOf_bitsOkO`: the shape's S has every `wt` bit below 128 (`structureOf_bitsOk` at the opening), so the
   parts' residuals cover it (`residuals_zero_of_parts`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

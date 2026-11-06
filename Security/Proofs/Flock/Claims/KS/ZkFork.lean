@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkFork0
+module
+
+public import Proofs.Flock.Claims.KS.ZkFork0
 
 /-!
 # The masked simulator's fork bound at its caps, from its alignment and its clash
@@ -22,6 +24,8 @@ commitment `c` with `c 0 = Lτ.leaf 0 default`. So `advTauSZ` counts a fork pair
 opens another `τ` there, a collision with an input no run hashed, and `forkC_simAtJZ_le` needs an event that no dead
 output has.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

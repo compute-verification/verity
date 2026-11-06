@@ -1,7 +1,9 @@
-import Flock.Hash
-import Flock.Bytes
-import Flock.Canon
-import Identity.Tagged
+module
+
+public import Flock.Hash
+public import Flock.Bytes
+public import Flock.Canon
+public import Identity.Tagged
 
 /-!
 # The network certificate's encodings (record v2)
@@ -17,6 +19,8 @@ digest under the certifier's salt (`certificateDigest`), and the message it sign
 `certificateInput`, `messageInput`), as the properties (`Security/Properties/NetworkCertifier.lean`) name the strings a run hashes. The tree climbs by structural recursion (`pairs`, `climb`, `top`). `NetworkCheck.Difftest` holds these to the
 Python on generated inputs.
 -/
+
+@[expose] public section
 
 namespace NetworkCheck
 

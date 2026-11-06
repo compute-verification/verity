@@ -1,5 +1,7 @@
-import Std.Data.HashSet
-import Flock.Program
+module
+
+public import Std.Data.HashSet
+public import Flock.Program
 
 /-!
 # The NCI policy's check of a declared division
@@ -44,6 +46,8 @@ then gate by gate `owner-entry`: neither `"input"` nor a natural, `input-in-iu`,
 `check` writes a refusal as `{"error": code}`, with a `message` giving the fix where one is the declaration's to make
 (`fixOf`), or for a `program` refusal of a reinterpretation, where (`refusalOf`).
 -/
+
+@[expose] public section
 
 namespace NciCheck
 

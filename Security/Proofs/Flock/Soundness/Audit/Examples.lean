@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Audit.TwoStage
-import Mathlib.Logic.Equiv.Fin.Basic
-import Mathlib.Tactic.FinCases
+module
+
+public import Proofs.Flock.Soundness.Audit.TwoStage
+public import Mathlib.Logic.Equiv.Fin.Basic
+public import Mathlib.Tactic.FinCases
 
 /-!
 # Tightness and insecurity: NOT chains
@@ -18,6 +20,8 @@ fine unit is correct.
 * `late_interior_insecure`: if the interior is committed after the fine draw, a wrong chain is
   accepted with certainty.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

@@ -13,7 +13,7 @@ files = ["Security/Definitions/Accounting/Compose.lean", "Security/Definitions/A
 words = { "redraw" = "resample", "redraw_at" = "resample_at", "redraw_redraw" = "resample_resample", "sum_redraw" = "sum_resample" }
 
 [rewrite]
-# host_map.toml's: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
 # files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
 exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
            "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]

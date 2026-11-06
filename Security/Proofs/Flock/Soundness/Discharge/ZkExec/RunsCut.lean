@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsCarries
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsCarries
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
 
 /-!
 # A `--zk` rep's messages cut into its rounds
@@ -11,6 +13,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
 * `roundGroups_succ`: from round 1 on, `decZ`'s groups are `decOf`'s, which `DecodeZL.roundGroups_eq` gives as the
   chunks' reads, and `DecodeZL.cut_of_carries` cuts `zk_carries` into the same.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

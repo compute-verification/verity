@@ -2,7 +2,12 @@
 `checkRegionBytes`, the setup's region-size check: a region of four free bits carries two bytes in each of the `2^nbl`
 blocks. A region one byte short, or one block's bytes short, is refused; so is a region one byte long.
 -/
-import Flock.Statement
+module
+
+public import Flock.Statement
+meta import Flock.Statement
+
+@[expose] public section
 
 namespace Flock.Test.RegionBytes
 

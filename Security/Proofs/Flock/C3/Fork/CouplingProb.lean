@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Fork.CouplingBad
-import Proofs.Flock.C3.Fork.CouplingValue
+module
+
+public import Proofs.Flock.C3.Fork.CouplingBad
+public import Proofs.Flock.C3.Fork.CouplingValue
 
 /-!
 # a1l, step 7: the compiled holographic table on a clash-free set, against one prover
@@ -10,6 +12,8 @@ argument on `lockHoloL`: the oracle prover sends `W`'s tables (`tab₀W` at the 
 so `holo_bad_zero` leaves the coupling no bad term, and the coupling's oracle game is no better than the oracle table
 (`holoOrcL_value_le`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

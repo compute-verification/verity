@@ -1,3 +1,5 @@
+module
+
 /-!
 # An H1 lane's chunks along K (`weights.chunks`)
 
@@ -6,6 +8,8 @@ The port of `weights.chunks` with its `CHUNK_MAX` and `CHUNK_ALIGN`: the chunks 
 chunk c its leaf n·r + c), which credit's layout reads. `pouw-check-difftest`'s `chunks` (`PouwCheck.Difftest`) holds it
 to the Python, refusal for refusal, at every multiple of 32 below 2^17 (`tests/test_difftest.py`).
 -/
+
+@[expose] public section
 
 namespace PouwCheck.Chunks
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
 
 /-!
 # The static shape of a compiled `--zk` rep
@@ -22,6 +24,8 @@ steps after the opening are the inner proof's, not level 0's. That run ends in a
   `repShapeZ`. `repZCAt_spineAt` is its prefix form at a result (plays-coin's `SpineAt`, unfolded), and
   `ne_reject_of_verdict` gives the hypothesis from a Ligerito verdict that holds.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

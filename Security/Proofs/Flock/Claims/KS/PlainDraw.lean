@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainEvent
+module
+
+public import Proofs.Flock.Claims.KS.PlainEvent
 
 /-!
 # The plain verdict at the statement's draw
@@ -20,6 +22,8 @@ draw `d`, and no draw in the record is read, as the masked side does (`Composed.
   column off `C` has at its live outcome, on every draw-carrying record (`plainVerdict_of_run` without its premise
   that the record carry the statement's draw verbatim).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 
@@ -64,7 +68,7 @@ def RecordsLiveAtD (I : Exec.Inputs) (d : Json) {J mPts : ℕ} (o : Tables.LiveO
 /-- **No column off `C` in a transcript, at the setup at the draw `d`**: `TxNoOff` with the setup at `d` for the setup
 at the record's draw. -/
 def TxNoOffAt (I : Exec.Inputs) (d : Json) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Transcript) : Prop :=
-  ∀ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
+  ∀ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
     setupAtD I (some d) = .ok (spec, #[st]) → Record.decode spec t.record = .ok sess →
     _root_.Flock.fast100 st.m = some sch →
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 0) = some s₀ →

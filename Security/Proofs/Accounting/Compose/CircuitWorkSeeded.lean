@@ -1,6 +1,8 @@
-import Proofs.Accounting.Compose.ServiceBudget
-import Proofs.Accounting.Compose.ServiceCovers
-import Proofs.Accounting.Compose.CircuitWork
+module
+
+public import Proofs.Accounting.Compose.ServiceBudget
+public import Proofs.Accounting.Compose.ServiceCovers
+public import Proofs.Accounting.Compose.CircuitWork
 
 /-!
 # `CircuitWorkSeeded`: the circuit's work under seeded coins
@@ -19,6 +21,8 @@ import Proofs.Accounting.Compose.CircuitWork
   and `UnitFixed` with `ServiceCovers` on `Declared.atIR`'s layer gives the words as in `CircuitWork`
   (`WorkProof.work_of_bounds`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose.Seeded
 

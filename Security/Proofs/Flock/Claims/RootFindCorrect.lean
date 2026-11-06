@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.RootFindAlg
+module
+
+public import Proofs.Flock.Claims.RootFindAlg
 
 /-!
 # The root finder is correct
@@ -13,6 +15,8 @@ import Proofs.Flock.Claims.RootFindAlg
   smaller degree (`trySplit_some`), and `β` splits `g` when `g` has roots on both sides (`trySplit_isSome`).
 * `split` lists `g`'s roots, each once (`split_spec`), and so `roots` lists `f`'s (`roots_spec`).
 -/
+
+@[expose] public section
 
 namespace Claims.RootFind
 

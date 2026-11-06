@@ -1,9 +1,13 @@
-import Definitions.Pouw.NCP.Word
-import Proofs.Pouw.Copy
+module
+
+public import Definitions.Pouw.NCP.Word
+public import Proofs.Pouw.Copy
 
 /-!
 # R_word-NCP: the bound under NzNCP, the floor, and the witnesses
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.WordProofs
 

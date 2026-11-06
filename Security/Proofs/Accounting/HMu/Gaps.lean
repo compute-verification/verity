@@ -1,4 +1,6 @@
-import Proofs.Accounting.HMu.Luck
+module
+
+public import Proofs.Accounting.HMu.Luck
 
 /-!
 # Why the coins don't give the rest
@@ -11,6 +13,8 @@ import Proofs.Accounting.HMu.Luck
   before the checkpoint leaves the checkpoint's state unchanged for every skipped value. So Lemma B′ with two words in
   a unit needs a fibre bound at the start state, which injectivity alone doesn't give.
 -/
+
+@[expose] public section
 
 namespace Accounting.HMuProofs
 

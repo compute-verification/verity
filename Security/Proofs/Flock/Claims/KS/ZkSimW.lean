@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkTrimW
-import Proofs.Flock.Claims.KS.ZkFirst
+module
+
+public import Proofs.Flock.Claims.KS.ZkTrimW
+public import Proofs.Flock.Claims.KS.ZkFirst
 
 /-!
 # The masked chain from a simulator
@@ -24,6 +26,8 @@ gives `ZkXferWJ` (`zkXferWJ_of_simWJ`), and `Flock.KS` at the trimmed masked rec
 statements some run accepts (`zk_KS_trim_of_simWJ`), table 0's bound with escapes on accepted runs counted per round
 from it at the untrimmed one (`zk_tableBoundθAccAtR_of_simWJ`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

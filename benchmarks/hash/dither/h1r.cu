@@ -1,5 +1,5 @@
 // H1 + fx1's unit (`pouw.circuit.h1tile`, eps1-sm120-h1fx1) on the device: every live 32 x 32 unit of a step's served calls,
-// its receipt bit for bit `h1tile.reference`'s (and `served_h1/receipts.py`'s), in two plain launches on the caller's stream
+// its receipt bit for bit `h1tile.reference`'s (and `pouw_h1_receipts`'), in two plain launches on the caller's stream
 // into caller-owned buffers (no allocation, no host sync), so a CUDA graph captures them.
 //
 //   h1r_seeds   one thread a (live unit, seed): seed_j and σ_R (`seeds.seed`, `seeds.receipt_seed`), SHA-512 of the 224-byte
@@ -205,8 +205,8 @@ __device__ __forceinline__ void sha_round(u64 v[8], u64 k, u64 w) {
 }
 
 // a noise chunk's state after rounds 0 .. 10, which read only the tag and the seed (words 0 .. 10): one a unit.  This
-// and nblock_mid read the IV from constant memory (sx::IV_DEV): with sx::iv's immediates version 2 runs 2-4% slower at
-// T = 64, where nblock (version 1's) runs 1% faster with them
+// and nblock_mid read the IV from constant memory (sx::IV_DEV): at T = 64 version 2 is slower with sx::iv's immediates,
+// and nblock (version 1's) faster, so each keeps the faster form
 __device__ __forceinline__ void noise_mid(const u64* sd, u64 nt0, u64 nt1, u64 nt2, u64 mid[8]) {
 #pragma unroll
   for (int j = 0; j < 8; ++j) mid[j] = sx::IV_DEV[j];
