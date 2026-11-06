@@ -1,12 +1,14 @@
-import Proofs.Accounting.TS.Session.Lanes.Assumptions
-import Proofs.Accounting.TS.Session.Group.Premises
-import Proofs.Accounting.TS.Session.Lanes.Lane
-import Definitions.Pouw.H1Zy.Dequant
-import Proofs.Accounting.TS.Session.Lanes.KnownOf
-import Proofs.Accounting.TS.Session.Lanes.Committed
-import Proofs.Accounting.TS.Session.Lanes.Canon
-import PouwWindow.OwnPorts
-import PouwWindow.FullDraw
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Assumptions
+public import Proofs.Accounting.TS.Session.Group.Premises
+public import Proofs.Accounting.TS.Session.Lanes.Lane
+public import Definitions.Pouw.H1Zy.Dequant
+public import Proofs.Accounting.TS.Session.Lanes.KnownOf
+public import Proofs.Accounting.TS.Session.Lanes.Committed
+public import Proofs.Accounting.TS.Session.Lanes.Canon
+public import PouwWindow.OwnPorts
+public import PouwWindow.FullDraw
 
 /-!
 # A leaf's 33 linked sessions realize one unit (the statement)
@@ -63,6 +65,8 @@ chunk a lane, where the group's premise `GroupRealizes` is proved from the two a
 (`Accounting.TS.Lanes.groupRealizes_lanes32`).
 It sits in the proofs package because the sessions do (`reads_exempt`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

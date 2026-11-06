@@ -1,9 +1,11 @@
-import Proofs.Flock.Bridge.Targets
-import Proofs.Flock.Bridge.PortRoots
-import Proofs.Flock.Bridge.PopMatches
-import Proofs.Flock.Bridge.RightRegZc
-import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
-import Proofs.Flock.Soundness.Assumptions.Finders
+module
+
+public import Proofs.Flock.Bridge.Targets
+public import Proofs.Flock.Bridge.PortRoots
+public import Proofs.Flock.Bridge.PopMatches
+public import Proofs.Flock.Bridge.RightRegZc
+public import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
+public import Proofs.Flock.Soundness.Assumptions.Finders
 
 /-!
 # The bridge's targets with canonical openings (targets, not proved)
@@ -35,6 +37,8 @@ targets read them:
 `SampledKSLiveV3` (`Refused`) reads V2's file preconditions off the verifiers' acceptance, which refuses files that fail
 them.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -235,12 +239,13 @@ file whose ports are rows of `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg
 port's row message (`Bridge.rowDep`) framed at its port's schema (`Bridge.schemaOf`), with the registration's ports and roots distinct (`dupName`, and no colliding pair of ports, `PortRoots.rootsColl`, which
 `PortRoots.rootsColl_none_iff` reads as `PortRoots.RootFixesDomain`) and
 its descriptor `desc` and query `qr` evaluating to a population of `n` units in order (`Bridge.PopMatches`), whose strata
-(`Bridge.nsOf`) the statement's partition lays. The knowledge finders' budgets are their cost: the prover's per-run time `t'` (the one the link finders are charged,
-`LinkCRZC`) and one opening's verification `v`, so `2(t' + v)` for a rewinding finder (two runs after a commitment, two
-openings verified) and `t' + v` for the self-clash finder (one run, one verification). Its one bound on the prover is
-`t'`, where `SampledKSLive` takes the budgets `q_F`, `q_S` apart from it. It takes cr/sha-512 and ecr/sha-512 at those
-finders as the named assumptions `Assumptions.TableCRZAt` and `Assumptions.LinkCRZCAt`. `SampledKSLive` implies it
-(`sampledKSLiveV2_of`). -/
+(`Bridge.nsOf`) the statement's partition lays. Every finder is charged its SHA-512 evaluations, the prover's per-run
+time `t'` and one opening's verification `v` per run: `2(t' + v)` for a rewinding finder (two runs after a commitment,
+two openings verified), `t' + v` for the self-clash finder (one run, one verification), and `t' + v` per run for the
+link finders (`LinkCRZC`), whose trials read each run's verdict. Its one bound on the prover is `t'`, where
+`SampledKSLive` takes the budgets `q_F`, `q_S` and the link finders' per-run cost apart from it. It takes cr/sha-512 and
+ecr/sha-512 at those finders as the named assumptions `Assumptions.TableCRZAt` and `Assumptions.LinkCRZCAt`.
+`SampledKSLive` implies it (`sampledKSLiveV2_of`). -/
 def SampledKSLiveV2 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -267,7 +272,7 @@ def SampledKSLiveV2 : Prop :=
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     -- one opening's verification, in SHA-512 evaluations
-    (v : ℝ)
+    (v : ℝ) (_hv : 0 ≤ v)
     -- what the sampling statement carries and `RelS` doesn't read
     (q : Claims.Sampling.Query),
     let L := Law.execOS (n := n) src (.subset kd) n
@@ -296,9 +301,9 @@ def SampledKSLiveV2 : Prop :=
     -- prover and two verifications for a rewinding finder, one of each for the self-clash finder
     (∀ ω j, FlockSoundness.Assumptions.TableCRZAt execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) (2 * (t' + v)) (t' + v)) →
-    -- ecr/sha-512 for the prover's link finders
+    -- ecr/sha-512 for the prover's link finders, at a run of the prover and a verification per run
     FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
-      k Rw M t' →
+      k Rw M (t' + v) →
     prob (fun o => LiveAcceptsZK I o ∧
         ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
           (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
@@ -307,15 +312,16 @@ def SampledKSLiveV2 : Prop :=
         ksAvgStrictZ (planZHJ dj y₀) L k (2 * (t' + v)) (t' + v) (reg σ) +
         ENNReal.ofReal ((∑ p : vb.Pos,
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
-          (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
+          (2 * ((t' + v) * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
-/-- `SampledKSLiveV2` is `SampledKSLive` with four more hypotheses, at the budgets `2(t' + v)` and `t' + v` and the
-registration's strata. -/
+/-- `SampledKSLiveV2` is `SampledKSLive` with four more hypotheses, at the budgets `2(t' + v)` and `t' + v`, the link
+finders' per-run cost `t' + v` and the registration's strata. -/
 theorem sampledKSLiveV2_of (h : SampledKSLive) : SampledKSLiveV2 := by
   intro n Reg I ht D hD hU pub hpub hpt hscope _ _ _ desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
-    hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ v q
+    hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ v hv q
   exact h n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw
-    hM ρ hρ hr t' ht' K₀ hK₀ τ (2 * (t' + v)) (t' + v) (Bridge.nsOf desc qr) (Bridge.nsOf_sum hpop) desc q
+    hM ρ hρ hr (t' + v) (add_nonneg ht' hv) K₀ hK₀ τ (2 * (t' + v)) (t' + v) (Bridge.nsOf desc qr) (Bridge.nsOf_sum hpop)
+    desc q
 
 /-- **The assembly, with canonical openings**: canonical transport, M1's core over `RightRegZc`, the slot count and the
 count lemma turn `EndToEndHiddenC` into `SampledKSLive` at `RowsOk` circuit files (`SampledKSLiveV2`). -/

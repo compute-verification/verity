@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.DeploySessions
+module
+
+public import Proofs.Flock.Claims.Recursion.DeploySessions
 
 /-!
 # The recursive verifier's schedule: the inner and staging rounds
@@ -16,6 +18,8 @@ The run lemmas under them hold for any verifier: a round before a run's last is 
 (`stepWith_mid`), a run whose round is answered by a message runs on or has used its rounds up (`stepWith_full`), and
 a run that accepts a round accepts (`stepWith_acc_out`).
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive.Schedule
 

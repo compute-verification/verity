@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundRouteCols
-import Proofs.Flock.Claims.Recursion.KSLin2
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundRouteCols
+public import Proofs.Flock.Claims.Recursion.KSLin2
 
 /-!
 # The inner verifier's calls at the draw's coins
@@ -15,6 +17,8 @@ every call of an accepted inner run is among those `Deploy.callsAt` lists, by co
   (`ForksBindAtV`), where an inner view's rejection escapes to a collision with the compiled verifier's own.
 * `innerAcceptsCollAtV_C`: `innerAcceptsCollAt_C` with that escape.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

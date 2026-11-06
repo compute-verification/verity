@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Pinned
+module
+
+public import Proofs.Flock.Soundness.Discharge.Pinned
 
 /-!
 # A pinned statement satisfies its statement without Δ's pinned copies
@@ -10,6 +12,8 @@ them evaluates to 1 is `(a·z + z_r)(1 + z_r) = z_r`, so `z_r = 0` and `a·z = 0
 them holds too. So the witness satisfies the statement without the copies, and carries 0 on every bit copied an odd
 number of times (`sat_unpin`). Nothing here reads a row size, a `G` or a producer family.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Pinned
 

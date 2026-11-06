@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
 
 /-!
 # The `--zk` session of `J` tables at any acceptance
@@ -14,6 +16,8 @@ inputs (`ZkHidden.AcceptsZKP`) instantiate them.
 * `RunsOnZCJA`, `decodesOnZKJA_of_runsOnZCJA`: `RunsOnZCJ`, `decodesOnZKJ_of_runsOnZCJ`.
 * `RecordsLiveZKJA`: `RecordsLiveZKJ`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

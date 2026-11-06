@@ -1,4 +1,6 @@
-import Definitions.NetworkCertifier.SampledCharge
+module
+
+public import Definitions.NetworkCertifier.SampledCharge
 
 /-!
 # The registered inputs: the registration's values, and the finder that a disagreement with them gives
@@ -11,6 +13,8 @@ position to different values, so under `CommitmentScheme.Binds` the calls that c
 looks for that collision: the extractor run on the judged run, and the first collision among its own calls and those
 that check the registration's openings.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

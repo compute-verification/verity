@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.C3.PubRows.Shape
-import Proofs.Flock.C3.Compose.RsFacts
-import Proofs.Flock.C3.Reps.RoundLinks
-import Proofs.Flock.VBridge.Pinned
-import Proofs.Flock.VBridge.Sparse.Unit
+module
+
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.C3.PubRows.Shape
+public import Proofs.Flock.C3.Compose.RsFacts
+public import Proofs.Flock.C3.Reps.RoundLinks
+public import Proofs.Flock.VBridge.Pinned
+public import Proofs.Flock.VBridge.Sparse.Unit
 
 /-!
 # RecCap's part holds round 0 as the coin server recorded it
@@ -22,6 +24,8 @@ At `layoutBTops`, RecCap's part holds round 0 whole: port `top`'s hm96 slot at e
 * So instance `n`'s slot at `top` reads `topRow lk l n` (`capRow_bytes`), node `n` of `root_B` at level 0, and the `N`
   slots in order are `root_B`'s nodes, the record's round 0 (`staged_reads_link`, `FlockC3.VStarList.checkReads_ok`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

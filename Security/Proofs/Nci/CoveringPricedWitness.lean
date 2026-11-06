@@ -1,10 +1,12 @@
-import Proofs.Nci.CoveringPriced
-import Mathlib.Algebra.BigOperators.Field
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Tactic.FinCases
-import Mathlib.Tactic.NormNum
+module
+
+public import Proofs.Nci.CoveringPriced
+public import Mathlib.Algebra.BigOperators.Field
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Tactic.FinCases
+public import Mathlib.Tactic.NormNum
 
 /-!
 # The priced covering bound is not vacuous, and beats every uniform weight cost
@@ -27,6 +29,8 @@ completes two weights from one input outside `θ`. So `CoveringBoundTwoCosts`'s 
 `(1/15) · 4 / ((2 / (1/2)) · 2 + 2) = 2/75`, while the priced one, at the price ceiling `t = 1`, is
 `(1/15) · 4 / (2 · 2 + 1 · 2) = 2/45`. The covering's slowdown is `4 · 10 / 15 = 8/3`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.CoveringPriced
 

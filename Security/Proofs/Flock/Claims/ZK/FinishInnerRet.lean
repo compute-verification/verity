@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishInnerAt
+module
+
+public import Proofs.Flock.Claims.ZK.FinishInnerAt
 
 /-!
 # A returning cut rep, stopped at its inner proof's first round
@@ -11,6 +13,8 @@ first coin is the one the cut refuses (`innerCut_first`). It reads no commitment
 
 * `repCut_inner_of_ret`: that stop.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

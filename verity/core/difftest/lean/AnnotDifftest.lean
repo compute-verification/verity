@@ -1,6 +1,8 @@
-import Difftest
-import Flock.Annot
-import Flock.AnnotExpand
+module
+
+public import Difftest
+public import Flock.Annot
+public import Flock.AnnotExpand
 
 /-!
 # The annotation check's port: `Flock.Annot` behind `Difftest.serve`
@@ -18,6 +20,8 @@ descriptor's text, `annotation` is `{"query", "tables"}` (`Annot.Desc.ofJson`) a
 
 A refusal is a reject whose reason starts with its code (`term`, `table`, `plan`, `fuel`, `meaning-unsupported`).
 -/
+
+@[expose] public section
 
 namespace AnnotDifftest
 

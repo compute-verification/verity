@@ -3,7 +3,12 @@
 `pub` its public file states, committed afresh (no registered read), passes `Registered.check` on its other ports and is
 refused by `checkComplete`; with `pub` among the verifier's ports, it passes.
 -/
-import Flock.Test.RegFormats
+module
+
+public import Flock.Test.RegFormats
+meta import Flock.Test.RegFormats
+
+@[expose] public section
 
 namespace Flock.Test.RegComplete
 

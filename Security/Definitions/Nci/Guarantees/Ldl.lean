@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Ldl
+module
+
+public import Definitions.Nci.Assumptions.Ldl
 
 /-!
 # Local description length on a `(c,k)`-partition: the guarantees
@@ -15,6 +17,8 @@ The working draft's Lemma 1, Theorem 3 and Corollary 4b, on core's circuit and `
 `ρ = |C| / T₀` is written out: `|C|` is `size computed`, the number of operation gates, and `T₀ > 0` the size of the
 reference circuit. The statements are about an arbitrary circuit, not the NCI check's code.
 -/
+
+@[expose] public section
 
 namespace Nci.Ldl.Guarantees
 

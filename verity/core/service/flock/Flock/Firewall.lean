@@ -3,9 +3,13 @@ The firewall's contract, inner phase (live PROTOCOL.md §10.3): what the firewal
 program. `rec_live` relays a live session through it (`flock-firewall live`, `liveCmd`), and its Python mirror is held to
 it (`flock-firewall`, `verity/ml/flock/tests/test_firewall_agreement.py`).
 -/
-import Lean.Data.Json
-import Flock.Hm96
-import Flock.JsonParse
+module
+
+public import Lean.Data.Json
+public import Flock.Hm96
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Firewall
 
@@ -695,8 +699,35 @@ def calls (sent : Array Sent) : Json :=
     | .round st _ _ _ n => some (.arr #[.str "round", .str st, jnat n])
     | .finish _ => none)
 
-/-- One case of `flock-firewall`'s input, `{"schedule", "requests": [hex], "salts": [hex]}`: the record; with
-`"calls": true`, `{"record", "calls"}`. -/
+/-! ## A session on the challenger's coin tree (`rec_live --coin-tree`)
+
+The prover's `Hello` names the challenger's coin tree under `coins`: the tree's spec, and a nonce of the prover's own, which
+the session never uses (the challenger's nonce keys the tree). The coin server is sent the schedule's `Hello` either way,
+so the firewall's messages are the live-coin session's. `treeHello` reads such a request as `step` reads one on live coins:
+a `Hello` whose `coins` without its nonce is the pinned spec, as that `Hello` without `coins`; any other `Hello` stops the
+session, and every other request is unchanged. -/
+
+def u32le (n : Nat) : ByteArray := ⟨(List.range 4).toArray.map fun i => (n / 256 ^ i % 256).toUInt8⟩
+
+def treeHello (spec : Json) (b : ByteArray) : V ByteArray := do
+  let .hello text ← decode b | return b
+  if fractional text then throw "FIREWALL-REFUSED: Hello: a number that is not an integer"
+  let v ← JsonParse.parse text
+  let some c := (v.getObjVal? "coins").toOption
+    | throw s!"FIREWALL-REFUSED: Hello: no coins where the challenger's coin tree is {spec.compress}"
+  if (without c "nonce").compress != spec.compress then
+    throw s!"FIREWALL-REFUSED: Hello: coins {c.compress} where the challenger's coin tree is {spec.compress}"
+  let t := (without v "coins").compress.toUTF8
+  return ByteArray.mk #[1] ++ u32le t.size ++ t
+
+/-- The requests as `step` reads them: under a pinned coin tree (`some spec`), through `treeHello`. -/
+def onTree : Option Json → ByteArray → V ByteArray
+  | none, b => pure b
+  | some spec, b => treeHello spec b
+
+/-- One case of `flock-firewall`'s input, `{"schedule", "requests": [hex], "salts": [hex]}`, and `"coin_tree": spec` for a
+session on the challenger's coin tree: the record; with `"calls": true`, `{"record", "calls"}`. Under a coin tree the
+requests are read through `treeHello`, and the first it refuses ends them, as `run` stops at a refusal. -/
 def case (j : Json) : V Json := do
   let s ← schedule (← field j "schedule")
   let hexList := fun (k : String) => do
@@ -704,7 +735,10 @@ def case (j : Json) : V Json := do
     a.toList.mapM fun x => match x with
       | .str h => unhex h
       | _ => throw s!"{k}: not hex"
-  let (sent, ok) := run s (← hexList "requests") (← hexList "salts")
+  let tree := (j.getObjVal? "coin_tree").toOption
+  let reqs := ((← hexList "requests").map (onTree tree)).takeWhile (·.toOption.isSome) |>.filterMap (·.toOption)
+  let reqs := if reqs.length < (← hexList "requests").length then reqs ++ [ByteArray.empty] else reqs
+  let (sent, ok) := run s reqs (← hexList "salts")
   if j.getObjValD "calls" == .bool true then
     return Json.mkObj [("record", record sent ok), ("calls", calls sent)]
   return record sent ok
@@ -750,7 +784,8 @@ def liveStep (s : Schedule) (st : State) (b : ByteArray) (fresh : List ByteArray
   | .ok ((), st') => .ok (st'.sent.toList, pool.take (pool.length - st'.salts.length), { st' with sent := #[] })
   | .error e => .error e
 
-/-- `flock-firewall live` at the byte source `get`: one session. Its first line is `{"schedule": …}`, answered
+/-- `flock-firewall live` at the byte source `get`: one session. Its first line is `{"schedule": …}`, with `"coin_tree":
+spec` for a session on the challenger's coin tree (each request then read through `treeHello`), answered
 `{"ok": true}`; each later line is one request in hex, answered with what the firewall sends the coin server for it and
 the salts it drew for them, `{"sent": [sentJson…], "salts": [hex…]}`, or with the refusal that stops the session,
 `{"stop": why}`, which every later line is answered with too. Every line is a request, an empty one an empty frame. A
@@ -767,6 +802,7 @@ def liveWith (get : USize → IO ByteArray) (_ : List String) : IO UInt32 := do
   let some s := (JsonParse.parse first >>= (field · "schedule") >>= schedule).toOption
     | out (Json.mkObj [("error", .str "the first line is not {\"schedule\": a rec/inner-transcript/v1/schedule}")])
       return 1
+  let tree := (JsonParse.parse first >>= (·.getObjVal? "coin_tree")).toOption
   out (Json.mkObj [("ok", .bool true)])
   let mut st : State := { salts := [] }
   let mut stop : Option String := none
@@ -776,7 +812,7 @@ def liveWith (get : USize → IO ByteArray) (_ : List String) : IO UInt32 := do
     if let some why := stop then
       out (Json.mkObj [("stop", .str why)])
       continue
-    match unhex line.trim with
+    match unhex line.trim >>= onTree tree with
     | .error e =>
       stop := some e
       out (Json.mkObj [("stop", .str e)])

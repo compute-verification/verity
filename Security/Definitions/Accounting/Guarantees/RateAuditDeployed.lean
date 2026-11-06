@@ -1,7 +1,9 @@
-import Definitions.Accounting.RateAuditDeployed
-import Definitions.Accounting.Remote.Deployed
-import Definitions.Accounting.Assumptions.RateAudit
-import Definitions.Accounting.Assumptions.RateAuditDeployed
+module
+
+public import Definitions.Accounting.RateAuditDeployed
+public import Definitions.Accounting.Remote.Deployed
+public import Definitions.Accounting.Assumptions.RateAudit
+public import Definitions.Accounting.Assumptions.RateAuditDeployed
 
 /-!
 # The remote bandwidth audit as deployed: conservation over a session (trusted)
@@ -35,6 +37,8 @@ also supports 64 rows). For the verbatim-sector class the sketch receipt is prov
 `RemoteSessionConservationSketchDeployed` (at the deployed 16-row parameters, under the per-pass hash budget
 `Accounting.Assumptions.SketchHashBudget`: the sum form, whose query term stays non-vacuous at the measured caps).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

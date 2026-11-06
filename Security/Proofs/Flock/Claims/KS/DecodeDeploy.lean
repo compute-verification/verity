@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.DecodeSC
-import Proofs.Flock.Claims.KS.PlainAcc
+module
+
+public import Proofs.Flock.Claims.KS.DecodeSC
+public import Proofs.Flock.Claims.KS.PlainAcc
 
 /-!
 # The deployed plain decoders at the plain table
@@ -15,6 +17,8 @@ outputs whose draw is `d`, the two are one table:
 * `plain_hdec`: so at the draw `d` and no drawn unit, `decodesTable_wrP_sc` is the decoders' fact `PlainLiveAccAt`
   asks, at `plainTab`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

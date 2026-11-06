@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.Recursion.VerdictRows
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Recursive.ExecClass
-import Proofs.Flock.SessionLoop.FinPoints
-import Proofs.Flock.Claims.Complete.Reps
-import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
-import Proofs.Flock.VBridge.Family.Join
-import Proofs.Flock.VBridge.Family.Setup
-import Proofs.Flock.Soundness.Refine.Regions
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Recursive.ExecClass
+public import Proofs.Flock.SessionLoop.FinPoints
+public import Proofs.Flock.Claims.Complete.Reps
+public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+public import Proofs.Flock.VBridge.Family.Join
+public import Proofs.Flock.VBridge.Family.Setup
+public import Proofs.Flock.Soundness.Refine.Regions
 
 /-!
 # Row G: the verdict's setup is the reader's
@@ -27,6 +29,8 @@ Row G of the verdict's rows (`VerdictRows`), the facts about the setup:
   as one table at the files' tags, whose `m` has a `fast100` schedule (`innerSetup_files`, `repRounds_size`).
 * **`DecAt.rowG`**: so row G holds at every table of a decision of an inner statement read at the dense form.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

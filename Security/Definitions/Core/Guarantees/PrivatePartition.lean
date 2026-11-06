@@ -1,6 +1,10 @@
-import Definitions.Core.PrivatePartition
+module
+
+public import Definitions.Core.PrivatePartition
 
 /-! # What a private partition's public predicates establish -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

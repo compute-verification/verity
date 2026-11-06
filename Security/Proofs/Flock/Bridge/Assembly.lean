@@ -1,4 +1,6 @@
-import Proofs.Flock.Bridge.Canon
+module
+
+public import Proofs.Flock.Bridge.Canon
 
 /-!
 # The assembly with canonical openings (`Bridge.AssemblyTargetC`, proved)
@@ -14,6 +16,8 @@ evaluation, the constant; the constants, `oneG`, `zeroG` and the program inputs 
 `constsOf_isInput`). `K₁`'s miss term is `K₀`'s
 (`choose_min_count`): where they differ both are `0`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -59,8 +63,8 @@ theorem _root_.Flock.Bridge.constsOf_isInput {c : Flock.Circuit} {hU : Built c.u
 /-- **The assembly, with canonical openings** (`Bridge.AssemblyTargetC`). -/
 theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
   intro hT hF _ hC hE n Reg I ht D hD hU pub hpub hpt hscope hv2 hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg
-    N Ω _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ tv q L P vb σ Xr δ Cc rows roots Cd κ hTab
-    hLink
+    N Ω _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ tv htv q L P vb σ Xr δ Cc rows roots Cd κ
+    hTab hLink
   by_cases hk0 : kd = 0
   · refine (FlockSoundness.Game.prob_le_one _ _ τ).trans (le_trans (le_of_eq ?_) (le_self_add.trans le_self_add))
     rw [hk0]
@@ -98,8 +102,8 @@ theorem _root_.Flock.Bridge.assemblyTargetC : Bridge.AssemblyTargetC := by
     (hC P _ hns kd K₀ hkd1 hkd _ _ κ desc q roots _ hrel).trans
       ((Finset.card_le_card hsub).trans (Finset.card_map _).le)
   have hE' := hE n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust
-    k Rw M hk hRw hM ρ hρ hr t' ht' (min K₀ (n - kd + 1)) ((min_le_left _ _).trans hK₀) τ (2 * (t' + tv)) (t' + tv)
-    hTab hLink
+    k Rw M hk hRw hM ρ hρ hr (t' + tv) (add_nonneg ht' htv) (min K₀ (n - kd + 1)) ((min_le_left _ _).trans hK₀) τ
+    (2 * (t' + tv)) (t' + tv) hTab hLink
   rw [Bridge.choose_min_count hkd1 hkd] at hE'
   refine le_trans (FlockSoundness.Game.prob_mono ?_ _ τ) hE'
   exact fun o ho => ⟨ho.1, hcard ho.2⟩

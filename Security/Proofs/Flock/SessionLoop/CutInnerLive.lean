@@ -1,8 +1,10 @@
-import Proofs.Flock.SessionLoop.CutPiopLive
-import Proofs.Flock.SessionLoop.FinHmkFc
-import Proofs.Flock.Claims.ZK.FinishFc
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+module
+
+public import Proofs.Flock.SessionLoop.CutPiopLive
+public import Proofs.Flock.SessionLoop.FinHmkFc
+public import Proofs.Flock.Claims.ZK.FinishFc
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 
 /-!
 # The cut session at a rep's inner proof, on the opened coins alone
@@ -23,6 +25,8 @@ source's masked `final_c` (`piopCut_fc_go`) and the inner proof's `3 + 2 + 2` co
 * **`Masked.runCut_innerBody`**: the cut session stopped at rep `2j + r`'s inner round `i` sends there `innerCutBody`
   at the rep's source.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

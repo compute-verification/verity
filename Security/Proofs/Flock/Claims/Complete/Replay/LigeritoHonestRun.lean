@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoHonest
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoHonest
 
 /-!
 # The honest Ligerito meets its final identity
@@ -10,6 +12,8 @@ levels (`Lg.sch_facts`); the model's final identity (`Lg.Final`) and `Lg.Mid` fo
 (`lgFinal_walkP`), and the skeleton's `Ligerito` and `Consumed` on the walk's facts and the schemes' widths
 (`ligerito_walkP`, `consumed_walkP`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 
 /-!
 # Off the masked table without a self-clash
@@ -9,6 +11,8 @@ and any level-0 oracle `C`, `Pr[Acc ∧ C uncommitted] ≤ ε_c⁻ + Pr[Acc ∧ 
 off C]` (`session_sound_of_table_accZ_sc`). `ε_c⁻` already counts the self-clash, so a bad run that self-clashes is charged
 there (`bad_pointwise_ofZ_sc`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

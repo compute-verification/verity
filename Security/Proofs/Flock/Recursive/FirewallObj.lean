@@ -1,5 +1,9 @@
-import Flock.Firewall.Honest
-import Proofs.Flock.Recursive.FirewallJson
+module
+
+public import Flock.Firewall.Honest
+public import Proofs.Flock.Recursive.FirewallJson
+import all Lean.Data.Json.Basic
+import all Std.Data.Internal.List.Associative
 
 /-!
 # Objects as the firewall builds, reads and pins them
@@ -10,6 +14,8 @@ objects whose keys ascend and whose members have the same keys and canonical for
 (`canonForm_obj_perm`), and a key of an object whose keys ascend reads its member's value (`getObjVal?_of_mem`) or
 nothing (`getObjVal?_of_not_mem`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallObj
 
@@ -59,7 +65,7 @@ theorem canonForm_obj_perm {t t' : Tree} (ht : t.Ordered) (ht' : t'.Ordered) (hp
 
 /-! ## Built from members -/
 
-theorem mkObj_eq (L : List (String × Json)) : Json.mkObj L = .obj ⟨⟨Impl.Const.ofList L⟩⟩ := rfl
+theorem mkObj_eq (L : List (String × Json)) : Json.mkObj L = .obj ⟨⟨Impl.Const.ofList L⟩⟩ := (rfl)
 
 theorem wf_ofList (L : List (String × Json)) : (Impl.Const.ofList L : Tree).WF :=
   Impl.WF.constInsertMany Impl.WF.empty

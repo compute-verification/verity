@@ -1,4 +1,6 @@
-import Definitions.Claims
+module
+
+public import Definitions.Claims
 
 /-!
 # Claims: zero knowledge on statement-indexed tapes
@@ -10,6 +12,8 @@ recursion's and sampling's claims read it (`Recursion.ZK`, `Recursion.ZKPriv`, `
 its own `Hello` round; Flock's session stays at one tape (`Flock.ZK`), proved on a class of statements of bounded table
 count (`Flock.zk_deployZk_ref_on`).
 -/
+
+@[expose] public section
 
 namespace Claims
 

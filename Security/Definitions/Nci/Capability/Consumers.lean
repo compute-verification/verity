@@ -1,4 +1,6 @@
-import Definitions.Nci.Capability.Products
+module
+
+public import Definitions.Nci.Capability.Products
 
 /-!
 # Local bounds: consumers and their dependencies
@@ -15,6 +17,8 @@ gates (a **recomputation**, spending gates and, possibly, updated state). **Over
 The same three statements bound every kind of consumer (`Nci.Guarantees.ImportOrRecompute`, `RecomputeByGates`,
 `RecomputeByState`); a new kind of dependency is a new `Consumers` value, not a new argument.
 -/
+
+@[expose] public section
 
 namespace Nci.Capability
 

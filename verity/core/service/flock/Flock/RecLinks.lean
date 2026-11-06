@@ -25,6 +25,13 @@ statement's rows, and the recursion's knowledge soundness at the linked relation
 through the links' binding `Flock.Guarantees.LinksBindDeployed`) covers a statement carrying it.
 -/
 
+module
+
+import all Init.Data.Array.DecidableEq
+import all Init.Data.Array.Basic
+
+@[expose] public section
+
 namespace Flock
 namespace RecLinks
 

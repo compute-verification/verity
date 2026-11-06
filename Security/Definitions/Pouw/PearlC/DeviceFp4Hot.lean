@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
+module
+
+public import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
 
 /-!
 # Pearl-C4 v2's accounting at an FP4 record (definitions only, staged)
@@ -14,6 +16,8 @@ these definitions fix only what its price twins read:
 * **The accounting a v2 protocol and its tiles must meet** to give them: `Fp4HotUnitAccounting`, `Fp4HotTileAccounting`
   and their chain-only forms.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

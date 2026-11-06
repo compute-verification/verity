@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.PlainHJ.Defs
-import Proofs.Flock.Soundness.Discharge.PlainHJ.Decode
-import Proofs.Flock.Soundness.Discharge.PlainHJ.Bind
-import Proofs.Flock.Soundness.Discharge.PlainHJ.Sound
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Defs
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Decode
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Bind
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Sound
 
 /-!
 # One plain sampled session of `J` hidden-output tables (`flock-verify verify --plain-tables`, hidden outputs)
@@ -12,3 +14,5 @@ import Proofs.Flock.Soundness.Discharge.PlainHJ.Sound
   where the wires feed neither the unit nor the outputs, at the unit's key program `keyProg`.
 * `Sound.lean`: `plain_session_soundHJ` (`keyProg`) and `plain_session_soundHJI` (`instProg`).
 -/
+
+@[expose] public section

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FrameSched
-import Flock.Firewall.Frames
+module
+
+public import Proofs.Flock.Claims.ZK.FrameSched
+public import Flock.Firewall.Frames
 
 /-!
 # The loop places a rep's rounds as `Drive.reqs` does
@@ -14,6 +16,8 @@ round's coins keeps the invariant:
   (`schedSoFar`) on its coins, and the rep after that round's coins (`coinsOf`) keeps `RepInv`.
 * `coinsStep_ok`: what `Frames.coinsStep` puts back is `coinsOf`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

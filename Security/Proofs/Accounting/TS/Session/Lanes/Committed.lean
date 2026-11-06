@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Lanes.KnownFields
-import Proofs.Accounting.TS.Session.Lanes.Layout
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.KnownFields
+public import Proofs.Accounting.TS.Session.Lanes.Layout
 
 /-!
 # The leaf and the receipt its 33 sessions' committed rows decode to
@@ -23,6 +25,8 @@ Four lanes read each A row, and four each B row; that they decode it alike is `A
 registered tree, each read in full, the registrants' rows agreeing). Each cell of the record is read by its one lane,
 so no lane's reads of another's cells are asked.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

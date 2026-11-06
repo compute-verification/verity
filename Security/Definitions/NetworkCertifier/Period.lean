@@ -1,5 +1,7 @@
-import Definitions.NetworkCertifier.SampledCharge
-import Definitions.NetworkCertifier.TapRows
+module
+
+public import Definitions.NetworkCertifier.SampledCharge
+public import Definitions.NetworkCertifier.TapRows
 
 /-!
 # A monitoring period of sampled audits: each window's good event
@@ -13,6 +15,8 @@ relation counts is picked out by the network certifier's registration of its row
 certifier's (`Btap`). The registration's values at the prover's registered inputs are the one condition the event holds
 that no statement here bounds.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

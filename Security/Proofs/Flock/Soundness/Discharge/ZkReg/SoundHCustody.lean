@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundH
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundH
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
 
 /-!
 # One hidden-output `--zk --registered` sampled session, under the record's custody
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
 (`live-verifier`), exactly as `ZkHidden.zk_session_soundH_custody` replaces them in `zk_session_soundH`: the custody
 assumption reads only the record and its draws, which neither the shared rows nor the registered check change.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

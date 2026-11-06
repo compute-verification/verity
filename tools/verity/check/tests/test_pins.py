@@ -72,6 +72,27 @@ def test_a_command_that_fails_leaves_its_pin_stale_and_regen_says_so(repo, monke
     assert "vec.json: its command exited 3" in err and "vec.json is stale (pkg/A.lean): run `exit 3`" in err
 
 
+WRITE = """import pathlib, sys
+assert sys.argv[1:] == ["--write"]
+pathlib.Path("t/fx.json").write_text(pathlib.Path("t/src.txt").read_text())
+"""
+
+
+def test_write_runs_the_named_fixtures_test_module_and_refuses_a_path_no_writer_lists(repo, monkeypatch, capsys):
+    (repo / "t").mkdir()
+    (repo / "t" / "test_fx.py").write_text(WRITE)
+    (repo / "t" / "src.txt").write_text("1\n")
+    monkeypatch.setattr(P, "WRITERS", (P.Writer("t/fx.json", "t/test_fx.py"), P.Writer("t/other.json", "t/test_other.py")))
+    assert P.main(["--write", "./t/fx.json", "--root", str(repo)]) == 0
+    assert (repo / "t" / "fx.json").read_text() == "1\n" and not (repo / "t" / "other.json").exists()
+    assert P.Writer("t/fx.json", "t/test_fx.py").command == "uv run python tools/verity/check/pins.py --write t/fx.json"
+    (repo / "t" / "src.txt").write_text("2\n")
+    assert P.main(["--write", "t/fx.json", "t/nope.json", "--root", str(repo)]) == 2
+    assert (repo / "t" / "fx.json").read_text() == "1\n" and "t/nope.json: no test's fixture" in capsys.readouterr().err
+    assert P.main(["--write", "t/other.json", "--root", str(repo)]) == 1
+    assert "t/other.json: t/test_other.py --write exited 2" in capsys.readouterr().err
+
+
 def test_a_recorded_file_that_is_gone_is_stale_unless_git_ignores_it(repo, monkeypatch):
     doc = {"inputs": {"pkg/A.lean": sha((repo / "pkg/A.lean").read_bytes()), "fetched/big.bin": "0" * 64, "gone.txt": "0" * 64}}
     (repo / "vec.json").write_text(json.dumps(doc))

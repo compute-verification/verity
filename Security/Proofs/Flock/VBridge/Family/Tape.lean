@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Stages
+module
+
+public import Proofs.Flock.VBridge.Stages
 
 /-!
 # VBridge G item 5: `TableFiles.Valid`'s transcript conjuncts
@@ -16,6 +18,8 @@ points, both tapes and the openings (`tableTape`). `transcript_of_runs` proves t
   points then both streams' coins. A transcript whose rounds and coins are a tape's is that tape on the schedule
   (`schedSteps_of_cut`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

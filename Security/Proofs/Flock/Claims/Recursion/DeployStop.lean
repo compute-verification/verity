@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.DeployZK
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployZK
 
 /-!
 # The recursion's deployed stop (`stopsRec`) and its record (`deployRecStop`)
@@ -45,6 +47,8 @@ zero digest.
 
 `ZKStop` at `deployRecStop` is its bound, as `ZK` is at `deployRec` (`zkStop_deployRecStop_iff`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

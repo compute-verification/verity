@@ -1,4 +1,6 @@
-import Proofs.Pouw.PeriodJ10R.Honest
+module
+
+public import Proofs.Pouw.PeriodJ10R.Honest
 
 /-!
 # `H1J10RCheckedCreditPeriod`'s conclusion fails at a verifier that accepts everything
@@ -15,6 +17,8 @@ is all `n` windows and its live words are `N_p·n` (`prefixLenBy_all`, `creditLi
 path, and its probability, `1`, exceeds any `δ_s + n·(δ_bind + δ_ks) < 1`. At `k s_T = 24` and `δ_s = 1%` that is
 every period of 39 windows or more.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
 

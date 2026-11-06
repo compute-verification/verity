@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Placed.Wiring
-import Proofs.Flock.Soundness.Discharge.Aliased.Keys
-import Proofs.Flock.Soundness.Discharge.Const.Inst
-import Properties.Flock.Circuit.Keyed
+module
+
+public import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+public import Proofs.Flock.Soundness.Discharge.Const.Inst
+public import Properties.Flock.Circuit.Keyed
 
 /-!
 # `ProgPlaces` for the circuit's program on Δ's source keys
@@ -16,6 +18,8 @@ zero (`keyProg_wire_key`). At every drawn unit's site in an accepted untyped sta
 
 So `Sites.progPlaces_keyProg` is a `ProgPlaces` that takes only the sites and the parse.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

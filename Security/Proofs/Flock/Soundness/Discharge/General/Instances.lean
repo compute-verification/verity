@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
-import Flock.Test.Wires
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
+public import Flock.Test.Wires
+meta import Proofs.Flock.Soundness.Discharge.Layout.Scope
+meta import Flock.Test.Wires
 
 /-!
 # The general form at the tails' shapes
@@ -14,6 +18,8 @@ import Flock.Test.Wires
 * At a cycle through the wires (`rms 1`, `lookup true`) both refuse: `wiresAcyclic` is the general form's one refusal
   on the wires.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.General
 

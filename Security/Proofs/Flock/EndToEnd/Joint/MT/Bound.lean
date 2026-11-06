@@ -1,6 +1,8 @@
-import Proofs.Flock.EndToEnd.Joint.MT.Drawn
-import Proofs.Flock.EndToEnd.Joint.Prod
-import Proofs.Flock.Soundness.Game.Union
+module
+
+public import Proofs.Flock.EndToEnd.Joint.MT.Drawn
+public import Proofs.Flock.EndToEnd.Joint.Prod
+public import Proofs.Flock.Soundness.Game.Union
 
 /-!
 # Proof of the joint stratified bound over sampling blocks of `J` tables, per sampling block and pooled
@@ -16,6 +18,8 @@ The proofs of `JointStratified` and `JointStratifiedHorizon` (`Joint/Bound.lean`
   `Σ_t (ε_ks,t + ε_bind,t)` by `period_union`, or every draw misses with the product of the escapes below `δ`, at most
   `δ` by `period_prod`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

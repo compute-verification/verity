@@ -3,8 +3,12 @@ The `--zk` copies under the deployed hashes: run in `V` with `Hashes.ofSha512 Sh
 verifier's function it copies, so `Zk.verifyWith Sha512.hash` is `Zk.verify` for every session whose tables' Merkle schemes
 are the registry's.
 -/
-import Flock.With.Eq
-import Flock.With.Zk
+module
+
+public import Flock.With.Eq
+public import Flock.With.Zk
+
+@[expose] public section
 
 namespace Flock
 

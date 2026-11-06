@@ -4,7 +4,14 @@ values its error messages quote: `", "` and `": "` between items, keys sorted, a
 character outside `' '`..`'~'` escaped (`\"`, `\\`, `\n`, `\r`, `\t`, `\b`, `\f`, else `\uXXXX` in lowercase hex, a
 character above U+FFFF as its UTF-16 surrogate pair).
 -/
-import Lean.Data.Json
+module
+
+public import Lean.Data.Json
+meta import Lean.Data.Json
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Firewall
 

@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Assumptions
+module
+
+public import Proofs.Accounting.TS.Session.Assumptions
 
 /-!
 # A checked unit's proof layer through its C-Flock sessions
@@ -25,6 +27,8 @@ session's value layer (`XplurZC`) at them, the `rows` `ServedChecksHold` and `Se
 These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
 `Proofs.Accounting.TS.Session`, as `Accounting.Assumptions.TS`'s do.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Checked
 

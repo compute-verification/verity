@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.CoverAdditive
+module
+
+public import Definitions.Nci.Assumptions.CoverAdditive
 
 /-!
 # The additive covering bound
@@ -9,6 +11,8 @@ token computations (`Assumptions.ConditionalParameterHardAt`): a block's two cha
 by a quarter of `(k / c_w)(k / c_a)`. Activation-chaining at cost `c_a` charges a block `c_a` inputs per token: an
 activation `c_a` bits wide is such a cut.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Guarantees
 

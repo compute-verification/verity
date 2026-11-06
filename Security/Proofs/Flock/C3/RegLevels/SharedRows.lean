@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.RegLevels.AccReads
+module
+
+public import Proofs.Flock.C3.RegLevels.AccReads
 
 /-!
 # `SharedOwnRoot`: two sessions register a shared value under one root, from `checkShared`
@@ -17,6 +19,8 @@ cap `rec-top-L0`, needs such an entry. So:
   (`ChecksAccepted`; the checked family's, `checksAccepted_checked`) `SharedOwnRoot` holds at `rows`. A value `rows`
   does not register, other than R's tops, is not covered.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

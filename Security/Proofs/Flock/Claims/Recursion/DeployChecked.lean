@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Claims.Complete.Walk
-import Proofs.Flock.Claims.Complete.Json.UnitDraw
-import Proofs.Flock.Claims.Recursion.Assumptions.PlainLeaves
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Complete.Walk
+public import Proofs.Flock.Claims.Complete.Json.UnitDraw
+public import Proofs.Flock.Claims.Recursion.Assumptions.PlainLeaves
 
 /-!
 # The checked reader: `Decomp` under Flock's admission of plain leaves
@@ -36,6 +38,8 @@ soundness headline at the statement's leaf. What the recursion needs of an inner
   (`FlockComplete.RecordFitsAt`), since the scope check already sets it up with a draw (`ready_inScope_iff`); at the
   inner statement the Prop names, it holds (`ready_of_admitted`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -76,6 +76,16 @@ def moved(tmp_path) -> Path:
     return r
 
 
+def test_a_second_run_on_the_moved_tree_changes_nothing(moved):
+    """`restack.py` carries a branch across a move by rerunning it, and `stage.py` refuses a move whose rerun changes
+    anything: with nothing of the map left to move, no second (empty) entry goes to `moves.json`."""
+    git(moved, "commit", "-q", "-m", "moved")
+    subprocess.run(["python3", str(LAYOUT), "--root", str(moved), "--map", str(moved.parent / "map.toml"), "--no-lock"],
+                   check=True, capture_output=True)
+    assert git(moved, "status", "--porcelain") == ""
+    assert len(json.loads((moved / "tools/research/src/research/store/moves.json").read_text())["moves"]) == 1
+
+
 def test_a_string_literal_in_rust_or_lean_keeps_its_text_and_only_a_path_in_one_moves(moved):
     rs = (moved / "prover.rs").read_text()
     assert 'const TAG: &str = "sha256 (verity.randomness)";' in rs, "a domain tag is protocol text"

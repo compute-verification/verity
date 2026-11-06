@@ -1,5 +1,7 @@
-import Proofs.Nci.Cover.FanOutWalk
-import Proofs.Nci.Cover.Witness
+module
+
+public import Proofs.Nci.Cover.FanOutWalk
+public import Proofs.Nci.Cover.Witness
 
 /-!
 # The fan-out bounds: their hypotheses can hold together
@@ -25,6 +27,8 @@ both: a spent value costs `f = 2` bits. Holding a lookup costs its column's 3 bi
 lookup, handed its column, one for the root, handed both lookups (4 bits), and one for the product, handed the root,
 gate 7 and a column bit.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

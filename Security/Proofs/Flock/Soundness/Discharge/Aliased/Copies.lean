@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Aliased.Rows
-import Proofs.Flock.Soundness.Discharge.Hm.SatEx
+module
+
+public import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+public import Proofs.Flock.Soundness.Discharge.Hm.SatEx
 
 /-!
 # `Layout.Aliased` from Δ's copy positions (`pp.aliased`)
@@ -20,6 +22,8 @@ statement alone: two inputs an instance puts on one gate can copy different sour
 a forced-zero row. `setupH_aliased` and `setupH_unitPlace` instantiate it at the untyped statement `Stmt.setupH`
 accepted.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Prob
+module
+
+public import Proofs.Flock.Claims.Prob
 
 /-!
 # Zero knowledge against a malicious verifier: what the proofs add to the spec's `ZKmalR`
@@ -12,6 +14,8 @@ every coin. This module adds:
 * **The worst-case cost** (`SimCostLe`), beside the spec's expected `SimCost`, which it implies (`SimCostLe.simCost`).
 * What `findColl` finds (`findColl_ne_none_iff`, `findColl_collision`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

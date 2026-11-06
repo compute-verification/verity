@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # ASCII texts: what the canonical printer prints
@@ -8,6 +10,8 @@ DEL (`Json.Ascii`: every character below `0x7f`, so every byte is), the bytes Py
 
 Mathlib only, as `Definitions/` is.
 -/
+
+@[expose] public section
 
 namespace Claims
 

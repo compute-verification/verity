@@ -1,9 +1,11 @@
-import Proofs.Flock.Recursive.KSStatement
-import Proofs.Flock.Claims.Recursion.VCallsAt
-import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
-import Proofs.Flock.Claims.Recursion.LamDeployed
-import Proofs.Flock.Claims.Witnesses.RecursionLin2
-import Proofs.Flock.Claims.Recursion.Assumptions.KSFixture
+module
+
+public import Proofs.Flock.Recursive.KSStatement
+public import Proofs.Flock.Claims.Recursion.VCallsAt
+public import Proofs.Flock.Claims.Recursion.PlainKSAbortFails
+public import Proofs.Flock.Claims.Recursion.LamDeployed
+public import Proofs.Flock.Claims.Witnesses.RecursionLin2
+public import Proofs.Flock.Claims.Recursion.Assumptions.KSFixture
 
 /-!
 # `RecursiveKS` at the verifier that accepts everything (the Lean check's `nontrivial`)
@@ -33,6 +35,8 @@ the dense statements stay deployed. `RecursiveKSAtAll` is `RecursiveKSAt` there.
   statement can be built in Lean that it reads, and the nontrivial lemma assumes only the reading, witnessed by a
   fixture run.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

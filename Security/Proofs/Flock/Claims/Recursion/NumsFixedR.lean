@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.DeployHonest
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.VStarLinks
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.VStarLinks
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 /-!
 # A staged part's numbers do not depend on the inner rounds (`numsFixed`)
@@ -23,6 +25,8 @@ reads those off the circuit (`HmOut.parseCommit`, the same file) and the stateme
 instance count, which `RecVStar.checkCircuit` holds to the instances of V*'s statement `s` at the verifier's own inner
 shape (`staged_pop`); with one, the draw's proved units (`Layout.drawn_spec`), the same draw.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.NumsFix
 
@@ -221,15 +225,13 @@ theorem staged_one {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i 
   have hC := RecIns.setup_checks hset
   rw [hinner, insO_staged_part hins] at hC
   have hn := ResLower.checkStmt_name (checks_stmt hC 0 (by omega))
-  obtain ⟨⟨nm, hf⟩, coins, hI⟩ := ResLower.insO_tags hins
+  obtain ⟨⟨nm, hf⟩, hI⟩ := ResLower.insO_tags hins
   have hnm : nm = Flock.Tags.circuit.name := by rw [← Flock.Tags.byName?_name hf, hn]
   subst hnm
   rw [Flock.Tags.byName?_of_find? FlockSoundness.Discharge.Recursion.find?_circuit] at hf
   have hT : i.base.stmtTags = Flock.Tags.circuit := (Option.some.inj hf).symm
   have hI' : i.base.read.I.tags.hiddenOutputs = true := by
-    rw [hI, hT]
-    unfold Flock.Tags.withCoins
-    split <;> rfl
+    rw [hI, hT] <;> rfl
   show i.base.read.tags.hiddenOutputs = true
   unfold Flock.Readable.Read.tags
   split
