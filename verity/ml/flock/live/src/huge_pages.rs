@@ -2,9 +2,11 @@
 //! its first touch. The prover's tables are fresh vectors of 2^k field elements each rep (the lincheck's eq table and folds,
 //! the encoded rows), each mapped anew by glibc and faulted in by the kernel 4 KiB at a time, the prover's threads waiting on
 //! each other's faults; huge pages fault each 2 MiB once. The kernel takes the advice where `transparent_hugepage/enabled`
-//! is `madvise` or `always`, and ignores it under `never`.
+//! is `madvise` or `always`, and ignores it under `never`. A GPU prover turns the advice off ([`set`]): its host staging
+//! of each witness runs slower on advised pages than on small ones, which outweighs what the advice saves it.
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::ffi::c_void;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// glibc's largest mmap threshold: an allocation this large is a mapping of its own, which the advice covers whole (an
 /// advised part of a mapping would split it, and glibc's `realloc` could no longer `mremap` it).
@@ -18,8 +20,15 @@ unsafe extern "C" {
 
 pub struct HugePages;
 
+static ON: AtomicBool = AtomicBool::new(true);
+
+/// Whether later allocations take the advice; set before the prover's first large allocation.
+pub fn set(on: bool) {
+    ON.store(on, Ordering::Relaxed);
+}
+
 fn advise(p: *mut u8, size: usize) -> *mut u8 {
-    if !p.is_null() && size >= MIN_BYTES {
+    if !p.is_null() && size >= MIN_BYTES && ON.load(Ordering::Relaxed) {
         let (a, e) = (p as usize / PAGE * PAGE, (p as usize + size).next_multiple_of(PAGE));
         // advice: refused, the pages stay small
         unsafe { madvise(a as *mut c_void, e - a, MADV_HUGEPAGE) };
@@ -82,6 +91,12 @@ mod tests {
             let s = HugePages.alloc(small);
             assert!(!s.is_null());
             HugePages.dealloc(s, small);
+            set(false);
+            let p = HugePages.alloc_zeroed(l);
+            set(true);
+            let (_, _, flags) = mapping(p as usize);
+            assert!(!flags.split_whitespace().any(|f| f == "hg"), "advised while off: {flags}");
+            HugePages.dealloc(p, l);
         }
     }
 }

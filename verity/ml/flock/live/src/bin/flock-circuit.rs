@@ -6483,6 +6483,7 @@ fn stacked() {
 }
 
 fn main() {
+    flock_live::huge_pages::set(!flag("--gpu"));
     flock_live::init_threads();
     let cmd = std::env::args().nth(1).unwrap_or_default();
     if cmd == "replay-coins" {
