@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
 
 /-!
 # A run's coin steps
@@ -8,6 +10,8 @@ exactly its coin arrays as `coinArr` reads them, by the induction of `Plays.toT`
 round whose coin count is its array's size, `coinMsg true` is `coinArr`. So `coinsOfRounds` (`CoinsOfRounds`): a run on
 well-formed rounds' coins has the coin steps `coinMsg true` of the rounds.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlaysCoin
 

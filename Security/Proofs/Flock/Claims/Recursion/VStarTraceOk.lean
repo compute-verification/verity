@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.Recursion.VStarTrace
-import Proofs.Flock.Claims.Recursion.VStarLinks
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Scope.InScope
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.Hm.Place
-import Proofs.Flock.Soundness.Discharge.Hm.Copy
-import Proofs.Flock.Soundness.Discharge.Aliased.Rows
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarTrace
+public import Proofs.Flock.Claims.Recursion.VStarLinks
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Scope.InScope
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Soundness.Discharge.Hm.Place
+public import Proofs.Flock.Soundness.Discharge.Hm.Copy
+public import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 
 /-!
 # `TraceOk` at the deployed statements (`traceOk_deployed`)
@@ -36,6 +38,8 @@ Two facts the checks don't give, the hypotheses here:
   rows the empty salt, `partIn` still succeeds, and `rows` fails. It is a fact of the honest inner prover and of
   V\*'s port widths (`vstarRows`), not of the verifier.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarTraceOk
 
@@ -247,7 +251,9 @@ theorem scope_ports (h : ProvedScope.scopeOk c = true) {q : ℕ} (hq : q < c.por
     c.ports[q].segs = none ∧ c.ports[q].bits = 16 * c.ports[q].words := by
   unfold ProvedScope.scopeOk ProvedScope.v1Ports ProvedScope.v1Rows at h
   rw [Bool.and_eq_true] at h
-  have := Array.all_eq_true.mp ((Bool.and_eq_true _ _).mp h.2).1 q hq
+  have h2 := h.2
+  rw [Bool.and_eq_true] at h2
+  have := Array.all_eq_true.mp h2.1 q hq
   simp only [Bool.and_eq_true, Bool.not_eq_true', Option.isNone_iff_eq_none, beq_iff_eq, decide_eq_true_eq] at this
   exact ⟨this.1.1.2, this.1.2⟩
 

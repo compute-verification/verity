@@ -1,6 +1,10 @@
-import Proofs.Flock.Claims.ZK.FrameLoop
-import Proofs.Flock.Claims.ZK.FramePass
-import Proofs.Flock.Claims.ZK.FinishLevel0
+module
+
+public import Proofs.Flock.Claims.ZK.FrameLoop
+public import Proofs.Flock.Claims.ZK.FramePass
+public import Proofs.Flock.Claims.ZK.FinishLevel0
+import all Init.Data.String.Defs
+import all Init.Data.Array.DecidableEq
 
 /-!
 # Two runs of the firewall's prover alike in shape
@@ -26,6 +30,8 @@ too:
   PIOP returns the same proof and claims and leaves alike transcripts.
 * **The ring switch** (`ringSwitchP_sim`): at switched vectors of the same sizes, it returns the same switched claims.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainFork
-import Proofs.Flock.Claims.KS.PlainClashRunK
+module
+
+public import Proofs.Flock.Claims.KS.PlainFork
+public import Proofs.Flock.Claims.KS.PlainClashRunK
 
 /-!
 # The live fork event's collision
@@ -20,6 +22,8 @@ logs (`tiedColl_of_openings`).
 * `plain_liveOpeningK`, `plainForkQ_ofK`, `plainForkClashK`: the same at `VK keep` (`plainSimK keep`, `wrPDK keep`,
   `rawLevelCols_plainK`), so `PlainForkClashK keep` holds at every statement.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

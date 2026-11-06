@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VerdictRows
-import Proofs.Flock.VBridge.AccChain
-import Proofs.Flock.VBridge.Family.Opened
-import Proofs.Flock.VBridge.Family.Structure
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+public import Proofs.Flock.VBridge.AccChain
+public import Proofs.Flock.VBridge.Family.Opened
+public import Proofs.Flock.VBridge.Family.Structure
 
 /-!
 # Row E: the running sums at a rep of the decision
@@ -22,6 +24,8 @@ chain (`UnitSums`), they read the verifier's coefficients (`CoefsAre`), the rep'
   establish: the `rec-open` copies' `acc_out` columns (`AccUnits.unitSum_of_cols`) and the algebra unit's `acc0`,
   `acc1` ports read at the chain's ends (`AccUnits.readsEnds_of_regBits`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

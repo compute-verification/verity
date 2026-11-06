@@ -1,5 +1,7 @@
-import PouwCheck.Credit
-import PouwWindow.RegFile
+module
+
+public import PouwCheck.Credit
+public import PouwWindow.RegFile
 
 /-!
 # A window unit's leaf statements: their tile and the placement of the values they read
@@ -25,6 +27,8 @@ descriptor's Program (`Credit.programOf`, `Credit.layoutOf`, `Credit.prefixOf`).
 `PouwWindow.Lanes.leafOwn?` at that tile and placement, which `pouw-leaf-own-window` runs (`leafOwnCmd`). Its cost is
 the descriptor's bytes and the window's calls.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.LeafOwn
 

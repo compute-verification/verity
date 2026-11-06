@@ -11,7 +11,11 @@ family `label`, and its openings exactly the coins that session's signed log sho
 coins through this (`Core.Live`) takes its draw from the challenger's record, and
 `Properties.Challenger.DrawnByDevice` says what that record shows: the coins the device drew, or a break.
 -/
-import SampledProofs.ChallengerCoins
+module
+
+public import SampledProofs.ChallengerCoins
+
+@[expose] public section
 
 namespace SampledProofs.Challenger
 
@@ -31,7 +35,7 @@ def drawCoins (key : ChallengerKey) (window label : String) (after : ByteArray) 
     (getD coins "pins") (getD coins "main") (getD coins "session")
   unless withheldOn (getD coins "ledger") window do throw WITHHELD
   let segment := getD coins "segment"
-  unless getD segment "label" == Json.str label do
+  unless jsonStrIs (getD segment "label") label do
     throw s!"the draw's coins are not the challenger's {label} family's"
   challengerStream c segment after (some (((roots.find? (·.1 == label)).map (·.2)).getD []))
 

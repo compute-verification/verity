@@ -1,6 +1,8 @@
-import Proofs.Accounting.TS.Session.Checked.Layer
-import Proofs.Accounting.TS.Session.Held.Known
-import Definitions.Accounting.Served
+module
+
+public import Proofs.Accounting.TS.Session.Checked.Layer
+public import Proofs.Accounting.TS.Session.Held.Known
+public import Definitions.Accounting.Served
 
 /-!
 # A checked unit's proof layer with its served checks, through its C-Flock sessions
@@ -25,6 +27,8 @@ Unit `u` of the session is one unit of `Cd`, and its partials are proof-layer va
 These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
 `Proofs.Accounting.TS.Session`, as `Accounting.TS.Checked`'s do.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Held
 

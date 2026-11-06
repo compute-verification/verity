@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Scope.Readable
-import Proofs.Flock.Soundness.ExecSetup
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.Hidden.Layout
-import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+module
+
+public import Proofs.Flock.Claims.Scope.Readable
+public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
 # What the verifier's setup gives the scope
@@ -14,6 +16,8 @@ table's statement `st` has the circuit the scope check parses (`ProvedScope.circ
 loads (`ProvedScope.publicOf`), `m = k_log + nbl`, `6 ≤ k_log ≤ 27` and `m ≤ 35` (`Stmt.setupH`'s and
 `Stmt.setupHidden`'s refusals), and under `--zk` `25 ≤ m` (`Zk.shapeOk`'s `queries0`).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

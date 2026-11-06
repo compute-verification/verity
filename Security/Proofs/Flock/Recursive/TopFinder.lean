@@ -1,7 +1,9 @@
-import Proofs.Flock.Recursive.Registrants
-import Proofs.Flock.Recursive.TopRoot
-import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.C3.RegLevels.TopHold
+module
+
+public import Proofs.Flock.Recursive.Registrants
+public import Proofs.Flock.Recursive.TopRoot
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.C3.RegLevels.TopHold
 
 /-!
 # A one-run finder for a held top different from the registered top
@@ -12,6 +14,8 @@ equal-size frame-v3 trees with one root.  `topFinder` runs the audit once and re
 at exactly that bad event (`TopColl`, a disjunct of VBridgeCOff's bad event, which reads every outcome, so the event
 asks no acceptance); off it the held top is `TopOf`'s (`topOf_held`).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs.TopFinder
 

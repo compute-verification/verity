@@ -1,5 +1,7 @@
-import Definitions.Core.TC.Spec
-import Definitions.Core.TC.Relation
+module
+
+public import Definitions.Core.TC.Spec
+public import Definitions.Core.TC.Relation
 
 /-!
 # One product: the relation's product rows are forced, and they are `bf16_product_total`
@@ -8,6 +10,8 @@ import Definitions.Core.TC.Relation
 to it (`prodHolds_eq`), and it satisfies `prodHolds` (`prodHolds_prodCols`). `prod_value` reads the semantics' product
 off it: its NaN and infinity flags, and in the finite case its sign, masked exponent and significand product.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs
 

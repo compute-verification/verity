@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.RegLevels.ValueTie
-import Proofs.Flock.C3.RegLevels.OutRegs
+module
+
+public import Proofs.Flock.C3.RegLevels.ValueTie
+public import Proofs.Flock.C3.RegLevels.OutRegs
 
 /-!
 # `opensTopAt_of_regs`' `hT` at R's levels `ℓ ≥ 1`, from a root over the cap's rows
@@ -16,6 +18,8 @@ By the read's leaf instead (`hT_of_leaf`): at an accepted session the registrant
 `LeafColl`'s event); where that digest is a node's commit string under the held salts (`TopOf`), `salt_tie` gives the
 node's row, or `saltFinder`'s pair collides.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

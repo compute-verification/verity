@@ -1,5 +1,7 @@
-import Definitions.Accounting.ComposePeriod
-import Definitions.Accounting.Assumptions.Compose
+module
+
+public import Definitions.Accounting.ComposePeriod
+public import Definitions.Accounting.Assumptions.Compose
 
 /-!
 # PoUW's work over a monitoring period of `n` windows (trusted)
@@ -45,6 +47,8 @@ at it (`PeriodTailMax`).
   realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposePeriod`) from `CircuitWorkPeriod`'s
   assembly at `a, b > 0`. Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.ComposePeriod
 

@@ -1,10 +1,12 @@
-import Mathlib.Data.ENat.Lattice
-import Mathlib.Data.Finset.Sort
-import Mathlib.Data.Nat.Log
-import Mathlib.Basic.Real.Basic
-import Mathlib.Data.ZMod.Defs
-import Definitions.Core.Partition
-import Definitions.Core.Declaration
+module
+
+public import Mathlib.Data.ENat.Lattice
+public import Mathlib.Data.Finset.Sort
+public import Mathlib.Data.Nat.Log
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.ZMod.Defs
+public import Definitions.Core.Partition
+public import Definitions.Core.Declaration
 
 /-!
 # The working draft's model: Boolean circuits, `(c, k)`-partitions and local description length
@@ -45,6 +47,8 @@ stated on these objects.
 
 A multi-bit circuit reaches this model through its bit-level expansion (`Definitions.Core.Expand`).
 -/
+
+@[expose] public section
 
 namespace Verity
 

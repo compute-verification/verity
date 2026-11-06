@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.VBridge.Family.Registered
+module
+
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.VBridge.Family.Registered
 
 /-!
 # The rows `own` names are registered reads, at candidate 3's family
@@ -19,6 +21,8 @@ at every unit. At the checked family (`C3Family.checked`) the sessions' records 
 * `rowsCovered_checked`: `RowsCovered` at the checked family from `RegistrantCovers zr`; `keepOwn` and `ZkOuter.refuse`
   only narrow `own` to `freshOwn`, which names no port of the circuit (`fresh_not_named`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

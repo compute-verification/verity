@@ -1,6 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Inst.Place
-import Proofs.Flock.Soundness.ExecLookup
-import Flock.ProvedScope
+module
+
+public import Proofs.Flock.Soundness.Discharge.Inst.Place
+public import Proofs.Flock.Soundness.ExecLookup
+public import Flock.ProvedScope
+import all Init.Data.Nat.Fold
 
 /-!
 # Every column with a row is in the order, once the wires are acyclic
@@ -15,6 +18,8 @@ every slot's rows read only port bits and earlier rows. Then every column with a
   ports `outReads` names (`ok_mem_order`, a lookup slot's from its input port, `lookup_mem_order`);
 - a computed row reads only filled ports' bits, earlier rows and the constant.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

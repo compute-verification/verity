@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.Reference
-import Flock.Hm96
-import Flock.Canon
-import Flock.Firewall.SessionPlan
+module
+
+public import Proofs.Flock.Claims.ZK.Reference
+public import Flock.Hm96
+public import Flock.Canon
+public import Flock.Firewall.SessionPlan
 
 /-!
 # The deployed coin layer of `flock-circuit --zk`
@@ -34,6 +36,8 @@ requests, not the statement's, so the record takes them as a parameter, and the 
 `Claims.Witness.Flock.ZK_meets` states the record's coin layer; `ZK_coins_fails` that the degenerate coin layer (an
 opening check that passes everything, a coin that is the opening) is not it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -244,7 +248,7 @@ def helloJson (spec : Flock.SessionSpec) (nonce : String) : Flock.V String :=
   match spec.coinTree with
   | none => pure spec.hello
   | some _ => do
-    let some own := (Json.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
+    let some own := (Flock.JsonParse.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
     let coins := (own.getObjVal? "coins").toOption.getD Json.null
     Flock.canon (own.setObjVal! "coins" (coins.setObjVal! "nonce" (Json.str nonce)))
 

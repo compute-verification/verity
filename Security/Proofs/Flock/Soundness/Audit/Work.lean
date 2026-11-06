@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Audit.Stratified
-import Mathlib.Analysis.MeanInequalities
-import Definitions.Flock.Guarantees.Audit
+module
+
+public import Proofs.Flock.Soundness.Audit.Stratified
+public import Mathlib.Analysis.MeanInequalities
+public import Definitions.Flock.Guarantees.Audit
 
 /-!
 # The work law
@@ -44,6 +46,8 @@ For the strata that do no work:
 Closure draws (a drawn unit proved with the units it reads) are not part of this law. `Law.widen` proves more units than a
 law draws on the same coins, and `escape_widen_le` carries every escape bound to it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

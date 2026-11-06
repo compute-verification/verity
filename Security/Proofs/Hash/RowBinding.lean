@@ -1,4 +1,6 @@
-import Proofs.Hash.TreeBinding
+module
+
+public import Proofs.Hash.TreeBinding
 
 /-!
 # `Hash.SecurityProofs.RowBinding : Hash.Guarantees.RowBinding`
@@ -15,6 +17,8 @@ Down from the root, each step gives the next equality or a collision among what 
    (`Q(ℓ)`) and one list of segment digests. Each segment digest comes from one segment message, so from one segment,
    and the segments cover the row.
 -/
+
+@[expose] public section
 
 namespace Hash.BindingProofs
 

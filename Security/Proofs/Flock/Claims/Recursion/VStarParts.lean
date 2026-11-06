@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VStar
-import Proofs.Flock.Claims.Scope.Fit
-import Proofs.Flock.Claims.Scope.Matches
-import Proofs.Flock.VBridge.ResUnit
-import Proofs.Flock.VBridge.Verifier
+module
+
+public import Proofs.Flock.Claims.Recursion.VStar
+public import Proofs.Flock.Claims.Scope.Fit
+public import Proofs.Flock.Claims.Scope.Matches
+public import Proofs.Flock.VBridge.ResUnit
+public import Proofs.Flock.VBridge.Verifier
 
 /-!
 # V*'s parts at the Claims relation: a unit copy's semantics, and the algebra parts
@@ -49,6 +51,8 @@ circuit file byte for byte with `RecVStar.circuitFile`, and `RecResiduals.check`
   input they hash is one the setup evaluates or one the part records, so the collision is a registered tie `Br` finds
   or one among the recorded calls (`coll_of_chains`).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

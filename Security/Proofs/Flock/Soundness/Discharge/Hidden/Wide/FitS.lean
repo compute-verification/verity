@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
 
 /-!
 # The rows the hidden-output headlines cover: fit rows and `sha512/row-seg/v1` rows, each under its own prefix
@@ -11,6 +13,8 @@ fitting (`Any.OutRowsS`). A row's `hm96` slot hashes `Any.rowMsg` of its message
 own `v2`) and the bytes at an unsegmented row, `RowSeg.enc` of them at a row-seg row
 (`Any.row_bc_tgtS`, from `Any.row_bc_tgt` and `Any.seg_bc_tgt`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

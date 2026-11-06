@@ -1,4 +1,6 @@
-import Evaluate.Fp32
+module
+
+public import Evaluate.Fp32
 
 /-!
 # The sampler's primitives: libdevice's logs, Philox and Triton's rand, and top-p's keep count
@@ -20,6 +22,8 @@ The Python computes libdevice's FTZ steps in Python `float`, a double, on the ho
 
 Words as in `Evaluate.Scalar`; `Int` holds the Python's signed integers, and its `x & -2^23` is `x - x mod 2^23`.
 -/
+
+@[expose] public section
 
 namespace Evaluate.Libdevice
 

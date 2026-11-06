@@ -5,7 +5,12 @@ relabelled under another template (another part's S, a level's, or the same S wi
 a level under its neighbour's `H` and the link table's part under another table's `UB` or `PB`, however consistently the
 bindings carry the label.
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock.Test.Template
 

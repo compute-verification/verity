@@ -35,12 +35,11 @@ untraced = [
     "tests/test_lean_coin_tree.py",
     "tests/test_lean_forged_proofs.py",
     "tests/test_lean_hidden_outputs.py",
-    "tests/test_lean_honest_plain.py",
-    "tests/test_lean_live_os.py",
     "tests/test_lean_out_group_slot.py",
     "tests/test_lean_plain_hidden_tables.py",
     "tests/test_lean_public_inputs.py",
     "tests/test_lean_rec_cap_guards.py",
+    "tests/test_lean_record_checks.py",
     "tests/test_lean_region_words.py",
     "tests/test_lean_registered_bit_rows.py",
     "tests/test_lean_registered_reads.py",
@@ -80,11 +79,17 @@ inputs = [
     "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
     # the Lean decoder's width refusals against the codec, on the NCI difftest's mistyped descriptors
     "verity/core/protocols/network/nci/lean/scripts",
-    # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's
-    "verity/core/service/flock/Flock/Zk.lean",
+    # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
+    # tree to RecVStar's
+    "verity/core/service/flock/Flock/Zk.lean", "verity/core/service/flock/Flock/RecVStar.lean",
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
     # the flock-verify artifact
     "verity/core/service/flock/Flock/Test/RecCap.lean",
+    # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
+    "verity/ml/flock/live/PROTOCOL.md",
+    # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
+    # lock (its Flock.Firewall.Honest is C-Flock's, which the flock-firewall artifact keys)
+    "verity/core/difftest/python/verity_difftest", "verity/core/difftest/lean",
 ]
 parallel = true
 # an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
@@ -94,6 +99,7 @@ timeout_s = 14400
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
 artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
              "verity/core/service/flock/.lake/build/bin/flock-firewall",
+             "verity/core/service/flock/.lake/build/bin/flock-frame-tape",
              "verity/core/service/flock/.lake/build/bin/flock-rec-sparse",
              "verity/core/service/flock/.lake/build/bin/flock-witness",
              "verity/core/service/flock/.lake/build/bin/flock-rec-opening",
@@ -164,9 +170,8 @@ paths = [
 tests = [
     "tests/test_lean_draw_laws.py",
     "tests/test_lean_ks_form.py",
-    "tests/test_lean_live_os.py",
-    "tests/test_lean_plain_hidden.py",
     "tests/test_lean_plain_hidden_tables.py",
+    "tests/test_lean_record_checks.py",
     "tests/test_lean_region_words.py",
     "tests/test_lean_registered_reads.py",
     "tests/test_lean_served_registered.py",

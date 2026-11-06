@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
-import Proofs.Flock.Claims.Complete.ZkTables.Level0
-import Proofs.Flock.Claims.Complete.ZkTables.Table
-import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
-import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
-import Proofs.Flock.Claims.Complete.Zk.InnerGo
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+public import Proofs.Flock.Claims.Complete.ZkTables.Table
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
+public import Proofs.Flock.Claims.Complete.Zk.InnerGo
 
 /-!
 # The verifier's view of a returning masked rep
@@ -20,6 +22,8 @@ import Proofs.Flock.Claims.Complete.Zk.InnerGo
   ring switch that returned, runs on the prover's inputs and returns where the prover's stopped, and the prover's
   inner proof returned on the verifier's constraints.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

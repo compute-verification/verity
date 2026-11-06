@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Claims.Complete.Walk
-import Proofs.Flock.Claims.Complete.Json.UnitDraw
-import Proofs.Flock.Claims.Recursion.Assumptions.PlainLeaves
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Complete.Walk
+public import Proofs.Flock.Claims.Complete.Json.UnitDraw
+public import Proofs.Flock.Claims.Recursion.Assumptions.PlainLeaves
 
 /-!
 # The checked reader: `Decomp` under Flock's admission of plain leaves
@@ -36,6 +38,8 @@ soundness headline at the statement's leaf. What the recursion needs of an inner
   (`FlockComplete.RecordFitsAt`), since the scope check already sets it up with a draw (`ready_inScope_iff`); at the
   inner statement the Prop names, it holds (`ready_of_admitted`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -225,13 +229,13 @@ theorem admitted_acc {rel : Flock.Readable.Parsed → Flock.Readable.Relation} (
 /-- **`admitted_acc` at `Readable.relation`**, where Flock's completeness is `FlockComplete.Replay.complete_plain`, under its
 hypotheses. -/
 theorem admitted_acc_plain (hA : PlainLeavesAdmitted Flock.Readable.relation)
-    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (h64 : Claims.Out64 FlockDeploy.sha512)
+    (h64 : Claims.Out64 FlockDeploy.sha512)
     (hfin : FlockComplete.Replay.LgFinal FlockDeploy.sha512 Flock.Readable.relation) :
     ∃ (inner : Msg) (ri : FlockDeploy.Raw) (partition : Option Json) (dims : Flock.RecVStar.Inner),
       FlockDeploy.decode inner = some ri ∧ (ri.partition.mapM (FlockDeploy.jsonOf "partition")).toOption = some partition ∧
         Flock.RecVStar.innerOf ri.circuit ri.publicFile partition ri.program = .ok dims ∧ innerOk inner = .ok () ∧
         ∃ (c : ℕ → Coin) (ms : List Msg), InnerAccSha inner c ms :=
-  admitted_acc hA (FlockComplete.Replay.complete_plain FlockDeploy.sha512 S h64 hfin) h64
+  admitted_acc hA (FlockComplete.Replay.complete_plain FlockDeploy.sha512 h64 hfin) h64
 
 /-! ## The inner readiness the deployed stop reads -/
 

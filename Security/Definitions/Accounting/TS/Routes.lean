@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS.Machine
+module
+
+public import Definitions.Accounting.TS.Machine
 
 /-!
 # Routes, labelled programs and the terms (trusted)
@@ -21,6 +23,8 @@ EPS1-SPEC §0.4–§0.7a and §1.3 over `Accounting.TS.Machine`:
 
 Prices are per unit of honest work throughout; a window's totals divided by its units.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

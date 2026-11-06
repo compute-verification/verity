@@ -1,5 +1,7 @@
-import Definitions.Core.Expand
-import Definitions.Nci
+module
+
+public import Definitions.Core.Expand
+public import Definitions.Nci
 
 /-!
 # NCI's policy as a `(c, k)`-partition
@@ -11,6 +13,8 @@ working draft's Lemma 1 and Theorem 3 apply. A multi-bit declaration first takes
 (`ExpandComplies`): an IU of gates at most `W` bits wide becomes one of at most `Γ W` one-bit gates, reading the same
 novel bits.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

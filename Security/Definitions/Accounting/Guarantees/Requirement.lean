@@ -1,4 +1,6 @@
-import Definitions.Accounting.Requirement
+module
+
+public import Definitions.Accounting.Requirement
 
 /-!
 # A declared circuit's requirement, from what the audit credits (trusted)
@@ -28,6 +30,8 @@ credits, and the last two bound what it leaves out. Their proofs are in
 
 Frozen (no-function): counting bounds over a wiring, its execution and a store, about no function of the code.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

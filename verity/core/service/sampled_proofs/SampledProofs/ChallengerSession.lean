@@ -13,8 +13,9 @@ leaf (`challenger.json`):
 
 `end` 0x00 when the client closed the session and 0x01 ‖ ended otherwise. `sessionOf` is `session_of`: the record under
 the key (`recordReason`), the close signed under it, the log the one the close signs, line for line, a session its
-client closed, and the roots it received (`releasedRootsOf`). A line is refused unless it is its own canonical JSON
-(`Flock.canon`) in at most `MAX_LOG_LINE` characters, so Lean's parser and Python's read every accepted line alike.
+client closed, and the roots it received (`releasedRootsOf`), which reads past the log's coin-tree lines (`treeLine`;
+`ChallengerTrees` reads them). A line is refused unless it is its own canonical JSON (`Flock.canon`) in at most
+`MAX_LOG_LINE` characters, so Lean's parser and Python's read every accepted line alike.
 
 The auditor's ledger names the one session each window's coins come from (`auditedSession`, `audited_session`): infra's
 `windows.jsonl`, a line per entry `{body, kind, prev, schema, seq, session, sig}` as the auditor writes it (`ledger_text`,
@@ -54,9 +55,17 @@ The difftest's pieces: `challenger_close` (`ChallengerClose.from_json` and `clos
 `challenger_session` (`trusted_session_of`), `challenger_credited` (`credited_session`) and `challenger_pinned`
 (`pinned_session`), each `{"refused": why}` where Python refuses.
 -/
-import CoreProtocol.Record
-import SampledProofs.ChallengerRecord
-import SampledProofs.PyJson
+module
+
+public import CoreProtocol.Record
+public import SampledProofs.ChallengerRecord
+public import SampledProofs.PyJson
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 
@@ -66,8 +75,14 @@ open Flock (V)
 def CLOSE_ROLE : String := "verity/challenger-close/v1"
 def LOG_TAG : String := "verity/challenger/release-log/v1"
 def MAX_SESSION_ID : Nat := 128
-def MAX_LOG_LINES : Nat := 2 * MAX_COINS + 1
+/-- A release log's most coin-tree lines (`ChallengerTrees.coinTreesOf`): each tree the challenger sampled and each
+round it opened. -/
+def MAX_TREE_LINES : Nat := 2 ^ 20
+/-- A release log's most lines: its head, then a root and its release per coin, and its coin-tree lines. -/
+def MAX_LOG_LINES : Nat := 2 * MAX_COINS + 1 + MAX_TREE_LINES
 def MAX_LOG_LINE : Nat := 4096
+def TREE_EVENT : String := "coin-tree"
+def OPEN_EVENT : String := "tree-open"
 def CLOSE_FORM : String :=
   "a challenger close record is {chain, ended, lines, session, signature}: a 64-byte chain and a signature in " ++
   "lowercase hex, how the session ended (null when its client closed it), the release log's line count, 1 to " ++
@@ -185,7 +200,7 @@ def ChallengerClose.toJson (c : ChallengerClose) : Json :=
 characters. -/
 def event (line : String) : V Json := do
   unless line.length ≤ MAX_LOG_LINE do throw LOG_MALFORMED
-  let .ok j := Json.parse line | throw LOG_MALFORMED
+  let .ok j := Flock.JsonParse.parse line | throw LOG_MALFORMED
   let .ok text := Flock.canon j | throw LOG_MALFORMED
   unless text == line do throw LOG_MALFORMED
   pure j
@@ -196,18 +211,26 @@ private def pairs : List String → List (String × String)
 
 private def isTime (j : Json) : Bool := (nat? j).isSome
 
+/-- `tree_line`: whether release log line `line` is a coin tree's (`ChallengerTrees.coinTreesOf`), an event whose
+`event` is `TREE_EVENT` or `OPEN_EVENT`. -/
+def treeLine (line : String) : Bool :=
+  match event line with
+  | .ok j => getD j "event" == Json.str TREE_EVENT || getD j "event" == Json.str OPEN_EVENT
+  | .error _ => false
+
 /-- The roots the challenger received, by family in order. -/
 abbrev Roots := List (String × List ByteArray)
 
 /-- `released_roots_of` (module docstring): the roots the release log `log` shows the challenger received, its head
-naming `c`, each root followed by its coin's release. -/
+naming `c`, each root followed by its coin's release, its coin trees' lines aside (`treeLine`). -/
 def releasedRootsOf (c : LiveCommitment) (log : List String) : V Roots := do
   let head := "{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}"
   unless log.head? == some head do
     throw s!"the challenger's release log is not coin commitment {(Flock.hexOf c.root).take 16}'s"
-  if log.length % 2 == 0 then throw "the challenger's release log ends on a root without its release"
+  let rest := log.tail.filter fun l => !treeLine l
+  if rest.length % 2 == 1 then throw "the challenger's release log ends on a root without its release"
   let mut roots : Array (String × Array ByteArray) := (c.families.map fun (l, _) => (l, #[])).toArray
-  for (a, b) in pairs log.tail do
+  for (a, b) in pairs rest do
     let r ← event a
     let s ← event b
     let ok := keys? r == some #["event", "index", "label", "received_at", "root"] &&
@@ -397,7 +420,7 @@ and is of the ledger's form: a schema of the ledger's, a session's entry naming 
 def ledgerEntry? (line : Json) : Option LedgerEntry := do
   let .str text := line | none
   guard (text.length ≤ MAX_LEDGER_LINE)
-  let e ← (Json.parse text).toOption
+  let e ← (Flock.JsonParse.parse text).toOption
   guard ((PyJson.canonical e).toOption == some text && !escapesSurrogate text && (Flock.canon e).toOption.isSome)
   let r ← (Core.Record.ofJson e).toOption
   let _ ← ledgerTag? r.schema
@@ -736,7 +759,7 @@ def circuitReason (period : Option String) (circuit : Json) (descriptor : ByteAr
 `{commit, main, pinned_utc}`, two commits in 40 lowercase hex and a time `later` holds fixed. -/
 def pinOf? (line : Json) : Option String := do
   let .str text := line | none
-  let e ← (Json.parse text).toOption
+  let e ← (Flock.JsonParse.parse text).toOption
   guard ((PyJson.canonical e).toOption == some text && keys? e == some #["commit", "main", "pinned_utc"])
   guard (isDigest (getD e "commit") 40 && isDigest (getD e "main") 40)
   let .str t := getD e "pinned_utc" | none

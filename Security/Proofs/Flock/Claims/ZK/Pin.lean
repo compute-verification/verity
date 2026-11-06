@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Congr
-import Proofs.Flock.Claims.DeployCode
+module
+
+public import Proofs.Flock.Claims.ZK.Congr
+public import Proofs.Flock.Claims.DeployCode
 
 /-!
 # Flock's `ZK` at the masked record's reference prover
@@ -17,6 +19,8 @@ carries one to the other, by `zkmalR_congr` (`Congr`):
   `G.prover`'s messages and makes its calls (`zkOf_prover`), so `ZKAt` at `G.prover` is `Claims.Flock.ZK` at `zkOf`
   (`zk_zkOf`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

@@ -1,6 +1,11 @@
-import Identity.Sha512
-import Randomness
-import PousCheck.P2
+module
+
+public import Identity.Sha512
+public import Randomness
+public import PousCheck.P2
+meta import Identity.Sha512
+meta import Randomness
+meta import PousCheck.P2
 
 /-!
 P2 v4's per-block keys (`schemes/p2.py`'s `expand_prefix`, `stream`, `below`, `sha512_keys`):
@@ -23,6 +28,8 @@ The prefix is absorbed once (`Identity.Sha512`'s midstate) and each chunk is one
 `u32be`, so a stream has at most `2^32` chunks: `t` reads candidates while they fit, and a stream with none below `p` among
 them is an error here, an `OverflowError` in Python (probability `(c0/2^w)^⌊2^38/n⌋`).
 -/
+
+@[expose] public section
 
 namespace PousCheck.Keys
 

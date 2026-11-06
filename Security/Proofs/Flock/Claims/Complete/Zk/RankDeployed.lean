@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.RankBridge
-import Proofs.Flock.Claims.Complete.Zk.RankPrimal
-import Proofs.Flock.Level3.Pinned
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.RankBridge
+public import Proofs.Flock.Claims.Complete.Zk.RankPrimal
+public import Proofs.Flock.Level3.Pinned
 
 /-!
 # The deployed rank bound
@@ -20,6 +22,8 @@ the `c` claims' first six pinned, at most `2^-122` of the coins leave the mask s
 * `maskRankBound_of_small`: `MaskRankBound` from `SmallSlotBound` alone, so `maskRankBound`: `MaskRankBound` holds,
   `SmallSlotBound` by the verifier's floor (`smallSlotBound`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.MaskRank
 

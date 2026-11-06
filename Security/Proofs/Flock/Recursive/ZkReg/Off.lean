@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Registered.ReadsX
-import Proofs.Flock.Soundness.Discharge.Exec.Live
+module
+
+public import Proofs.Flock.Soundness.Registered.ReadsX
+public import Proofs.Flock.Soundness.Discharge.Exec.Live
 
 /-!
 # Registered reads off the registrant's leaf, at the outcome's draw
@@ -14,6 +16,8 @@ and the verifier checks only the reads of the units it draws. So:
   outcome of the session bound probabilities: `prob_auditLive_liveOfZJ_mono`, `Proofs.Flock.Recursive.Flock`);
 * `reg_cast`: a strategy's registration survives a cast along an equation of sessions.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

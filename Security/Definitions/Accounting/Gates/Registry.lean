@@ -1,4 +1,6 @@
-import Definitions.Accounting.Gates.Model
+module
+
+public import Definitions.Accounting.Gates.Model
 
 /-!
 # The registry's primitives, each in one class (trusted)
@@ -61,6 +63,8 @@ the u8·s8 IMMA step is, `Bf16ToF32_v1`, free-affine here as property/v1 counts 
 as ruled), and the table's nine other `other` ids, roundings here: the ruling caps three classes and no fourth, and both
 are budgeted the same.
 -/
+
+@[expose] public section
 
 namespace Accounting.Gates
 

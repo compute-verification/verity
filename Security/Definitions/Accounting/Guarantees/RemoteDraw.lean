@@ -1,5 +1,7 @@
-import Definitions.Accounting.Assumptions.RemoteDraw
-import Definitions.Accounting.Assumptions.RemoteHeld
+module
+
+public import Definitions.Accounting.Assumptions.RemoteDraw
+public import Definitions.Accounting.Assumptions.RemoteHeld
 
 /-!
 # The openings' pooled bound (trusted)
@@ -50,6 +52,8 @@ a window's receipts and draws. The prover sends window `t`'s roots before it hol
 coin, but that the receipts' roots read only the cut is not a premise here (the gap `binding-split`), and
 `ledger.binding` takes `split_t` as 0.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Remote
 

@@ -63,6 +63,7 @@ import posixpath
 import re
 import sys
 import tomllib
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -108,6 +109,7 @@ _ARG_NAME = re.compile(r"\s*([A-Za-z_]\w*)\s*[,)]")
 _PATCH = re.compile(r"""\b(?:setattr|delattr|patch)\(\s*[rRuU]?["']([A-Za-z_]\w*(?:\.\w+)+)["']""")
 #: a path joined of string parts to a name or `Path(__file__)` (`HERE.parent / "harness"`)
 _BUILT_PATH = re.compile(r"""(?:\bPath\(__file__\)|\b[A-Za-z_]\w*)(?:\.\w+|\[\d+\]|\(\))*(?:\s*/\s*["'][\w.-]+["'])+""")
+_QUOTED_SLASH = re.compile(r"""/\s*["']""")
 #: a call that puts a directory on `sys.path`
 _SYSPATH = re.compile(r"\bsys\.path\.(?:insert|append|extend)\(|\bsys\.path\[[^\]\n]*\]\s*=|\bsyspath_prepend\(|\baddsitedir\(")
 #: the calls and methods a path expression passes its path through, and those taking its directory
@@ -124,6 +126,8 @@ _PYPROJECT = re.compile(r"""["']pyproject\.toml["']""")
 #: a module that builds native code: it runs a compiler the guard can't trace whenever its build cache misses, on the sources
 #: beside it (`Tree.beside`), so a task whose closure holds one lets its runs start a compiler (`vars` `untraced` = `compilers`)
 _NATIVE = re.compile(r"""cpp_extension|load_inline|["'](?:g\+\+|gcc|c\+\+|cc|clang\+?\+?|nvcc)["']""")
+#: what any match of `_NATIVE` holds: a scan for these is a fraction of the expression's
+_NATIVE_HINTS = ("cpp_extension", "load_inline", "cc'", 'cc"', "+'", '+"', "clang'", 'clang"')
 
 
 def _parent(path: str) -> str:
@@ -191,6 +195,26 @@ def _ast(source: str, mode: str = "exec") -> ast.Module | ast.Expression | Excep
         return e
 
 
+def _built_paths(text: str) -> Iterator[re.Match]:
+    """`_BUILT_PATH.finditer(text)`, trying the expression only before each `/` a string follows: a match's head holds no
+    whitespace and no `/` and only whitespace parts it from its first such `/`, so it starts in the run of non-whitespace before
+    the first one at or after where the search is, or nowhere before that `/`. Trying it at every name is the slow way."""
+    pos = 0
+    while s := _QUOTED_SLASH.search(text, pos):
+        slash = lo = s.start()
+        while lo > pos and text[lo - 1].isspace():
+            lo -= 1
+        while lo > pos and not text[lo - 1].isspace():
+            lo -= 1
+        for at in range(lo, slash):
+            if m := _BUILT_PATH.match(text, at):
+                yield m
+                pos = m.end()
+                break
+        else:
+            pos = slash + 1
+
+
 def _parse(text: str, at: int) -> ast.Module | Exception:
     """The logical line of ``text`` from the start of the line holding offset ``at``, parsed alone: parsing whole files to
     find the few statements that touch `sys.path` would take most of the listing's time."""
@@ -256,7 +280,7 @@ class _Paths:
     def built(self) -> list[str]:
         """Each path the file builds by joining string parts to a path (`HERE.parent / "harness"`)."""
         out = []
-        for m in _BUILT_PATH.finditer(self.text):
+        for m in _built_paths(self.text):
             if isinstance(e := _ast(m.group(0), "eval"), ast.Expression) and (p := self.where(e.body)) is not None:
                 out.append(p)
         return out
@@ -355,6 +379,7 @@ class Tree:
         self.code = frozenset(code)
         self.pyprojects = tuple(f for f in self.sorted if f.rpartition("/")[2] == "pyproject.toml")
         self._beside: dict[str, list[str]] = {}
+        self._toml: dict[str, dict] = {}
 
     def beside(self, d: str) -> list[str]:
         """The data beside the modules of directory ``d``: its files that aren't Python, and every file under those of its
@@ -374,7 +399,10 @@ class Tree:
         return (self.root / path).read_bytes().decode("utf-8", "replace")
 
     def toml(self, path: str) -> dict:
-        return tomllib.loads(self.text(path))
+        """``path`` parsed, once: the caller reads it and never changes it."""
+        if (got := self._toml.get(path)) is None:
+            got = self._toml[path] = tomllib.loads(self.text(path))
+        return got
 
     def under(self, d: str) -> list[str]:
         """The files at or under ``d`` ("" or "." for the root)."""
@@ -543,6 +571,7 @@ class Imports:
         self.tree, self.layout = tree, layout
         self._info: dict[str, Info] = {}
         self._serves: dict[str, bool] = {}
+        self._walked: dict[tuple[str, str, tuple[str, ...]], tuple[str, ...]] = {}
         self._closed: dict[str, frozenset[str]] = {}            # file -> what its `fixed` edges reach, itself included
         self._paths: dict[str, list[str]] = {}                  # file -> the files under the paths it names (`named`)
         self.metadata: set[str] = set()                         # the files read so far that list every pyproject.toml
@@ -555,10 +584,15 @@ class Imports:
             self._serves[top] = self.layout.serves(top)
         return self._serves[top]
 
-    def walk(self, base: str, module: str, names: tuple[str, ...]) -> list[str]:
+    def walk(self, base: str, module: str, names: tuple[str, ...]) -> tuple[str, ...]:
         """The files importing ``module`` from ``base`` (a `sys.path` directory, or a package's for a relative import) runs: each
         package's `__init__.py` on the way and the module's file, then each of ``names`` that is a submodule (`("*",)`: each of
         its modules)."""
+        if (got := self._walked.get(at := (base, module, names))) is None:
+            got = self._walked[at] = tuple(self._walk(base, module, names))
+        return got
+
+    def _walk(self, base: str, module: str, names: tuple[str, ...]) -> list[str]:
         out, d = [], base
         parts = [p for p in module.split(".") if p]
         for p in parts:
@@ -680,7 +714,7 @@ class Imports:
         for line in _PLUGINS.finditer(text) if "pytest_plugins" in text else ():
             for s in re.findall(r"""["']([\w.]+)["']""", _statement(text, line.start())):
                 reqs.append((0, s, ()))
-        reqs += [(0, s, ()) for s in _PATCH.findall(text)] if "attr(" in text or "patch(" in text else []
+        reqs += [(0, s, ()) for s in _PATCH.findall(text)] if "setattr(" in text or "delattr(" in text or "patch(" in text else []
         local: dict[str, list[tuple[str, tuple[str, ...]]]] = {}
         here = _parent(path)
         put = "sys.path" in text or "syspath_prepend" in text or "addsitedir" in text
@@ -716,7 +750,7 @@ class Imports:
             bare = set(_BARE.findall(text))
             fixed += [p for s in bare if (p := _join(here, s + ".py")) in self.tree.files]
             scripts |= {p for s in bare if (p := self._named(path, s + ".py"))}
-        modules = set(_DASH_M.findall(text)) if "-m" in text else set()
+        modules = set(_DASH_M.findall(text)) if "-m'" in text or '-m"' in text else set()
         code = set()
         for m in _CODE_IMPORT.finditer(text) if "import" in text else ():
             if m.group(1):
@@ -724,12 +758,13 @@ class Imports:
             else:
                 code.update((n, ()) for n in re.split(r"\s*,\s*", m.group(3)))
         got = self._info[path] = Info(tuple(sorted(set(fixed) - {path})), local, unfollowed, tuple(sorted(scripts - {path})),
-                                      tuple(sorted(modules)), tuple(dirs), bool(_METADATA.search(text) or "members" in text
-                                                                                and _MEMBERS.search(text) and _PYPROJECT.search(text)),
+                                      tuple(sorted(modules)), tuple(dirs), bool("*/pyproject.toml" in text and _METADATA.search(text)
+                                                                                or "members" in text and _MEMBERS.search(text)
+                                                                                and _PYPROJECT.search(text)),
                                       tuple(sorted(c for c in code if c[0].partition(".")[0] not in STDLIB)))
         if got.metadata:
             self.metadata.add(path)
-        if _NATIVE.search(text):
+        if any(k in text for k in _NATIVE_HINTS) and _NATIVE.search(text):
             self.native.add(path)
         for top in local:
             self._by_top.setdefault(top, set()).add(path)
@@ -1024,7 +1059,9 @@ def task(tree: Tree, imports: Imports, suite: Suite, path: str, data: list[str],
     beside = {f for d in {_parent(f) for f in code} for f in tree.beside(d) if md or not f.endswith(".md")}
     if not imports.metadata.isdisjoint(code):
         pyprojects += tree.pyprojects
-    helpers = [f for f in code if not f.rpartition("/")[2].startswith("test_") and any(_under(f, t) for t in suite.testpaths)]
+    every, under = any(t in ("", ".") for t in suite.testpaths), tuple(t + "/" for t in suite.testpaths)
+    helpers = [f for f in code if (every or f.startswith(under) or f in suite.testpaths)
+               and not f.rpartition("/")[2].startswith("test_")]
     paths = {f for s in {path, *conftests, *helpers} for f in imports.named(s) if md or not f.endswith(".md")}
     inputs = {*code, *beside, *paths, *seeds, *data, *pyprojects, *walked, *GUARD}
     out = {"id": f"{KIND}:{path}", "vars": {"suite": suite.path}, "inputs": sorted(inputs)}

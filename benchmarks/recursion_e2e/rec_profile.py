@@ -25,7 +25,8 @@ ORDER = ("build", "inner", "icheck", "vstage", "vcap", "oprove", "oreplay", "lea
 #: what each part of the recursive run is, recorded in the result's ``inputs``
 STATEMENTS = {
     "inner": "N x GemmCoordinate_v2{K,DOT=HopperBF16WgmmaDot16_v1} under Q_template_instance (rec_reprice.py), "
-             "verity/flock-circuit+plain-leaves, M0 (no --zk), FC_COINS=os, through rec_live's proxy",
+             "verity/flock-circuit+plain-leaves, M0 (no --zk), on the challenger's coin tree (FC_COINS=tree), through "
+             "rec_live's proxy",
     "vstar": "V*'s statements over the inner's last proxied run: each Ligerito level's RecOpen and RecCap, the algebra's "
              "InnerRepCheck parts (rec_vstage)",
     "outer": "each V* statement with --zk on loopback, every unit drawn, one at a time, in each of MODES",
@@ -373,7 +374,7 @@ def read(root: Path) -> dict[str, Any]:
     if ln:
         names = [n for n in _names(ln, "lean", r"time-(.+)\.txt")]
         rel = {f"lean {n}": (f"lean/time-{n}.txt", ("flock-verify statement on the inner statement" if n == "inner-statement"
-                                                    else "flock-verify verify on the inner run (--coins os)" if n == "inner"
+                                                    else "flock-verify verify on the inner run" if n == "inner"
                                                     else f"flock-verify verify --zk on V*'s {n} release")) for n in names}
 
         def lv(o: Path, n: str) -> bool | None:
@@ -429,9 +430,48 @@ def read(root: Path) -> dict[str, Any]:
         f"{staged['n']} x {staged['unit']} ({staged['subcircuit']}, m = {staged['m']}) under Q_template_instance, staged by "
         + (f"stage.sh from served window {staged['window']['run'][:16]}'s member {staged['window']['member']}"
            if staged.get("window") else "stage.sh from seeded draws (generated values)")
-        + ", verity/flock-circuit+plain-leaves, M0 (no --zk), FC_COINS=os, through rec_live's proxy")}
-    return {"schema": SCHEMA, "params": params(root), "inputs": inputs, "rows": [r.to_json() for r in rows], "summary": s,
-            "steps": steps, "headline": headline(rows, s, steps), **({"staged": staged} if staged else {})}
+        + ", verity/flock-circuit+plain-leaves, M0 (no --zk), on the challenger's coin tree (FC_COINS=tree), through "
+          "rec_live's proxy")}
+    doc = {"schema": SCHEMA, "params": params(root), "inputs": inputs, "rows": [r.to_json() for r in rows], "summary": s,
+           "steps": steps, **({"staged": staged} if staged else {})}
+    rel = release(root)
+    if rel:
+        doc["release"] = rel
+    doc["headline"] = headline(rows, s, steps) | ({"released": rel["ok"]} if rel else {})
+    if doc["params"].get("release") == "1":
+        doc["headline"]["ok"] = doc["headline"]["ok"] and bool(rel and rel["ok"])
+    # the figures read the tree's monitoring periods (figures.PERIODS); a failure there is recorded, not the table's
+    try:
+        import figures as F
+        budget = doc["params"].get("release_budget")
+        doc["figures"] = F.figures(doc, {x: (lambda r: r and timev(r[0].parent / "time-step.txt"))(repeats(root, x)[:1])
+                                         for x in F.SESSION_STEPS}, budget=int(budget) if budget else None)
+    except Exception as e:  # noqa: BLE001
+        doc["figures"] = {"error": f"{type(e).__name__}: {e}"}
+    return doc
+
+
+def release(root: Path) -> dict[str, Any] | None:
+    """The recursive session through the ZK server's release side (85's RELEASE=1): oprove's ``release.json`` (each part's
+    release time against when the Lean loop decided it), each part's prove wall (``release-wall.tsv``), the schedule the
+    inner step fixed and the inner coin trees' audit against the challenger's release log (``tree-held.json``)."""
+    o = next(iter(repeats(root, "oprove")), None)
+    rep = json.loads(text(o / "oprove" / "release.json") or "null") if o else None
+    if rep is None:
+        return None
+    wall = {}
+    for ln in text(o / "oprove" / "release-wall.tsv").splitlines():
+        part, d, t0, t1, rc = ln.split("\t")
+        wall[part] = {"dir": d, "started_ms": int(t0), "ended_ms": int(t1), "rc": int(rc)}
+    for p in rep["parts"]:
+        w = wall.get(p["part"])
+        p["prove_wall_s"] = (w["ended_ms"] - w["started_ms"]) / 1000 if w else None
+        p["rc"] = w["rc"] if w else None
+    i = next(iter(repeats(root, "inner")), None)
+    held = json.loads(text(i / "inner" / "tree-held.json") or "null") if i else None
+    return rep | {"schedule": json.loads(text(i / "inner" / "release.json") or "null") if i else None,
+                  "tree_source": text(i / "inner" / "tree-source.txt").strip() if i else None,
+                  "trees_held": held and held.get("ok"), "ok": bool(rep["ok"] and (held is None or held.get("ok")))}
 
 
 def staged_units(p: Path) -> dict[str, dict[str, Any]]:
@@ -759,4 +799,36 @@ def markdown(doc: dict[str, Any]) -> str:
     if s.get("not_ok"):
         lines.append("Not accepted or not run: " + ", ".join(s["not_ok"]) + ".")
     lines.append("Steps' exit codes: " + ", ".join(f"{k} {'/'.join(v)}" for k, v in doc.get("steps", {}).items()) + ".")
+    rel = doc.get("release")
+    if rel:
+        lines += ["", f"**Release side.** Recursive session {rel['session']} on stream {rel['stream']}, inner coins from "
+                  f"{rel.get('tree_source') or '?'} (challenger's log holds them: {_yn(rel.get('trees_held'))}); every part released "
+                  f"at its time: {_yn(rel['ok'])}. Times are seconds from the inner connection (the schedule's start).", "",
+                  "| part | window s | release at s | decided at s | slack s | prove wall s | decided | record |",
+                  "|---|---:|---:|---:|---:|---:|---|---|"]
+        t0 = rel.get("start_ms") or 0
+        for p in rel["parts"]:
+            at = {k: f"{(p[k] - t0) / 1000:.1f}" if p.get(k) is not None else "—" for k in ("release_ms", "ready_ms")}
+            lines.append(f"| {p['part']} | {_s(p.get('window_ms'))} | {at['release_ms']} | {at['ready_ms']} | {_s(p.get('slack_ms'))} | "
+                         f"{_fmt3(p.get('prove_wall_s'))} | {p.get('decided') or '—'} | {'/'.join(p.get('record') or []) or '—'} |")
+        if rel.get("stops"):
+            lines.append("Stops: " + "; ".join(f"{e.get('part')}: {e.get('why', e.get('event'))}" for e in rel["stops"]) + ".")
+    fig = doc.get("figures")
+    if fig and fig.get("error"):
+        lines.append(f"Figures: not computed ({fig['error']}).")
+    elif fig:
+        import figures as F
+        lines.append(F.markdown(fig).rstrip("\n"))
     return "\n".join(lines) + "\n"
+
+
+def _yn(v: Any) -> str:
+    return {True: "yes", False: "**no**"}.get(v, "—")
+
+
+def _s(ms: Any) -> str:
+    return f"{ms / 1000:.1f}" if isinstance(ms, (int, float)) else "—"
+
+
+def _fmt3(x: Any) -> str:
+    return f"{x:.3g}" if isinstance(x, (int, float)) else "—"

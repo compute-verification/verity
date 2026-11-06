@@ -1,6 +1,8 @@
-import Definitions.Accounting.TS.FanIn
-import Definitions.Accounting.TS.Fold
-import Definitions.Pouw.Receipt.Fx1
+module
+
+public import Definitions.Accounting.TS.FanIn
+public import Definitions.Accounting.TS.Fold
+public import Definitions.Pouw.Receipt.Fx1
 
 /-!
 # The fan-in floor of a fold (trusted)
@@ -27,6 +29,8 @@ No count of this kind gives more than `1/(f − 1)` a word. A tree of `f`-input 
 `⌈(N − 1)/(f − 1)⌉` nodes. A duo run is a dataflow of two 3-source nodes a word, since `y′` and `z′` are each a
 function of `y`, `z` and the word. So duo's 3 instructions a word (`FoldOpt`) are out of reach of any such count.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

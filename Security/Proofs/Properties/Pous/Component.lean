@@ -1,9 +1,21 @@
-import Properties.Pous.Component
-import Proofs.Properties.Pous.RunAt
-import Proofs.Properties.Pous.MemoryChallenger
-import Proofs.Properties.CertifierDevice.Lms
-import Mathlib.Tactic.SplitIfs
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Properties.Pous.Component
+public import Proofs.Properties.Pous.RunAt
+public import Proofs.Properties.Pous.MemoryChallenger
+public import Proofs.Properties.CertifierDevice.Lms
+public import Mathlib.Tactic.SplitIfs
+public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
+import all Init.Data.String.Defs
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.List.Control
+import all Init.Data.Range.Basic
+import all Init.Data.Int.Repr
+import all Init.Data.Repr
 
 /-!
 # Proofs of PoUS's and the wipe's component statements (`Properties.Pous.Component`)
@@ -30,6 +42,8 @@ Each acceptance statement's two lemmas:
   evaluates (`decide +kernel`) once `Flock.canonUtf8`'s sort is shown to leave the manifest's sorted keys as they are
   (`qsort_sorted`); `runBinds_meets`, that run twice; and `wipeAccepts_meets`, an honest wipe.
 -/
+
+@[expose] public section
 
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
@@ -74,27 +88,35 @@ private theorem toUTF8_of_fromUTF8? {b : ByteArray} {s : String} (h : String.fro
 private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canonicalJson b = .ok j) :
     ∃ s, String.fromUTF8? b = some s ∧ Flock.canon j = .ok s := by
   unfold Core.canonicalJson at h
-  cases ha : b.data.all (· < 0x7f)
-  case false =>
-    simp only [ha] at h
-    simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
-  simp only [ha] at h
   cases hs : String.fromUTF8? b with
-  | none => simp [hs, throw, throwThe, MonadExceptOf.throw] at h
+  | none =>
+    simp [hs, throw, throwThe, MonadExceptOf.throw] at h
+    split at h
+    · cases h
+    · simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   | some s =>
     refine ⟨s, rfl, ?_⟩
     cases hp : Lean.Json.parse s with
-    | error e => simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+    | error e =>
+      simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+      split at h <;> cases h
     | ok j0 =>
       cases hc : Flock.canon j0 with
-      | error e => simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
+      | error e =>
+        simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
+        split at h
+        · cases h
+        · simp [throw, throwThe, MonadExceptOf.throw] at h
       | ok s' =>
         by_cases hne : s' = s
         · subst hne
           simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
-          subst h
-          exact hc
+          split at h
+          · cases h
+            exact hc
+          · simp [throw, throwThe, MonadExceptOf.throw] at h
         · simp [hs, hp, hc, hne, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+          split at h <;> cases h
 
 /-- What `exactly` accepts is in the form its encoder writes: the two have one canonical text. -/
 private theorem exactly_ok {α : Type} {f : Lean.Json → Flock.V α} {enc : α → Lean.Json} {j : Lean.Json} {a : α}

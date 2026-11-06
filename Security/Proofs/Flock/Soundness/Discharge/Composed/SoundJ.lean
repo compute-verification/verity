@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
 
 /-!
 # The soundness half of one `--zk` sampled session of `J` tables
@@ -21,6 +23,8 @@ The same bound shape and assumptions as `zk_session_sound`, with two changes tha
 `ε_ks` (`ksAvgStrictZ`) is the worst table's knowledge error averaged over the law's draws, and `δ_link` reads the plan
 only through the positions the draw reads and `ρ`, a bound on every table's rate, so neither grows with `J`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

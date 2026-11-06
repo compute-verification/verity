@@ -1,4 +1,6 @@
-import Proofs.Flock.EndToEndRegisteredRows.Statement
+module
+
+public import Proofs.Flock.EndToEndRegisteredRows.Statement
 
 /-!
 # One C-Flock session with a registrant's opening per unit (trusted)
@@ -21,6 +23,8 @@ The session's game, prover, value layer and events are those `EndToEndRegistered
 * `BadU o`: flock-verify accepts and some drawn unit is wrong or its rows are off;
 * `CR`: `EndToEndRegisteredRows`' named assumptions at every unit's opening; `bound`: its bound.
 -/
+
+@[expose] public section
 
 namespace Flock.SoundAtBridge
 

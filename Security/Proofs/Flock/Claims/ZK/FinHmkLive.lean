@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.FinishZc
-import Proofs.Flock.Claims.ZK.FinishTau
-import Proofs.Flock.Claims.ZK.FinPads
-import Proofs.Flock.Claims.ZK.L0PinCoins
+module
+
+public import Proofs.Flock.Claims.ZK.FinishZc
+public import Proofs.Flock.Claims.ZK.FinishTau
+public import Proofs.Flock.Claims.ZK.FinPads
+public import Proofs.Flock.Claims.ZK.L0PinCoins
 
 /-!
 # `hmk` from the proofs: a rep's masked values below `zp 64` are the request's plus its pads
@@ -19,6 +21,8 @@ rep from a source (`repCut`) both return, at proofs equal up to `eraseZ`, the so
 * `repFwC_proofs`, `repCut_proofs`: so do a returned firewall's rep and a returned cut rep.
 * **`masked_of_eraseZ`**: the source's masked values below `zp 64` are `vals + pads.h`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.HmkLive
 

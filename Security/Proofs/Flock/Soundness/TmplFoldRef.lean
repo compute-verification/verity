@@ -1,7 +1,9 @@
-import Proofs.Flock.Level3.FoldedBase
-import Proofs.Flock.Soundness.SparseRows
-import Flock.TmplFold
-import Flock.NetAt
+module
+
+public import Proofs.Flock.Level3.FoldedBase
+public import Proofs.Flock.Soundness.SparseRows
+public import Flock.TmplFold
+public import Flock.NetAt
 
 /-!
 # The template fold's reference, in closed form
@@ -13,6 +15,8 @@ without `α`, with `e(q) = lw[q mod 64] · eq(ρ, ⌊q/64⌋)` and `g(q) = eq(r,
 - `foldRef_eq_rows`: its loops are a `foldl` over the rows (`foldRefRows`).
 - `of_eqAt`, `eqTail_halves`: the fold point's `eq` tables, read in two halves, are `eqTable`'s entries.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

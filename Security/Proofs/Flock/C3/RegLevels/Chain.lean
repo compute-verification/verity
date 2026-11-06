@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Compose.Family
+module
+
+public import Proofs.Flock.C3.Compose.Family
 
 /-!
 # Piece (f): R's levels on the chain
@@ -8,6 +10,8 @@ chain runs after both reps and R's opening) play `ligeritoC` on stream 2 at R's 
 result, which the openings accept and whose level-0 paths verify against the registered cap (`xR.cap`, the record's
 `stacked` entry by `StackedTopAt`): R's tops and its binding round.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

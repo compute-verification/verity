@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Finder
+module
+
+public import Proofs.Flock.Claims.Finder
 
 /-!
 # Many finders to one `B`: one square root
@@ -11,6 +13,8 @@ rounds (at most `m` finders at one round)
 `√(C p) + β p ≤ √((√C + β)² p)` for `0 ≤ p ≤ 1` (`sqrt_add_lin`), and an average of roots is at most the root of the
 average (`Ex_sqrt_le`).
 -/
+
+@[expose] public section
 
 namespace Claims
 

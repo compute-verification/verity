@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.OnsiteFreed
+module
+
+public import Definitions.Pouw.Assumptions.OnsiteFreed
 
 /-!
 # The onsite PoUW protocol's freed compute (trusted)
@@ -23,6 +25,8 @@ At the served check (the J10-R period, `PouwCheck.Credit.window`) the same compo
 `Properties.Pouw.Served.ServedFreed`, over `ServedWork` in the play's vocabulary, with no remote floor taken as a
 premise.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees
 

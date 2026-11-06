@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.DeployInputs
-import Flock.RecBudget
-import Flock.RecLinkPart
+module
+
+public import Proofs.Flock.Claims.DeployInputs
+public import Flock.RecBudget
+public import Flock.RecLinkPart
 
 /-!
 # A V* part's statement: its bytes, its parser and its recursive setup
@@ -12,10 +14,10 @@ directory: Flock's statement (`FlockDeploy.Raw`, `--zk` on) and the bytes and nu
 `--rec-inner-partition`; `--rec-inner-coins`, which the verifier refuses), the inner session's record
 (`--rec-inner-session`'s `session.json`), the coin server's transcript (`--rec-inner-transcript`), the circuit
 registration (`--rec-inner-registration`) and how the inner statement is set up (`--rec-inner-statement`,
-`--rec-inner-statement-coins`, `--rec-inner-tables`' tables, `--rec-inner-draw`), the inner population's link table
+`--rec-inner-tables`' tables, `--rec-inner-draw`), the inner population's link table
 (`--rec-links`: its root and row count) and the verifier's program of the inner statement (`--rec-inner-program`).
 `decodeRec` keeps only a reading whose encoding is `x`, so it is injective (`decodeRec_injective`), and refuses every
-other format, `flock-verify-rec-statement/v2` (no inner program) among them.
+other format, `flock-verify-rec-statement/v3` (with the inner statement's coins) among them.
 
 `RecRaw.ins` runs the verifier's readers on those bytes as `Main.verifyCmd` runs them: Flock's (`Raw.ins`), then
 `RecLinkTree.linksArg`'s checks of the link table's root and row count (`linksOf`), `RecVStar.Inner.ofJson`,
@@ -34,6 +36,8 @@ Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows fir
 shipped ones, outside the oracle.
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Flock
@@ -46,7 +50,7 @@ open Lean (Json)
 /-- **What `flock-verify verify --zk` reads of a V* part's statement** besides the session directory: Flock's statement,
 then `--rec-inner`, `--rec-part`, `--rec-bindings`, `--rec-rows`, `--rec-inner-circuit`, `--rec-inner-public`,
 `--rec-inner-partition`, `--rec-inner-coins`, `--rec-inner-session`'s `session.json`, `--rec-inner-transcript`,
-`--rec-inner-registration`, `--rec-inner-statement`, `--rec-inner-statement-coins`, the tables in `--rec-inner-tables`,
+`--rec-inner-registration`, `--rec-inner-statement`, the tables in `--rec-inner-tables`,
 `--rec-inner-draw`, `--rec-links`' root and row count, and `--rec-inner-program`. -/
 structure RecRaw where
   base : Raw
@@ -62,14 +66,13 @@ structure RecRaw where
   transcript : Option ByteArray
   registration : Option ByteArray
   innerStatement : Option String
-  innerStatementCoins : Option Bool
   innerTables : Option (List (String × ByteArray))
   innerDraw : Option ByteArray
   recLinks : Option (ByteArray × ℕ)
   innerProgram : Option ByteArray
 
 /-- The encoding's format string, its first field. -/
-def RFORMAT : String := "flock-verify-rec-statement/v3"
+def RFORMAT : String := "flock-verify-rec-statement/v4"
 
 /-- **The statement's canonical bytes**: Flock's statement's (`Raw.encode`) as one field, then the recursive flags'. -/
 def RecRaw.encode (w : RecRaw) : Claims.Msg :=
@@ -77,7 +80,7 @@ def RecRaw.encode (w : RecRaw) : Claims.Msg :=
     encOpt encBytes w.recBindings ++ encOpt encBytes w.recRows ++ encOpt encBytes w.innerCircuit ++
     encOpt encBytes w.innerPublic ++ encOpt encBytes w.innerPartition ++ encOpt encBytes w.innerCoins ++
     encOpt encBytes w.innerSession ++ encOpt encBytes w.transcript ++ encOpt encBytes w.registration ++
-    encOpt encStr w.innerStatement ++ encOpt encBool w.innerStatementCoins ++
+    encOpt encStr w.innerStatement ++
     encOpt (encList fun p => encStr p.1 ++ encBytes p.2) w.innerTables ++ encOpt encBytes w.innerDraw ++
     encOpt (fun l => encBytes l.1 ++ encNat l.2) w.recLinks ++ encOpt encBytes w.innerProgram
 
@@ -98,7 +101,6 @@ def RecRaw.read : Rd RecRaw := do
   let transcript ← rdOpt rdBytes
   let registration ← rdOpt rdBytes
   let innerStatement ← rdOpt rdStr
-  let innerStatementCoins ← rdOpt rdBool
   let innerTables ← rdOpt (rdList do
     let n ← rdStr
     let b ← rdBytes
@@ -110,7 +112,7 @@ def RecRaw.read : Rd RecRaw := do
     pure (t, n))
   let innerProgram ← rdOpt rdBytes
   pure ⟨base, recInner, recPart, recBindings, recRows, innerCircuit, innerPublic, innerPartition, innerCoins,
-    innerSession, transcript, registration, innerStatement, innerStatementCoins, innerTables, innerDraw, recLinks,
+    innerSession, transcript, registration, innerStatement, innerTables, innerDraw, recLinks,
     innerProgram⟩
 
 /-- **The statement's decoder**: `RecRaw.read` on all of `x`, kept only when its encoding is `x`. -/
@@ -157,7 +159,7 @@ def metaLine : ℕ → List (List UInt8) → Except String String
 /-- **The inner circuit's META** (`innerMeta`): its header's first nine lines, up to its `META` line. -/
 def metaOf (c : ByteArray) : Except String Json := do
   let t ← metaLine 9 (linesAux c.data.toList [])
-  match Json.parse (t.drop 5).toString with
+  match Flock.JsonParse.parse (t.drop 5).toString with
   | .error e => throw s!"rec inner circuit: META is not JSON: {e}"
   | .ok m => pure m
 
@@ -167,15 +169,15 @@ def boundOf : Option ByteArray → Flock.V (Option String × Option RecVStar.Sta
   | none => .ok (none, none)
   | some c => do RecSetup.metaBound (← metaOf c)
 
-/-- **How the inner statement is set up** (`RecCoins.formInput`): `--rec-inner-statement` with its coins (the coin
-server's where `--rec-inner-statement-coins` is `os`, `true` here; `seed` unless it says), tables and draw, or none. -/
+/-- **How the inner statement is set up** (`RecCoins.formInput`): `--rec-inner-statement` with its tables and draw, or
+none. -/
 def formOf (w : RecRaw) : Except String (Option RecCoins.InnerForm) :=
   match w.innerStatement with
   | none =>
-    if w.innerStatementCoins.isSome || w.innerTables.isSome || w.innerDraw.isSome then
-      .error "--rec-inner-statement-coins, --rec-inner-tables and --rec-inner-draw go with --rec-inner-statement"
+    if w.innerTables.isSome || w.innerDraw.isSome then
+      .error "--rec-inner-tables and --rec-inner-draw go with --rec-inner-statement"
     else .ok none
-  | some s => .ok (some ⟨s, w.innerStatementCoins.getD false, w.innerTables.getD [], w.innerDraw⟩)
+  | some s => .ok (some ⟨s, w.innerTables.getD [], w.innerDraw⟩)
 
 /-- **Check 5's source** (`RecCoins.filesInput`): the inner statement's three files with the inner session's record,
 how it is set up (`formOf`) and the verifier's program of it, or none; `--rec-inner-coins` is refused
@@ -221,7 +223,7 @@ points to the coin server's; none without either. -/
 def linkInputOf (w : RecRaw) (src : Option RecCoins.Source) : Except String (Option RecVStar.InnerLink) :=
   match w.transcript, src.map (·.record) with
   | some t, some record => do
-    match Json.parse (← textOf "rec inner transcript" t) with
+    match Flock.JsonParse.parse (← textOf "rec inner transcript" t) with
     | .ok j => some <$> RecVStar.innerLink j record
     | .error e => .error s!"rec inner transcript: not JSON: {e}"
   | _, _ => .ok none

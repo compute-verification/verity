@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 
 /-!
 # TT_OUT at W1 is TT_OUT at the cost model `W1.w1Priced`
@@ -9,6 +11,8 @@ import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 `ttOutTileW1_iff`). The `_of_w1` lemmas give the six named forms the γ readers' reductions take, so each reader at W1
 is its reduction at that cost model.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TTOutW1
 

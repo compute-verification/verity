@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.ResLayer
-import Proofs.Flock.Verifier.HmNets
+module
+
+public import Proofs.Flock.VBridge.ResLayer
+public import Proofs.Flock.Verifier.HmNets
 
 /-!
 # The opening unit reads its row and sibling columns (`ReadCol`)
@@ -17,6 +19,8 @@ rows are `Rows.ofNet`'s:
   direction bit `h` (an input bit, as `H ≤ 32`) with `cur ⊕ s`, whose support holds sibling bit `i`, since `cur` reads
   no sibling of level `h`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

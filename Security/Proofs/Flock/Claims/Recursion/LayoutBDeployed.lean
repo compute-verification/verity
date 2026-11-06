@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VStarBDeploy
-import Proofs.Flock.Claims.Recursion.BoundReaders
-import Flock.HmRow
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarBDeploy
+public import Proofs.Flock.Claims.Recursion.BoundReaders
+public import Flock.HmRow
 
 /-!
 # V*'s bound layout off the registered ports, at affine forms (`layoutBDeployed`)
@@ -46,6 +48,8 @@ What holds of the route's layout premises here:
   `ReadersLogColl` also asks for `nextE`'s calls (the level copies' climbs, `VStar.levelCalls_read`, which read at
   `copyForm` over the V* statement's parse, not off `x`), and is not reached by this layout.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 
