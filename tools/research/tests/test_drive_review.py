@@ -1810,6 +1810,33 @@ def test_an_after_landing_launch_that_exits_1_rings_ci_and_top_once_an_hour_and_
     assert "(launching)" not in alarm and "has run" not in alarm, alarm
 
 
+def test_a_shard_of_the_after_landing_run_that_prints_no_run_ids_within_the_bound_registered_no_run(world, monkeypatch, tmp_path):
+    """A shard's launch record holds no launch time of its own: without the run's, a train.sh that hung before printing its run
+    ids would leave the run launching for good, and nothing would land."""
+    from research.drive import LAUNCH_LOST_S
+
+    h = Review(world, monkeypatch, baseline=False)
+    h.d.after_landing_shards = 2
+    starts = _detached(h, tmp_path, post=True)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    main = _main(world)
+    h.tick()
+    h.printed[str(tmp_path / "launch-1")] = ([], "train: no run launched")   # circuit-check's records step: the shards build them
+    h.tick()
+    shards = h.postland()["run"]["shards"]
+    assert starts == [main] * 3 and all("at" not in s for s in shards), world.logs
+    h.printed[shards[0]["launch"]["dir"]] = (["r-one"], "RUN r-one")
+    h.clock += LAUNCH_LOST_S                                              # within the bound the other still launches
+    h.tick()
+    assert starts == [main] * 3 and not [p for p in h.posts if "--shard 2/2 registered no run" in p], world.logs
+    h.clock += 1
+    h.tick()
+    (post,) = [p for p in h.posts if "--shard 2/2 registered no run" in p]
+    assert "no run ids 60 min after its launch" in post, post
+    assert h.cancelled == ["r-one"] and starts == [main] * 5, world.logs
+
+
 def test_detach_returns_before_train_sh_prints_its_run_ids_and_launched_reads_them_or_an_exit_without_them(tmp_path, monkeypatch):
     """`detach`'s job, with a stand-in for train.sh that prints its `RUN` line only once the test lets it."""
     from research.drive import LAUNCHES, detach, launched
