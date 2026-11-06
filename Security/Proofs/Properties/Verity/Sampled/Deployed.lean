@@ -7,10 +7,10 @@ public import Proofs.Properties.Verity.SampledCoins
 /-!
 # A3 and `live-verifier` at the session the deployment runs, with no premise
 
-`Verity.Sampled.Live` reads two of V5's hypotheses, A3 at the device's bytes the draw reads (`Live.hA3`, a field) and
-`live-verifier` at the writer whose record v2 decodes (`Live.hCust`, `RecordCustodyZKJPLaw` at the draw file's law at
-every draw, with the draw file's size, V5's `hsz`). This file proves both at the deployment's session, for the
-vocabulary instance to cite:
+`Verity.Sampled.Live` proves two of V5's hypotheses from this file, `live-verifier` at the writer whose record v2
+decodes (`Live.hCust`, `RecordCustodyZKJPLaw` at the draw file's law at every draw) and the draw file's size (V5's
+`hsz`, `Live.hsz`), and carries a third as a field, A3 at the device's bytes the draw reads (`Live.hA3`), which the
+session as deployed takes from here (`Live.deployed`). This file proves the three at the deployment's session:
 
 * **The draw file** (`printedDraw law`): at each draw `S`, the one `flock-verify draw` prints for the verifier's own draw
   of `S` under `law` over the `n` proof blocks (`UnitDraw.toJson` of `ZkLink.drawOf`); at a subset law it is
