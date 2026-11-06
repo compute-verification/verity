@@ -1,6 +1,6 @@
 # network_e2e
 
-Network accounting end to end on a served model, as one command and one report. From a certifier-serve rehearsal (the
+Network certification end to end on a served model, as one command and one report. From a certifier-serve rehearsal (the
 network certifier in front of a served endpoint, `benchmarks/network_traces/certifier_serve.py`), it takes:
 
 - N2's verdict of record on every execution phase, and the link's network verdict;

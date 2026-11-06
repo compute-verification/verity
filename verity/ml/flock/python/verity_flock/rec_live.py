@@ -416,7 +416,7 @@ def top_rows(cap: bytes) -> list[list[int]]:
 
 
 def commit_top(cap: bytes, salts: list[bytes]) -> list[bytes]:
-    """A top's salted commitment: each node's ``b || c`` as a registered row's (`top_rows`), one salt a node."""
+    """A top's hiding commitment: each node's ``b || c`` as a registered row's (`top_rows`), one salt a node."""
     return commit_rows(top_rows(cap), salts)
 
 
@@ -913,7 +913,7 @@ class CoinServer:
         return nonce, CT.words(root) + CT.words(key)
 
     def commit(self, roots: dict[str, list[bytes]]) -> list[int]:
-        """Each table's level-0 top as its salted commitment (`commit_top`: a ``b || c`` a node) in; the link points out
+        """Each table's level-0 top as its hiding commitment (`commit_top`: a ``b || c`` a node) in; the link points out
         (``points × m`` coins)."""
         if self.hello is None or self.link is not None:
             raise ValueError("the link points are drawn once, after Hello")

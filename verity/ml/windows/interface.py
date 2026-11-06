@@ -69,7 +69,7 @@ The circuit's blocks (`Blocks`, ``verity/blocks/v1``, the record's ``blocks``) a
 unit: ``proof``, the partition into proof units (its units and partition digest, which the verifier holds to the record's,
 and the planner's ``plan`` digest, carried and never read); ``inference``, the slot and step of every unit (`InferenceEntry`:
 the entries tile each template's units exactly once, a slot digit's radix is the class's S and every step is below its T);
-and network accounting's ``server``, ``server_time`` and ``transfers``, carried as given for its own check. Of those the
+and network certification's ``server``, ``server_time`` and ``transfers``, carried as given for its own check. Of those the
 members read only the servers' unit ranges: a template's units are cut where a server's begin or end, so each statement's
 units sit on one server. Blocks name units, ports, steps and row patterns, never a value.
 
@@ -114,7 +114,7 @@ LABEL_KEYS = ("step", "slot", "form")
 BLOCKS = "verity/blocks/v1"
 #: what an inference entry's digit is: the unit's slot, its step past the entry's ``step``, or neither
 AXES = ("slot", "step", "-")
-#: network accounting's keys of the blocks, carried as given for its check; the members read the servers' unit ranges
+#: network certification's keys of the blocks, carried as given for its check; the members read the servers' unit ranges
 NETWORK = ("server", "server_time", "transfers")
 #: what a table's supplied values hold (`supplied`): its root, its domain id, and 1, what an opening's verdict reads
 SUPPLIED = ("root", "domain", "opened")
@@ -875,10 +875,10 @@ class Blocks:
             raise ValueError(f"a plan's digest is SHA-256 or SHA-512 in hex, not {self.plan!r}")
         if self.network is not None:
             if not isinstance(self.network, Mapping) or set(self.network) != set(NETWORK):
-                raise ValueError(f"network accounting's blocks are {list(NETWORK)}, all of them, not {self.network!r}")
+                raise ValueError(f"network certification's blocks are {list(NETWORK)}, all of them, not {self.network!r}")
             net = json.loads(json.dumps(dict(self.network)))
             if not all(isinstance(net[k], list) for k in NETWORK):
-                raise ValueError(f"network accounting's {list(NETWORK)} are lists")
+                raise ValueError(f"network certification's {list(NETWORK)} are lists")
             object.__setattr__(self, "network", net)
 
     def check(self, units: Mapping[str, int]) -> dict[str, tuple[int, ...]]:
@@ -944,7 +944,7 @@ class Blocks:
         their total and that digest, refused (ValueError) unless well-formed and `check`ed. -> (the blocks, the server ends)."""
         if not isinstance(d, Mapping) or d.get("format") != BLOCKS or not {"format", "proof", "inference"} <= set(d) \
                 or not set(d) <= {"format", "proof", "inference", *NETWORK}:
-            raise ValueError(f"a circuit's blocks are a {BLOCKS} object of its proof and inference, and network accounting's "
+            raise ValueError(f"a circuit's blocks are a {BLOCKS} object of its proof and inference, and network certification's "
                              f"{list(NETWORK)}")
         proof, inf = d["proof"], d["inference"]
         if not isinstance(proof, Mapping) or not {"units", "partition"} <= set(proof) <= {"units", "partition", "plan"}:
@@ -963,7 +963,7 @@ class Blocks:
 def server_ends(network: Mapping[str, Any] | None, units: Mapping[str, int]) -> dict[str, tuple[int, ...]]:
     """Each template's unit indices where a server's units begin or end (the servers' ``units``, ``"all"`` or ``[template,
     at, n]`` ranges), refused (ValueError) where a range isn't among its template's units. That the servers partition the
-    units is network accounting's check."""
+    units is network certification's check."""
     if not network:
         return {}
     servers, ends = network["server"], {}

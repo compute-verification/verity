@@ -68,7 +68,7 @@ def parse_law(text: str) -> dict[str, Any]:
     """`subset:K` or `bernoulli:NUM/DEN` (`flock-circuit serve --draw`'s syntax), or `stratified:K` or `work:K` (rules, which `derive`
     expands over a program and query, and for `work` a work table), as a sampling design object; numbers in ASCII digits, `K >= 1`.
     A design outside the sampling claims' scope (`Claims.Sampling.OneStage.WellFormed`) is refused: `subset:0` draws
-    nothing, so its `P_a` is no miss probability."""
+    nothing, so its `P_a` is no acceptance probability."""
     kind, _, arg = text.partition(":")
     if kind == "subset" and digits(arg) and int(arg) >= 1:
         return {"law": "subset", "k": int(arg)}
