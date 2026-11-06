@@ -373,6 +373,22 @@ def test_a_target_holds_its_own_reads_and_resolutions(tmp_path):
     assert set(top["enums"]) == {"syn"} and {"top", "other", "idle"} <= set(top["enums"]["syn"])   # `load_registries` listed it
 
 
+def test_a_copy_of_the_tree_at_another_path_reuses_every_target(tmp_path):
+    """Nothing of where the tree is or where the run starts is in a key or a read: a copy of the tree at another path, run from
+    its own root once the first is gone (as each of drive's checks runs in a tree of its own, removed after it), finds every
+    target's key among the first run's entries and reuses it, storing nothing."""
+    import shutil
+
+    first, second = tmp_path / "a", tmp_path / "elsewhere" / "b"
+    assert _run(_tree(first), cwd=first)["hits"] == []
+    entries = sorted(p.relative_to(first / "cache") for p in (first / "cache").glob("*/*/*.json"))
+    shutil.copytree(first, second)
+    shutil.rmtree(first)
+    out = _run(second, cwd=second)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 0, out["stats"]
+    assert sorted(p.relative_to(second / "cache") for p in (second / "cache").glob("*/*/*.json")) == entries
+
+
 def test_a_target_s_reads_declare_the_paths_their_lookup_takes(tmp_path, monkeypatch):
     """`cache.declared` of SynTop's entry: the files of the modules it holds and of their import sites, its binding file and
     its pin's file; the listing of the package `load_registries` enumerated, not the modules that lists (`lookup` holds an

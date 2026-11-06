@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -647,9 +648,11 @@ def parallel(fn: Callable, items: list, jobs: int, initializer: Callable | None 
     `Killed` for ``fn(item)``, with the peak it reached; the others run on.  With ``weight`` and ``budget`` an item starts only
     while the weights of the items running and its own add up to at most ``budget`` (an item heavier than ``budget`` runs
     alone), taken in the order given, the first that fits; a callable ``budget`` is asked again each time items are admitted.
-    The zygotes end with the iteration."""
+    The zygotes end with the iteration; ``jobs`` under 1, which would start no item and wait forever, is refused."""
     from multiprocessing.connection import wait
 
+    if jobs < 1:
+        raise ValueError(f"parallel: jobs={jobs} starts no item, so none would ever finish: give 1 or more")
     weigh = weight or (lambda _: 0.0)
     limit = (lambda: float("inf")) if budget is None else budget if callable(budget) else (lambda: budget)
     zs = zygote if isinstance(zygote, list) else [zygote or Zygote(fn, initializer, initargs)]
@@ -722,8 +725,9 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     target that grows more than `HEAVY_GB` past the task list it is forked with (``peak_gb - rss_start_gb``) is listed in `HEAVY`
     with its peak: a target starts only while the peaks of those running and its own add up to at most `budget_gb` (``mem_gb``
     less this process's RSS), counting an unlisted target as `HEAVY_GB`; one heavier than that still runs, alone, and the log
-    says it does not fit; the listed targets go first, heaviest first.  The sum counts each listed process's copy of the task
-    list, which they share, so the bound is conservative by that much per process.  An unlisted target that grows well past
+    says it does not fit, or, when the budget is under `HEAVY_GB` and so every target runs alone, says why and what to do
+    (`short_budget`; on stderr without ``log``); the listed targets go first, heaviest first.  The sum counts each listed
+    process's copy of the task list, which they share, so the bound is conservative by that much per process.  An unlisted target that grows well past
     `HEAVY_GB` can still break it: the process it gets killed in is reported as that target's failure (``circuit-check/killed``,
     with its peak), the other targets run on, and its peak belongs in `HEAVY`.  Once ``mem_file`` holds a number of GiB
     (`granted_gb`: check.py writes its slot's mem= there when every step beside circuit-check has ended), that number takes
@@ -1172,13 +1176,20 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
         init = (specs, opts, everything, as_call, tracing)
         budget = budget_gb(mem_gb)
         peaks = heavy()
+
+        def weigh(i: int) -> float:
+            return peaks.get(tasks[i][1], HEAVY_GB)
+
         # a by-calls root has no gates, but its check builds the sidecar targets its callees rely on (`by_calls.relied`), which
         # no process it is forked from holds when their bindings were built apart: it starts with the largest
         order = sorted(todo, key=lambda i: (-peaks.get(tasks[i][1], 0), tasks[i][1] not in TG.BY_CALLS, -_gates(tasks[i])))
-        if log:
+        if (short := short_budget(budget, mem_gb, jobs, mem_file is not None and granted_gb(mem_file) is None)) is not None:
+            (log or (lambda s: print(s, file=sys.stderr, flush=True)))(short)
+        elif log:
             for i in order:
-                if peaks.get(tasks[i][1], 0) > budget:
-                    log(f"warn {tasks[i][1]} peaked at {peaks[tasks[i][1]]} GiB, over the {budget:.1f} GiB budget: it runs alone")
+                if weigh(i) > budget:
+                    log(f"warn {tasks[i][1]} peaked at {weigh(i)} GiB, over the {budget:.1f} GiB budget: it runs alone")
+
         def now() -> float:
             return (budget if (g := granted_gb(mem_file)) is None else budget_gb(g)) - sum(z.grown_gb() for z in zygote or ())
 
@@ -1187,7 +1198,7 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
 
         owner = _owners(plan, [tasks[i] for i in todo], len(zygote)) if plan is not None and zygote else {}
         for x, got_, peak, start in parallel(_work, _batched(order, tasks), jobs, _init, init, budget=now, zygote=zygote,
-                                             weight=lambda x: max(peaks.get(tasks[i][1], HEAVY_GB) for i in members(x)),
+                                             weight=lambda x: max(weigh(i) for i in members(x)),
                                              route=lambda x: owner.get(_info(tasks[members(x)[0]]).get("via"))):
             each = got_ if isinstance(x, tuple) and not isinstance(got_, Killed) else [got_] * len(members(x))
             for i, g in zip(members(x), each):
@@ -1280,6 +1291,24 @@ def budget_gb(mem_gb: int | None) -> float:
     holds now (its own copy of the task list)."""
     mem_gb = slot_gb() if mem_gb is None else mem_gb
     return memory_gb() if mem_gb is None else min(mem_gb - (_rss_gb() or 0.0), memory_gb())
+
+
+def short_budget(budget: float, mem_gb: int | None, jobs: int, grant: bool = False) -> str | None:
+    """What `run` says before its checks when ``budget`` (`budget_gb` of ``mem_gb``) is under `HEAVY_GB`, what a target with
+    no recorded peak is counted at: each target then runs alone (`admit`), past ``mem_gb`` when the budget is negative.  It
+    names what leaves so little and what to do; ``grant``: a ``--mem-gb-file`` may raise it later.  None when one fits."""
+    if budget >= HEAVY_GB:
+        return None
+    rss, mem = _rss_gb() or 0.0, slot_gb() if mem_gb is None else mem_gb
+    alone = (f"leaves its targets {budget:.1f} GiB, under the {HEAVY_GB} GiB a target with no recorded peak is counted at, "
+             f"so each runs alone" + (", and the run is over its memory before any starts" if budget < 0 else "")
+             + (" (until --mem-gb-file grants more)" if grant else ""))
+    if mem is None or memory_gb() < mem - rss:
+        return f"warn circuit-check: this machine has {memory_gb()} GiB free, which {alone}: free memory or run elsewhere"
+    return (f"warn circuit-check holds {rss:.1f} GiB after building its task list, and --mem-gb (else its check slot's "
+            f"{SLOT_MEM_ENV}) allows circuit-check {mem} GiB in all, which {alone}.  Build the catalog's records first "
+            f"(circuit-check --all --records-only --cache DIR) and run from them (--catalog-units --cache DIR), so this process "
+            f"builds no Definition's body, or raise --mem-gb to {math.ceil(rss) + HEAVY_GB * max(1, jobs)}")
 
 
 def granted_gb(path: Path | None) -> int | None:
@@ -1577,6 +1606,8 @@ def main(argv: list[str] | None = None) -> int:
         return _batch_main(a, ap)
     if a.combine:
         return _combine_main(a, ap)
+    if a.jobs is not None and a.jobs < 0:
+        ap.error(f"--jobs {a.jobs} would start no target and wait forever: give 1 or more, or 0 for one per core")
     if a.records_only and (a.targets or not a.all or a.cache is None or a.no_cache or a.update_pins or a.shard or a.shard_dir):
         ap.error("--records-only stores every catalog binding's record in --cache DIR and checks no target: give --all and "
                  "--cache, and no target, --no-cache, --update-pins, --shard or --shard-dir")
