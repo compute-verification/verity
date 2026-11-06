@@ -1,5 +1,6 @@
-"""The Goals page as the merge queue's goal gate reads it (`research.queue.goal_statuses`), with no network: `serve` puts a page
-behind the route (`research.goals.Route`) and this machine's copy of it under a test's directory (`research.queue.GOALS_CACHE`)."""
+"""The Goals page as the merge queue reads it (the goal gate's `research.queue.goal_statuses`, drive's priority list's
+`goal_records`), with no network: `serve` puts a page behind the route (`research.goals.Route`) and this machine's copy of it
+under a test's directory (`research.queue.GOALS_CACHE`)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,20 +16,21 @@ DOWN = f"GET {G.GOALS}: the route is unreachable: a test's page is down"
 
 
 class Page:
-    """The route: ``goals`` (each id to its status) at each read, or `DOWN` while ``goals`` is None; ``reads`` counts the reads."""
+    """The route: ``goals`` (each id to its status, or to its fields but its id and title) at each read, or `DOWN` while
+    ``goals`` is None; ``reads`` counts the reads."""
 
-    def __init__(self, goals: dict[str, str] | None):
+    def __init__(self, goals: dict[str, str | dict] | None):
         self.goals, self.reads = goals, 0
 
     def call(self, body: dict | None = None) -> list[dict]:
-        assert body is None, "the goal gate only reads the page"
+        assert body is None, "the merge queue only reads the page"
         self.reads += 1
         if self.goals is None:
             raise SlackError(DOWN)
-        return [{"id": k, "status": v, "title": k} for k, v in self.goals.items()]
+        return [{"id": k, "title": k, **(v if isinstance(v, dict) else {"status": v})} for k, v in self.goals.items()]
 
 
-def serve(monkeypatch, tmp: Path, goals: dict[str, str] | None) -> Page:
+def serve(monkeypatch, tmp: Path, goals: dict[str, str | dict] | None) -> Page:
     """``goals`` behind the Goals page's route (None: the page is down), and this machine's copy at ``tmp``/cache/goals.json,
     which no read has written yet: the route."""
     page = Page(goals)
