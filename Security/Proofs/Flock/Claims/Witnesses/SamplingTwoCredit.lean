@@ -42,8 +42,9 @@ def Prog.Checked (C : Prog) (u : List ℕ) (g : ℕ) : Prop :=
 block inside `ρ` reads, `w` opens the interior value `ι ρ`. -/
 def OpensChecked (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition) (w : Wit)
     (ι : ℕ → ℕ → Bool) : Prop :=
-  ∀ ρ r, Pρ.blocks[ρ]? = some r → ∀ g ∈ r, s.prog.Boundary r g = false →
-    (∃ v u, Pt.blocks[v]? = some u ∧ (∀ g' ∈ u, g' ∈ r) ∧ s.prog.Checked u g) → w.val H Cm s g = some (ι ρ g)
+  ∀ (ρ : ℕ) (r : List ℕ), Pρ.blocks[ρ]? = some r → ∀ g ∈ r, s.prog.Boundary r g = false →
+    (∃ (v : ℕ) (u : List ℕ), Pt.blocks[v]? = some u ∧ (∀ g' ∈ u, g' ∈ r) ∧ s.prog.Checked u g) →
+      w.val H Cm s g = some (ι ρ g)
 
 /-- A proof block is faulty exactly when it is incorrect on the committed values, with no hypothesis on the program:
 its check reads no interior value (`Boundary.core`). -/
@@ -73,8 +74,9 @@ theorem correct_refIn_iff (C : Prog) {r u : List ℕ} {val : ℕ → Option Bool
 gate of replay block `ρ`'s interior that the check of a proof block inside `ρ` reads. -/
 theorem wrongIn_eq_inter_faulty {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement}
     {Pt Pρ : Partition} {w : Wit} {ρ t : ℕ} {ι : ℕ → Bool}
-    (hι : ∀ r, Pρ.blocks[ρ]? = some r → ∀ g ∈ r, s.prog.Boundary r g = false →
-      (∃ v u, Pt.blocks[v]? = some u ∧ (∀ g' ∈ u, g' ∈ r) ∧ s.prog.Checked u g) → w.val H Cm s g = some (ι g)) :
+    (hι : ∀ r : List ℕ, Pρ.blocks[ρ]? = some r → ∀ g ∈ r, s.prog.Boundary r g = false →
+      (∃ (v : ℕ) (u : List ℕ), Pt.blocks[v]? = some u ∧ (∀ g' ∈ u, g' ∈ r) ∧ s.prog.Checked u g) →
+        w.val H Cm s g = some (ι g)) :
     wrongIn H Cm s Pt Pρ w ρ t ι = cell Pt Pρ ρ t ∩ faulty H Cm s Pt w := by
   have hiff : ∀ v ∈ cell Pt Pρ ρ t, ∀ u r, Pt.blocks[v]? = some u → Pρ.blocks[ρ]? = some r →
       (s.prog.Correct (s.prog.refIn r (w.val H Cm s) ι) u ↔ s.prog.Correct (w.val H Cm s) u) := by
@@ -83,13 +85,14 @@ theorem wrongIn_eq_inter_faulty {H : Msg → Msg} {Cm : CommitmentScheme Bool} {
     rw [hu, Option.some.injEq] at hu'
     rw [hr, Option.some.injEq] at hr'
     subst hu' hr'
-    have key : ∀ g, (∃ v u, Pt.blocks[v]? = some u ∧ (∀ g' ∈ u, g' ∈ r) ∧ s.prog.Checked u g) →
+    have key : ∀ g, (∃ (v : ℕ) (u : List ℕ), Pt.blocks[v]? = some u ∧ (∀ g' ∈ u, g' ∈ r) ∧ s.prog.Checked u g) →
         s.prog.refIn r (w.val H Cm s) ι g = w.val H Cm s g := fun g hc => by
-      unfold Prog.refIn
-      by_cases h : g ∈ r ∧ s.prog.Boundary r g = false
-      · rw [if_pos h]
-        exact (hι r hr g h.1 h.2 hc).symm
-      · rw [if_neg h]
+      by_cases hgr : g ∈ r
+      · cases hb : s.prog.Boundary r g
+        · rw [hι r hr g hgr hb hc]
+          simp [Prog.refIn, hgr, hb]
+        · exact Prog.refIn_of_boundary hb
+      · exact Prog.refIn_of_not_mem hgr
     exact correct_refIn_iff s.prog (fun g hg hb => key g ⟨v, u, hu, hur, Or.inl ⟨hg, hb⟩⟩)
       fun g hg x hx i hi hiu => key i ⟨v, u, hu, hur, Or.inr ⟨hiu, g, hg, x, hx, hi⟩⟩
   ext v
@@ -110,6 +113,7 @@ theorem wrongIn_eq_inter_faulty {H : Msg → Msg} {Cm : CommitmentScheme Bool} {
 theorem footprint_eq_counts_faulty {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement}
     {Pt Pρ : Partition} {w : Wit} {ι : ℕ → ℕ → Bool} (hι : OpensChecked H Cm s Pt Pρ w ι) :
     footprint H Cm s Pt Pρ w ι = counts Pt Pρ (faulty H Cm s Pt w) := by
+  unfold OpensChecked at hι
   funext ρ t
   unfold footprint counts
   rw [wrongIn_eq_inter_faulty (hι ρ), Finset.inter_comm]
@@ -135,17 +139,19 @@ theorem notNotTwo_Pa (fp : ℕ → ℕ → ℕ) :
   unfold Design.Two.Pa
   have hl : notNotTwo.part.blocks.length = 2 := by decide
   rw [hl, Finset.sum_eq_single_of_mem ∅ (Finset.empty_mem_powerset _)]
-  · rw [notNotTwo_replay_Pa, if_pos (show window 0 2 (∅ : Finset ℕ) = ∅ by decide)]
-    simp [Finset.prod_range_succ]
+  · have hw : window 0 2 (∅ : Finset ℕ) = ∅ := by decide
+    rw [notNotTwo_replay_Pa]
+    simp [hw, Finset.prod_range_succ]
   · intro T hT hne
     obtain ⟨v, hv⟩ := Finset.nonempty_iff_ne_empty.2 hne
     have hv2 : v < 2 := Finset.mem_range.1 (Finset.mem_powerset.1 hT hv)
     have hw : window 0 2 T ≠ ∅ := by
       intro hw
-      have hvw : v ∈ window 0 2 T := by simp [window, hv, hv2]
+      have hvw : v ∈ window 0 2 T := by simp [window, hv] <;> omega
       rw [hw] at hvw
       simp at hvw
-    rw [notNotTwo_replay_Pa, if_neg hw, zero_mul]
+    rw [notNotTwo_replay_Pa]
+    simp [hw]
 
 theorem notNotTwo_esc (fp : ℕ → ℕ → ℕ) (ρ : ℕ) :
     notNotTwo.esc notNotPt fp ρ = escCell (cell notNotPt notNotPρ ρ 0).card 1 (fp ρ 0) := by
@@ -161,6 +167,7 @@ theorem counts_notNot_empty : counts notNotPt notNotPρ ∅ = fun _ _ => 0 := by
 /-- `fullW` opens gate `1`, the one gate of a replay block's interior, at the interior `false`. -/
 theorem fullW_opensChecked (H : Msg → Msg) :
     OpensChecked H notNotCm notNotStmt notNotPt notNotPρ fullW fun _ _ => false := by
+  unfold OpensChecked
   intro ρ r hr g hg hb _
   rw [notNotPρ_blocks] at hr
   match ρ, hr with
@@ -181,6 +188,7 @@ theorem fullW_opensChecked (H : Msg → Msg) :
 theorem lateW_not_opensChecked (H : Msg → Msg) (ι : ℕ → ℕ → Bool) :
     ¬ OpensChecked H notNotCm notNotStmt notNotPt notNotPρ lateW ι := by
   intro h
+  unfold OpensChecked at h
   have hu : ∀ g' ∈ [1], g' ∈ [1, 2] := fun g' hg' => by
     obtain rfl := List.mem_singleton.1 hg'
     decide
@@ -196,7 +204,7 @@ theorem lateW_served_Pa (H : Msg → Msg) :
   have h2 : counts notNotPt notNotPρ {1, 2} 1 0 = 2 := by decide
   have h3 : escCell 2 1 2 = 0 := by
     unfold escCell
-    rw [show (2 - 2).choose (min 1 2) = 0 by decide]
+    rw [show Nat.choose (2 - 2) (min 1 2) = 0 by decide]
     simp
   rw [h1, h2, h3, mul_zero]
 
