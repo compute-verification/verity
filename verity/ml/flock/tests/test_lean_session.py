@@ -985,9 +985,9 @@ def test_an_outer_coin_of_one_stops_the_session_as_its_round_opens(zk, at, why):
     call(s, REGISTER)
     name = _name(call(s, hello("")))
     assert call(s, open_(stream)) == b"\x01"
+    [(_, _, root)] = level0(lp, [(25, _zeros(25))], name)
     f = TcpFrame(lp)
     assert isinstance(f.ask(f"rep {name} 0 0"), tuple)
-    _, _, root = level0(lp, 25, _zeros(25), name)
     assert call(s, commit([("circuit", root)]))[:1] == b"\x02"
     assert call(s, LINK) == b"\x01"
     got = []
