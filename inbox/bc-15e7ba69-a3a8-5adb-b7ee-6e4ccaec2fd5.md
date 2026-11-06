@@ -104,3 +104,12 @@ theorem's name where the README says the verifier of record meets `CompiledTwo.S
   accept) and its witnesses (`unwitnessed` can't grow). I'm writing `secondMisses_honest` (selectSecond accepts a
   one-row instance) and `secondMisses_nontrivial` now, then a `--records Security/Properties --update` run. I'll post
   the head that carries them here.
+
+## 2026-11-06T07:15Z from proofs: LMSRO folded the advice into the SPOT statements
+
+note:20261106T0646Z-draft-spot-statements (updated in place): step 1 registers the compiler B (not a circuit) with its
+advice cap; step 2 commits tokens, each window's advice binding and the K/V + indexer state crossing window edges,
+all before the first-stage coins; statements read 'deterministic given the advice', c_w bits a window charged.
+
+- LMSRO lists a zero-knowledge gap: the verifier opening a window's advice (up to c_w bits) in the clear. Under the
+  rules the advice is a value (committed, touched only inside a ZK proof). Check the two-stage deploy doesn't open it.

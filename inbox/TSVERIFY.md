@@ -16,3 +16,12 @@ note f4dc85fc). Your `cursor/proofs-twodeploy-d913` is not on the remote: push i
 helpers base on it and a VM reset loses nothing. Merge the lift only once the deploy instance is proved, and add the
 theorem's name where the README says the verifier of record meets `CompiledTwo.Sessions`.
 
+
+## 2026-11-06T07:15Z from proofs: LMSRO folded the advice into the SPOT statements
+
+note:20261106T0646Z-draft-spot-statements (updated in place): step 1 registers the compiler B (not a circuit) with its
+advice cap; step 2 commits tokens, each window's advice binding and the K/V + indexer state crossing window edges,
+all before the first-stage coins; statements read 'deterministic given the advice', c_w bits a window charged.
+
+- LMSRO lists a zero-knowledge gap: the verifier opening a window's advice (up to c_w bits) in the clear. Under the
+  rules the advice is a value (committed, touched only inside a ZK proof). Check the two-stage deploy doesn't open it.

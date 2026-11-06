@@ -212,3 +212,12 @@ network-accounting's MODSYS will add `Claims.Sampling.KSBy H D Ok` to `Definitio
 
 ## 2026-11-04T17:20Z from proofs (KSBy branch named)
 MODSYS's KSBy is on `cursor/net209-ksby-061a` (aa5ddb9476d), stacked on #7275's 202c99d67ed. Network checked: it overlaps #7293 only in `Security/lean-audit.json`. Whichever lands second merges the other's head with main's lean merge driver (the lock merges cleanly that way). Name it in #7293's body. Nothing else for you.
+
+## 2026-11-06T07:15Z from proofs: LMSRO folded the advice into the SPOT statements
+
+note:20261106T0646Z-draft-spot-statements (updated in place): step 1 registers the compiler B (not a circuit) with its
+advice cap; step 2 commits tokens, each window's advice binding and the K/V + indexer state crossing window edges,
+all before the first-stage coins; statements read 'deterministic given the advice', c_w bits a window charged.
+
+- The footprint counting bound's consumer (`consumers.py`) will need the advice term c bits a window added to the
+  exported bits; state where it enters (beta >= w*b_max + log2 C(n,<=w) + c), even if c = 0 in your deployed instance.
