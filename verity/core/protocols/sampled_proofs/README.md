@@ -382,7 +382,7 @@ Code and records call a sampling design a `law`; the name stays until a format v
   sampling design expanded.
 - `derive` refuses a `K` outside `[1, N]`, a work sampling design without the verifier's work table, a subcircuit the
   table does not name, and a population that does no work.
-- Two sampling designs are the same when their canonical JSON bytes are (`draw.same_law`), so `true` is not `1`, as the
+- Two sampling designs are the same when their canonical JSON bytes are (`draw.same_design`), so `true` is not `1`, as the
   Lean verifier reads them.
 - `check_draw` also holds the draw's population to the registration's.
 
