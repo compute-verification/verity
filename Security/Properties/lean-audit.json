@@ -1687,8 +1687,6 @@
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
    "unfolded_hash": "e414354acd8918255fe2888c376780bcd6dd97919b29cea4883bfb2faffcf306"
   },
-  "Properties.NetworkPeriod.rowsUntiedRefused": "a6422e99a7badb1dc8a3922255ccfe6783a66bdba2511039bf21dc30042d5a24",
-  "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": "aa00cfe5835bf525712d992edb7d9e6ab94b7914b335d01ade734f3611ede2f5",
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "33f7abc2366880d43c453c6ef7f93c829313485d13e4d3112049d6c68e127c27",
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
    "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
@@ -1715,15 +1713,7 @@
    "unfolded_hash": "1cbdf00ba5dbe5e7e90c3c839923b6104892a82cc56f463e2667e0cf2b29c167"
   },
   "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738",
-  "Properties.RemoteAudit.Subprotocol.acceptIsVerified": "e5be3f448a3a0cd511b5b692cd03aa865fa570e659e621fe25464cc53f957dd9",
-  "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
-   "type_hash": "6fb8373a02a810bf600b6c591918363ed77972bd908601d917d4ff66bd582156",
-   "unfolded_hash": "07b4c1b540ec87475245acbd94fad1814beffecc299fa1b4819c0934efed381c"
-  },
-  "Properties.RemoteAudit.Component.acceptIsVerified": {
-   "type_hash": "5e3069f2c0bb12102f9cf9ec32b6cb573d48b81d26b2f1ce0143b0c683f65959",
-   "unfolded_hash": "2659f85f3c83b418933a8c3b39219163303da4f757f87e7a0b330fc4cae0125e"
-  }
+  "Properties.RemoteAudit.Subprotocol.acceptIsVerified": "e5be3f448a3a0cd511b5b692cd03aa865fa570e659e621fe25464cc53f957dd9"
  },
  "layers": {
   "Properties.Pouw": {
