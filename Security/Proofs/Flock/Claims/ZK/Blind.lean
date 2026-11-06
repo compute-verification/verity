@@ -26,11 +26,11 @@ with the honest prover's simulator, and the server that runs pad-blind workers i
   **`Flock.zk_deployZk_sw`**: `Claims.Flock.ZKAt` at `swP vs`'s prover with `Flock.zkAt_deployZk_ref`'s simulator, `ε_zk`
   and `γ`: one simulator for every `vs`. It is `Flock.zkAt_sw` at `deployZk`; `zkAt_sw` holds at any masked record whose
   rounds on its relation are the session's, `refK x + 1`.
+* `RefSession.honestVals`, each table's own values: `swP_vals` (`swP` there is `refP`) and `swCausal_vals` (`Causal`
+  gives `SwCausal` there), so `Flock.zkAt_deployZk_ref_of_sw` recovers `Flock.zkAt_deployZk_ref` from `zk_deployZk_sw`.
 * `RefSession.SwCausalOn Ok vs`: `SwCausal vs` on one tape (each table's base, what the workers see and level 0's
   leaves' pairs from it, `tapePairs`), at the coin vectors `Ok` admits; `SwCausal` gives it at every `Ok`
   (`swCausalOn_of_swCausal`).
-* `RefSession.honestVals`, each table's own values: `swP_vals` (`swP` there is `refP`) and `swCausal_vals` (`Causal`
-  gives `SwCausal` there), so `Flock.zkAt_deployZk_ref_of_sw` recovers `Flock.zkAt_deployZk_ref` from `zk_deployZk_sw`.
 * **`Flock.zk_server_blind`**: for every pad-blind worker and any values `vs` whose round encoding is causal, the server
   that defers every stop to the last round (`ZkServer.nextD`), whose frame at the worker's values with its stand-ins in
   after a failed round is `swP vs`'s message wherever it releases one (`ZkServer.RefD`), releases, on every event, at
