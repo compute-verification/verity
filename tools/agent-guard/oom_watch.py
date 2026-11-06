@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""An agent VM's OOM recorder (INF-55 f): every kernel OOM kill here, with the victim's worktree, kept and announced.
+"""An agent VM's OOM recorder: every kernel OOM kill here, with the victim's worktree, kept and announced.
 
     oom_watch.py loop     boot.sh starts it detached on every boot (one per VM: it holds $OOM_WATCH_LOCK)
     oom_watch.py scan     print the OOM kills still in the kernel's ring buffer as JSON, record nothing
 
-The kernel's ring buffer turns over in minutes on a busy VM and agent VMs keep no journal, so a kill (nine workers sharing a 15 GB
-coordinator VM lost four python processes at 00:39Z 18 Oct) left no trace by the time anyone looked. This reads /dev/kmsg as it is
-written and samples every process over $OOM_WATCH_MIN_MB (default 300) every few seconds for its cwd, which a dead process no
-longer has, so each kill is recorded with the worktree it ran in: the worker. A kill is a line in $OOM_WATCH_LOG (default
-~/.research/agent-oom.jsonl; pid, comm, anon RSS, memory cgroup, cwd, worktree, the VM and its agent) and, best effort, a post to
-#agent-alerts through `research msg send` (the record stays either way). A restart reports only kills after the last one recorded.
+The kernel's ring buffer turns over in minutes on a busy VM and agent VMs keep no journal, so a kill (when workers share a
+coordinator's VM, one kill can take several of their processes) leaves no trace by the time anyone looks. This reads /dev/kmsg
+as it is written and samples every process over $OOM_WATCH_MIN_MB (default 300) every few seconds for its cwd, which a dead
+process no longer has, so each kill is recorded with the worktree it ran in: the worker. A kill is a line in $OOM_WATCH_LOG
+(default ~/.research/agent-oom.jsonl; pid, comm, anon RSS, memory cgroup, cwd, worktree, the VM and its agent) and, best effort,
+a post to #agent-alerts through `research msg send` (the record stays either way). A restart reports only kills after the last
+one recorded.
 """
 from __future__ import annotations
 
