@@ -33,8 +33,9 @@ echo "device=$DEV units=$UNITS ns=$NS warm=$WARM runs=$RUNS" > $O/config.txt
 
 if has build; then
   echo "== build $(date -u +%T)"
-  MODE=build GPU=$([ $DEV = gpu ] && echo 1 || echo 0) SM=$SM FLOCK_WORK=$FW RESEARCH_RUN_DIR=$O/build \
-    bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 || { tail -40 $O/build.log $O/build/out/build.log 2>/dev/null; exit 1; }
+  ( flock 9; MODE=build GPU=$([ $DEV = gpu ] && echo 1 || echo 0) SM=$SM FLOCK_WORK=$FW RESEARCH_RUN_DIR=$O/build \
+    bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 ) 9> $FW/.build.lock \
+    || { tail -40 $O/build.log $O/build/out/build.log 2>/dev/null; exit 1; }
   sha256sum $B | tee $O/binary.sha256
 fi
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
@@ -50,13 +51,15 @@ name() { echo "$(echo "$1" | tr ':,=+' '----' | tr 'A-Z' 'a-z')-n$2"; }
 stage() {
   local u=${1%+public-weights} flag= nm=$(name $1 $2); [ "$u" = "$1" ] || flag=--public-weights
   local d=$FW/data/$nm-$KEY o=$O/stage/$nm
-  mkdir -p $o
-  if [ ! -e $d/.done ]; then
+  mkdir -p $o $FW/data
+  (
+    flock 9
+    [ -e $d/.done ] && exit 0
     rm -rf $d && mkdir -p $d
     /usr/bin/time -v -o $o/time-stage.txt $PY $REPO/benchmarks/served_units/stage.py $u $2 $d $flag > $o/stage.log 2>&1 \
-      || { echo "stage $nm FAILED: $(tail -1 $o/stage.log)"; rm -rf $d; return 1; }
+      || { echo "stage $nm FAILED: $(tail -1 $o/stage.log)"; rm -rf $d; exit 1; }
     touch $d/.done
-  fi
+  ) 9> $d.lock || return 1
   cp $d/stage.json $o/
   echo "staged $nm: $(python3 -c "import json; s = json.load(open('$o/stage.json')); print(s['ands'], 'ANDs, k_log', s['k_log'], 'G', s['vus_per_block'], s['seconds'])")"
 }
