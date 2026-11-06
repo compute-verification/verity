@@ -175,15 +175,16 @@ theorem periodRun_pouw_fails (c : Certificates) (hW : c.W = 1) (p : Price) (ξ :
 
 /-- **The idle deployment's period coupling at PoUW**, at `vocab δ 1`, for every verdict, composite, parameters,
 committed files, commitment, strategy and resolution of the coin trees' coins: the run that charges nothing and accepts
-everything (`periodRun`), over one coin in bijection with the coins drawn up front (the coin commitment has no families), with
-no break. Its claim, one gate of work, fails at every coin, so its `world` holds. -/
+everything (`periodRun`), over one coin in bijection with the coins drawn up front (the coin commitment has no families
+and the device draws nothing at the close), with no break. Its claim, one gate of work, fails at every coin, so its `world` holds. -/
 def coupling (δ : ℝ≥0∞) (acc : Exchange → Prop) (k : Verity.Registration.Composite) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy ((vocab δ 1).game θ F c)) (ρ : TreeCoins) :
     (vocab δ 1).PeriodCoupling acc k .pouw θ F c σ ρ where
   C := fileRead.circuit
   I := Unit
   Ω _ := Unit
-  coins := ⟨fun _ => PUnit.unit, fun _ _ => (), fun _ => rfl, fun _ => rfl⟩
+  coins := ⟨fun _ => (PUnit.unit, fun i => i.elim0), fun _ _ => (), fun _ => rfl,
+    fun _ => Prod.ext rfl (funext fun i => i.elim0)⟩
   run := periodRun
   price _ := 0
   brk _ := False

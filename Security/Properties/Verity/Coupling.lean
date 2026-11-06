@@ -1,5 +1,7 @@
-import Properties.Verity.Subprotocols
-import Definitions.Accounting.JointPeriod
+module
+
+public import Properties.Verity.Subprotocols
+public import Definitions.Accounting.JointPeriod
 
 /-!
 # The causal game's coins, drawn up front: each subprotocol's bound in the coins model carried to the play
@@ -9,13 +11,17 @@ prover sends picks what the device draws next, after every coin before it. A sub
 drawn up front: `Accounting.PeriodRun.Sound` bounds, at every value of the other coins, the probability over the audit's
 own coins. This module states the coupling between the two and the bounds it carries.
 
-* **The coins drawn up front** (`UpFront fs`): every coin of the coin commitment's families `fs`, family `j`'s coin `n`
-  the one the device releases when the family goes from `n + 1` coins left to `n` (`UpFront.read`, `coinsLeft`). The
-  coin trees' coins are not among them: what a tree draws depends on the shape and nonce the prover sends at its
-  `Hello`, so they are resolved from the device's log so far (`TreeCoins`).
-* **The play at those coins** (`outUp fs θ F c ρ σ t`): the play of `σ` with each family coin read from `t` and each coin
-  tree's from `ρ`, the device's log and the evidence `σ` sends after it (`outK`). Each family coin is read once: a
-  family's coins left only go down.
+* **The coins drawn up front** (`UpFrontAll fs D`): every coin of the coin commitment's families `fs` (`UpFront fs`),
+  family `j`'s coin `n` the one the device releases when the family goes from `n + 1` coins left to `n`
+  (`UpFront.read`, `coinsLeft`), and the device's draw at the close under its signer `D` (`finish`: each coin's salt
+  and the coins it committed to and didn't release), which no release reads. The coin trees' coins are not among them:
+  what a tree draws depends on the shape and nonce the prover sends at its `Hello`, so they are resolved from the
+  device's log so far (`TreeCoins`).
+* **The play at those coins** (`outUp fs D θ F c ρ σ t`): the play of `σ` with each family coin read from `t`, each coin
+  tree's from `ρ` and the close's draw from `t`: the prover's request, the device's log, the bytes the close leaves to
+  the device, the draw and the device's signatures, and the evidence `σ` sends after it (`outK`). Each family coin is
+  read once: a family's coins left only go down. A frame the device refuses, a tree frame past its coin-tree lines or a
+  `Hello` of a spec it doesn't sample among them, ends its releases, as in the play.
 * **The coupling**, which every guarantee here rests on and which the proofs tree proves (`play_couples`): for every
   event, the play's probability at `σ` lies between its probabilities over the coins drawn up front at two resolutions
   of the coin trees' coins. An event that reads no coin tree's coin has the same probability in both.
@@ -42,6 +48,8 @@ prover choosing them can't break it, so its bound stays at its component (`Vocab
 (`Vocab.Target`), proved in the play itself. The inference-only policy's claim reads no coin, so its bound is its own.
 -/
 
+@[expose] public section
+
 namespace Verity
 
 open Accounting Core
@@ -60,6 +68,10 @@ instance UpFront.instFintype : (fs : List (String × ℕ)) → Fintype (UpFront 
 instance UpFront.instNonempty : (fs : List (String × ℕ)) → Nonempty (UpFront fs)
   | [] => inferInstanceAs (Nonempty PUnit)
   | (_, n) :: fs => have := UpFront.instNonempty fs; inferInstanceAs (Nonempty ((Fin n → Fin 512 → Bool) × UpFront fs))
+
+/-- **Every coin the play draws apart from the coin trees', drawn up front**: the coin commitment's families' coins and
+the device's draw at the close under the signer `D` (`finish`), which no release reads. -/
+abbrev UpFrontAll (fs : List (String × ℕ)) (D : Signer) : Type := UpFront fs × (Fin D.draws → Bool)
 
 /-- **The coins left of the family `l`** in `fs`: of the first family labelled `l`, the one `takeCoin` takes from; `0`
 where no family is. -/
@@ -90,6 +102,22 @@ def Game.Strategy.assocMap {α β γ : Type} (h : α → β) (f : β → Game γ
   | .send _ k, s => ⟨s.1, Game.Strategy.assocMap h f (k s.1) s.2⟩
   | @Game.coin _ _ _ _ k, s => fun c => Game.Strategy.assocMap h f (k c) (s c)
 
+/-- A strategy for an `if` continued by `f`, where the condition holds: a strategy for its first branch continued by
+`f`. -/
+def Game.Strategy.ifPos {β γ : Type} {c : Prop} [h : Decidable c] {A B : Game β} {f : β → Game γ} (hc : c)
+    (σ : Game.Strategy ((if c then A else B).bind f)) : Game.Strategy (A.bind f) :=
+  match h, σ with
+  | isTrue _, σ => σ
+  | isFalse hn, _ => absurd hc hn
+
+/-- A strategy for an `if` continued by `f`, where the condition fails: a strategy for its second branch continued by
+`f`. -/
+def Game.Strategy.ifNeg {β γ : Type} {c : Prop} [h : Decidable c] {A B : Game β} {f : β → Game γ} (hc : ¬ c)
+    (σ : Game.Strategy ((if c then A else B).bind f)) : Game.Strategy (B.bind f) :=
+  match h, σ with
+  | isTrue hp, _ => absurd hp hc
+  | isFalse _, σ => σ
+
 /-- **Where the play of a strategy goes at the coins drawn up front**: from the device's state (the families' coins
 left `fs`, the trees open `ts`, at most `k` frames more) after the releases `pre`, with each family coin read from `t`
 (the coins of the families `fs₀`) and each coin tree's from `ρ`, the device's log from there and the strategy left for
@@ -110,15 +138,20 @@ def outK (fs₀ : List (String × ℕ)) (t : UpFront fs₀) (ρ : TreeCoins) {β
         let o := outK fs₀ t ρ k fs' ts (pre ++ [r]) (fun log => f (r :: log))
           (Game.Strategy.assocMap (r :: ·) f _ (σ x))
         ⟨r :: o.1, o.2⟩
-  | k + 1, fs, ts, pre, f, ⟨some (.hello spec, ν), σ⟩ =>
-    let x := ρ.hello pre spec ν
-    let r : Release := ⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec x ++ treeKey x.1)⟩
-    let o := outK fs₀ t ρ k fs (ts ++ [⟨ν, spec, x, fun _ => 0⟩]) (pre ++ [r]) (fun log => f (r :: log))
-      (Game.Strategy.assocMap (r :: ·) f _ (σ x))
-    ⟨r :: o.1, o.2⟩
+  | k + 1, fs, ts, pre, f, ⟨some (.hello spec, ν), σ⟩ => by
+    dsimp only at σ
+    exact if hc : treeLines ts < maxTreeLines ∧ TreeSpecOk spec then
+      let σ := Game.Strategy.ifPos hc σ
+      let x := ρ.hello pre spec ν
+      let r : Release := ⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec x ++ treeKey x.1)⟩
+      let o := outK fs₀ t ρ k fs (ts ++ [⟨ν, spec, x, fun _ => 0⟩]) (pre ++ [r]) (fun log => f (r :: log))
+        (Game.Strategy.assocMap (r :: ·) f _ (σ x))
+      ⟨r :: o.1, o.2⟩
+    else ⟨[], Game.Strategy.ifNeg hc σ⟩
   | k + 1, fs, ts, pre, f, ⟨some (.opening i s n, b), σ⟩ => by
     dsimp only at σ
-    match ts[i]?, σ with
+    refine if hc : treeLines ts < maxTreeLines then ?_ else ⟨[], Game.Strategy.ifNeg hc σ⟩
+    match ts[i]?, Game.Strategy.ifPos hc σ with
     | none, σ => exact ⟨[], σ⟩
     | some T, σ =>
       dsimp only at σ
@@ -133,11 +166,13 @@ def outK (fs₀ : List (String × ℕ)) (t : UpFront fs₀) (ρ : TreeCoins) {β
           ⟨r :: o.1, o.2⟩
 
 /-- **The play of `σ` at the coins drawn up front `t`**, with the coin trees' coins resolved by `ρ`: the parameters, the
-committed files and the commitment, the device's log, and the evidence `σ` sends after it. -/
-def outUp (fs : List (String × ℕ)) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (ρ : TreeCoins)
-    (σ : Game.Strategy (play fs θ F c)) (t : UpFront fs) : Exchange :=
-  let o := outK fs t ρ (frames fs) fs [] [] _ σ
-  ⟨θ, F, c, o.1, o.2.1.1, o.2.1.2⟩
+committed files and the commitment, the prover's request, the device's log, the bytes the prover's close leaves to the
+device, the device's draw at the close (`t`'s) and its signatures under `D`, and the evidence `σ` sends after it. -/
+def outUp (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (ρ : TreeCoins) (σ : Game.Strategy (play fs D θ F c)) (t : UpFrontAll fs D) : Exchange :=
+  let o := outK fs t.1 ρ (frames fs) fs [] [] (finish D θ F c σ.1) σ.2
+  let e := (o.2.2 t.2).1
+  ⟨θ, F, c, σ.1, o.1, o.2.1, List.ofFn t.2, D.signatures σ.1 o.1 o.2.1 (List.ofFn t.2), e.1, e.2⟩
 
 namespace Vocab
 
@@ -148,8 +183,8 @@ and `c`, for every strategy and every resolution of the coin trees' coins, the p
 that `acc` holds of the play at them while `a`'s claim fails there is at most `a`'s error at the strategy. -/
 def UpFrontFor (acc : Exchange → Prop) (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (ρ : TreeCoins),
-    Game.prCoin (fun t => acc (outUp (V.families θ) θ F c ρ σ t) ∧
-        ¬ V.Holds k θ F c σ a (outUp (V.families θ) θ F c ρ σ t)) ≤
+    Game.prCoin (fun t => acc (outUp (V.families θ) (V.signer θ) θ F c ρ σ t) ∧
+        ¬ V.Holds k θ F c σ a (outUp (V.families θ) (V.signer θ) θ F c ρ σ t)) ≤
       V.error a θ F c σ
 
 /-- **Subprotocol `a`'s bound at its compiled component at composite `k`, over the coins drawn up front**: `UpFrontFor`
@@ -172,14 +207,14 @@ structure PeriodCoupling (acc : Exchange → Prop) (k : Verity.Registration.Comp
   [decEqI : DecidableEq I]
   [fintypeΩ : ∀ i, Fintype (Ω i)]
   [nonemptyΩ : ∀ i, Nonempty (Ω i)]
-  coins : ((i : I) → Ω i) ≃ UpFront (V.families θ)
+  coins : ((i : I) → Ω i) ≃ UpFrontAll (V.families θ) (V.signer θ)
   run : PeriodRun d α C Ω
   price : Price
   brk : ((i : I) → Ω i) → Prop
-  verdict : ∀ ξ, acc (outUp (V.families θ) θ F c ρ σ (coins ξ)) →
-    V.Logged (.ofAudit b) (outUp (V.families θ) θ F c ρ σ (coins ξ)) → ¬ brk ξ → run.accepts b ξ
+  verdict : ∀ ξ, acc (outUp (V.families θ) (V.signer θ) θ F c ρ σ (coins ξ)) →
+    V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) θ F c ρ σ (coins ξ)) → ¬ brk ξ → run.accepts b ξ
   world : ∀ ξ, run.Holds (V.certOf θ) price b ξ →
-    V.Holds k θ F c σ (.ofAudit b) (outUp (V.families θ) θ F c ρ σ (coins ξ))
+    V.Holds k θ F c σ (.ofAudit b) (outUp (V.families θ) (V.signer θ) θ F c ρ σ (coins ξ))
 
 attribute [instance] PeriodCoupling.fintypeI PeriodCoupling.decEqI PeriodCoupling.fintypeΩ
   PeriodCoupling.nonemptyΩ
@@ -191,8 +226,8 @@ probability. A release out of place is a forgery of the device's signature over 
 def PeriodCoupling.BreakBound {acc : Exchange → Prop} {k : Verity.Registration.Composite} {b : Audit} {θ : ByteArray}
     {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)} {ρ : TreeCoins}
     (q : V.PeriodCoupling acc k b θ F c σ ρ) : Prop :=
-  Game.prCoin (fun ξ : (i : q.I) → q.Ω i => acc (outUp (V.families θ) θ F c ρ σ (q.coins ξ)) ∧
-      (¬ V.Logged (.ofAudit b) (outUp (V.families θ) θ F c ρ σ (q.coins ξ)) ∨ q.brk ξ)) ≤
+  Game.prCoin (fun ξ : (i : q.I) → q.Ω i => acc (outUp (V.families θ) (V.signer θ) θ F c ρ σ (q.coins ξ)) ∧
+      (¬ V.Logged (.ofAudit b) (outUp (V.families θ) (V.signer θ) θ F c ρ σ (q.coins ξ)) ∨ q.brk ξ)) ≤
     ENNReal.ofReal ((V.forger (.ofAudit b) θ F c σ).Pr lmsVerify) +
       V.loss (.ofAudit b) θ (ENNReal.ofReal ((V.finder (.ofAudit b) θ F c σ).Pr sha512Msg))
 
