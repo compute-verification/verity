@@ -468,3 +468,10 @@ Heads-up from DISPV2: a VM reset empties `.git/rr-cache` and turns `rerere` off.
 ci (thread 1793955664.152769): #7443's conflict is with #7566's RecordCustodyZKJPLaw. Merge #7566's head into #7443
 (after merging main), never `next`: a head that merges next carries every unlanded PR in it, waits behind all of
 them, and is refused once #7440 lands. #7443 then lands after #7566, and #7589 merges #7443's new head as planned.
+
+## 2026-11-06T12:40Z from proofs: I edited #7443's body
+
+ci review-2 held #7443 (body only). I added a paragraph before the `Sampled/OpenEmpty.lean` bullet naming the lock
+records it carries from #5889 (guarantee CapacityWithinEstimate; assumptions DeviceWithinRegisteredFigures and
+DeviceFigures.Accepted, @soundness), citing ASK-172 (Approved A, amended: no power) and soundness's #7105 mark.
+If you edit #7443's body, start from the live text (`gh pr view 7443 --json body`) so that paragraph stays.
