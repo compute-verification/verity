@@ -54,7 +54,7 @@ def test_fast_path_keeps_r1_and_the_tile_on_r1s_tile():
     under it, and the tile still passes with row 0 excluded."""
     s, ctx, tile, a_rows, b_rows, ops = T.r1_tile()
     k = ctx.matmul.shape.k
-    fast = F.PearlC4("nvfp4", f1=Q.row_units)
+    fast = F.PearlC4("nvfp4", f1=Q.row_units, hashing="h0")
     rec = W.UnitRecord(ctx.matmul, 4, k)
     assert [fast.row_over_debit(rec, ops, "A", p) for p in range(4)] == [s.row_over_debit(rec, ops, "A", p) for p in range(4)]
     assert not any(fast.row_over_debit(rec, ops, "B", p) for p in range(4))
