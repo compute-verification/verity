@@ -3,7 +3,10 @@ module
 public import Definitions.Accounting.Gates.Codec
 
 /-!
-# The encode bound's former conjecture, falsified: a word's encoding costs budgeted units per squaring (trusted)
+# The encode bound's former conjecture, falsified: a word's encoding costs budgeted units per squaring
+
+It is no longer a named assumption: no guarantee rests on it, and it stays beside the proof that refutes it
+(`Proofs.Accounting.Lemmas.GatesBitwise`).
 
 **Falsified.** `Accounting.SecurityProofs.Gates.EncodeChainRefuted` (`Security/Proofs/Accounting/Gates/Bitwise.lean`)
 proves it false inside its floor at every `E ≥ 1` and every `B`, p1024 at `k = 3` among the fields: an AND of two bits

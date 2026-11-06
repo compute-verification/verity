@@ -12,7 +12,7 @@ public import Definitions.Nci.Assumptions.CoverTraining
 
 The cover theorem (`Nci.Cover.Guarantees`) bounds what a block of a circuit of bits finishes. This guarantee
 joins it to the inference-only policy at `(c, k)`, `Nci.Complies c k`, through a reference training circuit
-`r` that the declared circuit `d` contains, as `Nci.Guarantees.ContainedTraining` does: `d`'s wiring is the
+`r` that the declared circuit `d` contains, as `Nci.Guarantees.IncompressibleContainedTraining` does: `d`'s wiring is the
 prover's, so the premises are on `r`, and `d` reaches `r` through containment with its registered information
 free of the reference circuit's fresh input (`ThetaRegistered`). The premises of the cover theorem (`UpdateHardness`,
 the upstream certificate) are on `r`'s circuit bit by bit (`Circuit.ofDecl r`), where a block is a set of bits.

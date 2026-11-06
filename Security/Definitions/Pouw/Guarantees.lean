@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Pouw.Guarantees.Barrier
 public import Definitions.Pouw.Guarantees.Deadline
 public import Definitions.Pouw.Guarantees.Dither
 public import Definitions.Pouw.Guarantees.DitherInstance
