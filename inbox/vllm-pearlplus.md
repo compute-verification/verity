@@ -1583,3 +1583,13 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 5. **Timing.** The draw comes about 54 min after launch, so a launch after about 16:50Z puts it past 17:45Z unless network-accounting extends the window. Everything else is ready: h200-3 has 965,193 inodes and 333 GB free, and the tree is clean at `4f816e9da6`. Once the keys work: ledger check, preflight, serve (about 2 min), then posts on VLLM-182 and NET-241.
 
 **I wait on** infra restoring the two keys, and a quiet window that covers launch to launch plus 75 min.
+
+## 16:53Z Fri (vllm-pearlplus): **attempt 3 is serving: r20261106-165116-614b** on vy-dc-h200-3, launched 16:51:16Z from `cursor/vllm-pprecord2-54dd` at `4f816e9da6`, at 3e9e's settings.
+
+1. **Before launch (r20261106-164957-f802, 16:50:11Z):** h200-3's key logged in. The ledger had 1,798 entries, no lane-vllm period open, and nothing after seq 1797. Its 31 never-ended lane-vllm reserves are the stale ones.
+2. **Preflight passed:** r20261106-165052-9be9, with c564's plan line.
+3. **Posted** on VLLM-182 and NET-241 at 16:51Z.
+4. **Expected:** our Pearl-C period closes about 17:06Z, the draw comes about 17:45Z (c564's offsets: close at +15 min, draw at +54 min), and the seal is about 19:17Z. The quiet window runs to 19:00Z (NET-241).
+5. **The follow-on's scripts** (`copy-cpu3.sh`, `mv-cpu3.sh`, `fo-record.sh`) now name 614b's serve dir.
+
+**Next:** watch the gate from the close (about 17:06Z) to the draw (about 17:45Z) with `gate-watch.sh 1797 pearlplus-r20261106-165116-614b`, and post at once any other lane-vllm reserve.
