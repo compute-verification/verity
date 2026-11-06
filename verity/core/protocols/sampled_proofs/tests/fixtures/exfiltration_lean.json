@@ -3,8 +3,8 @@
  "statement": "FlockSoundness.Audit.Partition.audit_exfiltration",
  "inputs": {
   "verity/core/protocols/sampled_proofs/tests/lean/ExfiltrationVectors.lean": "3b4a068d82025f3f5883b36944806786da1e72bdf5bb24f260e26c0e19bf49d9",
-  "Security/Proofs/Flock/Soundness/Audit/Influence.lean": "b327d169f5932f0e785cb834e941e6da6e6740542867a31a9716c3179e144a51",
-  "Security/Proofs/Flock/Soundness/Audit/Law.lean": "2486f5b3cc7dd845ecf03d1c12ed2ee0c3db9ac49b946aad4620d57ee2699d2d",
+  "Security/Proofs/Flock/Soundness/Audit/Influence.lean": "d551213a7f0d4272d5c8be66f5b536063d179cb73bb265338a097fcda5d4e744",
+  "Security/Proofs/Flock/Soundness/Audit/Law.lean": "6a3f977b21769ff53592cd212a11fb3f817802e78cc6435e3ba52290c40ca233",
   "Security/Proofs/Flock/Soundness/Audit/Stratified.lean": "dcb5126bc914ed1712d50ba38875ace8756f54b45921a07145b163ff380e0f9b",
   "Security/Proofs/Flock/Soundness/Audit/StratifiedMiss.lean": "0869105bb570b4f5093d496f1db72019fe115dab7c4e6f933326435defeae3de",
   "Security/Proofs/lake-manifest.json": "ff93ba694c8590e42a4a230477990c192059d3929935f71021592c8eb1217c89",
