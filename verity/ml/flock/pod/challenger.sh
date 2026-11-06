@@ -13,6 +13,11 @@
 #   challenger_audit DIR SESSION...  each SESSION directory's session.json held to DIR's release log
 #                                    (`challenger.sessions_tree_reason`, and the Lean's `challenger_session_trees`): DIR/audit.json,
 #                                    0 when both pass every record
+#   challenger_cases DIR TREE OWN OUT  93-zk-tree-from.sh's audit, the same two checks per case: TREE's record alone, OWN's
+#                                    alone, both at once, and TREE's with one round's coin or one link point changed; OUT
+#                                    (JSON) holds each case's Python reason beside the Lean's
+# Both hold each record at the tables its link's root_b keys, with no root_B length: neither sets up the statement that
+# fixes one.
 # env: CHALLENGER_REPO (default the working directory: a verity tree), CHALLENGER_PY (default python3, with the tree's
 #      Python importable), CHALLENGER_WORK (default `mktemp -d`: the key and the secret), CHALLENGER_PARAMS (the LMS key's
 #      height and Winternitz parameter, default 4,3: a test key)
@@ -68,23 +73,69 @@ challenger_end() {
 }
 
 challenger_audit() {
-  local dir=$1; shift
-  "$CHALLENGER_PY" - "$dir" "$CHALLENGER_SP/.lake/build/bin/sampled-proofs-difftest" "$@" <<'EOF'
-import json, subprocess, sys
+  _challenger_trees audit "$@"
+}
+
+challenger_cases() {
+  _challenger_trees cases "$@"
+}
+
+_challenger_trees() {
+  "$CHALLENGER_PY" - "$CHALLENGER_SP/.lake/build/bin/sampled-proofs-difftest" "$@" <<'EOF'
+import copy, json, subprocess, sys
 from pathlib import Path
 from verity.core.protocols.sampled_proofs import challenger as C, remote as R
 
-ch, difftest, *sessions = sys.argv[1:]
+difftest, mode, ch, *rest = sys.argv[1:]
 log = R.log_lines(Path(ch) / R.RELEASES)
-records = [(Path(s).name, json.loads((Path(s) / "session.json").read_text())) for s in sessions]
-py = C.sessions_tree_reason(C.coin_trees_of(log), records)
-line = json.dumps({"fn": "challenger_session_trees",
-                   "input": {"log": log, "records": [{"name": n, "record": r} for n, r in records]}})
-answer = subprocess.run([difftest], input=line + "\n", capture_output=True, text=True, check=True).stdout
-lean = json.loads(answer).get("output", {}).get("reason", answer)
-audit = {"sessions": [n for n, _ in records], "python": py, "lean": lean, "ok": py is None and lean is None}
-(Path(ch) / "audit.json").write_text(json.dumps(audit, indent=1) + "\n")
+trees = C.coin_trees_of(log)
+
+
+def record(d):
+    return json.loads((Path(d) / "session.json").read_text())
+
+
+def tables(rec):
+    link = rec.get("link") if isinstance(rec, dict) else None
+    return dict.fromkeys(link["root_b"]) if isinstance(link, dict) and isinstance(link.get("root_b"), dict) else {}
+
+
+def reasons(cases):
+    asks = [json.dumps({"fn": "challenger_session_trees", "input": {
+        "log": log, "records": [{"name": n, "record": r, "tables": tables(r)} for n, r in rs]}}) for rs in cases.values()]
+    answers = subprocess.run([difftest], input="".join(a + "\n" for a in asks), capture_output=True, text=True,
+                             check=True).stdout.splitlines()
+    if len(answers) != len(asks):
+        sys.exit(f"challenger: {difftest} answered {len(answers)} lines to {len(asks)} requests")
+    return {c: {"python": C.sessions_tree_reason(trees, [(n, tables(r), r) for n, r in rs]),
+                "lean": json.loads(a).get("output", {}).get("reason", a)} for (c, rs), a in zip(cases.items(), answers)}
+
+
+def bumped(h):
+    return h[:-1] + "0123456789abcdef"[("0123456789abcdef".index(h[-1]) + 1) % 16]
+
+
+if mode == "audit":
+    names = [Path(s).name for s in rest]
+    got = reasons({"audit": [(n, record(s)) for n, s in zip(names, rest)]})["audit"]
+    audit = {"sessions": names, **got, "ok": got["python"] is None and got["lean"] is None}
+    (Path(ch) / "audit.json").write_text(json.dumps(audit, indent=1) + "\n")
+    print(json.dumps(audit))
+    sys.exit(0 if audit["ok"] else 1)
+if mode != "cases":
+    sys.exit(f"challenger: no audit {mode!r}")
+tree, own, out = rest
+rec = {"tree-from": record(tree), "own-tree": record(own)}
+coin, point = copy.deepcopy(rec["tree-from"]), copy.deepcopy(rec["tree-from"])
+s = next(s for s in coin["streams"] if s["rounds"])
+s["rounds"][0]["coins"][0] = bumped(s["rounds"][0]["coins"][0])
+point["link"]["points"][0][0] = bumped(point["link"]["points"][0][0])
+cases = {"tree-from": [("tree-from", rec["tree-from"])], "own-tree": [("own-tree", rec["own-tree"])],
+         "both": [("tree-from", rec["tree-from"]), ("own-tree", rec["own-tree"])],
+         "coin-changed": [("tree-from", coin)], "point-changed": [("tree-from", point)]}
+audit = {"trees": len(trees), "opened": {root: len(t.opened) for root, t in trees.items()},
+         "hellos_refused": len(R.hello_lines(Path(ch) / R.HELLOS) or []), "cases": reasons(cases)}
+Path(out).write_text(json.dumps(audit, indent=1) + "\n")
 print(json.dumps(audit))
-sys.exit(0 if audit["ok"] else 1)
 EOF
 }
