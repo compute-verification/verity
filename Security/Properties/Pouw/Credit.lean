@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pouw.RelativeSecurity
-public import Flock.Keccak
 public import Properties.Pouw.Strata
 public import Properties.SampledProofs.Draw
 import Mathlib.Algebra.Order.Floor.Extended

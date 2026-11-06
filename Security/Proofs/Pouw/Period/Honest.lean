@@ -1,6 +1,5 @@
 module
 
-public import Flock.Keccak
 public import Proofs.Accounting.ComposePeriod.Honest
 public import Proofs.Pouw.Period
 public import Proofs.Pouw.Period.Accept

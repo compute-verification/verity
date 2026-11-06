@@ -1,9 +1,8 @@
 module
 
 public import Definitions.Accounting.TS.J10R
-public import Flock.Keccak
-public import PouwCheck.Credit
 public import Properties.Pouw.Period
+public import PouwCheck.Credit
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
