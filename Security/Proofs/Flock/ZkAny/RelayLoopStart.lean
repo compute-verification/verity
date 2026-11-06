@@ -120,7 +120,7 @@ theorem LoopModel.Deployed.head_hello {T : ZKMal.CoinLayer.TableData}
   have h0 := hOwn 0 hne
   rw [show M.hist 0 = [] from rfl] at h0
   unfold ZkServer.nextD at h0
-  rw [if_pos (Or.inl (by simp only [List.length_nil]; omega)),
+  rw [ite_eq_left (Or.inl (by simp only [List.length_nil]; omega)),
     LeanRelease.frameD_own _ _ _ _ _ _ _ _ (LeanRelease.kindAt_zero _ _), hD.rel] at h0
   rw [hm, h0, show (LeanRelease.ofLoop T L₀ real).hello M.x M.ρ = ZKMal.CoinLayer.helloMsg M.x M.ρ.1 from
     LeanRelease.loop_helloIs _ T _ M.x M.ρ.1 M.ρ.2]
@@ -168,7 +168,8 @@ theorem envPre_run
     {sid : Nat} {nonce : ByteArray} (hn : nonce = ⟨(ZKMal.CoinLayer.nb M.ρ.1).toArray⟩)
     {ins : List (ByteArray × Env)} (hs : ∀ p ∈ ins, p.2.setup = .ok (spec, sts))
     (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) {σ : LoopAt} (hc : σ.c = 0)
-    (hnew : ∀ p ∈ σ.R.reps, p.sid ≠ sid) (hR : RelayServes M rv sid spec sts nonce σ ins)
+    (hnew : ∀ p ∈ σ.R.reps, p.sid ≠ sid) {aud : List ByteArray → Option ByteArray}
+    (hR : RelayServes M rv aud sid spec sts nonce σ ins)
     (hA : AuditorAnswers M (modelSlots {} {} (pick true {} {} ins))) :
     EnvPre spec [] (relaySteps true ins) M.msgs := by
   have hOwn := LoopModel.own_of_runStar hτ
@@ -216,7 +217,8 @@ theorem relayPre_run
     {sid : Nat} {nonce : ByteArray} (hn : nonce = ⟨(ZKMal.CoinLayer.nb M.ρ.1).toArray⟩)
     {ins : List (ByteArray × Env)} (hs : ∀ p ∈ ins, p.2.setup = .ok (spec, sts))
     (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) {σ : LoopAt} (hc : σ.c = 0)
-    (hnew : ∀ p ∈ σ.R.reps, p.sid ≠ sid) (hR : RelayServes M rv sid spec sts nonce σ ins)
+    (hnew : ∀ p ∈ σ.R.reps, p.sid ≠ sid) {aud : List ByteArray → Option ByteArray}
+    (hR : RelayServes M rv aud sid spec sts nonce σ ins)
     (hA : AuditorAnswers M (modelSlots {} {} (pick true {} {} ins))) :
     RelayPre (relayTrace true ins) (encOf spec sts M.msgs) :=
   relayPre_of_env ins M.msgs hs hb
