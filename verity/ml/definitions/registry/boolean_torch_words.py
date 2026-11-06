@@ -7,6 +7,8 @@
     I64ToU8_v2        (t: Array<64, Value<1>>) -> Array<8, Value<1>>            word view: I64ToU8_v1, no gates
     U8ToI64_v2        (t: Array<8, Value<1>>) -> Array<64, Value<1>>            word view: U8ToI64_v1, no gates
     I64ToF32Rn_v2     (t: Array<64, Value<1>>) -> Array<32, Value<1>>           word view: I64ToF32Rn_v1, |t| rounded by `fp.round_f32`
+    F32ToI64Rz_v2     (x: Array<32, Value<1>>) -> Array<64, Value<1>>           word view: F32ToI64Rz_v1, the significand shifted
+                                                                                and negated with the sign
     F32ToF16Rn_v2     (x: Array<32, Value<1>>) -> Array<16, Value<1>>           word view: F32ToF16Rn_v1, the significand rounded
                                                                                 by `fp.round_fp` at f16
     F16ToF32_v2       (h: Array<16, Value<1>>) -> Array<32, Value<1>>           word view: F16ToF32_v1, normalized by `fp.round_f32`
@@ -16,7 +18,7 @@
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, OR, ZERO, add, const_bits, mux
+from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, shl_window, sub
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.ops.boolean.scalar import gt_u, select
 from verity.ml.circuits.silicon import fp
@@ -24,8 +26,8 @@ from verity.ml.circuits.types import Array
 
 from . import torch_words as W
 
-__all__ = ["F16ToF32", "F32OrderKey", "F32ToF16Rn", "I64Add", "I64Le", "I64ToF32Rn", "I64ToU8", "OrderKeyF32", "SelectI64",
-           "U8ToI64"]
+__all__ = ["F16ToF32", "F32OrderKey", "F32ToF16Rn", "F32ToI64Rz", "I64Add", "I64Le", "I64ToF32Rn", "I64ToU8", "OrderKeyF32",
+           "SelectI64", "U8ToI64"]
 
 BIT = BL.BIT
 I64, U8, F16, F32 = Array(64, BIT), Array(8, BIT), Array(16, BIT), Array(32, BIT)
@@ -42,6 +44,18 @@ def i64_le(C, a, b):
 def i64_to_f32(C, t):
     """``cvt.rn.f32.s64``: |t| (2^63 for INT64_MIN) rounded to f32 at exponent 190 by `fp.round_f32`, the sign t's."""
     return fp.round_f32(C, t[63], const_bits(190, 9), 0, fp.neg_if(C, list(t), t[63]), ZERO, underflow=False)
+
+
+def f32_to_i64(C, x):
+    """``cvt.rzi.s64.f32``: for 1 <= |x| < 2^63 (exponent field 127..189) bits [23, 86) of the significand shifted left by e - 127,
+    negated with x's sign; from 2^63 up (the infinities too) INT64_MAX or INT64_MIN by the sign; below 1 zero; a NaN zero."""
+    e, s = x[23:31], x[31]
+    k, small = sub(C, e, const_bits(127, 8), 8)
+    _, fits = sub(C, e, const_bits(190, 8), 8)
+    mag = [C.AND(NOT(small), b) for b in shl_window(C, list(x[:23]) + [ONE], k[:6], 23, 86)]
+    val = add(C, [b ^ s for b in mag + [ZERO]], [], cin=s, width=64)
+    nan = C.AND(and_reduce(C, e), or_reduce(C, x[:23]))
+    return [C.AND(NOT(nan), b) for b in mux(C, fits, val, [NOT(s)] * 63 + [s])]
 
 
 def f32_to_f16(C, x):
@@ -81,6 +95,8 @@ U8ToI64 = definition("U8ToI64", 2, lambda C, t: [*t, *const_bits(0, 56)], (("t",
                      doc="a byte zero-extended to 64 bits, on bits: U8ToI64_v1")
 I64ToF32Rn = definition("I64ToF32Rn", 2, i64_to_f32, (("t", I64),), F32, word=W.I64ToF32Rn,
                         doc="cvt.rn.f32.s64 on bits: I64ToF32Rn_v1")
+F32ToI64Rz = definition("F32ToI64Rz", 2, f32_to_i64, (("x", F32),), I64, word=W.F32ToI64Rz,
+                        doc="cvt.rzi.s64.f32 on bits: F32ToI64Rz_v1, saturated, a NaN 0")
 F32ToF16Rn = definition("F32ToF16Rn", 2, f32_to_f16, (("x", F32),), F16, word=W.F32ToF16Rn,
                         doc="cvt.rn.f16.f32 on bits: F32ToF16Rn_v1, every NaN 0x7FFF")
 F16ToF32 = definition("F16ToF32", 2, f16_to_f32, (("h", F16),), F32, word=W.F16ToF32,

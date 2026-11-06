@@ -5,9 +5,12 @@ f32 arithmetic. Each is exact and the same word on torch's CPU and CUDA kernels,
     Compare     gt / ge / lt / le / eq / ne of f32: IEEE, a NaN unordered and -0 equal to +0
     Logic       and / or / not of bool values
     Where       where.self with an f32, bf16 or int64 result
-    Clamp       clamp by Python numbers of an int64 or f32 value
-    Cast        conversions between int64, uint8, bool and f32, and at `cc` the GPU's to bf16 and to and from f16
+    Clamp       clamp by Python numbers of an int64 or f32 value, at `cc` as the GPU's kernel clamps
+    Cast        conversions between int64, uint8, bool and f32, and at `cc` the GPU's to bf16, to and from f16 and from f32 to
+                int64 and uint8
+    Copy        a functionalized copy_: its source by reference, or converted as `Cast` converts (bf16 to f32 too)
     IntSum      sum of a bool or int64 value to int64
+    AMax        amax of an f32 value
     Index       a static float table (a codebook) indexed by an integer value
     KthValue    kthvalue of an f32 value at `cc`, as the GPU's radix select
 """
@@ -29,7 +32,7 @@ from verity.ml.definitions.registry.dsv4_decode_indices import gather_i32
 from verity_vllm.program.frontend.rules.training_emit import (_DT, _batch, _bits, _const, _converted, _ew, _flat, _from_bits,
                                                               _operand, _operand_ok, _ref, _shape, _static_coll, _tokens,
                                                               _TrainRule, _tree, _word_ok, _word_operand, aten)
-from verity_vllm.program.frontend.rules.training_views import StaticFloat, _info, _view_permute
+from verity_vllm.program.frontend.rules.training_views import StaticFloat, _info, _view_expand, _view_permute
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
 
@@ -167,12 +170,13 @@ def _bounds(node) -> tuple:
 
 class Clamp(_TrainRule):
     """`clamp` / `clamp_min` / `clamp_max` by Python numbers, `min(max(x, lo), hi)` as torch computes it: of an int64 value
-    (`I64Le_v1`, `SelectI64_v1`); of an f32 value with each bound its f32 word, a NaN kept (`F32GtStrict_v1`, `SelectF32_v1`),
-    which is torch CPU's in its vector body and scalar tail and the GPU's `launch_clamp_scalar`. Refused: a NaN bound (torch
-    fills the result with NaN when both bounds are given), at a compute capability `cc` an f32 bound ±0 (the GPU's `max.f32` of
-    -0 and +0 is not modeled), a tensor bound and other dtypes."""
+    (`I64Le_v1`, `SelectI64_v1`); of an f32 value with each bound its f32 word and a NaN kept, torch CPU's in its vector body and
+    scalar tail (`F32GtStrict_v1`, `SelectF32_v1`), and at a compute capability `cc` the GPU's `launch_clamp_scalar`, `isnan(x) ?
+    x : fminf(fmaxf(x, lo), hi)` (`F32Eq_v1`, `F32Fmaxf_v1`, `F32Fminf_v1`, `SelectF32_v1`), whose `fmaxf` and `fminf` order -0
+    below +0. Refused: a NaN bound (torch fills the result with NaN when both bounds are given), a tensor bound and other
+    dtypes."""
     info = _info("Clamp", "aten.clamp / clamp_min / clamp_max of an int64 or f32 value by Python numbers", "the operand a value of "
-                 "the result's dtype", "f32: no NaN bound, and at cc no bound ±0")
+                 "the result's dtype", "f32: no NaN bound")
 
     def __init__(self, cc: tuple[int, int] | None = None):
         self.cc = cc
@@ -193,8 +197,6 @@ class Clamp(_TrainRule):
             return "numerics_unregistered: a bound that is not a Python number"
         if any(x != x for x in bounds):
             return "numerics_unregistered: a NaN bound"
-        if self.cc and any(x == 0 for x in bounds):
-            return "numerics_unregistered: a bound ±0 on the GPU (its max.f32 and min.f32 of -0 and +0 are not modeled)"
         return True
 
     def emit(self, node, ctx):
@@ -204,35 +206,45 @@ class Clamp(_TrainRule):
         def ew(fn, *ops, w=w):
             return _flat(_ew(ctx, node, fn, list(ops), S, w), S, w)
 
+        def bound(v):
+            return _const(ctx, node, v, 64) if i64 else _const(ctx, node, W.f32_rn_of_int(v) if type(v) is int else _bits(v)), None
+
         lo, hi = _bounds(node)
         x = _word_operand(ctx, node, node.args[0], S, torch.int64) if i64 else _operand(ctx, node, node.args[0], S)
-        if lo is not None:
-            b = (_const(ctx, node, lo, 64) if i64 else _const(ctx, node, W.f32_rn_of_int(lo) if type(lo) is int else _bits(lo)), None)
-            x = ew(W.SelectI64, ew(W.I64Le, b, x, w=1), x, b) if i64 else ew(SC.SelectF32, ew(R.F32GtStrict, b, x, w=1), b, x)
-        if hi is not None:
-            b = (_const(ctx, node, hi, 64) if i64 else _const(ctx, node, W.f32_rn_of_int(hi) if type(hi) is int else _bits(hi)), None)
-            x = ew(W.SelectI64, ew(W.I64Le, x, b, w=1), x, b) if i64 else ew(SC.SelectF32, ew(R.F32GtStrict, x, b, w=1), b, x)
+        if self.cc and not i64:
+            y = x if lo is None else ew(SC.F32Fmaxf, x, bound(lo))
+            y = y if hi is None else ew(SC.F32Fminf, y, bound(hi))
+            x = ew(SC.SelectF32, ew(SC.F32Eq, x, x, w=1), y, x)
+        else:
+            if lo is not None:
+                b = bound(lo)
+                x = ew(W.SelectI64, ew(W.I64Le, b, x, w=1), x, b) if i64 else ew(SC.SelectF32, ew(R.F32GtStrict, b, x, w=1), b, x)
+            if hi is not None:
+                b = bound(hi)
+                x = ew(W.SelectI64, ew(W.I64Le, x, b, w=1), x, b) if i64 else ew(SC.SelectF32, ew(R.F32GtStrict, x, b, w=1), b, x)
         ctx.define(node, x[0].reshape(_tensor_type(S, w)))
         ctx.record(self, node, {"shape": list(S), "min": lo, "max": hi}, emitted=f"clamp x{math.prod(S)}")
 
 
 #: conversions exact on the CPU and the GPU alike
 _EXACT = {(torch.int64, torch.uint8): W.I64ToU8, (torch.uint8, torch.int64): W.U8ToI64, (torch.int64, torch.float32): W.I64ToF32Rn}
-#: the GPU's conversions, lowered at a compute capability
+#: the GPU's conversions, lowered at a compute capability: a Definition, or Definitions applied in turn
 _GPU = {(torch.float32, torch.bfloat16): P.F2fpBf16, (torch.float32, torch.float16): W.F32ToF16Rn,
-        (torch.float16, torch.float32): W.F16ToF32}
+        (torch.float16, torch.float32): W.F16ToF32, (torch.float32, torch.int64): W.F32ToI64Rz,
+        (torch.float32, torch.uint8): (W.F32ToI64Rz, W.I64ToU8)}
 
 
 class Cast(_TrainRule):
     """`_to_copy` of a value to another dtype, as torch converts it: int64 to uint8 its low byte (`I64ToU8_v1`), uint8 to int64
     zero-extended (`U8ToI64_v1`), int64 to f32 rounded to nearest even (`I64ToF32Rn_v1`), bool to f32 and to int64 1 or 0
     (`SelectF32_v1`, `SelectI64_v1`), each the same on the CPU and the GPU; at a compute capability `cc` the GPU's f32 to bf16
-    (`F2fpBf16_v1`), f32 to f16 (`F32ToF16Rn_v1`) and f16 to f32 (`F16ToF32_v1`), whose NaN words are the GPU's.
-    `training_rules` places it first at `cc`, ahead of the default rules' f32 to bf16 (torch CPU's rounding), which it leaves to
-    them without `cc`. Refused without `cc`: the f16 conversions (torch CPU's keep a NaN's payload in their vector body and not
-    in their scalar tail)."""
-    info = _info("Cast", "aten._to_copy of a value between int64, uint8, bool and f32; at cc f32 to bf16 and f32 to and from f16",
-                 "the operand is a value", "a dtype pair this rule lowers")
+    (`F2fpBf16_v1`), f32 to f16 (`F32ToF16Rn_v1`) and f16 to f32 (`F16ToF32_v1`), whose NaN words are the GPU's, and f32 to
+    int64 truncated toward zero (`F32ToI64Rz_v1`, saturated, a NaN 0) and to uint8 through int64 (its low byte, `I64ToU8_v1`),
+    as c10 converts. `training_rules` places it first at `cc`, ahead of the default rules' f32 to bf16 (torch CPU's rounding),
+    which it leaves to them without `cc`. Refused without `cc`: the f16 conversions (torch CPU's keep a NaN's payload in their
+    vector body and not in their scalar tail) and f32 to int64 and uint8 (torch CPU's is INT64_MIN for a NaN and from 2^63 up)."""
+    info = _info("Cast", "aten._to_copy of a value between int64, uint8, bool and f32; at cc f32 to bf16, f32 to and from f16 and "
+                 "f32 to int64 and uint8", "the operand is a value", "a dtype pair this rule lowers")
 
     def __init__(self, cc: tuple[int, int] | None = None):
         self.cc = cc
@@ -250,20 +262,71 @@ class Cast(_TrainRule):
         if pair == (torch.float32, torch.bfloat16):
             return "an f32 to bf16 conversion without a compute capability is the default rules' (torch CPU's rounding)"
         if pair in _GPU:
-            return ("numerics_unregistered: torch CPU's f16 conversions keep a NaN's payload in their vector body and not in "
-                    "their scalar tail; the GPU's are lowered at a compute capability (training_rules(cc=...))")
+            why = ("torch CPU's f16 conversions keep a NaN's payload in their vector body and not in their scalar tail"
+                   if torch.float16 in pair else "torch CPU's truncation is INT64_MIN for a NaN and from 2^63 up")
+            return f"numerics_unregistered: {why}; the GPU's are lowered at a compute capability (training_rules(cc=...))"
         return f"not a conversion this rule lowers ({pair[0]} to {pair[1]})"
 
     def emit(self, node, ctx):
         a = node.args[0]
         src, dst = ctx.dtype_of(a), ctx.dtype_of(node)
-        if src == torch.bool:
-            y, fn = _from_bits(ctx, node, ctx.coll(a), dst), "SelectF32_v1" if dst == torch.float32 else "SelectI64_v1"
-        else:
-            f = _EXACT.get((src, dst)) or _GPU[(src, dst)]
-            y, fn = _converted(ctx, node, ctx.coll(a), f, WIDTH_OF_DTYPE[dst]), f.id
+        y, fn = _convert(ctx, node, ctx.coll(a), src, dst)
         ctx.define(node, y)
         ctx.record(self, node, {"from": str(src), "to": str(dst)}, emitted=f"{fn} x{math.prod(ctx.shape_of_node(node))}")
+
+
+def _convert(ctx, node, x: Coll, src, dst) -> tuple[Coll, str]:
+    """(the value x converted from `src` to `dst` as torch's kernels convert it, its Definitions): bool by `_from_bits`, bf16 to
+    f32 widened exactly (`Bf16ToF32_v1`), or a pair of `_EXACT` or `_GPU` (through int64 between two Definitions)."""
+    if src == torch.bool:
+        return _from_bits(ctx, node, x, dst), "SelectF32_v1" if dst == torch.float32 else "SelectI64_v1"
+    f = P.Bf16ToF32 if (src, dst) == (torch.bfloat16, torch.float32) else _EXACT.get((src, dst)) or _GPU[(src, dst)]
+    fs = f if isinstance(f, tuple) else (f,)
+    for g, w in zip(fs, [64] * (len(fs) - 1) + [WIDTH_OF_DTYPE[dst]], strict=True):
+        x = _converted(ctx, node, x, g, w)
+    return x, " then ".join(g.id for g in fs)
+
+
+class Copy(_TrainRule):
+    """`copy(self, src)` (a functionalized `copy_`): `src`'s values in `self`'s shape, broadcast, whatever `self` holds (an
+    allocation such as autograd's `new_empty_strided` for a gradient, which stays unread, or a value); `src` a value or a static
+    float tensor of `self`'s dtype, or a value of another dtype converted as torch's copy kernel converts it, with `_to_copy`'s
+    casts: bf16 to f32 exactly (`Bf16ToF32_v1`), `Cast`'s exact pairs, and at a compute capability `cc` the GPU's to bf16, to and
+    from f16 and from f32 to int64 and uint8. Refused without `cc`: those."""
+    info = _info("Copy", "aten.copy of a value or a static float tensor into a tensor", "src has self's dtype, or is a value "
+                 "converted as `_to_copy` converts it", "src broadcasts to self's shape", "self's values are not read")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
+
+    def targets(self):
+        return {aten.copy.default}
+
+    def applies(self, node, ctx):
+        src = node.args[1]
+        if not isinstance(src, torch.fx.Node) or not isinstance(ctx.val(src), (Coll, StaticFloat)):
+            return "src is not a value or a static float tensor"
+        pair = (ctx.dtype_of(src), ctx.dtype_of(node))
+        if pair[0] == pair[1]:
+            return True
+        if isinstance(ctx.val(src), Coll) and (pair == (torch.bfloat16, torch.float32) or pair in _EXACT or (
+                pair[0] == torch.bool and pair[1] in (torch.float32, torch.int64)) or (self.cc and pair in _GPU)):
+            return True
+        return f"numerics_unregistered: a conversion from {pair[0]} to {pair[1]} (lowered at a compute capability, or not at all)"
+
+    def emit(self, node, ctx):
+        src, S = node.args[1], tuple(ctx.shape_of_node(node))
+        v, fn = ctx.val(src), None
+        if isinstance(v, StaticFloat):
+            shape, out = tuple(v.tensor.shape), StaticFloat(v.tensor.broadcast_to(S).contiguous())
+        else:
+            if ctx.dtype_of(src) != ctx.dtype_of(node):
+                v, fn = _convert(ctx, node, v, ctx.dtype_of(src), ctx.dtype_of(node))
+            shape = tuple(shape_of(v.type)[0])
+            out = v if shape == S else _view_expand(v, list(S), node.name)
+        ctx.define(node, out)
+        ctx.record(self, node, {"shape": list(S), "src_shape": list(shape), "conversion": fn},
+                   emitted=f"{fn} x{math.prod(shape)}" if fn else "references")
 
 
 def _dims(node, r: int) -> list[int]:
@@ -308,6 +371,29 @@ class IntSum(_TrainRule):
         s = _tree(ctx, node, W.I64Add, v, n, rows, 64)
         ctx.define(node, s.reshape(_tensor_type(ctx.shape_of_node(node), 64)))
         ctx.record(self, node, {"terms": n, "rows": rows}, emitted=f"I64Add_v1 x{(n - 1) * rows}")
+
+
+class AMax(_TrainRule):
+    """`amax` of an f32 value over `dim` (every axis for none), kept or not: `F32MaxRef_v1` folded pairwise. A maximum is one word
+    in any order, so this is torch's CPU and CUDA kernels' value, except where a term is a NaN (here the canonical 0x7FC00000,
+    there a NaN term's word) or the maximum is zero with both zeros among the terms (either, by the order)."""
+    info = _info("AMax", "aten.amax of an f32 value", "the operand is an f32 value with an axis")
+
+    def targets(self):
+        return {aten.amax.default}
+
+    def applies(self, node, ctx):
+        a = node.args[0]
+        if not isinstance(ctx.val(a), Coll) or ctx.dtype_of(a) != torch.float32:
+            return "numerics_unregistered: the operand is not an f32 value"
+        return True if _shape(ctx, a) else "a 0-d operand"
+
+    def emit(self, node, ctx):
+        x = ctx.coll(node.args[0])
+        v, n, rows = _first_axes(ctx, node, x, _dims(node, len(shape_of(x.type)[0])))
+        m = _tree(ctx, node, R.F32MaxRef, v, n, rows, 32)
+        ctx.define(node, m.reshape(_tensor_type(ctx.shape_of_node(node), 32)))
+        ctx.record(self, node, {"terms": n, "rows": rows}, emitted=f"F32MaxRef_v1 x{(n - 1) * rows}")
 
 
 class Index(_TrainRule):
@@ -418,4 +504,4 @@ class KthValue(_TrainRule):
         ctx.record(self, node, {"k": k, "slice": N, "slices": rows}, emitted=f"radix select of {N} keys x{rows} (32 steps)")
 
 
-__all__ = ["Compare", "Logic", "Where", "Clamp", "Cast", "IntSum", "Index", "KthValue"]
+__all__ = ["Compare", "Logic", "Where", "Clamp", "Cast", "Copy", "IntSum", "Index", "KthValue"]
