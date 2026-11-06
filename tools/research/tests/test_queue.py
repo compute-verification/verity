@@ -1904,10 +1904,10 @@ GOAL_FIX = ("add a `Goal <id>` line naming the live goal it serves (its id on th
             "`Issue: none: REASON` line, to its body (`research queue edit {n} --body-file F`)")
 
 
-def test_ready_refuses_a_body_naming_no_live_goal_and_no_issue_before_any_gate_runs_and_marks_one_that_names_either(
-        world, monkeypatch, capsys):
-    """A mark (here `--mark`'s, as every tier's) needs the body to name a live goal of the Goals page on a `Goal <id>` line, or no
-    issue on purpose on an `Issue: none: REASON` line."""
+def test_ready_warns_of_a_body_naming_no_live_goal_and_no_issue_and_marks_it_all_the_same(world, monkeypatch, capsys):
+    """The goal gate (here under `--mark`, as under every tier) warns on stderr when the body names no live goal of the Goals page
+    on a `Goal <id>` line and no issue on purpose on an `Issue: none: REASON` line, and never refuses: the gates after it run,
+    and the head is marked."""
     from research.queue import MarkOnly, StoreLabels, ready
 
     world.with_store_remote()
@@ -1924,18 +1924,17 @@ def test_ready_refuses_a_body_naming_no_live_goal_and_no_issue_before_any_gate_r
     for i, (body, why) in enumerate(bodies.items()):
         world.gh.put(3, h := world.change({"m.txt": f"{i}\n"}), body=body, ready=False)
         assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), records=gate("records"), preflight=gate("preflight"),
-                     goals=Q.goal_gate) == (1 if why else 0)
-        assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is (why is None)
-        if why:
-            assert (f"research queue ready: #3 is not marked ready at {h[:12]}: {why}: {GOAL_FIX.format(n=3)}"
-                    in capsys.readouterr().err)
-    assert ran == ["records", "preflight"] * 3
+                     goals=Q.goal_gate) == 0
+        assert StoreLabels(world.store, log=world.logs.append).ready(3, h) is True
+        warned = [line for line in capsys.readouterr().err.splitlines() if line.startswith("research queue ready: warning:")]
+        assert warned == ([f"research queue ready: warning: #3 at {h[:12]}: {why}: {GOAL_FIX.format(n=3)}"] if why else []), warned
+    assert ran == ["records", "preflight"] * len(bodies)
 
 
-def test_ready_reads_the_goals_this_machine_last_read_whatever_their_age_while_the_page_is_down_and_refuses_with_neither(
+def test_ready_reads_the_goals_this_machine_last_read_whatever_their_age_while_the_page_is_down_and_warns_with_neither(
         world, monkeypatch, capsys):
     """Each read of the Goals page is kept on this machine; while the page can't be read the gate judges by that copy, saying so in
-    one line, and with no copy it refuses, naming the outage and the `Issue: none:` escape, which still marks."""
+    one line, and with no copy it warns, naming the outage.  Each head is marked."""
     from research.queue import MarkOnly, StoreLabels, ready
 
     world.with_store_remote()
@@ -1944,28 +1943,29 @@ def test_ready_reads_the_goals_this_machine_last_read_whatever_their_age_while_t
     mark = lambda n: ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), goals=Q.goal_gate)  # noqa: E731
     body = "Lane `lane-3`.\n\nGoal ci/merge-speed\n"
     world.gh.put(3, h := world.change({"m.txt": "1\n"}), body=body, ready=False)
-    assert mark(3) == 1 and not marked(3, h) and not cache.exists()
-    assert (f"research queue ready: #3 is not marked ready at {h[:12]}: the Goals page can't be read ({DOWN}) and this machine "
-            f"has no copy of it ({cache}): mark it once the page answers, or give its body an `Issue: none: REASON` line "
-            "(`research queue edit 3 --body-file F`)") in capsys.readouterr().err
+    assert mark(3) == 0 and marked(3, h) and not cache.exists()
+    assert (f"research queue ready: warning: #3 at {h[:12]}: the Goals page can't be read ({DOWN}) and this machine has no copy "
+            f"of it ({cache}): its `Goal` lines go unchecked") in capsys.readouterr().err
     world.gh.put(4, h4 := world.change({"n.txt": "4\n"}), body="Lane `lane-4`.\n\nIssue: none: docs only\n", ready=False)
     assert mark(4) == 0 and marked(4, h4)
     page.goals = dict(PAGE)
-    assert mark(3) == 0 and marked(3, h)
+    world.gh.put(3, h := world.change({"m.txt": "2\n"}), body=body, ready=False)
+    capsys.readouterr()
+    assert mark(3) == 0 and marked(3, h) and "warning" not in capsys.readouterr().err
     kept = json.loads(cache.read_text())
     assert kept["goals"] == [{"id": g, "status": PAGE[g]} for g in sorted(PAGE)]
     assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", kept["read"])
     page.goals = None
     cache.write_text(json.dumps({**kept, "read": "2020-01-01T00:00:00Z"}))
-    for i, (b, rc) in enumerate(((body, 0), ("Lane `lane-3`.\n\nGoal ci/old-landing\n", 1))):
-        world.gh.put(3, h := world.change({"m.txt": f"{i + 2}\n"}), body=b, ready=False)
+    for i, (b, warns) in enumerate(((body, False), ("Lane `lane-3`.\n\nGoal ci/old-landing\n", True))):
+        world.gh.put(3, h := world.change({"m.txt": f"{i + 3}\n"}), body=b, ready=False)
         capsys.readouterr()
-        assert mark(3) == rc and marked(3, h) is (rc == 0)
+        assert mark(3) == 0 and marked(3, h)
         said = [line for line in capsys.readouterr().err.splitlines() if "Goals page" in line]
         assert said[0] == (f"research queue: the Goals page can't be read ({DOWN}): using its 4 goals as this machine read them "
                            f"at 2020-01-01T00:00:00Z ({cache})")
-        assert said[1:] == ([] if rc == 0 else [f"research queue ready: #3 is not marked ready at {h[:12]}: its body names no "
-                                                f"live goal (ci/old-landing is done): {GOAL_FIX.format(n=3)}"])
+        assert said[1:] == ([f"research queue ready: warning: #3 at {h[:12]}: its body names no live goal (ci/old-landing is "
+                             f"done): {GOAL_FIX.format(n=3)}"] if warns else [])
 
 
 def test_pr_from_api_reads_the_head_repository_and_the_author():
@@ -3887,19 +3887,17 @@ def test_judge_marks_a_pr_ready_from_its_quick_tiers_run_once_it_ended_without_i
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
 
 
-def test_judge_refuses_a_pr_whose_body_names_no_live_goal_and_marks_it_once_its_body_does(world, monkeypatch, capsys):
-    """`judge` writes the mark `ready` would have, so `ready`'s goal gate refuses it, with the same fix."""
+def test_judge_warns_of_a_pr_whose_body_names_no_live_goal_and_marks_it_all_the_same(world, monkeypatch, capsys):
+    """`judge` writes the mark `ready` would have, so `ready`'s goal gate warns there too, with the same fix, and never
+    refuses."""
     from research import queue as Q
 
     machine, rid, h1 = _orphaned(world, monkeypatch)
     serve(monkeypatch, world.tmp, dict(PAGE))
     capsys.readouterr()
-    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch, goals=Q.goal_gate) == 1
-    assert capsys.readouterr().err == (f"research queue judge: #1 is not marked ready at {h1[:12]}: its body names no goal: "
-                                       f"{GOAL_FIX.format(n=1)}\n")
-    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
-    world.gh.prs[1] = dataclasses.replace(world.gh.prs[1], body="Lane `lane-1`.\n\nGoal ci/faster-landing\n")
     assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch, goals=Q.goal_gate) == 0
+    assert capsys.readouterr().err == (f"research queue judge: warning: #1 at {h1[:12]}: its body names no goal: "
+                                       f"{GOAL_FIX.format(n=1)}\n")
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
 
 

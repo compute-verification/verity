@@ -25,12 +25,11 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    once it ends); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`).  First it refuses a PR
                                                    whose head is on another repository or whose author isn't the
-                                                   organization's or one of `AUTHORS` (`PR.outside`), as admission does; then
-                                                   one whose body has neither a `Goal <id>` line naming a live goal of the
-                                                   Goals page (on it, and not done) nor an `Issue: none: REASON` line
-                                                   (`goal_gate`; the goals as this machine last read them when the page can't
-                                                   be read, said in one line, and refused when it never read them); then
-                                                   the records gate
+                                                   organization's or one of `AUTHORS` (`PR.outside`), as admission does; it
+                                                   warns on stderr, and goes on, when the body has neither a `Goal <id>` line
+                                                   naming a live goal of the Goals page (on it, and not done) nor an `Issue:
+                                                   none: REASON` line (`goal_gate`; the goals as this machine last read them
+                                                   when the page can't be read, said in one line); then the records gate
                                                    (`RecordsGate`, which --no-preflight keeps) refuses a head that changes a Lean
                                                    lock against the landing branch unless a records run or Lean check passed
                                                    that package, of the head or of a commit whose files of the package and the
@@ -109,10 +108,11 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    (Linear's non-closing magic word: the merge leaves the issue open), or
                                                    `Issue: none: REASON` (`with_issue`); KEY's issue carries the label of the
                                                    goal it serves, a live goal's id on the Goals page, written as a `Goal <id>`
-                                                   line after `Refs KEY` unless F's own `Goal` lines name it (`with_goals`);
-                                                   refuses a KEY that isn't one (like ENG-123), that Linear has no issue for,
-                                                   or whose labels name no live goal or can't be read, a `Goal` line of F
-                                                   naming another, an empty REASON, and when BRANCH
+                                                   line after `Refs KEY` unless F has `Goal` lines of its own (`with_goals`),
+                                                   warning on stderr, and opening it all the same, when KEY's labels name no
+                                                   live goal or can't be read, or a `Goal` line of F names another;
+                                                   refuses a KEY that isn't one (like ENG-123) or that Linear has no issue
+                                                   for, an empty REASON, and when BRANCH
                                                    isn't on the remote, isn't at --sha, or already has an open PR; prints the
                                                    PR's URL (`open_pr`), then links the PR to KEY through the Linear app
                                                    (`link_issue`: Linear's GitHub integration is off for this repository, so
@@ -370,7 +370,8 @@ ISSUE_LINE = "Refs {key}"
 NO_ISSUE_LINE = "Issue: none: {reason}"
 NO_ISSUE_RE = re.compile(r"^[ \t>*_]*Issue:[ \t]*none:[ \t]*(\S.*?)[ \t]*$", re.M)
 #: the line naming a goal of the Goals page (`research.goals`) the PR serves: `open --issue KEY` writes one after `Refs KEY` for
-#: each live goal KEY's labels name (`with_goals`), and a ready mark needs one naming a live goal, or `NO_ISSUE_LINE` (`goal_gate`)
+#: each live goal KEY's labels name (`with_goals`), and a ready mark warns without one naming a live goal, or `NO_ISSUE_LINE`
+#: (`goal_gate`)
 GOAL_LINE = "Goal {id}"
 GOAL_RE = re.compile(r"^[ \t>*_]*Goal:?[ \t]+`?([A-Za-z0-9](?:[\w./-]*[A-Za-z0-9])?)`?[ \t.]*$", re.M)
 #: the Goals page's goals (id and status) as this machine last read them, which the goal gate reads when the page can't be read
@@ -4892,8 +4893,8 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
     head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
     unless ``again`` (a re-mark at an ejected head would fail a second train on the same line).  Before any of it, a PR
     `PR.outside` refuses (its head on another repository than ``github``'s, or an author the organization doesn't have) is
-    refused, then ``goals`` (`goal_gate`) refuses a PR whose body names no live goal of the Goals page and no `Issue: none:
-    REASON`, then ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of
+    refused, then ``goals`` (`goal_gate`) warns, on stderr, of a PR whose body names no live goal of the Goals page and no
+    `Issue: none: REASON`, and goes on, then ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of
     it or of a commit with the same inputs for that package,
     then ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
     (`--sha`) it marks only that head: GitHub's head lags a push by seconds (`git push && research queue ready N --mark` can mark
@@ -4936,8 +4937,7 @@ def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str 
               "run this again", file=sys.stderr)
         return 1, pr, prs
     if goals is not None and (why := goals(pr)):
-        print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: {why}", file=sys.stderr)
-        return 1, pr, prs
+        print(f"research queue ready: warning: #{pr.number} at {pr.head[:12]}: {why}", file=sys.stderr)
     if not again and (why := ejection(store, pr)):
         print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: that head was ejected: {why}. Push the fix "
               f"and mark the new head; if the ejection was wrong (a machine fault), say so in the merge thread and pass --again",
@@ -4974,7 +4974,7 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
     them as `RemoteQuickTier` does, at the head the tier ran at, and mark the open PR at that head ready, or, when none is there now
     and ``repo`` (a clone of ``url``) is given, the one open PR whose head has that head's tree (`same_tree_mark`'s reason).
     Refused when the run can't be fetched, hasn't ended, isn't a quick tier, failed, or no open PR is at that head or tree now,
-    and as `ready` refuses, by ``goals`` (`goal_gate`) and ``records``."""
+    and as `ready` refuses, by ``records``; ``goals`` (`goal_gate`) warns, as in `ready`."""
     from . import cli, remote
     from . import runs as R
 
@@ -5009,7 +5009,7 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
     if why := prs[0].outside(github.repo):
         return refuse(f"#{prs[0].number} is not marked ready: {why}")
     if goals is not None and (why := goals(prs[0])):
-        return refuse(f"#{prs[0].number} is not marked ready at {prs[0].head[:12]}: {why}")
+        print(f"research queue judge: warning: #{prs[0].number} at {prs[0].head[:12]}: {why}", file=sys.stderr)
     if records is not None and (why := records(prs[0])):
         return refuse(f"#{prs[0].number} is not marked ready at {prs[0].head[:12]}: {why}")
     covers = allowed(repo or Path.cwd(), tier.get("base") if isinstance(tier, dict) else None)
@@ -5277,7 +5277,7 @@ def with_issue(body: str, spec: str) -> str:
 
 def issue_app(key: str) -> tuple[linear.Linear, str] | Exception:
     """The Linear app and the id of issue ``key``, resolved before anything is sent; the failure instead when the app can't be
-    asked (no credentials, Linear down), which `open` refuses (`with_goals`) and `link` reports (`link_issue`).  A key Linear
+    asked (no credentials, Linear down), which `open` warns of (`with_goals`) and `link` reports (`link_issue`).  A key Linear
     has no issue for raises QueueError."""
     try:
         app = linear.Linear()
@@ -5341,32 +5341,36 @@ def live_goals(names: Iterable[str], status: dict[str, str]) -> list[str]:
 def with_goals(body: str, key: str, app: tuple[linear.Linear, str] | Exception,
                read: Callable[[], dict[str, str]] | None = None) -> str:
     """``body``, `with_issue`'s for Linear issue ``key``, with a `Goal <id>` line after its `Refs KEY` line for each live goal
-    (`live_goals`) a label of the issue names (its name is the goal's id), or as it is when its own `Goal` lines name only such
-    goals.  Refused (`QueueError`), sending nothing, when the issue's labels can't be read (``app`` is `issue_app`'s failure)
-    or name no live goal, when ``read`` (`goal_statuses`) has no goals, and when a `Goal` line of the body names another."""
-    escape = "or pass --issue none:REASON; nothing sent"
+    (`live_goals`) a label of the issue names (its name is the goal's id), or as it is when it has `Goal` lines of its own.  A
+    warning on stderr, never a refusal: when the issue's labels can't be read (``app`` is `issue_app`'s failure) or name no
+    live goal, when ``read`` (`goal_statuses`) has no goals, and for each `Goal` line of the body that names another."""
+    def warn(why: str) -> None:
+        print(f"research queue open: warning: --issue {key}: {why}", file=sys.stderr)
+
     try:
         if isinstance(app, Exception):
             raise app
         labels = app[0].issue_labels(key)
     except (linear.LinearError, OSError) as e:
-        raise QueueError(f"--issue {key}: the Linear app can't read its labels ({e}): try again once it can, {escape}") from None
+        warn(f"the Linear app can't read its labels ({e}): no `Goal` line written")
+        return body
     try:
         status = (read or goal_statuses)()
     except QueueError as e:
-        raise QueueError(f"--issue {key}: {e}: try again once the page answers, {escape}") from None
+        warn(f"{e}: no `Goal` line written")
+        return body
     if not (live := live_goals(labels, status)):
         done = [n for n in labels if status.get(n) == "done"]
-        raise QueueError(f"--issue {key}: no label of it names a live goal of the Goals page (its labels: {', '.join(labels) or 'none'}"
-                         f"{'; done goals among them: ' + ', '.join(done) if done else ''}): label {key} with the goal it serves "
-                         f"(its id on the page, `research goals show`), {escape}")
+        warn(f"no label of it names a live goal of the Goals page (its labels: {', '.join(labels) or 'none'}"
+             f"{'; done goals among them: ' + ', '.join(done) if done else ''}): label {key} with the goal it serves "
+             f"(its id on the page, `research goals show`)")
     for g in GOAL_RE.findall(body):
         if g not in live:
             why = (f"a goal no label of {key} names" if g not in labels else "a done goal" if status.get(g) == "done" else
                    "no goal of the Goals page")
-            raise QueueError(f"--issue {key}: the body's `Goal {g}` names {why}: name one of {key}'s live goals "
-                             f"({', '.join(live)}), or drop the line and `open` writes them; nothing sent")
-    if GOAL_RE.search(body):
+            warn(f"the body's `Goal {g}` names {why}" + (f": name one of {key}'s live goals ({', '.join(live)}), or drop the "
+                                                        "line and `open` writes them" if live else ""))
+    if GOAL_RE.search(body) or not live:
         return body
     lines = body.splitlines()
     at = lines.index(ISSUE_LINE.format(key=key)) + 1
@@ -5374,8 +5378,9 @@ def with_goals(body: str, key: str, app: tuple[linear.Linear, str] | Exception,
 
 
 def goal_gate(pr: PR, read: Callable[[], dict[str, str]] | None = None) -> str | None:
-    """The goal gate of `ready` and `judge`: None when ``pr``'s body names a live goal (`live_goals`) on a `Goal <id>` line, or
-    no issue on purpose on an `Issue: none: REASON` line, which reads no page; else why not, with the fix."""
+    """The goal gate of `ready` and `judge`, a warning that never refuses: None when ``pr``'s body names a live goal
+    (`live_goals`) on a `Goal <id>` line, or no issue on purpose on an `Issue: none: REASON` line, which reads no page; else why
+    not, with the fix, which they print to stderr before they go on."""
     if NO_ISSUE_RE.search(pr.body):
         return None
     fix = (f"add a `Goal <id>` line naming the live goal it serves (its id on the Goals page, `research goals show`), or an "
@@ -5385,8 +5390,7 @@ def goal_gate(pr: PR, read: Callable[[], dict[str, str]] | None = None) -> str |
     try:
         status = (read or goal_statuses)()
     except QueueError as e:
-        return (f"{e}: mark it once the page answers, or give its body an `Issue: none: REASON` line (`research queue edit "
-                f"{pr.number} --body-file F`)")
+        return f"{e}: its `Goal` lines go unchecked"
     if live_goals(named, status):
         return None
     dead = "; ".join(f"{g} is done" if g in status else f"the Goals page has no goal {g}" for g in dict.fromkeys(named))
@@ -5637,7 +5641,7 @@ def main(argv: list[str]) -> int:
                     help="open (required): the PR's Linear issue, a key like ENG-123, written into the body as a `Refs KEY` line "
                          "and linked to the PR through the Linear app (Linear's GitHub integration is off for this "
                          "repository, so the line alone links nothing), with a `Goal <id>` line after it for each live goal "
-                         "of the Goals page a label of the issue names (refused when none does); or none:REASON, written as an "
+                         "of the Goals page a label of the issue names (a warning on stderr when none does); or none:REASON, written as an "
                          "`Issue: none: REASON` line, for a PR with no issue; link (required): the KEY to link the open PR to")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
     ap.add_argument("--tip", default="origin/main", help="checked-heads: whose first-parent line (default origin/main)")

@@ -1,6 +1,6 @@
 """`research queue open`: a PR for any pushed branch, through gh, refused when the branch isn't on origin, has moved from the
-owner's pinned head, or already has an open PR, or when its issue's labels name no live goal of the Goals page, and linked to
-its Linear issue through the Linear app.  A throwaway bare origin stands in for GitHub's git side, a recording fake for gh,
+owner's pinned head, or already has an open PR, opened with a warning when its issue's labels name no live goal of the Goals
+page, and linked to its Linear issue through the Linear app.  A throwaway bare origin stands in for GitHub's git side, a recording fake for gh,
 another for Linear's API, and `goals_page` for the Goals page."""
 from __future__ import annotations
 
@@ -237,22 +237,25 @@ def test_a_link_that_fails_leaves_the_pr_open_and_prints_why_and_the_command_tha
     assert "is not linked to ENG-123 in Linear" in err and "link it with `research queue link 7 --issue ENG-123`" in err
 
 
-def test_open_refuses_an_issue_whose_labels_the_linear_app_cant_read_and_sends_nothing(opening, monkeypatch, capsys):
-    """Without the issue's labels there is no goal to check, so a Linear app that can't be asked opens nothing."""
+def test_open_warns_of_an_issue_whose_labels_the_linear_app_cant_read_and_opens_the_pr_all_the_same(opening, monkeypatch, capsys):
+    """Without the issue's labels there is no goal to check or write: a Linear app that can't be asked is a warning, the PR opens
+    with its `Refs` line, and its link fails as any failed link does, naming the command that links it."""
     from research import linear
     from research.cli import main as research_main
 
     log, fake, _, argv = opening
     monkeypatch.setattr(linear, "Linear", lambda: fake.app({}, fake))
-    assert research_main([*argv, "--issue", "ENG-123"]) == 1
+    assert research_main([*argv, "--issue", "ENG-123"]) == 0
     err = capsys.readouterr().err
-    assert "--issue ENG-123: the Linear app can't read its labels (no Linear credentials" in err
-    assert "try again once it can, or pass --issue none:REASON; nothing sent" in err and log == []
+    assert "research queue open: warning: --issue ENG-123: the Linear app can't read its labels (no Linear credentials" in err
+    assert "): no `Goal` line written" in err and "link it with `research queue link 7 --issue ENG-123`" in err, err
+    assert [e[2] for e in log if e[0] == "open"] == ["Lane ci\n\nthe change\n\nRefs ENG-123\n"]
 
 
-def test_open_refuses_an_issue_whose_labels_name_no_live_goal_and_sends_nothing(opening, capsys):
+def test_open_warns_of_an_issue_whose_labels_name_no_live_goal_and_opens_the_pr_without_a_goal_line(opening, capsys):
     """A label names a goal when its name is a goal's id on the Goals page, and the goal is live unless it is done: an issue
-    labelled with no goal, with names the page doesn't have, or with a done goal alone opens nothing and links nothing."""
+    labelled with no goal, with names the page doesn't have, or with a done goal alone is a warning, and the PR opens with its
+    `Refs` line and no `Goal` line."""
     from research.cli import main as research_main
 
     log, fake, _, argv = opening
@@ -260,11 +263,11 @@ def test_open_refuses_an_issue_whose_labels_name_no_live_goal_and_sends_nothing(
                          (["ci/old-landing"], "its labels: ci/old-landing; done goals among them: ci/old-landing")):
         fake.labels["ENG-123"] = labels
         log.clear()
-        assert research_main([*argv, "--issue", "ENG-123"]) == 1
+        assert research_main([*argv, "--issue", "ENG-123"]) == 0
         err = capsys.readouterr().err
-        assert (f"--issue ENG-123: no label of it names a live goal of the Goals page ({says}): label ENG-123 with the goal it "
-                "serves (its id on the page, `research goals show`), or pass --issue none:REASON; nothing sent") in err, err
-        assert [e[0] for e in log] == ["gql", "gql"]                         # its id and its labels: no PR, no link
+        assert (f"research queue open: warning: --issue ENG-123: no label of it names a live goal of the Goals page ({says}): "
+                "label ENG-123 with the goal it serves (its id on the page, `research goals show`)\n") in err, err
+        assert [e[2] for e in log if e[0] == "open"] == ["Lane ci\n\nthe change\n\nRefs ENG-123\n"]
 
 
 def test_open_writes_a_goal_line_after_refs_for_each_live_goal_the_issues_labels_name(opening):
@@ -279,9 +282,9 @@ def test_open_writes_a_goal_line_after_refs_for_each_live_goal_the_issues_labels
         "Lane ci\n\nRefs ENG-123\nGoal ci/faster-landing\nGoal ci/merge-speed\n\nthe change\n"]
 
 
-def test_open_keeps_a_hand_written_goal_line_that_agrees_and_refuses_one_that_doesnt(opening, capsys):
-    """A `Goal` line of the body must name a live goal the issue's labels name: one that does stands alone (no other Goal line is
-    added), and one naming a goal the labels don't, a done goal or no goal of the page sends nothing."""
+def test_open_keeps_a_hand_written_goal_line_that_agrees_and_warns_of_one_that_doesnt(opening, capsys):
+    """A `Goal` line of the body is to name a live goal the issue's labels name: one that does stands alone (no other Goal line is
+    added), and one naming a goal the labels don't, a done goal or no goal of the page is a warning, and stands too."""
     from research.cli import main as research_main
 
     log, fake, body, argv = opening
@@ -294,23 +297,23 @@ def test_open_keeps_a_hand_written_goal_line_that_agrees_and_refuses_one_that_do
                       ("ci/unlisted", "no goal of the Goals page")):
         log.clear()
         body.write_text(f"Lane ci\n\nthe change\n\nGoal {goal}\n")
-        assert research_main([*argv, "--issue", "ENG-123"]) == 1
-        assert (f"--issue ENG-123: the body's `Goal {goal}` names {why}: name one of ENG-123's live goals (ci/faster-landing, "
-                "ci/merge-speed), or drop the line and `open` writes them; nothing sent") in capsys.readouterr().err
-        assert [e[0] for e in log] == ["gql", "gql"]
+        assert research_main([*argv, "--issue", "ENG-123"]) == 0
+        assert (f"research queue open: warning: --issue ENG-123: the body's `Goal {goal}` names {why}: name one of ENG-123's "
+                "live goals (ci/faster-landing, ci/merge-speed), or drop the line and `open` writes them\n"
+                ) in capsys.readouterr().err
+        assert [e[2] for e in log if e[0] == "open"] == [f"Lane ci\n\nthe change\n\nGoal {goal}\n\nRefs ENG-123\n"]
 
 
-def test_open_takes_the_goals_this_machine_last_read_while_the_page_is_down_and_refuses_with_neither(opening, monkeypatch,
-                                                                                                    tmp_path, capsys):
+def test_open_takes_the_goals_this_machine_last_read_while_the_page_is_down_and_warns_with_neither(opening, monkeypatch,
+                                                                                                  tmp_path, capsys):
     from research.cli import main as research_main
 
     log, _, _, argv = opening
     page = serve(monkeypatch, tmp_path, None)
-    assert research_main([*argv, "--issue", "ENG-123"]) == 1
-    assert (f"--issue ENG-123: the Goals page can't be read ({DOWN}) and this machine has no copy of it "
-            f"({tmp_path / 'cache' / 'goals.json'}): try again once the page answers, or pass --issue none:REASON; nothing "
-            "sent") in capsys.readouterr().err
-    assert "open" not in [e[0] for e in log]
+    assert research_main([*argv, "--issue", "ENG-123"]) == 0
+    assert (f"research queue open: warning: --issue ENG-123: the Goals page can't be read ({DOWN}) and this machine has no copy "
+            f"of it ({tmp_path / 'cache' / 'goals.json'}): no `Goal` line written") in capsys.readouterr().err
+    assert [e[2] for e in log if e[0] == "open"] == ["Lane ci\n\nthe change\n\nRefs ENG-123\n"]
     page.goals = dict(PAGE)
     assert research_main([*argv, "--issue", "ENG-123"]) == 0                 # read, and kept on this machine
     page.goals = None
