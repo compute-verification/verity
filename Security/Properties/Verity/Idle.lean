@@ -7,8 +7,9 @@ public import Properties.Verity.Game
 
 The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.SoundnessOf` read these: a small hand-built
 descriptor, not a parsed file. The device has no on-chip state, no memory, no ops and no bandwidth (`device`); the
-circuit file is read as empty files under the netlist tags (`fileRead`); the coin commitment has no families, the honest
-prover closes the device at once, no check reads its log, and there are no commitment openings and no gates computed;
+circuit file is read as empty files under the netlist tags (`fileRead`); the coin commitment has no families, the device
+draws nothing at the close and signs nothing (`signer`), the honest prover sends an empty request and closes the device
+at once, no check reads its log, and there are no commitment openings and no gates computed;
 the world charges nothing over an empty window (`world`); the schedule is one
 empty block (`blocks`), and its wipe fills nothing and accepts nothing (`wipe`). Every finder and forger outputs nothing
 on its one coin, and no bound reads a further finder. The circuit file's and the public file's digests in the parameters
@@ -77,11 +78,14 @@ def finder : Claims.Finder where
   out _ := none
   cost _ := 0
 
+/-- **The device's signer**: it signs nothing and draws nothing at the close. -/
+def signer : Signer := ⟨fun _ => [], 0, fun _ _ _ _ => [], fun _ _ => []⟩
+
 /-- The forger that saw no signature and outputs nothing, on one coin, with no SHA-512 call. -/
 def forger : Hash.Assumptions.LmsForger where
   S := Unit
   key := []
-  signed := []
+  signed _ := []
   out _ := none
   cost _ := 0
 
@@ -93,6 +97,7 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   publicDigest θ := some (sha512 θ.data.toList)
   registered θ := #[θ]
   families _ := []
+  signer _ := signer
   coinsRead _ _ := none
   extract _ _ _ _ _ := 0
   finder _ _ _ _ _ := finder
@@ -104,7 +109,8 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   forger _ _ _ _ _ := forger
   forger_calls _ _ _ _ _ _ := Nat.zero_le _
   signatures _ := 0
-  forger_signed _ _ _ _ _ := Nat.zero_le _
+  signs_le _ _ _ _ _ := Nat.le_refl 0
+  forger_signed _ _ _ _ _ _ := Nat.zero_le _
   computed _ _ _ _ _ := ∅
   world _ _ _ _ _ := world
   window _ := ⟨0, 0⟩
@@ -121,11 +127,9 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   Seed := Unit
   Spots := Unit
   wipe _ _ := wipe
-  wipeRun θ F c _ := ofRun (play [] θ F c)
+  wipeRun θ F c _ := ofRun (play [] signer θ F c)
   foreignBits _ := 0
-  honest θ F c :=
-    closeThen (fun log => .send (ByteArray × Array ByteArray) fun e => .ret (⟨θ, F, c, log, e.1, e.2⟩ : Exchange))
-      ⟨(.empty, #[]), ⟨⟩⟩ _ _ _
+  honest θ F c := requestThen [] signer θ F c .empty ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩
   certOf _ := ⟨0, W, 0, 0, 0⟩
   crBound _ _ _ := 0
   delta _ _ _ := δ
