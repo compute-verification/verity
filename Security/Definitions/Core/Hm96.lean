@@ -12,9 +12,9 @@ An hm96 leaf of a row's digest `x` under a salt `y` is `H(p_leaf ‖ b ‖ c)`, 
 uniform salt is within `δ₁` of `(U, c)` for a fresh uniform `U`, on every event. It is statistical: no computational
 property of SHA-512.
 
-`Definitions/Claims.lean` imports this module, and the soundness proofs read it directly: it imports only the little
-of Mathlib they do, so they need not import all of it. The probability is in `[0, ∞]` (`PrENNReal`), as the proofs
-compute theirs.
+It is Core's: the claims (`Definitions/Claims.lean`) and the composition of zero knowledge through a recursion
+(`Definitions/Core/Rec.lean`) state it, and the soundness proofs read it directly: it imports only the little of Mathlib
+they do, so they need not import all of it. The probability is in `[0, ∞]` (`PrENNReal`), as the proofs compute theirs.
 -/
 
 @[expose] public section
