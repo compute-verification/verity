@@ -23,17 +23,18 @@ sides share T, the horizon k. An integration writes the field with `Boundary.rec
 
 * **Egress** (`egress.EgressBucket`, the scan's egress side, in generator form): ``frame`` is an output row of R·B
   bytes, the row the proof block computes from its state, slot σ's cell at bytes σ·B … (σ + 1)·B − 1, row bit 8k + i bit
-  i of byte k, which the proof block's statement commits under the salt of the warden's egress row t of link ℓ and
-  registers as a read of it (`warden_rows.bucket_port`), so the proof opens only when the row the proof block computes
-  is the warden's. ``verdict`` is an output row of one u16 word whose bit 0 is every slot's presence gate: 1
-  (`egress.ACCEPT`) exactly when the state renders a row. So `Layout.egress t ℓ σ` is (bit 0 of proof block ℓ·T + t's
-  verdict row, bits 8σB … 8(σ + 1)B − 1 of its frame row), gates the proof block computes and returns, none an input.
+  i of byte k, which the proof block's statement commits under the salt of the network certifier's egress row t of link
+  ℓ and registers as a read of it (`warden_rows.bucket_port`), so the proof opens only when the row the proof block
+  computes is the network certifier's. ``verdict`` is an output row of one u16 word whose bit 0 is every slot's presence
+  gate: 1 (`egress.ACCEPT`) exactly when the state renders a row. So `Layout.egress t ℓ σ` is (bit 0 of proof block ℓ·T
+  + t's verdict row, bits 8σB … 8(σ + 1)B − 1 of its frame row), gates the proof block computes and returns, none an
+    input.
   Only the verdict is public: a proof block's public output is at most 16 bits, and the frame is a committed output.
   v2's checked row, whose frame was a parameter row (an input) its verdict held to the cells the proof block rendered,
   is retired with v2.
 * **Ingress** (`ingress_scan.IngressScanBucket`, and `IngressScanFirst` its ``first``): ``frame`` is a parameter row of
-  RI·BI bytes, the warden's ingress row t of link ℓ, which the proof block reads as its registered input port.
-  `Layout.ingress t` is the ingress links' frame rows at bucket t, in link order, each in row order.
+  RI·BI bytes, the network certifier's ingress row t of link ℓ, which the proof block reads as its registered input
+  port. `Layout.ingress t` is the ingress links' frame rows at bucket t, in link order, each in row order.
 
 Every bucket's gates are the same whatever the load, so no arrival step, prompt length or occupancy is public: a
 request's token ids are values the window's proof blocks parse from the cells, like every other value (arrival steps and

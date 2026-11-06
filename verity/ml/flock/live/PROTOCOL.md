@@ -398,7 +398,7 @@ by round, and a Goldreich–Kahan simulator rewinds once, to just after that com
 degenerate coins as they open (the Claim above).
 
 **The coin commitment** (`src/coin_tree.rs`, the keyed coin tree `coin-tree/hm96-sha512/v2`,
-`SessionConfig::coin_tree`; the verifier's side is `verity/ml/flock/verifier/PROTOCOL.md` §7.4).
+`SessionConfig::coin_tree`; the verifier's side is `Flock.CoinTree`).
 - The schedule is pinned in `Hello` (`coins: {block, nonce, rounds_log, scheme, streams}`): streams `session`,
   `circuit/rep0`, `circuit/rep1`; `2^9` rounds per stream; blocks of 512 coins. A RoPE rep uses 100 rounds and at most
   277 coins in one (level 0's queries); the session stream's round 0 is the two link points.
@@ -745,16 +745,18 @@ drop, duplicate, swap, forgery and seeded byte flip of one. One difference is de
 spelling, so `flock-firewall` refuses any `Hello` with a fraction or an exponent, where the proxy compares Python's canonical
 JSON. The two agree whenever the schedule's `Hello` holds only integers, as `schedule_for`'s does.
 
-On live coins the send check is that program itself. `rec_live --lean BIN` (required unless `--coin-tree`) starts one
-`flock-firewall live` a session (`Flock.Firewall.liveWith`): its first line is the schedule, and each request goes to it
-before the proxy handles it. It answers with the messages the coin server gets for the request and the salts it drew for
-them (`Flock.Firewall.liveStep`, one step of `run`'s loop, its salts from the operating system, those a request doesn't
-draw kept for the next), or with the refusal that stops the session. The proxy delivers Lean's messages, in Lean's order,
-and handles the request too, for the prover's side (the answers, the session record, `private.json`) on Lean's salts: a message or a salt of its own that
+The send check is that program itself. `rec_live --lean BIN` (required) starts one `flock-firewall live` a session (`Flock.Firewall.liveWith`): its first line is the schedule, and
+each request goes to it before the proxy handles it. It answers with the messages the coin server gets for the request and
+the salts it drew for them (`Flock.Firewall.liveStep`, one step of `run`'s loop, its salts from the operating system, those
+a request doesn't draw kept for the next), or with the refusal that stops the session. The proxy delivers Lean's messages, in Lean's order, and handles the request too,
+for the prover's side (the answers, the session record, `private.json`) on Lean's salts: a message or a salt of its own that
 is not Lean's, or one of Lean's it leaves unused, stops the session. The same test holds the relay to `run` at the salts the
-live session drew, on every case and every whole placement of the `Open`s. Lean's firewall refuses a coin tree's `Hello` and
-a binding round of a registered top, so a `--coin-tree` session and `rec_session.serve`'s, with its stacked table's
-registered top, keep the Python check that the test holds to `run`.
+live session drew, on every case and every whole placement of the `Open`s. On the challenger's coin tree (`--coin-tree`)
+the first line also gives the tree's spec: the prover's `Hello` names the tree, with a nonce of its own the session never
+uses, and `Flock.Firewall.treeHello` holds `coins` without its nonce to the spec and hands `step` the `Hello` without
+`coins`, so the coin server gets the live-coin session's messages; the same test holds the proxy, the relay and `run` to
+one another on the tree's sessions. Lean's firewall refuses a binding round of a registered top, so `rec_session.serve`'s
+sessions, with their stacked table's registered top, keep the Python check that the test holds to `run`.
 
 In the Lean analysis (`Security/Proofs/Flock/Recursive/`), `FirewallTemplate.run_blank` proves that a session `run` finishes
 sent the pinned schedule's transcript (`tmpl`) but for its commitment strings, and `sends_of_one` that if `run` finishes at
@@ -814,9 +816,10 @@ is fixed by the statement and the schedule, as the model has it: each frame that
 one message a round (`Claims.ZKServer.LeanRelease.toSrv`), and nothing the prover places. It sends its own
 `Hello` (the Lean `Hello` at the auditor's sample and a nonce it samples from the OS) in place of the prover's, checks
 `Hello`'s answer (20 words, key bit 2047 clear) and every coin opening against the root, and hands the prover only the
-coins, as `coin_tree::Checked` does. `Hello`'s answer itself never reaches the prover: once it checked, the prover
-receives in its place the loop's id for the session, four words sampled from the OS with the nonce (`Session.idFrame`).
-The tree, link count and nonce it checks them under are the values it set up and
+coins, as `coin_tree::Checked` does; an answer to a `Commit` or `Round` that is not coins stops the session, refused
+(`Session.State.noCoins`), so no opening is asked for twice. `Hello`'s answer itself never reaches the prover: once it
+checked, the prover receives in its place the loop's id for the session, four words sampled from the OS with the nonce
+(`Session.idFrame`). The tree, link count and nonce it checks them under are the values it set up and
 sent (`Session.helloOf`), never a parse of the `Hello`: the setup's coin tree, whose streams must be the session stream
 then each table's `rep0` and `rep1`, distinct (`Session.streamsOk`), else `Hello`'s answer is refused. It asks for each
 opening at the schedule's place, not the prover's: the session stream's at `Commit`, then every round of each rep
@@ -882,9 +885,9 @@ proof files (`FinishIs`, `Loop.finishIs`). The frames refusing every coin fault 
 (`frameUnrefused_ofLoop`), and from it, `FinishIs` and the tables admitting unrefused coins, proved at the deployed
 tables, `FinalRoundEq` follows (`finalRoundEq_ofLoop`). The other bytes it releases the theorem still reads only through
 named hypotheses: the worker's passed rounds and the stand-in rounds are the session's (`LiveRoundEq`, `FillRoundEq`) and
-the inner proof's round 0 is the firewall's own (`LoopInnerRound0`), and the tables' side (`Tables`, `Complete`,
-`DummyReg`, `Causal`, `SwCausal`, `TapeOK`) is a premise. Until those are proved, the ZK server is not yet proved
-zero-knowledge.
+the inner proof's round 0 is the firewall's own (`LoopInnerRound0`), and of the tables' side `SwCausal` is a premise;
+the rest of it (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`) is proved at the deployed tables
+(`Loop.tables_dataE` and its siblings). Until those are proved, the ZK server is not yet proved zero-knowledge.
 
 The frame's protocol, which the loop steps on its own requests (`Frame.Req`) and `flock-firewall frame` serves on its
 standard input (`tests/test_firewall_frame.py`):
@@ -1158,7 +1161,10 @@ the session reaches the challenger. It relays the session's rounds as §10.4 say
 proofs, and at `Finish` decides (`Decision.after`, at the wall clock's time): the loop's own refusal of the session is a
 stop, as is a `Finish` with fewer than the session's proofs (two a table, the loop's finish's: where a check refused, the
 finish computed none) and a missed release time. A session that goes waits for its release time; its proofs, then `Finish`,
-leave, and serve's verdict is its release or its stop. `verity/core/service/firewall/tests` holds these stages to
+leave, and serve's verdict is its release or its stop. At each decision the loop writes one line to its stderr,
+`FIREWALL-TIMES {"session", "part", "ready_ms", "release_ms", "outcome"}`: when it decided, the release time it holds
+the proofs to (null on a stop) and `go` or `stop`, by which a run times its windows (pod 85's `RELEASE=1`,
+`rec_inner.py release-report`). `verity/core/service/firewall/tests` holds these stages to
 Python's record and to the cases frozen from the Rust release side the loop replaced (`tests/fixtures/`). Every stop the
 loop makes, and a fault of its own, cuts the challenger's connection before `Finish`, and the worker gets the loop's own
 verdict; a prover killed while its session holds the slot is that session's stop, which the loop records, or, where the
