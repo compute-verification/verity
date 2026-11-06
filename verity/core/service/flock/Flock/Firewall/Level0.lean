@@ -99,6 +99,19 @@ def build (m : Nat) (lv : Level) (tPad : Nat) (g : Array F128) (extra pads : Arr
   let t := tower lv.d (fun q => lvs[q]!) (lv.d - lv.cap)
   { l with rows, layers := t.2, root := Link.flat t.1 }
 
+/-- `build` with the leaves (`Link.leaves`'s) on the rows it keeps, so that level 0's codeword is computed once. -/
+def buildFast (m : Nat) (lv : Level) (tPad : Nat) (g : Array F128) (extra pads : Array (Array F128))
+    (salts : ByteArray) : Level0 :=
+  let l : Level0 := { m, lv, tPad, g, extra, pads, salts, rows := #[], layers := #[], root := .empty }
+  let rows := Link.rows lv tPad l.toIn.g l.toIn.extra l.toIn.lanePad
+  let k := min lv.d Link.CHUNK
+  let lvs := Link.parRange (fun q => Link.leaf rows[q]! (l.toIn.salt q)) (2 ^ (lv.d - k)) (2 ^ k)
+  let t := tower lv.d (fun q => lvs[q]!) (lv.d - lv.cap)
+  { l with rows, layers := t.2, root := Link.flat t.1 }
+
+/-- Compiled code runs `buildFast`; proofs see `build`. -/
+@[csimp] theorem build_eq_buildFast : @build = @buildFast := rfl
+
 /-- The OS bytes level 0 draws at level `lv` with `t_pad` paddings: the extra lanes' words, the paddings' and the
 salts. -/
 def drawSize (lv : Level) (tPad : Nat) : Nat :=
