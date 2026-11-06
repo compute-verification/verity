@@ -1,7 +1,7 @@
 module
 
 public import Mathlib.Probability.Distributions.Uniform
-public import Definitions.Accounting.Tag.Prob
+public import Definitions.Core.Prob
 public import Definitions.Accounting.Tag.Sketch
 
 /-!
@@ -27,6 +27,8 @@ on the data and the chain's length are in their types. The proofs are in `Securi
 -/
 
 @[expose] public section
+
+open Verity.Game renaming prPMF → prob
 
 namespace Accounting.Guarantees.Sketch
 

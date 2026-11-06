@@ -20,6 +20,8 @@ public import Proofs.Core.Game.Prob
 
 @[expose] public section
 
+open Claims renaming Ex → ex
+
 namespace Pouw.PearlC
 
 open Finset Pouw.PearlC.Assumptions

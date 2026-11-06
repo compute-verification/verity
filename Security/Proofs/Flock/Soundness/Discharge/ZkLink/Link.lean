@@ -171,17 +171,11 @@ open Classical in
 noncomputable def opOfZ (c : vb.Pos) (w : ΩcZ A P planZ tab vb L c) (v : vb.Val) : vb.Opening :=
   Classical.epsilon fun o => OpensAtZ A P planZ tab vb R τ w.1 c v o
 
-open Classical in
-/-- **The finder's output**: a collision from two openings of `c` with different values, the first from its first
-trial, the second from that trial or from the first further trial that reads `c`. -/
+/-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOf`), from
+the trials its cost charges. -/
 noncomputable def outZ (c : vb.Pos) (x : ΩcZ A P planZ tab vb L c × List (ΩcZ A P planZ tab vb L c)) :
     Option (List UInt8 × List UInt8) :=
-  if h : ∃ p : ΩcZ A P planZ tab vb L c × vb.Val × vb.Val, p.2.1 ≠ p.2.2 ∧
-      p.2.1 ∈ rdZ A P planZ tab vb R τ c x.1 ∧ p.2.2 ∈ rdZ A P planZ tab vb R τ c p.1 ∧
-      (p.1 = x.1 ∨ nextRead (rdZ A P planZ tab vb R τ c) x.2 = some p.1) then
-    some (vb.collide (opOfZ A P planZ tab vb R τ c x.1 (Classical.choose h).2.1)
-      (opOfZ A P planZ tab vb R τ c (Classical.choose h).1 (Classical.choose h).2.2))
-  else none
+  outOf (rdZ A P planZ tab vb R τ c) (opOfZ A P planZ tab vb R τ c) vb.collide x
 
 open Classical in
 /-- **The plurality value at `c`**: the value the trial reads alone most often. -/
@@ -221,13 +215,8 @@ omit [Fintype K] in
 /-- **Every success of the finder outputs a collision.** -/
 theorem outZ_spec (c : vb.Pos) (x : ΩcZ A P planZ tab vb L c × List (ΩcZ A P planZ tab vb L c))
     (hS : Succ (rdZ A P planZ tab vb R τ c) x) :
-    ∃ a b, outZ A P planZ tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b := by
-  have e : outZ A P planZ tab vb R τ c x = outOf (rdZ A P planZ tab vb R τ c) (opOfZ A P planZ tab vb R τ c)
-      vb.collide x := by
-    unfold outZ outOf
-    congr
-  rw [e]
-  exact outOf_spec (rdZ A P planZ tab vb R τ c) (opOfZ A P planZ tab vb R τ c) vb.collide
+    ∃ a b, outZ A P planZ tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
+  outOf_spec (rdZ A P planZ tab vb R τ c) (opOfZ A P planZ tab vb R τ c) vb.collide
     (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hv => opOfZ_spec A P planZ tab vb R τ hv)
     (fun o o' h h' hv => vb.collide_spec o o' (h.trans h'.symm) hv) x hS
 

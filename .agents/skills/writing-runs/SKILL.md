@@ -46,7 +46,7 @@ A local `research run` (no `--on`) publishes only its telemetry and the files it
    it on purpose.
 
 ~~~bash
-research run --on M --cwd source -- \
+research run --on auto --cwd source -- \
   bash -c 'd=$(mktemp -d); trap "rm -rf $d" EXIT; python bench.py --scratch "$d" --out "$OUT"'
 ~~~
 

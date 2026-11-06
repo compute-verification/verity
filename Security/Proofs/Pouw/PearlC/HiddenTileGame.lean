@@ -15,6 +15,8 @@ better than some strategy it induces on that tile's game, which is in `Cls` (cor
 
 @[expose] public section
 
+open Claims renaming Ex → ex
+
 namespace Pouw.PearlC
 
 open scoped ENNReal

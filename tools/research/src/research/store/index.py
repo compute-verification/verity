@@ -35,12 +35,16 @@ CREATE INDEX IF NOT EXISTS attempts_drv ON attempts(derivation);
 CREATE INDEX IF NOT EXISTS attempts_tool ON attempts(tool);
 CREATE TABLE IF NOT EXISTS attempt_params(attempt TEXT, key TEXT, value TEXT);
 CREATE INDEX IF NOT EXISTS attempt_params_kv ON attempt_params(key, value);
+CREATE INDEX IF NOT EXISTS attempt_params_attempt ON attempt_params(attempt);
 CREATE TABLE IF NOT EXISTS attempt_conditions(attempt TEXT, key TEXT, value TEXT);
 CREATE INDEX IF NOT EXISTS attempt_conditions_kv ON attempt_conditions(key, value);
+CREATE INDEX IF NOT EXISTS attempt_conditions_attempt ON attempt_conditions(attempt);
 CREATE TABLE IF NOT EXISTS attempt_outputs(attempt TEXT, name TEXT, artifact TEXT);
 CREATE INDEX IF NOT EXISTS attempt_outputs_art ON attempt_outputs(artifact);
+CREATE INDEX IF NOT EXISTS attempt_outputs_attempt ON attempt_outputs(attempt);
 CREATE TABLE IF NOT EXISTS attempt_inputs(attempt TEXT, name TEXT, artifact TEXT);
 CREATE INDEX IF NOT EXISTS attempt_inputs_art ON attempt_inputs(artifact);
+CREATE INDEX IF NOT EXISTS attempt_inputs_attempt ON attempt_inputs(attempt);
 CREATE TABLE IF NOT EXISTS labels(target TEXT, key TEXT, value TEXT, by TEXT, ts TEXT, ref TEXT, path TEXT PRIMARY KEY);
 CREATE INDEX IF NOT EXISTS labels_target ON labels(target, key);
 CREATE TABLE IF NOT EXISTS replicas(id TEXT, location TEXT, verified_utc TEXT, detail TEXT, PRIMARY KEY(id, location));
@@ -50,6 +54,10 @@ CREATE TABLE IF NOT EXISTS replica_checks(id TEXT, location TEXT, verified TEXT,
 # code inserts into the original tables positionally (`INSERT ... VALUES (?,?,?,?)`).  Never add a column to a shipped table --
 # it breaks every older writer at once (2026-09-22: `replicas.verified` did exactly that to six running lanes).  Add a side
 # table keyed like the original instead; `replica_checks` is the first.
+#
+# Every row a write reads, replaces or deletes is found through an index.  A write holds the catalog's lock until it commits,
+# and every process on the machine shares the catalog, so a write statement that scans its table holds every other writer off
+# for a pass over it; a refresh indexes each attempt it lacks, one after another, and a scan in each starves the rest for all of it.
 #
 # Versioning: `PRAGMA user_version` holds the catalog's schema version.  0 = written by code from before versioning (may still
 # carry the `replicas.verified` column).  On open, an older catalog is migrated forward step by step (`MIGRATIONS[v]` takes v to

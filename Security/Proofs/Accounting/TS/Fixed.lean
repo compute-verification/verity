@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Accounting.TS.Drawn
-public import Definitions.Accounting.Guarantees.TS.Fixed
+public import Proofs.Accounting.Lemmas.TS.Fixed
 
 /-!
 # `UnitFixed` from a fixed word, and the additive lemma
