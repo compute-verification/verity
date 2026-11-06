@@ -27,7 +27,9 @@
 # progress to end, `drive.sh start` removes it once a dry-run push of next shows the token can push, `drive.sh status` says
 # which and shows the log's tail, and `drive.sh once [FLAGS]` runs one tick here in the foreground, after the one in progress,
 # with FLAGS added (`--dry-run`). `drive.sh queue ARGS` runs `research queue ARGS` the same way, between ticks, against drive's
-# state (the lander's `queue eject N --by ci --reason ...`, which edits verity.state.json; the next tick rebuilds next), and `drive.sh merge
+# state (the lander's `queue eject N --by ci --reason ...`, which edits verity.state.json; the next tick rebuilds next), but
+# `queue baseline SHA --by ci` and `queue promote` (a loop's, every minute or so), which fast-forward main and write nothing of
+# drive's, run beside a tick (`unlocked`), so main follows a passed after-landing run within minutes, and `drive.sh merge
 # ARGS` runs `research merge ARGS` (`--push`) on branch main, reset to origin's. All of it runs with RESEARCH_DRIVE=1: GitHub's rulesets let only
 # the verity-drive App move main and next (23 Oct), and `checked` once infra adds it there (drive lands the reviewed
 # prefix on checked, fast-forwards main only to a checked commit whose after-landing run passed every step on the merge
@@ -133,6 +135,12 @@ locked() {
   checkout "$1" || exit 1
   cd "$REPO" && RESEARCH_DRIVE=1 PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research "$@"
 }
+# `queue baseline` and `queue promote` only fast-forward main, reading the queue's clone and drive's state and writing neither,
+# so they run beside a tick: no tick lock, and no checkout, which would change the code a running tick imports from $REPO
+unlocked() {
+  set -a; . $CONF/r2.env; set +a
+  cd "$REPO" && RESEARCH_DRIVE=1 PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research "$@"
+}
 # Drive's merged trees (the sync's codemod worktrees) go under --preflight-root, on the container disk: under TMPDIR, on the
 # network volume, each worktree add and remove takes minutes.
 tick() { locked queue drive --config tools/verity/check/drive.toml --preflight-root "$FAST/preflight" $(grep -v '^#' $DIR/args 2>/dev/null) "$@"; }
@@ -153,7 +161,8 @@ case ${1:-} in
           echo "drive: runs $(cat "$DIR/deployed" 2>/dev/null || echo "main's tip")"
           tail -n 5 "$LOG" 2>/dev/null; exit 0 ;;
   once) shift; (tick "$@"); exit $? ;;
-  queue|merge) (locked "$@"); exit $? ;;
+  queue) case ${2:-} in baseline|promote) (unlocked "$@") ;; *) (locked "$@") ;; esac; exit $? ;;
+  merge) (locked "$@"); exit $? ;;
   deploy) deploy "${2:-}"; exit $? ;;
   '') ;;
   *) echo "drive.sh [start|stop|status|once [FLAGS]|queue ARGS|merge ARGS|deploy SHA|main]: with no argument, the loop" >&2; exit 2 ;;
