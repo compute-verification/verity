@@ -3708,12 +3708,12 @@
    "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.Bridge": "C-Flock is excepted until its spec is extracted",
-   "Proofs.Properties.NetworkCertifier.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityHorizon, its SamplingBlock and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlockCarried, its CarriedBlocks, SamplingBlock and CarriedBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Pouw.OnsiteFreed": "OnsiteFreed's witnesses read the toy instance's floor, certifier check and quiet prover (`twF`, `twNet`, `quiet`), proof-only beside it",
    "Proofs.Properties.Verity.Recursive": "the recursive audit (RecursiveAuditC3) states sampled proofs at the recursive configuration over the recursion's deployed record (`Dep`, `RecDeploy`), its session in the game (`SessionIn`) and verdict (`RecVerdict`), which read C-Flock's recursive model in Proofs; C-Flock is excepted until proofs extracts its spec",
-   "Proofs.Flock.RecGeneric": "the generic recursion's statements and their instance at Flock, on the recursive audit's model and C-Flock's; C-Flock is excepted until its spec is extracted"
+   "Proofs.Flock.RecGeneric": "the generic recursion's statements and their instance at Flock, on the recursive audit's model and C-Flock's; C-Flock is excepted until its spec is extracted",
+   "Proofs.Flock.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec"
   }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
@@ -32081,6 +32081,12 @@
     "Flock.Guarantees.SampledKSLiveV5": "84a999f71f8bae7fea5da4c5b5dc70ff2ccbfc10f2b7e61e09bdc5014678f95c"
    }
   },
+  "Proofs.Flock.Bytes": {
+   "digest": "dd4b5150ef158d7b1805d199610831c520cb73bd3a25b6f8f5bae4d8212b0e6a",
+   "definitions": {
+    "Properties.NetworkCertifier.Bytes.bs": "a42720c5b5b8602389499662042ebda0cf215bef5cf9191921c4ce4e0db150b2"
+   }
+  },
   "Proofs.Flock.Claims.Bridge.Committed": {
    "digest": "16e865f50d9cfb1d563667b87171a341c49d98811bcc5c4d48512feaa02d292c",
    "definitions": {
@@ -39596,12 +39602,6 @@
    "digest": "465f5655deb1bcd97a1eeb02d07f26aa53a6a8db3b9f91d54e2dbbd0ee083284",
    "definitions": {
     "Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "e6e7094d949ae08c4d2d27d03cc844cdb92cab1a89752f6479547017446e67fb"
-   }
-  },
-  "Proofs.Properties.NetworkCertifier.Bytes": {
-   "digest": "dd4b5150ef158d7b1805d199610831c520cb73bd3a25b6f8f5bae4d8212b0e6a",
-   "definitions": {
-    "Properties.NetworkCertifier.Bytes.bs": "a42720c5b5b8602389499662042ebda0cf215bef5cf9191921c4ce4e0db150b2"
    }
   },
   "Proofs.Properties.Verity.Recursive": {
