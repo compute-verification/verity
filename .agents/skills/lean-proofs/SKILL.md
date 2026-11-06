@@ -25,6 +25,20 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   owner, with no `sorry` outside them.
 - **Definitions a guarantee or property reads go in `Definitions/`**, not in a proof file; a lemma's statement over
   proof-only definitions is not a guarantee.
+- **Every module is on Lean's module system** (`tests/test_lean_packages.py`): a new file starts `module`, imports with
+  `public import M`, and opens `@[expose] public section` after its header; `python3 tools/verity/lean/modules.py FILE`
+  writes that, with `backward.privateInPublic` when the file declares a private definition, and puts
+  `backward.proofsInPublic = true` in each package's `[leanOptions]`, so a proof inside a statement or an exposed body
+  stays in it and the lock's records don't move. A proof's body is private,
+  so an edit to it rebuilds no importer. What the module system refuses is fixed
+  in the file (the codemod's docstring): a tactic's helper is `meta`; a proof that unfolds a core definition the
+  toolchain doesn't expose (`decide`, `rfl`, `unfold`) rewrites by core's lemma for it or has `import all` of its
+  module, never of an in-tree one (a module's build reads only its imports' public parts), and moves to a module of its
+  own when that `import all` slows its file's other proofs; a theorem whose statement names another module's private
+  declaration (core's `Array.qsort.sort`) is private, beside a public one over the public definition; an exported
+  `:= rfl` that unfolds an unexposed definition is `:= (rfl)`; a public definition that reads another private
+  declaration, and a module whose private declarations another opens (`open private … from M`), take
+  `modules.py --option backward.privateInPublic FILE`.
 - **Build in your own checkout**: two agents never share a writable `.lake`, since two Lake builds in one tree break
   each other. A second Lean task on one machine copies its dependencies (never symlinks) from a checkout with the same
   manifest and toolchain: `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. A
@@ -150,3 +164,7 @@ Their history is in the decisions log.
 - What a physical region reads is not a premise: it follows from the circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
   server-window is stated on `Accounting.Placed` with `WindowsAt`.
+- Verifier code compares `Json` by a match the kernel reduces, never by `BEq Json`'s `==`, a `partial def` no proof can
+  read. A string is compared by `SampledProofs.jsonStrIs`, which `Properties.Pouw.LiveSalt.jsonStrIs_eq` reads back.
+  Replacing such an `==` or a partial reading with a total one that means the same (it refuses on every parse failure
+  and never defaults) changes no claim: the lane makes the change and tells the code's owner.

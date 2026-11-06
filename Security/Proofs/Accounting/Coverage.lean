@@ -1,11 +1,15 @@
-import Definitions.Accounting.Guarantees.Coverage
-import Proofs.Core.Game.Prob
+module
+
+public import Definitions.Accounting.Guarantees.Coverage
+public import Proofs.Core.Game.Prob
 
 /-! `Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor`: below `min Lc Tmax`, a computation in `𝒜`
 has no covered structure (each costs at least `Lc`), so its success there is among coverage's uncovered successes below
 `Tmax`. Its witnesses (`CapabilityFloorHonest`, `CapabilityFloorNontrivial`) are proved at the toy task
 `Accounting.Slowdown.Toy`: a position holds one gate, so a run reaches at most one of the coin's two targets, and the
 guess reaches one. -/
+
+@[expose] public section
 
 /-- **Covered success below the floor is rare** (`Nci.Guarantees.CapabilityFloor`). -/
 theorem Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor := by

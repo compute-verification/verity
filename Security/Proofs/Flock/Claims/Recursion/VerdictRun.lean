@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Refine.RepConverse
-import Proofs.Flock.Claims.Recursion.NextShaDec
-import Flock.With.Eq
+module
+
+public import Proofs.Flock.Soundness.Refine.RepConverse
+public import Proofs.Flock.Claims.Recursion.NextShaDec
+public import Flock.With.Eq
 
 /-!
 # A rep's verdict on its decoded proof, from its program's run
@@ -16,6 +18,8 @@ whose Merkle scheme is the registry's (`Named`):
 
 `FlockVBridge.Family.runs_of_files` gives the program's run from the pieces (`RunsFrom`, `AlgebraHolds`, `AccHolds`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

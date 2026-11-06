@@ -1,26 +1,28 @@
-import Proofs.Flock.Recursive.KSStatement
-import Proofs.Flock.Recursive.KSV
-import Proofs.Flock.Claims.Recursion.NonVacuous
-import Proofs.Flock.Claims.KS.PlainRConflict
-import Proofs.Flock.Claims.KS.PlainAccPrR
-import Proofs.Flock.Claims.KS.PlainRCapPrefix
-import Proofs.Flock.Claims.Recursion.LastCallsR
-import Proofs.Flock.Claims.Recursion.KSLin2LayR
-import Proofs.Flock.Claims.Recursion.RestLowR
-import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
-import Proofs.Flock.Claims.KS.PlainSimR
-import Proofs.Flock.Claims.Recursion.SlotsPorted
-import Proofs.Flock.Claims.Recursion.MoreSlotsAll
-import Proofs.Flock.Claims.Recursion.VerdictRowRLeaf
-import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
-import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
-import Proofs.Flock.Claims.Recursion.InnerAtCoins
-import Proofs.Flock.Claims.Recursion.InnerExtras
-import Proofs.Flock.Claims.Recursion.OutTopRows
-import Proofs.Flock.Claims.Recursion.ResPiecesD
-import Proofs.Flock.Claims.Recursion.ResLowerD
-import Proofs.Flock.Claims.Recursion.SideCapPos
-import Proofs.Flock.Claims.Recursion.VerdictRowEFree
+module
+
+public import Proofs.Flock.Recursive.KSStatement
+public import Proofs.Flock.Recursive.KSV
+public import Proofs.Flock.Claims.Recursion.NonVacuous
+public import Proofs.Flock.Claims.KS.PlainRConflict
+public import Proofs.Flock.Claims.KS.PlainAccPrR
+public import Proofs.Flock.Claims.KS.PlainRCapPrefix
+public import Proofs.Flock.Claims.Recursion.LastCallsR
+public import Proofs.Flock.Claims.Recursion.KSLin2LayR
+public import Proofs.Flock.Claims.Recursion.RestLowR
+public import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
+public import Proofs.Flock.Claims.KS.PlainSimR
+public import Proofs.Flock.Claims.Recursion.SlotsPorted
+public import Proofs.Flock.Claims.Recursion.MoreSlotsAll
+public import Proofs.Flock.Claims.Recursion.VerdictRowRLeaf
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
+public import Proofs.Flock.Claims.Recursion.InnerAtCoins
+public import Proofs.Flock.Claims.Recursion.InnerExtras
+public import Proofs.Flock.Claims.Recursion.OutTopRows
+public import Proofs.Flock.Claims.Recursion.ResPiecesD
+public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Claims.Recursion.SideCapPos
+public import Proofs.Flock.Claims.Recursion.VerdictRowEFree
 
 /-!
 # `RecursiveKSAt` from its open premises
@@ -37,6 +39,8 @@ at what each part's circuit accepts at its own witness `ws[s]` (`hD`, `PartAccep
 through `recursiveKSAt_ofVD`, each part's check read at its decision (`ResLower.showsDec`, which the run supplies):
 pinned because the cap tie binds across parts through the parts' own witnesses' calls (`OutBindRP`), and at the V\* statements (`JointV`), which reads every part's check at its statement.
 -/
+
+@[expose] public section
 
 
 namespace Flock.SecurityProofs

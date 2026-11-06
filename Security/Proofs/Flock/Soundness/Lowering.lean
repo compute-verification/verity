@@ -1,10 +1,12 @@
-import Definitions.Flock.Lowering
-import Proofs.Flock.Soundness.Audit.Circuit
+module
+
+public import Definitions.Flock.Lowering
+public import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # The compiled lowering: a satisfied table makes every placed unit correct
 
-**The audit's circuit is the rows the verifier parses** (PROTOCOL.md §16.5, `Flock/Net.lean`). A
+**The audit's circuit is the rows the verifier parses** (`Flock.Circuit`, `Flock/Net.lean`). A
 template's unit is `nIn` input columns, `nComp` computed rows and the constant, its last column
 (`Rows`). Computed row `i` is column `nIn + i`:
 
@@ -27,6 +29,8 @@ not a hypothesis.
 columns, where every satisfying witness carries one value on the unit's inputs that share a gate.
 `UnitPlace.correct` is the compiled lowering for that unit.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

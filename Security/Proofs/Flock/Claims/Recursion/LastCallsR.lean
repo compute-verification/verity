@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.LastFilesR
-import Proofs.Flock.Claims.Recursion.CallsAgreeE
+module
+
+public import Proofs.Flock.Claims.Recursion.LastFilesR
+public import Proofs.Flock.Claims.Recursion.CallsAgreeE
 
 /-!
 # The calls half of the deployed reader's last-message binding (`RecDeploy.RCallsBind`)
@@ -15,6 +17,8 @@ reps' own calls (`verdictJK_log`), and custody pins every input they read (`sess
 So `RCallsBind` holds at SHA-512 with no premise (`RecDeploy.rCallsBind_sha512`), and with the columns half the deployed
 bound record at the deployed reader meets `LastBindsEC` and `LastCoinFree` (`RecDeploy.lastR_sha512`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

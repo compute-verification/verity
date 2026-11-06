@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Game.Prob
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-import Mathlib.Data.Fin.Tuple.Basic
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
+module
+
+public import Proofs.Flock.Soundness.Game.Prob
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+public import Mathlib.Data.Fin.Tuple.Basic
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # The monitoring period: adaptive per-period bounds over `T` periods
@@ -32,6 +34,8 @@ probability at most `p` over its own coins" is `∀ ω, prCoin (fun a => E t (Fu
 
 `Audit.Law`'s pooled escape (`Pooled.lean`) is the instance at uniform `kd`-subset draws.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Periods
 

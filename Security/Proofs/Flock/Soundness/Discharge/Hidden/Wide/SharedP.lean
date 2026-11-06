@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
-import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
-import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
-import Proofs.Flock.Soundness.Discharge.Layout.InRegion
-import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
+public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
+public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
+public import Proofs.Flock.Soundness.Discharge.Layout.InRegion
+public import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 
 /-!
 # The registered `b ‖ c` at a drawn unit, at public inputs
@@ -12,6 +14,8 @@ import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 population's public file (`bc_drawnWP`, `bc_drawnW` at `Hidden.SpecP`), and the public word the in regions hold at a
 proved slot's public leaf is the unit's public input word there (`inVal_drawnP`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

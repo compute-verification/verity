@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
-import Proofs.NetworkCertifier.Period
-import Proofs.Accounting.PouwWork
+module
+
+public import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
+public import Proofs.NetworkCertifier.Period
+public import Proofs.Accounting.PouwWork
 
 /-!
 # The network certifier's per-period guarantee from its period of sampled audits (proof)
@@ -19,6 +21,8 @@ so it is read off at the period of no windows (`ksLin_of_periodLeak`). Its count
 `trusted`, which this proof doesn't read: `window_le` is the per-window bound its records give, and deriving it from
 `PeriodLeakAccepted` at the deployed period and `trusted` is the follow-up.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge
 

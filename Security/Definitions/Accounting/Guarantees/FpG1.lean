@@ -1,6 +1,8 @@
-import Definitions.Accounting.Headline
-import Definitions.Pouw.FpG1
-import Definitions.Accounting.Assumptions.Sheet
+module
+
+public import Definitions.Accounting.Headline
+public import Definitions.Pouw.FpG1
+public import Definitions.Accounting.Assumptions.Sheet
 
 /-!
 # FP8-g1's and W4A8-g1's headlines on sm_120 (trusted)
@@ -49,6 +51,8 @@ The statements:
   to 9.
 * `Sm120FpG1MeasuredHeadline`, `Sm120W4a8G1MeasuredHeadline`: the same two on the measured vector, at `1 − 0.591%`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.FpG1
 

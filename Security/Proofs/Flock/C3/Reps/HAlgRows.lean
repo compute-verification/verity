@@ -1,9 +1,11 @@
-import Proofs.Flock.C3.Reps.AtList
-import Proofs.Flock.C3.Reps.ReadWhole
-import Proofs.Flock.C3.Reps.RoundLinks
-import Proofs.Flock.Recursive.HPortTie
-import Proofs.Flock.VBridge.Family.PartKeys
-import Proofs.Flock.VBridge.Algebra.RingSwitch
+module
+
+public import Proofs.Flock.C3.Reps.AtList
+public import Proofs.Flock.C3.Reps.ReadWhole
+public import Proofs.Flock.C3.Reps.RoundLinks
+public import Proofs.Flock.Recursive.HPortTie
+public import Proofs.Flock.VBridge.Family.PartKeys
+public import Proofs.Flock.VBridge.Algebra.RingSwitch
 
 /-!
 # The algebra unit reads rep `i`'s `h` at `m<hr>` (`hAlgRows_of_res`)
@@ -22,6 +24,8 @@ decoder tie `AlgebraDecodes` is proved from (`RepMaps.algebraDecodes`):
   (`hOfW`) is `w`'s at `wi`, so the part's row at unit `i` holds it; `hAlgRows_withReads` at the reads' decoder
   (`RepMaps.withReads`, `resZeroAtLH_wRead`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

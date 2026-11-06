@@ -1,4 +1,6 @@
-import Definitions.NetworkCertifier.SampledAudit
+module
+
+public import Definitions.NetworkCertifier.SampledAudit
 
 /-!
 # The wrong units over a monitoring period of sampled audits
@@ -15,6 +17,8 @@ The statement is a fact of probability over every draw, acceptance event and err
 soundness are its hypotheses. A deployment's instances of them (A3 for the draw, `Claims.Sampling.KS` for each
 window) come in where it is applied to the sampled verifier.
 -/
+
+@[expose] public section
 
 namespace NetTiming.Guarantees
 

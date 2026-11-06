@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishFwRep
+module
+
+public import Proofs.Flock.Claims.ZK.FinishFwRep
 
 /-!
 # Level 0's values from the firewall's run
@@ -12,6 +14,8 @@ replies, `Level0.laneCh_coins`, `Level0.lanePoint_coins`, `Level0.laneW0_coins`)
 * **`Finish.repFwC_l0`**: where `repFwC` returns and its PIOP ends at round `p₀` with basis `b`, level 0's values in its
   proof are `l0Clear` at the coins from `p₀`, the packed table and `b`, plus the pads.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.LigLock
 

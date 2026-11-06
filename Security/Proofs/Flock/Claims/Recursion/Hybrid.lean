@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.Compose
-import Proofs.Flock.Claims.KS.Fork
+module
+
+public import Proofs.Flock.Claims.Recursion.Compose
+public import Proofs.Flock.Claims.KS.Fork
 
 /-!
 # The composed extractor's failure, rerun by rerun
@@ -15,6 +17,8 @@ sees is the one `dec` reads off a successful outer extraction.
   of coins), `Pr_equiv` (coins regrouped): the averages the recursion's proof uses.
 * `sqrt_add_lin_any`: `sqrt_add_lin` at any `C`, since `√` of a negative is `0`.
 -/
+
+@[expose] public section
 
 namespace Claims
 

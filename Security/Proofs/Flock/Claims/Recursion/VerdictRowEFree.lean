@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
 
 /-!
 # Row E's chain at any statement, messages and coins (`Top.chainHolds_exists`, `Top.rowEJoint_holds`)
@@ -10,6 +12,8 @@ each below the rep's `nOpen`), so a chain built row by row from any start (`recC
 sum. So `Top.RowEJoint` holds at every layout, check and witnesses (`rowEJoint_holds`), with no tie to the parts'
 `rec-acc` slots.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

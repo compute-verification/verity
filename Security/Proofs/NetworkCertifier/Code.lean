@@ -1,13 +1,15 @@
-import Definitions.NetworkCertifier
-import Definitions.NetworkCertifier.AdviceV1
-import Definitions.NetworkCertifier.WindowCharge
-import NetworkCertifier.Ingress
-import NetworkCertifier.Schedule
-import NetworkCertifier.AdviceV1
-import NetworkCertifier.WindowCharge
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Finset.Dedup
+module
+
+public import Definitions.NetworkCertifier
+public import Definitions.NetworkCertifier.AdviceV1
+public import Definitions.NetworkCertifier.WindowCharge
+public import NetworkCertifier.Ingress
+public import NetworkCertifier.Schedule
+public import NetworkCertifier.AdviceV1
+public import NetworkCertifier.WindowCharge
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Finset.Dedup
 
 /-!
 # The certifier program agrees with the reference definitions
@@ -37,6 +39,8 @@ Each statement relates the two sides by their fields rather than by a transport,
 definitions. The transports (`frameRef`, `syncRef`, `syncSetRef`, `syncSetCode`, `tallyRef`, `carryRef`, `tableRef`,
 `bookRef`, `wcarryRef`, `windowRef`) are the proofs' own.
 -/
+
+@[expose] public section
 
 namespace NetTiming.SecurityProofs
 

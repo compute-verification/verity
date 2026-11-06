@@ -1,4 +1,6 @@
-import Definitions.Claims
+module
+
+public import Definitions.Claims
 
 /-!
 # A counted program against a size of the proof's choosing
@@ -9,6 +11,8 @@ length, a level's decoder at its opened data's), on the way to `Claims.Flock.Eff
 decoder's own count (`Claims.Flock.Deploy.dec`) at the opened word's encoded length (`Claims.Flock.wordLen`). It is no
 claim: with `counted` and `size` its own arguments, a count of `0` meets it.
 -/
+
+@[expose] public section
 
 namespace Claims
 

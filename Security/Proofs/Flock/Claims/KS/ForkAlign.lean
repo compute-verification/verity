@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ForkSim
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Game.Seq
+module
+
+public import Proofs.Flock.Claims.KS.ForkSim
+public import Proofs.Flock.Soundness.Game.Prob
+public import Proofs.Flock.Soundness.Game.Seq
 
 /-!
 # A fork at a table node, aligned with a fork after a number of coins
@@ -21,6 +23,8 @@ reaches that node after exactly `j` coins on every path, or forks to nothing on 
   message of one type with `nul` (a dead branch's), the fork is `0` at any chooser where `Φ` is `0` at every two
   outcomes reached with those messages `nul`, so such a branch meets `SlotAt` by `nul`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game.Lock
 

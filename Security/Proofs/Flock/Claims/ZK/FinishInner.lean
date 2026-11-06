@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FinishPiop
-import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
-import Proofs.Flock.Soundness.Refine.Exec
+module
+
+public import Proofs.Flock.Claims.ZK.FinishPiop
+public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
+public import Proofs.Flock.Soundness.Refine.Exec
 
 /-!
 # The firewall's inner proof is the masked session's where no constraint fails on the pads
@@ -18,6 +20,8 @@ where a constraint the rep hands the inner proof fails there (`failingOn`).
   empty), each on the pads' length, the batched constraint holds at every coin (`FlockComplete.batched_of_holds`, with the
   triple's three at the prover's openings, `FlockComplete.triple_holds`).
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

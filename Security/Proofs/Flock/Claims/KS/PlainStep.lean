@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainLock
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainLock
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain simulator's rounds are the record's
@@ -7,6 +9,8 @@ import Proofs.Flock.Claims.Recursion.PlainK
 Where `P`'s deployed run at `plainΦ`'s coins decides and accepts, the plain simulator's live outcome has the record's
 rep streams, round by round, and the last message's proof files (`plainSimReps`, `plainSimProofs`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

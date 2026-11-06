@@ -1,191 +1,194 @@
-import Proofs.Flock.Claims.ZK.Statement
-import Proofs.Flock.Claims.ZK.GK
-import Proofs.Flock.Claims.ZK.Interact
-import Proofs.Flock.Claims.ZK.Coins
-import Proofs.Flock.Claims.ZK.Congr
-import Proofs.Flock.Claims.ZK.Pin
-import Proofs.Flock.Claims.ZK.Forced
-import Proofs.Flock.Claims.ZK.Rewind
-import Proofs.Flock.Claims.ZK.GKProof
-import Proofs.Flock.Claims.ZK.GKCost
-import Proofs.Flock.Claims.ZK.GKExp
-import Proofs.Flock.Claims.ZK.CoinCheck
-import Proofs.Flock.Claims.ZK.CoinBind
-import Proofs.Flock.Claims.ZK.Prefix
-import Proofs.Flock.Claims.ZK.Shvzk
-import Proofs.Flock.Claims.ZK.Flock
-import Proofs.Flock.Claims.ZK.Hypotheses
-import Proofs.Flock.Claims.ZK.Prefinal
-import Proofs.Flock.Claims.ZK.Deployed
-import Proofs.Flock.Claims.ZK.Reference
-import Proofs.Flock.Claims.ZK.CoinLayer
-import Proofs.Flock.Claims.ZK.CoinOpen
-import Proofs.Flock.Claims.ZK.Tape
-import Proofs.Flock.Claims.ZK.Capacity
-import Proofs.Flock.Claims.ZK.Session
-import Proofs.Flock.Claims.ZK.MaskedTables
-import Proofs.Flock.Claims.ZK.Masked
-import Proofs.Flock.Claims.ZK.MaskTape
-import Proofs.Flock.Claims.ZK.MaskFamily
-import Proofs.Flock.Claims.ZK.OneTape
-import Proofs.Flock.Claims.ZK.Round0
-import Proofs.Flock.Claims.ZK.ExeLayout
-import Proofs.Flock.Claims.ZK.Refusals
-import Proofs.Flock.Claims.ZK.FirstRefusal
-import Proofs.Flock.Claims.ZK.Stopped
-import Proofs.Flock.Claims.ZK.HiSalts
-import Proofs.Flock.Claims.ZK.SaltProver
-import Proofs.Flock.Claims.ZK.CutSession
-import Proofs.Flock.Claims.ZK.ExePlan
-import Proofs.Flock.Claims.ZK.Split
-import Proofs.Flock.Claims.ZK.SimCommit
-import Proofs.Flock.Claims.ZK.PrefixLive
-import Proofs.Flock.Claims.ZK.SimSession
-import Proofs.Flock.Claims.ZK.SimInner
-import Proofs.Flock.Claims.ZK.SplitInner
-import Proofs.Flock.Claims.ZK.InnerSlotTriple
-import Proofs.Flock.Claims.ZK.InnerLeaf
-import Proofs.Flock.Claims.ZK.InnerY
-import Proofs.Flock.Claims.ZK.InnerBatched
-import Proofs.Flock.Claims.ZK.InnerTauVal
-import Proofs.Flock.Claims.ZK.InnerTauRep
-import Proofs.Flock.Claims.ZK.InnerTauLig
-import Proofs.Flock.Claims.ZK.Assemble
-import Proofs.Flock.Claims.ZK.Sent
-import Proofs.Flock.Claims.ZK.Round1
-import Proofs.Flock.Claims.ZK.Round1Pads
-import Proofs.Flock.Claims.ZK.Round1Root
-import Proofs.Flock.Claims.ZK.Round1Enc
-import Proofs.Flock.Claims.ZK.Round2
-import Proofs.Flock.Claims.ZK.Round3Vals
-import Proofs.Flock.Claims.ZK.SimZerocheck
-import Proofs.Flock.Claims.ZK.SimPiopGo
-import Proofs.Flock.Claims.ZK.SimPiopOf
-import Proofs.Flock.Claims.ZK.PiopSrcVals
-import Proofs.Flock.Claims.ZK.PiopSrcLc
-import Proofs.Flock.Claims.ZK.SentE
-import Proofs.Flock.Claims.ZK.PiopSrcSv
-import Proofs.Flock.Claims.ZK.SimPiop
-import Proofs.Flock.Claims.ZK.SimLig
-import Proofs.Flock.Claims.ZK.FinExe
-import Proofs.Flock.Claims.ZK.FinPads
-import Proofs.Flock.Claims.ZK.CausalExe
-import Proofs.Flock.Claims.ZK.LiveEnd
-import Proofs.Flock.Claims.ZK.FinTau
-import Proofs.Flock.Claims.ZK.FinInner
-import Proofs.Flock.Claims.ZK.Worker
-import Proofs.Flock.Claims.ZK.PadFree
-import Proofs.Flock.Claims.ZK.Switched
-import Proofs.Flock.Claims.ZK.Server
-import Proofs.Flock.Claims.ZK.Blind
-import Proofs.Flock.Claims.ZK.Release
-import Proofs.Flock.Claims.ZK.Refine
-import Proofs.Flock.Claims.ZK.CoinPass
-import Proofs.Flock.Claims.ZK.Os
-import Proofs.Flock.Claims.ZK.FrameTape
-import Proofs.Flock.Claims.ZK.FrameParse
-import Proofs.Flock.Claims.ZK.FrameMask
-import Proofs.Flock.Claims.ZK.FrameRounds
-import Proofs.Flock.Claims.ZK.FrameOpen
-import Proofs.Flock.Claims.ZK.FrameOpenCut
-import Proofs.Flock.Claims.ZK.FrameOpenLive
-import Proofs.Flock.Claims.ZK.FramePhase
-import Proofs.Flock.Claims.ZK.FrameState
-import Proofs.Flock.Claims.ZK.FrameRun
-import Proofs.Flock.Claims.ZK.FrameShape
-import Proofs.Flock.Claims.ZK.FrameOwn
-import Proofs.Flock.Claims.ZK.FramePass
-import Proofs.Flock.Claims.ZK.FrameLoop
-import Proofs.Flock.Claims.ZK.FrameSched
-import Proofs.Flock.Claims.ZK.FrameProg
-import Proofs.Flock.Claims.ZK.FrameCount
-import Proofs.Flock.Claims.ZK.FrameAsks
-import Proofs.Flock.Claims.ZK.FramePlan
-import Proofs.Flock.Claims.ZK.FrameLinks
-import Proofs.Flock.Claims.ZK.FrameReal
-import Proofs.Flock.Claims.ZK.FrameRep
-import Proofs.Flock.Claims.ZK.FrameInner
-import Proofs.Flock.Claims.ZK.FrameZK
-import Proofs.Flock.Claims.ZK.FrameLive
-import Proofs.Flock.Claims.ZK.PadsRoot
-import Proofs.Flock.Claims.ZK.NonVacuous
-import Proofs.Flock.Claims.ZK.SamplingNonVacuous
-import Proofs.Flock.Claims.ZK.Compose
-import Proofs.Flock.Claims.ZK.Layout
-import Proofs.Flock.Claims.ZK.Cut
-import Proofs.Flock.Claims.ZK.Stop
-import Proofs.Flock.Claims.ZK.LinkFft
-import Proofs.Flock.Claims.ZK.LinkRecheck
-import Proofs.Flock.Claims.ZK.FinishRound
-import Proofs.Flock.Claims.ZK.FrameTaken
-import Proofs.Flock.Claims.ZK.FrameRank
-import Proofs.Flock.Claims.ZK.FramePoints
-import Proofs.Flock.Claims.ZK.FinishCommit
-import Proofs.Flock.Claims.ZK.FinishLevel0
-import Proofs.Flock.Claims.ZK.FinishPiop
-import Proofs.Flock.Claims.ZK.FinishInner
-import Proofs.Flock.Claims.ZK.FinishLig
-import Proofs.Flock.Claims.ZK.FinishRep
-import Proofs.Flock.Claims.ZK.FinishRank
-import Proofs.Flock.Claims.ZK.AdmitsOf
-import Proofs.Flock.Claims.ZK.FrameAdmits
-import Proofs.Flock.Claims.ZK.FrameBeta
-import Proofs.Flock.Claims.ZK.FrameOuter
-import Proofs.Flock.Claims.ZK.FrameFree
-import Proofs.Flock.Claims.ZK.FrameRanked
-import Proofs.Flock.Claims.ZK.FrameRankFault
-import Proofs.Flock.Claims.ZK.FrameRho
-import Proofs.Flock.Claims.ZK.FrameUnrefused
-import Proofs.Flock.Claims.ZK.FinishSrc
-import Proofs.Flock.Claims.ZK.FinishBridge
-import Proofs.Flock.Claims.ZK.FinishTrunc
-import Proofs.Flock.Claims.ZK.FinishLive
-import Proofs.Flock.Claims.ZK.FinishStop
-import Proofs.Flock.Claims.ZK.FinishStopAt
-import Proofs.Flock.Claims.ZK.FinishSwSrc
-import Proofs.Flock.Claims.ZK.FinishSwSv
-import Proofs.Flock.Claims.ZK.FinishSwMk
-import Proofs.Flock.Claims.ZK.FinishSwMkAny
-import Proofs.Flock.Claims.ZK.FinishFwL0
-import Proofs.Flock.Claims.ZK.FinishSwFrame
-import Proofs.Flock.Claims.ZK.FinishSwLig
-import Proofs.Flock.Claims.ZK.FinishSwLigE
-import Proofs.Flock.Claims.ZK.L0Pin
-import Proofs.Flock.Claims.ZK.L0PinCoins
-import Proofs.Flock.Claims.ZK.L0PinFrame
-import Proofs.Flock.Claims.ZK.L0PinQuiet
-import Proofs.Flock.Claims.ZK.L0PinFlags
-import Proofs.Flock.Claims.ZK.L0PinSwitch
-import Proofs.Flock.Claims.ZK.L0PinRec
-import Proofs.Flock.Claims.ZK.L0PinBind
-import Proofs.Flock.Claims.ZK.L0PinLive
-import Proofs.Flock.Claims.ZK.L0PinChain
-import Proofs.Flock.Claims.ZK.L0PinLoop
-import Proofs.Flock.Claims.ZK.L0PinCut
-import Proofs.Flock.Claims.ZK.FinHmkLive
-import Proofs.Flock.Claims.ZK.FinishSwInner
-import Proofs.Flock.Claims.ZK.FinishSwTau
-import Proofs.Flock.Claims.ZK.FinishSwRows
-import Proofs.Flock.Claims.ZK.FinishSwFw
-import Proofs.Flock.Claims.ZK.FinishSwPts
-import Proofs.Flock.Claims.ZK.FinishSwBit
-import Proofs.Flock.Claims.ZK.FinishSwRep
-import Proofs.Flock.Claims.ZK.FinishClaimsX
-import Proofs.Flock.Claims.ZK.FinishSwVals
-import Proofs.Flock.Claims.ZK.FinishRows
-import Proofs.Flock.Claims.ZK.FinishZc
-import Proofs.Flock.Claims.ZK.FinishTau
-import Proofs.Flock.Claims.ZK.FinishLane
-import Proofs.Flock.Claims.ZK.HelloLean
-import Proofs.Flock.Claims.ZK.SessionLean
-import Proofs.Flock.Claims.ZK.RepLog
-import Proofs.Flock.Claims.ZK.CutPrefix
-import Proofs.Flock.Claims.ZK.PiopFree
-import Proofs.Flock.Claims.ZK.RepFree
-import Proofs.Flock.Claims.ZK.RepReplay
-import Proofs.Flock.Claims.ZK.RepInner
-import Proofs.Flock.Claims.ZK.RepCutFw
-import Proofs.Flock.Claims.ZK.RepRet
+module
+
+public import Proofs.Flock.Claims.ZK.Statement
+public import Proofs.Flock.Claims.ZK.GK
+public import Proofs.Flock.Claims.ZK.Interact
+public import Proofs.Flock.Claims.ZK.Coins
+public import Proofs.Flock.Claims.ZK.Congr
+public import Proofs.Flock.Claims.ZK.Pin
+public import Proofs.Flock.Claims.ZK.Forced
+public import Proofs.Flock.Claims.ZK.Rewind
+public import Proofs.Flock.Claims.ZK.GKProof
+public import Proofs.Flock.Claims.ZK.GKCost
+public import Proofs.Flock.Claims.ZK.GKExp
+public import Proofs.Flock.Claims.ZK.CoinCheck
+public import Proofs.Flock.Claims.ZK.CoinBind
+public import Proofs.Flock.Claims.ZK.Prefix
+public import Proofs.Flock.Claims.ZK.Shvzk
+public import Proofs.Flock.Claims.ZK.Flock
+public import Proofs.Flock.Claims.ZK.Hypotheses
+public import Proofs.Flock.Claims.ZK.Prefinal
+public import Proofs.Flock.Claims.ZK.Deployed
+public import Proofs.Flock.Claims.ZK.Reference
+public import Proofs.Flock.Claims.ZK.CoinLayer
+public import Proofs.Flock.Claims.ZK.CoinOpen
+public import Proofs.Flock.Claims.ZK.Tape
+public import Proofs.Flock.Claims.ZK.Capacity
+public import Proofs.Flock.Claims.ZK.Session
+public import Proofs.Flock.Claims.ZK.MaskedTables
+public import Proofs.Flock.Claims.ZK.Masked
+public import Proofs.Flock.Claims.ZK.MaskTape
+public import Proofs.Flock.Claims.ZK.MaskFamily
+public import Proofs.Flock.Claims.ZK.OneTape
+public import Proofs.Flock.Claims.ZK.Round0
+public import Proofs.Flock.Claims.ZK.ExeLayout
+public import Proofs.Flock.Claims.ZK.Refusals
+public import Proofs.Flock.Claims.ZK.FirstRefusal
+public import Proofs.Flock.Claims.ZK.Stopped
+public import Proofs.Flock.Claims.ZK.HiSalts
+public import Proofs.Flock.Claims.ZK.SaltProver
+public import Proofs.Flock.Claims.ZK.CutSession
+public import Proofs.Flock.Claims.ZK.ExePlan
+public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.ZK.SimCommit
+public import Proofs.Flock.Claims.ZK.PrefixLive
+public import Proofs.Flock.Claims.ZK.SimSession
+public import Proofs.Flock.Claims.ZK.SimInner
+public import Proofs.Flock.Claims.ZK.SplitInner
+public import Proofs.Flock.Claims.ZK.InnerSlotTriple
+public import Proofs.Flock.Claims.ZK.InnerLeaf
+public import Proofs.Flock.Claims.ZK.InnerY
+public import Proofs.Flock.Claims.ZK.InnerBatched
+public import Proofs.Flock.Claims.ZK.InnerTauVal
+public import Proofs.Flock.Claims.ZK.InnerTauRep
+public import Proofs.Flock.Claims.ZK.InnerTauLig
+public import Proofs.Flock.Claims.ZK.Assemble
+public import Proofs.Flock.Claims.ZK.Sent
+public import Proofs.Flock.Claims.ZK.Round1
+public import Proofs.Flock.Claims.ZK.Round1Pads
+public import Proofs.Flock.Claims.ZK.Round1Root
+public import Proofs.Flock.Claims.ZK.Round1Enc
+public import Proofs.Flock.Claims.ZK.Round2
+public import Proofs.Flock.Claims.ZK.Round3Vals
+public import Proofs.Flock.Claims.ZK.SimZerocheck
+public import Proofs.Flock.Claims.ZK.SimPiopGo
+public import Proofs.Flock.Claims.ZK.SimPiopOf
+public import Proofs.Flock.Claims.ZK.PiopSrcVals
+public import Proofs.Flock.Claims.ZK.PiopSrcLc
+public import Proofs.Flock.Claims.ZK.SentE
+public import Proofs.Flock.Claims.ZK.PiopSrcSv
+public import Proofs.Flock.Claims.ZK.SimPiop
+public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.FinPads
+public import Proofs.Flock.Claims.ZK.CausalExe
+public import Proofs.Flock.Claims.ZK.LiveEnd
+public import Proofs.Flock.Claims.ZK.FinTau
+public import Proofs.Flock.Claims.ZK.FinInner
+public import Proofs.Flock.Claims.ZK.Worker
+public import Proofs.Flock.Claims.ZK.PadFree
+public import Proofs.Flock.Claims.ZK.Switched
+public import Proofs.Flock.Claims.ZK.Server
+public import Proofs.Flock.Claims.ZK.Blind
+public import Proofs.Flock.Claims.ZK.Release
+public import Proofs.Flock.Claims.ZK.Refine
+public import Proofs.Flock.Claims.ZK.CoinPass
+public import Proofs.Flock.Claims.ZK.Os
+public import Proofs.Flock.Claims.ZK.FrameTape
+public import Proofs.Flock.Claims.ZK.FrameParse
+public import Proofs.Flock.Claims.ZK.FrameMask
+public import Proofs.Flock.Claims.ZK.FrameRounds
+public import Proofs.Flock.Claims.ZK.FrameOpen
+public import Proofs.Flock.Claims.ZK.FrameOpenCut
+public import Proofs.Flock.Claims.ZK.FrameOpenLive
+public import Proofs.Flock.Claims.ZK.FramePhase
+public import Proofs.Flock.Claims.ZK.FrameState
+public import Proofs.Flock.Claims.ZK.FrameRun
+public import Proofs.Flock.Claims.ZK.FrameShape
+public import Proofs.Flock.Claims.ZK.FrameOwn
+public import Proofs.Flock.Claims.ZK.FramePass
+public import Proofs.Flock.Claims.ZK.FrameLoop
+public import Proofs.Flock.Claims.ZK.FrameSched
+public import Proofs.Flock.Claims.ZK.FrameProg
+public import Proofs.Flock.Claims.ZK.FrameCount
+public import Proofs.Flock.Claims.ZK.FrameAsks
+public import Proofs.Flock.Claims.ZK.FramePlan
+public import Proofs.Flock.Claims.ZK.FrameLinks
+public import Proofs.Flock.Claims.ZK.FrameReal
+public import Proofs.Flock.Claims.ZK.FrameRep
+public import Proofs.Flock.Claims.ZK.FrameInner
+public import Proofs.Flock.Claims.ZK.FrameZK
+public import Proofs.Flock.Claims.ZK.FrameLive
+public import Proofs.Flock.Claims.ZK.PadsRoot
+public import Proofs.Flock.Claims.ZK.NonVacuous
+public import Proofs.Flock.Claims.ZK.SamplingNonVacuous
+public import Proofs.Flock.Claims.ZK.Compose
+public import Proofs.Flock.Claims.ZK.Layout
+public import Proofs.Flock.Claims.ZK.Cut
+public import Proofs.Flock.Claims.ZK.DeferredOut
+public import Proofs.Flock.Claims.ZK.Stop
+public import Proofs.Flock.Claims.ZK.LinkFft
+public import Proofs.Flock.Claims.ZK.LinkRecheck
+public import Proofs.Flock.Claims.ZK.FinishRound
+public import Proofs.Flock.Claims.ZK.FrameTaken
+public import Proofs.Flock.Claims.ZK.FrameRank
+public import Proofs.Flock.Claims.ZK.FramePoints
+public import Proofs.Flock.Claims.ZK.FinishCommit
+public import Proofs.Flock.Claims.ZK.FinishLevel0
+public import Proofs.Flock.Claims.ZK.FinishPiop
+public import Proofs.Flock.Claims.ZK.FinishInner
+public import Proofs.Flock.Claims.ZK.FinishLig
+public import Proofs.Flock.Claims.ZK.FinishRep
+public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.AdmitsOf
+public import Proofs.Flock.Claims.ZK.FrameAdmits
+public import Proofs.Flock.Claims.ZK.FrameBeta
+public import Proofs.Flock.Claims.ZK.FrameOuter
+public import Proofs.Flock.Claims.ZK.FrameFree
+public import Proofs.Flock.Claims.ZK.FrameRanked
+public import Proofs.Flock.Claims.ZK.FrameRankFault
+public import Proofs.Flock.Claims.ZK.FrameRho
+public import Proofs.Flock.Claims.ZK.FrameUnrefused
+public import Proofs.Flock.Claims.ZK.FinishSrc
+public import Proofs.Flock.Claims.ZK.FinishBridge
+public import Proofs.Flock.Claims.ZK.FinishTrunc
+public import Proofs.Flock.Claims.ZK.FinishLive
+public import Proofs.Flock.Claims.ZK.FinishStop
+public import Proofs.Flock.Claims.ZK.FinishStopAt
+public import Proofs.Flock.Claims.ZK.FinishSwSrc
+public import Proofs.Flock.Claims.ZK.FinishSwSv
+public import Proofs.Flock.Claims.ZK.FinishSwMk
+public import Proofs.Flock.Claims.ZK.FinishSwMkAny
+public import Proofs.Flock.Claims.ZK.FinishFwL0
+public import Proofs.Flock.Claims.ZK.FinishSwFrame
+public import Proofs.Flock.Claims.ZK.FinishSwLig
+public import Proofs.Flock.Claims.ZK.FinishSwLigE
+public import Proofs.Flock.Claims.ZK.L0Pin
+public import Proofs.Flock.Claims.ZK.L0PinCoins
+public import Proofs.Flock.Claims.ZK.L0PinFrame
+public import Proofs.Flock.Claims.ZK.L0PinQuiet
+public import Proofs.Flock.Claims.ZK.L0PinFlags
+public import Proofs.Flock.Claims.ZK.L0PinSwitch
+public import Proofs.Flock.Claims.ZK.L0PinRec
+public import Proofs.Flock.Claims.ZK.L0PinBind
+public import Proofs.Flock.Claims.ZK.L0PinLive
+public import Proofs.Flock.Claims.ZK.L0PinChain
+public import Proofs.Flock.Claims.ZK.L0PinLoop
+public import Proofs.Flock.Claims.ZK.L0PinCut
+public import Proofs.Flock.Claims.ZK.FinHmkLive
+public import Proofs.Flock.Claims.ZK.FinishSwInner
+public import Proofs.Flock.Claims.ZK.FinishSwTau
+public import Proofs.Flock.Claims.ZK.FinishSwRows
+public import Proofs.Flock.Claims.ZK.FinishSwFw
+public import Proofs.Flock.Claims.ZK.FinishSwPts
+public import Proofs.Flock.Claims.ZK.FinishSwBit
+public import Proofs.Flock.Claims.ZK.FinishSwRep
+public import Proofs.Flock.Claims.ZK.FinishClaimsX
+public import Proofs.Flock.Claims.ZK.FinishSwVals
+public import Proofs.Flock.Claims.ZK.FinishRows
+public import Proofs.Flock.Claims.ZK.FinishZc
+public import Proofs.Flock.Claims.ZK.FinishTau
+public import Proofs.Flock.Claims.ZK.FinishLane
+public import Proofs.Flock.Claims.ZK.HelloLean
+public import Proofs.Flock.Claims.ZK.SessionLean
+public import Proofs.Flock.Claims.ZK.RepLog
+public import Proofs.Flock.Claims.ZK.CutPrefix
+public import Proofs.Flock.Claims.ZK.PiopFree
+public import Proofs.Flock.Claims.ZK.RepFree
+public import Proofs.Flock.Claims.ZK.RepReplay
+public import Proofs.Flock.Claims.ZK.RepInner
+public import Proofs.Flock.Claims.ZK.RepCutFw
+public import Proofs.Flock.Claims.ZK.RepRet
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -488,6 +491,9 @@ import Proofs.Flock.Claims.ZK.RepRet
   server's draws nor its messages (`ZkServer.lift`, `ZkServer.Blind`). The server that defers every stop to the last
   round (`ZkServer.nextD`) releases the reference run or it with its last message the stop (`ZkServer.split_deferred`),
   within a factor 2 of the simulator that guesses which (`ZkServer.zk_deferred`, `leaky1`).
+* `DeferredOut`: which one is public, the bit whether the session's last round carries the stop (`stopOf`), so per
+  outcome (`outD`: the verdict and that bit) the deferred server is `Claims.ZKOut`'s bound at the factor `1`, at the
+  simulator given the outcome (`simOutD`, `leaky1` at its bit; `ZkServer.zkOut_deferred`).
 * `Blind`: the switched prover at the reference session (`RefSession.swP`, at values `RefSession.SwVals` read from what
   a pad-blind worker sees of every table, `RefSession.seenOf`), with `refP`'s simulator, which never reads the prover's messages (`Proto.simulatorE_msg`):
   **`Flock.zk_deployZk_sw`**, `Claims.Flock.ZKAt` at the same `ε_zk`, `γ` and simulator as `Flock.zkAt_deployZk_ref`
@@ -1005,3 +1011,5 @@ import Proofs.Flock.Claims.ZK.RepRet
   its error (`ZKmalAt.censor`), sessions where it fired are silent and simulated exactly, and **`zkmalAt_layout_stop`**
   charges the parts in turn `ε₀ + Σ_{j < m} eB j` and `m·g` against the prover with the stop.
 -/
+
+@[expose] public section

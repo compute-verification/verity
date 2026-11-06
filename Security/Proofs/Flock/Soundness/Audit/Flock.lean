@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Audit.OneStage
-import Proofs.Flock.Soundness.Audit.TwoStage
-import Proofs.Flock.Soundness.Game.Batch
-import Proofs.Flock.Soundness.Instance
+module
+
+public import Proofs.Flock.Soundness.Audit.OneStage
+public import Proofs.Flock.Soundness.Audit.TwoStage
+public import Proofs.Flock.Soundness.Game.Batch
+public import Proofs.Flock.Soundness.Instance
 
 /-!
 # The Flock instantiation, at the oracle layer
@@ -29,6 +31,8 @@ Mutual correlated agreement is proved (`mcaError_le_bchks25`), so there is no ot
 Of `Audit/`, only this file and the compiled instances (`FlockCompiled.lean`, `FlockBatched.lean`)
 import the Flock theorems.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

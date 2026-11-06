@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictRows
-import Proofs.Flock.Claims.Recursion.DecodeTiesW
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+public import Proofs.Flock.Claims.Recursion.DecodeTiesW
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
 # Row C at a decision: the decoded proof's ties
@@ -19,6 +21,8 @@ points being the link's (`pointsOf` at the first coin), and the proof being shap
   fields are the decoded ones (`zcProofOf_of`, …). The messages, out-of-domain values and `yr` need two levels or
   more, which a shaped proof's schedule has (`ProofShaped`'s `1 ≤ sh.sched.levels.size - 1`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows.DecAt
 

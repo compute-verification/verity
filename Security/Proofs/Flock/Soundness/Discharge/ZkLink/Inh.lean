@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
-import Proofs.Flock.Soundness.Refine.LiveCompiled
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+public import Proofs.Flock.Soundness.Refine.LiveCompiled
 
 /-!
 # Every message a compiled `--zk` rep receives has an inhabited type
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Refine.LiveCompiled
 can still play. `allInh_repZCAt` gives it for `repZCAt`, `Refine.modelTable`'s `G` for the compiled `--zk` table, from
 `AllInh` of each game a masked rep is built from.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

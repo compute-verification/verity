@@ -2,7 +2,11 @@
 The two slot circuits as the verifier builds them (`Flock.HmNets.hmLaid`, `shaLaid`): run from the empty state, so their
 inputs are the committed bits `0, 1, …` in port order, and what their rows force on those bits.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Hm96
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Hm96
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

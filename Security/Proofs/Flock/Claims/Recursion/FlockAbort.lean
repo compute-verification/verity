@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.Gap
+module
+
+public import Proofs.Flock.Claims.Recursion.Gap
 
 /-!
 # `Claims.Flock.KS` does not give `Inner.KSAbort`
@@ -24,6 +26,8 @@ reject after those coins, and `qV` gives no such move after its coin 0. `qDI` me
 prover can thin acceptance on the query position: its `ε_table = 0` is no table bound, as a table out of the code, wrong
 at position `0` alone, is opened consistently at every run that queries position `1`, half the runs.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

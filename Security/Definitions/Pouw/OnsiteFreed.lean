@@ -1,4 +1,6 @@
-import Definitions.Pouw.Dither
+module
+
+public import Definitions.Pouw.Dither
 
 /-!
 # The onsite PoUW protocol's verdict on a monitoring period (trusted)
@@ -17,6 +19,8 @@ monitoring period when both its checks do:
 bit with a machine outside them. `Definitions.Pouw.Guarantees.OnsiteFreed` bounds what an accepted onsite period
 frees.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dither
 

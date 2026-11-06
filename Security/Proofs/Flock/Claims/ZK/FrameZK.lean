@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FrameInner
-import Flock.Firewall.Session
+module
+
+public import Proofs.Flock.Claims.ZK.FrameInner
+public import Flock.Firewall.Session
 
 /-!
 # `Flock.zk_server_lean` at the session loop's own frames
@@ -25,6 +27,8 @@ This file states the bound there with `ProgChecks` as a conclusion, its premises
   `final_c'` (`hL0`: the loop's frame releases that round itself, `Frame.innerSched` on its finish's round 0, at the inner
   proof's label).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

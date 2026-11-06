@@ -1,4 +1,6 @@
-import Proofs.Flock.Level3
+module
+
+public import Proofs.Flock.Level3
 
 /-!
 # The clear zerocheck is complete at every coin with `r_j ≠ 1`
@@ -21,6 +23,8 @@ executable's own arithmetic (`F128`, `dot`, `lagrange nodesL den6Inv`, `combWeig
 honest one. The seven pinned coordinates are never 1 (`pinned_append_ne_one`).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.Composed.Zerocheck
 
 open Flock FlockLevel3 Polynomial
@@ -29,7 +33,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-! ## The clear replay -/
 
-/-- The starting claim `Pcomb(z) + Pc(z)` (§9.2), as `Zk.replay` forms it on the clear values. -/
+/-- The starting claim `Pcomb(z) + Pc(z)` (`Flock.Piop`), as `Zk.replay` forms it on the clear values. -/
 def claim0 (zc : ZerocheckProof) (z : F128) : F128 :=
   dot (combWeights z) ((Array.range 64).map fun i => zc.round1ab[i]! + zc.round1c[i]!) +
     dot (lagrange nodesL den6Inv z) zc.round1c

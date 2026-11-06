@@ -1,8 +1,10 @@
-import Proofs.Pouw.PearlC.PeelExists
-import Proofs.Pouw.PearlC.PeelExists4
-import Proofs.Pouw.PearlC.TileCheck4Words
-import Proofs.Pouw.PearlC.CoreOps
-import Definitions.Pouw.Guarantees.PearlCTileCheck
+module
+
+public import Proofs.Pouw.PearlC.PeelExists
+public import Proofs.Pouw.PearlC.PeelExists4
+public import Proofs.Pouw.PearlC.TileCheck4Words
+public import Proofs.Pouw.PearlC.CoreOps
+public import Definitions.Pouw.Guarantees.PearlCTileCheck
 
 /-!
 # The plain `pc8` and `pc4` tile checks compute the words (proofs)
@@ -31,6 +33,8 @@ hypothesis at an entry. `pc4` names none at an entry: the two rows' `Row4OK` and
 At core's instance `coreOps` both agreements follow from core's definitions (`CoreOps`), so
 `tileCheck8_computesWords_core` and `tileCheck4_computesWords_core` name no hypothesis.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 

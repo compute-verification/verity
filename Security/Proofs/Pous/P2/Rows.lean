@@ -1,5 +1,7 @@
-import Proofs.Pous.P2.Count
-import Proofs.Pous.TrackA.A3Prime
+module
+
+public import Proofs.Pous.P2.Count
+public import Proofs.Pous.TrackA.A3Prime
 
 /-!
 # The certificate in model M1 (`Pous.m1`)
@@ -14,6 +16,8 @@ The certificate bounds `log₂ |Hist| ≤ k·log₂ B`, `log₂ C(B, g) ≤ B`, 
 `log₂ Σ_{h ≤ g} C((g+1)T, h) ≤ g·log₂ T + (g + 1)/ln 2` (from `C(N, h) ≤ N^h/h!` and `Σ g^h/h! ≤ e^g`), so the
 final check is linear arithmetic with `ln 2 > 0.6931471803`.
 -/
+
+@[expose] public section
 
 namespace PousP2
 

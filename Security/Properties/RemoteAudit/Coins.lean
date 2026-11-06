@@ -1,4 +1,6 @@
-import Properties.RemoteAudit
+module
+
+public import Properties.RemoteAudit
 
 /-!
 # When the verifier reads a window's openings coin (`RemoteAudit`)
@@ -37,6 +39,8 @@ The statements need `1 ≤ W` (with no window, `start` reads `coins[0]`, window 
 `1 ≤ min_passes` (with none, an empty window drawn on its deadline could take a root afterwards, once the window
 before it is drawn), which `audit.py`'s `Params` and the difftest's `positive` check.
 -/
+
+@[expose] public section
 
 open RemoteAudit
 

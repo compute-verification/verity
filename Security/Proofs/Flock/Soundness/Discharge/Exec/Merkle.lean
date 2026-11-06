@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ExecTemplate
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
+module
+
+public import Proofs.Flock.Soundness.ExecTemplate
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
 
 /-!
 # The leaf scheme of each table flock-verify sets up (`hms`)
@@ -17,6 +19,8 @@ tags' `merkleLeaf`, and `Stmt.setupH` takes its Merkle scheme from that id (`Mer
   `merkleLeaf_circuitTypes`), each table's Merkle scheme is `hm96Sha512`.
 * `accepts_tables_hm96_of_leaf`: `accepts_tables_hm96` with `hms` discharged.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

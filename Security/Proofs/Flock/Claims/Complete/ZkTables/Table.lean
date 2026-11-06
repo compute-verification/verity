@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
 /-!
 # The masked completeness premises, one table at a time
@@ -32,6 +34,8 @@ of a good case, its rep `r` from the sends after the link's and the `2 i + r` ea
   `Inner` at the deployed relation, from the table-level forms at table `0` of a good masked case (`CaseZk.toCase`) or
   run (`RunZk.toRun`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

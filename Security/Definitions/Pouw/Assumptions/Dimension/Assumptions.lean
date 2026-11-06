@@ -1,4 +1,6 @@
-import Definitions.Pouw.Dimension.Defs
+module
+
+public import Definitions.Pouw.Dimension.Defs
 
 /-!
 # Theorem D's residue: the named assumption A1 (trusted)
@@ -12,6 +14,8 @@ checked words it is the per-word cost itself, TT_NCP restated, so it reduces TT_
 stays the named conjecture (`Pouw.NCP.Assumptions.TTNCP_U`). The accounting's machine model is ACCEL's
 (`Verity.Accel.Machine`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Assumptions
 

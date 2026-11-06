@@ -13,8 +13,12 @@ first, and the unit's rows in unit coordinates, as the prover's mirror (`verity_
 
 Reads, inline and placed, by `table/v2` (S3b). `Flock.Derive.derive` is the flat case.
 -/
-import Flock.Derive
-import Flock.Layout
+module
+
+public import Flock.Derive
+public import Flock.Layout
+
+@[expose] public section
 
 namespace Flock.DeriveAll
 

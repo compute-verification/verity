@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VerdictRows
-import Proofs.Flock.Claims.Bridge.Custody
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+public import Proofs.Flock.Claims.Bridge.Custody
 
 /-!
 # Row B at the decision: what the record's decode gives
@@ -15,6 +17,8 @@ are what the verdict's decoder checks of every record it returns (`DecAt.decode`
 The fourth, `framed` (the rounds hold the rep's frames), is about the record's values, not its form: it holds where
 each round retained its chunk's bytes and counts its chunk's closing squeeze (`framedAt_of_rounds`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

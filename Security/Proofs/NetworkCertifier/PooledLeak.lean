@@ -1,9 +1,11 @@
-import Definitions.NetworkCertifier.Guarantees.PooledLeak
-import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Soundness.Audit.Periods
-import Proofs.NetworkCertifier.Period
-import Proofs.NetworkCertifier.Pooled
-import Proofs.NetworkCertifier.Tap
+module
+
+public import Definitions.NetworkCertifier.Guarantees.PooledLeak
+public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Soundness.Audit.Periods
+public import Proofs.NetworkCertifier.Period
+public import Proofs.NetworkCertifier.Pooled
+public import Proofs.NetworkCertifier.Tap
 
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits
@@ -23,6 +25,8 @@ the client receives read back from the network certifier's record under the sche
 number at most `#Ss` times those records, which bounds the secrets they decode to (`encard_pooledGood_le`);
 `∏_c (cap_c + 1)` is room, as in the period's bound.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 
