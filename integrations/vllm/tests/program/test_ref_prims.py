@@ -231,6 +231,8 @@ def test_twins_equal_gates(DT):
     assert (out == ref_prims_twins.np_silu_ref(x[None], DT)[0]).all()
     out, _ = gates(bind(R.SoftmaxRef, N=K, DT=DT), x)
     assert (out == ref_prims_twins.np_softmax_ref(x[None], DT)[0]).all()
+    out, _ = gates(bind(R.LogSoftmaxRef, N=K, DT=DT), x)
+    assert (out == ref_prims_twins.np_log_softmax_ref(x[None], DT)[0]).all()
     xr, c, s = rand_words(rng, D, DT), rand_words(rng, D, DT), rand_words(rng, D, DT)
     out, _ = gates(bind(R.RoPERef, D=D, DT=DT), xr, c, s)
     assert (out == ref_prims_twins.np_rope_ref(xr[None], c, s, DT)[0]).all()

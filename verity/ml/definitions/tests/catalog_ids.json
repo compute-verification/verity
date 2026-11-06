@@ -853,6 +853,7 @@
 "LogSoftmaxNllBackwardRow_v1",
 "LogSoftmaxNllBackwardWarp_v1",
 "LogSoftmaxNllSlots_v1",
+"LogSoftmaxRef_v1",
 "LogSoftmaxRowEnd_v1",
 "LogSoftmaxRow_v1",
 "LogSoftmaxWarpMax_v1",
