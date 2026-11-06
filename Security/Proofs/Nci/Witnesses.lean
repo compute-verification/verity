@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Guarantees.Witnesses
+public import Proofs.Nci.Rate
 public import Proofs.Nci.Reads
 public import Proofs.Nci.RemotePeriod
 public import Proofs.Nci.Capability.Witnesses
@@ -9,12 +10,13 @@ public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Mathlib.Tactic.Linarith
 
 /-!
-# The inference-only policy's guarantees in `(c, k)`: proofs of their witnesses
+# The inference-only policy's guarantees: proofs of their witnesses
 
 Each witness of `Definitions.Nci.Guarantees.Witnesses`, at the toy (`Nci.Capability.Toy`) and the instances of
-`Nci.Witness`. The facts they share come first: the toy complies at `(2, 1)`, and with the token registered at `(2, 0)`;
-the threading `T1` is `(1, 0)`-threaded and its weights incompressible at half a bit each, read off the toy's sixteen
-sets of gates; `T0` has no counted multiplication and bound `e`; and `F` is positive.
+`Nci.Witness`. The facts they share come first: the toy's one proof block is a `(2, 1)`-partition of exactly two gates,
+so the toy complies at `Γ = 2` and the rate `α = 1/2`, and with the token registered at `α = 0`; the threading `T1` is
+`(1, 0)`-threaded and its weights incompressible at half a bit each, read off the toy's sixteen sets of gates; `T0` has
+no counted multiplication and bound `e`; and `F` is positive.
 -/
 
 @[expose] public section
@@ -23,11 +25,17 @@ namespace Nci.Witness
 
 open Verity Finset Nci.Capability.Toy
 
-theorem complies_D : Complies 2 1 D :=
-  ⟨1, P1, { boolean := ⟨fun _ => rfl, by decide⟩, card := by decide, reads := by decide }⟩
+theorem isCK_D : P1.IsCK D 2 1 := { boolean := ⟨fun _ => rfl, by decide⟩, card := by decide, reads := by decide }
 
-theorem complies_Dθ : Complies 2 0 Dθ :=
-  ⟨1, P1, { boolean := ⟨fun _ => rfl, by decide⟩, card := by decide, reads := by decide }⟩
+theorem isCK_Dθ : P1.IsCK Dθ 2 0 := { boolean := ⟨fun _ => rfl, by decide⟩, card := by decide, reads := by decide }
+
+/-- The toy's one proof block is two gates reading one fresh bit, the token: it complies at `Γ = 2` and `α = 1/2`. -/
+theorem compliesRate_D : CompliesRate 2 (1 / 2) D := by
+  simpa only [Nat.cast_one, Nat.cast_ofNat] using SecurityProofs.compliesRate_of_complies isCK_D (by decide)
+
+/-- With the token registered too, the toy's one proof block reads no fresh bit: it complies at `α = 0`. -/
+theorem compliesRate_Dθ : CompliesRate 2 0 Dθ := by
+  simpa only [Nat.cast_zero, zero_div] using SecurityProofs.compliesRate_of_complies isCK_Dθ (by decide)
 
 theorem size_D : D.D.size D.D.computed = 2 := by decide
 
@@ -308,7 +316,11 @@ theorem mb0_not_coverage_two : ¬ Assumptions.Coverage 2 D (mb0 D).P.card := by
   rw [size_D]
   norm_num [mb0]
 
-theorem D_blockFits : Cover.Assumptions.BlockFits D 2 1 1 4 := ⟨by decide, by decide⟩
+theorem D_blockFits : Cover.Assumptions.BlockFits D 2 1 1 4 := by
+  refine ⟨by decide, ?_⟩
+  have h : (D.D.width D.θ : ℝ) ≤ 1 := by exact_mod_cast (show D.D.width D.θ ≤ 1 by decide)
+  push_cast
+  linarith
 
 theorem capBelowDepth_one_two : Cover.Assumptions.CapBelowDepth 1 1 2 := by
   unfold Cover.Assumptions.CapBelowDepth
@@ -358,53 +370,53 @@ namespace Nci.SecurityProofs
 open Verity Finset Nci.Capability.Toy Nci.Witness Nci.Dampener
 
 theorem ThreadedTraining_honest : Guarantees.ThreadedTraining_honest :=
-  ⟨complies_D, theta_id D, T1_threaded, T1_weights, coverage_T1⟩
+  ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights, coverage_T1⟩
 
 theorem ThreadedTraining_nontrivial : Guarantees.ThreadedTraining_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, complies_D, theta_id D, T0_threaded _ _ _ _ _,
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _,
     T0_weights _ _ _ _ _, not_coverage_T0, ?_⟩
   rw [bound_T0, size_D]
   norm_num
 
 theorem ThreadedTrainingOn_nontrivial : Guarantees.ThreadedTrainingOn_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, complies_D, theta_id D, T0_threaded _ _ _ _ _,
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _,
     T0_weights _ _ _ _ _, not_coverage_T0, ?_⟩
   rw [bound_T0, size_D, dark_id]
   norm_num
 
 theorem ActivationsBoundOn_honest : Guarantees.ActivationsBoundOn_honest :=
-  ⟨complies_D, theta_id D, entersAtMost_T1, drawsAtLeast_noLinks _ _, activations_T1⟩
+  ⟨compliesRate_D, theta_id D, entersAtMost_T1, drawsAtLeast_noLinks _ _, activations_T1⟩
 
 theorem ActivationsBoundOn_nontrivial : Guarantees.ActivationsBoundOn_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, complies_Dθ, not_theta_Dθ,
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ,
     entersAtMost_T1, drawsAtLeast_noLinks _ _, activations_T1, ?_⟩
   rw [show (T1.M ∩ Mθ.S).card = 1 by decide]
   norm_num
 
 theorem ActivationsTrainingOn_honest : Guarantees.ActivationsTrainingOn_honest :=
-  ⟨complies_D, theta_id D, entersAtMost_T1, drawsAtLeast_noLinks _ _, activations_T1, coverage_T1⟩
+  ⟨compliesRate_D, theta_id D, entersAtMost_T1, drawsAtLeast_noLinks _ _, activations_T1, coverage_T1⟩
 
 theorem ActivationsTrainingOn_nontrivial : Guarantees.ActivationsTrainingOn_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, complies_D, theta_id D,
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_D, theta_id D,
     entersAtMost_T0 _, drawsAtLeast_noLinks _ _, activations_T0 _ _ _ _ _, not_coverage_T0, ?_⟩
   rw [bound_T0, size_D, dark_id]
   norm_num
 
 theorem LayeredTraining_honest : Guarantees.LayeredTraining_honest :=
-  ⟨⟨layered1 1 2⟩, complies_D, theta_id D, by norm_num [Assumptions.CapBelowColumns], T1_weights, coverage_T1⟩
+  ⟨⟨layered1 1 2⟩, compliesRate_D, theta_id D, by norm_num [Assumptions.CapBelowColumns], T1_weights, coverage_T1⟩
 
 theorem LayeredTraining_nontrivial : Guarantees.LayeredTraining_nontrivial := by
-  refine ⟨⟨layered0 D 1 0 0 2⟩, by norm_num, by norm_num, by norm_num, by norm_num, complies_D, theta_id D,
+  refine ⟨⟨layered0 D 1 0 0 2⟩, by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_D, theta_id D,
     by norm_num [Assumptions.CapBelowColumns], T0_weights _ _ _ _ _, not_coverage_T0, ?_⟩
   rw [bound_T0, size_D]
   norm_num
 
-theorem windowsHold_T1 : Assumptions.WindowsHold T1 2 1 0 1 2 1 1 1 (1 / 2) (1 / 2) 1 0 := by
+theorem windowsHold_T1 : Assumptions.WindowsHold T1 0 1 (1 / 2) 2 1 1 1 (1 / 2) (1 / 2) 1 0 := by
   unfold Assumptions.WindowsHold
   rw [bound_T1 _ (by norm_num), card_T1]
   norm_num
 
-theorem not_windowsHold_T0 : ¬ Assumptions.WindowsHold (T0 D) 2 1 1 1 0 1 1 0 (1 / 2) (1 / 2) 1 0 := by
+theorem not_windowsHold_T0 : ¬ Assumptions.WindowsHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 := by
   unfold Assumptions.WindowsHold
   rw [bound_T0, show (T0 D).M.card = 0 from rfl]
   norm_num
@@ -418,55 +430,55 @@ theorem dampener_T0_fails :
   norm_num [efficiency, unmonitoredShare, residualShare, memoryCap, declaredShare, rhoT]
 
 theorem DampenerThreaded_honest : Guarantees.DampenerThreaded_honest := by
-  refine ⟨complies_D, theta_id D, T1_threaded, T1_weights, by rw [size_D]; norm_num, by decide,
+  refine ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights, by rw [size_D]; norm_num, by decide,
     by norm_num [Assumptions.WindowLength], ?_, windowsHold_T1⟩
   rw [show T1.reuse = 1 from rfl]
   norm_num
 
 theorem DampenerThreaded_nontrivial : Guarantees.DampenerThreaded_nontrivial := by
   refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num, by norm_num, complies_D, theta_id D, T0_threaded _ _ _ _ _, T0_weights _ _ _ _ _,
+    by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weights _ _ _ _ _,
     by rw [size_D]; norm_num, by decide, by norm_num, by norm_num, by norm_num, by norm_num,
     by norm_num [Assumptions.WindowLength], by norm_num, not_windowsHold_T0, dampener_T0_fails⟩
 
 theorem DampenerThreadedSlots_honest : Guarantees.DampenerThreadedSlots_honest := by
-  refine ⟨complies_D, theta_id D, T1_threaded, T1_weightsSlots, by rw [size_D]; norm_num, by decide,
+  refine ⟨compliesRate_D, theta_id D, T1_threaded, T1_weightsSlots, by rw [size_D]; norm_num, by decide,
     by norm_num [Assumptions.WindowLength], ?_, windowsHold_T1⟩
   rw [show T1.reuse = 1 from rfl]
   norm_num
 
 theorem DampenerThreadedSlots_nontrivial : Guarantees.DampenerThreadedSlots_nontrivial := by
   refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num, by norm_num, complies_D, theta_id D, T0_threaded _ _ _ _ _, T0_weightsSlots _ _ _ _ _,
+    by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weightsSlots _ _ _ _ _,
     by rw [size_D]; norm_num, by decide, by norm_num, by norm_num, by norm_num, by norm_num,
     by norm_num [Assumptions.WindowLength], by norm_num, not_windowsHold_T0, dampener_T0_fails⟩
 
 theorem IncompressibleContainedTraining_honest : Guarantees.IncompressibleContainedTraining_honest :=
-  ⟨complies_D, theta_id D, ch1_T1_incompressible, coverage_ch1⟩
+  ⟨compliesRate_D, theta_id D, ch1_T1_incompressible, coverage_ch1⟩
 
 theorem IncompressibleContainedTraining_nontrivial : Guarantees.IncompressibleContainedTraining_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, fun ℓ => ℓ.elim0, complies_D, theta_id D,
+  refine ⟨by norm_num, by norm_num, by norm_num, fun ℓ => ℓ.elim0, compliesRate_D, theta_id D,
     ch0_T0_incompressible, not_coverage_ch0, ?_⟩
-  have hF := F_ge (α := ((1 : ℕ) / (2 : ℕ) : ℝ)) (K := 1) (b_w := 1) (b_a := 2) (d := 1)
+  have hF := F_ge (α := 1 / 2) (K := 1) (b_w := 1) (b_a := 2) (d := 1)
     (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num)
   rw [size_D]
   norm_num at hF ⊢
   linarith
 
 theorem IncompressibleContainedMatMulOn_honest : Guarantees.IncompressibleContainedMatMulOn_honest :=
-  ⟨complies_D, theta_id D, darkReads_M1 _, ch1_T1_incompressible⟩
+  ⟨compliesRate_D, theta_id D, darkReads_M1 _, ch1_T1_incompressible⟩
 
 theorem IncompressibleContainedMatMulOn_nontrivial : Guarantees.IncompressibleContainedMatMulOn_nontrivial :=
-  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    fun _ => le_rfl, fun _ => le_rfl, complies_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_T1_incompressible,
+  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
+    fun _ => le_rfl, fun _ => le_rfl, compliesRate_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_T1_incompressible,
     not_bound factor_half (Nat.one_le_cast.2 (by decide)) (by norm_num)⟩
 
 theorem IncompressibleContainedTrainingOn_honest : Guarantees.IncompressibleContainedTrainingOn_honest :=
-  ⟨complies_D, theta_id D, darkReads_M1 _, ch1_T1_incompressible, coverage_ch1⟩
+  ⟨compliesRate_D, theta_id D, darkReads_M1 _, ch1_T1_incompressible, coverage_ch1⟩
 
 theorem IncompressibleContainedTrainingOn_nontrivial : Guarantees.IncompressibleContainedTrainingOn_nontrivial :=
-  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    fun _ => le_rfl, fun _ => le_rfl, complies_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_T1_incompressible, coverage_ch1,
+  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
+    fun _ => le_rfl, fun _ => le_rfl, compliesRate_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_T1_incompressible, coverage_ch1,
     not_bound factor_half (by rw [size_D, dark_Mθ]; norm_num) (by norm_num)⟩
 
 theorem coverage_pch1 : Assumptions.Coverage 1 D (2 * ch1.toPacked.G) := by
@@ -475,22 +487,22 @@ theorem coverage_pch1 : Assumptions.Coverage 1 D (2 * ch1.toPacked.G) := by
   norm_num
 
 theorem PackedIncompressibleContainedMatMulOn_honest : Guarantees.PackedIncompressibleContainedMatMulOn_honest :=
-  ⟨complies_D, theta_id D, darkReads_M1 _, pch1_T1_incompressible⟩
+  ⟨compliesRate_D, theta_id D, darkReads_M1 _, pch1_T1_incompressible⟩
 
 theorem PackedIncompressibleContainedMatMulOn_nontrivial :
     Guarantees.PackedIncompressibleContainedMatMulOn_nontrivial :=
-  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    fun _ => le_rfl, fun _ => le_rfl, complies_Dθ, not_theta_Dθ, darkReads_Mθ _, pch1_T1_incompressible,
+  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
+    fun _ => le_rfl, fun _ => le_rfl, compliesRate_Dθ, not_theta_Dθ, darkReads_Mθ _, pch1_T1_incompressible,
     not_bound factor_half (Nat.one_le_cast.2 (by decide)) (by norm_num)⟩
 
 theorem PackedIncompressibleContainedTrainingOn_honest :
     Guarantees.PackedIncompressibleContainedTrainingOn_honest :=
-  ⟨complies_D, theta_id D, darkReads_M1 _, pch1_T1_incompressible, coverage_pch1⟩
+  ⟨compliesRate_D, theta_id D, darkReads_M1 _, pch1_T1_incompressible, coverage_pch1⟩
 
 theorem PackedIncompressibleContainedTrainingOn_nontrivial :
     Guarantees.PackedIncompressibleContainedTrainingOn_nontrivial :=
-  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    fun _ => le_rfl, fun _ => le_rfl, complies_Dθ, not_theta_Dθ, darkReads_Mθ _, pch1_T1_incompressible,
+  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
+    fun _ => le_rfl, fun _ => le_rfl, compliesRate_Dθ, not_theta_Dθ, darkReads_Mθ _, pch1_T1_incompressible,
     coverage_pch1, not_bound factor_half (by rw [size_D, dark_Mθ]; norm_num) (by norm_num)⟩
 
 theorem oneWindow_withinCompute : Assumptions.WithinCompute OneWindow.cap 2 := by
@@ -508,7 +520,7 @@ theorem oneWindow_not_pouwSound : ¬ Assumptions.PouwSound (PMF.uniformOfFintype
   linarith
 
 theorem DampenerRemote_honest : Guarantees.DampenerRemote_honest :=
-  ⟨oneWindow_withinCompute, oneWindow_pouwSound, fun _ b => b.elim, fun b => b.elim, complies_D, theta_id D,
+  ⟨oneWindow_withinCompute, oneWindow_pouwSound, fun _ b => b.elim, fun b => b.elim, compliesRate_D, theta_id D,
     T1_threaded, T1_weights, by rw [size_D]; norm_num, by decide,
     fun _ => by norm_num [Assumptions.ResidualAtMost, wrongCapacity]⟩
 
@@ -517,7 +529,7 @@ theorem DampenerRemote_nontrivial : Guarantees.DampenerRemote_nontrivial := by
     by norm_num, by norm_num, by norm_num, fun _ b => b.elim, fun _ b => b.elim,
     fun _ _ _ => by simp, by norm_num, fun b => b.elim, by norm_num, by norm_num, by norm_num,
     fun _ b => b.elim, fun b => b.elim, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num, by norm_num, by norm_num, complies_D, theta_id D, T0_threaded _ _ _ _ _, T0_weights _ _ _ _ _,
+    by norm_num, by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weights _ _ _ _ _,
     by rw [size_D]; norm_num, by norm_num, by decide, by norm_num,
     fun _ => by norm_num [Assumptions.ResidualAtMost, wrongCapacity], by norm_num, ?_⟩
   intro h
@@ -534,26 +546,27 @@ namespace Nci.Cover.SecurityProofs
 open Verity Nci.Capability.Toy Nci.Witness
 
 theorem CoverTraining_honest : Guarantees.CoverTraining_honest :=
-  ⟨complies_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two, D_blockFits,
+  ⟨compliesRate_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two, D_blockFits,
     mb0_coverage_zero⟩
 
 theorem CoverTraining_nontrivial : Guarantees.CoverTraining_nontrivial :=
-  ⟨by norm_num, complies_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two,
-    D_blockFits, mb0_not_coverage_two, by rw [size_D]; norm_num⟩
+  ⟨by norm_num, by norm_num, compliesRate_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2,
+    capBelowDepth_one_two, D_blockFits, mb0_not_coverage_two, by rw [size_D]; norm_num⟩
 
 theorem CoverTrainingAligned_honest : Guarantees.CoverTrainingAligned_honest :=
-  ⟨complies_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two,
+  ⟨compliesRate_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two,
     mb0_regionsAtLeast D _ 1, D_blockFits, mb0_coverage_zero⟩
 
 theorem CoverTrainingAligned_nontrivial : Guarantees.CoverTrainingAligned_nontrivial :=
-  ⟨by norm_num, complies_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two,
-    mb0_regionsAtLeast D _ 1, D_blockFits, mb0_not_coverage_two, by rw [size_D]; norm_num⟩
+  ⟨by norm_num, by norm_num, compliesRate_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2,
+    capBelowDepth_one_two, mb0_regionsAtLeast D _ 1, D_blockFits, mb0_not_coverage_two, by rw [size_D]; norm_num⟩
 
 theorem CoverTrainingChained_honest : Guarantees.CoverTrainingChained_honest :=
-  ⟨complies_D, theta_id D, mbBits_parameterHard 4, capBelowDepth_one_two, D_blockFits⟩
+  ⟨compliesRate_D, theta_id D, mbBits_parameterHard 4, capBelowDepth_one_two, D_blockFits⟩
 
 theorem CoverTrainingChained_nontrivial : Guarantees.CoverTrainingChained_nontrivial :=
-  ⟨by norm_num, complies_D, theta_id D, mbBits_parameterHard 4,
-    by unfold Assumptions.CapBelowDepth; norm_num, D_blockFits, by rw [mbBits_chained_zero, size_D]; norm_num⟩
+  ⟨by norm_num, compliesRate_D, theta_id D, mbBits_parameterHard 4,
+    by unfold Assumptions.CapBelowDepth; norm_num, by norm_num, D_blockFits,
+    by rw [mbBits_chained_zero, size_D]; norm_num⟩
 
 end Nci.Cover.SecurityProofs

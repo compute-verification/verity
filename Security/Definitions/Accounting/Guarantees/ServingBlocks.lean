@@ -16,10 +16,9 @@ where `n_u` is the number of inference blocks inside serving block `u`. Each arg
 or its `n_u` inference blocks at `(c, k)` (`Verity.Guarantees.InferenceCap`). `Verity.Guarantees.ServingBlockSum` sums
 them. The statements are about one circuit; Layer 2's envelopes supply the premises, each with its probability.
 
-A serving block has at most `c_S` gates and reads at most `k_S` unregistered input bits, `Verity.Guarantees.Padding`'s
-premise: padded to exactly `c_S` gates, the serving blocks read as many unregistered input bits as before and are proof
-blocks of exactly `c_S` gates of the padded circuit. The per-block cap reads blocks of at most `c` gates, so the bound is
-stated on the circuit at hand.
+A serving block has at most `c_S` gates and reads at most `k_S` unregistered input bits: a proof block at `(c_S, k_S)`,
+as a `(c, k)`-partition's proof blocks have at most `c` gates (`Verity.Partition.IsCK`). The per-block cap reads
+blocks of at most `c` gates, so the bound is stated on the circuit at hand.
 
 Two terms differ from Theorem 3 at the serving blocks:
 * `ω_max μ k_S` bounds the weight assigned to `u` but not computed wholly inside it. `Ω_u` counts an operation by its
