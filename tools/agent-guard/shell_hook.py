@@ -16,10 +16,10 @@ token can sit in argv; one process (`ps -p PID -o args`), a listing piped straig
 Builds and tests run on our nodes, not on agent VMs (every handle, at Daniel's request, 18 Oct: three OOM kills that day each
 took down every worker on a shared VM). So it refuses, always, a local pytest that names no test file or `-k` selection,
 `lake build|exe`, `cargo build|test|run|check`, nvcc and `circuit-check --all`, pointing to `research run --on auto`; and while
-the VM has less than $AGENT_GUARD_MIN_AVAIL (default 0.25) of its memory available (MemAvailable, or its cgroup's limit less its
-use when that is less) it also refuses the lighter ones: a pytest of named files, `lake env`, the check's suites and `verity
-check`. The same command through `research run`, or over ssh, runs elsewhere and passes; `AGENT_GUARD_LOCAL_OK=1` anywhere in
-the command passes it too.
+the VM has less than $AGENT_GUARD_MIN_AVAIL (default 0.25) of its memory available (MemAvailable, or, when that is less, its
+cgroup's limit less its working set: its use less its inactive file cache, which the kernel reclaims on demand) it also refuses
+the lighter ones: a pytest of named files, `lake env`, the check's suites and `verity check`. The same command through `research
+run`, or over ssh, runs elsewhere and passes; `AGENT_GUARD_LOCAL_OK=1` anywhere in the command passes it too.
 
 No tool call may block more than 20 minutes (Daniel, 19 Oct: an agent blocked in one long call looks silent and misses its
 wake-ups). So it refuses a command that plainly would: a `sleep` past BLOCK_CAP_S (`sleep 3000`, `sleep 30m`, `sleep 2h`,
@@ -293,8 +293,10 @@ def weight(text: str) -> int:
 
 
 def available() -> tuple[float, float] | None:
-    """(available, total) bytes of this VM's memory: /proc/meminfo's MemAvailable and MemTotal, or this process's cgroup's limit and
-    its headroom where that limit is tighter."""
+    """(available, total) bytes of this VM's memory: /proc/meminfo's MemAvailable and MemTotal, or, where this process's cgroup's
+    limit is tighter, that limit and the lesser of MemAvailable and what the limit leaves over the cgroup's working set. The working
+    set is memory.current less memory.stat's inactive_file, the file cache the kernel reclaims on demand, as container runtimes
+    count it; all of memory.current where memory.stat can't be read."""
     try:
         info = dict(re.findall(r"^(\w+):\s+(\d+) kB", open(os.environ.get("AGENT_GUARD_MEMINFO", "/proc/meminfo")).read(), re.M))
         avail, total = int(info["MemAvailable"]) * 1024, int(info["MemTotal"]) * 1024
@@ -305,7 +307,12 @@ def available() -> tuple[float, float] | None:
         cg = os.environ.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
         limit = open(f"{cg}/memory.max").read().strip()
         if limit != "max" and int(limit) < total:
-            total, avail = int(limit), min(avail, int(limit) - int(open(f"{cg}/memory.current").read()))
+            try:
+                cache = int(dict(re.findall(r"^(\w+) (\d+)$", open(f"{cg}/memory.stat").read(), re.M))["inactive_file"])
+            except (OSError, KeyError):
+                cache = 0
+            used = max(0, int(open(f"{cg}/memory.current").read()) - cache)
+            total, avail = int(limit), min(avail, int(limit) - used)
     except (OSError, IndexError, ValueError):
         pass
     return avail, total
