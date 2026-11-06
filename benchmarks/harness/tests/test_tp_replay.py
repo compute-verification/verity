@@ -136,7 +136,10 @@ def test_arms_keep_the_drawn_requests_and_their_companions_shapes():
     base = np.random.default_rng(5).integers(3, 1000, size=256).tolist()
     A = D.arms(base, 1000)
     served = {r["request_id"]: r for r in A["served"]}
-    assert list(A) == ["served", "served-2", "shape", "alone-d-short", "alone-d-long", "alone-d-seed", "other", "warm"]
+    assert list(A) == ["served", "served-2", "shape", "reordered", "staggered", "alone-d-short", "alone-d-long", "alone-d-seed", "other", "warm"]
+    assert [r["request_id"] for r in A["reordered"]] == [r["request_id"] for r in reversed(A["served"])]
+    assert {r["arrive_step"] for r in A["reordered"]} == {0} and [r["arrive_step"] for r in A["staggered"]] == list(range(0, 16, 2))
+    assert all(r["prompt_token_ids"] == served[r["request_id"]]["prompt_token_ids"] for arm in ("reordered", "staggered") for r in A[arm])
     assert [(r["request_id"], len(r["prompt_token_ids"])) for r in A["served"]][:3] == [("d-short", 256), ("d-long", 3072), ("d-seed", 512)]
     firsts = [tuple(r["prompt_token_ids"][:64]) for arm in ("served", "other") for r in A[arm] if not (arm == "other" and r["request_id"] in D.DRAWN)]
     assert len(set(firsts)) == len(firsts) == len(D.SERVED) + len(D.OTHER)
@@ -290,10 +293,30 @@ def test_interior_folds_every_module_per_row_and_compares_runs_across_batches(mo
     assert (ch["positions_differ"], ch["differ"], ch["equal"], ch["only_ref"], ch["only_run"]) == (1, len(forward) + 1, entries - len(forward) - 1, 0, 0)
     assert ch["kinds_differ"]["topk"] == 2 and ch["kinds_differ"]["logits_processor"] == 1
     assert out["alone"]["per_request"]["c"]["compared"] == 0 and out["alone"]["per_request"]["c"]["only_ref"] == entries
+    assert out["served"]["schedule"] == [[("d", 0, 3), ("c", 0, 3)], [("d", 3, 1), ("c", 3, 1)]]
+    assert out["alone"]["schedule"] == [[("d", 0, 2)], [("d", 2, 1)], [("d", 3, 1)]]
+    assert sorted(out["served"]["gaps"]["d"]) == sorted(out["alone"]["gaps"]["d"]) == [2, 3] and out["served"]["gaps"]["d"] == out["alone"]["gaps"]["d"]
+    assert sorted(out["served"]["gaps"]["c"]) == [2, 3] and all(v >= 0 for v in out["served"]["gaps"]["c"].values())
     assert D.uninstall(worker) == {"rank": 0, "hooks_left": 0, "patches_left": 0}
     runner = worker.model_runner
     assert not {"execute_model", "prepare_inputs", "sample"} & set(vars(runner))
     assert not any("_sparse_indexer_and_attn" in vars(m) for m in runner.model.modules())
+
+
+def test_flips_count_the_differing_outputs_and_read_the_gap_at_the_first():
+    ref = {"a": [1, 2, 3, 4], "b": [5, 6], "c": [7]}
+    run = {"a": [1, 2, 9, 9], "b": [5, 6], "d": [8]}
+    gaps = {"a": {9: 0.5, 10: 0.75, 11: 0.03125, 12: 2.0}, "b": {4: 1.0, 5: 0.25}}
+    out = D.flips(ref, run, gaps, {"a": {11: 0.0625}}, {"a": 10, "b": 5, "c": 1, "d": 1})
+    assert out == {"a": {"tokens_equal": False, "flipped": 2, "first_flip": 2, "gap_ref": 0.03125, "gap_run": 0.0625, "min_gap_ref": 0.03125},
+                   "b": {"tokens_equal": True, "flipped": 0, "first_flip": None, "gap_ref": None, "gap_run": None, "min_gap_ref": 0.25}}
+    assert D.flips({"a": [1, 2]}, {"a": [1]}, {}, {}, {"a": 3})["a"]["flipped"] == 1
+
+
+def test_distinct_counts_sequences_of_requests_served_more_than_once():
+    rows = [{"tokens": {"a": [1, 2], "b": [3], "filler-0": [4], D.PRODUCER: [5]}}, {"tokens": {"a": [1, 2], "filler-0": [6]}},
+            {"tokens": {"a": [1, 9], "c": [7]}}, {"pass": 0}]
+    assert D.distinct(rows) == {"a": 2}
 
 
 def test_summarize_sums_ranks_and_takes_medians():
@@ -305,6 +328,7 @@ def test_summarize_sums_ranks_and_takes_medians():
             *[{"pass": 2, "arm": "alone-d-long", "wall_s": w, "tokens_equal_pass1": True, "spans": {"d-long": w}, "cached_tokens": {}} for w in (2.0, 3.0)],
             {"pass": 2, "arm": "warm", "wall_s": 2.0, "tokens_equal_pass1": True, "spans": {"d-long": 0.5}, "cached_tokens": {"d-long": 3008}}]
     s = D.summarize(rows, 8)
+    assert s["distinct_sequences"] == {}
     assert s["arms"]["served"]["drawn"]["d-long"]["bit_exact"] is True
     d = s["arms"]["alone-d-long"]["drawn"]["d-long"]
     assert (d["bit_exact"], d["differ"], d["ranks_differ"], d["first_differ"], d["kinds_differ"]) == (False, 3, 2, {"pos": 3090, "group": "L5.attn"}, {"topk": 3})
