@@ -1401,3 +1401,32 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
    - r20261106-101008-9d2c: the record's hand-off tree, `997af1d259`.
 
 **I wait on:** r20261106-101009-d659 and r20261106-101008-9d2c (about 10:35–10:40Z), and infra's hold for the follow-on, which gives up at about 12:48Z.
+
+## 11:08Z Fri (vllm-pearlplus): **PR #7623 is open onto `remote` at `ab66bd024e`, with the VLLM-230 redaction folded in. Both suites passed. It is NOT marked ready: the queue's Lean-records gate refuses it for `remote`'s own Lean, which this PR doesn't touch. The follow-on started on cpu-3 at 11:03:43Z.**
+
+1. **The suites PASSED,** both on cpu-1's pool with 0 failures:
+   - r20261106-101009-d659, the fix branch at `9574010e6b`: `benchmarks/one_stage` 668 passed.
+   - r20261106-101008-9d2c, the record's hand-off tree at `997af1d259`: 736 passed.
+2. **The redaction:** the fix branch didn't hold it. #7614 (onto `remote`) already had it with tests, so I cherry-picked its two commits with `-x` (`c7b658cbb9`, `ab66bd024e`) rather than write it again.
+   - The diff between this head and #7614's head is exactly the hand-off fix.
+   - Locally, the three redaction tests and the gate-compose test pass by name. `test_served_verdicts.py` with `test_served_overhead.py` gives 329 passed and the five baseline failures.
+   - The record's tree doesn't need it, because only the serving run writes `overhead.json`.
+   - Whichever of #7614 and #7623 lands first makes the other's copy redundant.
+3. **PR #7623:** https://github.com/compute-verification/verity/pull/7623, base `remote`, head `ab66bd024ecf7435f61d94f60c303662830b9042`.
+   - Its body starts `Lane vllm`, says it stages onto `remote` with proofs' multi-member lift, and ends `Refs VLLM-182, VLLM-230`. `open` added `Refs VLLM-182` and `Goal demos/both-demos`.
+   - It is linked to VLLM-182; VLLM-230 was linked already.
+4. **The quick suites,** r20261106-104208-3a7c on cpu-5 (`--changed b72f5a8fb7d0 --quick`): 6 of 7 passed, `benchmarks/one_stage` with 662. `repository` failed 5 tests.
+   - All 5 are `remote`'s own: they fail at `b72f5a8fb7d` too, with identical findings, and none names a file of this PR. suites.py judges failures only against `main`'s known reds.
+   - The PR body now says so, in place of "the ready mark follows their pass".
+5. **The ready mark was refused** (`research queue ready 7623 --mark --by vllm --sha ab66bd024e…`, after about 5 min).
+   - The records gate compares Lean locks with `checked`, which is `main`-based. It counts 21 of `remote`'s Lean packages (Security, Security/Proofs, Security/Properties and 18 under `verity/core`) as this head's change, and wants a records run of each at the head, each `--mem-gb 32` for up to 120 min. `--no-preflight` doesn't skip it.
+   - Drive would hold the PR anyway as "based on remote, not main", as it holds #7234.
+   - **Your call:** (a) leave it unmarked and stage it by hand with the lift, or (b) I launch the 21 records runs, off cpu-3, and mark it when they pass. I recommend (a).
+   - Friction note `vllm/20261106T1059Z-friction-records-gate-remote-base`.
+6. **The follow-on r20261106-084839-0bb4 started on cpu-3 at 11:03:43Z.** Its 320 GB reservation went in at 11:03:41Z, once check-c ended under infra's hold.
+   - It runs from `44b0c741c930` at the deferral's settings, with V3c's audit capped at 72 h. By 11:07Z, the window circuit had passed against the verifier's own record, and the audit's build had begun.
+   - I posted its start on VLLM-217 and told infra on INF-518 at 11:06Z, so infra can empty the window.
+   - Expect it to end about 48 h from its start, near 11:00Z Sun 8 Nov (54–60 h if slow).
+7. **Heads:** the fix branch `cursor/vllm-handoff-pp-3a37` at `ab66bd024e`; the record's hand-off tree `cursor/vllm-pprecord-handoff-4734` at `997af1d259`; the frozen `cursor/vllm-pprecord-496a` untouched at `44b0c741c930`. h200-3 is untouched.
+
+**I wait on:** r20261106-084839-0bb4 (near 11:00Z Sun 8 Nov), and your word on the mark.
