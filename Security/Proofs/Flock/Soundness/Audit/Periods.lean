@@ -1,11 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Prob
-public import Mathlib.Algebra.BigOperators.Fin
-public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-public import Mathlib.Data.Fin.Tuple.Basic
-public import Mathlib.Data.Fintype.Powerset
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+public import Definitions.Core.Game
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The monitoring period: adaptive per-period bounds over `T` periods

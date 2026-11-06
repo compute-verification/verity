@@ -1,12 +1,47 @@
 module
 
-public import Proofs.Flock.Bridge.V5.KSLive
-public import Proofs.Flock.Bridge.V5.Refused
 public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Claims.Recursion.SetupValues
-public import Proofs.Flock.Soundness.Discharge.Hidden.Public
-public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SharedP
-public import Flock.With.SetupEq
+public import Flock.KsScope
+public import Proofs.Flock.Bridge.V5.Statement
+import Flock.With.SetupEq
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Bridge.V5.KSLive
+import Proofs.Flock.Bridge.V5.Refused
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SharedP
+import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # `SampledKSLiveV5`'s file preconditions, read off acceptance (`SampledKSLiveV5Accepted`)

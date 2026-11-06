@@ -1,7 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
-public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+public import Proofs.Flock.Soundness.Discharge.Placed.Setup
+public import Proofs.Flock.Soundness.ExecTyped
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 
 @[expose] public section
 

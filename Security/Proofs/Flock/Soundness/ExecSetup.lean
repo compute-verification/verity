@@ -2,7 +2,11 @@ module
 
 public import Proofs.Flock.Soundness.ExecCircuit
 public import Proofs.Flock.Soundness.ExecCheck
-public import Proofs.Flock.Soundness.ExecLookup
+public import Proofs.Flock.Soundness.ExecParse
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.ExecLookup
 
 @[expose] public section
 

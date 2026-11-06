@@ -1,6 +1,9 @@
 module
 
-public import Mathlib.Data.Fin.Tuple.Basic
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Tactic.Finiteness.Attr
 
 /-!
 # A fold of words (trusted)

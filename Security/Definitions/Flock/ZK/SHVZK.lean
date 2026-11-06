@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Flock.ZK.Table
-public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # Zero knowledge of one masked table: the view as a function of four masked components

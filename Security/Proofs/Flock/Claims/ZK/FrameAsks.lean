@@ -1,8 +1,27 @@
 module
 
 public import Flock.Firewall.Drive
-public import Flock.Firewall.SessionPlan
 public import Proofs.Flock.Claims.ZK.FrameCount
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import VCVio.Prelude.Core
 
 /-!
 # The opening's coin asks

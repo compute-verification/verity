@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Threads
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # Links: the counted multiplications an activation is computed from

@@ -1,6 +1,5 @@
 module
 
-public import Randomness
 public import PouwCommit.Coins
 public import Identity.Domains
 

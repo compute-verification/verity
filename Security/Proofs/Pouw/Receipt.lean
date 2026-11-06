@@ -9,6 +9,10 @@ public import Proofs.Pouw.Receipt.Run
 public import Proofs.Pouw.Receipt.DuoReceipt
 public import Proofs.Pouw.Receipt.AtState
 public import Proofs.Pouw.Receipt.Xor
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.NormNum.Ineq
+import Mathlib.Tactic.NormNum.Pow
+import Mathlib.Tactic.SetLike
 
 /-!
 # The receipt folds duo's, fx1's and li's guarantees

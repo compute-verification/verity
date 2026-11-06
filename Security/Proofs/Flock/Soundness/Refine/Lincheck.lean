@@ -1,8 +1,18 @@
 module
 
-public import Proofs.Flock.Soundness.Refine.Zerocheck
 public import Proofs.Flock.Soundness.Refine.Realizes
-public import Proofs.Flock.Level3.Folded
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Level3.Fold
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Exec
+import Proofs.Flock.Soundness.Refine.Plays
+import Proofs.Flock.Soundness.Refine.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # The lincheck refines the model's (`Flock.Piop`)

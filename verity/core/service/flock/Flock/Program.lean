@@ -12,13 +12,12 @@ gets a smaller index than its callers.
 -/
 module
 
-public import Lean.Data.Json
-public import Std.Data.HashMap
 public import Flock.Canon
 public import Flock.Hash
-public import Flock.Sizes
 public import Flock.Steps
 public import Flock.JsonParse
+public import Lean.Data.Json.FromToJson.Basic
+import Flock.Sizes
 
 @[expose] public section
 set_option backward.privateInPublic true

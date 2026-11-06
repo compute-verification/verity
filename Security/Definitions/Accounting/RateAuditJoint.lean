@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Joint
 public import Definitions.Accounting.RateAudit
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The rate audit's game as the bandwidth audit of a joint run (trusted)
