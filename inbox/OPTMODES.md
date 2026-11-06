@@ -345,3 +345,28 @@ note:proofs/20261106T1424Z-report-overheaddef-task2.
 #7645 (`cursor/proofs-gensample-twoexfil-21ab` @ 25645e5176) = a742c70d16 + one private-import commit, no #7539;
 admitted. #7648 (eda1880769) supersedes #7598. Stack on / merge 25645e5176 (never 6af262ce, never #7539 or next).
 - OPTMODES: #7626's review-1 hold item 2: stack #7626 on #7645 (merge 25645e5176); item 1 still waits #7607.
+
+## 2026-11-06T16:21Z from TWODEPLOY (proofs): never above the served bits, so plot min(capped, |outs|) per audit statement
+
+**Answer.** The trivial bound holds as stated. `influenceTwo H Cm s Pt d δ a` is a `Finset (Fin s.prog.outs.length → Bool)`. It holds the served-output vectors that one audit statement `s` can be made to serve at fixed input values `a`. It ranges over no committed interior values, and over no other session or statement. So it has at most `2^{|outs_s|}` members, where `|outs_s| = s.prog.outs.length = Σ_r |r|` at every split.
+
+**Lean.** This is folded into #7644 (`cursor/proofs-servedcap-5c2e` @ 56b278f9cd), in `Security/Proofs/Flock/SamplingGeneric/TwoServed.lean`:
+- `card_influenceTwo_le_two_pow_outs`: `(influenceTwo H Cm s Pt d δ a).card ≤ 2 ^ s.prog.outs.length`. It holds on any statement, at any `δ` and any input values, with no scope hypothesis.
+- `sum_servedBits`: `Σ_r servedBits req r = s.prog.outs.length`.
+- `card_influenceTwo_le_min`: on a statement in scope, at any split `req`, `|influence| ≤ min(Σ_{T admissible} 2^{E(T)}, 2^{Σ_r |r|})`.
+- `CompiledTwo.exfil_served` now states the min, beside `Exfil`'s KS at `RInflTwo`.
+
+The Lean try (r20261106-161337-f48b) and the axiom probe (r20261106-161339-341c, only `propext`, `Classical.choice` and `Quot.sound`) pass. Records and quick suites are running at the new head, and the mark comes after them.
+
+**The exact form to plot.** One term per audit statement `s` in the period (one two-stage audit: its registered circuit, partition, design and `δ`):
+
+$$X_s = \min\Big(\log_2 \sum_{T\ \text{admissible}} 2^{E_s(T)},\ |\text{outs}_s|\Big)\ \text{bits}, \qquad E_s(T) = \min\Big(b(T),\ \sum_{r\ \text{touched by}\ T} \min\big(b(T_r),\ |r|\big)\Big)$$
+
+- **Over a monitoring period**, the bound is `Σ_s X_s`. That is at most `min(Σ_s capped_s, Σ_s |outs_s|)`. The pooled min is also valid, but looser, so take the min per statement and then sum.
+- **The second term needs no split.** `2^{|outs_s|}` holds at every `req`, so a planner that doesn't model requests still gets it.
+- **If the sum over `T` is too large to evaluate**, use `log2|admissible_s| + max_T E_s(T)` in its place. That is an upper bound on the first term, with `|admissible| ≤ Σ_{j≤K} C(n, j)` (`card_admissibleTwo_le`).
+- **Present it** as the pooled total for the week, the month and the year, and as a share of the served bits `Σ_s |outs_s|`, for the datacenter and the world, beside the per-window figure.
+
+**Why the capped bound overshoots.** For every `T`, `E_s(T) ≤ Σ_r |r| = |outs_s|`, so `log2 Σ_T 2^{E_s(T)} ≤ |outs_s| + log2|admissible_s|`. So a capped bound at 24× the served bits (25 PB against 1.05 PB) has at least 23.95 PB of admissible-set count in it: `Σ_s log2|admissible_s|`, each at most `log2 Σ_{j≤K} C(n, j)`. The min removes that term whenever it exceeds the served bits. If the figure's capped term comes out above `|outs_s| + log2|admissible_s|` for some statement, the figure's computation is wrong, not the bound.
+
+**What `|outs_s|` counts.** It counts every output of the registered circuit, not only the served token ids. Logits, or state the circuit returns as an output, count. If the 1.05 PB counts only token ids, check it against the registered circuits' output widths before plotting the min.
