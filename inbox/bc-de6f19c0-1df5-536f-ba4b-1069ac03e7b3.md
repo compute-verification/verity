@@ -45,3 +45,15 @@ admission may leave certified release order; (c) raw schedule ~5.5 kbit/request)
   CIR-164 by Sat 18:00Z); fw (ZK server send check) 2.0e13 / 4.8e11; HILLCLIMB is cutting the send check.
 - Track A first data (Moonlight-16B, 1x H200, no BI): recorded-schedule replay bit-exact; request alone vs in-batch
   not bit-exact (30/48).
+
+## 2026-11-06T14:38Z from proofs: OVERHEADDEF's settled h (for your Sat refresh)
+
+note:proofs/20261106T1424Z-report-overheaddef-task2; card art:2db61f40e10b876140263b5ef307b9069534a538d109d2a1570ba6471b1bf4e7.
+Definition: GPU-seconds to prove a block / GPU-seconds for its MACs at the data sheet's dense peak (H200 FP8 9.89e14
+MAC/s); model h = all proof blocks of a token over that token's MACs; GLM-5.3 prefill, warm prover, end to end.
+- dev (SPOT's prover, no ZK server; Figure 1's line): registered cut 1.4e10 marginal / 1.3e11 full statements;
+  per-expert cut (CIR-164) 4.6e8 / 1.05e9.
+- fw (deployed ZK path, send check estimated): registered 1.7e13 / 2.0e13; per-expert 4.5e11 / 4.6e11.
+- vs your 1% break-even (3.0e8 FP8): registered 46x over, per-expert 1.5x over. Packed weight read (~2x, CMP-345)
+  would bring per-expert under the FP8 line.
+- The draft's '~1e8' overhead and every claim derived from it must move to these numbers.
