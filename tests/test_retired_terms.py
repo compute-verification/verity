@@ -92,9 +92,27 @@ DOC_TERMS = {
     "execution transcript": "trace (a proof's or a session's messages stay its transcript)",
     "that period's coins": "before any coins are flipped",
     "rejection dominates, reject dominance": "any rejection rejects the whole",
-    "physical block": "server-time block",
+    "physical block": "server block",
     "thread block": "CTA",
     "KV block": "KV page",
+    "the accelerator model, the machine model": "the ACCEL model (`benchmarks/pouw/machine_model/` and its `machine-model` "
+                                                "command keep the name)",
+    "coverage premise, coverage table": "the card premise, the opcode table",
+    "envelope ISA, envelope op": "the ACCEL ops",
+    "server-time block, serving block, server-window": "server block",
+    "overhead lower bound, exclusion bound": "the slowdown lower bound",
+    "circuit-size slowdown, training efficiency, hardware multiple": "slowdown(𝒢, 𝒜, η)",
+    "per-block cap, per-block limit": "the server-block yield q_S, or the inference-block yield q(c, k)",
+    "training class": "pricing argument",
+    "physical class, restricted class, monitored class": "the feasible set 𝓕; the admissible set 𝒜",
+    "certified work, accounted compute, declared compute": "verified compute, V",
+    "certified share, declared utilization": "utilization",
+    "uncertified capacity, uncertified gates, undeclared compute, skippable work, residual compute, monitored residual":
+        "free compute, U",
+    "dark compute, dark fleet, dark leaves, undeclared hardware": "unregistered hardware, ε_unreg",
+    "unregistered input, unregistered information, novel information": "fresh input, fresh input bits",
+    "registered computation": "the registered circuit",
+    "work requirement": "necessary subcomputation",
     "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
                                           "renamed)",
@@ -110,6 +128,15 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
                        rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
+                       rf"|(?:accelerator|machine){_SPACE}models?|coverage{_SPACE}(?:premises?|tables?)|envelope{_SPACE}(?:ISA|ops?)"
+                       rf"|server{_SPACE}time{_SPACE}blocks?|serving{_SPACE}blocks?|server-windows?"
+                       rf"|(?:overhead{_SPACE}lower|exclusion){_SPACE}bounds?|circuit{_SPACE}size{_SPACE}slowdown"
+                       rf"|training{_SPACE}efficiency|hardware{_SPACE}multiples?|per{_SPACE}block{_SPACE}(?:caps?|limits?)"
+                       rf"|(?:training|physical|restricted|monitored){_SPACE}class(?:es)?|certified{_SPACE}(?:work|shares?)"
+                       rf"|accounted{_SPACE}compute|declared{_SPACE}(?:compute|utilization)|uncertified{_SPACE}(?:capacity|gates)"
+                       rf"|undeclared{_SPACE}(?:compute|hardware)|skippable{_SPACE}work|residual{_SPACE}compute|monitored{_SPACE}residuals?"
+                       rf"|dark{_SPACE}(?:compute|fleets?|leaves|hardware)|unregistered{_SPACE}(?:inputs?|information)"
+                       rf"|novel{_SPACE}information|registered{_SPACE}computations?|work{_SPACE}requirements?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
                        rf"|uplink{_SPACE}taps?|auditor's{_SPACE}taps?"
                        rf"|timed{_SPACE}verifiers?|network{_SPACE}transparency|(?:prover|verifier){_SPACE}gateways?"
@@ -156,6 +183,8 @@ PENDING: dict[str, str] = {
     "benchmarks/pouw/served_h1/coins.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/claims/tests/test_claims_registry.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/dither/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
+    "Security/Definitions/Nci/Capability/README.md": "its per-block cap q was pending when the accounting vocabulary's rename "
+                                                     "ran; that rename follows",
     "verity/core/protocols/remote_bandwidth/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
@@ -439,13 +468,22 @@ def test_the_doc_scan_reads_the_reporting_terms():
 
 
 def test_the_doc_scan_reads_the_training_terms():
-    """Training's vocabulary, on toy files: the dampener and NCI in prose, never their Lean names in code spans or paths."""
+    """Training's and accounting's vocabulary, on toy files: the dampener, NCI, the machine model, serving blocks and the
+    rest in prose, never their Lean names in code spans or paths; the `machine-model` command, a server block, the
+    slowdown lower bound and a window that caps its samples stay."""
     docs = {
         "a.md": "The compute dampener D; Dampeners. NCI's check, novel\ncommunication intensity.\n"
-                "`Nci.Dampener.remoteDampener` and `benchmarks/nci`, the nci directory, NciCheck stay.\n",
+                "`Nci.Dampener.remoteDampener` and `benchmarks/nci`, the nci directory, NciCheck stay.\n"
+                "The machine model's coverage\ntable, an envelope op; a serving block, two server-windows, the server time block.\n"
+                "The overhead lower bound, an exclusion bound, the training classes, per-block caps; dark compute, certified work.\n"
+                "The `machine-model` command, a server block, the slowdown lower bound and a window that caps its samples stay.\n",
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
-        ("a.md", 1, "dampener"), ("a.md", 1, "Dampeners"), ("a.md", 1, "NCI"), ("a.md", 1, "novel communication intensity")]
+        ("a.md", 1, "dampener"), ("a.md", 1, "Dampeners"), ("a.md", 1, "NCI"), ("a.md", 1, "novel communication intensity"),
+        ("a.md", 4, "machine model"), ("a.md", 4, "coverage table"), ("a.md", 5, "envelope op"), ("a.md", 5, "serving block"),
+        ("a.md", 5, "server-windows"), ("a.md", 5, "server time block"), ("a.md", 6, "overhead lower bound"),
+        ("a.md", 6, "exclusion bound"), ("a.md", 6, "training classes"), ("a.md", 6, "per-block caps"),
+        ("a.md", 6, "dark compute"), ("a.md", 6, "certified work")]
 
 
 def test_the_doc_scan_reads_the_incorrect_terms():

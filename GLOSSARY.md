@@ -95,7 +95,7 @@ Credit and all reporting are in circuit size (tentative).
   (`SAKResidual`), over noised operands only; an un-noised call earns none. PoUW's bar is T1–T3
   (`verity/core/protocols/pouw/README.md`). PoUB (`Accounting.Remote`) bounds no hidden work itself, so PoUW's
   guarantee beside it is its compute credit alone.
-- **The overhead lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
+- **The slowdown lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
   verified compute (products the registered circuit computes anyway, through inference-block yields) and free compute: a
   server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free compute can
   do), unregistered hardware works at the hardware's rate, and the straddle term covers objects split between the two.
@@ -200,7 +200,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | the free compute at that GPU, ε_undecl + ε_skip; the exchanged bits are fresh input (k_S's r_in and r_side), reported beside it in bits |
 | 𝒜_phys, "physical class", "the physical model's class"; "envelope" for 𝒜_p, "subprotocol application" for p; 𝒜′, "restricted class", "monitored class", "training class", "faithfulness" for 𝒜′; "class" for a set of computations; "initial information" for what both sides start from; the Lean's `Accounting.Overhead.physClass`, `envelope`, `restricted` and `Class` and `benchmarks/rho`'s, until renamed | the feasible set 𝓕; protocol p's admissible set 𝒜_p; the admissible set 𝒜; set; the initial state a |
 | "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `Accounting.Overhead.serverTime` (to count each server's GPUs) and `threshold`, until renamed | GPU-hours; the training cost T_𝒢(η; S) |
-| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the overhead lower bound's sum over server blocks |
+| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the slowdown lower bound's sum over server blocks |
 | "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
 | "coverage", "materialization" and "work requirement" for what every successful training run must compute; η_cov's subscript | necessary subcomputation (the covering bounds and the inventory's coverage keep their names) |
 | "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", q, q_T(c, k), and `benchmarks/rho`'s `Cap`, until renamed | the slowdown lower bound; the server-block yield q_S, and the inference-block yield q(c, k) |
