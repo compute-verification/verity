@@ -17,6 +17,8 @@ A pinned receipt's draw passes with probability at most one less its wrong share
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Accounting.SecurityProofs.FillerLuck
 
 open Finset Accounting.Filler Accounting.TS Pouw.RelativeSecurity
@@ -81,7 +83,7 @@ theorem prob_none {Ω : Type} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := b
 theorem prob_all {Ω : Type} [Fintype Ω] [Nonempty Ω] : prob (fun _ : Ω => True) = 1 := by
   classical
   rw [prob_eq_expect]
-  unfold Pouw.RelativeSecurity.expect
+  unfold Claims.Ex
   simp only [ite_true, sum_const, card_univ, nsmul_eq_mul, mul_one]
   exact div_self (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
 
@@ -96,7 +98,7 @@ theorem exists_of_prob_pos {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : 0 < p
 theorem prob_vec {K : ℕ} (z : Fin K → ZMod 2) : prob (fun u : Fin K → ZMod 2 => u = z) = 1 / 2 ^ K := by
   classical
   rw [prob_eq_expect]
-  unfold Pouw.RelativeSecurity.expect
+  unfold Claims.Ex
   simp
 
 theorem card_fiber_eq {Y : Type} [Fintype Y] {K : ℕ} (π : Y → Fin K → ZMod 2)

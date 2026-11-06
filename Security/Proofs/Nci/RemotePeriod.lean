@@ -30,6 +30,8 @@ the end applies `DampenerRemotePeriod` to the nontrivial lemma's conjuncts, so t
 
 @[expose] public section
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.SecurityProofs
 
 open Verity Nci.Dampener FlockSoundness.Audit.Periods
@@ -40,7 +42,8 @@ open scoped ENNReal
 theorem prob_uniform_eq {α : Type} [Fintype α] [Nonempty α] (E : α → Prop) :
     prob (PMF.uniformOfFintype α) E = (prCoin E).toReal := by
   classical
-  unfold prob prCoin avg
+  simp only [prob_eq_sum]
+  unfold prCoin avg
   rw [ENNReal.toReal_sum fun a _ => ?_]
   · refine Finset.sum_congr rfl fun a _ => ?_
     by_cases h : E a <;> simp [h, PMF.uniformOfFintype_apply]
@@ -50,7 +53,7 @@ theorem prob_uniform_eq {α : Type} [Fintype α] [Nonempty α] (E : α → Prop)
 theorem prob_exists_le {Ω ι : Type} [Fintype Ω] (μ : PMF Ω) (s : Finset ι) (E : ι → Ω → Prop) :
     prob μ (fun ω => ∃ i ∈ s, E i ω) ≤ ∑ i ∈ s, prob μ (E i) := by
   classical
-  unfold prob
+  simp only [prob_eq_sum]
   rw [Finset.sum_comm]
   refine Finset.sum_le_sum fun ω _ => ?_
   have hq : 0 ≤ (μ ω).toReal := ENNReal.toReal_nonneg
@@ -435,7 +438,7 @@ theorem DampenerRemotePeriod : Guarantees.DampenerRemotePeriod := by
 
 /-- An event that holds on no run has probability 0. -/
 theorem prob_of_forall_not {Ω : Type} [Fintype Ω] (μ : PMF Ω) {E : Ω → Prop} (h : ∀ ω, ¬ E ω) : prob μ E = 0 := by
-  unfold prob
+  simp only [prob_eq_sum]
   exact Finset.sum_eq_zero fun ω _ => by simp [h ω]
 
 theorem prob_uniform_le_one {α : Type} [Fintype α] [Nonempty α] (E : α → Prop) :

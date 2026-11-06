@@ -63,6 +63,8 @@ every certificate, every other premise holds while PoUW's per-window bound and t
 
 @[expose] public section
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.Guarantees
 
 open Verity Nci.Dampener

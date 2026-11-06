@@ -1352,7 +1352,7 @@
   },
   "Nci.Assumptions.PouwSound": {
    "owner": "@lean",
-   "digest": "29d44de1ab5d74abaab44bf203879de9c6902fdeb239418a76492aafae28afd0"
+   "digest": "f1ab2af6035f8383c3a9b0eeadae952029fec217ebcbac4e47f5aafe225de14d"
   },
   "Nci.Assumptions.Reach": {
    "owner": "@lean",
@@ -1384,7 +1384,7 @@
   },
   "Nci.Assumptions.SampledDetection": {
    "owner": "@lean",
-   "digest": "343f2d282d4407a820a686cfc55f137e17a3b7edc6ffc42dc6cefca6b0409a2f"
+   "digest": "1c23f4c51df5938029b64808c707695c53cefb77f6c46014ce3c9b8144ee8217"
   },
   "Nci.Assumptions.SampledPerWindow": {
    "owner": "@training",
@@ -1780,7 +1780,7 @@
   },
   "Pouw.Assumptions.OwnDither": {
    "owner": "@compute-research",
-   "digest": "14587c33d7d3ff0bdab1def743552da1bfff7faa306ac293271baf4686c60772"
+   "digest": "6789ba838602764a5a77af6ef2cefcefce97cb648ad6c291d3b582bcf0fc86a6"
   },
   "Pouw.Assumptions.ProofSystemSound": {
    "owner": "@compute-research",
@@ -1888,7 +1888,7 @@
   },
   "Pouw.Dither.MomentSound": {
    "owner": "@compute-research",
-   "digest": "b2f280b18c92267044f5539005dcd2395eae9960c595f4d4631bd6274e4e4874"
+   "digest": "288acecc93cd31625631ebd527deb7d691a5d92d4f660bebc4e4982f326c7765"
   },
   "Pouw.Dither.OnCard": {
    "owner": "@compute-research",
@@ -2068,7 +2068,7 @@
   },
   "Pouw.PearlC.Assumptions.TileProofSound": {
    "owner": "@compute-accounting",
-   "digest": "639f98447f6c6c587e14a0d6086e06a990570d57a3bd22beac2ff989bf2f0040"
+   "digest": "084fe2b015d5f5cd7b0e0c8e070b017416af05f9e2878b3cf2b393ad1fb65a5e"
   },
   "Pouw.PearlC.Assumptions.TileProofSoundAll": {
    "owner": "@compute-accounting",
@@ -18601,11 +18601,8 @@
    },
    "Nci.SecurityProofs.DampenerRemotePeriod": {
     "Real.instLE.le (Finset.univ.sum fun t => c t) C": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => wrong t (Function.update ξ t a)) p": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin T) (ξ ξ' : (t : Fin T) → Ω t), (∀ (s : Fin T), instLTFin.lt s t → Eq (ξ s) (ξ' s)) → ∀ (b : β), Eq (win b) t → Iff (SetLike.instMembership.mem (bad ξ) b) (SetLike.instMembership.mem (bad ξ') b)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin T) (ξ ξ' : (t : Fin T) → Ω t), (∀ (s : Fin T), instLEFin.le s t → Eq (ξ s) (ξ' s)) → ∀ (b : β), Eq (win b) t → And (Iff (SetLike.instMembership.mem (drawn ξ) b) (SetLike.instMembership.mem (drawn ξ') b)) (Iff (SetLike.instMembership.mem (detected ξ) b) (SetLike.instMembership.mem (detected ξ') b))": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => ∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b)) (instHPow.hPow (instHSub.hSub 1 q) (Finset.filter (fun b => Eq (win b) t) (bad ξ)).card)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => And (Exists fun b => And (SetLike.instMembership.mem (bad ξ) b) (And (Eq (win b) t) (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b))) (∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (detected (Function.update ξ t a)) b))) (ks t)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t t' : Fin T), Eq (idW t) (idW t') → instLTFin.lt t t' → Real.instLT.lt (τw t) (τw t')": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ξ : (t : Fin T) → Ω t) (b : β), SetLike.instMembership.mem (bad ξ) b → SetLike.instMembership.mem I (idW (win b))": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (instHMul.hMul Φ H) C": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -18617,7 +18614,13 @@
     "∀ (ξ : (t : Fin T) → Ω t), instLENat.le (M ξ) (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (Mu ξ) (Mr ξ)) (Finset.univ.sum fun i => (Th i).M.card)) (Mx ξ))": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mu ξ).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul mfu κ) U) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mr ξ).cast (instHDiv.hDiv (instHMul.hMul κ (instHAdd.hAdd (instHAdd.hAdd (instHSub.hSub C (instHMul.hMul (instHSub.hSub 1 εW) (W ξ))) (Nci.Dampener.wrongCapacity c fun t => wrong t ξ)) ((bad ξ).sum fun b => w b))) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mx ξ).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mx ξ).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Verity.Game.prPMFReal (PMF.uniformOfFintype (Ω t)) fun a => wrong t (Function.update ξ t a)) p": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Verity.Game.prPMFReal (PMF.uniformOfFintype (Ω t)) fun a => ∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b)) (instHPow.hPow (instHSub.hSub 1 q) (Finset.filter (fun b => Eq (win b) t) (bad ξ)).card)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Verity.Game.prPMFReal (PMF.uniformOfFintype (Ω t)) fun a => And (Exists fun b => And (SetLike.instMembership.mem (bad ξ) b) (And (Eq (win b) t) (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b))) (∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (detected (Function.update ξ t a)) b))) (ks t)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => wrong t (Function.update ξ t a)) p": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => ∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b)) (instHPow.hPow (instHSub.hSub 1 q) (Finset.filter (fun b => Eq (win b) t) (bad ξ)).card)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => And (Exists fun b => And (SetLike.instMembership.mem (bad ξ) b) (And (Eq (win b) t) (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b))) (∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (detected (Function.update ξ t a)) b))) (ks t)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": {
     "∀ (s : Fin 1), instLTFin.lt s t → Eq (ξ s) (ξ' s)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -20627,14 +20630,14 @@
    }
   },
   "Definitions.Accounting.Guarantees.Tag": {
-   "digest": "9940c37076cd659420688a644a11835d84f0872a1275dbf97e4ae30d85e6678b",
+   "digest": "7669d5555c0270122b78dc563ca2682c8f7867909f75b1dccaf5905a3ecbafbd",
    "definitions": {
     "Accounting.Guarantees.Tag.DigestNonCollision": "ecf59b3008fe531a98990a787b24455c9aaab3c3822a395d1576a8af71a78d1c",
     "Accounting.Guarantees.Tag.FoldNonCollision": "91894ebf37acec0673168e1ab62c65f4dc07f5fc8f404ab308ec8478a558d788",
     "Accounting.Guarantees.Tag.HornerIsBlockHash": "4aeb9f5d243bf02331ce33cb21d3ef2069d685a12a434962eae9a2065f22d9d8",
     "Accounting.Guarantees.Tag.PartialReadGuess": "55bc754da56b8532c229cb1de73feddffa64bfe8587a04d99e43728a3b600a4a",
     "Accounting.Guarantees.Tag.PolyNonCollision": "c58a9c529120559b2100a707fdde6266d82298c83cda1543134209ffb9a656dc",
-    "Accounting.Guarantees.Tag.PolyNonCollisionKeyed": "2e8bea4e7f597f7007e4f53e61f07bb1826591cb9f2b16fcbba7bdcbbe50d692",
+    "Accounting.Guarantees.Tag.PolyNonCollisionKeyed": "1846a66d78e12bdfc749bfd54bb47b49e4771a904d2bd14afd14357701524593",
     "Accounting.Guarantees.Tag.PolyUnpredictable": "cf0ec52932be9fa2b51cb6f3644559161b91df35f98d2b5b74265dd5464de38b"
    }
   },
@@ -22116,12 +22119,6 @@
     "Accounting.Tag.residue": "35490ea3a9bc32d44807b5f8fe8b4b17f9a33a23aaa2ddd5bf256542543ab63c",
     "Accounting.Tag.residues": "fc5a97172cd35ed75837ae4dbade7a67fff3151a41bc1e390a4b244a4792d622",
     "Accounting.Tag.wordGuess": "18cffad6621d3a1e17ae63c078238192bf7d5ce7194db09baf59145cece4cff3"
-   }
-  },
-  "Definitions.Accounting.Tag.Prob": {
-   "digest": "fd72301bac0a45de24b8b65047fad63158f5201c33a50da86c108b6fff9fe108",
-   "definitions": {
-    "Accounting.Tag.prob": "ed2c540751af0a6a113efc4d7a5e17342d51a00a17fdc1ef713432753e7f0c81"
    }
   },
   "Definitions.Accounting.Tag.Sketch": {
@@ -23846,6 +23843,13 @@
     "Verity.Predicates.units": "8bde5c6c212a94a5b83d49d43519fd9bdeb3b7758ee4bc2177407ddc4aa47817"
    }
   },
+  "Definitions.Core.Prob": {
+   "digest": "34d49b4df40002f425456422a2197214e963ec01104bdce146d2e6c4e52acb4c",
+   "definitions": {
+    "Verity.Game.prPMF": "9b5a9af8fb7746fac48dbb415307a17399d0af89a2a0fbb7942e420041423575",
+    "Verity.Game.prPMFReal": "6229e666416051c38a491834817d3f4deed1badef918f1ed30c0bec3c196ba7c"
+   }
+  },
   "Definitions.Core.Rec": {
    "digest": "d307c6252105e7f31767d49f6f317ff3f76fe873994e24b423dfa2e617fc4e02",
    "definitions": {
@@ -25148,12 +25152,12 @@
    }
   },
   "Definitions.Nci.Assumptions.Remote": {
-   "digest": "ae4c8fa6c53312205fc74f2a6ef185a4e085bb2815bd22d1a65884acf65aa5c6",
+   "digest": "bbb25b9705db6bca55ffbb22d0aef624eccf445c7f5880f6b5c57f87fc61aeac",
    "definitions": {
     "Nci.Assumptions.IdentitySchedule": "f7d502370c0b00f07fc595e4a3f3c837796aa8596c248dffed41b6719df60bfa",
     "Nci.Assumptions.PouwPerWindow": "a0c7452a234c6c066ada42f4fd69f3611d4879b4959dd4a7fb0cc7e8be4c989f",
-    "Nci.Assumptions.PouwSound": "29d44de1ab5d74abaab44bf203879de9c6902fdeb239418a76492aafae28afd0",
-    "Nci.Assumptions.SampledDetection": "343f2d282d4407a820a686cfc55f137e17a3b7edc6ffc42dc6cefca6b0409a2f",
+    "Nci.Assumptions.PouwSound": "f1ab2af6035f8383c3a9b0eeadae952029fec217ebcbac4e47f5aafe225de14d",
+    "Nci.Assumptions.SampledDetection": "1c23f4c51df5938029b64808c707695c53cefb77f6c46014ce3c9b8144ee8217",
     "Nci.Assumptions.SampledPerWindow": "b4551085c57fd3e5842a71c3536b642b66b067f48ef4e25eb2784fa717330588",
     "Nci.Assumptions.TerminalDetection": "8ed5bc6c9f877e1d994af693541c6e1be76f4708ae20468313c71f656cb2a0b8"
    }
@@ -25625,9 +25629,9 @@
    }
   },
   "Definitions.Nci.Guarantees.Remote": {
-   "digest": "9469d72bc81a752897c937cad8b616fb2bcaf9dac78fa1d66373ec213d729720",
+   "digest": "ecaaf90558383a5811fe0f8636e8e7a0f2a5ae6b2dc29949d9dd217653ae86b9",
    "definitions": {
-    "Nci.Guarantees.CertificateSlack": "bae784caa85319ad74e01d0f0b8594f2470ef7c09caf2dccaa021adf9605973b",
+    "Nci.Guarantees.CertificateSlack": "db00537aef2be53dbb14e44ec20e1f1751ed6af6dcd6e357096c79b9af84eeea",
     "Nci.Guarantees.DampenerRemote": "e136d882b276832423a982dd248864c12e4119f0c147b6d54a7746e39d432341",
     "Nci.Guarantees.VerdictLag": "44fb4be0cee1807d457934dea23c74775a2e7d4f2df6aa5be058c1f79e539b4b"
    }
@@ -25806,13 +25810,12 @@
    }
   },
   "Definitions.Nci.Remote": {
-   "digest": "f4b979d0a0db7f5923fb07d28fbd2890d51f8c6924a8dd4eababad70818c2579",
+   "digest": "142049ddaacdc77c1176c0a81030d9fa58ff6c6aceef04b22e556fa420fd40b1",
    "definitions": {
     "Nci.Dampener.escaped": "ae6331d000a7cd5eae92d7e526f9b6ee722ff9f3833ee6c0f29f76c656daf724",
     "Nci.Dampener.hardwareMultiple": "ac91025b05224ad18fbbb18a05bc186a5956a61b57e8f5b282c2a7fdc78c01a0",
     "Nci.Dampener.lagShare": "016ab8c8cc93e989e47d906d4a12618cbb199be782f16186d6490b2f40c4756d",
     "Nci.Dampener.noDetectionBefore": "1f2b776654d47f72d5c222010904c35e2cc57e4e7948374fd6f2f52dc6cd1076",
-    "Nci.Dampener.prob": "43d591d08a337ab2dd1faf7de9d660b97f07923ac3cb4806d353798f13e87eee",
     "Nci.Dampener.remoteDampener": "2c778f4218fe47446f462e0bdce81850edb784e88240459487af99b4484f6a12",
     "Nci.Dampener.wrongCapacity": "f561edf3f609baac913a6308e14142fd4ef5fdc88eedd5b6e8857aa4a7ff7767"
    }
@@ -26755,12 +26758,12 @@
    }
   },
   "Definitions.Pouw.Assumptions.Dither": {
-   "digest": "e8a2480f2c99b53f365cf03311c0d41a097b6dcfb17d638eba637080ae52622b",
+   "digest": "22c4b8ddf73e4832db343699d2d064afdf190d35f37be9f2457a48af4244a8cf",
    "definitions": {
     "Pouw.Assumptions.CoinsConfidential": "d8393ab6968720ddd2ebc0ab09931d9b238144a58e0fb8b5391cf9385cd23115",
     "Pouw.Assumptions.ImportWithinCertifier": "da3d3b0e08858ad33f905c8e639f5f63d576cccc0197c9ae5dac826a40b6084d",
     "Pouw.Assumptions.OutsourceWithinEgress": "b56a56840f42a8ccfc2418f4a8b4169d2e1025ce9933babced5498b9fff7fbc8",
-    "Pouw.Assumptions.OwnDither": "14587c33d7d3ff0bdab1def743552da1bfff7faa306ac293271baf4686c60772",
+    "Pouw.Assumptions.OwnDither": "6789ba838602764a5a77af6ef2cefcefce97cb648ad6c291d3b582bcf0fc86a6",
     "Pouw.Assumptions.ProofSystemSound": "d56e224bb81a43377e362a0b70e2a39751b98bb316ca7044d538e6eb2cd1cf3a",
     "Pouw.Assumptions.SAKMatmul": "aca93284b4344597af71ea0c3d855de46f764cce17a7649612e8145c68315919",
     "Pouw.Assumptions.SAKSha": "b5e591ee106588c0a39051b7bb8ff598566ebfba0dfcba9771ec134bc0b7fde5"
@@ -26854,9 +26857,9 @@
    }
   },
   "Definitions.Pouw.Assumptions.PearlC.HiddenTile": {
-   "digest": "c66056a9ef33bbc697c848f1efead8cebf524d00db6510edc77f0eecd633f5fc",
+   "digest": "0f1e82a4432c532d1b4730153bdd96c0102e8019fa1b46cd9fc20da348d95910",
    "definitions": {
-    "Pouw.PearlC.Assumptions.TileProofSound": "639f98447f6c6c587e14a0d6086e06a990570d57a3bd22beac2ff989bf2f0040",
+    "Pouw.PearlC.Assumptions.TileProofSound": "084fe2b015d5f5cd7b0e0c8e070b017416af05f9e2878b3cf2b393ad1fb65a5e",
     "Pouw.PearlC.Assumptions.TileProofSoundAll": "68fa374e6e32105f7e0fb6ac933a3494270054495536d060d6015fc6a3e4a6d5"
    }
   },
@@ -27036,7 +27039,7 @@
    }
   },
   "Definitions.Pouw.Dither": {
-   "digest": "66291886521446c3db3b55da5c03199af4fce3a0219786ebeee77ec115e8859e",
+   "digest": "91bc069e86cdd628629532668370aa604b6ee82974b54d068d8a92f1494c8104",
    "definitions": {
     "Pouw.Dither.Accel": "9ec480ad86ec2d74ede4f0425a6de1dc7b028b5da50ebe62f1272b00fa7b531d",
     "Pouw.Dither.Accel.G1": "4653da5027854c6fcc140db720f6a2dedbae2c9b3ec44e4c96c63aafd4278963",
@@ -27059,7 +27062,7 @@
     "Pouw.Dither.Accel.wall": "ed94fd59ce3d84f3a84155a33d4361089a9a29721ffe3b8ef03904c36330f390",
     "Pouw.Dither.AnswersFit": "e570fd22138edd4a4ac2b18e176f0e54d0cec0cc7eaab177a8b7105cfe6cdd29",
     "Pouw.Dither.FreedSound": "d651f64f2dd7178c2c19065387a5d8e53b3dffadda6f93a99e55a3a3d0112613",
-    "Pouw.Dither.MomentSound": "b2f280b18c92267044f5539005dcd2395eae9960c595f4d4631bd6274e4e4874",
+    "Pouw.Dither.MomentSound": "288acecc93cd31625631ebd527deb7d691a5d92d4f660bebc4e4982f326c7765",
     "Pouw.Dither.NoFold": "524a3001ca92a9049b4995d6172d95c2948cb1f4c5b727bbbd3bff7e057d9b46",
     "Pouw.Dither.NoFold.Chk": "f087b3c7c0e1971c5f066d0baae0ac481c570ec940ad6c4956aebd37f1512795",
     "Pouw.Dither.NoFold.Draw": "ac76d77cbe561e9e4fbbfa4fafd2df43707424ea1c0507dc63906f908591713e",
@@ -27130,14 +27133,13 @@
     "Pouw.Dither.RoundProto.opens": "6919b712fec2957e2dacc63b02bf1ed02b8dae56a0d6f6283db33729820feaa6",
     "Pouw.Dither.Verdict": "6aab3327362e824bcabad909b734628c81977844f158a19d6e044b22a2d3e6b5",
     "Pouw.Dither.Word": "df06544b7fecb542aac5d8a2a0324a68e9c1866a518194de7597ed8c0545eccb",
-    "Pouw.Dither.avg": "a5ccab788ce3ef5b5b0f4704acf4a359e91c867611e0b77c34f9562e06d2dd40",
-    "Pouw.Dither.commitMoment": "fc3b55f8225d99de96ca451e1437ad8a18504492ad327546f79a9c4f16d4458a",
+    "Pouw.Dither.commitMoment": "fa99fe96689a45ed5ddc0e59638d39187095ebbd4b37f7082a4bf097b99659bf",
     "Pouw.Dither.epsWorkSound": "71ce05753d99daf0eed4b806f1ff0f55b86b567b34d715a03b0950ba2415c1e7",
     "Pouw.Dither.fleetLuck": "b59e224a07418794f1d4c198b335444b1b24d1b06e0ef3730764fcd89d5f4875",
     "Pouw.Dither.noFoldRound": "113bb6a1c4a48fc341b28857f0c044c2088c42fd0b9c68be428d0881e30532e1",
     "Pouw.Dither.noFoldWord": "065991b2e0abd88b32919f01355bb47c746db331c5c912089f8ea9deca46c2e7",
     "Pouw.Dither.roundShortfall": "02b16cb81b88bdc126b916354d4327f99dd54555cfd218838c7c240f98d752c3",
-    "Pouw.Dither.wordsMoment": "a27373faa87733bcb05e56675d7610134e8e3f7f21cb9c419503e2d664e5fcf8"
+    "Pouw.Dither.wordsMoment": "b228fc89c83906502a72ccc5d23d174dc3ff542a33d48fd899a5105a99ce4a5e"
    }
   },
   "Definitions.Pouw.DitherInstance": {
@@ -28462,7 +28464,7 @@
    }
   },
   "Definitions.Pouw.PearlC.Hidden": {
-   "digest": "5489a5fb78b73772516f0a6c351eb091c441ec93fa73734ea82d0b928249a260",
+   "digest": "ae202d9f62e69c57ff93d45a84253a2fb56e97a368a5a0cfd47f792d17afda10",
    "definitions": {
     "Pouw.PearlC.GγHidden": "748703f9f1082ef3c6056657657198f2f2e48bca4f2d7222ae6978266264aa55",
     "Pouw.PearlC.HiddenAudit": "4644e9aa08d46d127146c9bea9d5c1804986c235583758d7f2632941fe3b599a",
@@ -28474,8 +28476,7 @@
     "Pouw.PearlC.HiddenAudit.batch": "ef06a02067e26a1c528d833ff7669b4126360832f198544ee23d59b92b9a6556",
     "Pouw.PearlC.HiddenAudit.game": "4837361751d6cc7457f80c514111ed11068ccc5c10650ae53b0fb723af915b3f",
     "Pouw.PearlC.HiddenAudit.root": "b2b4ff4ec8c19810cb008a5093af9ee3cce2fd9f5b45807d266b48d157d29757",
-    "Pouw.PearlC.HiddenAudit.winProb": "8a8ed0ab1f45bdd02092e754fc112b6891b56f66f21eb7d250e4e5b7ad0132a9",
-    "Pouw.PearlC.ex": "a91da7689685599e9ee24d99101cefdaf01d8b45d8d5ac5e8f65b22c16c10a3f"
+    "Pouw.PearlC.HiddenAudit.winProb": "80843a676c89ed773a202e4aa74c31196f2c27aee2b5e601e55b942e29a13082"
    }
   },
   "Definitions.Pouw.PearlC.HiddenTileGame": {
