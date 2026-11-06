@@ -2082,6 +2082,49 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
     assert ready(world.gh, world.store, 99, "lane-1", PASS) == 2
 
 
+def test_a_merge_of_main_keeps_the_heads_mark_and_verdict_and_a_real_change_loses_them(world):
+    """A merge of `main` into a marked, verdicted head leaves its own change (`Queue.own_change`: the patch-id of its diff from
+    its merge base with the landing branch) as it was, so the new head takes the old one's mark and verdict, and the log names
+    the head they came from: no new mark and no new review.  A real change on top takes none; a head with a label of its own
+    reads only its own; a carried label is judged on its own head's companions; and a withdrawn mark carries as the mark did."""
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    world.gh.put(1, a := world.change({"a.txt": "1\n"}), ready=False)
+    world.store.add_label(label_target(1, a), vocab.READY, True, "lane-1", ts="2026-11-06T10:00:00Z")
+    world.store.add_label(label_target(1, a), vocab.REVIEWED, "land", "reviewer", ts="2026-11-06T11:00:00Z")
+    _git(world.dev, "push", "-q", "origin", f"{(main := world.change({'b.txt': 'main moved\n'}))}:refs/heads/main")
+    world.gh.put(1, b := _merge(world, a, main), ready=False)
+    q = world.queue()
+    q._clone()
+    q.fetch(world.gh.open_prs())
+    labels = StoreLabels(world.store, log=world.logs.append, change=q.own_change)
+    assert q.own_change(b) == q.own_change(a) is not None
+    assert labels.ready(1, b) and labels.ready_by(1, b) == "lane-1" and labels.marked_at(1, b) == "2026-11-06T10:00:00Z"
+    assert [(lab.value, lab.by) for lab in labels.reviews(1, b)] == [("land", "reviewer")]
+    assert [s for s in world.logs if "takes the" in s] == [
+        f"research queue: #1 at {b[:8]} takes the `{key}` labels at {a[:8]}: none of its own counts, and its own change is "
+        f"theirs (patch-id {q.own_change(b)[:12]})" for key in (vocab.READY, vocab.REVIEWED)]
+
+    class Refuse:
+        def why(self, lab, beside):
+            return "no companion"
+
+    strict = StoreLabels(world.store, verify=Refuse(), change=q.own_change)
+    assert not strict.ready(1, b) and strict.refusals(1, b, vocab.READY) == [
+        "ready = True by lane-1 at 2026-11-06T10:00:00Z: no companion"]
+
+    world.gh.put(1, c := world.change({"a.txt": "1 fixed\n"}, base=b), ready=False)
+    q.fetch(world.gh.open_prs())
+    assert q.own_change(c) not in (None, q.own_change(a))
+    assert not labels.ready(1, c) and labels.reviews(1, c) == [] and labels.ready_by(1, c) is None
+
+    world.store.add_label(label_target(1, b), vocab.REVIEWED, "hold", "reviewer", ref="wait", ts="2026-11-06T12:00:00Z")
+    assert [lab.value for lab in StoreLabels(world.store, change=q.own_change).reviews(1, b)] == ["hold"]
+    world.store.add_label(label_target(1, a), vocab.READY, False, "ci", ref="breaks x", ts="2026-11-06T13:00:00Z")
+    assert not StoreLabels(world.store, change=q.own_change).ready(1, b)
+
+
 def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):
     """A ready post with no mark behind it admits nothing; `--mark` needs neither a machine nor a tier."""
     from research.queue import MarkOnly, StoreLabels, ready

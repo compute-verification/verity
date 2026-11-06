@@ -4717,7 +4717,7 @@ class Driver:
     def _stacked(self, drive: dict, members: list[Member], tip: str) -> None:
         """After a landing at ``tip``, tell the owner of each open PR based on `main` or on a landed member's branch whose head
         contains that member's head (a PR stacked on it) that its base landed, once per (PR, base) (`stacked:P<Q`): not one
-        marked ready at its head, which lands from `next` as it is, and whose merge of `main` would need a new mark.  A PR based
+        marked ready at its head, which lands from `next` as it is.  A PR based
         on another branch (a long-lived one, as the remote demo's) takes `main` through that branch, and isn't told."""
         from .stale import pull_refs
 

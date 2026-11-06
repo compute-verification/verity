@@ -13,10 +13,12 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    lists, or an `Issue: none: REASON` line); --json gives each its `issue`
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue eject PR --reason TEXT [--by HANDLE]
-                                                   keep the PR's current head out of `next`; a new push or ready mark re-admits it;
+                                                   keep the PR's current head out of `next`, and a new head whose own change is
+                                                   the same (`StoreLabels`); a ready mark re-admits it;
                                                    posted as HANDLE to `CI` and the owner in the merge thread (exit 1 if it couldn't be)
     research queue ready PR (--on MACHINE | --local | --mark) [--by LANE] [--no-preflight] [--sha SHA] [--json]
-                                                   the owner's word that the PR is ready at its current head (a new push needs it again;
+                                                   the owner's word that the PR is ready at its current head (a new push needs it
+                                                   again unless its own change is the marked head's;
                                                    --sha: only at SHA, refused when GitHub still has another head after a few reads),
                                                    once the quick tier passes there: as a run on MACHINE in a check slot
                                                    (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
@@ -153,8 +155,8 @@ a fork's, or a deleted one's) or whose author is neither an owner or member of t
 collaborator's isn't enough) nor one of `AUTHORS` (the team's Apps, the repository's admin) is refused, at its mark and at
 admission, naming why and the fix: a maintainer opens it from a branch of this repository (`PR.outside`).  A PR based on another branch is never admitted: `ready` marks it and says so,
 and `status` lists it, once marked, as waiting to be retargeted to `main` (a PR containing another waits for it there).  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that
-`research queue ready PR` writes, so a new push needs a new one (a restack too: the tier ran on the old tree; not a head whose tree is a marked head's,
-as a merge of `main` that changes no file leaves it: `ready` marks that one without a tier), and only after the quick tier passes at that
+`research queue ready PR` writes, so a new push needs a new one unless its own change is a marked head's (below; `ready` marks a head whose tree is a
+marked head's, as a merge of `main` that changes no file leaves it, without a tier), and only after the quick tier passes at that
 head: `suites.py --quick` on the suites the PR changes, from a clean checkout, either as a `research run` on a machine (`--on`,
 `RemoteQuickTier`: in one of its check slots, so several PRs' tiers run at once and the caller only waits) or here (`--local`,
 `QuickTier`); a failure refuses and names the tests, and a remote run whose result can't be read, or that reports another head, is a
@@ -163,7 +165,11 @@ the ready label is what says one is done.  The hold label keeps a PR out whateve
 on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules file (`ci/queue.toml` on
 `main`, `tools/verity/check/queue.toml` until the repository move, or `--rules`) names the hold label.  Ready marks are read after
 pulling the target's labels from the store's remote; when that pull can't happen (no remote here, one
-that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.
+that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.  A head with no
+ready mark (or land verdict) of its own that counts takes those of each other head of its PR whose own change is the same: the
+`git patch-id --stable` of its diff from its merge base with the landing branch (`Queue.own_change`, `StoreLabels`), and the log
+names the head they came from.  So a merge of `main`, or a restack that leaves the diff as it was, costs no new mark and no new
+review, a withdrawn mark holds there too, and a head whose own diff differs takes none.
 
 Preflight.  What breaks or cancels a train is cheap to catch at mark time: a conflict with a PR already on `next`, a stale Lake
 pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry, a test that reads
@@ -341,6 +347,7 @@ import sys
 import tempfile
 import time
 import tomllib
+import weakref
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Callable, Iterable
@@ -1243,33 +1250,49 @@ class StoreLabels:
     """Ready marks from the evidence store: `ready` labels on `pr:{n}@{head}`, pulled from the remote first.  Without that pull it
     raises: a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled.
     With ``verify`` (a `labelauth.Verifier`: drive.toml's `signed_verdicts`), a ready mark or land verdict its `label_auth`
-    companion doesn't authenticate is read as absent (`refusals` says why); `ready = false` and holds count as written."""
+    companion doesn't authenticate is read as absent (`refusals` says why); `ready = false` and holds count as written.
+    With ``change`` (`Queue.own_change`), a head with no `ready` (or `reviewed`) label of its own that counts takes those of
+    each other head of its PR whose own change is the same, logging which (`_counted`): so a merge of `main` costs no new mark
+    and no new review, while a head whose own diff differs takes none."""
 
-    def __init__(self, store, log: Callable[[str], None] = print, since: str | None = None, verify=None):
-        self.store, self.log, self.since, self.verify = store, log, since, verify
+    def __init__(self, store, log: Callable[[str], None] = print, since: str | None = None, verify=None,
+                 change: Callable[[str], str | None] | None = None):
+        self.store, self.log, self.since, self.verify, self.change = store, log, since, verify, change
         self._pulled: set[int] = set()
         self._newest: dict[tuple[int, str], object] = {}
         self._fresh: set[str] = set()
+        #: the heads of each PR with labels here, by its label directories' prefix (`pr_12@`), listed again after a pull
+        self._dirs: dict[str, list[str]] | None = None
+        self._said: set[tuple[int, str, str]] = set()
 
     def prefetch(self, heads: Iterable[tuple[int, str]]) -> None:
         """Pull the labels of each `pr:{n}@{head}` from the store's remote at once, so `ready` answers each from them without a
-        pull of its own (one listing per open PR, in turn, would be seconds of every drive tick).  A failed pull leaves each
-        target to its own, which says why."""
+        pull of its own (one listing per open PR, in turn, would be seconds of every drive tick); with ``change``, those of
+        every head of each PR, one listing per PR as well, which a head without labels of its own may take.  A failed pull
+        leaves each target to its own, which says why."""
         from .store import labels_sync
 
-        targets = [label_target(n, h) for n, h in heads]
+        heads = list(heads)
+        targets, prs = [label_target(n, h) for n, h in heads], sorted({n for n, _ in heads})
         if not targets or getattr(self.store, "remote", None) is None:
             return
         try:
-            labels_sync.pull_targets(self.store, targets, jobs=PREFETCH_JOBS)
+            if self.change is None:
+                labels_sync.pull_targets(self.store, targets, jobs=PREFETCH_JOBS)
+            else:
+                labels_sync.pull_prefixes(self.store, [label_target(n, "") for n in prs], jobs=PREFETCH_JOBS)
         except Exception:  # noqa: BLE001
             return
         self._fresh.update(targets)
+        if self.change is not None:
+            self._pulled.update(prs)
+            self._dirs = None
 
     def ready(self, pr: int, head: str) -> bool:
         """Whether the newest `ready` label on `pr:{n}@{head}` is `true`, written at or after ``since`` (`--marked-after`) when
-        given.  `research queue eject` writes `ready = false` there, so an ejection holds on every VM's queue until the owner
-        marks it again or pushes a new head (an ejection kept in the ejecting VM's state would be lost to drive, which re-admits)."""
+        given.  `research queue eject` writes `ready = false` there, so an ejection holds on every VM's queue, at that head and at
+        a new one whose own change is the same (`_counted`), until the owner marks it again (an ejection kept in the ejecting
+        VM's state would be lost to drive, which re-admits)."""
         labs = sorted(self._counted(pr, head, vocab.READY)[0], key=lambda lab: lab.ts)
         self._newest[(pr, head)] = labs[-1] if labs else None
         return bool(labs) and str(labs[-1].value).lower() == "true" and (self.since is None or labs[-1].ts >= self.since)
@@ -1288,7 +1311,26 @@ class StoreLabels:
         return self._counted(pr, head, key)[1]
 
     def _counted(self, pr: int, head: str, key: str) -> tuple[list, list[str]]:
-        labs = self._labels(pr, head, key)
+        """The ``key`` labels on `pr:{n}@{head}` that count, and why each other one doesn't.  With ``change``, a head none of
+        whose own counts takes those of each other head of the PR with the same own change (``change``, never None for
+        either), each judged on its own head's companions; the log names the heads they came from, once."""
+        counted, refused = self._verified(pr, head, self._labels(pr, head, key))
+        if counted or self.change is None or not (others := self._other_heads(pr, head, key)) or not (own := self.change(head)):
+            return counted, refused
+        came = []
+        for old, labs in others.items():
+            if self.change(old) == own:
+                got, why = self._verified(pr, old, labs)
+                counted, refused = [*counted, *got], [*refused, *why]
+                came += [old] if got else []
+        if came and (pr, head, key) not in self._said:
+            self._said.add((pr, head, key))
+            self.log(f"research queue: #{pr} at {head[:8]} takes the `{key}` labels at {', '.join(c[:8] for c in came)}: none "
+                     f"of its own counts, and its own change is theirs (patch-id {own[:12]})")
+        return counted, refused
+
+    def _verified(self, pr: int, head: str, labs: list) -> tuple[list, list[str]]:
+        """``labs``, labels on `pr:{n}@{head}`, that ``verify`` counts (each without it), and why each other one doesn't."""
         if self.verify is None:
             return labs, []
         from .labelauth import landing
@@ -1322,7 +1364,7 @@ class StoreLabels:
 
     def _other_heads(self, pr: int, head: str, key: str) -> dict[str, list]:
         """{head: its ``key`` labels} for each head of pull request ``pr`` but ``head`` that has some, after pulling every head's
-        labels from the store's remote (once per PR); without that pull it raises, as `_labels` does."""
+        labels from the store's remote (once per PR, or by `prefetch`); without that pull it raises, as `_labels` does."""
         from .store import labels_sync
 
         prefix = label_target(pr, "")
@@ -1333,9 +1375,15 @@ class StoreLabels:
                 raise QueueError(f"STALE: the labels of {prefix}* weren't pulled from the store's remote ({type(e).__name__}: {e}), "
                                  f"so ready marks on #{pr}'s other heads here may be old") from None
             self._pulled.add(pr)
+            self._dirs = None
+        if self._dirs is None:
+            root, self._dirs = Path(self.store.root) / "labels", {}
+            for name in sorted(os.listdir(root)) if root.is_dir() else ():
+                at, sep, old = name.rpartition("@")
+                if sep:
+                    self._dirs.setdefault(at + sep, []).append(old)
         out = {}
-        for d in sorted((Path(self.store.root) / "labels").glob(f"{ids.target_dirname(prefix)}*")):
-            old = d.name.rpartition("@")[2]
+        for old in self._dirs.get(ids.target_dirname(prefix), ()):
             if old != head and ids.is_pr(label_target(pr, old)) and (labs := self.store.labels(label_target(pr, old), key=key)):
                 out[old] = labs
         return out
@@ -1582,6 +1630,11 @@ class Queue:
         self._context: str | None = None
         self._merged_from: dict[str, tuple[str, str]] = {}
         self._merges_reused = 0
+        #: each (landing branch, head)'s `own_change`, and those kept in the clone's git directory (at `_kept_at`) by merge base
+        #: and head
+        self._own: dict[tuple[str, str], str | None] = {}
+        self._kept: dict[str, str | None] | None = None
+        self._kept_at = Path()
 
     # -- the clone and its state
 
@@ -1751,6 +1804,28 @@ class Queue:
         isn't below it."""
         return chain_of(self.workdir, self.base, f"refs/remotes/origin/{self.branch}")
 
+    def own_change(self, head: str, landing: str | None = None) -> str | None:
+        """``head``'s own change (`own_change`) from its merge base with the landing branch as fetched (``landing``, else
+        `base`), or None when either isn't in the clone or the branch has all of it: what a ready mark or land verdict carries
+        to a new head by (`StoreLabels`).  A large diff takes about a second, so each is kept in the clone's git directory by
+        merge base and head, the newest `OWN_KEEP`."""
+        if (key := (landing or self.base, head)) in self._own:
+            return self._own[key]
+        if not (mb := _git(self.workdir, "merge-base", key[0], head, check=False).stdout.strip()):
+            self._own[key] = None
+            return None
+        if self._kept is None:
+            self._kept_at = self.workdir / _out(self.workdir, "rev-parse", "--git-common-dir") / "own-changes.json"
+            self._kept = json.loads(self._kept_at.read_text()) if self._kept_at.is_file() else {}  # written whole, by `replace`
+        if (at := f"{mb} {head}") not in self._kept:
+            self._kept[at] = own_change(self.workdir, mb, head)
+            self._kept = dict(list(self._kept.items())[-OWN_KEEP:])
+            tmp = self._kept_at.with_name(f"{self._kept_at.name}.{os.getpid()}.tmp")
+            tmp.write_text(json.dumps(self._kept))
+            tmp.replace(self._kept_at)
+        self._own[key] = self._kept[at]
+        return self._own[key]
+
     # -- admission
 
     def _marked_again(self, p: PR, ejected: dict) -> bool:
@@ -1808,7 +1883,7 @@ class Queue:
             elif p.owner is None:
                 e.state, e.why = "waiting", "no owner: add a `Lane {name}` line to the PR body"
             elif ejected and ejected["head"] == p.head and not self._marked_again(p, ejected):
-                e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a new push or ready mark re-admits it)"
+                e.state, e.why = "refused", f"ejected at {p.head[:8]}: {ejected['why']} (a ready mark re-admits it)"
             elif self.ready(p.number, p.head):
                 pass
             elif self.before_cutoff and (when := self.before_cutoff(p.number, p.head)):
@@ -3499,6 +3574,23 @@ def _tree(repo: Path, commit: str) -> str:
     return _git(repo, "rev-parse", "-q", "--verify", f"{commit}^{{tree}}", check=False).stdout.strip()
 
 
+#: the own changes `Queue.own_change` keeps: the heads of open PRs whose mark or verdict another head may take number some hundreds
+OWN_KEEP = 4096
+
+
+def own_change(repo: Path, base: str, head: str) -> str | None:
+    """The `git patch-id --stable` of ``head``'s diff from ``base`` (its merge base with the landing branch: `Queue.own_change`),
+    with full blob ids, so a binary file's new content counts; None for an empty diff or a commit that isn't here.  A merge of
+    `main` that resolves no conflict leaves it as it was, as does a merge of `next` once the members it merged have landed; an
+    edit of the change, a conflict resolved into it, or a change of a line its diff shows as context changes it."""
+    diff = subprocess.run(["git", "diff-tree", "-r", "-p", "--full-index", base, head], cwd=repo, capture_output=True,
+                          env=git_env(GIT_TERMINAL_PROMPT="0"))
+    if diff.returncode or not diff.stdout:
+        return None
+    got = subprocess.run(["git", "patch-id", "--stable"], cwd=repo, input=diff.stdout, capture_output=True).stdout.split()
+    return got[0].decode() if got else None
+
+
 #: the invariant tests the preflight runs on the merged tree, from the root, each a common way a train breaks: a module string
 #: naming a module only an unlanded PR adds, stale Lake pins, a doc path, a workspace member without its REAL_ROOTS entry, and
 #: `check`'s preflight-lints on test_repository.py (a skill over the Markdown cap, a report-genre name)
@@ -4287,6 +4379,7 @@ class Preflight:
         q = Queue(self.repo, remote=self.remote, github=None, ready=lambda n, h: (n, h) == (pr.number, pr.head) or labels.ready(n, h),
                   store=self.store, rules=rules, log=self.log, before_cutoff=labels.before_cutoff, marked_by=labels.marked_by,
                   marked_at=labels.marked_at, prefetch=labels.prefetch)
+        labels.change = functools.partial(q.own_change, landing=landed)
         judged = inside | {n for n, _, _ in carried}
         try:
             entries = q.entries([pr, *(p for p in prs if p.number in judged)], {"ejected": {}}, base=main, landed=landed,
@@ -5120,7 +5213,7 @@ def off_main_note(pr: PR, prs: list[PR]) -> str | None:
     until = f"until #{parent.number} lands, one stack level per landing" if parent else "until it is"
     return (f"#{pr.number} is based on {based_on(pr, prs)}, not main: drive won't see it {until}. Retarget it to main (drive orders "
             f"stacked PRs itself: a PR containing another waits for it); retargeting keeps the head, so a ready mark at "
-            f"{pr.head[:12]} counts from then on, and a new push needs a new mark as always")
+            f"{pr.head[:12]} counts from then on, and a new push needs a new mark unless its own change is the same")
 
 
 def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool = False,
@@ -6110,6 +6203,10 @@ def main(argv: list[str]) -> int:
                   auth=credential_args(Path.cwd(), remote),
                   before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, marked_at=labels.marked_at,
                   prefetch=labels.prefetch)
+        # weakly: `q` holds `labels`' methods, so a strong reference back would keep `q`, and the workdir's lock it holds, past
+        # `main`'s return
+        own = weakref.WeakMethod(q.own_change)
+        labels.change = lambda head: own()(head)
         lock = _lock(workdir)
         q.unlock = lock.close
         if ignored := [f"--{k.replace('_', '-')}" for k in ("max_running", "train_size") if getattr(a, k) is not None]:

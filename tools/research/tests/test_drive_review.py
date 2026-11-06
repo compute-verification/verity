@@ -2540,8 +2540,8 @@ def test_a_marked_pr_left_out_for_an_ejected_pr_it_holds_an_older_head_of_is_tol
 
     h.tick()
     assert told() == [
-        f"@ci @lane-6 @lane-7 queue: #6 at {new[:8]} isn't admitted (ejected at {new[:8]}: breaks circuits (a new push or ready "
-        f"mark re-admits it)). It takes out #7 (at #6's older head {old[:12]}), which contains it. Fix: mark #6 ready at {new[:8]}, "
+        f"@ci @lane-6 @lane-7 queue: #6 at {new[:8]} isn't admitted (ejected at {new[:8]}: breaks circuits (a ready mark "
+        f"re-admits it)). It takes out #7 (at #6's older head {old[:12]}), which contains it. Fix: mark #6 ready at {new[:8]}, "
         f"drop #6's commits from #7, or ask @top to close #6"], told()
     assert h.q.status()[7].state == "waiting"
     h.tick()
@@ -3318,3 +3318,29 @@ def test_the_low_risk_lanes_rebuild_merges_with_each_tips_drivers_not_its_checko
     q._merge_records = {}
     tree, why = D.Driver._clean_merge(types.SimpleNamespace(repo=q.workdir, q=q), two, three)
     assert tree is not None and _git(q.workdir, "show", f"{tree}:{caps}") == counts(355, 185).strip(), why
+
+
+def test_a_merge_of_main_into_a_verdicted_head_lands_on_its_verdict_and_a_real_change_waits_for_its_own(world, monkeypatch):
+    """Merging `main` into a PR costs no new mark and no new review: the new head's own change (`Queue.own_change`) is the
+    verdicted head's, so drive lands it on that head's mark and verdict, and its log names that head.  A PR whose new head
+    changes its own diff, marked again by its owner, waits for a land verdict at that head."""
+    from test_queue import _merge
+
+    world.with_store_remote()
+    old = {1: world.change({"a.txt": "1\n"}), 2: world.change({"b.txt": "2\n"})}
+    _move_main(world, {"c.txt": "moved\n"})
+    labels = StoreLabels(world.store, log=world.logs.append)
+    h = Review(world, monkeypatch, ready=labels.ready, marked_at=labels.marked_at, prefetch=labels.prefetch)
+    labels.change, h.d.reviews, h.d.ready_by = h.q.own_change, labels.reviews, labels.ready_by
+    for n, head in old.items():
+        world.gh.put(n, head, ready=False)
+        world.store.add_label(label_target(n, head), vocab.READY, True, f"lane-{n}")
+        h.review(n)
+    world.gh.put(1, one := _merge(world, old[1], _main(world)), ready=False)
+    world.gh.put(2, two := world.change({"b.txt": "2 fixed\n"}, base=old[2]), ready=False)
+    world.store.add_label(label_target(2, two), vocab.READY, True, "lane-2")
+    assert h.tick().startswith("landed #1"), world.logs
+    assert f"Head: {one}" in _git(world.origin, "log", "-1", "--format=%B", "main")
+    assert any(s.startswith(f"research queue: #1 at {one[:8]} takes the `reviewed` labels at {old[1][:8]}") for s in world.logs)
+    out = h.tick()
+    assert out.startswith(f"nothing reviewed lands: #2 at {two[:8]}") and "no land verdict" in out, out
