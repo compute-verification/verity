@@ -387,6 +387,7 @@ theorem accepted_trees {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.
   rename_i run hrun
   obtain ⟨_, -, hrun⟩ := bind_ok hrun
   obtain ⟨ts, hts, hrun⟩ := bind_ok hrun
+  obtain ⟨_, -, hrun⟩ := bind_ok hrun
   obtain ⟨_, hheld, -⟩ := bind_ok hrun
   exact ⟨ts, hts, hheld⟩
 

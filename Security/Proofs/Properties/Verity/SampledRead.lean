@@ -1251,7 +1251,7 @@ theorem trees_of_checkBlobsAt {p : _root_.SampledProofs.OneStageZk.Params}
   · cases h
   · rename_i hr
     simp only [bind_ok] at hr
-    obtain ⟨_, -, ts, hts, _, hth, -⟩ := hr
+    obtain ⟨_, -, ts, hts, _, -, _, hth, -⟩ := hr
     exact ⟨ts, hts, hth⟩
 
 /-! ### The read -/

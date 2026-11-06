@@ -18,14 +18,17 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
   the challenger's key, on the verifier's window; none read refuses. The check below runs at them (`checkBlobsAt`): v1's
   `checkAt` refuses a draw other than the one they give before v1's `check`;
-* **trees** (`treesOf`, `treesHeld`): the coin trees that same session's signed release log shows the challenger sampled
-  and opened (`Challenger.trustedTreesOf`). Each session's coins must be one tree's, a tree no other session's, its
-  record's `coin_tree`, link points and every round's coins as the challenger logged them, its link's `root_b` naming
-  exactly the session's tables (`sessionTables`), the roots the link points are opened after, each entry the length
-  its table's statement fixes, `2^cap₀` digests (`rootBTables`, `Challenger.LINK_ROOT_LEN`), refused before the link's
-  message is hashed, which is what makes that message parse one way, and every tree logged must be a session's
-  (`Challenger.sessionsTreeReason`); else the check refuses, before any session is verified. A session whose statement
-  sets up no table has no length to hold, and its own verdict rejects;
+* **trees** (`treesOf`, `orderHeld`, `treesHeld`): the coin trees that same session's signed release log shows the
+  challenger sampled and opened (`Challenger.trustedTreesOf`). The log must release the sample, then the link, then the
+  other rounds: no coin of the parameters' challenger family after the registration's digest released after a round is
+  opened, and the first round opened a tree's `session` stream (`Challenger.sampleLinkFirst`, `SAMPLE_LINK_FIRST`). Each
+  session's coins must be one tree's, a tree no other session's, its record's `coin_tree`, link points and every
+  round's coins as the challenger logged them, its link's `root_b` naming exactly the session's tables
+  (`sessionTables`), the roots the link points are opened after, each entry the length its table's statement fixes,
+  `2^cap₀` digests (`rootBTables`, `Challenger.LINK_ROOT_LEN`), refused before the link's message is hashed, which is
+  what makes that message parse one way, and every tree logged must be a session's (`Challenger.sessionsTreeReason`);
+  else the check refuses, before any session is verified. A session whose statement sets up no table has no length to
+  hold, and its own verdict rejects;
 * **population** (`popHeld`): the registration's population held to the verifier's program: under its query, the
   program's proof blocks read stratum by stratum must be the record's `population` units in order (`Slots.popOk`), as
   the service's run refuses at registration (`Run.run`, `population-order`), else the check refuses, before any session
@@ -579,16 +582,33 @@ def popHeld (v : Registration.Verifier) (record : Json) : V Unit :=
   | none => throw "the record names no population"
   | some n => if Slots.popOk v.program v.query n then pure () else throw POPULATION_ORDER
 
+/-- The challenger session's release log in the evidence's `coins`, a line each, as `Challenger.trustedTreesOf` reads
+it. -/
+def linesOf (e : Evidence) : V (List String) := do
+  let .arr ls := getD (getD e.base.coins "session") "log" | throw "the session's log is not a list of lines"
+  ls.toList.mapM fun | .str l => pure l | _ => throw "a line of the session's log is not a string"
+
+/-- The order the window's challenger session released in (module docstring, **trees**): the sample, then the link,
+then the other rounds (`Challenger.sampleLinkFirst`) over its release log's lines after the head, at the parameters'
+challenger family and the registration's digest. -/
+def orderHeld (p : Params) (c : OneStage.Commitment) (e : Evidence) : V Unit := do
+  let some (_, label) := p.base.challenger | throw s!"coins: {NO_CHALLENGER}"
+  let lines ← linesOf e
+  unless Challenger.sampleLinkFirst label c.digest lines.tail do throw s!"coins: {Challenger.SAMPLE_LINK_FIRST}"
+
 /-- The check at the coins `ξ` (module docstring, **check**): the evidence's one session (`oneSession`), its coins held
-to the trees the challenger logged (`treesOf`, `treesHeld`), the registration's population held to the program
-(`popHeld`), the parameters' public file held to the registration (`publicHeld`), then the session's verdict on the
-blobs, then v1's `checkAt` at `ξ` on it. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own
-`all` says it again, so an acceptance reads the run rather than the verdicts' JSON. -/
+to the trees the challenger logged in the order it must release them (`treesOf`, `orderHeld`, `treesHeld`), the
+registration's population held to the program (`popHeld`), the parameters' public file held to the registration
+(`publicHeld`), then the session's verdict on the blobs, then v1's `checkAt` at `ξ` on it. v1 accepts only verdicts
+that all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance reads the run rather than the
+verdicts' JSON. -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   let r : V Run := do
     oneSession e.sessions
-    treesHeld p.own (← treesOf p.base e.base) e bs
+    let ts ← treesOf p.base e.base
+    orderHeld p c e
+    treesHeld p.own ts e bs
     popHeld p.base.verifier c.record
     publicHeld c.record (← bs.get p.own.pub "public file")
     run p.own e.sessions (some e.base.provedUnits) bs

@@ -375,6 +375,7 @@ theorem checkBlobsAt_run {p : _root_.SampledProofs.OneStageZk.Params} {c : _root
   · rename_i r hr
     obtain ⟨_, h1, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
+    obtain ⟨⟨⟩, -, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
     obtain ⟨pubB, hpub, hr⟩ := ebind_ok hr

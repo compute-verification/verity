@@ -182,8 +182,9 @@ these lines (`tree_line`), `coin_trees_of` reads them, and `session_tree_reason`
 ``coin_tree`` a tree the log shows sampled, its link's ``root_b`` keys exactly its session's tables (`LINK_TABLES`), each
 entry the length its table's statement fixes (`LINK_ROOT_LEN`, refused before the hash so the hashed message parses one
 way), its link points and every round's coins that tree's logged openings.  `sessions_tree_reason` holds an audit's sessions to
-them, one tree a session and every tree a session's, so no statement's coins are flipped twice.  The tree's root and key
-leave at ``Hello``, as C-Flock's coin server releases them, so its unopened coins rest on the tree's hm96 hiding.
+them, one tree a session and every tree a session's, so no statement's coins are flipped twice.  `sample_link_first`
+holds the log's order: the sample, then the link, then the other rounds.  The tree's root and key leave at ``Hello``, as
+C-Flock's coin server releases them, so its unopened coins rest on the tree's hm96 hiding.
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
@@ -260,6 +261,10 @@ TREE_SPEC_FORM = (f"a coin tree's spec is {{block, rounds_log, scheme, streams}}
 NO_TREE = "its coin tree is none the challenger's release log shows it sampled"
 SHARED_TREE = "its coin tree is another session's"
 UNUSED_TREE = "a tree no session records is a second sample, and each session's coins are flipped once"
+#: Lean `Challenger.SAMPLE_LINK_FIRST`: the refusal of a release log out of the order `sample_link_first` holds it to
+SAMPLE_LINK_FIRST = ("the challenger's release log is not the sample, then the link, then the other rounds: a coin of the "
+                     "sample is released after a coin tree's round is opened, or the first round opened is not a "
+                     f"tree's {CT.SESSION} stream, the link points")
 CLOSE_FORM = ("a challenger close record is {chain, ended, lines, session, signature}: a 64-byte chain and a signature in "
               "lowercase hex, how the session ended (null when its client closed it), the release log's line count, "
               f"1 to {MAX_LOG_LINES}, and a session id of at most {MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'")
@@ -991,6 +996,55 @@ def sessions_tree_reason(trees: dict[str, LoggedTree],
         return (f"the challenger's release log shows {len(trees)} coin trees and the sessions use {len(used)}: "
                 f"{UNUSED_TREE}")
     return None
+
+
+def _root_names(line: str, label: str, root: bytes) -> bool:
+    """Whether release log line `line` shows family `label` and root `root`, as `released_roots_of` reads a root line
+    (Lean `Challenger.rootOf line = some (label, root)`); False where the line doesn't parse."""
+    try:
+        doc = _event(line)
+    except CoinError:
+        return False
+    return (isinstance(doc, dict) and doc.get("label") == label and type(doc.get("root")) is str
+            and _hex(doc["root"]) == root)
+
+
+def open_line(line: str) -> bool:
+    """Whether release log line `line` opens a coin tree's round: an event whose ``event`` is `OPEN_EVENT`."""
+    try:
+        doc = _event(line)
+    except CoinError:
+        return False
+    return isinstance(doc, dict) and doc.get("event") == OPEN_EVENT
+
+
+def link_line(line: str) -> bool:
+    """Whether release log line `line` opens a round of a coin tree's stream ``session`` (`coin_tree.SESSION`), the
+    stream a session's link points are opened from."""
+    return open_line(line) and _event(line).get("stream") == CT.SESSION
+
+
+def sample_link_first(label: str, after: bytes, log: Sequence[str]) -> bool:
+    """**The sample, then the link, then the other rounds**, in the release log's lines `log` after its head (Lean
+    `Challenger.sampleLinkFirst`). Read as `released_roots_of` reads them, a coin tree's line aside (`tree_line`) and
+    the rest in pairs, a root's line and its coin's release: no coin of family `label` whose root's line names `after`
+    is released after a line opening a coin tree's round (`open_line`), and the first such line opens the stream
+    ``session`` (`link_line`), whose first round is the link points. A coin tree's own line may come anywhere. In v2's
+    one-stage audit `label` is the parameters' challenger family and `after` the registration's digest, so the coins so
+    released are the sample's, and v2 refuses a log out of this order (`SAMPLE_LINK_FIRST`)."""
+    opened, pending = False, None
+    for line in log:
+        if tree_line(line):
+            if not opened and open_line(line) and not link_line(line):
+                return False
+            opened = opened or open_line(line)
+        elif pending is None:
+            pending = line
+        else:
+            if opened and _root_names(pending, label, after):
+                return False
+            pending = None
+    return True
 
 
 def _period(s: Any) -> bool:
@@ -1979,6 +2033,6 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
            "verify_periods", "withheld_on", "write_record",
            "LINK_ROOT_LEN", "LINK_TABLES", "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS", "MAX_TREE_LINES", "NO_TREE", "OPEN_EVENT",
-           "SHARED_TREE", "TREE_EVENT", "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening",
-           "coin_trees_of", "coins_digest", "link_after", "session_tree_reason", "sessions_tree_reason", "tree_line",
-           "tree_spec_reason"]
+           "SAMPLE_LINK_FIRST", "SHARED_TREE", "TREE_EVENT", "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE",
+           "LoggedTree", "TreeOpening", "coin_trees_of", "coins_digest", "link_after", "link_line", "open_line",
+           "sample_link_first", "session_tree_reason", "sessions_tree_reason", "tree_line", "tree_spec_reason"]

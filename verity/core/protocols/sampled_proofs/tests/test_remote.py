@@ -581,7 +581,9 @@ def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed
     """The challenger samples a ``--zk`` session's coin tree under the prover's nonce and opens each round itself, after
     what it follows, between the session's own coins; each line is logged before its answer, the signed close covers
     them, the verifier's read of the session's roots reads past them, and a record on those coins is held to them
-    (`session_tree_reason`), one whose round's coins differ refused, as is one held to another ``root_B`` length."""
+    (`session_tree_reason`), one whose round's coins differ refused, as is one held to another ``root_B`` length. Its
+    log is the sample, then the link, then the other rounds (`sample_link_first`) for the coin released before the tree
+    was sampled, and not for the one released after its rounds."""
     host = Host(tmp_path, signer, withhold=True)
     client = R.RemoteChallenger.connect(host.address)
     positions = C.LiveRecord(client, "positions", itertools.count().__next__)
@@ -599,6 +601,8 @@ def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed
     log = R.session_files(host.directory)["log"]
     assert [json.loads(line)["event"] for line in log] == ["commitment", "root", "release", "coin-tree", "tree-open",
                                                            "tree-open", "tree-open", "root", "release"]
+    assert C.sample_link_first("positions", root(0), log[1:])
+    assert not C.sample_link_first("positions", root(1), log[1:])
     assert json.loads((host.directory / R.CLOSE).read_text())["lines"] == len(log)
     trees = C.coin_trees_of(log)
     assert list(trees) == [tree_root.hex()] and trees[tree_root.hex()].record()["key"] == key.hex()

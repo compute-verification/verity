@@ -152,7 +152,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   the session's record to the coin trees the signed release log shows the challenger sampled and opened, a link
   `root_B` of any length but its statement's refused before the hash (`LINK_ROOT_LEN`;
   `SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its
-  link points and round coins that tree's openings after its link's roots and each round's message. Then it runs
+  link points and round coins that tree's openings after its link's roots and each round's message, the sample
+  released before any round and the link first (`order_why`). Then it runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, accepts
   the session only if the public file's units are the population in order (`FilePart.check`), binds `proved_units` to
   what the session proved, and hands its verdict to v1's `checkAt` at those coins.
