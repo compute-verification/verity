@@ -62,7 +62,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   wired row's public string its writer's) and on the reference's entries whose unit is drawn.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
-`select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
+`select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `select_second` (a
+two-stage rule's second stage, on the coins after the interior registration), `check_draw`,
 `check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it), `hello`,
 `stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
 -/

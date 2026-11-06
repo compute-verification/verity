@@ -2091,9 +2091,9 @@ class Stream:
     def _footprint(self, e: _Entry) -> IntegrityProfile:
         """An accepted two-stage outcome's integrity profile: two levels, the replay blocks (`replay`, the registration's
         partition) and their proof blocks (`A.LEVEL`, the interior registration's), n_rho in each. The first stage's
-        uniform Q-subset of the N replay blocks is bounded by `Bernoulli(Q/N)` (sampling without replacement is
-        negatively associated, so the product of the replay blocks' escapes has no larger mean), and the second stage is
-        `Subset(k)` inside each sampled replay block. Its `accept(m)` is a replay block's at footprint m, the fewest
+        uniform Q-subset of the N replay blocks is bounded by `Bernoulli(Q/N)` (`Design.Two.Pa_le_bernoulli_pop`: it
+        misses a set T with probability C(N − |T|, Q)/C(N, Q) ≤ (1 − Q/N)^|T|), and the second stage is `Subset(k)`
+        inside each sampled replay block. Its `accept(m)` is a replay block's at footprint m, the fewest
         incorrect proof blocks of any interior consistent with its boundary commitment, which is fixed before any coin;
         the prover's choice of interior after the first stage only raises it."""
         assert e.draw is not None and e.interior is not None and e.second is not None
