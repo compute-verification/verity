@@ -126,6 +126,7 @@ trace's in `RTwo`, and there is none. -/
 theorem sksLTwo_noRInfl {Coin : Type} (H : Msg → Msg) (x : Msg) (w : Claims.Sampling.Wit) :
     ¬ Claims.Sampling.RInflTwo H (sksLTwo Coin).commit (sksLTwo Coin).parse (sksLTwo Coin).partition
       (sksLTwo Coin).two 0 x w := by
+  classical
   rintro ⟨s, Pt, d, hs, hPt, hd, hy⟩
   unfold Claims.Sampling.influenceTwo at hy
   obtain ⟨w', _, ⟨ι, hM⟩, _⟩ := (Finset.mem_filter.1 hy).2
