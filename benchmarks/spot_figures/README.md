@@ -54,8 +54,10 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
       serve time, outside the budget, and the JSON gives that hashing's share of the scope's compute
       (`serve_hash_share`).
   - The vertical line is the `proof_overhead` card's `model_overhead`, the marginal: a token's per-block proving
-    seconds, statements' fixed costs excluded, over its MACs at the peak. The reference lines come from rho's reference,
-    the model's checkpoint and any `references` card. A MAC's AND gates, read from the FP8 MoE coordinate's
+    seconds, statements' fixed costs excluded, over its MACs at the peak. The reference lines come from rho's reference
+    (its reference model's, SparseLoCo's syncs scaled to the served model's parameters), the model's checkpoint and
+    every `references` card. A line at 0 is named in the caption, lines that coincide are drawn once, and one far
+    above the headline curves is named at the axis's top. A MAC's AND gates, read from the FP8 MoE coordinate's
     circuit-check pin, state each scope's compute and the skipped work in AND gates.
 - **Figure 2** (`figure2.py`): proof overhead per proof-block type, the `proof_overhead` card's blocks joined to the
   `workload` card's strata, beside each type's share of a token's proof blocks and MACs. A type without a measurement
