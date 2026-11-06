@@ -32,7 +32,7 @@ through every subprotocol (`examples/vllm/README.md`).
   computed, and the GPU committer (`commit/committer/`) commits it under the scheme `rows-sha512` (`commit/step_rows.py`;
   `vllm-v1`, `commit/scheme.py`, by name). The checks (`check/`) end in one verdict, `verdict.json` (`check/verdict.py`).
 - **Serve.** `verity-vllm serve-openai` is an OpenAI-compatible endpoint on the in-process engine that commits every step and,
-  with `--seal`, seals each closed sampling period for a later audit.
+  with `--seal`, seals each closed window for a later audit.
 - **Records.** The circuit database (`pipeline/circuit_db.py`, `verity-vllm records`) keeps, per workload of record
   (`manifests/records.json`), the exact circuit it served and the evidence that it is faithful, never committed values.
 
