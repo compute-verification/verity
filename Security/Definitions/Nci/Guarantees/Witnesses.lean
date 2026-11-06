@@ -18,7 +18,6 @@ public import Definitions.Nci.Assumptions.Training
 public import Definitions.Nci.Assumptions.PackedTraining
 public import Definitions.Nci.Support
 public import Definitions.Nci.Guarantees.CoverTraining
-public import Definitions.Nci.Guarantees.CoverChained
 public import Definitions.Nci.Guarantees.Remote
 
 /-!
@@ -37,9 +36,9 @@ witnesses at the toy circuit (`Nci.Capability.Toy`, with the instances of `Nci.W
 The premise each `X_nontrivial` drops is the one the bound rests on: the coverage `κ` when the bound is a share of the
 reference circuit (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
 in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), `WindowsHold`
-for the dampener, and PoUW's soundness (`PouwSound`) for the remote dampener. The cover theorem's joins (`Nci.Cover.Guarantees.CoverTraining` and
-`CoverTrainingAligned`) are stated at the multiplication blocks `mb0` of no product, where coverage `α₀ > 0` fails;
-`CoverTrainingChained` at the toy's two products on its bit view, where at depth `0` the cap `α Γ < c_w D` fails.
+for the dampener, and PoUW's soundness (`PouwSound`) for the remote dampener. The cover theorem's join
+(`Nci.Cover.Guarantees.CoverTraining`) is stated at the multiplication blocks `mb0` of no product, where coverage
+`α₀ > 0` fails.
 -/
 
 @[expose] public section
@@ -350,40 +349,5 @@ def CoverTraining_nontrivial : Prop :=
     Assumptions.UpdateHardness (mb0 D) 4 1 ∧ (mb0 D).Upstream (fun _ => ∅) 2 ∧ Assumptions.CapBelowDepth 1 1 2 ∧
     Assumptions.BlockFits D 2 1 1 4 ∧ ¬ Nci.Assumptions.Coverage 2 D (mb0 D).P.card ∧
     ¬ (2 * 1 * D.D.size D.D.computed ≤ ((1 / 2 : ℝ) * (1 / 2) * 2 + 1 * (1 / 2)) * D.D.size D.D.computed)
-
-/-- **`CoverTrainingAligned`'s premises hold together**: `CoverTraining_honest`'s instance, with no activation region
-(`Aw = ∅`) at width `f = 1`. -/
-def CoverTrainingAligned_honest : Prop :=
-  Nci.CompliesRate 2 (1 / 2) D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧ Assumptions.UpdateHardness (mb0 D) 4 1 ∧
-    (mb0 D).Upstream (fun _ => wordBits D ∅) 2 ∧ Assumptions.CapBelowDepth 1 1 2 ∧
-    Assumptions.RegionsAtLeast (mb0 D) (fun _ => ∅) 1 ∧ Assumptions.BlockFits D 2 1 1 4 ∧
-    Nci.Assumptions.Coverage 0 D (mb0 D).P.card
-
-/-- **`CoverTrainingAligned` without coverage**: `CoverTraining_nontrivial`'s instance at width `f = 1`, where
-`α₀ b f size(r) = 4` exceeds `(α² Γ + b f α) size(d) = 2`. -/
-def CoverTrainingAligned_nontrivial : Prop :=
-  (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 1 / 2 ∧ Nci.CompliesRate 2 (1 / 2) D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧
-    Assumptions.UpdateHardness (mb0 D) 4 1 ∧ (mb0 D).Upstream (fun _ => wordBits D ∅) 2 ∧
-    Assumptions.CapBelowDepth 1 1 2 ∧ Assumptions.RegionsAtLeast (mb0 D) (fun _ => ∅) 1 ∧
-    Assumptions.BlockFits D 2 1 1 4 ∧ ¬ Nci.Assumptions.Coverage 2 D (mb0 D).P.card ∧
-    ¬ (2 * 1 * ((1 : ℕ) : ℝ) * D.D.size D.D.computed ≤
-        ((1 / 2 : ℝ) * (1 / 2) * 2 + 1 * ((1 : ℕ) : ℝ) * (1 / 2)) * D.D.size D.D.computed)
-
-/-- **`CoverTrainingChained`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `c_w = 1`, `r = d = Toy.D`
-through the containment of the toy in itself, the toy's two products on its bit view (`mbBits`), which a set of bits
-completes only when it is handed the token's bit, at depth `D = 2` and block size `s = 4`. -/
-def CoverTrainingChained_honest : Prop :=
-  Nci.CompliesRate 2 (1 / 2) D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧
-    Nci.Assumptions.ParameterHardAt (bitDecl D) mbBits 4 1 ∧ Assumptions.CapBelowDepth 1 1 2 ∧
-    Assumptions.BlockFits D 2 1 1 4
-
-/-- **`CoverTrainingChained` without `α Γ < c_w D`**: at depth `D = 0` both of `mbBits`' products are chained at
-`c_a = 2`, and `c_w c_a |𝓜*| = 4` exceeds `(α² Γ + c_w c_a α) size(d) = 3`. -/
-def CoverTrainingChained_nontrivial : Prop :=
-  (0 : ℝ) ≤ 1 / 2 ∧ Nci.CompliesRate 2 (1 / 2) D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧
-    Nci.Assumptions.ParameterHardAt (bitDecl D) mbBits 4 1 ∧ ¬ Assumptions.CapBelowDepth 1 1 0 ∧ (0 : ℝ) < 2 ∧
-    Assumptions.BlockFits D 2 1 1 4 ∧
-    ¬ (1 * 2 * (Nci.Assumptions.chainedBlocksAt (bitDecl D) mbBits 0 2).card ≤
-        ((1 / 2 : ℝ) * (1 / 2) * 2 + 1 * 2 * (1 / 2)) * D.D.size D.D.computed)
 
 end Nci.Cover.Guarantees
