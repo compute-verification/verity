@@ -7,7 +7,12 @@ pad; after rep 0's failure it leaves as the scheduled round of a stopped rep, by
 model's release of every round after a session's first failure), its value as rep 1's pad alone. Both reps' frames
 then answer `finish` `stop`, so the session's `Finish` leaves without proofs.
 -/
-import Flock.Firewall.Frames
+module
+
+public import Flock.Firewall.Frames
+meta import Flock.Firewall.Frames
+
+@[expose] public section
 
 namespace Flock.Test.FramesStop
 
