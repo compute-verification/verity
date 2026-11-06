@@ -1,7 +1,10 @@
 module
 
 public import Definitions.Core.Game.Prob
+public import Definitions.Flock.Game
 public import Definitions.Flock.Game.Interleave
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # C-Flock's game vocabulary is Core's: `Prob`

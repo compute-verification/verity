@@ -1,6 +1,15 @@
 module
 
-public import Proofs.Flock.Soundness.ZerocheckPhase
+public import Definitions.Core.Game
+public import Definitions.Flock.Defs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.RingTheory.Henselian
+import Mathlib.RingTheory.RegularLocalRing.Defs
+import Mathlib.RingTheory.SimpleRing.Principal
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.Rounds
 
 /-!
 # Ligerito's coins (`Flock.Ligerito`)

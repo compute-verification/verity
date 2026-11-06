@@ -1,8 +1,12 @@
 module
 
+public import Proofs.Flock.Soundness.TmplFoldClassOk
 public import Proofs.Flock.Soundness.TmplFoldPos
 public import Proofs.Flock.Soundness.TmplLayOk
 public import Proofs.Flock.Soundness.TmplWf
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 /-!
 # The template fold is its reference on `layoutM`'s layouts

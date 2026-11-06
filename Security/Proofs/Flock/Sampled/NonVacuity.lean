@@ -2,6 +2,16 @@ module
 
 public import Mathlib.Data.Fintype.Card
 public import Proofs.Flock.Sampled.Statements
+public import Proofs.Flock.Soundness.Game.Prob
+import Flock.Sizes
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game.Union
+import Std.Data.HashSet
+import Std.Data.TreeMap.Raw.Lemmas
 meta import Mathlib.Data.Fintype.Card
 meta import Proofs.Flock.Sampled.Statements
 

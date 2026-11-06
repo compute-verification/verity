@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Lowering
 public import Proofs.Flock.Soundness.GateRows
+public import Definitions.Flock.Lowering
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
+import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # A unit's certificate: rows that are a gate circuit's rows compute it

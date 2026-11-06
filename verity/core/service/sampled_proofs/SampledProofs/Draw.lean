@@ -6,7 +6,6 @@ the challenger's coins, raw bytes with no derivation, which `drawFirst` reads as
 -/
 module
 
-public import Flock.Draw
 public import SampledProofs.Partition
 
 @[expose] public section

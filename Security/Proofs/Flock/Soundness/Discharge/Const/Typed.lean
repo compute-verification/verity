@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Placed.Typed
-public import Proofs.Flock.Soundness.Discharge.Const.ConstCols
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Const.ConstCols
 
 /-!
 # `hConst` on the typed path

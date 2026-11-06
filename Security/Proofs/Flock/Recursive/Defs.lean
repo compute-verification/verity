@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Law
 public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Recursion: the model
