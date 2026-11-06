@@ -73,7 +73,8 @@ S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, 58_120, 116_240
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): a `full` statement's
 MAX_BITS = 1 << 35
 #: the served types whose proof block is one output coordinate of a dot product, K MACs, and their operands' format
-DOT = {"fp8-coord": "e4m3", "s8-coord": "s8", "moe-w13": "e4m3", "moe-w2": "e4m3", "s8-linear": "s8"}
+DOT = {"fp8-coord": "e4m3", "s8-coord": "s8", "moe-w13": "e4m3", "moe-w2": "e4m3", "moe-chunk": "e4m3", "moe-gemmw": "e4m3",
+       "s8-linear": "s8"}
 STAGE_PY = REPO / "benchmarks" / "served_units" / "stage.py"
 
 
