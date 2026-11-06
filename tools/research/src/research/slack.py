@@ -1268,15 +1268,18 @@ def vercel_oidc_token() -> str | None:
         return OIDC_TOKEN() or None
     except Exception as e:  # noqa: BLE001 - the host's lookup has no identity for this call: the notes token falls back
         _notes_token["why"] = f"no OIDC identity ({type(e).__name__})"
-        print(f"research msg: no Vercel OIDC identity ({type(e).__name__}): using RESEARCH_NOTES_TOKEN if set", file=sys.stderr)
+        print(f"research msg: no Vercel OIDC identity ({type(e).__name__}): "
+              "using RESEARCH_NOTES_TOKEN or an agent's notes token", file=sys.stderr)
         return None
 
 
 def notes_token(now: float | None = None) -> str | None:
     """A token for the private notes repository.  Where there is a Vercel OIDC identity (`vercel_oidc_token`, as the Slack events
     service has it), the one the broker mints for it (`NOTES_TOKEN_URL`, scope `notes`), kept until shortly before it
-    expires; else, or when the broker refuses (said on stderr), $RESEARCH_NOTES_TOKEN.  None when there is neither, so a
-    read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one it was, and why."""
+    expires; else, or when the broker refuses (said on stderr), `notes_sync.notes_token`'s: $RESEARCH_NOTES_TOKEN when set by
+    hand, else on a Cursor agent the one the agents' GitHub broker mints for its Cursor identity.  None when there is none of
+    them, so a read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one it was, and
+    why."""
     _notes_token.pop("why", None)
     oidc = vercel_oidc_token()
     if oidc and (token := _broker_notes_token(oidc, time.time() if now is None else now)):
@@ -1284,13 +1287,21 @@ def notes_token(now: float | None = None) -> str | None:
         return token
     if not oidc:
         _notes_token.setdefault("why", "no OIDC identity")
-    token = os.environ.get("RESEARCH_NOTES_TOKEN") or None
-    _notes_token["source"] = "env" if token else None
+    try:
+        from . import notes_sync
+    except ImportError:   # the Slack events service deploys this file alone: it has only $RESEARCH_NOTES_TOKEN
+        token = os.environ.get("RESEARCH_NOTES_TOKEN") or None
+        _notes_token["source"] = "env" if token else None
+        return token
+    token = notes_sync.notes_token()
+    _notes_token["source"] = None if not token else \
+        "agent-broker" if os.environ.get(notes_sync.SOURCE_ENV) == "broker" else "env"
     return token
 
 
 def notes_token_source() -> str | None:
-    """Where `notes_token` got the token it gives now: "broker", "env" (RESEARCH_NOTES_TOKEN), or None."""
+    """Where `notes_token` got the token it gives now: "broker" (the Slack broker's, by Vercel identity), "agent-broker" (the
+    agents' GitHub broker's, by Cursor identity), "env" (RESEARCH_NOTES_TOKEN), or None."""
     notes_token()
     return _notes_token.get("source")
 
