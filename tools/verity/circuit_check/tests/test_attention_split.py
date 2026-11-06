@@ -41,14 +41,14 @@ def test_the_served_bindings_are_unchanged():
 
 
 @pytest.mark.slow
-def test_circuit_check_binds_every_definition_the_snapshot_holds(suite):
+def test_circuit_check_binds_every_definition_the_snapshot_holds(catalog):
     """Each Definition the snapshot holds is still at a circuit-check binding, a pin or a served binding, and circuit-check's is the
     very Definition its id makes, whose id and digest the digest files hold to the snapshot."""
     fam = AS.family()
-    at = {fid for fid, fn in suite.items() if (getattr(fn, "base_id", None) or fn.id) in fam}
+    at = {fid for fid in catalog.suite if catalog.reached[fid][0] in fam}
     served = {fn.id for fn in AS.served_bindings().values() if not isinstance(fn, str)}
     assert sorted(set(SNAPSHOT["definitions"]) - at - set(AS.pinned(fam)) - served) == []
-    assert sorted(k for k in SNAPSHOT["definitions"] if k in at and AS.made(k) is not suite[k]) == []
+    assert sorted(k for k in SNAPSHOT["definitions"] if k in at and AS.made(k) is not catalog.suite[k]) == []
 
 
 @pytest.mark.slow
