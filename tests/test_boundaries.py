@@ -144,7 +144,8 @@ ML_IMPORTS_CORE = {
                                              "(`verity/ml/circuits/population.py`, `verity/ml/commitments/registered.py`), "
                                              "core imports them from there, and this entry then covers only rec_live's coin "
                                              "server, which takes the inner session's coin tree from the challenger's device "
-                                             "through sampled proofs' `remote.RemoteChallenger` (`--tree-from`)",
+                                             "through sampled proofs' `remote.RemoteChallenger` (`--tree-from`) and holds "
+                                             "its sessions to the device's release log (`challenger.coin_trees_of`)",
     "ml/flock/pod/rec_inner.py": "stages the inner statement over sampled proofs' `one_stage.partition`, as V*'s builders "
                                   "do (the rec_* entry), and moves with them in the follow-up to T2",
     "ml/flock/pod/rec_reprice.py": "builds the inner statement's population program and partition with sampled proofs' "
@@ -221,7 +222,7 @@ BENCHMARKS_IMPORTERS = {
         "verity/ml/flock/tests/test_flock_rows.py", "verity/ml/flock/tests/test_gemm_hill.py",
         "verity/ml/flock/tests/test_inner_registered.py", "verity/ml/flock/tests/test_ir_lowering.py",
         "verity/ml/flock/tests/test_ir_sampling.py", "verity/ml/flock/tests/test_lean_hidden_outputs.py",
-        "verity/ml/flock/tests/test_lean_plain_hidden.py", "verity/ml/flock/tests/test_lean_plain_hidden_tables.py",
+        "verity/ml/flock/tests/test_lean_plain_hidden_tables.py",
         "verity/ml/flock/tests/test_lean_registered_bit_rows.py", "verity/ml/flock/tests/test_lean_registered_reads.py",
         "verity/ml/flock/tests/test_lean_served_registered.py", "verity/ml/flock/tests/test_lean_session_tables.py",
         "verity/ml/flock/tests/test_lean_typed_statement.py", "verity/ml/flock/tests/test_lean_verifier.py",

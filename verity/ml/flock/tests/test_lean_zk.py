@@ -129,9 +129,9 @@ def test_zk_is_the_verifiers_setting(zk):
 
 @pytest.mark.slow
 def test_zk_takes_no_coins_flag(zk):
-    """A `--zk` session's coins are its keyed coin tree, never `os` or `seed` coins (the live build reads no `FC_COINS` under
-    `--zk`, and its identity never names live-OS coins), so `--zk` with either `--coins` is refused before any setup."""
-    for coins in ("os", "seed"):
+    """A `--zk` session's coins are its keyed coin tree (the live build reads no `FC_COINS` under `--zk`), and `--coins` is a
+    plain session's, so `--zk` with any `--coins` is refused before any setup."""
+    for coins in ("tree", "seed"):
         p = _run(zk, zk / "sessions" / "selftest" / "honest", extra=("--coins", coins))
         assert p.returncode == 2 and "VERDICT" not in p.stdout, (coins, p.stdout)
         assert p.stderr.startswith("verify --zk: a --zk session's coins are its keyed coin tree"), (coins, p.stderr)
