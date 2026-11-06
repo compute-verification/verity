@@ -8,15 +8,17 @@ public import Proofs.Flock.Claims.Deploy
 /-!
 # The two-stage compiler's statement says something
 
-`CompilerKSTwo` is a guarantee that the lock's `claims.generic` names, held to two witnesses: an honest one, whose
-conclusion is its premises holding together at one instance with two sampled sessions, and a nontrivial one, at which
-its conclusion fails. Each is at coins `Bool` and the hash SHA-512 (`FlockDeploy.sha512`), on the toys of
-`Witnesses.SamplingGeneric`; the claim `CompiledTwo.KS` they read has its `fails` witness here too.
+`CompilerKSTwo` and `CompilerExfilTwo` are guarantees that the lock's `claims.generic` names, each held to two
+witnesses: an honest one, whose conclusion is its premises holding together at one instance with two sampled sessions
+(both read `compilerKSTwo_honest`: they have the same premises), and a nontrivial one, at which its conclusion fails.
+Each is at coins `Bool` and the hash SHA-512 (`FlockDeploy.sha512`), on the toys of `Witnesses.SamplingGeneric`; the
+claims `CompiledTwo.KS` and `CompiledTwo.Exfil` they read have their `fails` witnesses here too.
 
 * `sksLTwo`: `sksL` (accepts after one round, samples nothing, opens nothing) with the two-stage design `toyTwo` (its
   replay partition the proof-block partition `{0}`, its first stage `all`, `k = 1`). Its one proof block is incorrect at
   any interior values, so its footprint is at least `1` at every interior, the cell's escape `0` and `P̄_a = 0`: no witness is in the
-  relation at `δ = 0`, and `CompiledTwo.KS` fails (`compiledTwoKS_fails`).
+  relation at `δ = 0`, and `CompiledTwo.KS` fails (`compiledTwoKS_fails`). Its influence set is then empty, so no
+  witness is in the influence relation either, and `CompiledTwo.Exfil` fails (`compiledTwoExfil_fails`).
 * `twoLTwo`: `twoL` (both proof blocks of `twoStmt` sampled, block `u`'s session at round `u`) with the design `twoTwo`
   (replay blocks the proof blocks `{0}`, `{1}`, first stage `all`, `k = 1`), sampling both replay blocks. It meets
   `CompiledTwo.Sessions` at every hash (`twoSessionsTwo_meets`): the first stage misses a set only when it is empty, and
@@ -117,6 +119,27 @@ theorem compiledTwoKS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
   have hb := sksL_bound_fails (Coin := Coin) H
     (Claims.Sampling.RTwo H (sksLTwo Coin).commit (sksLTwo Coin).parse (sksLTwo Coin).partition (sksLTwo Coin).two 0)
     ((sksL Coin).κ 0 []) [] (sksLTwo_noR H []) (by linarith [sksL_κ (Coin := Coin) []])
+  exact hb h1
+
+/-- No witness is in `sksLTwo`'s influence relation at `δ = 0`: a served output in the influence set is some boundary
+trace's in `RTwo`, and there is none. -/
+theorem sksLTwo_noRInfl {Coin : Type} (H : Msg → Msg) (x : Msg) (w : Claims.Sampling.Wit) :
+    ¬ Claims.Sampling.RInflTwo H (sksLTwo Coin).commit (sksLTwo Coin).parse (sksLTwo Coin).partition
+      (sksLTwo Coin).two 0 x w := by
+  rintro ⟨s, Pt, d, hs, hPt, hd, hy⟩
+  unfold Claims.Sampling.influenceTwo at hy
+  obtain ⟨w', _, ⟨ι, hM⟩, _⟩ := (Finset.mem_filter.1 hy).2
+  exact sksLTwo_noR H x w' ⟨s, Pt, d, hs, hPt, hd, ι, hM⟩
+
+/-- **`CompiledTwo.Exfil` fails** at `sksLTwo`, at `δ = 0`: its knowledge-soundness half does. -/
+theorem compiledTwoExfil_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
+    ¬ (sksLTwo Coin).Exfil H := by
+  intro h
+  have h1 := (h 0 le_rfl).1 [] (sksLTwo_scope []) Unit silentP
+  have hb := sksL_bound_fails (Coin := Coin) H
+    (Claims.Sampling.RInflTwo H (sksLTwo Coin).commit (sksLTwo Coin).parse (sksLTwo Coin).partition
+      (sksLTwo Coin).two 0)
+    ((sksL Coin).κ 0 []) [] (sksLTwo_noRInfl H []) (by linarith [sksL_κ (Coin := Coin) []])
   exact hb h1
 
 /-! ## Two sampled sessions meet the two-stage contract -/
@@ -242,5 +265,13 @@ theorem compilerKSTwo_honest :
 
 /-- **`CompilerKSTwo`'s conclusion fails** at `sksLTwo`, which accepts with an empty relation. -/
 theorem compilerKSTwo_nontrivial : ¬ (sksLTwo Bool).KS FlockDeploy.sha512 := compiledTwoKS_fails _
+
+/-- **`CompiledTwo.Exfil` fails** at some compiled two-stage verifier. -/
+theorem CompiledTwo.Exfil_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
+    ∃ (A : Arg Coin) (L : CompiledTwo Coin A), ¬ L.Exfil H :=
+  ⟨_, _, compiledTwoExfil_fails H⟩
+
+/-- **`CompilerExfilTwo`'s conclusion fails** at `sksLTwo`, which accepts with an empty influence relation. -/
+theorem compilerExfilTwo_nontrivial : ¬ (sksLTwo Bool).Exfil FlockDeploy.sha512 := compiledTwoExfil_fails _
 
 end Claims.SamplingGeneric
