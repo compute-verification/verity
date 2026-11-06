@@ -4604,10 +4604,11 @@ def test_a_lane_line_names_its_handle_without_a_trailing_period():
 
 
 #: a lock as `check.py --update` writes one: F, G and H listed, F frozen, G's two inline premises and H's one, G and H reading M
-PREMISE_LOCK = {"guarantees": {"F": {"type_hash": "f"}, "G": {"owner": "@lean", "type_hash": "g"}, "H": {"type_hash": "h"}},
+PREMISE_LOCK = {"guarantees": {"F": {"type_hash": "f"}, "G": {"owner": "@lean", "signature": ["G : Guarantees.G"], "type_hash": "g"},
+                               "H": {"signature": ["H : Guarantees.H"], "type_hash": "h"}},
         "shape": {"frozen": {"F": "frozen: a game's bound"},
                   "inline": {"G": {"p1": "a membership", "p2": "a bound"}, "H": {"q": "a bound"}}},
-        "reads": {"M": {"definitions": {"Guarantees.G": "1", "Guarantees.H": "2"}, "guarantees": ["G", "H"]}}}
+        "reads": {"M": {"definitions": {"Guarantees.G": "1", "Guarantees.H": "2"}}}}
 
 
 def _lock_text(edit: Callable[[dict], object] = lambda d: None) -> str:
@@ -4627,12 +4628,10 @@ def _lock_files() -> dict[str, str]:
 def _renamed(d: dict) -> None:
     d["guarantees"]["G2"] = d["guarantees"].pop("G")
     d["shape"]["inline"]["G2"] = d["shape"]["inline"].pop("G")
-    d["reads"]["M"]["guarantees"] = ["G2", "H"]
 
 
 def _removed(d: dict) -> None:
     del d["guarantees"]["G"], d["shape"]["inline"]["G"]
-    d["reads"]["M"]["guarantees"] = ["H"]
 
 
 def _rekeyed(d: dict) -> None:
@@ -4701,7 +4700,8 @@ def test_dropped_entries_reads_a_frozen_reason_reworded_at_its_key_as_kept_and_a
 
 def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guarantee_recorded_otherwise():
     """A premise `next` lists under G that the merged lock lists under a key it adds is renamed, and a guarantee whose record
-    (its owner aside) differs was restated; a new owner alone restates nothing."""
+    (its owner aside) differs, or a definition its signature names has another hash, was restated; a new owner alone, or
+    another guarantee's definition rehashed, restates nothing."""
     from research.queue import dropped_entries
 
     def lock(edit: Callable[[dict], object]) -> dict:
@@ -4711,6 +4711,9 @@ def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guar
     assert dropped_entries(base, lock(lambda d: d["shape"]["inline"].update(G2=d["shape"]["inline"].pop("G")))) == []
     assert dropped_entries(base, lock(lambda d: (d["guarantees"]["G"].update(type_hash="g2"),
                                                  d["shape"]["inline"]["G"].pop("p1")))) == []
+    assert dropped_entries(base, lock(_restated)) == [], "G is lifted into Guarantees.G, rehashed"
+    assert dropped_entries(base, lock(lambda d: (d["reads"]["M"]["definitions"].update({"Guarantees.H": "4"}),
+                                                 d["shape"]["inline"]["G"].pop("p1")))) == ["shape.inline[G]: p1"]
     assert dropped_entries(base, lock(lambda d: (d["guarantees"]["G"].update(owner="@proofs"),
                                                  d["shape"]["inline"]["G"].pop("p1")))) == ["shape.inline[G]: p1"]
     long = "∀ (i : Fin n), " + "x" * 80
