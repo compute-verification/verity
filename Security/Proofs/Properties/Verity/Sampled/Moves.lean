@@ -335,6 +335,7 @@ theorem run_verified {p : _root_.SampledProofs.OneStageZk.Own} {s : _root_.Sampl
           _root_.SampledProofs.OneStageZk.provedHeld r.proved want' = .ok () := by
   unfold _root_.SampledProofs.OneStageZk.run at h
   dsimp only at h
+  obtain ⟨_, -, h⟩ := ebind_ok h
   split at h
   · rename_i tags0 htags
     obtain ⟨_, -, h⟩ := ebind_ok h

@@ -22,7 +22,7 @@ of `Deployed` and `Covers` either proved or one of the named `Prop`s below.
   (`SetsUp`).
 * **The sampled names** (`Instance.stage`, at constructions `K` over the base, whose game and declared calls are the
   stage's): v2's log (`coinsRead`), the binding's read finder and forger (`Binding.readFinder`, `Binding.forger`) at
-  `2t` calls, the further finders (the file finders and the tables' finder under `ecr/sha-512`, `fileSpecs`, and at a
+  `2t` calls, the further finders (the file finders under `ecr/sha-512`, `fileSpecs`, and at a
   session `K`'s two-continuation finders under `cr/sha-512`, `strictSpecs`), the session's premises at the projected
   strategy (`premisesOf`), no loss, and the session's δ (`Live.delta`) at the deployment's session. Each premise is
   asked of the finders built from the one strategy `error` is at. The other subprotocols' names are the base's, so
@@ -46,65 +46,7 @@ open scoped ENNReal
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-! ## The file finders and the tables' finder -/
-
-/-- **The committed file holding a pinned table**: the first of `F` whose SHA-512's hex is `sha`, as `tablesOf` looks
-it up on the committed files (`tablesOf_ofArray`). -/
-def tableFile (sha : String) (F : Array ByteArray) : Option ByteArray :=
-  F.find? fun b => Flock.hexOf (Flock.Sha512.hash b) == sha
-
-theorem tablesOf_ofArray (F : Array ByteArray) :
-    _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F) =
-      Flock.MUFU_TABLES.filterMap fun t => (tableFile t.sha512 F).map fun b => (t.name, b) := by
-  unfold _root_.SampledProofs.OneStageZk.tablesOf _root_.Core.Blobs.ofArray tableFile
-  congr 1
-  funext t
-  rw [Array.find?_map, Option.map_map]
-  rfl
-
-/-- **A pinned table's two files**: the table the committed files `F` and the registered files `R` hold under the
-digest `sha`, where both hold one and they differ. -/
-noncomputable def tablePair (F R : Array ByteArray) (sha : String) : Option (Claims.Msg × Claims.Msg) :=
-  match tableFile sha F, tableFile sha R with
-  | some a, some b => if a = b then none else some (a.data.toList, b.data.toList)
-  | _, _ => none
-
-/-- **The tables' finder**: on its one coin it hashes each pinned table the committed files and the registered files
-hold, and outputs the first two that differ, a SHA-512 collision (`tablePair_collision`). -/
-noncomputable def tableFinder (F R : Array ByteArray) : Claims.Finder where
-  S := Unit
-  out _ := Flock.MUFU_TABLES.findSome? fun t => tablePair F R t.sha512
-  cost _ := 2 * Flock.MUFU_TABLES.length
-
-/-- **The committed files' tables agree with the registered files'** wherever both hold the pinned table. -/
-def TablesAgree (F R : Array ByteArray) : Prop :=
-  ∀ t ∈ Flock.MUFU_TABLES, ∀ a b, tableFile t.sha512 F = some a → tableFile t.sha512 R = some b → a = b
-
-theorem tableFile_hash {sha : String} {F : Array ByteArray} {a : ByteArray} (h : tableFile sha F = some a) :
-    Flock.hexOf (Flock.Sha512.hash a) = sha := by
-  unfold tableFile at h
-  have h' := Array.find?_some h
-  exact beq_iff_eq.1 h'
-
-theorem tablePair_collision {F R : Array ByteArray} {sha : String} {u v : Claims.Msg}
-    (h : tablePair F R sha = some (u, v)) : Claims.Collision Verity.sha512Msg u v := by
-  unfold tablePair at h
-  cases ha : tableFile sha F with
-  | none => rw [ha] at h; cases h
-  | some a =>
-    cases hb : tableFile sha R with
-    | none => rw [ha, hb] at h; cases h
-    | some b =>
-      rw [ha, hb] at h
-      dsimp only at h
-      by_cases hab : a = b
-      · rw [if_pos hab] at h; cases h
-      rw [if_neg hab] at h
-      cases h
-      have hh : Flock.Sha512.hash a = Flock.Sha512.hash b :=
-        Flock.SecurityProofs.TopFinder.hexOf_inj ((tableFile_hash ha).trans (tableFile_hash hb).symm)
-      refine ⟨fun e => hab (ByteArray.ext (Array.ext' e)), ?_⟩
-      simp only [Verity.sha512Msg, Binding.bytes_ofList, hh]
+/-! ## The file finders -/
 
 /-- A one-coin finder's success is `0` or `1`, so below `1` it is `0`. -/
 theorem pr_unit {p : Unit → Prop} (h : Claims.Pr p < 1) : Claims.Pr p = 0 := by
@@ -170,28 +112,6 @@ theorem namedFile_eq {h : Option Hash.Digest} {F R : Array ByteArray}
   rw [h1] at hp
   exact lt_irrefl _ hp
 
-theorem tablesAgree_of {F R : Array ByteArray} (hp : (tableFinder F R).Pr Verity.sha512Msg < 1) : TablesAgree F R := by
-  have h0 : (tableFinder F R).Pr Verity.sha512Msg = 0 := pr_unit hp
-  have hnone : (tableFinder F R).out () = none := by
-    cases ho : (tableFinder F R).out () with
-    | none => rfl
-    | some uv =>
-      have h1 : (tableFinder F R).Pr Verity.sha512Msg = 1 := by
-        unfold Claims.Finder.Pr Claims.Pr
-        obtain ⟨t, -, ht⟩ := List.exists_of_findSome?_eq_some ho
-        have hs : ∀ s : (tableFinder F R).S,
-            ∃ u v, (tableFinder F R).out s = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v :=
-          fun s => by cases s; exact ⟨uv.1, uv.2, ho, tablePair_collision ht⟩
-        classical
-        rw [Finset.filter_true_of_mem fun s _ => hs s, Finset.card_univ]
-        exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
-      rw [h1] at h0
-      exact absurd h0 one_ne_zero
-  intro t ht a b ha hb
-  have hn := List.findSome?_eq_none_iff.1 hnone t ht
-  by_contra hab
-  simp only [tablePair, ha, hb, if_neg hab, reduceCtorEq] at hn
-
 /-! ## The registered files -/
 
 open Classical in
@@ -209,9 +129,11 @@ theorem fileWith_mem {h : Option Hash.Digest} (hx : ∃ f : ByteArray, h = some 
   simp [Option.toArray]
 
 /-- **The files the parameters' digests name**: a file with the circuit file's digest and one with the public file's
-that v2's parameters hold (`programDigestOf`, `publicDigestOf`), where some file has it. -/
+that v2's parameters hold (`programDigestOf`, `publicDigestOf`), where some file has it, and the lookup tables that
+circuit file registers (`pinnedTables`). -/
 noncomputable def registeredOf (θ : ByteArray) : Array ByteArray :=
-  (fileWith (programDigestOf θ)).toArray ++ (fileWith (publicDigestOf θ)).toArray
+  (fileWith (programDigestOf θ)).toArray ++ (fileWith (publicDigestOf θ)).toArray ++
+    (((fileWith (programDigestOf θ)).map fun f => (pinnedTables f).map (·.2)).getD []).toArray
 
 /-! ## The base -/
 
@@ -251,13 +173,11 @@ noncomputable abbrev dev : Exchange → Properties.Challenger.History :=
   Device.dev (I.deployment.setupOf I.base.families)
 
 /-- **Sampled proofs' further finders as deployed**: the circuit file's and the public file's (`Vocab.fileFinder`,
-`Vocab.publicFinder`) at two calls each, and the tables' (`tableFinder`) at two per pinned table. -/
+`Vocab.publicFinder`) at two calls each. -/
 noncomputable def fileSpecs (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
     List (FinderSpec (I.base.game θ F c) (I.base.cost θ F c)) :=
   [{ finder := fun _ => I.base.fileFinder θ F, budget := fun _ => 2, calls := fun _ _ => Nat.le_refl 2 },
-   { finder := fun _ => I.base.publicFinder θ F, budget := fun _ => 2, calls := fun _ _ => Nat.le_refl 2 },
-   { finder := fun _ => tableFinder F (I.base.registered θ), budget := fun _ => 2 * Flock.MUFU_TABLES.length,
-     calls := fun _ _ => Nat.le_refl _ }]
+   { finder := fun _ => I.base.publicFinder θ F, budget := fun _ => 2, calls := fun _ _ => Nat.le_refl 2 }]
 
 noncomputable def coinsReadOf : Subprotocol → Sent → Option (List Release)
   | .sampled => Verity.Sampled.coinsRead
@@ -513,16 +433,13 @@ def OpensAt : Prop :=
 
 theorem fileCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {σ : Verity.Game.Strategy ((I.stage K).game θ F c)} (h : (I.stage K).finderCR .sampled θ F c σ) :
-    (I.base.fileFinder θ F).Pr Verity.sha512Msg < 1 ∧ (I.base.publicFinder θ F).Pr Verity.sha512Msg < 1 ∧
-      (tableFinder F (I.base.registered θ)).Pr Verity.sha512Msg < 1 := by
+    (I.base.fileFinder θ F).Pr Verity.sha512Msg < 1 ∧ (I.base.publicFinder θ F).Pr Verity.sha512Msg < 1 := by
   have hall := List.forall_iff_forall_mem.1 (show finderCROf (I.fileSpecs θ F c ++ I.strictSpecs K θ F c) σ from h)
   have hl : finderCROf (I.fileSpecs θ F c) σ :=
     List.forall_iff_forall_mem.2 fun f hf => hall f (List.mem_append_left _ hf)
-  obtain ⟨h1, h2, h3⟩ := hl
+  obtain ⟨h1, h2⟩ := hl
   have lt2 : ((2 : ℕ) : ℝ) / 2 ^ (256 : ℝ) < 1 := budget_lt (by norm_num)
-  have hT : Flock.MUFU_TABLES.length = 4 := rfl
-  have ltT : ((2 * Flock.MUFU_TABLES.length : ℕ) : ℝ) / 2 ^ (256 : ℝ) < 1 := budget_lt (by rw [hT]; norm_num)
-  exact ⟨lt_of_le_of_lt h1 lt2, lt_of_le_of_lt h2 lt2, lt_of_le_of_lt h3 ltT⟩
+  exact ⟨lt_of_le_of_lt h1 lt2, lt_of_le_of_lt h2 lt2⟩
 
 /-- **The two-continuation finders' premises**: at the deployment's session, where the further finders meet theirs,
 each two-continuation finder `K` builds from the strategy meets the strict birthday bound (`strictSpecs`). -/
@@ -571,7 +488,7 @@ theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFind
   opens θ F A h c := hO θ F A (I.sessions_some h).1 (I.sessions_some h).2 c
   finderCR θ F A h c σ hcr hpr := by
     obtain ⟨hm, hr, hb⟩ := I.strictCR K h hcr
-    obtain ⟨h1, h2, -⟩ := I.fileCR K hcr
+    obtain ⟨h1, h2⟩ := I.fileCR K hcr
     exact ⟨hpr A h, hm, hr, hb, strict_of_zero (pr_unit h1), strict_of_zero (pr_unit h2)⟩
   premises _ _ _ _ := Iff.rfl
   delta θ F A h t := by
@@ -599,14 +516,15 @@ theorem registeredFiles_of (h : ∀ θ, I.base.registered θ = registeredOf θ) 
   rw [h, registeredOf]
   obtain ⟨x, hx, hxe⟩ := fileWith_mem ⟨f, hc⟩
   obtain ⟨y, hy, hye⟩ := fileWith_mem ⟨g, hp⟩
-  exact ⟨⟨x, Array.mem_append_left _ hx, hxe⟩, ⟨y, Array.mem_append_right _ hy, hye⟩⟩
+  exact ⟨⟨x, Array.mem_append_left _ (Array.mem_append_left _ hx), hxe⟩,
+    ⟨y, Array.mem_append_left _ (Array.mem_append_right _ hy), hye⟩⟩
 
 /-- **v2's session at the registered files' files**: at parameters naming the one-stage form, committed files that
-name the registered circuit and public files and hold the registered lookup tables wherever both hold one, and that
-some play's sampled verdict accepts, are files the deployment's session is the one v2 sets up on. -/
+name the registered circuit and public files, and that some play's sampled verdict accepts, are files the deployment's
+session is the one v2 sets up on. -/
 def SessionAt (k : Verity.Registration.Composite) : Prop :=
   ∀ θ F, (∃ p, ParamsAt θ p) → I.base.circuitFile θ F = I.base.circuitFile θ (I.base.registered θ) →
-    I.base.publicFile θ F = I.base.publicFile θ (I.base.registered θ) → TablesAgree F (I.base.registered θ) →
+    I.base.publicFile θ F = I.base.publicFile θ (I.base.registered θ) →
     (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o) →
     ∃ A, I.session θ = some A ∧ SetsUp I.base θ F A
 
@@ -622,8 +540,8 @@ theorem exists_tape_of_prob_ne {β : Type} {p : β → Prop} {g : Verity.Game β
     _ = 0 := Verity.Game.prCoin_false
 
 /-- **`Covers` at the deployed vocabulary**: where the deployment's sessions hold none, an accepting play's files pass
-the file check, so under the further finders' premises they name the registered files and agree with the registered
-tables (`namedFile_eq`, `tablesAgree_of`), where v2's session is the deployment's (`SessionAt`). -/
+the file check, so under the further finders' premises they name the registered files (`namedFile_eq`), where v2's
+session is the deployment's (`SessionAt`). -/
 theorem covers (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hSa : I.SessionAt k) :
     Covers (I.vocab K) k I.sessions := by
   intro θ F hS hP c σ hcr
@@ -638,9 +556,8 @@ theorem covers (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hS
     rw [hθ, hF] at h1
     exact h1
   have hR := hRg θ F hP hreg
-  obtain ⟨h1, h2, h3⟩ := I.fileCR K hcr
-  obtain ⟨A, hA, hs⟩ := hSa θ F hP (namedFile_eq hreg.1 hR.1 h1) (namedFile_eq hreg.2 hR.2 h2) (tablesAgree_of h3)
-    ⟨c, _, hreach, hv'⟩
+  obtain ⟨h1, h2⟩ := I.fileCR K hcr
+  obtain ⟨A, hA, hs⟩ := hSa θ F hP (namedFile_eq hreg.1 hR.1 h1) (namedFile_eq hreg.2 hR.2 h2) ⟨c, _, hreach, hv'⟩
   rw [I.sessions_of hA hs] at hS
   cases hS
 
