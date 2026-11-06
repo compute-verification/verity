@@ -770,8 +770,8 @@ theorem sampledProofsRecursive_nontrivial (q : Dep) (V : Vocab d α) (k : Verity
       q.errAt V S collOf dColl nI vS δs lam := by
   intro h
   have h1 : Game.prob (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ = 1 :=
-    prob_play_eq_one (V.families θ) (V.signer θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
-      (fun _ _ _ _ => ⟨trivial, hbad⟩) σ
+    prob_play_eq_one (V.families θ) (D := V.signer θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
+      (fun _ _ => ⟨trivial, hbad⟩) σ
   rw [Dep.errAt, if_pos hcr] at h
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le h).trans_lt hlt)
 

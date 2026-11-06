@@ -146,8 +146,8 @@ theorem prob_finish (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : B
       then 1 else 0 := rfl
 
 /-- An event every play after `θ`, `F` and `c` meets has probability one. -/
-theorem prob_play_eq_one (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (p : Exchange → Prop) (hp : ∀ o : Exchange, o.params = θ → o.files = F → o.commitment = c → p o)
+theorem prob_play_eq_one (fs : List (String × ℕ)) {D : Signer} (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (p : Exchange → Prop) (hp : ∀ o : Exchange, o.params = θ ∧ o.files = F ∧ o.commitment = c → p o)
     (σ : Game.Strategy (play fs D θ F c)) : Game.prob p (play fs D θ F c) σ = 1 := by
   refine (Game.prob_send p ByteArray (fun a => (releases (frames fs) fs []).bind (finish D θ F c a)) σ).trans <|
     (Game.prob_bind_of_const (finish D θ F c σ.1) p (fun _ => True) (fun log t => ?_)
@@ -155,7 +155,7 @@ theorem prob_play_eq_one (fs : List (String × ℕ)) (D : Signer) (θ : ByteArra
   rw [prob_finish]
   refine ((congrArg Game.avg (funext fun ρ => ite_eq_left ?_)).trans (Game.avg_const 1)).trans
     (Game.prob_true _ _).symm
-  exact hp _ rfl rfl rfl
+  exact hp _ ⟨rfl, rfl, rfl⟩
 
 /-- **Its hypotheses hold at the honest deployment**: at registered files, where each of composite `k`'s subprotocols'
 honest lemma holds (`Vocab.HonestHolds`), the deployment's honest prover meets every target with probability `0` on its
@@ -194,14 +194,14 @@ theorem soundness_nontrivial_of {ι α : Type} [Fintype α] {d : Device ι} (V :
     (hlt : ∑ a ∈ subprotocols k, V.error a θ F c σ < 1) :
     ¬ V.SoundnessFor k fun _ => True := by
   intro h
-  have h1 := prob_play_eq_one (V.families θ) (V.signer θ) θ F c
+  have h1 := prob_play_eq_one (V.families θ) θ F c
     (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.files ∧ ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c σ a o)
-    (fun o hθ hF _ => ⟨trivial, hθ ▸ hF ▸ hreg, a, ha, hfail o⟩) σ
+    (fun o h3 => ⟨trivial, h3.1 ▸ h3.2.1 ▸ hreg, a, ha, hfail o⟩) σ
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
 
 /-- An event no play after `θ`, `F` and `c` meets has probability zero. -/
-theorem prob_play_eq_zero (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (p : Exchange → Prop) (hp : ∀ o : Exchange, o.params = θ → o.files = F → o.commitment = c → ¬ p o)
+theorem prob_play_eq_zero (fs : List (String × ℕ)) {D : Signer} (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (p : Exchange → Prop) (hp : ∀ o : Exchange, o.params = θ ∧ o.files = F ∧ o.commitment = c → ¬ p o)
     (σ : Game.Strategy (play fs D θ F c)) : Game.prob p (play fs D θ F c) σ = 0 := by
   refine (Game.prob_send p ByteArray (fun a => (releases (frames fs) fs []).bind (finish D θ F c a)) σ).trans <|
     (Game.prob_bind_of_const (finish D θ F c σ.1) p (fun _ => False) (fun log t => ?_)
@@ -209,7 +209,7 @@ theorem prob_play_eq_zero (fs : List (String × ℕ)) (D : Signer) (θ : ByteArr
   rw [prob_finish]
   refine ((congrArg Game.avg (funext fun ρ => ite_eq_right ?_)).trans (Game.avg_const 0)).trans
     (Game.prob_false _ _).symm
-  exact hp _ rfl rfl rfl
+  exact hp _ ⟨rfl, rfl, rfl⟩
 
 /-- **One subprotocol's failing instance is the theorem's**: at files that pass the commit phase's check, a strategy at
 which the claim of one of composite `k`'s subprotocols fails with probability above the errors summed makes the
@@ -222,7 +222,7 @@ theorem soundness_nontrivial_of_lt {ι α : Type} [Fintype α] {d : Device ι} (
     ¬ V.SoundnessFor k fun _ => True := by
   intro h
   have hz : Game.prob (fun o => ¬ V.Registered o.params o.files) (V.game θ F c) σ = 0 :=
-    prob_play_eq_zero (V.families θ) (V.signer θ) θ F c _ (fun _ hθ hF _ hn => hn (hθ ▸ hF ▸ hreg)) σ
+    prob_play_eq_zero (V.families θ) (D := V.signer θ) θ F c _ (fun _ h3 hn => hn (h3.1 ▸ h3.2.1 ▸ hreg)) σ
   have hle : Game.prob (fun o => ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤
       Game.prob (fun o => (fun _ => True) o.sent ∧ V.Registered o.params o.files ∧
         ∃ a ∈ subprotocols k, ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ :=
