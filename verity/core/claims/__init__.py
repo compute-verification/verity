@@ -524,6 +524,19 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "least the words of the units that are fixed under option A, computed, and with every unit steering them "
           "computed, over the rounds, and the folded words at least the words of the units whose receipts commit their "
           "folds", "TS counts fixed", "conjectured"),
+    # `Claims.ZKServer.Relay.RelayServes` and `Claims.ZKServer.Relay.WorkerDeterministic`
+    # (Security/Proofs/Flock/ZkAny/RelayServes.lean) are their Lean forms, premises of the relay's `envPre_run`
+    Entry("flock-relay-serves", "assumption",
+          "The firewall's relay serves each session's requests as its IO code reads: at each request that reaches a "
+          "slot of the session's schedule, the loop's references (the rep frames, the level 0s, the link, the loop's "
+          "own proofs, the inner proof's rounds and the salts the finish keeps) change as the IO function the relay "
+          "calls there changes them, stated with the pure functions it calls, and each answer the relay reads on the "
+          "auditor's connection is the auditor's to everything the relay sent it", "Relay serves", "standard"),
+    Entry("flock-worker-deterministic", "assumption",
+          "The prover's worker behind the ZK server gives each frame round's content as a function of its history: "
+          "the content LiveChallenger::round sends in its Req::Round is the value the model's worker gives at the "
+          "coins the worker has received, from the statement, the witness and its tapes", "Worker deterministic",
+          "standard"),
     # `Claims.ZKServer.Loop.Src` (Security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
     # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
     Entry("flock-firewall-os-src", "assumption",

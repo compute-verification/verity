@@ -147,6 +147,14 @@ def test_the_dc_headlines_claims_name_what_their_statements_assume() -> None:
     assert "RT3-LOGIC-6" in get("accounting-ts-fold-opt").name
 
 
+def test_the_relay_trusts_are_standard_assumptions() -> None:
+    for i in ("flock-relay-serves", "flock-worker-deterministic"):
+        e = get(i)
+        assert (e.kind, e.standing) == ("assumption", "standard"), i
+    assert "auditor's connection" in get("flock-relay-serves").name
+    assert "LiveChallenger::round" in get("flock-worker-deterministic").name
+
+
 def test_the_sites_nine_assumptions_resolve_and_the_retired_ones_do_not() -> None:
     site = ("cr/sha-256", "cr/sha-512", "cr/blake3", "cr/blake2b", "cr/poseidon2-babybear", "cr/poseidon2-koalabear", "xof/shake-256",
             "random-oracle", "honest-verifier")
