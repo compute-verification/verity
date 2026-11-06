@@ -19,7 +19,7 @@ from collections import Counter
 
 import torch
 
-from te_core.capture.structure import StepGraph
+from training_slowdown.capture.structure import StepGraph
 
 __all__ = ["lower", "lower_forward"]
 

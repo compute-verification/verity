@@ -37,8 +37,8 @@ per tensor through every op within a step:
   it has named a θ weight, so no other tensor takes its memory.
 
 A node is `updated` when it is in a forward pass (outside autograd's backward), one operand is token-indexed and another
-(the weight, or an initial accumulator) has roots: the counter's updated multiplications, which were U before te_core
-4.0. 4.0 reads U by update dependence from the step's traced circuit (te_core.capture, `annotate.with_structures`), and
+(the weight, or an initial accumulator) has roots: the counter's updated multiplications, which were U before training_slowdown
+4.0. 4.0 reads U by update dependence from the step's traced circuit (training_slowdown.capture, `annotate.with_structures`), and
 this count stays |C|. Others are `theta` (the weight equals
 θ's, or a fast value made in the step), `act` (two token-indexed operands: attention), `param` (no token-indexed
 operand: optimizer work), and every product in autograd's backward is `bwd/grad`. Each updated node records its MACs per token row and the updated MACs per token
@@ -254,7 +254,7 @@ def plain(x):
     if isinstance(x, torch.Tensor):
         y = x.detach()
         if type(y) is not torch.Tensor:
-            raise TypeError(f"te_core: a {t.__name__} is not a plain tensor; hand the harness torch.Tensor values")
+            raise TypeError(f"training_slowdown: a {t.__name__} is not a plain tensor; hand the harness torch.Tensor values")
         return y
     if isinstance(x, Mapping):
         return {plain(k): plain(v) for k, v in x.items()}
@@ -271,7 +271,7 @@ def plain(x):
     for base in (int, float, complex, str, bytes):
         if isinstance(x, base) and type(y := base(x)) is base:
             return y
-    raise TypeError(f"te_core: the harness takes plain values, not a {t.__name__}")
+    raise TypeError(f"training_slowdown: the harness takes plain values, not a {t.__name__}")
 
 
 def digest(t: torch.Tensor) -> str:

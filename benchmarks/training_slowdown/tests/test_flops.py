@@ -2,9 +2,9 @@ import torch
 import torch.nn.functional as F
 
 from conftest import D, PER_TOKEN, VOCAB, loss_of
-from te_core.annotate import annotate
-from te_core.cw import readout_leaks
-from te_core.flops import Counter, flags, forward_macs_per_token, gather_selects, guard_exits, leaked, mux_tree
+from training_slowdown.annotate import annotate
+from training_slowdown.cw import readout_leaks
+from training_slowdown.flops import Counter, flags, forward_macs_per_token, gather_selects, guard_exits, leaked, mux_tree
 
 IDX = torch.randint(0, VOCAB, (3, 8), generator=torch.Generator().manual_seed(3))  # 24 tokens: no activation is weight-shaped
 TOKENS = IDX.numel()
@@ -94,8 +94,8 @@ def test_an_update_of_the_tied_table_alone_is_read_at_its_lookup(tiny):
 
 def test_a_record_counted_before_lookups_were_priced_gets_them_at_ingest(tiny, monkeypatch):
     """`annotate.with_lookups` on a record counted as 3.5 did (no lookup priced) gives 3.6's annotation of the same run."""
-    from te_core import flops
-    from te_core.annotate import with_lookups
+    from training_slowdown import flops
+    from training_slowdown.annotate import with_lookups
 
     m, theta = tiny
     want = annotate(train(m, theta))
@@ -198,7 +198,7 @@ def test_a_stream_batch_is_token_data_through_any_op_and_counts_once():
 
 
 def test_disjoint_reads_of_one_batch_add_up_and_overlapping_ones_count_each_position_once():
-    """te_core 4.0's counter: a micro-batched step (`x = rows[i:i + m]`, `fwd(x[:, :-1])`) consumes every micro-batch's
+    """training_slowdown 4.0's counter: a micro-batched step (`x = rows[i:i + m]`, `fwd(x[:, :-1])`) consumes every micro-batch's
     tokens, where the rule before counted one at the largest read; windows overlapping by a token can't chain into one
     read either."""
     torch.manual_seed(0)
@@ -382,7 +382,7 @@ def test_forward_macs_per_token_and_flags(tiny):
 
 
 def test_the_keyed_digest_is_exact_and_keyed():
-    from te_core.flops import KeyedDigest
+    from training_slowdown.flops import KeyedDigest
 
     t = torch.randn(5, 7, generator=torch.Generator().manual_seed(1))
     d = KeyedDigest(b"k" * 16)

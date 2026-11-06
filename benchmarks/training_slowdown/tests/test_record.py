@@ -1,4 +1,4 @@
-"""`StepGraph.c_macs`, `StepGraph.structure()` and `RunGraph.record()`, te_core.flops's record form, against hand counts
+"""`StepGraph.c_macs`, `StepGraph.structure()` and `RunGraph.record()`, training_slowdown.flops's record form, against hand counts
 on the 2-layer MLP."""
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 
 from models import TinyLM, lm_loss, mlp
-from te_core.capture import capture_run, capture_step
+from training_slowdown.capture import capture_run, capture_step
 
 FI, H, O, N = 3, 5, 2, 4
 GEMM = N * (2 * FI * H + 3 * H * O)

@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 
 from models import TinyLM, conv_net, lm_loss, lora, mlp
-from te_core.capture import CaptureRefused, capture_fn, capture_step, phase
+from training_slowdown.capture import CaptureRefused, capture_fn, capture_step, phase
 
 B, S, V, H, NH, I, L, R = 2, 4, 32, 16, 2, 32, 2, 2
 T = B * S
@@ -271,7 +271,7 @@ def test_conv_net():
 
 @pytest.mark.parametrize("big", [False, True])
 def test_upstream_sums_are_exact_over_a_wide_bitset(big):
-    from te_core.capture.structure import _bit_sums
+    from training_slowdown.capture.structure import _bit_sums
     k = 20_003
     macs = [(b % 97 + 1) * (2 ** 62 if big else 1) for b in range(k)]
     tokens = [(3, 7, 64)[b % 3] for b in range(k)]

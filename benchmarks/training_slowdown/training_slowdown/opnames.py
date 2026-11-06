@@ -1,9 +1,9 @@
-"""The op sets te_core counts, by aten name, with no torch: te_core.flops and te_core.capture build their aten sets from
-them, and te_core.gates prices a record's ops by them."""
+"""The op sets training_slowdown counts, by aten name, with no torch: training_slowdown.flops and training_slowdown.capture build their aten sets from
+them, and training_slowdown.gates prices a record's ops by them."""
 from __future__ import annotations
 
 #: Parts of the names of ops that compute products. An op whose name has one, and that neither the counter nor
-#: te_core.capture has a formula for (an RNN kernel, `_trilinear`, a packed or sparse matmul), makes a run invalid or a
+#: training_slowdown.capture has a formula for (an RNN kernel, `_trilinear`, a packed or sparse matmul), makes a run invalid or a
 #: capture refused, since its work would count as zero.
 GEMM_LIKE = ("mm", "matmul", "conv", "linear", "attention", "einsum", "tensordot", "bilinear", "lstm", "gru", "rnn",
              "mv", "addr", "dot", "dist", "embedding_bag", "kron")
@@ -15,7 +15,7 @@ NOT_GEMM = frozenset({"cummax", "cummin", "digamma", "digamma_", "igamma", "igam
                       "upsample_trilinear3d", "upsample_linear1d_backward", "upsample_bilinear2d_backward",
                       "upsample_trilinear3d_backward", "_record_function_enter_new", "_record_function_exit",
                       "conj_physical", "native_dropout_backward"})
-#: The non-GEMM op sets by aten name, which te_core.capture's static count (`capture.structure`) reads too. Division is
+#: The non-GEMM op sets by aten name, which training_slowdown.capture's static count (`capture.structure`) reads too. Division is
 #: a multiplication by a reciprocal.
 ELEMENTWISE_NAMES = frozenset({"mul", "mul_", "div", "div_", "addcmul", "addcmul_", "addcdiv", "addcdiv_", "lerp", "lerp_",
                                "_foreach_mul", "_foreach_mul_", "_foreach_div", "_foreach_div_", "_foreach_addcmul",

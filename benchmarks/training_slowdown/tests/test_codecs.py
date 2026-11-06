@@ -1,9 +1,9 @@
 import pytest
 import torch
 
-from te_core.codecs import (Compose, Identity, LowRank, Plan, QuantDelta, SeedReplay, SparseMask, Unencodable,
+from training_slowdown.codecs import (Compose, Identity, LowRank, Plan, QuantDelta, SeedReplay, SparseMask, Unencodable,
                             derive_seed, from_spec)
-from te_core.codecs.wire import pack_bits, unpack_bits
+from training_slowdown.codecs.wire import pack_bits, unpack_bits
 
 
 def same(a, b):

@@ -1,26 +1,26 @@
 """Run one submission inside the harness: the program trains from θ through a `Session`, and everything it computes
 through torch is counted (flops.py).
 
-    python -m te_core.run --program train.py --starts starts.json --start small --tier 0 --seed 0 --out OUT \\
+    python -m training_slowdown.run --program train.py --starts starts.json --start small --tier 0 --seed 0 --out OUT \\
         [--evaluator MODULE:FUNCTION] [--device cuda] [-- PROGRAM ARGS...]
 
 The program is a Python file defining `train(te)`; `te` is the `Session`. It builds its model, loads θ and registers it
 (`te.load(model)`), declares its step count (`te.plan(n)`), wraps each training step in `with te.step():` and may
 name its output model (`te.output(fn)`, default: the registered model's weights) and write counterexample families
 (`te.family(name, plan)`). A checkpoint is taken after every 5% of the planned steps: the output model's held-out
-bits per byte from the fixed evaluator, uncounted (`--script`: the program's E, written for a separate evaluation job,
-cw.py). Tokens computed outside a step, or a run with no step, make the run invalid.
+bits per byte from the fixed evaluator, uncounted. Tokens computed outside a step, or a run with no step, make the run
+invalid.
 
-`--starts` is the integrator's registry of starts, `{name: {path, sha256, val_bpb, ctx, vocab, forward_macs_per_token}}`;
-c is `score.C_PER_FORWARD_TOKEN` times the start's `forward_macs_per_token` (measured on the registered model when the
-registry lacks it). The evaluator is a function `(state_dict, split, device) -> bits per byte`, or None for a split it
-keeps sealed (covert_witness's `test`).
+`--starts` is a registry of starts, `{name: {path, sha256, val_bpb, ctx, vocab, forward_macs_per_token}}`;
+c is `C_PER_FORWARD_TOKEN` times the start's `forward_macs_per_token` (`block_c`; measured on the registered model when
+the registry lacks it). The evaluator is a function `(state_dict, split, device) -> bits per byte`, or None for a split
+it keeps sealed (a held-out `test`).
 
 Writes `OUT/run.json` (the count, the checkpoints, the flags, the program's and θ's digests), `OUT/families/*/` with each
 family's `verified.json` (checked here, after training, on the run's device, from a live coin) and, with
 `--keep-checkpoints` (tier 2), each checkpoint's weights. Torch compilation is disabled and CUDA graph replay refused:
 both run work the counter can't see. For the same reason a run is invalid when it uses an op the counter can't price
-(flops.py), reads token data out of torch, starts a thread or a process (cw.py), or imports a module that names a route
+(flops.py), reads token data out of torch, starts a thread or a process, or imports a module that names a route
 the screen refuses or that it wrote during the run (`Imports`). The screen (`screen`) refuses, in the program and in every
 module it imports outside the fixed side, the names that run code it never reads: `exec`, `eval` and `compile` (called
 or not), `runpy`, `importlib`, `__import__`, `marshal`, pickle, `FunctionType`, `CodeType`, `__code__` and
@@ -38,7 +38,6 @@ import math
 import os
 import re
 import resource
-import runpy
 import subprocess
 import sys
 import sysconfig
@@ -56,15 +55,21 @@ from . import VERSION
 from .codecs import Plan
 from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
 from .flops import Counter, _tensors, digest, flags, forward_macs_per_token, guard_exits, leaked, plain
-from .score import block_c
 
 CHECKPOINTS = 20
+#: a run's block size c in MACs is this many times its start's forward MACs per token (`block_c`): the bound a
+#: counterexample family's rebuild must meet (training_slowdown.counterexample) and the record's `c`
+C_PER_FORWARD_TOKEN = 4096
 #: a run past its tier's GPU budget by this factor is stopped at its next step
 BUDGET_SLACK = 1.2
 
 
 class BudgetExceeded(RuntimeError):
     pass
+
+
+def block_c(forward_macs_per_token: float) -> float:
+    return C_PER_FORWARD_TOKEN * forward_macs_per_token
 
 
 def theta_sha256(state: dict[str, torch.Tensor]) -> str:
@@ -128,30 +133,13 @@ class Session:
         self.model = None
         self.output_fn = None
         self.n_steps = 0
-        self.budget_macs = 0.0
-        self.explicit = False
         self.cp_steps: set[int] = set()
-        self.marks_done = 0
         self.checkpoints: list[dict] = []
         self.families: list[Family] = []
         self.forward_macs_per_token = float(self.start.get("forward_macs_per_token") or 0)
         self.sys_path = list(sys.path)
         self._t0 = clock()
         self.out.mkdir(parents=True, exist_ok=True)
-
-    def bind(self, theta: dict[str, torch.Tensor], start: dict, model: torch.nn.Module,
-             named: dict[str, torch.Tensor], extra: dict[str, torch.Tensor] | None = None) -> None:
-        """θ known only once a standalone program loads its start: `extra` (the model's buffers) is checked like θ but
-        isn't part of the output model."""
-        if self.bound:
-            raise RuntimeError("te_core: one start per run")
-        self.theta = theta
-        self.start |= start
-        self.counter.theta_cpu = dict(theta) | dict(extra or {})
-        with self.uncounted():
-            self.counter.register(named)
-        self.bound = True
-        self._measure(model)
 
     def _measure(self, model: torch.nn.Module) -> None:
         if not self.forward_macs_per_token:
@@ -198,44 +186,18 @@ class Session:
         return c.setup.macs + sum(s.macs for s in c.steps) + (c.cur.macs if c.cur is not c.setup else 0)
 
     def progress_bucket(self) -> int:
-        """Which 5% of the run the step in progress is in: of the planned steps, else of the MAC budget, else its index."""
+        """Which 5% of the run the step in progress is in: of the planned steps, else its index."""
         if self.n_steps:
             return math.ceil((self.current_step() + 1) * CHECKPOINTS / self.n_steps)
-        if self.budget_macs:
-            return math.ceil(self.macs_so_far() * CHECKPOINTS / self.budget_macs)
         return self.current_step()
 
-    def boundary(self) -> None:
-        """A standalone program's step boundary (its next batch): end the step in progress if it computed on tokens."""
-        if self.explicit or not self.bound:
-            return
-        c = self.counter
-        if c.cur is c.setup:
-            c.begin_step()
-            return
-        if not c.cur.tokens:
-            return
-        c.end_step()
-        self._after_step(len(c.steps) - 1)
-
-    def close(self) -> None:
-        """A standalone program returned: its last step ends."""
-        c = self.counter
-        if not self.explicit and c.cur is not c.setup and c.cur.tokens:
-            c.end_step()
-            self._after_step(len(c.steps) - 1, budget=False)
-
-    def _after_step(self, index: int, budget: bool = True) -> None:
+    def _after_step(self, index: int) -> None:
         due = False
         if self.output_fn is not None or self.model is not None:
-            if self.n_steps:
-                due = index in self.cp_steps
-            elif self.budget_macs:
-                reached = min(CHECKPOINTS, int(self.macs_so_far() * CHECKPOINTS // self.budget_macs))
-                due, self.marks_done = reached > self.marks_done, max(self.marks_done, reached)
+            due = bool(self.n_steps) and index in self.cp_steps
         if due:
             self._checkpoint(index)
-        if budget and self.budget_s and self.elapsed() > BUDGET_SLACK * self.budget_s:
+        if self.budget_s and self.elapsed() > BUDGET_SLACK * self.budget_s:
             raise BudgetExceeded(f"{self.elapsed():.0f} s past the tier's {self.budget_s:.0f} s budget")
 
     # -- the program's API
@@ -291,14 +253,6 @@ class Session:
         self.counter.end_step()
         self._after_step(len(self.counter.steps) - 1)
 
-    def explicit_step(self):
-        """`hooks.step()`: a standalone program's own boundaries, which replace the data stream's."""
-        if self.counter.cur is not self.counter.setup and self.counter.cur.tokens and not self.explicit:
-            self.counter.end_step()
-            self._after_step(len(self.counter.steps) - 1)
-        self.explicit = True
-        return self.step()
-
     # -- the harness's side
 
     def _state(self) -> dict[str, torch.Tensor]:
@@ -342,14 +296,14 @@ class Session:
         if rec["foreign_ops"]:
             problems.append(f"ops outside torch's own, whose work the counter can't see: {list(rec['foreign_ops'])[:4]}")
         if rec["unknown_ops"]:
-            problems.append(f"ops that compute products te_core has no formula for: {list(rec['unknown_ops'])[:4]}")
+            problems.append(f"ops that compute products training_slowdown has no formula for: {list(rec['unknown_ops'])[:4]}")
         leaks = [s["step"] for s in [rec["setup"], *rec["steps"], rec["tail"]] if leaked(s)]
         if leaks:
             problems.append(f"token data read out of torch (numpy, tolist, DLPack) at a value per token or more, in steps "
                             f"{leaks[:5]}: what is computed on it there isn't counted")
         c = block_c(self.forward_macs_per_token)
         rec |= meta | {
-            "schema": "te-core/run/v1", "te_core": VERSION, "seed": self.seed, "tier": self.tier,
+            "schema": "training-slowdown/run/v1", "training_slowdown": VERSION, "seed": self.seed, "tier": self.tier,
             "start": self.start, "theta_sha256": theta_sha256(self.theta), "device": self.device,
             "forward_macs_per_token": self.forward_macs_per_token, "c": c, "planned_steps": self.n_steps,
             "checkpoints": self.checkpoints,
@@ -375,10 +329,9 @@ class Session:
 #: counter doesn't see, threads and processes, and code built from strings. `torch.compile` is allowed:
 #: TORCHDYNAMO_DISABLE, set before torch is imported, makes it return the eager module, and `_dynamo` (which could turn
 #: it back on) is refused. A screen of source text is a first filter only: the routes it names are caught as they run
-#: where they can be (cw.py, flops.py).
-FORBIDDEN = (r"\.counter\b", r"\.pause\b", r"\buncounted\b", r"\bte_core\.(?!(hooks|codecs)\b)",
-             r"(?m)from\s+te_core\s+import\s+(?!(hooks|codecs)(\s*,\s*(hooks|codecs))*\s*$)", r"\bhooks\.ACTIVE\b",
-             r"\bAdapter\b", "_python_dispatch", "_pop_mode", "_disable_current_modes", "TorchDispatchMode",
+#: where they can be (flops.py).
+FORBIDDEN = (r"\.counter\b", r"\.pause\b", r"\buncounted\b", r"\btraining_slowdown\.(?!codecs\b)",
+             r"(?m)from\s+training_slowdown\s+import\s+(?!codecs\s*$)", r"\bAdapter\b", "_python_dispatch", "_pop_mode", "_disable_current_modes", "TorchDispatchMode",
              "_set_dispatch_mode", "CUDAGraph", r"cuda\.graph", "_dynamo", "TORCHDYNAMO", "triton", "ctypes", "cupy",
              "numba", "jax", r"torch\.utils\.cpp_extension", "load_inline", "subprocess", "multiprocessing",
              r"os\.system", r"os\.exec", r"os\.spawn", r"os\.posix_spawn", r"\bos\.fork", r"\bos\.popen\b", r"\bpty\b",
@@ -425,22 +378,21 @@ def screen(source: str) -> list[str]:
     return [pat for pat in FORBIDDEN if re.search(pat, code)] + sorted(FORBIDDEN_NAMES & _names(code))
 
 
-TE_CORE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent
 
 
 class Imports:
     """The modules first imported while a program runs, each screened like the program (a module beside it that names
-    a refused route), unless the fixed side holds it: Python's own paths, te_core (not its tests), or the files beside
-    prepare.py (`fixed_dir`), unchanged since the run began. A module from a file written since the run began is refused:
+    a refused route), unless the fixed side holds it: Python's own paths or training_slowdown (not its tests), unchanged
+    since the run began. A module from a file written since the run began is refused:
     its source when it ran may not be what is screened at exit. While the program runs, bytecode caches are neither read
     nor written (`no_bytecode`), so what runs is the source that is screened."""
 
-    def __init__(self, fixed_dir: Path | None = None):
+    def __init__(self):
         self.before = set(sys.modules)
         self.since = time.time()
         paths = {sysconfig.get_path(k) for k in ("stdlib", "platstdlib", "purelib", "platlib")}
         self.roots = sorted(str(Path(p).resolve()) for p in paths if p)
-        self.fixed_dir = Path(fixed_dir).resolve() if fixed_dir else None
 
     def _fixed(self, p: Path) -> bool:
         try:
@@ -448,10 +400,8 @@ class Imports:
                 return False
         except OSError:
             return False
-        if self.fixed_dir is not None and p.parent == self.fixed_dir and p.suffix == ".py":
-            return True
-        if p.is_relative_to(TE_CORE):
-            return "tests" not in p.relative_to(TE_CORE).parts
+        if p.is_relative_to(HERE):
+            return "tests" not in p.relative_to(HERE).parts
         return any(str(p).startswith(r + os.sep) for r in self.roots)
 
     def problems(self) -> list[str]:
@@ -492,7 +442,7 @@ def load_program(path: Path):
     path = Path(path).resolve()
     bad = screen(path.read_text())
     if bad:
-        raise SystemExit(f"{path}: refused, it names {bad} (te_core/README.md, the program contract)")
+        raise SystemExit(f"{path}: refused, it names {bad} (training_slowdown/README.md, the program contract)")
     sys.path.insert(0, str(path.parent))
     spec = importlib.util.spec_from_file_location("te_program", path)
     mod = importlib.util.module_from_spec(spec)
@@ -511,14 +461,7 @@ def load_evaluator(name: str):
 
 def parse(argv=None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    which = ap.add_mutually_exclusive_group(required=True)
-    which.add_argument("--program", type=Path, help="a file defining train(te)")
-    which.add_argument("--script", type=Path, help="a standalone covert_witness train.py, run as __main__ (cw.py)")
-    ap.add_argument("--budget-macs", type=float, default=0.0,
-                    help="--script: the MACs the 5%% checkpoints divide (default --budget-fraction of "
-                         "prepare.TRAIN_FLOP_BUDGET / 2)")
-    ap.add_argument("--budget-fraction", type=float, default=1.0, help="--script: see --budget-macs")
-    ap.add_argument("--start-bpb", type=float, default=None, help="--script: the start's held-out bpb, else measured")
+    ap.add_argument("--program", type=Path, required=True, help="a file defining train(te)")
     ap.add_argument("--digests", choices=("on", "off"), default="on",
                     help="digest every updated weight value (flops.KeyedDigest, on the run's device; counterexample "
                          "checks need them)")
@@ -535,67 +478,17 @@ def parse(argv=None) -> argparse.Namespace:
     ap.add_argument("--families", type=Path, default=None,
                     help="where counterexample families are written (default OUT/families; their verdicts are in run.json)")
     ap.add_argument("--peak-macs-per-s", type=float, default=0.0, help="the device's peak, for the unexplained-GPU flag")
-    ap.add_argument("--meta", default="{}", help="JSON merged into the record (agent, tags, parent: launch.py's)")
+    ap.add_argument("--meta", default="{}", help="JSON merged into the record")
     ap.add_argument("program_args", nargs=argparse.REMAINDER)
     return ap.parse_args(argv)
 
-
-def run_script(a, args: list[str]) -> dict:
-    """A standalone covert_witness train.py, unmodified, as `__main__` inside the counter (cw.py). Its checkpoints are
-    E files for the evaluation job (`cw.score_run`); nothing is scored here."""
-    from . import cw, hooks
-
-    script = a.script.resolve()
-    bad = screen(script.read_text())
-    if bad:
-        raise SystemExit(f"{script}: refused, it names {bad} (te_core/README.md, the program contract)")
-    prepare = cw.import_prepare(script)
-    start = {} if a.start_bpb is None else {"val_bpb": a.start_bpb}
-    te = Session({}, a.out, seed=a.seed, tier=a.tier, device=getattr(prepare, "DEVICE", a.device), start=start,
-                 budget_s=60 * a.budget_minutes, keep_checkpoints=a.keep_checkpoints, digests=a.digests != "off",
-                 args=args, families=a.families)
-    te.budget_macs = a.budget_macs or a.budget_fraction * float(getattr(prepare, "TRAIN_FLOP_BUDGET", 0)) / 2
-    adapter = cw.Adapter(te, prepare, guard_log=a.out / "guard.log", own_dirs=[a.out, te.families_root.parent])
-    guard_exits()
-    adapter.install()
-    hooks.ACTIVE = te
-    meta = json.loads(a.meta) | {"program": script.name, "program_sha256": file_sha256(script), "commit": git_commit(),
-                                 "hardware": torch.cuda.get_device_name() if torch.cuda.is_available() else "cpu",
-                                 "peak_macs_per_s": a.peak_macs_per_s, "mode": "script", "script_args": args}
-    argv0, sys.argv = sys.argv, [str(script), *args]
-    sys.path.insert(0, str(script.parent))
-    imports = Imports(Path(prepare.__file__).parent)
-    rc = 0
-    with no_bytecode(), te.counter:
-        adapter.start()
-        try:
-            runpy.run_path(str(script), run_name="__main__")
-        except SystemExit as e:
-            rc = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
-        except BudgetExceeded as e:
-            meta["stopped"] = str(e)
-        except Exception as e:  # noqa: BLE001 - the run's record says how the program failed
-            rc, meta["error"] = 1, f"{type(e).__name__}: {e}"
-        finally:
-            adapter.stop()
-        te.close()
-    sys.argv = argv0
-    hooks.ACTIVE = None
-    meta |= adapter.meta() | {"script_rc": rc}
-    problems = [f"the script exited {rc}" + (f" ({meta['error']})" if "error" in meta else "")] if rc else []
-    problems += adapter.problems() + imports.problems()
-    if not adapter.submitted and "stopped" not in meta:
-        problems.append("the script submitted nothing")
-    return te.finish(meta, problems, adapter.flags())
 
 
 def main(argv=None) -> int:
     a = parse(argv)
     torch.cuda.graphs.CUDAGraph.replay = lambda self: (_ for _ in ()).throw(
-        RuntimeError("te_core: CUDA graph replay runs work the counter can't see"))
+        RuntimeError("training_slowdown: CUDA graph replay runs work the counter can't see"))
     args = a.program_args[1:] if a.program_args[:1] == ["--"] else a.program_args
-    if a.script:
-        return report(run_script(a, args))
     if a.theta:
         start = {"name": a.start or a.theta.name, "path": str(a.theta)}
         path = a.theta

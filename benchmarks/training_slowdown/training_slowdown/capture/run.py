@@ -11,7 +11,7 @@ structure digest and the same `updated` set merge. |C| = Σ steps · MACs of eac
 `schedule_updated` turns a schedule of per-step trainable sets into the `updated` set each step reads: a parameter differs
 from θ from the step after the first one that trains it, and stays new whether or not it trains again.
 
-`RunGraph.record()` writes the run in te_core.flops's record form, so te_core.annotate reads a captured run as it reads
+`RunGraph.record()` writes the run in training_slowdown.flops's record form, so training_slowdown.annotate reads a captured run as it reads
 a counted one.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Callable, Iterable, Sequence
 
-from te_core.capture.structure import StepGraph
+from training_slowdown.capture.structure import StepGraph
 
 __all__ = ["RunGraph", "capture_run", "schedule_updated"]
 
@@ -42,7 +42,7 @@ class RunGraph:
 
     @property
     def c_macs(self) -> int:
-        """|C| as te_core.flops counts it (`StepGraph.c_macs`)."""
+        """|C| as training_slowdown.flops counts it (`StepGraph.c_macs`)."""
         return sum(n * g.c_macs for n, g in self.steps)
 
     @property
@@ -60,9 +60,9 @@ class RunGraph:
         return Fraction(self.deep_macs(D, unit), self.c_macs) if self.c_macs else Fraction(0)
 
     def record(self) -> dict:
-        """The run as te_core.flops's `Counter.record()`: one step entry per step, in order, each naming its structure.
+        """The run as training_slowdown.flops's `Counter.record()`: one step entry per step, in order, each naming its structure.
         A capture has shapes and no values, so the entries' `weights` and `shapes` (digests of the updated weights a step
-        read) are empty, and `te_core.annotate.annotate(record)` reads everything else."""
+        read) are empty, and `training_slowdown.annotate.annotate(record)` reads everything else."""
         structures, steps, sid = {}, [], {}
         for n, g in self.schedule or self.steps:
             key = (g.digest, g.updated)
@@ -77,7 +77,7 @@ class RunGraph:
                               "elementwise_macs": g.elementwise_macs, "approx_macs": g.approx_macs, "by": by,
                               "struct": sid[key], "weights": {}, "shapes": {}})
         empty = {"macs": 0, "matmul_macs": 0, "elementwise_macs": 0, "approx_macs": 0}
-        return {"source": "te_core.capture", "totals": {"macs": self.c_macs, "approx_macs": sum(s["approx_macs"] for s in steps)},
+        return {"source": "training_slowdown.capture", "totals": {"macs": self.c_macs, "approx_macs": sum(s["approx_macs"] for s in steps)},
                 "setup": {"step": -1, "tokens": 0, **empty}, "steps": steps, "tail": {"step": len(steps), "tokens": 0, **empty},
                 "structures": structures}
 

@@ -1,4 +1,4 @@
-"""te_core.formalism and te_core.policy: Fit and Slowdown as the formalism v2 states them (a frozen tail always
+"""training_slowdown.formalism and training_slowdown.policy: Fit and Slowdown as the formalism v2 states them (a frozen tail always
 charged), the attack side beside them, the stubs, assumptions and upper bounds labelled, the grid."""
 import dataclasses
 import json
@@ -9,10 +9,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from te_core import VERSION as F_VERSION
-from te_core import formalism as F
-from te_core import frontier, policy
-from te_core.gates import per_mac
+from training_slowdown import VERSION as F_VERSION
+from training_slowdown import formalism as F
+from training_slowdown import frontier, policy
+from training_slowdown.gates import per_mac
 
 SHAPE = {"d_model": 512, "n_layer": 6, "vocab": 50304, "ctx": 1024, "parameters": 45_029_888, "tokens": 154_206_208,
          "forward_macs_per_token": 51_342_080}
@@ -317,7 +317,7 @@ EMA = {"kind": "a Python number read back in several earlier steps", "where": "t
     ({"affected_share": 0.0, "u1_bits": 0.0, "u_in": [[0, 0], [1, 0.0]]}, 10,
      "update-free trace: E is 10 bytes, but the traced step shows no update (its affected share is 0 and u(1) is 0)"),
     ({"u1_bits": 0.0, "u_in": [[0, 0], [1, 0.0]]}, None, "update-free trace: E is of unknown size"),
-    ({"data_dependent": None}, 10, "read-backs unchecked: traced before te_core 4.2 (no data_dependent)"),
+    ({"data_dependent": None}, 10, "read-backs unchecked: traced before training_slowdown 4.2 (no data_dependent)"),
 ])
 def test_a_trace_the_capture_cannot_vouch_for_is_refused_never_scored(trace, e_bytes, reason):
     """seed-mezo's 04:15Z LOOPHOLE: a clip on a read-back estimate left the trace with no update (affected share 0,
@@ -443,7 +443,7 @@ def test_the_consoles_c_is_one_full_session_of_the_reference_model():
     assert s["gates"] == 362_592_337_920 * 1480.125 == policy.CONSOLE[0] == policy.session_gates(45_029_888, 4096, 1024)
     assert s["k_bits"] == policy.CONSOLE[1] == 65_536
     assert round(policy.CONSOLE[0] / (5_120 * 2 * 45e6 * 740), 6) == 1.573884
-    # attention over the whole prompt at each prompt token, as te_core.flops counts the causal SDPA
+    # attention over the whole prompt at each prompt token, as training_slowdown.flops counts the causal SDPA
     assert policy.session(45_029_888, 8, 0)["attended"] == 64 and policy.session(45_029_888, 8, 2)["attended"] == 64 + 19
     with pytest.raises(ValueError, match="no stated shape"):
         policy.session(7e9, 4096, 1024)
@@ -503,7 +503,7 @@ def test_a_span_block_holds_the_most_tokens_its_reads_and_gates_allow():
 
 def tile(gates: float, m: int, K: int, n: int = 1000) -> dict:
     """A forward op of one (1, m, K, n) product at one gate a MAC, bf16: at k = 3600 its tile holds 225·max(m, n)
-    gates, the operand of the shorter side free (te_core.tiles)."""
+    gates, the operand of the shorter side free (training_slowdown.tiles)."""
     return {"phase": "fwd", "class": "updated", "op": "mm", "gates": gates, "macs": gates, "products": [[1, m, K, n]],
             "widths": [16, 16]}
 
@@ -605,13 +605,13 @@ CHAIN = {"k": policy.CONSOLE[1], "order": "chain", "products": [SQUARE], "system
 
 
 def test_the_old_fresh_products_figure_is_io_bounds_bound_beside_the_term():
-    """The sensitivity fresh_old is te_core.io_bound's bound with Λ proved on the record's products and |C|, with
+    """The sensitivity fresh_old is training_slowdown.io_bound's bound with Λ proved on the record's products and |C|, with
     P-cell, and fresh_no_cell its figure without it, in every bound, and fresh_old on every console row; both rest on
     P-width extended, false on honest circuits. The products are summed in the reference circuit's chains (`ORDER`),
     so they give it whether or not they give an order; a circuit that declares a tree leaves it unmeasured, with
     io_bound's chain figure in the inputs, as a k other than the one the products were classified at does. It is the
     same over S steps of the same products, and the products survive the record's JSON."""
-    from te_core import io_bound
+    from training_slowdown import io_bound
 
     c, k = 1e11, policy.CONSOLE[1]
     chain = replace(one_segment(), products=CHAIN)
@@ -700,7 +700,7 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
 
 
 def he_row(phase: str, td: list, m: int, k: int, n: int, count: int = 1, batch: int = 1) -> dict:
-    """A product row as te_core.capture.products writes one: both operands affected at bf16, paid, none gathered."""
+    """A product row as training_slowdown.capture.products writes one: both operands affected at bf16, paid, none gathered."""
     gates = next(g for g, b in F.HE_BITS.items() if b == (16, 16))
     return {"phase": phase, "token_dims": td, "dims": {"batch": batch, "m": m, "k": k, "n": n}, "count": count,
             "macs": batch * m * k * n, "outputs": batch * m * n, "affected": [True, True], "self": False,
@@ -825,7 +825,7 @@ def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ
 
 
 def graph(omega: int = 3, forward: int = 2, dw: int = 2, repeated: list | None = None) -> dict:
-    """A step's array graph as te_core.arrays' `check` writes one."""
+    """A step's array graph as training_slowdown.arrays' `check` writes one."""
     return {"omega": omega, "clique": [], "omega_forward": forward, "omega_dw": dw, "arrays": 6, "products": 6,
             "repeated": repeated or [], "loops": []}
 
@@ -836,7 +836,7 @@ def test_the_products_term_takes_f_at_the_steps_array_graph_and_refuses_two_prod
     leaves the term as it is without one; a clique of five charges M F = √1.6, a triangle among the weight gradients
     charges them 2/√3, and one among the forward products charges a forward-only M_P, where it binds, 2/√3; two of M's
     products on one pair leave the term unmeasured, with the graph it read."""
-    from te_core import arrays, io_bound
+    from training_slowdown import arrays, io_bound
 
     c, k, C = 1e11, 65_536.0, 1e13
     he = F.he_of_rows(HE_STEP, k, 10.0, 1024)
@@ -877,7 +877,7 @@ def test_the_products_term_takes_f_at_the_steps_array_graph_and_refuses_two_prod
 
 
 #: a code name in a published string: a dotted path (a module's, or its function's), an identifier with an underscore
-#: (te_core, io_bound, rows_of, ONE_CLASS, FRESH_VOID, k_whole) other than a one-letter math subscript (b_y), or a
+#: (training_slowdown, io_bound, rows_of, ONE_CLASS, FRESH_VOID, k_whole) other than a one-letter math subscript (b_y), or a
 #: command-line flag
 CODE_NAME = __import__("re").compile(
     r"\b[A-Za-z]\w*\.[A-Za-z_]\w*|\b(?![A-Za-z]_[A-Za-z0-9]\b)[A-Za-z][A-Za-z0-9]*_\w+\b|--[a-z]")
@@ -985,8 +985,8 @@ def test_products_of_takes_io_bounds_fresh_rows_from_captured_steps():
     import torch.nn.functional as tF
     from torch import nn
 
-    from te_core import io_bound
-    from te_core.capture import capture_step
+    from training_slowdown import io_bound
+    from training_slowdown.capture import capture_step
 
     torch.manual_seed(0)
     m = nn.Sequential(nn.Linear(256, 256, bias=False), nn.Linear(256, 64, bias=False), nn.Linear(64, 256, bias=False),
@@ -1004,12 +1004,12 @@ def test_products_of_takes_io_bounds_fresh_rows_from_captured_steps():
 
 @pytest.mark.parametrize("name", ("dense_blocks", "lora_blocks", "wildcard_adapter"))
 def test_products_of_ops_takes_a_logs_products_and_counts_none(name):
-    """`products_of_ops` on a traced step's op log (the fixtures' `.ops.json`, te_core.tiles.of_graph): a row for each
+    """`products_of_ops` on a traced step's op log (the fixtures' `.ops.json`, training_slowdown.tiles.of_graph): a row for each
     product the log places, its op's MACs split by the products' sizes, its output entries its MACs over K, its
     operands' widths the log's and its partial sums' io_bound's; θ where its class is registered, else unknown (the
     tiny start's attention is unfused bmm, whose token dims a log doesn't keep). The order is the reference circuit's,
     and nothing is counted, so the fresh-products term is unmeasured with the unknown share in its reason."""
-    from te_core import io_bound
+    from training_slowdown import io_bound
 
     ops = json.loads((FIXTURES / f"{name}.ops.json").read_text())
     placed = [op for op in ops if op["products"]]
@@ -1029,8 +1029,8 @@ def test_products_of_ops_takes_a_logs_products_and_counts_none(name):
 
 @pytest.mark.slow
 def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it(monkeypatch):
-    """The 45M start's dense step (te_core.io_bound.capture, Muon on the block matrices, batch 2 at ctx 256) through
-    te_core.capture.products and `products_of_trace`, before G leaves out the sequences' first positions, is the
+    """The 45M start's dense step (training_slowdown.io_bound.capture, Muon on the block matrices, batch 2 at ctx 256) through
+    training_slowdown.capture.products and `products_of_trace`, before G leaves out the sequences' first positions, is the
     products io_bound.rows_of counts on it, its identical rows merged, and their whole-making system is
     io_bound.chain_classes', so io_bound's bound is the same: at the console's policy about 69,676 fresh MACs a block,
     0.552 of |C| and ρ 2.87e6 with P-cell. The trace's order is unknown and the reference circuit's chain stands, so
@@ -1041,8 +1041,8 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it(monkeypatch):
     6 s on a CPU): the fixtures' tiny start has almost no fresh products."""
     import collections
 
-    from te_core import io_bound
-    from te_core.capture import products
+    from training_slowdown import io_bound
+    from training_slowdown.capture import products
 
     g = io_bound.capture("dense", size="s", vocab=32000, batch=2, ctx=256, micro_steps=1)
     c, k = policy.CONSOLE
@@ -1180,7 +1180,7 @@ def test_the_45m_dense_steps_old_figure_reads_its_whole_making_system_and_a_rank
 
 
 def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_dial_reads_as_c_times_a_number():
-    """A trace from te_core 4.12.1 on keeps its product rows at each k of the console's dial (te_core.capture.products'
+    """A trace from training_slowdown 4.12.1 on keeps its product rows at each k of the console's dial (training_slowdown.capture.products'
     `at`), so the products term is measured at each of them on that k's M, and off the dial it is unmeasured with the
     reason. At a fixed k the theorem of record's ρ is c/|C| times a function of k, and io_bound's blocks don't move
     with c, so the dial reads the old figure and the term as c times a number for each k (`fresh_per_c`, [fresh_old/c,
@@ -1190,7 +1190,7 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_d
     old figure is 2,869,161, 2,089,282 and 778,360 at the first three, and void from 800,000 bits up, where its
     whole-making system's one cycle, which feeds every counted product, has no fixed point, so the dial reads it null
     beside the term."""
-    from te_core.capture import products
+    from training_slowdown.capture import products
 
     rows = json.loads((FIXTURES / "dense_45m.products.json").read_text())
     got = F.products_of_trace(rows)
@@ -1232,7 +1232,7 @@ def test_a_block_5_slots_term_grows_with_its_rank_and_never_falls_below_what_no_
     exactly; on all three MLP matrices the residual stream closes a cycle with no fixed point, so the term is void
     and is the figure of the product no diverged cycle feeds (187.7 with P-cell, 63.41 without, on 0.595 of the
     step's counted fresh MACs), a valid lower bound (coordinator 21:54Z)."""
-    from te_core import io_bound
+    from training_slowdown import io_bound
 
     fx = json.loads((FIXTURES / "block5_slots.products.json").read_text())
     c, k = policy.CONSOLE
@@ -1280,8 +1280,8 @@ def test_a_block_5_slots_term_grows_with_its_rank_and_never_falls_below_what_no_
 
 @pytest.mark.parametrize("name", ("dense_blocks", "lora_blocks", "wildcard_adapter"))
 def test_a_fixtures_trace_keeps_its_product_rows_and_their_fresh_share(name):
-    """Each fixture's product rows (the `.products.json` beside its circuit, te_core.capture.products of the step the
-    circuit traces, at te_core 4.12.1): the capture's version, the console's k, the order unknown, the circuit's
+    """Each fixture's product rows (the `.products.json` beside its circuit, training_slowdown.capture.products of the step the
+    circuit traces, at training_slowdown 4.12.1): the capture's version, the console's k, the order unknown, the circuit's
     tokens and |C|, and by kind every product the op log places. On the tiny start no product is fresh: every counted
     candidate has an operand read through a repeating view or a broadcast below its width (each view read at its own
     value's rate), so the old figure is a measured 0 with nothing counted, and so is the term: M's operands are read
@@ -1289,8 +1289,8 @@ def test_a_fixtures_trace_keeps_its_product_rows_and_their_fresh_share(name):
     system's cycle through attention's 32-long chains (r = 4/3) has no fixed point but feeds no counted product, so
     whole_chain is 1; P-match holds, and G drops nothing for an embedding's rows (the products that read them are expansion, θ or attention
     products) and trims nothing at the sequences' first positions (1,024 long, attention's, affected or not)."""
-    from te_core.capture import products
-    from te_core.capture.circuit import StepCircuit, measure
+    from training_slowdown.capture import products
+    from training_slowdown.capture.circuit import StepCircuit, measure
 
     block = json.loads((FIXTURES / f"{name}.products.json").read_text())
     f = measure(StepCircuit.load(FIXTURES / f"{name}.npz"))
@@ -1363,11 +1363,11 @@ def test_a_records_trace_rows_are_its_traced_steps_products():
 
 def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does():
     """A ledger row keeps the products its ingest took from its trace's rows, and the scorer's traces were ingested by
-    the te_core that captured them: at 4.8 with the trace's order unknown, which `fresh_products` never measures, and
+    the training_slowdown that captured them: at 4.8 with the trace's order unknown, which `fresh_products` never measures, and
     an upcast operand's product an expansion; at 4.10 and 4.11 with no `system`, which it reads as products of no
     trace, by the one-class rule (`ONE_CLASS`) that misses attention's chains; at 4.12 with a system that counts the
     products reading gathered rows, which its rows can't name; at 4.12.1 at the console's k only, though the trace
-    keeps rows at each k of the dial (`at`). `complete` reads them as this te_core's ingest of the same rows over the
+    keeps rows at each k of the dial (`at`). `complete` reads them as this training_slowdown's ingest of the same rows over the
     same traced steps (`traced_products`: their kinds' MACs over the rows' own, 2.5 here with a stand-in), so for the
     old figure (fresh_old) rows captured before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`) and rows with
     `fed` and `gathered`, from a capture that looked for products written elementwise and found none, are measured on
@@ -1453,7 +1453,7 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
 def test_a_trace_of_another_program_than_the_runs_is_never_priced():
     """Coordinator 20:42Z: a products term is priced only on a trace of the run's own program. A trace keeps no list
     of the tensors it trains, so `complete` reads the row's op log beside the trace's rows when the row is read
-    (`other_program`, whatever te_core ingested it): where every matrix-product shape the rows run is a product the
+    (`other_program`, whatever training_slowdown ingested it): where every matrix-product shape the rows run is a product the
     log ran, in either orientation, the term is priced as before; where one isn't (a rank, a width or a batch the
     capture took and the run didn't), the term is unmeasured at every k the trace keeps rows at, with the counts as
     its reason (`FRESH_OTHER`), and so are the old figure's fresh_old and fresh_no_cell. A batched product is no match
@@ -1507,7 +1507,7 @@ def test_a_ledger_row_publishes_what_its_trace_rows_give_at_every_dial_k_whateve
     4.12.1 (products at the console's k only, none at the dial's other k, no `fed` and no shared-prefix trim) it
     publishes at the served block's 145,568 bits, and at every k of the dial, what a fresh ingest of the same record
     does, where its stored products kept none there."""
-    from te_core.capture.products import DIAL_K
+    from training_slowdown.capture.products import DIAL_K
 
     fixture = json.loads((FIXTURES / "dense_45m.products.json").read_text())
     log = [["fwd", "theta", "mm", "[[8]]", 1, 80]]
@@ -1567,7 +1567,7 @@ def test_a_ledger_row_publishes_what_its_trace_rows_give_at_every_dial_k_whateve
 
 
 def test_a_ledger_rows_log_puts_theta_and_attention_products_aside_and_the_rest_unknown():
-    """On a macs_log (te_core.tiles.of_log): a product whose non-token operand is θ (its role theta) is θ's, a fused
+    """On a macs_log (training_slowdown.tiles.of_log): a product whose non-token operand is θ (its role theta) is θ's, a fused
     attention op's products are attention's, and an updated one's, whose operands the log says only depend on the
     run's state, is unknown; an op run twice is one row of twice its MACs."""
     sdpa = 2 * 16 * 256 * 64 * 256
@@ -1613,7 +1613,7 @@ def test_reduction_update_and_the_token_form_are_sensitivities_never_the_bound()
 
 
 def test_a_rows_op_log_is_its_tiles_and_its_block_keeps_its_own():
-    """`complete` reads a block's `ops`, else the row's macs_log (te_core.tiles.of_log), labelled; from_json keeps
+    """`complete` reads a block's `ops`, else the row's macs_log (training_slowdown.tiles.of_log), labelled; from_json keeps
     them."""
     log = {"by": {"fwd/updated": 2048 * 64 * 192}, "ops": {"fwd updated mm [[2048, 64], [64, 192]]": [1, 2048 * 64 * 192]}}
     m = F.complete({}, {"macs_log": log, "output": {"e_bytes": 10}}, SHAPE)

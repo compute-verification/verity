@@ -1,7 +1,7 @@
-"""The training formalism v2's quantities measured on one traced step, in Boolean gates (te_core.gates) and bits. No torch: a `StepCircuit` saved by ``python -m te_core.capture.script --circuit F.npz`` is measured again with
-``python -m te_core.capture.circuit F.npz``.
+"""The training formalism v2's quantities measured on one traced step, in Boolean gates (training_slowdown.gates) and bits. No torch: a `StepCircuit` saved by ``python -m training_slowdown.capture.script --circuit F.npz`` is measured again with
+``python -m training_slowdown.capture.circuit F.npz``.
 
-`StepCircuit` is te_core.capture.structure's dataflow of a program recorded from its start, restricted to its measured
+`StepCircuit` is training_slowdown.capture.structure's dataflow of a program recorded from its start, restricted to its measured
 step R (`Trace.region`) and the values R reads from earlier steps that depend on their token data (`carried`: θ' and
 the run's other persistent state). Each value has its predecessors, phase, whether it is token-indexed (`tok`), whether
 it depends on an earlier step's token data (`dep`) or on step R's own (`tokdep`), its bits, and the gates of the op that
@@ -16,8 +16,8 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
   `affected_share` = |A ∩ ∪T| / |C_R|, the token ops that depend on θ'; `affected_all_share` = every affected op's
   (A, the optimizer's included).
 - tokens: the step's consumed tokens, the union of the positions the token-index ops read in each token input, and
-  in each sampled id the step feeds back (a generation round's decode, te_core.capture.script). An index computed
-  from token data otherwise (a sampled head's unique(y), a QAT code) is no token, though te_core.flops counts its
+  in each sampled id the step feeds back (a generation round's decode, training_slowdown.capture.script). An index computed
+  from token data otherwise (a sampled head's unique(y), a QAT code) is no token, though training_slowdown.flops counts its
   reads too; a step whose token-index ops read no token input (a program-made source) counts every token-index read.
   `token_factor` = tokens over the record's count for the step.
 - τ: the token inputs' positions the step reads (its targets included), per consumed token (`tau_ids`, ids, priced at
@@ -39,14 +39,14 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
   step's token ops don't read (optimizer moments, error feedback). The cut prices each value at the width the circuit
   passes it, its dtype's (a torch.bool plane 1 bit an entry, int8 and uint8 8, f16 16, a packed word its packing), so
   a message coded inside the step is measured at its coded width. Its encode, decode and sum are traced ops, counted in
-  |C| by the rule every op is (te_core.gates): their products at the elementwise price, an integer one at bf16's for
+  |C| by the rule every op is (training_slowdown.gates): their products at the elementwise price, an integer one at bf16's for
   want of a Definition, and their comparisons, casts, shifts, masks and sums at nothing. The values a reduction over
   the step's tokens makes (a dW product, a loss) are priced at the accumulator's width, 32 bits an element at least,
   since a block holding part of the tokens passes the accumulator's partial.
 - `update_cut_bits`: the narrowest cut between the carried values and every update value any token op of the step
   reads: the trace's own encoding of θ' (compare 8 |E|).
 - `partial_cut_bits`: the gradient's cut from one token's group alone (its own dW products): the partial a block
-  holding the group's work passes, at its passed width, which the one bound's reduction kind reads (te_core.formalism).
+  holding the group's work passes, at its passed width, which the one bound's reduction kind reads (training_slowdown.formalism).
 - `entries`, reading A's inputs (A1's approved reading: a block reads at least the update bits its work reads,
   counted once, plus each token's computed state where its work on the token begins, the context it reads and doesn't
   compute included). One token's path (its group's affected ops in program order, as for u_in) is cut into at most
@@ -65,12 +65,12 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
   bits of its affected token-indexed operands), earlier positions in the forward and later ones in the backward; and its
   first op (`first_ops`), so a run's ops on the path (`path`) are `run_ops`'s. Reading A's checker, `check`, counts the
   gates and reads of any set of the trace's ops by the same rule: a witness block, of which the runs are the default
-  packer's (te_core.formalism.packer).
+  packer's (training_slowdown.formalism.packer).
 - `data_dependent` and `carried_scalars`: the recording's read-backs that decide what the graph can't carry
-  (te_core.capture.script), which the circuit keeps (`read_backs`, saved with it); absent for a circuit no recording
-  listed them for, which te_core.formalism refuses as unchecked.
-- `products`: the step's matrix products as te_core.io_bound reads them (te_core.capture.products' rows), which the
-  circuit keeps too; absent for a circuit recorded before te_core 4.8.
+  (training_slowdown.capture.script), which the circuit keeps (`read_backs`, saved with it); absent for a circuit no recording
+  listed them for, which training_slowdown.formalism refuses as unchecked.
+- `products`: the step's matrix products as training_slowdown.io_bound reads them (training_slowdown.capture.products' rows), which the
+  circuit keeps too; absent for a circuit recorded before training_slowdown 4.8.
 """
 from __future__ import annotations
 
@@ -117,15 +117,15 @@ class StepCircuit:
     token_key: np.ndarray
     region: int
     step_tokens: int
-    #: the recording's read-backs that decide what the graph can't carry (te_core.capture.script's `data_dependent` and
+    #: the recording's read-backs that decide what the graph can't carry (training_slowdown.capture.script's `data_dependent` and
     #: `carried_scalars`), which `measure` returns; None for a circuit no recording listed them for
     read_backs: dict | None = None
     #: whether a value is quadratic in the context (attention's scores and probabilities), and the context's length;
     #: None and 0 for a trace whose variant doesn't halve the context
     mix: np.ndarray | None = None
     ctx: int = 0
-    #: the step's matrix products as te_core.io_bound reads them (te_core.capture.products' `rows`), which `measure`
-    #: returns; None for a circuit recorded before te_core 4.8
+    #: the step's matrix products as training_slowdown.io_bound reads them (training_slowdown.capture.products' `rows`), which `measure`
+    #: returns; None for a circuit recorded before training_slowdown 4.8
     products: dict | None = None
 
     def save(self, path: Path) -> None:
@@ -666,7 +666,7 @@ def measure(c: StepCircuit, max_cuts: int = 128, segments: int = 24) -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("circuit", type=Path, help="a StepCircuit saved by te_core.capture.script --circuit")
+    ap.add_argument("circuit", type=Path, help="a StepCircuit saved by training_slowdown.capture.script --circuit")
     ap.add_argument("--max-cuts", type=int, default=128)
     a = ap.parse_args(argv)
     print(json.dumps(measure(StepCircuit.load(a.circuit), a.max_cuts), indent=1))

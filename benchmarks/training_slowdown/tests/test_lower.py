@@ -6,8 +6,8 @@ import torch
 import torch.nn.functional as F
 
 from models import TinyLM, conv_net, lm_loss, mlp
-from te_core.capture import capture_step
-from te_core.capture.lower import lower, lower_forward
+from training_slowdown.capture import capture_step
+from training_slowdown.capture.lower import lower, lower_forward
 
 
 def _no_macs(defs: dict) -> dict:

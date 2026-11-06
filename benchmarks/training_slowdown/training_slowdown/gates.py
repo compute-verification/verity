@@ -1,8 +1,8 @@
 """Boolean gates per counted operation: the conversion from the harness's multiply-accumulates (MACs) to the gates
 the training formalism counts |C|, c and w in.
 
-    python -m te_core.gates           # the table
-    python -m te_core.gates --check   # recompute it from the Definitions (needs verity), exit 1 on a difference
+    python -m training_slowdown.gates           # the table
+    python -m training_slowdown.gates --check   # recompute it from the Definitions (needs verity), exit 1 on a difference
 
 Each price is one of the circuits' own Definitions (`verity.ml.circuits.ops.boolean`), at its whole gate count:
 AND + XOR + NOT as `verity.ml.circuits.evaluation.bits.compile(D).counts` gives them, the AND count being the one its
@@ -12,14 +12,14 @@ AND + XOR + NOT as `verity.ml.circuits.evaluation.bits.compile(D).counts` gives 
   `HopperBF16WgmmaDot16_v2` / 16, the 26-bit-adder model sm_120's BF16 pipeline shares (`ml.circuits.targets.target`);
   FP8 at `BlackwellE4m3QmmaDot32_v2` / 32 or `BlackwellE5m2QmmaDot32_v2` / 32, NVFP4 at `BlackwellNvf4OmmaDot64_v2` /
   64, f32 at `F32Fma_v4`;
-- an elementwise MAC (te_core.flops's `mul`, `div`, `addcmul`, a scaled `add`, a counted forward op) is a bf16 multiply
+- an elementwise MAC (training_slowdown.flops's `mul`, `div`, `addcmul`, a scaled `add`, a counted forward op) is a bf16 multiply
   then a bf16 add (`Bf16MulBf16_v2` + `Bf16Add_v2`), or one `F32Fma_v4` in f32;
 - an optimizer's MAC (phase `other`/`optimizer`, role `param`) and dense linear algebra's are f32 (`F32Fma_v4`);
-- a gather's MAC (te_core.flops's `gather_macs`) is one word multiplexer, y ⊕ (b ∧ (x ⊕ y)) per bit: 3 gates per bit.
+- a gather's MAC (training_slowdown.flops's `gather_macs`) is one word multiplexer, y ⊕ (b ∧ (x ⊕ y)) per bit: 3 gates per bit.
 
-A record names each op's dtype from te_core 4.0's capture on. A record without one (v2.3's `macs_log`) is priced by
+A record names each op's dtype from training_slowdown 4.0's capture on. A record without one (v2.3's `macs_log`) is priced by
 `ASSUMED`: GEMMs and forward or backward elementwise ops in bf16 (the islands train under bf16 autocast), the optimizer
-in f32; `of_log` lists every assumption it made. The ops te_core.flops doesn't count (exp, max, comparisons, casts)
+in f32; `of_log` lists every assumption it made. The ops training_slowdown.flops doesn't count (exp, max, comparisons, casts)
 are in no record, so |C| here is the counted ops' gates.
 """
 from __future__ import annotations
@@ -88,7 +88,7 @@ UNIT = f"gates: AND + XOR + NOT, {per_and('gemm/bf16'):.1f}x a bf16 GEMM's AND c
 
 
 def kind_of(phase: str, role: str, op: str, dtype: str | None = None) -> tuple[str, str]:
-    """(kind, assumption) of a counted op: its class by te_core.flops's name sets, its dtype the record's or `ASSUMED`'s
+    """(kind, assumption) of a counted op: its class by training_slowdown.flops's name sets, its dtype the record's or `ASSUMED`'s
     (the assumption names it; "" when the record gave the dtype)."""
     base = op.split(".")[0]
     if base in GATHER_NAMES:
@@ -125,7 +125,7 @@ def split_key(key: str) -> tuple[str, str, str, str, str | None]:
 
 
 def of_log(log: dict) -> dict:
-    """A `macs_log` (te_core.ledger's: `by` class -> MACs, `ops` "phase role op shapes [dtype]" -> [count, MACs]) in
+    """A `macs_log` (training_slowdown.ledger's: `by` class -> MACs, `ops` "phase role op shapes [dtype]" -> [count, MACs]) in
     gates: the total, the MACs and gates per kind, and the assumptions made. MACs `by` counts that no op row holds are
     priced as elementwise bf16, an assumption it names."""
     kinds: dict[str, list[float]] = {}

@@ -77,7 +77,7 @@ class Trace:
     optimizer state after the step; the token-axis sizes the batch was captured at. A capture of several steps (a
     recorded program's update period) gives each step's tokens by its nodes' ``meta["te_step"]`` (`step_tokens`), and
     the graph attributes steps before it wrote (`written_before`: the run's own values when the graph reads them). A
-    program recorded from its start (`te_core.capture.script`) names the step it measures (`region`): the graph holds
+    program recorded from its start (`training_slowdown.capture.script`) names the step it measures (`region`): the graph holds
     every step before it, which decide what the run produced, and the step after it, whose forward reads the new
     values."""
     gm: torch.fx.GraphModule
@@ -299,7 +299,7 @@ def _axis_name(names: Sequence[str], a: int) -> str:
 
 
 def _capture(step, model, opts, example_batch, *, updated, token_dims, token_axes, device, name):
-    from te_core.capture.structure import StepGraph
+    from training_slowdown.capture.structure import StepGraph
     leaves, spec = pytree.tree_flatten(example_batch)
     dims = _token_dims(leaves, token_dims)
     sizes = _axis_sizes(leaves, dims)

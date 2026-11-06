@@ -1,5 +1,5 @@
-"""A captured step's matrix products as te_core.io_bound reads them (P-width's dataflow side), for a program recorded
-from its start (te_core.capture.script, `Trace.region`) as well as a step captured by capture_step or capture_fn.
+"""A captured step's matrix products as training_slowdown.io_bound reads them (P-width's dataflow side), for a program recorded
+from its start (training_slowdown.capture.script, `Trace.region`) as well as a step captured by capture_step or capture_fn.
 
 Each GEMM of the measured step is a row (`rows`): its dims and token dims, whether each operand depends on θ′, the
 width each operand is passed at (`io_bound._passed_width`), the bits a block pays an entry of it at policy k (the rates
@@ -8,7 +8,7 @@ rule), whether both operands are one array, its partial sums' width (`io_bound.A
 step's whole-making system (`io_bound.chain_classes`) reads of it: the classes whose outputs reach its operands (`fed`)
 and their paid factor (`P`, `_reach`), and whether each operand reads a gather's rows (an embedding's, the same for
 every token that shares an id) before any op makes them token-specific (`gathered`, `_gathered`), which the bound drops
-(te_core.formalism). The block's `p_match` lists the ops that break P-match, and its `elementwise_products` the
+(training_slowdown.formalism). The block's `p_match` lists the ops that break P-match, and its `elementwise_products` the
 matrix products written with elementwise ops (a broadcast multiplication and a sum, or a gather, a multiplication and
 a sum by index), which no row is and whose classes the whole-making system would miss. Identical rows of the step (a layer's GEMMs
 repeated over the layers) are one row with their count, so `gathered` puts layer 0's products of the embedding's rows in
@@ -17,13 +17,13 @@ row's rates, kind and feeds move with k.
 
 A recorded program reads θ′ through storage versions: a weight's view in the measured step reads the version the
 previous step's optimizer wrote, not the attribute's entry value. So the rates and chains here are keyed by the
-capture's values (`te_core.capture.structure._Flow`), not by nodes as io_bound's are, and every value the measured step
+capture's values (`training_slowdown.capture.structure._Flow`), not by nodes as io_bound's are, and every value the measured step
 reads from an earlier step that depends on θ′ (θ′ itself, the optimizer's state) is read at its width with no chain,
 as io_bound takes an updated parameter or state; for a step captured by capture_step or capture_fn they are io_bound's.
 
 The summation order of a GEMM's partial sums is its kernel's, which no ATen graph shows (a GEMM is one op), so `order`
-is ``unknown`` here; the order belongs to the circuit model, not the trace, and te_core.formalism sums the rows in the
-reference circuit's chains (`te_core.formalism.ORDER`), as te_core.gates prices a GEMM."""
+is ``unknown`` here; the order belongs to the circuit model, not the trace, and training_slowdown.formalism sums the rows in the
+reference circuit's chains (`training_slowdown.formalism.ORDER`), as training_slowdown.gates prices a GEMM."""
 from __future__ import annotations
 
 import math
@@ -31,19 +31,19 @@ import operator
 
 import torch
 
-from te_core import io_bound
-from te_core.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _phases, _pk, _shape
+from training_slowdown import io_bound
+from training_slowdown.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _phases, _pk, _shape
 
-#: the capture's version of these rows (te_core's VERSION when they were last changed), so a trace that has them is
-#: distinguishable from one traced before them. A recorded program's trace also carries the te_core VERSION whose code
-#: wrote it (`capture_code`, te_core.capture.script's `record`, from 4.12.14 on; a trace without it was written by 4.12.9
+#: the capture's version of these rows (training_slowdown's VERSION when they were last changed), so a trace that has them is
+#: distinguishable from one traced before them. A recorded program's trace also carries the training_slowdown VERSION whose code
+#: wrote it (`capture_code`, training_slowdown.capture.script's `record`, from 4.12.14 on; a trace without it was written by 4.12.9
 #: to 4.12.13's code, which differ only in that 4.12.12's and 4.12.13's list fewer elementwise products)
 CAPTURE = "4.12.9"
 #: the torch the frozen capture traces under, the trace job's (``torch==2.15.0+cpu``): a step's graph, and so what the
-#: capture counts on it, moves with torch's version, so te_core.capture.script refuses to trace under another
+#: capture counts on it, moves with torch's version, so training_slowdown.capture.script refuses to trace under another
 TORCH = "2.15.0"
 ORDER = "unknown"
-#: the console's dial's k levels in bits (te_core.panels' `K_LEVELS`, which a test holds this to): each of its block
+#: the console's dial's k levels in bits (training_slowdown.panels' `K_LEVELS`, which a test holds this to): each of its block
 #: sizes, the reference's, the served demo's block and the console's default
 DIAL_K = (65_536, 80_000, 145_568, 800_000, 8_000_000, 80_000_000, 800_000_000)
 
@@ -300,7 +300,7 @@ def _gathered(vs: _Values, made: dict) -> set:
     gathered index (RoPE's cos and sin sliced to the context), numbers or masks positions (`_POSITIONAL`, the causal
     mask's tril), or is random (a dropout mask). Any other op carries the rows on, so a product is never kept for want
     of a reason to drop it."""
-    from te_core.capture.structure import _RANDOM
+    from training_slowdown.capture.structure import _RANDOM
 
     flow = vs.flow
     tok = flow.tok
@@ -656,7 +656,7 @@ def rows(graph, k: float = io_bound.CONSOLE[1], gemm_dtype: str | None = "bfloat
     the step's |C| at io_bound's prices (`io_bound.step_gates`) for a step captured by capture_step or capture_fn, else
     None (the circuit's count is the trace's), `p_match` [{"op", "fan_out", "count"}] the ops that break P-match
     (`_reach`), and `elementwise_products` the matrix products the step writes with elementwise ops
-    (`_elementwise_products`), which te_core.formalism refuses to price."""
+    (`_elementwise_products`), which training_slowdown.formalism refuses to price."""
     vs = _Values(graph)
     made = _made(vs)
     return _rows(vs, graph, k, gemm_dtype, made, _gathered(vs, made)) | {"elementwise_products": _elementwise_products(vs)}
@@ -666,7 +666,7 @@ def rows_on_dial(graph, gemm_dtype: str | None = "bfloat16") -> dict:
     """`rows` at the console's k, and under "at" each other k of the console's dial (`DIAL_K`, by its integer as a
     string) the rows and P-match check there ({"k", "rows", "p_match"}): a product's rates, kind and feeds move with k
     (a block of k bits pays an output made whole at 4K²·b²/k, and makes one whole by itself from K ≥ 3^1.5·√(k/b_c)),
-    so the dial's term at a k reads that k's rows, which only the captured step gives. A trace keeps these (te_core.
+    so the dial's term at a k reads that k's rows, which only the captured step gives. A trace keeps these (training_slowdown.
     capture.script) so the dial needs no retrace."""
     vs = _Values(graph)
     made = _made(vs)

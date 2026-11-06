@@ -1,4 +1,4 @@
-"""te_core 4.0's definitions (after Daniel's smell check), on toy steps: T2 reads update dependence,
+"""training_slowdown 4.0's definitions (after Daniel's smell check), on toy steps: T2 reads update dependence,
 however the circuit is written, and T1's β is the narrowest cut the step's own circuit has (structure.py's docstring)."""
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from models import LoRA, TinyLM, lm_loss, lora
-from te_core.capture import capture_fn, capture_step
+from training_slowdown.capture import capture_fn, capture_step
 
 B, S, V, NH, L = 2, 4, 32, 2, 2
 T = B * S

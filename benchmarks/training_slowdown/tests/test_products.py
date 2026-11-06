@@ -1,6 +1,6 @@
-"""te_core.capture.products: a step's matrix products as te_core.io_bound reads them. On test_script.py's program at
+"""training_slowdown.capture.products: a step's matrix products as training_slowdown.io_bound reads them. On test_script.py's program at
 H = 256 (past the K at which io_bound's GEMM rate rule changes, 3^1.5·√(k/32), 235 at the console's k), the step
-recorded from the start (te_core.capture.script), whose weights the measured step reads through the versions the
+recorded from the start (training_slowdown.capture.script), whose weights the measured step reads through the versions the
 previous step's update wrote, has the rows of the same step captured by capture_step, and those are io_bound.rows_of's."""
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ import torch
 import torch.nn.functional as tF
 from torch import nn
 
-from te_core import VERSION, formalism, io_bound, policy
-from te_core.capture import capture_fn, capture_step, products, script
+from training_slowdown import VERSION, formalism, io_bound, policy
+from training_slowdown.capture import capture_fn, capture_step, products, script
 
 PROGRAM = Path(__file__).parent / "recorded" / "islands" / "toy" / "train.py"
 V, H, B, CTX = 16, 256, 4, 8
@@ -48,7 +48,7 @@ def recorded(tmp_path, monkeypatch):
 def test_a_recorded_steps_rows_are_the_captured_steps_and_io_bounds(recorded):
     """The forward's head product is fresh and its fc product an expansion (io_bound's rule pays a lookup at the token
     ids at no rate); in the backward three products are fresh and one an expansion. The trace keeps the rows with the
-    capture's version and the te_core VERSION whose code wrote them (`capture_code`), and the order is unknown, and at
+    capture's version and the training_slowdown VERSION whose code wrote them (`capture_code`), and the order is unknown, and at
     each other k of the console's dial the rows there."""
     k = policy.CONSOLE[1]
     model = Toy()
@@ -83,18 +83,18 @@ def test_a_recorded_steps_rows_are_the_captured_steps_and_io_bounds(recorded):
 
 
 def test_the_capture_keeps_rows_at_the_consoles_dial_levels():
-    """The capture's dial is te_core.panels' `K_LEVELS` (products can't import panels, which imports formalism, which
+    """The capture's dial is training_slowdown.panels' `K_LEVELS` (products can't import panels, which imports formalism, which
     imports products); a trace has no rows at a level added after it was captured, so a new level means a retrace."""
-    from te_core import panels
+    from training_slowdown import panels
 
     assert products.DIAL_K == panels.K_LEVELS, (
-        f"set te_core.capture.products.DIAL_K to te_core.panels.K_LEVELS {panels.K_LEVELS}, bump products.CAPTURE and "
+        f"set training_slowdown.capture.products.DIAL_K to training_slowdown.panels.K_LEVELS {panels.K_LEVELS}, bump products.CAPTURE and "
         "say on the board that traces need a retrace for the new levels")
 
 
 def test_the_capture_is_frozen_at_4_12_9_under_the_trace_jobs_torch():
     """Every published row was priced from a trace of the capture's 4.12.9 rows taken under torch 2.15.0, the trace
-    job's (te_core.capture.script refuses another), so moving either moves rows already traced."""
+    job's (training_slowdown.capture.script refuses another), so moving either moves rows already traced."""
     assert (products.CAPTURE, products.TORCH) == ("4.12.9", "2.15.0"), (
         "the capture is frozen at 4.12.9 under torch 2.15.0 through the finals: a later fix prices at read time, adds "
         "what it captures that is new, and fails closed only for the runs it changes; moving products.CAPTURE or "
@@ -555,10 +555,10 @@ class MatVec(nn.Module):
 
 
 def test_a_bf16_steps_matrix_vector_products_are_priced_as_gemms():
-    """aten.mv is a GEMM by its name (te_core.opnames' GEMM_LIKE), as capture.structure counts it, so a bf16 step
+    """aten.mv is a GEMM by its name (training_slowdown.opnames' GEMM_LIKE), as capture.structure counts it, so a bf16 step
     with torch.mv is priced at the bf16 GEMM's Definition through the capture's rows and io_bound, never as an
     elementwise op, whose price has two Definitions that a GEMM's can't take."""
-    from te_core import gates
+    from training_slowdown import gates
 
     torch.manual_seed(0)
     m = MatVec(16).to(torch.bfloat16)

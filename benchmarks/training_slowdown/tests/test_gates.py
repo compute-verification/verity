@@ -1,10 +1,10 @@
-"""te_core.gates: every price is a Definition's whole gate count, the one circuit-check pins the ANDs of."""
+"""training_slowdown.gates: every price is a Definition's whole gate count, the one circuit-check pins the ANDs of."""
 import json
 from pathlib import Path
 
 import pytest
 
-from te_core import gates
+from training_slowdown import gates
 
 BOOLEAN = Path(__file__).resolve().parents[4] / "verity" / "ml" / "circuits" / "ops" / "boolean"
 
@@ -40,7 +40,7 @@ def test_kinds_and_assumptions():
     assert gates.kind_of("fwd", "theta", "_scaled_mm") == ("gemm/e4m3", "")
     kind, note = gates.kind_of("fwd", "theta", "_int_mm", "int8")
     assert kind == "gemm/bf16" and "no Definition" in note
-    for op in ("mv", "addmv", "addmv_"):   # matrix-vector products, which te_core.capture.structure counts as GEMMs
+    for op in ("mv", "addmv", "addmv_"):   # matrix-vector products, which training_slowdown.capture.structure counts as GEMMs
         assert gates.kind_of("forward", "", op, "bfloat16") == ("gemm/bf16", "")
     assert gates.kind_of("forward", "", "mvlgamma", "bfloat16")[0] == "elementwise/bf16"
 

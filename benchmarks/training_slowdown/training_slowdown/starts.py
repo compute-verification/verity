@@ -1,6 +1,6 @@
 """Describe a start for the starts registry that run.py and launch.py read.
 
-    python -m te_core.starts --name small --theta THETA.pt --factory model_starts:small [--ctx 1024] [--vocab 50304] \\
+    python -m training_slowdown.starts --name small --theta THETA.pt --factory model_starts:small [--ctx 1024] [--vocab 50304] \\
         [--val-bpb X] >> entries.jsonl
 
 `--factory MODULE:FUNCTION` returns the start's model, untrained; θ is loaded into it and its forward MACs per token at

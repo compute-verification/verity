@@ -1,13 +1,13 @@
 """The policy plane: the (c, k) values the formalism scores every record at, and a start's reference shapes
 (c in Boolean gates, k in bits).
 
-    python -m te_core.policy [START ...]    # each start's reference shapes and grid
+    python -m training_slowdown.policy [START ...]    # each start's reference shapes and grid
 
 A start's shape (`starts_store.json`'s `shape`: d_model, n_layer, vocab, ctx, parameters, the tokens it was trained
 on, its forward MACs per token as the harness counts them) gives the two reference shapes and the reference policy:
 
 - **inference block** (one token): c = one token's forward at full context, w_fwd = forward MACs per token at the
-  bf16 GEMM price (te_core.gates); k = what that block reads beyond θ: its token id, ⌈log2 V⌉ bits, and its context's
+  bf16 GEMM price (training_slowdown.gates); k = what that block reads beyond θ: its token id, ⌈log2 V⌉ bits, and its context's
   keys and values, (ctx − 1)·2·n_layer·d_model bf16 values;
 - **reference** policy (the experiments' E0):
   c = 4096·w_fwd, one 4,096-token session per block, and k = 10 kB, 80,000 bits, where honest serving still passes Fit
@@ -30,13 +30,13 @@ operands:
 - each layer's matrices, attention's four (4·d²) and the SwiGLU MLP's three (3·d·d_ff), at every token;
 - the LM head over the tied embedding (d·V), at every token: the model's forward computes logits at each position;
 - attention's score and value products (QKᵀ and AV, d each per position attended, every layer): a prompt token
-  attends over the whole prompt, as te_core.flops counts the causal SDPA (torch's formula, the full score matrix,
+  attends over the whole prompt, as training_slowdown.flops counts the causal SDPA (torch's formula, the full score matrix,
   which every counted |C| uses), and the j-th output token over the prompt and the output tokens up to itself, its
   KV cache;
 
-each MAC at the served precision's GEMM price (`SERVED_PRECISION`, bf16: te_core.gates' 1,480.125 gates). The
+each MAC at the served precision's GEMM price (`SERVED_PRECISION`, bf16: training_slowdown.gates' 1,480.125 gates). The
 elementwise ops (RoPE, the norms' gains, SwiGLU's product) are left out: under 0.1% of a token's counted MACs, and
-their count moves with te_core.flops' version (the starts' `forward_macs_per_token` exceed the products by 27,392
+their count moves with training_slowdown.flops' version (the starts' `forward_macs_per_token` exceed the products by 27,392
 at s50 and 40,192 at s-t20).
 
 The console's dials move the reference model over `REFERENCE_SIZES` (20M to 1B at vocab 50,304, each a shape `SHAPES`
@@ -115,12 +115,12 @@ def session(params: int, in_tokens: int, out_tokens: int, shape: dict | None = N
     the session's input ids in bits (k)."""
     shape = SHAPES.get(params) if shape is None else shape
     if shape is None:
-        raise ValueError(f"te_core.policy: no stated shape for {params:,} parameters (SHAPES: "
+        raise ValueError(f"training_slowdown.policy: no stated shape for {params:,} parameters (SHAPES: "
                          f"{', '.join(f'{p:,}' for p in SHAPES)}); pass its shape")
     if parameters(shape) != params:
-        raise ValueError(f"te_core.policy: the shape {shape} has {parameters(shape):,} parameters, not {params:,}")
+        raise ValueError(f"training_slowdown.policy: the shape {shape} has {parameters(shape):,} parameters, not {params:,}")
     if in_tokens < 1 or out_tokens < 0:
-        raise ValueError(f"te_core.policy: a session has at least one input token, not {in_tokens} in, {out_tokens} out")
+        raise ValueError(f"training_slowdown.policy: a session has at least one input token, not {in_tokens} in, {out_tokens} out")
     d, n, f, v = shape["d_model"], shape["n_layer"], shape["d_ff"], shape["vocab"]
     tokens = in_tokens + out_tokens
     attended = in_tokens * in_tokens + out_tokens * in_tokens + out_tokens * (out_tokens + 1) // 2
@@ -176,7 +176,7 @@ def ladder_fit(path: Path):
     loss between neighbours and None outside their span."""
     pts = sorted((p["loss"], math.log(p["forward_gates_per_token"])) for p in json.loads(path.read_text())["points"])
     if len(pts) < 2:
-        raise SystemExit(f"te_core.policy: {path} has {len(pts)} ladder points, not at least two")
+        raise SystemExit(f"training_slowdown.policy: {path} has {len(pts)} ladder points, not at least two")
 
     def fit(loss: float) -> float | None:
         for (l1, g1), (l2, g2) in zip(pts, pts[1:]):

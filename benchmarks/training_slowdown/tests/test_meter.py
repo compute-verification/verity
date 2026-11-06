@@ -1,7 +1,7 @@
 """covert_witness's training-FLOP meter (`prepare.train_flops`) on a small tied-embedding start: an adapter on the tied
 embedding is trained from the lookup, so its pass runs the whole backward, and the meter's lowest trained node is the one
 `deep_share` finds for the same tensor. On an lf model, and at v3's starts' shapes, the meter is the harness's own
-count (`te_core.flops`) of a training step's matmuls and attention, so a planner that sizes its steps by it and the
+count (`training_slowdown.flops`) of a training step's matmuls and attention, so a planner that sizes its steps by it and the
 `flop_budget` check read one count."""
 import importlib.util
 from pathlib import Path
@@ -13,7 +13,7 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 from torch.utils import flop_counter
 
 from model import SIZES, Size
-from te_core.flops import Counter
+from training_slowdown.flops import Counter
 
 _spec = importlib.util.spec_from_file_location("cw_prepare_meter", Path(__file__).resolve().parents[2] / "prepare.py")
 prepare = importlib.util.module_from_spec(_spec)
@@ -64,7 +64,7 @@ def test_an_adapter_on_a_gain_is_refused(name):
 
 @pytest.fixture
 def gpu_flash(monkeypatch):
-    """The CPU flash attention kernel priced as te_core.flops prices the GPUs' (torch's registry has no formula for the
+    """The CPU flash attention kernel priced as training_slowdown.flops prices the GPUs' (torch's registry has no formula for the
     CPU one before 2.15, and from 2.15 it is the same one)."""
     aten = torch.ops.aten
     for cpu, gpu in ((aten._scaled_dot_product_flash_attention_for_cpu, aten._scaled_dot_product_flash_attention),
@@ -75,7 +75,7 @@ def gpu_flash(monkeypatch):
 
 def counted(config: dict, trained: list[str], ctx: int) -> tuple[int, int]:
     """One `ctx`-token training step of the lf model `config` with `trained` its trainable tensors: 2x the matmul MACs
-    (weight matmuls and attention) te_core.flops counts on CPU under flash attention, the GPUs' kernel (`gpu_flash`),
+    (weight matmuls and attention) training_slowdown.flops counts on CPU under flash attention, the GPUs' kernel (`gpu_flash`),
     with no op it can't price, and `train_flops`' figure for the same step."""
     shapes = prepare.architecture(config)
     g = torch.Generator().manual_seed(1)

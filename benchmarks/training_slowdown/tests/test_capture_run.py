@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from models import TinyLM, lm_loss
-from te_core.capture import capture_run, capture_step, schedule_updated
+from training_slowdown.capture import capture_run, capture_step, schedule_updated
 
 B, S = 2, 4
 

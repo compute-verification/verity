@@ -4,10 +4,10 @@ import json
 import pytest
 import torch
 
-from te_core import run as te_run
-from te_core.counterexample import check
-from te_core.gates import of_log
-from te_core.ledger import Ledger, ingest
+from training_slowdown import run as te_run
+from training_slowdown.counterexample import check
+from training_slowdown.gates import of_log
+from training_slowdown.ledger import Ledger, ingest
 
 MODEL = '''
 import torch
@@ -34,7 +34,7 @@ def batch(step):
 '''
 
 SGD = MODEL + '''
-from te_core.codecs import Identity, Plan
+from training_slowdown.codecs import Identity, Plan
 
 def train(te):
     m = te.load(Tiny())
@@ -50,7 +50,7 @@ def train(te):
 '''
 
 MEZO = MODEL + '''
-from te_core.codecs import Plan, SeedReplay, derive_seed
+from training_slowdown.codecs import Plan, SeedReplay, derive_seed
 
 EPS, LR = 1e-3, 1e-2
 

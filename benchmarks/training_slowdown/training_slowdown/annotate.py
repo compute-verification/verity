@@ -1,15 +1,15 @@
 """The maximal structure annotation A of a run, read from the harness's count (flops.Counter.record) and its traced step
-circuit (te_core.capture, `with_structures`), never from the program.
+circuit (training_slowdown.capture, `with_structures`), never from the program.
 
 - multiplication blocks: MACs, as counted;
 - token blocks: one token's computation in one step;
-- updated blocks U (te_core 4.0, after Daniel's smell check): the forward pass's MACs with a token-indexed result and
+- updated blocks U (training_slowdown 4.0, after Daniel's smell check): the forward pass's MACs with a token-indexed result and
   an update-dependent operand, one that depends, through any path of the traced step graph, on a value the run produced
   that persists across steps (the slow weights, optimizer state, any buffer carried from one step to the next that
   isn't θ or token data). A gather of a dependent table makes its rows dependent with no MAC; a cache computed only
   from θ and token data is not dependent. So the merged (W + BA)x and unmerged Wx + BAx forms of one update have the
   same U up to the adapter products. Backward products are left out of U; the training formalism's affected gates A,
-  which count them and the optimizer's, are measured on the step's circuit (te_core.capture.circuit, through
+  which count them and the optimizer's, are measured on the step's circuit (training_slowdown.capture.circuit, through
   `with_structures`).
 
 Per step t it gives the updated MACs, the updated MACs per token block (the smaller of the per-row sum over updated nodes
@@ -20,7 +20,7 @@ with at least D_min updated MACs upstream) and the traced circuit's narrowest cu
 gradient-side computation and its new persistent values, per updated MAC per token block (`beta`, recorded; the formula
 that read it is retired; None for a structure the capture didn't trace).
 
-A record the runtime counter wrote holds the counter's own U (the MACs whose weight operand differs from θ, te_core
+A record the runtime counter wrote holds the counter's own U (the MACs whose weight operand differs from θ, training_slowdown
 before 4.0) and no cut; its MAC count stays |C|.
 """
 from __future__ import annotations
@@ -99,11 +99,11 @@ def _step(rec: dict, struct: dict) -> StepAnnotation:
 
 def with_structures(record: dict, traced: dict[str, dict]) -> dict:
     """A record counted by the runtime counter with its U, cut and training-formalism quantities from the traced step
-    circuit: `traced` maps a structure id of the record to a traced structure (te_core.capture's
-    `StepGraph.structure()`, or a recorded script's, `te_core.capture.script`), whose per-token rows are scaled to each
+    circuit: `traced` maps a structure id of the record to a traced structure (training_slowdown.capture's
+    `StepGraph.structure()`, or a recorded script's, `training_slowdown.capture.script`), whose per-token rows are scaled to each
     step's tokens. Only steps whose own structure has updated MACs take its U and cut (a step before the run's first
     update reads θ only), and |C| stays the runtime count. A traced structure's `formalism`
-    (te_core.capture.circuit.measure) gives its steps' σ, affected share, token factor and Δ_grad (te_core.formalism's
+    (training_slowdown.capture.circuit.measure) gives its steps' σ, affected share, token factor and Δ_grad (training_slowdown.formalism's
     `TRACED_STRUCTURE`), a step that updates nothing included where a step that does is traced too: its Δ_grad, 0, is
     a measurement, not a missing value. The record's `formalism` block takes the per-token quantities of the updating
     traced structure its steps spend the most MACs in (`formalism.of_trace`), with its `trace`'s read-back lists
@@ -146,14 +146,14 @@ def with_structures(record: dict, traced: dict[str, dict]) -> dict:
     return out
 
 
-#: the first te_core whose counter prices a lookup of an updated table (`flops.gather_macs`)
+#: the first training_slowdown whose counter prices a lookup of an updated table (`flops.gather_macs`)
 LOOKUPS_FROM = (3, 6)
 
 _BITS = {"float64": 64, "float32": 32, "bfloat16": 16, "float16": 16}
 
 
 def with_lookups(record: dict, tables: list[str]) -> dict:
-    """A record counted before te_core 3.6 with its token lookups added as 3.6's counter has them: in each step whose
+    """A record counted before training_slowdown 3.6 with its token lookups added as 3.6's counter has them: in each step whose
     updated weights include a table `tables` names (regexes: the start's lookup), a node at position 0 of
     `flops.gather_selects(rows) · cols` MACs per token, with every other updated node downstream of it (each reads the
     lookup's output) and the lookup's MACs in the step's count. A lookup of an updated table the record doesn't list (an

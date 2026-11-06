@@ -4,12 +4,12 @@ Every matmul-class node (``mm``, ``addmm``, ``bmm``, ``baddbmm``, ``addbmm``, ``
 ``linear``, ``matmul``, ``convolution`` and ``convolution_backward``'s two GEMMs, ``_scaled_mm``, ``_int_mm``) is one
 `Matmul` per GEMM it runs, with dims (batch, m, k, n), MACs = batch·m·k·n, and which token axes index each dim (from
 the varied captures, `trace`). A matmul-like op outside that list is refused. `macs` is the GEMMs' MACs. The rest of
-the step's share of |C| is counted by te_core.flops's rule, so `c_macs` matches the harness's count: one MAC per output
+the step's share of |C| is counted by training_slowdown.flops's rule, so `c_macs` matches the harness's count: one MAC per output
 element of each elementwise multiplication (`elementwise_macs`: ``mul``, ``div``, ``addcmul``, ``addcdiv``, ``lerp``,
 ``add`` and ``sub`` with a scale, their in-place and ``_foreach_`` forms, fused optimizer steps at their unfused forms'
 multiplications), dense linear algebra at n³ per matrix (`approx_macs`), and any other forward op that combines an
 activation with a parameter that differs from θ (a norm with a trained gain, an add then ``exp``) at one MAC per element
-of its largest operand or result (only its indices and result, for a gather), as te_core.flops counts it.
+of its largest operand or result (only its indices and result, for a gather), as training_slowdown.flops counts it.
 
 Terms are the training ontology's, with T2 read as Daniel's smell check set it: deep use is about activations that
 depend on the run's own persistent values, however the circuit is written.
@@ -28,7 +28,7 @@ depend on the run's own persistent values, however the circuit is written.
   data is not.
 - **Updated**: a MAC of the forward (outside autograd's backward and an optimizer's step) with a token-indexed result and
   an update-dependent operand: a GEMM (role ``updated``), an elementwise multiplication or a counted op of
-  te_core.flops's rule (`updated_elementwise`, one `Matmul` of part ``elementwise`` per node). Backward products against
+  training_slowdown.flops's rule (`updated_elementwise`, one `Matmul` of part ``elementwise`` per node). Backward products against
   the same values are left out (counting them halves β per MAC and doubles φ, leaving φβ unchanged and D ≥ k/β harder).
   **Producing**: a parameter-indexed result that reaches the final value of a parameter the step writes through
   weight-shaped values only (dW into the optimizer's state and the parameter; a matrix optimizer's own products).
@@ -47,7 +47,7 @@ depend on the run's own persistent values, however the circuit is written.
   (through casts). A circuit that sends its update through a sign bit with error feedback, a top-k list or low-rank
   factors has that cut; a dense update's is its elements at that width. `beta` is the cut over the step's updated MACs
   per token.
-- A program recorded from its start (`te_core.capture.script`, `Trace.region`) is measured at one step of its history,
+- A program recorded from its start (`training_slowdown.capture.script`, `Trace.region`) is measured at one step of its history,
   and its slots are whatever it carries: a value is update-dependent when it depends on an earlier step's token data
   (the run's weights, optimizer state and error feedback, kept in place, rebound or written by hand; a cache made from
   θ and this step's tokens is not), and the cut's sinks are the update-dependent values the step makes that the next
@@ -70,11 +70,11 @@ from typing import Any
 import numpy as np
 import torch
 
-from te_core.capture.circuit import ATTR, CARRIED, COMPUTED, OTHER_INPUT, RANDOM, TOKEN_INPUT, Net, StepCircuit, measure
-from te_core.capture.trace import BACKWARD, PHASE, CaptureRefused, Trace
-from te_core.flops import (ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, GATHERS, GEMM_LIKE, LINALG_NAMES, NOT_GEMM, SCALED_NAMES,
+from training_slowdown.capture.circuit import ATTR, CARRIED, COMPUTED, OTHER_INPUT, RANDOM, TOKEN_INPUT, Net, StepCircuit, measure
+from training_slowdown.capture.trace import BACKWARD, PHASE, CaptureRefused, Trace
+from training_slowdown.flops import (ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, GATHERS, GEMM_LIKE, LINALG_NAMES, NOT_GEMM, SCALED_NAMES,
                            TOKEN_INDEX, _is_view, gather_macs)
-from te_core.gates import kind_of, per_mac
+from training_slowdown.gates import kind_of, per_mac
 
 __all__ = ["CLASSES", "Matmul", "StepGraph"]
 
@@ -96,7 +96,7 @@ _SHAPE_ONLY = {"ones_like", "zeros_like", "empty_like", "full_like", "new_zeros"
 #: in-place ops that write every element of what they write without reading it
 _OVERWRITE = {"copy_", "fill_", "zero_", "set_", "normal_", "uniform_", "bernoulli_", "random_", "exponential_",
               "geometric_", "log_normal_", "cauchy_", "_foreach_copy_", "_foreach_zero_"}
-#: matmul-like names that `_gemms` must account for (te_core.flops's); any other op with one of these in its name is refused
+#: matmul-like names that `_gemms` must account for (training_slowdown.flops's); any other op with one of these in its name is refused
 _GEMM_LIKE, _NOT_GEMM = GEMM_LIKE, NOT_GEMM
 _ELEMENTWISE, _SCALED, _FUSED, _LINALG = ELEMENTWISE_NAMES, SCALED_NAMES, FUSED_OPTIMIZER_MACS, LINALG_NAMES
 _TOKEN_INDEX = {p.__name__ for p in TOKEN_INDEX}
@@ -218,7 +218,7 @@ def _numel(x) -> int:
 
 
 def _other_macs(node) -> tuple[int, str]:
-    """A non-GEMM node's MACs by te_core.flops's rule (module docstring): (MACs, "elementwise" | "approx" | "")."""
+    """A non-GEMM node's MACs by training_slowdown.flops's rule (module docstring): (MACs, "elementwise" | "approx" | "")."""
     if node.op != "call_function" or not isinstance(node.target, torch._ops.OpOverload):
         return 0, ""
     name, a = _pk(node.target), node.args
@@ -234,7 +234,7 @@ def _other_macs(node) -> tuple[int, str]:
 
 
 def _work(node) -> int:
-    """A non-GEMM node's work by te_core.flops's rule (`flops._work`): one per element of its largest operand or result,
+    """A non-GEMM node's work by training_slowdown.flops's rule (`flops._work`): one per element of its largest operand or result,
     of its index operands and result for a gather."""
     name = _pk(node.target)
     args = list(node.args[1:]) + list(node.kwargs.values()) if name in _TOKEN_INDEX else list(node.args) + list(node.kwargs.values())
@@ -585,7 +585,7 @@ class StepGraph:
     #: (value, bits) on one narrowest cut, widest first; the dependent slots whose new values are the cut's sinks
     cut: list = field(default_factory=list)
     sinks: list = field(default_factory=list)
-    #: a recorded program's measured step as a circuit (`te_core.capture.circuit`), and the formalism's quantities on it
+    #: a recorded program's measured step as a circuit (`training_slowdown.capture.circuit`), and the formalism's quantities on it
     circuit: StepCircuit | None = field(default=None, repr=False)
     formalism: dict | None = None
     _inputs: Any = field(default=None, repr=False)
@@ -729,7 +729,7 @@ class StepGraph:
                   and isinstance(a.meta.get("val"), torch.Tensor) and any(dep[x] for x in flow.reads.get((n, a), ()))]
             return min(ws, default=0)
 
-        # GEMMs and their dims in every capture; each counted op's gates at its Definition's price (te_core.gates)
+        # GEMMs and their dims in every capture; each counted op's gates at its Definition's price (training_slowdown.gates)
         node_gates: dict = {}
 
         def priced(n, macs, dtype, kind=None, width=16) -> None:
@@ -793,7 +793,7 @@ class StepGraph:
             weight = min(classes, key=lambda c: _RANK[c]) if classes else "constant"
             recs.append([n, g, tdims, classes, names, result, role, weight, rv])
 
-        # |C|'s other forward work (te_core.flops): an activation combined with an operand that differs from θ, at its
+        # |C|'s other forward work (training_slowdown.flops): an activation combined with an operand that differs from θ, at its
         # elementwise multiplications, else its work (`_work`); an updated source gathered by token data is the
         # circuit's gather (`gather_macs`). The updated ones: an elementwise or counted op whose result is
         # token-indexed with an update-dependent operand; a gather moves a dependent table's rows with no MAC.
@@ -970,14 +970,14 @@ class StepGraph:
 
     @property
     def c_macs(self) -> int:
-        """The step's share of |C| as te_core.flops counts it: GEMMs, elementwise multiplications, linear algebra."""
+        """The step's share of |C| as training_slowdown.flops counts it: GEMMs, elementwise multiplications, linear algebra."""
         return self.macs + self.elementwise_macs + self.approx_macs
 
     def _updated(self) -> list[Matmul]:
         return [m for m in self.matmuls + self.updated_elementwise if m.role == "updated" and m.phase == "forward"]
 
     def structure(self) -> dict:
-        """The step in te_core.flops's record form (`Counter.record()["structures"][sid]`), which te_core.annotate reads:
+        """The step in training_slowdown.flops's record form (`Counter.record()["structures"][sid]`), which training_slowdown.annotate reads:
         `updated` holds one row [MACs per token, updated MACs per token upstream, MACs, tokens, width] per updated MAC node,
         sorted by (upstream, MACs per token), the width its update-dependent operands' narrowest; `beta` the cut's bits
         per updated MAC per token (None: no updated MAC), `cut_bits` the cut; `log` counts every GEMM by (phase, role,
@@ -1142,7 +1142,7 @@ def _dtype_name(x) -> str | None:
 
 
 def _storage_positions(v: torch.Tensor) -> np.ndarray:
-    """The storage positions a (fake) tensor's elements sit at, as te_core.flops's `read_positions`."""
+    """The storage positions a (fake) tensor's elements sit at, as training_slowdown.flops's `read_positions`."""
     pos = np.array(int(v.storage_offset()), dtype=np.int64)
     for n, s in zip(v.shape, v.stride()):
         pos = pos[..., None] + np.arange(int(n), dtype=np.int64) * int(s)
@@ -1151,7 +1151,7 @@ def _storage_positions(v: torch.Tensor) -> np.ndarray:
 
 def _step_circuit(flow: _Flow, nodes: list, region: int, dep: list[bool], carried: list[int], node_gates: dict,
                   step_tokens: int, positions: int = 0) -> StepCircuit:
-    """The measured step `region` as a `StepCircuit` (te_core.capture.circuit): its values and the carried ones it reads,
+    """The measured step `region` as a `StepCircuit` (training_slowdown.capture.circuit): its values and the carried ones it reads,
     each op's gates split over its values by elements, every read of token data through a storage a step-R token
     input owns or by a token-index op (a sampled id's lookup's ids, ``meta["te_sampled"]``, token data as an input's
     are), and (with `positions`, the context's length, from a trace whose variant halves it) which values are

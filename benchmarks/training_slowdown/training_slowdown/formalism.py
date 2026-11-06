@@ -1,6 +1,6 @@
 """A record's slowdown ρ at a policy (c, k), by the training formalism v2: its
-theorems Fit and Slowdown per record, the attack side beside them, and the quantities Security's S = W*/H reads (te_core.frontier). |C|, c, w and d are Boolean gates
-(te_core.gates), every other quantity bits.
+theorems Fit and Slowdown per record, the attack side beside them, and the quantities Security's S = W*/H reads (training_slowdown.frontier). |C|, c, w and d are Boolean gates
+(training_slowdown.gates), every other quantity bits.
 
 Measured per record (`Measured`), each with its source in `labels` ("measured: ...", "counted: ...", "stub: ...",
 "assumption (A1): ..." or "assumption (A1'): ..." for a profile the claim takes from an assumption, or "upper bound
@@ -45,7 +45,7 @@ At (c, k), with s = c/w, w = token_gates / tokens (each part's for Fit; the reco
 Where Fit holds, Δ + sτ ≤ k bounds u_in by k through the cap, so x0's bound is 1 and Slowdown's bound 0: the two never
 disagree.
 
-**The context charge** (`Measured.context`, te_core.rescore's `--charge-context`; a sensitivity for A1, off by default,
+**The context charge** (`Measured.context`, training_slowdown.rescore's `--charge-context`; a sensitivity for A1, off by default,
 the coordinator's ask of 3 Nov). A1 charges a block a per token it serves. The charge adds, for each token whose
 affected work a block does without computing the token from its inputs, at each layer the block works on for it, the
 keys and values of every earlier token of the sequence at that layer that the block doesn't compute itself:
@@ -91,7 +91,7 @@ most that. The kinds:
   bits a trained weight (`CODE_LABEL`), an activation's at most β(k) (`BETA_K`, `BETA_K_LABEL`), the casts of one
   value counting as one word. b_y is M's least output width and F = 2/√3 where M holds a backward product (a layer's
   forward, input-gradient and weight-gradient products share arrays), √(2(1 − 1/ω)) where a step's array graph has a
-  clique of ω > 3 (te_core.arrays), else 1, in both α and the outputs' term. The
+  clique of ω > 3 (training_slowdown.arrays), else 1, in both α and the outputs' term. The
   term is the best over three choices of M (`HE_SUBSETS`: M, M less the contractions too short for the main term to
   outweigh the outputs', and the weight gradients alone, at F = 1), each at the best β_w·β_x threshold it can take
   (`he_figure`), never below 0. It needs no whole-making system, no P-cell (a block's split MACs are charged k a block)
@@ -101,14 +101,14 @@ most that. The kinds:
   log doesn't keep whether an operand depends on the update, `LOG_UNKNOWN`), on rows that predate `SYSTEM_FROM`
   (`HE_RETRACE`), past `BETA_K`'s last k (`HE_PAST`), from `HEAD_K` on a model's products (`HE_HEAD`), on a
   step whose elementwise ops fan out into an operand (`p_match_reason`) and on a step whose array graph puts two of
-  M's products on one pair of arrays or has one of a value with its copy or recomputation (te_core.arrays'
+  M's products on one pair of arrays or has one of a value with its copy or recomputation (training_slowdown.arrays'
   `refusal`), and never priced on a
   trace of another program (`FRESH_OTHER`). The products come from `products_of` (steps captured by capture_step or
-  capture_fn) or `products_of_trace` (the product rows a recorded program's trace keeps from te_core 4.8 on,
-  te_core.capture.products), each at the k it classifies them at, a trace's at every k of the console's dial too
+  capture_fn) or `products_of_trace` (the product rows a recorded program's trace keeps from training_slowdown 4.8 on,
+  training_slowdown.capture.products), each at the k it classifies them at, a trace's at every k of the console's dial too
   (`at`). At a fixed k the term is linear in c, so the console's dial reads it as c times a number for each k it has
-  products at (`fresh_per_c`, in te_core.panels' rho_inputs). The old figure (`fresh_products`, the sensitivity
-  fresh_old) is te_core.io_bound's bound with Λ proved on the same products: the Loomis-Whitney cap amortized over
+  products at (`fresh_per_c`, in training_slowdown.panels' rho_inputs). The old figure (`fresh_products`, the sensitivity
+  fresh_old) is training_slowdown.io_bound's bound with Λ proved on the same products: the Loomis-Whitney cap amortized over
   the partition, with each subset's whole-making factor (io_bound's `whole_chain_of`), void (`FRESH_VOID`) where a
   counted product is fed by a cycle that diverges, with P-cell where `P_CELL`, and on io_bound's one-class rule for
   products with no system (`ONE_CLASS`); it rests on P-width extended to every value a block reads while making
@@ -135,7 +135,7 @@ ones (None, and so ρ where Fit fails, where none is). Beside the kinds, never i
 (R) and (U) hold only for partitions split by tokens, not by layers or tensors (a block holding only frozen layers'
 work passes no partial), reading B isn't A1's approved reading, per_gate holds only for blocks that are no union of
 witnesses, and the old products figures on P-width extended, which honest circuits refute, so they aren't lower
-bounds on their own without its premise; `kinds` refuses them. Each result is labelled "te_core VERSION, reading A".
+bounds on their own without its premise; `kinds` refuses them. Each result is labelled "training_slowdown VERSION, reading A".
 `published` is the console's ρ (coordinator 08:26Z), under reading A where a row's token kind is measured (its
 trace's entries and an op log), else reading B's token form, a target: Fit's c/(c − d) where it holds; else the max of
 the measured terms where it exceeds 1, partial where a kind is unmeasured; else None where a kind is unmeasured; else
@@ -146,7 +146,7 @@ the term is measured), and the reduction and update sensitivities with the old p
 **Reading A** (A1's approved reading): every block I reads |in(I) \\ θ| ≥ u_I + Σ_T a_T(e_T(I)), u_I the
 update bits I's work reads, counted once, and a_T(e) the bits of token T's computed state where I's work on T begins,
 the earlier tokens' keys and values that work reads and doesn't compute included. A1's values are the least reads any
-checked witness achieves (a witness block is a set of the trace's ops, te_core.capture.circuit.check counts its gates
+checked witness achieves (a witness block is a set of the trace's ops, training_slowdown.capture.circuit.check counts its gates
 and reads), and the default packer's witnesses are of two sorts. Runs of one traced token's path in segments (the
 trace's `entries`, which `check` counts the same): a run block holding a gate at segment s and position p holds at
 most M·W_ij of a run i..j ∋ s, W_ij the run's gates a token and M (`_span_tokens`) the most tokens such a block holds:
@@ -154,7 +154,7 @@ at most C0 = its gates over W_ij, and reads U + A·M + its context ≤ k, U the 
 and token ids at ⌈log2 V⌉ a token, and the context kf a position before and kb a position after p in p's sequence
 outside the block's span, each read once a block. A block of c gates reads the run's update cut; where Δ counts
 (d < c), one reading the code reads min(cut, Δ) and has c − d gates (c for the token kind). And matrix-product tiles
-of the record's op log (te_core.tiles; `Measured.ops`): a box of one product's MACs reading only the operand
+of the record's op log (training_slowdown.tiles; `Measured.ops`): a box of one product's MACs reading only the operand
 coordinates it uses, weight-gradient tiles among them; a matmul is one op in the trace, so a tile's reads are counted
 from its op's dims and passed widths rather than by `check`. `packer` gives the token kind's term from both, closed
 under unions: a block's work is a union of witnesses, each part reading at most the block's k bits, so it holds at
@@ -168,15 +168,15 @@ A each, as if it computed their sequences' context; values computed from θ and 
 takes either operand free); every inner coordinate may begin a sum.
 
 Where the quantities come from (`measure`): a row's `formalism` block, which ingest writes from the run record
-(`of_record`) or a re-score attaches (te_core.rescore), else the stubs below from a v2.3 row's own fields. te_core
-4.0 measures them on the record's traced step (te_core.capture.circuit, `TRACED` its labels): each traced structure's
+(`of_record`) or a re-score attaches (training_slowdown.rescore), else the stubs below from a v2.3 row's own fields. training_slowdown
+4.0 measures them on the record's traced step (training_slowdown.capture.circuit, `TRACED` its labels): each traced structure's
 σ, affected share, token factor and Δ_grad (`TRACED_STRUCTURE`), and the record's τ (`tau_ids` token positions read
 per consumed token at ⌈log2 V⌉ bits, plus `tau_other_bits`), a, u_in, u and t (`of_trace`, with every measured field
 under `trace`). Δ stays 8 |E|, the submitted code: the trace's own encoding of θ' (`trace.update_cut_bits`) is the
 carried state, θ' in full. A run record may also give its own block, {"parts": [...], "tau_bits", "a_bits", "u",
 "u_in", "u1_bits", "tail_share", "delta_bits", "delta_t_bits", "decoder_gates", "ops", "products", "labels"}, which
 `of_record` passes through field by field. Reading A's tiles read the block's `ops`, else the row's `macs_log`
-(te_core.tiles). The trace's Δ_grad leaves θ' out of its carried state (a latent the step quantizes is θ' as the step reads it), so
+(training_slowdown.tiles). The trace's Δ_grad leaves θ' out of its carried state (a latent the step quantizes is θ' as the step reads it), so
 Δ_t + Δ_grad counts the latents once.
 
 **The decoder** (`decoder`; seed-mezo's 04:15Z finding): d is the block's `decoder_gates` where it gives one,
@@ -187,8 +187,8 @@ directly: rebuild_macs 0, or a full or model E), and unmeasured (Fit refused) wh
 
 **Refusals** (`refusal`, `measure` raising `Refused`; the same finding): a traced row's measured quantities are refused,
 never scored, with the reason, when
-- its trace lists no read-backs: it was traced before te_core 4.2, whose capture lists them (unchecked);
-- its capture lists a read-back that decides what the graph can't carry (`trace.data_dependent`, te_core.capture.script:
+- its trace lists no read-backs: it was traced before training_slowdown 4.2, whose capture lists them (unchecked);
+- its capture lists a read-back that decides what the graph can't carry (`trace.data_dependent`, training_slowdown.capture.script:
   a Python clip or branch on a read-back loss): the update the trace shows is the stand-in's, not the run's;
 - a Python number is folded over steps (`trace.carried_scalars`, an EMA of read-back estimates kept as a float): the
   trace carries every earlier step's read-back, so its Δ_grad grows with the step;
@@ -236,12 +236,12 @@ class Measured:
     tail_share: float = 0.0
     context: dict | None = None
     delta_t_bits: float | None = None
-    #: reading A's inputs: the trace's `entries` (te_core.capture.circuit) and `id_bits`, ⌈log2 V⌉ (None: traced before
-    #: te_core 4.4, or not traced)
+    #: reading A's inputs: the trace's `entries` (training_slowdown.capture.circuit) and `id_bits`, ⌈log2 V⌉ (None: traced before
+    #: training_slowdown 4.4, or not traced)
     entries: dict | None = None
-    #: the record's ops as reading A's tiles read them (te_core.tiles' `of_log` or `of_graph`; None: no op log)
+    #: the record's ops as reading A's tiles read them (training_slowdown.tiles' `of_log` or `of_graph`; None: no op log)
     ops: list | None = None
-    #: the fresh-products kind's inputs, the run's products of two fresh operands as te_core.io_bound reads them
+    #: the fresh-products kind's inputs, the run's products of two fresh operands as training_slowdown.io_bound reads them
     #: (`products_of` or `products_of_trace`: {"k", "order", "products"}; None: no captured step and no trace product
     #: rows)
     products: dict | None = None
@@ -529,7 +529,7 @@ def _antitone(a: np.ndarray, wa: np.ndarray, b: np.ndarray, wb: np.ndarray) -> f
     return float((v[keep] * width[keep]).sum())
 
 
-#: the trace's segment phases (te_core.capture.circuit) as the op log's
+#: the trace's segment phases (training_slowdown.capture.circuit) as the op log's
 SEGMENT_PHASE = {0: "fwd", 1: "bwd"}
 
 
@@ -538,7 +538,7 @@ def packer(m: Measured, c: float, k: float, decoder: bool = True) -> float | Non
     block holds, its work a union of the default packer's witnesses, each part reading at most the block's k bits: per
     block kind (`_block_kinds`, with `decoder` one reading the update code at c − d gates), at most its gates and at
     most its kind's best run block (`_run_caps`: a union of run blocks holds no more than the best, since a token's
-    entry costs add and the union reads every run's update cut) plus the tiles beside it (te_core.tiles.held, the log
+    entry costs add and the union reads every run's update cut) plus the tiles beside it (training_slowdown.tiles.held, the log
     scaled to |C|). None (unmeasured) where the record has no op log or no entries: A1's values then come from runs
     alone, a family without matrix-product tiles. Infinite where no block holds an affected gate."""
     e, ops = m.entries, m.ops
@@ -557,7 +557,7 @@ def packer(m: Measured, c: float, k: float, decoder: bool = True) -> float | Non
 def per_gate(m: Measured, c: float, k: float, decoder: bool = False) -> float | None:
     """`packer`'s term with each gate at the best witness that holds it, not closed under unions (`SENSITIVITIES`):
     (c/|C|)·Σ_g 1/cap(g) over the affected gates g of token blocks, cap(g) the most affected gates of any of the
-    default packer's blocks that holds g, a run block's (`_run_caps`) or a tile's (te_core.tiles.caps, at c gates: a
+    default packer's blocks that holds g, a run block's (`_run_caps`) or a tile's (training_slowdown.tiles.caps, at c gates: a
     tile with either operand free covers one reading the code). Which op of the log an affected gate at a segment and
     position is isn't in the trace, so per phase the term takes the joint law of the two caps least favourable to the
     bound (`_antitone`): the run caps over the phase's affected gates (spread by its segments' gates and the
@@ -685,14 +685,14 @@ SENSITIVITIES = {
 #: the orders a circuit may declare its products' output entries summed in, each with its cap's constant; io_bound has
 #: the chain's
 ORDERS = ("chain", "tree")
-#: the reference circuit's order: te_core.gates prices a GEMM MAC as a tensor-core dot cell over its K, each adding
+#: the reference circuit's order: training_slowdown.gates prices a GEMM MAC as a tensor-core dot cell over its K, each adding
 #: into the running sum from a zero 32-bit word, so each output entry is summed along one chain of whole cells
-#: (te_core.io_bound's docstring). P-chain is a premise on the reference circuit, true of it as te_core prices it, as
+#: (training_slowdown.io_bound's docstring). P-chain is a premise on the reference circuit, true of it as training_slowdown prices it, as
 #: P-width is; a run's products take it whatever the recorded graph shows (a GEMM is one op there), and only a circuit
 #: that declares another summation takes another (none does). A split-K kernel only multiplies the chains, which
 #: io_bound's `outputs` counts
 ORDER = "chain"
-#: the first te_core whose capture writes a traced step's product rows (te_core.capture.products' `CAPTURE`)
+#: the first training_slowdown whose capture writes a traced step's product rows (training_slowdown.capture.products' `CAPTURE`)
 PRODUCTS_FROM = "4.8"
 #: why the fresh-products kind is unmeasured on a record with no product rows
 FRESH_UNMEASURED = (f"unmeasured: the record has no product rows (a step captured on its own has them, and a recorded "
@@ -715,7 +715,7 @@ def void_reason(term: float | None, kept: float | None) -> str:
         return "the products count diverges; no subset has a proved bound"
     return f"the products count diverges; best subset {term:.3g}" + (
         "" if kept is None else f", keeping {100 * kept:.3g}% of the step's fresh multiplications")
-#: the first te_core whose capture writes everything the term reads: the whole-making system's rows (each product's
+#: the first training_slowdown whose capture writes everything the term reads: the whole-making system's rows (each product's
 #: `fed` and `P`, the trace's `p_match`) and which operands read a gather's rows (`gathered`)
 SYSTEM_FROM = "4.12.1"
 #: the positions at the start of each sequence that G leaves out of every token-indexed product (`products_of_trace`):
@@ -723,14 +723,14 @@ SYSTEM_FROM = "4.12.1"
 #: windows are cut from it) compute it identically through every layer. A longer shared prefix needs the batch's
 #: tokens, which no trace keeps
 SHARED_PREFIX = 1
-#: the first te_core whose capture checks a step for matrix products written with elementwise ops (te_core.capture.
+#: the first training_slowdown whose capture checks a step for matrix products written with elementwise ops (training_slowdown.capture.
 #: products' `elementwise_products`): a multiplication that broadcasts both its operands (an outer product, or a matrix
 #: product once summed), or a gather, a multiplication and a sum by index, which no product row is, so the whole-making
 #: system misses their classes. 4.12.7's check lost a broadcast at any op but a view, so a map, a copy or a
 #: multiplication by a value outside the update hid it, and it took an embedding's rows for a broadcast
 ELEMENTWISE_FROM = "4.12.9"
-#: the first te_core whose capture records the VERSION of the code that wrote a trace (its products' `capture_code`,
-#: te_core.capture.script's `record`), beside the frozen `capture` tag. It gates nothing, and only a reason names it: a
+#: the first training_slowdown whose capture records the VERSION of the code that wrote a trace (its products' `capture_code`,
+#: training_slowdown.capture.script's `record`), beside the frozen `capture` tag. It gates nothing, and only a reason names it: a
 #: trace without the field was written by 4.12.9 to 4.12.13's code, and those differ only in that the check lists
 #: fewer elementwise products from `LISTS_FEWER` on (a broadcast whose dims a view regroups, a scalar's broadcast, a
 #: lookup of a table the step builds), so a trace that lists none prices the same whichever of them wrote it
@@ -739,7 +739,7 @@ LISTS_FEWER = "4.12.12"
 
 
 def _release(v) -> tuple[int, ...]:
-    """A te_core version as a tuple (none: (0,))."""
+    """A training_slowdown version as a tuple (none: (0,))."""
     return tuple(int(x) for x in str(v).split(".")) if v else (0,)
 #: why the fresh-products kind is unmeasured on a trace captured before `ELEMENTWISE_FROM`
 FRESH_UNCHECKED = (f"unmeasured: the trace was captured before {THE_CODE} {ELEMENTWISE_FROM}'s check for matrix "
@@ -750,8 +750,8 @@ FRESH_UNCHECKED = (f"unmeasured: the trace was captured before {THE_CODE} {ELEME
 FRESH_RETRACE = (f"unmeasured: the trace's product rows predate {THE_CODE} {SYSTEM_FROM}, so they don't say which "
                  "chains make each operand whole or which products read an embedding's rows before any op makes them "
                  f"token-specific, which G drops; retrace the run with {THE_CODE} {ELEMENTWISE_FROM} or later")
-#: the matrix products a trace's rows and a run's op log both give as (m, K, n), by one rule (te_core.capture.
-#: structure's GEMMs and te_core.tiles' `products`): a batched product is left out, since a capture's attention, by
+#: the matrix products a trace's rows and a run's op log both give as (m, K, n), by one rule (training_slowdown.capture.
+#: structure's GEMMs and training_slowdown.tiles' `products`): a batched product is left out, since a capture's attention, by
 #: the math backend, has no counterpart in a run's fused attention
 PLAIN_PRODUCTS = ("mm", "_int_mm", "_scaled_mm", "addmm", "addmm_", "mv", "addmv", "addmv_", "dot", "vdot", "addr",
                   "addr_")
@@ -765,7 +765,7 @@ FRESH_OTHER = ("unmeasured: the trace isn't of the run's own program: {unmatched
 #: io_bound's one-class rule at each subset's least k_whole, which misses any shorter chain nested below their operands
 ONE_CLASS = ("one-class rule: every product's operands made whole along the shortest chain that makes any of them "
              "whole (no whole-making system given)")
-#: an op log's class (te_core.tiles' ops: a macs_log's role, or a traced step's weight class) as what it says of a
+#: an op log's class (training_slowdown.tiles' ops: a macs_log's role, or a traced step's weight class) as what it says of a
 #: product: its non-token operand is θ (the product is never fresh), or it is attention's, which io_bound doesn't count
 LOG_KIND = {"theta": "theta", "registered": "theta"}
 #: what an op log doesn't keep, which decides whether a product's operands are fresh (`products_of_ops`): a weight
@@ -777,7 +777,7 @@ LOG_UNKNOWN = ("the record's capture keeps each product's dims, its op's dtype a
 
 
 def products_of_ops(ops: list[dict]) -> dict:
-    """A record's matrix products from its op log (te_core.tiles' ops: a ledger row's macs_log by `tiles.of_log`, or a
+    """A record's matrix products from its op log (training_slowdown.tiles' ops: a ledger row's macs_log by `tiles.of_log`, or a
     traced step's by `tiles.of_graph`), for a capture that keeps no step `io_bound.rows_of` reads: each product
     (b, m, K, n) of an op tiles places, its MACs and output entries, its operands' widths as the log gives them and
     its partial sums' (`io_bound.ACC_BITS`), and its kind where the log decides it (`LOG_KIND`: θ where its non-token
@@ -803,15 +803,15 @@ def products_of_ops(ops: list[dict]) -> dict:
 
 
 def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bfloat16", order: str | None = None) -> dict:
-    """`Measured.products` for a run of captured steps, `segments` [(steps, StepGraph)] as te_core.capture.capture_run
-    takes them, each captured by capture_step or capture_fn: every product te_core.io_bound.rows_of counts at k (kind
+    """`Measured.products` for a run of captured steps, `segments` [(steps, StepGraph)] as training_slowdown.capture.capture_run
+    takes them, each captured by capture_step or capture_fn: every product training_slowdown.io_bound.rows_of counts at k (kind
     "fresh"; k the console's by default), its MACs and output entries times its steps (the bound's G and Q add over
     steps, so its blocks do too), the order its entries are summed in (`ORDERS`; None: the reference circuit's,
-    `ORDER`), and the steps' whole-making system and P-match check from their product rows (te_core.capture.products,
+    `ORDER`), and the steps' whole-making system and P-match check from their product rows (training_slowdown.capture.products,
     `system_of`), G without the products that read a gather's rows as `products_of_trace` drops them (`gathered`),
     the matrix products the steps write with elementwise ops (`elementwise_products`, times their steps), which
     `fresh_products` refuses to price, and the products term's M from the steps' rows (`he`, `he_of_rows`)."""
-    from te_core.capture import products
+    from training_slowdown.capture import products
 
     if order not in (None, *ORDERS):
         raise ValueError(f"order {order!r}: one of {ORDERS}, or None for the reference circuit's ({ORDER})")
@@ -844,10 +844,10 @@ def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bflo
 
 
 def product_kind(row: dict) -> str:
-    """A trace's product row's kind (te_core.capture.products' rows), as te_core.io_bound.rows_of classifies a GEMM:
+    """A trace's product row's kind (training_slowdown.capture.products' rows), as training_slowdown.io_bound.rows_of classifies a GEMM:
     unaffected, attention (two token-indexed dims among m, k and n), self (both operands one array), theta (one
     operand doesn't depend on θ′), fresh (both do and both are paid at their passed width, `io_bound.is_paid` on the
-    row's rates and widths) or expansion. The row's own `paid` isn't read: before te_core 4.10 a capture compared an
+    row's rates and widths) or expansion. The row's own `paid` isn't read: before training_slowdown 4.10 a capture compared an
     upcast operand's rate with the cast's width, so a trace's rates and widths decide."""
     if not any(row["affected"]):
         return "unaffected"
@@ -861,8 +861,8 @@ def product_kind(row: dict) -> str:
 
 
 def products_of_trace(block: dict, steps: float | None = None) -> dict:
-    """`Measured.products` from a trace's product rows (te_core.capture.products' `rows`, the trace's `products`) over
-    `steps` traced steps: its fresh rows (`product_kind`) as exactly the products te_core.io_bound's bound reads, each
+    """`Measured.products` from a trace's product rows (training_slowdown.capture.products' `rows`, the trace's `products`) over
+    `steps` traced steps: its fresh rows (`product_kind`) as exactly the products training_slowdown.io_bound's bound reads, each
     row's MACs and output entries times its count and `steps`, at the k the capture classified them at, and each kind's
     MACs, and the products term's M over the steps of the block's tokens (`he`, `he_of_rows`). The steps are ones
     after the run's first update (`of_record` counts no step before it, whose products read only registered weights;
@@ -883,7 +883,7 @@ def products_of_trace(block: dict, steps: float | None = None) -> dict:
     `gathered`'s). Each product keeps its operands' `fed`,
     which `fresh_products` reads to give each subset its own whole-making factor, and `elementwise_products` is the
     trace's (None: captured before `ELEMENTWISE_FROM`, whose check an earlier list may not have passed). `arrays` is
-    the step's array graph where the block carries one (te_core.arrays' `check`, which `he_products` reads)."""
+    the step's array graph where the block carries one (training_slowdown.arrays' `check`, which `he_products` reads)."""
     out, kinds = [], dict.fromkeys(io_bound.KINDS, 0.0)
     flagged = all("gathered" in r for r in block["rows"])
     seq = max((r["dims"][d] for r in block["rows"] if sum(x in r["token_dims"] for x in ("m", "k", "n")) >= 2
@@ -928,7 +928,7 @@ def products_of_trace(block: dict, steps: float | None = None) -> dict:
 
 def classified_at(p: dict, k: float) -> dict | None:
     """`Measured.products` `p` as classified at k: itself where it was classified at k, else its block at k (`at`: a
-    trace's rows at each k of the console's dial, te_core.capture.products.rows_on_dial) with `p`'s stand_in and
+    trace's rows at each k of the console's dial, training_slowdown.capture.products.rows_on_dial) with `p`'s stand_in and
     other_program; None where it has neither."""
     if math.isclose(p["k"], k, rel_tol=1e-12):
         return p
@@ -937,7 +937,7 @@ def classified_at(p: dict, k: float) -> dict | None:
 
 
 def system_of(rows: list[dict]) -> dict | None:
-    """The step's whole-making system (te_core.io_bound's `chain_classes`) from a trace's product rows: a class for
+    """The step's whole-making system (training_slowdown.io_bound's `chain_classes`) from a trace's product rows: a class for
     each chain length K among the rows with both operands affected, with c (`io_bound.C_SELF` where it holds a product
     of an array with itself, else `C_PAIR`), P and the classes feeding it ([K, A] pairs), the counted rows' feeds, and
     the least width of a class's operand; None for rows captured before `SYSTEM_FROM`, which have no `fed` or no
@@ -963,14 +963,14 @@ def system_of(rows: list[dict]) -> dict | None:
 
 
 def whole_chain(system: dict, k: float) -> dict:
-    """te_core.io_bound's `whole_chain_of` on a system `system_of` gives."""
+    """training_slowdown.io_bound's `whole_chain_of` on a system `system_of` gives."""
     return io_bound.whole_chain_of({"classes": {e["k"]: {"c": e["c"], "P": e["P"], "feeds": dict(e["feeds"])}
                                                 for e in system["classes"]},
                                     "counted": dict(system["counted"]), "b": system["b"]}, k)
 
 
 def other_program(rows: list[dict], log: dict) -> dict | None:
-    """Whether a trace's product rows are of the run whose op log is `log` (te_core.ledger's macs_log), as far as
+    """Whether a trace's product rows are of the run whose op log is `log` (training_slowdown.ledger's macs_log), as far as
     their shapes say (coordinator 20:42Z: a products term is priced only on a trace of the run's own program): None
     where every shape (m, K, n) of the rows' `PLAIN_PRODUCTS` is a product of one of the log's ops (`tiles.products`),
     in either orientation; else how many distinct shapes the rows run, how many of those the log never ran, how many
@@ -998,12 +998,12 @@ def other_program(rows: list[dict], log: dict) -> dict | None:
 
 
 def traced_products(p: dict | None, block: dict | None, log: dict | None = None) -> dict | None:
-    """Products ingest took from a trace's rows (`p`, `products_of_trace` of `block`) as this te_core takes them from
-    the same rows over the same traced steps (their kinds' MACs over the rows' own), whatever te_core ingested the
-    record, so the rows are read by this te_core's rules: an ingest before 4.12 kept no whole-making system, which
+    """Products ingest took from a trace's rows (`p`, `products_of_trace` of `block`) as this training_slowdown takes them from
+    the same rows over the same traced steps (their kinds' MACs over the rows' own), whatever training_slowdown ingested the
+    record, so the rows are read by this training_slowdown's rules: an ingest before 4.12 kept no whole-making system, which
     `fresh_products` reads as products of no trace (`ONE_CLASS`), 4.12's kept one that counts the products reading
-    gathered rows, which it would read as this te_core's, 4.12.1's kept them at the console's k only, though the trace
-    keeps rows at each k of the dial (`at`, which `classified_at` reads), te_core 4.8's kept the trace's order unknown,
+    gathered rows, which it would read as this training_slowdown's, 4.12.1's kept them at the console's k only, though the trace
+    keeps rows at each k of the dial (`at`, which `classified_at` reads), training_slowdown 4.8's kept the trace's order unknown,
     which it never measures, before 4.10 an upcast operand's product was an expansion, and before 4.13.1 none kept the
     products term's M (`he`) as this takes it over the same steps. Taken again, rows captured
     before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`), rows captured before `ELEMENTWISE_FROM` that no
@@ -1093,7 +1093,7 @@ def beta_k(k: float) -> float | None:
 
 
 def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: float | None = None) -> dict | None:
-    """The products term's M from a step's product rows at k (te_core.capture.products' rows) over `steps` steps
+    """The products term's M from a step's product rows at k (training_slowdown.capture.products' rows) over `steps` steps
     after the run's first (None: one step captured on its own, which stands for one after the first ones), each of
     `tokens` tokens (+1: the grader chooses M): every product whose two operands both depend on the update, except
     one array times itself (W and X disjoint), a product with an operand that reads a gather's rows before any op
@@ -1199,7 +1199,7 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
 
 
 def he_of_products(products: list[dict], k: float, rank: float | None = None) -> dict:
-    """M from products a model states (te_core.workloads' `products`: each group's MACs and output entries at k, its
+    """M from products a model states (training_slowdown.workloads' `products`: each group's MACs and output entries at k, its
     operands' widths, its Definition's gates a gadget and its `role`, forward, dx, dw or optimizer), every one of both
     operands' update dependence through a trained matrix, at its operands' widths, its first operand an activation
     and its second a weight but in a weight gradient (dw), whose two are activations; the optimizer's products leave
@@ -1255,7 +1255,7 @@ def he_figure(he: dict, c: float, C: float, tau: float | None = None, beta_code:
     where a layer's arrays differ in β (Motzkin-Straus sums u_r·u_s/(β_r·β_s) over the pairs M_P multiplies), b_y M_P's
     least output width and F = 2/√3 where M_P holds a backward product (+2: a layer's forward, input-gradient and
     weight-gradient products share arrays; Motzkin-Straus bounds π by 4/3 where no four arrays are pairwise
-    multiplied), else 1, and 1 on the weight gradients alone; with the step's array graph (`graph`, te_core.arrays'
+    multiplied), else 1, and 1 on the weight gradients alone; with the step's array graph (`graph`, training_slowdown.arrays'
     `check`), F at its clique number where that is more than 3, and on the forward products alone and the weight
     gradients alone at theirs where they hold a triangle (`arrays.share`); the subset's term is the largest `he_rho`
     over P. The
@@ -1337,7 +1337,7 @@ def p_match_reason(broken: list[dict]) -> str:
 
 
 def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str | None, dict]:
-    """The fresh-products kind's term at (c, k), te_core.io_bound's bound with Λ proved (`io_bound.bound`) on the run's
+    """The fresh-products kind's term at (c, k), training_slowdown.io_bound's bound with Λ proved (`io_bound.bound`) on the run's
     products (`Measured.products`) and the record's |C|, its figure with P-cell where `P_CELL` (`rho`; without it,
     `rho_no_cell`, where it is off); its reason where it has no figure (None: it has one); and what it read, both
     figures among it (`fresh_cell`, `fresh_no_cell`). The products are io_bound's at the k `rows_of` classified them at, or a trace's at each k of the
@@ -1444,7 +1444,7 @@ def he_products(m: Measured, c: float, k: float) -> tuple[float | None, str | No
     products (`LOG_UNKNOWN`), on rows that predate `SYSTEM_FROM` (`HE_RETRACE`), on products without M
     (`HE_NO_ROWS`), past `BETA_K`'s last k (`HE_PAST`), from `HEAD_K` on products that don't say which are the
     head's (`HE_HEAD`), on a step whose elementwise ops fan out into an operand (`p_match_reason`) and on products
-    whose step's array graph (their `arrays`, te_core.arrays' `check`) puts two of M's on one pair of arrays or has one
+    whose step's array graph (their `arrays`, training_slowdown.arrays' `check`) puts two of M's on one pair of arrays or has one
     of a value with itself (`arrays.refusal`), and never priced on a trace of another program (`FRESH_OTHER`); with that graph, F is at its
     clique numbers (`he_figure`), which it read beside the repeated pairs (`arrays`). A weight's β is at most the
     record's code bits (`delta_bits`) over M's trained weights where M counts them, and τ is the record's."""
@@ -1672,7 +1672,7 @@ READING_A = True
 
 
 def published(m: Measured, c: float | None = None, k: float | None = None, reading: str | None = None) -> dict:
-    """The published ρ at (c, k), by default the console's policy (te_core.policy's `CONSOLE`, one full session of the
+    """The published ρ at (c, k), by default the console's policy (training_slowdown.policy's `CONSOLE`, one full session of the
     reference model) (coordinator 08:26Z), `at`'s: under reading A (`reading`, else where `READING_A` and
     the row's token kind is measured): Fit's c/(c − d) where it holds; else the max of the measured terms where it
     exceeds 1, binding that kind, `partial` where a kind is unmeasured (ρ is then only a lower bound); else, where a
@@ -1822,7 +1822,7 @@ TRACED_PRODUCTS = ("measured (trace): the traced step's products of two fresh op
 #: the products' approximation where a run's traced steps differ in shape (their structures, or their tokens)
 STAND_IN = ("approximated: the run's traced steps differ in shape, so the dominant traced step's products stand in "
             "for all of them, scaled by tokens")
-#: the capture's lists of read-backs that decide what the graph can't carry (te_core.capture.script), which `refusal`
+#: the capture's lists of read-backs that decide what the graph can't carry (training_slowdown.capture.script), which `refusal`
 #: reads under a row's `trace`
 READ_BACKS = ("data_dependent", "carried_scalars")
 CONTEXT = ("charged (the context charge): every earlier token's keys and values at each layer from the lowest whose "
@@ -1865,7 +1865,7 @@ def context(changed, shape: dict) -> dict:
 
 
 def of_trace(f: dict) -> dict:
-    """The record-level `formalism` fields of a traced step's quantities (te_core.capture.circuit.measure), with every
+    """The record-level `formalism` fields of a traced step's quantities (training_slowdown.capture.circuit.measure), with every
     measured field under `trace`. t is 0 where no token op reads an update value (u_in is 0 then)."""
     t = f["tail_share"] if f["tail_share"] < 1 else 0.0
     u_in = tuple(map(tuple, f["u_in"]))
@@ -1893,7 +1893,7 @@ def _v23_part(row: dict, shape: dict) -> Part:
 
 
 def _part(p: dict, labels: dict) -> Part:
-    """A part from a block, a te_core 4.0 block's `dep_gates` read as its affected gates."""
+    """A part from a block, a training_slowdown 4.0 block's `dep_gates` read as its affected gates."""
     p = dict(p)
     if "dep_gates" in p:
         p.setdefault("affected_gates", p.pop("dep_gates"))
@@ -1905,7 +1905,7 @@ def _part(p: dict, labels: dict) -> Part:
 
 def complete(f: dict, row: dict, shape: dict) -> Measured:
     """`f`'s quantities (a `formalism` block, possibly partial), each missing one stubbed (`STUBS`) from the row and the
-    start's shape, and a trace's products this te_core's of its rows, checked against the row's op log
+    start's shape, and a trace's products this training_slowdown's of its rows, checked against the row's op log
     (`traced_products`, `other_program`); `labels` names every quantity's source."""
     labels = dict(f.get("labels", {}))
     if f.get("parts"):
@@ -2004,7 +2004,7 @@ def refusal(row: dict) -> str | None:
         return None
     missing = [k for k in READ_BACKS if k not in tr]
     if missing:
-        return (f"read-backs unchecked: traced before te_core 4.2 (no {' or '.join(missing)}), whose capture lists the "
+        return (f"read-backs unchecked: traced before training_slowdown 4.2 (no {' or '.join(missing)}), whose capture lists the "
                 f"read-backs that decide what the graph can't carry; trace the run again")
     if tr["data_dependent"]:
         return f"data-dependent: not measured ({_events(tr['data_dependent'])})"
@@ -2035,7 +2035,7 @@ def measure(row: dict, shape: dict) -> Measured:
 
 def of_record(record: dict, through: int | None = None) -> dict:
     """The `formalism` block ingest writes for a run record's prefix through step `through`: one part per step
-    structure (its steps' gates by te_core.gates, their tokens, the gates of their token blocks, its affected gates and
+    structure (its steps' gates by training_slowdown.gates, their tokens, the gates of their token blocks, its affected gates and
     Δ_grad), and the record's own `formalism` fields over these. In a record with traced structures
     (`annotate.with_structures`), a traced structure's affected gates, token blocks' gates and Δ_grad are its measured
     shares of its counted gates and its measured Δ_grad, and its tokens are scaled by its token factor (`TRACED`), a
@@ -2090,12 +2090,12 @@ def of_record(record: dict, through: int | None = None) -> dict:
                                   "stub: forward MACs with an update-dependent operand (no backward), bf16 GEMM")
             dg = st.get("delta_grad_bits", st.get("cut_bits"))
             if "delta_grad_bits" not in st and dg is not None:
-                labels.setdefault("delta_grad_bits", "measured: te_core 4.0's cut (gradient side to the new values)")
+                labels.setdefault("delta_grad_bits", "measured: training_slowdown 4.0's cut (gradient side to the new values)")
         parts.append({"gates": gates, "tokens": tokens, "token_gates": token_gates, "affected_gates": affected,
                       "steps": n, "delta_grad_bits": dg, "partial_bits": partial, "grad_bits": grad})
-    labels.setdefault("gates", "counted MACs in gates (te_core.gates)")
+    labels.setdefault("gates", "counted MACs in gates (training_slowdown.gates)")
     labels.setdefault("tokens", "measured: the steps' token counts")
-    labels.setdefault("token_gates", "counted: the steps' forward and backward in gates (te_core.gates)")
+    labels.setdefault("token_gates", "counted: the steps' forward and backward in gates (training_slowdown.gates)")
     if rows and "products" not in own:
         own["products"] = products_of_trace(rows, traced_steps)
         labels.setdefault("products", TRACED_PRODUCTS)

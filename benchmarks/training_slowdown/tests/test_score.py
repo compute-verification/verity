@@ -1,6 +1,6 @@
-"""te_core.score: a run's checkpoints as prefixes of its count, and te_core.annotate's traced structures."""
-from te_core.annotate import annotate, with_structures
-from te_core.score import C_PER_FORWARD_TOKEN, block_c, checkpoints
+"""training_slowdown.score: a run's checkpoints as prefixes of its count, and training_slowdown.annotate's traced structures."""
+from training_slowdown.annotate import annotate, with_structures
+from training_slowdown.score import C_PER_FORWARD_TOKEN, block_c, checkpoints
 
 
 def test_c_is_4096_forward_passes():
@@ -59,10 +59,10 @@ TRACE = {"sigma": 0.9, "affected_share": 0.75, "token_factor": 2.0, "delta_grad_
 def test_with_structures_carries_the_traced_formalism():
     """A traced structure's σ, affected share, token factor, Δ_grad and partial and gradient cuts go to its steps'
     structure, and its per-token quantities to the record's `formalism` block (`trace` every measured field; u is 0 up
-    to t, then u_in); te_core.formalism.of_record reads them: σ |C_j| token gates, the affected share's |C_j| affected
+    to t, then u_in); training_slowdown.formalism.of_record reads them: σ |C_j| token gates, the affected share's |C_j| affected
     gates, the steps' tokens times the factor, the cuts as the parts' partial and grad bits (the one bound's reduction
     and update kinds), the step before the first update with no affected gates, and τ at ⌈log2 V⌉."""
-    from te_core import formalism
+    from training_slowdown import formalism
 
     rec = record(3)
     rec["structures"]["z"] = {"updated": [], "log": []}
@@ -96,7 +96,7 @@ def test_a_traced_step_that_updates_nothing_takes_its_measured_delta_grad():
     """A step before the first update, traced (Δ_grad 0, affected share 0), keeps its own U (none) and takes its trace's
     measured quantities and read-backs: its Δ_grad 0 is a measurement, so Fit binds on the updating step's where it
     failed at every k; traced with no updating step traced, it is left as it was."""
-    from te_core import formalism
+    from training_slowdown import formalism
 
     rec = record(3)
     rec["structures"]["z"] = {"updated": [], "log": []}
@@ -130,8 +130,8 @@ def test_a_traced_step_that_updates_nothing_takes_its_measured_delta_grad():
 
 def test_with_structures_lists_the_read_backs_of_every_traced_structure_its_steps_take():
     """The record's `trace` takes the most-MACs structure's quantities and every taken structure's read-back lists; a
-    structure traced before te_core 4.2 (no lists) leaves them out, so te_core.formalism refuses the row as unchecked."""
-    from te_core import formalism
+    structure traced before training_slowdown 4.2 (no lists) leaves them out, so training_slowdown.formalism refuses the row as unchecked."""
+    from training_slowdown import formalism
 
     rec = record(3)
     rec["structures"]["t"] = dict(rec["structures"]["s"])

@@ -1,5 +1,5 @@
-"""The capture's static record against te_core.flops.Counter's runtime record of the same steps: they count from one op
-list (te_core.flops's *_NAMES) and must agree on every step's MACs. The structure te_core 4.0 scores (updated MACs, depth,
+"""The capture's static record against training_slowdown.flops.Counter's runtime record of the same steps: they count from one op
+list (training_slowdown.flops's *_NAMES) and must agree on every step's MACs. The structure training_slowdown 4.0 scores (updated MACs, depth,
 the cut) is the capture's alone: the Counter's rows are the weight-operand rule it had before."""
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ import torch
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 import models
-from te_core.capture import capture_run, capture_step
-from te_core.capture.script import recorded_forward_gemm_macs
-from te_core.flops import Counter, gather_macs
-from te_core.opnames import gemm_like
+from training_slowdown.capture import capture_run, capture_step
+from training_slowdown.capture.script import recorded_forward_gemm_macs
+from training_slowdown.flops import Counter, gather_macs
+from training_slowdown.opnames import gemm_like
 
 N = 3
 
@@ -59,13 +59,13 @@ def lora_new():
 
 
 def test_a_trace_is_of_its_runs_program_where_its_product_shapes_are_the_counters():
-    """te_core.formalism.other_program on the counter's op log as a ledger row keeps it (te_core.ledger's macs_log)
+    """training_slowdown.formalism.other_program on the counter's op log as a ledger row keeps it (training_slowdown.ledger's macs_log)
     and the capture's product rows of the same program (coordinator 20:42Z): LoRA at rank 2, trained from scratch,
     and the whole model trained run the same matrix-product shapes in both, so their terms are priced, while a capture
     at rank 3 runs shapes the rank-2 run never ran (each adapter's factors and their gradients), so its term isn't."""
-    from te_core.capture.products import rows
-    from te_core.formalism import other_program
-    from te_core.ledger import _macs_log
+    from training_slowdown.capture.products import rows
+    from training_slowdown.formalism import other_program
+    from training_slowdown.ledger import _macs_log
 
     def both(make, rank=None):
         torch.manual_seed(0)
