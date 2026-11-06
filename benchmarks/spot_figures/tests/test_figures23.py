@@ -27,6 +27,18 @@ def test_figure2_joins_the_workload_to_the_measured_blocks():
     assert [s["stands_in"] for s in out["stand_ins"]] == [True]
 
 
+def test_figure2_tells_apart_the_blocks_sharing_a_name():
+    """Bars sharing a Definition's name and K add the parameters that differ among them, a nested function by its
+    name; blocks alike in those add their kind, and then an ordinal."""
+    rows = [{"block": 'A_v1{N=1,H=2,DOT={"fn":"Dot_v1"}}', "kind": "x"},
+            {"block": 'A_v1{N=2,H=2,DOT={"fn":"Dot_v2"}}', "kind": "x"},
+            {"block": "B_v1{K=4,H=1}", "kind": "y"}, {"block": "B_v1{K=4,H=1}", "kind": "z"},
+            {"block": "C_v1", "kind": "w"}, {"block": "C_v1", "kind": "w"}]
+    assert figure2.labels(rows) == ["A_v1 N=1 DOT=Dot_v1", "A_v1 N=2 DOT=Dot_v2", "B_v1 K=4 (y)", "B_v1 K=4 (z)",
+                                    "C_v1 (w) #1", "C_v1 (w) #2"]
+    assert figure2.params('M{K=8,SCALE={"f64":"0x1p-4"},T=[1,2]}') == {"K": "8", "SCALE": "0x1p-4", "T": "[1,2]"}
+
+
 def test_figure2_derives_the_model_overhead_once_every_type_is_measured(card_dir, tmp_path):
     po = cards.load("proof_overhead", "GLM-5.3")
     strata = cards.load("workload", "GLM-5.3")["value"]["strata"]
@@ -77,9 +89,11 @@ def test_figure3_prices_the_cuts_as_figure1_does():
 def test_macs_in_no_proof_block_are_served_and_shown(card_dir):
     """A workload card whose proof blocks hold half the served MACs, one stratum modeled: Figure 1 serves half the
     requests and its captions say what no curve bounds and what is modeled, Figure 2's shares are of the served MACs,
-    and Figure 3 prices a token's serving at them."""
-    base, base3 = figure1.run("GLM-5.3", 2, ("world year",)), figure3.run("GLM-5.3")
+    and Figure 3 prices a token's serving at them, against the card with every served MAC in a proof block."""
     work = cards.load("workload", "GLM-5.3")
+    work["value"]["served_macs_per_token"] = None
+    cards.write(work, force=True)
+    base, base3 = figure1.run("GLM-5.3", 2, ("world year",)), figure3.run("GLM-5.3")
     strata = work["value"]["strata"]
     macs = sum(s["per_token"] * s["macs"] for s in strata)
     first = next(s for s in strata if s["macs"])
@@ -115,4 +129,4 @@ def test_figures_writes_every_figure(tmp_path):
     for n, schema in ((1, figure1.SCHEMA), (2, figure2.SCHEMA), (3, figure3.SCHEMA)):
         assert json.loads((tmp_path / f"figure{n}.json").read_text())["schema"] == schema
         assert (tmp_path / f"figure{n}.png").stat().st_size > 0 and (tmp_path / f"figure{n}.svg").exists()
-    assert len(list(tmp_path.glob("figure1*.png"))) == 6
+    assert len(list(tmp_path.glob("figure1_appendix*.png"))) == 6 and len(list(tmp_path.glob("figure1*.png"))) == 12
