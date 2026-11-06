@@ -1516,6 +1516,11 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/band_gpu/memory_challenger.py": "verity/core/devices/memory_challenger/timed_audit.py"
+      }
     }
   ]
 }
