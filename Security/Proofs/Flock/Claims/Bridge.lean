@@ -13,9 +13,8 @@ public import Proofs.Flock.Claims.Bridge.DecodePlain
 public import Proofs.Flock.Claims.Bridge.Dead
 public import Proofs.Flock.Claims.Bridge.Returns
 public import Proofs.Flock.Claims.Bridge.Hm96Tree
-public import Proofs.Flock.Claims.Bridge.ErrorTerms
+public import Definitions.Claims.Sampling
 public import Proofs.Flock.Claims.Bridge.WrongSet
-public import Proofs.Flock.Claims.Bridge.BindsColl
 public import Proofs.Flock.Claims.Bridge.Transports
 
 /-! The run-to-live-game bridge: the coin law (`Coins`), the public-coin verifier of a game and its run path by path

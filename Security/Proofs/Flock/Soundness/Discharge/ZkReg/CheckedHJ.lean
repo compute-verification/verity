@@ -2,7 +2,10 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
-public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 import all Init.Data.Array.Basic
 
 /-!

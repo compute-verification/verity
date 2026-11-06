@@ -54,7 +54,7 @@ lemma. Which template each part uses:
   climbs from different values collide, at `Br`'s setup evaluations or among the recorded calls.
 * **At the holo shape**: `vstarAccepts_holo_of_links` (`VStarAcceptsR`), and the bundles `vstarParts_holo_of_links` and
   `vstarPartsStaging_holo_of_links`, what `codeFacts_of_parts`, `ksA_deployed_parts` and `KS_of_parts` read, with each
-  part a holo part (`HoloPart`, the counterpart of M's `DensePart`: `PartsLinksOr`, and `LogsNil` or `PartsLogLinks`;
+  part a holo part (`HoloPart`: `PartsLinksOr`, and `LogsNil` or `PartsLogLinks`;
   `holoPart_of_open` from M's level links, `holoPart_of_nil` at a part without calls). At
   `deployRec` over the outer record `deployZkRec relation` (`vstarAccepts_holo_deployRec`, `vstarParts_holo_deployRec`,
   `vstarPartsStaging_holo_deployRec`), the outer record parses at `parseOf relation readOfO` by definition, and
@@ -547,7 +547,7 @@ theorem partOpens_holo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Co
 
 /-! ## A part at the holo shape -/
 
-/-- **Part `s` at the holo shape** (the holo counterpart of M's `DensePart`): its links for its check or a collision
+/-- **Part `s` at the holo shape**: its links for its check or a collision
 the finders charge (`PartsLinksOr`, any kind of part), and for its calls either none where its coins are shown (the
 algebra, opening and sparse parts, `LogsNil`) or a level's links for them (`PartsLogLinks`). -/
 def HoloPart (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T)

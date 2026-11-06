@@ -101,7 +101,8 @@ public import Definitions.Pouw.Receipt.Li
 public import Definitions.Pouw.Receipt.Fx1
 public import Definitions.Pouw.RelativeSecurity
 public import Definitions.Pouw.RelativeSecurityJ10R
-public import Definitions.Pouw.TileBound.AlignedExactDefs
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Rat.Cast.Order
 public import Definitions.Pouw.TileBound.Defs
 public import Definitions.Pouw.TileBound.Fp8Defs
 public import Definitions.Pouw.Window
