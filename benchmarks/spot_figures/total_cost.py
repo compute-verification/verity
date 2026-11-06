@@ -12,28 +12,35 @@ proof block the same way (`priced`): at its type's seconds on the `proof_overhea
 witness bits where the card doesn't measure the type; a line's marginal overhead is what its blocks come to.
 
 * `tokens` (A): serving commits the token ids, the schedule record and the KV cache at each window edge; a replay block
-  is a request, and the design the width-stratified two-stage one.  Exfiltration is its capped sets' form
-  (`card_influenceTwo_le_served_min`), never above the scope's served bits (`card_influenceTwo_le_min`).  Infiltration
-  is its write form (`write_form`) at a footprint of a request's served bits: an incorrect request is charged at most
-  the cheapest explanation of what it serves.
+  is a request, and the design the width-stratified two-stage one.  Exfiltration is its patterns' form
+  (`card_influenceTwo_le_patterns`), never above the scope's served bits (`card_influenceTwo_le_two_pow_outs`), at
+  one machine's registration and, as `tokens_pod` and `tokens_datacenter`, at a pod's and a datacenter's
+  (`REGISTRATIONS`); `tokens_sets` is the capped sets' form (`card_influenceTwo_le_served_min`, at most the served bits
+  by `card_influenceTwo_le_min`) at one machine's, the comparison.  Infiltration is its write form (`write_form`) at a
+  footprint of a request's served bits: an incorrect request is charged at most the cheapest explanation of what it
+  serves.
 * `layer_of_token` (B): serving also commits each layer's residual stream, K/V and indexer keys; a replay block is one
   layer of one token, holding its share of the token's proof blocks and replayed at its share of its request's
   replay.  Exfiltration is the planner's design on that grain in the capped sets' form, each replay block charged at
   most its request's served bits, which is at least the lemma's charge because min(·, S) is subadditive, and never
   above the scope's served bits.  Infiltration is its write form at a footprint of the layer's boundary bits.
-* `per_expert` (A′): (A)'s serving and tax on another cut of the circuit, the model's `partition` card `per-expert`
-  (the MoE cut per expert: the router's slots, table reads at each slot's expert and per-expert GEMMs), labelled with
-  the card's `label`; a line only for a model with that card.
+* `per_expert` (A′): (A)'s serving, tax, forms and registrations on another cut of the circuit, the model's
+  `partition` card `per-expert` (the MoE cut per expert: the router's slots, table reads at each slot's expert and
+  per-expert GEMMs), labelled with the card's `label`; lines only for a model with that card.
 * `every_block` (C): serving commits every proof block's outputs, and the audit samples them one-stage; its tax is a
   lower bound, the hashing alone.  Exfiltration is `consumers.exfiltration_bound`'s form, at most the served bits by
   the same count, which Lean states for two-stage only; infiltration is its write form (the K incorrect blocks the plan
   detects, each the widest block's bits) and skipped work the work target's plan.
 
 Each configuration's two panels read one design, the one with the least exfiltration bound at β; skipped work is
-planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.
+planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
+two-stage statement holds one Definition's sampled proof blocks of a registration's sampled replay blocks, up to its
+cap, so a registration that samples more of them fills its statements more.  `breakeven` gives each patterns'-form
+line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4.
 
     uv run python benchmarks/spot_figures/total_cost.py priced-card --model GLM-5.3 --out CARD.json
     uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json [--scope "world year"] [--out DIR]
+    uv run python benchmarks/spot_figures/total_cost.py breakeven --model GLM-5.3 --out DIR [--scope S] [--workers N]
 """
 from __future__ import annotations
 
@@ -76,7 +83,8 @@ STATEMENT_BITS = 2 ** 35
 class Configuration:
     """A line: its label, what serving commits, its replay block and design, and the panels it bounds; the `partition`
     card it cuts the circuit by (else the `workload` card's cut) and the configuration whose serve tax it pays (else
-    its own)."""
+    its own).  A two-stage line charges each request in the capped sets' or patterns' `form` and shares statements
+    within its `registration` (`REGISTRATIONS`); a variant of another line (`variant_of`) differs from it only there."""
 
     label: str
     commits: str
@@ -85,19 +93,45 @@ class Configuration:
     panels: tuple[str, ...]
     partition: str | None = None
     serve: str | None = None
+    form: str | None = None
+    registration: str | None = None
+    variant_of: str | None = None
+
+
+#: a 64-machine pod: one committer gathering its machines' boundary rows into one registration
+POD = 64
+#: an interior registration's span over the census window: one machine, a pod or every machine of the census
+#: datacenter; its sampled requests fill each Definition's statements together, up to the cap
+REGISTRATIONS = {"machine": "one machine's", "pod": f"a {POD}-machine pod's", "datacenter": "a datacenter's"}
+
+
+def registration_gpu_seconds(name: str, c: dict[str, f1.InputCard]) -> float:
+    """A registration's GPU-seconds: its machines' GPUs over the census window."""
+    machines = {"machine": 1, "pod": POD, "datacenter": c["datacenter_machines"].value}[name]
+    return machines * c["machine_gpus"].value * c["window"].value
+
+
+def _spans(name: str, line: Configuration) -> dict[str, Configuration]:
+    """A request-grain line at every registration in the patterns' form, and at its own in the capped sets' form, the
+    comparison, for exfiltration only."""
+    other = {f"{name}_{r}": replace(line, registration=r, serve=line.serve or name, variant_of=name)
+             for r in REGISTRATIONS if r != line.registration}
+    return {name: line} | other | {f"{name}_sets": replace(line, form="sets", panels=("exfiltration",),
+                                                           serve=line.serve or name, variant_of=name)}
 
 
 TOKENS = "the token ids, the schedule record and the KV cache at window edges"
 CONFIGURATIONS = {
-    "tokens": Configuration("(A) Tokens only", TOKENS, "a request", "two-stage, width-stratified",
-                            ("exfiltration", "infiltration")),
-    "per_expert": Configuration("(A′) Tokens only, the MoE cut per expert", TOKENS, "a request",
-                                "two-stage, width-stratified", ("exfiltration", "infiltration"), partition="per-expert",
-                                serve="tokens"),
+    **_spans("tokens", Configuration("(A) Tokens only", TOKENS, "a request", "two-stage, width-stratified",
+                                     ("exfiltration", "infiltration"), form="patterns", registration="machine")),
     "layer_of_token": Configuration("(B) Each layer's state",
                                     "the tokens and each layer's residual stream, K/V and indexer keys",
                                     "one layer of one token", "two-stage, width-stratified",
-                                    ("exfiltration", "infiltration")),
+                                    ("exfiltration", "infiltration"), form="sets", registration="machine"),
+    **_spans("per_expert", Configuration("(A′) Tokens only, the MoE cut per expert", TOKENS, "a request",
+                                         "two-stage, width-stratified", ("exfiltration", "infiltration"),
+                                         partition="per-expert", serve="tokens", form="patterns",
+                                         registration="machine")),
     "every_block": Configuration("(C) Every proof-block boundary", "every proof block's outputs", "a proof block",
                                  "one-stage", PANELS),
 }
@@ -249,9 +283,10 @@ def computed_proving(cells: list[Cell], row: dict, computed: tuple[bool, ...]) -
     samples a few blocks of a type pays its statement's fixed cost on them, so this can be far above the type's share
     of the marginal."""
     split = [replace(c, stratum=0 if _size_class(c.bits) <= row["merged"] else _size_class(c.bits)) for c in cells]
-    whole = two_stage_price(split, row["k"])[2]
+    share = row.get("share", 1.0)
+    whole = two_stage_price(split, row["k"], share)[2]
     measured = two_stage_price([replace(c, prove=0.0, fixed=0.0) if x else c
-                                for c, x in zip(split, computed, strict=True)], row["k"])[2]
+                                for c, x in zip(split, computed, strict=True)], row["k"], share)[2]
     return 1 - measured / whole
 
 
@@ -279,8 +314,10 @@ def _plan(row: dict | None) -> dict | None:
 
 def _point(job: tuple) -> dict:
     """One configuration's bounds at one budget, in GPU-seconds: each panel's, with the plan and, for the capped
-    exfiltration, which of the count and the served bits binds and the computed share of its design's proving."""
-    name, m, g, budget, computed = job
+    exfiltration, which of the count and the served bits binds, the sampled requests a statement shares and the computed
+    share of its design's proving.  A two-stage line's `form` and its registration's replay blocks (`span`) come with
+    it."""
+    name, m, g, budget, computed, form, span = job
     served = f1.served_total(m)
     if name == "every_block":
         total_bits = m.scope.requests * sum(c.n * c.bits for c in m.cells)
@@ -294,10 +331,10 @@ def _point(job: tuple) -> dict:
                 "skipped_work": {"y": work["bound"], "binds": "trivial" if work["capped"] else "count",
                                  "plan": _plan(work["row"])}}
     row = two_stage_design(g.cells, g.replay_blocks, m.delta, budget=budget, replay=g.replay, h=m.byte_s,
-                           served=m.served)
+                           served=m.served, union=form == "patterns", registration=span)
     return {"exfiltration": {"y": min(row["bound"], served), "count": row["bound"],
                              "binds": "served" if served <= row["bound"] else "count", "plan": _plan(row),
-                             "computed_proving": computed_proving(list(g.cells), row, computed)},
+                             "share": row["share"], "computed_proving": computed_proving(list(g.cells), row, computed)},
             "infiltration": {"y": write_form(list(g.cells), row, g.replay_blocks, m.delta, g.footprint),
                              "plan": _plan(row)}}
 
@@ -339,12 +376,13 @@ def captions(out: dict, scope: str) -> dict[str, str]:
     conf = out["configurations"]
     at = out["betas"].index(f1.RATIO_BUDGET) if f1.RATIO_BUDGET in out["betas"] else None
 
-    def proving(name: str) -> str:
+    def at_ratio(name: str) -> str:
+        """A two-stage line at β = `RATIO_BUDGET`: its bound, its statements' sharing and its computed proving."""
         if at is None:
             return ""
-        share = lines["exfiltration"][name]["computed_proving"][at]
-        return (f" At β = {_share(f1.RATIO_BUDGET)}, {_share(share)} of its sampled replay block's proving, the "
-                "statements' fixed costs included, is computed.")
+        s = lines["exfiltration"][name]
+        return (f" {_size(s['y'][at])}, R = {s['share'][at]:.3g}, {_share(s['computed_proving'][at])} of its sampled "
+                "replay block's proving computed;")
 
     head = ("x is the serve tax, what each configuration's change to the production server costs on every token, plus "
             "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
@@ -353,42 +391,85 @@ def captions(out: dict, scope: str) -> dict[str, str]:
             f"the registered circuit's marginal proof overhead comes to {out['overhead']:.3g}×, "
             f"{_share(conf['tokens']['computed_share'])} of it computed. Every β has its own plan, the one with the "
             "least bound.")
+    regs, window = out["registrations"], out["inputs"]["window"]["value"]
+    head += (f" A two-stage statement holds one Definition's sampled proof blocks of one registration's sampled replay "
+             f"blocks, at most the Definition's cap: a registration spans the {window:g} s window on one machine "
+             f"({out['inputs']['machine_gpus']['value']:g} GPUs), on a {POD}-machine pod or on a datacenter's "
+             f"{regs['datacenter']['machines']:,.0f} machines, and its R sampled replay blocks share a statement, "
+             "R = Q/(1 − e^−Q) at the Q it samples, a fixed point with the design's q. The registration and its "
+             "statements' split are the protocol's, fixed before any coin, never the prover's. Each two-stage line "
+             f"gives at β = {_share(f1.RATIO_BUDGET)} its bound, R and the share of its sampled replay block's "
+             "proving, the statements' fixed costs included, that is computed.")
     a, b, c = CONFIGURATIONS["tokens"], CONFIGURATIONS["layer_of_token"], CONFIGURATIONS["every_block"]
-    cuts = {n: (CONFIGURATIONS[n], k["cut"]) for n, k in conf.items() if "cut" in k}
     short = a.label.split(" ")[0]
-    exfil_cuts = "".join(
-        f" {e.label} (dash-dot; {k['label']}): {short}'s serving and serve tax on the partition card {k['name']}'s "
-        f"cut, its marginal proof overhead {conf[n]['overhead']:.3g}×, {_share(conf[n]['computed_share'])} of it "
-        f"computed; the same form: {_binds(out['betas'], lines['exfiltration'][n]['binds'])}.{proving(n)}"
-        for n, (e, k) in cuts.items())
-    infil_cuts = "".join(f" {e.label} (dash-dot): {short}'s footprint at its own design." for e, _ in cuts.values())
-    trivial = [CONFIGURATIONS[n].label.split(" ")[0] for n, s in lines["exfiltration"].items()
-               if f1.RATIO_BUDGET in out["betas"] and s["binds"][out["betas"].index(f1.RATIO_BUDGET)] == "served"]
-    who = ("every line is" if len(trivial) == len(lines["exfiltration"]) else
-           f"{', '.join(trivial)} {'is' if len(trivial) == 1 else 'are'}")
+    served, betas = out["served_bits_request"], out["betas"]
+
+    def variants(name: str, form: str) -> list[str]:
+        return [n for n, k in conf.items() if (n == name or k["variant_of"] == name) and k["form"] == form]
+
+    def tag(name: str) -> str:
+        k = conf[name]
+        if not k["variant_of"] and not any(v["variant_of"] == name for v in conf.values()):
+            return k["label"].split(" ")[0]
+        return (f"{k['label'].split(' ')[0]} at {regs[k['registration']]['label']}"
+                + (" in the sets' form" if k["form"] == "sets" else ""))
+
+    def binds(name: str) -> str:
+        return f"{at_ratio(name)} {_binds(betas, lines['exfiltration'][name]['binds'])}."
+
+    def span(name: str) -> str:
+        r = regs[conf[name]["registration"]]
+        return f" {r['label'][0].upper()}{r['label'][1:]} ({r['requests']:,.0f} requests):{binds(name)}"
+
+    def family(name: str, style: str, what: str) -> str:
+        own = [n for n in variants(name, "patterns") if n in lines["exfiltration"]]
+        spans = [REGISTRATIONS[conf[n]["registration"]] for n in own]
+        text = (f" {conf[name]['label']} ({style}, dark to light: {', '.join(spans[:-1])} and {spans[-1]} "
+                f"registration): {what}" + "".join(span(n) for n in own))
+        for n in variants(name, "sets"):
+            r = regs[conf[n]["registration"]]["label"]
+            text += (f" {conf[n]['label']} in the capped sets' form (dashed, thin; {r}), for comparison: "
+                     f"{f1.CAP_STATUS['sets']}, at most the scope's served bits ({f1.SERVED_STATUS}):{binds(n)}")
+        return text
+
+    patterns = (f"the patterns' form ({f1.CAP_STATUS['patterns']}, proved, in review): a request's incorrect proof "
+                f"blocks are charged their committed bits up to the {served:,.0f} bits it serves, so a wholly incorrect "
+                f"request costs {served:,.0f} bits, and the bound is at most the {sc['served_bits']:.2g} bits the "
+                f"scope serves ({f1.OUTS_STATUS}). It takes two modeling conditions: each request serves at most "
+                f"S = {served:,.0f} bits, and no proof block is shared across requests, so a request's served outputs "
+                "read only its own replay block's proof blocks.")
+    cuts = {n: k["cut"] for n, k in conf.items() if "cut" in k and not k["variant_of"]}
+    exfil_cuts = "".join(family(n, "dash-dot", f"{short}'s serving and serve tax on the partition card {k['name']}'s "
+                                f"cut ({k['label']}), its marginal proof overhead {conf[n]['overhead']:.3g}×, "
+                                f"{_share(conf[n]['computed_share'])} of it computed; the same forms.")
+                         for n, k in cuts.items())
+    infil_cuts = "".join(f" {conf[n]['label']} (dash-dot, the same registrations): {short}'s footprint at its own "
+                         "designs." for n in cuts)
+    trivial = [tag(n) for n, s in lines["exfiltration"].items()
+               if at is not None and s["binds"][at] == "served"]
+    who = ("every line is" if len(trivial) == len(lines["exfiltration"]) else trivial[0] + " is" if len(trivial) == 1
+           else f"{', '.join(trivial[:-1])} and {trivial[-1]} are")
     one = len(trivial) == 1
     exfil = (f" At β = {_share(f1.RATIO_BUDGET)} {who} bounded here only by everything the scope serves "
              f"({_size(sc['served_bits'])}), the trivial bound: the audit's {'count is' if one else 'counts are'} "
              f"above it, so {'that value is not a result' if one else 'those values are not results'} of the audit."
              if trivial else "")
-    exfil += (f" {a.label}: serving commits {a.commits}, a replay block is {a.replay_block}, {priced('tokens')}; the "
-             f"capped sets' form (card_influenceTwo_le_served_min) at most the {sc['served_bits']:.2g} bits the scope "
-             f"serves (card_influenceTwo_le_min): {_binds(out['betas'], lines['exfiltration']['tokens']['binds'])}."
-             f"{proving('tokens')}{exfil_cuts} {b.label}: serving commits {b.commits}, a replay block is "
-             f"{b.replay_block}, {priced('layer_of_token')}; each replay block charged at most its request's served "
-             f"bits, at least the lemma's charge: {_binds(out['betas'], lines['exfiltration']['layer_of_token']['binds'])}."
-             f"{proving('layer_of_token')}"
-             f" {c.label} (dashed): serving commits {c.commits}, sampled one-stage, {priced('every_block')}; "
-             "consumers.exfiltration_bound's form, which bits are incorrect and where, at most the served bits by the "
-             "same count (an influence set is a set of served outputs; Lean states it for two-stage only): "
-             f"{_binds(out['betas'], lines['exfiltration']['every_block']['binds'])}.")
+    exfil += (family("tokens", "solid", f"serving commits {a.commits}, a replay block is {a.replay_block}, "
+                     f"{priced('tokens')}; {patterns}")
+              + f"{exfil_cuts} {b.label} ({regs[b.registration]['label']}): serving commits {b.commits}, a replay "
+              f"block is {b.replay_block}, {priced('layer_of_token')}; the capped sets' form, each replay block "
+              f"charged at most its request's served bits, at least the lemma's charge:{binds('layer_of_token')}"
+              f" {c.label} (dashed): serving commits {c.commits}, sampled one-stage, a statement a sampled proof "
+              f"block, {priced('every_block')}; consumers.exfiltration_bound's form, which bits are incorrect and "
+              "where, at most the served bits by the same count (an influence set is a set of served outputs; Lean "
+              f"states it for two-stage only): {_binds(betas, lines['exfiltration']['every_block']['binds'])}.")
     infil = (f" The write form: the bits the incorrect proof blocks write, each replay block charged at most its "
-             f"footprint, at the design its exfiltration line plans. {a.label}: a footprint of a request's "
-             f"{out['served_bits_request']:,.0f} served bits, the cheapest explanation of what it serves (the served "
-             f"form).{infil_cuts} {b.label}: a footprint of its {out['footprint_bits'][1]:,.0f} boundary bits, written "
-             f"wherever they sit. {c.label} (dashed): the K incorrect blocks the plan detects, each the widest block's bits. "
-             "The two-stage write forms need a harm bound at the footprint, which no lemma states yet; one-stage's "
-             "rests on audit_profile.")
+             f"footprint, at the design its exfiltration line plans. {a.label} (solid, dark to light: its "
+             f"registrations): a footprint of a request's {served:,.0f} served bits, the cheapest explanation of what "
+             f"it serves (the served form).{infil_cuts} {b.label} ({regs[b.registration]['label']}): a footprint of "
+             f"its {out['footprint_bits'][1]:,.0f} boundary bits, written wherever they sit. {c.label} (dashed): the K "
+             "incorrect blocks the plan detects, each the widest block's bits. The two-stage write forms need a harm "
+             "bound at the footprint, which no lemma states yet; one-stage's rests on audit_profile.")
     work = (f" Only {c.label} bounds skipped work: serving commits {c.commits}, so a sampled block's inputs and "
             f"outputs were fixed at serve time; {priced('every_block')}; the work target's plan.")
     return {"exfiltration": head + exfil, "infiltration": head + infil, "skipped_work": head + work}
@@ -401,12 +482,13 @@ def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None,
         return _run(model_name, scope_names, request, pool.map if pool else map)
 
 
-def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each) -> dict:
+def _lines(model_name: str, request: str) -> tuple:
+    """The model's cards and, for each configuration it has the cut of, its priced inputs, its line (proof blocks a
+    token, fill and marginal overhead) and which of its cells' types are computed."""
     sc = f1.slot_cards(model_name)
     c = f1.cards(model_name, request)
     cuts = {card["value"]["name"]: card for card in spot_cards.load_all("partition", model_name)}
     confs = {n: conf for n, conf in CONFIGURATIONS.items() if conf.partition is None or conf.partition in cuts}
-    tax = taxes(spot_cards.load("serve_tax", model_name), tuple(confs))
     inputs = {n: priced(cut(c, cuts[conf.partition]) if conf.partition else c, sc["proof_overhead"])
               for n, conf in confs.items()}
 
@@ -418,6 +500,12 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
     lines = {n: line(i) for n, i in inputs.items()}
     computed = {n: tuple(x["priced"] == "computed" for x in i["partition"].value["strata"] if x["per_token"] > 0)
                 for n, i in inputs.items()}
+    return sc, c, cuts, confs, inputs, lines, computed
+
+
+def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each) -> dict:
+    sc, c, cuts, confs, inputs, lines, computed = _lines(model_name, request)
+    tax = taxes(spot_cards.load("serve_tax", model_name), tuple(confs))
     part, fill, h = lines["tokens"]
     betas = sorted(set(BETAS) | set(c["budgets"].value))
     inf_card = sc["infiltration"]["value"]
@@ -427,30 +515,40 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
     notes = f1.reference_notes(sc.get("references", []), refs)
     chosen = [s for s in f1.scopes(c, part) if scope_names is None or s.name in scope_names]
     series: dict[str, list[dict]] = {p: [] for p in PANELS}
-    out_scopes = {}
+    bases, plans = {}, []
     for s in chosen:
         base = f1.model(inputs["tokens"], part, s, h, fill)
         for name, conf in confs.items():
             tb, fl, oh = lines[name]
             m = f1.model(inputs[name], tb, s, oh, fl) if conf.partition else base
             g = None if name == "every_block" else grain(m, name, layers, boundary, tokens)
-            pts = list(each(_point, [(name, m, g, beta * s.gpu_seconds, computed[name]) for beta in betas]))
-            for panel in conf.panels:
-                rows = [p[panel] for p in pts]
-                series[panel].append({"scope": s.name, "config": name, "beta": betas,
-                                      "x": [tax[name]["tax"] + b for b in betas], "y": [r["y"] for r in rows],
-                                      **({"binds": [r["binds"] for r in rows]} if "binds" in rows[0] else {}),
-                                      **({"count": [r["count"] for r in rows]} if "count" in rows[0] else {}),
-                                      **({"computed_proving": [r["computed_proving"] for r in rows]}
-                                         if "computed_proving" in rows[0] else {}),
-                                      "plan": [r["plan"] for r in rows]})
-        out_scopes[s.name] = {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
-                              "gpu_seconds": s.gpu_seconds, "requests": s.requests,
-                              "tokens": s.requests * tokens, "served_bits": f1.served_total(base),
-                              "output_bits": f1.cap(base, "leak"), "flop": f1.cap(base, "work"),
-                              "ands": f1.cap(base, "work") * c["ands_per_mac"].value / 2}
+            span = 0.0 if g is None or conf.registration is None else (
+                g.replay_blocks * registration_gpu_seconds(conf.registration, c) / s.gpu_seconds)
+            plans.append((s, name, conf, [(name, m, g, beta * s.gpu_seconds, computed[name], conf.form, span)
+                                          for beta in betas]))
+        bases[s.name] = base
+    points = iter(list(each(_point, [job for *_, jobs in plans for job in jobs])))
+    for s, name, conf, jobs in plans:
+        pts = [next(points) for _ in jobs]
+        for panel in conf.panels:
+            rows = [p[panel] for p in pts]
+            series[panel].append({"scope": s.name, "config": name, "beta": betas,
+                                  "x": [tax[name]["tax"] + b for b in betas], "y": [r["y"] for r in rows],
+                                  **{k: [r[k] for r in rows] for k in ("binds", "count", "share", "computed_proving")
+                                     if k in rows[0]},
+                                  "plan": [r["plan"] for r in rows]})
+    out_scopes = {s.name: {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
+                           "gpu_seconds": s.gpu_seconds, "requests": s.requests,
+                           "tokens": s.requests * tokens, "served_bits": f1.served_total(bases[s.name]),
+                           "output_bits": f1.cap(bases[s.name], "leak"), "flop": f1.cap(bases[s.name], "work"),
+                           "ands": f1.cap(bases[s.name], "work") * c["ands_per_mac"].value / 2} for s in chosen}
     used = {conf.partition: cuts[conf.partition] for conf in confs.values() if conf.partition}
-    out = {"schema": SCHEMA, "model": model_name, "request": request, "overhead": h,
+    per_gpu_s = chosen[0].requests / chosen[0].gpu_seconds
+    registrations = {r: {"label": f"{label} {c['window'].value:g} s registration",
+                         "machines": registration_gpu_seconds(r, c) / (c["machine_gpus"].value * c["window"].value),
+                         "gpu_seconds": registration_gpu_seconds(r, c),
+                         "requests": per_gpu_s * registration_gpu_seconds(r, c)} for r, label in REGISTRATIONS.items()}
+    out = {"schema": SCHEMA, "model": model_name, "request": request, "overhead": h, "registrations": registrations,
            "overhead_label": sc["proof_overhead"]["value"]["label"], "betas": betas, "budgets": c["budgets"].value,
            "served_bits_request": c["served_bits"].value, "footprint_bits": [c["served_bits"].value, boundary],
            "configurations": {n: conf.__dict__ | {"panels": list(conf.panels), "overhead": lines[n][2],
@@ -475,6 +573,89 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
     return out
 
 
+def weights(c: dict[str, f1.InputCard]) -> dict[str, float]:
+    """The weights a break-even reaches, in bits: the checkpoint's FP8 bytes, and FP4 at 4 bits a parameter."""
+    return {"FP8": 8 * c["weights_bytes"].value, "FP4": 4 * c["params"].value}
+
+
+def _bound(line: tuple, scale: float, beta: float) -> float:
+    """A request-grain line's exfiltration bound at β with its marginal overhead times `scale`: `_point`'s, at most the
+    scope's served bits."""
+    name, i, (tb, fl, oh), s, computed, conf, gpu_s = line
+    m = f1.model(i, tb, s, oh * scale, fl)
+    g = Grain(m.replay.replay_blocks, m.cells, m.replay.cost, m.served)
+    job = (name, m, g, beta * s.gpu_seconds, computed, conf.form, g.replay_blocks * gpu_s / s.gpu_seconds)
+    return _point(job)["exfiltration"]["y"]
+
+
+def _solve(job: tuple) -> float | None:
+    """The multiple of a line's marginal overhead (`what` "h") at which its bound at β reaches `target` bits, or the β
+    ("beta") at which it does at its own overhead, by bisection in log to `rel` over its `SPANS`; None where the bound
+    is above the target over the whole span, and the span's end where it is below it throughout.  At a target of None,
+    the floor: the bound at the least overhead."""
+    what, target, line, beta, rel = job
+    lo, hi = SPANS[what]
+    if target is None:
+        return _bound(line, lo, beta)
+
+    def bound(x: float) -> float:
+        return _bound(line, x, beta) if what == "h" else _bound(line, 1.0, x)
+
+    rising = what == "h"
+    if bound(lo if rising else hi) > target:
+        return None
+    if bound(hi if rising else lo) <= target:
+        return hi if rising else lo
+    while hi / lo > 1 + rel:
+        mid = (lo * hi) ** 0.5
+        lo, hi = (mid, hi) if (bound(mid) <= target) == rising else (lo, mid)
+    return (lo * hi) ** 0.5
+
+
+#: the spans a break-even searches: the marginal overhead's multiple, and β
+SPANS = {"h": (1e-12, 1e2), "beta": (1e-6, 1e6)}
+
+
+def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
+              workers: int = 1, rel: float = 0.01) -> dict:
+    """Each patterns'-form line's break-even on each scope: the marginal overhead at which its bound at β =
+    `RATIO_BUDGET` reaches each of the weights (`weights`), the β at which it does at the line's own overhead, and its
+    floor, the bound at the least overhead `SPANS` searches."""
+    _, c, _, confs, inputs, lines, computed = _lines(model_name, request)
+    targets = weights(c)
+    chosen = [s for s in f1.scopes(c, lines["tokens"][0]) if scope_names is None or s.name in scope_names]
+    keys = [(n, s) for s in chosen for n, conf in confs.items() if conf.form == "patterns"]
+    jobs = [(what, t, (n, inputs[n], lines[n], s, computed[n], confs[n],
+                       registration_gpu_seconds(confs[n].registration, c)), f1.RATIO_BUDGET, rel)
+            for n, s in keys for what, t in [("h", None)] + [(w, t) for w in SPANS for t in targets.values()]]
+    with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
+        it = iter(list((pool.map if pool else map)(_solve, jobs)))
+    rows = []
+    for n, s in keys:
+        oh, floor_bits = lines[n][2], next(it)
+        at = {what: {name: next(it) for name in targets} for what in SPANS}
+        rows.append({"config": n, "scope": s.name, "registration": confs[n].registration, "overhead": oh,
+                     "floor": floor_bits, "h": {k: None if v is None else v * oh for k, v in at["h"].items()},
+                     "beta": at["beta"]})
+    return {"beta": f1.RATIO_BUDGET, "targets": targets, "rel": rel, "spans": SPANS, "rows": rows}
+
+
+def breakeven_table(be: dict) -> str:
+    """The break-even as a table: a row per line and scope, its floor, the marginal overheads at which its bound at β
+    reaches each weights size and the β at which it does at its own overhead."""
+    names = list(be["targets"])
+    head = (["line", "registration", "scope", "h", "floor"] + [f"h for {n} at β = {_share(be['beta'])}" for n in names]
+            + [f"β for {n}" for n in names])
+
+    def fmt(v: float | None, end: float) -> str:
+        return "none" if v is None else (">" if v >= end else "") + f"{v:.3g}"
+
+    rows = [[CONFIGURATIONS[r["config"]].label.split(" ")[0], r["registration"], r["scope"], f"{r['overhead']:.3g}",
+             _size(r["floor"])] + [fmt(r["h"][n], be["spans"]["h"][1] * r["overhead"]) for n in names]
+            + [fmt(r["beta"][n], be["spans"]["beta"][1]) for n in names] for r in be["rows"]]
+    return "\n".join(" | ".join(x) for x in [head] + rows) + "\n"
+
+
 def at_budgets(out: dict) -> list[dict]:
     """Each line's point at the design card's budgets: the bound, its x, and its share of the scope's served bits
     (exfiltration, infiltration) or FLOP (skipped work)."""
@@ -492,8 +673,13 @@ def at_budgets(out: dict) -> list[dict]:
 
 
 PRIMARY = "world year"
-#: each configuration's colour, line style and width; (C) dashed, its tax a lower bound
-STYLE = {"tokens": ("#08306B", "-", 3.2), "per_expert": ("#4292C6", (0, (7, 2, 1.5, 2)), 2.8),
+#: each configuration's colour, line style and width: a line's registrations dark to light, each narrower so that one
+#: drawn over another shows; the sets' form thin and dashed; (C) dashed, its tax a lower bound
+CUT, SETS = (0, (7, 2, 1.5, 2)), (0, (3, 2))
+STYLE = {"tokens": ("#08306B", "-", 4.2), "tokens_pod": ("#2171B5", "-", 2.8),
+         "tokens_datacenter": ("#9ECAE1", "-", 1.4), "tokens_sets": ("#08306B", SETS, 1.6),
+         "per_expert": ("#00441B", CUT, 4.2), "per_expert_pod": ("#238B45", CUT, 2.8),
+         "per_expert_datacenter": ("#A1D99B", CUT, 1.4), "per_expert_sets": ("#00441B", SETS, 1.6),
          "layer_of_token": ("#D95F02", "-", 2.4),
          "every_block": ("#555555", (0, (6, 3)), 2.4)}
 YLABELS = {"exfiltration": "Exfiltration capacity", "infiltration": "Infiltration, bits written",
@@ -565,11 +751,22 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
                 markerfacecolor="white" if t["status"] == "priced" else color)
     configs = list(dict.fromkeys(s["config"] for s in series))
     handles = [plt_line(STYLE[n]) for n in configs]
-    conf = out["configurations"]
-    labels = [fill(conf[n]["label"] + (" (priced)" if n == "every_block" else f" ({conf[n]['cut']['label']})"
-                                       if "cut" in conf[n] else ""), 72) for n in configs]
-    ax.legend(handles, labels, loc="lower left", bbox_to_anchor=(0, 1.01), ncol=2 if len(configs) > 3 else 3,
-              frameon=False, fontsize=15, handlelength=2.6, columnspacing=1.4, borderaxespad=0)
+    ax.legend(handles, [fill(legend(out, n), 64) for n in configs], loc="lower left", bbox_to_anchor=(0, 1.01),
+              ncol=2 if len(configs) > 3 else 3, frameon=False, fontsize=14, handlelength=2.6, columnspacing=1.4,
+              borderaxespad=0)
+
+
+def legend(out: dict, name: str) -> str:
+    """A line's legend entry: its label, its registration and form where its line has variants, and a cut's label on
+    the cut's own line."""
+    k = out["configurations"][name]
+    if name == "every_block":
+        return k["label"] + " (priced)"
+    text = k["label"] if k["variant_of"] else k["label"] + (f" ({k['cut']['label']})" if "cut" in k else "")
+    if k["registration"] is None:
+        return text
+    return f"{text}: {out['registrations'][k['registration']]['label']}" + (
+        ", the capped sets' form" if k["form"] == "sets" and k["variant_of"] else "")
 
 
 def plt_line(style: tuple):
@@ -594,10 +791,11 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
     info = out["scopes"][scope]
     where = "the world's compute" if info["who"] == "world" else "a datacenter's compute"
     paths = []
-    for panels, width in ((("exfiltration", "infiltration"), 24), (("skipped_work",), 13)):
-        fig, axes = plt.subplots(1, len(panels), figsize=(width, 12), squeeze=False)
+    for panels, width, height, bottom in ((("exfiltration", "infiltration"), 24, 13.5, .47),
+                                          (("skipped_work",), 13, 12, .42)):
+        fig, axes = plt.subplots(1, len(panels), figsize=(width, height), squeeze=False)
         left = .06 if len(panels) > 1 else .11
-        fig.subplots_adjust(left=left, right=.99, bottom=.42, top=.88, wspace=.28)
+        fig.subplots_adjust(left=left, right=.99, bottom=bottom, top=.88, wspace=.28)
         for ax, panel in zip(axes[0], panels):
             _panel(fig, ax, out, scope, panel, 108 if len(panels) > 1 else 110)
         renderer = fig.canvas.get_renderer()
@@ -620,10 +818,22 @@ def main(argv=None) -> None:
     rd.add_argument("json", type=Path)
     rd.add_argument("--scope", action="append", help="a scope's name, as the JSON's `scopes` has it; default all")
     rd.add_argument("--out", type=Path, help="default: the JSON's directory")
+    be = sub.add_parser("breakeven", help="write the patterns'-form lines' break-even, breakeven.json and .txt")
+    be.add_argument("--model", choices=spot_cards.MODELS, default=spot_cards.MODELS[0])
+    be.add_argument("--out", type=Path, required=True)
+    be.add_argument("--scope", action="append", help="a scope's name; default all")
+    be.add_argument("--workers", type=int, default=1)
     args = ap.parse_args(argv)
     if args.cmd == "priced-card":
         args.out.write_text(json.dumps(priced_card(args.model), indent=1) + "\n")
         print(args.out)
+        return
+    if args.cmd == "breakeven":
+        out = breakeven(args.model, tuple(args.scope) if args.scope else None, workers=args.workers)
+        args.out.mkdir(parents=True, exist_ok=True)
+        (args.out / "breakeven.json").write_text(json.dumps(out, indent=1, allow_nan=False) + "\n")
+        (args.out / "breakeven.txt").write_text(breakeven_table(out))
+        print(breakeven_table(out), end="")
         return
     out = json.loads(args.json.read_text())
     for scope in args.scope or out["scopes"]:

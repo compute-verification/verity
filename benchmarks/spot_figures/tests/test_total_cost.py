@@ -1,5 +1,6 @@
-"""Figure 1 in its total-cost form: the configurations and their serve-tax card, the write form against every admissible
-set of a small design, and one scope end to end with a measured tax dropped in."""
+"""Figure 1 in its total-cost form: the configurations and their serve-tax card, the registrations' spans, the write form
+against every admissible set of a small design, the break-even's search, and one scope end to end with a measured tax
+dropped in."""
 from itertools import product
 from math import comb
 
@@ -16,6 +17,38 @@ def test_the_configurations_are_the_cards():
     assert tuple(n for n, c in t.CONFIGURATIONS.items() if c.serve is None) == cards.CONFIGURATIONS
     assert all(t.CONFIGURATIONS[c.serve].serve is None for c in t.CONFIGURATIONS.values() if c.serve)
     assert [n for n, c in t.CONFIGURATIONS.items() if "skipped_work" in c.panels] == ["every_block"]
+
+
+def test_a_request_line_is_drawn_at_every_registration_and_compared_in_the_sets_form():
+    """(A) and (A′) in the patterns' form at each registration, and in the sets' form at their own, which only
+    exfiltration plots; a registration's GPU-seconds are its machines' over the census window."""
+    for name in ("tokens", "per_expert"):
+        lines = {n: c for n, c in t.CONFIGURATIONS.items() if n == name or c.variant_of == name}
+        assert sorted(c.registration for c in lines.values() if c.form == "patterns") == sorted(t.REGISTRATIONS)
+        (sets,) = [c for c in lines.values() if c.form == "sets"]
+        assert sets.registration == t.CONFIGURATIONS[name].registration and sets.panels == ("exfiltration",)
+        assert all(c.label == t.CONFIGURATIONS[name].label for c in lines.values())
+    c = f1.cards("GLM-5.3")
+    window, gpus = c["window"].value, c["machine_gpus"].value
+    assert [t.registration_gpu_seconds(r, c) for r in t.REGISTRATIONS] == [
+        gpus * window, t.POD * gpus * window, c["datacenter_machines"].value * gpus * window]
+
+
+def test_a_break_even_bisects_to_its_target_and_says_when_none_is_in_reach(monkeypatch):
+    """The overhead's multiple at which a bound rising in it reaches the target, and the β at which a bound falling in
+    β does, each within its tolerance; None when the span's best end is above the target, the end when its worst is
+    below; and the floor at the least overhead."""
+    monkeypatch.setattr(t, "_bound", lambda line, scale, beta: 1e6 * scale / beta)
+    h = t._solve(("h", 1e3, None, 0.01, 1e-3))
+    assert h == pytest.approx(1e-5, rel=2e-3)
+    assert t._solve(("beta", 1e3, None, 0.01, 1e-3)) == pytest.approx(1e3, rel=2e-3)
+    assert t._solve(("h", 1e-12, None, 0.01, 1e-3)) is None and t._solve(("h", 1e30, None, 0.01, 1e-3)) == 1e2
+    assert t._solve(("beta", 1e-12, None, 0.01, 1e-3)) is None
+    assert t._solve(("h", None, None, 0.01, 1e-3)) == pytest.approx(1e6 * 1e-12 / 0.01)
+    be = {"beta": 0.01, "targets": {"FP8": 1e3}, "spans": t.SPANS,
+          "rows": [{"config": "tokens", "registration": "pod", "scope": "world week", "overhead": 2.0, "floor": 8e6,
+                    "h": {"FP8": 2e-5}, "beta": {"FP8": None}}]}
+    assert t.breakeven_table(be).splitlines()[1] == "(A) | pod | world week | 2 | 1 MB | 2e-05 | none"
 
 
 def test_a_partition_card_cuts_the_circuit_and_keeps_its_macs():
@@ -157,7 +190,7 @@ def measured(tmp_path_factory) -> dict:
 
     mp.setattr(t.spot_cards, "load", with_measured)
     mp.setattr(t, "BETAS", (1e-3, 1e-1, 1.0))
-    out = t.run("GLM-5.3", ("datacenter week",))
+    out = t.run("GLM-5.3", ("datacenter week",), workers=4)
     mp.undo()
     return out
 
@@ -165,9 +198,10 @@ def measured(tmp_path_factory) -> dict:
 @pytest.mark.slow
 def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     """The planned scope: each line's x is its tax plus β, a measured tax as it comes; the exfiltration lines never
-    above the served bits, saying which term binds; both infiltration lines plotted, and (C)'s falling with β; skipped
-    work only for (C); the captions name what each rests on; and it renders.  It plans every configuration at four
-    shares, about 20 s, the only test of the series end to end."""
+    above the served bits, saying which term binds, a wider registration never above a narrower one and the patterns'
+    form below the sets'; both infiltration lines plotted, and (C)'s falling with β; skipped work only for (C); the
+    captions name what each rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
+    configuration at four shares, about a minute on four workers, the only test of the series end to end."""
     out, scope = measured, "datacenter week"
     served = out["scopes"][scope]["served_bits"]
     assert out["taxes"]["tokens"] == out["taxes"]["tokens"] | {"status": "measured", "tax": .03}
@@ -186,11 +220,22 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     assert out["taxes"]["per_expert"] == out["taxes"]["tokens"]
     assert out["configurations"]["per_expert"]["cut"]["label"] in caps["exfiltration"]
     assert "card_influenceTwo_le_served_min" in caps["exfiltration"] and "card_influenceTwo_le_min" in caps["exfiltration"]
+    assert "card_influenceTwo_le_patterns, proved, in review" in caps["exfiltration"]
+    assert ("each request serves at most S = 144,000 bits, and no proof block is shared across requests"
+            in caps["exfiltration"])
     assert "serve tax 3%" in caps["exfiltration"] and "measured" in caps["exfiltration"]
-    assert "At β = 1% every line is bounded here only by everything the scope serves" in caps["exfiltration"]
     at = out["betas"].index(f1.RATIO_BUDGET)
+    lines = {s["config"]: s for s in out["panels"]["exfiltration"]["series"]}
+    for name in ("tokens", "per_expert"):
+        spans = [lines[n]["y"] for n in (name, f"{name}_pod", f"{name}_datacenter")]
+        assert all(b <= a * (1 + 1e-9) for x in zip(*spans) for a, b in zip(x, x[1:])), name
+        assert lines[name]["y"][at] < lines[f"{name}_sets"]["y"][at]
+        assert all(r >= 1 for n in (name, f"{name}_pod", f"{name}_datacenter") for r in lines[n]["share"])
+    served_at = [n for n, s in lines.items() if s["binds"][at] == "served"]
+    assert served_at and "tokens" not in served_at
+    assert caps["exfiltration"].count("bounded here only by everything the scope serves") == 1
     for name in ("tokens", "per_expert", "layer_of_token"):
-        s = next(x for x in out["panels"]["exfiltration"]["series"] if x["config"] == name)
+        s = lines[name]
         assert all(0 < v < 1 for v in s["computed_proving"])
         assert f"{t._share(s['computed_proving'][at])} of its sampled replay block's proving" in caps["exfiltration"]
     assert "everything the scope serves (" not in caps["infiltration"]

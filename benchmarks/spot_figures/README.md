@@ -63,11 +63,22 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     with skipped work). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
     expert), dash-dot, labelled with the card's `label` (what of the cut is built, checked, proved and served), a
     line only for a model with that card. A new configuration, such as another cut, is a new entry with its own line.
-  - Exfiltration: (A) and (B) in the capped sets' form (`card_influenceTwo_le_served_min`) and never above the
-    scope's served bits (`card_influenceTwo_le_min`), the JSON saying which term binds at each β; (C) in
+  - A two-stage statement holds one Definition's sampled proof blocks of one registration's sampled replay blocks, up
+    to its cap (`optimize.two_stage_design`'s `registration`): a registration spans the census window on one machine,
+    on a 64-machine pod (`POD`) or on all of the census datacenter's machines (`REGISTRATIONS`). (A) and (A′) are drawn
+    at each of the three, dark to light, and (B) at one machine's; each series gives R, the sampled replay blocks a
+    statement shares.
+  - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
+    conditions (each request serves at most S bits, and no proof block is shared across requests), with the capped
+    sets' form (`card_influenceTwo_le_served_min`) at one machine's registration beside each, thin and dashed; (B) in
+    the sets' form. Each is never above the scope's served bits (`card_influenceTwo_le_two_pow_outs`,
+    `card_influenceTwo_le_min`), the JSON saying which term binds at each β; (C) is in
     `consumers.exfiltration_bound`'s form, at most the served bits by the same count. The caption names the lines
     that at β = 1% are bounded only by everything the scope serves, the trivial bound, so that value isn't read as a
     result.
+  - The break-even (`breakeven`, `breakeven.txt` and `figure1.json`'s `breakeven`): for each patterns'-form line and
+    scope, the marginal overhead at which its bound at β = 1% reaches the FP8 and the FP4 weights, the β at which it
+    does at its own overhead, and its floor, the bound as proving's cost goes to nothing.
   - Infiltration: the write form, the bits the incorrect proof blocks write, at the design each exfiltration line
     plans (`write_form`): each replay block charged at most its footprint, a request's served bits under (A) and a
     layer's boundary bits under (B); (C)'s is the K incorrect blocks its plan detects, each the widest block's bits.
@@ -97,9 +108,9 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
       `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`), which still counts which of a request's proof
       blocks are incorrect, and never above the scope's served bits (`card_influenceTwo_le_min`). `--request
       workload` sizes a request as the `workload` card's instead of the census's mean. The appendix figure adds the
-      uniform designs (one sample over a request's proof blocks), the patterns' form, which no lemma states yet (a
-      request's incorrect sets of more than its served bits count once; at most the scope's served bits by
-      `card_influenceTwo_le_two_pow_outs`), and one-stage
+      uniform designs (one sample over a request's proof blocks), the patterns' form
+      (`card_influenceTwo_le_patterns`: a request's incorrect sets of more than its served bits count once; at most
+      the scope's served bits by `card_influenceTwo_le_two_pow_outs`), and one-stage
       sampling of dot-product proof blocks, in `consumers.exfiltration_bound`'s form (the incorrect proof blocks'
       output bits and which ones they are), where the adversary makes the widest ones incorrect first and each is
       charged the widest block's output bits;
@@ -130,7 +141,11 @@ Limits of the model:
 - The one-stage certificate counts location bits over every proof block of the scope.
 - The uncapped two-stage bound charges a wholly incorrect request every bit it commits, its interior included, not
   only what it serves; the capped ones charge at most what it serves, the sets' form on
-  `card_influenceTwo_le_served_min` and the patterns' form on none yet.
+  `card_influenceTwo_le_served_min` and the patterns' form on `card_influenceTwo_le_patterns`.
+- The patterns' form takes each request to serve at most S bits and no proof block to be shared across requests: a
+  batched or routed block that several requests read needs the planner changed.
+- A registration's sharing is its expected sampled replay blocks given at least one, Q/(1 − e^−Q), not their
+  distribution; a pod-wide or datacenter-wide registration needs one committer over its machines' boundary rows.
 - The served bits count every token of a request as served, as the token select's output word alone: a circuit that
   returns more (logits, state) serves more, and the cap is then too low.
 - The two-stage write forms need a harm bound at the footprint, which no lemma states yet, and (B) replays a layer of

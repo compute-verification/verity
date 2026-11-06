@@ -109,7 +109,7 @@ def test_a_capped_caption_says_what_it_rests_on():
            "144,000 bits it serves (4,500 tokens of 32 bits)" in caps["exfiltration"]
     assert "never above the 1.5e+16 bits the scope serves (card_influenceTwo_le_min)" in caps["exfiltration"]
     assert "Patterns" not in caps["exfiltration"]
-    assert "Patterns (dash-dot-dot; no lemma states it yet)" in caps["exfiltration_appendix"]
+    assert "Patterns (dash-dot-dot; card_influenceTwo_le_patterns)" in caps["exfiltration_appendix"]
     for panel in ("exfiltration", "skipped_work"):
         assert "the token ids, 1e-07 of the scope's compute" in caps[panel], panel
 
@@ -334,7 +334,7 @@ def test_the_capped_curves_charge_at_most_what_a_request_serves(tmp_path):
     p = out["panels"]["exfiltration"]
     assert p["capped"] == {"two-stage-capped": {"form": "sets", "status": "card_influenceTwo_le_served_min",
                                                 "served": "card_influenceTwo_le_min"},
-                           "two-stage-patterns": {"form": "patterns", "status": "no lemma states it yet",
+                           "two-stage-patterns": {"form": "patterns", "status": "card_influenceTwo_le_patterns",
                                                   "served": "card_influenceTwo_le_two_pow_outs"}}
     assert p["main"] == ["two-stage", "two-stage-capped"]
     ys = {(s["design"], s["budget"]): s["y"] for s in p["series"]}
@@ -346,7 +346,7 @@ def test_the_capped_curves_charge_at_most_what_a_request_serves(tmp_path):
     caps = out["scopes"]["datacenter week"]["captions"]
     assert (f"Capped (dash-dot; card_influenceTwo_le_served_min): two-stage with each request charged at most the "
             f"{out['inputs']['served_bits']['value']:,.0f} bits it serves") in caps["exfiltration"]
-    assert "no lemma states it yet" in caps["exfiltration_appendix"] and "Patterns" not in caps["exfiltration"]
+    assert "card_influenceTwo_le_patterns" in caps["exfiltration_appendix"] and "Patterns" not in caps["exfiltration"]
     assert all(path.stat().st_size > 0 for path in render(out, "datacenter week", tmp_path)
                + render_appendix(out, "datacenter week", tmp_path))
 
