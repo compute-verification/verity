@@ -21,6 +21,8 @@ public import Proofs.Flock.Claims.Sampling.Select.Bounds
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Properties.Served.SecurityProofs
 
 open Pouw.RelativeSecurity

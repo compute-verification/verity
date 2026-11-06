@@ -26,6 +26,8 @@ The floors per prover take the same chain one adversary and one value of its coi
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Pouw.RelativeSecurity
 
 open Finset
