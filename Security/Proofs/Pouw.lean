@@ -154,6 +154,7 @@ public import Proofs.Pouw.PearlC.TileCapRev1Gamma
 public import Proofs.Pouw.PearlC.TileCircuit
 public import Proofs.Pouw.PearlC.TileValues
 public import Proofs.Pouw.PearlC.TileGamma
+public import Proofs.Pouw.PearlC.TileGammaTol
 public import Proofs.Pouw.PearlC.TileUOnlyGamma
 public import Proofs.Pouw.PearlC.UOnlyGamma
 public import Proofs.Pouw.PearlC.UOnlyLoopGamma
@@ -172,6 +173,7 @@ public import Proofs.Pouw.PearlC.RowStats
 public import Proofs.Pouw.PearlC.PeelExists
 public import Proofs.Pouw.PearlC.PeelExists4
 public import Proofs.Pouw.PearlC.TileCheckWords
+public import Proofs.Pouw.PearlC.TileCheckWordsRev1
 public import Proofs.Pouw.Pool
 public import Proofs.Pouw.PoolWitness
 public import Proofs.Pouw.Prob
