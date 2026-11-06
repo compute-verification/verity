@@ -1,4 +1,6 @@
-import Proofs.Flock.SessionLoop.Statement
+module
+
+public import Proofs.Flock.SessionLoop.Statement
 
 /-!
 # `LoopInnerRound0Own`'s fixture: a deployed session loop reaches a rep's inner proof
@@ -11,6 +13,8 @@ a table's level 0 (`Finish.tabOfLevel0`) with SHA-512 trees over the rows of a d
 the host's packed witness and the operating system's bytes, which no Lean term is. So the named assumption
 `Loop.ReachesInner` says only that one deployed run reaches such a round.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

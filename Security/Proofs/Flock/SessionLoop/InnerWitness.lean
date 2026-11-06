@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.Inner
-import Proofs.Flock.Claims.Recursion.Assumptions.LoopFixture
+module
+
+public import Proofs.Flock.SessionLoop.Inner
+public import Proofs.Flock.Claims.Recursion.Assumptions.LoopFixture
 
 /-!
 # `LoopInnerRound0Own` says something
@@ -13,6 +15,8 @@ Both lemmas are at a deployed session loop's run, `Loop.ReachesInner` (the named
 * `Flock.SecurityProofs.LoopInnerRound0Own_nontrivial`: there `LoopInnerRound0` fails at `LeanRelease.silent`, the
   release that releases nothing, whose round is empty where the inner proof's round 0 is at least its two headers.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
