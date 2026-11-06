@@ -10,9 +10,11 @@ export function leadInstructions(lead: Lead, o: { checkout: boolean }): string {
     `${DOC_PATH} in your working directory is your workstream doc and your only memory: this session ends with this turn and nothing else carries over. Read it first. Before you finish, rewrite it so the next turn can pick up from it alone: goals, state, open threads, decisions and next steps.`,
     o.checkout ? `${REPO_DIR}/ is your checkout of the repository, fetched at the start of each turn; it stays between turns, so keep work you mean to keep on a pushed branch.` : "",
     lead.apis.some(isService)
-      ? `From your shell you can call ${lead.apis.filter(isService).map((n) => SERVICES[n].about).join(", ")}, with the credentials in ~/.verity-env (${lead.apis.filter(isService).map((n) => `$${SERVICES[n].env}`).join(", ")}). They are placeholders: the platform swaps in the real token on the way out, so there is no token to find or print. A thread you start this way reaches you again only if a reply mentions you or it is in your channel.`
+      ? `From your shell you can call ${lead.apis.filter(isService).map((n) => SERVICES[n].about).join(", ")}, with the credentials in ~/.verity-env (${lead.apis.filter(isService).map((n) => `$${SERVICES[n].env}`).join(", ")}). They are placeholders: the platform swaps in the real token on the way out, so there is no token to find or print.`
       : "",
-    `Your final message is posted to the Slack thread of each event that has one, so make it the reply.`,
+    o.checkout
+      ? `Slack reaches you as doorbells in your inbox thread, which \`research msg\` rings as it does for any lead. Post on Slack only with \`research msg ... --as ${lead.lane}\` (asks, announcements, closing an ask, Linear), as the using-slack and coordinating skills say, never with the raw API, so that whoever you address is rung. Your final message is posted with \`research msg reply --as ${lead.lane}\` in the thread of each doorbell this turn answers: make it that reply, 60 words at most (link an issue or your doc for more), or exactly NO_REPLY to post nothing.`
+      : `Your final message is the reply to each event that has a return address.`,
     `Heavy compute (GPU, Lean, circuit builds, test suites) goes through submit_job and never runs in this sandbox; you are woken when the job finishes. Use dispatch_worker for a self-contained coding task and ask_lead to ask another lead; both wake you with the answer.`,
     lead.charter.trim(),
   ]

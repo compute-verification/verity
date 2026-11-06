@@ -1,4 +1,5 @@
 import type { Credentials } from "./credentials.ts";
+import { shq } from "./shell.ts";
 
 export const placeholder = (name: string) => `platform-${name}-placeholder`;
 export const GITHUB_PLACEHOLDER = placeholder("github");
@@ -7,7 +8,7 @@ export const GITHUB_PLACEHOLDER = placeholder("github");
 // the host: the sandbox's environment holds the placeholder under `env`, and
 // the firewall swaps the header for the real one on the way to `hosts`.
 export const SERVICES = {
-  slack: { hosts: ["slack.com"], env: "SLACK_BOT_TOKEN", header: (t: string) => `Bearer ${t}`, about: "Slack's Web API (https://slack.com/api/…, as the platform's bot)" },
+  slack: { hosts: ["slack.com"], env: "SLACK_BOT_TOKEN", header: (t: string) => `Bearer ${t}`, about: "Slack's Web API (https://slack.com/api/…, as Verity's bot)" },
   linear: { hosts: ["api.linear.app"], env: "LINEAR_API_KEY", header: (t: string) => t, about: "Linear's GraphQL API (https://api.linear.app/graphql)" },
   notion: { hosts: ["api.notion.com"], env: "NOTION_API_KEY", header: (t: string) => `Bearer ${t}`, about: "Notion's API (https://api.notion.com/v1/…)" },
 } as const;
@@ -20,15 +21,16 @@ export const isService = (name: string): name is ServiceName => Object.hasOwn(SE
 export type HeaderRule = { host: string; sent: string; real: string };
 
 // The header rules and extra hosts for a sandbox opened for `subject`: GitHub
-// in git's Basic form and the API's Bearer form, and each granted API whose
-// token the host holds. Each credential is issued (and recorded) per open.
+// in git's Basic form and the API's Bearer form (raw files too, where research
+// reads the notes repository's routes), and each granted API whose token the
+// host holds. Each credential is issued (and recorded) per open.
 export async function credentialRules(credentials: Credentials, subject: string, apis: string[]): Promise<{ rules: HeaderRule[]; hosts: string[] }> {
   const rules: HeaderRule[] = [];
   const hosts: string[] = [];
   const gh = await credentials.github(subject);
   if (gh) {
     const basic = (t: string) => `Basic ${Buffer.from(`x-access-token:${t}`).toString("base64")}`;
-    for (const host of ["github.com", "api.github.com"]) {
+    for (const host of ["github.com", "api.github.com", "raw.githubusercontent.com"]) {
       rules.push({ host, sent: `Bearer ${GITHUB_PLACEHOLDER}`, real: `Bearer ${gh.token}` });
       rules.push({ host, sent: basic(GITHUB_PLACEHOLDER), real: basic(gh.token) });
     }
@@ -43,8 +45,10 @@ export async function credentialRules(credentials: Credentials, subject: string,
   return { rules, hosts };
 }
 
-export const envExports = (apis: string[]) =>
-  apis
-    .filter(isService)
-    .map((n) => `export ${SERVICES[n].env}=${placeholder(n)}`)
+export const serviceEnv = (apis: string[]): Record<string, string> =>
+  Object.fromEntries(apis.filter(isService).map((n) => [SERVICES[n].env, placeholder(n)]));
+
+export const envExports = (vars: Record<string, string>) =>
+  Object.entries(vars)
+    .map(([k, v]) => `export ${k}=${shq(v)}`)
     .join("\n");

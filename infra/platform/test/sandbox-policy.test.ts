@@ -97,6 +97,7 @@ describe("sandbox network policy", () => {
     expect(rule("slack.com")).toEqual([{ sent: `Bearer ${placeholder("slack")}`, real: "Bearer xoxb-1" }]);
     expect(rule("api.linear.app")).toEqual([{ sent: placeholder("linear"), real: "lin-1" }]);
     expect(rule("api.github.com").map((r) => r.real)).toEqual(["Bearer gh-1", `Basic ${Buffer.from("x-access-token:gh-1").toString("base64")}`]);
+    expect(rule("raw.githubusercontent.com")[0]).toEqual({ sent: `Bearer ${placeholder("github")}`, real: "Bearer gh-1" });
     expect(rules.some((r) => r.host === "api.notion.com")).toBe(false);
 
     const allowHosts = [...ALLOW, ...hosts];

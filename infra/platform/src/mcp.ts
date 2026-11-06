@@ -43,7 +43,7 @@ export function platformMcpServer() {
     "assign",
     {
       description:
-        "Hand a lead a task. The lead replies in the given Slack thread, or in its own channel when none is given.",
+        "Hand a lead a task. The lead replies in the given Slack thread (a channel id or registry key, and the thread's root ts), else get_answer reads its reply.",
       inputSchema: {
         lane: z.string(),
         task: z.string(),
@@ -58,7 +58,7 @@ export function platformMcpServer() {
         source: "mcp",
         kind: "assign",
         payload: { text: task, from: from ?? "mcp" },
-        replyTo: slack_channel ? { channel: slack_channel, threadTs: thread_ts } : null,
+        replyTo: slack_channel && thread_ts ? { channel: slack_channel, threadTs: thread_ts } : { caller: from ?? "mcp" },
       });
       return result({ eventId: r.eventId, started: r.started });
     },

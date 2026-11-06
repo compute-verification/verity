@@ -1,7 +1,8 @@
 // Moves leads onto the platform and back, over its HTTP API. Needs PLATFORM_URL
 // and PLATFORM_API_TOKEN in the environment.
 //
-//   swap.ts register LANE --channel C --charter FILE --doc FILE [--usergroup S…] [--apis slack,linear,notion]
+//   swap.ts id LANE                         the agent id LANE's platform lead holds its inbox under (names open --holder)
+//   swap.ts register LANE --channel C --inbox TS --charter FILE --doc FILE [--apis slack,linear,notion]
 //                         [--model M] [--harness claude-code|codex] [--budget USD] [--cron MINUTES] [--kick TEXT]
 //   swap.ts all LEADS.json [--kick TEXT]     register every lead in the file (an array of register's fields)
 //   swap.ts pause LANE                      rollback: the platform stops taking events for LANE
@@ -10,7 +11,12 @@
 //   swap.ts doc LANE                        print LANE's workstream doc (to hand back to Cursor)
 //   swap.ts status [LANE]
 import { readFileSync } from "node:fs";
+import { leadAgentId } from "../src/slack.ts";
 
+if (process.argv[2] === "id") {
+  console.log(leadAgentId(process.argv[3] ?? ""));
+  process.exit(process.argv[3] ? 0 : 2);
+}
 const url = process.env.PLATFORM_URL?.replace(/\/$/, "");
 const token = process.env.PLATFORM_API_TOKEN;
 if (!url || !token) {
@@ -43,7 +49,7 @@ function flags(args: string[]) {
 type Entry = {
   lane: string;
   slackChannel?: string;
-  slackUsergroup?: string;
+  slackInbox?: string;
   apis?: string[];
   charterFile?: string;
   docFile?: string;
@@ -59,7 +65,7 @@ async function register(e: Entry, kick?: string) {
   const r = await api("POST", "/api/leads", {
     lane: e.lane,
     slackChannel: e.slackChannel,
-    slackUsergroup: e.slackUsergroup,
+    slackInbox: e.slackInbox,
     apis: e.apis,
     charter: read(e.charterFile),
     doc: read(e.docFile),
@@ -90,7 +96,7 @@ switch (cmd) {
       {
         lane,
         slackChannel: f.channel,
-        slackUsergroup: f.usergroup,
+        slackInbox: f.inbox,
         apis: f.apis ? f.apis.split(",") : undefined,
         charterFile: f.charter,
         docFile: f.doc,

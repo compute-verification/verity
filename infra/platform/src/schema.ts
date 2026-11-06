@@ -22,8 +22,9 @@ create table if not exists leads (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-alter table leads add column if not exists slack_usergroup text;
+alter table leads add column if not exists slack_inbox text;
 alter table leads add column if not exists apis text not null default 'slack,linear';
+create unique index if not exists leads_inbox on leads (slack_channel, slack_inbox) where slack_inbox is not null;
 
 create table if not exists events (
   id bigserial primary key,
@@ -110,14 +111,6 @@ create table if not exists jobs (
   result jsonb,
   submitted_at timestamptz not null default now(),
   finished_at timestamptz
-);
-
-create table if not exists threads (
-  channel text not null,
-  thread_ts text not null,
-  lane text not null references leads(lane),
-  at timestamptz not null default now(),
-  primary key (channel, thread_ts)
 );
 
 create table if not exists alerts (

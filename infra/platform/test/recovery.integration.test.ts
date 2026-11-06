@@ -3,7 +3,7 @@ import { getRun } from "workflow/api";
 import { tick } from "../src/cron.ts";
 import { slackEvents } from "../src/http.ts";
 import type { LeadResult } from "../workflows/lead.ts";
-import { NOW, signedSlackRequest, slackBody, slackEnv, testRuntime } from "./helpers.ts";
+import { NOW, nextTs, signedSlackRequest, slackBody, slackEnv, testRuntime } from "./helpers.ts";
 
 // What happens without a human when something breaks: a failed turn is
 // reported in its thread and the lead carries on; the minute cron rings a lead
@@ -11,31 +11,34 @@ import { NOW, signedSlackRequest, slackBody, slackEnv, testRuntime } from "./hel
 // turn that has run too long, once.
 
 let t: Awaited<ReturnType<typeof testRuntime>>;
+const INBOX = "1700000000.000009";
 
-async function say(channel: string, text: string) {
-  const { ts, body } = slackBody({ channel, text });
+async function ring(text: string) {
+  const thread = nextTs();
+  const { body } = slackBody({ channel: "C_COORD", text: `from daniel, thread ${thread}: @kernels ${text}`, threadTs: INBOX, username: "router" });
   await slackEvents(signedSlackRequest(body), slackEnv, NOW);
-  return ts;
+  return thread;
 }
 
 const reply = (thread: string, has: string) => t.slack.waitFor((p) => p.threadTs === thread && p.text.includes(has));
+const turnOf = (has: string, n = 1) => t.turnsEnded((x) => x.lane === "kernels" && (x.finalText ?? "").includes(has), n);
 
 beforeAll(async () => {
   t = await testRuntime();
-  await t.store.upsertLead({ lane: "kernels", model: "fake/fake", harness: "fake", slackChannel: "C_KERNELS", doc: "# kernels\n" });
+  await t.store.upsertLead({ lane: "kernels", model: "fake/fake", harness: "fake", slackChannel: "C_COORD", slackInbox: INBOX, doc: "# kernels\n" });
 });
 
 describe("recovery", () => {
   it("reports a failed turn in its thread, keeps the doc, and answers the next message", async () => {
-    const thread = await say("C_KERNELS", "[[fail: harness crashed]]");
+    const thread = await ring("[[fail: harness crashed]]");
     const post = await reply(thread, "This turn failed");
     expect(post.text).toContain("harness crashed");
     const [turn] = await t.store.listTurns({ lane: "kernels", limit: 1 });
     expect(turn).toMatchObject({ status: "failed" });
     expect(turn!.error).toContain("harness crashed");
     expect((await t.store.getLead("kernels"))!.docRev).toBe(0);
-    const next = await say("C_KERNELS", "are you back?");
-    await reply(next, "slack/message");
+    const next = await ring("are you back?");
+    await reply(next, "slack/doorbell");
   });
 
   it("restarts a lead whose events have waited too long, and alerts once", async () => {
@@ -46,7 +49,7 @@ describe("recovery", () => {
     expect(r.restarted).toEqual(["kernels"]);
     expect(r.alerts).toHaveLength(1);
     await t.slack.waitFor((p) => p.channel === "C_ALERTS" && p.text.includes("kernels had 1 event(s) waiting"));
-    await t.slack.waitFor((p) => p.channel === "C_KERNELS" && p.threadTs === undefined && p.text.includes("mcp/assign"));
+    await turnOf("mcp/assign");
     expect((await t.store.getLead("kernels"))!.runId).not.toBe(before);
   });
 
@@ -59,7 +62,7 @@ describe("recovery", () => {
     expect(r.nudged).toEqual(["kernels"]);
     expect(r.alerts).toEqual([expect.stringContaining("kernels-stuck")]);
     expect((await tick({ alertChannel: "C_ALERTS" })).alerts).toEqual([]);
-    await t.slack.waitFor((p) => p.channel === "C_KERNELS" && p.text.includes("Handled 1 event(s): mcp/assign") && t.slack.posts.filter((q) => q.channel === "C_KERNELS" && q.threadTs === undefined).length >= 2);
+    await turnOf("Handled 1 event(s): mcp/assign", 2);
   });
 
   it("moves an idle lead whose run is a day old to a fresh run", async () => {
@@ -71,7 +74,7 @@ describe("recovery", () => {
     const ended = (await getRun<LeadResult>(old).returnValue) as LeadResult;
     expect(ended).toMatchObject({ ended: "superseded" });
     expect((await tick()).rolled).toEqual([]);
-    const thread = await say("C_KERNELS", "after the roll");
-    await reply(thread, "slack/message");
+    const thread = await ring("after the roll");
+    await reply(thread, "slack/doorbell");
   });
 });

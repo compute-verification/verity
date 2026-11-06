@@ -5,7 +5,7 @@ import { tick } from "./cron.ts";
 import { jobDone } from "./job-done.ts";
 import { runtime } from "./runtime.ts";
 import { SERVICE_NAMES, isService } from "./services.ts";
-import { mentionedLanes, parseSlackEvent, verifySlackSignature } from "./slack.ts";
+import { PLATFORM_NAME, leadAgentId, parseDoorbell, parseSlackEvent, verifySlackSignature } from "./slack.ts";
 import type { HarnessName, Lead } from "./store.ts";
 import { wake } from "./wake.ts";
 
@@ -37,31 +37,24 @@ export async function slackEvents(req: Request, env: Env = process.env, nowSecon
   if (!parsed) return json({ ok: true, routed: [] });
   if ("challenge" in parsed) return json({ challenge: parsed.challenge });
   const m = parsed.message;
+  const none = json({ ok: true, routed: [] });
+  // Only a reply in a lead's inbox thread wakes it. Who a post is for is
+  // `research msg`'s rule, applied by whoever sends it: it rings each name the
+  // post addresses with a doorbell in that name's inbox, on Cursor and here alike.
+  if (!m.threadTs || m.threadTs === m.ts) return none;
   const rt = await runtime();
-  if (m.botId && m.botId === (await rt.slack.botId())) return json({ ok: true, routed: [] });
-  const leads = (await rt.store.listLeads()).filter((l) => l.status === "active");
-  let lanes = mentionedLanes(m.text, leads);
-  if (lanes.length === 0 && m.threadTs) {
-    const owner = await rt.store.threadLane(m.channel, m.threadTs);
-    if (owner) lanes = [owner];
-  }
-  if (lanes.length === 0) {
-    const owner = leads.find((l) => l.slackChannel === m.channel);
-    if (owner) lanes = [owner.lane];
-  }
-  const thread = m.threadTs ?? m.ts;
-  for (const lane of lanes) {
-    await rt.store.bindThread(m.channel, thread, lane);
-    await wake(lane, {
-      lane,
-      source: "slack",
-      kind: "message",
-      payload: { text: m.text, user: m.user, channel: m.channel, ts: m.ts },
-      replyTo: { channel: m.channel, threadTs: thread },
-      dedupeKey: `slack:${m.eventId}:${lane}`,
-    });
-  }
-  return json({ ok: true, routed: lanes });
+  const lead = await rt.store.leadByInbox(m.channel, m.threadTs);
+  if (!lead || lead.status !== "active" || m.username === lead.lane || m.username === PLATFORM_NAME) return none;
+  const bell = parseDoorbell(m.text);
+  await wake(lead.lane, {
+    lane: lead.lane,
+    source: "slack",
+    kind: bell ? "doorbell" : "message",
+    payload: { text: m.text, user: m.user, channel: m.channel, ts: m.ts, ...(bell && { from: bell.author, urgent: bell.urgent }) },
+    replyTo: bell ? { channel: bell.channel ?? m.channel, threadTs: bell.thread } : null,
+    dedupeKey: `slack:${m.eventId}`,
+  });
+  return json({ ok: true, routed: [lead.lane] });
 }
 
 // A job runner posts here when a job ends. The URL's token is the job's
@@ -102,7 +95,7 @@ type LeadChange = {
   charter?: string;
   doc?: string;
   slackChannel?: string;
-  slackUsergroup?: string;
+  slackInbox?: string;
   apis?: string[];
   harness?: HarnessName;
   model?: string;
@@ -151,7 +144,7 @@ export async function changeLead(req: Request, env: Env = process.env) {
     ? await wake(lead.lane, { lane: lead.lane, source: "mcp", kind: "cutover", payload: { text: c.kick, from: "swap" }, replyTo: null })
     : null;
   const { doc: _doc, charter: _charter, ...shown } = lead;
-  return json({ lead: { ...shown, docBytes: lead.doc.length }, kicked, runId });
+  return json({ lead: { ...shown, agentId: leadAgentId(lead.lane), docBytes: lead.doc.length }, kicked, runId });
 }
 
 export async function transcripts(req: Request, env: Env = process.env) {
@@ -185,6 +178,8 @@ export async function statusReport(lane?: string) {
     const mine = spend.filter((s) => s.lane === l.lane);
     out.push({
       lane: l.lane,
+      agentId: leadAgentId(l.lane),
+      inbox: l.slackInbox ? { channel: l.slackChannel, threadTs: l.slackInbox } : null,
       status: l.status,
       harness: l.harness,
       model: l.model,

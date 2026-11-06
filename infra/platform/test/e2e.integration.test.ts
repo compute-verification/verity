@@ -9,9 +9,9 @@ import { getRun, start } from "workflow/api";
 import { tick } from "../src/cron.ts";
 import { changeLead, jobCallback, slackEvents, status } from "../src/http.ts";
 import { mcpHandler } from "../src/mcp.ts";
-import { MEMORY_BOT_ID } from "../src/slack.ts";
+import { leadAgentId } from "../src/slack.ts";
 import { type LeadResult, leadWorkflow } from "../workflows/lead.ts";
-import { NOW, signedSlackRequest, slackBody, slackEnv, testRuntime } from "./helpers.ts";
+import { NOW, nextTs, signedSlackRequest, slackBody, slackEnv, testRuntime } from "./helpers.ts";
 
 // The whole platform in one process: real Workflow DevKit runs (the local world),
 // the real HarnessAgent driving a scripted harness in directory sandboxes,
@@ -19,14 +19,31 @@ import { NOW, signedSlackRequest, slackBody, slackEnv, testRuntime } from "./hel
 
 let t: Awaited<ReturnType<typeof testRuntime>>;
 const API = { PLATFORM_API_TOKEN: "test-api-token" };
+const COORD = "C_COORD";
+const INBOX: Record<string, string> = {
+  infra: "1700000000.000001",
+  proofs: "1700000000.000002",
+  comms: "1700000000.000003",
+  circuits: "1700000000.000004",
+};
 
-async function say(channel: string, text: string, threadTs?: string) {
-  const { ts, body } = slackBody({ channel, text, threadTs });
+async function event(o: { text: string; threadTs?: string; channel?: string; username?: string }) {
+  const { ts, body } = slackBody({ channel: o.channel ?? COORD, text: o.text, threadTs: o.threadTs, botId: "BVERITY", username: o.username });
   const res = await slackEvents(signedSlackRequest(body), slackEnv, NOW);
-  return { ts, thread: threadTs ?? ts, body, res: (await res.json()) as { ok: boolean; routed: string[] } };
+  return { ts, body, res: (await res.json()) as { ok: boolean; routed: string[] } };
+}
+
+// What `research msg` posts in `lane`'s inbox thread for a post addressed to it
+// in the front door (or in `channel`): a doorbell naming the post's thread.
+async function ring(lane: string, text: string, o: { thread?: string; channel?: string; from?: string } = {}) {
+  const thread = o.thread ?? nextTs();
+  const where = `${o.channel ? `#${o.channel} ` : ""}thread ${thread}`;
+  const e = await event({ text: `from ${o.from ?? "daniel"}, ${where}: @${lane} ${text}`, threadTs: INBOX[lane], username: "router" });
+  return { ...e, thread };
 }
 
 const reply = (thread: string, has: string) => t.slack.waitFor((p) => p.threadTs === thread && p.text.includes(has));
+const turnOf = (lane: string, has: string) => t.turnEnded((x) => x.lane === lane && x.kind === "lead" && (x.finalText ?? "").includes(has));
 
 async function filesUnder(dir: string): Promise<string[]> {
   const out: string[] = [];
@@ -40,65 +57,82 @@ async function filesUnder(dir: string): Promise<string[]> {
 
 beforeAll(async () => {
   t = await testRuntime();
-  await t.store.upsertLead({ lane: "infra", model: "fake/fake", harness: "fake", slackChannel: "C_INFRA", doc: "# infra workstream\n", monthlyBudgetUsd: 400 });
-  await t.store.upsertLead({ lane: "proofs", model: "fake/fake", harness: "fake", slackChannel: "C_PROOFS", slackUsergroup: "SPROOFS1", doc: "# proofs workstream\n" });
+  for (const lane of ["infra", "proofs"]) {
+    await t.store.upsertLead({ lane, model: "fake/fake", harness: "fake", slackChannel: COORD, slackInbox: INBOX[lane], doc: `# ${lane} workstream\n` });
+  }
+  await t.store.upsertLead({ lane: "infra", model: "fake/fake", monthlyBudgetUsd: 400 });
 });
 
 describe("a lead on the platform", () => {
-  it("wakes on a Slack message, runs a harness turn, updates its doc and replies in the thread", async () => {
-    const m = await say("C_INFRA", "status of the queue?");
+  it("wakes on a doorbell in its inbox, runs a harness turn, updates its doc and replies in the post's thread", async () => {
+    const m = await ring("infra", "status of the queue?");
     expect(m.res).toEqual({ ok: true, routed: ["infra"] });
-    const post = await reply(m.thread, "slack/message");
-    expect(post.channel).toBe("C_INFRA");
+    const post = await reply(m.thread, "slack/doorbell");
+    expect(post).toMatchObject({ channel: COORD, username: "infra" });
     const lead = (await t.store.getLead("infra"))!;
     expect(lead.docRev).toBe(1);
-    expect(lead.doc).toContain("handled slack/message");
+    expect(lead.doc).toContain("handled slack/doorbell");
     expect(lead.runId).toBeTruthy();
     expect((await t.store.docRevisions("infra")).map((r) => r.rev)).toEqual([1]);
   });
 
-  it("routes by mention of the lead's user group, then by thread", async () => {
-    const m = await say("C_GENERAL", "<!subteam^SPROOFS1> is the lock current?");
-    expect(m.res.routed).toEqual(["proofs"]);
-    await reply(m.thread, "slack/message");
-    const followUp = await say("C_GENERAL", "and the audit?", m.thread);
-    expect(followUp.res.routed).toEqual(["proofs"]);
-    await t.slack.waitFor(() => t.slack.posts.filter((q) => q.threadTs === m.thread).length >= 2);
-    expect((await t.store.getLead("proofs"))!.docRev).toBe(2);
+  it("wakes only on its inbox: research msg decides who a post is for, and nothing the lead or the platform posts rings it", async () => {
+    const elsewhere = await ring("proofs", "is the lock current?", { channel: "ask-the-team" });
+    expect(elsewhere.res.routed).toEqual(["proofs"]);
+    expect(await reply(elsewhere.thread, "slack/doorbell")).toMatchObject({ channel: "ask-the-team", username: "proofs" });
+
+    expect((await event({ text: "<!subteam^SPROOFS|@proofs> a top-level post, rung by its sender" })).res.routed).toEqual([]);
+    expect((await event({ text: "@proofs a reply in some other thread", threadTs: "1700000999.000001" })).res.routed).toEqual([]);
+    expect((await event({ text: "from proofs, thread 1.2: x", threadTs: INBOX.proofs, username: "proofs" })).res.routed).toEqual([]);
+    expect((await event({ text: "This turn failed", threadTs: INBOX.proofs, username: "platform" })).res.routed).toEqual([]);
+
+    const typed = await event({ text: "a line someone typed in the inbox", threadTs: INBOX.proofs });
+    expect(typed.res.routed).toEqual(["proofs"]);
+    const turn = await turnOf("proofs", "slack/message");
+    expect((await t.store.transcript(turn.id)).some((p) => p.type === "post")).toBe(false);
   });
 
   it("refuses an unsigned request and records a redelivered event once", async () => {
-    const bad = await slackEvents(signedSlackRequest(slackBody({ channel: "C_INFRA", text: "x" }).body, "wrong-secret"), slackEnv, NOW);
+    const bad = await slackEvents(signedSlackRequest(slackBody({ channel: COORD, text: "x", threadTs: INBOX.infra }).body, "wrong-secret"), slackEnv, NOW);
     expect(bad.status).toBe(401);
-    const m = await say("C_INFRA", "once only");
+    const m = await ring("infra", "once only");
     await slackEvents(signedSlackRequest(m.body), slackEnv, NOW);
-    const { rows } = await t.store.db.query(`select count(*)::int as n from events where payload->>'text' = 'once only'`);
+    const { rows } = await t.store.db.query(`select count(*)::int as n from events where payload->>'text' like '%once only'`);
     expect(rows[0]!.n).toBe(1);
-    await reply(m.thread, "slack/message");
+    await reply(m.thread, "slack/doorbell");
   });
 
-  it("hears another bot's post (an agent still on Cursor, an alert) and ignores its own", async () => {
-    const post = async (botId: string, text: string) => {
-      const { ts, body } = slackBody({ channel: "C_COORD", text, user: "U_BOT", botId });
-      return { ts, res: (await (await slackEvents(signedSlackRequest(body), slackEnv, NOW)).json()) as { routed: string[] } };
+  it("hands a reply that can't be posted back to the lead, once", async () => {
+    const real = t.rt.reply;
+    t.rt.reply = async () => {
+      throw new Error("research msg reply: exit 1: refused: 130 words");
     };
-    expect((await post(MEMORY_BOT_ID, "<!subteam^SPROOFS1> from the platform itself")).res.routed).toEqual([]);
-    const other = await post("BTEAMBOT", "<!subteam^SPROOFS1> from an agent on Cursor");
-    expect(other.res.routed).toEqual(["proofs"]);
-    await reply(other.ts, "slack/message");
+    try {
+      const m = await ring("infra", "a long answer, please");
+      await turnOf("infra", "slack/reply-failed");
+      const turns = await t.store.listTurns({ lane: "infra" });
+      const errors = (await Promise.all(turns.map((x) => t.store.transcript(x.id)))).flat().filter((p) => p.type === "post-error");
+      expect(errors.map((p) => p.content)).toEqual([{ channel: COORD, threadTs: m.thread }]);
+      expect(errors[0]!.text).toContain("130 words");
+      const { rows } = await t.store.db.query(`select count(*)::int as n from events where kind = 'reply-failed'`);
+      expect(rows[0]!.n).toBe(1);
+    } finally {
+      t.rt.reply = real;
+    }
   });
 
-  it("wakes on a cron tick and posts in its channel", async () => {
+  it("wakes on a cron tick and posts nothing", async () => {
     await t.store.db.query(`update leads set cron_every_minutes = 60, next_tick_at = now() - interval '1 minute' where lane = 'infra'`);
     const r = await tick();
     expect(r.ticked).toEqual(["infra"]);
-    const post = await t.slack.waitFor((p) => p.channel === "C_INFRA" && p.threadTs === undefined && p.text.includes("cron/tick"));
-    expect(post.text).toContain("Handled 1 event(s)");
+    const turn = await turnOf("infra", "cron/tick");
+    expect(turn.finalText).toContain("Handled 1 event(s)");
+    expect(t.slack.posts.some((p) => p.text.includes("cron/tick"))).toBe(false);
     expect((await tick()).ticked).toEqual([]);
   });
 
   it("submits a job and is woken in the same thread by its callback", async () => {
-    const m = await say("C_INFRA", "run the bench [[job: uv run bench.py --quick]]");
+    const m = await ring("infra", "run the bench [[job: uv run bench.py --quick]]");
     await reply(m.thread, "submit_job");
     const sub = t.jobs.submitted.at(-1)!;
     expect(sub.spec.command).toBe("uv run bench.py --quick");
@@ -112,7 +146,7 @@ describe("a lead on the platform", () => {
   });
 
   it("learns of a job that ends without calling back from the queue, once", async () => {
-    const m = await say("C_INFRA", "[[job: lake build Security]]");
+    const m = await ring("infra", "[[job: lake build Security]]");
     await reply(m.thread, "submit_job");
     const sub = t.jobs.submitted.at(-1)!;
     const { externalId } = (await t.store.getJob(sub.id))!;
@@ -128,7 +162,7 @@ describe("a lead on the platform", () => {
   });
 
   it("dispatches a worker and is woken in the same thread when it finishes", async () => {
-    const m = await say("C_INFRA", "[[dispatch: fix the flaky test in tests/test_clock.py]]");
+    const m = await ring("infra", "[[dispatch: fix the flaky test in tests/test_clock.py]]");
     await reply(m.thread, "dispatch_worker");
     await reply(m.thread, "worker/worker-done");
     const [w] = await t.store.listWorkers({ lane: "infra" });
@@ -139,11 +173,11 @@ describe("a lead on the platform", () => {
   });
 
   it("asks another lead and gets the answer back in the thread it asked from", async () => {
-    const m = await say("C_INFRA", "[[ask proofs: which guarantees moved this week?]]");
+    const m = await ring("infra", "[[ask proofs: which guarantees moved this week?]]");
     await reply(m.thread, "ask_lead");
     const answer = await reply(m.thread, "lead/answer");
-    expect(answer.channel).toBe("C_INFRA");
-    expect(t.slack.posts.some((p) => p.channel === "C_PROOFS" && p.text.includes("lead/ask"))).toBe(false);
+    expect(answer).toMatchObject({ channel: COORD, username: "infra" });
+    expect(t.slack.posts.some((p) => p.username === "proofs" && p.text.includes("lead/ask"))).toBe(false);
   });
 
   it("serves ask_lead, assign, status and search over MCP", async () => {
@@ -167,12 +201,13 @@ describe("a lead on the platform", () => {
     expect(asked.reply).toContain("mcp/ask");
     expect(await call("get_answer", { event_id: asked.eventId })).toMatchObject({ status: "finished", reply: asked.reply });
 
-    await call("assign", { lane: "proofs", task: "tidy the ledger" });
-    await t.slack.waitFor((p) => p.channel === "C_PROOFS" && p.threadTs === undefined && p.text.includes("mcp/assign"));
+    const thread = nextTs();
+    await call("assign", { lane: "proofs", task: "tidy the ledger", slack_channel: COORD, thread_ts: thread });
+    expect(await reply(thread, "mcp/assign")).toMatchObject({ channel: COORD, username: "proofs" });
 
     const st = await call("status", { lane: "infra" });
     const infra = st.leads[0];
-    expect(infra.lane).toBe("infra");
+    expect(infra).toMatchObject({ lane: "infra", agentId: leadAgentId("infra"), inbox: { channel: COORD, threadTs: INBOX.infra } });
     expect(infra.monthToDate.turns).toBeGreaterThan(5);
     expect(infra.monthToDate.budgetUsd).toBe(400);
     expect(infra.monthToDate.byKind.map((k: { kind: string }) => k.kind).sort()).toEqual(["lead", "worker"]);
@@ -206,7 +241,13 @@ describe("a lead on the platform", () => {
     for (const f of await filesUnder(t.root)) expect(await readFile(f, "utf8")).not.toMatch(/local-[a-z]+-token/);
     expect(await readFile(join(t.root, "lead-infra", ".gitconfig"), "utf8")).toContain("password=platform-github-placeholder");
     expect(await readFile(join(t.root, "lead-infra", ".verity-env"), "utf8")).toBe(
-      "export SLACK_BOT_TOKEN=platform-slack-placeholder\nexport LINEAR_API_KEY=platform-linear-placeholder\n",
+      [
+        "export SLACK_BOT_TOKEN='platform-slack-placeholder'",
+        "export LINEAR_API_KEY='platform-linear-placeholder'",
+        "export RESEARCH_NOTES_TOKEN='platform-github-placeholder'",
+        `export RESEARCH_AGENT_URL='http://platform.test/api/leads?lane=infra&agent=${leadAgentId("infra")}'`,
+        "",
+      ].join("\n"),
     );
     expect(await readFile(join(t.root, "lead-infra", ".bashrc"), "utf8")).toContain(". \"$HOME/.verity-env\"");
     const { rows } = await t.store.db.query(`select count(*)::int as n from transcript_parts where text ~ 'local-[a-z]+-token'`);
@@ -218,8 +259,8 @@ describe("a lead on the platform", () => {
     const run = await start(leadWorkflow, [{ lane: "infra", epoch: 0 }]);
     const ended = (await getRun<LeadResult>(old).returnValue) as LeadResult;
     expect(ended).toMatchObject({ ended: "superseded", by: run.runId });
-    const m = await say("C_INFRA", "still there?");
-    await reply(m.thread, "slack/message");
+    const m = await ring("infra", "still there?");
+    await reply(m.thread, "slack/doorbell");
     expect((await t.store.getLead("infra"))!.runId).toBe(run.runId);
   });
 
@@ -233,11 +274,13 @@ describe("a lead on the platform", () => {
       (await status(new Request(`http://platform.test/api/leads?${q}`, { headers: { authorization: `Bearer ${API.PLATFORM_API_TOKEN}` } }), API)).json();
     expect((await admin({ lane: "comms" }, "wrong")).status).toBe(401);
     expect((await admin({ lane: "Not A Lane" })).status).toBe(400);
+    expect((await admin({ lane: "comms", apis: ["slack", "jira"] })).status).toBe(400);
 
     const reg = await (
       await admin({
         lane: "comms",
-        slackChannel: "C_COMMS",
+        slackChannel: COORD,
+        slackInbox: INBOX.comms,
         harness: "fake",
         model: "fake/fake",
         charter: "Keep the public story true.",
@@ -249,9 +292,11 @@ describe("a lead on the platform", () => {
       })
     ).json();
     expect(reg.runId).toBeTruthy();
-    expect(reg.lead).toMatchObject({ lane: "comms", gatewayKeyId: "local-key-comms", docBytes: 19 });
-    await t.slack.waitFor((p) => p.channel === "C_COMMS" && !p.threadTs && p.text.includes("mcp/cutover"));
+    expect(reg.lead).toMatchObject({ lane: "comms", agentId: leadAgentId("comms"), gatewayKeyId: "local-key-comms", docBytes: 19 });
+    await turnOf("comms", "mcp/cutover");
     expect((await t.store.getLead("comms"))!.runId).toBe(reg.runId);
+    const m = await ring("comms", "is the post up?");
+    await reply(m.thread, "slack/doorbell");
 
     await admin({ lane: "comms", monthlyBudgetUsd: 300, doc: "# comms, from the old side\n" });
     const keys = (await t.store.listGrants("comms")).filter((g) => g.kind === "ai-gateway-key");
@@ -262,7 +307,7 @@ describe("a lead on the platform", () => {
     expect((await get("lane=comms&doc=1&rev=0")).doc).toBe("# comms workstream\n");
 
     expect((await (await admin({ lane: "comms", status: "paused" })).json()).lead.status).toBe("paused");
-    expect(await t.store.leadByChannel("C_COMMS")).toBeNull();
+    expect((await ring("comms", "anyone there?")).res.routed).toEqual([]);
   });
 
   it("gives a lead a checkout that lasts between turns and a worker one on its own branch", async () => {
@@ -275,16 +320,16 @@ describe("a lead on the platform", () => {
     git(seed, "commit", "-q", "-m", "seed");
     t.rt.repoUrl = `file://${seed}`;
     try {
-      await t.store.upsertLead({ lane: "circuits", model: "fake/fake", harness: "fake", slackChannel: "C_CIRCUITS", doc: "# circuits\n" });
-      const first = await say("C_CIRCUITS", "[[dispatch: add a pin]]");
+      await t.store.upsertLead({ lane: "circuits", model: "fake/fake", harness: "fake", slackChannel: COORD, slackInbox: INBOX.circuits, doc: "# circuits\n" });
+      const first = await ring("circuits", "[[dispatch: add a pin]]");
       await reply(first.thread, "worker/worker-done");
       const lead = join(t.root, "lead-circuits", "verity");
       expect(await readFile(join(lead, "README.md"), "utf8")).toBe("seed\n");
       await writeFile(join(lead, "scratch.txt"), "kept\n");
       git(seed, "commit", "-q", "--allow-empty", "-m", "second");
 
-      const second = await say("C_CIRCUITS", "anything new?");
-      await reply(second.thread, "slack/message");
+      const second = await ring("circuits", "anything new?");
+      await reply(second.thread, "slack/doorbell");
       expect(await readFile(join(lead, "scratch.txt"), "utf8")).toBe("kept\n");
       expect(git(lead, "log", "-1", "--format=%s", "origin/main")).toBe("second");
 
@@ -292,7 +337,9 @@ describe("a lead on the platform", () => {
       expect(git(join(t.root, `worker-${w!.id}`, "verity"), "branch", "--show-current")).toBe(w!.branch);
       const [turn] = (await t.store.listTurns({ lane: "circuits" })).filter((x) => x.kind === "lead");
       const parts = await t.store.transcript(turn!.id);
-      expect(parts.find((p) => p.type === "instructions")!.text).toContain("verity/ is your checkout");
+      const instructions = parts.find((p) => p.type === "instructions")!.text;
+      expect(instructions).toContain("verity/ is your checkout");
+      expect(instructions).toContain("research msg reply --as circuits");
     } finally {
       t.rt.repoUrl = null;
     }

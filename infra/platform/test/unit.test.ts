@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +8,7 @@ import { openDb } from "../src/db.ts";
 import { costUsd, priceFor } from "../src/prices.ts";
 import { renderEvent, turnPrompt } from "../src/prompt.ts";
 import { localSandboxSession } from "../src/sandbox/local.ts";
-import { mentionedLanes, parseSlackEvent, signSlackBody, verifySlackSignature } from "../src/slack.ts";
+import { leadAgentId, parseDoorbell, parseSlackEvent, researchReplyCommand, signSlackBody, verifySlackSignature } from "../src/slack.ts";
 import { type Store, createStore } from "../src/store.ts";
 import { finalText, foldChunks, fromSdkUsage } from "../src/transcript.ts";
 
@@ -43,21 +44,34 @@ describe("slack", () => {
     expect(verifySlackSignature({ secret, timestamp: "1000", signature: sig, body: `${body} `, nowSeconds: 1100 })).toBe(false);
     expect(verifySlackSignature({ secret, timestamp: null, signature: sig, body, nowSeconds: 1100 })).toBe(false);
   });
-  it("parses messages and bots' posts, and drops edits and other subtypes", () => {
+  it("parses messages and bots' posts with the name they were posted under, and drops edits and other subtypes", () => {
     const ev = (e: Record<string, unknown>) => parseSlackEvent({ type: "event_callback", event_id: "Ev1", event: { type: "message", channel: "C1", text: "hi", ts: "1.1", ...e } });
     expect(ev({ user: "U1", thread_ts: "0.9" })).toEqual({ message: { eventId: "Ev1", channel: "C1", user: "U1", text: "hi", ts: "1.1", threadTs: "0.9" } });
-    expect(ev({ bot_id: "B1" })).toEqual({ message: { eventId: "Ev1", channel: "C1", user: "B1", text: "hi", ts: "1.1", botId: "B1" } });
-    expect(ev({ user: "U9", bot_id: "B1", subtype: "bot_message" })).toMatchObject({ message: { user: "U9", botId: "B1" } });
+    expect(ev({ bot_id: "B1", username: "router" })).toEqual({ message: { eventId: "Ev1", channel: "C1", user: "B1", text: "hi", ts: "1.1", username: "router" } });
+    expect(ev({ user: "U9", bot_id: "B1", subtype: "bot_message" })).toMatchObject({ message: { user: "U9" } });
     expect(ev({ subtype: "message_changed" })).toBeNull();
     expect(parseSlackEvent({ type: "url_verification", challenge: "abc" })).toEqual({ challenge: "abc" });
   });
-  it("finds lanes named by @lane or by a user-group mention", () => {
-    const lanes = [{ lane: "infra" }, { lane: "proofs", slackUsergroup: "S123" }, { lane: "kernels", slackUsergroup: "S456" }];
-    expect(mentionedLanes("@infra and <!subteam^S999|@proofs> please", lanes)).toEqual(["infra", "proofs"]);
-    expect(mentionedLanes("<!subteam^S456> and <!subteam^S123|@renamed>", lanes)).toEqual(["kernels", "proofs"]);
-    expect(mentionedLanes("<!subteam^S000>", lanes)).toEqual([]);
-    expect(mentionedLanes("mail me at a@infra.example", lanes)).toEqual([]);
-    expect(mentionedLanes("(@kernels) and @nobody", lanes)).toEqual(["kernels"]);
+  it("reads every doorbell research's routing vectors pin", () => {
+    type Case = { author: string; thread: string; ts: string; urgent: boolean; channel?: string; doorbell: string };
+    const vectors = JSON.parse(readFileSync(new URL("../../../tools/research/tests/slack_routing_vectors.json", import.meta.url), "utf8"));
+    const cases = vectors.doorbells.cases as Case[];
+    expect(cases.length).toBeGreaterThan(5);
+    for (const c of cases) {
+      expect(parseDoorbell(c.doorbell)).toEqual({ author: c.author, urgent: c.urgent, channel: c.channel ?? null, thread: c.thread, reply: c.ts === c.thread ? null : c.ts });
+    }
+    expect(parseDoorbell("@infra a post, not a doorbell")).toBeNull();
+  });
+  it("replies through research msg, as the lead, in the doorbell's channel", () => {
+    expect(researchReplyCommand({ lane: "infra", channel: "C0FRONTDOOR", threadTs: "1.2" })).toBe(
+      `. "$HOME/.verity-env" && "$HOME/.local/bin/research" msg reply --registry verity/.agents/skills/using-slack/registry.json --as 'infra' --channel-id 'C0FRONTDOOR' --thread '1.2' --file .platform-reply.md`,
+    );
+    expect(researchReplyCommand({ lane: "infra", channel: "ask-the-team", threadTs: "1.2" })).toContain("--channel 'ask-the-team' --thread");
+  });
+  it("gives each lane one agent id, in a form research reads as one", () => {
+    expect(leadAgentId("infra")).toBe(leadAgentId("infra"));
+    expect(leadAgentId("infra")).not.toBe(leadAgentId("proofs"));
+    expect(leadAgentId("infra")).toMatch(/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/);
   });
 });
 

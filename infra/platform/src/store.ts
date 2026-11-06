@@ -10,8 +10,9 @@ export type Lead = {
   docRev: number;
   harness: HarnessName;
   model: string;
+  // The lead's inbox: the thread `research msg` rings its doorbells in.
   slackChannel: string | null;
-  slackUsergroup: string | null;
+  slackInbox: string | null;
   // The APIs (services.ts) the lead's sandbox may call.
   apis: string[];
   cronEveryMinutes: number | null;
@@ -23,9 +24,10 @@ export type Lead = {
   runStartedAt: string | null;
 };
 
-// Where a turn's reply goes: a Slack thread, another lead's inbox (an answer to
-// ask_lead), or nowhere but the record (an MCP caller reads it with get_answer).
-export type ReplyTo = { channel: string; threadTs?: string } | { lane: string } | { caller: string };
+// Where a turn's reply goes: a Slack thread (a channel id or registry key),
+// another lead's inbox (an answer to ask_lead), or nowhere but the record (an
+// MCP caller reads it with get_answer).
+export type ReplyTo = { channel: string; threadTs: string } | { lane: string } | { caller: string };
 
 export type InboxEvent = {
   id: number;
@@ -111,7 +113,7 @@ function toLead(r: Record<string, unknown>): Lead {
     harness: r.harness as HarnessName,
     model: r.model as string,
     slackChannel: (r.slack_channel as string) ?? null,
-    slackUsergroup: (r.slack_usergroup as string) ?? null,
+    slackInbox: (r.slack_inbox as string) ?? null,
     apis: String(r.apis ?? "").split(",").filter(Boolean),
     cronEveryMinutes: r.cron_every_minutes == null ? null : num(r.cron_every_minutes),
     nextTickAt: iso(r.next_tick_at),
@@ -200,7 +202,7 @@ export function createStore(db: Db) {
     async upsertLead(l: Partial<Lead> & Pick<Lead, "lane" | "model">): Promise<Lead> {
       const { rows } = await db.query(
         `insert into leads (lane, charter, doc, harness, model, slack_channel, cron_every_minutes,
-                            next_tick_at, monthly_budget_usd, status, slack_usergroup, apis)
+                            next_tick_at, monthly_budget_usd, status, slack_inbox, apis)
          values ($1, coalesce($2, ''), coalesce($3, ''), coalesce($4, 'claude-code'), $5, $6, $7,
                  case when $7::int is null then null else now() + make_interval(mins => $7::int) end,
                  $8, coalesce($9, 'active'), $10, coalesce($11, 'slack,linear'))
@@ -213,7 +215,7 @@ export function createStore(db: Db) {
            cron_every_minutes = coalesce($7, leads.cron_every_minutes),
            monthly_budget_usd = coalesce($8, leads.monthly_budget_usd),
            status = coalesce($9, leads.status),
-           slack_usergroup = coalesce($10, leads.slack_usergroup),
+           slack_inbox = coalesce($10, leads.slack_inbox),
            apis = coalesce($11, leads.apis),
            updated_at = now()
          returning *`,
@@ -227,7 +229,7 @@ export function createStore(db: Db) {
           l.cronEveryMinutes ?? null,
           l.monthlyBudgetUsd ?? null,
           l.status ?? null,
-          l.slackUsergroup ?? null,
+          l.slackInbox ?? null,
           l.apis ? l.apis.join(",") : null,
         ],
       );
@@ -244,11 +246,8 @@ export function createStore(db: Db) {
       return rows.map(toLead);
     },
 
-    async leadByChannel(channel: string): Promise<Lead | null> {
-      const { rows } = await db.query(
-        `select * from leads where slack_channel = $1 and status = 'active' order by lane limit 1`,
-        [channel],
-      );
+    async leadByInbox(channel: string, threadTs: string): Promise<Lead | null> {
+      const { rows } = await db.query(`select * from leads where slack_channel = $1 and slack_inbox = $2`, [channel, threadTs]);
       return rows[0] ? toLead(rows[0]) : null;
     },
 
@@ -611,23 +610,6 @@ export function createStore(db: Db) {
         [q.lane ?? null],
       );
       return rows.map(toJob);
-    },
-
-    // A Slack thread belongs to the lead that started or answered it, so a
-    // reply in the thread reaches that lead without naming it.
-    async bindThread(channel: string, threadTs: string, lane: string) {
-      await db.query(
-        `insert into threads (channel, thread_ts, lane) values ($1, $2, $3) on conflict do nothing`,
-        [channel, threadTs, lane],
-      );
-    },
-
-    async threadLane(channel: string, threadTs: string): Promise<string | null> {
-      const { rows } = await db.query<{ lane: string }>(
-        `select lane from threads where channel = $1 and thread_ts = $2`,
-        [channel, threadTs],
-      );
-      return rows[0]?.lane ?? null;
     },
 
     async recordGrant(g: Grant) {

@@ -3,8 +3,10 @@ import { type HarnessWorkflowState, createHarnessWorkflowState, runHarnessAgentT
 import { tapped } from "../src/harness/tap.ts";
 import { costUsd } from "../src/prices.ts";
 import { DOC_PATH, REPO_DIR, leadInstructions, turnPrompt, workerInstructions } from "../src/prompt.ts";
-import { type Runtime, runtime } from "../src/runtime.ts";
-import { GITHUB_PLACEHOLDER, envExports } from "../src/services.ts";
+import { type Runtime, type SandboxSession, runtime } from "../src/runtime.ts";
+import { GITHUB_PLACEHOLDER, envExports, serviceEnv } from "../src/services.ts";
+import { type Shell, mustRun, shq } from "../src/shell.ts";
+import { leadAgentId } from "../src/slack.ts";
 import type { HarnessName, InboxEvent, ReplyTo, Usage, Worker } from "../src/store.ts";
 import { hostTools } from "../src/tools.ts";
 import { finalText, foldChunks } from "../src/transcript.ts";
@@ -31,16 +33,27 @@ export type WorkerInput = Pick<Worker, "id" | "lane" | "task" | "branch" | "harn
 
 const SLACK_LIMIT = 3500;
 const NO_REPLY = "NO_REPLY";
+const UV_VERSION = "0.13.7";
 
 const openSandbox = (rt: Runtime, ctx: TurnCtx) =>
   rt.sandbox.open(ctx.sandboxName, { lane: ctx.lane, subject: ctx.subject, credentials: rt.credentials, apis: ctx.apis });
 
-const shq = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
+// `research` (no dependencies of its own) from the checkout, editable so each
+// fetch updates it, on a pinned uv; a checkout without it gets nothing.
+const INSTALL_RESEARCH = [
+  `test -d ${REPO_DIR}/tools/research || exit 0`,
+  `test -x "$HOME/.local/bin/uv" || curl -LsSf https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-installer.sh | INSTALLER_NO_MODIFY_PATH=1 sh -s -- -q`,
+  `"$HOME/.local/bin/uv" tool install -q --python 3.12 --editable ./${REPO_DIR}/tools/research`,
+].join("; ");
 
-async function mustRun(session: { run(o: { command: string }): PromiseLike<{ exitCode: number; stderr: string }> }, command: string) {
-  const r = await session.run({ command });
-  if (r.exitCode !== 0) throw new Error(`${command.split(" ").slice(0, 3).join(" ")}: exit ${r.exitCode}: ${r.stderr.slice(0, 300)}`);
-}
+// What a lead's shell exports: the granted APIs' placeholders, the notes
+// token's (research reads routes with it), and the agent id research posts
+// as; the env file holds no secret.
+const leadEnv = (rt: Runtime, ctx: TurnCtx): Record<string, string> => ({
+  ...serviceEnv(ctx.apis),
+  RESEARCH_NOTES_TOKEN: GITHUB_PLACEHOLDER,
+  RESEARCH_AGENT_URL: `${rt.baseUrl}/api/leads?lane=${ctx.lane}&agent=${leadAgentId(ctx.lane)}`,
+});
 
 // The checkout is cloned once per sandbox (the harness marks a sandbox as
 // bootstrapped per bootstrapHash, and a persistent sandbox keeps the marker
@@ -50,6 +63,7 @@ async function buildAgent(rt: Runtime, ctx: TurnCtx) {
   const repo = rt.repoUrl;
   const checkout = (branch: string) =>
     `git -C ${REPO_DIR} checkout -q ${shq(branch)} 2>/dev/null || git -C ${REPO_DIR} checkout -q -b ${shq(branch)} origin/HEAD`;
+  const env = ctx.kind === "lead" ? leadEnv(rt, ctx) : {};
   return new HarnessAgent({
     harness: await rt.harness(ctx.harness, { auth: await rt.credentials.modelAuth(ctx.lane) }),
     model: ctx.model,
@@ -59,8 +73,11 @@ async function buildAgent(rt: Runtime, ctx: TurnCtx) {
     sandboxConfig: {
       workDir: ".",
       ...(repo && {
-        bootstrapHash: `checkout:${repo}`,
-        onBootstrap: ({ session }) => mustRun(session, `git clone -q --filter=blob:none ${shq(repo)} ${REPO_DIR}`),
+        bootstrapHash: `checkout:${repo}:uv-${UV_VERSION}`,
+        onBootstrap: async ({ session }) => {
+          await mustRun(session, `test -d ${REPO_DIR}/.git || git clone -q --filter=blob:none ${shq(repo)} ${REPO_DIR}`);
+          if (ctx.kind === "lead") await mustRun(session, INSTALL_RESEARCH);
+        },
       }),
       // git and gh inside the sandbox send a placeholder; the sandbox firewall
       // swaps in the short-lived token on the way out.
@@ -69,10 +86,10 @@ async function buildAgent(rt: Runtime, ctx: TurnCtx) {
           session,
           `git config --global credential.helper '!f() { echo username=x-access-token; echo password=${GITHUB_PLACEHOLDER}; }; f' && git config --global user.name verity-platform && git config --global user.email platform@verity.invalid`,
         );
-        if (ctx.apis.length > 0) {
+        if (Object.keys(env).length > 0) {
           await mustRun(
             session,
-            `printf '%s\\n' ${shq(envExports(ctx.apis))} > "$HOME/.verity-env" && for f in "$HOME/.bashrc" "$HOME/.profile"; do grep -qs verity-env "$f" || echo '. "$HOME/.verity-env"' >> "$f"; done`,
+            `printf '%s\\n' ${shq(envExports(env))} > "$HOME/.verity-env" && for f in "$HOME/.bashrc" "$HOME/.profile"; do grep -qs verity-env "$f" || echo '. "$HOME/.verity-env"' >> "$f"; done`,
           );
         }
         if (!repo) return;
@@ -183,35 +200,48 @@ export async function sliceTurn(ctx: TurnCtx, state: HarnessWorkflowState): Prom
   return { state: next, usage, text: finalText(parts) };
 }
 
-async function postOnce(rt: Runtime, ctx: TurnCtx, channel: string, threadTs: string | undefined, text: string) {
-  const already = (await rt.store.transcript(ctx.turnId)).some((p) => {
-    const c = p.content as { channel?: string; threadTs?: string } | null;
-    return p.type === "post" && c?.channel === channel && c?.threadTs === threadTs;
-  });
-  if (already) return;
+type Thread = { channel: string; threadTs: string };
+
+// A reply that can't be posted (research refuses one past its length, say) is
+// recorded and handed back to the lead once, never retried.
+async function replyOnce(rt: Runtime, ctx: TurnCtx, session: Shell, t: Thread, text: string, events: InboxEvent[]) {
+  const same = (c: unknown) => (c as Thread | null)?.channel === t.channel && (c as Thread | null)?.threadTs === t.threadTs;
+  if ((await rt.store.transcript(ctx.turnId)).some((p) => p.type === "post" && same(p.content))) return;
   const body = text.length > SLACK_LIMIT ? `${text.slice(0, SLACK_LIMIT)}\n… (full reply in transcript ${ctx.turnId})` : text;
-  const { ts } = await rt.slack.post({ channel, text: body, threadTs });
-  await rt.store.bindThread(channel, threadTs ?? ts, ctx.lane);
-  await rt.store.appendParts(ctx.turnId, [{ type: "post", content: { channel, threadTs, ts }, text: body }]);
+  try {
+    await rt.reply(session, { lane: ctx.lane, channel: t.channel, threadTs: t.threadTs, text: body });
+    await rt.store.appendParts(ctx.turnId, [{ type: "post", content: t, text: body }]);
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    await rt.store.appendParts(ctx.turnId, [{ type: "post-error", content: t, text: why }]);
+    if (events.every((e) => e.kind === "reply-failed")) return;
+    await wake(ctx.lane, {
+      lane: ctx.lane,
+      source: "slack",
+      kind: "reply-failed",
+      payload: { ...t, text: `Your reply in ${t.channel} thread ${t.threadTs} was not posted (${why}). Post it yourself with research msg reply if it is still needed.` },
+      replyTo: null,
+      dedupeKey: `reply-failed:${ctx.turnId}:${t.channel}:${t.threadTs}`,
+    });
+  }
 }
 
-// The reply goes to every Slack thread the turn's events came from, and back to
-// every lead that asked (into the thread it asked from). A turn on events with
-// no return address (ticks, say) posts in the lead's channel; an MCP caller's
-// event gets no post and is read back with get_answer.
+// The reply goes to every Slack thread the turn's events came from, posted
+// from the lead's sandbox (Runtime.reply), and back to every lead that asked.
+// A turn on events with no return address (ticks, say) posts nothing; an MCP
+// caller reads its answer with get_answer.
 async function deliver(rt: Runtime, ctx: TurnCtx, events: InboxEvent[], text: string) {
-  const lead = (await rt.store.getLead(ctx.lane))!;
-  const threads = new Map<string, { channel: string; threadTs?: string }>();
+  const threads = new Map<string, Thread>();
   const asks: { lane: string; e: InboxEvent }[] = [];
   for (const e of events) {
     const r = e.replyTo;
-    if (r && "channel" in r) threads.set(`${r.channel}/${r.threadTs}`, r);
+    if (r && "channel" in r) threads.set(`${r.channel}/${r.threadTs}`, { channel: r.channel, threadTs: r.threadTs });
     if (r && "lane" in r) asks.push({ lane: r.lane, e });
   }
   const quiet = text === "" || text === NO_REPLY;
-  if (!quiet) {
-    for (const t of threads.values()) await postOnce(rt, ctx, t.channel, t.threadTs, text);
-    if (events.every((e) => !e.replyTo) && lead.slackChannel) await postOnce(rt, ctx, lead.slackChannel, undefined, text);
+  if (!quiet && threads.size > 0) {
+    const session: SandboxSession = await openSandbox(rt, ctx);
+    for (const t of threads.values()) await replyOnce(rt, ctx, session as Shell, t, text, events);
   }
   for (const { lane, e } of asks) {
     await wake(lane, {

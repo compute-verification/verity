@@ -8,7 +8,7 @@ import { harnessFor } from "./harness/providers.ts";
 import { type JobRunner, jobsApi, memoryJobs } from "./jobs.ts";
 import { localSandboxSession } from "./sandbox/local.ts";
 import { credentialRules } from "./services.ts";
-import { type SlackClient, memorySlack, webSlack } from "./slack.ts";
+import { type SlackClient, type SlackReplier, directReply, memorySlack, researchReply, webSlack } from "./slack.ts";
 import { type HarnessName, type Store, createStore } from "./store.ts";
 
 export type SandboxSession = HarnessV1NetworkSandboxSession | Experimental_SandboxSession;
@@ -26,6 +26,7 @@ export type HarnessProvider = (name: HarnessName, o: { auth: ModelAuth }) => Pro
 export type Runtime = {
   store: Store;
   slack: SlackClient;
+  reply: SlackReplier;
   jobs: JobRunner;
   sandbox: SandboxProvider;
   harness: HarnessProvider;
@@ -102,6 +103,7 @@ export async function fromEnv(env: NodeJS.ProcessEnv): Promise<Runtime> {
       })
     : localCredentials(store);
   if (env.VERCEL && env.PLATFORM_SANDBOX !== "vercel") throw new Error("PLATFORM_SANDBOX=vercel is required on Vercel: local sandboxes isolate nothing");
+  if (env.VERCEL && !env.PLATFORM_REPO_URL) throw new Error("PLATFORM_REPO_URL is required on Vercel: a lead replies on Slack with research msg from its checkout");
   const sandbox =
     env.PLATFORM_SANDBOX === "vercel"
       ? await vercelSandboxes({ vcpus: Number(env.PLATFORM_SANDBOX_VCPUS ?? 2), timeoutMs: Number(env.PLATFORM_SANDBOX_TIMEOUT_MINUTES ?? 45) * 60_000 })
@@ -109,9 +111,11 @@ export async function fromEnv(env: NodeJS.ProcessEnv): Promise<Runtime> {
   const baseUrl =
     env.PLATFORM_BASE_URL ??
     (env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000");
+  const slack = env.SLACK_BOT_TOKEN ? webSlack(env.SLACK_BOT_TOKEN) : memorySlack();
   return {
     store,
-    slack: env.SLACK_BOT_TOKEN ? webSlack(env.SLACK_BOT_TOKEN) : memorySlack(),
+    slack,
+    reply: env.PLATFORM_REPO_URL ? researchReply : directReply(slack),
     jobs: env.PLATFORM_JOBS_URL && env.PLATFORM_JOBS_TOKEN ? jobsApi({ url: env.PLATFORM_JOBS_URL, token: env.PLATFORM_JOBS_TOKEN, line: env.PLATFORM_JOBS_LINE }) : memoryJobs(),
     sandbox,
     harness: harnessFor,
