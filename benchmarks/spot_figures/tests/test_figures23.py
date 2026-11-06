@@ -140,7 +140,7 @@ def test_figures_writes_every_figure(tmp_path, monkeypatch):
                     "floor": 8e6, "h": {"FP8": None}, "beta": {"FP8": 3.0}}]}
     monkeypatch.setattr(total_cost, "breakeven", lambda *a, **k: be)
     figures.main(["--model", "GLM-5.3", "--out", str(tmp_path), "--points", "2"])
-    assert json.loads((tmp_path / "figure1.json").read_text())["breakeven"] == be
+    assert json.loads((tmp_path / "figure1.json").read_text())["breakeven"] == json.loads(json.dumps(be))
     assert (tmp_path / "breakeven.txt").read_text() == total_cost.breakeven_table(be)
     for name, schema in (("figure1", total_cost.SCHEMA), ("figure1_overhead", figure1.SCHEMA),
                          ("figure2", figure2.SCHEMA), ("figure3", figure3.SCHEMA)):
