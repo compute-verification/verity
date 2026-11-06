@@ -26,9 +26,9 @@ the targets alone, and with its two witnesses at the idle deployment (`Idle.lean
 
 ## The subprotocols each composes
 
-`Verity.subprotocols k` (`Game.lean`) is the subprotocols composite `k` has a component for (`Verity.component`):
+`Verity.subprotocols k` (`Game.lean`) is the subprotocols composite `k` composes, those `Verity.component` names for it:
 
-| Subprotocol | Target | Component | Remote | Onsite |
+| Subprotocol | Target | Compiled check | Remote | Onsite |
 |---|---|---|---|---|
 | sampled proofs | `SampledProofsSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`SampledProofs.OneStageZk`) or the recursive audit, as its parameters' `form` names; one-stage v1 is refused by name | yes | yes |
 | PoUW | `PouwSound` | `PouwCheck.Period.protocol` | yes | yes |
@@ -42,24 +42,24 @@ the targets alone, and with its two witnesses at the idle deployment (`Idle.lean
 
 In this order:
 
-1. **The game**, `Verity.Game` (`Security/Definitions/Core/Game.lean`): the prover `send`s, the verifier draws a live
+1. **The game**, `Verity.Game` (`Security/Definitions/Core/Game.lean`): the prover `send`s, the verifier flips a live
    `coin`, the game `ret`urns; a `Strategy` picks every message from the history, and `Game.prob` is the exact
    probability over the coins.
 2. **The play** (`Game.lean`): the prover sends `θ`, `F` and `c` before any coin, then `Verity.play`, in which it drives
-   the device (`Verity.releases`): each frame carries the bytes a release answers, then the device draws and releases
+   the device (`Verity.releases`): each frame carries the bytes a release answers, then the device flips and releases
    its coins, and a refused frame ends the releases; the evidence comes last. `Exchange.sent` is what the composite reads; `Accepts k` is its compiled verifier's verdict on it.
 3. **`Vocab`**: the names each subprotocol defines, given until it defines them: v2's reading of the committed files, the
    positions, the coin families, the fixed extractor, each subprotocol's fixed collision finders and LMS forger, the gates
    computed, the world, and the published certificates, `δ`s, `ε_forge` and losses.
 4. **The claims and errors**: `Vocab.Holds k θ F c σ a` is subprotocol `a`'s claim (sampled proofs' on the extractor's
    transcript, the five period claims as `Accounting.PeriodLive.Holds`, the policy's as `Nci.Complies`, the wipe's as
-   `Verity.Wipe.OfRun.Kept`'s negation); `Vocab.Verdict` is `a`'s component accepting inside the composite's acceptance;
+   `Verity.Wipe.OfRun.Kept`'s negation); `Vocab.Verdict` is `a` accepting its own case inside the composite's acceptance;
    `Vocab.error` is `δ + ε_forge + loss` where the finders and forger meet their premises, `⊤` elsewhere.
 5. **`Target` and `SoundnessAt`**: `Vocab.Target k a` bounds `Pr[Verdict ∧ ¬ Holds]` by `a`'s error at every
    `θ F c σ`; `Vocab.SoundnessAt k` bounds `Pr[Accepts k ∧ Registered ∧ ∃ a, ¬ Holds]` by the sum. The seven named
    targets are `Target` at one subprotocol each.
 6. **The proof** (`Security/Proofs/Properties/Verity/Soundness.lean`): `accepts_same` and `accepts_components` (the
-   composite's acceptance is a `same` composition and each component's on its own case, from `Properties.Composition`),
+   composite's acceptance is a `same` composition and each subprotocol's on its own case, from `Properties.Composition`),
    then `prob_exists_finset_le`, the union bound. `sent_reachable` and `Vocab.accepts_reachable` say the event covers
    every input whose blobs begin with the committed files, so no input shape escapes it.
 
@@ -69,7 +69,7 @@ In this order:
   per-period guarantee `Accounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
   `Security/Definitions/Accounting/JointLive.lean`), so each discharges its target by proving that guarantee.
 - **Sampled proofs** at the recursive configuration: `Verity.Recursive.sampledProofsRecursive`
-  (`Security/Proofs/Properties/Verity/Recursive/Target.lean`) proves the target's bound at the recursive component's
+  (`Security/Proofs/Properties/Verity/Recursive/Target.lean`) proves the target's bound at the recursive configuration's
   verdict (`RecVerdict`) and its own error, under hypotheses that include `live-verifier`; `sampledProofsRecursive_of_ks`
   (`Security/Proofs/Properties/Verity/Recursive/Audit.lean`) states it at the deployment from
   `Flock.Guarantees.RecursiveKS`. It doesn't yet instantiate `SampledProofsSound`.
@@ -89,12 +89,12 @@ The targets are the theorem's only hypotheses. Three kinds of assumption enter b
 - **LMS unforgeability**, `Hash.Assumptions.LmsUnforgeable` (`euf-cma/lms-sha512`,
   `Security/Definitions/Hash/Assumptions.lean`; `Security/Properties/lean-audit.json`). It is asked only of each
   subprotocol's fixed forger at the compiled LMS verifier (`Verity.lmsVerify`, `Vocab.Unforgeable`) and adds
-  `ε_forge(t, Q)` to the error. A log a component's check reads that isn't the device's whole log is such a forgery,
+  `ε_forge(t, Q)` to the error. A log a subprotocol's check reads that isn't the device's whole log is such a forgery,
   or a SHA-512 collision of the log's signed chain (`Vocab.Logged`).
 - **The auditor's live-coin challenger**, `Verity.Assumptions.ChallengerLogsCoins`, `Verity.Assumptions.FlipsAfterRecorded`
   and `Verity.Assumptions.VerifierReadsLog` (`Security/Definitions/Core/Assumptions/Challenger.lean`;
   `Security/lean-audit.json`): the challenger logs every coin it releases, flips each only after what it samples is
-  recorded, and the verifier reads coins only from that log. The game's device, each release's coins drawn uniformly after
+  recorded, and the verifier reads coins only from that log. The game's device, each release's coins flipped uniformly after
   the bytes they answer, is the challenger they describe. They are stated over the challenger's log
   (`Security/Definitions/Core/Challenger.lean`), not over `Verity.Game`, and are not hypotheses of the theorem; what they
   give is `Verity.Guarantees.SampleAfterRecorded` (`Security/Proofs/Core/Challenger.lean`). The challenger is an auditor
