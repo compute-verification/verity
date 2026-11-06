@@ -38,6 +38,7 @@ public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs
 public import Proofs.Flock.SamplingBoundary
 public import Proofs.Flock.SamplingScope
+public import Proofs.Flock.ZkAny
 
 /-! C-Flock's proofs: the verifier's, level3's and soundness's. -/
 

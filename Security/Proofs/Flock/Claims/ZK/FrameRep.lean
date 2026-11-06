@@ -225,14 +225,16 @@ theorem repInv_coinsOf_done (t : Tab) (dom : ByteArray) (xs : Array (Array F128)
   rfl
 
 /-- **The loop places a rep's round as `Drive.reqs` does**: at the rep `p` keeping its schedule so far (`RepInv`), on
-the table `t`, extras and salts its session and the loop's salts give it, `placeOf` places its next round (round
-`p.coins.size`) at the schedule so far on its coins (`placeAt`), and the rep it puts back, after that round's coins
-at any frame state and values (`coinsOf`), keeps `RepInv`. -/
+the table `t` and extras its session gives it, and the salts the loop's salts give it at the opening's first round,
+where `placeOf` reads them, `placeOf` places its next round (round `p.coins.size`) at the schedule so far on its coins
+(`placeAt`), and the rep it puts back, after that round's coins at any frame state and values (`coinsOf`), keeps
+`RepInv`. -/
 theorem placeOf_sched (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 : _root_.Flock.Firewall.Level0.Level0)
     (s : _root_.Flock.Firewall.Frames.Release) (p : _root_.Flock.Firewall.Frames.Rep) (dom : ByteArray) {t : Tab}
     {xs : Array (Array F128)} {hi : Array ByteArray} {st : Stmt} {c : Array F128} {r0 : ByteArray} {q0 : ℕ}
     (hst : s.sts[p.table]? = some st) (hlink : s.link = some c)
-    (hsalt : salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
+    (hsalt : p.alg.size ≤ p.coins.size → p.opened = false → p.opening = none →
+      salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
     (htab : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit st) l0 = .ok t)
     (hxs : xs = _root_.Flock.Firewall.Drive.extras st (_root_.Flock.Firewall.Drive.linkPoints st c))
     (hI : RepInv t dom xs hi p) {sched : Array (ByteArray × ℕ)}
@@ -261,7 +263,7 @@ theorem placeOf_sched (salts : Array (ByteArray × ℕ × Array ByteArray)) (l0 
         rw [Array.extract_empty_of_size_le_start hle]
         exact feed_nil _ _
       rw [hF] at hs'
-      rw [placeOf_none salts l0 s p dom hlt ho hn hst hlink hsalt htab, ← hxs]
+      rw [placeOf_none salts l0 s p dom hlt ho hn hst hlink (hsalt (by omega) ho hn) htab, ← hxs]
       revert hs' hF
       generalize _root_.Flock.Firewall.Drive.openStep t p.rep dom xs hi (p.coins.extract 0 p.alg.size) = S
       intro hs' hF
