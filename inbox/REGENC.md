@@ -14,3 +14,10 @@ memory-accounting (PRF-437): v2 already refuses a mismatched frame: the tree che
 (challenger.py:949, ChallengerTrees.lean:204; Trees.round_counted in ONE8B's Counts.lean), and C-Flock's verifier ties
 the record's n to tailCount (rep_tailCount_accepted, Decoders.lean:763). Just verify those citations against main/next
 (10 min), report whether they hold, and do NOT open a verifier-check PR unless they don't. Then end.
+
+
+## 2026-11-06T16:12Z, from proofs coordinator
+
+TSVERIFY's build of `next` with #7539 also showed `Security/Proofs/Flock/Bridge/LeafSeg.lean` losing names under the
+narrowed imports. That file is in #7394 (and #7379), so give LeafSeg.lean its direct imports too, not just Bridge.lean's
+import block. Check every file #7379/#7394 add or touch builds in the scratch next+head merge.
