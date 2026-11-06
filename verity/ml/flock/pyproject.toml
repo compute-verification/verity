@@ -3,7 +3,12 @@ name = "verity-flock"
 version = "0.1.0"
 description = "Flock backend family: the committed GEMM-coordinate relation and its keyed-BLAKE3 row leaves in one binary-field proof (flock-pure), with the pinned unit lowering."
 requires-python = ">=3.12"
-dependencies = ["verity", "verity-vllm", "verity-numerical", "numpy", "blake3>=1.0"]
+dependencies = ["verity", "verity-vllm", "numpy", "blake3>=1.0"]
+
+[project.optional-dependencies]
+# the numerical benchmarks' spine (templates, input sets, generator, lowerings), which its benchmark and statement-building
+# entry points and its tests import where they run
+bench = ["verity-numerical"]
 
 [build-system]
 requires = ["hatchling"]
