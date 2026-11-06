@@ -1689,6 +1689,97 @@ def test_a_push_to_the_branch_a_worker_moved_its_task_to_is_its_activity(tmp_pat
         and not W.same_task("cursor/lean-one18-fc8d", "cursor/lean-one18-9f2a")
 
 
+def test_a_research_run_a_worker_sent_is_its_activity_at_its_start_and_at_its_end(tmp_path):
+    """lean and circuits workers waiting on two-hour checks were rung silent while their runs ran. The start of a run the
+    worker sent, read while it runs, and its end are its activity; reading it while it runs doesn't use up its end's ring."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
+    (notes / "machines.d").mkdir(parents=True)
+    root = tmp_path / "vy-nebius-1"
+    (notes / "machines.d" / "vy-nebius-1.toml").write_text(
+        f'provider = "ssh"\nhost = "vy-nebius-1.example"\nuser = "research"\nproject = "verity"\nroot = "{root}"\n')
+    (tmp_path / "nodes.json").write_text(json.dumps({"nodes": ["vy-nebius-1"], "every_s": 300, "ssh": ["ssh"]}))
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=FakeSh({"cursor/w3-branch-c7a9": "a" * 40}),
+                                 nodes=tmp_path / "nodes.json", timers=None)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 60)
+    rid, started = "r20261018-200000-0001", clock.t
+    node_run(root, rid, started + 3600, by=f"https://cursor.com/agents/{W1_}", wall_s=3600)
+    status_json = root / "runs" / rid / "status.json"
+    status_json.write_text(json.dumps({"state": "running", "transitions": [{"state": "running", "t_utc": W.iso(started)}]}))
+    W.os.utime(status_json, (started, started))
+    sweeps(w, clock, 85)
+    assert silent(tmp_path) == [] and ended(tmp_path) == [], "the run's start is its sender's activity, and not an end"
+    sweeps(w, clock, 10)
+    assert [r["since"] for r in silent(tmp_path)] == [W.iso(started)]
+    status_json.write_text(json.dumps({"state": "done", "rc": 0, "wall_s": clock.t - started, "transitions": [
+        {"state": "running", "t_utc": W.iso(started)}, {"state": "done", "t_utc": W.iso(clock.t)}]}))
+    W.os.utime(status_json, (clock.t, clock.t))
+    finished = clock.t
+    sweeps(w, clock, 85)
+    assert len(silent(tmp_path)) == 1 and [r["run"] for r in ended(tmp_path)] == [rid], "its end is activity, and rings once"
+    sweeps(w, clock, 10)
+    assert [r["since"] for r in silent(tmp_path)][-1] == W.iso(finished)
+
+
+def test_a_push_to_a_pr_branch_whose_body_names_a_worker_is_its_activity(tmp_path):
+    """lean's workers push to `cursor/lean-...-fc8d` branches, which match none of a worker's known branches, and were rung
+    silent while pushing. A push to the branch of an open PR whose body names the worker, by full or short id, is its activity."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
+    sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40, "cursor/lean-records-fc8d": "b" * 40})
+    prs = [{"branch": "cursor/lean-records-fc8d", "body": f"Lane lean\n\nRECORDS ({W.short_id(W1_)}) re-heads it."}]
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh, open_prs=lambda: prs)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 60)
+    sh.heads["cursor/lean-records-fc8d"] = "c" * 40
+    pushed = clock.t + 5 * 60
+    sweeps(w, clock, 90)
+    assert silent(tmp_path) == [], "the push to its PR's branch is activity"
+    sweeps(w, clock, 5)
+    (rec,) = silent(tmp_path)
+    assert rec["since"] == W.iso(pushed) and "cursor/lean-records-fc8d" in rec["branches"]
+    w.open_prs = lambda: (_ for _ in ()).throw(OSError("HTTP 502"))
+    w.prs_read = -float("inf")
+    w.read_prs(clock.t)
+    assert w.pr_branches == {W.short_id(W1_): {"cursor/lean-records-fc8d"}}, "a failed read keeps the last one"
+
+
+def test_github_prs_reads_every_page_of_open_prs_with_the_token_from_its_file(tmp_path, monkeypatch):
+    env = tmp_path / "relay.env"
+    env.write_text("SLACK_BOT_TOKEN=x\nGH_TOKEN=ghs_dummy_for_tests\n")
+    seen = []
+
+    class Resp:
+        def __init__(self, data):
+            self.data = data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return json.dumps(self.data).encode()
+
+    def urlopen(req, timeout):
+        seen.append((req.full_url, req.get_header("Authorization")))
+        page = int(req.full_url.rsplit("page=", 1)[1])
+        return Resp([{"head": {"ref": f"b{page}-{i}"}, "body": "x"} for i in range(100 if page == 1 else 3)])
+
+    monkeypatch.setattr(W.urllib.request, "urlopen", urlopen)
+    got = W.github_prs(REMOTE, env)()
+    assert len(got) == 103 and got[0] == {"branch": "b1-0", "body": "x"}
+    assert [u for u, _ in seen] == [
+        f"https://api.github.com/repos/compute-verification/verity/pulls?state=open&per_page=100&page={p}" for p in (1, 2)]
+    assert {a for _, a in seen} == {"Bearer ghs_dummy_for_tests"}
+    with pytest.raises(ValueError):
+        W.github_prs("/srv/git/verity.git", env)
+
+
 def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_top(tmp_path):
     """top, 26 Oct: nine workers sat ACTIVE with no step for 30-64 h, each rung twice as silent and then by no one."""
     notes = tmp_path / "notes"
@@ -1920,7 +2011,7 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
 
 def test_a_run_a_worker_sent_is_its_activity(tmp_path):
     """A worker whose only sign of life was the runs it sent (no note, no push) was rung silent and then no_step while its runs
-    ended every hour. A run counts from when it was sent (its end less its wall time), learned when it ends."""
+    ended every hour. A run counts at its start and at its end."""
     notes = tmp_path / "notes"
     note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})", age_s=2 * 3600)
     api, clock, w, sh, roots = nodes_setup(tmp_path, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, git_remote=REMOTE)
@@ -1929,11 +2020,11 @@ def test_a_run_a_worker_sent_is_its_activity(tmp_path):
     for i in range(6):
         sweeps(w, clock, 60)
         node_run(roots["vy-nebius-1"], f"r20261018-2{i}0000-000{i}", clock.t, by=f"https://cursor.com/agents/{W1_}", wall_s=600)
-    sent = clock.t - 600
+    last_end = clock.t
     assert silent(tmp_path) == [], "a run sent every hour is activity"
     sweeps(w, clock, 120)
     (rec,) = silent(tmp_path)
-    assert rec["agent"] == W1_ and rec["since"] == W.iso(sent), "silence counts from its newest run's sending"
+    assert rec["agent"] == W1_ and rec["since"] == W.iso(last_end), "silence counts from its newest run's end"
 
 
 def test_a_run_ends_sender_resolves_as_a_learned_worker_does_and_the_rest_are_one_record_for_infra(tmp_path):
