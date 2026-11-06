@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { start } from "workflow/api";
 import { leadWorkflow } from "../workflows/lead.ts";
 import { tick } from "./cron.ts";
+import { jobDone } from "./job-done.ts";
 import { runtime } from "./runtime.ts";
 import { SERVICE_NAMES, isService } from "./services.ts";
 import { mentionedLanes, parseSlackEvent, verifySlackSignature } from "./slack.ts";
@@ -70,16 +71,7 @@ export async function jobCallback(req: Request, token: string) {
   const job = await rt.store.jobByToken(token);
   if (!job) return json({ error: "no such job" }, 404);
   const body = (await req.json().catch(() => ({}))) as { status?: string; summary?: string; result?: unknown };
-  const status = body.status ?? "done";
-  await rt.store.finishJob(job.id, status, body.result ?? body.summary ?? null);
-  const r = await wake(job.lane, {
-    lane: job.lane,
-    source: "job",
-    kind: "job-done",
-    payload: { jobId: job.id, externalId: job.externalId, status, text: `Job ${job.id} ${status}: ${body.summary ?? ""}`.trim(), result: body.result ?? null },
-    replyTo: job.replyTo,
-    dedupeKey: `job-done:${job.id}`,
-  });
+  const r = await jobDone(job, { status: body.status ?? "done", summary: body.summary, result: body.result });
   return json({ ok: true, eventId: r.eventId, duplicate: r.duplicate });
 }
 

@@ -111,6 +111,22 @@ describe("a lead on the platform", () => {
     expect((await t.store.getJob(sub.id))!.status).toBe("done");
   });
 
+  it("learns of a job that ends without calling back from the queue, once", async () => {
+    const m = await say("C_INFRA", "[[job: lake build Security]]");
+    await reply(m.thread, "submit_job");
+    const sub = t.jobs.submitted.at(-1)!;
+    const { externalId } = (await t.store.getJob(sub.id))!;
+    expect((await tick()).jobsEnded).toEqual([]);
+    t.jobs.end(externalId!, "dead", { outcome: "error", summary: "lease expired 3 times" });
+    expect((await tick()).jobsEnded).toEqual([sub.id]);
+    const post = await reply(m.thread, "job/job-done");
+    expect(post.text).toContain("Handled 1 event(s)");
+    expect((await t.store.getJob(sub.id))!.status).toBe("dead");
+    expect((await tick()).jobsEnded).toEqual([]);
+    const { rows } = await t.store.db.query(`select payload->>'text' as text from events where kind = 'job-done' and payload->>'jobId' = $1`, [sub.id]);
+    expect(rows.map((r) => r.text)).toEqual([`Job ${sub.id} dead: lease expired 3 times`]);
+  });
+
   it("dispatches a worker and is woken in the same thread when it finishes", async () => {
     const m = await say("C_INFRA", "[[dispatch: fix the flaky test in tests/test_clock.py]]");
     await reply(m.thread, "dispatch_worker");

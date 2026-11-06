@@ -1,5 +1,7 @@
 import { start } from "workflow/api";
 import { leadWorkflow } from "../workflows/lead.ts";
+import { jobDone } from "./job-done.ts";
+import { FINAL_STATES } from "./jobs.ts";
 import { runtime } from "./runtime.ts";
 import { wake } from "./wake.ts";
 
@@ -11,8 +13,8 @@ export const ROLL_AFTER_HOURS = 24;
 // lead with pending events is rung (which starts it if no run holds its hook),
 // a lead whose events wait too long with no turn running gets a fresh run, an
 // idle lead whose run is a day old moves to a fresh run on the current
-// deployment, and a turn running too long is reported once. Nothing here needs
-// a human.
+// deployment, a turn running too long is reported once, and jobs that ended
+// are delivered. Nothing here needs a human.
 export async function tick(o: { alertChannel?: string; now?: Date } = {}) {
   const rt = await runtime();
   const now = o.now ?? new Date();
@@ -66,5 +68,14 @@ export async function tick(o: { alertChannel?: string; now?: Date } = {}) {
   for (const t of await rt.store.staleTurns(STALE_TURN_MINUTES)) {
     await alert(`stale:${t.id}`, `platform: turn ${t.id} of ${t.lane} has run over ${STALE_TURN_MINUTES} min.`);
   }
-  return { ticked, nudged, restarted, rolled, alerts };
+  // A job's end is also read from the queue, so a runner that never calls back
+  // (or a callback that was lost) still wakes the lead.
+  const jobsEnded: string[] = [];
+  for (const job of await rt.store.openJobs()) {
+    const s = await rt.jobs.status(job.externalId!).catch(() => null);
+    if (!s || !FINAL_STATES.has(s.state)) continue;
+    await jobDone(job, { status: s.state, summary: s.result?.summary, result: s.result });
+    jobsEnded.push(job.id);
+  }
+  return { ticked, nudged, restarted, rolled, alerts, jobsEnded };
 }

@@ -592,6 +592,11 @@ export function createStore(db: Db) {
       return rows[0] ? toJob(rows[0]) : null;
     },
 
+    async openJobs(): Promise<Job[]> {
+      const { rows } = await db.query(`select * from jobs where status = 'submitted' and external_id is not null order by submitted_at`);
+      return rows.map(toJob);
+    },
+
     async finishJob(id: string, status: string, result: unknown) {
       await db.query(`update jobs set status = $2, result = $3, finished_at = now() where id = $1`, [
         id,

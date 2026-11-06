@@ -7,12 +7,24 @@ export type JobSpec = {
   leaseSeconds?: number;
 };
 
+export type JobState = { state: string; result: { outcome?: string; summary?: string; run_id?: string } | null };
+
 export type JobRunner = {
   submit(j: { id: string; lane: string; spec: JobSpec; callbackUrl: string }): Promise<{ externalId: string }>;
+  status(externalId: string): Promise<JobState>;
 };
+
+// The queue's states a job doesn't leave.
+export const FINAL_STATES = new Set(["done", "failed", "dead", "cancelled"]);
 
 export function jobsApi(o: { url: string; token: string; line?: string }): JobRunner {
   return {
+    async status(externalId) {
+      const r = await fetch(`${o.url.replace(/\/$/, "")}/${encodeURIComponent(externalId)}`, { headers: { authorization: `Bearer ${o.token}` } });
+      if (!r.ok) throw new Error(`jobs API: ${r.status} ${(await r.text()).slice(0, 300)}`);
+      const j = (await r.json()) as JobState;
+      return { state: j.state, result: j.result ?? null };
+    },
     async submit({ id, lane, spec, callbackUrl }) {
       const r = await fetch(o.url, {
         method: "POST",
@@ -33,13 +45,25 @@ export function jobsApi(o: { url: string; token: string; line?: string }): JobRu
   };
 }
 
-export function memoryJobs(): JobRunner & { submitted: { id: string; lane: string; spec: JobSpec; callbackUrl: string }[] } {
+// A queue in memory: a job stays queued until a test `end`s it.
+export function memoryJobs() {
   const submitted: { id: string; lane: string; spec: JobSpec; callbackUrl: string }[] = [];
+  const states = new Map<string, JobState>();
   return {
     submitted,
-    async submit(j) {
+    async submit(j: { id: string; lane: string; spec: JobSpec; callbackUrl: string }) {
       submitted.push(j);
-      return { externalId: `local-${submitted.length}` };
+      const externalId = `local-${submitted.length}`;
+      states.set(externalId, { state: "queued", result: null });
+      return { externalId };
     },
-  };
+    async status(externalId: string): Promise<JobState> {
+      const s = states.get(externalId);
+      if (!s) throw new Error(`no job ${externalId}`);
+      return s;
+    },
+    end(externalId: string, state: string, result: JobState["result"]) {
+      states.set(externalId, { state, result });
+    },
+  } satisfies JobRunner & Record<string, unknown>;
 }
