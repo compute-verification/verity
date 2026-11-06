@@ -1463,3 +1463,34 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
    - The run's records are fetched (and preserved on cpu-3). h200-3, the serve dir and the frozen tree are untouched.
 
 **I wait on:** your decision. Nothing is running.
+
+## 13:05Z Fri (vllm-pearlplus): **A and B1–B3 are done. B4's preflight refuses on h200-3's free inodes, so the serve waits on your word: may I `retention rm` the rehearsal eeab's window commit there? Nothing else blocks it.**
+
+1. **A:** posted on VLLM-182 and VLLM-217 at 12:45Z, and 0bb4 is labelled `outcome refused-no-session` (ref r20261106-060005-3e9e).
+2. **B1, the tree:** `cursor/vllm-pprecord2-54dd` at `4f816e9da6`: `997af1d259` plus `801c787b3b` and `4f816e9da6`, clean `-x` cherry-picks of #7614's `990fb5eddfe9` and `b1f9c2a287f6`.
+   - Its diff from `44b0c741c930` is the fix branch's diff from `remote`, but for context lines.
+   - Locally: 375 passed, and the five baseline failures.
+   - On cpu-6 (r20261106-124405-9251, research pool): `benchmarks/one_stage` 739 of 739, `test_served_verdicts.py` 366 of 366 and `test_served_overhead.py` 14 of 14.
+3. **B2, the coin link:** infra pinned cpu-3's key at 12:51:57Z (INF-518: the auditor account's `known_hosts` had no entry for cpu-3's address).
+   - At 12:52:57Z I ran a gate certifier rehearsal, c20261106T125257Z-a23f (`--peer vy-nebius-cpu-3 --port 7865 --minutes 1`; probe r20261106-125249-9c20). Its `ssh -N -L`, as `auditor` from `/etc/vy/peers`' line, is the coin link's path with the forward the other way.
+   - It came up (`tunnel.log` empty) and reached a listener on cpu-3's 127.0.0.1:7865 twice. It exited 1 only because the listener isn't an HTTP endpoint.
+   - No root, coin or ledger entry: the ledger still has 1777 entries.
+   - The coin link's `-R` is permitted by cpu-3's `permitlisten="127.0.0.1:*"` and sshd's defaults (only `AllowUsers research` is set).
+4. **B3, h200-3:** idle since 10:21Z: GPU 0 MiB, lease lock free (last owner 10:11Z), no runs (probe r20261106-124655-680b).
+   - No booking: TOP-255 is Thursday's and done, and no issue updated today books it.
+   - Registry deadline Mon 9 Nov 12:00Z (INF-480).
+5. **B4, the preflight, refused:** r20261106-125749-9c83, from `4f816e9da6` at 3e9e's settings: "/workspace has 554732 inodes free, 217656 short of PEARLPLUS_INODES (772388)".
+   - A diagnostic preflight with only that check off (`PEARLPLUS_INODES=0`, r20261106-125822-31d4) passed with 046d's plan line word for word.
+   - The serve's gate check from the new tree: GATE ready, pinned `f0c4b1355fb7` on main's line (r20261106-130156-96bf).
+   - The holders (r20261106-125544-ab04): eeab's window commit (386,196 inodes) and 3e9e's (386,196).
+   - **Proposal:** `research retention rm --approved-by @vllm` of eeab's window commit, `r20261104-223945-eeab/v3c-wK-4-32-4`. Its follow-on (ec10 on cpu-5) failed, and its copy there is gone. The dry run (r20261106-125945-d32b) plans 1 path, 3.9 GiB, under @vllm's keep, which leaves about 955k inodes free.
+   - The alternatives: 3e9e's window instead (compute-accounting has run `served_shares.py` on it, CMP-348), or `SERVE_ROOT` on `/` (33M inodes free), which changes a setting from 3e9e's. I don't recommend either.
+6. **A slip:** probe ab04's stdout names both window commits' directories with their window numbers, and custody put that log in the store. The store has no delete. On your word I `retention rm` the node's copy of that log.
+7. **Also:** at 11:25Z infra asked @vllm on INF-456 whether run 2's follow-on still needs cpu-6's 320 GB hold to Sat 06:00Z, which other lanes' checks wait behind. This plan's follow-on runs on cpu-3 and doesn't use it. Yours to answer.
+8. **The plan with its times is on VLLM-182 (13:04Z).** Ready on your word, in `sc/record2/`:
+   - the removal, `eeab-rm-apply.sh`;
+   - the preflight, `preflight.sh`;
+   - the serve, `serve.sh`, which refuses a settings line that differs from 3e9e's.
+   - At the serve's launch I ask infra on INF-518 to pause cpu-3's b slots from the seal to Tue 10 Nov 12:00Z.
+
+**I wait on:** your word on the room (item 5). Nothing is running.
