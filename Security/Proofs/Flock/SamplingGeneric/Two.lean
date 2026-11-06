@@ -207,7 +207,7 @@ end Claims.Sampling
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Partition InScopeTwo RTwo cell escCell replayOf footprint wrongIn forkOn
+open Claims.Sampling (AuditStatement Partition InScopeTwo RTwo cell counts escCell replayOf footprint wrongIn forkOn
   forkOn_forkOn' accList AllBad wait_bad_le Pr_or_le slack slack_pos Pr_acc_forkOn Opening OwnColl agree_of_passes
   val_assemble ιOf ιOf_eq acc_of_accList accList_length_eq assemble escCell_anti Ex_esc_le cell_subset cell_disj
   replayOf_of_mem_cell wrongAll wrongAll_subset inter_cell_wrongAll exists_best_interior)
@@ -218,9 +218,6 @@ namespace CompiledTwo
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 /-! ## The failure event -/
-
-/-- `Y`'s proof blocks in cell `(ρ, t)`. -/
-def counts (Pt Pρ : Partition) (Y : Finset ℕ) (ρ t : ℕ) : ℕ := (Y ∩ cell Pt Pρ ρ t).card
 
 open Classical in
 /-- **The candidate sets**: sets of proof blocks whose counts per cell are a footprint of acceptance probability at
