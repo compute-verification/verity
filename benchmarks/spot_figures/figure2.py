@@ -43,8 +43,9 @@ def run(model: str) -> dict:
                       "block_share": s["per_token"] / blocks, "mac_share": s["per_token"] * s["macs"] / macs,
                       "measured": b is not None, "overhead": None if b is None else b["overhead"],
                       "seconds_per_token": None if b is None else s["per_token"] * seconds(b)})
+    shared = {t["label"] for t in types if sum(u["label"] == t["label"] for u in types) > 1}
     for t in types:
-        if sum(u["label"] == t["label"] for u in types) > 1:
+        if t["label"] in shared:
             t["label"] += f" ({t['kind']})"
     done = all(t["measured"] for t in types)
     return {
