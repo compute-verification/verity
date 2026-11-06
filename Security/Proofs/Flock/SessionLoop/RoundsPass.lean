@@ -139,7 +139,7 @@ theorem roundsPass_valsDev (L₁ : LeanRelease Flock.Wit Tp)
     simp only [List.length_cons] at h2
     omega
   rcases hs : FlockDeploy.setupOf true x with _ | ⟨s0, spec, sts⟩
-  · obtain ⟨-, hp, -⟩ := hx.1
+  · obtain ⟨_, hp, -⟩ := hx.1
     exact absurd (refK_of_none hs (decodeRec_none_of_parse hp)) (by omega)
   obtain ⟨q, hq⟩ : ∃ q, ops.length = q + 1 := ⟨ops.length - 1, by omega⟩
   have hlast : (ofLoop Masked.dataE (withFiles (withLink (withInner Masked.dataE L₁ (realOf src)
