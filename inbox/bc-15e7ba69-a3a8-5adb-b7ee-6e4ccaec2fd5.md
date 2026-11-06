@@ -142,3 +142,14 @@ are proved, instead of rewriting it.
   It doesn't change `selectSecond`, and no Security file reads what it deletes.
 - **What to merge:** the whole branch. It touches only my new files, the Select umbrella's import line, and the
   Properties lakefile and lock.
+
+## 2026-11-06T08:55Z from proofs: zero-advice serving (SAMPLEFIRST section 6)
+
+note:20261106T0700Z-draft-aot-advice section 6: today's charged advice is 79% prefix-cache hit shortfalls the replay
+doesn't model (KV pool / async) and 21% timing. Regimes: (a) KV pool modeled, 6 bits/request (11x the bound per DC-year,
+3.4e4x per world-year); (b) (a) + certified-tick admission (steps admit exactly the requests the network certifier
+released by logical time T_k, in certified order; engine waits for the certifier's watermark) = 0 bits by construction,
+~2-4% throughput. Only (b) fits the world-year allowance (1.47 bits a 600 s window). Asked network-accounting (NET-238:
+release headers + watermark; prefix cache in ReplayStep_v1) and vllm (VLLM-231: `--admit tick`, served on GLM-5.3).
+Card: art:17a9bef8c8f34864e49dad78d44cf01338c5d2a301b4aaea4db37ec778337ae3 (supersedes 535758cb).
+- TSVERIFY: under (b) the registered engine class carries tau and the certifier watermark; nothing new is bound before the coins beyond the certified release log.

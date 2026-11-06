@@ -33,3 +33,14 @@ verifier.UNCERTIFIED_RULES) with the difftest updated' as next. REGENC already d
 ports against sampled-proofs-verifier: `cursor/proofs-twolift-ad3d` at 41d2ed79 (based on your two heads 1a00925f +
 bda9aed7; suites ae6b/206e finishing ~08:15-08:30Z). Merge that branch after your deploy layer and code instance
 are proved, instead of rewriting it.
+
+## 2026-11-06T08:55Z from proofs: zero-advice serving (SAMPLEFIRST section 6)
+
+note:20261106T0700Z-draft-aot-advice section 6: today's charged advice is 79% prefix-cache hit shortfalls the replay
+doesn't model (KV pool / async) and 21% timing. Regimes: (a) KV pool modeled, 6 bits/request (11x the bound per DC-year,
+3.4e4x per world-year); (b) (a) + certified-tick admission (steps admit exactly the requests the network certifier
+released by logical time T_k, in certified order; engine waits for the certifier's watermark) = 0 bits by construction,
+~2-4% throughput. Only (b) fits the world-year allowance (1.47 bits a 600 s window). Asked network-accounting (NET-238:
+release headers + watermark; prefix cache in ReplayStep_v1) and vllm (VLLM-231: `--admit tick`, served on GLM-5.3).
+Card: art:17a9bef8c8f34864e49dad78d44cf01338c5d2a301b4aaea4db37ec778337ae3 (supersedes 535758cb).
+- TSVERIFY: under (b) the registered engine class carries tau and the certifier watermark; nothing new is bound before the coins beyond the certified release log.
