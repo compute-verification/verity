@@ -155,6 +155,7 @@ theorem net_width {tags : Tags} {c : Circuit} (P : ParseFacts tags c) {n : ℕ} 
     exact ⟨ofRows_width ha, ofRows_width hb, fun lk h => by rw [hlk] at h; cases h⟩
   · exact build_width hb
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`Stmt.setupH`'s leaf is the default one**: an hm96 row statement has no compression leaf. -/
 theorem setupH_leaf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}

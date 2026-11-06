@@ -64,7 +64,7 @@ open Game Composed ZkView Model Flock ZkEveryCoin ZkLink
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **Under the abort interface, the honest prover is `outExe`.** -/
 theorem honestOut_eq {prover : TableProver} (hP : SelfCheckSilent prover) {C : CoinedSetup}

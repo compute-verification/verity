@@ -293,7 +293,7 @@ theorem hin : Partition.AnchorsSound₂ (C := C) X a 0 := by
 /-- **`twoStage_influence` is not vacuous**: its hypotheses, `AnchorsSound₂` among them, hold at `0`. -/
 theorem influence (δ : ℝ≥0∞) (σ : Strategy (twoStage L L₂ Unit Int session)) :
     prob (fun o => o.1 = true ∧
-        Partition.out D (X (reg₂ σ) (cont₁ σ)) ∉ P.influenceSet D (effEscape L L₂ r.parent) a δ)
+        Partition.out D (X (reg₂ σ) (cont₁ σ)) ∉ P.influenceSet D (effAcceptProb L L₂ r.parent) a δ)
       (twoStage L L₂ Unit Int session) σ ≤ δ + 0 + 0 + 0 :=
   r.twoStage_influence X Yint ext hks hlink hin δ σ
 

@@ -50,7 +50,7 @@ open Game
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **The commit strings the firewall sends under live inner coins**, at the salt bytes `ys`: string `i` is message
 `i`'s SHA-512 under `ys i` (`Default512.commitString`), where message `i`, `msgs i l`, reads the strings `l` the

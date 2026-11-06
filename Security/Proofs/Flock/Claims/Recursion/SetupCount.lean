@@ -309,6 +309,8 @@ theorem descParse_cost (bytes : ByteArray) :
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
+-- a cost combinator per bind and loop of `Program.decodeWith`'s unfolded body (`repeat (first ...)`), `omega` at each
+-- leaf
 set_option maxHeartbeats 2000000 in
 theorem decode_cost (bytes : ByteArray) : countC.P (Program.decodeWith (Hashes.counted h).sha512 bytes) 1 := by
   apply countC.mono
@@ -974,6 +976,8 @@ theorem qwordFinding_cost (c : Circuit) (pub : Public) (obj : Json) (program : B
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
+-- a cost combinator per bind and loop of `HmLinks.checkWith`'s unfolded body (`repeat (first ...)`), `omega` at each
+-- leaf
 set_option maxHeartbeats 4000000 in
 theorem linksCheck_cost (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) :
     countC.P (HmLinks.checkWith (Hashes.counted h) c pop readers program) 1 := by
@@ -1044,6 +1048,8 @@ theorem linksCheck_cost (c : Circuit) (pop : Public) (readers : Option (Array Na
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
 
+-- a cost combinator per bind and loop of `HmRow.loadPublicWith`'s unfolded body (`repeat (first ...)`), `omega` at each
+-- leaf
 set_option maxHeartbeats 4000000 in
 theorem loadPublic_cost (tags : Tags) (c : Circuit) (file : ByteArray) :
     countC.P (HmRow.loadPublicWith (Hashes.counted h) tags c file) 1 := by
@@ -1175,6 +1181,7 @@ theorem inLoadPublic_cost (tags : Tags) (c : Circuit) (pi : HmIn.Ports) (file : 
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
+-- a cost combinator per bind and loop of the unfolded sample header write (`repeat (first ...)`), `omega` at each leaf
 set_option maxHeartbeats 4000000 in
 theorem drawn_cost (c : Circuit) (pub : Public) (draw : Json) :
     countC.P (HmRow.drawnWith (Hashes.counted h) c pub draw) 1 := by
@@ -1716,6 +1723,8 @@ theorem outParseCommit_flat (tags : Tags) (bytes : ByteArray) (tables : List (St
     HmOut.parseCommitWith (Hashes.counted h) tags bytes tables = HmOut.parseWith (Hashes.counted h) tags bytes tables := by
   rw [HmOut.parseCommitWith, ite_eq_right (by simp [hi])]
 
+-- a cost combinator per bind and loop of `Stmt.setupHiddenWith`'s unfolded body (`repeat (first ...)`), `omega` at each
+-- leaf
 set_option maxHeartbeats 8000000 in
 /-- **`Stmt.setupHiddenWith`'s calls**, at a drawn statement of an untyped, flat circuit: ten for its parse, partition,
 load, draw, law, links or query and digests, and `checkPublic`'s, at the ports and rows its parse, load and draw return. -/
@@ -1857,6 +1866,8 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
 theorem workLaw_cost' (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
     countC.P (HmRow.workLawWith (Hashes.counted h) obj program k table) 1 := workLaw_cost h obj program k table
 
+-- a cost combinator per bind and loop of `Stmt.setupTablesWith`'s unfolded body (`repeat (first ...)`), `omega` at each
+-- leaf
 set_option maxHeartbeats 8000000 in
 /-- **`Stmt.setupTablesWith`'s calls** at one table of a statement with hidden outputs and a draw: the verifier's own
 stratified or work law, and the one statement's setup. -/

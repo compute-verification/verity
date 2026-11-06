@@ -17,7 +17,7 @@ The units are `N` instances of `Pc4RowB_v1{K}` (`row4B`), `M` of `Pc4RowA_v1{K}`
 bytes) and `P_A` row `i` from RowA `rs·TM + i`, and row `j` of its `B̃` and `P_B` row `j` from RowB `cs·TN + j`
 (`portT4`). As in `pc8`, the lines and `G` are verifier-derived public inputs, so no unit computes `G`.
 
-`tests/test_circuit_whole4_lean.py` checks the inputs' widths, the ports, the unit numbering and the outputs against
+`verity/core/protocols/pouw/tests/test_circuit_whole4_lean.py` checks the inputs' widths, the ports, the unit numbering and the outputs against
 `pc4.unit_cut` of `Pc4Check`, with its descriptor digests pinned.
 -/
 

@@ -357,6 +357,7 @@ theorem sqOk_of {c : Cfg} {xb : ByteArray} {n : ℕ} (p : ℕ) {o : ByteArray} {
   rw [innerOwn_owed]
   exact hi k hk'
 
+-- `split` and `cases` at every branch of `roundFree`'s unfolded body
 set_option maxHeartbeats 1000000 in
 /-- **A round the frame takes ends in its squeeze** (`SqOk`): `roundFree`'s loop returns only there. -/
 theorem roundFree_sq {c : Cfg} {s : Masker} {xb : ByteArray} {n : ℕ} {q : ByteArray × Masker × Array ℕ}
@@ -532,6 +533,7 @@ theorem label_inner_some (c : Cfg) (s : Masker) {j : ℕ} (hs : s.inner = some j
     exact (label_inner_twice c s hs h).elim
   · rw [Sched.label_inner c s b hb h, hs]
 
+-- `split` and `cases` at every branch of `roundFree`'s unfolded body
 set_option maxHeartbeats 1000000 in
 /-- **Inside the inner proof a round the frame takes keeps the inner proof's count.** -/
 theorem roundFree_inner_some {c : Cfg} {s : Masker} {xb : ByteArray} {n j : ℕ} {q : ByteArray × Masker × Array ℕ}

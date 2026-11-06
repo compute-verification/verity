@@ -10,8 +10,11 @@
                                                                the readers an older record lists
 
 `.gitattributes` names this driver for every `lean-audit.json`, and git runs it when both sides changed the file. A record is
-a map of entries by name: the guarantees, the modules under `reads`, the assumptions, the dependencies, and the policy's own
-sections. Each side's change to an entry (added, changed or removed) applies. Under `reads`, which two branches adding
+a map of entries by name: the guarantees, the modules under `reads`, the assumptions, the open premises, the domain
+hypotheses, the dependencies, and the policy's own sections. Each side's change to an entry (added, changed or removed) applies.
+An entry sits in one section of a group (`EXCLUSIVE`: a claim's `claims.witnesses`, `not`, `generic`; a premise's
+`assumptions`, `domain`, `open`): one side moved between them from the base is where that side put it, and one both sides
+placed differently refuses, naming both sections (`exclusive`). Under `reads`, which two branches adding
 guarantees that read one module both change, the module's definitions merge the same way, and its digest is recomputed
 from the merged definitions (`audit.module_digest`). A side written before guarantees were called that (`pins`) is read
 under today's names (`audit.as_guarantees`), and a side whose `reads` groups still list their readers (`audit.READER_KEYS`)
@@ -20,16 +23,17 @@ is read without them, so a branch from before the lock dropped them merges with 
 What the build determines never refuses: the records `check.py --update` writes from it and the Lean check of `next`
 (`--regenerate`) rewrites on the merged tree whenever they differ (`audit.RECORD_DIFFERENCE`, `audit.regenerated`). Those are
 a guarantee's record (signature, named assumptions, type hash: restated on both sides, the merged tree's statement decides
-it), each `reads` group (which definitions the guarantees read, and each one's hash) and an assumption's `digest`.
+it), each `reads` group (which definitions the guarantees read, and each one's hash) and an assumption's or open
+premise's `digest`.
 Where the sides disagree the merge takes the union (a definition the other side changed while one side stopped reading
 it) or ours' value (a hash or a record both sides changed differently), and names each in one line on stderr. A definition
 one side reads nowhere while the other kept it as the base had it is dropped (`gone`): none of that side's guarantees
 reads it, so in the merged tree only the other side's new or restated guarantees can, and one moved to another module
 leaves the old one (`moved`); a group left without definitions is dropped. Whether a guarantee is listed is
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
-refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry (a `shape.inline` entry is one
-premise of a guarantee, so two sides that each add or drop premises of one guarantee merge: `DEEPER`; a premise both
-sides give different reasons keeps ours', since the check asks only that one be given), a dependency's
+refuses when both sides changed it differently: an `owner`, an open premise's `issue` or `due`, a domain hypothesis's
+`why` or `cites`, a `shape` or `frozen` entry (a `shape.inline` entry is one premise of a guarantee, so two sides that
+each add or drop premises of one guarantee merge: `DEEPER`; a premise both sides give different reasons keeps ours', since the check asks only that one be given), a dependency's
 revision, a policy entry (a layer's field, a `compile_time` digest). A `shape.inline` premise one side dropped while the
 other has it as the base had it stays, while the merged record lists its guarantee (`held`): a side whose `--update` ran on
 an older tree drops a text the other side's tree still prints, and the Lean check fails on a missing entry but not on one
@@ -248,9 +252,11 @@ def guarantees(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) 
 
 
 def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str], section: str = "assumptions") -> dict:
-    """The named assumptions entry by entry, each one's `owner` (hand-written) apart from its `digest` (the build's: the hash
-    its `reads` record holds), which merges as `derived`.  An entry one side removed and the other changed is kept: the
-    Lean check of `next` drops it when no guarantee of the merged tree reads it (`assumptions.unread`)."""
+    """The named assumptions (or, ``section`` `open` or `domain`, the open premises or the domain hypotheses) entry by
+    entry, each one's hand-written fields (`owner`; an open premise's `issue` and `due`, a domain hypothesis's `why` and
+    `cites`) apart from its `digest` (the build's: the hash its `reads` record holds), which merges as `derived`.  An
+    entry one side removed and the other changed is kept: the Lean check of `next` drops it when no guarantee of the merged
+    tree reads it (`assumptions.unread`, `open.unread`, `domain.unread`)."""
     out = {}
     for k in keys(section, a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)

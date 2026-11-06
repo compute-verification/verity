@@ -84,7 +84,7 @@ open FlockSoundness.Discharge
 open CoinLayer
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **`Claims.Flock.ZK` at a larger `ε_zk`**, larger at the statements with a witness. -/
 theorem zk_mono {Coin Col T : Type} {H : Msg → Msg} {D : Claims.Flock.ZkDeploy Coin Col T} {ε ε' γ : Msg → ℝ}

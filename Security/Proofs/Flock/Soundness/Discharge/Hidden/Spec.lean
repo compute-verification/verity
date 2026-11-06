@@ -86,6 +86,7 @@ theorem regions_noPorts {c : Circuit} {pi : HmIn.Ports} {pub : Public} {r : Arra
   simp only [he, ↓reduceIte, pure, Except.pure, Except.ok.injEq] at h
   exact h.symm
 
+-- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **What `Stmt.setupHidden` accepted** is its `Spec`. -/
 theorem setupHidden_spec' (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :

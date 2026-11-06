@@ -76,7 +76,7 @@ open _root_.Flock.Firewall.Frames (COIN_MAX)
 open _root_.Flock.Firewall.Session (sizesOk)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace Loop
 

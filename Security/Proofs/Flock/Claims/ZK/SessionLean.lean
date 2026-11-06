@@ -76,7 +76,7 @@ open _root_.Flock.Firewall.Session (INNER_CONS replayCoins ligeritoCoins repCoin
 open _root_.Flock.Firewall.Frame (Cfg Masker Draws MaskSlot)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace Loop
 

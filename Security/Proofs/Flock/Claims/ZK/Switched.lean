@@ -89,7 +89,7 @@ open FlockSoundness.Discharge.Composed (CoinedSetup CoinsZK)
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **A `--zk` table's switched view** at a worker's clear values `v`, with the executable's hidden leaves: `v`'s view
 where its rows hold, else the honest prover's on the moved pads (`Table.Hm96.swViewR`). -/
@@ -429,6 +429,7 @@ theorem card_cutAt_ideal01 {J : ℕ} {V : Type} [DecidableEq V] (C : Fin J → C
   exact card_cutAt_ideal C cz wt wt' hreg hreg' out σ
 
 set_option maxRecDepth 8000 in
+-- `prCoin` over the product of `J` tables' randomness and salts, each table's bound composed by `prCoin_pi_close`
 set_option maxHeartbeats 4000000 in
 /-- **Lemma B at the workers' values, at `J` `CoinedSetup`s**: at any coin vector of each table that the honest prover
 doesn't refuse, valid witnesses `w j` and any clear values `vs` read from what every table's workers see (`tabSeen`:

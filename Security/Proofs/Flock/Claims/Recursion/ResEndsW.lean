@@ -315,6 +315,7 @@ theorem partPorts_of {sh : _root_.Flock.Shape} {jj : ℕ} {S0 : _root_.Flock.Rec
   unfold RecVStar.partPorts
   simp only [hS, hg, hj, bind, Except.bind, pure, Except.pure]
 
+-- one proof of over a hundred lines through the commit tie's hypotheses, `rw` and `omega` on the port and row indices
 set_option maxHeartbeats 1000000 in
 /-- **P3's ends half**, under the commit tie (`InnerAccTieV`): in a piece's port context, at a decision, each element
 of the copy past the frame is one of `w`'s last four, `acc0`'s or `acc1`'s element `o` (`acc_elem`), and the copy holds

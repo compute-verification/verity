@@ -127,7 +127,7 @@ open Claims
 open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-! ## A table's switched view before the last coin -/
 
@@ -859,7 +859,7 @@ open Claims Claims.ZKMal
 open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **The ZK server at pad-blind workers, at `flock-circuit --zk`'s reference session**: the server defers every
 stop to the session's last round (`ZkServer.nextD`, live PROTOCOL.md §10.1: a failed check stops the session at its

@@ -65,7 +65,7 @@ the masked values, the switched vectors, the layout, the cap or the root.
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace FlockComplete
 

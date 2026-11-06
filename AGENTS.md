@@ -206,10 +206,13 @@ to a commit whose records are the regenerated ones and whose gated steps all pas
   `Pouw`, `Pous`, `NetworkCertifier`, `Flock`, `Accounting`). All packages share one toolchain and one Mathlib revision,
   bumped together in a PR of their own.
 - **The Lean check** (`tools/verity/lean/check.py`) builds every file and replays every declaration through the kernel:
-  only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; an
-  assumption is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock.
+  only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
+  premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
+  named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean`, and every other premise is
+  open (`open`, with the Linear issue that discharges it and its due date), a list `--update` never adds to, unless it
+  is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it).
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
-  statement, the definitions it reads and the named assumptions it takes, so a changed statement is a changed record.
+  statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`).
 - How to work on Lean (the edit loop, why two agents never share a writable `.lake`, `upstream` watch entries): the
   lean-proofs skill.
@@ -241,8 +244,9 @@ and its parameters). What a run measured, what happened and who decided live out
 - **In the tree:** code, tests, Lean, circuits and their pins, the parameters and configuration code reads (with their
   public sources: a data sheet, the census), small fixtures beside their generators, and maintained current-truth docs
   (`README.md`, `AGENTS.md`, `ARCHITECTURE.md`, the root's `GLOSSARY.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`,
-  `CHANGELOG.md`, `*.template.md`, `PROTOCOL.md`; `tests/test_repository.py`). A protocol keeps its `PROTOCOL.md` only
-  while experimental: the PR whose Lean covers it deletes it, leaving a README of outline, signposts and core API.
+  `CHANGELOG.md`, `*.template.md`, `PROTOCOL.md`; `tests/test_repository.py`). The root has no README: an agent starts at
+  this file and `ARCHITECTURE.md`, and a directory keeps a README only where an agent couldn't find its way without one.
+  A protocol keeps its `PROTOCOL.md` only while experimental: the PR whose Lean covers it deletes it, leaving a README of outline, signposts and core API.
 - **Not in the tree, and not cited from it** (code, comments, docstrings, Lean, READMEs, docs): measured results
   (numbers, tables, plots, overheads), reports and drafts, and the process's ids and names: run, `art:` and `note:` ids,
   Notion pages, Linear issues, Slack threads, PR numbers, agent ids, lane and worker names, dates, and attributions such

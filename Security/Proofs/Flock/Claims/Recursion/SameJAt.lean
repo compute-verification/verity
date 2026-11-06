@@ -396,6 +396,7 @@ theorem arr_mapKey_null' {k : String} {j : Json} {a : Array Json}
     rw [hf] at h
     cases h
 
+-- `liveOfJ`'s run unfolded at the substituted record, `simp` and `omega` on each stream's offsets
 set_option maxHeartbeats 1600000 in
 /-- **The fill finds a coin for every recorded round** of the record of streams `S` wherever `liveOf` reads its
 substituted value, at rep streams of distinct names. -/

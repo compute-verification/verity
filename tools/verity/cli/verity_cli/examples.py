@@ -77,7 +77,8 @@ def _git(root: Path, *argv: str) -> list[str]:
 
 @cache
 def _locks(root: Path) -> tuple[frozenset[str], frozenset[str]]:
-    """Every name a `lean-audit.json` lists as a guarantee (a proof, its statement, or a claim), and every assumption."""
+    """Every name a `lean-audit.json` lists as a guarantee (a proof, its statement, or a claim), and every premise
+    (`assumptions`, `domain` or `open`)."""
     listed, assumptions = set(), set()
     for f in _git(root, "ls-files", "-z", "--", "lean-audit.json", "*/lean-audit.json"):
         if "/tests/" in f:
@@ -89,7 +90,7 @@ def _locks(root: Path) -> tuple[frozenset[str], frozenset[str]]:
                 if " : " in s:
                     listed.add(re.sub(r"\.\{[^}]*\}$", "", s.split(" : ", 1)[1].split()[0]))
         listed |= set(d.get("claims", {}).get("witnesses", {}))
-        assumptions |= set(d.get("assumptions", {}))
+        assumptions |= set(d.get("assumptions", {})) | set(d.get("open", {})) | set(d.get("domain", {}))
     return frozenset(listed), frozenset(assumptions)
 
 
@@ -230,7 +231,8 @@ def missing(ex: Demo, axis: str, step: str, root: Path) -> list[str]:
             return out
         for k, v in prem.items():
             if k not in assumptions:
-                out.append(f"{head}: premise {k!r} is an assumption no lean-audit.json lists")
+                out.append(f"{head}: premise {k!r} is a premise no lean-audit.json lists under `assumptions`, `domain` "
+                           f"or `open`")
             if not isinstance(v, str) or not RUN.fullmatch(v):
                 out.append(f"{head}: premise {k!r}: {v!r} is neither a run id (rYYYYMMDD-HHMMSS-xxxx) nor an art: id")
     return out

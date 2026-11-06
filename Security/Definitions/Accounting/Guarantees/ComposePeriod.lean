@@ -35,7 +35,7 @@ at it (`PeriodTailMax`).
   windows' live tiles and `WriterReads` (`PeriodCoversStmt`, `ServiceCovers`' argument with a window index, proved as
   `periodCovers` in `Proofs.Accounting.ComposePeriod.Covers`) and `UnitFixed`'s sums.
 * `CircuitCreditPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the
-  realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposePeriod`) from `CircuitWorkPeriod`'s
+  realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposePeriod`) from `CircuitWorkMonitoringPeriod`'s
   assembly at `a, b > 0`. Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives.
 -/
 
@@ -203,7 +203,7 @@ cuts them; no period over windows run at once (above); no check that the service
 or kept its periods disjoint (above); nothing of seeded windows (*Live coins only*); and, as `CircuitWork`, nothing
 of a served workload until a `Declared` is built from a compiled Program and `Properties.Compose.UnitsOfLayout` is
 proved. -/
-def CircuitWorkPeriod : Prop :=
+def CircuitWorkMonitoringPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
@@ -230,7 +230,7 @@ def CircuitWorkPeriod : Prop :=
         (rOfPrefix Sc Cd Np (pr.prefixLen x) a b Λ δs) (n * (Pl.run x).fixed) (n * folded x)) ≤
         δs + n * (δbind + δks)
 
-/-- **(L)'s credit in live words over a monitoring period's accepted prefix, live coins.** Under `CircuitWorkPeriod`'s
+/-- **(L)'s credit in live words over a monitoring period's accepted prefix, live coins.** Under `CircuitWorkMonitoringPeriod`'s
 premises with `a, b > 0`, an accepted period has at least its credit `(1 − ε(j))₊·N_live` (`creditPrefix`) of its
 prefix's live words fixed right (`n·fixed`), `N_live` the prefix's live words (`creditedLive`) and
 `ε(j) = r(j)·N_w/(min(a, b)·N_live)` at the realized prefix `j = Outcomes.prefixLen` (`epsPrefix`), except with
@@ -247,7 +247,7 @@ and `ε(j) < 1%` from 8,513, 18,026 and 82,403 windows: the proved line. Compose
 physical costs `a = 0.218`, `b = 0.998` with `ε_♭ = 0.571%`, where `ε(j) ≥ 1` up to 20, 43 and 201 windows and
 `ε(j) < 1%` from 4,815, 10,195 and 46,604: that credit, `(1 − ε_♭ − ε_μ − r(j)·N_w/N_live)₊` of the prefix's live
 words' `T_cred`, needs `CreditOfWork` on each credited window's run, which the period's one `Pl.run` doesn't give, and
-is not stated. Everything `CircuitWorkPeriod` doesn't say, this doesn't either. -/
+is not stated. Everything `CircuitWorkMonitoringPeriod` doesn't say, this doesn't either. -/
 def CircuitCreditPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)

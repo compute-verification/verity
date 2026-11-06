@@ -24,17 +24,28 @@ public import Definitions.Core.Site
 public import Definitions.Core.ValueSalts
 
 /-!
-# Core's protocol: the model every protocol states its guarantees in
+# Core: the model every area states its guarantees in
 
-The developer declares a circuit `D` and its baseline `θ` (`RegisteredCircuit`), runs `D` and commits the values of its
-committed wires, and the verifier draws with live coins (`Game`), which it reads from a challenger's log
-(`Challenger`), by a draw law over units (`Draw`). Every protocol package states its guarantees about
-these objects and defines none of its own: a circuit, its transcripts, a partition into units and a unit's correctness
-are the ones here.
+The developer registers a circuit `D` with its registered information `θ` (`RegisteredCircuit`), runs `D` and commits
+the values of its committed wires. The verifier's live coins (`Game`) come from the challenger's log (`Challenger`) and
+select a sample of proof blocks by a sampling design (`Draw`). Every area states its guarantees about these objects
+and defines none of its own: a circuit and its trace, a partition into proof blocks and a proof block's correctness are
+the ones here.
 
-This module, `Assumptions` and `Guarantees` are the trusted text: they import only one another and Mathlib, so their
-diff is everything a statement reviewer reads. `SecurityProofs` holds the proofs and every lemma, which nobody reviews
-for meaning.
+* Circuits: `Circuit` (gates, traces, `Implements`), `Boolean` (the Boolean profile), `Expand` (a multi-bit circuit as
+  a Boolean one), `Digest`.
+* Partitions: `Partition` (committed wires, a proof block's correctness), `Annotation`, `PrivatePartition`,
+  `Formalism` (`(c, k)`-partitions and local description length).
+* What the developer commits: `RegisteredCircuit` (the registered circuit and `θ`), `Advice` (the advice root), `Site`
+  (the registered hardware and its registration).
+* Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Challenger`, `Decisive`.
+* Word semantics: `Scalar`, `Prims`, `Fp32`, `TC` (the tensor cores); `NaiveStrassen` (two tilings in the tensor-core
+  model).
+
+The guarantees are in `Guarantees` (read `Verity.Guarantees.SampleAfterRecorded` and `Verity.Guarantees.SoundBatch`
+first) and the named assumptions in `Assumptions`. This module, `Assumptions` and `Guarantees` are the spec: they import
+only one another and Mathlib, so their diff is everything a statement reviewer reads. The proofs and their lemmas are in
+`Security/Proofs/Core/`.
 -/
 
 @[expose] public section

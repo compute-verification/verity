@@ -49,7 +49,7 @@ A demo stands on two independent axes, and its `demo.toml` gives each. `run` is 
 | `none` | none |
 | `stated` | `guarantee` listed in a `lean-audit.json`, with its `honest` and `nontrivial` lemmas declared in Lean |
 | `proved` | `[evidence] proof`, the guarantee's `<Area>.SecurityProofs.G`, declared in Lean |
-| `measured` | `[evidence.premises]`: each premise, an assumption a lock lists, to the run that measured it |
+| `measured` | `[evidence.premises]`: each premise a lock lists (under `assumptions`, `domain` or `open`), to the run that measured it |
 
 A file that still gives the retired `level` instead of the two axes is read as `run` `moved`, `runs` or `placed` for 0, 1
 or 2, with `proof` `none`.

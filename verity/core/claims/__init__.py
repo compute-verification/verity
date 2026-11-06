@@ -303,6 +303,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
+    # the min-cut bound's cut conjectures (Security/Definitions/Nci/Assumptions/Cut.lean): (H) is
+    # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
+    Entry("training-cut-hardness", "assumption",
+          "(H), cut hardness: every set S of words of the registered circuit with κ(S) ≤ k has "
+          "Σ_r β_r |val(S ∩ A_r)| ≤ κ(S), κ(S) the least number of gates meeting every path from the unregistered "
+          "inputs to the gates of S's words: each value of array A_r that S's words carry costs β_r of those gates; "
+          "refuted by exhibiting a set of words whose values cost more than κ(S)", "(H) cut hardness", "conjectured"),
+    Entry("training-cut-exports", "assumption",
+          "(E), cut exports: every set B of computed gates has κ(B → E(B)) ≥ b |E(B)|, E(B) the outputs fed by a MAC "
+          "inside B with no wire in B: each output B finishes costs b of the gates separating B from it; refuted by "
+          "exhibiting a set of computed gates with κ(B → E(B)) < b |E(B)|", "(E) cut exports", "conjectured"),
     # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
     # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
     # (Security/Definitions/Accounting/Assumptions/Stages.lean)

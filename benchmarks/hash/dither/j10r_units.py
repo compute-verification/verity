@@ -95,7 +95,7 @@ def lean_vectors() -> dict:
                             "h1_seeds_c": _kernel_seed(data, 0, 40)},
            "receiptSeed_vec": {"seeds.receipt_seed": SD.receipt_seed(salt, 46, ra, rb),
                                "h1_seeds_c": _kernel_seed(data, 1, 46)},
-           "noiseBlock_vec": {"_stream": _stream(sc, np.array([24]))[0].astype(">u4").tobytes()}}
+           "noiseChunk_vec": {"_stream": _stream(sc, np.array([24]))[0].astype(">u4").tobytes()}}
     doc: dict = {"file": str(path.relative_to(path.parents[4])), "bad": 0}
     for name, by in got.items():
         want = lean.get(name)

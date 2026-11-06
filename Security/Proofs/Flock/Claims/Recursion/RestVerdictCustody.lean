@@ -258,6 +258,8 @@ theorem roundJ_fill (spec : SessionSpec) (h : ByteArray → ByteArray) (k : ℕ)
 
 /-! ## The record's reads at the substituted value -/
 
+-- one proof of over a hundred lines down `liveOfJ` at the substituted record, `rw` and `simp` through `coinSubJ`'s and
+-- `Record.arr`'s unfolded bodies
 set_option maxHeartbeats 1000000 in
 /-- **`liveOfJ` at the substituted value of a record with the honest link and streams**: its `root_B`, no public
 words, and each rep stream's rounds retaining their bytes, where the tables are named apart, there is one `root_B` per

@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FrameZK
 public import Proofs.Flock.Claims.ZK.LinkRecheck
 public import Proofs.Flock.Claims.ZK.SessionLean
 import Mathlib.Algebra.Order.Floor.Extended

@@ -8,7 +8,7 @@ file are the fixture's `stage/`, the ones
 Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's
 verdict comes from core's own verifier run: the honest session, whose public file is a shared-row file in the form
 `SampledKSLiveV5` covers (`Flock.KsScope.sharedWhy`), is accepted with its program and registered finding read off that
-run, and proves the proof blocks its draw drew; a circuit file other than the committed one
+run, and proves the proof blocks its sample holds; a circuit file other than the committed one
 is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
@@ -52,7 +52,7 @@ REGISTERED_ROOTS = {
     "out": {"value": "rope_out", "root": "cffcc31602347cbafa44022c617bae5506de1f8f800b5b0c4b75559020f3c50a"
                                          "2960e8ff8e0968d9d4adf7281c8739366165795a5a72c1dd55d6798aaf1dd4fb"},
 }
-#: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
+#: the instances the session's own sample holds, which are the proof blocks, the public file's indices being 0..31
 DRAWN = (1, 4, 6, 7, 9, 14, 16, 18, 19, 20, 21, 22, 23, 24, 27, 29)
 
 #: a test that runs Lean on the fixture

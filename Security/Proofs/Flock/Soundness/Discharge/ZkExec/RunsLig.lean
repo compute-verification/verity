@@ -201,6 +201,8 @@ theorem finalProgZ_ok {p : LigeritoProof} {basisAt : Array F256 → ℕ → Arra
 
 /-! ## Ligerito under `--zk` -/
 
+-- one proof of a few hundred lines down `Zk.ligerito`'s unfolded run, a `*_bind` step per bind and `rw` and `omega` on
+-- the frames' indices
 set_option maxHeartbeats 4000000 in
 theorem zkLigerito_frames (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray)
     (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (zl : Zk.Level0) (hdim : DimSeam sch)
