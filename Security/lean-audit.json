@@ -4782,10 +4782,7 @@
    "type_hash": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b",
    "unfolded_hash": "efc4e98bf4082e88a395254b33ae1a520f107ed14a276746c33d4002ab17287a"
   },
-  "Flock.SecurityProofs.SampledKSLiveV5": {
-   "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "6ba7a6cdf0548341449d1a03dd859a42e519cd9cef127c37c51892dca171975f"
-  },
+  "Flock.SecurityProofs.SampledKSLiveV5": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b",
    "unfolded_hash": "3c7a3c9d0fdf15619397212469e31b384e7bb1af251f26dc5cdcb4a783a11023"
