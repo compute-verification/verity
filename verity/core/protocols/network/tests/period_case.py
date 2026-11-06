@@ -1809,8 +1809,11 @@ UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
 #: How `rows-state-untied` breaks its link-window's tie of the scan's state to its wired audit's `SCAN_STATE` while its
 #: `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of the
 #: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
-#: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a second
-UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra")
+#: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a second,
+#: or held in its window's `activations.values` alone under another name (its entry's `value` another or none, or
+#: the entry under another value's key)
+UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra",
+            "audit-misnamed")
 #: Where a tied audit's registration holds its `SCAN_STATE`: a `roots` entry of port `STATE`, a `registered` entry of
 #: value `SCAN_STATE`, or its window's `activations.values` entry of it, as a window circuit's registration commits its
 #: per-window values (`{"program", "values": {value: entry}}`), a second state entry then in `registered`
@@ -2347,13 +2350,20 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             stated = i == ties[first + t]["audit"]
             if not (stated and unstate == "audit"):
                 st = states[i] | ({"root": rp.randbytes(64).hex()} if stated and unstate == "audit-root" else {})
-                there = rp.choice(STATE_PLACES)
+                misnamed = stated and unstate == "audit-misnamed"
+                there = "activations" if misnamed else rp.choice(STATE_PLACES)
                 got = [st | ({"port": STATE} if there == "roots" else {"value": SCAN_STATE}) | {"leaves": sched.window}]
                 if stated and unstate == "audit-extra":
                     got.append(got[0] | {"root": rp.randbytes(64).hex()})
                 if there == "activations":
-                    rec["window"]["activations"] = {"program": WINDOW_PROGRAM,
-                                                    "values": {SCAN_STATE: got[0] | {"words": 1}}}
+                    entry, held_under = got[0] | {"words": 1}, SCAN_STATE
+                    if misnamed:
+                        misname = rp.choice(["verity/certifier/scan-state/v2", "verity/certifier/scan-state", STATE,
+                                             "w"])
+                        entry, held_under = rp.choice([(entry | {"value": misname}, held_under),
+                                                       (entry | {"value": misname}, misname), (entry, misname),
+                                                       ({k: v for k, v in entry.items() if k != "value"}, held_under)])
+                    rec["window"]["activations"] = {"program": WINDOW_PROGRAM, "values": {held_under: entry}}
                     there, got = "registered", got[1:]
                 if got:
                     rec[there] = rec.get(there, []) + got
