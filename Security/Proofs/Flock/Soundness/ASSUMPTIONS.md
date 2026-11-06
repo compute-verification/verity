@@ -131,7 +131,7 @@ coins.
 - **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
   coins from `/dev/urandom` when it has no seed. A3 is about the byte sources the theorems read (the unit sample's, the
   salts' and the ZK server's tape), so it doesn't cover these bytes, which the model's coin nodes sample.
-- **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
+- **Seed coins are outside it.** By default the prover's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
   `live/src/coin_seed.rs`, through `verity.ml.randomness.derive`). Those sessions also rest on `prf/sha-512` (A4's claim)
   and on the seed commitment's hiding, and no headline covers them: the Lean verifier refuses such a session once every
   check has passed (`ProvedScope.SEED_COINS`).
