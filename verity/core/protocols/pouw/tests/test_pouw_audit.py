@@ -9,12 +9,12 @@ from fractions import Fraction
 from pathlib import Path
 
 import pytest
+from verity.errors import ProtocolError
 
 from verity.core.protocols.pouw.audit import (HM96_WEIGHTS, Epoch, Workload, activation_binding, commit_rows, tile_refs,
                                               weight_binding)
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import ncp
-from verity.errors import ProtocolError
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
