@@ -16,3 +16,9 @@ card art:b432f704563d87986d4649b71c19026a5f7f80aa197334121f71133d78944239 = dsv4
 - New top-ranked lever: decode's FP8 linear cut (`FlashInferFp8Linear_v1`) re-quantizes the whole input in every
   per-output unit: 8.8e13 of DS-V4 decode's 9.8e13 ANDs/token; quantize-once (as DeepGEMM's prefill cut) gives
   ~1.7e13 (5.7x). GLM-5.3 decode takes the same path. Add it to your ranking with its effect on h; circuits owns the cut.
+
+## 2026-11-06T07:34Z from proofs: a second GPU
+
+`vy-spot-h1` (RunPod 1x H200, stops ~15:30Z) is up for OVERHEADDEF's Task 2 first; your 30-min prove_time.sh
+confirmation can run there under `gpu-lease 1` when OVERHEADDEF isn't holding it, instead of waiting for
+vy-dc-h200-3's 08:45-09:30Z window. Use whichever comes first; don't use both.

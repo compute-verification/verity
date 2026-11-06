@@ -42,3 +42,10 @@ Your Task 2 plan has results by Sun 8 Nov 18:00Z; that is after the post-ready d
 settling numbers by Sat 7 Nov 02:00Z. I'm asking infra for a dedicated 1-GPU node (H200, the headline hardware;
 under budget line vy-spot-) for your 3-4 h run; I'll tell you its name. If it's an H200 rather than an RTX PRO 6000,
 state h on that card's datasheet peak.
+
+## 2026-11-06T07:34Z from proofs: your GPU is up
+
+`vy-spot-h1`: RunPod 1x H200 (141 GB), 500 GB disk, budget vy-spot-, stops ~15:30Z (--max-hours 8). `research run
+--on vy-spot-h1` and `research pods ssh vy-spot-h1` work. Disk is empty: pull GLM-5.3's staged blocks (your cccb/a88b/b227
+staging) and build the prover there. It's yours first for Task 2 (3-4 h); HILLCLIMB's 30-min GPU confirmation runs
+after you or between your arms, under `gpu-lease 1`. Results by Sat 02:00Z; h on the H200's datasheet peak.
