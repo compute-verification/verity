@@ -31,7 +31,6 @@ binding.
   every knob.
 - `h200_step.py`: the H200's step, from `v31 fill-bench`'s JSON lines.
 - `h200_pipes.py`: each pipe's duty over an overlapped call, from Nsight Compute.
-- `duty.metrics`: an Nsight Compute metric list, read by `benchmarks/torch_gpu/sha512_rows/beside.sh`.
 
 ## API
 
