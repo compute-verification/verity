@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Core.Game
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 public import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Flock.Soundness.Game.Basic
