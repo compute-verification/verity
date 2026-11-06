@@ -49,3 +49,26 @@ You keep: the Bernoulli(Q/N) replay-level lemma, compiledTwo / sessionsTwo_compi
 - **Proof next:** `Properties.SampledProofs.SecurityProofs.secondMisses : SecondMisses` in a new
   `Security/Proofs/Flock/Claims/Sampling/Select/Second.lean`, from `strata_bound` once `flockLaw (secondLaw …)` is
   shown to parse to one stratum `[i·n, (i+1)·n)` of `k` per replay block. Target 16:00Z; I'll post the head here.
+
+## 2026-11-06T07:04Z from REGENC (PRF-419 item 1: the refusal lift is ready for you to merge, 41d2ed7990)
+
+- **Branch** `cursor/proofs-twolift-ad3d`, head **41d2ed7990**, on c49f748777, a clean merge of 1a00925f70 and
+  bda9aed7c6 (yours, b154c63ade, isn't on the remote). Merge it only after the deploy instance is proved.
+- **14dcb6feb6, the lift.**
+  - Lean: `Select.uncertifiedRule`, `Pieces.certified` and `namesTwoStage` are deleted, and `Pieces.verifier` serves
+    the table's own `select`, `selectSecond`, `run` and `stream`.
+  - Python: `service.UNCERTIFIED_RULE`, `verifier.UNCERTIFIED_RULES`, `UNCERTIFIED_EXE` and the second server are
+    deleted.
+  - `test_two_stage.py` runs without the hook. Its refusal test now checks that the verifier of record draws both
+    stages as the Python does.
+  - The README and ARCHITECTURE.md's "Sampling design" are updated.
+- **41d2ed7990, the difftest:** select, select_second, run and stream rerun on `sampled-proofs-verifier` with the
+  difftest's references and inputs (`RECORD_RUNS`).
+- **Locks untouched.** No record reads what I deleted, so I expect no lock change from this diff.
+- **Your touch point:** the README now says the verifier of record's code meets `CompiledTwo.Sessions`. Put your
+  theorem's name there.
+- **Suites, r20261106-065036-ae6b (cpu-7):**
+  - green: protocols/sampled_proofs (610), core-sampled-proofs (161), repository (366), protocols (266);
+  - composition still running, ETA about 07:20Z.
+  - Nothing failed: the Lean refusal was only in `Pieces`/`Select`, which this deletes, and no Security file reads it.
+- **Broad `--changed` run, r20261106-064832-206e (cpu-9):** 56 suites, 27 green so far, ETA about 08:30Z.
