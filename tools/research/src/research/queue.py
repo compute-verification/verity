@@ -145,7 +145,11 @@ Admission.  A PR is admitted while it is open against `main`, has an owner, carr
 no change waits on a per-head grant.  A PR whose head is on another repository than the queue's (GitHub's `head.repo.full_name`:
 a fork's, or a deleted one's) or whose author is neither an owner or member of the organization (`author_association`; a
 collaborator's isn't enough) nor one of `AUTHORS` (the team's Apps, the repository's admin) is refused, at its mark and at
-admission, naming why and the fix: a maintainer opens it from a branch of this repository (`PR.outside`).  A PR based on another branch is never admitted: `ready` marks it and says so,
+admission, naming why and the fix: a maintainer opens it from a branch of this repository (`PR.outside`).  So is a PR whose head
+carries merges of an old `next`, rebuilt since (`old_next`: `Queue: #N` merges the landing branch doesn't hold, of PRs neither open
+nor landed, which would land with it; a demo branch that merged `next` carries hundreds), naming the fix: retarget it to the demo
+branch it builds on, or restack its own commits onto `main` (`old_next_refusal`; at its mark, the preflight's first refusal:
+`Preflight._old_next`).  A PR based on another branch is never admitted: `ready` marks it and says so,
 and `status` lists it, once marked, as waiting to be retargeted to `main` (a PR containing another waits for it there).  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that
 `research queue ready PR` writes, so a new push needs a new one (a restack too: the tier ran on the old tree; not a head whose tree is a marked head's,
 as a merge of `main` that changes no file leaves it: `ready` marks that one without a tier), and only after the quick tier passes at that
@@ -162,8 +166,8 @@ that's unusable, a failed pull) the command fails with `STALE`, never answering 
 Preflight.  What breaks or cancels a train is cheap to catch at mark time: a conflict with a PR already on `next`, a stale Lake
 pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry, a test that reads
 a row another queued PR refits away (an error at collection), one lane's unlanded branch carried in two PRs, a merge of `next`
-that carries a PR's head the PR no longer lands (closed, rebuilt without it, or withdrawn: `stale_carried`; the sync leaves such
-a head off `next` too), and a failure of
+that carries a PR's head the PR no longer lands (closed, rebuilt without it, or withdrawn: `stale_carried`, after `old_next` for
+one closed unlanded; the sync leaves such a head off `next` too), and a failure of
 `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight runs too, as it runs the landing gates the
 sync would (on the head; the sync, on its merge onto `next`).  A Lean change can pass its own Lean check and break a module
 another PR on `next` owns (a changed signature, dropped premises, a dropped import), which drive's lock run finds only after it
@@ -327,7 +331,7 @@ import time
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Callable, Iterable
+from typing import Callable, Collection, Iterable
 
 from . import linear, quick_tier, waitcap
 from .gates import git_env
@@ -592,7 +596,8 @@ class GitHub:
         return r.stdout.strip() or None if r.returncode == 0 else None
 
     def close(self, number: int, comment: str) -> None:
-        """Close PR ``number`` with ``comment`` (drive's stale rule, `research.stale`), as `gh` is authenticated here: drive's App."""
+        """Close PR ``number`` with ``comment`` (drive's stale and unlandable rules: `research.stale`, `drive.Driver._unlandable`),
+        as `gh` is authenticated here: drive's App."""
         try:
             r = subprocess.run(["gh", "pr", "close", str(number), "--repo", self.repo, "--comment", comment], capture_output=True,
                                text=True, timeout=GH_TIMEOUT_S)
@@ -659,6 +664,8 @@ GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
 #: drive.toml's `executor`: off, shadow (beside the after-landing run) or on (in its place)
 EXECUTOR_MODES = ("off", "shadow", "on")
+#: drive.toml's `close_unlandable`: off, log (each close it would make, only logged) or on
+CLOSE_UNLANDABLE = ("off", "log", "on")
 #: the keys a flag of drive's command line can set (`DriveFlags.override`), each as `--KEY` with `_` as `-`
 COMMAND_LINE = ("on", "marked_after", "regenerate_locks", "after_landing_no_cache")
 #: drive.toml keys whose code was deleted: a drive deployed ahead of `main` (`drive.sh deploy SHA`) still reads them in
@@ -700,6 +707,9 @@ class DriveFlags:
     stale_close_days: int = 0
     #: PRs the stale rule never judges: their owners keep them open with a reason
     stale_keep: tuple[int, ...] = ()
+    #: close each open PR nothing will land, its head carried by a landed PR of the same owner or its change already on
+    #: `land_into` (`drive.Driver._unlandable`): "on"; "log", only log each it would close; "off"
+    close_unlandable: str = "off"
     #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`drive.Driver.start_postland`):
     #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot; "auto" or "auto:MAX", the shard
     #: planner's N (`tools/verity/check/shards.py`), at most MAX (default its MAX_SHARDS), each shard `--shard auto:K/N`
@@ -766,10 +776,11 @@ class DriveFlags:
                 raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/verity/check/ci.toml, or "
                                                   "\"auto\" or \"auto:MAX\" (the shard planner's N, at most MAX)")
             got["after_landing_shards"] = v
-        if "executor" in doc:
-            if doc["executor"] not in EXECUTOR_MODES:
-                raise bad("executor", f"one of {', '.join(EXECUTOR_MODES)}")
-            got["executor"] = doc["executor"]
+        for k, modes in (("executor", EXECUTOR_MODES), ("close_unlandable", CLOSE_UNLANDABLE)):
+            if k in doc:
+                if doc[k] not in modes:
+                    raise bad(k, f"one of {', '.join(modes)}")
+                got[k] = doc[k]
         if "executor_enqueue" in doc:
             v = doc["executor_enqueue"]
             if not (isinstance(v, list) and v and all(isinstance(x, str) and x for x in v)):
@@ -1343,16 +1354,13 @@ def contained(repo: Path, base: str, head: str, heads: dict[str, int]) -> list[i
 
 
 def carried_heads(repo: Path, landed: str, head: str) -> list[tuple[int, str, str]]:
-    """(N, H, C) for each commit C drive made on `next` for #N at head H (`Queue: #N`, its `PR:` and `Head:` lines) that
-    ``head`` holds above ``landed``, the landing branch's tip, newest first, but those whose H ``landed`` holds (a `next`
-    rebuilt since landed #N at a merge of its own): what a branch that merged `next` carries of the PRs on it."""
-    log = _out(repo, "log", "--format=%H%x1f%B%x1e", "--grep=^Queue: #", f"{landed}..{head}")
-    out = []
-    for c, _, body in (r.strip("\n").partition("\x1f") for r in log.split("\x1e") if r.strip()):
-        n, h = re.search(r"^PR: #(\d+)$", body, re.M), re.search(r"^Head: ([0-9a-f]{40})$", body, re.M)
-        if n and h and _git(repo, "merge-base", "--is-ancestor", h[1], landed, check=False).returncode:
-            out.append((int(n[1]), h[1], c))
-    return out
+    """(N, H, C) for each commit C drive made on `next` for #N at head H (`queue_commit`) that ``head`` holds above
+    ``landed``, the landing branch's tip, newest first, but those whose H ``landed`` holds (a `next` rebuilt since landed #N
+    at a merge of its own): what a branch that merged `next` carries of the PRs on it."""
+    log = _out(repo, "log", "--format=%H%x00%P%x00%B%x1e", "--grep=^Queue: #", f"{landed}..{head}")
+    made = (queue_commit(*r.strip().split("\x00", 2)) for r in log.split("\x1e") if r.strip())
+    return [(m.pr, m.head, m.commit) for m in made
+            if m and _git(repo, "merge-base", "--is-ancestor", m.head, landed, check=False).returncode]
 
 
 def stale_carried(repo: Path, carried: Iterable[tuple[int, str, str]], heads: dict[int, str],
@@ -1360,7 +1368,9 @@ def stale_carried(repo: Path, carried: Iterable[tuple[int, str, str]], heads: di
     """{N: the refusal} for each PR of ``carried`` (`carried_heads`) whose commits the head would land without it: #N is
     closed (not in ``heads``, each open PR's head), its current head doesn't hold the carried one (rebuilt without it), or it
     isn't admitted at its current head (``admitted``: why not, or None), as when its owner withdrew it after the branch
-    merged `next`: a branch that merged `next` doesn't carry a PR's change the way a rebuild does (`Queue._carried`)."""
+    merged `next`: a branch that merged `next` doesn't carry a PR's change the way a rebuild does (`Queue._carried`).  A
+    head based on `main` that carries the merge of a PR closed unlanded is refused before this, as one of an old `next`
+    (`old_next`), so for it a closed #N here landed at another commit (`queue_log`)."""
     out: dict[int, str] = {}
     for n, h, c in carried:
         if n in out:
@@ -1446,6 +1456,18 @@ def _move_message(pr: PR, tip: str, into: str, main: str) -> str:
     return (f"Queue: #{pr.number} {pr.title}".rstrip() + f"\n\n`python3 {RENAME} --map {pr.move}` at the root of {tip}, regenerated "
             f"by drive for #{pr.number} and certified by `{MOVE_CHECK} {tip[:12]} HEAD`, both as `{into}` {main[:12]} has them."
             f"\n\nPR: #{pr.number}\nHead: {pr.head}\nOwner: {pr.owner}\nMove: {pr.move}\n")
+
+
+def queue_commit(commit: str, parents: str, body: str) -> Member | None:
+    """The PR ``commit`` (its ``parents`` as `%P` gives them, its message ``body``) brings when the queue made it, else None:
+    a merge of a PR onto `next` (`Queue: #N`, with its `PR`, `Head` and `Owner` trailers: `_message`), or a move drive
+    regenerated, one commit with a `Move:` trailer too (`_move_message`).  Never a lander's commit, nor one whose `PR` isn't
+    `#N` or whose `Head` isn't a full commit id, as no commit the queue made has."""
+    t = {k: v.strip() for k, v in TRAILER_RE.findall(body)}
+    if (len(parents.split()) > 1 or MOVE_TRAILER_RE.search(body)) and body.startswith("Queue: #") and {"PR", "Head", "Owner"} <= set(t) \
+            and re.fullmatch(r"#\d+", t["PR"]) and re.fullmatch(r"[0-9a-f]{40}", t["Head"]):
+        return Member(int(t["PR"][1:]), t["Head"], t["Owner"], commit)
+    return None
 
 
 class Queue:
@@ -1694,8 +1716,10 @@ class Queue:
         return when is not None and when > at
 
     def entries(self, prs: list[PR], state: dict, base: str | None = None, landed: str | None = None,
-                queued: str | None = None) -> dict[int, Entry]:
-        """Each open PR's standing.  A PR P goes after, and waits while it isn't admitted, each other open PR Q whose current
+                queued: str | None = None, open_numbers: Collection[int] | None = None) -> dict[int, Entry]:
+        """Each open PR's standing.  With ``open_numbers`` (every open PR's number), one whose head carries merges of an old
+        `next` (`old_next`: of PRs neither among them nor landed) is refused, with the fix (`old_next_refusal`), as the
+        preflight refuses its mark (`Preflight._old_next`).  A PR P goes after, and waits while it isn't admitted, each other open PR Q whose current
         head P's head contains, or an older head of Q's, by ancestry alone (never by PR number).  P holds an older head of Q
         when one of P's own commits (those in ``base``.. its head less those below the heads of open PRs it contains, and
         less those `next` already carries without P, below) is
@@ -1727,11 +1751,15 @@ class Queue:
         if self.prefetch is not None:
             self.prefetch([(p.number, p.head) for p in prs if rules.hold_label not in p.labels and p.owner is not None])
         reach = above(self.workdir, base, (p.head for p in prs))
+        old = {} if open_numbers is None else old_next(self.workdir, (p.head for p in prs if reach[p.head][0]), landed,
+                                                       open_numbers)
         for p in prs:
             e = out[p.number] = Entry(p)
             ejected = state["ejected"].get(str(p.number))
             if why := p.outside(self.slug):
                 e.state, e.why = "refused", why
+            elif carried := [old[c] for c in reach[p.head][0] if c in old]:
+                e.state, e.why = "refused", old_next_refusal(carried, self.into)
             elif rules.hold_label in p.labels:
                 e.state, e.why = "waiting", f"held (`{rules.hold_label}` label)"
             elif p.owner is None:
@@ -2290,7 +2318,7 @@ class Queue:
         self._merge_keys, self._context, self._merged_from = {}, None, {}
         self._seen(state, prs, {p.number for p in open_prs})
         chain = self.chain()
-        entries = self.entries(prs, state)
+        entries = self.entries(prs, state, open_numbers={p.number for p in open_prs})
         entries.update(waiting)
         listed = [n for n in self.priority if n in entries]
         self._prioritized = set(listed).union(*(entries[n].after for n in listed))
@@ -2474,7 +2502,7 @@ class Queue:
             prefetch([(p.number, p.head) for p in open_prs])
             self.prefetch = None
         try:
-            entries = self.entries(prs, state)
+            entries = self.entries(prs, state, open_numbers={p.number for p in open_prs})
             entries.update(waiting)
             entries.update(self.off_main(open_prs))
             idle = stale(open_prs) if stale else {}
@@ -2935,6 +2963,53 @@ def queue_log(repo: Path, ref: str, n: int = LANDED_WINDOW) -> tuple[set[str], l
             if m := MOVE_TRAILER_RE.search(body):
                 moves.append(Move(commit, m.group(1)))
     return heads, moves[::-1]
+
+
+#: how many of the merges it found a refusal for an old `next` names (`old_next_refusal`)
+OLD_NEXT_SHOWN = 3
+
+
+def old_next(repo: Path, heads: Iterable[str], landed: str, open_prs: Collection[int]) -> dict[str, Member]:
+    """{commit: the PR it brings} of each queue commit (`queue_commit`) one of ``heads`` reaches that ``landed``, the landing
+    branch's tip, doesn't, whose PR is none of ``open_prs`` (numbers) and never landed: its head is neither on ``landed`` nor
+    one the queue landed there at another commit (`queue_log`: a move's, a restacked one's).  Each is a merge of an old
+    `next`, one rebuilt since (a demo branch that merged it carries hundreds), and brings the change of a PR closed
+    unlanded, which a head carrying it would land with its own.  A head stacked on an open PR, or one that merged `next`,
+    carries only merges of PRs that are open or landed."""
+    heads = list(dict.fromkeys(heads))
+    if not heads:
+        return {}
+    env = git_env(GIT_TERMINAL_PROMPT="0")
+    r = subprocess.run(["git", "log", "--stdin", "--grep=^Queue: #", "--format=%H%x00%P%x00%B%x1e"], cwd=repo,
+                       input="".join(f"{h}\n" for h in [*heads, f"^{landed}"]), capture_output=True, text=True,
+                       errors="surrogateescape", env=env)
+    if r.returncode:
+        raise QueueError(f"git log {landed}.. ({len(heads)} heads): {(r.stderr or r.stdout).strip()[-400:]}")
+    found = {m.commit: m for rec in r.stdout.split("\x1e") if rec.strip()
+             if (m := queue_commit(*rec.strip().split("\x00", 2))) and m.pr not in open_prs}
+    if not found:
+        return {}
+    done = queue_log(repo, landed)[0]
+    if not (maybe := sorted({m.head for m in found.values()} - done)):
+        return {}
+    have = subprocess.run(["git", "cat-file", "--batch-check=%(objectname)"], cwd=repo, input="".join(f"{h}\n" for h in maybe),
+                          capture_output=True, text=True, env=env).stdout.splitlines()
+    off = subprocess.run(["git", "rev-list", "--ignore-missing", "--stdin"], cwd=repo,
+                         input="".join(f"{h}\n" for h in [*maybe, f"^{landed}"]), capture_output=True, text=True, env=env)
+    if off.returncode:
+        raise QueueError(f"git rev-list {landed}.. ({len(maybe)} heads): {(off.stderr or off.stdout).strip()[-400:]}")
+    on = {h for h in have if not h.endswith(" missing")}.difference(off.stdout.split())
+    return {c: m for c, m in found.items() if m.head not in done and m.head not in on}
+
+
+def old_next_refusal(old: list[Member], into: str) -> str:
+    """Why a head carrying ``old``, merges of an old `next` (`old_next`), is neither marked nor admitted, with the fix."""
+    shown = ", ".join(f"{m.commit[:12]} (#{m.pr})" for m in old[:OLD_NEXT_SHOWN])
+    more = f" and {len(old) - OLD_NEXT_SHOWN} more" if len(old) > OLD_NEXT_SHOWN else ""
+    return (f"its head carries {len(old)} merge{'s' if len(old) > 1 else ''} of an old `{BRANCH}` that `{into}` doesn't hold, "
+            f"of PRs closed unlanded ({shown}{more}), which would land with it: retarget the PR to the demo branch it builds on, "
+            f"or restack its own commits onto `main` (a branch from `origin/main` with each cherry-picked, and the branch of each "
+            f"open PR it needs merged, never `{BRANCH}`) and mark that head")
 
 
 def move_of(repo: Path, commit: str) -> str | None:
@@ -3983,7 +4058,8 @@ class Preflight:
         self.root = Path(root or tempfile.gettempdir())
 
     def __call__(self, pr: PR, prs: list[PR]) -> str | None:
-        """None when the head may be marked; else the refusal."""
+        """None when the head may be marked; else the refusal: before any check when the sync would refuse the head for the
+        merges of an old `next` it carries (`_old_next`), since its fix makes another head."""
         start = self.clock()
         try:
             base, onto, members = self._fetch(pr)
@@ -3991,6 +4067,8 @@ class Preflight:
             self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]}: checks skipped: all ({e}); the after-landing "
                      "run still tests the head")
             return None
+        if why := self._old_next(pr, prs):
+            return why
         notes: list[str] = []
         found = self._contained(pr, prs) + self._gates(pr, notes)
         tree, files, r = None, [], None
@@ -4045,6 +4123,23 @@ class Preflight:
         said = f"checks skipped: {'; '.join(skipped)}; the checks that ran passed" if skipped else "nothing refused"
         self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]} merged onto {onto}: {said} ({took})")
         return None
+
+    def _old_next(self, pr: PR, prs: list[PR]) -> str | None:
+        """The sync's refusal (`Queue.entries`) of a head based on `main` that carries merges of an old `next` (`old_next`, on
+        the landing branch as `_fetch` fetched it, ``prs`` the open PRs), else None.  One based on another branch isn't judged:
+        drive never admits it (`off_main_note`).  What git can't read refuses nothing, said in the log: the sync judges it."""
+        if pr.base != "main":
+            return None
+        into = into_at(self.repo, "refs/queue/preflight/main")
+        if _git(self.repo, "rev-parse", "-q", "--verify", f"refs/queue/preflight/{into}^{{commit}}", check=False).returncode:
+            into = "main"
+        try:
+            old = old_next(self.repo, [pr.head], f"refs/queue/preflight/{into}", {p.number for p in prs})
+        except QueueError as e:
+            self.log(f"research queue: preflight: whether #{pr.number}'s head carries an old `{BRANCH}` isn't known ({e}); the "
+                     "sync judges it")
+            return None
+        return old_next_refusal(list(old.values()), into) if old else None
 
     def _only_moved(self, base: str, files: list[str]) -> list[str]:
         """The moves drive regenerated below ``base`` (`queue_log`) that ``files``, a merge's conflicts, are all files of, when
@@ -6019,8 +6114,10 @@ def main(argv: list[str]) -> int:
 
             drive_names(q, flags, push=not (a.dry_run or a.shadow))
             Driver(q, on=flags.on, regenerate_locks=flags.regenerate_locks, after_landing_no_cache=flags.after_landing_no_cache,
-                   reviews=labels.reviews, ready_by=labels.ready_by, stale_days=flags.stale_days, stale_close_days=flags.stale_close_days,
-                   stale_keep=flags.stale_keep, after_landing_shards=flags.after_landing_shards,
+                   reviews=labels.reviews, ready_by=labels.ready_by,
+                   stale_days=flags.stale_days, stale_close_days=flags.stale_close_days,
+                   stale_keep=flags.stale_keep, close_unlandable=flags.close_unlandable,
+                   after_landing_shards=flags.after_landing_shards,
                    lowrisk_lane=flags.lowrisk_lane, lowrisk_per_tick=flags.lowrisk_per_tick,
                    lowrisk_excludes=flags.lowrisk_excludes, executor=flags.executor,
                    executor_enqueue=flags.executor_enqueue).tick(dry_run=a.dry_run)
