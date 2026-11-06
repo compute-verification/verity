@@ -1206,22 +1206,6 @@
    "owner": "@proofs",
    "digest": "4234584c8c100c10bc25e561da0e248d6b2c394ea401c2310eac1fcb610131e6"
   },
-  "FlockSoundness.ZK.Release.Gated": {
-   "owner": "@proofs",
-   "digest": "582d4504db0536a964cfa4f72671e4d1341036951dc0bc66b4b72e69c1afb775"
-  },
-  "FlockSoundness.ZK.Table.Gated": {
-   "owner": "@proofs",
-   "digest": "cdf70b4bc5bb88ef28338ea152ed5d8e33005d22c95abb0ef1ffdae061f8c055"
-  },
-  "FlockSoundness.ZK.Table.RegPublic": {
-   "owner": "@proofs",
-   "digest": "4db41b9530f8e25fac9c810a0e9b3a4c9a4baf9533ffc01fb41cb5f6ed42a9f3"
-  },
-  "FlockSoundness.ZK.Table.Simulable": {
-   "owner": "@proofs",
-   "digest": "177b757840a80a271c675d352c250359908ef911eb8c194b0e12e15e7ad49bad"
-  },
   "FlockVBridge.ColsHold": {
    "owner": "@proofs",
    "digest": "4c6283114e6093bce72430d7e41df49d280807a9f7dcfd337e81398948a04d9f"
@@ -15725,8 +15709,7 @@
    "Flock.SecurityProofs.RanRegisteredRun": {
     "com.Opens rt p op₀": "com.Opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (b : β), acc b → com.Opens rt (prog b) (op b)": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (FlockSoundness.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.RecursiveCircuitIndist": {
     "honest o P w": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28151,7 +28134,7 @@
    ]
   },
   "Definitions.Flock.ZK.Table": {
-   "digest": "00e051f076ede041c379d0f2571805e104b65959563df82d6aa1a3e8f4b0719a",
+   "digest": "4b13ee00f39cdf25ae12dfb8fa60e5eb51898f305cb92ec3dc08ee255b322c5d",
    "definitions": {
     "FlockSoundness.ZK.PadIdx": "44b47a037d5bb4710f8f332fae4b71a31c1085bc119ff36532f8f348186f1f34",
     "FlockSoundness.ZK.Table": "911b8587e62e4b52de0be0440ac45226a0d6b36317a345a4e1c878247a9ae373",
@@ -28161,8 +28144,6 @@
     "FlockSoundness.ZK.Table.Gp": "41e16efe5c993fbbbbb989a175b6be6b284fa80f3c4072935b96a92fcfd48564",
     "FlockSoundness.ZK.Table.L": "4eeaf0bf0345251bab403d07ab9f8836a280d8e12709a4f1e01c2206daf3b92f",
     "FlockSoundness.ZK.Table.Mask": "0c914aa9d42c8dd0b42ddd8a30587ea7e4e26079a060d0d9890c205e42d16a45",
-    "FlockSoundness.ZK.Table.PadOnto": "7f19d3029e3c9aeec75ef5861f59b0961e3a2c22896bdc1467f46219ce64cb5c",
-    "FlockSoundness.ZK.Table.PadsOnto": "ed21825b7559da379c4b9ea27056e1ac2f4ee5ec18f07d0a648480fa072cfaf7",
     "FlockSoundness.ZK.Table.PreView": "7bc23dd04ff24b3b08c3db6b00483c8470097d3a9d4a04a624851b9638bf5c4d",
     "FlockSoundness.ZK.Table.PreView.Y1": "5142999f05b80e47c0c127cb7492b74f65e709430a5a08ebb907d2fd1d620931",
     "FlockSoundness.ZK.Table.PreView.Y2": "ad7c939eea79ce1ab1a95f9de8787d26378f7f2d17936f2d91c755b4da7d89ec",
@@ -28177,7 +28158,6 @@
     "FlockSoundness.ZK.Table.PreView.y1": "014662433e9ea641ae5fe5309ee9aab7006b22d06378df8d3c8e07710eb73e92",
     "FlockSoundness.ZK.Table.PreView.ybar": "5a6f68ac22795b73c96ac8b22dc0a27b22b855af97f1269a6c8c40e0e0abeea9",
     "FlockSoundness.ZK.Table.Rand": "1a432d7d9b94004c78b4a54d1e02a088dd74842e0eb1b555aa180937b6f33855",
-    "FlockSoundness.ZK.Table.Rank": "d1a12baa161d1faf2f42c46549c3e2ef2790896b9fab687a32183213e767ff7b",
     "FlockSoundness.ZK.Table.Seeds": "9bc35e319d50ed83fa0f618039db8fa5e09a7a81f677d253770b94951bdfa531",
     "FlockSoundness.ZK.Table.SimRand": "7039356c0691dd6a72f9b978c38e7404dbaf7d21069cde6f220ee03a91578450",
     "FlockSoundness.ZK.Table.View": "28f3f17d6949f30c545a155d6f14aabe15be38fcfeaa3ab8638b045df36f4780",
