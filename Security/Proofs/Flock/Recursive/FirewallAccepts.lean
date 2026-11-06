@@ -1,6 +1,7 @@
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.FirewallTemplate
 import Proofs.Flock.Recursive.FirewallLive
+import Proofs.Flock.Recursive.FirewallHonest
 
 /-!
 # `FirewallSends` from the firewall's code
@@ -22,6 +23,9 @@ those of the messages `msgs`, each reading the strings before it.
   what `FirewallSends` says `run` sends: on the honest worker's requests, a live session that doesn't stop, whose salts
   read begin with `ys`, sends the transcript at the commit strings `firewallStrings ys` and finishes
   (`FirewallLive.run_live`, `FirewallLive.run_append`).
+* `honestReqs_accepts`: the worker's half, `FirewallAccepts` of the honest worker's requests (`honestReqs`) and its rows'
+  messages (`FirewallHonest.honestMsgs`), at a schedule the firewall holds a session to and a worker that follows it,
+  its rows reading only the commit strings before them (`FirewallHonest.honest_accepts` at the zero salt).
 -/
 
 namespace Flock.Guarantees
@@ -161,5 +165,17 @@ theorem liveSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.
     sent.toArray = Flock.Guarantees.firewallT s tables (Flock.Guarantees.firewallStrings (msgs P w r a p) ys) ∧
       t.finished = true :=
   liveSends s reqs msgs _ (firewallSends_of_accepts s reqs msgs tables hA) P w r a p ys zs L sent t hreqs hsalts hlive
+
+/-- **The honest worker's half of `FirewallSends`**: at a schedule the firewall holds a session to, the honest worker's
+requests (`honestReqs`) pass the firewall, Commit naming the schedule's tables (`Schedule.tables`), and commit its rows'
+messages (`FirewallHonest.honestMsgs`), wherever at every commit strings it follows the schedule (`FirewallHonest.Fits`)
+and its rows read only the commit strings before them (`FirewallHonest.Causal`). -/
+theorem honestReqs_accepts {Prog Wit Rr Ωa Ωp : Type} (s : Flock.Firewall.Schedule)
+    (hs : FirewallHonest.Canonical s)
+    (D : Prog → Wit → Rr → Ωa → Ωp → (Fin (FirewallHonest.rowCount s) → ByteArray) → Flock.Firewall.Honest)
+    (hD : ∀ P w r a p l, FirewallHonest.Fits s (D P w r a p l)) (hc : FirewallHonest.Causal s D) :
+    Flock.Guarantees.FirewallAccepts s (fun P w r a p l => Flock.Firewall.honestReqs s (D P w r a p l))
+      (FirewallHonest.honestMsgs s D) s.tables :=
+  FirewallHonest.honest_accepts hs hD hc Flock.Guarantees.zeroSalt
 
 end Flock.SecurityProofs

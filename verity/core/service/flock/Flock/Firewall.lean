@@ -418,15 +418,26 @@ def printJson (j : Json) : String := String.ofList (jsonChars j)
 
 /-- **The schedules the firewall holds a session to**, those an honest worker's session can finish; `schedule` refuses
 every other:
-* Hello is plain (`plain`), so it prints back as it parses, and names no `coins`;
-* each round's entry is its six fields and nothing more (`specJson`);
+* Hello is plain (`plain`), so it prints back as it parses, names no `coins`, and is an object whose `link` is an object
+  without `sigma`;
+* the roots are an object of naturals, its keys ascending (`ascending`), and the streams' names ascend, as in every
+  tree `JsonParse` builds;
+* each round's entry is its six fields and nothing more (`specJson`), and its stream is one of the schedule's;
 * each stream has a round, and its rounds come in the schedule's order with `k` = 0, 1, …, as many as its `rounds`;
 * a stream without a parent, and a stream with a round that copies level 0's top, is of a table with a root. -/
 def Schedule.canonical (s : Schedule) : Bool :=
   let rooted := fun (stream : String) => (s.roots.getObjVal? (tableOf stream)).toOption.isSome
   plain s.hello && (s.hello.getObjVal? "coins").toOption.isNone &&
+    (match s.hello.getObjVal? "link" with
+      | .ok l@(.obj _) => (l.getObjVal? "sigma").toOption.isNone
+      | _ => false) &&
+    (match s.roots with
+      | .obj ⟨⟨t⟩⟩ => ascending t && t.toListModel.all fun e => (natOf? e.2).isSome
+      | _ => false) &&
+    decide ((s.streams.map (·.1)).Pairwise fun a b => compare a b = .lt) &&
     s.rounds.all (fun r => match roundSpec r with
-      | some sp => canonForm r == canonForm (specJson sp) && (sp.2.2.2.2.1 == 0 || rooted sp.1)
+      | some sp => canonForm r == canonForm (specJson sp) && (sp.2.2.2.2.1 == 0 || rooted sp.1) &&
+          s.streams.any (·.1 == sp.1)
       | none => false) &&
     s.streams.all fun (name, parent, _, count) =>
       0 < count && (parent != "" || rooted name) &&

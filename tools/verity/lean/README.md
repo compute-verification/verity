@@ -279,25 +279,24 @@ installs it first, so a machine without elan works), must pass clean and fail on
   section each guarantee is frozen or fails. An entry added to `frozen`, and a conjecture added or with a new status,
   is a claims change: the landing DM shows it with its reason (`research/spec_alert.py`), and nothing waits on it.
 - **The spec**, the trusted text a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
-  policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means what it means
-  whatever proves the propositions inside it), followed through `meaning` and where the walk leaves it, must lie in the
-  spec of its package or of a package it requires by path (by that package's own `layers`), or in a pinned dependency
-  (the toolchain, Mathlib, ArkLib). A definition in a spec module must also be under `meaning`, or the record would hold
-  nothing of it. `reads_exempt` lists, each with the reason, module prefixes a guarantee may read outside the spec (a
-  package whose statements are about its executable, not about a model of it), as an object {prefix: the reason}; an
-  entry that exempts no read outside the spec fails, and no entry covers a spec module outside `meaning`, nor a module of
-  the proofs tree (the trees check judges those).
-- **The trees**: `trees` names which module prefixes are the definitions tree (what a reader reads:
-  each area's vocabulary, named assumptions and guarantee statements), the properties tree (statements about the code)
-  and the proofs tree (every proof, lemma and proof-only definition); a module's tree is that of its longest prefix
-  (`Proofs.Properties` before `Properties`), and a package's trees reach the packages that require it by path
-  (`Security`'s reach `Security/Properties` and `Security/Proofs`). The check refuses a guarantee or property whose
-  statement reads a definition of a module of the proofs tree (move it into the definitions tree, or take the statement
-  off the guarantees: it is a lemma), and a module of the definitions or properties tree that imports one. `except`
-  ({prefix: the reason}, the package's own) lists the exceptions by the read module or the importing one; an entry that
-  excepts nothing fails. `Security`'s `except` is the cleanup's to-do.
-  The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
-  package's (`unread_spec` in `report.json`).
+  policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means the same
+  whatever proves the propositions in it), followed through `meaning` and where the walk leaves it, must lie in the spec
+  of its package or of a package it requires by path (by that package's own `layers`), or in a pinned dependency (the
+  toolchain, Mathlib, ArkLib). A definition in a spec module must also be under `meaning`, or the record would hold
+  nothing of it. `reads_exempt` ({prefix: the reason}) lists the module prefixes a guarantee may read outside the spec
+  (a package whose statements are about its executable, not about a model of it); an entry that exempts no read outside
+  the spec fails, and no entry covers a spec module outside `meaning`, nor a module of the proofs tree (the trees check
+  judges those).
+- **The trees**: `trees` names the module prefixes of the definitions tree (each area's vocabulary, named assumptions
+  and guarantee statements), the properties tree (statements about the code) and the proofs tree (every proof, lemma and
+  proof-only definition); a module's tree is that of its longest prefix (`Proofs.Properties` before `Properties`), and a
+  package's trees reach those that require it by path (`Security`'s reach `Security/Properties` and `Security/Proofs`).
+  The check refuses a guarantee or property whose statement reads a definition in the proofs tree (move it to the
+  definitions tree, or unlist it as a lemma), and a module of the definitions or properties tree that imports one.
+  `except` ({prefix: the reason}, the package's own) lists exceptions by the read or importing module; an entry that
+  excepts nothing fails. Excepted modules are still recorded. `Security`'s `except` is the cleanup's to-do. The report
+  also lists, without failing, the spec definitions no guarantee of the package or a dependent one reads (`unread_spec`
+  in `report.json`).
 - **Heartbeat overrides are listed, never refused.** Each `set_option maxHeartbeats N` (and
   `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats` in `report.json`, and printed
   under its `AUDIT` line, so the nightly lists them): its file and line, its value, the reason beside it (a `--` comment
@@ -418,15 +417,15 @@ Two branches that each add guarantees both change `lean-audit.json`, usually in 
 conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python tools/verity/lean/merge.py --install` has registered
 it in the clone's git config. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency
 or a policy entry applies. Within a module both sides changed, the definitions merge the same way, the readers as sets, and
-the digest is recomputed. Guarantees arrive byte for byte from their branches, and a hand-written section one side extends
-(a module added to `meaning`) is kept. A side written before guarantees were called that (`pins`) is read under today's
-names. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the other side's
-restatement both apply.
+the digest is recomputed. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the
+other side's restatement both apply.
 
 What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
 `reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
 them. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
-conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree.
+conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree. Git runs the driver
+from the worktree you merge into, and one whose rules are older than `origin/main`'s runs `origin/main`'s (`deferred`), so
+fetch `main` before you merge.
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the

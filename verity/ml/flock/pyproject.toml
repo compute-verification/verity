@@ -87,6 +87,9 @@ inputs = [
     "verity/core/service/flock/Flock/Test/RecCap.lean",
     # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
     "verity/ml/flock/live/PROTOCOL.md",
+    # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
+    # lock (its Flock.Firewall.Honest is C-Flock's, which the flock-firewall artifact keys)
+    "verity/core/difftest/python/verity_difftest", "verity/core/difftest/lean",
 ]
 parallel = true
 # an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this

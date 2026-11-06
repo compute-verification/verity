@@ -14221,14 +14221,14 @@
    ]
   },
   "Flock.RecBudget": {
-   "digest": "2707fb299250a2dbb00995a0609e4a530e0dd1dbcd172cf9ed0b52a7d70bcad2",
+   "digest": "5358a6ab98c6f86100bfbb7e99d67fb540b5f9cd8cdc35c938a310d5f23eb05f",
    "definitions": {
     "Flock.RecBudget.MAX_DEPTH": "f959294d54f7cc019e5cfe1eb1afa671fc401095b2782618bebc491816f9dcef",
     "Flock.RecBudget.MAX_INNER_ROWS": "1ac6251e4f2f844ea501d86051226f677e2804db2b060287d37f4356c1fb3b16",
     "Flock.RecBudget.MAX_INSTANCES": "9380466934f89490e722f48762aa74a4be4262f9b97812530ebe150faa112050",
     "Flock.RecBudget.MAX_PORTS": "94099a932b2c010af70d9a38c410bbfcb2cf0794939ed9516f935071f511e9cb",
-    "Flock.RecBudget.MAX_STATEMENTS": "46672ddfc86e4e2ea3e40dc38dfdaee662d44ac48cf940fa735cba7e6a6b7b63",
-    "Flock.RecBudget.count": "351e90c2c3b66ec3d98afc534646f9c21fc1fe9abc2e5faee7bf3c12c929cbaf",
+    "Flock.RecBudget.MAX_STATEMENTS": "d31f477d79ac8cf50b2f29c92c27d9bcd156acc74c4abb6b01febddddf89cd07",
+    "Flock.RecBudget.count": "2e5156dff654c07a93d4ee2442e8c97a057409039f50dfbc1fb721c408ad4807",
     "Flock.RecBudget.innerRows": "315a8eb3099291502c773fa3a00f31f7855c124664950c3023ec2ffacc085e8f",
     "Flock.RecBudget.regs": "e2e57a05791e570482d196c57b98de7fc84a493eac6a8d612c10f9bd796e3686",
     "Flock.RecBudget.regs._sparseCasesOn_1": "e266830cbc64ba2fbfcd23a611083371905da5f845bb0ab00a08272a6f3f1575",

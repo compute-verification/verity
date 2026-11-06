@@ -19,9 +19,9 @@
 # node, as SERVE_ROOT/runs/RUN/<lifetime>/overhead.json, beside the full load lines (SERVE_ROOT/runs/RUN/stock.txt); $OUT
 # gets only status lines and that directory's path (private.txt). `served_overhead.py table --stock --public` reads them on the
 # node beside the composed run's aggregate and publishes ratios alone. WARM lifetimes (default 1) run first as warm-<i>,
-# so the reps find the Triton and vLLM caches as warm as the composed run's node keeps them; a cold first lifetime's first step
-# took 0.40 s against 0.018 s warm (r20261027-175833-6214). With NOT_AFTER (a UTC time, `date -d` syntax) no lifetime starts
-# after it, so a control queued behind other leases never runs into a later window (V2's run of record, say).
+# so the reps find the Triton and vLLM caches as warm as the composed run's node keeps them, and no rep times a cold first
+# step. With NOT_AFTER (a UTC time, `date -d` syntax) no lifetime starts after it, so a control queued behind other leases
+# never runs into a later window.
 #   research run --on vy-dc-h200-2 --project verity --source TREE --cwd clone --timeout 90m -- \
 #     env ROW=... bash benchmarks/one_stage/served_stock.sh
 set -uo pipefail
