@@ -58,11 +58,6 @@ DISAGREE = "disagree"
 CORE = Path(__file__).resolve().parents[3]
 PACKAGE = CORE.parents[1] / "verity/core/service/sampled_proofs"
 EXE = "sampled-proofs-verifier"
-UNCERTIFIED_RULES = False
-"""A test hook, off in every deployment. On, the service runs a two-stage rule, which the verifier of record refuses
-(`service.UNCERTIFIED_RULE`, `Select.uncertifiedRule`), and every call here goes to `UNCERTIFIED_EXE`."""
-UNCERTIFIED_EXE = "sampled-proofs-difftest"
-"""The difftest's executable, whose pieces (`Pieces.table`) run a two-stage rule."""
 BUILD_LOCK = CORE / "difftest" / "lean" / ".lake" / "harness-build.lock"
 #: The δ the Lean's registration parameters carry, which R1-R7 never read.
 REGISTRATION_DELTA = "1/2"
@@ -161,14 +156,12 @@ class _Server:
 
 _server = _Server()
 atexit.register(_server.close)
-_uncertified = _Server(UNCERTIFIED_EXE)
-atexit.register(_uncertified.close)
 
 
 def lean(fn: str, value: Any) -> dict[str, Any]:
     """The Lean's answer: its output, or `{"refused": reason}` where it refuses the input or can't run."""
     try:
-        kind, body = (_uncertified if UNCERTIFIED_RULES else _server).call(fn, value)
+        kind, body = _server.call(fn, value)
     except LeanError as e:
         return {"refused": str(e)}
     return body if kind == "output" else {"refused": body}
@@ -518,6 +511,6 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "UNCERTIFIED_EXE",
-           "UNCERTIFIED_RULES", "audit_record", "check", "check_draw", "check_proved", "check_public", "check_verdicts",
-           "coins", "executable", "fleet", "lean", "matches_public", "run", "select", "select_second", "stream"]
+__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
+           "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "fleet", "lean",
+           "matches_public", "run", "select", "select_second", "stream"]
