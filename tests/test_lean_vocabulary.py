@@ -510,6 +510,8 @@ KNOWN: dict[str, str] = {
         "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
     "Security/Definitions/Core/Circuit.lean::Verity.Circuit.Transcript":
         "homonym, one run's gate values, which the Glossary calls a trace: rename, then the canonical trace (proofs)",
+    "Security/Definitions/Core/Compose.lean::Claims.ZKMal.Layout":
+        "homonym, a run in parts (a first part, then sessions) that RecZK reads: rename (lean)",
     "Security/Definitions/Core/Interaction.lean::Claims.Trace":
         "homonym, a run's messages, oracle calls and decision, which the Glossary calls a transcript: rename, then the canonical transcript (proofs)",
     "Security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
@@ -608,14 +610,14 @@ KNOWN: dict[str, str] = {
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (proofs)",
     "Security/Proofs/Flock/Claims/Recursion/VStar.lean::Claims.Recursion.VStar.Layout":
         "homonym, proof-internal layout: rename (proofs)",
-    "Security/Proofs/Flock/Claims/ZK/Layout.lean::Claims.ZKMal.Layout":
-        "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Sampled/Defs.lean::FlockSampled.Trace":
         "homonym, the sampled proofs' committed units, each one's type and values: rename (proofs)",
     "Security/Proofs/Flock/Soundness/Binding/Layout.lean::FlockSoundness.Binding.Layout":
         "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Soundness/Binding/Layout.lean::FlockSoundness.Binding.Layout.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (proofs)",
+    "Security/Proofs/Flock/SampledGeneric/Defs.lean::FlockSoundness.SampledGeneric.Binding.Trace":
+        "homonym, the value a binding commits at each of its positions (`Pos → Val`): rename (proofs)",
     "Security/Proofs/Flock/Soundness/Discharge/Exec/Event.lean::FlockSoundness.Discharge.Exec.Transcript":
         "homonym, a session directory's files: rename (proofs)",
     "Security/Proofs/Flock/Soundness/ExecPlacement.lean::FlockSoundness.Layout":

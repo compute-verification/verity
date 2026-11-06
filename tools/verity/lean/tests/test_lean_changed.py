@@ -669,3 +669,18 @@ def test_module_of_reads_the_packages_src_dir(trying):
     assert LC.module_of("Sec", "Sec/src/A/B.lean") == "A.B"
     (root / "Plain").mkdir()
     assert LC.module_of("Plain", "Plain/A/B.lean") == "A.B"
+
+
+def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp_path, monkeypatch):
+    """A slot tree is a link into the node's cache root, and mountinfo names a mount by its resolved path, which
+    `sandbox.sh` keeps writable: the `.lake` paths (and their `packages`, kept read-only) are the resolved ones."""
+    real = tmp_path / "cache-root" / "build-2"
+    (real / "Sec" / ".lake" / "packages").mkdir(parents=True)
+    (real / "Dep").mkdir()
+    link = tmp_path / "build-2"
+    link.symlink_to(real)
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "Dep"])
+    argv = LC.in_sandbox("Sec", link, ["lake", "build"])
+    box = argv.index(str(LC.SANDBOX))
+    assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
+    assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]

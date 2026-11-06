@@ -215,7 +215,7 @@ def buildSessionOf (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB
 
 /-- `flock-verify`'s `programDigest`: SHA-512 of the canonical descriptor without `annotations`. -/
 def programDigest (b : ByteArray) : Option String := do
-  let j ← (Json.parse (← String.fromUTF8? b)).toOption
+  let j ← (Flock.JsonParse.parse (← String.fromUTF8? b)).toOption
   let bare := match j with
     | .obj kvs => Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
     | x => x
@@ -229,7 +229,7 @@ private def headerLine (b : ByteArray) : ByteArray := Id.run do
 /-- The public file's header as `HmRow.loadPublic` reads it: parsed, then `Flock.norm`. -/
 private def headerOf (pubB : ByteArray) : V Json := do
   let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
-  Flock.norm <$> (Json.parse line).mapError (s!"the public file's header is not JSON: {·}")
+  Flock.norm <$> (Flock.JsonParse.parse line).mapError (s!"the public file's header is not JSON: {·}")
 
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the draw): its header's scheme, `frame_v3` roots and their `domain_ids`, and
@@ -245,7 +245,8 @@ record drew (`unit_draw.units`), ascending. -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
   let h ← headerOf pubB
   let .arr is := getD (getD h "units") "indices" | throw "the public file's header names no units.indices"
-  let .arr ds := getD (getD (← Json.parse record) "unit_draw") "units" | throw "the record's unit_draw names no units"
+  let .arr ds := getD (getD (← Flock.JsonParse.parse record) "unit_draw") "units"
+    | throw "the record's unit_draw names no units"
   let units ← ds.mapM fun d => match nat? d >>= fun i => is[i]? >>= nat? with
     | some u => pure u
     | none => throw "the record draws an instance the public file's units.indices does not name"
@@ -340,7 +341,7 @@ def coinKeyOf (record : String) (st : SetUp) : Option String :=
   match st with
   | .ok (spec, _, _) =>
     if spec.coinTree.isNone then none
-    else (Json.parse record).toOption.bind fun j =>
+    else (Flock.JsonParse.parse record).toOption.bind fun j =>
       (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
   | .error _ => none
 
@@ -459,10 +460,11 @@ def coinsOf (p : Params) (c : OneStage.Commitment) (e : Evidence) : V ByteArray 
   | none => throw s!"coins: {NO_CHALLENGER}"
 
 /-- The coin trees the window's challenger session shows it sampled and opened (module docstring, **trees**): read from
-the evidence's `coins` under the parameters' challenger's key, on the verifier's window. -/
-def treesOf (p : Params) (e : Evidence) : V (Array Challenger.LoggedTree) :=
-  match p.base.challenger, p.base.verifier.windowRoot with
-  | some (key, _), some w => (Challenger.trustedTreesOf key w e.base.coins).mapError (s!"coins: {·}")
+the evidence's `coins` under the parameters' challenger's key, on the verifier's window: v1's parameters and evidence,
+which the recursive audit's trees are read from too (`VStar.Recursive.innerCoinsHeld`). -/
+def treesOf (p : OneStage.Params) (e : OneStage.Evidence) : V (Array Challenger.LoggedTree) :=
+  match p.challenger, p.verifier.windowRoot with
+  | some (key, _), some w => (Challenger.trustedTreesOf key w e.coins).mapError (s!"coins: {·}")
   | _, _ => throw s!"coins: {NO_CHALLENGER}"
 
 /-- The evidence's sessions held to the challenger's trees `ts` (module docstring, **trees**): each session's record
@@ -502,7 +504,7 @@ def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Ev
     Core.Outcome OneStage.Public Core.Integrity :=
   let r : V Run := do
     oneSession e.sessions
-    treesHeld (← treesOf p e) e bs
+    treesHeld (← treesOf p.base e.base) e bs
     popHeld p.base.verifier c.record
     publicHeld c.record (← bs.get p.own.pub "public file")
     run p.own e.sessions (some e.base.provedUnits) bs
@@ -585,7 +587,8 @@ def main (args : List String) : IO UInt32 := do
 #guard !(oneSession #[⟨"s", "", #[]⟩, ⟨"t", "", #[]⟩]).toBool
 
 private def heldRecord : Json :=
-  (Json.parse "{\"population\":2,\"roots\":[{\"domain\":\"dd\",\"port\":\"x\",\"root\":\"aa\"}],\"scheme\":\"s\"}").toOption.getD
+  (Flock.JsonParse.parse
+    "{\"population\":2,\"roots\":[{\"domain\":\"dd\",\"port\":\"x\",\"root\":\"aa\"}],\"scheme\":\"s\"}").toOption.getD
     .null
 
 private def refusal : V Unit → String

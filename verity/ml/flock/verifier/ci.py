@@ -8,7 +8,8 @@ For each set (in `vectors.json` `replayable.sets`) whose M0 commit has an upstre
 - fetches its inputs from the evidence store (`research data fetch`), among them the verifier's own registered reads
   (`statement.registered`, `agree.py --registered`) for a statement that reads registered values, and passes the verifier's
   own K (`statement.stratified`, `agree.py --stratified`) for sessions sampled by the stratified law, and a plain session's
-  coins (`statement.coins`, `agree.py --coins`: `os` for a live server's OS coins);
+  coins (`statement.coins`, `agree.py --coins`: `tree` for a session on the challenger's coin tree; without it, a session
+  on seed coins, which the Lean verifier refuses last, `ProvedScope.SEED_COINS`);
 - for a set that names `mutants`, regenerates the proof mutants (`redigest.py`), the retained-bytes sessions
   (`redigest.py --retain`) and `N` fuzz cases (`fuzz.py --seed S`) from its honest session;
 - adds the set's stored forgeries, if it has any;

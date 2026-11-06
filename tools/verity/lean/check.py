@@ -49,7 +49,8 @@ environment extension loaded, so none of the package's code runs), and replays t
     assumptions  a named assumption (listed by name under `assumptions`: a `Prop` declared in `assumptions_module`, taken
                  as a premise by a guarantee) has no `owner`, no guarantee reads it, is declared elsewhere, or its
                  definition no longer has the digest its record holds; or the policy still lists assumption modules,
-                 which `--update` converts into the definitions the guarantees read there
+                 which `--update` converts into the definitions the guarantees read there; or one declared elsewhere
+                 is listed beside its `open` or `domain` entry, which `--update` drops
     open         a premise declared outside `assumptions_module` is not listed under `open` with its `owner`, the
                  Linear `issue` that discharges it and its `due` date (`--update` adds one only under `open_seed`), or
                  its entry has no owner, no guarantee takes it, or its definition no longer has its recorded digest
@@ -2559,6 +2560,16 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     def real(d: str) -> bool:
         return home is not None and module(d) == home
 
+    moved = sorted(a for a in assumed if (a in opened or a in domained) and not real(a))
+    if not update:
+        fails += [Failure("assumptions.moved", a, f"assumptions: {a} is listed under `assumptions` and under "
+                          f"`{'open' if a in opened else 'domain'}`, and it is declared "
+                          f"{'in ' + module(a) + ', not in' if module(a) else 'outside'} "
+                          f"{home or 'an `assumptions_module`'}: a merge kept one side's changed `assumptions` entry "
+                          f"beside the other side's move; run `check.py --update`, which drops the `assumptions` entry")
+                  for a in moved]
+    assumed = {a: r for a, r in assumed.items() if a not in moved}
+
     def issue_of(d: str, who: str | None) -> dict | None:
         m, keys = module(d), (seed or {}).keys() if update else ()
         hit = sorted((k for k in keys if not k.startswith("@") and m and under([k], m)), key=len) or \
@@ -2738,9 +2749,11 @@ class Codes(frozenset):
 #: assumption with no record yet, a premise of `assumptions_module` the lock doesn't list (the premise rule adds it with its
 #: guarantees' owner), an open or domain premise now declared there (it moves to `assumptions`), another listed
 #: guarantee's statement taken as a premise (a domain hypothesis citing it), a `shape.inline` entry of a guarantee the lock
-#: doesn't list, and an entry no guarantee takes (an update drops either; `merge.py` keeps one entry a side removed while
-#: the other changed it).  A missing name, an owner, an open premise the lock doesn't list (its issue), a domain entry's
-#: `why`, one no honest witness concludes, and every other failure take a person
+#: doesn't list, an entry no guarantee takes, and an `assumptions` entry of a premise declared outside
+#: `assumptions_module` beside its `open` or `domain` entry (an update drops each; `merge.py` keeps one entry a side
+#: removed while the other changed it, and an older base's `merge.py` keeps it beside the other side's move).  A missing
+#: name, an owner, an open premise the lock doesn't list (its issue), a domain entry's `why`, one no honest witness
+#: concludes, and every other failure take a person
 RECORD_DIFFERENCE = Codes({
     "guarantees.signature", "guarantees.assumptions", "guarantees.type-hash",       # its record's statement differs
     "guarantees.unfolded-hash",                                                     # or its definition, unfolded once
@@ -2749,7 +2762,7 @@ RECORD_DIFFERENCE = Codes({
     "guarantees.reads-digest", "guarantees.readers",                                # or still lists its readers
     "guarantees.unrecorded",                                                        # owned, with no record yet
     "assumptions.digest", "assumptions.unrecorded", "assumptions.unlisted-premise",
-    "assumptions.unread", "assumptions.read-only",
+    "assumptions.unread", "assumptions.read-only", "assumptions.moved",
     "open.digest", "open.unrecorded", "open.unread", "open.read-only",              # an open premise's record differs
     "open.declared", "open.cited",                                                  # or it is another kind
     "domain.digest", "domain.unrecorded", "domain.unread", "domain.read-only",      # a domain hypothesis's record differs
