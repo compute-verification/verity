@@ -62,7 +62,7 @@ case $verdict in
   *'"deny"'*) ;;
   *) echo "agent-guard: $dest/shell_hook.py let \`env | cut -d= -f1\` through: $verdict" >&2; exit 1 ;;
 esac
-# research (the workspace's venv) and the GitHub helper on every later shell's PATH (INF-71: a fresh VM had neither)
+# research (the workspace's venv) and the GitHub helper on every later shell's PATH, since a fresh VM has neither
 line='export PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH'
 rc=${AGENT_GUARD_BASHRC:-$HOME/.bashrc}
 grep -qxF "$line" "$rc" 2>/dev/null || echo "$line" >> "$rc"
