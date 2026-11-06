@@ -493,6 +493,8 @@ KNOWN: dict[str, str] = {
         "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
     "Security/Definitions/Core/Circuit.lean::Verity.Circuit.Transcript":
         "homonym, one run's gate values, which the Glossary calls a trace: rename, then the canonical trace (proofs)",
+    "Security/Definitions/Core/Compose.lean::Claims.ZKMal.Layout":
+        "homonym, a run in parts (a first part, then sessions) that RecZK reads: rename (lean)",
     "Security/Definitions/Core/Interaction.lean::Claims.Trace":
         "homonym, a run's messages, oracle calls and decision, which the Glossary calls a transcript: rename, then the canonical transcript (proofs)",
     "Security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
@@ -582,8 +584,6 @@ KNOWN: dict[str, str] = {
     "Security/Proofs/Flock/Claims/Recursion/Inner.lean::Claims.Recursion.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (proofs)",
     "Security/Proofs/Flock/Claims/Recursion/VStar.lean::Claims.Recursion.VStar.Layout":
-        "homonym, proof-internal layout: rename (proofs)",
-    "Security/Proofs/Flock/Claims/ZK/Layout.lean::Claims.ZKMal.Layout":
         "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Sampled/Defs.lean::FlockSampled.Trace":
         "homonym, the sampled proofs' committed units, each one's type and values: rename (proofs)",
