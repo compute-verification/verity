@@ -7,7 +7,7 @@
 # (a guest job on a shared GPU node is preemptible; one arm a run, ZK_ARMS=fw, takes about 3.5 h with its verification, the builds cached)
 # env: ZK_KS=4096,14336  ZK_SIZES=1,8,64,512  ZK_DRAWS=1,8,64,c  ZK_ARMS=fw,nofw  ZK_COLD=2  ZK_RUNS=3  ZK_WARM=1
 #      ZK_UNITS="fp8-coord:K=6144 router" (served types instead of A6's coordinates, zk_cost.py's --units: ZK_SIZES then
-#      defaults to half,full, ZK_DRAWS to c:dev+nofw,8:nofw+fw,64:nofw+fw, ZK_ARMS to dev,nofw,fw; overhead instead of fit)
+#      defaults to half,full, ZK_DRAWS to c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw, ZK_ARMS to dev,nofw,fw; overhead instead of fit)
 #      ZK_STAGE_ONLY=1 (with ZK_UNITS: stage on this node's CPUs, keep the records, no CUDA, build or GPU)
 #      ZK_SM (the prover's target, from nvidia-smi unless given)  ZK_CARD=rtx-pro-6000-server (the card whose datasheet
 #      peak divides; the overhead step refuses one whose arch isn't the run's GPU's; an H200: ZK_CARD=h200-sxm-141gb)
@@ -42,7 +42,7 @@ keep() {
 }
 # a served type stages on CPUs alone (stage.py, no Lean), before the builds
 if [ -n "${ZK_UNITS:-}" ]; then
-  : "${ZK_SIZES:=half,full}" "${ZK_DRAWS:=c:dev+nofw,8:nofw+fw,64:nofw+fw}" "${ZK_ARMS:=dev,nofw,fw}"
+  : "${ZK_SIZES:=half,full}" "${ZK_DRAWS:=c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw}" "${ZK_ARMS:=dev,nofw,fw}"
   log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}; stage: units $ZK_UNITS, sizes $ZK_SIZES, draws $ZK_DRAWS"
   ZK stage --units "$ZK_UNITS" --sizes "$ZK_SIZES" --draws "$ZK_DRAWS" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
   rc=${PIPESTATUS[0]}

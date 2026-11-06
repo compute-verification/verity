@@ -21,7 +21,7 @@ sessions.
   point and arm against the type's own partition and no Program, which it refuses once every other check has passed.
 * **Draws.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
   program and partition, served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
-  sampled proof blocks in one statement. An entry `k:arm+arm` runs only those arms at k (`c:dev+nofw 8:nofw+fw`).
+  sampled proof blocks in one statement. An entry `k:arm+arm` runs only those arms at k (`c:dev+nofw 8:dev+nofw+fw`).
 * **Sessions.** Per point and arm, `--cold` processes proving one session each (`--runs 1 --warm 0`: one touched
   statement's prover) and one proving `--warm` + `--runs` sessions (the in-process session cost). Arm `fw` is the
   design's path: the firewall's send check on every session (`FC_FIREWALL=1`), which rechecks the host's witness; `nofw`
@@ -31,7 +31,9 @@ sessions.
 * **Overhead** (`overhead`): per served type and arm, the timed sessions' end-to-end seconds at k = c fitted as
   `fixed + marginal c` over its sizes, and a dot product's proof overhead: its GPU-seconds a proof block over the
   GPU-seconds the same card's datasheet dense peak needs for the block's K MACs in its operand format (`verity.hardware`).
-  The `fw` arm's points at k < c give the send check's increment over `nofw` at the same statement and sample.
+  Per statement and arm, its sessions at every k it drew, k = c among them, fitted over k (`drawn`): the statement's
+  fixed seconds and a drawn block's, the deployed sample's price; `fw` less `nofw` at the same draws is the send
+  check's increment.
 * **Verification.** Lean `verify --zk --partition --program` on each cold session of arm `fw` and the first timed session
   of each warm process, one at a time.
 * **Fit.** Weighted least squares in relative error, with standard errors from the residuals: per K, the cold process
@@ -602,7 +604,7 @@ def overhead(a) -> int:
         peak = peak_macs(card, s0["format"]) if s0["macs"] else None
         t = {"unit": s0["unit"], "definition": s0["definition"], "class": s0.get("class"), "ands": s0["ands"],
              "k_log": s0["k_log"], "full": s0["full"], "sizes": sorted(st), "macs": s0["macs"], "format": s0["format"],
-             "peak_mac_per_s": peak, "stage_s": {c: r["stage_s"] for c, r in st.items()}, "arms": {}, "firewall": {}}
+             "peak_mac_per_s": peak, "stage_s": {c: r["stage_s"] for c, r in st.items()}, "arms": {}, "drawn": {}}
         for arm in sorted({r["arm"] for r in proves if r["tag"] == tag}):
             mine = [r for r in proves if r["tag"] == tag and r["arm"] == arm]
             whole = {c: [x for r in mine if r["mode"] == "warm" and r["c"] == r["k"] == c for x in r["lives"] if not x["warm"]]
@@ -627,18 +629,19 @@ def overhead(a) -> int:
                 if arm_rec["marginal_s"]:
                     arm_rec["overhead_marginal"] = arm_rec["marginal_s"] / native
             t["arms"][arm] = arm_rec
-        # the send check's increment: fw over nofw at the same statement and sample, fitted over the sample size k
+        # per statement and arm, its sessions fitted over the drawn blocks k (k = c among them): the statement's fixed
+        # seconds and a drawn block's
         for c in st:
             fits = {}
-            for arm in ("nofw", "fw"):
+            for arm in ("dev", "nofw", "fw"):
                 pts: dict[int, list[float]] = {}
                 for r in proves:
-                    if r["tag"] == tag and r["arm"] == arm and r["mode"] == "warm" and r["c"] == c and r["k"] < c:
+                    if r["tag"] == tag and r["arm"] == arm and r["mode"] == "warm" and r["c"] == c:
                         pts.setdefault(r["k"], []).extend(x["e2e_s"] for x in r["lives"] if not x["warm"])
                 if pts:
                     fits[arm] = {**line(pts), "e2e_s": {k: float(np.median(v)) for k, v in pts.items()}}
             if fits:
-                t["firewall"][c] = fits
+                t["drawn"][c] = fits
         types[tag] = t
     rec = {"schema": "verity/proof-overhead/v1", "definition": DEFINITION, "card": a.card, "gpu": gpu, "run": a.run,
            "settings": "flock-circuit prove --zk --gpu, one warm process (its timed sessions' end-to-end seconds), every staged "
@@ -654,11 +657,18 @@ def overhead(a) -> int:
             rows.append(f"| {tag} | {t['definition']} | {arm} | {','.join(map(str, t['sizes']))} | {fmt(r['fixed_s'])} | "
                         f"{fmt(r['marginal_s'], 1e3)} | {fmt(r['amortized_s'], 1e3)} | {fmt(r.get('overhead_marginal'))} | "
                         f"{fmt(r.get('overhead_amortized'))} | {lean} |")
-        for c, fits in t["firewall"].items():
-            if "fw" in fits and "nofw" in fits and fits["fw"]["marginal_s"] is not None and fits["nofw"]["marginal_s"] is not None:
-                rows.append(f"| {tag} | send check at c={c} | fw - nofw | k {','.join(map(str, sorted(fits['fw']['e2e_s'])))} | "
-                            f"{fmt(fits['fw']['fixed_s'] - fits['nofw']['fixed_s'])} | "
-                            f"{fmt(fits['fw']['marginal_s'] - fits['nofw']['marginal_s'], 1e3)} | - | - | - | - |")
+        for c, fits in t["drawn"].items():
+            for arm, f in fits.items():
+                if f["marginal_s"] is not None:
+                    rows.append(f"| {tag} | drawn at c={c} | {arm} | k {','.join(map(str, sorted(f['e2e_s'])))} | "
+                                f"{fmt(f['fixed_s'])} | {fmt(f['marginal_s'], 1e3)} | - | - | - | - |")
+            if "fw" in fits and "nofw" in fits:
+                ks = sorted(set(fits["fw"]["e2e_s"]) & set(fits["nofw"]["e2e_s"]))
+                d = {k: fits["fw"]["e2e_s"][k] - fits["nofw"]["e2e_s"][k] for k in ks}
+                if ks:
+                    rows.append(f"| {tag} | send check at c={c} | fw - nofw | k {','.join(map(str, ks))} | {fmt(d[ks[0]])} | "
+                                f"{fmt((d[ks[-1]] - d[ks[0]]) / (ks[-1] - ks[0]) if len(ks) > 1 else None, 1e3)} "
+                                "| - | - | - | - |")
     (out / "overhead.md").write_text(DEFINITION + "\n\n" + "\n".join(rows) + "\n")
     print("\n".join(rows))
     return 0
