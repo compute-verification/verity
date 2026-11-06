@@ -13,7 +13,6 @@
     "test": "vitest run --config vitest.config.ts",
     "test:e2e": "vitest run --config vitest.integration.config.ts",
     "check": "npm run typecheck && npm test && npm run test:e2e",
-    "migrate": "node --experimental-strip-types scripts/migrate.ts",
     "swap": "node --experimental-strip-types scripts/swap.ts",
     "smoke": "node --experimental-strip-types scripts/smoke.ts"
   },
