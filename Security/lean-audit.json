@@ -40834,7 +40834,7 @@
    }
   },
   "SampledProofs.ChallengerTrees": {
-   "digest": "7c6a2927649a5601a84e32f22c1ef4b2ac66e715112082a05f6b7e8aceba7768",
+   "digest": "98b9654af88b40230323e90ed2c235138c113290b9276b8075211335a3aa4717",
    "definitions": {
     "SampledProofs.Challenger.LINK_ROOT_LEN": "1f8fe31e355f018a53a514f119ab08ada8488ed6acb6643ec9c8df82a7dc045a",
     "SampledProofs.Challenger.LINK_TABLES": "8af716a484dd7ab4f4e315c2eeb20f7828c8781f86bb7275cf827566b638e88d",
@@ -40869,6 +40869,7 @@
     "SampledProofs.Challenger.trustedTreesOf": "b68a1fcd5206defc96c6413db71389f77ec1703dfc3f204a85d564ed1148d794",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isHexN": "2dcd137ccdf67fb110c9b12c5c48d9cb3d84a940e1316b7093818f79c566d4cc",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isStream": "e1c6e1745b80341e2fb0ce52396de6f234d1571ad69accb08f57cba803089faf",
+    "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.recordCoins?": "80df91b2f8689a5640931e6190c75075f98d0a3f43a13eb9af1398f1c96bb126",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.strOf": "3c64e96cec1f8ba9cdb56c0279fec34d9b496d66ad66ec0e35e6571df9cdf4d0"
    }
   },
