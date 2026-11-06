@@ -482,10 +482,14 @@ def test_no_long_module_grows():
 RETIRED_NAMES = {"draw": 958, "law": 113, "escape": 98, "wrong": 120, "dampener": 37, "firewall": 26, "horizon": 31, "warden": 10, "tap": 19, "leg": 3}
 
 
-#: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree when the rule came
-IMPORT_ALL: dict[str, str] = {}
-#: the entries of `IMPORT_ALL`, per package
-IMPORT_ALL_USES = {}
+#: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree or on `next` when the rule came; an
+#: entry whose FILE the tree doesn't have waits for the change on `next` that adds it
+IMPORT_ALL: dict[str, str] = {
+    "Security/Proofs/Flock/Claims/Sampling/Select/Second.lean: SampledProofs.Draw":
+        "its proofs open `SampledProofs.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
+}
+#: the entries of `IMPORT_ALL` whose FILE the tree has, per package
+IMPORT_ALL_USES = {"Security/Proofs": 1}
 
 
 def imports_all(files: dict[str, str], in_tree) -> list[str]:
@@ -496,12 +500,13 @@ def imports_all(files: dict[str, str], in_tree) -> list[str]:
                   for i in h.imports if i.all and in_tree(i.module))
 
 
-def import_all_failures(found: list[str], allowed: dict[str, str]) -> list[str]:
-    """What fails of the `import all` uses ``found`` (`imports_all`) against ``allowed`` (`IMPORT_ALL`): a use it doesn't
-    list, an entry no file has any more, and an entry without its reason."""
+def import_all_failures(found: list[str], allowed: dict[str, str], files: set[str]) -> list[str]:
+    """What fails of the `import all` uses ``found`` (`imports_all`) against ``allowed`` (`IMPORT_ALL`), in a tree of
+    ``files``: a use it doesn't list, an entry whose file no longer has it, and an entry without its reason."""
     return ([f"`import all` of an in-tree module, {u}: import it publicly, and move the proof that needs its private part "
              f"into it or `@[expose]` the definition that proof reads" for u in found if u not in allowed]
-            + [f"IMPORT_ALL lists {u}, which no file has any more: remove the entry" for u in sorted(set(allowed) - set(found))]
+            + [f"IMPORT_ALL lists {u}, which no file has any more: remove the entry" for u in sorted(set(allowed) - set(found))
+               if u.split(": ")[0] in files]
             + [f"IMPORT_ALL[{u!r}] gives no reason" for u, why in sorted(allowed.items()) if not why.strip()])
 
 
@@ -513,10 +518,10 @@ def test_no_import_all_of_an_in_tree_module():
 
     def in_tree(m: str) -> bool:
         return any((m == r or m.startswith(r + ".")) and (s / (m.replace(".", "/") + ".lean")).is_file() for s, r in homes)
-    bad = import_all_failures(imports_all({_rel(f): _text(f) for f in files}, in_tree), IMPORT_ALL)
-    assert not bad, "\n".join(bad)
     pkg = {_rel(f): _rel(p) for f, p in files.items()}
-    _held("IMPORT_ALL_USES", IMPORT_ALL_USES, dict(Counter(pkg[u.split(": ")[0]] for u in IMPORT_ALL)),
+    bad = import_all_failures(imports_all({_rel(f): _text(f) for f in files}, in_tree), IMPORT_ALL, set(pkg))
+    assert not bad, "\n".join(bad)
+    _held("IMPORT_ALL_USES", IMPORT_ALL_USES, dict(Counter(pkg[f] for u in IMPORT_ALL if (f := u.split(": ")[0]) in pkg)),
           "`IMPORT_ALL`", "it only shrinks; import the module publicly instead")
 
 
@@ -586,13 +591,14 @@ def test_a_module_is_long_past_its_2000th_line():
 
 def test_an_in_tree_import_all_is_refused_unless_listed_with_its_reason():
     """`imports_all` and `import_all_failures` on toy files: an `import all` the tree resolves fails unless `IMPORT_ALL`
-    lists it, with a reason; the toolchain's (`Init`) is no use; and an entry no file has fails too."""
+    lists it, with a reason; the toolchain's (`Init`) is no use; an entry its file no longer has fails too, and one whose
+    file the tree doesn't have waits."""
     files = {"A.lean": "module\npublic import B\nimport all C.D\nimport all Init.Data.Repr\n", "E.lean": "import all C.D\n"}
     found = imports_all(files, lambda m: m.split(".")[0] in ("B", "C"))
     assert found == ["A.lean: C.D", "E.lean: C.D"]
-    assert import_all_failures(found, {"A.lean: C.D": "a by-decide example reads `C.D`'s private table"}) == [
+    assert import_all_failures(found, {"A.lean: C.D": "a by-decide example reads `C.D`'s private table"}, set(files)) == [
         "`import all` of an in-tree module, E.lean: C.D: import it publicly, and move the proof that needs its private part "
         "into it or `@[expose]` the definition that proof reads"]
-    assert import_all_failures([], {"A.lean: C.D": "why", "F.lean: G": " "}) == [
+    assert import_all_failures([], {"A.lean: C.D": "why", "F.lean: G": " ", "H.lean: C.D": "on next"}, {"A.lean", "F.lean"}) == [
         "IMPORT_ALL lists A.lean: C.D, which no file has any more: remove the entry",
         "IMPORT_ALL lists F.lean: G, which no file has any more: remove the entry", "IMPORT_ALL['F.lean: G'] gives no reason"]
