@@ -1,5 +1,5 @@
 # Training's slowdown code (the `training_slowdown` package) and its suite. Not a distribution: the suite and its commands
-# run from this directory. `grader/` is a suite of its own.
+# run from this directory.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

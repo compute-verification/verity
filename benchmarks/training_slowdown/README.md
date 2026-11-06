@@ -8,9 +8,6 @@ block, else the one bound's products term (the theorem of record on M, the produ
 the update, given (H) and (E)), with Slowdown's token form and the sensitivities beside it. A change to what it
 measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record carries.
 
-`grader/` is a suite of its own: it reads a training step's matrix products, their multiply-adds and output wires, and
-the circuit's size off the Boolean circuit handed over, beside this code's trace of the same step.
-
 ## Modules
 
 | module | what it does |
