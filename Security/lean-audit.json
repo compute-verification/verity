@@ -5331,24 +5331,6 @@
    "assumptions": [],
    "type_hash": "25bb13b79dd739375049d34f8168300966c182117594c7a5a67767779cd0ea9c"
   },
-  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest": {
-   "owner": "@training",
-   "signature": [
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest :",
-    "  Accounting.Guarantees.ServingBlocks.UncertifiedElementary_honest"
-   ],
-   "assumptions": [],
-   "type_hash": "b937b5e90ac4e9fa4cc05c362459bc2dcffa1c15a3f8cfb2cf6158528814ecd5"
-  },
-  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial": {
-   "owner": "@training",
-   "signature": [
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial :",
-    "  Accounting.Guarantees.ServingBlocks.UncertifiedElementary_nontrivial"
-   ],
-   "assumptions": [],
-   "type_hash": "2d20e7e6b89b4fdf3de336f65c1bb585181dc57741bfd6d21d65b68f85246846"
-  },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Sketch.CommitThenProject : Accounting.Guarantees.Sketch.CommitThenProject"],
@@ -15408,8 +15390,6 @@
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": "lemma: ServingBlockBound's nontrivial lemma: at Counter, one gate reading a registered input gate, every premise but the per-block cap at the serving blocks' size (1, 0) holds, that cap fails, and the counted weight 1 is above the bound's right-hand side 0. A counterexample at an instance, not a property of a Lean function.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest": "completeness: ServingBlockBoundRemote's honest lemma: at Honest (as ServingBlockBound_honest's) its premises hold together at (c, k) = (1, 1). It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial": "lemma: ServingBlockBoundRemote's nontrivial lemma: at Counter every premise but the per-block cap at the inference size (1, 0) holds, that cap fails, and the counted weight 1 is above the bound's right-hand side 0. A counterexample at an instance, not a property of a Lean function.",
-   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest": "completeness: UncertifiedElementary's honest lemma: at Honest the serving blocks and dark remainder refine themselves, so its premise holds. It states a fact of an instance, not a property of a Lean function.",
-   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial": "lemma: UncertifiedElementary's nontrivial lemma: at Counter the parent map away, sending the one inference block to a unit that holds no gate, is no refinement, and the operation's weight 1 is above the cap split = 0. A counterexample at an instance, not a property of a Lean function.",
    "Flock.SecurityProofs.SampledKSLiveHonest": "frozen (no-function): the honest witness of SampledKSLiveV2, SampledKSLiveV3 and SampledKSLivePub, not a run of a Lean function: from one named premise, ServedFilesParse (that the one-stage audit's --zk session files of art:31c671f6's honest case, pinned by SHA-512, parse to a descriptor in scopeOkH whose public file loads with no shared-row tables, as run r20261027-042157-5c54 evaluated beside verify --zk accepting that session), every hypothesis those statements take of the files holds there (Built, TagsOkZHJ, untyped tags, the parse, the public file, scopeOkH); it reads SampledKSLiveHonest (Security/Proofs/Flock/Bridge/Honest.lean), so the lock records its text.",
    "Nci.SecurityProofs.DampenerRemotePeriod": "frozen (no-function): It composes the remote protocol's overhead bound over a monitoring period of T windows on live coins from CertificateSlack, the union over the windows, the per-identity escape tail and VerdictLag, under the named TerminalDetection (Security/Definitions/Nci/Assumptions/Remote.lean), with each protocol's per-window bound (CircuitCredit's conclusion, the sampled-proofs window's draw-miss and knowledge-soundness bounds, NciCheck.Properties.Throttled's conclusion) taken as a hypothesis, not from a function's acceptance; joining the windows to their protocols' verifiers is what would give it one.",
    "Nci.SecurityProofs.DampenerRemotePeriod_honest": "frozen (no-function): It states that DampenerRemotePeriod's premises hold at a constructed honest developer over one window at the remote reference's p = 3 * 2^-40 and eps' = 2p/10^-6, with the failure probability at most 10^-6 and the overhead bound above 1, an existence over the statement's parameters, not a function's acceptance.",
@@ -20826,9 +20806,7 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial"
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial"
    ]
   },
   "Definitions.Accounting.Guarantees.Sheet": {
@@ -22579,19 +22557,17 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial"
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary"
    ]
   },
   "Definitions.Accounting.ServingBlocks.Instances": {
-   "digest": "0edcab8d9e81a37f2c0ee04ae0e144f44c39483bffa0c50a4eee2e29f7c1028d",
+   "digest": "4d98d225e80f020b0e8c21276b83d940239237bb8fbab8eaa0b6d4669cb8ec2d",
    "definitions": {
     "Accounting.ServingBlocks.Counter.C": "4b847921ab33546fa4f9cfc485025687315111d7af172db34a1c1dcab3289126",
     "Accounting.ServingBlocks.Counter.J": "f1997dc5ad2848696bbb3047ac2219bf851f0da8beaf3c2689383bb5f2768216",
     "Accounting.ServingBlocks.Counter.P": "7fb5550c51cc1f1d2f980be8b4f616cc0c549eda7a8c6a436350c082afc0288e",
     "Accounting.ServingBlocks.Counter.P₂": "807652c812828246fd2cd7622586887718adc2cfb1a3fbfe8064fb2a92bd1501",
     "Accounting.ServingBlocks.Counter.S": "4f48d1556ea96d0f898d9321231ef904dfadd831018ddbcc1ce21ecaac05910d",
-    "Accounting.ServingBlocks.Counter.away": "e9fd27ad1334f6114c594547b5552191a6f8e3236ff237ad560c6958fe68b4ae",
     "Accounting.ServingBlocks.Counter.d": "e13afdd209d6d8943224490732c21d172733336f89e9d1298e8da44370e70d3a",
     "Accounting.ServingBlocks.Counter.q": "a8640e1613fb9f77a00eb9503a3bb4aaf7405049cb5479ee9144bf918a9045c4",
     "Accounting.ServingBlocks.Counter.r": "d53073fcb0d476747904937be7cc8e072ed976c154ff88de24e2c0800aa15037",
@@ -22608,9 +22584,7 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
-    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial"
+    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial"
    ]
   },
   "Definitions.Accounting.Slowdown": {
@@ -25084,8 +25058,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
     "Accounting.SecurityProofs.pouwRow",
     "Bandwidth.SecurityProofs.B3",
     "Bandwidth.SecurityProofs.B3Capacity",
@@ -25378,8 +25350,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
@@ -25612,8 +25582,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
@@ -27348,8 +27316,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
@@ -27654,8 +27620,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
@@ -27942,8 +27906,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest",
-    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
