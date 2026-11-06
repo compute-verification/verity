@@ -30,7 +30,8 @@ kinds = ["lean-module"]
 env = "lean"
 about = "compile and kernel-replay {name}"
 resources = { cores = 1, mem_gb = 6, disk_gb = 1 }
-timeout_s = 900
+# a Lean module's replay can outlive 900 s (Security/Proofs/Flock/VBridge/RecLink.lean's does)
+timeout_s = 3600
 
 [family.lean-env]
 files = ["**/lean-toolchain", "**/lake-manifest.json"]
