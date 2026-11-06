@@ -23,9 +23,10 @@ DEV=${PT_DEVICE:-gpu}; case $DEV in gpu | cpu) ;; *) echo "PT_DEVICE is gpu or c
 FW=${FLOCK_WORK:-/workspace/tmp/served-units-time-$DEV}; mkdir -p $FW || exit 1
 UNITS=${PT_UNITS:-"fp8-coord:K=6144 fp8-coord:K=6144+public-weights"}; NS=${PT_NS:-"16 64"}; JOBS=${PT_JOBS:-4}
 WARM=${WARM:-1}; RUNS=${RUNS:-3}; NSESS=$((WARM + RUNS)); SM=${SM:-120}; STEPS=${STEPS:-"build stage prove"}
+[ -x /usr/bin/time ] || { echo "prove_time.sh needs GNU time at /usr/bin/time (apt-get install time)"; exit 1; }
 if [ $DEV = gpu ]; then
   . verity/ml/flock/pod/cuda-13.3.sh
-  export PATH=$CUDA_TK/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
+  C13=${CUDA_TK:-/usr/local/cuda-13.3}; export PATH=$C13/bin:$PATH LD_LIBRARY_PATH=$C13/lib64:${LD_LIBRARY_PATH:-}
 fi
 export PATH=$HOME/.cargo/bin:$PATH FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 CPUS=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))'); NC=$(echo $CPUS | tr , '\n' | wc -l)
