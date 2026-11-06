@@ -18,7 +18,8 @@ FLAGS: [--peer PEER] [--port 18782] [--prompts 64] [--requests 113] [--height 12
 
 ``--requests`` is by default `REQUESTS`, what h200-2's free disk seals by the endpoint's sizing; ``--tokens`` is each
 request's max_tokens, at most KO. ``--scan-class`` asks the gate for another class's schedule (`auditor.SCAN_CLASSES`:
-w63k4, the window circuit's 4,32,4, at 5 egress cells), whose KI and KO then bound ``--prompt-ids`` and ``--tokens``.
+w63k4, the window circuit's class 8,32,4,4,16, at 5 egress cells), whose KI and KO then bound ``--prompt-ids`` and
+``--tokens``.
 
 * **plan** prints the request's words, the minutes it takes (``--minutes`` by default `auditor.warden_minutes` of its
   requests and height plus `MARGIN`), the prompts' size, the endpoint's flags and each run's command. The request and
