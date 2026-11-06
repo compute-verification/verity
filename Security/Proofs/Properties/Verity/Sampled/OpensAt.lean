@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Instance
 public import Proofs.Properties.Verity.Sampled.Place
+public import Proofs.Properties.Verity.Sampled.SessionAt
 
 /-!
 # The deployed commitment's openings are `Hash.RowLeaf`'s
@@ -28,7 +29,7 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
   whose place is `placeOfRead` at its reading of the files, at sessions `OpensReady` alone; `Instance.opensAt_of_sessions`
   at every instance, whose base's place is `placeOfRead` by construction (`Instance.place`).
 * `remote_soundness_deployedReady`: **`remote_soundness_deployedAt` with `OpensAt` discharged** at sessions
-  `OpensReady`.
+  `OpensReady`, and `SessionAt` by `sessionAt_of_registered` at the deployment's session on the registered files.
 -/
 
 @[expose] public section
@@ -230,7 +231,8 @@ theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hready : ∀ θ F A, I.session θ = some A → SetsUp I.base θ F A → A.OpensReady)
-    (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote) (hε : I.StopsWithin .remote reg record recordDigest)
+    (hRg : I.RegisteredFiles) (hSr : I.SessionRegistered .remote)
+    (hε : I.StopsWithin .remote reg record recordDigest)
     (hL : ∀ θ F A, I.sessions θ F = some A → A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
     (hord : ∀ θ F c (σ : Verity.Game.Strategy (I.base.game θ F c)) (x : Verity.Game.CoinTape (I.base.game θ F c) σ),
       I.base.Verdict .remote .sampled (Verity.Game.CoinTape.run (I.base.game θ F c) σ x) →
@@ -244,7 +246,7 @@ theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions
     (hB : UnboundFaulty) (hR : RecursiveForm (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)) .remote)
     (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
-  remote_soundness_deployedAt I K₀ reg record recordDigest (I.opensAt_of_sessions hready) hRg hSa hε hL hord hOR hB
-    hR hW hI
+  remote_soundness_deployedAt I K₀ reg record recordDigest (I.opensAt_of_sessions hready) hRg
+    (I.sessionAt_of_registered .remote hSr) hε hL hord hOR hB hR hW hI
 
 end Verity.Sampled
