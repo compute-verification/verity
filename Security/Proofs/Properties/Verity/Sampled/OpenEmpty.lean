@@ -5,6 +5,7 @@ public import Mathlib.Logic.Equiv.Fin.Basic
 public import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
 public import Proofs.Flock.Soundness.ZK.RealLeaves
 public import Proofs.Properties.Verity.Sampled.CoinMap
+import Proofs.Flock.Soundness.Discharge.Hm.Commit
 
 /-!
 # An opening's empty class at one hm96 leaf
