@@ -1287,7 +1287,7 @@ def test_the_cache_key_is_the_same_on_every_node(monkeypatch, tmp_path):
         home = tmp_path / name
         return {"HOME": str(home), "PATH": f"{home}/.local/bin:/usr/bin", "HOSTNAME": name, "TMPDIR": f"{home}/tmp",
                 "VIRTUAL_ENV": f"{home}/trees/{name}/.venv", "SSH_CONNECTION": f"10.0.0.{len(name)} 22", "CUDA_VISIBLE_DEVICES": "",
-                "VERITY_TEST_CACHE": f"{home}/.cache/verity/tests-slot-{name}", "CHECK_SLOT": name}
+                "VERITY_TEST_CACHE": f"{home}/.cache/verity/tests-slot-{name}", "CHECK_SLOT": name, "VERITY_REGRESSION": "0"}
 
     def on(name: str) -> None:
         for k, v in node(name).items():
@@ -1304,7 +1304,7 @@ def test_the_cache_key_is_the_same_on_every_node(monkeypatch, tmp_path):
     on("vy-nebius-cpu-11")
     assert CC.key({"target": "F32Mul_v1"}) == here
     assert CC.key({"target": "F32Add_v1"}) != here
-    monkeypatch.setenv("VERITY_REGRESSION", "1" if os.environ.get("VERITY_REGRESSION") != "1" else "0")
+    monkeypatch.setenv("VERITY_REGRESSION", "1")
     assert CC.key({"target": "F32Mul_v1"}) != here
     monkeypatch.undo()
     here = CC.key({"target": "F32Mul_v1"})
