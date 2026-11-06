@@ -30,8 +30,8 @@ peak), then O(proof) a session: so a protocol verifies one statement a stratum, 
 The one-stage audit's v2 (`V2`, `SampledProofs.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
 (`evidence_v2`) and the files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
-`verify`'s. Its parameters register no lookup table, so it refuses blobs holding a pinned MUFU table (`tables_why`,
-`OneStageZk.tablesHeld`), and `verify`, which hands `flock-verify` no tables, sets up the same session.
+`verify`'s. The registered circuit names the lookup tables its session reads (its META's ``lookups``, `lookups_of`), and v2
+refuses blobs whose pinned MUFU tables are other than those (`tables_why`, `OneStageZk.tablesHeld`).
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
@@ -69,9 +69,9 @@ TABLES_WHY = "a shared-row public file (header shared_rows) under --zk"
 #: `Flock.MUFU_TABLES`' SHA-512s, in its order: the digests the v2 audit finds a pinned lookup table under among its blobs
 #: (`OneStageZk.tablesOf`)
 MUFU_SHA512 = {t.name: t.sha512 for t in TABLES if t.name in ("rsq", "sqrt", "rcp", "ex2")}
-#: `OneStageZk.NO_TABLES`, the head of the v2 audit's refusal of blobs holding a pinned MUFU table (`tables_why`)
-NO_TABLES = ("tables: the parameters register no lookup table (proofs names the circuit and public files only), and the "
-             "blobs hold the pinned MUFU table")
+#: `OneStageZk.NO_TABLES`, the head of the v2 audit's refusal of blobs whose pinned MUFU tables are not the registered
+#: circuit's lookups (`tables_why`)
+NO_TABLES = "tables: the blobs' pinned MUFU tables are not the ones the registered circuit looks up (its META's lookups)"
 
 
 class LeanError(RuntimeError):
@@ -200,13 +200,37 @@ def population_why(indices: Sequence[int], strata: Sequence[tuple[str, Sequence[
     return None
 
 
-def tables_why(digests: Iterable[str]) -> str | None:
-    """`OneStageZk.tablesHeld`: the v2 audit's refusal of blobs whose SHA-512s (lowercase hex) are `digests` when one is
-    a pinned MUFU table's (`MUFU_SHA512`), naming each in that order; None when none is. The parameters register no
-    lookup table, so the session v2 sets up reads none."""
+def lookups_of(meta: Any) -> list[str]:
+    """`OneStageZk.lookupsOf` on a circuit file whose META is `meta`: the pinned MUFU tables named under its ``lookups``,
+    in `MUFU_SHA512`'s order, none where it has none; ValueError where ``lookups`` is neither an object nor null."""
+    v = meta.get("lookups") if isinstance(meta, dict) else None
+    if v is None:
+        return []
+    if not isinstance(v, dict):
+        raise ValueError("META: lookups is not an object")
+    return [n for n in MUFU_SHA512 if n in v]
+
+
+def circuit_lookups(circuit: Path) -> list[str]:
+    """`lookups_of` on the circuit file `circuit`'s META, read off its second line alone (`Flock.HmOut.metaOf`)."""
+    with open(circuit, "rb") as f:
+        f.readline()
+        line = f.readline().decode().rstrip()
+    if not line.startswith("META "):
+        raise ValueError("circuit: no META line")
+    return lookups_of(json.loads(line[5:]))
+
+
+def tables_why(lookups: Sequence[str], digests: Iterable[str]) -> str | None:
+    """`OneStageZk.tablesHeld`: the v2 audit's refusal of blobs whose SHA-512s (lowercase hex) are `digests` when the
+    pinned MUFU tables among them (`MUFU_SHA512`, in its order) are not `lookups`, the registered circuit's
+    (`lookups_of`), naming both; None when they are."""
     held = set(digests)
-    names = [n for n, d in MUFU_SHA512.items() if d in held]
-    return f"{NO_TABLES} {', '.join(names)}" if names else None
+    got = [n for n, d in MUFU_SHA512.items() if d in held]
+    if got == list(lookups):
+        return None
+    names = ", ".join
+    return (f"{NO_TABLES}: the circuit looks up {names(lookups) or 'none'}, the blobs hold {names(got) or 'none'}")
 
 
 def proved_units(public: Path, session: Path) -> tuple[int, ...]:
@@ -387,5 +411,6 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 
 __all__ = ["EXE", "MUFU_SHA512", "NO_TABLES", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE",
-           "Finding", "LeanError", "Proof", "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why",
-           "population_why", "proved_units", "reads_registered", "tables_why", "v2_executable", "verdicts_v2", "verify"]
+           "Finding", "LeanError", "Proof", "check_v2", "circuit_lookups", "evidence_v2", "executable", "file_sha512",
+           "ks_form_why", "lookups_of", "population_why", "proved_units", "reads_registered", "tables_why", "v2_executable",
+           "verdicts_v2", "verify"]
