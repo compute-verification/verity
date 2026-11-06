@@ -45,4 +45,7 @@ def SecondMisses : Prop :=
       ∏ i ∈ Finset.range sample.size,
         Claims.Sampling.escCell n k (X ∩ Finset.Ico (i * n) ((i + 1) * n)).card
 
+/-- A second stage that accepts everything: its draw is `null`, which proves no unit. -/
+def acceptAllSecond (_ : Array ℕ) (_ _ : ℕ) (_ : ByteArray) : Flock.V (Json × ℕ) := .ok (Json.null, 0)
+
 end Properties.SampledProofs

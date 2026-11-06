@@ -300,9 +300,6 @@ theorem secondMisses_honest : (Select.selectSecond #[0] 2 1 ⟨Array.replicate 8
   simp only [onWith_fuel _ _ _ 2, canon_fuel 16, qsort_fuel, subset_fn]
   decide +kernel
 
-/-- A second stage that accepts everything: its draw is `null`, which proves no unit. -/
-def acceptAllSecond (_ : Array ℕ) (_ _ : ℕ) (_ : ByteArray) : Flock.V (Json × ℕ) := .ok (Json.null, 0)
-
 theorem proved_null : Draw.proved Json.null = #[] := by
   unfold Draw.proved
   simp only [qsort_fuel]
