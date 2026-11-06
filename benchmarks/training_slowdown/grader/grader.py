@@ -14,7 +14,8 @@ A lane hands over one directory (`write_handover`), and the grader refuses anyth
     step.json.gz       the run's step: `step_program(model, loss_fn, optimizer, batch)`'s Program at the run's batch shape
                        (`codec.encode_program`), named by its digest (`codec.program_digest`, which leaves the annotations
                        out, so `annotations` is the sha512 of their canonical JSON)
-    structure.json.gz  the same step at another batch shape, which says which dims are the tokens'
+    structure.json.gz  the same step at another batch shape, which says which dims are the tokens': only its occurrences'
+                       views are read, so it may be derived without the step's `cc`, whose routes needn't cover its shapes
 
 Training's slowdown code is read where it sits, at the commit named, and never copied (`load_slowdown_code`): the grader
 calls its names of the ops that compute products and its Definitions' output widths, and refuses a capture other than the
@@ -22,15 +23,17 @@ one it reads beside (`CAPTURE`).
 
 What it reads (`read`, "grader-products/v1"):
 
-- the step's matrix products (`Cells.products`): one row per mm or bmm occurrence, lowered to `LinearRef_v1` cells, with
-  its phase (forward, backward or optimizer), MACs, outputs and output wires, those of the cells whose two operands depend on
-  θ′ (the start's weights and the optimizer's state and scalars: `*_both`), the operands' and outputs' word widths as the
-  circuit wires them, and its dims, the tokens' among them; the dots other ops are lowered to (`DotRef_v1`) are rows of
-  their own;
+- the step's matrix products (`Cells.products`): one row per mm or bmm occurrence, lowered to cells that each compute
+  one row of it (`ROWS`: `LinearRef_v1`, torch CPU's arithmetic, or, derived at a `cc`, the route its cuBLAS takes, each
+  k16 step the tensor core's dot), with its phase (forward, backward or optimizer), MACs, outputs and output wires, those
+  of the cells whose two operands depend on θ′ (the start's weights and the optimizer's state and scalars: `*_both`), the
+  operands' and outputs' word widths as the circuit wires them, its dims, the tokens' among them, and its cells' |C|; the
+  dots other ops are lowered to (`DotRef_v1`) are rows of their own;
 - N, the MACs of the matrix products whose two operands depend on θ′, and O, their output wires (`totals`);
 - |C| (`circuit_size`): the step Program's census at the Boolean prices of the primitives it calls;
 - given a trace (`against`): the slowdown code's product rows of the same step (its capture's `.products.json`) beside the
-  circuit's products, by phase, op and dims: their count, N, O, operand widths and token dims, and both |C|.
+  circuit's products, by phase, op and dims: their count, N, O, operand widths, token dims and |C| (the trace's at its
+  gates a MAC), and both sides' |C| of the step, of each op's products and of the rest.
 
 A pure function of its inputs: no network, nothing published. It doesn't compute the bound ρ.
 """
@@ -56,9 +59,12 @@ READ = "grader-products/v1"
 CAPTURE = "4.12.9"
 THE_CODE = "training's slowdown code"
 DERIVE = "derive the step with step_program, the training-step frontend"
-#: the matrix products the grader reads, and the cell Definition each must be lowered to
+#: the matrix products the grader reads, and the cells each must be lowered to, one cell a row of the product (N dots of K,
+#: its bindings `K` and `N`): torch CPU's arithmetic (`CELL`), or a cuBLAS route's Definition on words
+#: (`cublas_bf16.route_gemm`'s word: unsplit, split-K with a bf16 workspace, serial split-K)
 PRODUCTS = ("mm", "bmm")
 CELL = "LinearRef_v1"
+ROWS = (CELL, "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1")
 DIMS = ("batch", "m", "k", "n")
 PHASES = ("forward", "backward", "optimizer")
 
@@ -147,6 +153,8 @@ def load_handover(path: Path) -> Handover:
     registered, and two batch shapes that tell the token dims apart. Raises `Refused` with the fix."""
     from verity.ml.circuits.codec import decode_program, program_digest
     from verity.ml.circuits.defs import REGISTRY
+    # registers the Definitions the frontend's rules lower to, which a decoded step calls by id
+    import verity_vllm.program.frontend.train_step  # noqa: F401
 
     path = Path(path)
     path = path / "handover.json" if path.is_dir() else path
@@ -376,9 +384,9 @@ def _dims(p: _Program, o: int) -> dict:
 # -- the step's multiply-add cells, on its circuit -----------------------------------------------------------------------
 
 #: the multiply-add cells a step's circuit computes products with, each instance's MACs and outputs from its bindings: a
-#: row of a matrix product (`LinearRef_v1{K, N}`: N dots of K, what every mm and bmm is lowered to) and one dot
+#: row of a matrix product (`ROWS`, `{K, N}`: N dots of K, what every mm and bmm is lowered to) and one dot
 #: (`DotRef_v1{K}`, what other ops' sums of products are lowered to)
-MAC_CELLS = {CELL: lambda b: (b["K"] * b["N"], b["N"]), "DotRef_v1": lambda b: (b["K"], 1)}
+MAC_CELLS = {**dict.fromkeys(ROWS, lambda b: (b["K"] * b["N"], b["N"])), "DotRef_v1": lambda b: (b["K"], 1)}
 
 
 def _instances(nd) -> int:
@@ -394,8 +402,8 @@ def _first_node(refs) -> int:
 
 def _check_products(p: _Program, code) -> None:
     """Refuse a step whose matrix products the grader doesn't read whole: an aten op that computes products (the slowdown
-    code's `opnames.gemm_like`) other than an mm or bmm, and an mm or bmm whose multiply-add cells aren't `LinearRef_v1`
-    rows of its K and N, one for each of its rows."""
+    code's `opnames.gemm_like`) other than an mm or bmm, and an mm or bmm whose multiply-add cells aren't rows (`ROWS`) of
+    its K and N, one for each of its rows."""
     cells: dict = collections.defaultdict(list)
     for k, c in enumerate(p.calls):
         nd = p.nodes[p.n_in + k]
@@ -409,23 +417,25 @@ def _check_products(p: _Program, code) -> None:
                               f"{', '.join(PRODUCTS)}): derive the step with a rule that lowers it to mm or bmm")
             continue
         d = _dims(p, o)
-        bad = sorted({nd.fn.id for nd in cells[o] if nd.fn.base_id != CELL or nd.fn.bindings.get("K") != d["k"]
+        bad = sorted({nd.fn.id for nd in cells[o] if nd.fn.base_id not in ROWS or nd.fn.bindings.get("K") != d["k"]
                       or nd.fn.bindings.get("N") != d["n"]})
         rows = sum(_instances(nd) for nd in cells[o])
         if bad or rows != d["batch"] * d["m"]:
-            raise Refused(f"{where}, {d['batch']}x{d['m']}x{d['k']}x{d['n']}, isn't {CELL} cells of K={d['k']} and "
-                          f"N={d['n']}, one for each of its {d['batch'] * d['m']} rows ({', '.join(bad[:2]) or f'{rows} rows'}): "
-                          f"derive the step with step_program's training rules")
+            raise Refused(f"{where}, {d['batch']}x{d['m']}x{d['k']}x{d['n']}, isn't row cells ({', '.join(ROWS)}) of "
+                          f"K={d['k']} and N={d['n']}, one for each of its {d['batch'] * d['m']} rows "
+                          f"({', '.join(bad[:2]) or f'{rows} rows'}): derive the step with step_program's training rules")
 
 
 class Cells:
     """A step Program's multiply-add cells as the products bound reads its circuit, root node by root node: which nodes
     depend on θ′ (`dep`: the start's weights, the optimizer's state and scalars, and every node computed from them), which
     the loss is computed from (`forward`), which read the optimizer's state (`opt`), and each multiply-add cell
-    (`MAC_CELLS`): its occurrence, instances, MACs and outputs, whether each of its two operands depends on θ′, and the
-    operands' and the outputs' word widths, from the cell Definition's signature."""
+    (`MAC_CELLS`): its occurrence, census class, instances, MACs and outputs, whether each of its two operands depends on θ′,
+    and the operands' and the outputs' word widths, from the cell Definition's signature."""
 
     def __init__(self, p: _Program) -> None:
+        from verity.ml.circuits.codec import descriptor_id
+
         self.p = p
         P, S = len(p.layout["params"]), len(p.layout["scalars"])
         seeds = set(p.layout["inputs"][:3 * P + S])
@@ -456,6 +466,7 @@ class Cells:
             k = _instances(nd)
             self.cells.append({
                 "node": i, "occ": p.calls[i - n_in]["occ"], "cell": nd.fn.id, "base": nd.fn.base_id,
+                "class": descriptor_id(nd.fn),
                 "phase": self.phase(i), "instances": k, "macs": k * macs, "outputs": k * outs,
                 "out_width": max(ret.width_set()), "widths": [max(t.width_set()) for _, t in params[:2]],
                 "dep": [any(dep[x] for x in _ref_nodes(a.refs, logs)) for a in nd.args[:2]]})
@@ -470,13 +481,15 @@ class Cells:
         got = {self.phase(self.p.n_in + k) for k, c in enumerate(self.p.calls) if c["occ"] == o}
         return next((x for x in PHASES if x in got), "backward")
 
-    def products(self, structure: _Program | None = None) -> list[dict]:
+    def products(self, structure: _Program | None = None, C: dict | None = None) -> list[dict]:
         """Each occurrence with multiply-add cells (and the cells of no occurrence, as one row): its op, phase, cells and
         their instances, MACs, outputs and output wires, those of cells with both operands depending on θ′ (`*_both`),
-        each operand's dependence (any cell's), the operands' and outputs' word widths, and for an mm or bmm its dims
+        each operand's dependence (any cell's), the operands' and outputs' word widths, for an mm or bmm its dims
         from its operands' views (`dims`, their MACs `dims_macs`) and, given the structure Program, its token dims
-        (`token_dims`: those that differ there)."""
+        (`token_dims`: those that differ there), and, given the step's |C| (`circuit_size`), its cells' gates (`gates`,
+        each instance at its class's) and the primitives they leave out, with no Boolean version (`unpriced`)."""
         p = self.p
+        classes = None if C is None else {r["class"]: r for r in C["classes"]}
         by: dict = {}
         for c in self.cells:
             by.setdefault(c["occ"], []).append(c)
@@ -499,6 +512,10 @@ class Cells:
                 if structure is not None:
                     d2 = _dims(structure, o)
                     row["token_dims"] = sorted(d for d in dims if dims[d] != d2[d])
+            if classes is not None:
+                cl = [classes[c["class"]] for c in cs]
+                row["gates"] = sum(c["instances"] * (k["gates"] // k["instances"]) for c, k in zip(cs, cl))
+                row["unpriced"] = sorted({u for k in cl for u in k["unpriced"]})
             rows.append(row)
         return rows
 
@@ -527,7 +544,7 @@ def boolean_prices(prims: dict) -> dict[str, dict]:
 
 def priced(cen: dict, prices: dict) -> dict:
     """Each root callee class's word gates, Boolean gates and ANDs (its primitives at their prices, times its instances under
-    the root), and the word gates of primitives without a Boolean version."""
+    the root) and the primitives it calls without a Boolean version (`unpriced`), and those primitives' word gates."""
     rows, unpriced = [], collections.Counter()
     for cid in cen["callees"]:
         cl = cen["classes"][cid]
@@ -542,7 +559,8 @@ def priced(cen: dict, prices: dict) -> dict:
                 continue
             g += inst * k * p["gates"]
             a += inst * k * p["and"]
-        rows.append({"class": cid, "instances": inst, "word_gates": inst * cl["gates"], "gates": g, "ands": a})
+        rows.append({"class": cid, "instances": inst, "word_gates": inst * cl["gates"], "gates": g, "ands": a,
+                     "unpriced": sorted(pid for pid in cl["primitives"] if prices.get(pid, {}).get("boolean") is None)})
     rows.sort(key=lambda r: -r["gates"])
     return {"classes": rows, "gates": sum(r["gates"] for r in rows), "ands": sum(r["ands"] for r in rows),
             "word_gates": sum(r["word_gates"] for r in rows), "unpriced_word_gates": dict(unpriced)}
@@ -561,17 +579,21 @@ def circuit_size(program) -> dict:
 # -- the front door ------------------------------------------------------------------------------------------------------
 
 def totals(rows: list[dict]) -> dict:
-    """The matrix products' count, MACs, N (the MACs of those whose two operands depend on θ′) and O (their output wires),
-    with N by phase and the operands' and outputs' widths; the other ops' dots apart (`dots`)."""
+    """The matrix products' count, MACs, N (the MACs of those whose two operands depend on θ′), O (their output wires) and
+    gates, with N and gates by phase, gates by op and the operands' and outputs' widths; the other ops' dots apart (`dots`)."""
     prods = [r for r in rows if r["op"] in PRODUCTS]
     dots = [r for r in rows if r["op"] not in PRODUCTS]
     return {"products": len(prods), "macs": sum(r["macs"] for r in prods), "N": sum(r["macs_both"] for r in prods),
             "O": sum(r["out_wires_both"] for r in prods), "outputs": sum(r["outputs_both"] for r in prods),
+            "gates": sum(r["gates"] for r in prods),
             "N_by_phase": {ph: sum(r["macs_both"] for r in prods if r["phase"] == ph) for ph in PHASES},
+            "gates_by_phase": {ph: sum(r["gates"] for r in prods if r["phase"] == ph) for ph in PHASES},
+            "gates_by_op": {op: sum(r["gates"] for r in prods if r["op"] == op) for op in PRODUCTS},
+            "unpriced": sorted({u for r in prods for u in r["unpriced"]}),
             "widths": sorted({tuple(w) for r in prods for w in r["widths"]}),
             "out_widths": sorted({w for r in prods for w in r["out_widths"]}),
             "dots": {"rows": len(dots), "macs": sum(r["macs"] for r in dots), "N": sum(r["macs_both"] for r in dots),
-                     "O": sum(r["out_wires_both"] for r in dots)}}
+                     "O": sum(r["out_wires_both"] for r in dots), "gates": sum(r["gates"] for r in dots)}}
 
 
 def read(h: Handover, code) -> dict:
@@ -581,12 +603,13 @@ def read(h: Handover, code) -> dict:
     step, structure = _Program(h.step, "step"), _Program(h.structure, "structure")
     _same_step(step, structure)
     _check_products(step, code)
-    rows = Cells(step).products(structure)
+    C = circuit_size(h.step)
+    rows = Cells(step).products(structure, C)
     return {"format": READ,
             "handover": {"path": str(h.path), "run": h.doc["run"]["id"], "frontend": h.doc["frontend"]["commit"],
                          **{k: {"digest": h.doc[k]["digest"], "batch": h.doc[k]["batch"]} for k in ("step", "structure")}},
             "slowdown_code": {"version": code.version, "commit": code.commit, "checked": code.checked, "capture": CAPTURE},
-            "products": rows, "totals": totals(rows), "C": circuit_size(h.step)}
+            "products": rows, "totals": totals(rows), "C": C}
 
 
 def load_trace(path: Path) -> dict:
@@ -608,11 +631,13 @@ def _key(phase: str, op: str, dims: dict) -> tuple:
 
 def against(result: dict, trace: dict, code) -> dict:
     """The circuit's matrix products (`read`'s) beside the slowdown code's product rows of the same step (`trace`,
-    `load_trace`), by (phase, op, batch, m, k, n): on each side the products' count, N, O, operand widths and token dims.
-    The trace's widths are those its capture passes; its O has each output at its Definition's output width b_y, as the
-    slowdown code's `he_of_rows` reads it from `formalism.HE_BITS` (the narrower operand's width for a Definition it doesn't
-    list); the circuit's are as it wires them. `agree` says which of those match at every key; `C` holds both |C| and their
-    ratio."""
+    `load_trace`), by (phase, op, batch, m, k, n): on each side the products' count, N, O, operand widths, token dims and
+    gates. The trace's widths are those its capture passes; its O has each output at its Definition's output width b_y, as
+    the slowdown code's `he_of_rows` reads it from `formalism.HE_BITS` (the narrower operand's width for a Definition it
+    doesn't list); its gates are each product's MACs at its gates a MAC (`gates_per_mac`), as its |C| prices them. The
+    circuit's are as it wires and prices them. `agree` says which of count, N, O, widths and token dims match at every key;
+    `C` holds both sides' |C| and their ratio: the step's, each op's products', all products' and the rest's (the step's
+    less its products')."""
     if trace["capture"] != CAPTURE:
         raise Refused(f"the trace is capture {trace['capture']}'s, and the grader reads beside {CAPTURE}'s: capture the "
                       f"step with {THE_CODE} at a commit whose capture is {CAPTURE}")
@@ -620,7 +645,7 @@ def against(result: dict, trace: dict, code) -> dict:
 
     def side(key: tuple, s: str) -> dict:
         e = by.setdefault(key, {})
-        return e.setdefault(s, {"count": 0, "N": 0, "O": 0, "widths": set(), "token_dims": set()})
+        return e.setdefault(s, {"count": 0, "N": 0, "O": 0, "gates": 0, "widths": set(), "token_dims": set()})
 
     for r in result["products"]:
         if r["op"] not in PRODUCTS:
@@ -629,6 +654,7 @@ def against(result: dict, trace: dict, code) -> dict:
         e["count"] += 1
         e["N"] += r["macs_both"]
         e["O"] += r["out_wires_both"]
+        e["gates"] += r["gates"]
         e["widths"] |= {tuple(w) for w in r["widths"]}
         e["token_dims"].add(tuple(r.get("token_dims") or ()))
     for r in trace["rows"]:
@@ -638,9 +664,10 @@ def against(result: dict, trace: dict, code) -> dict:
             b_y = code.formalism.HE_BITS.get(r["cell_gates"], (min(r["widths"]),) * 2)[1]
             e["N"] += r["count"] * r["macs"]
             e["O"] += r["count"] * r["outputs"] * b_y
+        e["gates"] += r["count"] * r["macs"] * r["gates_per_mac"]
         e["widths"].add(tuple(r["widths"]))
         e["token_dims"].add(tuple(sorted(r["token_dims"])))
-    empty = {"count": 0, "N": 0, "O": 0, "widths": [], "token_dims": []}
+    empty = {"count": 0, "N": 0, "O": 0, "gates": 0, "widths": [], "token_dims": []}
     rows = []
     for key in sorted(by, key=lambda k: (PHASES.index(k[0]) if k[0] in PHASES else len(PHASES), k[1], -math.prod(k[2:]), k)):
         row = {"phase": key[0], "op": key[1], "dims": dict(zip(DIMS, key[2:]))}
@@ -649,9 +676,18 @@ def against(result: dict, trace: dict, code) -> dict:
             row[s] = empty if e is None else {**e, "widths": sorted(e["widths"]), "token_dims": sorted(e["token_dims"])}
         rows.append(row)
     agree = {x: all(r["circuit"][x] == r["trace"][x] for r in rows) for x in ("count", "N", "O", "widths", "token_dims")}
-    C = {"circuit": result["C"]["gates"], "trace": trace["gates"]}
-    C["ratio"] = C["circuit"] / C["trace"] if C["trace"] else None
-    return {"rows": rows, "totals": {s: {x: sum(r[s][x] for r in rows) for x in ("count", "N", "O")} for s in ("circuit", "trace")},
+
+    def ratio(circuit, trace_) -> dict:
+        return {"circuit": circuit, "trace": trace_, "ratio": circuit / trace_ if trace_ else None}
+
+    ops = {s: {op: sum(r[s]["gates"] for r in rows if r["op"] == op) for op in PRODUCTS} for s in ("circuit", "trace")}
+    prods = {s: sum(ops[s].values()) for s in ops}
+    step = {"circuit": result["C"]["gates"], "trace": trace["gates"]}
+    C = {"step": ratio(step["circuit"], step["trace"]), **{op: ratio(ops["circuit"][op], ops["trace"][op]) for op in PRODUCTS},
+         "products": ratio(prods["circuit"], prods["trace"]),
+         "rest": ratio(step["circuit"] - prods["circuit"], None if step["trace"] is None else step["trace"] - prods["trace"])}
+    return {"rows": rows, "totals": {s: {x: sum(r[s][x] for r in rows) for x in ("count", "N", "O", "gates")}
+                                     for s in ("circuit", "trace")},
             "agree": agree, "C": C}
 
 
@@ -675,9 +711,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     a.out.write_text(json.dumps(out, indent=1) + "\n")
     t = out["totals"]
-    line = f"grader: {t['products']} products, N {t['N']:,}, O {t['O']:,}, |C| {out['C']['gates']:,}"
+    line = f"grader: {t['products']} products, N {t['N']:,}, O {t['O']:,}, |C| {out['C']['gates']:,} ({t['gates']:,} products')"
     if "against" in out:
-        line += f"; against {THE_CODE}: agree {out['against']['agree']}, |C| ratio {out['against']['C']['ratio']}"
+        C = out["against"]["C"]
+        line += (f"; against {THE_CODE}: agree {out['against']['agree']}, |C| ratio "
+                 + ", ".join(f"{k} {C[k]['ratio']}" for k in ("step", "products", *PRODUCTS, "rest")))
     print(line)
     return 0
 
