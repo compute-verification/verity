@@ -114,6 +114,7 @@
   "Proofs.Properties.Verity.Sampled.LeafErr",
   "Proofs.Properties.Verity.Sampled.Charge",
   "Proofs.Properties.Verity.Sampled.CouplingAt",
+  "Proofs.Properties.Verity.Sampled.CountsLayout",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
