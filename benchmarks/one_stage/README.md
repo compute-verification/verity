@@ -255,9 +255,9 @@ negatives.
   and there is no bound; where its registered-files condition doesn't, neither is a composite's that reads the case,
   nor sampled proofs', its leg there; and where θ names no public file, the public file isn't bound and sampled proofs'
   verdict is not established. Where the composite of record read the period's circuit files by path (its
-  composite.json's `circuit_files`), the verdict is the composed executable's: until the lock holds
-  `Verity.circuit_files_by_path_agree`, `composite-congruence` is open and its accept and bound are conditional on it
-  by name.
+  composite.json's `circuit_files`), the verdict is the composed executable's: `composite-congruence` closes where the
+  lock holds `Verity.circuit_files_by_path_agree` at the statement `DISCHARGES` pins, as the tree's does, and while it
+  is open its accept and bound are conditional on it by name.
   Sampled proofs credits only the drawn members whose `--registered` file its audit completed at the window's
   committed roots and whose Lean verdict of record reported exactly that file's reads, and lists every other drawn
   member as not credited, by name; PoUW's freed compute is credited nowhere and not claimed, by name, beside the PoUW
