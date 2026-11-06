@@ -10,8 +10,8 @@ public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 `Prog.flock_headline` is about the unsalted batched session. At the production statements (`hm96-sha512/v1` leaves) an
 honest transcript fails its openings check, so the headline the executable instantiates is e2e-exec's salted, one-table
 form at flock-verify's verdict, `Prog.flock_headline_live_on`, whose hypotheses are `Prog.flock_headline`'s (`pp`,
-`hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with R11 discharged up to R11b (`hdec`, the decoder right at
-the law's draws, `DecodesOn`).
+`hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with the refinement discharged up to the decoder (`hdec`, the
+decoder right at the law's draws, `DecodesOn`).
 
 `flock_headline_exec` instantiates it at the production program `Placed.keyProg c hU n` (the circuit's program on Δ's
 source keys), its returned outputs' bits for the program's outputs (`Layout.outsOf`), and the one-table plan of the
