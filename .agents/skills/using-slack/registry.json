@@ -572,7 +572,6 @@
       ],
       "owns": [
         "AGENTS.md",
-        "README.md",
         "ARCHITECTURE.md",
         "GLOSSARY.md",
         ".agents/skills/",
