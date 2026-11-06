@@ -409,6 +409,20 @@ def test_a_node_no_machine_entry_names_is_that_nodes_error_not_the_whole_drift(w
     assert "is not in machines.toml" in json.loads(capsys.readouterr().out)["n"]["error"]
 
 
+def test_a_released_machine_is_unreachable_not_the_drift_monitors_error(world, monkeypatch, tmp_path, capsys):
+    """Released machines (no host) failed every relay drift for hours, though a stopped VM's are skipped."""
+    from research import remote
+    from research.pods import registry
+
+    def refused(name, project):
+        raise remote.Refused(f"machine {name!r} refused: {name}.toml: host None is not a host name or address")
+    (tmp_path / "n.toml").write_text('provider = "ssh"\nreleased_host = "10.0.0.1"\n')
+    monkeypatch.setattr(remote, "resolve_machine", refused)
+    monkeypatch.setattr(registry, "registry_dir", lambda *_a, **_k: tmp_path)
+    deploy.main(["drift", "--json", "--no-fetch"], run=deploy.ssh_runner(), manifest=world["manifest"], repo=world["repo"])
+    assert json.loads(capsys.readouterr().out)["n"]["unreachable"] is True
+
+
 def test_code_running_from_a_tree_without_history_reads_and_fetches_every_branch_of_the_clone_it_is_given(world, tmp_path, capsys):
     """The control pod's watchers run from a `git archive` tree; drift reads $RESEARCH_DEPLOY_REPO's clone, fetched each run."""
     repo, origin, clone = world["repo"], tmp_path / "origin.git", tmp_path / "clone"
