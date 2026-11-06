@@ -16,7 +16,7 @@ import pytest
 from verity.ml.circuits.partition import Level
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
 from verity.core.protocols.sampled_proofs.consumers import (UNPROVED_EXFILTRATION, compute_bound, exfiltration_bound,
-                                                            location_bits)
+                                                            infiltration_bound, location_bits)
 from verity.core.protocols.sampled_proofs.service import REPLAY
 
 #: A4 P6's layer 0 (one-stage-e2e): six templates, 6,771,765 proof blocks, in canonical order.
@@ -45,19 +45,22 @@ def mib(bits: float) -> float:
     return bits / 8 / 2 ** 20
 
 
-def test_exfiltration_is_the_output_bit_weighted_bound_plus_the_location_term():
-    """A4's sampling designs: the output bits in incorrect proof blocks reach 9.40 MiB under the uniform subset:1024, 8.81 MiB with one proof block per
-    template and 1.50 MiB sampling in proportion to output bits, each exactly core's `harm_bound` over the sampling design.  Which proof blocks
-    are incorrect adds 0.08, 0.09 and 0.41 MiB (`location_bits`), so the bounds are 9.48, 8.89 and 1.91 MiB."""
+def test_infiltration_is_the_output_bit_weighted_bound_and_exfiltration_adds_the_location_term():
+    """A4's sampling designs: the incorrect proof blocks' outputs, what the prover wrote in place of the circuit's values,
+    total at most 9.40 MiB under the uniform subset:1024, 8.81 MiB with one proof block per template and 1.50 MiB sampling
+    in proportion to output bits, each exactly core's `harm_bound` over the sampling design.  Which proof blocks are incorrect
+    adds 0.08, 0.09 and 0.41 MiB (`location_bits`), so the exfiltration bounds are 9.48, 8.89 and 1.91 MiB."""
     segments = [(A4_BITS[name], size) for name, size in A4_SIZES.items()]
-    uniform = Stratified.uniform(sum(A4_SIZES.values()), 1024)
     p = one_level(Subset(1024))
-    got = exfiltration_bound(p, {"unit": segments})
-    assert got == uniform.harm_bound({"unit": segments}, DELTA) + location_bits(p) and 9.48 < mib(got) < 9.49
-    for ks, lo, hi in ((FLOOR, 8.88, 8.90), (BY_BITS, 1.90, 1.92)):
+    got = infiltration_bound(p, {"unit": segments})
+    assert got == Stratified.uniform(sum(A4_SIZES.values()), 1024).harm_bound({"unit": segments}, DELTA)
+    out = exfiltration_bound(p, {"unit": segments})
+    assert 9.39 < mib(got) < 9.41 and out == got + location_bits(p) and 9.48 < mib(out) < 9.49
+    for ks, lo, hi, out_lo, out_hi in ((FLOOR, 8.80, 8.82, 8.88, 8.90), (BY_BITS, 1.49, 1.51, 1.90, 1.92)):
         p = one_level(a4_law(ks))
-        got = exfiltration_bound(p, A4_BITS)
-        assert got == a4_law(ks).harm_bound(A4_BITS, DELTA) + location_bits(p) and lo < mib(got) < hi
+        got, out = infiltration_bound(p, A4_BITS), exfiltration_bound(p, A4_BITS)
+        assert got == a4_law(ks).harm_bound(A4_BITS, DELTA) and lo < mib(got) < hi
+        assert out == got + location_bits(p) and out_lo < mib(out) < out_hi
 
 
 def test_the_location_term_bounds_the_number_of_wrong_sets():
@@ -150,18 +153,21 @@ def test_compute_is_the_work_weighted_bound():
     assert compute_bound(one_level(a4_law(FLOOR)), work) == a4_law(FLOOR).harm_bound(work, DELTA)
 
 
-def test_a_two_stage_profile_is_read_for_compute_and_refused_for_exfiltration():
-    """A two-stage design's profile, a level of replay blocks (`service.REPLAY`) above the proof blocks: compute reads
-    it at the footprint, and exfiltration refuses it, since no Lean proof yet bounds what its accepted traces deliver."""
+def test_a_two_stage_profile_is_read_for_compute_and_infiltration_and_refused_for_exfiltration():
+    """A two-stage design's profile, a level of replay blocks (`service.REPLAY`) above the proof blocks: compute and
+    infiltration read it at the footprint (`worst_case` with utility b m), and exfiltration refuses it, since no Lean proof
+    yet bounds what its accepted traces deliver."""
     two = IntegrityProfile((REPLAY, "unit"), (512, 4), {REPLAY: Bernoulli(Fraction(1, 2)), "unit": Subset(2)}, 0.01)
     assert compute_bound(two, 1) == two.worst_case(lambda m: m)
+    assert infiltration_bound(two, 16) == two.worst_case(lambda m: 16 * m)
     with pytest.raises(ValueError, match=re.escape(UNPROVED_EXFILTRATION)):
         exfiltration_bound(two, 1)
 
 
 def test_an_application_reads_nothing_the_profile_does_not_bound():
-    """Weighting every proof block 1 reads the profile's own count (from above, within one proof block), for every sampling design; exfiltration
-    adds the location term to it."""
+    """Weighting every proof block 1 reads the profile's own count (from above, within one proof block), for every sampling design;
+    infiltration reads the same count, and exfiltration adds the location term to it."""
     for p in (one_level(Subset(1024)), one_level(a4_law(FLOOR)), one_level(a4_law(BY_BITS))):
         assert p.bound() <= compute_bound(p, 1) < p.bound() + 1 + 1e-6 * p.bound()
+        assert infiltration_bound(p, 1) == compute_bound(p, 1)
         assert exfiltration_bound(p, 1) == compute_bound(p, 1) + location_bits(p)
