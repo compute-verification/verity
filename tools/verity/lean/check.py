@@ -138,11 +138,12 @@ guarantee reads with its source now.  A weakened definition passes every axiom c
 those changes: the landing DM lists them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
 `--update` whose every failure is a record difference (its code is in `RECORD_DIFFERENCE`: two records each right on its
 side of a merge whose definitions changed, an owned entry with no record yet, a premise the lock doesn't list) writes the
-same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a train's
-merge carries its record.  Every failure carries a code (`Failure`: `guarantees.signature`, `orphan.file`), which the report
+same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a merge
+on `next` carries its record.  Every failure carries a code (`Failure`: `guarantees.signature`, `orphan.file`), which the report
 lists beside its text (`failure_codes`, `settled_codes`); what settles is decided by code, never by the text.  With
-`--regenerate` (a train's lean-audit step) such a package passes instead, and `audit.json`'s `regenerated` maps each to its record for the train to commit before it lands; the package's own lock is never written,
-and every other failure fails as before.  A guarantee whose
+`--regenerate` (the lean-audit step of the Lean check of a commit of `next`) such a package passes instead, and
+`audit.json`'s `regenerated` maps each to its record for drive to commit when it lands that commit; the package's own lock
+is never written, and every other failure fails as before.  A guarantee whose
 statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
 one line, and so does a definition read in another module with the same content.  `--update` keeps each entry's `owner`
 and writes a new entry only with one, from `--owner`; an owner changed by hand gets one line, since it changes who answers
@@ -231,7 +232,7 @@ GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|ca
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "claims", "witnesses",
          "unwitnessed", "witnesses_assumed", "compile_time",
          "dependency_unchecked", "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
-#: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
+#: a guarantee's `owner`: the handle of the lane that answers for it (`@lane`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 
 
@@ -239,7 +240,7 @@ class Failure(str):
     """A failure: its text as the audit prints and reports it, with a stable ``code`` (`check.kind`, its check the text's
     leading word, spaces as `-`) and the ``entry`` it is about (a guarantee, a module, a file; None when it is about several
     or the package).  What follows from a failure (`RECORD_DIFFERENCE`, `regenerated`) reads its code, never its text, so a
-    reworded message changes nothing a train settles.  The report's `failure_codes` lists the codes beside `failures`."""
+    reworded message changes nothing a Lean check settles.  The report's `failure_codes` lists the codes beside `failures`."""
     code: str
     entry: str | None
 
@@ -4054,9 +4055,10 @@ def main(argv: list[str]) -> int:
                     "\"into\": spec module[, \"beside\": module]}}; write each as `def G : Prop` in the spec module and "
                     "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
                     "auditing, and FILE.moved.json for `--update --moved`")
-    ap.add_argument("--regenerate", action="store_true", help="a train's audit: a package whose every failure is a record "
-                    "difference (a code in `RECORD_DIFFERENCE`) passes, and audit.json's `regenerated` names the record `--update` writes "
-                    "for it under --out, which the train commits; the package's own lock is never written")
+    ap.add_argument("--regenerate", action="store_true", help="the Lean check of a commit of `next`: a package whose every "
+                    "failure is a record difference (a code in `RECORD_DIFFERENCE`) passes, and audit.json's `regenerated` names "
+                    "the record `--update` writes for it under --out, which drive commits when it lands that commit; the "
+                    "package's own lock is never written")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
     ap.add_argument("--dev-cache", action="store_true", help="restore the dependencies from the verified build cache "
                     "(`cache.py get`, Mathlib's `cache get`) for a development check: our packages are still built and "
@@ -4232,8 +4234,8 @@ def main(argv: list[str]) -> int:
               f"each package's reports)", flush=True)
     regen = {os.path.relpath(r["package"], a.repo.resolve()): r["regenerated"] for r in reports if r.get("settled")}
     for p, f in regen.items():
-        print(f"audit: {p}: every failure is a record difference, settled by {f}, which the train commits over "
-              f"{p}/{POLICY}", flush=True)
+        print(f"audit: {p}: every failure is a record difference, settled by {f}, which drive commits over "
+              f"{p}/{POLICY} when it lands", flush=True)
     doc = {"passed": not failed, "failed": failed, "packages": reports, "regenerated": regen}
     if DEV_CACHE:
         doc["kind"] = DEV_KIND

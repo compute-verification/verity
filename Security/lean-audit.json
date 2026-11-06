@@ -20516,12 +20516,13 @@
    }
   },
   "Definitions.Accounting.Guarantees.ServingBlocks.Witnesses": {
-   "digest": "05955b712cd4c89d863f929a16cfcc58f787a94e0466fd168aaf9cc9aae466d5",
+   "digest": "33823491420871c8821af386d7ce917e8fe7b08673119b03596ddd2ffdbf62bd",
    "definitions": {
     "Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote_honest": "25797ab90323ce962d8b746541fadb2402657126f47bd6c9fb7c71c51434d4eb",
     "Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote_nontrivial": "5966cd1a2bcc52533644b9e29551a86d124db749cb25bbbef1cc1101625a13f6",
     "Accounting.Guarantees.ServingBlocks.ServingBlockBound_honest": "e5d0cfb7e12796c00dc4e54fb4984db24aa41e3a10153a76fc1486a7cda8ca6a",
-    "Accounting.Guarantees.ServingBlocks.ServingBlockBound_nontrivial": "e744485e2a719f114d332e0119503dd16e78503bf7926fd31c30fa18c2828428"
+    "Accounting.Guarantees.ServingBlocks.ServingBlockBound_nontrivial": "e744485e2a719f114d332e0119503dd16e78503bf7926fd31c30fa18c2828428",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedElementary_nontrivial": "02cb39feb488e72840e655b16cc5dd3d425c284b9b39aa8f65ea033d4b38182b"
    }
   },
   "Definitions.Accounting.Guarantees.Sheet": {
@@ -21693,11 +21694,12 @@
    }
   },
   "Definitions.Accounting.ServingBlocks.Instances": {
-   "digest": "739837c03a459efc296a6b1a4db703885d22c6adfc7e69671cb6834a53e8968b",
+   "digest": "358c62f68ec83cca85d29bce04350fd19fe4bd1229b8ec5d444dd180629c3c31",
    "definitions": {
     "Accounting.ServingBlocks.Counter.C": "3b93f637755e03d11d4590845850e2a40f8ca396e64620f282ac3eea5242dea6",
     "Accounting.ServingBlocks.Counter.J": "c3bdc4121c7ea29a05761b86cf7f1289f7752725e46610cf8988a159fa55d9fa",
     "Accounting.ServingBlocks.Counter.P": "b1e6c06a2a83dd111e0a1af2e165a4002b272c695df7b02f4363961fa7ff5b20",
+    "Accounting.ServingBlocks.Counter.P₂": "e629ac1d6f218708eb3d97d13d0f2c044f3c0f0efc969c35a2a71ba0e10bb12e",
     "Accounting.ServingBlocks.Counter.S": "0a28396f7d1ea254cea460c75f402dc12a6bd1702cf618bb0f30cd130fc2d56f",
     "Accounting.ServingBlocks.Counter.d": "1b656ae739cc7cbc5bb566c5da8de2bf884c682ebda5d6c8e852baf8c0c5f8b0",
     "Accounting.ServingBlocks.Counter.q": "a8640e1613fb9f77a00eb9503a3bb4aaf7405049cb5479ee9144bf918a9045c4",
@@ -30546,7 +30548,7 @@
    }
   },
   "Flock.Firewall.Frame": {
-   "digest": "f7b67c1ce9c05a8b6444b4ee45cbca333f0ad609cefc377e1e32658ef0a5397e",
+   "digest": "533e3e17d17fa98fdf734fe850256e8c5b3afb13e3d834b01c916911a284c3f1",
    "definitions": {
     "Flock.Firewall.Frame.Cfg": "bf9503846407764cd457755ef636ee64e0c349d8a0c4e1796a2a729919931930",
     "Flock.Firewall.Frame.Cfg.h": "37b00e39b0369196fef37e649c7bc44a58dd4010204b20b00713eec6c895d8b8",
@@ -30574,8 +30576,6 @@
     "Flock.Firewall.Frame.LABEL_ZC": "87797493625e3f138063ec1272d7297a384397ea51fa46f2380411c198146f17",
     "Flock.Firewall.Frame.MaskSlot": "d762bd305ae002405e073fbd614790b65853e94a2f35d7a5e6265adcef31d6a0",
     "Flock.Firewall.Frame.MaskSlot.blocks": "e3bba1021e7bda2b9980053a677af1ab6b5771c48d4026963603913f9aa2dc4e",
-    "Flock.Firewall.Frame.MaskSlot.fill._sparseCasesOn_1": "866b8a91c27307a49c95524c96d83db81c05ba73753607810652f12e4b232975",
-    "Flock.Firewall.Frame.MaskSlot.fill.match_1": "bc3e4a1d321342663a51a34d396886c900e8cac0a19298405f958644318da5a3",
     "Flock.Firewall.Frame.MaskSlot.n": "c01efe4b3af030619fe9d9c5ea2e991b1b973c5adbadefe933971a29e7830c8c",
     "Flock.Firewall.Frame.MaskSlot.w0": "0626b63451e4f7d9e6ad14b6663995dfa4aba98b73e3fc3818379d8ef57a8eb5",
     "Flock.Firewall.Frame.MaskSlot.word": "b2ab0fe47a7eb21e1f1da0bd2b98c94032a5aac32518b6c18b566cc1260f6bbf",
@@ -40178,12 +40178,10 @@
    }
   },
   "Proofs.Flock.SessionLoop.Inner": {
-   "digest": "60c172c56ba2e79c953b43c1857ebf1eb5f909399e0e1a71cef083ffa1a5aa0a",
+   "digest": "55c58322b9340d775c31c028287c316f048a0964c4274b682d6199eb0060ae45",
    "definitions": {
     "Claims.ZKServer.LeanRelease.withInner": "f5ec534552d23c1bff48a6a2799bf8949aab648a755b5a03204679c61d9d3784",
     "Claims.ZKServer.Loop.innerOf": "dcbfed36475e79a7518d16a662fc5bd24c71c4756cde0e032d38c6f4f7820f19",
-    "Claims.ZKServer.Loop.innerOf._sparseCasesOn_5": "40213eeff0858bf31936ccdd687000af339330bf961923ac07bb92978e7dcca9",
-    "Claims.ZKServer.Loop.innerOf._sparseCasesOn_6": "dee1eadabd977a268fb47f103c35a70fc3d18465306604619f2ac3244f8be737",
     "Flock.Guarantees.LoopInnerRound0Own": "cddec953854c5e9debbf39861f09943cd12d34c041339b4d337a565f75ecce0c"
    }
   },

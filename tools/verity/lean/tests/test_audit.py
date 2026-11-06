@@ -547,7 +547,7 @@ def test_only_record_differences_are_regenerated_and_the_regenerated_record_pass
 
 def test_every_record_difference_code_is_one_update_settles():
     """Each code of `RECORD_DIFFERENCE` comes from a record that differs from the build, and `regenerated` writes the record
-    that then passes: what a train commits is the code set, so a code in it that no case provokes fails here."""
+    that then passes: what drive commits is the code set, so a code in it that no case provokes fails here."""
     pol = recorded()
     group = pol["reads"]["P.Defs"]
     entry = pol["guarantees"]["P.t"]
@@ -585,7 +585,7 @@ def test_every_record_difference_code_is_one_update_settles():
 
 def test_what_settles_is_keyed_on_codes_not_text():
     """A record difference reworded still settles, and a string that reads like one but has no record-difference code (a
-    bare string, or another check's failure) settles nothing: rewording a message changes nothing a train commits."""
+    bare string, or another check's failure) settles nothing: rewording a message changes nothing drive commits."""
     now = facts()
     (unrecorded, *_) = A.judge(POLICY, now, FILES)[0]
     assert unrecorded.code == "guarantees.unrecorded" and unrecorded.entry == "P.t"
@@ -603,7 +603,7 @@ def test_what_settles_is_keyed_on_codes_not_text():
 
 
 def test_reports_list_their_failures_codes_beside_them(tmp_path, monkeypatch):
-    """`report.json`'s and `audit.json`'s packages carry `failure_codes`, one per failure in its order, and a train's
+    """`report.json`'s and `audit.json`'s packages carry `failure_codes`, one per failure in its order, and the Lean check's
     `--regenerate` moves the codes with the failures it settles (`settled_codes`)."""
     a = tmp_path / "a"
     a.mkdir()
@@ -3251,9 +3251,9 @@ def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
     assert r.stdout.strip() == "1"
 
 
-def test_a_trains_audit_passes_record_differences_and_names_the_records_to_commit(tmp_path, monkeypatch):
-    """`--regenerate` (a train's lean-audit step): a package whose every failure is a record difference, so the audit wrote
-    the record `--update` would, passes, and `audit.json` names that record for the train to commit; one with any other
+def test_the_lean_checks_audit_passes_record_differences_and_names_the_records_to_commit(tmp_path, monkeypatch):
+    """`--regenerate` (the lean-audit step of the Lean check of `next`): a package whose every failure is a record difference,
+    so the audit wrote the record `--update` would, passes, and `audit.json` names that record for drive to commit; one with any other
     failure fails as before, and the packages' own locks are never written."""
     a, b = tmp_path / "a", tmp_path / "b"
     for p in (a, b):
