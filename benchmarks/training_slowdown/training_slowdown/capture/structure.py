@@ -263,15 +263,13 @@ def _dtype_bits(dtype: torch.dtype) -> int:
     return 1 if dtype == torch.bool else dtype.itemsize * 8
 
 
+_SPARSE = (torch.sparse_coo, torch.sparse_csr, torch.sparse_csc, torch.sparse_bsr, torch.sparse_bsc)
+
+
 def _value_bits(v) -> int:
     """A value's bits: its elements (a sparse tensor's stored ones) at its dtype's width; 64 for a Python scalar."""
     if isinstance(v, torch.Tensor):
-        n = v.numel()
-        if v.layout != torch.strided:
-            try:
-                n = v._nnz() * (1 + v.sparse_dim())
-            except (RuntimeError, NotImplementedError, AttributeError):
-                pass
+        n = v._nnz() * (1 + v.sparse_dim()) if v.layout in _SPARSE else v.numel()
         return n * _dtype_bits(v.dtype)
     return 64 if isinstance(v, (int, float, bool, torch.SymInt, torch.SymFloat)) else 0
 

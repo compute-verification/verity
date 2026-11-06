@@ -1,10 +1,10 @@
-"""Run one submission inside the harness: the program trains from θ through a `Session`, and everything it computes
+"""Run one submission inside the harness: the program trains from θ through a `Harness`, and everything it computes
 through torch is counted (flops.py).
 
     python -m training_slowdown.run --program train.py --starts starts.json --start small --tier 0 --seed 0 --out OUT \\
         [--evaluator MODULE:FUNCTION] [--device cuda] [-- PROGRAM ARGS...]
 
-The program is a Python file defining `train(te)`; `te` is the `Session`. It builds its model, loads θ and registers it
+The program is a Python file defining `train(te)`; `te` is the `Harness`. It builds its model, loads θ and registers it
 (`te.load(model)`), declares its step count (`te.plan(n)`), wraps each training step in `with te.step():` and may
 name its output model (`te.output(fn)`, default: the registered model's weights) and write counterexample families
 (`te.family(name, plan)`). A checkpoint is taken after every 5% of the planned steps: the output model's held-out
@@ -46,7 +46,7 @@ import tokenize
 from contextlib import contextmanager
 from pathlib import Path
 
-os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
+os.environ["TORCHDYNAMO_DISABLE"] = "1"
 
 import torch
 import torch.nn.modules.module as nn_module
@@ -110,11 +110,11 @@ def git_commit() -> str:
     try:
         return subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).parent, capture_output=True, text=True,
                               check=True).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
-        return os.environ.get("RESEARCH_COMMIT", "")
+    except (OSError, subprocess.CalledProcessError) as e:
+        return f"unknown ({type(e).__name__})"
 
 
-class Session:
+class Harness:
     """What a program sees. Everything but `step`'s body and the program's own code runs uncounted."""
 
     def __init__(self, theta: dict[str, torch.Tensor], out: Path, *, seed: int = 0, tier: int = 0, device: str = "cpu",
@@ -350,18 +350,12 @@ FORBIDDEN_NAMES = frozenset({"exec", "eval", "compile", "execfile", "breakpoint"
 
 def _code(source: str) -> str:
     """`source` without its comments and docstrings (statements that are only a string), which never run."""
-    try:
-        toks = list(tokenize.generate_tokens(io.StringIO(source).readline))
-    except (tokenize.TokenError, SyntaxError):
-        return source
+    toks = list(tokenize.generate_tokens(io.StringIO(source).readline))
     starts = (tokenize.NEWLINE, tokenize.NL, tokenize.INDENT, tokenize.DEDENT)
     kept = [t for i, t in enumerate(toks) if t.type != tokenize.COMMENT and not (
         t.type == tokenize.STRING and (i == 0 or toks[i - 1].type in starts)
         and toks[i + 1].type in (tokenize.NEWLINE, tokenize.ENDMARKER))]
-    try:
-        return tokenize.untokenize(kept)
-    except ValueError:
-        return source
+    return tokenize.untokenize(kept)
 
 
 def _names(code: str) -> set[str]:
@@ -374,7 +368,10 @@ def _names(code: str) -> set[str]:
 
 
 def screen(source: str) -> list[str]:
-    code = _code(source)
+    try:
+        code = _code(source)
+    except (tokenize.TokenError, SyntaxError, ValueError) as e:
+        return [f"source that doesn't tokenize ({type(e).__name__})"]
     return [pat for pat in FORBIDDEN if re.search(pat, code)] + sorted(FORBIDDEN_NAMES & _names(code))
 
 
@@ -502,7 +499,7 @@ def main(argv=None) -> int:
     if start.get("sha256") and theta_sha256(theta) != start["sha256"]:
         raise SystemExit(f"{path}: θ has sha256 {theta_sha256(theta)}, the registry says {start['sha256']}")
     torch.manual_seed(a.seed)
-    te = Session(theta, a.out, seed=a.seed, tier=a.tier, device=a.device, start=start,
+    te = Harness(theta, a.out, seed=a.seed, tier=a.tier, device=a.device, start=start,
                  evaluator=load_evaluator(a.evaluator), budget_s=60 * a.budget_minutes,
                  keep_checkpoints=a.keep_checkpoints, digests=a.digests != "off", args=args,
                  families=a.families)

@@ -15,7 +15,7 @@ the circuit's size off the Boolean circuit handed over, beside this code's trace
 
 | module | what it does |
 |---|---|
-| `run.py` | `Session`, the program's API, and the run command (below); `block_c`, a start's c |
+| `run.py` | `Harness`, the program's API, and the run command (below); `block_c`, a start's c |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
@@ -40,7 +40,7 @@ python -m training_slowdown.gates [--check]             # gates per multiply-add
 ~~~
 
 Run them from this directory. The program contract: a program is one Python file defining `train(te)`, `te` the
-`Session`. It loads θ into its model and registers it (`te.load`), declares its step count (`te.plan`), wraps each
+`Harness`. It loads θ into its model and registers it (`te.load`), declares its step count (`te.plan`), wraps each
 training step in `with te.step():`, and may name its output model (`te.output`) and write counterexample families
 (`te.family`). Everything it computes through torch is counted; the harness's own work (loading, evaluating each
 checkpoint, encoding) isn't. A program that names the harness's internals or a route around the dispatcher

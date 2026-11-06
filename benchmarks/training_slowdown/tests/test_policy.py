@@ -70,11 +70,11 @@ def test_the_consoles_c_is_one_full_session_of_the_reference_model():
         policy.session(45_029_888, 4096, 1024, policy.SHAPES[35_658_240])
 
 
-def test_the_stated_shapes_are_the_lf_models_and_its_counted_forward_is_the_sessions_products():
+def test_the_stated_shapes_are_the_lf_models_and_its_counted_forward_is_the_sessions_weight_products():
     """Every stated shape has its parameters and heads 64 wide, and the 45M reference is the lf model
     (`integrations/vllm/tests/program/train_step_lf.py`) at its s size over the GPT-2 vocabulary padded to 50,304:
     the model's parameters are `parameters`' count, and a token's counted forward MACs at a context are the session's
-    products there but the elementwise ops, under 0.1% of them."""
+    matrices and LM head there, its causal attention and elementwise ops under 0.1% of them."""
     for params, sh in policy.SHAPES.items():
         assert policy.parameters(sh) == params and sh["d_model"] // sh["n_head"] == 64, params
     size, ctx = LF.SIZES["s"], 16
@@ -84,5 +84,5 @@ def test_the_stated_shapes_are_the_lf_models_and_its_counted_forward_is_the_sess
     model = LF.LM(size, ctx=ctx)
     assert sum(p.numel() for p in model.parameters()) == policy.REFERENCE_PARAMS
     forward = flops.forward_macs_per_token(model, ctx, LF.VOCAB)
-    products = sum(policy.session(policy.REFERENCE_PARAMS, ctx, 0)["macs"].values()) / ctx
-    assert 0 < forward - products < 1e-3 * forward
+    macs = policy.session(policy.REFERENCE_PARAMS, ctx, 0)["macs"]
+    assert 0 < forward - (macs["matrices"] + macs["lm_head"]) / ctx < 1e-3 * forward

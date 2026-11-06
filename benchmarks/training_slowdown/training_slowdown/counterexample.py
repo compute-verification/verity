@@ -1,6 +1,6 @@
 """Counterexamples to update hardness (T1): a family shows that some steps' updated weights rebuild from θ in few bits.
 
-A family is a directory a program writes during its run (`Family`, through `Session.family`):
+A family is a directory a program writes during its run (`Family`, through `Harness.family`):
 
 - `family.json`: its name, its decoder (a `codecs.Plan` spec from the shared library), `uniform` (one rule for every
   step it declares) and the declared steps;
