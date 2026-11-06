@@ -566,7 +566,7 @@ def test_no_verdict_counts_by_the_owner_its_handle_or_its_ready_marks_author_wha
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.store.add_label(label_target(1, world.gh.prs[1].head), vocab.READY, "true", "marker")
-    for by in ("Lane-1", "@LANE-1", "Marker"):                  # #1's `Lane lane-1`, its handle, its ready mark's author
+    for by in ("Lane-1", "@LANE-1", "Marker"):                  # #1's owning lane, its handle, its ready mark's author
         h.review(1, by=by)
         out = h.tick()
         assert "no land verdict but its owner's own" in out and _subject(world, "main") == "change ['.agents/skills/using-slack/registry.json']", out
@@ -601,8 +601,8 @@ def test_with_signed_verdicts_drive_lands_only_on_an_authenticated_land_verdict(
 
 
 def test_the_lowest_member_waiting_for_a_land_verdict_rings_the_reviewers_and_top_every_30_min_at_its_head(world, monkeypatch):
-    """`next`'s lowest member with no land verdict holds every landing above it, and its tick's log rang nobody: drive rings @ci
-    (who staffs the reviewers) and @top `BOTTOM_WAIT_S` after it became the lowest or its ready mark, whichever is later, once
+    """`next`'s lowest member with no land verdict holds every landing above it, and its tick's log rang nobody: drive rings `CI`
+    (who staffs the reviewers) and `TOP` `BOTTOM_WAIT_S` after it became the lowest or its ready mark, whichever is later, once
     per `BOTTOM_WAIT_S` at its head; a hold rings nothing, and a new head starts the wait again."""
     from research.drive import BOTTOM_WAIT_S
 
