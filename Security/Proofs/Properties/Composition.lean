@@ -1,8 +1,9 @@
 module
 
-public import Properties.Composition
-public import Proofs.Properties.Pouw.LiveSalt.Canon
 public import Proofs.Flock.Claims.Complete.Json.Hex
+public import Proofs.Properties.Pouw.LiveSalt.Canon
+public import Properties.Composition
+import Batteries.Tactic.OpenPrivate
 
 /-!
 # The composition's properties, proved

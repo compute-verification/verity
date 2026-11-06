@@ -54,7 +54,7 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
             "vars": {}, "inputs": ["Security/Proofs/Flock/Claims/Recursion/AccTies.lean", "..."],
             "reads": [{"task": "lean-module:...", "output": "olean"}],
             "outputs": [{"name": "olean", "path": "out/AccTies.olean"}],
-            "resources": {"cores": 1, "mem_gb": 6, "disk_gb": 1}, "timeout_s": 900, "key": null}]}
+            "resources": {"cores": 1, "mem_gb": 6, "disk_gb": 1}, "timeout_s": 900, "priority": 251, "key": null}]}
 ~~~
 
 - The same bytes on any machine for one commit: no timings, store reads, environment or machine state. `--json` prints
@@ -72,6 +72,12 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
 - `reads` name another task's output; `outputs` are files, by relative path in the task's work directory.
 - `key` is set when the task reads no artifact; otherwise it is `null`, and the executor computes it once the reads' digests
   exist.
+- `priority` is how many reads the longest chain of them through the task makes, the tasks that wait on it one after another
+  and those it waits on so (`graph.priorities`): the Lean modules under a lock and the lock itself have the graph's highest,
+  and a task that reads nothing and that nothing reads has 0. Of the queued tasks of submissions it ranks alike, an executor
+  claims one of the highest `priority` first, ahead of any order of its own (`timeout_s`, ids), so a chain never waits behind
+  the tasks off it. In a task's graph (`graph.task_graph`), which holds none of the tasks that read it, a priority counts the
+  chains that graph holds.
 
 ## The key rule
 
@@ -86,12 +92,12 @@ file digest  = "sha512:" + hex(SHA-512(file bytes))
 env digest   = "sha512:" + hex(SHA-512(b"verity-env/v1\n" + canonical(sorted [[path, file digest], ...])))
 ~~~
 
-Sorting is by code point (Python's string order, which is UTF-8's byte order). `id`, `about`, `resources` and `timeout_s`
-stay out of the key. A read enters by its output's digest, so an artifact rebuilt to the same bytes leaves its readers' keys
-unchanged (early cutoff). `contract.key(task, file_digests, read_digests, env_digest)` takes `read_digests` as {read task:
-its result's `outputs`}. `tests/key_vectors.json` covers inputs alone, outputs, reads of one and of two tasks, unicode paths,
-escapes in vars and argv, another env, and the fields the key leaves out; `python tests/test_contract.py --write` rewrites
-it from the cases in that file, which is a change to the contract.
+Sorting is by code point (Python's string order, which is UTF-8's byte order). `id`, `about`, `resources`, `timeout_s` and
+`priority` stay out of the key. A read enters by its output's digest, so an artifact rebuilt to the same bytes leaves its
+readers' keys unchanged (early cutoff). `contract.key(task, file_digests, read_digests, env_digest)` takes `read_digests` as
+{read task: its result's `outputs`}. `tests/key_vectors.json` covers inputs alone, outputs, reads of one and of two tasks,
+unicode paths, escapes in vars and argv, another env, and the fields the key leaves out; `python tests/test_contract.py
+--write` rewrites it from the cases in that file, which is a change to the contract.
 
 ## Running one task
 
@@ -152,7 +158,7 @@ retried; a task whose read didn't pass is cancelled. Each task's last result/v1 
 
 ## The build family
 
-The check's steps that build the Flock verifier and run what it built, and C-Flock's Rust, as `tools/verity/check/check.py`
+The check's steps that build the Flock verifier and run what it built, and Flock's Rust, as `tools/verity/check/check.py`
 runs them, one task a step:
 
 | task | env | runs | inputs | outputs |
@@ -183,10 +189,10 @@ the executor's check (`research.drive.SLIM_STEPS`).
 
 ## Writing a family
 
-A family's lister returns graph/v2 tasks without `key`, for the tree at `root`, reading nothing but files under `root` (its
-`files` is the tree's file list). The core fills what a task leaves out from its table, `about` from the table's template over
-the task's `id`, `kind`, `name` (the id after `<kind>:`) and `vars`, and refuses a field outside graph/v2, an input that isn't
-a file of the tree, a read of a task or output that doesn't exist, a cycle, and a path two things land on.
+A family's lister returns graph/v2 tasks without `priority` and `key`, for the tree at `root`, reading nothing but files under
+`root` (its `files` is the tree's file list). The core fills what a task leaves out from its table, `about` from the table's
+template over the task's `id`, `kind`, `name` (the id after `<kind>:`) and `vars`, and refuses a field outside graph/v2, an
+input that isn't a file of the tree, a read of a task or output that doesn't exist, a cycle, and a path two things land on.
 `graph.covered(root, family, files)` is the files the table's `files` globs cover. Test it on a toy checkout
 (`tests/conftest.py`'s `toy_tree`, which writes a `tasks.toml`, runner stubs and files into a fresh git repository), and the
 whole tree's invariants (`tests/test_invariants.py`) cover it once it lists.

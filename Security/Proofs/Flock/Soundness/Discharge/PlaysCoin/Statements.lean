@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 public import Proofs.Flock.Soundness.Discharge.Exec.Shape
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The coin half of `DecodesAll` and `DecodesOn` (R11b): statements

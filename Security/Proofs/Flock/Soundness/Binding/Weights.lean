@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Binding.Rows
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # `registered_weights`: the extracted rows are the registered weights, or a SHA-512 collision

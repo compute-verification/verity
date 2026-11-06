@@ -1,4 +1,4 @@
-"""The ZK server's contract, inner phase: `rec_live`'s proxy sends the coin server exactly what `Flock.Firewall.run` (the Lean
+"""The ZK server's contract, inner phase: `rec_live`'s proxy sends the challenger exactly what `Flock.Firewall.run` (the Lean
 program `flock-firewall`) sends, byte for byte, on an honest session and on every session a worker can make of it here (each
 schedule edit of `test_rec_live`, every prefix, drop, duplicate and swap of a request, requests after ``Finish``, forged
 requests, a Commit of two tables in and out of the schedule's order, and seeded random byte flips). The Lean program's
@@ -276,7 +276,7 @@ def lean_records(lean_runs):
 
 
 def test_the_proxy_sends_what_the_lean_firewall_sends(lean_runs):
-    """The same record and the same calls on the coin server, in the same order."""
+    """The same record and the same calls on the challenger, in the same order."""
     cs, lean = lean_runs
     differ = [(name, mine, got) for (name, s, r), got in zip(cs, lean)
               if (mine := dict(zip(("record", "calls"), proxy_session(s, r)))) != got]
@@ -311,7 +311,7 @@ def test_a_stopped_record_does_not_show_an_open(lean_records):
 
 
 def test_the_cases_reach_every_ending(lean_records):
-    """The cases are not all refused at the first request: some finish, and many stop after the coin server saw rounds."""
+    """The cases are not all refused at the first request: some finish, and many stop after the challenger saw rounds."""
     _, lean = lean_records
     ends = [r["end"] for r in lean]
     assert ends.count("finish") >= 2 and ends.count("stop") >= 50

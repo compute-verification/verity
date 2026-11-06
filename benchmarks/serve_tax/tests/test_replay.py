@@ -1,0 +1,74 @@
+"""The replay's served window, cut from a synthetic arm's step trace, and its comparison with a replay."""
+from __future__ import annotations
+
+import gzip
+import json
+from pathlib import Path
+
+import pytest
+import replay as R
+
+
+def rid(tag: str, i: int) -> str:
+    return f"cmpl-{tag}-{i:05d}-0-0123abcd"
+
+
+def arm(tmp_path: Path, foreign: bool = False) -> Path:
+    """Load ``warm`` (one request, step 0), then ``sat1`` (two requests, steps 1 and 2) in one engine's trace."""
+    d = tmp_path / "record"
+    (d / "server").mkdir(parents=True)
+    (d / "sat" / "rep-1").mkdir(parents=True)
+    plan = tmp_path / "plan.jsonl"
+    plan.write_text("".join(json.dumps({"i": i, "prompt_ids": [i, i + 1]}) + "\n" for i in range(3)))
+    (d / "meta.json").write_text(json.dumps({"plan": str(plan), "checkpoint": "ck"}))
+    (d / "sat" / "rep-1" / "meta.json").write_text(json.dumps({"tag": "sat1"}))
+    (d / "sat" / "rep-1" / "client.jsonl").write_text("".join(
+        json.dumps({"id": f"sat1-{i:05d}", "i": i, "output_ids": [7, i]}) + "\n" for i in range(2)))
+    w, a, b = rid("warm", 2), rid("sat1", 0), rid("sat1", 1)
+    recs = [{"kind": "header", "config": {}},
+            {"kind": "arrive", "request": w, "before_step": 0, "sampling": {"max_tokens": 2}, "t": 0.0},
+            {"kind": "step", "step": 0, "rows": [[w, 0, 2]], "t": 0.1},
+            {"kind": "arrive", "request": a, "before_step": 1, "sampling": {"max_tokens": 2}, "t": 1.0},
+            {"kind": "arrive", "request": b, "before_step": 1, "sampling": {"max_tokens": 2}, "t": 1.0},
+            {"kind": "step", "step": 1, "rows": [[a, 0, 2], [b, 0, 2]] + ([[w, 2, 1]] if foreign else []), "t": 1.1},
+            {"kind": "step", "step": 2, "rows": [[a, 2, 1], [b, 2, 1]], "t": 1.2}]
+    with gzip.open(d / "server" / "step_trace.9.jsonl.gz", "wt") as f:
+        f.write("".join(json.dumps(r) + "\n" for r in recs))
+    return d
+
+
+def test_window_is_the_loads_steps_from_its_first_arrival(tmp_path: Path):
+    w = R.window(arm(tmp_path), "sat", 1)
+    assert [s["step"] for s in w["steps"]] == [0, 1]
+    assert [(r["engine_id"], r["before_step"], r["prompt_ids"], r["served"]) for r in w["requests"]] == [
+        (rid("sat1", 0), 0, [0, 1], [7, 0]), (rid("sat1", 1), 0, [1, 2], [7, 1])]
+    assert w["served_s"] == pytest.approx(0.2)
+
+
+def test_window_refuses_a_step_shared_with_another_load(tmp_path: Path):
+    with pytest.raises(SystemExit, match="another load"):
+        R.window(arm(tmp_path, foreign=True), "sat", 1)
+
+
+def test_compare_counts_steps_rows_and_tokens_that_differ(tmp_path: Path):
+    w = R.window(arm(tmp_path), "sat", 1)
+    same = {"steps": [dict(s) for s in w["steps"]], "tokens": {r["engine_id"]: list(r["served"]) for r in w["requests"]}}
+    assert R.compare(w, same)["bit_exact"]
+    other = {"steps": [dict(w["steps"][0]), {"step": 1, "rows": [[rid("sat1", 0), 2, 1]]}],
+             "tokens": {**same["tokens"], rid("sat1", 1): [7, 9]}}
+    c = R.compare(w, other)
+    assert (c["steps_differing"], c["rows_differing"], c["first_differing_step"]) == (1, 1, 1)
+    assert (c["requests_tokens_differing"], c["token_positions_differing"], c["bit_exact"]) == (1, 1, False)
+    assert c["requests_differing"] == [{"request": rid("sat1", 1), "tokens": 2, "tokens_replayed": 2, "first_position": 1,
+                                        "positions": 1}]
+
+
+def test_token_diff_counts_a_shorter_replay_from_where_it_stops():
+    assert R.token_diff({"a": [1, 2, 3], "b": [4]}, {"a": [1, 2], "b": [4]}) == [
+        {"request": "a", "tokens": 3, "tokens_replayed": 2, "first_position": 2, "positions": 1}]
+
+
+def test_replay_tokens_round_trip(tmp_path: Path):
+    tokens = {rid("sat1", 1): [7, 9], rid("sat1", 0): [7, 0]}
+    R.write_tokens(tmp_path, tokens)
+    assert R.read_tokens(tmp_path) == tokens

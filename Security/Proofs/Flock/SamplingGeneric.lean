@@ -17,6 +17,9 @@ public import Proofs.Flock.SamplingGeneric.ZK
 public import Proofs.Flock.SamplingGeneric.FlockZk
 public import Proofs.Flock.SamplingGeneric.Two
 public import Proofs.Flock.SamplingGeneric.TwoCount
+public import Proofs.Flock.SamplingGeneric.TwoServed
+public import Proofs.Flock.SamplingGeneric.TwoTable
+public import Proofs.Flock.SamplingGeneric.TwoBernoulli
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -64,6 +67,10 @@ with the sessions' runs, numbers and openings (`SamplingDeploy.samplingKS_deploy
 knowledge at the session's statement against `V*` after the run's messages before it (`residual`). Flock's ZK server is
 zero knowledge per outcome (`FlockZk.server_zkOut`, `SamplingGeneric/FlockZk.lean`), at the simulator given the outcome
 and the server's error, under the premises `Claims.ZKServer.Flock.zk_server_lean_loop` takes.
+
+At a two-stage design whose first stage draws a uniform `Q`-subset of the population's `N` replay blocks, its `P̄_a` is
+at most the product a Bernoulli(Q/N) replay level gives, `∏_{ρ<N} (1 − Q/N + (Q/N)·e_ρ)` (`SamplingGeneric/TwoBernoulli.lean`:
+`Design.Two.Pa_le_bernoulli_pop`), the integrity profile's acceptance.
 -/
 
 @[expose] public section

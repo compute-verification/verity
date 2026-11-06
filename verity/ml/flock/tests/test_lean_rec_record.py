@@ -1,4 +1,4 @@
-"""The coin server's record in its own format, held to Lean's total reader (`Flock.RecRecord`, `flock-verify
+"""The challenger's record in its own format, held to Lean's total reader (`Flock.RecRecord`, `flock-verify
 rec-record`), which `Proofs.Flock.Claims.Recursion.RecRecord` proves reads back what `recordW` writes. The record's writer is Python
 (`rec_live.record_bytes`), so these tests are what ties the proof to the deployed record: on the honest records of the
 plain session and of `rec-c3-inner`'s candidate-3 session, and on one with every escape a stream name can need, `recordW` writes
@@ -7,7 +7,7 @@ layout (compact, or its rounds not first) is refused.
 
 The proofs' transcript model (`RecDeploy.recTr`, read by `recRead`) is the record read on past its rounds to the link
 points (`readFull`, written by `recordFullW`), and the inner rounds before the last as the record shows them
-(`Record.msgs`). These tests hold that model to the coin server's records: `recordFullW` writes `record_bytes`' bytes up
+(`Record.msgs`). These tests hold that model to the challenger's records: `recordFullW` writes `record_bytes`' bytes up
 to the link points, the rounds shown are the link's level-0 tops and points, then each recorded round's tops and
 `c_k` with its coins, and at the plain session they are the inner verifier's rounds less the last, each as many
 128-byte commit strings as the schedule fixes (`RecDeploy.nAtSched`)."""
@@ -70,7 +70,7 @@ def test_a_record_in_another_layout_is_refused(tmp_path, dump):
 
 
 def _shown(r: dict) -> list[dict]:
-    """The inner rounds before the last as the coin server's record holds them: the link's level-0 tops (each table's
+    """The inner rounds before the last as the challenger's record holds them: the link's level-0 tops (each table's
     nodes, in the record's order) joined, with the link points; then each round's tops' nodes and ``c_k`` joined, with
     its coins."""
     link = r["link"]
@@ -82,7 +82,7 @@ def _shown(r: dict) -> list[dict]:
 @pytest.mark.parametrize("record", [lambda: _record(PLAIN), lambda: _record(C3)], ids=["plain", "c3"])
 def test_the_transcript_model_shows_the_coin_servers_rounds(tmp_path, record):
     """`recordFullW` at the record `readFull` read is `record_bytes`' bytes up to the link points, and the rounds it shows
-    are the coin server's: round 0 from the link, each later one from its recorded round."""
+    are the challenger's: round 0 from the link, each later one from its recorded round."""
     r = record()
     rc, out, err = _read(tmp_path, RL.record_bytes(r))
     assert rc == 0, err

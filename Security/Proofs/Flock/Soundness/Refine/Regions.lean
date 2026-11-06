@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Soundness.Refine.StmtOf
 public import Proofs.Flock.Soundness.Refine.Table
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Level3.LookupRows
 
 /-!
 # The statement decoding, part 2: the regions are the model's (`Flock.Piop`, `Flock.Statement`)

@@ -8,7 +8,7 @@ tree ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a one-member win
     python examples/h200/m3bundle.py build --private DIR --registration REG.json --draw DRAW.json \\
         --receipt RECEIPT.json --weights OPEN.json --out TREE [--workers W]
 
-* **Which block.** Drawn g is slot ``g // units_per_slot``'s layout unit ``g % units_per_slot`` (`replay_bundle.block_of`),
+* **Which block.** Drawn g is slot ``g // units_per_slot``'s layout unit ``g % units_per_slot`` (`replay_bundle.position_of`),
   unit ``index`` of its family (`m3draw.families`). A gather's unit is no proof block (the Program has its parts'
   references and no Definition for it), and an embedding at a prompt position reads ingress: each is a visible failure,
   written to ``summary.json``, and never resampled. A norm's gain (one registered word a row) is a port of
@@ -133,7 +133,7 @@ def blocks_of(reg: dict, draw: dict, fams: list) -> list[dict]:
     """Each drawn g's slot, layout unit, family and index."""
     out = []
     for g in draw["units"]:
-        b, u = RB.block_of(reg, g)
+        b, u = RB.position_of(reg, g)
         fam, idx = M3.locate(fams, u)
         out.append({"g": int(g), "slot": int(b), "unit": int(u), "family": fam, "index": int(idx)})
     return out

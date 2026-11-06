@@ -1,7 +1,7 @@
 """A served window's live coins: where they come from, and the verifier's check of them from the challenger's own run.
 
 * **Off the node** (`Endpoint`: its id, the HOST:PORT its challenger listens on, the secret its hello carries and the
-  coin commitment's root the gate's open answered): the proof service's challenger on its auditor host
+  coin commitment's root the gate's open answered): the proof system's challenger on its auditor host
   (`sampled_proofs.remote.RemoteChallenger`), one session a window, from infra's gate in two steps; lanes don't start
   challenger sessions themselves. `reserve` (``ssh GATE reserve`` with the peer node and the window's layout) gives the
   window's session id; the reserve counts toward its lane's open period, and one not opened by its ``expires_utc`` is
@@ -605,7 +605,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     it: the session the ledger opens on `draw_after` (`audited_window`), opened withheld (`challenger.withheld_on`), a
     draw session's layout (`window.draw_epoch_reason`), and its draw coin opened once after `draw_after`.  ``ok`` only
     when all hold."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
     d = published(directory)
     sid, window = coins.get("session"), coins.get("window") or {}
     out: dict[str, Any] = {"ok": False, "coins": "refused", "challenger_out": str(d), "session": sid}

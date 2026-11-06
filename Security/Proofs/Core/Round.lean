@@ -1,10 +1,9 @@
 module
 
-public import Mathlib.Data.Rat.Floor
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Ring
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Algebra.Order.Ring.Unbundled.Rat
+import Mathlib.Data.Rat.Floor
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Rounding to nearest, ties to even

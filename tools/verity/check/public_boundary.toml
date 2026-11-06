@@ -1,0 +1,135 @@
+# The public monorepo's boundary: the files of this repository its one-way export copies. This repository stays the only
+# source of truth, and the export (`public_export.py`) copies the public set into a tree of fresh history. This file is the
+# decided boundary: moving a path across it is a boundary decision, then one line here.
+#
+# A file is public when a `public` glob covers it, when a `needed` glob covers it and a public file needs it (directly or
+# through other such files), or when a `when_closed` glob covers it and everything it needs is public. A `private` glob
+# wins over all three, and every other file stays private. A public file that needs a file that isn't public is an edge,
+# which `public_boundary.py` reports: what a file needs is its docstring's.
+#
+# A glob is a path from the root, `*` within one segment, `**` across any number, `{a,b}` either; it covers the path it
+# names and everything under it.
+
+# the whole-tree invariants: each test exported when everything it needs is public
+when_closed = ["tests"]
+
+[public]
+# SPOT: the generic sampling claim, its proofs, and sampled proofs' protocol and service
+spot = [
+    "Security/Definitions/Claims/SamplingGeneric.lean",
+    "Security/Proofs/Flock/SamplingGeneric*",
+    "verity/core/protocols/sampled_proofs",
+    "verity/core/service/sampled_proofs",
+]
+# C-Flock: its prover, its Lean verifier and ZK server, and its security analysis
+flock = [
+    "verity/ml/flock",
+    "verity/core/service/flock",
+    "Security/*/Flock{,.lean}",
+]
+ml = ["verity/ml/{circuits,definitions,commitments,crypto,randomness,windows,kernels,private_circuits}"]
+# PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
+pouw = [
+    "verity/core/protocols/{profile.py,pouw}",
+    "verity/ml/protocols/pouw",
+    "Security/*/Pouw{,.lean}",
+    "Security/Proofs/Properties/Pouw{,.lean}",
+]
+# the firewall (the ZK server's release side) and the recursion
+firewall = [
+    "verity/core/service/firewall",
+    "Security/*/Flock/Claims/{ZK,Recursion}{,.lean}",
+    "Security/**/RecGeneric*",
+    "verity/core/service/vstar",
+]
+vllm = ["integrations/vllm"]
+# what the public side shares: the one challenge derivation, the one signature scheme, the Python held to each Lean, the
+# deployment's configuration, and what public proofs import from private areas: two lemmas, and Bits' layout as the
+# claims' program, which the bridge reads
+shared = [
+    "verity/core/primitives/{randomness,lms}",
+    "verity/core/difftest",
+    "tools/config",
+    "Security/Properties/SampledProofs/{Draw,Bits}.lean",
+    "Security/Proofs/Properties/RemoteAudit/Sort.lean",
+    # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
+    # Draw.lean's
+    "Security/Properties/SampledProofs/Second.lean",
+]
+# the repository's structure the public tests and the Lean check read
+structure = ["ruff.toml", "Security/lean-audit.json", "Security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
+# the benchmarks the demonstration runs: of `one_stage`, the files the remote demo's launch runs
+benchmarks = [
+    "benchmarks/{flock_s8_block,recursion_e2e}",
+    "benchmarks/one_stage/{served_verdicts,served_pearlplus,served_composite}.sh",
+    "benchmarks/one_stage/{served_verdicts,composite,served_cases,inference_only,served_integrity,served_shares}.py",
+    "benchmarks/one_stage/{served_overhead,served_compare}.py",
+    "benchmarks/one_stage/{pyproject.toml,README.md}",
+]
+
+[private]
+protocols = [
+    "verity/core/protocols/{pous,bandwidth,remote_bandwidth,certifier,network}",
+    "verity/ml/protocols/{pous,certifier}",
+    "Security/*/{Nci,NciDesc}{,.lean}",
+    "Security/Proofs/Properties/Nci{,.lean}",
+    "verity/core/primitives/identity",
+    "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
+    "integrations/vllm/tests/pipeline/test_registration_log.py",
+    # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
+    "Security/Proofs/Pouw/PeriodJ10R/Binding.lean",
+]
+team = [
+    "infra",
+    "tools/{research,agent-guard}",
+    "archive",
+    "benchmarks/census",
+    ".agents",
+    ".cursor",
+    "{inbox,notes,lanes}",
+]
+
+# Each entry: globs exported only as far as public files need them, the public groups whose files may pull them in
+# ("*": any public file), and the kinds of need that may (`via`, `public_boundary.KINDS`; "*", the default: any). A file
+# an entry pulled in may pull in the rest of that entry.
+[[needed]]
+why = "the shared vocabulary (AGENTS.md \"One vocabulary\": Core and Hash) and the claims' ids"
+paths = ["Security/*/{Core,Claims,Hash}{,.lean}", "Security/{Definitions,Models}.lean"]
+from = "*"
+
+[[needed]]
+why = "what a public file needs to build and run: its Lake package's files, its suite's and distribution's pyproject, the packages above it"
+paths = ["**/{lakefile.toml,lake-manifest.json,lean-toolchain,pyproject.toml,__init__.py,conftest.py}", "uv.lock"]
+from = "*"
+via = ["package"]
+
+[[needed]]
+why = "the errors and settings every unit of `verity` shares"
+paths = ["verity/{errors,settings}.py"]
+from = "*"
+
+[[needed]]
+why = "the challenger and service code SPOT needs"
+paths = ["verity/core", "Security/{Properties,Proofs/Properties}/{SampledProofs,Challenger}{,.lean}"]
+from = ["spot"]
+
+[[needed]]
+why = "the accounting PoUW needs"
+paths = ["Security/*/Accounting{,.lean}", "Security/Proofs/Properties/Accounting{,.lean}"]
+from = ["pouw"]
+
+# Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
+# (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
+# matches.
+[[residue]]
+what = "the auditor ledger's `lane` field: a monitoring period's prover, as the v2 ledger's period-open and period-close name it"
+pattern = '\bperiod\b[^\n]*\blane\b|\blane\b[^\n]*\bperiod\b'
+paths = [
+    "verity/core/protocols/{sampled_proofs,pouw}",
+    "verity/core/service/sampled_proofs",
+    "Security/*/Pouw",
+    "Security/Proofs/Properties/Pouw",
+    "integrations/vllm",
+    "benchmarks/one_stage",
+]
+until = "PRF-285: the v3 ledger names a period's prover `prover`"
