@@ -30,7 +30,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "verity/core/claims/__init__.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/core/protocols/pouw/__init__.py",
-          "verity/core/protocols/pouw/circuit", "integrations/vllm/verity_vllm/__init__.py",
+          "verity/ml/protocols/pouw/circuit", "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/program/__init__.py", "verity/ml/definitions/__init__.py",
           "verity/ml/definitions/registry",
           "verity/ml/definitions/numerics", "verity/ml/definitions/evidence.py",

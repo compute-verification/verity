@@ -22,7 +22,7 @@ from verity.ml.commitments.scheme import DIGEST_BYTES
 
 from .audit import Epoch
 from .protocol import DomainError, PoUWScheme
-from .schemes import SCHEMES
+from verity.ml.protocols.pouw.schemes import SCHEMES
 
 FORMAT = domains.POUW_IDENTIFIER
 SALT_BYTES = 32

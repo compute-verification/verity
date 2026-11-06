@@ -65,7 +65,7 @@ def classify(pid: str) -> str:
 def primitives() -> dict[str, PrimitiveDefinition]:
     """Every registered primitive, with the catalog's ops and registry loaded (`catalog.load`); a module that fails to
     import is named on stderr."""
-    import verity.core.protocols.pouw.circuit.words  # noqa: F401  (PoUW word primitives register on import)
+    import verity.ml.protocols.pouw.circuit.words  # noqa: F401  (PoUW word primitives register on import)
     for e in catalog.load(("ops", "registry"))[1]:
         print(f"skip {e}", file=sys.stderr)
     return {k: v for k, v in REGISTRY.defs.items() if isinstance(v, PrimitiveDefinition)}

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from verity.core.protocols.pouw.circuit import h1device as D
-from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import h1device as D
+from verity.ml.protocols.pouw.circuit import h1zy as Z
 
 H1U = Path(__file__).resolve().parents[1] / "h1u.cu"
 
