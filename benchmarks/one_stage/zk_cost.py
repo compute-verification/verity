@@ -33,7 +33,7 @@ sessions.
   GPU-seconds the same card's datasheet dense peak needs for the block's K MACs in its operand format (`verity.hardware`).
   Per statement and arm, its sessions at every k it drew, k = c among them, fitted over k (`drawn`): the statement's
   fixed seconds and a drawn block's, the deployed sample's price; `fw` less `nofw` at the same draws is the send
-  check's increment.
+  check's increment. Its `observations.json` holds each arm's `costfit.Observation`s, prove the median timed session.
 * **Verification.** Lean `verify --zk --partition --program` on each cold session of arm `fw` and the first timed session
   of each warm process, one at a time.
 * **Fit.** Weighted least squares in relative error, with standard errors from the residuals: per K, the cold process
@@ -598,6 +598,7 @@ def overhead(a) -> int:
             raise SystemExit(f"overhead: the run's GPU is {name} (sm_{cc}) but --card {a.card} is {card.get('arch')}; pass the "
                              "card it ran on (zk_cost.sh's ZK_CARD, e.g. h200-sxm-141gb for an H200)")
     types: dict[str, dict] = {}
+    obs: dict[str, list[dict]] = {}
     for tag in dict.fromkeys(r["tag"] for r in stages):
         st = {r["c"]: r for r in stages if r["tag"] == tag}
         s0 = st[max(st)]
@@ -643,11 +644,24 @@ def overhead(a) -> int:
             if fits:
                 t["drawn"][c] = fits
         types[tag] = t
+        # costfit.Observations per arm: each statement and sample's median timed session end to end (a warm prover's; the live
+        # verifier's waits in it), Lean's CPU time where it verified that point and arm, and the statement's staging (CPU-s)
+        for arm in sorted({r["arm"] for r in proves if r["tag"] == tag}):
+            for c, k in sorted({(r["c"], r["k"]) for r in proves if r["tag"] == tag and r["arm"] == arm}):
+                xs = [x["e2e_s"] for r in proves if (r["tag"], r["arm"], r["mode"], r["c"], r["k"]) == (tag, arm, "warm", c, k)
+                      for x in r["lives"] if not x["warm"]]
+                ver = [v["user_s"] + v["sys_s"] for v in verifies if (v["tag"], v["arm"], v["c"], v["k"]) == (tag, arm, c, k)]
+                if xs and c in st:
+                    obs.setdefault(arm, []).append(
+                        {"source": a.run or "zk_cost", "template": s0["definition"], "ands": s0["ands"], "staged": c, "drawn": k,
+                         "prove": float(np.median(xs)), "verify": float(np.mean(ver)) if ver else None,
+                         "stage": st[c].get("stage_cpu_s", st[c]["stage_s"])})
     rec = {"schema": "verity/proof-overhead/v1", "definition": DEFINITION, "card": a.card, "gpu": gpu, "run": a.run,
            "settings": "flock-circuit prove --zk --gpu, one warm process (its timed sessions' end-to-end seconds), every staged "
                        "proof block drawn (k = c); dev: the device's witness, nofw: the host's, fw: the host's and the ZK server's "
                        "send check (FC_FIREWALL=1)", "types": types}
     (out / "overhead.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
+    (out / "observations.json").write_text(json.dumps(obs, indent=1))
     rows = ["| type | definition | arm | sizes | fixed s | marginal ms | amortized ms | overhead (marginal) | overhead (amortized) | Lean |",
             "|---|---|---|---|---:|---:|---:|---:|---:|---|"]
     fmt = lambda x, s=1.0, f=".3g": "-" if x is None else format(x * s, f)  # noqa: E731
