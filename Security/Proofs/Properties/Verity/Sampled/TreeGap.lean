@@ -21,7 +21,7 @@ values. A coin tree draws its key and its salts as bits, so the bound applies on
   so it takes at most `2^512` values.
 * **The mean over the key** (`sum_hidingGap_tree_le`, `avg_hidingGap_tree_le`): averaged over the device's 2047 key
   bits, the tree's hiding gap is at most `2^-257`. At each key it is the `δ₁` at which `CROnly.hm96Hiding_gap` gives
-  `openEmpty_avg_le_round` and `openGap_avg_le_round` their hiding premise.
+  `openEmpty_avg_le` and `openGap_avg_le_round` their hiding premise.
 -/
 
 @[expose] public section
