@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.ZkAny.RelayLoopLink
 public import Proofs.Flock.ZkAny.RelaySame
 public import Proofs.Flock.ZkAny.RelayTook
+public import Proofs.Flock.Claims.DeployK
+public import Proofs.Flock.Claims.ZK.FrameZK
 
 /-!
 # The relay's invariant at the deployed loop, kept at the control slots and the `Hello`

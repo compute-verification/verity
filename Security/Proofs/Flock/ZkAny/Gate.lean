@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.Tables
 public import Proofs.Flock.Claims.ZK.FinishStopAt
+public import Proofs.Flock.VBridge.Family.Openings
 
 /-!
 # The ZK server's check gates each table's file, at any values

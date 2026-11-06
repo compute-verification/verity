@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.ZkAny.RelayLoop
+public import Proofs.Flock.Claims.ZK.SaltProver
 
 /-!
 # The session's link at the deployed loop

@@ -5,6 +5,9 @@ public import Proofs.Flock.ZkAny.RelayOpenFirst
 public import Proofs.Flock.ZkAny.RelayTaken
 public import Proofs.Flock.SessionLoop
 public import Proofs.Flock.Claims.ZK.FrameReal
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+public import Proofs.Flock.Claims.Complete.ZkTables.Table
+public import Proofs.Flock.Claims.ZK.FrameBeta
 
 /-!
 # The scheduled round where the model's rank stop fails

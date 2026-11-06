@@ -542,8 +542,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
           "for each table's level 0, the witness's packed table at the tape's mask words and the tape's extra lanes, lane "
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
-          "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
-          "uniform draws the tape models", "Firewall OS source", "standard"),
+          "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
+          "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
+          "since zero knowledge protects the developer", "Firewall OS source", "standard"),
 )}
 
 

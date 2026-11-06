@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.ZkAny.RelayLoopFacts
+public import Proofs.Flock.SessionLoop.FinRepRows
 
 /-!
 # The next rep's start at a stream's first round

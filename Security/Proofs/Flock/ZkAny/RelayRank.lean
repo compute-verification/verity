@@ -5,6 +5,7 @@ public import Proofs.Flock.Claims.ZK.FrameRun
 public import Proofs.Flock.Claims.ZK.FrameInner
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
+public import Proofs.Flock.Claims.ZK.FrameRanked
 
 /-!
 # A frame that releases the opening's first round took a state the rank stop passes

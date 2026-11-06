@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayFrames
 public import Proofs.Flock.Claims.ZK.HelloLean
+import Proofs.Flock.Claims.ZK.Reference
 
 /-!
 # What the relay reads at the model's `Hello` and `Commit` is the model's
@@ -49,7 +50,7 @@ theorem envOk_hello_tape {x : Claims.Msg} {ν : Claims.ZKMal.CoinLayer.Nonce} {s
     EnvOk spec seen .hello e (Claims.ZKMal.CoinLayer.helloMsg x ν) := by
   show _root_.Flock.Firewall.Hello.msg spec e.nonce = _
   unfold Claims.ZKMal.CoinLayer.helloMsg
-  rw [hs, hn]
+  rw [Claims.ZKMal.sessOf_flock hs, hn]
 
 /-- **What the relay reads at a `Commit` frame `f`** of the session `sid`, with its tables `tables`, against the loop's
 level-0 slots `R`: the roots its tables' level 0 now bound, in table order, and the slots after; else why it does not

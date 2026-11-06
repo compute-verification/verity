@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayAlg
 public import Proofs.Flock.ZkAny.RelayPlace
+public import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # A rep's frame at its stream's first round, as `Frames.startRep` pushed it
