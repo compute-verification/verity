@@ -36,7 +36,7 @@ abbrev C : Circuit where
   outputs := {2}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : RegisteredCircuit := .ofCircuit C {0} (by decide)
 
 /-- Gate 2 is the one unit. -/
 abbrev P : Partition d.D 1 := ⟨![none, none, some 0], by decide⟩

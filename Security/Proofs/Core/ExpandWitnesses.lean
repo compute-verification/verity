@@ -10,7 +10,7 @@ The proofs of `Security/Definitions/Core/Guarantees/Expand/Witnesses.lean`, at `
 (`Security/Definitions/Core/Expand/Instances.lean`). The honest lemmas are `ExpandSize` and `ExpandAndSize` there. The
 nontrivial ones show that both bounds hold with equality there:
 
-* `Declaration.width_unregistered_le_expand`: when every gate of a unit has a bit, the bits of the unit's unregistered
+* `RegisteredCircuit.width_unregistered_le_expand`: when every gate of a unit has a bit, the bits of the unit's unregistered
   reads are unregistered reads of its expansion, so `ExpandSize`'s bound on them is an equality;
 * `Expand.AndPair.isAnd`: each bit of `AndPair`'s gate 2 is the AND of a bit of gate 0 and one of gate 1, so it is not
   affine (`Circuit.not_affine_of_and`), and the expansion's AND count is its number of computed bits.
@@ -38,7 +38,7 @@ theorem getLsbD_ofBool_zero (b : Bool) : (BitVec.ofBool b).getLsbD 0 = b := by
 
 /-- The bits of a unit's unregistered reads are unregistered reads of its expansion, when each gate of the unit has a
 bit to read them. -/
-theorem Declaration.bits_unregistered_subset (d : Declaration) {B : ℕ} (P : Partition d.D B) (u : Fin B)
+theorem RegisteredCircuit.bits_unregistered_subset (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (u : Fin B)
     (hw : ∀ g ∈ P.gates u, 0 < d.D.w g) :
     univ.filter (fun b => (d.D.unbit b).1 ∈ d.unregistered (P.gates u)) ⊆ d.expand.unregistered (P.expand.gates u) := by
   intro b' hb'
@@ -58,7 +58,7 @@ theorem Declaration.bits_unregistered_subset (d : Declaration) {B : ℕ} (P : Pa
 
 /-- When each gate of a unit has a bit, its expansion's unregistered reads are at least as many as the width of its own:
 `ExpandSize`'s bound on them is an equality. -/
-theorem Declaration.width_unregistered_le_expand (d : Declaration) {B : ℕ} (P : Partition d.D B) (u : Fin B)
+theorem RegisteredCircuit.width_unregistered_le_expand (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (u : Fin B)
     (hw : ∀ g ∈ P.gates u, 0 < d.D.w g) :
     d.D.width (d.unregistered (P.gates u)) ≤ (d.expand.unregistered (P.expand.gates u)).card := by
   calc d.D.width (d.unregistered (P.gates u))
