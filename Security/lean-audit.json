@@ -24727,8 +24727,10 @@
    }
   },
   "SampledProofs.Draw": {
-   "digest": "c297aa56047cdaace4325d7a6bd8647bec2f5e680482508c0a4c6c6d9820f5b1",
+   "digest": "1f7adc36bfe856eae3f353922fc5545184ee9ab162a9c067d20c60fadd044430",
    "definitions": {
+    "SampledProofs.Draw.BERNOULLI": "e2c9adff20ef4d107fc4a91b10ad53dc1ffe2ba8c4407255086a717517db7ba4",
+    "SampledProofs.Draw.bernoulli": "26e1bd9a4cc26e53338e89f3ad9362908d012c9503d7187232864d01e344c44d",
     "SampledProofs.Draw.checkDrawFull": "6b1dd6a202c2bf969495c6c1285b7b57167fa900a88485669a11af83f7494f29",
     "SampledProofs.Draw.countVaries": "1d087b4bfc5526f1b9791c5f3561ec714d95b003b2f6f1fe04b408a002919621",
     "SampledProofs.Draw.deriveLaw": "037f17a61be7d0c0db3be8df7550dc58de6fc692ba9556f7ba2643d59962e01b",

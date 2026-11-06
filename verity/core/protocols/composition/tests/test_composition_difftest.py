@@ -144,6 +144,10 @@ V2_BREAKS = {
 #: form, or the recursive form with none of its files.
 FORM_BREAKS = ["params-no-form", "params-form-other", "params-recursive", "evidence-no-form", "evidence-recursive"]
 
+#: `OneStage.paramsOfJson` refuses a bernoulli law at every p, so an audit that drew nothing drew a subset of none.
+_drawn_nothing = empty_draws
+empty_draws = lambda: _drawn_nothing().filter(lambda a: a["params"]["law"]["law"] != "bernoulli")  # noqa: E731
+
 
 def _with_form(x, br: str | None, side: str):
     """Sampled proofs' form on the params or the evidence (`VStar.Recursive.Sampled`): ``one-stage``, unless `br` breaks

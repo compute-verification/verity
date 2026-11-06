@@ -7313,8 +7313,10 @@
    }
   },
   "SampledProofs.Draw": {
-   "digest": "a9e386c78a89e0b61c413c51a5fae8e51d7d97940286870904519912c7b7b1cd",
+   "digest": "3081324c82839638d54512503b96f7865ba0d6821377d0b86ad2a8e6fb31c48b",
    "definitions": {
+    "SampledProofs.Draw.BERNOULLI": "e2c9adff20ef4d107fc4a91b10ad53dc1ffe2ba8c4407255086a717517db7ba4",
+    "SampledProofs.Draw.bernoulli": "26e1bd9a4cc26e53338e89f3ad9362908d012c9503d7187232864d01e344c44d",
     "SampledProofs.Draw.countVaries": "1d087b4bfc5526f1b9791c5f3561ec714d95b003b2f6f1fe04b408a002919621"
    }
   },
