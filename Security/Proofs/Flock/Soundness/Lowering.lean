@@ -24,8 +24,8 @@ which unit `u`'s rows are placed in block `o` (`Placement`: the block matrices' 
 computed columns read exactly its rows' columns, and its constant's rows read the pin), and the
 unit's input columns on one gate carry one value there. Then the transcript decoded from that
 block makes `u` correct, and carries `true` on the constant (`UnitPlace.decode_one`). What each
-template's rows compute is the certificate's (`IsRowsUnit.computes_of_cert`, `Certificate.lean`),
-not a hypothesis.
+template's rows compute is not a hypothesis of it: rows derived from a gate circuit carry its outputs
+(`GateRows.rows_sound`), and no theorem carries that to a unit (`ASSUMPTIONS.md`).
 
 `UnitPlace` bundles a drawn unit's place in a table: its rows, its instance, its block and its
 columns, where every satisfying witness carries one value on the unit's inputs that share a gate.

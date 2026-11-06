@@ -907,8 +907,8 @@ def NetworkCertifierSound (k : Verity.Registration.Composite) : Prop := V.Target
 def WipeSound (k : Verity.Registration.Composite) : Prop := V.Target k .wipe
 
 /-- **Subprotocol `a`'s honest lemma at the deployment**: at registered files, the deployment's honest prover meets
-`a`'s claim at composite `k` on almost every play. Each subprotocol's piece proves its own (sampled proofs from
-`Flock.Bridge.card_wrong_lt_of_relS_honest`; the others from their owners' `_honest` lemmas). -/
+`a`'s claim at composite `k` on almost every play. No theorem proves it for any subprotocol: the soundness theorem
+takes it as a hypothesis, one per subprotocol (`Proofs.Properties.Verity.Soundness`). -/
 def HonestHolds (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray), V.Registered θ F →
     Game.prob (fun o => ¬ V.Holds k θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) = 0

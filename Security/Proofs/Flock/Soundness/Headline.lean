@@ -26,8 +26,9 @@ The others are the named obligations `assumption-notes/e2e-checklist.md` lists: 
 their finders' real SHA-512 evaluations, `qF, qT ≥ 2t′ + 2v` and `qS ≥ t′ + v` for `t′` one session run's and `v` one
 opening's verification, which Lean doesn't check (`ASSUMPTIONS.md`).
 
-It bounds wrong units of the rows' circuit. That a correct unit computes a Definition additionally needs the unit's
-certificate (`RowsCert`, `IsRowsUnit.computes_of_cert`) and the Definition's Boolean semantics in Lean.
+It bounds wrong units of the rows' circuit. That a correct unit computes a Definition is outside it: rows that
+`GateRows.rows` derives from a gate circuit, satisfied with the constant 1, carry its outputs (`GateRows.rows_sound`),
+but no theorem ties a unit's rows to its Definition's gate circuit, and the Definition's Boolean semantics isn't in Lean.
 
 Its proof coins are the model's: uniform, drawn each round after the prover's message. That the challenger's round
 coins are those is A6 (`uniform/flock-coin-server`, `ASSUMPTIONS.md`), which the model embodies rather than a hypothesis

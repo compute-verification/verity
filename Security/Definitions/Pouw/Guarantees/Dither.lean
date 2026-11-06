@@ -78,10 +78,13 @@ their commit phases and work) with
 The rate `η`, per priced cost, is one rate for every sampling block: a block selected by a
 Bernoulli coin at a probability proportional to its public cost meets its premises at `η = q/C` at `q` checks, so
 the luck term is `ln(1/δ)/q`. The served block is `ditherSelected` (its check coin carries the selection), with
-`sel` its selection; there SAK(matmul) at this rate follows from `Pouw.SakLb.SAKResidual` at the luck allowance
-`lam_w` once `η H_w / H_mm,w · (pub_mm,w + lam_w) ≤ π` (`Pouw.SakLb.workSound_sakMatmul_selected`). The terms of `ε_A`: the model's slack on the matmul and hashing parts (0 where the
-honest kernel and hashing are the public best), the honest work that is neither (no lower bound, full weight), the
-sampling luck (`ε_skip`'s at `δ_coin = δ`), the exchanged bits, and the walk and log the extraction adds.
+`sel` its selection, and SAK(matmul) at this rate is a premise there. `Pouw.SakLb` derives SAK(matmul) from
+`Pouw.SakLb.SAKResidual` at the luck allowance `lam` on the round that checks on every coin
+(`Pouw.SakLb.sakMatmul_of_residual`), and proves the rate condition of a round checked with probability `π`,
+`η · pub ≤ π` (`Pouw.SakLb.rate_bern`); no theorem derives SAK(matmul) on `ditherSelected` itself. The terms of
+`ε_A`: the model's slack on the matmul and hashing parts (0 where the honest kernel and hashing are the public best),
+the honest work that is neither (no lower bound, full weight), the sampling luck (`ε_skip`'s at `δ_coin = δ`), the
+exchanged bits, and the walk and log the extraction adds.
 
 The phases: each sampling block's commit phase commits its operands before any of its coins, the challenge phase's work
 commits its words before its check coin, and only the response phase follows the check coin (`Prover`). The cap: the

@@ -19380,16 +19380,48 @@
     "  {π : Pouw.PearlC.Layout → Equiv Q Q} (m : Nat)",
     "  (hTT : Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : Pouw.PearlC.RowSeedNoise sem sem')",
     "  (hC : Pouw.PearlC.CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :",
-    "  Pouw.PearlC.GγSampledDraw CM (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
+    "  Pouw.PearlC.GγSampled CM (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
     "    (fun L =>",
     "      And (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 { m := m, n := 6144, k := 256 } L)",
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
-    "    (Pouw.PearlC.pearlCDrawRev1 Pouw.PearlC.devH100) (32437 / 2521000).cast fun q N =>",
-    "    Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
+    "    (32437 / 2521000).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
    ],
    "assumptions": [],
-   "type_hash": "b6f1266b3b0597c3e65f67e595129a36e72c2f0b6bcc710f413e3cf4371c7913"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1",
+     "Pouw.PearlC.CodeSeedNoise",
+     "Pouw.PearlC.CostModel.RelabelClosed",
+     "Pouw.PearlC.CostModel.SplitClosed",
+     "Pouw.PearlC.RowSeedNoise",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": [
+     "Pouw.PearlC.Assumptions.TTOutTile",
+     "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1",
+     "Pouw.PearlC.PearlCSem.splitNoise",
+     "Pouw.PearlC.pearlCProtocolDevRev1RowCap",
+     "Pouw.PearlC.pearlCProtocolDevRev1RowCapAt",
+     "Pouw.PearlC.pearlCTilesDevRev1RowCap",
+     "Pouw.PearlC.pearlCTilesDevRev1RowCapAt",
+     "Pouw.PearlC.rowCodes",
+     "Pouw.PearlC.rowCommit",
+     "Pouw.PearlC.rowIdx",
+     "Pouw.PearlC.rowOfRow",
+     "Pouw.PearlC.rowOffset",
+     "Pouw.PearlC.rowsOf",
+     "Pouw.PearlC.splitLayout",
+     "Pouw.PearlC.splitTranscript",
+     "Pouw.PearlC.splitWorkload",
+     "Pouw.PearlC.unitOfRow"
+    ]
+   },
+   "type_hash": "cd5315129f9e8a0ce845524fc730a3ba4665f471ff5eac2e2ea8249a000a2cf9",
+   "unfolded_hash": "5848e26e716919906d89448e9933750e578b17c35d43df81509951be796cf3fa"
   },
   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": {
    "owner": "@compute-accounting",
@@ -19418,16 +19450,46 @@
     "  [Fintype S] (CM : Pouw.PearlC.CostModel Q R S) {sem sem' : Pouw.PearlC.PearlCSem Q R S} (m : Nat)",
     "  (hTT : Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : Pouw.PearlC.RowSeedNoise sem sem')",
     "  (hCM : CM.SplitClosed) :",
-    "  Pouw.PearlC.GγSampledDraw CM (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
+    "  Pouw.PearlC.GγSampled CM (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
     "    (fun L =>",
     "      And (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 { m := m, n := 6144, k := 256 } L)",
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
-    "    (Pouw.PearlC.pearlCDrawRev1 Pouw.PearlC.devH100) (32437 / 2521000).cast fun q N =>",
-    "    Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
+    "    (32437 / 2521000).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
    ],
    "assumptions": [],
-   "type_hash": "463c89795112885024f7ab689e21f774603b015c7b66cd7fea72055a0b410fd3"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1",
+     "Pouw.PearlC.CostModel.SplitClosed",
+     "Pouw.PearlC.RowSeedNoise",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": [
+     "Pouw.PearlC.Assumptions.TTOutTile",
+     "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1",
+     "Pouw.PearlC.PearlCSem.splitNoise",
+     "Pouw.PearlC.pearlCProtocolDevRev1RowCap",
+     "Pouw.PearlC.pearlCProtocolDevRev1RowCapAt",
+     "Pouw.PearlC.pearlCTilesDevRev1RowCap",
+     "Pouw.PearlC.pearlCTilesDevRev1RowCapAt",
+     "Pouw.PearlC.rowCodes",
+     "Pouw.PearlC.rowCommit",
+     "Pouw.PearlC.rowIdx",
+     "Pouw.PearlC.rowOfRow",
+     "Pouw.PearlC.rowOffset",
+     "Pouw.PearlC.rowsOf",
+     "Pouw.PearlC.splitLayout",
+     "Pouw.PearlC.splitTranscript",
+     "Pouw.PearlC.splitWorkload",
+     "Pouw.PearlC.unitOfRow"
+    ]
+   },
+   "type_hash": "7993b61309d4731d5f1506dbcc1977d1cd86cd517db1383b5b8ac39ac04b425b",
+   "unfolded_hash": "f6351f369fc0f1289e8aa55999e97fb4259a5f04c05d34e0a1bc29d201d0c642"
   },
   "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol": {
    "owner": "@compute-accounting",
@@ -33837,6 +33899,12 @@
     "Nci.Formalism.PeakAtMost": "d846aaf90484906bcd76942d72dc6be57f5601ddaff436fd6e475ca537f48dce"
    }
   },
+  "Definitions.Nci.Guarantees": {
+   "digest": "5ba053c7f930d8f3bda9834b608f61cd2860e1fafef1888e8c46e4297b6788d0",
+   "definitions": {
+    "Nci.Guarantees.Training": "ac755629ce33d179673a1e6d5a3e8956a54355cfe321073d60a7653241a75f4b"
+   }
+  },
   "Definitions.Nci.Guarantees.Activations": {
    "digest": "aebc0383bf07170d6113ae0fb0a66c40cd561891ee5bc6a3b348e2416c7c0ff0",
    "definitions": {
@@ -34041,9 +34109,11 @@
    }
   },
   "Definitions.Nci.Guarantees.Info": {
-   "digest": "1a11f8f835f92008e18f148c1bfe98c18bcccc33c150a07219c9f8b8f07b706d",
+   "digest": "0673f594d30f5a136607025c037bcaed6df344e15d8843c63ed9518abac12d55",
    "definitions": {
-    "Nci.Guarantees.InfoOfState": "abedae17ce184de3ab12da621c0c8872266d1e1a1bfa50b3685e1e869c06b000"
+    "Nci.Guarantees.InfoOfState": "abedae17ce184de3ab12da621c0c8872266d1e1a1bfa50b3685e1e869c06b000",
+    "Nci.Guarantees.ThreadedContainedInfo": "de51224a83445e288ff4d3893f4d62d8abae7196f304e6486ab08324fd9da457",
+    "Nci.Guarantees.ThreadedOfState": "4327f2ace41254899c3ab61b4ede227b1dbc8093a2d578f6ac7fd605d3d4ef4b"
    }
   },
   "Definitions.Nci.Guarantees.Layered": {

@@ -52,10 +52,9 @@ $S$ of $N$ units and a block $B$, conditioned on $|S \cap B| = j$ the share $S \
 size $j$ with that size's probability times the member's own $\binom{|B|-|W|}{j}/\binom{|B|}{j}$ (`share_escape`,
 `share_escape_total`). **The pooled escape** (`Audit/Pooled.lean`): over $T$ periods, each a fresh uniform
 $kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier samples
-escapes every sample with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`horizon_escape`), at most
-$\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`horizon_escape_prod`); at $\delta$, the escaped total
-reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$ (`pooled_escape_log`, in `Claims.Pr`, which is outside the audit layer:
-`Claims/Sampling/PooledPr.lean`).
+escapes every sample with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`pooled_escape`), at most
+$\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`pooled_escape_prod`), both in `prCoin`; at $\delta$, the
+escaped total reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$, which no theorem states.
 These are instances of **the monitoring-period step** (`Audit/Periods.lean`, `FlockSoundness.Audit.Periods`): $T$
 periods of independent uniform coins, any coin space per period, and an event of period $t$ that may read the periods
 up to $t$ with probability at most $p_t$ given any history (`avg_prod_le`, the one induction). It holds in at least
@@ -306,8 +305,9 @@ The hypotheses are the lowerings.
 **The audit's circuit `C`** is abstract in these theorems. For a program it is the rows the verifier parses
 (`Prog.circuit`, `Lowering.lean`, `../README.md` §1.5): each unit an instance of its template's `Rows`, one `Op.row` gate per
 computed row. No hypothesis relates those rows to another circuit (the circuit is chosen on the untrusted side,
-and the lowering does no optimizing); what a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`,
-`../Certificate.lean`; `../ASSUMPTIONS.md`). The decoder is **per sampled proof block**: two sampled proof blocks that share a wire hold it in their own columns, and only
+and the lowering does no optimizing); what a correct unit computes beyond its rows is outside these theorems: rows
+derived from a gate circuit carry its outputs (`GateRows.rows_sound`), and no theorem carries that to a unit's committed
+values (`../ASSUMPTIONS.md`). The decoder is **per sampled proof block**: two sampled proof blocks that share a wire hold it in their own columns, and only
 the link makes the readings agree.
 
 The compiled layer's named hypotheses are stated there too.

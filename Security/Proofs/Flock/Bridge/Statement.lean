@@ -130,13 +130,10 @@ def SampledKSLive : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 open Classical in
-/-- **The registered openings open the deployed commitment** (the bridge's `Transports`, at `SampledKSLive`'s
-commitment, roots, hash and registration): in `EndToEndHidden`'s setting, at every unit `u`, every committed wire `g` of
-`u` and every opening `o` of `g`'s registered commit string at the prover's registration, some data opens `g`'s claims
-position to `o`'s bit there, under the registration's roots at SHA-512. With `tr i o := ⟨i, vb.bit (vb.val o) (φ i), d⟩`,
-`d` chosen by it, it is `WrongSet.Transports execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb sha512Msg Cd
-(stmtOf P κ r desc q roots) (reg σ) u φ tr` at every `u`, `r`, `desc`, `q` and every `φ` that maps into `P.io u` only
-committed positions, its wire's (`φ i ∈ P.io u → posOf Cc (φ i) = i`). -/
+/-- **The registered openings open the deployed commitment** (at `SampledKSLive`'s commitment, roots, hash and
+registration): in `EndToEndHidden`'s setting, at every unit `u`, every committed wire `g` of `u` and every opening `o`
+of `g`'s registered commit string at the prover's registration, some data `d` opens `g`'s claims position
+(`posOf Cc g`) to `o`'s bit there, `vb.bit (vb.val o) g`, under the registration's roots at SHA-512 (`Cd.Opens`). -/
 def _root_.Flock.Bridge.TransportsLive : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
