@@ -370,12 +370,12 @@ theorem repPiop_fold {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptO
     repPiop io { S with fold := c } lay cap root extras mk = repPiop io S lay cap root extras mk := by
   simp only [repPiop, lincheckFw_fold io c S.fold hk hf]
 
-theorem repOpening_fold {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (io : Asks M)
-    (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (S : Setup) (c : CircuitFold) (sch : Flock.Schedule)
-    (lay : Zk.PadLayout) (tPad rep : Nat) (g : Array F128) (cm0 : Commit) (claims : Array Claim) (h : Array F128)
-    (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
-    repOpening io commit { S with fold := c } sch lay tPad rep g cm0 claims h extra lanePad salt =
-      repOpening io commit S sch lay tPad rep g cm0 claims h extra lanePad salt := rfl
+theorem repOpeningMemo_fold {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
+    (memo : Option Memo) (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (S : Setup)
+    (c : CircuitFold) (sch : Flock.Schedule) (lay : Zk.PadLayout) (tPad rep : Nat) (g : Array F128) (cm0 : Commit)
+    (claims : Array Claim) (h : Array F128) (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
+    repOpeningMemo memo io commit { S with fold := c } sch lay tPad rep g cm0 claims h extra lanePad salt =
+      repOpeningMemo memo io commit S sch lay tPad rep g cm0 claims h extra lanePad salt := rfl
 
 theorem rounds_fold (S : Setup) (c : CircuitFold) (hk : c.kLog = S.fold.kLog)
     (hf : ∀ a w r, (fun _ => ()) <$> c.fold a w r = (fun _ => ()) <$> S.fold.fold a w r) (k0 : Nat) (cap dom : ByteArray) :
@@ -396,12 +396,12 @@ instance instLawfulStep : LawfulMonad Drive.Step := LawfulMonad.mk' Drive.Step
     | fail _ => rfl
     | ask c n k ih => exact congrArg (Drive.Step.ask c n) (funext ih))
 
-theorem openStep_fold (t : Tab) (S : Setup) (c : CircuitFold) (hk : c.kLog = S.fold.kLog)
+theorem openStepM_fold (t : Tab) (S : Setup) (c : CircuitFold) (hk : c.kLog = S.fold.kLog)
     (hf : ∀ a w r, (fun _ => ()) <$> c.fold a w r = (fun _ => ()) <$> S.fold.fold a w r) (rep : Nat) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) :
-    Drive.openStep { t with st := { S with fold := c } } rep dom xs hi coins =
-      Drive.openStep { t with st := S } rep dom xs hi coins := by
-  simp only [Drive.openStep, repPiop_fold (Drive.stepAsks coins false) S c hk hf, repOpening_fold]
+    Drive.openStepM { t with st := { S with fold := c } } rep dom xs hi coins =
+      Drive.openStepM { t with st := S } rep dom xs hi coins := by
+  simp only [Drive.openStepM, repPiop_fold (Drive.stepAsks coins false) S c hk hf, repOpeningMemo_fold]
 
 theorem ok_bind {α β : Type} (a : α) (f : α → V β) : ((Except.ok a : V α) >>= f) = f a := rfl
 
@@ -420,10 +420,10 @@ theorem tabOfLevel0_with (S S' : Setup) (hm : S'.merkle = S.merkle) (hn : S'.m =
     · rfl
   · rfl
 
-/-- A rep's opening (`Drive.openStep`) on the table's level 0 `l0` at the statement's setup `setup st`. -/
+/-- A rep's opening (`Drive.openStepM`) on the table's level 0 `l0` at the statement's setup `setup st`. -/
 def openingOf (setup : Stmt → Setup) (st : Stmt) (l0 : Level0.Level0) (rep : Nat) (dom : ByteArray)
-    (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) : V (Drive.Step Unit) :=
-  (fun t => Drive.openStep t rep dom xs hi coins) <$> tabOfLevel0 (setup st) l0
+    (xs : Array (Array F128)) (hi : Array ByteArray) (coins : Array (Array F128)) : V (Drive.Step Memo) :=
+  (fun t => Drive.openStepM t rep dom xs hi coins) <$> tabOfLevel0 (setup st) l0
 
 theorem openingOf_chk : openingOf Setup.ofCircuit = openingOf ofCircuitChk := by
   funext st l0 rep dom xs hi coins
@@ -432,12 +432,12 @@ theorem openingOf_chk : openingOf Setup.ofCircuit = openingOf ofCircuitChk := by
     tabOfLevel0_with (Setup.ofCircuit st) (Setup.ofCircuit st) rfl rfl l0]
   simp only [Functor.map_map]
   refine congrArg (fun f => Functor.map f (tabOfLevel0 (Setup.ofCircuit st) l0)) (funext fun t => ?_)
-  exact (openStep_fold t (Setup.ofCircuit st) { st.circuitFold with fold := foldChk st } rfl (foldChk_map st) rep dom xs
+  exact (openStepM_fold t (Setup.ofCircuit st) { st.circuitFold with fold := foldChk st } rfl (foldChk_map st) rep dom xs
     hi coins).symm
 
 /-- `placeOf` with the rep's opening `op st l0 rep dom xs hi coins` (`openingOf`). -/
 def placeOfWith (op : Stmt → Level0.Level0 → Nat → ByteArray → Array (Array F128) → Array ByteArray →
-    Array (Array F128) → V (Drive.Step Unit)) (salts : Array (ByteArray × Nat × Array ByteArray))
+    Array (Array F128) → V (Drive.Step Memo)) (salts : Array (ByteArray × Nat × Array ByteArray))
     (l0 : Level0.Level0) (s : Release) (p : Rep) (dom : ByteArray) : Except String (Frame.Place × Nat × Rep) := do
   let k := p.coins.size
   if h : k < p.alg.size then return (.sched p.alg[k].1, p.alg[k].2, p)
