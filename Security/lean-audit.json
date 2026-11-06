@@ -2924,6 +2924,11 @@
    "honest": ["Nci.SecurityProofs.CapabilityFloorHonest"],
    "nontrivial": "Nci.SecurityProofs.CapabilityFloorNontrivial"
   },
+  "Nci.SecurityProofs.ContainedFanOutOn": {
+   "honest": ["Nci.SecurityProofs.ContainedFanOutOn_honest"],
+   "nontrivial": "Nci.SecurityProofs.ContainedFanOutOn_nontrivial",
+   "kind": "exclusion"
+  },
   "Nci.SecurityProofs.DampenerRemote": {
    "honest": ["Nci.SecurityProofs.DampenerRemote_honest"],
    "nontrivial": "Nci.SecurityProofs.DampenerRemote_nontrivial",
@@ -2969,6 +2974,16 @@
    "nontrivial": "Nci.SecurityProofs.IncompressibleContainedTrainingOn_nontrivial",
    "kind": "exclusion"
   },
+  "Nci.SecurityProofs.IncompressibleThreadedThrottled": {
+   "honest": ["Nci.SecurityProofs.IncompressibleThreadedThrottled_honest"],
+   "nontrivial": "Nci.SecurityProofs.IncompressibleThreadedThrottled_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.IncompressibleThreadedThrottledOn": {
+   "honest": ["Nci.SecurityProofs.IncompressibleThreadedThrottled_honest"],
+   "nontrivial": "Nci.SecurityProofs.IncompressibleThreadedThrottledOn_nontrivial",
+   "kind": "exclusion"
+  },
   "Nci.SecurityProofs.LayeredTraining": {
    "honest": ["Nci.SecurityProofs.LayeredTraining_honest"],
    "nontrivial": "Nci.SecurityProofs.LayeredTraining_nontrivial",
@@ -2982,6 +2997,11 @@
   "Nci.SecurityProofs.OperandCapSeparate": {
    "honest": ["Nci.SecurityProofs.OperandCapSeparateHonest"],
    "nontrivial": "Nci.SecurityProofs.OperandCapSeparateNontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.PackedContainedFanOutOn": {
+   "honest": ["Nci.SecurityProofs.PackedContainedFanOutOn_honest"],
+   "nontrivial": "Nci.SecurityProofs.PackedContainedFanOutOn_nontrivial",
    "kind": "exclusion"
   },
   "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": {
@@ -3012,6 +3032,36 @@
   "Nci.SecurityProofs.StatHeldBudget": {
    "honest": ["Nci.SecurityProofs.StatHeldBudgetHonest"],
    "nontrivial": "Nci.SecurityProofs.StatHeldBudgetNontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.ThreadedThrottled": {
+   "honest": ["Nci.SecurityProofs.ThreadedThrottled_honest"],
+   "nontrivial": "Nci.SecurityProofs.ThreadedThrottled_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledDark": {
+   "honest": ["Nci.SecurityProofs.ThreadedThrottled_honest"],
+   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledDark_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledDarkSlots": {
+   "honest": ["Nci.SecurityProofs.ThreadedThrottledSlots_honest"],
+   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledDarkSlots_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledOn": {
+   "honest": ["Nci.SecurityProofs.ThreadedThrottled_honest"],
+   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledOn_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledOnSlots": {
+   "honest": ["Nci.SecurityProofs.ThreadedThrottledSlots_honest"],
+   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledOnSlots_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledSlots": {
+   "honest": ["Nci.SecurityProofs.ThreadedThrottledSlots_honest"],
+   "nontrivial": "Nci.SecurityProofs.ThreadedThrottledSlots_nontrivial",
    "kind": "exclusion"
   },
   "Nci.SecurityProofs.ThreadedTraining": {
@@ -10037,6 +10087,12 @@
    "assumptions": [],
    "type_hash": "73829ebd967ff8c364d3f61bf5fa17d4876ebd5f88b398444265e0ebe4ec593d"
   },
+  "Nci.SecurityProofs.ContainedFanOutOn_honest": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.ContainedFanOutOn_nontrivial": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.CoveringBound": {
    "owner": "@compute-accounting",
    "signature": ["Nci.SecurityProofs.CoveringBound : Nci.Guarantees.CoveringBound"],
@@ -10308,6 +10364,15 @@
    "assumptions": [],
    "type_hash": "796765adf9071efb9307c0bc132a001510b1a96beab7fb237fdd64013c33899f"
   },
+  "Nci.SecurityProofs.IncompressibleThreadedThrottledOn_nontrivial": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.IncompressibleThreadedThrottled_honest": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.IncompressibleThreadedThrottled_nontrivial": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.Inference": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.Inference : Nci.Guarantees.Inference"],
@@ -10397,6 +10462,12 @@
    "signature": ["Nci.SecurityProofs.PackedContainedFanOutOn : Nci.Guarantees.PackedContainedFanOutOn"],
    "assumptions": [],
    "type_hash": "4d2565dacf91227c14474ec7bf24354cc36527de5075976aab9be094e60a3be7"
+  },
+  "Nci.SecurityProofs.PackedContainedFanOutOn_honest": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.PackedContainedFanOutOn_nontrivial": {
+   "owner": "@lean"
   },
   "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": {
    "owner": "@lean",
@@ -10630,6 +10701,12 @@
    "assumptions": [],
    "type_hash": "f0fd651df80a204957a512ee9a4b43bbd40861f8aef36fd77bb331b62fa14301"
   },
+  "Nci.SecurityProofs.ThreadedThrottledDarkSlots_nontrivial": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledDark_nontrivial": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.ThreadedThrottledOn": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedThrottledOn : Nci.Guarantees.ThreadedThrottledOn"],
@@ -10642,11 +10719,29 @@
    "assumptions": [],
    "type_hash": "1593e5bf02baa087182289a9fedaf463f3d5fdf1bcbc4c08691ceaae7500be91"
   },
+  "Nci.SecurityProofs.ThreadedThrottledOnSlots_nontrivial": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledOn_nontrivial": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.ThreadedThrottledSlots": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedThrottledSlots : Nci.Guarantees.ThreadedThrottledSlots"],
    "assumptions": [],
    "type_hash": "6f1cd5018a0f1fbc06386cb1e9c7c06c3b2ec5b19ac3fa470a40e8f77f26e350"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledSlots_honest": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.ThreadedThrottledSlots_nontrivial": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.ThreadedThrottled_honest": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.ThreadedThrottled_nontrivial": {
+   "owner": "@lean"
   },
   "Nci.SecurityProofs.ThreadedTraining": {
    "owner": "@lean",
@@ -15201,6 +15296,8 @@
    "Nci.SecurityProofs.ActivationsBoundOn_nontrivial": "completeness: ActivationsBoundOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ActivationsBoundOn without ThetaRegistered: Dθ, the toy with the token registered, complies at k = 0, and the bound b_a #(M ∩ S) ≤ (k / c) Λ size(d) fails, its right side 0 and gate 2 a counted multiplication Dθ computes, all proved, so ActivationsBoundOn's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.ActivationsTrainingOn_honest": "completeness: ActivationsTrainingOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ActivationsTrainingOn's premises hold together: ActivationsBoundOn_honest's instance at coverage κ = 1, all proved, so ActivationsTrainingOn is not vacuous.",
    "Nci.SecurityProofs.ActivationsTrainingOn_nontrivial": "completeness: ActivationsTrainingOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ActivationsTrainingOn without coverage: at the threading T0, with e = 0, κ = 1 is no coverage and the bound fails, Λ being 0 and no gate dark, all proved, so ActivationsTrainingOn's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ContainedFanOutOn_honest": "completeness: ContainedFanOutOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ContainedFanOutOn's premises hold together: Γ = 2, α = 1/2, K = 1, b_w = b_a = 1/2 and the chain ch1 at dd = emax = 1, under ActivationsIncompressible, all proved, so ContainedFanOutOn is not vacuous.",
+   "Nci.SecurityProofs.ContainedFanOutOn_nontrivial": "completeness: ContainedFanOutOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ContainedFanOutOn without ThetaRegistered: Dθ complies at α = 0, and the bound fails, its right side 0 and the product at gate 2, which Dθ computes, charged b_a / max(emax, K/(4 b_w dd)) = 1/2, all proved, so ContainedFanOutOn's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.DampenerRemote_honest": "completeness: DampenerRemote's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), DampenerRemote's premises hold together at DampenerThreaded_honest's declaration, threading and charges, over the outcomes Bool drawn uniformly: one PoUW window of capacity C = 2, its certificate never wrong (p = 0), all of it certified (W = 2), no faulty proof block, so that every detection holds at q = 1 and the residual is 0, and one counted multiplication, the declared one, all proved, so DampenerRemote is not vacuous.",
    "Nci.SecurityProofs.DampenerRemote_nontrivial": "completeness: DampenerRemote's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), DampenerRemote without PoUW's soundness: the window's certificate is wrong at every outcome, so the residual holds its capacity, M_r = 2 counted multiplications at the threading T0, all of C = 2 certified, κ = 2, ε' = 1/2 and θ = 1/4. The efficiency 1 exceeds the bound ε' + θ = 3/4 at every outcome, so the event has probability 0, below 1 − δ = 1, all proved, so DampenerRemote's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.DampenerThreadedSlots_honest": "completeness: DampenerThreadedSlots's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), DampenerThreadedSlots' premises hold together: DampenerThreaded_honest's instance, the weight in its own parameter slot (σ1), all proved, so DampenerThreadedSlots is not vacuous.",
@@ -15213,12 +15310,25 @@
    "Nci.SecurityProofs.IncompressibleContainedTrainingOn_nontrivial": "completeness: IncompressibleContainedTrainingOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleContainedTrainingOn without ThetaRegistered: ContainedTrainingOn_nontrivial's instance, all proved, so IncompressibleContainedTrainingOn's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.IncompressibleContainedTraining_honest": "completeness: IncompressibleContainedTraining's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleContainedTraining's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2, κ = 1, the chain ch1 and the threading T1, all proved, so IncompressibleContainedTraining is not vacuous.",
    "Nci.SecurityProofs.IncompressibleContainedTraining_nontrivial": "completeness: IncompressibleContainedTraining's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleContainedTraining without coverage: ContainedTraining_nontrivial's instance, at the threading T0, all proved, so IncompressibleContainedTraining's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.IncompressibleThreadedThrottledOn_nontrivial": "completeness: IncompressibleThreadedThrottledOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleThreadedThrottledOn without ThetaRegistered: ThreadedThrottledOn_nontrivial's instance under TrainingIncompressible at the chain ch1, all proved, so IncompressibleThreadedThrottledOn's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.IncompressibleThreadedThrottled_honest": "completeness: IncompressibleThreadedThrottled and IncompressibleThreadedThrottledOn's honest witness (their witnesses entries): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleThreadedThrottled and IncompressibleThreadedThrottledOn's premises hold together: ThreadedThrottled_honest's instance under TrainingIncompressible at the chain ch1, all proved, so IncompressibleThreadedThrottled and IncompressibleThreadedThrottledOn are not vacuous.",
+   "Nci.SecurityProofs.IncompressibleThreadedThrottled_nontrivial": "completeness: IncompressibleThreadedThrottled's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), IncompressibleThreadedThrottled without ThetaRegistered: ThreadedThrottled_nontrivial's instance under TrainingIncompressible at the chain ch1, all proved, so IncompressibleThreadedThrottled's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.LayeredTraining_honest": "completeness: LayeredTraining's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), LayeredTraining's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2, κ = 1, the threading T1 keyed with no roots (layered1, d = e = 1, eLk = 0, b = 2) and E = 0, all proved, so LayeredTraining is not vacuous.",
    "Nci.SecurityProofs.LayeredTraining_nontrivial": "completeness: LayeredTraining's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), LayeredTraining without coverage: at the threading T0 keyed with no roots (layered0), κ = 1 is no coverage, and the bound fails, Λ being 0, all proved, so LayeredTraining's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.PackedContainedFanOutOn_honest": "completeness: PackedContainedFanOutOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), PackedContainedFanOutOn's premises hold together: ContainedFanOutOn_honest's instance, ch1 as a packed chain of one product to a gate, all proved, so PackedContainedFanOutOn is not vacuous.",
+   "Nci.SecurityProofs.PackedContainedFanOutOn_nontrivial": "completeness: PackedContainedFanOutOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), PackedContainedFanOutOn without ThetaRegistered: ContainedFanOutOn_nontrivial's instance, ch1 packed, all proved, so PackedContainedFanOutOn's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn_honest": "completeness: PackedIncompressibleContainedMatMulOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), PackedIncompressibleContainedMatMulOn's premises hold together: IncompressibleContainedMatMulOn_honest's instance, ch1 as a packed chain of one product to a gate, all proved, so PackedIncompressibleContainedMatMulOn is not vacuous.",
    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn_nontrivial": "completeness: PackedIncompressibleContainedMatMulOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), PackedIncompressibleContainedMatMulOn without ThetaRegistered: IncompressibleContainedMatMulOn_nontrivial's instance, ch1 packed, all proved, so PackedIncompressibleContainedMatMulOn's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn_honest": "completeness: PackedIncompressibleContainedTrainingOn's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), PackedIncompressibleContainedTrainingOn's premises hold together: PackedIncompressibleContainedMatMulOn_honest's instance at coverage κ = 1, all proved, so PackedIncompressibleContainedTrainingOn is not vacuous.",
    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn_nontrivial": "completeness: PackedIncompressibleContainedTrainingOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), PackedIncompressibleContainedTrainingOn without ThetaRegistered: IncompressibleContainedTrainingOn_nontrivial's instance, ch1 packed, all proved, so PackedIncompressibleContainedTrainingOn's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ThreadedThrottledDarkSlots_nontrivial": "completeness: ThreadedThrottledDarkSlots's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottledDarkSlots without ThetaRegistered: ThreadedThrottledDark_nontrivial's instance, the weight in its own parameter slot (σ1), all proved, so ThreadedThrottledDarkSlots's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ThreadedThrottledDark_nontrivial": "completeness: ThreadedThrottledDark's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottledDark without ThetaRegistered: ThreadedThrottled_nontrivial's instance, with no dark gate: #M = 1 exceeds #dark + α Λ size(d) / b_a = 0, all proved, so ThreadedThrottledDark's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ThreadedThrottledOnSlots_nontrivial": "completeness: ThreadedThrottledOnSlots's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottledOnSlots without ThetaRegistered: ThreadedThrottledOn_nontrivial's instance, the weight in its own parameter slot (σ1), all proved, so ThreadedThrottledOnSlots's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ThreadedThrottledOn_nontrivial": "completeness: ThreadedThrottledOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottledOn without ThetaRegistered: ThreadedThrottled_nontrivial's instance, where Dθ computes gate 2, so that it is in M ∩ S, all proved, so ThreadedThrottledOn's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ThreadedThrottledSlots_honest": "completeness: ThreadedThrottledSlots, ThreadedThrottledOnSlots and ThreadedThrottledDarkSlots's honest witness (their witnesses entries): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottledSlots, ThreadedThrottledOnSlots and ThreadedThrottledDarkSlots's premises hold together: ThreadedThrottled_honest's instance, the weight in its own parameter slot (σ1), all proved, so ThreadedThrottledSlots, ThreadedThrottledOnSlots and ThreadedThrottledDarkSlots are not vacuous.",
+   "Nci.SecurityProofs.ThreadedThrottledSlots_nontrivial": "completeness: ThreadedThrottledSlots's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottledSlots without ThetaRegistered: ThreadedThrottled_nontrivial's instance, the weight in its own parameter slot (σ1), all proved, so ThreadedThrottledSlots's conclusion is not a tautology and needs the premise it drops.",
+   "Nci.SecurityProofs.ThreadedThrottled_honest": "completeness: ThreadedThrottled, ThreadedThrottledOn and ThreadedThrottledDark's honest witness (their witnesses entries): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottled, ThreadedThrottledOn and ThreadedThrottledDark's premises hold together: ThreadedTraining_honest's instance, which needs no coverage: Γ = 2, α = 1/2, b_w = b_a = 1/2, r = d = Toy.D through the containment of the toy in itself, the threading T1 and (dd, e) = (1, 0), all proved, so ThreadedThrottled, ThreadedThrottledOn and ThreadedThrottledDark are not vacuous.",
+   "Nci.SecurityProofs.ThreadedThrottled_nontrivial": "completeness: ThreadedThrottled's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedThrottled without ThetaRegistered: Dθ, the toy with the token registered, complies at α = 0, so at read cap α Γ = 0, and the bound b_a #M ≤ α Λ size(d) fails, its right side 0 and gate 2 the counted multiplication of T1, all proved, so ThreadedThrottled's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.ThreadedTrainingOn_nontrivial": "completeness: ThreadedTrainingOn's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedTrainingOn without coverage: ThreadedTraining_nontrivial's instance, through the containment with no dark gate, all proved, so ThreadedTrainingOn's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.ThreadedTraining_honest": "completeness: ThreadedTraining's and ThreadedTrainingOn's honest witness (their witnesses entries): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedTraining's and ThreadedTrainingOn's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2, κ = 1, r = d = Toy.D through the containment of the toy in itself, the threading T1 and (dd, e) = (1, 0): a small subcircuit holding gate 2 reads the token, one fresh bit, and is charged half a bit for the weight and half for the token, all proved, so ThreadedTraining and ThreadedTrainingOn are not vacuous.",
    "Nci.SecurityProofs.ThreadedTraining_nontrivial": "completeness: ThreadedTraining's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), ThreadedTraining without coverage: at the threading T0 of no counted multiplication, κ = 1 is no coverage, and the bound κ b_a size(r) ≤ 2 (k / c) Λ size(d) fails, Λ being 0, all proved, so ThreadedTraining's conclusion is not a tautology and needs the premise it drops.",
