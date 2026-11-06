@@ -304,9 +304,9 @@ theorem zk_flock_countC_execOS_ks (hA : A.Correct) (hlow : LoweringSoundZK A P p
     (jointZC_ksBound A hA Hs planZ hk) ht K σ tr hT
 
 /-- **The compiled `--zk` count curve at the live draw, every term in closed form.** With the units drawn by
-`Flock.Draw.drawOS`'s stratified law on a byte source that A3 makes uniform (`hA3`), every table's finders after each draw
-under A1 at budgets `qF`, `qS` (`hCR`), the link finders under A2 (in `linkBoundZC`) and the serving roots' rewinding
-finder under A1 at budget `qT` (`hT`):
+`Flock.Draw.drawWith`'s stratified law on a byte source that A3 makes uniform (`hA3`), every table's finders after each
+draw under A1 at budgets `qF`, `qS` (`hCR`), the link finders under A2 (in `linkBoundZC`) and the serving roots'
+rewinding finder under A1 at budget `qT` (`hT`):
 `Pr[execAccept ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, with `miss(K)` `Law.stratified`'s count
 curve and `ε_ks = ksAvgStrictZ`. -/
 theorem zk_flock_countC_execOS_strict (hA : A.Correct) (hlow : LoweringSoundZK A P planZ tab decode)

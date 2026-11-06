@@ -147,7 +147,7 @@ theorem tapeSim_drawWith (T : ℕ → ByteArray) (k n : ℕ) :
   unfold Flock.Draw.drawWith
   exact tapeSim_bind (tapeSim_onWith T _ (by omega) _) fun u => tapeSim_pure _
 
-/-- **The code's subset draw is the live draw's** (`Law.runOS`, `Flock.Draw.drawOS`'s `drawWith`): on the bytes `f 0`,
+/-- **The code's subset draw is the live draw's** (`Law.runOS`, `Flock.Draw.drawWith`): on the bytes `f 0`,
 `Draw.drawUnits` draws the units `runOS` draws on `f`, and fails exactly where `runOS` is `none`. -/
 theorem drawUnits_subset_runOS (k n : ℕ) {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) :
     (Draw.drawUnits (.subset k) n (Law.streamOf (f 0))).toOption.map Prod.fst =

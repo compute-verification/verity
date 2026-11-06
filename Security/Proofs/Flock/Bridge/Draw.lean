@@ -8,9 +8,9 @@ public import Proofs.Flock.Soundness.ExecStrataOf
 /-!
 # The deployed draw at the registration's strata
 
-`SampledKSLiveV5` draws with the deployed draw (`SampledProofs.Draw.drawUnits`, `Flock.Draw.drawWith` on one stream of
-bytes read in order, as `Flock.Draw.drawOS` reads `IO.getRandomBytes`) under a C-Flock law over the registration's strata,
-and its `δ` is that law's own `P_a`. This file holds what the statement reads and how the draw meets it:
+`SampledKSLiveV5` draws with the deployed draw (`SampledProofs.Draw.drawUnits`, `Flock.Draw.drawWith` on the
+challenger's coins read in order as one stream) under a C-Flock law over the registration's strata, and its `δ` is that
+law's own `P_a`. This file holds what the statement reads and how the draw meets it:
 
 * `StrataOn St ns`: the strata `St`'s ranges, in order, are the slots `0, …, Σ ns − 1`, at sizes `ns`, so each stratum
   is one run of consecutive slots;

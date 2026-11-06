@@ -16,7 +16,7 @@ applies:
 
 * `zk_headline_exec_zc`: against any live prover, at any law,
   `Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`;
-* `zk_headline_exec_zc_execOS`: the same at the live draw (`Law.execOS`, `drawOS`'s stratified law) under A3
+* `zk_headline_exec_zc_execOS`: the same at the live draw (`Law.execOS`, `drawWith`'s stratified law) under A3
   (`UniformRandomBytes`), with `Law.stratified`'s count curve for `miss(K)`.
 
 The wrong units are those of the simulated prover's committed values (`ZkLink.XplurZC` at `simAuditZC … τ`). Open,
@@ -112,8 +112,8 @@ theorem zk_headline_exec_zc (hlow : LoweringSoundZK A P (planOne T) tab decode) 
     (hc.symm.trans_le hB)
 
 /-- **The `--zk` headline at flock-verify's acceptance, at the live draw under A3**: `zk_headline_exec_zc` with the
-units drawn by `Flock.Draw.drawOS`'s stratified law on a byte source A3 makes uniform, `miss(K)` `Law.stratified`'s
-count curve. -/
+units drawn by `Flock.Draw.drawWith`'s stratified law on a byte source A3 makes uniform (the challenger's coins),
+`miss(K)` `Law.stratified`'s count curve. -/
 theorem zk_headline_exec_zc_execOS (hlow : LoweringSoundZK A P (planOne T) tab decode)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
