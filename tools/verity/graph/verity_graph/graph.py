@@ -18,8 +18,10 @@ from . import contract, families
 HOME = "tools/verity/graph"
 SPEC = f"{HOME}/tasks.toml"
 RUNNERS = f"{HOME}/verity_graph/runners"
-#: a graph/v2 task's fields, in the order the listing writes them; a lister gives all but `key`
-TASK_FIELDS = ("id", "kind", "about", "env", "argv", "vars", "inputs", "reads", "outputs", "resources", "timeout_s", "key")
+#: a graph/v2 task's fields, in the order the listing writes them; a lister gives all but the core's (`CORE_FIELDS`)
+TASK_FIELDS = ("id", "kind", "about", "env", "argv", "vars", "inputs", "reads", "outputs", "resources", "timeout_s", "priority",
+               "key")
+CORE_FIELDS = ("priority", "key")
 FAMILY_FIELDS = {"files": list, "kinds": list, "env": str, "about": str, "resources": dict, "timeout_s": int}
 RESOURCES = ("cores", "mem_gb", "disk_gb")
 #: what `verity graph run` writes in a task's work directory beside its outputs and reads
@@ -126,8 +128,9 @@ def complete(t: object, family: str, table: dict, envs: dict, files: set[str]) -
         raise GraphError(f"family {family} listed {t!r}, not a task")
     _forbid(f"family {family}'s task {t.get('id')!r}", {k: v for k, v in t.items() if k not in SHAPED})
     tid = t.get("id")
-    if extra := set(t) - set(TASK_FIELDS[:-1]):
-        raise GraphError(f"{tid}: fields {', '.join(sorted(extra))} aren't graph/v2's (a lister leaves `key` to the core)")
+    if extra := set(t) - (set(TASK_FIELDS) - set(CORE_FIELDS)):
+        raise GraphError(f"{tid}: fields {', '.join(sorted(extra))} aren't graph/v2's (a lister leaves `priority` and `key` to "
+                         "the core)")
     kind = t.get("kind", table["kinds"][0])
     if kind not in table["kinds"]:
         raise GraphError(f"{tid}: kind {kind!r} isn't one of [family.{family}]'s kinds ({', '.join(table['kinds'])})")
@@ -178,7 +181,7 @@ def complete(t: object, family: str, table: dict, envs: dict, files: set[str]) -
         raise GraphError(f"{tid}: about is a non-empty string")
     return {"id": tid, "kind": kind, "about": about, "env": env, "argv": list(argv), "vars": dict(v), "inputs": inputs,
             "reads": reads, "outputs": sorted(({"name": o["name"], "path": o["path"]} for o in outputs), key=lambda o: o["name"]),
-            "resources": resources, "timeout_s": timeout, "key": None}
+            "resources": resources, "timeout_s": timeout, "priority": 0, "key": None}
 
 
 def family_of(kind: str, fams: dict) -> str:
@@ -213,6 +216,24 @@ def order(tasks: list[dict]) -> list[dict]:
     if len(done) != len(tasks):
         raise GraphError(f"the reads make a cycle through {', '.join(sorted(set(by) - {t['id'] for t in done})[:5])}")
     return done
+
+
+def priorities(tasks: list[dict]) -> dict[str, int]:
+    """Each task's priority: how many reads the longest chain of them through it makes, the tasks that wait on it one after
+    another and those it waits on so; 0 for a task that reads nothing and that nothing reads.  The Lean modules under a lock
+    and the lock itself have the graph's highest."""
+    done = order(tasks)
+    readers: dict[str, list[str]] = {}
+    for t in tasks:
+        for r in t["reads"]:
+            readers.setdefault(r["task"], []).append(t["id"])
+    below: dict[str, int] = {}
+    for t in done:
+        below[t["id"]] = max((below[r["task"]] + 1 for r in t["reads"]), default=0)
+    above: dict[str, int] = {}
+    for t in reversed(done):
+        above[t["id"]] = max((above[r] + 1 for r in readers.get(t["id"], ())), default=0)
+    return {i: below[i] + above[i] for i in below}
 
 
 def _check_reads(tasks: list[dict]) -> None:
@@ -290,7 +311,8 @@ def listing(root: Path, only: set[str] | None = None, listers: dict | None = Non
 def task_graph(root: Path, task_id: str, listers: dict | None = None) -> dict:
     """The part of the tree's graph/v2 that running ``task_id`` needs, as `listing` makes it: that task and every task it reads,
     transitively, the digests of their inputs and the envs, without completing, digesting or keying the rest of their families
-    (`verity graph run`).  Its `commit` is null, since nothing that runs a task reads one."""
+    (`verity graph run`).  Its `commit` is null and its priorities count only the chains it holds, none of the tasks that read
+    ``task_id``, since nothing that runs a task reads either."""
     root = Path(root)
     s = spec(root)
     fams = s["family"]
@@ -365,16 +387,18 @@ def given(root: Path, path: Path, task_id: str) -> dict:
 
 
 def _document(root: Path, s: dict, files: list[str], ts: list[dict], at: str | None) -> dict:
-    """graph/v2 of the completed tasks ``ts``, sorted by id, at commit ``at``: their reads checked, the digests of their inputs
-    and of every env's spec files, each env's digest, and the key of each task that reads no artifact."""
+    """graph/v2 of the completed tasks ``ts``, sorted by id, at commit ``at``: their reads checked, each one's priority among
+    them (`priorities`), the digests of their inputs and of every env's spec files, each env's digest, and the key of each task
+    that reads no artifact."""
     _check_reads(ts)
-    order(ts)
+    rank = priorities(ts)
     envs = {name: sorted(f for f in files if any(matches(f, p) for p in e["spec"])) for name, e in sorted(s["env"].items())}
     needed = sorted({p for t in ts for p in t["inputs"]} | {p for spec_files in envs.values() for p in spec_files})
     digests = {p: contract.file_digest(root / p) for p in needed}
     env_docs = {name: {"spec": sp, "digest": contract.env_digest(sp, digests)} for name, sp in envs.items()}
     key = contract.keyer(digests)
     for t in ts:
+        t["priority"] = rank[t["id"]]
         if not t["reads"]:
             t["key"] = key(t, None, env_docs[t["env"]]["digest"])
     return {"schema": contract.SCHEMA_GRAPH, "commit": at, "envs": env_docs, "files": digests, "tasks": ts}

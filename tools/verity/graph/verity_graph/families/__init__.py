@@ -1,7 +1,7 @@
 """The task families' listers: each module here, `<family>.py` with a family's name's - written _, lists the tasks of the
 tasks.toml table `[family.<family>]` as `tasks(root: Path, files: list[str]) -> list[dict]`. ``files`` is the tree's files
-(`graph.tracked`: POSIX, relative, sorted), and each task is a graph/v2 task without its key; the table fills what the task
-leaves out (`graph.complete`)."""
+(`graph.tracked`: POSIX, relative, sorted), and each task is a graph/v2 task without its priority and key; the table fills
+what the task leaves out (`graph.complete`)."""
 from __future__ import annotations
 
 import importlib

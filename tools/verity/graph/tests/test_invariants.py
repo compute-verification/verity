@@ -82,13 +82,15 @@ def test_every_key_is_the_rule_s(audited):
 
 
 def test_what_a_task_run_lists_is_the_listing_s(audited, tmp_path):
-    """`verity graph run`'s graph for a task of each kind, listed (`graph.task_graph`): the listing's tasks, digests and envs;
-    and handed its part of the listing (`graph.part`), taken here (`graph.given`)."""
+    """`verity graph run`'s graph for a task of each kind, listed (`graph.task_graph`): the listing's tasks, each with the
+    priority of the chains that graph holds, its digests and envs; and handed its part of the listing (`graph.part`), taken here
+    (`graph.given`)."""
     doc, _outside = audited
     by = {t["id"]: t for t in doc["tasks"]}
     for tid in sorted({t["kind"]: t["id"] for t in doc["tasks"]}.values()):
         part = graph.task_graph(ROOT, tid)
-        assert [by[t["id"]] for t in part["tasks"]] == part["tasks"] and part["envs"] == doc["envs"], tid
-        assert part["files"] == {p: doc["files"][p] for p in part["files"]}, tid
+        assert [{**by[t["id"]], "priority": t["priority"]} for t in part["tasks"]] == part["tasks"], tid
+        assert {t["id"]: t["priority"] for t in part["tasks"]} == graph.priorities(part["tasks"]), tid
+        assert part["envs"] == doc["envs"] and part["files"] == {p: doc["files"][p] for p in part["files"]}, tid
         (tmp_path / "part.json").write_bytes(contract.canonical(graph.part(doc, tid, by)))
         assert graph.given(ROOT, tmp_path / "part.json", tid) == graph.part(doc, tid, by), tid

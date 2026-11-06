@@ -56,8 +56,8 @@ def key_doc(task: dict, file_digests: dict[str, str], read_digests: dict[str, di
 
 
 def key(task: dict, file_digests: dict[str, str], read_digests: dict[str, dict[str, str]] | None, env_digest: str) -> str:
-    """The task's key: `about`, `resources` and `timeout_s` stay out of it, and a read enters by its output's digest, so an
-    artifact rebuilt to the same bytes leaves its readers' keys unchanged."""
+    """The task's key: `about`, `resources`, `timeout_s` and `priority` stay out of it, and a read enters by its output's
+    digest, so an artifact rebuilt to the same bytes leaves its readers' keys unchanged."""
     return digest(KEY_TAG + canonical(key_doc(task, file_digests, read_digests, env_digest)))
 
 
