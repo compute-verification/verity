@@ -3,7 +3,7 @@
 A Vercel project of one function, `api/deadman.py`, and a cron (`vercel.json`) that calls it every 10 minutes. It reads the
 heartbeat that the watchers supervisor on the control pod (`infra/control/watchers.py`) upserts into Neon's
 `store_private.control_heartbeat` every minute. When the heartbeat is 15 minutes old (the pod or its supervisor stopped), or the
-cloud watch's last pass recorded in it is 30 minutes old, it posts in #agent-alerts naming @infra, and again every 6 hours while
+cloud watch's last pass recorded in it is 30 minutes old, it posts in #agent-alerts naming infra, and again every 6 hours while
 that lasts. `GET /api/deadman` without the cron's secret answers 200 or 503 with the heartbeat's age and posts nothing.
 
 Console deploys it in its Vercel team (a Pro plan: Hobby crons run once a day), as its own project with root directory
