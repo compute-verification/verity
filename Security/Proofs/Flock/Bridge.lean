@@ -21,6 +21,7 @@ public import Proofs.Flock.Bridge.KSLive
 public import Proofs.Flock.Bridge.PublicDeployed
 public import Proofs.Flock.Bridge.Honest
 public import Proofs.Flock.Bridge.V5
+public import Proofs.Flock.Bridge.LeafSeg
 public import Proofs.Flock.Bridge.Public
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
@@ -37,7 +38,9 @@ at the code's partition (`Flock.Bridge.relDeploy_ofCircuit`).
 `Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed`, `deltaPub < 1` at the deployment's
 parameters. `Honest`: `Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest`, the file
 hypotheses of V2, V3 and Pub at the deployed session, from the named premise that its files parse
-(`Bridge.Assumptions.ServedFilesParse`). -/
+(`Bridge.Assumptions.ServedFilesParse`). `LeafSeg`: the `hm96-sha512/row-seg/v1` leaf binds, and
+`Flock.Bridge.commitRowL`, the deployed commitment with each port's own leaf, binds at every circuit file and opens at
+SHA-512 what `commitDepL` opens. -/
 
 @[expose] public section
 
