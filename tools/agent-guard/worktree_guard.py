@@ -11,8 +11,7 @@ branch it had then is registered to it. The hook then refuses, from any other ag
   - switching that worktree's branch (`git checkout BRANCH|-b|-B`, `git switch`), since everything installed editable from it
     (the `research` CLI) follows the switch; checking out files (`git checkout -- PATH`, `git checkout REF -- PATH`) passes;
   - pushing a branch registered to another agent: one it created (`checkout -b`, `switch -c`, `worktree add -b`) or the one its
-    worktree had when it claimed it, until that agent hands it over (`hand`, which only the branch's owner may run). An
-    unregistered branch passes.
+    worktree had when it claimed it, until that agent hands it over (`hand`). An unregistered branch passes.
 For every agent, whatever it owns, it also refuses a push that would update `main`, `checked` or `next` (only drive and the lander move
 them; INF-110), and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token (INF-105).
 A lander's hand repair of `next` under the queue lock names its reason on the push itself (`AGENT_GUARD_PUSH_NEXT_OK='REASON'
