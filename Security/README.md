@@ -466,7 +466,8 @@ site. It composes three subprotocols, sampled proofs (one-stage v2 or the recurs
 (`verity/pouw/period/v1`, onsite's work subprotocol too) and the inference-only policy's check (`NciCheck.Protocol`), and
 accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when the
 policy and the one-stage audit commit to one record and every window of the period names it as its Commit record
-(`Core.Composition.tiedSame`, `Core.Remote.windows`). Onsite adds PoUS, PoUB, network certification and memory wipes.
+(`Core.Composition.tiedSame`, `Core.Remote.windows`). Onsite holds the same two ties (`Core.Onsite.ties`) and adds PoUS,
+PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store.
 
 - **Guarantees:** the table's sampled-proofs row and PoUW's period guarantee,
   `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, both proved. Neither is stated yet as its target in

@@ -15239,12 +15239,13 @@
    }
   },
   "CoreOnsite": {
-   "digest": "e83d3b6b1cca1247b63b5d8580f66f290c68e52359a8e850576e7b10ad53c86c",
+   "digest": "187a19a48f2b18d0b1448bbb25de1bc0c10e6512dbd2919d4aa7ae548996b9e1",
    "definitions": {
     "Core.Onsite.components": "f442961e26642b6e55be0e64d4e911658d8eb4c0eca28f6e6cc30621ea458ec9",
-    "Core.Onsite.protocol": "f5539aa853728830c5ec00bfab378b1042251d5140a6fce3ff7e3490e7f2590f",
+    "Core.Onsite.protocol": "0e07f330e559bb81509c5e3c7d9aa51bad8dc41b5d349f96e409d0beac624152",
     "Core.Onsite.store": "864761eb87fd340a42d648553b892218a8a23328c0b95aefbe6f8bd57b414a52",
-    "Core.Onsite.tied": "115a0df23b7403a0f5e000b3863d6efd2012aa7dc7e07fc6bb35eef15d20214d"
+    "Core.Onsite.tied": "115a0df23b7403a0f5e000b3863d6efd2012aa7dc7e07fc6bb35eef15d20214d",
+    "Core.Onsite.ties": "787633b56799a02d9498c28a62ebadad461eb4712290ef10aa41963581403bae"
    }
   },
   "CoreProtocol.Blobs": {

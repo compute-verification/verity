@@ -11,7 +11,8 @@ subprotocols' packages, with no Mathlib:
   (`Blobs.lean`); the stub subprotocols (`Stubs.lean`); and the `#guard`s that pin the rules (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, the inference-only policy,
   PoUW, PoUS, PoUB-P2 (on PoUS's store), network certification and the memory challenger's
-  wipe, the policy and sampled proofs on one registration record, and PoUS and PoUB-P2 on one store (a `tiedSameB`).
+  wipe, the policy and sampled proofs on one registration record and every window of the period on it, as at remote,
+  and PoUS and PoUB-P2 on one store (a `tiedSameB`).
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs, the inference-only policy and
   PoUW's period, the policy and sampled proofs on one registration record and every window of the period on it (a
   `tiedSameB`).
@@ -112,9 +113,9 @@ products are one:
 
 - remote, `tiedSameB "verity/remote/v0" [verity/inference-only/v0, verity/sampled-proofs/v1] [windows]
   components`, whose policy and sampled proofs each commit to the run's registration record;
-- onsite, `tiedSameB "verity/onsite/v0" [verity/inference-only/v0, verity/sampled-proofs/v1] [store]
-  components`, whose policy and sampled proofs each commit to the run's registration record (in either form, the
-  one-stage audit's).
+- onsite, `tiedSameB "verity/onsite/v0" [verity/inference-only/v0, verity/sampled-proofs/v1] [windows, store]
+  components` (`Core.Onsite.ties`), whose policy and sampled proofs each commit to the run's registration record (in
+  either form, the one-stage audit's).
 
 Each product's `#guard`s pin that two records reject it with the policy among the subprotocols. Onsite's PoUW period and
 network certification name one record a window, in their evidence and their period commitment, so they join the check
@@ -124,9 +125,10 @@ every subprotocol names.
 A tie (`Tie`, `Tie.lean`) is the values each named subprotocol reads off its own case (its commitment's bytes, or its
 evidence's) with its own decoder, which must all be one value (`Tie.strays`: `what: s committed D, t committed D'`). `tiedSame id ss ties components`
 (`tiedSameB` over blobs) is `same` with its ties held (`holdTies`): a verdict of `same` that isn't a reject becomes a
-reject when a tie strays, and a reject stays itself. Onsite's one tie, `Core.Onsite.store`, puts PoUS and PoUB-P2 on one
-store: the root of `C*` PoUS's setup published (its commitment's `root`) and the root PoUB-P2's registration names (its
-commitment's `root`, the case's `store_root`). PoUB's generic session (`verity/remote-bandwidth/v0`), whose payload
+reject when a tie strays, and a reject stays itself. Onsite's ties are remote's `Core.Remote.windows` (below), read
+from `core_remote` rather than restated, then `Core.Onsite.store`, which puts PoUS and PoUB-P2 on one store: the root
+of `C*` PoUS's setup published (its commitment's `root`) and the root PoUB-P2's registration names (its commitment's
+`root`, the case's `store_root`). PoUB's generic session (`verity/remote-bandwidth/v0`), whose payload
 root is its own salted tree's, is not a subprotocol. Once the log exists, both read the store's hardware entry.
 Remote's one tie, `Core.Remote.windows`, puts every window of PoUW's period on the policy's record: the digest of the
 record the policy's commitment is, and the digest of each window's Commit record as the period's credit reads it
@@ -160,19 +162,19 @@ Lean to:
 Hypothesis samples 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
 (one sample in six every one aimed at acceptance, one in six all but one, which is aimed at undecided; the inference-only
 policy is never undecided), every case hands the subprotocols the same blobs, and the composition's inputs, its blobs or
-the case itself are often broken. Sampled proofs' cases are aimed at undecided at best (v2's audits whose sample is
-empty; the rest reject), so no product accepts in the difftest. Often
-the tied subprotocols are put on one record (`one_record`), and otherwise they mostly commit to two, which the product
-refuses. On one record the policy declares the one-stage audit's own circuit on its record, which it accepts, so
-onsite's cases reach undecided. Remote's cases reject: an honest period's windows each name their own Commit record,
-not the audit's, so remote's tie refuses them, and a period whose windows are put on the audit's record
-(`windows_on`) refuses itself. `test_remote_refuses_a_period_window_on_another_record` pins the tie's refusal of an
-otherwise undecided case, in Lean and Python, and
+the case itself are often broken. Sampled proofs' cases are all refused (v1's audits, refused by name, and v1's audits
+with one or two changes), so every product's case rejects in the difftest and no tie decides a verdict there; the
+ties' refusals are pinned by each product's `#guard`s. `test_sampled_proofs_refuses_one_stage_v1` shows remote and
+onsite refusing v1 by name with every other subprotocol aimed at acceptance, in Lean and Python. Often the tied
+subprotocols are put on one record (`one_record`), and otherwise they mostly commit to two, which the product refuses.
+On one record the policy declares the one-stage audit's own circuit on its record, which it accepts. An honest period's
+windows each name their own Commit record, not the audit's, so the `windows` tie, remote's and onsite's, refuses them,
+and a period whose windows are put on the audit's record (`windows_on`) refuses itself.
 `test_remote_refuses_two_records_and_else_keeps_the_products_verdict` shows that the record checks change no other
-verdict of the product's. Onsite's PoUS and PoUB-P2 cases are on one store, but for PoUS's honest run on another
+verdict of remote's. Onsite's PoUS and PoUB-P2 cases are on one store, but for PoUS's honest run on another
 (`periods.OTHER_STORE`, a quarter of its cases aimed at acceptance), which onsite refuses beside PoUB-P2's unless it
-rejects already; `test_onsite_refuses_two_stores_and_else_keeps_its_verdict` shows that refusal changes no other
-verdict. A case that names PoUB-P2's by the generic audit's id is refused, as no subprotocol.
+rejects already; `test_onsite_refuses_a_stray_tie_and_else_keeps_its_verdict` shows that its two ties' refusals change
+no other verdict. A case that names PoUB-P2's by the generic audit's id is refused, as no subprotocol.
 `test_a_reference_without_reject_dominance_is_caught` shows the difftest tells the rule above from one in which a
 rejection need not reject the whole: such a reference disagrees with the Lean on a case where one subprotocol rejects and another is undecided.
 `product` names the two composites and refuses every other subset of their subprotocols

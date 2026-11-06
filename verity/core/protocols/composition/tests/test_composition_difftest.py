@@ -9,8 +9,8 @@ breaks, and one-stage v1's `changed_audits`, which the form refuses by name, the
 `wipe_protocol_case.case`; space's and
 bandwidth's from the small periods of their hooks, `periods.py`, all on one committed `C*` but PoUS's run on another
 store, `periods.OTHER_STORE`), often recommits the subprotocols each composite ties to one record (`one_record`: the
-policy to sampled proofs' registration record, on that audit's own declared circuit, `policy_on`, and at remote
-sometimes every window of the period too, `windows_on`), hands every subprotocol the same blobs (`BLOBS`), then often
+policy to sampled proofs' registration record, on that audit's own declared circuit, `policy_on`, and sometimes every
+window of the period too, `windows_on`), hands every subprotocol the same blobs (`BLOBS`), then often
 breaks the composition's own inputs (a component dropped, unknown, repeated or out of order, a case under other params,
 a wrong or short commitment, non-canonical or malformed evidence, blobs missing or malformed) or the case itself (a
 field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly. Sampled
@@ -281,7 +281,7 @@ def one_record(product: R.Same, cases: list[dict], windows: bool = False) -> lis
     """The cases with every subprotocol of ``product.same`` committing to sampled proofs' registration record, each
     with its digest as its Python reads it on `BLOBS`, and the policy's case on the audit's own declared circuit
     where it can be (`policy_on`): cases that pass `Core.Composition.strays` and leave the verdict to the subprotocols.
-    With ``windows``, every window of remote's PoUW period names that record too (`windows_on`), so that remote's
+    With ``windows``, every window of the product's PoUW period names that record too (`windows_on`), so that its
     `windows` tie holds; the period then refuses, since a window's Commit record registers its own tables. Without it,
     an honest period's windows name their own records, and the tie refuses."""
     first = next(c for c in cases if c["id"] == R.SAMPLED_PROOFS.id)
@@ -522,35 +522,43 @@ def test_remote_refuses_two_records_and_else_keeps_the_products_verdict():
     assert seen["two"] > 20 and seen["one"] > 20, dict(seen)
 
 
-def remote_case(cases: list[dict]) -> dict:
-    """Remote's case on its components' cases as they are, with no break of its own."""
-    return {"commitment": R.bind(R.REMOTE.id, [(c["id"], c["digest"]) for c in cases]).hex(),
+def product_case(product: R.Product, cases: list[dict]) -> dict:
+    """The product's case on its components' cases as they are, with no break of its own."""
+    return {"commitment": R.bind(product.id, [(c["id"], c["digest"]) for c in cases]).hex(),
             "evidence": canonical({"components": [{"commitment": c["root"].hex(), "evidence": c["evidence"].hex(),
                                                    "id": c["id"], "params": c["params"]} for c in cases]}).encode().hex(),
             "params": {"components": [{"id": c["id"], "params": c["params"]} for c in cases]},
             "blobs": [b.hex() for b in BLOBS]}
 
 
-def test_sampled_proofs_refuses_one_stage_v1(remote_server):
+@pytest.mark.parametrize("name", ["remote", pytest.param("onsite", marks=pytest.mark.slow)])
+def test_sampled_proofs_refuses_one_stage_v1(name, request):
     """Sampled proofs' one-stage form is one-stage v2: v1's audit under it, one v1 itself decides (undecided, on an
     empty draw at its challenger's coins), is refused by name (`VStar.Recursive.Sampled.V1_REFUSED`) at its params,
-    and v1's evidence under v2's params at the evidence. Remote, its policy and period aimed at acceptance on the
-    audit's record, rejects with that refusal as sampled proofs' reason, in Lean as in Python."""
+    and v1's evidence under v2's params at the evidence. Remote and onsite, every other subprotocol aimed at acceptance
+    on the audit's record, reject with that refusal as sampled proofs' reason, in Lean as in Python. Onsite's case is
+    slow for its space and bandwidth cases (`recorded`)."""
+    product = {"remote": R.REMOTE, "onsite": R.ONSITE}[name]
+    if name == "onsite":
+        request.getfixturevalue("recorded")
+    server = request.getfixturevalue(f"{name}_server")
     want = {"v1": f"params: the parameters name no proofs: {R.V1_REFUSED}",
             "v1-evidence": f"evidence: the evidence names no proofs: {R.V1_REFUSED}"}
+    others = [C for C in product.components if C is not R.SAMPLED_PROOFS]
     seen = collections.Counter()
 
     @settings(max_examples=3, database=None, deadline=None, suppress_health_check=list(HealthCheck))
-    @given(component_case(R.INFERENCE_ONLY, R.ACCEPT), component_case(R.POUW_PERIOD, R.ACCEPT), empty_draws())
-    def check(policy, period, audit):
+    @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), empty_draws())
+    def check(drawn, audit):
         assert OS.answer(OS._case(_v1(audit)))["verdict"] == R.UNDECIDED
         for br, why in want.items():
             sampled = broken_case(audit, br)
             got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
             assert (got["verdict"], got["reason"]) == (R.REJECT, why), got
-            case = remote_case(one_record(R.REMOTE, [policy, period, as_component(R.SAMPLED_PROOFS, sampled)]))
-            assert R.REMOTE.answer(case)["verdict"] == R.REJECT
-            out = remote_server.exchange(case)
+            by_id = {c["id"]: c for c in (*drawn, as_component(R.SAMPLED_PROOFS, sampled))}
+            case = product_case(product, one_record(product, [by_id[C.id] for C in product.components]))
+            assert product.answer(case)["verdict"] == R.REJECT
+            out = server.exchange(case)
             assert out["verdict"] == R.REJECT and f"{R.SAMPLED_PROOFS.id} reject: {why}" in out["reason"], out
             seen[br] += 1
     check()
@@ -633,7 +641,7 @@ def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server
     assert [x.hex() for x in R.window_records(period["root"], period["evidence"])] == [record]
     got = R.SAMPLED_PROOFS.answer({**reused, "blobs": BLOBS})
     assert (got["verdict"], got["reason"]) == (R.REJECT, NO_SESSION), got
-    case = remote_case([policy, period, audit])
+    case = product_case(R.REMOTE, [policy, period, audit])
     assert R.REMOTE.verdicts(case) == [R.ACCEPT, R.ACCEPT, R.REJECT], R.REMOTE.verdicts(case)
     python, lean = R.REMOTE.answer(case), remote_server.exchange(case)
     assert {k: v for k, v in lean.items() if k != "reason"} == {k: v for k, v in python.items() if k != "reason"}
@@ -643,8 +651,9 @@ def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server
 @pytest.mark.slow
 def test_onsite_agrees(onsite_server, recorded):
     """Onsite rejects with a component undecided beside the rejection, its policy and integrity meet on one record
-    (left to the subprotocols) and on two (refused), and PoUS and PoUB-P2 on one store and on two, each often; and
-    PoUB-P2's case named as the generic bandwidth audit's, which is no component, refused."""
+    (left to the subprotocols) and on two (refused), its period's windows on the policy's record and on others, and
+    PoUS and PoUB-P2 on one store and on two, each often; and PoUB-P2's case named as the generic bandwidth audit's,
+    which is no component, refused."""
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, "reject, a component undecided", "one record",
                                                        "two records", "one store", "two stores"))
     assert SEEN["onsite"]["generic bandwidth"] > 0, dict(SEEN["onsite"])
@@ -694,12 +703,18 @@ def test_onsites_bandwidth_is_p2():
     assert [s for s, _ in R.STORE.names] == [R.POUS.id, R.BANDWIDTH.id]
 
 
+def test_onsites_ties_are_remotes_windows_and_the_store():
+    """Onsite holds remote's `windows` tie, the one value of it, before its store tie (`Core.Onsite.ties`)."""
+    assert R.ONSITE.ties == (R.WINDOWS, R.STORE) and R.REMOTE.ties == (R.WINDOWS,)
+    assert R.ONSITE.ties[0] is R.REMOTE.ties[0]
+
+
 @pytest.mark.slow
-def test_onsite_refuses_two_stores_and_else_keeps_its_verdict(recorded):
-    """On drawn cases onsite's verdict is its verdict without the store tie (onsite before it), except where PoUS and
-    PoUB-P2 committed to two stores (PoUS's run on another store, `periods.OTHER_STORE`), which it refuses: the tie
-    changes no other verdict. Python only: the difftest holds the Lean to it. Drawn from a fixed seed, as
-    `verity_difftest.run` draws."""
+def test_onsite_refuses_a_stray_tie_and_else_keeps_its_verdict(recorded):
+    """On drawn cases onsite's verdict is its verdict without its ties (onsite before them), except where a window of
+    its PoUW period names another record than the policy's, or PoUS and PoUB-P2 committed to two stores (PoUS's run on
+    another store, `periods.OTHER_STORE`), which it refuses: the ties change no other verdict. Python only: the
+    difftest holds the Lean to it. Drawn from a fixed seed, as `verity_difftest.run` draws."""
     untied = dataclasses.replace(R.ONSITE, ties=())
     seen = collections.Counter()
 
@@ -708,14 +723,16 @@ def test_onsite_refuses_two_stores_and_else_keeps_its_verdict(recorded):
     @given(composite(R.ONSITE))
     def check(case):
         got, was = R.ONSITE.answer(case), untied.answer(case)
-        two = (R.STORE.what, False) in R.ONSITE.tied(case)
-        if two:
+        strays = [what for what, one in R.ONSITE.tied(case) if not one]
+        if strays:
             assert got["verdict"] == R.REJECT, got
         else:
             assert {k: v for k, v in got.items() if k != "reason"} == {k: v for k, v in was.items() if k != "reason"}
-        seen[f"was {was['verdict']}, two" if two else "same"] += 1
+        seen[f"was {was['verdict']}, two" if strays else "same"] += 1
+        seen.update(f"two {what}s" for what in strays)
     check()
     assert seen["same"] > 20 and seen["was reject, two"] > 0, dict(seen)
+    assert seen["two records"] > 0 and seen["two stores"] > 0, dict(seen)
 
 
 class Trial(R.TiedSame):
