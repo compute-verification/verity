@@ -1,7 +1,7 @@
 # recursion_e2e: the recursive run, timed step by step (`verity bench recursion_e2e`)
 
-Recursive witness zero knowledge proves an inner statement with C-Flock's circuit prover, ZK off, against the inner phase's ZK server. It then
-proves V*, the inner verifier written as C-Flock statements, with `--zk`, and the auditor's Lean verifier checks V*'s
+Recursive witness zero knowledge proves an inner statement with Flock's circuit prover, ZK off, against the inner phase's ZK server. It then
+proves V*, the inner verifier written as Flock statements, with `--zk`, and the auditor's Lean verifier checks V*'s
 releases only. This is the one runner for that pipeline. It drives the steps of the pod script,
 `verity/ml/flock/pod/85-rec-reprice.sh`, as one recorded run, times each step on the smallest real input (K = 4096,
 N = 2), repeats what is cheap to repeat, and says whether the run was whole (every step of one recursive proof) and whether it was accepted. Speed work measures each cut
@@ -118,16 +118,17 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   variables pass through undeclared.
 
 - **Another inner statement** (`stage.sh`, launched as `job.sh` is): `rec_inner.py stage --subcircuit` stages N seeded
-  draws of a census-style subcircuit into `data/$TAG/stage` (plain leaves) and `stage-zk` (hm96), or, with
-  `WINDOW=DIR`, `rec_inner.py stage-window` stages every unit of a served window's member from the window's own rows and
-  salts (`prove_path.py commit`'s window dir). It then runs `job.sh` with 85's `STAGE=0`, which proves what it finds.
+  inputs to a census-style subcircuit into `data/$TAG/stage` (plain leaves) and `stage-zk` (hm96), or, with
+  `WINDOW=DIR`, `rec_inner.py stage-window` stages every proof block of a served window's member from the window's own
+  rows and salts (`prove_path.py commit`'s window dir). It then runs `job.sh` with 85's `STAGE=0`, which proves what it
+  finds.
 
 ## The pipeline (step map)
 
 Every step is a STEP of the pod script (read as it is), run on one node with the big files under
 `$FLOCK_WORK/data/$TAG` for the next step. Each GPU step leases one RTX PRO 6000 per prover invocation (`on_gpu`), and
 everything else is CPU. The where column is a GPU run's: a CPU run (the default) runs every step on its CPU node
-with `GPU=0`. The inner statement is `N` instances of `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}`
+with `GPU=0`. The inner statement is `N` template instances of `GemmCoordinate_v2{K, DOT=HopperBF16WgmmaDot16_v1}`
 (`pod/rec_reprice.py`, the population program cut by `Q_template_instance`), with every proof block sampled.
 
 | # | step (STEP) | command (inside the pod script) | reads | writes | where |
