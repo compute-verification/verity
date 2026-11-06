@@ -49,7 +49,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import I, KEY, observations  # noqa: E402
+from inputs import CARDS, I, observations  # noqa: E402
 
 from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
@@ -369,13 +369,14 @@ def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
     return tuple(Commitment(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
 
 
-def costs(m: Model, s: Serving) -> CostModel:
-    """Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
-    `request` replay domain."""
-    obs = observations()
+def costs(m: Model, s: Serving, card: str = "rtx-pro-6000") -> CostModel:
+    """Flock's model fitted on `card`'s observations (`inputs.CARDS`; the RTX PRO 6000's is int8_llama's fit) with the
+    commitment rate, the block's serve-time commitments and the `request` replay domain."""
+    obs = observations(card)
+    key, cpu = CARDS[card]
     fitted = Fitted(fit(obs, "prove", ["one", "ands", "ands*staged", "ands*drawn"]),
                     fit(obs, "verify", ["one", "ands", "ands*staged", "ands*drawn"]),
-                    fit(obs, "stage", ["one", "ands", "ands*staged"]), I["cpu"].value, KEY)
+                    fit(obs, "stage", ["one", "ands", "ands*staged"]), I[cpu].value, key)
     return replace(fitted.model(), commit_per_bit=I["commit_per_byte"].value / 8, serve=serve(m, s),
                    replay={"request": ReplayDomain(m.requests, s.replay)})
 

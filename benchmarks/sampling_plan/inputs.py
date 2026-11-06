@@ -1,7 +1,8 @@
 """The int8 rows' inputs to the sampling planner (Llama-3.1-8B and Qwen3-8B): each a value, a low and a high, its source and
 its status (M measured, A assumed, D derived from the others), in one currency, GPU-seconds of an RTX PRO 6000 (sm_120);
-the models' shapes; and what every scale commits at serve time, a token a layer, by PoUW scheme (the scales
-table)."""
+the models' shapes; what every scale commits at serve time, a token a layer, by PoUW scheme (the scales
+table); and the cost model's observations by card (`CARDS`: the RTX PRO 6000's, and the `h200` card's in H200
+GPU-seconds)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,6 +22,8 @@ class Input:
 
 I = {
     "cpu": Input(1 / 55, 1 / 110, 1 / 27, "vCPU $0.033/h against sm_120 $1.80/h (X = 55)", "M"),
+    "cpu_h200": Input(0.033 / 5.29, 0.033 / 10.58, 0.033 / 2.65, "vCPU $0.033/h against one H200 SXM's $5.29/h on "
+                      "RunPod, the h200 card's pod (X = 160)", "M"),
     "round": Input(12.6, 12.6, 12.6, "a round (the budget model)", "A"),
     "rounds": Input(48_000, 48_000, 48_000, "a week of rounds (the budget model's S)", "A"),
     "tokens_per_s": Input(20_000, 8_000, 40_000, "int8 Llama-3.1-8B on one RTX PRO 6000: 7.2G MACs a token at 2K context "
@@ -218,7 +221,69 @@ OPENING_SESSIONS: dict[str, dict[tuple[int, int], float]] = {
     "r20261018-211523-93ec": {(512, 64): 156.0, (512, 128): 161.0, (512, 256): 197.0, (512, 512): 234.0}}
 
 
-def observations() -> list[Observation]:
+#: the `h200` card: GLM-5.3's proof blocks at TP8 (benchmarks/served_units/stage.py's types) proved on one H200 by
+#: benchmarks/one_stage/zk_cost.py with `flock-circuit prove --zk --gpu`, the device building the witness and no send check
+#: (arm dev, the deployed prover), per run and (Definition, ANDs a proof block as staged, staged proof blocks, drawn): the
+#: median end-to-end seconds of a warm prover's timed sessions (GPU-s, the live verifier's round trips in them), the CPU
+#: time of Lean `verify --zk` where it verified that point (None elsewhere) and the statement's staging (CPU-s); its
+#: `overhead` step's observations.json
+ZK_H200: dict[str, dict[tuple[str, int, int, int], tuple[float, float | None, float]]] = {
+    "r20261106-074634-13c4": {
+        ("MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}", 73969, 4096, 4096): (2.409, None, 28.6),
+        ("MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}", 73969, 8192, 8): (1.144, None, 32.0),
+        ("MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}", 73969, 8192, 64): (1.311, None, 32.0),
+        ("MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}", 73969, 8192, 8192): (3.956, None, 32.0),
+        ("MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}", 1737375, 512, 512): (7.542, None, 93.2),
+        ("MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}", 1737375, 1024, 8): (6.341, None, 103.2),
+        ("MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}", 1737375, 1024, 64): (6.528, None, 103.2),
+        ("MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}", 1737375, 1024, 1024): (8.794, None, 103.2),
+        ("ScaledMmFp8BlockCoordinate_v2{K=2048,G=128}", 539177, 2048, 2048): (3.489, None, 58.4),
+        ("ScaledMmFp8BlockCoordinate_v2{K=2048,G=128}", 539177, 4096, 8): (2.312, None, 79.7),
+        ("ScaledMmFp8BlockCoordinate_v2{K=2048,G=128}", 539177, 4096, 64): (2.195, None, 79.7),
+        ("ScaledMmFp8BlockCoordinate_v2{K=2048,G=128}", 539177, 4096, 4096): (4.542, None, 79.7),
+        ("ScaledMmFp8BlockCoordinate_v2{K=256,G=128}", 66607, 8192, 8192): (2.407, None, 33.8),
+        ("ScaledMmFp8BlockCoordinate_v2{K=256,G=128}", 66607, 16384, 8): (1.212, None, 45.9),
+        ("ScaledMmFp8BlockCoordinate_v2{K=256,G=128}", 66607, 16384, 64): (1.266, None, 45.9),
+        ("ScaledMmFp8BlockCoordinate_v2{K=256,G=128}", 66607, 16384, 16384): (4.086, None, 45.9),
+        ("ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}", 1619337, 1024, 8): (4.281, None, 108.8),
+        ("ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}", 1619337, 1024, 1024): (5.497, None, 108.8),
+        ("ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}", 1619337, 2048, 8): (4.732, None, 137.8),
+        ("ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}", 1619337, 2048, 64): (4.724, None, 137.8),
+        ("ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}", 1619337, 2048, 2048): (6.764, None, 137.8)},
+    "r20261106-092817-df0b": {
+        ("MoeExpertFp8CoordinateChunk_v1{E=256,K=256,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}", 619034, 128, 128): (19.884, None, 62.4),
+        ("MoeExpertFp8CoordinateChunk_v1{E=256,K=256,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}", 619034, 256, 8): (16.883, None, 68.8),
+        ("MoeExpertFp8CoordinateChunk_v1{E=256,K=256,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}", 619034, 256, 64): (17.583, None, 68.8),
+        ("MoeExpertFp8CoordinateChunk_v1{E=256,K=256,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}", 619034, 256, 256): (18.481, 21.54, 68.8)},
+    "r20261106-074918-e6ff": {
+        ("DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}", 126769, 16384, 16384): (8.054, None, 149.1),
+        ("DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}", 122673, 16384, 16384): (7.996, None, 104.8),
+        ("DsaMqaLogit_v1{H=32,D=128}", 1087058, 2048, 2048): (6.252, None, 75.6),
+        ("DsaTopKShortRow_v1{TOPK=2048}", 28, 32768, 32768): (4.197, None, 166.9),
+        ("MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}", 164320, 4096, 4096): (2.763, None, 77.7),
+        ("MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}", 164320, 8192, 8192): (4.138, None, 120.8),
+        ("MoeSumCoordinate_v1{TOPK=8}", 6494, 16384, 16384): (2.641, None, 23.6),
+        ("MoeSumCoordinate_v1{TOPK=8}", 6494, 32768, 32768): (4.033, None, 25.5),
+        ("RMSNormFusedCuda_v2{N=6144,EPS=1e-05}", 12778458, 1024, 1024): (30.936, None, 633.5),
+        ("RMSNormTriton_v1{N=2048,EPS=1e-06}", 4368140, 2048, 2048): (17.793, None, 347.5),
+        ("RopeOut_v1", 2998, 8192, 8192): (3.985, None, 23.8),
+        ("SiluMulBf16_v2", 1416, 8192, 8192): (2.432, None, 23.0),
+        ("SiluMulBf16_v2", 1416, 16384, 16384): (3.664, None, 23.0),
+        ("SiluMulFp8BlockQuantGroup_v1{G=128}", 48230, 8192, 8192): (2.247, None, 126.4),
+        ("SiluMulFp8BlockQuantGroup_v1{G=128}", 48230, 16384, 16384): (3.558, None, 237.2)},
+    "r20261106-092821-266a": {
+        ("MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}", 620575, 128, 128): (17.365, None, 64.0),
+        ("MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}", 620575, 256, 8): (19.276, None, 68.3),
+        ("MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}", 620575, 256, 64): (17.762, None, 68.3),
+        ("MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}", 620575, 256, 256): (20.799, 21.94, 68.3)}}
+
+
+def observations(card: str = "rtx-pro-6000") -> list[Observation]:
+    if card not in CARDS:
+        raise ValueError(f"no card {card!r}: one of {', '.join(CARDS)}")
+    if card == "h200":
+        return [Observation(run, t, a, c, d, prove=p, verify=v, stage=s)
+                for run, points in ZK_H200.items() for (t, a, c, d), (p, v, s) in points.items()]
     return [Observation(ZK_RUN, f"ScaledMmS8Coordinate_v1{{K={k}}}", s8_coord_ands(k), c, d, prove=p, verify=v, stage=s)
             for (k, c, d), (p, v, s) in ZK.items()] + \
         [Observation(run, OPENING, OPENING_ANDS, c, d, prove=p)
@@ -232,3 +297,12 @@ KEY = {"prover": "flock-circuit bin-dec484d021e461a0-g1-sm120 (binary 21944fa201
        "hardware": "RTX PRO 6000 Blackwell Server Edition (driver 580.173.02), Xeon 6776P, vy-nebius-2; the opening "
                    "unit's, the same card on vy-nebius-1",
        "templates": f"ScaledMmS8Coordinate_v1{{K=4096|14336}}, {OPENING}"}
+
+KEY_H200 = {"prover": "flock-circuit bin-32a698fff862d3db-g1-sm90 (binary 09fbd3d8c1d3, CUDA 13.3), --zk --gpu, "
+                       "FC_HOST_WITNESS and FC_FIREWALL unset",
+            "verifier": "flock-verify lean-3e804125132e928c (binary f399b8425bd6), verify --zk, one CPU",
+            "hardware": "H200 SXM 141 GB (driver 595.91.07), Xeon Platinum 8568Y+, vy-spot-h1",
+            "templates": "GLM-5.3's served proof-block types at TP8 (benchmarks/served_units/stage.py)"}
+
+#: each card's observations, the builds and hardware they key, and its price ratio (`I`'s key): GPU-seconds of that card
+CARDS = {"rtx-pro-6000": (KEY, "cpu"), "h200": (KEY_H200, "cpu_h200")}
