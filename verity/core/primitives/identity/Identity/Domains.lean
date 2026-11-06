@@ -1,7 +1,7 @@
 /-
 One table of domain separators: every versioned string a protocol hashes, derives from or commits under, or names its
 records, schemes and protocols by. `verity/ml/commitments/domains.py` mirrors it, entry for entry
-(`tests/test_domains.py`), beside `identity.tagged_sha512` as this file is beside `Identity.Tagged`.
+(`tests/test_domains.py`).
 
 A name is in today's words; the bytes keep the words of their version (a PoUW period's tags say "window", its
 sampling's say "draw"), because committed formats, pinned vectors and recorded runs carry them. Bytes never change in
