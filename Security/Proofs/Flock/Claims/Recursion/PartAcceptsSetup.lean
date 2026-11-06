@@ -35,7 +35,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 def PartAcceptsV (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) (x : Msg)
     (c : ℕ → Coin) (xO : Msg) (w : Flock.Wit) (ms : List Msg) : Prop :=
-  (∃ st : Stmt, D.parse x = some st ∧ shape st.form) ∧
+  (∃ st : CompiledStatement, D.parse x = some st ∧ shape st.form) ∧
     Flock.check DO.parse xO w = true ∧ (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧
       (findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false ∧ shows s x xO c ∧
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) ∧
@@ -48,7 +48,7 @@ every part, and the recorded calls are true, `IV` accepts the parts' messages, o
 compiled verifier's own evaluations at `xs` (`setupCalls`) collide. -/
 def DecompBV (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (L : LayoutB) (shape : Form → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → Msg → Flock.Wit → List Msg → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (xs : List Msg)
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (xs : List Msg)
     (ws : List Flock.Wit), ws.length = D.nS x → (∀ e ∈ L.allCalls x ws, H e.1 = e.2) →
     (∀ s (hs : s < ws.length), chk s x c (xs.getD s []) ws[s] (L.msgs x ws)) →
       (run H (replay (L.msgs x ws)) IV (xI D x) () fun i => c i.val).out = .acc ∨
@@ -59,7 +59,7 @@ at an accepted run's V\* statements, staged at one prefix of the run's messages 
 def DecompBVS (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (L : LayoutB) (shape : Form → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → Msg → Flock.Wit → List Msg → Prop)
     (ok : Msg → List Msg → List Flock.Wit → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (xs : List Msg)
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (xs : List Msg)
     (ws : List Flock.Wit), ws.length = D.nS x → (∀ e ∈ L.allCalls x ws, H e.1 = e.2) →
     (∀ s (hs : s < ws.length), chk s x c (xs.getD s []) ws[s] (L.msgs x ws)) → ok x xs ws →
       (run H (replay (L.msgs x ws)) IV (xI D x) () fun i => c i.val).out = .acc ∨
@@ -155,7 +155,7 @@ verifier's evaluations is `DecompBV`'s own second outcome, so `JointV` may assum
 theorem decompBV_of_jointV {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {IV : Claims.Verifier Coin}
     {L : LayoutB} {shape : Claims.Recursion.Form → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     {chkV : ℕ → Msg → (ℕ → Coin) → Msg → Claims.Flock.Wit → List Msg → Prop}
-    (hle : ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    (hle : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit), JointV H D L chkV x c xs ws →
         ∀ s < D.nS x, chk s x c (L.msgs x ws))
     (hD : DecompB H D IV L shape chk) : DecompBV H D IV L shape chkV := by
@@ -171,7 +171,7 @@ theorem decompBVS_of_jointV {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
     {L : LayoutB} {shape : Claims.Recursion.Form → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     {chkV : ℕ → Msg → (ℕ → Coin) → Msg → Claims.Flock.Wit → List Msg → Prop}
     {ok : Msg → List Msg → List Claims.Flock.Wit → Prop}
-    (hle : ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    (hle : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit), JointV H D L chkV x c xs ws → ok x xs ws →
         ∀ s < D.nS x, chk s x c (L.msgs x ws))
     (hD : DecompB H D IV L shape chk) : DecompBVS H D IV L shape chkV ok := by
@@ -187,7 +187,7 @@ theorem decompBV_of_jointVP {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
     {L : LayoutB} {shape : Claims.Recursion.Form → Prop}
     {chkP : ℕ → Msg → (ℕ → Coin) → Claims.Flock.Wit → List Msg → Prop}
     {chkV : ℕ → Msg → (ℕ → Coin) → Msg → Claims.Flock.Wit → List Msg → Prop}
-    (hle : ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    (hle : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit), JointV H D L chkV x c xs ws →
         ∀ s (hs : s < ws.length), chkP s x c ws[s] (L.msgs x ws))
     (hD : DecompBP H D IV L shape chkP) : DecompBV H D IV L shape chkV := by
@@ -208,7 +208,7 @@ open Claims.Recursion (Bound Inner)
 /-- **`ok` at every accepted run's V\* statements**, at any outer witnesses of the parts' count. -/
 def OkRuns {W : Type} (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (I : Claims.Recursion.Inner Coin W)
     (shape : Claims.Recursion.Form → Prop) (ok : Msg → List Msg → List Claims.Flock.Wit → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       ∀ ws : List Claims.Flock.Wit, ws.length = D.nS x → ok x (Claims.Recursion.runVstar H D I P x ω r) ws
 

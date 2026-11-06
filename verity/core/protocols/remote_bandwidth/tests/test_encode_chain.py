@@ -65,7 +65,7 @@ def e_per_squaring(log2_inv_eps: int) -> int:
 
 
 def bits(lo: int, hi: int) -> int:
-    """A declared interval's bits, `⌈log₂ size⌉` (`Gate.bits`)."""
+    """A declared interval's bits, `⌈log₂ size⌉` (`IntGate.bits`)."""
     return (hi - lo).bit_length()
 
 
@@ -126,8 +126,8 @@ def offset(c: int, *g: int) -> int:
 
 
 def ripple(ckt: Ckt, f: list[Val]) -> tuple[list[Val], Val]:
-    """A carry pass, two gates a limb: the limb and the carry, each its own budgeted gate (the red team's IMMA plus
-    `I32Rem` and `I32Div`)."""
+    """A carry pass, two gates a limb: the limb and the carry, each its own budgeted gate (an IMMA plus `I32Rem`
+    and `I32Div`)."""
     out, c = [], (0, 0, 0)
     for m in range(N_LIMBS):
         out.append(ckt.gate(lambda c, g: offset(c, g) % 256 - 128, c, f[m], lo=-128, hi=127))
@@ -245,7 +245,7 @@ def renormalization(L: int, eps_num: int, eps_den: int, budgeted: int, floor: in
 
 
 def test_renormalization_survives_non_carrying_families() -> None:
-    """The red team's product families `{a : a_l ≤ D_l}`, from its greedy search: the all-max member's folded column
+    """The product families `{a : a_l ≤ D_l}` a greedy search finds: the all-max member's folded column
     sums bound every member's, so if they are bytes and their value is below `p`, the circuit with no budgeted gate
     outputs every member's canonical bytes (and is proven: its derived intervals are those sums)."""
     rng = random.Random(27)
@@ -329,11 +329,9 @@ def lean_codec_rows() -> list[tuple[int, int, list[int], int, int, int, int, int
 
 
 def toy_key(n: int, c: int, cs: list[int], mask: int, tau: int) -> codec.Key:
-    """A masked key at the toy field `p = 2^n − c`, which `codec.Codec` refuses (it takes p1024 and p512 only)."""
-    toy = object.__new__(codec.Codec)
-    for name, v in (("field", codec.Field(f"toy{n}", n, c)), ("rounds", len(cs)), ("masked", True)):
-        object.__setattr__(toy, name, v)
-    return codec.Key(toy, tuple(cs), tau, mask)
+    """A masked key at the toy field `p = 2^n − c`: a `codec.Sloth`, which no `codec.Codec` is (those take p1024 and
+    p512 only)."""
+    return codec.Key(codec.Sloth(codec.Field(f"toy{n}", n, c), len(cs), True), tuple(cs), tau, mask)
 
 
 def test_encode_word_agrees_with_lean() -> None:

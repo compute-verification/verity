@@ -13,7 +13,7 @@ name the same request, else the Call is AMBIGUOUS. Any other row count is UNATTR
 no Call is dropped, guessed or shared.
 
 Projection: request r's Calls in fold order, segmented at r's own `TokenSelect` Calls into r's steps (prefill,
-then one per decode). Operand sources are canonicalised exactly as `compare.Prog.canon` does, relative to the projection:
+then one per decode). Operand sources are canonicalised exactly as `compare.RootView.canon` does, relative to the projection:
 `(TOK, lo, hi)` for r's OWN prompt parameter, `(W, field, lo, hi)` for weights, `(N, step_r, index_r, lo, hi)` for a node
 produced by one of r's Calls. A read of ANOTHER request's prompt parameter or of a node resolved to another request
 is a cross-request dependency (`XREQ`): it is counted, reported with examples, and fails the sweep row — token-row independence is
@@ -85,7 +85,7 @@ def record_ops() -> Ops:   # the checker of record's operations: X-09's default,
 
 
 def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = None, within_step: str = DEFAULT_WITHIN_STEP,
-              oracle: "C.Prog | None" = None, components: "dict[str, C.Prog] | None" = None, ops: Ops | None = None) -> dict:
+              oracle: "C.RootView | None" = None, components: "dict[str, C.RootView] | None" = None, ops: Ops | None = None) -> dict:
     if within_step not in WITHIN_STEP_CRITERIA:
         raise ValueError(f"within_step must be one of {WITHIN_STEP_CRITERIA}, got {within_step!r}")
     ops = ops or record_ops()
@@ -99,7 +99,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     log_path = log_path or os.path.join(oracle_dir, "capture", "log.jsonl.gz")
     header, steps = read_steps(log_path)
     reqs, param_of, parent_of = request_params(header)
-    # the caller (global_match.check) may pass the fold it has already decoded: the fold Prog is read-only
+    # the caller (global_match.check) may pass the fold it has already decoded: the fold RootView is read-only
     # after load_oracle and at B16 1024/128 it is ~40 GB of Python objects -- decoding it a second time in the same process doubled
     # GM-01's peak RSS (87 GB on cp-dev1) for nothing
     with _Phase(run_prof, "fold_load") if profiling else _NoPhase():
@@ -216,7 +216,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             bad_derived.append(d)
         else:
             derived.setdefault(sh, d)
-    A_cache: dict[tuple[int, ...], C.Prog] = {}
+    A_cache: dict[tuple[int, ...], C.RootView] = {}
     components = components if components is not None else {}  # decoded component Progs keyed by dir, shared with the caller
 
     res = {"schema": "cb-a/batch-decomp/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,

@@ -4,9 +4,11 @@ the models' shapes; and what every scale commits at serve time, a token a layer,
 table)."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil, log2
 
+from verity.ml.windows.interface import K_MAX, K_MIN, LAST_BLOCK_BYTES, MASK_LOG, PER_SLOT, SLOT_LOG
 from verity.core.protocols.sampled_proofs.costfit import Observation
 
 
@@ -25,11 +27,9 @@ I = {
     "rounds": Input(48_000, 48_000, 48_000, "a week of rounds (the budget model's S)", "A"),
     "tokens_per_s": Input(20_000, 8_000, 40_000, "int8 Llama-3.1-8B on one RTX PRO 6000: 7.2G MACs a token at 2K context "
                           "against 5e14 MAC/s dense int8 at 30-40% (prefill) down to decode's weight-bandwidth bound", "A"),
-    "context": Input(2048, 2048, 2048, "prefill at 2K, positions uniform (the budget model's binding cell)", "A"),
-    "step_tokens": Input(256, 64, 2048, "tokens a forward step (a replay unit is one layer of one step)", "A"),
-    "replay_layer_step": Input(5.2e-4, 1.0e-4, 2.0e-3, "one layer of one step re-executed from its committed input: its "
-                               "weights' read (218 MB at 1.8 TB/s) plus 256 tokens at the plain rate; Qwen3-8B on H200 "
-                               "is 0.18 ms a layer-step at B32", "A"),
+    "context": Input(2048, 2048, 2048, "prefill at 2K, positions uniform (the budget model's binding cell): a request is "
+                     "one prompt of it, re-run whole from its committed tokens and the weights to rebuild a drawn proof "
+                     "block's witness, at `tokens_per_s`", "A"),
     "commit_per_byte": Input(4.34e-12, 2.2e-12, 1.3e-11, "SHA-512 rows on H200: 3.62 ps a byte plus 2.94 ns a 4 KiB leaf; "
                              "sm_120 taken at 0.5-3x", "M"),
     "commit_floor": Input(0.060, 0.045, 0.101, "the one serve-time term of the 'floor' scheme: the measured "
@@ -37,9 +37,9 @@ I = {
                           "sm_120 (0.101 at R = 64), the leaves the Commit holds and PoUW's "
                           "seeds read under compile: Llama-3.1-8B's 26,624 B a token a layer, which the "
                           "serve-time total prices with every other scale's bytes", "M"),
-    "remote_receipts": Input(268e6, 268e6, 268e6, "the remote audit's receipts a GPU a pass: 64 B a 4 KiB block over the "
+    "remote_receipts": Input(268e6, 268e6, 268e6, "PoUB's receipts a GPU a pass: 64 B a 4 KiB block over the "
                              "registered store, 128 GiB on the 8-GPU Llama-3.1-8B node", "D"),
-    "passes_per_s": Input(65, 1, 82, "remote-audit passes a GPU-second: about 60-70 at 12.1 ms a pass; 82 back to back; "
+    "passes_per_s": Input(65, 1, 82, "PoUB passes a GPU-second: about 60-70 at 12.1 ms a pass; 82 back to back; "
                           "whether every served step is a pass is open", "A"),
     "decode_tokens": Input(32, 32, 32, "tokens a decode step (B32, the scales table's decode)", "A"),
     "compress_latency": Input(4.3e-6, 2.0e-6, 6.0e-6, "seconds a dependent SHA-512 compression on decode's critical path: "
@@ -118,7 +118,7 @@ def serve_rows(m: Model, scheme: str, *, kv: bool = False) -> list[Row]:
       K = 4,096 and 3 at 12,288, taken as 3 at 14,336); `h1-bf16` the same with the A rows BF16;
     - `kv`: the remote KV append's payload, one 4 KiB block a token-layer, when live KV is credited (not for chat).
 
-    The remote audit's receipts are a GPU's, not a token's (`I['remote_receipts']`), and `floor` is the measured term
+    PoUB's receipts are a GPU's, not a token's (`I['remote_receipts']`), and `floor` is the measured term
     alone (`I['commit_floor']`)."""
     if scheme not in SCHEMES:
         raise ValueError(f"no PoUW scheme {scheme!r}: one of {', '.join(SCHEMES)}")
@@ -166,15 +166,38 @@ def tree_chain(leaves: float) -> int:
 
 
 
+def block_k_log(ands: int, rows: Sequence[int]) -> int:
+    """The ``k_log`` of the C-Flock block that holds one proof block of ``ands`` ANDs opening ``rows`` (bytes each), as
+    C-Flock's composer lays it out (`verity_flock.circuit.compose`'s ranges): the unit's slot, the least power of two above
+    its ANDs and its rows' bits (a row an AND and a column a port bit, as `UnitStager`'s early check counts them), beside an
+    hm96 slot a row (a power of two in all) and the mask, then a sha512x3 slot per `PER_SLOT` compressions before the rows'
+    last SHA-512 blocks. A row's opening is those slots, not ANDs in the unit's slot."""
+    hm = (1 << (len(rows) - 1).bit_length()) << SLOT_LOG
+    slot = 1 << max(7, (ands + 8 * sum(rows)).bit_length())
+    comps = sum(-(-(b - LAST_BLOCK_BYTES) // 128) for b in rows if b > LAST_BLOCK_BYTES)
+    bits = (-(-(hm + slot + (1 << MASK_LOG)) >> SLOT_LOG) + -(-comps // PER_SLOT)) << SLOT_LOG
+    return max(K_MIN, (bits - 1).bit_length())
+
+
+def cap(ands: int, rows: Sequence[int]) -> int:
+    """A statement's proof blocks of ``ands`` ANDs opening ``rows``: one a C-Flock block of 2^`block_k_log` under
+    m = k_log + nbl <= 35, at most 2^20 (below 2^22 the composer packs several a block, about as many a statement); 0, not a
+    proof block, past C-Flock's 2^`K_MAX`."""
+    k = block_k_log(ands, rows)
+    return 0 if k > K_MAX else min(1 << (35 - k), 1 << 20)
+
+
 def s8_coord_ands(k: int) -> int:
     """One s8 coordinate's ANDs with its rows' openings, as `costfit` counts them: K/32 steps, the epilogue, two K-byte
-    operand rows and three one-block rows (the scales and the output)."""
-    return k // 32 * S8_STEP + EPILOGUE + 2 * (HM96 + SHA512 * ceil((k + 17) / 128)) + 3 * (HM96 + SHA512)
+    operand rows and three one-block rows (the scales and the output), each at `optimize.row_ands`."""
+    from verity.core.protocols.sampled_proofs.optimize import row_ands
+
+    return k // 32 * S8_STEP + EPILOGUE + 2 * row_ands(k) + 3 * row_ands(1)
 
 
 #: the measurements the cost model is fitted from (`costfit`): benchmarks/one_stage/zk_cost.py's sessions of
-#: `ScaledMmS8Coordinate_v1{K}` by `flock-circuit prove --zk --gpu` with the firewall's send check, per (K, staged units,
-#: drawn units): the mean wall of its two cold prover processes (GPU-s: one touched statement's prover today, its statement
+#: `ScaledMmS8Coordinate_v1{K}` by `flock-circuit prove --zk --gpu` with the ZK server's send check, per (K, staged units,
+#: sampled proof blocks): the mean wall of its two cold prover processes (GPU-s: one touched statement's prover today, its statement
 #: build included), the mean CPU time of Lean `verify --zk` on its three sessions and its statement's staging (CPU-s)
 ZK_RUN = "r20261018-060433-b55e"
 ZK: dict[tuple[int, int, int], tuple[float, float, float]] = {
@@ -200,14 +223,14 @@ ZK: dict[tuple[int, int, int], tuple[float, float, float]] = {
     (14336, 512, 512): (131.07, 119.78, 41.6)}
 
 
-#: the remote bandwidth audit's opening unit (`verity.ml.commitments.gates.block_check`): a drawn receipt opened in
+#: PoUB's opening unit (`verity.ml.commitments.gates.block_check`): a drawn receipt opened in
 #: circuit, its 4 KiB block decoded to its payload, its sketch receipt recomputed, and the receipt leaf and the payload
 #: opened to their roots (its ANDs are the whole unit's, every opening included)
 OPENING = "BlockOpeningCheck_v1{N=512,C=569,K=2,MASKED=0,BYTES=4096,ROWS=16,LEAF=16,P=64,DR=2,DP=12,DV=1}"
 OPENING_ANDS = 29_617_630
 
-#: benchmarks/one_stage/a8.py's sessions of it by `flock-circuit prove --zk --gpu` with the firewall's send check, per run
-#: and (staged units, drawn units): the GPU-seconds its cold prover process held the lease (its wall less the lease's
+#: benchmarks/one_stage/a8.py's sessions of it by `flock-circuit prove --zk --gpu` with the ZK server's send check, per run
+#: and (staged units, sampled proof blocks): the GPU-seconds its cold prover process held the lease (its wall less the lease's
 #: wait; the mean of two where it ran two). Their device phase is 79 ms an opening at a full statement, 16 ms without the
 #: send check, the GPU's own algebra about 1 ms of it. They
 #: give no `verify`: a8.py times Lean's by wall (478-488 s, flock-verify lean-4e521bba8e1bc519), not CPU. Nor `stage`:

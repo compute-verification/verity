@@ -3,8 +3,8 @@
 * an accepted audit record is sampled proofs' accept: the registration's digest, the drawn and proved units with the bound
   on wrong units at δ, and the profile as `Core.Integrity` with δ an exact ratio, all read back by the core answer's
   decoder; the report's ε is that bound over the window's units;
-* a refusal of the records, a check before the draw that failed, an audit record that doesn't accept and advice fixed
-  after the draw each reject by name, with no public outputs or profile;
+* a refusal of the records, a check before the sample that failed, an audit record that doesn't accept and advice fixed
+  after the sample each reject by name, with no public outputs or profile;
 * an audit that left nothing behind is an error, not a verdict;
 * an audit record decided at δ = 0.01 (a float in the record) is the exact ratio 1/100 in the profile.
 """
@@ -84,7 +84,7 @@ def test_a_refused_audit_record_names_leans_refusals(tmp_path):
 
 def test_a_tampered_wired_window_names_the_drawn_units_its_sessions_refused_before_leans_missing_files(tmp_path):
     """A drawn member whose live session the verifier of record rejects leaves no proof files, so Lean's replay finds
-    none: the reason names the drawn units not proved, by template, and the verifier of record's rejection first."""
+    none: the reason names the sampled proof blocks not proved, by template, and the verifier of record's rejection first."""
     mm, quant = "ScaledMmS8_v1{K=128,N=128}", "QuantRowS8_v1{N=128,RELU=true}"
     rec = record(False, proved=False)
     rec["checks"]["proved"]["detail"] = {"units": {"drawn": list(range(12)), "statement": list(range(8, 12))}}

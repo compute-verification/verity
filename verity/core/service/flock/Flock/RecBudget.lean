@@ -9,8 +9,15 @@ holds its `2 q` openings (`q < 256`, `fast100`), a later level's RecCap both rep
 `2^cap ≤ 128`, a part its two reps; a part registers its row ports (at most `RecResiduals.MAX_REGIONS = 64`) with `v` and
 `out`; and the deepest registered tree is `rec-acc`'s, the chain of every opening of both reps and R's, fewer than `2^12`
 rows. It also refuses an inner shape at which V\*'s list (`RecVStar.statements`) holds more than `MAX_STATEMENTS`
-statements (`statements`), so the recursion's V\* parts, one a statement, are at most that many; a deployed shape's list
-holds about ten (`fast100`'s levels, the algebra's parts, then RecCap). `verity_flock.rec_budget` is the stager's mirror.
+statements (`statements`), so the recursion's V\* parts, one a statement, are at most that many: the parts the
+recursion's soundness bound is proved at (its extractor's reruns and `κ`). A plain list holds each `fast100` level's
+RecOpen and RecCap and the algebra's parts, at most `16` at every `m ≤ 35` of at most three regions; candidate 3's adds
+RecSparse, R's levels and R's opening, `15` at `m ≤ 27`. `verity_flock.rec_budget` is the stager's mirror.
+
+The inner statement's setup hashes every row of its public file (two SHA-512 inputs a row, then the row tree), and a
+shared-row file's tables are as long as its header says, which only the file's length bounds. So where the verifier
+holds the inner statement's files, `RecSetup.checkShape` refuses one whose shared-row table holds more than
+`MAX_INNER_ROWS` rows (`innerRows`), as many as a statement's instances can be (`m ≤ 35`, slots of at least `2^7`).
 -/
 import Flock.RecVStar
 
@@ -24,7 +31,9 @@ def MAX_PORTS : Nat := 4096
 /-- The deepest registered tree a V\* session reads: `log2ceil leaves` levels. -/
 def MAX_DEPTH : Nat := 64
 /-- The most statements V\*'s list holds at the verifier's inner shape: the recursion's V\* parts. -/
-def MAX_STATEMENTS : Nat := 4096
+def MAX_STATEMENTS : Nat := 16
+/-- The most rows a shared-row table of the inner statement's public file holds. -/
+def MAX_INNER_ROWS : Nat := 268435456
 
 def tail : String := "the recursion's call bound covers no more"
 
@@ -54,7 +63,8 @@ def table (inner : Option RecVStar.Inner) (sts : Array Stmt) : V Unit :=
 /-- **V\*'s list of `n` statements is within the cap.** -/
 def count (n : Nat) : V Unit :=
   if MAX_STATEMENTS < n then
-    throw s!"refused: V*'s list at the verifier's inner shape holds {n} statements, more than {MAX_STATEMENTS}: {tail}"
+    throw (s!"refused: V*'s list at the verifier's inner shape holds {n} statements, more than {MAX_STATEMENTS}: " ++
+      s!"the recursion's soundness bound covers at most {MAX_STATEMENTS} V* parts")
   else pure ()
 
 /-- **V\*'s list at the verifier's inner shape holds at most `MAX_STATEMENTS` statements.** Under no inner shape nothing
@@ -65,6 +75,16 @@ def statements (inner : Option RecVStar.Inner) : V Unit :=
   | some i => match RecVStar.statements i with
     | .ok ss => count ss.size
     | .error _ => pure ()
+
+/-- **The inner statement's shared-row tables hold at most `MAX_INNER_ROWS` rows each**, at the statement `st` its files
+set up. A per-instance file has no table, and passes. -/
+def innerRows (st : Stmt) : V Unit :=
+  match st.pub.tables with
+  | none => pure ()
+  | some t =>
+    if t.counts.any (MAX_INNER_ROWS < ·) then
+      throw s!"refused: the inner statement's public file has a shared-row table of more than {MAX_INNER_ROWS} rows: {tail}"
+    else pure ()
 
 end RecBudget
 end Flock

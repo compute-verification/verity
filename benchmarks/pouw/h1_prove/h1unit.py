@@ -1,4 +1,4 @@
-"""The H1 tile unit as a C-Flock statement, and the window's commitments it is opened against: what the committer, the
+"""The H1 tile unit as a Flock statement, and the window's commitments it is opened against: what the committer, the
 prover and the verifier of `run.py` share.
 
 * **The unit** is `circuit.h1zy.PouwH1TileZy` over `circuit.h1tile.PouwH1Tile{EXACT=GemmAccumulatorS8_v2{K, sm120}, R, C,
@@ -36,7 +36,7 @@ prover and the verifier of `run.py` share.
   it is held across windows: `credit.domain_of`), so the Lean verifier opens every row a statement reads
   against their roots; ``receipt`` is the
   window's own tree (`domain`), opened outside the proof. Every unit's ``roots`` input is (the A tables' digest, root(b))
-  (`window_roots`). `commit_strings` computes a row's ``b || c`` with C-Flock's own function on the port the statement's
+  (`window_roots`). `commit_strings` computes a row's ``b || c`` with Flock's own function on the port the statement's
   META declares (`stage.py` holds the two equal), so a proof's committed rows are the window's leaves exactly when its
   rows and salts are the committed ones.
 * **The window's public Program** (`h1window.program`, `Shape.window`): every tile of the window as one call of the unit
@@ -85,7 +85,7 @@ SALT_BYTES = 192
 M32 = (1 << 32) - 1
 #: the public row's parameters, in its bit order
 PUBLIC = HW.PUBLIC
-PUB_BITS = 512 + 64 + 1024
+PUB_BITS = CC.PUBLIC_ROW_BITS
 #: STAND-INS for what the network certifier and the window's registration give a certified window, which this harness
 #: runs without: the certifier's reveal(p) (`stand_in_reveal`), the registered stream, and the registered prover's id
 STAND_IN_REVEAL_TAG = b"verity/pouw/h1-prove/stand-in-reveal/v0\0"
@@ -112,8 +112,8 @@ def tile() -> str:
     return t
 
 
-#: the structural statement's layout mode under ``H1_TMPL=structural`` (#3226's struct_lower costs and #3249's structural
-#: verdicts are at it)
+#: the structural statement's layout mode under ``H1_TMPL=structural`` (struct_lower's costs and the structural verdicts
+#: are measured at it)
 LAYOUT = "iv/hybrid/4"
 #: ``H1_TMPL``'s values for the flat statement (also unset or empty) and for the structural one at `LAYOUT`
 FLAT, STRUCTURAL = "flat", "structural"
@@ -123,8 +123,9 @@ def layout() -> str | None:
     """The statement's form: ``H1_TMPL`` unset, empty or ``flat``, None: the flat statement (``flock-circuit``, the unit's
     netlist in the file), the one the Lean verifier accepts; ``structural``, the templated statement at `LAYOUT`
     (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another
-    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The Lean verifier refuses a templated
-    statement, after every other check, until its proof lands (`Tags.templated`, PRF-133), so it stays opt-in."""
+    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The soundness proof covers a templated
+    statement only without the verifier's registered reads (`ProvedScope.scopeOkT`), so the Lean verifier refuses H1's,
+    which read ``--registered``, after every other check, and it stays opt-in."""
     import os
     from verity_flock import tmpl as TM
     m = os.environ.get("H1_TMPL") or FLAT
@@ -155,7 +156,7 @@ def stager(definition, name: str, in_rows, out_rows, layout: str | None, **kw):
 def stand_in_reveal(coin: bytes) -> bytes:
     """A STAND-IN for the network certifier's salt for the window, its ``reveal(p)`` (`pouw.salt.revealed`), which this
     harness has no certifier to give: SHA-512 of the epoch's opened salt coin (`pouw.coins`) under this harness's tag.
-    Like the certifier's salt it is the auditor's, drawn before the window and opened only after the window's roots are
+    Like the certifier's salt it is the auditor's, sampled before the window and opened only after the window's roots are
     recorded; unlike it, no certifier signs it or bounds when it is revealed."""
     return hashlib.sha512(STAND_IN_REVEAL_TAG + bytes(coin)).digest()
 
@@ -441,11 +442,15 @@ def statement_tables(z: dict, in_ports: list[str], out_ports: list[str]) -> dict
 
 @dataclass(frozen=True)
 class Shape:
-    """One H1 tile unit's shape: R A rows and C B rows at contraction K."""
+    """One H1 tile unit's shape: R A rows and C B rows at contraction K. With ``j10r`` the unit is J10-R's
+    (`h1tile.PouwH1Tile5` under `h1window.tile_unit`, chunked as `h1window.program` declares it), whose public row also
+    holds its call and blocks (`core_check.PUBLIC_ROW_J10R_BITS`), and its statement's rows are named by
+    `h1window.window_ports` (``a_k<K>_<i>``, ``b_k<K>_<j>``), the ports core's `credit.registered_file` reads."""
 
     k: int
     r: int = TILE[0]
     c: int = TILE[1]
+    j10r: bool = False
 
     @cached_property
     def layout(self):
@@ -463,23 +468,34 @@ class Shape:
 
     @property
     def receipt_words(self) -> int:
+        if self.j10r:
+            return sum(dict(self.definition().signature()[1].fields)[HW.OUTPUTS[0]].leaf_widths()) // 16
         return 4 * self.layout.sets
 
     @property
     def in_rows(self) -> list[str]:
+        if self.j10r:
+            return [p for p, *_ in HW.statement_rows(self.definition())][:-1]
         return [f"a{i}" for i in range(self.r)] + [f"b{j}" for j in range(self.c)] + ["zy"]
 
+    @property
+    def pub_bits(self) -> int:
+        return CC.PUBLIC_ROW_J10R_BITS if self.j10r else PUB_BITS
+
     def ports(self) -> list:
-        """The statement's rows as C-Flock's ports: the A and B rows, the record, the public row, then the receipt's and
+        """The statement's rows as Flock's ports: the A and B rows, the record, the public row, then the receipt's and
         ok's output rows."""
         from verity_flock import circuit as FC
         return ([FC._port(n, self.ab_words, 16 * self.ab_words) for n in self.in_rows[:-1]]
-                + [FC._port("zy", self.record_words, 16 * self.record_words), FC._port("pub", PUB_BITS // 16, PUB_BITS)]
+                + [FC._port("zy", self.record_words, 16 * self.record_words),
+                   FC._port("pub", self.pub_bits // 16, self.pub_bits)]
                 + [FC._port("o0", self.receipt_words, 16 * self.receipt_words), FC._port("o1", len(OK), 16 * len(OK))])
 
     def unit(self):
-        """The tile unit (`h1window.tile_unit`, over the v1 or v3 H1 tile by `tile`)."""
+        """The tile unit (`h1window.tile_unit`, over the v1 or v3 H1 tile by `tile`; J10-R's with ``j10r``)."""
         from verity.core.protocols.pouw.circuit import h1tile as H
+        if self.j10r:
+            return HW._chunked(self.k, HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile5))
         return HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile3 if tile() == "v3" else None)
 
     def definition(self):
@@ -498,10 +514,11 @@ class Shape:
         """The unit's `UnitStager` on K's statement rows (`h1window.statement_rows`, under this harness's ports): its circuit,
         built once and written to ``circuit``, bound to ``bind`` (``{"partition", "program"}``: the window's partition and
         Program, `Shape.window`), templated from struct_lower or flat as `layout` says (`stager`), or with ``flat`` the
-        flat statement whatever ``H1_TMPL`` says."""
+        flat statement whatever ``H1_TMPL`` says. A J10-R statement's rows are `h1window.statement_rows`' own
+        (`h1window.window_ports`' names, credit's)."""
         template = self.definition()
-        return stager(template, name, HW.statement_rows(template, ports(template)), HW.STATEMENT_OUT_ROWS,
-                      None if flat else layout(), circuit=circuit, bind=bind)
+        rows = HW.statement_rows(template) if self.j10r else HW.statement_rows(template, ports(template))
+        return stager(template, name, rows, HW.STATEMENT_OUT_ROWS, None if flat else layout(), circuit=circuit, bind=bind)
 
 
 # -- words ------------------------------------------------------------------------------------------------------------------
@@ -563,7 +580,7 @@ def receipt_words(rc: list[int]) -> np.ndarray:
 
 
 def commit_strings(port, rows: np.ndarray, salts: list[bytes]) -> list[bytes]:
-    """Each row's ``b || c`` under its salt, by C-Flock's own function (`circuit._commit_strings`) on `port`."""
+    """Each row's ``b || c`` under its salt, by Flock's own function (`circuit._commit_strings`) on `port`."""
     from verity_flock import circuit as FC
     return FC._commit_strings([port], {port.name: np.asarray(rows, np.uint16).reshape(len(salts), -1)}, {port.name: salts})[port.name]
 
@@ -673,7 +690,7 @@ def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[d
                  reads: list[dict[str, tuple[str, int, str]]]) -> bytes:
     """The verifier's own public file for n units (`circuit.write`'s ``pub_path`` of a shared-row statement):
     ``circuit_head`` the statement's circuit-side fields (its META, pin and class, which the verifier reads off the
-    circuit file it holds), each unit's global index in the window's Program (``indices``, ascending: the drawn units),
+    circuit file it holds), each unit's global index in the window's Program (``indices``, ascending: the sampled proof blocks),
     each unit's rows' ``b || c`` (port name -> 128 bytes: the window's opened leaves, and its own public and ok rows'), and
     each unit's registered reads (``reads``: port -> (value, position, path), the position the verifier's Program reads
     and the opened path, hex; one value a port, `one_value`). A registered port's table is its units' distinct positions

@@ -20,7 +20,7 @@ from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.parts import n_members
 from verity.ml.circuits.program import INPUT_ID, Program, input_id, is_input
 from verity.ml.circuits.refs import Affine, Coll, Concat, array_of, refs_from_json, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Record, Tuple, Value, type_from_json
+from verity.ml.circuits.types import Array, RecordType, Tuple, Value, type_from_json
 
 PATH = Path(__file__).parent / "format_vectors.json"
 V16, V32 = Value(16), Value(32)
@@ -68,7 +68,7 @@ RowDef = _comp("TRow", ("N", "OP", "C", "D"), lambda S: ((("row", Array(S.N, V32
 Row = bind(RowDef, N=4, OP=TAdd, C=1.5, D={"k": 2, "a": [1, "x"]})
 
 X_T = Array(2, Array(4, V32))
-R_T = Record(("h", Array(2, V16)), ("b", V32))
+R_T = RecordType(("h", Array(2, V16)), ("b", V32))
 RET_T = Tuple(Tuple(V32, V32), Array(2, V32), Array(4, V32), Tuple(V32, Array(4, V32)), V32, V32, V32, V32, V32)
 
 
@@ -155,7 +155,7 @@ def jcs(v) -> bytes:
 
 
 def leaf_widths(t) -> list[int]:
-    """Row-major leaves: an Array's elements in index order, a Tuple's or Record's fields in declared order."""
+    """Row-major leaves: an Array's elements in index order, a Tuple's or RecordType's fields in declared order."""
     tag = t[0]
     if tag == "Value":
         return [t[1]]

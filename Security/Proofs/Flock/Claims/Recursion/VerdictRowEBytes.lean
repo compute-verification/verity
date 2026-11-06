@@ -51,8 +51,7 @@ theorem outRowPorts_of_hidden {r : Read} {sts : Array Stmt} (hs : r.tablesOf = s
   unfold HiddenExec.setupOne at hd
   rw [Flock.Readable.tagsAt_hiddenOutputs, hh] at hd
   simp only [↓reduceIte] at hd
-  obtain ⟨hpa, hcr⟩ := Hidden.parse_untyped ht' (Hidden.setupHidden_spec' hd).parse
-  exact (Hidden.out_rows_v1 hpa hcr hv1).2.1
+  exact ((Hidden.committed_of_commit (Hidden.setupHidden_spec' hd).parse).outRows ht' hv1).2.1
 
 end Hidden
 
@@ -355,6 +354,7 @@ theorem stagedRecOpen {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s 
     rw [e]
     exact (oneFull_staged hS hsu).1
   obtain ⟨tags, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   rw [hc0] at P
   have hn : c.unit.name = Flock.RecOpen.unitName LANES HH := by rw [← hc0]; exact (htab 0 h0).1
   have hsc := (staged_scope hS hx h0).1

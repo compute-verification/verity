@@ -1,12 +1,12 @@
 """The honest plain session: the compiled Lean verifier accepts a plain (non-zk) session that the unmodified prover made
-in full against the rec proxy's coin server (`--coins os`), with the draw held to its own law (`--stratified 16`), and
-refuses the same session with one coin changed.
+in full against the rec proxy's coin server (`--coins os`), with the sample held to its own law (`--stratified 16`), and
+refuses the same session with one coin changed, or verified as one on the keyed coin tree (`--coins tree`).
 
 It checks the compiled `flock-verify` only, on one record. It makes no Lean premise hold and proves nothing about the
 records a theorem quantifies over.
 
 The session is rope-head/neox-bf16/pair at n=16, m=25, k_log=22 under `hm96-sha512/v1`, every unit drawn, written by
-`verity/ml/flock/pod/80-rec-inner.sh N=16` (run r20261026-212829-1d52, commit 4331ec922a), whose live verdicts are
+`verity/ml/flock/pod/80-rec-inner.sh N=16` (at commit 4331ec922a), whose live verdicts are
 `run.json`'s. It is a fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs, so
 a missing fixture fails these tests rather than skipping them. It catches a verifier that refuses an honest plain
 session in full, which `test_lean_forged_proofs.py`'s `--zk` sessions of four units can't."""
@@ -22,7 +22,7 @@ import pytest
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: ``stage/`` (circuit.txt, pub-16.bin, partition.json, program.json, draw.json), ``session/`` (session.json and rep 0's
-#: and rep 1's proofs) and ``run.json`` (the run, its verify command and its verdicts): `art:f9bfe23d`
+#: and rep 1's proofs) and ``run.json`` (the run, its verify command and its verdicts)
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "honest-plain"
 N = 16
 STREAM = "circuit/rep0"
@@ -38,11 +38,11 @@ def store():
     return FIXTURE
 
 
-def _verify(root: Path, session: Path | None = None) -> dict:
+def _verify(root: Path, session: Path | None = None, coins: str = "os") -> dict:
     s = root / "stage"
     p = subprocess.run([str(BIN), "verify", "--statement", "verity/flock-circuit", "--circuit", str(s / "circuit.txt"),
                         "--public", str(s / f"pub-{N}.bin"), "--partition", str(s / "partition.json"), "--program",
-                        str(s / "program.json"), "--stratified", str(N), "--coins", "os", "--session",
+                        str(s / "program.json"), "--stratified", str(N), "--coins", coins, "--session",
                         str(session or root / "session")], capture_output=True, text=True)
     [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
     return v
@@ -69,3 +69,11 @@ def test_lean_refuses_the_session_with_its_first_challenge_changed(store, tmp_pa
     (s / "session.json").write_text(json.dumps(rec))
     v = _verify(store, s)
     assert (v["accepted"], v["why"]) == (False, "zerocheck: SumcheckFinalFailed"), v
+
+
+@pytest.mark.slow
+def test_lean_refuses_the_session_as_one_on_the_coin_tree(store):
+    """Verified as a session on the keyed coin tree (`--coins tree`), the OS-coin session is refused at `Hello`, which
+    names no tree and carries no prover nonce (R7): `test_lean_plain_tree.py` is the converse."""
+    v = _verify(store, coins="tree")
+    assert (v["accepted"], v["why"]) == (False, "S2/R7: Hello's coins.nonce is not 64 lowercase hex digits"), v

@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.Layout.OutPin
+import Properties.Flock.Circuit.Outs
 
 set_option Elab.async false
 
@@ -85,11 +86,6 @@ theorem keyProg_reads (outs : Finset (Fin (keyN c hU n))) (u : Fin n) (y : Fin (
         (hone := Placed.insOf_ne_one n (keyB c hU) (Aliased.keyIdx c (keyB c hU))) n u
     rw [h0]
     exact Fin.isLt _
-
-/-- **The returned outputs' bits**: the gates the units' instances put on returned outputs' columns (`OutColAt`). -/
-noncomputable def outsOf : Finset (Fin (keyN c hU n)) :=
-  @Finset.filter _ (fun g => ∃ u x, (Const.Prog.rowsWireC (keyProg c hU n) u).wire x = g ∧
-    ∃ u' j t, OutColAt c hU x.val u' j t) (Classical.decPred _) Finset.univ
 
 /-- **`OutsOut` at the returned outputs' bits**: every committed gate a unit computes is on a returned output's column of
 the unit's instance. -/

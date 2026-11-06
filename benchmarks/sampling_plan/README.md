@@ -1,6 +1,6 @@
 # sampling_plan
 
-The sampling plan for one served workload under C-Flock, from the planner in `verity.core.protocols.sampled_proofs`
+The sampling plan for one served workload under Flock, from the planner in `verity.core.protocols.sampled_proofs`
 (`optimize`, `candidates`, `costfit`): the cost model fitted from proving measurements, the cuts the candidate generator
 finds, the frontier of ε (at δ = 2^-40, against the workload's MACs, W_ref's proxy) over the verification overhead B, the
 break-even granularity, and how the plan moves with each input. A model, not a measurement: every input carries its
@@ -9,22 +9,25 @@ source and status, measured or assumed (`inputs.py`).
 B is the budget model's unit, GPU-seconds of overhead per plain GPU-second over a window, and it is the serve-time
 total (everything is committed at serve time): every
 scale's serve-time commitments under the PoUW scheme (`--scheme`: `floor`, the measured s8 A-operand floor alone;
-`h1`, `h1-bf16`, `pearl-c`, each scheme's rows a token a layer) and the store-block receipts of proof of useful
-bandwidth (PoUB), which every plan pays; then proving and the verifier's CPU (at its price ratio) for the drawn units,
-the commitment of every unit's outputs, replay of the layer-steps the draw meets (to build their witnesses), and the
-zero-work subcircuits at their floor.
+`h1`, `h1-bf16`, `pearl-c`, each scheme's rows a token a layer) and the store-block receipts of
+PoUB, which every plan pays; then proving and the verifier's CPU (at its price ratio) for the drawn units,
+the commitment of every unit's outputs, replay of the requests the draw meets (serving keeps only the requests' tokens and
+the weights, so each is re-run whole from its prompt to build its drawn units' witnesses), and the zero-work subcircuits at
+their floor.
 
 - `inputs.py`: the models (Llama-3.1-8B, Qwen3-8B); each scheme's serve-time rows a token a layer, with their leaf
-  chains; the row's inputs (price ratio, rounds, throughput, replay and commitment speeds, PoUB's receipts
+  chains; the row's inputs (price ratio, rounds, throughput, a request's context, commitment speeds, PoUB's receipts
   and passes, decode's step and its compression latency), each with a low and a
-  high; the pieces' AND counts (#2391's pins, hm96's rows); and the observations the cost model is fitted from, C-Flock's
+  high; the pieces' AND counts (#2391's pins, hm96's rows); and the observations the cost model is fitted from, Flock's
   zero-knowledge sessions on sm_120 (`benchmarks/one_stage/zk_cost.py`'s of s8 coordinates, and A8's of PoUB's
   opening unit, `BlockOpeningCheck_v1`, at twice their ANDs, its proving only), with the builds and
   hardware they key.
 - `int8_llama.py`: the int8 Llama-3.1-8B row (vLLM's `cursor/vllm-int8-build-8350`). Its units: every s8 dot checks its
   seed, derives its own noise and opens its rows in circuit. `--model qwen3-8b`
   runs the Qwen3-8B row the same way. A linear's coordinate may be cut into K-chunks that commit their running sums, and
-  r × c tiles are offered, each a unit when its outputs fit a size class. It writes the fitted model (`cost-model.json`, a
+  r × c tiles are offered, each a unit when its outputs fit a size class. Its replay grain is the window's requests, each
+  one prompt of `context` tokens re-run through every layer at `tokens_per_s` (the engine is batch-invariant, so no
+  co-scheduled request is re-run with it). It writes the fitted model (`cost-model.json`, a
   cost-model/v1 record), the serve-time commitments, the frontier, the plan at each budget, the tensors committed at
   more than one scale and what committing each once saves (`overlaps`), the weight classes' weights at each ε
   (`--weights`), the break-even table (the linears forced to each grain, per window, ε and commitment regime), the
@@ -38,9 +41,9 @@ zero-work subcircuits at their floor.
   dimension a flag). Every op is a proof block of its Definition: the linears `ScaledMmS8Coordinate_v1` (or tiles of
   them), attention `GemmCoordinate_v2` on the BF16 step, the residual `Bf16Add_v1`, and the row ops (RMSNorm, the s8
   quantizer, softmax, ReLU, the embedding, argmax) as stubs, each id `stub:`, until they land, row ops whole, shared,
-  chunked or recomputed. The harm is faulty ANDs, the same whatever the cut, with the faulty proof blocks (IntegrityPeriod's W)
-  beside it. It writes the frontier of expected C-Flock cost (every serve-time commitment and the replay in it) against
-  certified faulty ANDs at δ, the share of its ANDs the block's own GPU time buys, the chosen plan for `--share` (1e-3,
+  chunked or recomputed. The harm is incorrect ANDs, the same whatever the cut, with the incorrect proof blocks (IntegrityPeriod's W)
+  beside it. It writes the frontier of expected Flock cost (every serve-time commitment and the replay in it) against
+  certified incorrect ANDs at δ, the share of its ANDs the block's own GPU time buys, the chosen plan for `--share` (1e-3,
   the small model's knee, held fixed), its certificate recomputed through `Stratified.harm_bound` and `count_bound` at
   δ = 1% and 1e-6, the pooled bound over a week, a month and a year on one server and on an assumed 10,000 (an assumed
   20-minute block: neither is in the census), and the plan as the GPU loop registers it (`handoff`): one
@@ -53,11 +56,11 @@ zero-work subcircuits at their floor.
   the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and drawn
   units, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
   tiles (`--tiles`) and softmax and PV padded to the context (`--pad`); and gives the frontier over the share, the
-  sampling block length in blocks that proves within its own GPU time, and the faulty ANDs (`Stratified.harm_bound`, not a Lean
+  sampling block length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
   guarantee).
 - `demo_a.py`: Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a
   6.35 s step, 32 steps a request, on the Definition map (`examples/h200/e2e_h200/plan.py`: every subcircuit a
-  Definition C-Flock stages, at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K
+  Definition Flock stages, at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K
   (J10-R's per-call lane units, `PouwH1LaneZy_v2` over v5, at their traced ANDs), and statements shared per subcircuit
   per sampling block. The harm is half skipped work (each unit's own ANDs), half leaked output bits, each half
   weighted at each budget by the least bound that budget certifies for it alone;
@@ -67,8 +70,23 @@ zero-work subcircuits at their floor.
   and the commits beside it; then M3's uniform 8-unit draw against the block's GPU time, and each Definition's share
   of the ANDs against the step's GPU time.
 
+- `served_window.py`: the served window (Llama-3.2-1B int8, T 8,192 on the H200, one step a window) cut at each rung of
+  a ladder (K-chunks of the int8 linears, output coordinates, tiles, and fused attention/MLP, layer and 4-layer proof
+  blocks that commit only the residual and K, V), for the free-compute target (a window, and pooled over a week, a month
+  and a year) and the exfiltration target, in the planner's two modes (proving only, and proving plus w times the serve-time
+  commitment) at two readings of a hashed byte's cost, through `grain_costs` and `for_target`, and the second mode again
+  under a code-based commitment at each rate ρ (codeword columns hashed, 1/ρ the bytes, and no row hashed in circuit),
+  each total with the replay of the requests the draw meets, each re-run from its prompt at the stock step's share;
+  then each rung under a two-stage design (`optimize.two_stage`: serving commits only the replay blocks' boundaries, q of
+  them sampled, their interiors committed after that, and k proof blocks sampled in each), at the `request` replay
+  grain for exfiltration and a layer of a token for both targets, beside today's one-stage design at the same scope, also
+  pooled over the census's datacenter and the world's fleet; then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when C-Flock's block holds each of its proof blocks (`inputs.cap`). Its
+  inputs, each with its status and source, are `served_window_inputs.json`; it writes `served_window.json` and
+  `served_window.md`.
+
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
+uv run python benchmarks/sampling_plan/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
 uv run python benchmarks/sampling_plan/transformer.py --out DIR [--model large] [--share S] [--delta D]
 uv run python benchmarks/sampling_plan/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad]
 uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
@@ -76,10 +94,21 @@ uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [-
 
 - `cpu_budget.py`: the block's draw sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its
   templates, their n, S and proved ANDs), prices each template's statements (up to 8 drawn units each) from measured
-  firewalled C-Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
+  firewalled Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
   `--slots` x `--hours`. It writes the per-template k and cost and the certified units per window and per period, pooled
   and each block, at δ = 1% and 1e-6 (`cpu-budget.json`, `cpu-budget.md`).
 
 ```text
 uv run python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 --out DIR
+```
+
+- `recursion.py`: one recursive session's cost per monitoring period. It reads a `benchmarks/recursion_e2e` result's
+  measured parts (the inner run, V*'s staging, V*'s firewalled releases and the Lean step), with the same units'
+  non-recursive `--zk` session beside them, and scales them to every machine-window of the census's datacenter
+  (`dc-12500-machines-600s`) and of the world (`benchmarks/rho`'s `world-h200` fleet, in the datacenter's windows,
+  assumed) over a week, a month and a year: sessions, node-hours and nodes kept busy, prover's and auditor's
+  (`recursion-periods.json`, `recursion-periods.md`).
+
+```text
+uv run python benchmarks/sampling_plan/recursion.py --result recursion_e2e.json [--sessions-per-window 1] --out DIR
 ```

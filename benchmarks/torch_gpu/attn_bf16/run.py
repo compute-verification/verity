@@ -428,7 +428,7 @@ def api_case(path: str, Bp: int = 0) -> dict | None:
 
 
 def timing(cu: Cuda, funcs: dict, reps: int) -> list[dict]:
-    """The H200 model's decode step for each batch of TIME_B: inputs drawn once at the largest and sliced to each."""
+    """The H200 model's decode step for each batch of TIME_B: inputs sampled once at the largest and sliced to each."""
     Bs = [int(b) for b in os.environ.get("TIME_B", "4096,16384,20480").split(",")]
     H, Hkv, L = (int(os.environ.get(k, d)) for k, d in (("TIME_H", 256), ("TIME_HKV", 1), ("TIME_L", 32)))
     D, Bm = 64, max(Bs)

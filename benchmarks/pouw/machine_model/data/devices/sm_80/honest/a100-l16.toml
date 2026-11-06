@@ -1,12 +1,12 @@
-# Honest at L = 16 on the A100 as AMPERE measured it: egemm80's e16 built with a 3-stage ring (EG80_NST=3, 0.5% faster
-# here than the default 4: 23.76 in r20261017-101927-0c99), e_l7qs's mainloop on sm_80 (as a100-l32) with
-# each k32 atom run as two IMMA.16816 passes, every k16 step's words absorbed, duo receipts at LAG 7 with a LOP3 tie every
-# 4th MMA, and the linears' peel as an IMMA.16832 tail a tile, 8192 x 8192 x 4096. Counts are the SASS's a mainloop MMA
-# (egemm80.py: the k-stage loop at its KT - 1 trips a tile, every other instruction once a tile, so an over-count); the
-# peel's MMAs are the IMMA16832 line.
+# Honest at L = 16 on the A100 as measured: egemm80's e16 built with a 3-stage ring (EG80_NST=3, 0.5% faster
+# here than the default 4: 23.76), e_l7qs's mainloop on sm_80 (as a100-l32) with each k32 atom run as two IMMA.16816
+# passes, every k16 step's words absorbed, duo receipts at LAG 7 with a LOP3 tie every 4th MMA, and the linears' peel as
+# an IMMA.16832 tail a tile, 8192 x 8192 x 4096. Counts are the SASS's a mainloop MMA (egemm80.py: the k-stage loop at
+# its KT - 1 trips a tile, every other instruction once a tile, so an over-count); the peel's MMAs are the IMMA16832
+# line.
 name = "a100-l16"
 status = "measured"
-source = "AMPERE r2's egemm80 e16 at EG80_NST=3 (benchmarks/pouw/edited_gemm/egemm80.cu, `egemm80.py summary`), bit-exact against derive.py's receipts by egemm80_ref.py (r20261017-093947-c786, r20261017-095346-e85c; note:20261017T0925Z-draft-eps1-ampere-r2)"
+source = "AMPERE r2's egemm80 e16 at EG80_NST=3 (benchmarks/pouw/edited_gemm/egemm80.cu, `egemm80.py summary`), bit-exact against derive.py's receipts by egemm80_ref.py"
 L = 16
 
 [mma]
@@ -24,8 +24,8 @@ LDSM_X4 = 0.2539
 IMMA16832 = 0.0078
 
 [measured]
-cycles_per_mma = 23.6241        # the 40 s hold's steady half at 1380 MHz NVML (SW power cap); c786's 23.6073
-source = "egemm80 e16's hold, 8192 x 8192 x 4096 (r20261017-095346-e85c; first r20261017-093947-c786); the interleaved bench's median 23.89 at 1365 MHz"
+cycles_per_mma = 23.6241        # the 40 s hold's steady half at 1380 MHz NVML; c786's 23.6073
+source = "egemm80 e16's hold, 8192 x 8192 x 4096; the interleaved bench's median 23.89 at 1365 MHz"
 
 [operands]      # the least operand delivery any program pays a MMA when the design names none
 floor = { LDSM_X4 = 0.097222 }

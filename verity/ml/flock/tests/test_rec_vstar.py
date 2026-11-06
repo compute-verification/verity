@@ -76,7 +76,7 @@ def _committed(cap: bytes, at: int):
 
 
 def _session():
-    """A rep stream as the firewall records it: level 0's top at Commit, its copies counted, a level-1 top salted."""
+    """A rep stream as the ZK server records it: level 0's top at Commit, its copies counted, a level-1 top salted."""
     a, b = bytes([1]) * 64 + bytes([3]) * 64, bytes([2]) * 64
     (oa, ca), (ob, cb) = _committed(a, 100), _committed(b, 200)
     s = "circuit/rep0"

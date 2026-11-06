@@ -14,7 +14,8 @@ import Proofs.Pouw.RelativeSecurity
   walk's word at its cell). Where the check passes on the walk's words they are the accepted answer's words, so they
   open.
 * `ExtractOfRealize`: the guarantee `Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`.
-* `state_congr`: a prover's state at round `w`'s start reads only the earlier rounds' coins, so it is advice in
+* `state_congr`, `commit_congr`: a prover's state at sampling block `w`'s start, and what its commit phase returns
+  (its instance and the state its work starts from), read only the earlier blocks' coins, so they are advice in
   `ExtractAdvAt`'s sense.
 -/
 
@@ -57,39 +58,39 @@ theorem link_noFold {G : Accel} {nf : NoFold} {k : ℕ} {X D : Type} [Inhabited 
     (eo : nf.Orc ≃ (X → D)) (rD : nf.Root → D) (pl : nf.Path → List (Bool × D × D))
     (dirs : Fin nf.n × Fin nf.n' × Fin nf.nb → List Bool) {q : ℕ} {τ : Fin k → ℕ}
     (hopens : ∀ o r c v p, nf.opens o r c v p → Opens (eo o) E (rD r) (pl p) v ∧ (pl p).map Prod.fst = dirs c)
-    (A : Prover G (noFoldRound nf) k) (reg : Fin k → (noFoldRound nf).Inst) (L : QueryLog (noFoldRound nf) k X D q τ)
-    {Adv : Type}
+    (A : Prover G (noFoldRound nf) k) (Reg : Fin k → Set (noFoldRound nf).Inst)
+    (L : QueryLog (noFoldRound nf) k X D q τ) {Adv : Type}
     (adv : nf.Orc → (Fin k → nf.Draw × nf.Chk) → Fin k → Adv)
     (Mw : Fin k → G.Mc.Alg (Adv × nf.Draw) (Fin nf.n → Fin nf.n' → Fin nf.nb → Word))
     (o : nf.Orc) (x : Fin k → nf.Draw × nf.Chk)
     (hroot : ∀ u, Consistent (L.qry x) (eo o) u → ∀ w, rD (A.root o x w) = L.root x w u)
-    (hN2 : ∀ u, Consistent (L.qry x) (eo o) u → A.Accepted reg o x → ∀ w (j : Fin nf.s),
+    (hN2 : ∀ u, Consistent (L.qry x) (eo o) u → A.Accepted Reg o x → ∀ w (j : Fin nf.s),
       ∀ y ∈ pts E (pl ((A.ans o x w : Fin nf.s → Word × nf.Path) j).2) ((A.ans o x w : Fin nf.s → Word × nf.Path) j).1,
         ∃ i, L.qry x i u = y)
     (hwalk : ∀ u, Consistent (L.qry x) (eo o) u → Function.Injective u →
       ∀ w (c : Fin nf.n × Fin nf.n' × Fin nf.nb), G.Mc.eval (Mw w) (adv o x w, (x w).1) c.1 c.2.1 c.2.2 =
         (ext ((L.prover x w).oracle u) E ((L.prover x w).pre u) (L.root x w u) (dirs c)).getD 0)
-    (u : Fin q → D) (hu : Consistent (L.qry x) (eo o) u) (hinj : Function.Injective u) (hacc : A.Accepted reg o x)
-    (hbad : ∃ w, ¬ ((noFoldRound nf).ok (reg w) (x w).1 (x w).2 (G.Mc.eval (Mw w) (adv o x w, (x w).1)) ∧
+    (u : Fin q → D) (hu : Consistent (L.qry x) (eo o) u) (hinj : Function.Injective u) (hacc : A.Accepted Reg o x)
+    (hbad : ∃ w, ¬ ((noFoldRound nf).ok (A.inst o x w) (x w).1 (x w).2 (G.Mc.eval (Mw w) (adv o x w, (x w).1)) ∧
       (noFoldRound nf).opens o (A.root o x w) (x w).2 (G.Mc.eval (Mw w) (adv o x w, (x w).1)))) :
     ∃ w, ExtractFails E (L.prover x w) u := by
   obtain ⟨w, hw⟩ := hbad
-  have hw' : ¬ (noFoldRound nf).ok (reg w) (x w).1 (x w).2 (G.Mc.eval (Mw w) (adv o x w, (x w).1)) := by
+  have hw' : ¬ (noFoldRound nf).ok (A.inst o x w) (x w).1 (x w).2 (G.Mc.eval (Mw w) (adv o x w, (x w).1)) := by
     intro hok
     refine hw ⟨hok, fun j => ⟨((A.ans o x w : Fin nf.s → Word × nf.Path) j).2, ?_⟩⟩
     have e : G.Mc.eval (Mw w) (adv o x w, (x w).1) (nf.cells (x w).2 j).1 (nf.cells (x w).2 j).2.1
         (nf.cells (x w).2 j).2.2 = ((A.ans o x w : Fin nf.s → Word × nf.Path) j).1 :=
-      (hok j).trans (hacc w j).2.symm
+      (hok j).trans ((hacc w).2 j).2.symm
     show nf.opens o (A.root o x w) (nf.cells (x w).2 j) (G.Mc.eval (Mw w) (adv o x w, (x w).1)
       (nf.cells (x w).2 j).1 (nf.cells (x w).2 j).2.1 (nf.cells (x w).2 j).2.2)
       ((A.ans o x w : Fin nf.s → Word × nf.Path) j).2
     rw [e]
-    exact (hacc w j).1
+    exact ((hacc w).2 j).1
   obtain ⟨j, hj⟩ := not_forall.mp hw'
   have hA : nf.opens o (A.root o x w) (nf.cells (x w).2 j) ((A.ans o x w : Fin nf.s → Word × nf.Path) j).1
         ((A.ans o x w : Fin nf.s → Word × nf.Path) j).2 ∧
-      ((A.ans o x w : Fin nf.s → Word × nf.Path) j).1 = noFoldWord nf (nf.noise (reg w) (x w).1)
-        (nf.cells (x w).2 j).1 (nf.cells (x w).2 j).2.1 (nf.cells (x w).2 j).2.2 := hacc w j
+      ((A.ans o x w : Fin nf.s → Word × nf.Path) j).1 = noFoldWord nf (nf.noise (A.inst o x w) (x w).1)
+        (nf.cells (x w).2 j).1 (nf.cells (x w).2 j).2.1 (nf.cells (x w).2 j).2.2 := (hacc w).2 j
   obtain ⟨hO, hdirs⟩ := hopens _ _ _ _ _ hA.1
   rw [hroot u hu w] at hO
   have hcov := hN2 u hu hacc w j
@@ -107,27 +108,27 @@ theorem link_noFold {G : Accel} {nf : NoFold} {k : ℕ} {X D : Type} [Inhabited 
 
 /-- **One prover**: a `Realization` of `A` at the cap `Q`, query budget `q`, schedule `τ` and advice size `Badv` gives
 `ExtractAdvAt` at `Q`, `Badv`, `ξ = k · ξw + q · ξl` and `κ_x = (q² + ∑_w q (2 τ_w + 1)) / |D|`. -/
-theorem extract_of_realization {G : Accel} {nf : NoFold} {k : ℕ} {reg : Fin k → (noFoldRound nf).Inst} {Q : ℝ}
-    {X D : Type}
+theorem extract_of_realization {G : Accel} {nf : NoFold} {k : ℕ} {Reg : Fin k → Set (noFoldRound nf).Inst}
+    {sel : (noFoldRound nf).Chk → Prop} {Q : ℝ} {X D : Type}
     [Fintype X] [DecidableEq X] [Fintype D] [DecidableEq D] [Inhabited D] (E : Enc X D Word) (eo : nf.Orc ≃ (X → D))
     (rD : nf.Root → D) (pl : nf.Path → List (Bool × D × D)) (dirs : Fin nf.n × Fin nf.n' × Fin nf.nb → List Bool)
     (hopens : ∀ o r c v p, nf.opens o r c v p → Opens (eo o) E (rD r) (pl p) v ∧ (pl p).map Prod.fst = dirs c)
     {ξw ξl : G.Res → ℝ} (A : Prover G (noFoldRound nf) k) {q : ℕ} {τ : Fin k → ℕ} {Badv : ℕ}
-    (hR : Realization G nf k reg Q E eo rD pl dirs ξw ξl A q τ Badv) :
-    ExtractAdvAt G (noFoldRound nf) k reg Q Badv (fun r => k * ξw r + q * ξl r)
+    (hR : Realization G nf k Reg sel Q E eo rD pl dirs ξw ξl A q τ Badv) :
+    ExtractAdvAt G (noFoldRound nf) k Reg sel Q Badv (fun r => k * ξw r + q * ξl r)
       (((q * q + ∑ w, q * (2 * τ w + 1) : ℕ) : ℝ) / Fintype.card D) A := by
   obtain ⟨L, Adv, adv, Mw, Mh, henc, hadv, hMh, huse, hext, hroot, hN2, hwalk⟩ := hR
   refine ⟨Adv, adv, Mw, Mh, henc, hadv, hMh, huse, hext, ?_⟩
   exact prob_bad_le E eo L
-    (fun o x => A.Accepted reg o x ∧ A.calls o x ≤ Q ∧
-      ∃ w, ¬ ((noFoldRound nf).ok (reg w) (x w).1 (x w).2 (G.Mc.eval (Mw w) (adv o x w, (x w).1)) ∧
+    (fun o x => A.Accepted Reg o x ∧ A.WithinCap sel Q o x ∧
+      ∃ w, ¬ ((noFoldRound nf).ok (A.inst o x w) (x w).1 (x w).2 (G.Mc.eval (Mw w) (adv o x w, (x w).1)) ∧
         (noFoldRound nf).opens o (A.root o x w) (x w).2 (G.Mc.eval (Mw w) (adv o x w, (x w).1))))
     fun o x u hu hb => (Classical.em (Function.Injective u)).imp (fun hinj => link_noFold E eo rD pl dirs hopens A
-      reg L adv Mw o x (hroot o x hb.2.1) (hN2 o x hb.2.1) (hwalk o x hb.2.1) u hu hinj hb.1 hb.2.2) id
+      Reg L adv Mw o x (hroot o x hb.2.1) (hN2 o x hb.2.1) (hwalk o x hb.2.1) u hu hinj hb.1 hb.2.2) id
 
 /-- `Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`. -/
 theorem ExtractOfRealize : Pouw.Guarantees.ShaRealize.ExtractOfRealize := by
-  intro G nf k reg Q X D _ _ _ _ _ E eo rD pl dirs ξw ξl q τ Badv hopens horc hR hG1 hG2 hG3 hP1 hP2 A
+  intro G nf k Reg sel Q X D _ _ _ _ _ E eo rD pl dirs ξw ξl q τ Badv hopens horc hR hG1 hG2 hG3 hP1 hP2 A
   exact extract_of_realization E eo rD pl dirs hopens A (hR hG1 hG2 hG3 horc hP1 hP2 A)
 
 /-- A prover's state at the start of round `n` reads only the coins of the rounds before `n`. -/
@@ -141,5 +142,18 @@ theorem state_congr {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (o
     split_ifs with hn
     · rw [ih, h ⟨n, hn⟩ (by simp)]
     · exact ih
+
+/-- A prover's sampling block `w`'s instance and the state its work starts from read only the coins of the blocks
+before `w`: the commit phase runs before `w`'s coins. -/
+theorem commit_congr {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (o : P.Orc)
+    {x x' : Fin k → P.Draw × P.Chk} (w : Fin k) (h : ∀ v : Fin k, v < w → x v = x' v) :
+    G.Mc.eval (A.commit w) (A.commitIn o x w) = G.Mc.eval (A.commit w) (A.commitIn o x' w) := by
+  simp only [Prover.commitIn, state_congr A o (w : ℕ) fun v hv => h v hv]
+
+/-- A prover's sampling block `w`'s instance reads only the coins of the blocks before `w`. -/
+theorem inst_congr {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (o : P.Orc)
+    {x x' : Fin k → P.Draw × P.Chk} (w : Fin k) (h : ∀ v : Fin k, v < w → x v = x' v) :
+    A.inst o x w = A.inst o x' w :=
+  congrArg Prod.snd (commit_congr A o w h)
 
 end Pouw.SecurityProofs.ShaRealize

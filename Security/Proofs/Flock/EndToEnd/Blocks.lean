@@ -2,7 +2,7 @@ import Proofs.Flock.EndToEnd.Blocks.Statement
 import Proofs.Flock.EndToEnd.Period
 
 /-!
-# Proof of the integrity audit per server-time block, and over a horizon of blocks
+# Proof of the integrity audit per server-time block, and pooled over a monitoring period's blocks
 
 * `Flock.SecurityProofs.integrity_on`: `IntegrityHorizon` on a set `I` of the period's sampling blocks. The probability
   that every sampling block of `I` is accepted and `I`'s wrong units total at least `M` is at most
@@ -12,8 +12,8 @@ import Proofs.Flock.EndToEnd.Period
   probability `≤ 1 = (1 − q)^0`.
 * `IntegrityBlock`: `integrity_on` at block `b`'s sessions, with `M = ⌈ln(1/δ)/q⌉`.
 * `IntegrityBlocks`: the union bound over the blocks (`value_exists_finset_le`), each block's by `IntegrityBlock`.
-* `IntegrityHorizonBlocks`: `IntegrityHorizon` over the horizon's `start B` sessions, whose terms regroup by block
-  (`sum_range_start`).
+* `IntegrityHorizonBlocks`: `IntegrityHorizon` over the monitoring period's `start B` sessions, whose terms regroup by
+  block (`sum_range_start`).
 -/
 
 namespace Flock.SecurityProofs
@@ -86,7 +86,7 @@ theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q :
         rw [add_comm, ← Finset.sum_filter]
         exact add_le_add le_rfl (Finset.sum_le_sum_of_subset fun t ht => (Finset.mem_filter.1 ht).2)
 
-/-- The horizon's sessions, regrouped by block. -/
+/-- The monitoring period's sessions, regrouped by block. -/
 theorem sum_range_start (S : ServerBlocks) (f : ℕ → ℝ≥0∞) :
     ∀ B, ∑ t ∈ Finset.range (S.start B), f t = ∑ b ∈ Finset.range B, ∑ t ∈ S.sessions b, f t
   | 0 => by simp [S.start_zero]
@@ -103,7 +103,7 @@ theorem IntegrityBlock : Flock.Guarantees.IntegrityBlock := by
     ((integrity_on S.W S.T (S.sessions b) hq hqt hA3 s hs ⌈Real.log (1 / δ) / q⌉₊).trans ?_)
   exact add_le_add (one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)) le_rfl
 
-/-- **The integrity audit per server-time block, over a horizon of `B` blocks.** -/
+/-- **The integrity audit per server-time block, over a monitoring period of `B` blocks.** -/
 theorem IntegrityBlocks : Flock.Guarantees.IntegrityBlocks := by
   intro S q δ hq hδ hqt hA3 s hT hL
   have hin : ∀ b < S.B, ∀ t ∈ S.sessions b, t < S.T := fun b hb t ht =>
@@ -116,7 +116,7 @@ theorem IntegrityBlocks : Flock.Guarantees.IntegrityBlocks := by
         IntegrityBlock S b q δ hq hδ (fun t ht => hqt t (hin b (Finset.mem_range.1 hb) t ht))
           (fun t ht => hA3 t (hin b (Finset.mem_range.1 hb) t ht)) s hT hL
 
-/-- **The integrity audit over a horizon of `B` server-time blocks, pooled.** -/
+/-- **The integrity audit over a monitoring period of `B` server-time blocks, pooled.** -/
 theorem IntegrityHorizonBlocks : Flock.Guarantees.IntegrityHorizonBlocks := by
   intro S q δ hq hδ hqt hA3 s hT hL
   refine (IntegrityHorizon S.W S.T q δ hq hδ hqt hA3 s hT hL).trans_eq ?_

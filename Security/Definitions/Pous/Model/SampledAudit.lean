@@ -3,8 +3,8 @@ import Definitions.Pous.Game.Oracle
 /-!
 # The state after a history (sampled audits)
 
-`seqState`, from `lean/submissions/b5/SampledAudit.lean`, verbatim: the state a sequential responder reaches after a
-history of indices. The pinned `SampledAuditSeq` reads it.
+`seqState` (the sampled audits are proved in `Security/Proofs/Pous/Audit/SampledAudit.lean`): the state a sequential
+responder reaches after a history of indices. The pinned `SampledAuditSeq` reads it.
 -/
 
 namespace Pous.Sampled

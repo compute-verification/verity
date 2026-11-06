@@ -1,17 +1,17 @@
 import Definitions.Claims.Sampling
 
 /-!
-# The universal unit's gates compute its netlist
+# The universal unit's gates run its private circuit
 
 `universalProg c`: the universal unit of the size class `c` (`verity.ml.private_circuits.universal`, `build`) as a
-program of the Boolean profile. Its inputs are the netlist's `(op, src, out)` arguments and then `x`, in leaf order
-(`Netlist.args`); after them, the constant `0` that fills every multiplexer tree. Each source and each output is a
-multiplexer tree over the wires it may read (`gather.gather`), selecting by the index's bits least significant first,
-a word without a partner meeting the fill; each netlist gate is `s ⊕ t·(a·b ⊕ s) ⊕ n` with `s = a ⊕ b`, `t` and `n` its
-op's bits.
+program of the Boolean profile. Its inputs are the private circuit's `(op, src, out)` arguments and then `x`, in leaf
+order (`PrivateCircuit.args`); after them, the constant `0` that fills every multiplexer tree. Each source and each
+output is a multiplexer tree over the wires it may read (`gather.gather`), selecting by the index's bits least
+significant first, a word without a partner meeting the fill; each of the private circuit's gates is
+`s ⊕ t·(a·b ⊕ s) ⊕ n` with `s = a ⊕ b`, `t` and `n` its op's bits.
 
-* `universal_correct`: **the unit computes its netlist**: on a netlist of class `c` and inputs of its width,
-  `universalProg c` returns `Netlist.eval`.
+* `universal_correct`: **the unit runs its private circuit**: on a private circuit of class `c` and inputs of its
+  width, `universalProg c` returns `PrivateCircuit.eval`.
 * `UniversalIs D`: the deployed unit computes what `universalProg` does, at every class and input. It is the code
   side's: the compiled unit's binding to its Definition.
 * `Universal_of`: `UniversalIs D` gives the claim `Universal D`.
@@ -40,7 +40,7 @@ def gather (z : ℕ) : List ℕ → List BGate → List ℕ → List BGate × �
   | [], gs, words => (gs, words.headD z)
   | s :: ss, gs, words => gather z ss (level s z gs words).1 (level s z gs words).2
 
-/-- A netlist gate on the wires `a` and `b`, its op's bits `t` (AND over XOR) and `n` (negate):
+/-- A gate of the private circuit on the wires `a` and `b`, its op's bits `t` (AND over XOR) and `n` (negate):
 `s ⊕ t·(a·b ⊕ s) ⊕ n` with `s = a ⊕ b` (`build`). -/
 def gate (gs : List BGate) (t n a b : ℕ) : List BGate × ℕ :=
   (gs ++ [.xor [a, b], .and [a, b], .xor [gs.length + 1, gs.length], .and [t, gs.length + 2],
@@ -63,7 +63,7 @@ def nArgs (c : SizeClass) : ℕ := xAt c + c.nIn
 /-- `K` wires from `base`. -/
 def bitWires (base K : ℕ) : List ℕ := (List.range K).map (base + ·)
 
-/-- Netlist gate `g`: its two sources' trees over the wires so far, its function, and its wire. -/
+/-- Gate `g` of the private circuit: its two sources' trees over the wires so far, its function, and its wire. -/
 def gStep (c : SizeClass) (st : List BGate × List ℕ) (g : ℕ) : List BGate × List ℕ :=
   let a := gather (nArgs c) (bitWires (srcAt c g 0) c.indexBits) st.1 st.2
   let b := gather (nArgs c) (bitWires (srcAt c g 1) c.indexBits) a.1 st.2
@@ -79,7 +79,7 @@ def oStep (c : SizeClass) (ws : List ℕ) (st : List BGate × List ℕ) (o : ℕ
 def init (c : SizeClass) : List BGate × List ℕ :=
   (List.replicate (nArgs c) .input ++ [.const false], bitWires (xAt c) c.nIn)
 
-/-- After every netlist gate: the gates and the netlist's wires. -/
+/-- After every gate of the private circuit: the gates and its wires. -/
 def body (c : SizeClass) : List BGate × List ℕ := (List.range c.G).foldl (gStep c) (init c)
 
 /-- After every output: the gates and the returned wires. -/
@@ -328,7 +328,7 @@ theorem bitsVal_bitsLE : ∀ (K v : ℕ), bitsVal (bitsLE K v) = v % 2 ^ K
       rcases Nat.mod_two_eq_zero_or_one v with h | h <;> simp [h]
     rw [h, bitsVal, bitsVal_bitsLE K (v / 2), Nat.pow_succ, Nat.mul_comm (2 ^ K) 2, Nat.mod_mul, h0]
 
-/-! ## The netlist gate -/
+/-! ## The private circuit's gates -/
 
 theorem gate_spec (gs : List BGate) (y : List Bool) {t nb a b : ℕ} (ht : t < gs.length) (hn : nb < gs.length)
     (ha : a < gs.length) (hb : b < gs.length) :
@@ -451,10 +451,10 @@ theorem xAt_eq (c : SizeClass) : xAt c = 2 * c.G + 2 * c.indexBits * c.G + c.ind
 
 section Args
 
-variable {c : SizeClass} {n : Netlist} {x y : List Bool}
+variable {c : SizeClass} {n : PrivateCircuit} {x y : List Bool}
 
 theorem args_length (hfit : n.Fits c) : (n.args c).length = xAt c := by
-  unfold Netlist.args
+  unfold PrivateCircuit.args
   rw [List.length_append, List.length_append, lenA, lenB, lenC, hfit.2.1, hfit.2.2.1, xAt_eq]
 
 theorem y_args (hfit : n.Fits c) (hy : y = n.args c ++ x) {i : ℕ} (hi : i < xAt c) :
@@ -470,7 +470,7 @@ theorem y_op (hfit : n.Fits c) (hy : y = n.args c ++ x) {g : ℕ} {gt : Fin 4 ×
     {j : ℕ} (hj : j < 2) : y.getD (2 * g + j) false = gt.1.val.testBit j := by
   have hgl : g < c.G := hfit.2.1 ▸ (List.getElem?_eq_some_iff.1 hg).1
   have hx := xAt_eq c
-  rw [y_args hfit hy (by omega), Netlist.args, List.append_assoc, List.getD_eq_getElem?_getD,
+  rw [y_args hfit hy (by omega), PrivateCircuit.args, List.append_assoc, List.getD_eq_getElem?_getD,
     List.getElem?_append_left (by rw [lenA, hfit.2.1]; omega), ← List.getD_eq_getElem?_getD,
     getD_flatMap (fun g : Fin 4 × ℕ × ℕ => bitsLE 2 g.1.val) (fun g => bitsLE_length 2 _) _ hg hj, bitsLE_getD hj]
 
@@ -490,7 +490,7 @@ theorem y_src (hfit : n.Fits c) (hy : y = n.args c ++ x) {g : ℕ} {gt : Fin 4 �
   have key : ∀ j, j < 2 → y.getD (srcAt c g j + i) false =
       (bitsLE c.indexBits gt.2.1 ++ bitsLE c.indexBits gt.2.2).getD (c.indexBits * j + i) false := fun j hj => by
     have := hjK j hj
-    rw [y_args hfit hy (by rw [hidx]; omega), hidx, Netlist.args, List.getD_eq_getElem?_getD,
+    rw [y_args hfit hy (by rw [hidx]; omega), hidx, PrivateCircuit.args, List.getD_eq_getElem?_getD,
       List.getElem?_append_left (by rw [List.length_append, lenA, lenB, hfit.2.1]; omega),
       List.getElem?_append_right (by rw [lenA, hfit.2.1]; omega), lenA, hfit.2.1, Nat.add_sub_cancel_left,
       ← List.getD_eq_getElem?_getD]
@@ -514,21 +514,21 @@ theorem y_out (hfit : n.Fits c) (hy : y = n.args c ++ x) {o v : ℕ} (ho : n.out
     unfold outAt
     ring
   have hx := xAt_eq c
-  rw [y_args hfit hy (by rw [hidx]; omega), hidx, Netlist.args, List.getD_eq_getElem?_getD,
+  rw [y_args hfit hy (by rw [hidx]; omega), hidx, PrivateCircuit.args, List.getD_eq_getElem?_getD,
     List.getElem?_append_right (by rw [List.length_append, lenA, lenB, hfit.2.1]; omega), List.length_append, lenA,
     lenB, hfit.2.1, Nat.add_sub_cancel_left, ← List.getD_eq_getElem?_getD,
     getD_flatMap (bitsLE c.indexBits) (bitsLE_length c.indexBits) _ ho hi, bitsLE_getD hi]
 
 end Args
 
-/-! ## The netlist's wires -/
+/-! ## The private circuit's wires -/
 
-/-- The netlist's step on its wires (`Netlist.eval`). -/
+/-- The private circuit's step on its wires (`PrivateCircuit.eval`). -/
 def nStep (ws : List Bool) (g : Fin 4 × ℕ × ℕ) : List Bool :=
   ws ++ [xor (if g.1.val % 2 = 1 then ws.getD g.2.1 false && ws.getD g.2.2 false
     else xor (ws.getD g.2.1 false) (ws.getD g.2.2 false)) (decide (g.1.val / 2 = 1))]
 
-theorem eval_eq (n : Netlist) (x : List Bool) :
+theorem eval_eq (n : PrivateCircuit) (x : List Bool) :
     n.eval x = n.outs.map fun o => (n.gates.foldl nStep x).getD o false := rfl
 
 theorem foldl_nStep_length : ∀ (l : List (Fin 4 × ℕ × ℕ)) (ws : List Bool),
@@ -554,16 +554,17 @@ theorem bitWires_map (gs : List BGate) (y : List Bool) (base K v : ℕ)
   rw [List.map_map]
   exact List.map_congr_left fun i hi => h i (List.mem_range.1 hi)
 
-/-- The netlist's wires after its first `g` gates. -/
-def nWires (n : Netlist) (x : List Bool) (g : ℕ) : List Bool := (n.gates.take g).foldl nStep x
+/-- The private circuit's wires after its first `g` gates. -/
+def nWires (n : PrivateCircuit) (x : List Bool) (g : ℕ) : List Bool := (n.gates.take g).foldl nStep x
 
-/-- After `g` netlist gates: the gates extend the inputs and the fill, and the wires so far carry the netlist's. -/
-def BodyInv (c : SizeClass) (n : Netlist) (x y : List Bool) (g : ℕ) (st : List BGate × List ℕ) : Prop :=
+/-- After `g` gates of the private circuit: the gates extend the inputs and the fill, and the wires so far carry the
+private circuit's. -/
+def BodyInv (c : SizeClass) (n : PrivateCircuit) (x y : List Bool) (g : ℕ) (st : List BGate × List ℕ) : Prop :=
   Ext (init c).1 st.1 ∧ (∀ w ∈ st.2, w < st.1.length) ∧ st.2.map (V st.1 y) = nWires n x g
 
 section Body
 
-variable {c : SizeClass} {n : Netlist} {x y : List Bool}
+variable {c : SizeClass} {n : PrivateCircuit} {x y : List Bool}
 
 theorem body_init (hfit : n.Fits c) (hx : x.length = c.nIn) (hy : y = n.args c ++ x) : BodyInv c n x y 0 (init c) := by
   refine ⟨Ext.refl _, fun w hw => ?_, ?_⟩
@@ -581,7 +582,7 @@ theorem body_init (hfit : n.Fits c) (hx : x.length = c.nIn) (hy : y = n.args c +
     rw [List.getElem_map, List.getElem_range, Function.comp_apply, V_init c y (by unfold nArgs; omega), y_x hfit hy,
       List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h2, Option.getD_some]
 
-theorem nWires_succ {n : Netlist} {x : List Bool} {g : ℕ} {gt : Fin 4 × ℕ × ℕ} (hg : n.gates[g]? = some gt) :
+theorem nWires_succ {n : PrivateCircuit} {x : List Bool} {g : ℕ} {gt : Fin 4 × ℕ × ℕ} (hg : n.gates[g]? = some gt) :
     nWires n x (g + 1) = nStep (nWires n x g) gt := by
   rw [nWires, nWires, List.take_add_one, hg, Option.toList_some, List.foldl_append, List.foldl_cons, List.foldl_nil]
 
@@ -665,10 +666,10 @@ end Body
 
 section Outs
 
-variable {c : SizeClass} {n : Netlist} {x y : List Bool}
+variable {c : SizeClass} {n : PrivateCircuit} {x y : List Bool}
 
-/-- After `o` outputs: the gates extend the body's, and the outputs so far carry the netlist's. -/
-def OutInv (c : SizeClass) (n : Netlist) (x y : List Bool) (o : ℕ) (st : List BGate × List ℕ) : Prop :=
+/-- After `o` outputs: the gates extend the body's, and the outputs so far carry the private circuit's. -/
+def OutInv (c : SizeClass) (n : PrivateCircuit) (x y : List Bool) (o : ℕ) (st : List BGate × List ℕ) : Prop :=
   Ext (body c).1 st.1 ∧ (∀ w ∈ st.2, w < st.1.length) ∧
     st.2.map (V st.1 y) = (n.outs.take o).map fun v => (n.gates.foldl nStep x).getD v false
 
@@ -708,9 +709,9 @@ theorem outs_inv (hfit : n.Fits c) (hx : x.length = c.nIn) (hy : y = n.args c ++
 
 end Outs
 
-/-- **The universal unit computes its netlist**: on a netlist of class `c`, as its arguments, and inputs of its
-width, `universalProg c` returns the netlist's outputs. -/
-theorem universal_correct (c : SizeClass) (n : Netlist) (x : List Bool) (hfit : n.Fits c) (hx : x.length = c.nIn) :
+/-- **The universal unit runs its private circuit**: on a private circuit of class `c`, as its arguments, and inputs of
+its width, `universalProg c` returns the private circuit's outputs. -/
+theorem universal_correct (c : SizeClass) (n : PrivateCircuit) (x : List Bool) (hfit : n.Fits c) (hx : x.length = c.nIn) :
     (universalProg c).eval (n.args c ++ x) = n.eval x := by
   have ho : OutInv c n x (n.args c ++ x) c.nOut (outs c) := outs_inv hfit hx rfl c.nOut le_rfl
   obtain ⟨-, -, hv⟩ := ho
@@ -721,7 +722,7 @@ theorem universal_correct (c : SizeClass) (n : Netlist) (x : List Bool) (hfit : 
 end Univ
 
 /-- **`Universal` from the unit's Definition**: a deployment whose universal unit computes what `universalProg` does
-computes every netlist of its class. -/
+runs every private circuit of its class. -/
 theorem Universal_of {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {D : Deploy Coin Col T} (h : UniversalIs D) : Universal D :=
   fun c n x hfit hx => (h c _).trans (Univ.universal_correct c n x hfit hx)

@@ -71,7 +71,7 @@ def AcceptsAllRetainedAny : Prop :=
 /-- **flock-verify's acceptance, round by round** (`Exec.accepts_rep_rounds` without `hh`). -/
 def AcceptsRepRoundsAny : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, I.tags.retainRounds = true → Accepts I t →
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         RepRounds spec (Setup.ofCircuit sts[j]) sch sess j 0 t.proofs[2 * j]! ∧
@@ -81,7 +81,7 @@ def AcceptsRepRoundsAny : Prop :=
 without `hh`, with `setupOne` for `setupH`). -/
 def AcceptsTablesHm96Any : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, Accepts I t →
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧ 0 < sts.size ∧
       ∀ (j : ℕ) (hj : j < sts.size),
         (∃ d, setupOne (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables d I.partition
@@ -105,7 +105,7 @@ def AcceptsTablesHm96Any : Prop :=
 (`Exec.accepts_tables_hm96_of_leaf` without `hh`, with `setupOne` for `setupH`). -/
 def AcceptsTablesHm96OfLeafAny : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, I.tags.merkleLeaf = "hm96-sha512/v1" → Accepts I t →
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧ 0 < sts.size ∧
       ∀ (j : ℕ) (hj : j < sts.size),
         (∃ d, setupOne (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables d I.partition
@@ -129,7 +129,7 @@ def AcceptsTablesHm96OfLeafAny : Prop :=
 `hh`). -/
 def AcceptsVerdictHm96Any : Prop :=
   ∀ {I : Exec.Inputs} {t : Exec.Transcript}, I.tags.merkleLeaf = "hm96-sha512/v1" → Accepts I t →
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupOf I t.record = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupOf I t.record = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m),

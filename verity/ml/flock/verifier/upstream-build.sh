@@ -4,7 +4,7 @@
 #   bash verity/ml/flock/verifier/upstream-build.sh
 #   (a job run from the source tree, with ci-bundle.tar.gz sent)
 #
-# From the bundle (`ci-bundle.sh`) it builds `ci-pod.sh`'s upstream loop, one `upstream-<PR #83 commit>` per live version, and
+# From the bundle (`ci-bundle.sh`) it builds `ci-pod.sh`'s upstream loop, one `upstream-<M0 commit>` per live version, and
 # writes $RESEARCH_RUN_DIR/upstream.tar.gz (the binaries and BUILD.json: the flock commit, the Rust toolchain, the build host's
 # glibc, the newest glibc symbol version the binaries need, the bundle's and each binary's sha256), packed reproducibly, and
 # $RESEARCH_RUN_DIR/inputs.tar.gz (the bundle's store/, the sets' stored inputs).

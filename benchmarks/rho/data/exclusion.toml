@@ -6,6 +6,13 @@
 [structure]
 default = "reference"
 
+# Reference efficiency, a task assumption (GLOSSARY.md): no run uses the hardware more efficiently than
+# the reference training algorithm, so a bound converts free compute into the reference's work at MFU_0, a = 1 in place
+# of 1/MFU_0 (theorem.multiple_bound). false counts it at peak: periods.py's row without the reference-efficiency
+# assumption.
+[task]
+reference_efficiency = { value = true, source = "a ruled task assumption (GLOSSARY.md)", status = "ruled" }
+
 # s_times at the reference's gates per counted product, 2G / kappa of the adversary's family (831 gates at
 # units.gates_per_flop 250 and family.full's kappa 0.602), so it moves with both and G cancels (u = w): the dark leaves
 # count at the dark hardware's datasheet product rate (kappa/2 a datasheet FLOP, the physical model), not at any

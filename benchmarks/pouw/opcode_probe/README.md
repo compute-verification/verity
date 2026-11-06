@@ -93,7 +93,7 @@ by the check it names, or nothing is timed at all.
 
    ~~~bash
    python probe.py build --out /tmp/p probes/my.cu && python probe.py gate /tmp/p/my
-   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source \
+   research run --on MACHINE --project verity --source <tree> --cwd source \
      --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/run.sh benchmarks/pouw/opcode_probe/probes/my.cu
    ~~~
 

@@ -40,7 +40,7 @@ toward zero per MMA past it.
 ## Run
 
 ~~~text
-research run --on vy-dc-b200 --project verity --source <tree> --cwd source --timeout 40m \
+research run --on MACHINE --project verity --source <tree> --cwd source --timeout 40m \
   --env GPU_LEASE_WHO=lowbit-dc -- bash benchmarks/pouw/lowbit_dc/run.sh [gemm|pgemm]
 ~~~
 

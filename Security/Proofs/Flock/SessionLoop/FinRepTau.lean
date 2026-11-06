@@ -43,7 +43,7 @@ the real view keeps the view's `τ` and changes the leaves alone. -/
 theorem FlockSoundness.Discharge.ZkView.Coined.swExe_tau {K W Hi VL : Type} [Field K]
     {z : FlockSoundness.Discharge.ZkView.Sizes} (T : FlockSoundness.Discharge.ZkView.Coined K W Hi VL z) (w : W)
     (v : T.tab.Vals) (ω : T.tab.Rand) (ys : T.tab.Hid → FlockSoundness.Discharge.ZkView.Salt)
-    (hr : T.tab.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1) :
+    (hr : T.tab.onVals.RowsAt (w, v) ω.1 ω.2.1) :
     (T.swExe w v ω ys).tau = (T.tab.toBase (T.tab.onVals.view (w, v) ω)).tau := by
   have e1 : T.swExe w v ω ys = T.tab.toBase (T.hm96.onVals.viewR (w, v) ω ys) :=
     congrArg T.tab.toBase
@@ -72,7 +72,7 @@ theorem fwTau_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (xs : Array _root_.Flock.Claim) (hxsz : xs.size = spec.points * (stAt x j).regions.size)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (tPad : ℕ) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (hg : g = ligTab x w τ j) (cm0 : FlockComplete.Commit)
@@ -404,7 +404,8 @@ lanes, pads and `μ` alone, as `Masked.swViewE`'s. -/
 theorem finSrc_tau (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce) (t : finS.Tape)
     (ops : List (Msg × Msg)) {i r : ℕ} (hi : i < Masked.jOf x) (hr : r < 2) (hrows : FinRows vs x w ν t ops ⟨i, hi⟩) :
     ((finSrc vs x w ν t ops i).rep r).tau =
-      FlockLevel3.GF128.val ((Masked.swViewE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t ⟨i, hi⟩).tau ⟨r, hr⟩) := by
+      FlockLevel3.GF128.val
+        ((Masked.swViewE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t ⟨i, hi⟩).tau ⟨r, hr⟩) := by
   unfold finSrc Masked.tabSrcView
   rw [dite_eq_left hi]
   dsimp only
@@ -413,7 +414,7 @@ theorem finSrc_tau (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce
   simp only [RefSession.swViewsAt]
   exact congrArg (fun g : Fin 2 → _ => FlockLevel3.GF128.val (g ⟨r, hr⟩))
     (ZkView.Coined.swExe_tau ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩))
-      (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
+      (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) (finS.seenOf x t) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
       (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).2 hrows)
 
 variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
@@ -505,7 +506,7 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
     rw [hst, hsch]
     rfl
   have hmk' : ∀ i < (Composed.layOf (Masked.zkTab x ⟨k / 2, hj⟩).table (Masked.stAt x ⟨k / 2, hj⟩)).zp 64,
-      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2)).masked i =
+      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2)).masked i =
         q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := by
     rw [← hlay]
     exact hmk
@@ -538,7 +539,8 @@ theorem finRepTau (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
   rw [hsch] at hgo
   have ht₀ : (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8).rounds = #[] := rfl
   have e3 := Masked.fwTau_at x hx w hR t (finCoins x ops) (refK x) hnr s0 spec hsx ⟨k / 2, hj⟩ ⟨k % 2, hr⟩
-    (vs x w ν (finCoins x ops)) (hRows ν t κ m₀ ρ₀ ops hctx ⟨k / 2, hj⟩) (_root_.Flock.Firewall.Finish.claimsOf q.xs)
+    (vs x w ν (finCoins x ops) (finS.seenOf x t)) (hRows ν t κ m₀ ρ₀ ops hctx ⟨k / 2, hj⟩)
+    (_root_.Flock.Firewall.Finish.claimsOf q.xs)
     hxsz tb.st hst tb.tPad _ tb.g hg tb.cm0.toC (_root_.Flock.Firewall.Finish.padsOf q.draws).toC hP' ic'.toC q.vals
     tb.extra tb.lanePad _ ht₀ hl' hgo hmk'
   exact e1.trans (e2.trans e3.symm)

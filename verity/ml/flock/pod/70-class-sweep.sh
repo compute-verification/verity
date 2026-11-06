@@ -7,7 +7,7 @@
 # env: BINARY= PYBIN= (skip the build and the venv: a local dry run)
 #      GRAPH=path/to/<row>.program.json | DEFS=path/to/defs.json | PROGRAM=path/to/module.py:FUNC (a Program's Calls)  SHAPES=path/to/shapes.txt
 #      PARTITION=q-word (partition_units' spec; q-template-instance: a population program's instances, each one unit)
-#      FLOCK_DRAW_LAW=path/to/law.json (each session proves the units the verifier draws by this law at Register: serve --draw-law)
+#      FLOCK_DRAW_LAW=path/to/law.json (each session proves the units the verifier samples by this law at Register: serve --draw-law)
 #      SELECT=table-free  MODULES= (a module-path prefix)
 #      BATCH=auto  WARM=1  RUNS=3  SELFTEST=25  JOBS=1 (shapes staged in parallel)  GPU=1  SM (from nvidia-smi)  PORT=7710
 #      SELFTEST_GPU=1 (the selftests on the GPU, its paths against each other and the CPU's included)  SELFTEST_CASES=a,b (only these)

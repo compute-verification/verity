@@ -16,7 +16,7 @@ what the quantizer's block over that output returns.
 The body is `rmsnorm`'s four-part composition (``RmsNormOutSums``'s statement): ``F32SumPart_v1{S / G}`` a group of the
 chunk sums, ``RmsNormRecip_v1{N, G, EPS}`` of the G group sums once, then ``RmsNormOut_v1{1}`` a word; and the quantizer's
 steps, ``RowAbsMax_v2{C, false}`` of the output, or ``QuantScaleS8_v1`` of amax once and ``QuantCodeS8_v1`` a word. Every
-callee is one small circuit traced once and called a word at a time. C-Flock's stager holds 4-7 KB a gate of such a block (the
+callee is one small circuit traced once and called a word at a time. Flock's stager holds 4-7 KB a gate of such a block (the
 amax at C = 2,048 peaks at 19.2 GB, the codes at C = 512 at 17.8 GB), so a frozen-width row is parts of these, never one block.
 A bf16 multiply and an f32 add are no MACs: nothing either recomputes is a linear's.
 """

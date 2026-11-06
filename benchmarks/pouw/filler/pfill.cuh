@@ -532,34 +532,11 @@ __global__ void __launch_bounds__(32 * PF_PW, PF_PMIN)
 #endif
 
 // ---------------------------------------------------------------- the host's tile, from the matrices (pfill_host.cpp builds
-// this part with g++ for tests/test_pfill_ref.py, RS_K a host array there)
-static uint64_t pf_K[80];
-static void pf_host_k() {
-  static bool ok = false;
-#ifdef __CUDACC__
-  if (!ok) CK(cudaMemcpyFromSymbol(pf_K, RS_K, sizeof pf_K));
-#else
-  if (!ok) memcpy(pf_K, RS_K, sizeof pf_K);
-#endif
-  ok = true;
-}
-static inline uint64_t pf_rotr64(uint64_t x, int n) { return (x >> n) | (x << (64 - n)); }
+// this part with g++ for tests/test_pfill_ref.py)
 static void pf_block_h(uint64_t dom, uint64_t c0, uint64_t c1, uint64_t tile, uint64_t ctr, uint64_t* st) {
-  uint64_t w[80] = {c0, c1, tile, dom, ctr, 0x8000000000000000ull, 0, 0, 0, 0, 0, 0, 0, 0, 0, 320};
-  for (int i = 16; i < 80; i++)
-    w[i] = (pf_rotr64(w[i - 2], 19) ^ pf_rotr64(w[i - 2], 61) ^ (w[i - 2] >> 6)) + w[i - 7] +
-           (pf_rotr64(w[i - 15], 1) ^ pf_rotr64(w[i - 15], 8) ^ (w[i - 15] >> 7)) + w[i - 16];
-  static const uint64_t iv[8] = {0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull, 0xa54ff53a5f1d36f1ull,
-                                 0x510e527fade682d1ull, 0x9b05688c2b3e6c1full, 0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
-  uint64_t v[8];
-  for (int i = 0; i < 8; i++) v[i] = iv[i];
-  for (int i = 0; i < 80; i++) {
-    const uint64_t e = v[4], a = v[0];
-    const uint64_t t1 = v[7] + (pf_rotr64(e, 14) ^ pf_rotr64(e, 18) ^ pf_rotr64(e, 41)) + ((e & v[5]) ^ (~e & v[6])) + pf_K[i] + w[i];
-    const uint64_t t2 = (pf_rotr64(a, 28) ^ pf_rotr64(a, 34) ^ pf_rotr64(a, 39)) + ((a & v[1]) ^ (a & v[2]) ^ (v[1] & v[2]));
-    v[7] = v[6]; v[6] = v[5]; v[5] = v[4]; v[4] = v[3] + t1; v[3] = v[2]; v[2] = v[1]; v[1] = v[0]; v[0] = t1 + t2;
-  }
-  for (int i = 0; i < 8; i++) st[i] = iv[i] + v[i];
+  uint64_t w[16] = {c0, c1, tile, dom, ctr, 0x8000000000000000ull, 0, 0, 0, 0, 0, 0, 0, 0, 0, 320};
+  sx::iv(st);
+  sx::compress<0, 0>(st, w);
 }
 // B's planes a column: one (its entries' bits) for the bit tiles, seven for bU (plane p: bit p of each entry's byte)
 template <int KD>
@@ -613,7 +590,6 @@ static uint64_t pf_ref(uint64_t c0, uint64_t c1, uint64_t tile, int steps, int W
   constexpr int KH = KD == PF_E2M1 ? 2 : 1, NP = pf_planes<KD>();
   constexpr uint64_t dom = pf_dom(KD);
   const int TN = 128 * W;
-  pf_host_k();
   uint64_t st[8];
   const std::vector<uint64_t> Bb = pf_bcols<KD>(c0, c1, tile, TN);
   pf_block_h(dom, c0, c1, tile, PF_KEY, st);
@@ -675,7 +651,6 @@ static inline uint64_t dfill_ref(uint64_t c0, uint64_t c1, uint64_t tile, int nc
 // blocks and of A over fragments 0 .. frags - 1 of each, from the round's coins, on the host generators dfill_ref reads,
 // so dgate's receipts hold the GPU's operands to them. hu, ha: 256 counts each, by the byte's u8 value.
 static void pf_bu_hist(uint64_t c0, uint64_t c1, int tiles, int frags, uint64_t* hu, uint64_t* ha) {
-  pf_host_k();
   uint64_t st[8];
   memset(hu, 0, 256 * sizeof *hu);
   memset(ha, 0, 256 * sizeof *ha);

@@ -31,7 +31,7 @@ MMA_WGMMA = ["HGMMA", "IGMMA", "QGMMA", "OGMMA", "BGMMA"]           # Hopper asy
 MMA_TCGEN05 = ["UTCHMMA", "UTCIMMA", "UTCQMMA", "UTCOMMA", "UTCBMMA"]  # Blackwell tcgen05.mma (TMEM accumulators)
 MMA = MMA_SYNC + MMA_WGMMA + MMA_TCGEN05
 
-# Lane multiply-accumulate / multiply opcodes: exact integer MAC (the honest route), FP MAC, dot products.
+# The lanes' multiply-accumulate and multiply opcodes: exact integer MAC (the honest route), FP MAC, dot products.
 LANE_MUL = {
     "IMAD": "s32 integer multiply-add (the honest lane MAC; IMAD.WIDE -> s64 pair)",
     "IMUL": "s32 integer multiply (high/low)",

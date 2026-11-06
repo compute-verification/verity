@@ -582,6 +582,86 @@ theorem check5_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   rw [hsl]
   simp [Array.getD_eq_getD_getElem?, hn]
 
+/-- **Check 5's row at a slot, at any instance of the table**: `check5_bytes` with the instance's block from the table's
+instance count (`div_lt_blocks`) rather than `n < 2`. -/
+theorem check5_bytes_lt {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
+    (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} {c : Circuit}
+    (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) {i : RecIns} {spec : SessionSpec}
+    {sts : Array Stmt} (hsu : setupO xO = some (i, spec, sts)) (h0 : 0 < sts.size)
+    (hidx : Registered.unitIndices sts[0].pub = .ok (Array.range sts[0].pub.n))
+    {own : Array Registered.Port} (hown : i.base.registered = some own)
+    {salt : String → ℕ → ByteArray} {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
+    (hrows : RecCoins.checkRows salt sts[0].c sts[0].pub own port value rows what = .ok ())
+    {q : ℕ} (hq : c.ports.findIdx? (·.name == port) = some q) {n : ℕ} (hnN : n < sts[0].n) (hn : n < rows.size)
+    (hnp : n < sts[0].pub.n) :
+    ∃ prog, sts[0].c.metaJ.getObjValAs? String "program_sha512" = .ok prog ∧
+      readForms w (hmCommit c q n) = (RecCoins.commitRow rows[n]! (salt prog n)).data.toList := by
+  obtain ⟨p, r', sv, hx, ht, hpi, hr', -, h0p, htab⟩ := stagedTables hS
+  rw [hr] at hr'
+  cases hr'
+  obtain ⟨-, hset⟩ := setupO_some hsu
+  have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
+  obtain ⟨hsz1, -⟩ := oneFull_staged hS hsu
+  have e0 : p.sts[0] = sts[0] := by subst hp; rfl
+  have hsz : p.sts.size = 1 := by rw [hp]; exact hsz1
+  have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0p
+  obtain ⟨L, hz⟩ := layout_of_check_regs hck hx ht hpi h0p
+  have hz1 : (L.model (FlockSoundness.Refine.regionsOf p.sts[0])).Satisfies (Flock.Readable.zOf 1 w 0 p.sts[0].m) := by
+    have e := congrArg (fun J => Flock.Readable.zOf J w 0 p.sts[0].m) hsz
+    rw [← e]
+    exact hz
+  obtain ⟨-, hts⟩ := tablesOf_of_parse hx
+  obtain ⟨_, hset0⟩ := Flock.Readable.setup_of_tablesOf hts
+  unfold Flock.Readable.Read.setup at hset0
+  rw [hpi] at hset0
+  obtain ⟨-, hall⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_setupOne hset0
+  obtain ⟨d, hd, -⟩ := hall 0 h0p
+  have ht' : (FlockSoundness.Discharge.Exec.tagsAt p.tags p.I.count 0).typed = false :=
+    (FlockSoundness.Discharge.Exec.tagsAt_typed _ _ _).trans ht
+  obtain ⟨hscope, -⟩ := staged_scope hS hx h0p
+  have hv1 := FlockSoundness.Discharge.Layout.scopeOk_ports
+    ((FlockSoundness.Discharge.FailClosed.scopeOk_eq _).symm.trans hscope)
+  obtain ⟨_, -, hupv, -, -, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0p).2.2
+  obtain ⟨-, hg, hnbl, -⟩ := table_rows ht' hd (by omega) hv1 L _ hz1
+  subst hc0
+  have hreg := RecIns.setup_registered hset sts[0] (Array.getElem_mem h0)
+  rw [← e0] at hrows hidx hnp hnN hreg ⊢
+  rw [hown] at hreg
+  obtain ⟨reg, prog, t, pp, positions, paths, hf, hreads, hprog, htt, hpp, hent, hrow⟩ := checkRows_tableRows hrows
+  have hmem : reg ∈ own := Array.mem_of_find?_eq_some hf
+  have hname : reg.name = port := by simpa using Array.find?_some hf
+  obtain ⟨t', idx, ht2, hidx2, hports⟩ :=
+    FlockSoundness.Discharge.ZkReg.check_tables (FlockSoundness.Discharge.ZkReg.checkRegistered_ok hreg)
+  rw [htt] at ht2
+  cases ht2
+  rw [hidx] at hidx2
+  cases hidx2
+  obtain ⟨p', positions', paths', hp', hent', hall'⟩ := FlockSoundness.Discharge.ZkReg.checkPort_at (hports _ hmem)
+  obtain ⟨p'', positions'', paths'', hp'', hent'', hsize⟩ := FlockC3.PubRows.checkPort_size (hports _ hmem)
+  rw [hname, hpp] at hp' hp''
+  cases hp'
+  cases hp''
+  rw [hent] at hent' hent''
+  cases hent'
+  cases hent''
+  obtain ⟨hq', -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hq
+  have hqq : pp = q := find_range_findIdx (f := fun (x : Port) => x.name == port) hpp hq
+  rw [hqq] at hrow hall' hsize
+  obtain ⟨hlt, hrd, -⟩ := hall' n hnp
+  rw [hreads, range_getD hnp] at hrd
+  have hpos : positions.getD (Registered.ref t p.sts[0].c.ports.size q n) 0 = n := by
+    rw [Array.getD_eq_getD_getElem?]
+    simp [hn] at hrd
+    omega
+  have hlt' : Registered.ref t p.sts[0].c.ports.size q n < positions.size := by rw [hsize]; exact hlt
+  have hsl := slotPub_table ht' hd (by omega) hv1 L hz1 hq' hnp (div_lt_blocks hg hnN hnbl)
+  rw [digest_tables htt, hrow _ hlt', getElem!_pos positions _ hlt'] at hsl
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt', Option.getD_some] at hpos
+  rw [hpos] at hsl
+  refine ⟨prog, hprog, ?_⟩
+  rw [hsl]
+  simp [Array.getD_eq_getD_getElem?, hn]
+
 /-- **An algebra part's `v` slot commits**: `v` is an input of the part's unit (`innerSub`'s outputs are `out` alone), so
 its row lies in the table's leaves (`in_block`), and `slotCommits_table` gives its commit string, as
 `hmSlotsCommit_of_full` does for the held rows. -/
@@ -658,6 +738,7 @@ theorem vCols_of_base {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   have hsz : p.sts.size = 1 := by rw [hp]; exact (oneFull_staged hS hsu).1
   have hc0 := partCircuit_staged hS hx ht' hpi hr hpc h0
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht' hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   obtain ⟨u, -, hupv, -, hl, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
   obtain ⟨hscope, -⟩ := staged_scope hS hx h0
   have hv1 := FlockSoundness.Discharge.Layout.scopeOk_ports
@@ -864,6 +945,7 @@ theorem vBase_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x
   cases hsv'
   have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   obtain ⟨-, hpk, hpa⟩ := htab 0 h0
   subst hc0
   obtain ⟨S', ns', nv', hpart', hn⟩ := FlockVBridge.OfVStar.check_part_at P.recResiduals hres hshp hholo
@@ -994,7 +1076,7 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Flock.Stmt} (ht : tags.typed = false)
     (hh : tags.hiddenOutputs = true)
     (hd : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
-    (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
+    (hnt : st.c.tmpl = none) (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     (ho : st.c.outNet = st.c.unitNet)
     (hin : ∀ j < (st.c.unit.outGroups.getD 0 default).bits.size, ∀ t < 16,
       (st.c.unit.outGroups.getD 0 default).col * Flock.WORD + 16 * j + t < 2 ^ st.c.unit.unitLog)
@@ -1008,7 +1090,13 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
   rw [hh] at hd'
   simp only [↓reduceIte] at hd'
   have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd'
-  obtain ⟨hp, hcr⟩ := FlockSoundness.Discharge.Hidden.parse_untyped ht s.parse
+  have hi : tags.isTmpl = false := by
+    obtain ⟨pre, c₀, -, -, -, -, hfl | ⟨tu, -, -, htu⟩⟩ :=
+      FlockSoundness.Discharge.Hidden.parseCommit_untyped ht s.parse
+    · exact hfl.1
+    · rw [hnt] at htu
+      cases htu
+  obtain ⟨hp, hcr⟩ := FlockSoundness.Discharge.Hidden.parse_untyped ht (s.parseF hi)
   have P := FlockSoundness.parse_facts hp
   have L0 : FlockSoundness.Layout (FlockSoundness.Discharge.Hidden.flatTwin st) :=
     FlockSoundness.layout_of (st := FlockSoundness.Discharge.Hidden.flatTwin st) P s.pin rfl rfl s.m s.kLog
@@ -1016,7 +1104,8 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
     FlockSoundness.Discharge.Hidden.unitFacts_of_parse (st := FlockSoundness.Discharge.Hidden.flatTwin st) hp rfl
   have hda : st.da = (Flock.HmRow.delta st.c st.pin).1 ++
       (FlockSoundness.Discharge.Hidden.outPairs st.c).toArray := by
-    rw [s.da, FlockSoundness.Discharge.Hidden.hidden_delta']
+    rw [s.da, FlockSoundness.Discharge.Hidden.hidden_delta_unpinned
+      (FlockSoundness.Discharge.Hidden.unpinned_of_v1 hcr fun p hp => (hv1 p hp).1)]
   have hrows : FlockSoundness.Discharge.Hidden.OutRows st.c :=
     FlockSoundness.Discharge.Hidden.out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
   have hz0 := FlockSoundness.Discharge.Hidden.sat_flat L L0 F0 hv1 hda hrows hz
@@ -1121,12 +1210,11 @@ theorem outRows_setupOne {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {ta
   rw [hh] at hd'
   simp only [↓reduceIte] at hd'
   have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd'
-  obtain ⟨hp, hcr⟩ := FlockSoundness.Discharge.Hidden.parse_untyped ht s.parse
-  exact FlockSoundness.Discharge.Hidden.out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
+  exact (FlockSoundness.Discharge.Hidden.committed_of_commit s.parse).outRows ht fun p hp => (hv1 p hp).1
 
 /-- `FlockDeploy.Raw.ins` reads its tags from `--statement`'s name, and C's under the session's coins. -/
 theorem raw_ins_tags {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
-    Tags.find? w.statement = some s.stmtTags ∧ s.read.I.tags = s.stmtTags.withCoins s.read.I.coins := by
+    Tags.byName? w.statement = some s.stmtTags ∧ s.read.I.tags = s.stmtTags.withCoins s.read.I.coins := by
   unfold FlockDeploy.Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -1134,7 +1222,7 @@ theorem raw_ins_tags {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .o
 
 /-- A recursive statement's tags are a known statement's, and C's are them under the session's coins. -/
 theorem insO_tags {x : Msg} {i : RecIns} (h : insO x = some i) :
-    (∃ nm, Tags.find? nm = some i.base.stmtTags) ∧ ∃ coins, i.base.read.I.tags = i.base.stmtTags.withCoins coins := by
+    (∃ nm, Tags.byName? nm = some i.base.stmtTags) ∧ ∃ coins, i.base.read.I.tags = i.base.stmtTags.withCoins coins := by
   cases hd : decodeRec x with
   | none => unfold insO at h; rw [hd] at h; simp at h
   | some w =>
@@ -1164,7 +1252,7 @@ theorem checkStmt_name {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : 
     simpa using hn
 
 /-- **A staged part's tables have hidden outputs**: its setup's `checkStmt` holds it to `verity/flock-circuit`
-(`checkStmt_name`), the one statement of that name (`Tags.find?`), whose outputs are hidden, under any coins and in
+(`checkStmt_name`), the one statement of that name (`Tags.byName?`), whose outputs are hidden, under any coins and in
 `verify --zk`'s tags (`zkTags_hiddenOutputs`). -/
 theorem staged_hidden {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {p : Flock.Readable.Parsed}
     (hx : Flock.Readable.parseBytes readOfO xO = some p) {t : ℕ} (ht : t < p.sts.size) :
@@ -1178,13 +1266,9 @@ theorem staged_hidden {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s 
   rw [hinner, insO_staged_part hins] at hC
   have hn := checkStmt_name (checks_stmt hC t ht)
   obtain ⟨⟨nm, hf⟩, coins, hI⟩ := insO_tags hins
-  have hf' := hf
-  unfold Flock.Tags.find? at hf'
-  have hnm : nm = Flock.Tags.circuit.name := by
-    have h2 : i.base.stmtTags.name = nm := by simpa using List.find?_some hf'
-    rw [← h2, hn]
+  have hnm : nm = Flock.Tags.circuit.name := by rw [← Flock.Tags.byName?_name hf, hn]
   subst hnm
-  rw [FlockSoundness.Discharge.Recursion.find?_circuit] at hf
+  rw [Flock.Tags.byName?_of_find? FlockSoundness.Discharge.Recursion.find?_circuit] at hf
   have hT : i.base.stmtTags = Flock.Tags.circuit := (Option.some.inj hf).symm
   have hI' : i.base.read.I.tags.hiddenOutputs = true := by
     rw [hI, hT]
@@ -1228,6 +1312,7 @@ theorem slotOut_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit
     rw [← e]
     exact hz
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   obtain ⟨-, hts⟩ := tablesOf_of_parse hx
   obtain ⟨spec0, hset⟩ := Flock.Readable.setup_of_tablesOf hts
   unfold Flock.Readable.Read.setup at hset
@@ -1251,17 +1336,19 @@ theorem slotOut_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit
   have hb := div_lt_blocks_two hn2 hnbl
   subst hc0
   obtain ⟨S', ns', nv', -, hn⟩ := FlockVBridge.OfVStar.check_part_at P.recResiduals hres hshp hholo
+  have hnt := FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2
+  have hU := L.built_flat hnt
   have hin : ∀ j < (p.sts[0].c.unit.outGroups.getD 0 default).bits.size, ∀ t < 16,
       (p.sts[0].c.unit.outGroups.getD 0 default).col * Flock.WORD + 16 * j + t < 2 ^ p.sts[0].c.unit.unitLog := by
-    obtain ⟨hcol, hsz', -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid L.unit_built hn
-    have hcp : (FlockSoundness.Rows.ofNet L.unit_built).nIn + (FlockSoundness.Rows.ofNet L.unit_built).nComp =
-        p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one L.unit_built
-    have hfit := (FlockSoundness.built_fit L.unit_built).1
+    obtain ⟨hcol, hsz', -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid hU hn
+    have hcp : (FlockSoundness.Rows.ofNet hU).nIn + (FlockSoundness.Rows.ofNet hU).nComp =
+        p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one hU
+    have hfit := (FlockSoundness.built_fit hU).1
     intro j hj t ht
     rw [hsz'] at hj
     have := hlt (16 * j + t) (by omega)
     omega
-  exact slotOut_table ht' hh hd hv1 ho hin L regs hz1 (Array.findIdx?_eq_some_iff_getElem.1 hqo).1 hoout hb
+  exact slotOut_table ht' hh hd hnt hv1 ho hin L regs hz1 (Array.findIdx?_eq_some_iff_getElem.1 hqo).1 hoout hb
 
 /-- **Where a copy's `out` columns sit** (`resTie_copyOf`'s `hOc`): at a staged algebra part, `out` is the unit's one
 output row, right after `v` (`v_idx`, one output row per output port by `outRows_setupOne`), so its bit `q` is output
@@ -1300,6 +1387,7 @@ theorem oCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   have hc0 := partCircuit_staged hS hx ht' hpi hr hpc h0
   obtain ⟨L, -, -⟩ := Flock.Readable.layout_of_check hck hx ht' hpi h0
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht' hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   obtain ⟨-, hts⟩ := tablesOf_of_parse hx
   obtain ⟨spec0, hset⟩ := Flock.Readable.setup_of_tablesOf hts
   unfold Flock.Readable.Read.setup at hset
@@ -1328,9 +1416,9 @@ theorem oCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   rw [hpart] at hpart'
   simp only [Except.ok.injEq, Prod.mk.injEq] at hpart'
   obtain ⟨rfl, rfl, rfl⟩ := hpart'
-  obtain ⟨hcol, hbits, -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid L.unit_built hnet
-  have hcp : (FlockSoundness.Rows.ofNet L.unit_built).nIn + (FlockSoundness.Rows.ofNet L.unit_built).nComp =
-      p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one L.unit_built
+  obtain ⟨hcol, hbits, -, hlt⟩ := FlockVBridge.OfVStar.outCols_of_unitLaid (L.built_flat P.tmpl) hnet
+  have hcp : (FlockSoundness.Rows.ofNet (L.built_flat P.tmpl)).nIn + (FlockSoundness.Rows.ofNet (L.built_flat P.tmpl)).nComp =
+      p.sts[0].c.unit.constPos := FlockSoundness.Rows.ofNet_one (L.built_flat P.tmpl)
   have hsm := FlockVBridge.OfVStar.part_small hpart
   have hR : RecResiduals.RES_OUT_WORDS = 128 := rfl
   obtain ⟨hqv', hsize⟩ := v_idx hu hrows hqv

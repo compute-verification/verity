@@ -77,6 +77,25 @@ private def rootHex : String := Flock.hexOf root
 #guard (protocol.answer "{}".toUTF8 root "{\"drawn\":2,\"passed\":2}".toUTF8).reason ==
   some "params: k is missing or not a natural number"
 #guard (protocol.case "not json").reason.map (·.startsWith "case: not JSON") == some true
+-- a character outside printable ASCII is canonical escaped, in lowercase hex, and refused as a raw byte or otherwise spelt
+#guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"passed\":2,\"x\":\"d\\u00e9\"}".toUTF8).verdict == .accept
+#guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"d\\u007f\":1,\"passed\":2}".toUTF8).verdict == .accept
+#guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"passed\":2,\"x\":\"\\ud83d\\ude00\"}".toUTF8).verdict == .accept
+#guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"passed\":2,\"x\":\"dé\"}".toUTF8).reason ==
+  some "evidence: not ASCII without DEL (a byte at or above 0x7f)"
+#guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"passed\":2,\"x\":\"\x7f\"}".toUTF8).reason ==
+  some "evidence: not ASCII without DEL (a byte at or above 0x7f)"
+#guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"passed\":2,\"x\":\"d\\u00E9\"}".toUTF8).reason ==
+  some "evidence: not canonical JSON (compact, keys sorted, integers only)"
+#guard (protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"passed\":2,\"x\":\"\\u007e\"}".toUTF8).reason ==
+  some "evidence: not canonical JSON (compact, keys sorted, integers only)"
+#guard (protocol.answer "{\"k\":2,\"x\":\"dé\"}".toUTF8 root "{\"drawn\":2,\"passed\":2}".toUTF8).reason ==
+  some "params: not ASCII without DEL (a byte at or above 0x7f)"
+-- an outcome's reason is free text, escaped as any string is
+private def freeReason : Answer :=
+  { protocol := "p", verdict := .reject, reason := some "Δ ≥ 1", digest := none, published := none, profile := none }
+#guard freeReason.canonical.toOption == some ("{\"commitment\":null,\"profile\":null,\"protocol\":\"p\"," ++
+  "\"public\":null,\"reason\":\"\\u0394 \\u2265 1\",\"verdict\":\"reject\"}")
 
 private def reread (params evidence : String) : String :=
   let go : V String := do

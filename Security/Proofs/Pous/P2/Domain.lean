@@ -18,21 +18,22 @@ square–mask–square maps. This file proves, with no hypothesis beyond what th
 
 The route:
 
-1. `PousGen.count_main`: A2's lazy-sampling count (`a2/A2.lean`) over permutations of any finite type `X`, giving
+1. `PousGen.count_main`: A2's lazy-sampling count over permutations of any finite type `X`, giving
    `|X|^g` in place of `2^(ℓ·g)`.
 2. `PousP2p.lemmaA_m1p`: Lemma A for `m1p` at `X = Fin p`, with bound `gammaP = 2^S·C(B, g)·Σ_{h ≤ g}
    C((g+1)Q, h) / p^g`, whenever `2^b ≤ p ≤ 2^w`. A query in the tail is answered by itself (`trP`), and a
    responder's output is read mod `p`. The bound does not depend on `b`.
 3. `PousP2p.gammaP_le`: `2^(w·g) ≤ 2·p^g` when `p ≥ 2^w − c` and `2·B·c ≤ 2^w` (Bernoulli), so `gammaP` is at most
-   A2's bound on `Bits w` with one more state bit. The certificate machinery of `p2/P2Meets.lean` then applies at
-   `S + 1` (`meets_m1p_of_row`); `S = ⌊(18/19)·B·w⌋` does not depend on `b` either.
+   A2's bound on `Bits w` with one more state bit. The certificate machinery of
+   `Security/Proofs/Pous/P2/Rows.lean` then applies at `S + 1` (`meets_m1p_of_row`); `S = ⌊(18/19)·B·w⌋` does not
+   depend on `b` either.
 4. `m1p` is correct (`b ≤ w`, `p ≤ 2^w`), `|C| = B·w ≥ n = B·b`, and within the `21/20` space bound
    (`20·w ≤ 21·b`). No payload and no code block lies in the tail (`pad_lt`, `m1p_code`), and the code blocks are
    uniform on `[0, p)` (`m1p_code_uniform`).
 
-The generic count (`PousGen`, from `a2/A2.lean`) is `Security/Proofs/Pous/P2/Count.lean`, the certificate
-plumbing (`PousP2`, from `p2/P2Meets.lean` up to `meets_m1_of_row`) is `Security/Proofs/Pous/P2/Rows.lean`, and
-A3′ is `PousTrackA.a3_prime_lam`. This module is the new part (`PousP2p`).
+The generic count (`PousGen`) is `Security/Proofs/Pous/P2/Count.lean`, the certificate
+plumbing (`PousP2`, up to `meets_m1_of_row`) is `Security/Proofs/Pous/P2/Rows.lean`, and
+A3′ is `PousTrackA.a3_prime_lam`. This module's own part is `PousP2p`.
 -/
 
 /-! ## M1 on P2's exact domain `[0, p)`: `Pous.m1p` -/

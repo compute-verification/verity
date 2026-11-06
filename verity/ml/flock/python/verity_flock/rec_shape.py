@@ -7,7 +7,7 @@ its openings (each rep's queries of the level, positions from the coins, never d
 (`rec_residuals.parts`). A deployment's `Cap` names the inner circuit's k_log and vus_per_block (its META), the instances every
 inner statement is padded to (`class_statement --real`: the real tiles, then fillers) and the claims (2 + the circuit's extra
 claims), all public; `outer` is the statements every outer proof of the deployment has, and `check` refuses a session of
-another shape before V* is staged over it (``rec_vstage stage --cap``, as the firewall would).
+another shape before V* is staged over it (``rec_vstage stage --cap``, as the ZK server would).
 
 A filler only adds instances: a tile whose rows are zero and whose output is the class's own on them, so the padded statement
 holds exactly when the unpadded one does and its fillers do, and the fillers hold of any table. `forge_filler` is the negative

@@ -31,7 +31,7 @@ theorem sampledAuditAccepted_of {T : Type}
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope H D)
     (hopen : OpenCallsLe H D) (huniv : UniversalIs D)
-    (hComplete : Complete H D) (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) :
+    (hComplete : Complete H D) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) :
     KSAccepted H D L K S lay k :=
   NetTiming.SecurityProofs.SampledAuditAccepted H D L K S lay k
     (sampling_assembled_of D H F p hflock hKS hlist hcount hε own at_ row salt π layer hcommit hrow hfixed hsessions
@@ -51,7 +51,7 @@ theorem sampledAuditAccepted_zk (rel : _root_.Flock.Readable.Parsed → _root_.F
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope H D)
     (hopen : OpenCallsLe H D) (huniv : UniversalIs D)
-    (hComplete : Complete H D) (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) :
+    (hComplete : Complete H D) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) :
     KSAccepted H D L K S lay k :=
   sampledAuditAccepted_of D H (FlockDeploy.deployZk rel) FlockDeploy.zkStepPoly hflock hKS
     (by
@@ -74,7 +74,7 @@ theorem sampledAuditAccepted_plain (rel : _root_.Flock.Readable.Parsed → _root
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope H D)
     (hopen : OpenCallsLe H D) (huniv : UniversalIs D)
-    (hComplete : Complete H D) (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) :
+    (hComplete : Complete H D) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) :
     KSAccepted H D L K S lay k :=
   NetTiming.SecurityProofs.SampledAuditAccepted H D L K S lay k
     (sampling_assembled_plain rel D H hflock hKS hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots

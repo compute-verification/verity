@@ -38,7 +38,7 @@ theorem prefixLen_eq {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) 
     (x : Paths (Coin C Ξ m σ sT) n) :
     (tileRun σ k hk sT unitOf ws opened rel right).prefixLen x = ws.prefixLen x := by
   classical
-  unfold PeriodRun.prefixLen CreditWindows.prefixLen
+  unfold Outcomes.prefixLen CreditWindows.prefixLen
   congr 1
   exact Finset.filter_congr fun w _ => credited_iff σ k hk sT unitOf hKd ws opened rel right x w
 
@@ -48,7 +48,7 @@ theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) 
     (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop)
-    (Wp : Period C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
+    (Wp : WindowPlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (x : Paths (Coin C Ξ Cd.rounds σ sT) n) :
     creditedLive Sc Cd Wp (tileRun σ k hk sT unitOf ws opened rel right) x = creditLive Sc Cd Wp ws x := by
   classical

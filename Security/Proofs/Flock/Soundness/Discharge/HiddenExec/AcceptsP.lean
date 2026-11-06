@@ -81,10 +81,10 @@ theorem setupTables_okHP (hh : tags.hiddenOutputs = true)
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-  · exact Or.inl ⟨by assumption, _, by assumption, rfl, rfl⟩
+  · exact Or.inl ⟨by assumption, _, ok_of_refuse (by assumption), rfl, rfl⟩
   all_goals
     obtain ⟨hsz, hall⟩ := range_mapM_ok (by assumption)
-    exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, hall j hj⟩, mPts_of_any (by assumption), rfl⟩
+    exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, ok_of_refuse (hall j hj)⟩, mPts_of_any (by assumption), rfl⟩
 
 /-- **Every table of a hidden-output session accepted at the verifier's public inputs is its `SpecP`**: under the
 table's tags (`tagsAt`), at some draw (the session's, for one table), and at its circuit's public input ports. -/

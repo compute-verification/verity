@@ -103,10 +103,10 @@ def commit_points(pairs: int) -> list[str]:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Row configuration (plan-time inputs).  Artifact-derived overrides win over the structural estimates.
+# Row scale (plan-time inputs).  Artifact-derived overrides win over the structural estimates.
 # ---------------------------------------------------------------------------------------------------------------------
 @dataclass
-class RowConfig:
+class RowScale:
     model: str
     requests: int = 1
     prompt_tokens: int = 1024            # sum over requests
@@ -305,7 +305,7 @@ def _decision(reserved: int, limit: int | None, live: dict[str, int], margin_byt
     return {"admit": True, "verdict": "ADMIT", "spare_bytes": limit - reserved, "live_at_peak_mib": {k: v // MiB for k, v in top}, "margin_mib": margin_bytes // MiB}
 
 
-def predict(cfg: RowConfig) -> dict[str, Any]:
+def predict(cfg: RowScale) -> dict[str, Any]:
     """Reservation per stage: base serving + simultaneously-live named terms + bounded (named) margin."""
     sp = cfg.spec
     C = CALIBRATION
@@ -577,7 +577,7 @@ def observe_r17(attempt_dir: str) -> dict[str, Any]:
     return obs
 
 
-def row_config_from_attempt(attempt_dir: str) -> RowConfig:
+def row_config_from_attempt(attempt_dir: str) -> RowScale:
     """Plan-time inputs from an attempt directory's artifacts (preflight row, workload program, admission JSON, fold summary)."""
     notes: list[str] = []
     row = None
@@ -602,7 +602,7 @@ def row_config_from_attempt(attempt_dir: str) -> RowConfig:
         i_ = next((int(p[1:]) for p in parts if re.fullmatch(r"i\d+", p)), 1024)
         o_ = next((int(p[1:]) for p in parts if re.fullmatch(r"o\d+", p)), 128)
         K = i_ + o_
-    cfg = RowConfig(model=model, requests=requests, max_context=K, notes=notes)
+    cfg = RowScale(model=model, requests=requests, max_context=K, notes=notes)
     # an attempt is modelled as it ran: a record whose commit.log lacks the frozen-fork line ran without gc.freeze (fork_gc_freeze False
     # -> the forked-children term); one that carries it is modelled with 250 MiB workers
     cl = os.path.join(attempt_dir, "commit.log")
@@ -807,7 +807,7 @@ def _observed_stage_peak(obs: dict[str, Any], stage: str) -> tuple[int | None, s
     return st.get("rss_mib"), f"max_python_rss over {st.get('n')} samples"
 
 
-def compare(attempt_dir: str, cfg: RowConfig | None = None) -> dict[str, Any]:
+def compare(attempt_dir: str, cfg: RowScale | None = None) -> dict[str, Any]:
     """Predicted vs observed peak per stage (+ per commit point) with the residual and the named attribution."""
     attempt_dir = str(attempt_dir)
     cfg = cfg or row_config_from_attempt(attempt_dir)
@@ -938,7 +938,7 @@ def model_key_for_row(row_id: str) -> str:
 
 def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | None = None, pairs: int = 3, replay_workers: int | None = None,
                              host_limit_bytes: int | None = None, snapshot_steps: str | None = None, snapshot_max_bytes: int | None = None,
-                             stages: str = "build,match,commit") -> RowConfig:
+                             stages: str = "build,match,commit") -> RowScale:
     """Plan-time config from the sweep workload (workloads/<row>.json, or its parsed dict): the same facts row_pod.sh reads for B/I/O/LP/T."""
     w = workload_path if isinstance(workload_path, dict) else json.loads(workload_file(workload_path).read_text())
     sw = w.get("sweep") or {}
@@ -956,7 +956,7 @@ def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | 
     notes = []
     if key not in MODELS:
         notes.append(uncalibrated_model_note(key))
-    cfg = RowConfig(model=key, requests=b, prompt_tokens=prompt, decode_rows=decode, steps=steps, max_context=int(ea.get("max_model_len") or (i_max + o_max)),
+    cfg = RowScale(model=key, requests=b, prompt_tokens=prompt, decode_rows=decode, steps=steps, max_context=int(ea.get("max_model_len") or (i_max + o_max)),
                     pairs=pairs, replay_workers=replay_workers, host_limit_bytes=host_limit_bytes,
                     largest_request_rows=t_max, largest_request_ctx=lp_max + t_max, notes=notes)
     cfg.prefill_rows = int(ea.get("max_num_batched_tokens") or prompt)
@@ -980,7 +980,7 @@ def cgroup_memory_max() -> int | None:
     return None
 
 
-def plan_row(cfg: RowConfig, out_path: str | None, advisory: bool = True) -> dict[str, Any]:
+def plan_row(cfg: RowScale, out_path: str | None, advisory: bool = True) -> dict[str, Any]:
     """predict() for one sweep row -> admission.json beside the attempt + the one-line summary row_pod.sh logs.
 
     ADVISORY: the document records per stage reserved_bytes, the named terms, verdict (ADMIT / REFUSE / LOWER_BOUND /

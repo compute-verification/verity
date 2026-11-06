@@ -158,7 +158,7 @@ def test_edge_unscheduled_request_is_pending_not_inactive_named_by_the_slot_map(
 
 
 def test_r5_rng_advances_iff_run_is_stated_and_the_lag_slot_is_the_one_post_eos_draw():
-    """The Definition SAYS it (RNG_STATEMENT) and the rule's accounting names the draws: one per executed slot, exactly one after the
+    """The Definition SAYS it (RNG_STATEMENT) and the rule's accounting names the samples: one per executed slot, exactly one after the
     served EOS under A = 1 (at pos = prompt_len - 1 + n, the ledger's query position), none under A = 0, none at an inactive slot."""
     assert "iff r_t" in K.RNG_STATEMENT and "one draw" in K.RNG_STATEMENT and "keyed by (seed, pos)" in K.RNG_STATEMENT
     asy = K.rng_accounting(K.recurrence([ORD, ORD, EOS[0], 9, None, None], cap=6, A=1, eos=EOS), prompt_len=32)
@@ -303,7 +303,7 @@ def test_derived_invariant_reproduces_the_real_records_executed_lengths_under_th
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the rule's draw positions, and the ledger compared to them by name
+# the rule's sample positions, and the ledger compared to them by name
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -345,7 +345,7 @@ def test_r5_expected_draw_positions_are_the_run_slots_and_the_ledger_is_compared
 
 
 def test_r5_positions_are_the_ledgers_pos_fact_draw_k_at_prompt_len_minus_1_plus_k_stoch_m_0749():
-    """One convention on the record: the draw ledger maps draw k (k from 0, slot t = k + 1) to pos = prompt_len - 1 + k, the query
+    """One convention on the record: the sample ledger maps draw k (k from 0, slot t = k + 1) to pos = prompt_len - 1 + k, the query
     position whose logits are sampled and the `pos` fact the sampled rows carry (an 8-token prompt's first draw is at pos 7, the llama B8
     record).  `expected_draw_positions` gives the same numbers -- the ledger imports `recurrence`/`executed_slots` and a disagreement is
     'two mechanisms'."""

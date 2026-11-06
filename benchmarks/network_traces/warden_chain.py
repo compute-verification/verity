@@ -9,9 +9,9 @@ none of its records enters the chain.
 * `link`: N2's link on the run (`service.LinkWindows` with its `service.WardenProfile`): the warden's link name, its
   one grid both ends', its key and session, its windows and parameters digest, and no sync (the warden runs no shaper
   clock and signs none, so no clock certificate enters N2 here).
-* `pairs`: each link-window's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the first
-  window missing one.
-* `certificates`: the warden's own offline check (`warden_serve.check`: every link-window of the three records
+* `pairs`: each execution phase's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the
+  first window missing one.
+* `certificates`: the warden's own offline check (`warden_serve.check`: every execution phase of the three records
   certified under the warden's key and session with its head the record's, its rows' registration, the audit, and the
   client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's, `auditor.warden_outcome`)
   exactly the certified lines' certificates and refusals, in order.
@@ -95,8 +95,8 @@ def link(run: Path) -> tuple[SVC.LinkWindows, dict, W.WardenParams]:
 
 
 def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
-    """Each link-window's certified (egress, ingress) records, from window 0 until the first missing one, and the
-    link-windows the signer refused."""
+    """Each execution phase's certified (egress, ingress) records, from window 0 until the first missing one, and the
+    execution phases the signer refused."""
     certified, refused = WS.read_certified(witness(run) / "certified.jsonl")
     out = []
     for w in range(dep["windows"]):
@@ -108,7 +108,7 @@ def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
 
 
 def certificates(run: Path, deployed: bool = False) -> dict:
-    """The certificates' check on the run (the module docstring's `certificates`), one row a link-window: certified
+    """The certificates' check on the run (the module docstring's `certificates`), one row an execution phase: certified
     when each of its three records is, complete. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`."""
     dep, _ = deployment(run)
     wit = witness(run)

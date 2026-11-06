@@ -50,7 +50,7 @@ theorem checked_of_acceptsHJI (I : Inputs) (ht : I.tags.typed = false) (own : Ar
   have hst := hstJ _ hjs
   have s := Hidden.setupHidden_spec' hst
   have hcst : sts[(partOf I d u.val).val].c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl hc))
     rw [parseH_tagsAt ((zkTags_typed I).trans ht), hc] at h1
     exact (Except.ok.inj h1).symm
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub

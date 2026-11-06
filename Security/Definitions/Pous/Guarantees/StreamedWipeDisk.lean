@@ -8,8 +8,8 @@ is `Security/Definitions/Pous/Model/StreamedWipeDisk.lean`, the game `Security/D
 the proof `Security/Proofs/Pous/StreamedWipe/Disk.lean`.
 
 `StreamedWipeMeetsDisk` is its claim (`Security/Definitions/Pous/Claims/StreamedWipeDisk.lean`) at the wipe's own
-verdict, `StreamedWipe.Accepts`, with its honest lemma (`Pous.Claims.StreamedWipeMeetsDisk_meets`: its numeric
-antecedents hold at the session on vy-dc-h200-2's card and disks as measured) and its nontrivial lemma
+acceptance rule, `StreamedWipe.Accepts`, with its honest lemma (`Pous.Claims.StreamedWipeMeetsDisk_meets`: its numeric
+antecedents hold at the session on the deployed H200's card and disks as measured) and its nontrivial lemma
 (`Pous.Claims.StreamedWipeMeetsDisk_fails`: the claim is false at `StreamedWipe.acceptAll`), both in
 `Security/Proofs/Pous/StreamedWipe/Disk.lean`. The PRF term is the advantage of the distinguisher built from the
 prover, `StreamedWipe.wipeDistinguisher P`.

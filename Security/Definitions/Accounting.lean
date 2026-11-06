@@ -1,4 +1,5 @@
 import Definitions.Accounting.Actual
+import Definitions.Accounting.Additive
 import Definitions.Accounting.Actual.Sampler
 import Definitions.Accounting.Bandwidth
 import Definitions.Accounting.BandwidthAudit
@@ -30,7 +31,7 @@ import Definitions.Accounting.JointLive
 import Definitions.Accounting.Memory
 import Definitions.Accounting.PerRun
 import Definitions.Accounting.Physical
-import Definitions.Accounting.Overhead
+import Definitions.Accounting.Slowdown
 import Definitions.Accounting.Pouw
 import Definitions.Accounting.PouwWork
 import Definitions.Accounting.RateAudit
@@ -51,10 +52,13 @@ import Definitions.Accounting.Requirement.Placed
 import Definitions.Accounting.Responder
 import Definitions.Accounting.Schedule
 import Definitions.Accounting.Served
+import Definitions.Accounting.ServingBlocks
+import Definitions.Accounting.ServingBlocks.Instances
 import Definitions.Accounting.Tag
 import Definitions.Accounting.TS
 import Definitions.Accounting.TS.Fixed
 import Definitions.Accounting.Window
+import Definitions.Accounting.Wipe
 
 /-! Resource accounting's vocabulary: the device model every resource audit is about, a joint audit's run on it, and
 how PoUW's game, the bandwidth audit's game and a state-bounded capacity game realize its compute, bandwidth and
@@ -74,5 +78,6 @@ run's guarantee per run is, PoUW's verdict, credits and help on one node of the 
 device memory whose post-seed contents are a circuit's values, seen through its inputs and encodes, a declared
 circuit's requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are
 its, a pass's layout as the verifier's plan of a schedule of counted bits (`ScheduleDeterministic`), the run tree of
-a prover's wipes that the memory cap's lifetime pool is over, and the gate model the lower bounds on a declared
+a prover's wipes that the memory cap's lifetime pool is over, a device's period as runs of the machine model 𝓜
+that compute additivity is stated over, and the gate model the lower bounds on a declared
 circuit are proved over (`Gates`). -/

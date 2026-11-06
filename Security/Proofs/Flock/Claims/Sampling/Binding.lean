@@ -4,13 +4,13 @@ import Proofs.Flock.Claims.Sampling.Cost
 /-!
 # Binding of the trace's commitment, at the openings the extractor checks
 
-The claims block's `Binding` is `Commitment.Binds` at every `H`: two openings that pass at one position under one
+The claims block's `Binding` is `CommitmentScheme.Binds` at every `H`: two openings that pass at one position under one
 roots, of different values, make `H` calls that collide. The extractor checks every opening it keeps with the
 commitment's own check (`checkRevealed`), its calls the extractor's own, so two kept openings that disagree are a
 collision among those calls, and `findColl` finds one.
 
 * `findColl_isSome`: `findColl` finds a collision whenever its list holds two different inputs with one output.
-* `disagree_collision`: under `Commitment.Binds`, two passing openings of one position to different values make calls
+* `disagree_collision`: under `CommitmentScheme.Binds`, two passing openings of one position to different values make calls
   that collide in any log holding both checks' calls.
 * `Pr_union_le`: the union bound.
 -/
@@ -43,9 +43,9 @@ theorem findColl_isSome :
       · exact absurd ⟨hne, heq⟩ (hno _ hp)
       · exact ⟨p, hp, p', hp', hne, heq⟩
 
-/-- **Disagreeing openings collide**: under `Commitment.Binds`, two openings that pass at one position under one
+/-- **Disagreeing openings collide**: under `CommitmentScheme.Binds`, two openings that pass at one position under one
 roots, of different values, make calls that collide in any log `l` that holds both checks' calls. -/
-theorem disagree_collision {H : Msg → Msg} {Cm : Commitment Bool} (hb : Cm.Binds H) {roots : List Msg}
+theorem disagree_collision {H : Msg → Msg} {Cm : CommitmentScheme Bool} (hb : Cm.Binds H) {roots : List Msg}
     {o o' : Opening Bool} (hpos : o.pos = o'.pos) (hne : o.val ≠ o'.val) (h : Cm.Opens H roots o = true)
     (h' : Cm.Opens H roots o' = true) {l : List (Msg × Msg)} (hl : ∀ q ∈ ((Cm.opens roots o).eval H).2, q ∈ l)
     (hl' : ∀ q ∈ ((Cm.opens roots o').eval H).2, q ∈ l) : LogColl l :=

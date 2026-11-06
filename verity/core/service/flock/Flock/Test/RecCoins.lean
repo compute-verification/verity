@@ -32,24 +32,41 @@ def oneWord (pos H : Nat) : Array Nat := #[pos % 2 ^ H] ++ Array.replicate (DIRS
 
 def hexOf (b : ByteArray) : String := String.join (b.toList.map fun x => (Nat.toDigits 16 (x.toNat + 256)).drop 1 |>.asString)
 
-#guard hexOf ((zeroSalt ZERO_VALUE 0).extract 0 8) == "4ec33c0e6abc3727"
-#guard hexOf ((zeroSalt ZERO_VALUE 1).extract 184 192) == "1d2a28d05cc645ac"
-#guard hexOf ((zeroSalt SPARSE_ZERO_VALUE 0).extract 0 8) == "bf86f81a839d245b"
+#guard hexOf ((zeroSalt ZERO_VALUE 0).extract 0 8) == "3f4a11eb1a86a92f"
+#guard hexOf ((zeroSalt ZERO_VALUE 1).extract 184 192) == "cf27372d26bc4461"
+#guard hexOf ((zeroSalt SPARSE_ZERO_VALUE 0).extract 0 8) == "62b2d0b5b6589682"
+#guard hexOf ((verifierSalt "p" DIRS_VALUE 0).extract 0 8) == "8d47e4d41a0c7f9c"
 #guard (zeroSalt ZERO_VALUE 0).size == SALT_BYTES
 #guard zeroSalt ZERO_VALUE 0 != verifierSalt "" ZERO_VALUE 0
+
+/-! A salt is SHA-512's whole outputs in counter mode, three of them. -/
+#guard saltOf "m".toUTF8 ==
+  Sha512.hash ("m".toUTF8 ++ be32 0) ++ Sha512.hash ("m".toUTF8 ++ be32 1) ++ Sha512.hash ("m".toUTF8 ++ be32 2)
 
 #guard match Registered.domain "p" ZERO_VALUE OUT_WORDS 2 16 with
   | .ok dom => hexOf (FV3.root dom ((Array.range 2).map fun i => Registered.rowLeaf dom i
       (Hm96.Default512.treeLeaf (commitRow (zeroRows 2 OUT_WORDS)[i]! (zeroSalt ZERO_VALUE i)))) Sha512.hash) ==
-    "2c9284397d43972cf9cc3954c442d25e4100c793211da7718213450dfe0d300136ae0e706de7136e0f68f84862387cde689461618cee310d816d6af564b18cd1"
+    "947124207d4f71d4f7d2ad6de910d213c77500f21a99332b7eb06cfe91ffcfaeb0ee2ef530656112c33ed85d7345535abcac993e7d5e89f54ba71367b5406d2b"
   | .error _ => false
 
 /-! R's opening part's one zero row (`checkOpening`), as `rec_residuals.stage_opening` registers it. -/
 #guard match Registered.domain "p" ZERO_VALUE OUT_WORDS 1 16 with
   | .ok dom => hexOf (FV3.root dom #[Registered.rowLeaf dom 0
       (Hm96.Default512.treeLeaf (commitRow (zeroRows 1 OUT_WORDS)[0]! (zeroSalt ZERO_VALUE 0)))] Sha512.hash) ==
-    "af8c0fa801627686aad3af3cc4c63840162705a903222f507a84c01e9f1414742bb6985e4eee425f0dd1539277a0b71fcb6d895abd7bad14ce4f03dc487265b9"
+    "2eca9c1be0de4fd86674c7aefcc800622e515195cd96359356984ea51c40ae617781640911365d6f049bc6f4390754bd00fcb0064bc21c5b193ed407be742dfb"
   | .error _ => false
+
+/-! The recursion's statement version: the verifier's inner shape is `verity/rec-inner/v2`'s, and `v1`'s, whose V*
+statements are under SHAKE256 salts, is refused. -/
+def shapeV (fmt : String) : Lean.Json :=
+  Lean.Json.mkObj [("format", .str fmt), ("m", (27 : Nat)), ("k_log", (22 : Nat)), ("claims", (8 : Nat)), ("regions", (3 : Nat))]
+
+#guard RecVStar.FORMAT == "verity/rec-inner/v2"
+#guard (RecVStar.Inner.ofJson (shapeV RecVStar.FORMAT)).toOption == some { m := 27, kLog := 22, claims := 8, regions := 3 }
+#guard (RecVStar.Inner.ofJson (RecVStar.Inner.toJson { m := 27, kLog := 22, claims := 8, regions := 3 })).isOk
+#guard match RecVStar.Inner.ofJson (shapeV "verity/rec-inner/v1") with
+  | .error e => e.startsWith "rec-inner: verity/rec-inner/v1 is refused"
+  | .ok _ => false
 
 /-! `--rec-inner-coins` is refused, with a value or bare, before any file is read; the inner statement's files pass. -/
 

@@ -143,6 +143,7 @@ theorem fit_rowPiece {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
     | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
     | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
     | cap _ _ => simp [RecVStar.ownPorts] at hq
+    | link _ _ _ => simp [RecVStar.ownPorts] at hq
     | sparse _ _ =>
       first | cases hpin | simp [_root_.VStar.In.partIn, throw, throwThe, MonadExceptOf.throw] at hpin
     | opening _ _ _ _ _ _ =>

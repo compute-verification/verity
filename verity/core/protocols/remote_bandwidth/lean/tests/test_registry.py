@@ -136,7 +136,7 @@ def script(draw, n: str, k: int) -> list[dict]:
 @st.composite
 def registry_inputs(draw) -> dict:
     """Calls over the nodes: most often a registration with a session over it and a few of its events, else one call
-    alone. The strategy keeps which nodes are live, so that a session names a registration drawn in the case by its
+    alone. The strategy keeps which nodes are live, so that a session names a registration sampled in the case by its
     place among those drawn."""
     registry = read_back(draw) if draw(st.integers(0, 2)) == 0 else None
     live = {n: (None, 0) for n in (registry or {}).get("live", ())}
@@ -209,7 +209,7 @@ def test_a_recorded_session_is_counted_at_close_as_the_lean_ends_it(server, name
 def test_a_registration_that_binds_tiles_is_refused_as_the_lean_refuses_it(server) -> None:
     """A registration that would bind PoUW's tile outputs: for a node with one live, refused and counted, as any second
     registration is; for one with none, refused by both registries outright (the Lean covers receipts of chunks
-    alone), drawing nothing."""
+    alone), sampling nothing."""
     v = recorded("honest")
     bound = v["ops"][0] | {"bind": True}
     assert D.replay(PORT, {"source": M.SOURCE.hex(), "registry": None, "ops": [bound]}, server)[0] == "reject"

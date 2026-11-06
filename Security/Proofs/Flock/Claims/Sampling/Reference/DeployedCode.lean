@@ -36,7 +36,7 @@ At this code:
   with no unit named.
 * `N₀_of_shapes`, `sessIn_of_shapes`: `N₀` reads only the session's table sizes, so `SessIn`'s `N₀` clause holds when
   every session at `x` has the tables `shape x` fixes (`ShapesFixed`). Nothing the Lean verifier runs establishes it at
-  `sess`: its registration refusal (`Run.countVaries`) fixes the drawn count only, and its outcome step takes the
+  `sess`: its registration refusal (`Draw.countVaries`) fixes the drawn count only, and its outcome step takes the
   session's statement as an opaque object.
 * `shapeChecked`, `shapesFixed_checked`, `shapesFixed_iff_checked`, `sessIn_checked`: the shape check an outcome step
   would run (`sess` with every session refused whose tables aren't `shape x`) fixes the shapes, refuses nothing exactly
@@ -71,7 +71,7 @@ def Reg.layout (g : Reg) : SampledProofs.Slots.Layout :=
 
 /-- **The draw of record's checked units** on the bytes `src`: `Slots.select`'s, and every slot of the layout where it
 is refused (`drawChecked`). -/
-def Reg.checked (g : Reg) (src : ByteArray) : List (ℕ × ℕ) :=
+def Reg.checked (g : Reg) (src : ByteArray) : List ℕ :=
   (drawChecked g.rule g.program g.query g.table g.closure g.layout src).toList
 
 /-- **The sampled verifier's code with its Lean draw**: `c` with `checked` the draw of record on the registration
@@ -102,7 +102,7 @@ theorem code_checked (x : Msg) (r : Fin (c.V.k x) → FlockDeploy.Coin) :
     (code c reg L bytes sr sess).checked x r = ((reg x).map fun g => g.checked (bytesOf (bytes x r))).getD [] :=
   rfl
 
-theorem code_session (x : Msg) (u : ℕ × ℕ) (v : Seen) : (code c reg L bytes sr sess).session x u v = sess x v := rfl
+theorem code_session (x : Msg) (u : ℕ) (v : Seen) : (code c reg L bytes sr sess).session x u v = sess x v := rfl
 
 theorem sessionSlots_code (H : Msg → Msg) : SessionSlots (code c reg L bytes sr sess) H :=
   sessionSlots_of_one H _ (fun _ => le_rfl) fun _ _ _ _ => rfl
@@ -247,14 +247,14 @@ theorem sessionWit_code_iff (H : Msg → Msg) :
 theorem sessionsIn_code_iff : SessionsIn (code c reg L bytes sr sess) ↔ SessIn c sess := by
   constructor
   · intro h x v xS vS hv
-    exact h x (0, 0) v xS vS hv
+    exact h x 0 v xS vS hv
   · intro h x _ v xS vS hv
     exact h x v xS vS hv
 
 /-! ## The sessions' table shapes -/
 
 /-- **The session's table shapes are the statement's**: whatever a run shows, the session's statement sets up tables of
-sizes `shape x`, in order. The sampled verifier's registration refusal (`Run.countVaries`: `shapes`) fixes the drawn
+sizes `shape x`, in order. The sampled verifier's registration refusal (`Draw.countVaries`: `shapes`) fixes the drawn
 count only, and its outcome step never reads the session's tables, so nothing in the Lean verifier establishes this at
 `sess`; at the session the shape check lets through it holds (`shapesFixed_checked`). -/
 def ShapesFixed (shape : Msg → List ℕ) : Prop :=

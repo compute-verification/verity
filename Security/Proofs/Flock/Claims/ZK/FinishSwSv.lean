@@ -23,7 +23,7 @@ set_option smartUnfolding false in
 theorem FlockSoundness.ZK.Table.swPre_sHat {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).sHat = (T.preView w ω).sHat := by
-  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
   · rw [FlockSoundness.ZK.Table.swPre, if_pos hr]
     rfl
   · rw [FlockSoundness.ZK.Table.swPre, if_neg hr]
@@ -34,7 +34,7 @@ set_option smartUnfolding false in
 theorem FlockSoundness.ZK.Table.swPre_sReg {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : FlockSoundness.ZK.Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     (T.swPre w v ω).sReg = (T.preView w ω).sReg := by
-  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
   · rw [FlockSoundness.ZK.Table.swPre, if_pos hr]
     rfl
   · rw [FlockSoundness.ZK.Table.swPre, if_neg hr]

@@ -16,7 +16,7 @@ relation's fields, and the `Form` the scope check reads, each field the value `P
 * `Read.check`: `ProvedScope.check` as `verifyCmd` calls it; `Parsed.scope`: it, then `ProvedScope.sizesOk` on the
   parsed tables' `m`, as `verifyCmd`'s verdict runs them.
 * `Read.form`: the `Form` of `ProvedScope.check`'s tests, on the circuit and public file as it reads them
-  (`ProvedScope.circuitOf`, `ProvedScope.publicOf`).
+  (`ProvedScope.circuitOf`, `ProvedScope.publicOf`), the unit's and the rows' on the statement circuit (`Read.stmt`).
 * `Parsed.only`: one table of a parsed statement, alone.
 * `Relation`: the readable relation's fields (`C`, `inp`, `out`, `pub`), which `toReadable` takes as a function of the
   parsed statement; the scope reads none of them. The deployed one is `relation` (`Scope.Tables`).
@@ -67,6 +67,10 @@ def Read.circ (r : Read) : Circuit :=
   | .ok c => c
   | .error _ => default
 
+/-- **The statement circuit** (ASK-112 option A): the circuit the scope check parses, a templated statement's unrolled
+to the flat circuit its template unrolls to (`HmOut.unrolled`); a flat statement's is its own. -/
+def Read.stmt (r : Read) : Circuit := HmOut.unrolled r.circ
+
 /-- The public file as the scope check loads it (`ProvedScope.publicOf`; `default` where it doesn't load). -/
 def Read.pub (r : Read) : Public :=
   match ProvedScope.publicOf r.tags r.circ r.I.publicFile with
@@ -75,7 +79,9 @@ def Read.pub (r : Read) : Public :=
 
 /-- **The statement's form**, each field the value `ProvedScope.check` tests: the tags' (`statementRules`), the table
 count, the verifier's own public input words and registered reads, a shared-row public file (`Public.tables`), and the
-unit's and the rows' (`scopeOk`, `scopeOkI`), and whether the wires compute every slot (`wiresAcyclic`). -/
+unit's and the rows' (`scopeOk`, `scopeOkI`), and whether the wires compute every slot (`wiresAcyclic`), the unit's and
+the rows' read on the statement circuit (`Read.stmt`), and whether the statement is templated (`Circuit.tmpl`, which
+the check reads by `scopeOkT`). -/
 def Read.form (r : Read) : Claims.Flock.Form where
   hm96Rows := r.tags.hm96Rows
   typed := r.tags.typed
@@ -86,13 +92,14 @@ def Read.form (r : Read) : Claims.Flock.Form where
   sharedRows := r.pub.tables.isSome
   registeredReads := r.registered
   hiddenOutputs := r.tags.hiddenOutputs
-  unitInputGroups := r.circ.unit.inGroups.size
-  tail := r.circ.outNet != r.circ.unitNet
-  unitLog := r.circ.unit.unitLog
-  readsOnlyPortBits := ProvedScope.portReadsB r.circ.unit
-  rowsV1 := ProvedScope.v1Ports r.circ
-  rowsV2OrSeg := ProvedScope.bitRows r.circ
-  wiresAcyclic := ProvedScope.wiresAcyclic r.circ
+  unitInputGroups := r.stmt.unit.inGroups.size
+  tail := r.stmt.outNet != r.stmt.unitNet
+  unitLog := r.stmt.unit.unitLog
+  readsOnlyPortBits := ProvedScope.portReadsB r.stmt.unit
+  rowsV1 := ProvedScope.v1Ports r.stmt
+  rowsV2OrSeg := ProvedScope.bitRows r.stmt
+  wiresAcyclic := ProvedScope.wiresAcyclic r.stmt
+  templated := r.circ.tmpl.isSome
 
 /-- A statement the verifier parsed: what it read, and the tables its setup made of it. -/
 structure Parsed extends Read where
@@ -114,11 +121,12 @@ def Parses (p : Parsed) : Prop := p.toRead.parse = some p
 by themselves. -/
 def Parsed.only (p : Parsed) (j : ℕ) : Parsed := { p with sts := #[p.sts[j]!] }
 
-/-- The readable relation's fields: the block circuit, each block's inputs and outputs, and the public values. -/
+/-- The readable relation's fields: the block circuit, each block's inputs and outputs at the circuit's gates, and the
+public values. -/
 structure Relation where
-  C : Claims.Circuit
-  inp : ℕ → List Claims.Flock.Src
-  out : ℕ → List Claims.Flock.Src
+  C : FlockSoundness.Audit.Circuit
+  inp : ℕ → ℕ → Claims.Flock.Src
+  out : ℕ → ℕ → Claims.Flock.Src
   pub : List Bool
 
 /-- **The verifier's statement, readable**: `m` and `kLog` of the first table's statement (`Stmt.m`, the circuit's

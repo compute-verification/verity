@@ -16,7 +16,7 @@ PROGRAM, WINDOW = "ab" * 64, "cd" * 64
 KEY = bytes(range(32))
 
 
-def _core(program, value, words, key, nonce, keep_rows=False, row_salts=None, schema=G.SCHEMA_V2, **binding):
+def _core(program, value, words, key, nonce, keep_rows=False, row_salts=None, schema=G.SCHEMA_V2, later=False, **binding):
     salts = ([hm96_salt(key, nonce, j) for j in range(len(words))] if row_salts is None
              else [row_salts[192 * j:192 * (j + 1)] for j in range(len(words))])
     return G.Registered.commit(program, value, np.asarray(words).tolist(), salts, schema=schema, **binding)
@@ -61,7 +61,7 @@ def test_a_value_is_what_core_commits(n, w, binding):
 
 def test_a_windows_reads_are_cores_statement_drawn_once(monkeypatch):
     """A window's registered reads (`interface._Drawn`, `rows.value_salts` and `value_rows`): for this value and core's, at
-    rows in any order and repeated, the salts, rows and header entry core's ``statement`` gives, this value's salts drawn
+    rows in any order and repeated, the salts, rows and header entry core's ``statement`` gives, this value's salts sampled
     in one ChaCha20 pass, never one row at a time."""
     from verity.ml.windows import interface as I, rows as CS
 

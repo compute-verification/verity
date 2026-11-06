@@ -16,3 +16,4 @@ import VStar.Holo
 import VStar.Cli
 import VStar.In
 import VStar.Trace
+import VStar.Link

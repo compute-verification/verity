@@ -155,7 +155,7 @@ theorem symbolic_ren (sh : Shape) : (symbolic sh).map (Lin.ren bump) = symbolic 
          | rfl)
     | rfl
 
-theorem residualLins_ren {sh : Shape} {coins : Coins} {extras : Array Claim} {lins : Array Lin} {info : Info Lin}
+theorem residualLins_ren {sh : Shape} {coins : CoinSource} {extras : Array Claim} {lins : Array Lin} {info : Info Lin}
     (h : residualLins sh coins extras = .ok (lins, info)) : lins.map (Lin.ren bump) = lins := by
   cases hr : run sh (symbolic sh) extras 0 coins with
   | error e =>
@@ -387,7 +387,7 @@ theorem build_bitsOk {sh : Shape} {lins : Array Lin} {b : Built} (hb : build sh 
 so `residuals_toV` reads it as V*'s. -/
 theorem structureOf_bitsOk {sh : Shape} {S : GfS} (h : structureOf sh = .ok S) : S.BitsOk := by
   unfold structureOf at h
-  cases hl : residualLins sh Coins.zeros (extrasLike sh) with
+  cases hl : residualLins sh CoinSource.zeros (extrasLike sh) with
   | error e => rw [hl] at h; cases h
   | ok p =>
     obtain ⟨lins, info⟩ := p

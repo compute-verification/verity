@@ -15,7 +15,7 @@
 #                (pgemm/dc-rate.jsonl); analyze.py pgemm's γ, time split and issue cost (pgemm/summary.json,
 #                pgemm/summary.md).
 #
-#   research run --on vy-dc-b200 --project verity --source <tree> --cwd source \
+#   research run --on MACHINE --project verity --source <tree> --cwd source \
 #     --env GPU_LEASE_WHO=lowbit-dc [--env DC_PGEMM_COMMIT=SHA --send dc-pgemm.cu --send dc.cuh] \
 #     -- bash benchmarks/pouw/lowbit_dc/run.sh [gemm|pgemm]
 # Exit: 0 every verdict as stated, 4 not, 1 build failed, 2 no device or no nvcc.

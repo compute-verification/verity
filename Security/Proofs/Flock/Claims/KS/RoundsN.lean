@@ -525,7 +525,7 @@ def repNs (m kLog claims : ℕ) (sch : Schedule) : List ℕ := zcNs m ++ lcNs kL
 table's `fast100` schedule, whatever the hashes `hs` are, its stream's rounds issued `repNs` at `m`, `kLog` and
 `2 + |extras|` claims, one count per round. -/
 theorem verifyRepWith_readsN (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Schedule}
-    {sess : Session} {i r : ℕ} {bytes c : ByteArray} (hk : st.fold.kLog = st.kLog) (hf : fast100 st.m = some sch)
+    {sess : RunRecord} {i r : ℕ} {bytes c : ByteArray} (hk : st.fold.kLog = st.kLog) (hf : fast100 st.m = some sch)
     (h : verifyRepWith hs spec st sch sess i r bytes = .ok c) :
     ∃ (stream : StreamRec) (extras : Array Claim),
       sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) = some stream ∧

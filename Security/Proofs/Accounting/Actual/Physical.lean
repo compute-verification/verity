@@ -26,7 +26,7 @@ variable {L : Type*} (A : Placed L)
 theorem forward_of_causal {ℓ : L → L → ℕ} (h : A.Causal ℓ) (X : Finset L) : A.Forward X :=
   fun g a ha _ _ _ => (Nat.le_add_right _ _).trans (h g a ha)
 
-theorem causal_of_feasible {E : Type*} {H : Hardware L E} {ann : Annotation A E} (h : Feasible H A ann) :
+theorem causal_of_feasible {E : Type*} {H : Hardware L E} {usage : Usage A E} (h : Feasible H A usage) :
     A.Causal H.ℓ := h.1
 
 theorem width_biUnion_le {ι : Type*} (s : Finset ι) (f : ι → Finset (Fin A.N)) :

@@ -6,9 +6,10 @@ import SampledProofs.Pieces
 
 The verifier's functions (`Pieces.verifier`) behind `Difftest.respond`'s line protocol, and one more request,
 `{"fn": "coins", "input": n}`: `n` bytes of the operating system's randomness (`IO.getRandomBytes`, A3's
-`uniform/io-getrandombytes`), answered `{"output": HEX}`. The proof service's challenger (`service.Stream`, through
-`one_stage.verifier.coins`) reads its coins from here, so the Python never reads them from the operating system itself;
-the draw of record is then this process's `Select.select` on those bytes.
+`uniform/io-getrandombytes`), answered `{"output": HEX}`: the entropy a challenger flips its coins from
+(`LiveChallenger`, through `one_stage.verifier.coins`), on the challenger's own host, so the Python never reads it from the
+operating system itself. The verifier reads no coins from here: its draws read the challenger's coins from its log
+(`Run.coinsHold`).
 -/
 
 namespace SampledProofs.VerifierMain

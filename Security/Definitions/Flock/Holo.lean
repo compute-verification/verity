@@ -45,7 +45,7 @@ def RegClaim.coord {sh : SparseShape} (c : RegClaim F sh) (j : ℕ) : F :=
 def RegClaim.toClaim {sh : SparseShape} (c : RegClaim F sh) : Claim F sh.mReg :=
   ⟨c.value, fun s => eqAt (fun j : Fin 6 => c.coord j.val) s.val, fun i => c.coord (i.val + 6)⟩
 
-/-- The sparse phase's public values in a rep (`rec_sparse.Coins`): the zerocheck's skip coin, the lincheck's `α`, the
+/-- The sparse phase's public values in a rep (`rec_sparse.SparsePublics`): the zerocheck's skip coin, the lincheck's `α`, the
 row point past the skip (`ρ_in`) and the column point past the skip in bit order (the column challenges reversed), and
 slot `σ`'s layout factor `U_σ = Σ_{u ∈ units σ} eq(x_hi, u)·eq(y_hi, u)`, where `x_hi`, `y_hi` are the points'
 coordinates past the template's `ℓ`. -/

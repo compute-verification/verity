@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# flock-circuit: a C-Flock cell of an IR template under verity/flock-circuit through the bench spine
+# flock-circuit: a Flock cell of an IR template under verity/flock-circuit through the bench spine
 # (bench.drivers.c_interactive, relation circuit:<template>): the sweep verity_flock.circuit_bench, the prover on the line's GPU, the
 # verifier on a separate pod serving its own public files (no rows). The cell's input set arrives as inputs/<digest>.tar.
 #   ROLE=prover   TEMPLATE POINTS PER RUNS VERIFIER=host:port RTT_TARGET=host:22 LOOPBACK=1 OPERATOR [ART]   (GPU build)

@@ -1,6 +1,6 @@
-"""The coverage table (data/cover/, MODEL-COVER): every opcode of NVIDIA's family tables, every SASS form of the corpus and
-every census kind on the H200 and the RTX PRO 6000 has a row; every row names a real envelope op (MODEL-MIN's `Accel.Op`
-or a proposed one), pipe, format and θ key; every lane and collective reads and writes no more words than its op allows;
+"""The coverage table (data/cover/): every opcode of NVIDIA's family tables, every SASS form of the corpus and
+every census kind on the H200 and the RTX PRO 6000 has a row; every row names a real envelope op (`Accel.Op` or a
+proposed one), pipe, format and θ key; every lane and collective reads and writes no more words than its op allows;
 and every dominated row's rate, in its op's units, is at most its resource's ρ."""
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ def test_the_envelope_is_accel_op_and_the_proposed_entries_say_why(cover):
                                              "collective", "tex", "-"]
     assert [p["key"] for p in env["pipe"]] == ["alu", "imad", "fma", "shfl", "f64", "sfu", "collective"]
     for e in (*env["op"], *env["pipe"], *env["fmt"]):
-        assert "proposed" not in e or "CMP-165" in e["proposed"] or e["key"] == "collective", e["key"]
+        assert "proposed" not in e or "MODEL-MIN" in e["proposed"] or e["key"] == "collective", e["key"]
     for dev in C.DEVICES:
         assert C.rho(cover, dev, "fma") == 128
         assert C.rho(cover, dev, "dram") == pytest.approx(env["device"][dev]["dram"] /

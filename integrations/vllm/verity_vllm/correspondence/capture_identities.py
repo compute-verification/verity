@@ -560,7 +560,7 @@ class Recomputer:
 
 def check_call(call: FunctionCall, gates: tuple[int, ...], transcript: LazyTranscript, captured: np.ndarray,
                *, sub=None, recompute: Recomputer | None = None) -> dict:
-    """Evaluate `sub` (default: the whole call) gate by gate, reading outside operands from the transcript's
+    """Evaluate `sub` (default: the whole call) gate by gate, reading outside operands from the trace's
     sources, and compare the words at `gates` that lie inside `sub` with `captured`.  With `recompute`, an operand
     the capture never materialised is recomputed exactly from committed values (see `Recomputer`)."""
     region = call if sub is None else sub
