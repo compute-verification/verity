@@ -17,8 +17,8 @@ zero-work subcircuits at their floor.
 - `inputs.py`: the models (Llama-3.1-8B, Qwen3-8B); each scheme's serve-time rows a token a layer, with their leaf
   chains; the row's inputs (price ratio, rounds, throughput, replay and commitment speeds, PoUB's receipts
   and passes, decode's step and its compression latency), each with a low and a
-  high; the pieces' AND counts (#2391's pins, hm96's rows); and the observations the cost model is fitted from, Flock's
-  zero-knowledge sessions on sm_120 (`benchmarks/one_stage/zk_cost.py`'s of s8 coordinates, and A8's of PoUB's
+  high; the pieces' AND counts (circuit-check's pins, hm96's rows); and the observations the cost model is fitted from,
+  Flock's zero-knowledge sessions on sm_120 (`benchmarks/one_stage/zk_cost.py`'s of s8 coordinates, and A8's of PoUB's
   opening unit, `BlockOpeningCheck_v1`, at twice their ANDs, its proving only), with the builds and
   hardware they key.
 - `int8_llama.py`: the int8 Llama-3.1-8B row (vLLM's `cursor/vllm-int8-build-8350`). Its units: every s8 dot checks its
@@ -31,7 +31,7 @@ zero-work subcircuits at their floor.
   sensitivity (each cost group scaled, each input at its low and high) and the hints (`plan.json`), and prints the
   tables.
 
-- `transformer.py`: the end-to-end demo's transformer (PRF-166), CMP-92's decoder block over one server block of
+- `transformer.py`: the end-to-end demo's transformer, its decoder block over one server block of
   serving, small (width 128, 2 heads, MLP 512, 2 layers, a byte vocabulary, context 32) or large (`--model large`:
   the Phase 2 model's 70 layers at width 8,192, 128 heads of 64 and an MLP of 32,768, 52.5 GiB of INT8 linears and
   35.0 GiB of KV for 1,023 sequences on one 96 GiB card, its requests a block from an estimated 195 ms step; each

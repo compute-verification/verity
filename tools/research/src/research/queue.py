@@ -182,7 +182,11 @@ and refuses when it can't; `--no-preflight` doesn't skip it.
 `next`.  Its first-parent chain above `checked` (`Queue.base`) is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
 order) and merges the rest on top, each by `git merge-tree` and `git commit-tree` (`Queue._merge`: no worktree, so a candidate
-that conflicts costs one call).  A merge whose only conflicts are in pins (`tools/verity/check/pins.py`'s `PINS`, generated
+that conflicts costs one call).  A merge is recorded under what it reads (`Queue._merge_key`): the parent's tree, not its
+commit, the head and their merge bases, with the merge's code, git and drivers; the same head merged again onto the same tree,
+above a moved or dropped member or on a `checked` moved to the same tree, takes its record's tree, conflict, porting, rebuilt
+pins and lock drops (the state's `merges`), and only `git commit-tree` runs; drive's low-risk lane merges onto `checked` through
+the same records (`Queue._recorded`).  A merge whose only conflicts are in pins (`tools/verity/check/pins.py`'s `PINS`, generated
 sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from the merged tree (`repinned`): two PRs that each
 change a pinned input both change its pin.  So a new push moves its PR to the tip, a dropped PR takes the commits after it
 along (they're merged again), and a `checked` that drive moved outside the sync (a landing, a revert, a merge of `main`) rebuilds
@@ -880,6 +884,9 @@ GATE_TIMEOUT_S = 600
 GATE_FIX_LINES = 15
 #: the most landing-gate verdicts the queue's state keeps for one `main` (`Queue._gated`), the newest
 GATE_VERDICTS = 1000
+#: the most merges' records the queue's state keeps (`Queue._merge`), the most recently used: a few hundred bytes each, and a
+#: sync merges a few hundred times
+MERGES = 2000
 
 
 def flags_at(repo: Path, ref: str) -> DriveFlags:
@@ -1426,6 +1433,15 @@ class Queue:
         self._restacks: dict[str, dict] = {}
         self._used: set[str] = set()
         self._words_of: dict[str, set[str]] = {}
+        #: each merge's record by its key (`_merge`, `_merge_key`; the state's `merges`), each stamped with the count of the last
+        #: sync that used it (`_merge_serial`); the key of each (tip, head) and what every merge reads (`_merge_context`), both
+        #: read once a sync; the record and head of each merge commit `_merge` made (`_lock_drops`); the merges a sync reused
+        self._merge_records: dict[str, dict] = {}
+        self._merge_serial = 0
+        self._merge_keys: dict[tuple[str, str], str] = {}
+        self._context: str | None = None
+        self._merged_from: dict[str, tuple[str, str]] = {}
+        self._merges_reused = 0
 
     # -- the clone and its state
 
@@ -1863,33 +1879,126 @@ class Queue:
         (`ported`), which refuses the merge when it can't.  A git without `--attr-source` (before 2.40) raises: merging
         without it would leave out every PR whose only conflict is a pin (drive refuses its tick before, `Driver._old_git`).
         ``head``: the commit merged in its place, its head restacked through a move (`_merge_through`), under the same
-        message."""
+        message.  What the merge comes to is recorded under what it reads (`_merge_key`, the state's `merges`): the same
+        ``head`` merged again onto ``tip``'s tree takes the record, told as the merge was, and only `git commit-tree` runs."""
         head = head or pr.head
+        rec = self._recorded(tip, head)
+        if "conflict" in rec:
+            return None, self._unmerged("", rec["conflict"], members)
+        if "err" in rec:
+            return None, self._unmerged(rec["err"], [], members)
+        if rec.get("pins"):
+            self.log(f"research queue: #{pr.number} conflicts only in pins: {', '.join(rec['pins'])} rebuilt from the merged tree")
+        if rec.get("gone"):
+            self.log(f"research queue: #{pr.number} deletes {', '.join(rec['gone'])}, which `{self.branch}` changed only by "
+                     "porting it to the module system: deleted in the merge")
+        if rec.get("tip_gone"):
+            self.log(f"research queue: `{self.branch}` deletes {', '.join(rec['tip_gone'])}, which #{pr.number} changed only by "
+                     "porting it to the module system: deleted in the merge")
+        if rec.get("merged"):
+            return tip, ""                                      # already merged: `merge --no-ff` makes no commit either
+        if "why" in rec:
+            return None, rec["why"]
+        if files := rec.get("ported"):
+            pins = rec.get("ported_pins")
+            self.log(f"research queue: #{pr.number}'s merged tree holds Lean made before the module system: {', '.join(files)} "
+                     f"ported by `{MODULES}`" + (f", and the pins {', '.join(pins)} rebuilt" if pins else ""))
+        commit = _git(self.workdir, "commit-tree", rec["tree"], "-p", tip, "-p", head, "-m", _message(pr),
+                      env=IDENTITY).stdout.strip()
+        self._merged_from[commit] = (self._merge_key(tip, head), head)
+        return commit, ""
+
+    def _recorded(self, tip: str, head: str) -> dict:
+        """``head`` merged onto ``tip`` as `_merged` tells it, from the record of that merge onto ``tip``'s tree (`_merge_key`)
+        when there is one and the clone still holds its tree (a fresh clone or a prune drops it), else made and recorded;
+        stamped with this sync's count (`_merge_serial`).  The sync's merges (`_merge`) and the low-risk lane's
+        (`drive.Driver._clean_merge`) are one merge, and share the records."""
+        key = self._merge_key(tip, head)
+        rec = self._merge_records.get(key)
+        if rec is not None and "tree" in rec and not self._has_tree(rec["tree"]):
+            rec = None
+        if rec is None:
+            rec = self._merged(tip, head)
+            if "err" not in rec and "why" not in rec:
+                self._merge_records[key] = rec
+        else:
+            self._merges_reused += 1
+        rec["at"] = self._merge_serial
+        return rec
+
+    def _keep_merges(self, state: dict) -> None:
+        """Put the merges' records into ``state`` (its `merges`): those it holds with those this process made or took, the
+        `MERGES` the latest syncs used."""
+        had = state.get("merges") or {}
+        merged = {**(had.get("of") or {}), **self._merge_records}
+        self._merge_records = dict(sorted(merged.items(), key=lambda kv: -kv[1].get("at", 0))[:MERGES])
+        state["merges"] = {"serial": max(self._merge_serial, int(had.get("serial") or 0)), "of": self._merge_records}
+
+    def _merged(self, tip: str, head: str) -> dict:
+        """``head`` merged onto ``tip``, as `_merge` records it: {"tree": the merged tree, ported, with "pins" rebuilt, "gone"
+        the `.lean` files ``head`` deleted that `next` only ported and "tip_gone" the reverse (`taken`), and "ported" the files
+        the codemod ported with "ported_pins" the pins recording them}, {"merged": True} when ``tip`` holds ``head``,
+        {"conflict": the files} when it doesn't merge, and, never recorded, {"err": git's error} when `git merge-tree` fails
+        otherwise and {"why": why} when porting fails (`ported`).  Empty lists are left out."""
         tree, files, r = merged_tree(self.workdir, tip, head, plain=False)
         if r.returncode == 129 and "attr-source" in r.stderr:
             raise QueueError(f"this git has no `--attr-source`, which merging `{self.branch}` needs: install git >= 2.40")
         if tree is None:
-            return None, self._unmerged(r, files, members)
+            return {"conflict": files} if files else {"err": (r.stderr or r.stdout).strip()[-200:]}
+        rec: dict = {}
         if files:
-            pins, gone, tip_gone = taken(self.workdir, tree, head, files)
-            if pins:
-                self.log(f"research queue: #{pr.number} conflicts only in pins: {', '.join(pins)} rebuilt from the merged tree")
-            if gone:
-                self.log(f"research queue: #{pr.number} deletes {', '.join(gone)}, which `{self.branch}` changed only by "
-                         "porting it to the module system: deleted in the merge")
-            if tip_gone:
-                self.log(f"research queue: `{self.branch}` deletes {', '.join(tip_gone)}, which #{pr.number} changed only by "
-                         "porting it to the module system: deleted in the merge")
+            rec.update(zip(("pins", "gone", "tip_gone"), taken(self.workdir, tree, head, files)))
         elif not _git(self.workdir, "merge-base", "--is-ancestor", head, tip, check=False).returncode:
-            return tip, ""                                      # already merged: `merge --no-ff` makes no commit either
+            return {"merged": True}
         tree, files, pins, why = ported(self.workdir, tree, base=tip)
         if tree is None:
-            return None, why
-        if files:
-            self.log(f"research queue: #{pr.number}'s merged tree holds Lean made before the module system: {', '.join(files)} "
-                     f"ported by `{MODULES}`" + (f", and the pins {', '.join(pins)} rebuilt" if pins else ""))
-        commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-p", head, "-m", _message(pr), env=IDENTITY).stdout.strip()
-        return commit, ""
+            return {**rec, "why": why}
+        return {k: v for k, v in {**rec, "tree": tree, "ported": files, "ported_pins": pins}.items() if v}
+
+    def _merge_key(self, tip: str, head: str) -> str:
+        """What `_merge` of ``head`` onto ``tip`` reads, as one digest: ``tip``'s tree (its files, its `.gitattributes` and the
+        drivers' files `base_drivers` runs, its pins and its Lean, which `ported` and its base read), ``head``, their merge bases
+        in git's order (what `git merge-tree` merges from, what `port_deletions` ports from, whether ``tip`` holds ``head``
+        already, and `lock_drops`' fork), and what every merge of this sync reads (`_merge_context`).  ``tip``'s commit is
+        not in it: a `checked` moved to a commit with the same tree leaves each merge above it as it was."""
+        if (key := self._merge_keys.get((tip, head))) is None:
+            tree = _out(self.workdir, "rev-parse", f"{tip}^{{tree}}")
+            bases = _git(self.workdir, "merge-base", "--all", tip, head, check=False).stdout.split()
+            key = hashlib.sha256("\0".join([self._merge_context(), tree, head, *bases]).encode()).hexdigest()
+            self._merge_keys[(tip, head)] = key
+        return key
+
+    def _merge_context(self) -> str:
+        """What every merge reads beside its commits, as one digest: this code (`queue.py`, `clone.py` with the drivers'
+        commands, `RECORD_DRIVER`, and `gates.py`, whose `git_env` every git and script runs in), git's version and config as
+        the merges see it (a driver's command, its merge settings, what the caller's environment sets; not a remote, a branch's
+        upstream, credentials or the identity), and the interpreters the drivers (`python3`) and the porting
+        (`sys.executable`) run in."""
+        if self._context is None:
+            from . import clone, gates
+
+            config = [ln for ln in _git(self.workdir, "config", "--list", check=False).stdout.splitlines()
+                      if not ln.startswith(("remote.", "url.", "http.", "credential.", "user.", "branch."))]
+            drivers = subprocess.run(["python3", "-c", "import sys; print(sys.version)"], capture_output=True, text=True,
+                                     env=git_env()).stdout
+            parts = [*(Path(f).read_text() for f in (__file__, clone.__file__, gates.__file__)),
+                     json.dumps(clone.RECORD_DRIVER, sort_keys=True), _out(self.workdir, "version"), sys.version, drivers, *config]
+            self._context = hashlib.sha256("\0".join(parts).encode()).hexdigest()
+        return self._context
+
+    def _has_tree(self, tree: str) -> bool:
+        return not _git(self.workdir, "cat-file", "-e", f"{tree}^{{tree}}", check=False).returncode
+
+    def _lock_drops(self, tip: str, head: str, commit: str) -> list[str]:
+        """`lock_drops` of ``commit``, ``head``'s merge onto ``tip``, kept in that merge's record (`_merge`) when ``head`` is
+        what it merged: it reads ``tip``'s tree, ``head``, their merge base and the merged tree, which the record's key and
+        tree fix.  A head restacked through a move merged another commit, and is judged afresh."""
+        key, merged = self._merged_from.get(commit, ("", ""))
+        if merged != head or (rec := self._merge_records.get(key)) is None:
+            return lock_drops(self.workdir, tip, head, commit)
+        if "drops" not in rec:
+            rec["drops"] = lock_drops(self.workdir, tip, head, commit)
+        return list(rec["drops"])
 
     # -- moves (the module's `Moves`)
 
@@ -2260,9 +2369,9 @@ class Queue:
             state["priority"] = sorted(got)
         return got
 
-    def _unmerged(self, r: subprocess.CompletedProcess, files: list[str], members: list[Member]) -> str:
+    def _unmerged(self, err: str, files: list[str], members: list[Member]) -> str:
         if not files:
-            return f"doesn't merge onto `{self.branch}`: {(r.stderr or r.stdout).strip()[-200:]}"
+            return f"doesn't merge onto `{self.branch}`: {err}"
         by = touched_by(self.workdir, members, files, self._touched)
         return f"conflicts with `{self.branch}` in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")
 
@@ -2317,6 +2426,10 @@ class Queue:
         prs = [p for p in prs if p.head not in landed
                and _git(self.workdir, "merge-base", "--is-ancestor", p.head, self.base, check=False).returncode]
         self._made, self._restacks, self._used = state.get("moves_made") or {}, state.get("restacks") or {}, set()
+        merges = state.get("merges") or {}
+        self._merge_records = {**(merges.get("of") or {}), **self._merge_records}
+        self._merge_serial, self._merges_reused = int(merges.get("serial") or 0) + 1, 0
+        self._merge_keys, self._context, self._merged_from = {}, None, {}
         self._seen(state, prs, {p.number for p in open_prs})
         chain = self.chain()
         entries = self.entries(prs, state)
@@ -2457,7 +2570,7 @@ class Queue:
                 merged = True
                 # a regenerated move is `rename.py`'s output that `move_check.py` certified, lock texts included: what its map
                 # rewrites in a premise or a frozen entry's reason is no drop
-                if not e.pr.move and commit not in (None, tip) and (drops := lock_drops(self.workdir, tip, e.pr.head, commit)):
+                if not e.pr.move and commit not in (None, tip) and (drops := self._lock_drops(tip, e.pr.head, commit)):
                     commit, why = None, lock_drop_refusal(drops, self.branch)
                 if commit is not None and gates:
                     refused, unjudged = self._gated(main, gates, tip, commit, e.pr, before, verdicts)
@@ -2500,6 +2613,7 @@ class Queue:
                          f"{tip}:refs/heads/{self.branch}")
         self.log(f"research queue: `{self.branch}` at {tip[:12]}: {len(members)} PR(s) above `{self.into}`"
                  + (f", kept {k}, merged {len(members) - k}" if members else "")
+                 + (f", merges reused for {self._merges_reused}" if self._merges_reused else "")
                  + (f", gates' verdicts reused for {reused}" if (reused := len(verdicts.keys() & before.keys())) else "")
                  + (f", preflights' verdicts reused for {self._preflights_reused}" if self._preflights_reused else "")
                  + (f", {len(unrun)} waiting off it for their preflight ({' '.join(f'#{n}' for n in sorted(unrun))})" if unrun else "")
@@ -2518,6 +2632,7 @@ class Queue:
             if gates:
                 newest = {**{h: v for h, v in before.items() if h not in verdicts}, **verdicts}
                 state["gate_verdicts"] = {"main": main, "gates": list(gates), "of": dict(list(newest.items())[-GATE_VERDICTS:])}
+            self._keep_merges(state)
             self.save_state(state)
         return members, entries
 

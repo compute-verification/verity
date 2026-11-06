@@ -129,11 +129,11 @@ RUST_SESSIONS = "art:48f286b4"
 
 @pytest.mark.slow
 def test_it_refuses_the_rust_provers_sessions(tmp_path):
-    """A typed statement is a form the soundness proof does not cover (§16.15): on `flock-circuit`'s own recorded sessions
+    """A typed statement is a form the soundness proof does not cover (`Flock.ProvedScope`): on `flock-circuit`'s own recorded sessions
     for a flat class, the statement sets up and the verifier refuses every case, the 3 honest ones for that reason, once
     every check has passed, and every other case for the check that catches it. That build has no zk patch, so its plain
     files are upstream's form, without the `zk_level0 = None` tag the deployed prover writes, and are read under
-    `--upstream-plain` (PROTOCOL.md §8.1)."""
+    `--upstream-plain` (`Flock.Proof`)."""
     import sys  # noqa: PLC0415
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "verifier"))

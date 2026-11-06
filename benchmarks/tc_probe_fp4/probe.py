@@ -30,8 +30,8 @@ recorded, nothing is tuned.
 random accumulators; random with zero accumulators; uniform encodings (codes, scales and accumulator bits all uniform); the full
 UE4M3 scale-code sweep (every valid code 0x00..0x7E, one and both operands); the hot-group-clip regime (one live group with both
 scale codes in 0x78..0x7E, the other groups on subnormal scales with bits at 2^-20, tiny or zero accumulators); all-hot and
-one-operand-hot controls; large cancellation (two groups cancel exactly at the top of the window while small terms sit below
-E1-41: the window-width probe); accumulator-window probe (large accumulators over tiny terms: W2); tiny accumulators; signed zero.
+one-operand-hot controls; large cancellation (two groups cancel exactly at the top of the window while small terms sit below:
+the window-width probe); accumulator-window probe (large accumulators over tiny terms: W2); tiny accumulators; signed zero.
 
 Outputs under ``--out``: ``probe_results.json`` (identity, sass counts, replay and per-family counts, first mismatches),
 ``capture_sample.json`` (records sampled per family: acc, a/b codes, scales, d as hex), ``tiles_<family>.npz`` (the full capture),

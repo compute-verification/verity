@@ -32,7 +32,8 @@ but no theorem ties a unit's rows to its Definition's gate circuit, and the Defi
 
 Its proof coins are the model's: uniform, drawn each round after the prover's message. That the challenger's round
 coins are those is A6 (`uniform/flock-coin-server`, `ASSUMPTIONS.md`), which the model embodies rather than a hypothesis
-states, and which covers only per-round OS coins: the circuit prover's seed-derived coins are outside the headline.
+states, and which covers the challenger's keyed coin tree and per-round OS coins: `verify` refuses a session on a
+committed seed's coins (`ProvedScope.servedForm`).
 -/
 
 @[expose] public section

@@ -1000,7 +1000,8 @@ def leaf_of(sig: Any) -> int:
 
 
 def lane_of(e: dict) -> str:
-    """A reserve's or an open's prover: the lane vy-admin reserved or opened it for (`for`), else its requester (`by`)."""
+    """A reserve's or an open's prover: the one the auditor's operator reserved or opened it for (`for`), else its
+    requester (`by`)."""
     return e["body"].get("for") or e["body"]["by"]
 
 

@@ -164,3 +164,7 @@ Their history is in the decisions log.
 - What a physical region reads is not a premise: it follows from the circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
   server-window is stated on `Accounting.Placed` with `WindowsAt`.
+- Verifier code compares `Json` by a match the kernel reduces, never by `BEq Json`'s `==`, a `partial def` no proof can
+  read. A string is compared by `SampledProofs.jsonStrIs`, which `Properties.Pouw.LiveSalt.jsonStrIs_eq` reads back.
+  Replacing such an `==` or a partial reading with a total one that means the same (it refuses on every parse failure
+  and never defaults) changes no claim: the lane makes the change and tells the code's owner.
