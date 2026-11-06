@@ -163,8 +163,9 @@ def _figure(out: dict, scope: str, panels: int, width: float, left: float):
     plt.rcParams.update({"font.family": "serif", "font.serif": ["STIXGeneral", "DejaVu Serif"],
                          "mathtext.fontset": "stix", "font.size": 20, "axes.labelsize": 22, "xtick.labelsize": 18,
                          "ytick.labelsize": 18, "savefig.facecolor": "white", "figure.facecolor": "white"})
+    top = .84 if panels > 1 else .8
     fig, axes = plt.subplots(1, panels, figsize=(width, 10), squeeze=False)
-    fig.subplots_adjust(left=left, right=.99, bottom=.27, top=.84, wspace=.3)
+    fig.subplots_adjust(left=left, right=.99, bottom=.27, top=top, wspace=.3)
     info = out["scopes"][scope]
     colors = dict(zip(out["budgets"], COLORS))
     where = "the world's compute" if info["who"] == "world" else "a datacenter's compute"
@@ -172,8 +173,8 @@ def _figure(out: dict, scope: str, panels: int, width: float, left: float):
              f"{_sci(info['requests'])} requests", ha="left", va="center", fontsize=23)
     fig.legend([plt.Line2D([], [], color=colors[b], lw=3.2) for b in out["budgets"]],
                [f"{b * 100:g}%" for b in out["budgets"]], title="Share of compute for replays and proofs:",
-               loc="upper left" if panels == 1 else "center right",
-               bbox_to_anchor=(left, .96) if panels == 1 else (.99, .985), ncol=4, frameon=False, fontsize=18,
+               loc="lower right" if panels == 1 else "center right",
+               bbox_to_anchor=(.99, top + .01) if panels == 1 else (.99, .985), ncol=4, frameon=False, fontsize=18,
                title_fontsize=18, alignment="left")
     return fig, list(axes[0])
 
@@ -202,7 +203,7 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
 def render_appendix(out: dict, scope: str, outdir: Path) -> list[Path]:
     """Draw `scope`'s appendix figure, the exfiltration panel with every design and the references the main figure
     leaves out, into `outdir` as `appendix_stem(scope)`.png and .svg; returns their paths."""
-    fig, (ax,) = _figure(out, scope, 1, 13, .12)
+    fig, (ax,) = _figure(out, scope, 1, 15, .1)
     p = out["panels"]["exfiltration"]
     _panel(fig, ax, out, scope, "exfiltration", PANELS[0][1], [s for s in p["series"] if s["scope"] == scope],
            [r for r in p["references"] if not r.get("main", True)],
