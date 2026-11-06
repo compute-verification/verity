@@ -32172,9 +32172,10 @@
    }
   },
   "Proofs.Flock.Bridge.Statement": {
-   "digest": "9906bbfb44af40263a47befbcd6e553e90937142c6b2c766ee892c3c2c5d0a36",
+   "digest": "35b3093afa8c9f0484ee8c26b67ff3709df5a9b3f7fd8eb054f3d615f341c8cd",
    "definitions": {
-    "Flock.Bridge.constsOf": "be9a0ea1abd126bde12485c1e9fda2c8e68e06155e71d25940c7f7fc78ad25e7",
+    "Flock.Bridge.constWiresOf": "271f90660ae3732eeeabb9f8a47d2515de072a38c4528b44cec236d38997360c",
+    "Flock.Bridge.constsOf": "6b018b2d354b5e279e308503f6b197bfd9ef232908ae8cc5e76afc8b6db3e21c",
     "Flock.Guarantees.SampledKSLive": "44b2c00b20e70f33483728c3b308dde8788a4ca243c8fa8a3598d266ee46e1e4",
     "Flock.Guarantees.SampledKSLiveStated": "31e4ef3dcdad15cc66cbbeaf9662a6446d28713b0c33995c48a799a43f55ac3d"
    }

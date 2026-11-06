@@ -20,6 +20,11 @@ public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Bridge.KSLive
 public import Proofs.Flock.Bridge.PublicDeployed
 public import Proofs.Flock.Bridge.Honest
+public import Proofs.Flock.Bridge.BitsRows
+public import Proofs.Flock.Bridge.BitsLower
+public import Proofs.Flock.Bridge.BitsKeys
+public import Proofs.Flock.Bridge.BitsKeyProg
+public import Proofs.Flock.Bridge.BitsRowMap
 public import Proofs.Flock.Bridge.V5
 public import Proofs.Flock.Bridge.LeafSeg
 public import Proofs.Flock.Bridge.Public
@@ -40,7 +45,14 @@ parameters. `Honest`: `Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarante
 hypotheses of V2, V3 and Pub at the deployed session, from the named premise that its files parse
 (`Bridge.Assumptions.ServedFilesParse`). `LeafSeg`: the `hm96-sha512/row-seg/v1` leaf binds, and
 `Flock.Bridge.commitRowL`, the deployed commitment with each port's own leaf, binds at every circuit file and opens at
-SHA-512 what `commitDepL` opens. -/
+SHA-512 what `commitDepL` opens. `BitsRows`: `SampledProofs.Bits`' stacked unit rows are a circuit's template
+instance rows (`Flock.Bridge.rowsAgree_circuitRows`). `BitsLower`: where a Bits key program lays out a circuit and its
+units, the bridge's lowering, positions and proof blocks are Bits' (`Flock.Bridge.LaysOut.progOf_eq`,
+`Flock.Bridge.blockOf_eq`). `BitsKeys`: Bits' source keys are the bridge's (`Flock.Bridge.keyIdx_eq`). `BitsKeyProg`:
+Bits' key program lays out a circuit file's and its units, so the bridge's program, positions and proof blocks are
+Bits' (`Flock.Bridge.progOf_keyProg`, `Flock.Bridge.posOf_keyProg`, `Flock.Bridge.blockOf_bitsKeyProg`). `BitsRowMap`:
+Bits' row map is the bridge's: at an input gate (`Flock.Bridge.rowBit_keyRowOf`, `Flock.Bridge.rowBit_wire`) and at a
+returned output's bit (`Flock.Bridge.outRowBit_outBitRow`, `Flock.Bridge.outRowBit_outRowOf`). -/
 
 @[expose] public section
 

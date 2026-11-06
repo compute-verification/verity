@@ -29,9 +29,9 @@ holds at every `own`:
   law's own miss of a set `B` of proof blocks (`P_a(B)` of `designOf (oneStageOf law)` on `partOf P κ ns`), not a
   parameter;
 * `live-verifier` at `own` and the law (`Assumptions.Zk.RecordCustodyZKJPLaw`);
-* the constants `Bridge.constsOfP`: `constsOf`'s constant and zero, and each proof block's public gates at its public input
-  words' bits in the population's public file (`HiddenExec.pubBitOf`). The verifier derives the public inputs, so the
-  statement fixes them, and a public gate is read with no opening;
+* the constants `Bridge.constsOfP`: the constant wires `Bridge.constWiresOf`, the constant and the zero, and each proof
+  block's public gates at its public input words' bits in the population's public file (`HiddenExec.pubBitOf`). The
+  verifier derives the public inputs, so the statement fixes them, and a public gate is read with no opening;
 * the registration at the public file's leaf map (`LeafMap.ofPublic`: one leaf per proof block, or a `shared_rows` file's
   refs), as `TransportsLiveCR` reads it.
 
@@ -50,12 +50,12 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **The circuit's constants at public inputs**: `constsOf`'s (`oneG` is `1`, `zeroG` is `0`), and at proof block `u`'s
-public gate of bit `t` of public word `q` (`Layout.keyPubOf`) that bit of `u`'s public input words in the population's
-public file `pub` (`HiddenExec.pubBitOf`). -/
+/-- **The circuit's constants at public inputs**: the constant wires' (`constWiresOf`: `oneG` is `1`, `zeroG` is `0`),
+and at proof block `u`'s public gate of bit `t` of public word `q` (`Layout.keyPubOf`) that bit of `u`'s public input
+words in the population's public file `pub` (`HiddenExec.pubBitOf`). -/
 noncomputable def _root_.Flock.Bridge.constsOfP (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi : HmIn.Ports)
     (pub : Public) (g : Fin (Discharge.Layout.keyN c hU n)) : Option Bool :=
-  match Bridge.constsOf c hU n g with
+  match Bridge.constWiresOf c hU n g with
   | some b => some b
   | none => (Discharge.Layout.keyPubOf c hU n pi g).map fun x =>
       Discharge.HiddenExec.pubBitOf pi (fun (_ : Unit) => pub) () x.1 x.2.1 x.2.2

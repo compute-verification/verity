@@ -33,6 +33,7 @@
   "Properties.NetworkScan",
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
+  "Properties.SampledProofs.Bits",
   "Properties.SampledProofs.Halt",
   "Properties.SampledProofs.Second",
   "Properties.Pous.TimedAudit",
@@ -880,7 +881,7 @@
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
-   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Second"],
+   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Bits", "Properties.SampledProofs.Second"],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.CertifierNetwork": {
@@ -1119,6 +1120,11 @@
    "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
    "except": [],
    "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
+  },
+  "Properties.SampledProofs.Bits": {
+   "imports": ["Definitions.Claims.Sampling", "SampledProofs.Bits"],
+   "except": [],
+   "why": "Bits' layout read as the claims' program (`bitsGate`, `bitsProg`) is stated against Bits' own gates and lowering (`SampledProofs.Bits`) and the claims' gates and program (`Definitions.Claims.Sampling`), never a proof"
   }
  },
  "reads_exempt": {
