@@ -265,6 +265,8 @@ theorem lforIn_inv' {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (I : L
       | done b => obtain ⟨-, rfl, rfl⟩ := lpure_ok h₂; exact hI₁
       | yield b => exact lforIn_inv' body I B hb n (a + 1) b st₁ t₁ s' st' t' (by omega) hI₁ h₂
 
+-- one proof of a few hundred lines down `Zk.ligerito`'s unfolded run, a `*_bind` step per bind and `rw` and `omega` on
+-- the round indices
 set_option maxHeartbeats 4000000 in
 /-- **`Zk.ligerito`'s record**: the target, level 0's out-of-domain coin, the lane rounds' coins and the pair's coins,
 at the rounds the run consumed, and those rounds' coin counts. -/
@@ -560,6 +562,8 @@ theorem claim0_rel (lay : Zk.PadLayout) (i : Fin lay.len) (hi : i.val = lay.lgOo
   · simp only [liftK, ZkSession.cK, ZkSession.padF, ZkSession.cF, ZkSession.mskF, ZkSession.pF, Prod.snd_add,
       Prod.smul_snd, smul_eq_mul, add_zero, map_add, map_mul]
 
+-- `ZkLink.ligeritoPadZC`'s run matched against `ligMsgsZ`'s messages, a `plays_bind_split` step per message and coin,
+-- then the lane relation's algebra (`convert`, `abel`)
 set_option maxHeartbeats 1000000 in
 /-- **Every run of the compiled masked level 0 returns the lane phase's row** (`laneLhs`), at the record whose
 target, out-of-domain coin, lane coins and pair coins the run's coins are. -/

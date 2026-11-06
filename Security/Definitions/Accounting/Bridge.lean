@@ -6,8 +6,8 @@ public import Definitions.Accounting.Physical
 /-!
 # The device's schedule, induced by the actual circuit (trusted)
 
-The device model (`Accounting.Device`, `Schedule`) read off the actual circuit of
-`note:console/20261012T0645Z-draft-actual-circuit-model` (v2.3), on a run. The device is the location `chip ∪ mem`: its
+The device model (`Accounting.Device`, `Schedule`) read off the actual circuit (its model's v2.3), on a run. The
+device is the location `chip ∪ mem`: its
 on-chip state is what the leaves of `chip` hold and what is in flight between them (`Actual.Run.state`), and its device
 memory the same of `mem`, so nothing it holds goes uncounted. Bits reach the chip from device memory on the link `hbm.1`
 toward its end `hbm.2`, and reach the device over side channel `i` on the link `(side i).1` toward `(side i).2`. Each

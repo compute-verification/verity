@@ -81,7 +81,7 @@ def certifier(windows: int, records: dict[int, bytes] | None = None, clock=lambd
               **kwargs) -> tuple[Proxy, dict[int, bytes]]:
     """The certifier with PoUW's reader and the prover's key, the stream its context, on clock `clock`, handed `records`
     by PoUW window before its first tick (`commit_weights`, signed by the prover), after `windows` certifier windows of
-    ingress ticks, and the salts it sampled by PoUW window: what the prover's server receives in-band."""
+    ingress ticks, and the salts it sampled by PoUW window: what the developer's server receives in-band."""
     drawn: dict[int, bytes] = {}
 
     def source(p: int, n: int) -> bytes:
@@ -366,7 +366,7 @@ def setup():
     rng = random.Random(3)
     work = Workload((Matmul(0, Shape(32, 64, 64), 7),))
     rows = [ncp.int7_bytes([rng.randint(-64, 63) for _ in range(64)]) for _ in range(64)]
-    return work, {7: commit_rows(weight_binding(7), -2, rows).commitment.root}
+    return work, {7: commit_rows(weight_binding(7), -2, rows, "sha256").commitment.root}
 
 
 def test_a_certified_epoch_applies_its_pouw_windows_salt():

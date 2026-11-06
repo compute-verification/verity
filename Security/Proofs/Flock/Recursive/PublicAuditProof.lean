@@ -119,7 +119,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **The recursive audit at public units, as the verifier of record runs it, with no A3.** -/
 theorem PublicAuditNoA3 : Flock.Guarantees.PublicAuditNoA3 := by

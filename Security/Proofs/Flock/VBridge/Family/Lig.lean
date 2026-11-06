@@ -54,6 +54,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-! ## The region count -/
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`Stmt.setupH` checks the statement range** (HmRow.lean:1339): every statement it returns passed `checkInRange`
 at its `k_log`, its regions and its link points. -/

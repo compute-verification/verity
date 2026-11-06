@@ -44,8 +44,8 @@ def part(case: str, name: str) -> bytes:
 def anchors(case: str, circuit: str, k: int, dev: str | None, row_k: int | None = None) -> TileAnchors:
     ctx = Context(part(case, "salt"), Matmul(3, Shape(2, k, 2), 9), part(case, "root_a"), part(case, "root_b"))
     if circuit == "pc4":
-        return TileAnchors.of(F.PearlC4("nvfp4"), ctx, pc4.Shape(2, k, 2, tile=(1, 1), row_k=row_k), ROWS, COLS)
-    return TileAnchors.of(C.PearlC(forming="v1", device=DEVICES[dev]), ctx,
+        return TileAnchors.of(F.PearlC4("nvfp4", hashing="h0"), ctx, pc4.Shape(2, k, 2, tile=(1, 1), row_k=row_k), ROWS, COLS)
+    return TileAnchors.of(C.PearlC(forming="v1", device=DEVICES[dev], hashing="h0"), ctx,
                           pc8.Shape(2, k, 2, tile=(1, 1), dev=dev, row_k=row_k), ROWS, COLS)
 
 

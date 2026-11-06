@@ -44,7 +44,7 @@ open Finset
 -- and group instances exceed instance search's default size.
 set_option synthInstance.maxSize 100000
 
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- the time instance search takes on those products
 
 namespace Table
 

@@ -81,6 +81,7 @@ theorem g_pos {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteAr
   · rw [h0, Nat.zero_mul] at hp; omega
   · exact h0
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **setupH's instances and blocks**: `n` is the (drawn) public file's, and `nbl = max 3 (log2ceil ⌈n / c.g⌉)`. -/
 theorem setupH_n {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}

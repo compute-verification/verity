@@ -40,7 +40,7 @@ open Finset Game
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- An `ℝ≥0∞` bound between two probabilities, as reals. -/
 theorem toReal_le_add {a b ε : ℝ≥0∞} (hb : b ≠ ⊤) (hε : ε ≠ ⊤) (h : a ≤ b + ε) : a.toReal ≤ b.toReal + ε.toReal := by

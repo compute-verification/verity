@@ -64,6 +64,7 @@ theorem forall₂_mem {α β : Type} {R : α → β → Prop} : ∀ {L : List α
       · obtain ⟨e, he, hr⟩ := forall₂_mem hrest a h
         exact ⟨e, List.mem_cons_of_mem _ he, hr⟩
 
+-- `split` at every branch of `HmRow.regions`' unfolded do-block, a bind step per region
 set_option maxHeartbeats 2000000 in
 /-- **`HmRow.regions` has region "digest p" for every input port `p`**, as `mkRegion` built it. -/
 theorem regions_digest {c : Circuit} {pub : Public} {regs : Array Region} (h : HmRow.regions c pub = .ok regs)
@@ -236,6 +237,7 @@ theorem bc_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model
 
 /-! ### setupH's regions -/
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **setupH's statement's regions are `HmRow.regions` of its circuit and public file.** -/
 theorem setupH_regions {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}

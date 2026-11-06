@@ -38,7 +38,7 @@ open Finset
 
 -- As in `SHVZK`: the randomness and the view are products of up to fifteen factors.
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 namespace Table
 

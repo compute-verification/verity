@@ -8,7 +8,7 @@
 # `verity/inference-only/v0` (`NciCheck.Protocol`), the inference-only policy's subprotocol of onsite and remote.
 name = "nci_check"
 defaultTargets = ["NciCheck", "nci-difftest", "nci-desc-difftest", "nci-desc-liveness", "nci-desc-fuzz", "nci-baseline-difftest",
-  "nci-check", "inference-only"]
+  "nci-count-difftest", "nci-check", "inference-only"]
 
 [leanOptions]
 autoImplicit = false
@@ -45,6 +45,10 @@ root = "NciCheck.DescFuzzMain"
 [[lean_exe]]
 name = "nci-baseline-difftest"
 root = "NciCheck.BaselineDifftestMain"
+
+[[lean_exe]]
+name = "nci-count-difftest"
+root = "NciCheck.CountDifftestMain"
 
 [[lean_exe]]
 name = "nci-check"

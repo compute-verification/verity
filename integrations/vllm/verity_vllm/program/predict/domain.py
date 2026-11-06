@@ -11,7 +11,7 @@ from .phi import Phi
 _ENV_MODELLED = ("VLLM_ALLREDUCE_USE_SYMM_MEM", "VLLM_ALLREDUCE_USE_FLASHINFER", "NCCL_P2P_DISABLE")
 #: the engine args a component Program does not read but through `settings_of` (the scheduler's: a component is one request's)
 _ARGS_MODELLED = ("disable_custom_all_reduce", "max_model_len", "max_num_batched_tokens", "max_num_seqs", "enable_prefix_caching",
-                  "enable_chunked_prefill")
+                  "enable_chunked_prefill", "long_prefill_token_threshold")
 
 
 def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, tuple[str, ...]]) -> None:

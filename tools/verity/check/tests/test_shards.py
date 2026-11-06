@@ -1,6 +1,6 @@
 """`check.py --shard K/N`: ci.toml's plans run every part of an unsharded check exactly once (but ratchet-gate's, off the gate and
-in no plan), each shard holds what its jobs need, a shard runs only its parts (lean-audit on its packages), and its result names
-what it ran."""
+in no plan), each shard holds what its jobs need or runs it beside their parts, a shard runs only its parts (lean-audit on its
+packages, lean-suites on its suites), and its result names what it ran."""
 from __future__ import annotations
 
 import importlib.util
@@ -27,30 +27,85 @@ CHECK = _module("repo_check_for_shards", ROOT / "tools" / "verity" / "check" / "
 D = CHECK.DECLARATION
 LA = _module("repo_lean_audit_for_shards", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
 PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
-SECURITY = ("lean-audit:Security", "lean-audit:Security/Proofs")
+#: the packages that build Security/Proofs: it, and the specs whose `proved_in` names it
+SECURITY = ("lean-audit:Security", "lean-audit:Security/Proofs", "lean-audit:Security/Properties")
+#: lean-suites' parts: its suites, the composition suite in the three parts by test id its pyproject declares
+SUITES = CHECK._parts_of()["lean-suites"]
+COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3))
+
+
+@pytest.fixture(autouse=True)
+def _provers(provers):
+    return provers(CHECK)
+
+
+def _parts(packages=PACKAGES) -> dict[str, list[str]]:
+    return {"lean-audit": packages, "lean-suites": SUITES}
 
 
 def _resolved(n: int, packages=PACKAGES) -> list[list[str]]:
-    return D.resolve(D.plans()[n], CHECK.JOBS, {"lean-audit": packages})
+    return D.resolve(D.plans()[n], CHECK.JOBS, _parts(packages), CHECK.audit_provers(packages))
 
 
 def test_the_plans_are_the_documented_ones():
+    c1, c2, c3 = COMPOSITION
     assert D.plans() == {
-        3: ((*SECURITY, "pytest"),
-            ("lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"),
-            ("flock-circuit-build", "circuit-check", "flock-rust-tests")),
-        4: ((*SECURITY, "circuit-check:1/4"),
-            ("lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed", "circuit-check:2/4"),
-            ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*")),
-        5: (SECURITY, ("lean-audit:*", "lean-changed"), ("lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"),
-            ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests"))}
+        3: ((*SECURITY, "pytest", c3),
+            ("lean-build", "lean-unit-cut", "lean-audit:*", c1, "lean-suites:*", "lean-agreement", "lean-changed"),
+            ("flock-circuit-build", "circuit-check", "flock-rust-tests", c2)),
+        4: ((*SECURITY, "circuit-check:1/4", c3),
+            ("lean-build", "lean-unit-cut", "lean-audit:*", c1, "lean-suites:*", "lean-agreement", "lean-changed", "circuit-check:2/4"),
+            ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", c2)),
+        5: ((*SECURITY, c3), ("lean-audit:*", "lean-changed"), ("lean-build", "lean-unit-cut", c1, "lean-suites:*", "lean-agreement"),
+            ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests", c2))}
+
+
+@pytest.mark.parametrize("n", sorted(D.plans()))
+def test_every_plan_runs_the_composition_suites_three_parts_on_three_shards(n):
+    """verity-core-composition declares three parts by test id: lean-suites' parts are its suites with it as those three, and
+    every plan's shards, gated and after landing, hold one each, so no shard runs the suite whole."""
+    assert CHECK.suite_parts() == {"verity-core-composition": 3}
+    parts = [p.removeprefix("lean-suites:") for p in COMPOSITION]
+    assert SUITES == [x for s in CHECK.AFTER_LEAN for x in (parts if s == "verity-core-composition" else [s])]
+    for gated in (True, False):
+        shards = [CHECK.shard(f"{k}/{n}", gated)["parts"] for k in range(1, n + 1)]
+        held = [[p for p in s if p in COMPOSITION] for s in shards]
+        assert sorted(p for h in held for p in h) == sorted(COMPOSITION) and all(len(h) <= 1 for h in held)
+
+
+@pytest.mark.parametrize("n", sorted(D.plans()))
+def test_every_plan_builds_the_security_proofs_once_a_run(n, _provers):
+    """Security and Security/Properties audit Security/Proofs beside them, from one build of it: apart, each shard holding one
+    builds the proofs again, cold after any change to them. The static plan's shards (gated, and an after-landing run's) put
+    all three on one."""
+    assert CHECK.audit_provers(PACKAGES) == {f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p, qs in _provers.items()}
+    for gated in (True, False):
+        shards = [CHECK.shard(f"{k}/{n}", gated)["parts"] for k in range(1, n + 1)]
+        [holder] = [s for s in shards if set(SECURITY) & set(s)]
+        assert set(SECURITY) <= set(holder)
+
+
+def test_a_spec_the_plan_doesnt_name_goes_with_its_provers_and_a_plan_naming_them_apart_is_refused():
+    together = {"lean-audit:s": ["lean-audit:p"], "lean-audit:t": ["lean-audit:p"]}
+    parts = {"lean-audit": ["p", "s", "t", "x"]}
+    plan = _plans('[["a", "b", "lean-audit:p"], ["lean-audit:*", "c"]]')[2]
+    assert D.resolve(plan, JOBS, parts) == [["a", "b", "lean-audit:p"], ["lean-audit:s", "lean-audit:t", "lean-audit:x", "c"]]
+    assert D.resolve(plan, JOBS, parts, together) == [["a", "b", "lean-audit:p", "lean-audit:s", "lean-audit:t"], ["lean-audit:x", "c"]]
+    spec = _plans('[["a", "b", "lean-audit:s"], ["lean-audit:*", "c"]]')[2]
+    assert D.resolve(spec, JOBS, parts, together)[0] == ["a", "b", "lean-audit:p", "lean-audit:s", "lean-audit:t"], \
+        "a named spec brings its provers, and their other specs"
+    assert D.resolve(_plans('[["a", "b", "lean-audit:*"], ["c"]]')[2], JOBS, parts, together)[0][2:] == [
+        "lean-audit:p", "lean-audit:s", "lean-audit:t", "lean-audit:x"]
+    apart = _plans('[["a", "b", "lean-audit:s"], ["lean-audit:p", "lean-audit:*", "c"]]')[2]
+    with pytest.raises(D.DeclarationError, match="names lean-audit:p, lean-audit:s in shards 1, 2, .*name them in one shard"):
+        D.resolve(apart, JOBS, parts, together)
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_runs_every_part_of_this_tree_exactly_once_and_the_same_way_each_time(n):
     """Every part but ratchet-gate's, which is off the gate and in no plan: circuit-check, off the gate too, stays planned."""
-    every = D.all_parts(CHECK.JOBS, {"lean-audit": PACKAGES})
-    assert len(PACKAGES) >= 4 and all(every.count(s) == 1 for s in SECURITY) and "lean-audit" not in every
+    every = D.all_parts(CHECK.JOBS, _parts())
+    assert len(PACKAGES) >= 4 and all(every.count(s) == 1 for s in SECURITY) and {"lean-audit", "lean-suites"}.isdisjoint(every)
     assert {p.partition(":")[0] for p in every} == {j.name for j in CHECK.JOBS}
     shards = _resolved(n)
     flat = [p for s in shards for p in s]
@@ -104,8 +159,8 @@ def test_a_plan_may_leave_out_a_job_off_the_gate_but_no_job_on_it():
     ('[["a", "b", "lean-audit:*"]]', "two or more"),
     ('[["a", "b"], []]', "two or more"),
     ('[["a", "b", "lean-audit:*"], ["x"]]', "'x' names no declared job"),
-    ('[["a", "b", "lean-audit:*"], ["c:1"]]', "only lean-audit, circuit-check split"),
-    ('[["a", "b", "lean-audit:*"], ["lean-audit:"]]', "only lean-audit, circuit-check split"),
+    ('[["a", "b", "lean-audit:*"], ["c:1"]]', "only lean-audit, circuit-check, lean-suites split"),
+    ('[["a", "b", "lean-audit:*"], ["lean-audit:"]]', "only lean-audit, circuit-check, lean-suites split"),
     ('[["a", "b", "lean-audit:*"], ["a", "c"]]', "a is in more than one shard"),
     ('[["a", "b", "lean-audit:*"], ["lean-audit", "c"]]', "lean-audit is in more than one shard"),
     ('[["a", "b"], ["lean-audit:*"]]', "no shard runs c"),
@@ -121,14 +176,20 @@ def test_a_plan_that_could_leave_a_part_out_or_run_it_twice_is_refused(shards, w
         _plans(shards)
 
 
-def test_a_shard_holds_the_job_its_job_runs_after():
-    """lean-suites runs `after` lean-build, in another group, on the verifier lean-build built: a shard without it would run
-    the suites on no verifier, so the plan is refused."""
-    jobs = [*JOBS, D.Job("d", "ci", 4, after="a")]
+def test_a_shard_holds_the_job_its_job_runs_after_or_runs_it_beside_a_split_jobs_parts():
+    """lean-suites runs `after` lean-build, in another group, on the verifier lean-build built: a shard holding a job whole
+    without what it runs after would run it on no verifier, so the plan is refused; one holding some of a split job's parts
+    runs the build again beside them (`check.groups`), so the build's own shard may be another."""
+    jobs = [*JOBS, D.Job("d", "ci", 4, after="a"), D.Job("lean-suites", "ci", 4, after="a")]
     plan = 'schema = "ci/v0"\n[[plan]]\nshards = {}\n'
-    assert D.parse_plans(plan.format('[["a", "b", "d", "lean-audit:*"], ["c"]]'), jobs)
+    assert D.parse_plans(plan.format('[["a", "b", "d", "lean-audit:*", "lean-suites"], ["c"]]'), jobs)
     with pytest.raises(D.DeclarationError, match="shard 2 runs d, which needs a in the same shard"):
-        D.parse_plans(plan.format('[["a", "b", "lean-audit:*"], ["c", "d"]]'), jobs)
+        D.parse_plans(plan.format('[["a", "b", "lean-audit:*", "lean-suites"], ["c", "d"]]'), jobs)
+    with pytest.raises(D.DeclarationError, match="shard 2 runs lean-suites, which needs a in the same shard"):
+        D.parse_plans(plan.format('[["a", "b", "d", "lean-audit:*"], ["c", "lean-suites"]]'), jobs)
+    split = D.parse_plans(plan.format('[["a", "b", "d", "lean-audit:*", "lean-suites:x"], ["c", "lean-suites:*"]]'), jobs)[2]
+    assert D.resolve(split, jobs, {"lean-audit": ["p"], "lean-suites": ["x", "y:1/2", "y:2/2"]}) == [
+        ["a", "b", "lean-audit:p", "d", "lean-suites:x"], ["c", "lean-suites:y:1/2", "lean-suites:y:2/2"]]
 
 
 def test_two_plans_of_one_size_and_a_need_outside_its_group_are_refused():
@@ -154,12 +215,14 @@ def test_a_shard_no_plan_declares_is_refused(spec):
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_a_shard_runs_its_parts_alone_in_their_groups_order_and_lean_audit_on_its_packages(tmp_path, n):
+    """And lean-suites on its suites, with lean-build beside them where another shard holds it."""
     for k, planned in enumerate(_resolved(n), 1):
         parts = [p for p in planned if p.partition(":")[0] not in CHECK.OFF_GATE]
-        assert CHECK.shard(f"{k}/{n}") == {"k": k, "n": n, "parts": parts, "all": D.all_parts(D.gated(CHECK.JOBS), {"lean-audit": PACKAGES})}
+        assert CHECK.shard(f"{k}/{n}") == {"k": k, "n": n, "parts": parts, "all": D.all_parts(D.gated(CHECK.JOBS), _parts())}
         gs = CHECK.groups(tmp_path, 16, only=parts)
         ran = [name for g in gs for name, _, _ in g]
-        assert sorted(ran) == sorted({p.partition(":")[0] for p in parts})
+        jobs = {p.partition(":")[0] for p in parts}
+        assert sorted(ran) == sorted(D.needed(CHECK.JOBS, sorted(jobs))) == sorted(jobs | ({"lean-build"} if "lean-suites" in jobs else set()))
         for g in gs:
             names = [name for name, _, _ in g]
             assert names == [j.name for j in CHECK.JOBS if j.name in names], "in ci.toml's order"
@@ -169,6 +232,9 @@ def test_a_shard_runs_its_parts_alone_in_their_groups_order_and_lean_audit_on_it
         audit = [argv for g in gs for name, argv, _ in g if name == "lean-audit"]
         want = [p.partition(":")[2] for p in parts if p.startswith("lean-audit:")]
         assert [[argv[i + 1] for i, x in enumerate(argv) if x == "--package"] for argv in audit] == ([want] if want else [])
+        suites = [shlex.split(argv[2].removeprefix(CHECK.ELAN)) for g in gs for name, argv, _ in g if name == "lean-suites"]
+        mine = [p.partition(":")[2] for p in parts if p.startswith("lean-suites:")]
+        assert [w[2:w.index("--lean-built")] for w in suites] == ([mine] if mine else [])
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
@@ -306,7 +372,7 @@ def test_circuit_check_s_parts_are_its_shards_and_a_check_runs_only_those_it_hol
     when any does."""
     [cc] = [j for j in CHECK.JOBS if j.name == "circuit-check"]
     assert cc.shards == 4 and D.job_parts(cc, {}) == ["1/4", "2/4", "3/4", "4/4"]
-    every = D.all_parts(CHECK.JOBS, {"lean-audit": PACKAGES})
+    every = D.all_parts(CHECK.JOBS, _parts())
     assert [p for p in every if p.startswith("circuit-check")] == [f"circuit-check:{k}/4" for k in range(1, 5)]
 
     def argv(only):
@@ -404,6 +470,13 @@ def test_the_combine_joins_a_split_suites_parts_across_shards_into_its_verdict(t
     reports["r2"] = []
     assert "missing: [2]" in CHECK.suite_join(Store(), steps, tmp_path / "e")
     assert "lost published no run files" in CHECK.suite_join(Store(), [{**steps[0], "run_id": "lost"}], tmp_path / "f")
+    both = [{"step": f"lean-suites:s:{k}/2", "status": "passed", "run_id": "r1"} for k in (1, 2)]
+    for status, why in (("passed", None), ("cached", None), ("failed", "s: failed")):
+        reports["r1"] = [{"suite": "s", "name": "s", "status": status, "seconds": 1.0, "failed_tests": []}]
+        got = CHECK.suite_join(Store(), both, tmp_path / f"whole-{status}")
+        assert (got is None) == (why is None) and (why is None or why in got), f"a shard that held every part ran the suite whole: {got}"
+    reports["r1"] = [{"suite": "w", "name": "w", "status": "passed"}]
+    assert "s: no shard reported its parts" in CHECK.suite_join(Store(), both, tmp_path / "g")
 
 
 def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch):
@@ -461,7 +534,7 @@ def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     monkeypatch.setattr(subprocess, "run", run)
     for args in (["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
         assert CHECK.record(["--base", "HEAD", "--on", "pod", *args]) == 0
-    assert parts == [[list(SECURITY)], [["pytest"]], [[]], []], "an unsharded check sends none"
+    assert parts == [[[*SECURITY, COMPOSITION[2]]], [["pytest"]], [[]], []], "an unsharded check sends none"
 
 
 def _records_run(tmp_path, monkeypatch, rc: int = 0) -> tuple[Path, list[list[str]]]:

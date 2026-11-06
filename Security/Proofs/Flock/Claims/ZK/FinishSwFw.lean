@@ -71,7 +71,7 @@ begins at `repSlot … (innerOff 0)`.
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 /-- A view at clear values, as the table's: its `ŝ` is `ν + maskHom` at its mask. -/
 theorem FlockSoundness.ZK.Table.toBase_onVals_sHat {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]

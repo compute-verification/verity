@@ -201,6 +201,7 @@ theorem transcript_eq {t : Transcript} {R : Array Round} {k : ℕ} {p : ByteArra
 
 /-! ## The record -/
 
+-- one proof down `Zk.ligeritoWith`'s unfolded run, a `*_bind` step per bind and `omega` on the positions
 set_option maxHeartbeats 4000000 in
 /-- **What the masked Ligerito returns, by coin position**: the target, level 0's out-of-domain coin (round
 `t.k + 1`'s) with the proof's first out-of-domain value, the lane rounds' `K` coins and the pair's, and it ends at round

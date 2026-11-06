@@ -1,8 +1,9 @@
 """`targets._authored`: a Definition is this tree's by the file of the module that defines it, so a package that moves to a new
 directory and import name stays in `REGISTERED`, and one whose module can't be judged fails by name.  `targets.root_functions`:
 every root function a binding file defines runs, the listed ones first.  `targets.definition`: a Definition-valued static in an
-id parses to the Definition it names, bound, recursively, and a record static to the record a catalog root binds, without the
-catalog.  `targets.word_call_families`: a vocabulary kind that doesn't bind is refused by name."""
+id parses to the Definition it names, bound, recursively, a record static to the record a catalog root binds, and a composite's
+lift to the one a body calling it binds, without the catalog.  `targets.word_call_families`: a vocabulary kind that doesn't bind
+is refused by name."""
 from __future__ import annotations
 
 import sys
@@ -114,6 +115,32 @@ def test_a_definition_valued_static_parses_to_the_definition_it_names_recursivel
     assert got is outer
     assert got.bindings["EXACT"] is mid and mid.bindings["IN"] is exact
     assert TG.definition(mid.id) is mid and TG.definition(exact.id) is exact
+
+
+def test_a_composites_lift_parses_to_the_lift_a_body_calling_it_binds(monkeypatch):
+    """``circuit-check 'Lifted[MoeRouterTopK_v1]_v2{E=4,TOPK=2,VPT=2,ORD=0}'`` failed with ``'CompositeDefinition' object has no
+    attribute 'params'`` in a process where no body had lifted the composite yet, while ``--all`` checks it.  Named, a composite's
+    lift is the very specialization a body that calls the composite binds (`lifted.lift_def`), and checks; a lift its id doesn't
+    name (`MoeFfnFixed`'s is by hand) is refused by name; without the catalog."""
+    from verity.ml.circuits.defs import REGISTRY, bind
+    from verity.ml.definitions.registry import lifted as L
+    from verity.ml.definitions.registry import moe, ref_prims
+
+    from circuit_check import checks as CK
+
+    TG.load_registries()
+    _no_catalog(monkeypatch)
+    fresh = {"ArgmaxStepF32_v1", "MoeRouterTopK_v1"}
+    monkeypatch.setattr(L, "_LIFTED_COMPOSITES", {k: v for k, v in L._LIFTED_COMPOSITES.items() if k not in fresh})
+    monkeypatch.setattr(L, "_UNLIFTED_OF", dict(L._UNLIFTED_OF))
+    monkeypatch.setattr(REGISTRY, "defs", {k: v for k, v in REGISTRY.defs.items() if k not in {f"Lifted[{f}]_v2" for f in fresh}})
+    step = TG.definition("Lifted[ArgmaxStepF32_v1]_v2{ORD=0}")
+    router = TG.definition("Lifted[MoeRouterTopK_v1]_v2{E=4,TOPK=2,VPT=2,ORD=0}")
+    assert step is L.lift_def(bind(ref_prims.ArgmaxStepF32))
+    assert router is L.lift_def(bind(moe.MoeRouterTopK, E=4, TOPK=2, VPT=2))
+    assert CK.check_definition(step, as_call=False)["failures"] == []
+    with pytest.raises(LookupError, match=r"Lifted\[MoeFfnFixed_v1\]_v2 names no Definition: MoeFfnFixed_v1's lift is LMoeFfn_v1"):
+        TG.definition("Lifted[MoeFfnFixed_v1]_v2{E=8,TOPK=2,VPT=8,H=16,I=16,ORD=0}")
 
 
 def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):

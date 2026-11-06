@@ -97,6 +97,7 @@ private theorem stmtOf_congr {a b : Flock.Stmt} (h : a = b) (ha : StmtWF a) (hb 
 variable {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
   {d₀ : Lean.Json} (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
 
+-- one proof down the opened statement's decode (`opnPJ`), a bind step per value it reads and `rw` on each
 set_option maxHeartbeats 4000000 in
 /-- **The decoder is right at a plain session of `J` tables** (R11b at `--plain-tables --session-tables J`): given the
 tags, `wr` the challenger's record and the challenger's draws setting each table up at `mPts` link points, `DecodesOnJ`

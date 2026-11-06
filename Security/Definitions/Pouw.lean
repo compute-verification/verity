@@ -64,6 +64,8 @@ public import Definitions.Pouw.PearlC.Fp4
 public import Definitions.Pouw.PearlC.Fp4Chain
 public import Definitions.Pouw.PearlC.Fp4Skip
 public import Definitions.Pouw.PearlC.Fp4Vectors
+public import Definitions.Pouw.PearlC.FlockTile.Bridge
+public import Definitions.Pouw.PearlC.FlockTile.Audit
 public import Definitions.Pouw.PearlC.Game
 public import Definitions.Pouw.PearlC.Hidden
 public import Definitions.Pouw.PearlC.HiddenTileGame
@@ -90,6 +92,7 @@ public import Definitions.Pouw.PearlC.TileCheck
 public import Definitions.Pouw.PearlC.TileCheck8
 public import Definitions.Pouw.PearlC.TileCheck4
 public import Definitions.Pouw.PearlC.TileCircuit
+public import Definitions.Pouw.PearlC.TileDraw
 public import Definitions.Pouw.PearlC.W1
 public import Definitions.Pouw.PearlC.W1Stop
 public import Definitions.Pouw.PearlC.WholeCircuit

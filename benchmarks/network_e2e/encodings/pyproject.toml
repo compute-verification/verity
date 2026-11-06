@@ -1,4 +1,4 @@
-# The advice's encodings (network accounting for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
+# The advice's encodings (network certification for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
 # cost zero bits, the residual that remains and its bits per certifier window; `cache_vectors.py`: the certifier's
 # CacheStep_v1 against derived's prefix rules, and its difftest vectors; `cache_pool_vectors.py`: CacheStep_v2 against
 # the replay's block pool (`replay._KV`), and its difftest vectors; `compile_slice_pool.py`: CompileSlice_v2's pool
@@ -26,4 +26,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
           "verity/core/protocols/sampled_proofs/one_stage/partition.py",
           "verity/core/protocols/sampled_proofs/one_stage/produced.py",
-          "verity/core/protocols/sampled_proofs/one_stage/registered.py"]
+          "verity/core/protocols/sampled_proofs/one_stage/registered.py",
+          # test_tick serves the replay's scheduler behind the vLLM integration's certified-tick gate (`serve_admit`)
+          "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/pipeline/__init__.py",
+          "integrations/vllm/verity_vllm/pipeline/serve_admit.py", "integrations/vllm/verity_vllm/engine/__init__.py",
+          "integrations/vllm/verity_vllm/engine/hooks.py"]

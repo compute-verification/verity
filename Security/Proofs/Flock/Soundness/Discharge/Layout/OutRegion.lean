@@ -27,6 +27,7 @@ open Flock FlockLevel3 Model
 
 /-! ### Region "out" -/
 
+-- `split` at every branch of `HmRow.regions`' unfolded do-block, a bind step per region
 set_option maxHeartbeats 2000000 in
 /-- **`HmRow.regions` ends with region "out"** in an untyped circuit whose unit returns the outputs. -/
 theorem regions_out {c : Circuit} {pub : Public} {regs : Array Region} (h : HmRow.regions c pub = .ok regs)

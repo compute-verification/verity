@@ -6,6 +6,7 @@ module
 
 public import Lean.Data.Json
 public import Flock.Hm96
+public import Flock.CanonForm
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -400,8 +401,10 @@ def withPlainLeaves (t : Tags) : Tags :=
   { t with merkleLeaf := "flock-leaf/sha512-unsalted", pinnedLeafScheme := some leafSchemePlain, identity }
 
 /-- A statement whose trees have plain SHA-512 leaves (leafSchemePlain), ZK off: verify refuses it under --zk, as upstream's
---zk does, and without --zk takes it where `ProvedScope.leafOk` covers it (hidden outputs). -/
-def plainLeaves (t : Tags) : Bool := t.pinnedLeafScheme == some leafSchemePlain
+--zk does, and without --zk takes it where `ProvedScope.leafOk` covers it (hidden outputs). The pinned scheme is compared by
+its canonical form (`Firewall.canonForm`), since `Json`'s `==` is a `partial def` no proof can evaluate. -/
+def plainLeaves (t : Tags) : Bool :=
+  t.pinnedLeafScheme.map Firewall.canonForm == some (Firewall.canonForm leafSchemePlain)
 
 /-- A recursive session's inner statement (`Tags.withPlainLeaves`): the default statement with plain SHA-512 leaves. -/
 def circuitPlainLeaves : Tags := { circuit.withPlainLeaves with name := "verity/flock-circuit+plain-leaves" }

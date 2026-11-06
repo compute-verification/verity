@@ -92,6 +92,8 @@ theorem qbOut_reqs_laterA {D : Type} (r : ℕ) (sch : Flock.Schedule) (i : ℕ)
     rw [hcw]
     exact Refine.positions_eq _ hl _
 
+-- one proof of several hundred lines down `Zk.ligerito`'s unfolded levels, a `*_bind` step per bind and `rw` and
+-- `omega` on the round indices
 set_option maxHeartbeats 4000000 in
 /-- **The hiding Ligerito's run records every level's request** (`zk_ligerito_reqs`): its requests passed, the first
 is level 0's at the positions of the coins of round `k + k0 + 8`, and the ones after it are levels `1, …, R` in

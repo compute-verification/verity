@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation.reference import evaluate_region
 from verity.ml.circuits.layout import FunctionCall, Region
 from verity.ml.circuits.refs import runs
 

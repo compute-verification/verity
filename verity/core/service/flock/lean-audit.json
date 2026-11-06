@@ -73,6 +73,7 @@
   "Flock.Test.CoinsTree",
   "Flock.Test.Canon",
   "Flock.Test.ZkIdentity",
+  "Flock.Test.FramesInner",
   "Flock.Test.FrameStep",
   "Flock.Test.SessionPlace",
   "Flock.Test.FramesAsk",

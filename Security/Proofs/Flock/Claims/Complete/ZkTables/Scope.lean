@@ -66,6 +66,7 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {draw partition : Option Lean.Json} {program : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
+-- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **A session of several tables** names them `Tags.tableNames`, links at two points, and has at most
 `Tags.MAX_TABLES`. -/

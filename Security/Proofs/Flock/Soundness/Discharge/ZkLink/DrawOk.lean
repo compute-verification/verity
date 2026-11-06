@@ -108,6 +108,7 @@ theorem foldl_count_filter (p : ℕ → Bool) : ∀ (l : List ℕ) (a : ℕ),
       split <;> (simp_all; try omega)
 
 
+-- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`UnitDraw.ofJson`'s per-stratum count**: a draw it decodes under a stratified law holds exactly `k_s` of its units in
 each stratum `s`'s ranges. -/

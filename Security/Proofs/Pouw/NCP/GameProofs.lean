@@ -14,7 +14,7 @@ import Proofs.Pouw.Reduction
 /-!
 # NCP's game instance: proofs
 
-* `threeBlock`: every running sum is in int32 for `k ≤ 107,524` and noise in `[−31, 31]`, a sanity
+* `threeSegment`: every running sum is in int32 for `k ≤ 107,524` and noise in `[−31, 31]`, a sanity
   bound; `lastChecked`, `leadComplete` (checked values mod `2^32`, NA2).
 * `gammaFromTTNCP`: the reduction with credited work `3·m·k·n`; `ttncpWitness`, in `outputPriced3`.
 * `oneSegment`: the zero-input adversary of class (c), in `Pouw.Barrier.gemmModel`.
@@ -71,7 +71,7 @@ theorem y3 {k : ℕ} {B F1 R : Mat} (hR : SignedPerm k R) {j : ℕ} (hB : ∀ l 
   unfold InInt7 InSmall at *; constructor <;> linarith
 
 /-- **The three-block int32 bound.** -/
-theorem threeBlock : GamePinned.ThreeBlock := by
+theorem threeSegment : GamePinned.ThreeSegment := by
   intro k A B E1 F1 R i j τ hk hR hA hB hE hF hτ
   have hk' : (k : ℤ) ≤ 107524 := by exact_mod_cast hk
   have h31 : (2 : ℤ) ^ 31 = 2147483648 := by norm_num
@@ -105,7 +105,7 @@ theorem threeBlock : GamePinned.ThreeBlock := by
 /-- **Usefulness.** -/
 theorem lastChecked : GamePinned.LastChecked := by
   intro Q R S P H s U u A i j hd hk hA hB
-  have he : D1.blockEnd P.d (3 * (U.layout.shape u).k) (D1.nBlocks P.d (3 * (U.layout.shape u).k) - 1)
+  have he : D1.blockEnd P.d (3 * (U.layout.shape u).k) (D1.nSegments P.d (3 * (U.layout.shape u).k) - 1)
       = 3 * (U.layout.shape u).k := by
     rcases Nat.eq_zero_or_pos (U.layout.shape u).k with h0 | h0
     · simp [D1.blockEnd, h0]
@@ -234,15 +234,15 @@ theorem ttncpWitness : GamePinned.TTNCPWitness := by
 /-! ## The one-segment adversary -/
 
 /-- A unit's one-segment plan: `segPlan` with one register per block of the stacked product. -/
-def onePlan (d : ℕ) (sh : Shape) : Barrier.Plan := Barrier.Proofs.segPlan (D1.nBlocks d (3 * sh.k)) d sh
+def onePlan (d : ℕ) (sh : Shape) : Barrier.Plan := Barrier.Proofs.segPlan (D1.nSegments d (3 * sh.k)) d sh
 
-theorem nBlocks_mul {d K : ℕ} (hd : 0 < d) (h : d ∣ K) : D1.nBlocks d K * d = K := by
+theorem nSegments_mul {d K : ℕ} (hd : 0 < d) (h : d ∣ K) : D1.nSegments d K * d = K := by
   obtain ⟨c, rfl⟩ := h
-  unfold D1.nBlocks
+  unfold D1.nSegments
   rw [show d * c + d - 1 = d - 1 + d * c by omega, Nat.add_mul_div_left _ _ hd, Nat.div_eq_of_lt (by omega),
     zero_add, mul_comm]
 
-theorem nBlocks_pos {d K : ℕ} (hd : 0 < d) (hK : 0 < K) : 1 ≤ D1.nBlocks d K :=
+theorem nSegments_pos {d K : ℕ} (hd : 0 < d) (hK : 0 < K) : 1 ≤ D1.nSegments d K :=
   (Nat.le_div_iff_mul_le hd).2 (by omega)
 
 theorem e2_abs {k : ℕ} {E1 R : Mat} (hR : SignedPerm k R) {i : ℕ} {c : ℤ} (hE : ∀ l < k, |E1 i l| ≤ c) {l : ℕ}
@@ -353,10 +353,10 @@ theorem onePlan_correct (P : Params Q R S) (hd : 0 < P.d) (Lay : Layout) (H : Q 
     simp only [Barrier.Plan.commit, onePlan, Barrier.Proofs.segPlan_act, Option.getD_some, Params.toProtocol,
       Params.Y]
     rw [mmW_eq_of_mem (hI _ (blockEnd_le _ _ _) _ ha _ hb)]
-    by_cases hlast : x.1 + 1 < D1.nBlocks P.d (3 * (Lay.shape u).k)
+    by_cases hlast : x.1 + 1 < D1.nSegments P.d (3 * (Lay.shape u).k)
     · rw [Barrier.Proofs.segPlan_regs _ _ _ _ _ _ ha hb x.1 hlast, Sanity.blockEnd_full hd hlast, hX, hY]
       rfl
-    · have hx1 : x.1 = D1.nBlocks P.d (3 * (Lay.shape u).k) - 1 := by omega
+    · have hx1 : x.1 = D1.nSegments P.d (3 * (Lay.shape u).k) - 1 := by omega
       rw [hx1, Barrier.Proofs.regs_eq, Barrier.Proofs.segPlan_nReg, ite_eq_left (by omega),
         Barrier.Proofs.segPlan_reg, ite_eq_right (by omega), Sanity.blockEnd_last hd (by omega)]
       simp only [Barrier.MExpr.eval, Pi.zero_apply, Params.opX, Params.opY]
@@ -372,9 +372,9 @@ theorem oneSegment : GamePinned.OneSegment := by
   have hcost : ∀ u ∈ range Lay.N, (((onePlan P.d (Lay.shape u)).cost : ℕ) : ℝ)
       = 3 * ((Lay.shape u).Wmm : ℝ) - (Lay.shape u).m * P.d * (Lay.shape u).n := fun u hu => by
     have hu' := Finset.mem_range.1 hu
-    have hL := nBlocks_pos hd (show 0 < 3 * (Lay.shape u).k by have := hk u hu'; omega)
-    have hm := nBlocks_mul hd (Dvd.dvd.mul_left (hdk u hu') 3)
-    have hm' : (D1.nBlocks P.d (3 * (Lay.shape u).k) : ℝ) * P.d = 3 * (Lay.shape u).k := by exact_mod_cast hm
+    have hL := nSegments_pos hd (show 0 < 3 * (Lay.shape u).k by have := hk u hu'; omega)
+    have hm := nSegments_mul hd (Dvd.dvd.mul_left (hdk u hu') 3)
+    have hm' : (D1.nSegments P.d (3 * (Lay.shape u).k) : ℝ) * P.d = 3 * (Lay.shape u).k := by exact_mod_cast hm
     rw [onePlan, Barrier.Proofs.segPlan_cost _ _ _ hL]
     push_cast [Nat.cast_sub hL, Shape.Wmm]
     linear_combination ((Lay.shape u).m * (Lay.shape u).n : ℝ) * hm'

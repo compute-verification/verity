@@ -182,7 +182,7 @@ theorem zkDeferredOs : ZkDeferredOs := by
     hη hA3).trans (add_le_add (S.zk_deferred fill H k P Rl Sim εzk γ hZK x w hR wk hRef.own Vs θ hk Ev) le_rfl)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **`Flock.zk_server_blind` at the operating system's bytes**: the ZK server at pad-blind workers, at
 `flock-circuit --zk`'s reference session, with the server's tape the bytes of a byte source, read one for one (`dec`),

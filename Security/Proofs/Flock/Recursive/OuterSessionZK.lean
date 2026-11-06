@@ -50,7 +50,7 @@ open Game
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 /-- **Messages fixed before the first commitment**: `msgs` read as live-coin messages that read none of the commit
 strings before them. -/

@@ -6,7 +6,8 @@ testpaths = ["tests"]
 
 [tool.verity.tests]
 # The modules read their variables through this directory's registry (settings.py), on verity_config.settings.
-inputs = ["tools/config/verity_config", "verity/__init__.py", "verity/settings.py"]
+# test_h1u_domain holds h1u's refusal to sm_90's H1 device record (verity.core.protocols.pouw.circuit.h1device).
+inputs = ["tools/config/verity_config", "verity"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -14,3 +15,7 @@ inputs = ["tools/config/verity_config", "verity/__init__.py", "verity/settings.p
 [[tool.verity.tests.reads]]
 tests = ["tests/test_j10r_ws.py", "tests/test_settings.py"]
 paths = ["benchmarks/hash/dither"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_h1u_domain.py"]
+paths = ["benchmarks/hash/dither/h1u.cu"]

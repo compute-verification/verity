@@ -61,7 +61,17 @@ the registered schemes, and `SM120_PRICES` (the device statement's `Prices.sm120
 
 **The domain** (TT_OUT's `pearlCDomain` and `OperandOK`): 128 ∣ k (whole promotion groups), and on every row of both
 operands the noise floor ρ·α ≥ 1 (the exact product of the FP32 words) and liveness `LiveRow 1 x Stat.every8`: with the
-exact ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values, at most k/64 entries have x_l² ≥ 64 ρ².
+exact ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values, at most k/64 entries have x_l² ≥ 64 ρ².  Columns come in
+whole 64-wide tiles (a narrower edge tile's words can be guessed whole), and rows in whole 16 x 16 ticket subtiles, so
+the last row tile may be partial (decode's 32 x 64 tile): `PearlC.check`.
+
+**Why -h3 seeds each row of A.**  A seed that doesn't read A's rows (h0's seed_A, over the unit's roots and index) tells
+the prover each row's noise before it chooses the row, so it can form every row onto a few shared A′ rows, compute their
+C̃ once per weight and copy it, while every row passes every rule.  Keyed on its own digest, each candidate row costs an
+oracle query again, and forming waits on that row's digest alone.  -h3 also caps each credited row's debit at ρ times
+its cells' credit (4ρ at a census k, `row_cap_at`) beside the tile's: that is (C2), under which
+`Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut` reduces the row-seeded TT_OUT to the per-unit one, and an aggregate cap
+doesn't transfer.  The registered -h3 schemes are ``pearl-c-sm120-v1-h3`` (the served default) and ``pearl-c-h100-v1-h3``.
 
 **The device** (`pearl_c_device.Device`) is a scheme parameter: the atom, the peel's step, G and the W1 prices above are
 the record's, and the H100 names in this docstring are `pearl_c_device.H100`'s.  ``pearl-c-sm120-v1`` is v1 on
@@ -147,13 +157,13 @@ class S512Seed(bytes):
     """A seed of -h3: its noise lines are sampled by `sample_line`'s SHA-512 rule, not Pearl's BLAKE3 one."""
 
 
-def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int, hashing: str = "h0") -> bytes:
+def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int, hashing: str = "h3") -> bytes:
     """A unit's seed_A: H_"pearl-c/v0/seed-A"(salt ‖ root_A ‖ root_B ‖ index u64 LE); under -h3 H_"seed-A" (`s512`)."""
     msg = salt + root_a + root_b + index.to_bytes(8, "little")
     return S512Seed(s512("seed-A", msg)) if hashing == "h3" else _labelled(msg, "seed-A")
 
 
-def seed_b(salt: bytes, root_b: bytes, hashing: str = "h0") -> bytes:
+def seed_b(salt: bytes, root_b: bytes, hashing: str = "h3") -> bytes:
     """An epoch weight's seed_B: H_"pearl-c/v0/seed-B"(salt ‖ root_B); under -h3 H_"seed-B" (`s512`)."""
     return S512Seed(s512("seed-B", salt + root_b)) if hashing == "h3" else _labelled(salt + root_b, "seed-B")
 
@@ -433,7 +443,7 @@ def messages(checked: Checked) -> list[bytes]:
     return out
 
 
-def leaf(checked: Checked, hashing: str = "h0") -> bytes:
+def leaf(checked: Checked, hashing: str = "h3") -> bytes:
     """The tile leaf.  Under h0, TurboSHAKE128 (D = 0x22) over the per-(row, 32-column chunk) message digests, row-major,
     chunks in order.  Under -h3, the 64-byte ``sha512/row-seg/v1`` digest of the messages themselves, so each 1 KiB
     segment's digest (four 256-byte messages of a 64-column tile) takes the message digests' place."""
@@ -443,7 +453,7 @@ def leaf(checked: Checked, hashing: str = "h0") -> bytes:
     return turboshake128(b"".join(message_digest(msg) for msg in messages(checked)), D_LEAF, 32)
 
 
-def tickets(seed_a: bytes, checked: Checked, hashing: str = "h0") -> list[bytes]:
+def tickets(seed_a: bytes, checked: Checked, hashing: str = "h3") -> list[bytes]:
     """Pearl's lottery tickets over C̃: one per 16 x 16 subtile, row-major, H_"jackpot"(fold; seed_A); under -h3 `s512`'s
     H_"jackpot"(seed_A ‖ fold)."""
     out = []
@@ -457,14 +467,14 @@ def tickets(seed_a: bytes, checked: Checked, hashing: str = "h0") -> list[bytes]
 
 class PearlC:
     """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain), and under forming v1
-    and -h3 the device record's `census_ks` below it (each row capped at 4ρ there, `row_cap_at`), and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3
-    names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A sampling its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
+    and -h3 the device record's `census_ks` below it (each row capped at 4ρ there, `row_cap_at`), and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3,
+    the default (h0, Pearl's keyed-BLAKE3 seeds, lines and tickets, is taken by name), names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A sampling its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
     `row_digest`), the work law checking the cap per row too.  The tree hash is `TREE_HASH[hashing]`, on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""
 
     def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
-                 hashing: str = "h0", prices: Prices | None = None):
+                 hashing: str = "h3", prices: Prices | None = None):
         if forming not in ("v0", "v1"):
             raise ValueError(f"forming {forming!r}: v0 (the H100 port's) or v1 (§5's)")
         if forming == "v0" and device != H100:

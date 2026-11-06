@@ -4,6 +4,8 @@ public import Proofs.Flock.Bridge.Draw
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Claims.Sampling.Select.Design
 public import SampledProofs.OneStage
+import Proofs.Flock.Claims.Sampling.Select.Misses
+import Proofs.Flock.Claims.Sampling.Select.Take
 
 /-!
 # The law the audit draws under (`Bridge.drawnLaw`)

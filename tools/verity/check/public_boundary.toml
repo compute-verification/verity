@@ -43,13 +43,17 @@ firewall = [
 ]
 vllm = ["integrations/vllm"]
 # what the public side shares: the one challenge derivation, the one signature scheme, the Python held to each Lean, the
-# deployment's configuration, and the two lemmas public proofs import from private areas
+# deployment's configuration, and what public proofs import from private areas: two lemmas, and Bits' layout as the
+# claims' program, which the bridge reads
 shared = [
     "verity/core/primitives/{randomness,lms}",
     "verity/core/difftest",
     "tools/config",
-    "Security/Properties/SampledProofs/Draw.lean",
+    "Security/Properties/SampledProofs/{Draw,Bits}.lean",
     "Security/Proofs/Properties/RemoteAudit/Sort.lean",
+    # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
+    # Draw.lean's
+    "Security/Properties/SampledProofs/Second.lean",
 ]
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "Security/lean-audit.json", "Security/Proofs/lean-audit.json", "fixtures/artifacts.json"]

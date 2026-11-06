@@ -252,8 +252,8 @@ def mufu : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
 signatures the registry holds for them. -/
 def decimals : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
   open Decimal in
-  [("F32ExpRn_v1", #[("x", f32)], f32, unary f32ExpRn), ("F32ErfRn_v1", #[("x", f32)], f32, unary f32ErfRn),
-   ("F32TanhRn_v1", #[("x", f32)], f32, unary f32TanhRn)]
+  [("F32ExpRn_v1", #[("x", f32)], f32, unary f32ExpRn), ("F32LogRn_v1", #[("x", f32)], f32, unary f32LogRn),
+   ("F32ErfRn_v1", #[("x", f32)], f32, unary f32ErfRn), ("F32TanhRn_v1", #[("x", f32)], f32, unary f32TanhRn)]
 
 /-- The activations and RoPE's outputs by id (the vLLM integration's `prims`, `act` and `dense`), with the signatures the
 registry holds for them. -/
