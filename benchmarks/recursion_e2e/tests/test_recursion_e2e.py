@@ -217,7 +217,7 @@ def test_the_lean_firewall_is_read_from_the_runs_process_samples(tmp_path: Path)
 def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
     doc = RP.read(job(tmp_path))
     md = RP.markdown(doc)
-    table = [ln for ln in md.splitlines() if ln.startswith("| ") and not ln.startswith("| stage | step |")]
+    table = [ln for ln in md.split("\nOuter")[0].splitlines() if ln.startswith("| ") and not ln.startswith("| stage | step |")]
     assert len(table) == len(doc["rows"])
     assert "| inner M0 | inner |" in md and "2 [1–3] (n=3)" in md and "t.ligerito 1.2 s (48% of e2e_s)" in md
     assert "| 4.67 |" in md
@@ -421,6 +421,16 @@ def test_e2e_is_one_pass_with_its_negative(capsys) -> None:
     assert "--gpu-host" not in cmd and cmd[3] == "vy-nebius-cpu-2"
     assert "STEPS=build,inner,vstage,vcap,oprove,lean,negative" in cmd and "REPEAT=1" in cmd and "GPU=0" in cmd
     assert "WARM=0" in cmd and "RUNS=1" in cmd and "NEG=challenge,query" in cmd
+
+
+def test_release_is_one_pass_whose_limit_holds_every_window(capsys) -> None:
+    assert RUN.main(["run", "--dry-run", "--steps", "oprove"]) == 0
+    plain = capsys.readouterr().out.split()
+    assert RUN.main(["run", "--dry-run", "--steps", "oprove", "--release", "--env", "TREE_FROM=local"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert "RELEASE=1" in cmd and "REPEAT=1" in cmd and "WARM=0" in cmd and "RUNS=1" in cmd and cmd[-1] == "TREE_FROM=local"
+    limit = {c: int(x[x.index("--timeout") + 1][:-1]) for c, x in (("plain", plain), ("release", cmd))}
+    assert limit["release"] - RUN.RELEASE_LEAD_MIN > 1.9 * limit["plain"] - 2 * RUN.SETUP_MIN
 
 
 def test_store_puts_each_result_the_merge_and_the_table(tmp_path: Path, monkeypatch, capsys) -> None:
