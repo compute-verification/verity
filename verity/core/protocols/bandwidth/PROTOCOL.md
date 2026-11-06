@@ -3,8 +3,8 @@
 A run of the bandwidth audit certifies how much of a fixed store a device read from its device memory into the chip
 within a deadline of a fresh seed. This is the audit over PoUS's store (v0), one of the subprotocols
 (`ARCHITECTURE.md`, Glossary), and no composite protocol runs it: its tag `ro-blake3/v1` is BLAKE3, which the one-hash
-rule (`AGENTS.md`, "Design rules") keeps off the served path. The bandwidth audit on the served path is the remote
-bandwidth audit (`verity/core/protocols/remote_bandwidth/`), which applies this audit's guarantee per pass. This package
+rule (`AGENTS.md`, "Design rules") keeps off the served path. The bandwidth audit on the served path is PoUB
+(`verity/core/protocols/remote_bandwidth/`), which applies this audit's guarantee per pass. This package
 stays for the benchmarks that measure its tags (`benchmarks/bandwidth`).
 
 ## 1. What a run certifies, and on what
