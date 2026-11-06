@@ -163,11 +163,11 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
 - **Don't wait for Daniel: make every decision yourself.** When one would wait on him, make it and act. A claim (what a
   guarantee says or rests on) goes on its ask page decided provisionally, which he reviews and can reverse (the
   asking-daniel skill). A click only an account he holds can make (the GitHub organization's admin, billing, the Nebius
-  and Cloudflare consoles, his Cursor settings) gets a way around it where one exists, such as another lane's tool, and
-  a blocking card where none does. Keys and access between our own machines and accounts are the lanes' call, set up
-  with the machine's owner and no ask: this is a simulation, so it needn't be perfect. Spend is its lead's call. A
-  change that crosses owners goes to the other owner, and the coordinator settles a disagreement. Fix what's in your way
-  at the source when the fix is yours, and record each ruling you get (the friction skill).
+  and Cloudflare consoles, his Cursor settings) gets a way around it where one exists, and a blocking card where none
+  does. Keys and access between our own machines and accounts are the lanes' call, set up with the machine's owner and
+  no ask: this is a simulation, so it needn't be perfect. Spend is its lead's call. A change that crosses owners goes to
+  the other owner, and the coordinator settles a disagreement. Fix what's in your way at the source when the fix is
+  yours, and record each ruling you get (the friction skill).
 - **Each lead owns its areas' size.** top's hourly consolidation reading tracks `main`'s size. A PR that adds code says
   in its body what it deletes or unifies, or why nothing can go.
 - **Parked work gets done.** A lead starts each Backlog or Todo issue worth doing on its own worker and closes the rest
