@@ -1,5 +1,5 @@
 /-
-`HmIn.checkReads` (META `shared_reads`, PROTOCOL.md §16.10): a shared read passes only when instance `i` reads table row
+`HmIn.checkReads` (META `shared_reads`, `Flock.HmRow`): a shared read passes only when instance `i` reads table row
 `⌊i/G⌋` of a table of one row per group, the instances are whole groups, and its position is the instance index mod `G`
 (seed `instance`, derivation `mod:G`): one writer a window. Four instances, an input row `x` and an output row `out`.
 -/

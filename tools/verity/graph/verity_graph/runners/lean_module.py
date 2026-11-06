@@ -25,11 +25,11 @@ names other bytes for it than this worker's (`env_digests`), is an error. A decl
 
 The `lean` env on a worker: the toolchain of the package's `lean-toolchain` (elan's), and for a package that fetches
 packages (Mathlib, ArkLib and the rest) its `.lake/packages` at its manifest and toolchain (`lean_audit.deps_key`), made once
-per worker under `lean-env/` in the check's cache: a copy of the check's warm dependencies (`lean_audit.WarmDeps`) when the
-worker has them, else what `setup.sh` makes in the package (the pinned bundle and Mathlib's cache). Only the compile runs
-the module's code, inside `sandbox.sh` where the worker has it. An env that can't be made, a part of it a compile misses,
-a part of an import the task didn't read and a crashed tool are errors; a module that doesn't compile, a declaration the
-kernel rejects or whose axioms are outside `STANDARD`, and a timeout are fails."""
+per worker under `lean-env/` in the check's cache (`fetched_dir`): a copy of the check's warm dependencies
+(`lean_audit.WarmDeps`) when the worker has them, else what `setup.sh` makes in the package (the pinned bundle and Mathlib's
+cache). Only the compile runs the module's code, inside `sandbox.sh` where the worker has it. An env that can't be made, a
+part of it a compile misses, a part of an import the task didn't read and a crashed tool are errors; a module that doesn't
+compile, a declaration the kernel rejects or whose axioms are outside `STANDARD`, and a timeout are fails."""
 from __future__ import annotations
 
 import fcntl
@@ -104,12 +104,19 @@ def fetched(pkg: Path) -> list[str]:
             if d.get("type") != "path"] if m.is_file() else []
 
 
+def fetched_dir(k: str) -> Path:
+    """Where the fetched packages of `lean_audit.deps_key` ``k`` are on this worker: a `.lake/packages`, as in a package's
+    checkout. Lake resolves a fetched package's directory through symlinks, and the audit tells a fetched package's
+    `.olean` from one this repository builds by that path (`check.py`'s `own_modules`)."""
+    return env_dir() / "fetched" / k / ".lake" / "packages"
+
+
 def packages(pkg: Path, work: Path) -> Path | None:
     """``pkg``'s fetched packages on this worker (its `.lake/packages`), made once per manifest and toolchain; None when it
     fetches none."""
     if (k := la.deps_key(pkg)) is None:
         return None
-    home = env_dir() / k
+    home = fetched_dir(k)
     if (home / READY).is_file():
         return home
     with _locked(env_dir() / f"{k}.lock"):
@@ -122,6 +129,7 @@ def _prepare(pkg: Path, k: str, home: Path, work: Path) -> None:
     tmp = home.with_name(f".{k}.tmp")
     shutil.rmtree(tmp, ignore_errors=True)
     shutil.rmtree(home, ignore_errors=True)
+    home.parent.mkdir(parents=True, exist_ok=True)
     warm = la.WarmDeps(la.COMMON.cache_dir() / "lean-deps")
     with warm._lock(k):
         if (warm.store / k).is_dir():

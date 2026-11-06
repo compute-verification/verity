@@ -10,7 +10,9 @@ public import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 deployment's dense statements `Pr[acc ∧ ¬R] ≤ κ + t·ε`, `κ` once a session and `ε` once per SHA-512 call of the
 prover's run, under `StrictBirthday` at `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, the named SHA-512
 collision assumptions. `recursiveBitsK_deployed` evaluates it at the deployment's sizes (`SizesAt` at the session's
-brings, call bounds `n, v ≤ 2^32`) with `kappa_eps_deployed`: `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}`.
+brings, call bounds `n, v ≤ 2^32`) with `kappa_eps_deployed`: `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}`. Every
+statement the compiled verifier accepts is at those sizes and calls, so `recursiveBitsK_tight` (`BitsKTight`) states
+the bound with neither as a premise.
 
 Both are stated at the brings `b` (`RecursiveBitsKAt`, `RecursiveBitsKBoundAt`), as `Flock.Guarantees.RecursiveKSAt`
 is, and hold at `deployedB b`. A statement that writes `{ deployedB b with … }` itself carries a `let`, which the
