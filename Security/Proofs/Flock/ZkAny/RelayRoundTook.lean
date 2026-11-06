@@ -19,11 +19,15 @@ label of the round it releases:
 * **`answered_of_took`**: so the model takes them, given the next rep's start at a rep's first round and the rank stop
   at a later round of the same rep.
 * `LoopModel.TookAt.opens`: where the session holds a coin tree, the transport's check passes the model's history.
+* `Flags.roundFree_count`, `Flags.check_count`, `Flags.pcsRound_of_step`: the frame takes a round only at the count
+  its bytes squeeze, so a released round in the place of the opening's first round at any count is it at the count
+  released.
 * **`rank_of_release`**: where a frame releases a device round at a state alike the coin step's, at the model's
-  configuration, in the place of a round that is the opening's first wherever the rank stop fails, the rank stop
-  passes (`Flags.rankFails_of_step`).
-* `ofLoop_fed`, **`coins_run_fed`**: where the frame takes a round's coins at a state alike the model's after the
-  round, the model's coin step takes them one message on (`fed`, by `answer_unstop`), whatever the round after.
+  configuration, in the place of a round that is the empty round or the opening's first (at any count) wherever the
+  rank stop fails, the rank stop passes (`Flags.rankFails_of_step`; the frame's check refuses the empty round).
+* `ofLoop_fed`, **`coins_run_fed`**, `roundRun_fed`: where the frame takes a round's coins at a state alike the
+  model's after the round, the model's coin step takes them one message on (`fed`, by `answer_unstop`), whatever the
+  round after; at a `RoundRun`, where the round leaves the frame `roundPlace` readied at that state.
 -/
 
 @[expose] public section
@@ -100,6 +104,56 @@ theorem answered_of_took {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ : R} {
 
 end LeanRelease
 
+namespace Flags
+
+open _root_.Flock.Firewall.Frame (roundFree check)
+open FlockSoundness.Refine (Frame encs)
+
+/-- **The frame takes a round only at the count its bytes squeeze**: `roundFree` refuses a last squeeze of other than
+the count it was asked for. -/
+theorem roundFree_count {c : Cfg} {s : Masker} {b : ByteArray} {n n' : ℕ} {k : UInt8} {pre : List UInt8}
+    {q : ByteArray × Masker × Array ℕ} (hb : b.data.toList = pre ++ (Frame.sq k n').enc) (hn : n' < 2 ^ 64)
+    (h : roundFree c s b n = .ok q) : n = n' := by
+  obtain ⟨-, -, hl, -⟩ := roundFree_sq (Loop.roundFree_ok_inner h) h
+  have hd : (pre ++ (Frame.sq k n').enc).drop pre.length = (Frame.sq k n').enc ++ [] := by
+    rw [List.drop_left, List.append_nil]
+  obtain ⟨-, -, hlen⟩ := header_at _ _ _ _ hd hn
+  rw [eq_mk_encs hb] at hl
+  have hsz : (ByteArray.mk (pre ++ (Frame.sq k n').enc).toArray).size - 16 = pre.length := by
+    show (pre ++ (Frame.sq k n').enc).toArray.size - 16 = pre.length
+    first
+      | (rw [List.size_toArray, List.length_append, Frame.enc_length]; simp [Frame.payLen])
+      | simp [Frame.enc_length, Frame.payLen]
+  rw [hsz] at hl
+  exact hl.symm.trans hlen
+
+/-- **The frame's check passes a round only at the count its bytes squeeze**, at the rep's state or its stopped one. -/
+theorem check_count {c : Cfg} {s : Masker} {v b : ByteArray} {n n' : ℕ} {k : UInt8} {pre : List UInt8}
+    {q : ByteArray × Masker × Option String} (hb : b.data.toList = pre ++ (Frame.sq k n').enc) (hn : n' < 2 ^ 64)
+    (h : check c s v b n = .ok q) : n = n' := by
+  rcases q with ⟨out, s', _ | w⟩
+  · obtain ⟨q', hr, -⟩ := passes_none (check_none_passes h)
+    exact roundFree_count hb hn hr
+  · have hr := check_some h
+    unfold _root_.Flock.Firewall.Frame.round at hr
+    obtain ⟨q', hq', -⟩ := bindV_ok hr
+    exact roundFree_count hb hn hq'
+
+/-- **A frame that releases a device round in the place of the opening's first round** at any count releases it at
+the count it was asked for: the opening's first round there. -/
+theorem pcsRound_of_step {c : Cfg} {st st' : _root_.Flock.Firewall.Frame.State} {n n' : ℕ} {v b out : ByteArray}
+    {vd : String} (hq : PcsRound (b, n'))
+    (h : _root_.Flock.Firewall.Frame.step c st (.round n v (.sched b)) = (.round out vd, st')) :
+    PcsRound (b, n) := by
+  have e : n = n' := by
+    obtain ⟨fs, k, hd, -, -, -, hn⟩ := hq
+    obtain ⟨why, hck⟩ := _root_.Flock.Firewall.Frame.check_of_step h
+    exact check_count hd hn hck
+  rw [e]
+  exact hq
+
+end Flags
+
 namespace Relay
 
 open _root_.Flock.Firewall.Session (State)
@@ -120,24 +174,29 @@ theorem rankFails_of_release {c : Cfg} {st st' : _root_.Flock.Firewall.Frame.Sta
 
 /-- **The rank stop at a released round**: where the frame `q` is at the coin step's state after `h` but for
 `stopped` (`hu`), at the model's configuration for the round, and releases a device round in the place `pc`, which is
-the opening's first round wherever the rank stop fails at the coin step's state (`hal`), the rank stop passes it. -/
+the empty round or the opening's first wherever the rank stop fails at the coin step's state (`hal`), the rank stop
+passes it: the frame's check refuses the empty round in its place (`Loop.check_empty`). -/
 theorem rank_of_release {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr} {h : List (Msg × Msg)}
     {q : _root_.Flock.Firewall.Frames.Rep} (hu : ∀ m, L.answeredR x ρ h = .ok m → unstop q.st.m = unstop m)
     (hcf : q.cfg = L.cfg x ρ h) {n : Nat} {v out : ByteArray} {pc : Place} {vd : String}
     {st' : _root_.Flock.Firewall.Frame.State}
     (hs : _root_.Flock.Firewall.Frame.step q.cfg q.st (.round n v pc) = (.round out vd, st'))
     (hal : ∀ m, L.answeredR x ρ h = .ok m → LeanRelease.rankFails (L.cfg x ρ h) m = true →
-      ∃ b, pc = .sched b ∧ Flags.PcsRound (b, n)) :
+      ∃ b, pc = .sched b ∧ (b = ByteArray.empty ∨ ∃ n', Flags.PcsRound (b, n'))) :
     ∀ m, L.answeredR x ρ h = .ok m → LeanRelease.rankFails (L.cfg x ρ h) m = false := by
   intro m hm
   cases hr : LeanRelease.rankFails (L.cfg x ρ h) m with
   | false => rfl
   | true =>
-    obtain ⟨b, rfl, hb⟩ := hal m hm hr
-    rw [hcf] at hs
-    have h' := rankFails_of_release (hu m hm) hb hs
-    rw [hr] at h'
-    cases h'
+    obtain ⟨b, rfl, hb | ⟨n', hb⟩⟩ := hal m hm hr
+    · subst hb
+      obtain ⟨why, hck⟩ := _root_.Flock.Firewall.Frame.check_of_step hs
+      exact absurd hck (Loop.check_empty _ _ _ _ _)
+    · have hb' := Flags.pcsRound_of_step hb hs
+      rw [hcf] at hs
+      have h' := rankFails_of_release (hu m hm) hb' hs
+      rw [hr] at h'
+      cases h'
 
 open Loop LeanRelease in
 /-- **Where the frame takes the last coins of `e0 :: h1` at a state alike the model's after its last round**, at a
@@ -185,6 +244,42 @@ theorem coins_run_fed (T : ZKMal.CoinLayer.TableData)
     rfl
   rw [e] at hc
   exact ofLoop_fed T L₀ real x ρ e0 (h1 ++ [(v, a.data.toList)]) hc hu hco
+
+open Loop LeanRelease in
+/-- **The coins of a frame round as the loop ran it, one message on**: at a `RoundRun` at the model's count whose
+content is the worker's message `v`, whose round releases and whose coins the rep's frame took off the auditor's answer
+`a`, where the frame `roundPlace` readied has the model's configuration and the round leaves it at the loop's state
+after the history with `(v, a)` (`progOf`) but for `stopped`, the model's coin step takes the coins after that history,
+whatever the round after (`roundRun_next`, `coins_run_fed`). -/
+theorem roundRun_fed (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      Nat → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (e0 : Msg × Msg) (h1 : List (Msg × Msg)) {sid : Nat} {st : State} {pl : _root_.Flock.Firewall.Session.Placed}
+    {stream : String} {i r : Nat} {dm : ByteArray} {v : Msg} {e : Env} {R : _root_.Flock.Firewall.Frames.Sessions}
+    {L0 : _root_.Flock.Firewall.Level0.Slots} {R₃ : _root_.Flock.Firewall.Frames.Sessions}
+    (hr : RoundRun sid st pl stream (loopNr x h1.length) i r dm ⟨v.toArray⟩ e R L0 R₃)
+    (hreq : st.request pl (.round stream (loopNr x h1.length)) = none) (hfr : (frameAt R sid i r).isSome)
+    {q p₁ : _root_.Flock.Firewall.Frames.Rep} {pl' : Place} {f : Bool} {nd : Option String} {o : ByteArray}
+    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dm ⟨v.toArray⟩ (loopNr x h1.length) =
+      .ok (q, pl', f, nd))
+    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dm ⟨v.toArray⟩ (loopNr x h1.length)).out = .ok o)
+    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dm ⟨v.toArray⟩ (loopNr x h1.length)).put =
+      some p₁) {a : ByteArray} (ha : e.ans = some a) (hb : _root_.Flock.Firewall.Session.byte? a 0 = some 2)
+    (hs : (st.answer (.round stream (loopNr x h1.length)) a).1.stop = none) (hco : e.coins = .ok ())
+    {pre : List _root_.Flock.Firewall.Frame.Req} {ev : List (Nat × ByteArray × Place × Array _root_.Flock.F128)}
+    (hR : RepRun pre ev q) (hcq : q.cfg = (ofLoop T L₀ real).cfg x ρ (e0 :: h1))
+    (hu : unstop (_root_.Flock.Firewall.Frame.step q.cfg q.st
+        (.round (loopNr x h1.length) (if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray)) pl')).2.m =
+      unstop (progOf x ((h1 ++ [(v, a.data.toList)]).map fun p => ZKMal.CoinLayer.rd p.2))) :
+    (ofLoop T L₀ real).fed x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = true := by
+  obtain ⟨st₂, hc, -, -⟩ := roundRun_next hr hreq hfr hrp ho hput ha hb hs hco hR
+  obtain ⟨hpc, hps⟩ := roundStep_put_of hrp hput
+  rw [← hps] at hu
+  exact coins_run_fed T L₀ real x ρ e0 h1 v a (by rw [hpc, hcq]; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩) hu hc
 
 end Relay
 

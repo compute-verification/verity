@@ -13,9 +13,10 @@ public import Proofs.Flock.ZkAny.RelayLoopOwn
   session.
 * **`repJ_round`**: at a frame round of the deployed loop (`LoopModel.Deployed`), where the model's draws are the
   tables the loop's level 0 give once the session's entry is the setup's and its level 0 are the ones the loop drew,
-  the round's own rep has `RepJ` at the session's next request: at its stream's first round by `repJ_same_first` or
-  `repJ_next_first`, past it by `repJ_same` within the rep's schedule so far, `repJ_own` past it, and `repJ_next`
-  where the next round is another stream's.
+  the round's own rep has `RepJ` at the session's next request and the model's coin step takes the round's coins: at
+  its stream's first round by `repJ_same_first` or `repJ_next_first`, past it by `repJ_same` within the rep's
+  schedule so far, `repJ_own` past it, and `repJ_next` where the next round is another stream's; the coin step is
+  `repJ_same_first`'s, `repJ_same`'s or `repJ_own`'s, whichever stream's round comes next.
 -/
 
 @[expose] public section
@@ -56,15 +57,15 @@ open Loop LeanRelease in
 /-- **`loopKept_round`'s `hcur` at the deployed loop**: at the loop's own frames (`LoopModel.Deployed`), `real`
 answering the loop's own tables (`hR`), and the model's draws at each rep the table its level 0 gives wherever the
 session's entry is the setup's and its level 0 the ones the loop drew (`hreal`): at a frame round of `stream`, table
-`i`'s rep `r`'s, the round's rep has `RepJ` at the session's next request. The round's coins are the model's
-(`RoundFacts.coins`), its place, configuration and state the model's (`RoundFacts.place`), the session's entry the
-setup's (`LoopJ.sess`) linked to the history's coins (`LoopJ.link`, at the level 0 `roundPlace` read,
-`roundPlace_l0`), the setup's sizes within its frames' (`LoopJ.sizes`; they bound the placeholders' domains, extras
-and rows of pads, `Loop.sizesOk_at`), and the history one message on ends with the round's coins
-(`LoopModel.hist_ans`). At the stream's first round the rep's frame is fresh (`freshAt_cur`): `repJ_same_first` where
-the next round is the stream's, else
-`repJ_next_first`. Past it the rep has `RepJ` (`repJ_cur`): `repJ_next` where the next round is another stream's;
-`repJ_own` where the placeholder's schedule so far on the rep's coins is no longer than them, else `repJ_same`. -/
+`i`'s rep `r`'s, the round's rep has `RepJ` at the session's next request and the model's coin step takes the round's
+coins, whichever stream's round comes next. The round's coins are the model's (`RoundFacts.coins`), its place,
+configuration and state the model's (`RoundFacts.place`), the session's entry the setup's (`LoopJ.sess`) linked to the
+history's coins (`LoopJ.link`, at the level 0 `roundPlace` read, `roundPlace_l0`), the setup's sizes within its frames'
+(`LoopJ.sizes`; they bound the placeholders' domains, extras and rows of pads, `Loop.sizesOk_at`), and the history one
+message on ends with the round's coins (`LoopModel.hist_ans`). At the stream's first round the rep's frame is fresh
+(`freshAt_cur`): `repJ_same_first` where the next round is the stream's, else `repJ_next_first`. Past it the rep has
+`RepJ` (`repJ_cur`): `repJ_next` where the next round is another stream's; `repJ_own` where the placeholder's schedule
+so far on the rep's coins is no longer than them, else `repJ_same`. -/
 theorem repJ_round (T : ZKMal.CoinLayer.TableData)
     {L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)}
@@ -90,7 +91,7 @@ theorem repJ_round (T : ZKMal.CoinLayer.TableData)
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → σ'.c = σ.c + 1 →
       Stays sid σ σ' → RoundFacts M sid spec seen stream n i r dom v σ → ∀ o a, e.round = .ok o →
       e.ans = some a → byte? a 0 = some 2 → (st.answer (.round stream n) a).1.stop = none → e.coins = .ok () →
-      RepJ M sid spec sts i r σ' := by
+      RepJ M sid spec sts i r σ' ∧ M.L.fed M.x M.ρ (M.hist σ'.c) = true := by
   intro seen st pl e σ σ' i r dom v hsl _ hF hJ hans _ hr hpc hcc hSt hRA o a hro hae hb hsa hco
   have hlt := hans.1
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
@@ -159,26 +160,30 @@ theorem repJ_round (T : ZKMal.CoinLayer.TableData)
   rcases Nat.eq_zero_or_pos (nextAt spec sts (M.hist σ.c)).2 with h0 | hpos
   · have hfr := freshAt_cur hsl hF hJ hr.rep_eq hlt hD.names h0
     have hk : nextAt spec sts (M.hist σ.c) = (2 * i + r, 0) := Prod.ext hkr.symm h0
+    have hF1 := repJ_same_first T L₀ real hD.rel hD.setup hS hR hP hmem hh hq hk hA₀ hRA.last hK2 hK3 hB
+      hD.names hfr hRA.frame hpc hr hreq hrp hu₀ hro hae hb hsa hco hh' hSt
     by_cases hsame : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q₀ + 1)).1 = 2 * i + r
-    · exact repJ_same_first T L₀ real hD.rel hD.setup hS hR hP hmem hh hq hk hsame hA₀ hRA.last hK2 hK3 hB
-        hD.names hfr hRA.frame hpc hr hreq hrp hu₀ hro hae hb hsa hco hh' hSt
-    · exact repJ_next_first T L₀ real hD.rel hD.setup hmem hh hq hk hsame hA₀ hK2 hB hD.names hfr hRA.frame hr
-        hreq hrp hro hae hb hsa hco hh' hSt
+    · exact ⟨hF1.2 hsame, hF1.1⟩
+    · exact ⟨repJ_next_first T L₀ real hD.rel hD.setup hmem hh hq hk hsame hA₀ hK2 hB hD.names hfr hRA.frame hr
+        hreq hrp hro hae hb hsa hco hh' hSt, hF1.1⟩
   · have hJ₀ := repJ_cur hsl hF hJ hr.rep_eq hlt hD.names hpos
     obtain ⟨j₀, hj₀⟩ : ∃ j₀, (nextAt spec sts (M.hist σ.c)).2 = j₀ + 1 :=
       ⟨(nextAt spec sts (M.hist σ.c)).2 - 1, by omega⟩
     have hk : nextAt spec sts (M.hist σ.c) = (2 * i + r, j₀ + 1) := Prod.ext hkr.symm hj₀
-    by_cases hsame : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q₀ + 1)).1 = 2 * i + r
-    · by_cases hout : ∃ c' t' dom' xs' hi' sched', placeholder spec sts (2 * i + r)
+    have hF1 : M.L.fed M.x M.ρ (M.hist σ'.c) = true ∧
+        ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q₀ + 1)).1 = 2 * i + r → RepJ M sid spec sts i r σ') := by
+      by_cases hout : ∃ c' t' dom' xs' hi' sched', placeholder spec sts (2 * i + r)
           (wordsAt M.x ((M.hist σ.c).tail.map fun y => ZKMal.CoinLayer.rd y.2) 0) = .ok (c', t', dom', xs', hi') ∧
           schedSoFar t' r dom' xs' hi' ((Array.range (j₀ + 1)).map fun k =>
             wordsAt M.x ((M.hist σ.c).tail.map fun y => ZKMal.CoinLayer.rd y.2)
               ((M.hist σ.c).length - 2 - (j₀ + 1) + k + 1)) = .ok sched' ∧ sched'.size ≤ j₀ + 1
-      · exact repJ_own T L₀ real hD.rel hD.setup hS hR hRow hmem hh hq hk hsame hA₀ hK2 hK3 hout hr hreq hrp hro
+      · exact repJ_own T L₀ real hD.rel hD.setup hS hR hRow hmem hh hq hk hA₀ hK2 hK3 hout hr hreq hrp hro
           hae hb hsa hco hh' hSt hJ₀
-      · exact repJ_same T L₀ real hD.rel hD.setup hS hR hP hmem hh hq hk hsame hA₀ hRA.last hK2 hK3
+      · exact repJ_same T L₀ real hD.rel hD.setup hS hR hP hmem hh hq hk hA₀ hRA.last hK2 hK3
           (fun c' t' dom' xs' hi' sched' h₁ h₂ => (Nat.lt_or_ge (j₀ + 1) sched'.size).resolve_right fun h₃ =>
             hout ⟨c', t', dom', xs', hi', sched', h₁, h₂, h₃⟩) hr hreq hrp hro hae hb hsa hco hh' hSt hJ₀
-    · exact repJ_next hmem hh hq hk hsame hr hreq hrp hro hae hb hsa hco hh' hSt hJ₀
+    by_cases hsame : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q₀ + 1)).1 = 2 * i + r
+    · exact ⟨hF1.2 hsame, hF1.1⟩
+    · exact ⟨repJ_next hmem hh hq hk hsame hr hreq hrp hro hae hb hsa hco hh' hSt hJ₀, hF1.1⟩
 
 end Claims.ZKServer.Relay
