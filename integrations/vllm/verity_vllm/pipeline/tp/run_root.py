@@ -11,9 +11,11 @@ from __future__ import annotations
 import hashlib
 import struct
 
+from verity.ml.commitments.scheme import DIGEST_BYTES
+
 TP_ROOT_TAG = b"verity/tp-run-root/v2"
 TP_ROOT_TAG_V1 = b"verity/tp-run-root/v1"
-RANK_ROOT_BYTES = 64
+RANK_ROOT_BYTES = DIGEST_BYTES["sha512"]
 
 
 def _ranks(world: int, roots: dict[int, bytes]) -> None:

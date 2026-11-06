@@ -79,18 +79,21 @@ than one, so every subcircuit is exercised in every audit. `work:K` keeps those 
 but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` draws
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
 Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
-soundness statement doesn't cover: `bernoulli` at `0 < p < 1` (`shapes`) and a closure map (`closure`).
+soundness statement doesn't cover: `bernoulli` at `0 < p < 1` (`shapes`), a closure map (`closure`) and, until a proof
+that this verifier meets its Lean certificate lands, a two-stage design (`UNCERTIFIED_RULE`).
 
 **What an accepted audit establishes.** Under a stratified draw, a set of incorrect proof blocks has acceptance probability
-`Π_s C(n_s − m_s, k_s) / C(n_s, k_s)` (the probability that the draw misses all of them), `m_s` being its proof blocks in
+`Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, `m_s` being its proof blocks in
 stratum `s`, so a subcircuit that is incorrect in every proof block is never missed. Under the work sampling design, incorrect proof blocks
 doing a fraction `ε` of the credited work have acceptance probability at most `(1 − ε)^K`; at `K = 27,713`, a 0.1% share
 has at most `2^-40`. The proof system adds, per proof block, its knowledge-soundness and binding errors (ε_ks and ε_bind).
-Applications weight the profile's incorrect proof blocks by what each one costs them: exfiltration security by their output bits,
-plus a term for which proof blocks are incorrect, and compute security by their work.
 
-Everything is committed at serve time: the proof system has no two-stage rule, and the Lean verifier refuses a
-registration that names one.
+**Two-stage designs** (`TwoStage`). Those above are one-stage. A two-stage design commits only replay-block boundaries
+while serving and samples `k` proof blocks in each sampled replay block once its interior is committed
+(`Stream.register_interiors`; `GLOSSARY.md`, "Two-stage design"): one of `n` proof blocks and footprint `w` is
+missed with probability at most `C(n − w, k) / C(n, k)`, `1 ≤ k < n`. Its code, the Lean pieces it reads (the
+difftest's executable) and its tests run under the test hook `verifier.UNCERTIFIED_RULES`, off in every deployment.
+
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
 
@@ -106,8 +109,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 
 - **The Lean.** Today it sits in C-Flock's soundness package, `Security/Proofs/Flock/Soundness/Audit/`,
   whose `README.md` lists every theorem: the one-stage audit (`OneStage`), the sampling designs (`Law`, `Stratified`,
-  `StratifiedMiss`, `Work`, `Closure`, `Window`), the registration-dependent draw (`RegDraw`), the retired two stages
-  (`TwoStage`, with the tight and insecure cases in `Examples`), exfiltration (`Influence`, `Harm`), the compiled layer
+  `StratifiedMiss`, `Work`, `Closure`, `Window`), the registration-dependent draw (`RegDraw`), the older two-stage
+  audit (`TwoStage`, with the tight and insecure cases in `Examples`), exfiltration (`Influence`, `Harm`), the compiled layer
   (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for C-Flock. The challenger's coins are
   the named assumption `Assumptions.UniformRandomBytes`.
 - **The executable draw** is the Lean verifier's `verity/core/service/flock/Flock/Draw.lean` (`flock-verify draw`): the
@@ -139,10 +142,12 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   circuit and public files' digests and the verifier's registered file; its evidence names step 4's one session's
   record and rep files by SHA-512 in place of `verdicts`, the files coming in as `Core.Blobs`. It refuses none or
   several sessions, a public file whose header isn't the registration's (`Record.matchesPublic`) or whose population
-  isn't the program's proof blocks in order (`Slots.popOk`), and parameters naming no challenger coins. It reads the
+  isn't the program's proof blocks in order (`Slots.popOk`), parameters naming no challenger coins or a key off
+  `Lms.deployed`, and coins past `Challenger.LIMITS`. It reads the
   draw's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`) and holds
-  the session's record to the coin trees the signed release log shows the challenger sampled and opened
-  (`SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its
+  the session's record to the coin trees the signed release log shows the challenger sampled and opened, a link
+  `root_B` of any length but its statement's refused before the hash (`LINK_ROOT_LEN`;
+  `SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its
   link points and round coins that tree's openings after its link's roots and each round's message. Then it runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, accepts
   the session only if the public file's units are the population in order (`FilePart.check`), binds `proved_units` to
@@ -202,7 +207,7 @@ Tests: `uv run tools/verity/check/suites.py protocols/sampled_proofs`.
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw, partition, registration
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, closure_of, draw_first
-from verity.core.protocols.sampled_proofs.consumers import compute_bound, exfiltration_bound, location_bits
+from verity.core.protocols.sampled_proofs.consumers import compute_bound, exfiltration_bound, infiltration_bound, location_bits
 from verity.core.protocols.sampled_proofs.plan import VerificationPlan
 from verity.core.protocols.sampled_proofs.optimize import Candidate, CostModel, Objective, frontier, for_budget
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts
@@ -253,7 +258,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `parties`: `Challenger`, `Firewall`, `Workers` and `Verifier`, `MANIFEST`, `PROTOCOL` (`PROTOCOLS` by id),
   `params_of`, and `IDS`, the configuration's component names and their protocol ids.
-- `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
+- `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's
   challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
@@ -439,7 +444,11 @@ Pinned by `tests/test_one_stage.py` (the profile, audit record and wrong-unit bo
 `consumers` reads any `IntegrityProfile`, whichever protocol produced it, at its
 delta, through its weighted bound `harm_bound`; each application counts delta once.
 
-- `exfiltration_bound(profile, output_bits)` is `harm_bound(output_bits) + location_bits(profile)`, in bits.
+- `infiltration_bound(profile, output_bits)` is `harm_bound(output_bits)`, in bits: the committed values the prover wrote
+  in place of what the circuit computes, served or not, so no served output's size caps it. A two-stage design's profile
+  is read at the footprint, so there it counts only what the boundary commitment pins down.
+- `exfiltration_bound(profile, output_bits)` is `infiltration_bound(profile, output_bits) + location_bits(profile)`, in bits,
+  and refuses a two-stage design's profile (`UNPROVED_EXFILTRATION`).
   `location_bits` is the location term: with `K = ⌊bound()⌋` of `n` proof blocks, 0 when `K ≤ 0` or `n = 0`, `n` when
   `2K ≥ n`, and otherwise `n H₂(K/n) (1 + MARGIN)` rounded up to the next float, at most `n`. The Lean states the bound
   (`audit_exfiltration`, `card_admissible_le`), and the tests hold the Python to be at least it.
