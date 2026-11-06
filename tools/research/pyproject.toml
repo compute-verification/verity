@@ -127,7 +127,10 @@ untraced = [
 # the sync's pin rebuild (`repinned`) reads the real `PINS`. tools/move/rename.py, layout.py and restack.py and
 # tools/verity/check/move_check.py: test_drive_moves commits them into its origin, so the sync regenerates, certifies and
 # restacks a move with the scripts it runs from the tree. tools/verity/graph/tests/key_vectors.json: test_drive_executor holds
-# the executor client's graph/v2 key rule to the vectors both sides of the contract reproduce.
+# the executor client's graph/v2 key rule to the vectors both sides of the contract reproduce. tools/verity/lean/lean_changed.py
+# and the files its `--inputs-key` loads (lean_audit.py, module_keys.py, headers.py, check.py, siblings.py, axiom_probe.py,
+# tools/verity/check/common.py, slot.py, lean_slot.py, tools/verity/graph/verity_graph/contract.py): test_queue commits them
+# into its origin, so the records gate keys each commit's Lean inputs with its own code (`lean_keys`).
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
           "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
           "pyproject.toml", "tools/config/pyproject.toml", "verity/ml/flock/pyproject.toml", "benchmarks/numerical/pyproject.toml",
@@ -137,7 +140,10 @@ inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra
           "infra/cluster", "tools/verity/lean/pyproject.toml", "tools/verity/lean/run_daily.py", "tools/verity/lean/merge.py",
           "tools/verity/lean/check.py", "tools/verity/check/suites.py", "tools/verity/check/gates/markdown_caps.py", "tests/test_repository.py", "tests/test_retired_terms.py", "tools/verity/check/pins.py", "benchmarks/native_peak/pyproject.toml",
           "benchmarks/tc_probe_fp4/pyproject.toml", "tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py",
-          "tools/verity/check/move_check.py", "tools/verity/graph/tests/key_vectors.json"]
+          "tools/verity/check/move_check.py", "tools/verity/graph/tests/key_vectors.json", "tools/verity/lean/lean_changed.py",
+          "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/headers.py",
+          "tools/verity/lean/siblings.py", "tools/verity/lean/axiom_probe.py", "tools/verity/check/common.py",
+          "tools/verity/graph/verity_graph/contract.py"]
 parallel = true
 # What the suites of packages depending on research read of it, and so key on in place of this directory: the store and its
 # telemetry, running and recording a run (`python -m research`, its CLI's other commands imported only when run), the merge
