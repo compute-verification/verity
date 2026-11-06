@@ -8,8 +8,10 @@ stock control, the same endpoint, engine and load with no protocol and no Commit
 A serve dir's traces and the load's records hold request values and stay on the node, so `metrics` runs there, over each
 serve dir, and prints one aggregate a line (`aggregate`): each load's counts and metrics, the Commit windows' parts, the
 engine's identity and scheduler, and no step's or request's own times or values. That line is what leaves the node
-(`served_verdicts.sh`'s ``$OUT/serve/overhead.json``, `served_stock.sh`'s ``$OUT/<lifetime>/overhead.json``), and
-`table`'s RUN is such a file, or a serve dir when it runs on the node.
+(`served_verdicts.sh`'s ``$OUT/serve/overhead.json``, `served_stock.sh`'s ``$OUT/<lifetime>/overhead.json``), the
+composed run's in its published form: `served_verdicts.py publish` holds its loads' counts, span and windows in the serve
+dir's ``private/out``. `table`'s RUN is a full aggregate (a stock run's file, or the composed run's
+``private/out/serve/overhead.json`` on the node), or a serve dir when it runs on the node; it refuses a published one.
 
 Two rulers, each the same code in both arms. The client's is `examples/vllm/serve_load.py --varied`'s timings file
 (``load.timings.json`` beside its record, on the node, which `metrics` reads there): each request's
@@ -65,6 +67,8 @@ TIMINGS = "*.timings.json"
 AGGREGATE = "verity-bench/served-overhead-metrics/v0"
 #: a load's fields an aggregate keeps: the counts the run's settings fix, the metrics and the windows' parts
 PUBLIC_LOAD = ("requests", "tokens", "steps", "span_s", "windows") + METRICS + CLIENT
+#: a load's fields `table` reads beside its metrics, which `served_verdicts.py publish` holds back from a published aggregate
+TABLE_READS = ("requests", "span_s", "windows")
 #: two-sided 95% Student-t quantiles by degrees of freedom (verity_bench.vllm.runner's T95, its first rows)
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228, 15: 2.131,
        20: 2.086, 30: 2.042, 60: 2.000, 120: 1.980}
@@ -245,12 +249,16 @@ def aggregate(d: Path) -> dict[str, Any]:
 
 
 def run_of(p: Path) -> dict[str, Any]:
-    """`table`'s RUN: an aggregate file (`metrics`'s line), or a serve dir aggregated here."""
+    """`table`'s RUN: a full aggregate file (`metrics`'s line), or a serve dir aggregated here; `ValueError` for a
+    published aggregate, whose loads lack what `TABLE_READS` names."""
     if p.is_dir():
         return aggregate(p) | {"dir": str(p)}
     doc = json.loads(p.read_text())
     if doc.get("schema") != AGGREGATE:
         raise ValueError(f"{p}: not a {AGGREGATE} aggregate (served_overhead.py metrics' line)")
+    if held := sorted({k for ld in doc.get("loads") or () for k in TABLE_READS if k not in ld}):
+        raise ValueError(f"{p}: a published aggregate, its loads without {', '.join(held)} (served_verdicts.py publish holds "
+                         "them): give the full one on the node, the serve dir's private/out/serve/overhead.json, or the serve dir")
     return doc | {"dir": str(p)}
 
 
