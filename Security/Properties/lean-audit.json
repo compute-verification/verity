@@ -63,6 +63,7 @@
   "Properties.Firewall",
   "Properties.Core.Site",
   "Properties.Verity.Subprotocols",
+  "Properties.Verity.Coupling",
   "Properties.Flock.Circuit",
   "Properties.Pous.WipeSigned",
   "Properties.Composition",
@@ -357,6 +358,26 @@
   "Verity.Vocab.WipeSound": {
    "owner": "@memory-accounting",
    "digest": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937"
+  },
+  "Verity.Vocab.PeriodsCouple": {
+   "owner": "@soundness",
+   "digest": "9b9104bef15bbb693a89d823254efc6ca9911c36423d3d5b98375234d0f2e089"
+  },
+  "Verity.Vocab.SubprotocolBound": {
+   "owner": "@soundness",
+   "digest": "1a4d2b3ea246dfa056c0ec2b3edc53f3eadc1d1f43645954fdb4b8a1aaa9b5ba"
+  },
+  "Verity.Vocab.UpFrontFor": {
+   "owner": "@soundness",
+   "digest": "4583e0cee1486768b5b956a0d38ffa6611b2fa8ac52f8c303f787a9812fc9e74"
+  },
+  "Verity.Vocab.WipeCoupling": {
+   "owner": "@soundness",
+   "digest": "ac9b2bf312a42ca3cd12882769c5e9450edc37f570e666e15bb10ba5316c0acb"
+  },
+  "Verity.Wipe.SurvivorBound": {
+   "owner": "@soundness",
+   "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
   }
  },
  "meaning": [
@@ -554,6 +575,22 @@
   "Verity.soundness_at_of_componentBounds": {
    "honest": ["Verity.soundness_at_of_componentBounds_honest"],
    "nontrivial": "Verity.soundness_at_of_componentBounds_nontrivial"
+  },
+  "Verity.coins_couple": {
+   "honest": ["Verity.coins_couple_honest"],
+   "nontrivial": "Verity.coins_couple_nontrivial"
+  },
+  "Verity.target_of_periods": {
+   "honest": ["Verity.target_of_periods_honest"],
+   "nontrivial": "Verity.target_of_periods_nontrivial"
+  },
+  "Verity.wipe_target": {
+   "honest": ["Verity.wipe_target_honest"],
+   "nontrivial": "Verity.wipe_target_nontrivial"
+  },
+  "Verity.soundness_of_upFront": {
+   "honest": ["Verity.soundness_of_upFront_honest"],
+   "nontrivial": "Verity.soundness_of_upFront_nontrivial"
   }
  },
  "unwitnessed": {
@@ -979,7 +1016,12 @@
     "Definitions.Hash.Assumptions",
     "Lms.Verify",
     "Flock.CoinTree",
-    "Flock.Hm96"
+    "Flock.Hm96",
+    "Properties.Verity.Subprotocols",
+    "Properties.Verity.Coupling",
+    "Definitions.Accounting.JointPeriod",
+    "Properties.Pouw.PearlPlus",
+    "Properties.Pouw.PearlPlusDraw"
    ],
    "except": [],
    "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
@@ -4008,6 +4050,111 @@
    ],
    "assumptions": [],
    "type_hash": "5331eb5f08954cebb0c4dda27e710eeab5c3ec3baba428f68d214b1f2d74f91d"
+  },
+  "Verity.coins_couple": {
+   "owner": "@soundness",
+   "signature": ["Verity.coins_couple : Verity.CoinsCouple"],
+   "assumptions": [],
+   "type_hash": "e11a9e40a8666e28598f3e1dd1b9e61a9b0435718454fe4bfd17509cd6f9de36"
+  },
+  "Verity.coins_couple_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.coins_couple_honest :",
+    "  Verity.Idle.unbounded.UpFrontFor",
+    "    (fun o => Verity.ComponentAccepts Verity.Registration.Composite.remote Verity.Subprotocol.pouw o.sent)",
+    "    Verity.Registration.Composite.remote Verity.Subprotocol.pouw"
+   ],
+   "assumptions": [],
+   "type_hash": "5090b998392f9af8511a0417df50be11768d9f519a2cb68ca682cdcc14ec7c11"
+  },
+  "Verity.coins_couple_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.coins_couple_nontrivial :",
+    "  Not (Verity.Idle.exact.TargetFor (fun x => True) Verity.Registration.Composite.remote Verity.Subprotocol.pouw)"
+   ],
+   "assumptions": [],
+   "type_hash": "685ffcdcfb618322cb616fc939e27ae7afb06436848dacb078fe8270820cab89"
+  },
+  "Verity.soundness_of_upFront": {
+   "owner": "@soundness",
+   "signature": ["Verity.soundness_of_upFront : Verity.SoundnessOfUpFront"],
+   "assumptions": [],
+   "type_hash": "2494f8e3e16e9e95ff2d41d571d5975aa4edb5159e9ab0eb29fd3fd41be59832"
+  },
+  "Verity.soundness_of_upFront_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.soundness_of_upFront_honest :",
+    "  And (Verity.Idle.unbounded.SubprotocolBound Verity.Registration.Composite.remote Verity.Subprotocol.sampled)",
+    "    (And (Verity.Idle.unbounded.SubprotocolBound Verity.Registration.Composite.remote Verity.Subprotocol.pouw)",
+    "      (Verity.Idle.unbounded.SubprotocolBound Verity.Registration.Composite.remote Verity.Subprotocol.inferenceOnly))"
+   ],
+   "assumptions": [],
+   "type_hash": "2729ed813926036839570ce2505354f024804b1b8a49140e865983608d82361a"
+  },
+  "Verity.soundness_of_upFront_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.soundness_of_upFront_nontrivial :",
+    "  Not (Verity.Idle.exact.SoundnessFor Verity.Registration.Composite.remote fun x => True)"
+   ],
+   "assumptions": [],
+   "type_hash": "6b58eb505a9bce5f3e3068ff276b0f6b7f22c5aa2702a1d43cf7b62ffbd757e6"
+  },
+  "Verity.target_of_periods": {
+   "owner": "@soundness",
+   "signature": ["Verity.target_of_periods : Verity.TargetOfPeriods"],
+   "assumptions": [],
+   "type_hash": "d181e7720c0d275fb70fe100c65ea105f93c383c5dae726079f6f9869a2f1412"
+  },
+  "Verity.target_of_periods_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.target_of_periods_honest :",
+    "  (Verity.Idle.vocab ENNReal.instTop.top 1).PeriodsCouple",
+    "    (fun o => Verity.ComponentAccepts Verity.Registration.Composite.remote Verity.Subprotocol.pouw o.sent)",
+    "    Verity.Registration.Composite.remote Accounting.Audit.pouw"
+   ],
+   "assumptions": [],
+   "type_hash": "8c6221a6838648bc6c1a0376c4ea61892ed3441bf05e1faeba09bf0cce0807d0"
+  },
+  "Verity.target_of_periods_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.target_of_periods_nontrivial :",
+    "  Not (Verity.Idle.exact.TargetFor (fun x => True) Verity.Registration.Composite.remote Verity.Subprotocol.pouw)"
+   ],
+   "assumptions": [],
+   "type_hash": "685ffcdcfb618322cb616fc939e27ae7afb06436848dacb078fe8270820cab89"
+  },
+  "Verity.wipe_target": {
+   "owner": "@soundness",
+   "signature": ["Verity.wipe_target : Verity.WipeTarget"],
+   "assumptions": [],
+   "type_hash": "8a7cd3dbe22e55ea70b7eeb6a96fe2c7a1828d90e42a45a4b3d7240773ed3222"
+  },
+  "Verity.wipe_target_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.wipe_target_honest :",
+    "  And",
+    "    (∀ (θ : ByteArray) (F : Array ByteArray),",
+    "      (Verity.Idle.unbounded.wipe θ F).SurvivorBound (Verity.Idle.unbounded.foreignBits θ) fun x x_1 x_2 => 0)",
+    "    (Verity.Idle.unbounded.WipeCoupling (fun x => False) fun x x_1 x_2 x_3 x_4 => 0)"
+   ],
+   "assumptions": [],
+   "type_hash": "3bfa901574ada0546ff7e2a7ed3e38b786a9307b5abcce18cdceda555de66441"
+  },
+  "Verity.wipe_target_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.wipe_target_nontrivial :",
+    "  Not (Verity.Idle.exact.TargetFor (fun x => True) Verity.Registration.Composite.onsite Verity.Subprotocol.wipe)"
+   ],
+   "assumptions": [],
+   "type_hash": "7be5722effd046f635964f023dca25c90e739fb055dc677bb81837a5fcb7709d"
   }
  },
  "shape": {
@@ -5348,7 +5495,11 @@
    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest": "completeness: GroupedDrawMisses's honest lemma: its premises hold at the lanes window, sixteen 32 × 32 leaves at K = 2048 each proved as its 32 lanes and their combine: strata and law accept it at K = 8, kPrime answers K′ ≤ 8 at ε = 1/2 and δ = 1/256 over its whole work, no leaf's blocks do more than the leaf, and the blocks do at least ε of the work, so GroupedDrawMisses is not vacuous",
    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial": "lemma: GroupedDrawMisses's nontrivial lemma: its conclusion fails under the strata a law that accepts everything may give, none: the draw is empty whatever the streams, so the lanes window's blocks all escape, with probability 1 > 1/256",
    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial": "lemma: DrawWithheld's nontrivial lemma: its conclusion fails at the empty ledger, which opens no session, for every draw root, so a verifier that accepts everything credits a window DrawWithheld excludes (drawWithheld_acceptAll)",
-   "Verity.soundness_at_of_componentBounds": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfComponents: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component (Verity.Vocab.ComponentBound: the component's acceptance of its own case in what the prover sent while the claim fails, at most the subprotocol's error) in place of its target; each bound gives its target by monotonicity (Verity.Vocab.sound_of, one family over every composite and subprotocol, at remote's three Vocab.sampledProofsSound_of, pouwSound_of and inferenceOnlySound_of), so a composite with one more subprotocol takes one more bound under the same statement; each bound is a hypothesis until its subprotocol's piece proves it of its compiled component, with the same claims, errors and Vocab"
+   "Verity.soundness_at_of_componentBounds": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfComponents: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component (Verity.Vocab.ComponentBound: the component's acceptance of its own case in what the prover sent while the claim fails, at most the subprotocol's error) in place of its target; each bound gives its target by monotonicity (Verity.Vocab.sound_of, one family over every composite and subprotocol, at remote's three Vocab.sampledProofsSound_of, pouwSound_of and inferenceOnlySound_of), so a composite with one more subprotocol takes one more bound under the same statement; each bound is a hypothesis until its subprotocol's piece proves it of its compiled component, with the same claims, errors and Vocab",
+   "Verity.coins_couple": "frozen (premise): a subprotocol's target at a verdict in the causal game (Verity.CoinsCouple: Verity.Vocab.TargetFor) from its bound over the coins drawn up front at every resolution of the coin trees' coins (Verity.Vocab.UpFrontFor), the play's probability of the event being at most its probability over those coins at some resolution; at the component's acceptance it is Verity.Vocab.ComponentBound; the bound is a hypothesis until each subprotocol's piece proves it in the coins model",
+   "Verity.target_of_periods": "frozen (premise): an audit's target at a verdict in the causal game (Verity.TargetOfPeriods: Verity.Vocab.TargetFor) from a period run of the coins model coupled to the play (Verity.Vocab.PeriodsCouple: its coins in bijection with the coins drawn up front, its verdict and claim refining the play's, Accounting.PeriodRun.Sound within the published delta, and the rest of the event, a log out of place or the coupling's break, within the forger's and the finder's terms); the coupling is a hypothesis until each audit's piece builds it",
+   "Verity.wipe_target": "frozen (premise): the wipe's target at a verdict in the causal game (Verity.WipeTarget: Verity.Vocab.TargetFor) from the wipe's survivor bound over its own draw (Verity.Wipe.SurvivorBound) and its coupling to the play (Verity.Vocab.WipeCoupling: Verity.Wipe.OfRun.Preserves, which reads the foreign content as uniform on the play, the wipe's verdict refining the verdict, and the survivor error within the wipe's); both are hypotheses until the wipe's piece proves them",
+   "Verity.soundness_of_upFront": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfUpFront: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component, over the coins drawn up front, or as its target (Verity.Vocab.SubprotocolBound: Verity.Vocab.ComponentBound, Verity.Vocab.UpFrontBound or Verity.Vocab.Target); each bound is a hypothesis until its subprotocol's piece proves it"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
