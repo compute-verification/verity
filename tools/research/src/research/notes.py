@@ -24,8 +24,9 @@ lane writes later (`<stamp>-report-<slug>.md`) never takes its checkpoints; with
 never a report another agent sent the lane (`<stamp>-report-from-<x>-<slug>.md`) or a note of another kind whose slug says report
 (`<stamp>-handoff-from-<x>-report-for.md`).  `checkpoint` writes
 `CHECKPOINT <sha> (<HH:MM>Z) [<state>] <text>` directly under the front matter (newest first, where lanes already put them),
-sets the front matter's `status:` to the state, sets its `origin:` to the writing agent's id (the agent watch credits a note
-to the agent its origin names), and creates the report if the lane has none.  `superseded` marks a lane whose
+sets the front matter's `status:` to the state, names the writing agent in its `origin:` (the agent watch credits a note to
+every agent its origin names; an origin that names it already is kept as is, any other gains `; checkpoint by <id>`), and
+creates the report if the lane has none.  `superseded` marks a lane whose
 work a successor took over: it is done, never STALE.
 
 Mail is files named `*handoff*` / `*asks*` / `*reply*` in the recipient's lane dir: the machines' notices (the merge queue's
@@ -244,6 +245,20 @@ def _set_front(front: str, key: str, value: str) -> str:
     return front[:-4] + f"{key}: {value}\n---\n"
 
 
+_AGENT_ID = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-9a-f]{8}")
+
+
+def _credit_writer(front: str, agent: str) -> str:
+    """The front matter with `agent` named in its `origin:`: an origin that names it already (in full or short) is kept as is,
+    and any other gains `; checkpoint by <agent>`, since the agent watch reads every id and branch an origin names."""
+    m = re.search(r"^origin:(.*)$", front, re.M)
+    if m is None:
+        return _set_front(front, "origin", agent)
+    if any(agent.startswith(i) or i.startswith(agent) for i in _AGENT_ID.findall(m[1])):
+        return front
+    return front[: m.end()] + f"; checkpoint by {agent}" + front[m.end():]
+
+
 def checkpoint(root: Path, lane: str, state: str, text: str, commit: str | None = None, now: dt.datetime | None = None,
                agent: str | None = None) -> Path:
     if state not in STATES:
@@ -259,7 +274,7 @@ def checkpoint(root: Path, lane: str, state: str, text: str, commit: str | None 
     if front:
         front = _set_front(front, "status", state)
         if agent:
-            front = _set_front(front, "origin", agent)
+            front = _credit_writer(front, agent)
     line = f"CHECKPOINT {commit or _head_commit()} ({now:%H:%M}Z) [{state}] {' '.join(text.split())}\n"
     new = front + "\n" + line + body.lstrip("\n") if front else line + body
     _io(lambda: path.write_text(new))
