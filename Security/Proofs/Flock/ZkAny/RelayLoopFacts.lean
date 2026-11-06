@@ -10,6 +10,7 @@ public import Proofs.Flock.ZkAny.RelaySlot
 public import Proofs.Flock.ZkAny.RelayPlace
 public import Proofs.Flock.ZkAny.RelayFollow
 public import Proofs.Flock.ZkAny.RelayLoopCur
+public import Proofs.Flock.ZkAny.RelayRankSched
 public import Proofs.Flock.ZkAny.RelayLoopL0
 public import Proofs.Flock.ZkAny.RelayLoopFirst
 public import Proofs.Flock.ZkAny.RelayRoundTook
@@ -50,6 +51,9 @@ model's release being the loop's own frames':
   (`LoopModel.TookAt`), given the next rep's start at a stream's first round and, at a stream seen, the round's place
   the model's scheduled round, the empty round or the opening's first wherever the rank stop fails
   (`rank_of_release`).
+* **`rank_sched_deployed`**: at a round of a stream seen of the deployed loop on a `Live` statement, wherever the rank
+  stop fails at the model's coin-step state, the model's scheduled round is the empty round or the opening's first
+  (`LeanRelease.ofLoop_rank_sched`): `answered_of_round`'s `hal`.
 * **`roundFacts_loop`**: `RoundFacts` at a frame round's slot of the deployed loop, given the model's answer there and
   `PlaceFacts` at the round's place.
 * `LeanRelease.CrossPasses`: the named hypothesis on the Rust release that its checks (`cross`) fail no frame round
@@ -1195,6 +1199,61 @@ theorem answered_of_round {T : ZKMal.CoinLayer.TableData}
       ((roundPlace_cfg hfd hrp).trans (hpc p hfa)) (Prod.ext hst rfl)
       (fun m' hm' hrk => ⟨_, hsc hsn q pc f nd hrp,
         (hal hsn m' hm' hrk).imp_left fun he => by rw [he]; rfl⟩) m hm
+
+/-- **Where the rank stop fails at a round of a stream seen, the model's scheduled round is the empty round or the
+opening's first** (`answered_of_round`'s `hal`): at the slot of a round of `stream`, table `i`'s rep `r`, where
+`LoopFacts` and `LoopJ` hold at the deployed loop on the loop's own tables (`Loop.realOf src`) at a `Live` statement,
+and `seen` has a round of `stream`, wherever the coin step after the history so far leaves `m` and the rank stop fails
+at `m`, the model's scheduled round is the empty round or the opening's first, at some count. The history is past a
+round of the same rep (`rep_seen`), so its next round is the rep's round past its first (`Loop.locate_first`), on a
+table of the setup (`rep_lt_size`), which passes `sizesOk` (`LoopJ.sizes`) and whose tables are `Live`'s
+(`Loop.tabs_of_live`): `LeanRelease.ofLoop_rank_sched`. -/
+theorem rank_sched_deployed {T : ZKMal.CoinLayer.TableData}
+    {M : LoopModel Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {src : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      Nat → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
+    {s0 : FlockDeploy.Ins} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
+    (hD : LoopModel.Deployed M L₀ (Loop.realOf src) s0 spec sts) (hlive : ZKMal.Masked.Live M.x)
+    {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
+    (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
+    (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
+    (hsn : seen.contains stream = true) {m : Masker} (hA : M.L.answeredR M.x M.ρ (M.hist σ.c) = .ok m)
+    (hr : LeanRelease.rankFails (M.L.cfg M.x M.ρ (M.hist σ.c)) m = true) (vals : String → Option ByteArray) :
+    M.L.scheduled M.x M.w M.ρ (M.hist σ.c) vals = [] ∨
+      ∃ n', Flags.PcsRound (⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c) vals).toArray⟩, n') := by
+  obtain ⟨hsent, -, -, -⟩ := slot_round hsl
+  obtain ⟨hk0, hmem⟩ := round_rep hsl hF hJ hrep hlt hD.names
+  obtain ⟨-, hiff⟩ := rep_seen hD hsl hF hJ hrep hlt
+  obtain ⟨h3, hre⟩ := hiff.1 hsn
+  have hro : ∀ k, M.L.rep M.x k = Loop.repOf M.x k := fun k => by
+    rw [hD.rel]
+    rfl
+  obtain ⟨q₁, hq₀⟩ : ∃ q₁, (M.hist σ.c).length = q₁ + 1 + 2 := ⟨(M.hist σ.c).length - 3, by omega⟩
+  rw [hro, hro, hq₀, show q₁ + 1 + 2 - 1 = q₁ + 2 by omega, LeanRelease.repOf_add_two hD.setup,
+    LeanRelease.repOf_add_two hD.setup] at hre
+  have hj0 := Loop.locate_first _ 0 q₁ hre
+  unfold nextAt at hk0
+  rw [hq₀, Nat.add_sub_cancel] at hk0
+  have hki : ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (q₁ + 1) =
+      (2 * i + r, (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (q₁ + 1)).2 - 1 + 1) :=
+    Prod.ext hk0.symm (by first | omega | (dsimp only; omega))
+  have hks : 2 * i + r < spec.repStreams.size := rep_lt_size hmem
+  obtain ⟨hm14, hk6, hmk⟩ := Loop.tabs_of_live hlive hD.setup (j := (2 * i + r) / 2)
+    (by have := hD.sizes; omega)
+  obtain ⟨e0, h1, he⟩ : ∃ e0 h1, M.hist σ.c = e0 :: h1 := by
+    cases hh : M.hist σ.c with
+    | nil => rw [hh, List.length_nil] at hq₀; omega
+    | cons e0 h1 => exact ⟨e0, h1, rfl⟩
+  have hq : h1.length = q₁ + 1 + 1 := by
+    rw [he, List.length_cons] at hq₀
+    omega
+  rw [hD.rel, he] at hA hr ⊢
+  exact LeanRelease.ofLoop_rank_sched T L₀ (Loop.realOf src) M.x M.w M.ρ e0 h1 vals hD.setup (hJ.sizes hsent)
+    (Loop.realTabs_realOf src M.x M.w M.ρ hD.setup) hq hki hks hm14 hk6 hmk hA hr
 
 /-- **`RoundFacts` at a frame round's slot of the deployed loop**: at the slot of a round of `n` coins of `stream`,
 where `LoopFacts` and `LoopJ` hold, the session's slots took fewer than the run's messages, and the loop ran the round
