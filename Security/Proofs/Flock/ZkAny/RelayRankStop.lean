@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.FrameRankFault
 public import Proofs.Flock.ZkAny.RelayRank
+public import Proofs.Flock.Claims.ZK.FrameOuter
 
 /-!
 # Where the model's rank stop falls in a rep

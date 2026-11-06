@@ -15,6 +15,8 @@ public import Proofs.Flock.ZkAny.RelayLoopL0
 public import Proofs.Flock.ZkAny.RelayLoopFirst
 public import Proofs.Flock.ZkAny.RelayRoundTook
 public import Proofs.Flock.SessionLoop.Statement
+public import Proofs.Flock.Claims.Complete.ZkTables.Count
+public import Proofs.Flock.SessionLoop.Tables
 
 /-!
 # What the loop's frames and the model hold at a frame round

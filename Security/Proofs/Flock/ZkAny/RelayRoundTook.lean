@@ -4,6 +4,8 @@ public import Proofs.Flock.ZkAny.RelayTook
 public import Proofs.Flock.ZkAny.RelayTaken
 public import Proofs.Flock.ZkAny.RelayRank
 public import Proofs.Flock.ZkAny.RelayCarry
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.InnerGo
 
 /-!
 # The model takes the coins after a frame round's history, from what the loop took

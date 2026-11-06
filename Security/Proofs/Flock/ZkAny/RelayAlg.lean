@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.ZkAny.RelayCount
+public import Proofs.Flock.Claims.ZK.FramePlan
 
 /-!
 # A rep's algebraic phase as the loop schedules it, beside the placeholder's
