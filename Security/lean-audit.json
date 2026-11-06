@@ -3348,15 +3348,9 @@
    "sealed": true
   },
   "Definitions.Flock.Guarantees": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Core.Game",
-    "Definitions.Claims",
-    "Definitions.Flock",
-    "Definitions.Flock.Guarantees"
-   ],
+   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Flock.Guarantees"],
    "except": [],
-   "why": "a guarantee is stated over C-Flock's definitions (Definitions.Flock) and the claims (Definitions.Claims), with the game's uniform average and probability from core (Definitions.Core.Game), never over a proof",
+   "why": "a guarantee is a Prop over Mathlib, never over a proof",
    "sealed": true
   },
   "Definitions.Accounting": {
