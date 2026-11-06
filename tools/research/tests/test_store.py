@@ -330,6 +330,17 @@ def test_index_facets_and_rebuild_equivalence(store, tmp_path):
     assert queries(fresh.index) == before, "rebuild from files == incremental index"
 
 
+def test_reindexing_an_attempt_deletes_its_rows_through_an_index(tmp_path):
+    """Each attempt's re-index deletes its rows from the four attempt_* tables by `attempt`; with no index on it, each delete
+    scanned whole tables, and a store refresh of three days of attempts into a 4.5 GB catalog took about 20 min."""
+    from research.store.index import Index
+    idx = Index(tmp_path / "catalog.sqlite")
+    for table in ("attempt_params", "attempt_conditions", "attempt_outputs", "attempt_inputs"):
+        plan = " ".join(str(r[-1]) for r in idx.db.execute(f"EXPLAIN QUERY PLAN DELETE FROM {table} WHERE attempt=?", ("x",)))
+        assert "USING" in plan and "INDEX" in plan, f"{table}: {plan}"
+    idx.close()
+
+
 def test_remote_roundtrip_and_preserved(store, fs_remote, tmp_path, capsys):
     src = tmp_path / "big.bin"
     src.write_bytes(os.urandom(10000))
