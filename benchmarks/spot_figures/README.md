@@ -45,7 +45,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   - Each panel shows its headline design solid and its comparisons dashed or dotted:
     - exfiltration: two-stage sampling (serving commits only token ids), one-stage sampling of dot-product proof
       blocks, and request-level sampling, in `consumers.exfiltration_bound`'s form (the incorrect proof blocks'
-      output bits and which ones they are);
+      output bits and which ones they are). Proof blocks are sampled uniformly, so the adversary makes the widest
+      ones incorrect first: each is charged the widest block's output bits;
     - infiltration: the `infiltration` card's design and series, pending without one;
     - skipped work: one-stage and request-level sampling. One-stage needs every proof block's outputs hashed at
       serve time, outside the budget, and the JSON gives that hashing's share of the scope's compute

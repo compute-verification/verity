@@ -32,7 +32,9 @@ outputs under one-stage, outside the budget, and the token ids under two-stage a
 * `request`: request-level sampling, each sampled request replayed and proved whole, its output the session's cap.
 
 Exfiltration is in bits, `consumers.exfiltration_bound`'s form: the incorrect proof blocks' output bits plus which ones
-they are.  Skipped work is the work in incorrect proof blocks, under one-stage and request-level sampling: the
+they are.  The leak target samples proof blocks uniformly, so the adversary makes the widest ones incorrect first
+(`harm_bound`'s order): every incorrect block is charged the widest block's output bits, and a sampled one costs the
+count-weighted mean MACs to prove.  Skipped work is the work in incorrect proof blocks, under one-stage and request-level sampling: the
 two-stage design's interior commitments come after its first stage, so they don't show the work was done at serve
 time.  Infiltration is a panel of its own, plotted from the model's `infiltration` card and pending without one.  The
 horizontal lines are rho's reference objects (`REFERENCES`), the model's checkpoint and any `references` card's.
@@ -154,17 +156,17 @@ def cards(model: str = "GLM-5.3") -> dict[str, InputCard]:
 
 @dataclass(frozen=True)
 class TokenBlocks:
-    """The model's proof blocks a token: their count, MACs and the bytes one-stage commits, and the mean MACs a proof
-    block weighted by count, by MACs (the work target's samples) and by output bits (the leak target's); beside them
-    the whole circuit's MACs a token and those in `modeled` strata."""
+    """The model's proof blocks a token: their count, MACs and the bytes one-stage commits, the mean MACs a proof
+    block weighted by count (a uniformly sampled block's) and by MACs (the work target's samples), and the mean and
+    widest output bits; beside them the whole circuit's MACs a token and those in `modeled` strata."""
 
     blocks: float
     macs: float
     bytes: float
     macs_by_count: float
     macs_by_work: float
-    macs_by_bits: float
     bits: float
+    widest_bits: float
     served_macs: float
     modeled_macs: float
 
@@ -176,8 +178,7 @@ class TokenBlocks:
         committed = sum(s["per_token"] * s.get("commit_bytes", s["out_bits"] / 8) for s in strata)
         modeled = sum(s["per_token"] * s["macs"] for s in strata if s.get("modeled"))
         return cls(n, macs, committed, macs / n, sum(s["per_token"] * s["macs"] ** 2 for s in strata) / macs,
-                   sum(s["per_token"] * s["out_bits"] * s["macs"] for s in strata) / bits, bits / n,
-                   served_macs or macs, modeled)
+                   bits / n, max(s["out_bits"] for s in strata if s["per_token"] > 0), served_macs or macs, modeled)
 
     def coverage(self) -> dict:
         """The shares of the served MACs in no proof block and in `modeled` strata."""
@@ -261,9 +262,9 @@ def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float,
     boundary = (tokens + 1) * c["token_bytes"].value
 
     def dot(macs: float) -> Grain:
-        return Grain("proof block", n, work, part.bits, part.bytes / part.blocks, overhead * 2 * macs / peak)
+        return Grain("proof block", n, work, part.widest_bits, part.bytes / part.blocks, overhead * 2 * macs / peak)
 
-    return Model(s, dot(part.macs_by_bits), dot(part.macs_by_work),
+    return Model(s, dot(part.macs_by_count), dot(part.macs_by_work),
                  Grain("request", round(s.requests), s.flop_request, c["output_cap"].value, boundary,
                        overhead * tokens * 2 * part.macs / peak),
                  ReplayGrain(round(s.requests), c["replay_factor"].value * s.flop_request / (mfu * peak), boundary,

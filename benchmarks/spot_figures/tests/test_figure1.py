@@ -104,6 +104,16 @@ def test_a_point_is_the_least_target_its_budget_buys(world, panel, target):
         assert f.cost(m, design, target, p["bound"] * (1 - 1e-3))["total"] > budget, design
 
 
+def test_an_incorrect_block_leaks_the_widest_blocks_output(world):
+    """Proof blocks are sampled uniformly, so the adversary makes the widest incorrect first (`harm_bound`'s order):
+    the leak grain is as wide as the widest stratum, not the mean, and a sampled block costs the count-weighted MACs."""
+    c, part, fill, s = world
+    m = f.model(c, part, s, 1.0, fill)
+    assert m.dot.out_bits == max(x["out_bits"] for x in c["partition"].value["strata"]) > part.bits
+    assert m.dot.prove == pytest.approx(2 * part.macs / part.blocks / c["peak_flops"].value)
+    assert f.certified(m, "two-stage", "leak", 1e12) >= m.dot.out_bits * f.leak_count(m.dot, 1e12)
+
+
 def test_two_stage_certifies_no_work(world):
     c, part, fill, s = world
     with pytest.raises(ValueError, match="no work target"):
