@@ -4,7 +4,8 @@ connection to the auditor. Here a scripted auditor stands on the far side. What 
 every frame that leaves the loop's own encoding (a `Proof` dropped, a frame it does not serve refused), the `Hello`
 that leaves the Lean one at the auditor's sample (at the fixture's statement, `test_lean_hello.py`'s recorded `Hello` at
 the loop's nonce) and never the prover's, `Hello`'s answer and every coin checked, each request leaving once at its place
-in the honest prover's order, a `Ping` answered by the loop and never leaving, every request after a refusal refused
+in the honest prover's order, a `Commit` answered without coins ending the session, a `Ping` answered by the loop and
+never leaving, every request after a refusal refused
 without reaching the auditor, and nothing of a session read after its `Finish`. The loop starts the reps' frames on a
 port of its own and drives each itself, every coin a frame takes the loop's own opening. `flock-circuit`'s firewalled
 sessions through it are the end-to-end check (live PROTOCOL.md §10.4)."""
@@ -387,11 +388,12 @@ def _name(a: bytes) -> str:
 
 
 class Sessions:
-    """A scripted auditor whose every `Hello` is answered with a coin tree root of its own, on a loop at `args`."""
+    """A scripted auditor whose every `Hello` is answered with a coin tree root of its own, and every `Commit` with
+    `at_commit`, on a loop at `args`."""
 
-    def __init__(self, args: list[str]):
+    def __init__(self, args: list[str], at_commit: bytes = coins([])):
         roots = iter(range(1, 256))
-        answers = {10: draw("null"), 3: b"\x01", 7: coins([])}
+        answers = {10: draw("null"), 3: b"\x01", 7: at_commit}
         self.auditor = Auditor(lambda f: _answer(root=next(roots)) if f[0] == 1 else answers[f[0]])
         self.lp = Loop(self.auditor, args)
 
@@ -566,6 +568,31 @@ def test_a_commit_leaves_only_with_the_loops_level_0(zk):
     _, sent, _, left = S.auditor.got[-1]
     sigma = bytes.fromhex(json.loads(sent[5:])["link"]["sigma"])
     assert left == b"\x07" + _bytes(sigma) + commit([(table, r)])[5:]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("answer, said", [(b"\x01", ""), (b"\x03" + _bytes(b"no coins here"), ": no coins here")])
+def test_a_commit_answered_without_coins_ends_the_session(zk, answer, said):
+    """A `Commit` the auditor answers with anything but coins (`Ok`, a refusal) ends the session, refused, with the
+    auditor's reason where it gave one and nothing else of its answer: the `Commit` sent again, and every request after
+    it, is refused for that reason without reaching the auditor, so a `Commit` leaves once however often the prover
+    sends it (`Flock.Test.SessionPlace` holds a `Round`'s answer to the same)."""
+    args = _args(zk, "pub-16.bin")
+    first = _streams(args)[0]
+    S = Sessions(args, answer)
+    s, _ = S.session(first)
+    [table] = re.search(r"tables are \[(.*)\]$", reason(call(s, COMMIT)))[1].split(", ")
+    s.close()
+    s, name = S.session(first)
+    m = _statement_m(S.lp, name)
+    [(_, _, r)] = level0(S.lp, [(m, _zeros(m))], name)
+    why = reason(call(s, commit([(table, r)])))
+    assert why == STOP + "the auditor answered the step-0 coin commitment without coins" + said, why
+    assert [reason(call(s, f)) for f in (commit([(table, r)]), LINK, round_(first, b"r", 2))] == [why] * 3
+    assert call(s, ping(b"p")) == b"\x01"
+    s.close()
+    S.lp.close()
+    assert [f[0] for f in S.auditor.got[-1]] == [10, 1, 3, 7]
 
 
 @pytest.mark.slow
