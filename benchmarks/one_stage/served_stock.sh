@@ -13,7 +13,8 @@
 # the client's record of load j, and load-<j>.timings.json, its per-request send, first-token and done times. The trace and
 # the load's records hold request values, so they stay there: once the endpoint stops, `served_overhead.py metrics` reads
 # them on the node and $OUT/<lifetime>/overhead.json gets its aggregate alone, which `served_overhead.py table --stock`
-# reads beside the composed run's $OUT/serve/overhead.json. WARM lifetimes (default 1) run first as warm-<i>,
+# reads beside the composed run's full aggregate (its serve dir's private/out/serve/overhead.json, on the node: its published
+# $OUT/serve/overhead.json holds no load's counts, tokens or span). WARM lifetimes (default 1) run first as warm-<i>,
 # so the reps find the Triton and vLLM caches as warm as the composed run's node keeps them; a cold first lifetime's first step
 # took 0.40 s against 0.018 s warm (r20261027-175833-6214). With NOT_AFTER (a UTC time, `date -d` syntax) no lifetime starts
 # after it, so a control queued behind other leases never runs into a later window (V2's run of record, say).
