@@ -67,7 +67,7 @@ def recordDraw (record : String) : Option Json :=
 def zkCoins (I : Inputs) : Coins := .tree (Zk.coinSpec (I.tags.tableNames I.count))
 
 /-- The tags `verify --zk` sets a session up under. -/
-def zkTags (I : Inputs) : Tags := Zk.tags (I.tags.withCoins (zkCoins I)) (Zk.maskLogOf I.circuitFile) I.count
+def zkTags (I : Inputs) : Tags := Zk.tags I.tags (Zk.maskLogOf I.circuitFile) I.count
 
 /-- The session's statement `verify --zk` sets up for a record. -/
 def setupOf (I : Inputs) (record : String) : V (SessionSpec × Array Stmt) :=

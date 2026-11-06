@@ -666,12 +666,13 @@ def readLines (label : String) (after : ByteArray) (records : List Lean.Json) :
             (← readLines label after records ls ts none (ξ.extract m ξ.size)))
         else pure (⟨.fresh lab, root, []⟩ :: (← readLines label after records ls ts none ξ))
 
-/-- The records of the sessions v2's evidence `e` names, on the blobs sent; `none` where one is missing or doesn't
+/-- The records of the sessions v2's evidence `e` names, on the blobs sent, parsed as
+`SampledProofs.OneStageZk.treesHeld` parses them (`Flock.JsonParse.parse`); `none` where one is missing or doesn't
 parse. -/
 def recordsOf (s : Verity.Sent) (e : _root_.SampledProofs.OneStageZk.Evidence) : Option (List Lean.Json) :=
   e.sessions.toList.mapM fun r => do
     let b ← ((_root_.Core.Blobs.ofArray s.blobs).get r.record "record").toOption
-    (Lean.Json.parse (← String.fromUTF8? b)).toOption
+    (Flock.JsonParse.parse (← String.fromUTF8? b)).toOption
 
 /-- **The device's log as v2's check reads it** from what the prover sent: the releases the challenger session's log in
 v2's evidence shows after its head (`readLines`), at the parameters' challenger family and the registration's digest,

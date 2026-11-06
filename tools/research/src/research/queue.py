@@ -26,6 +26,10 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    --mark, on the owner's word alone (`MarkOnly`).  First it refuses a PR
                                                    whose head is on another repository or whose author isn't the
                                                    organization's or one of `AUTHORS` (`PR.outside`), as admission does; then
+                                                   one whose body has neither a `Goal <id>` line naming a live goal of the
+                                                   Goals page (on it, and not done) nor an `Issue: none: REASON` line
+                                                   (`goal_gate`; the goals as this machine last read them when the page can't
+                                                   be read, said in one line, and refused when it never read them); then
                                                    the records gate
                                                    (`RecordsGate`, which --no-preflight keeps) refuses a head that changes a Lean
                                                    lock against the landing branch unless a records run or Lean check passed
@@ -76,6 +80,9 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    review landing counts unless LANE is the PR's owner, its handle or its ready
                                                    mark's author, refused here; without --sha, refused when GitHub has another
                                                    head than `next` (pushed since drive's last sync)
+    research queue delegate AGENT --by LANE [--days N]
+                                                   as LANE's holder, let the Cursor agent AGENT (a worker) sign ready marks and
+                                                   land verdicts as LANE for N days (default 7, at most 14): see Signed verdicts
     research queue baseline SHA --by ci             record `checked` at SHA as green for the review landing (and `main`'s to
                                                    follow), which otherwise first runs the after-landing run on `checked` itself,
                                                    and lands nothing until it ends
@@ -103,8 +110,12 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    checkout has one), for a lead whose PR tool opens PRs only from its own run
                                                    branch, its body F with a last line naming its Linear issue: `Refs KEY`
                                                    (Linear's non-closing magic word: the merge leaves the issue open), or
-                                                   `Issue: none: REASON` (`with_issue`); refuses a KEY that isn't one (like
-                                                   ENG-123) or that Linear has no issue for, an empty REASON, and when BRANCH
+                                                   `Issue: none: REASON` (`with_issue`); KEY's issue carries the label of the
+                                                   goal it serves, a live goal's id on the Goals page, written as a `Goal <id>`
+                                                   line after `Refs KEY` unless F's own `Goal` lines name it (`with_goals`);
+                                                   refuses a KEY that isn't one (like ENG-123), that Linear has no issue for,
+                                                   or whose labels name no live goal or can't be read, a `Goal` line of F
+                                                   naming another, an empty REASON, and when BRANCH
                                                    isn't on the remote, isn't at --sha, or already has an open PR; prints the
                                                    PR's URL (`open_pr`), then links the PR to KEY through the Linear app
                                                    (`link_issue`: Linear's GitHub integration is off for this repository, so
@@ -273,6 +284,18 @@ reverting on `checked` what that check fails, and fast-forwarding `main` to each
 if drive wrote it, and otherwise holds and rings `CI` and `TOP` (`Driver._unwritten`).  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
 `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
 
+Signed verdicts.  A label's `by` is whatever its writer said.  With drive.toml's `signed_verdicts` on at `main`, drive counts a
+ready mark or land verdict only beside a `label_auth` label that authenticates it (`research.labelauth`, `StoreLabels`): a
+Cursor identity token over the label's SHA-512 nonce, minted when the label was written by the agent that holds its `by` in
+`main`'s registry, or by a worker that holder delegated to (`research queue delegate`); `ready = false` (an ejection) and holds
+count unsigned.  `ready`, `judge` and `review` sign each ready mark and land verdict they write whenever this agent can mint a
+token, and with the flag on refuse to write one they can't sign, or one an agent that neither holds the handle nor has its
+delegation would sign; the
+`review` listing names each land verdict that doesn't count and why.  Drive refuses a tick when it can't read the registry or
+the issuer's keys (the last set fetched, kept beside the queue's clone, covers an outage of the issuer), since judging every
+mark absent would take every PR off `next`, and the flag is refused unless the low-risk lane can't land a change to the registry
+or the code that judges a label (`SIGNED_GUARDS`).
+
 Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `CI` and the owner's handle, once per PR head:
 drive tells each conflict its sync finds, and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
 there reached its owner only when the VM that ran the sync pushed its notes, inside that lane's commit.  What a sync leaves out
@@ -373,6 +396,12 @@ ISSUE_LINE = "Refs {key}"
 #: the line `open --issue none:REASON` writes, and what `named_issue` reads as a body that names no issue on purpose
 NO_ISSUE_LINE = "Issue: none: {reason}"
 NO_ISSUE_RE = re.compile(r"^[ \t>*_]*Issue:[ \t]*none:[ \t]*(\S.*?)[ \t]*$", re.M)
+#: the line naming a goal of the Goals page (`research.goals`) the PR serves: `open --issue KEY` writes one after `Refs KEY` for
+#: each live goal KEY's labels name (`with_goals`), and a ready mark needs one naming a live goal, or `NO_ISSUE_LINE` (`goal_gate`)
+GOAL_LINE = "Goal {id}"
+GOAL_RE = re.compile(r"^[ \t>*_]*Goal:?[ \t]+`?([A-Za-z0-9](?:[\w./-]*[A-Za-z0-9])?)`?[ \t.]*$", re.M)
+#: the Goals page's goals (id and status) as this machine last read them, which the goal gate reads when the page can't be read
+GOALS_CACHE = Path("~/.research/cache/goals.json")
 #: a key after any of Linear's magic words (closing, non-closing or relation), whatever its team
 ISSUE_LINK_RE = re.compile(r"(?i)\b(?:refs?|references|part of|contributes to|towards?|relates to|related to|close[sd]?|closing|"
                            r"fix(?:e[sd])?|fixing|resolve[sd]?|resolving|complete[sd]?|completing|implement(?:s|ed|ing)?)"
@@ -578,6 +607,9 @@ LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
 EXECUTOR_MODES = ("off", "shadow", "on")
 #: the keys a flag of drive's command line can set (`DriveFlags.override`), each as `--KEY` with `_` as `-`
 COMMAND_LINE = ("on", "marked_after", "regenerate_locks", "first", "after_landing_no_cache")
+#: what `DriveFlags.signed_verdicts` keeps off the low-risk lane: who holds each handle, and the code that judges a label
+SIGNED_GUARDS = (str(REGISTRY), "tools/research/src/research/labelauth.py", "tools/research/src/research/queue.py",
+                 "tools/research/src/research/drive.py")
 
 
 @dataclass(frozen=True)
@@ -637,6 +669,10 @@ class DriveFlags:
     #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
     #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
     executor_enqueue: tuple[str, ...] = ()
+    #: count a ready mark or land verdict only when its `label_auth` companion authenticates it as its author's, or as an agent's
+    #: its author delegated to (`research.labelauth`, `StoreLabels`); `ready`, `judge` and `review` then refuse to write one they
+    #: can't sign.  On only while the low-risk lane can't change who holds a handle or how a label is judged (`SIGNED_GUARDS`)
+    signed_verdicts: bool = False
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -706,7 +742,7 @@ class DriveFlags:
                 raise bad("lowrisk_excludes", "a non-empty list of directories from the repository's root, each ending in `/`, "
                                               "and file name globs, as [\"*.lean\", \"verity/core/\"]")
             got["lowrisk_excludes"] = tuple(v)
-        for k in ("regenerate_locks", "nonlean_first", "reviewed_first", "verdict_first", "lowrisk_lane"):
+        for k in ("regenerate_locks", "nonlean_first", "reviewed_first", "verdict_first", "lowrisk_lane", "signed_verdicts"):
             if k in doc:
                 if not isinstance(doc[k], bool):
                     raise bad(k, "true or false")
@@ -755,6 +791,11 @@ class DriveFlags:
             got["command_line"] = tuple(v)
         if got.get("stale_close_days") and not 0 < got.get("stale_days", 0) <= got["stale_close_days"]:
             raise bad("stale_close_days", "0, or at least stale_days, which must be on: drive closes only a stale PR")
+        if got.get("signed_verdicts") and got.get("lowrisk_lane", cls.lowrisk_lane) and \
+                (open_ := [p for p in SIGNED_GUARDS if lowrisk([p], got.get("lowrisk_excludes", cls.lowrisk_excludes))]):
+            raise bad("signed_verdicts", f"true lets a change to {' or '.join(open_)} land on its ready mark alone, so a lane "
+                                         "could make itself another handle's holder or loosen the check: add each to "
+                                         "`lowrisk_excludes`, or set `lowrisk_lane = false`")
         return cls(**got)
 
     def override(self, a: argparse.Namespace, where: str = DRIVE_FLAGS) -> "DriveFlags":
@@ -924,6 +965,33 @@ def into_at(repo: Path, ref: str) -> str:
     except tomllib.TOMLDecodeError as e:
         raise QueueError(f"{source}: not TOML: {e}") from None
     return "main" if into is None else DriveFlags.parse(f"land_into = {json.dumps(into)}\n", source).land_into
+
+
+def signed_at(repo: Path, ref: str) -> bool:
+    """drive.toml's `signed_verdicts` at ``ref``, false when it has none.  Only that key is read, as `into_at` reads its own (its
+    guard reads two others, which drive's strict parse of `main` checks)."""
+    r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
+    if r.returncode:
+        return False
+    source = f"{DRIVE_FLAGS} at {ref}"
+    try:
+        on = tomllib.loads(r.stdout).get("signed_verdicts", False)
+    except tomllib.TOMLDecodeError as e:
+        raise QueueError(f"{source}: not TOML: {e}") from None
+    if not isinstance(on, bool):
+        raise QueueError(f"{source}: signed_verdicts = {on!r}: true or false")
+    return on
+
+
+def holders_at(repo: Path, ref: str) -> dict[str, str]:
+    """{agent id: handle} of the registry at ``ref``: each agent id a handle's `holder` names holds that handle; none when ``ref``
+    has no registry.  QueueError when it can't be parsed, as then no one's handle is known."""
+    r = _git(repo, "show", f"{ref}:{REGISTRY}", check=False)
+    try:
+        reg = json.loads(r.stdout).get("handles", []) if r.returncode == 0 else []
+    except (ValueError, AttributeError) as e:
+        raise QueueError(f"{REGISTRY} at {ref} can't be parsed ({e}), so who holds each handle is unknown: fix it") from None
+    return {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h for a in AGENT_RE.findall(str(h.get("holder", "")))}
 
 
 def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, str]:
@@ -1104,10 +1172,12 @@ PREFETCH_JOBS = 128
 
 class StoreLabels:
     """Ready marks from the evidence store: `ready` labels on `pr:{n}@{head}`, pulled from the remote first.  Without that pull it
-    raises: a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled."""
+    raises: a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled.
+    With ``verify`` (a `labelauth.Verifier`: drive.toml's `signed_verdicts`), a ready mark or land verdict its `label_auth`
+    companion doesn't authenticate is read as absent (`refusals` says why); `ready = false` and holds count as written."""
 
-    def __init__(self, store, log: Callable[[str], None] = print, since: str | None = None):
-        self.store, self.log, self.since = store, log, since
+    def __init__(self, store, log: Callable[[str], None] = print, since: str | None = None, verify=None):
+        self.store, self.log, self.since, self.verify = store, log, since, verify
         self._pulled: set[int] = set()
         self._newest: dict[tuple[int, str], object] = {}
         self._fresh: set[str] = set()
@@ -1131,18 +1201,37 @@ class StoreLabels:
         """Whether the newest `ready` label on `pr:{n}@{head}` is `true`, written at or after ``since`` (`--marked-after`) when
         given.  `research queue eject` writes `ready = false` there, so an ejection holds on every VM's queue until the owner
         marks it again or pushes a new head (an ejection kept in the ejecting VM's state would be lost to drive, which re-admits)."""
-        labs = sorted(self._labels(pr, head, vocab.READY), key=lambda lab: lab.ts)
+        labs = sorted(self._counted(pr, head, vocab.READY)[0], key=lambda lab: lab.ts)
         self._newest[(pr, head)] = labs[-1] if labs else None
         return bool(labs) and str(labs[-1].value).lower() == "true" and (self.since is None or labs[-1].ts >= self.since)
 
     def reviews(self, pr: int, head: str) -> list:
         """The `reviewed` labels on `pr:{n}@{head}` (`research queue review`), pulled as `ready`'s are."""
-        return self._labels(pr, head, vocab.REVIEWED)
+        return self._counted(pr, head, vocab.REVIEWED)[0]
 
     def ready_by(self, pr: int, head: str) -> str | None:
         """Who wrote the newest `ready = true` label on `pr:{n}@{head}`, whenever it was written."""
-        labs = [lab for lab in sorted(self._labels(pr, head, vocab.READY), key=lambda lab: lab.ts) if str(lab.value).lower() == "true"]
+        labs = [lab for lab in sorted(self._counted(pr, head, vocab.READY)[0], key=lambda lab: lab.ts) if str(lab.value).lower() == "true"]
         return labs[-1].by if labs else None
+
+    def refusals(self, pr: int, head: str, key: str) -> list[str]:
+        """Each ``key`` label on `pr:{n}@{head}` that ``verify`` reads as absent, with why; none without ``verify``."""
+        return self._counted(pr, head, key)[1]
+
+    def _counted(self, pr: int, head: str, key: str) -> tuple[list, list[str]]:
+        labs = self._labels(pr, head, key)
+        if self.verify is None:
+            return labs, []
+        from .labelauth import landing
+
+        beside = self.store.labels(label_target(pr, head), key=vocab.LABEL_AUTH)
+        counted, refused = [], []
+        for lab in labs:
+            if landing(lab) and (why := self.verify.why(lab, beside)):
+                refused.append(f"{lab.key} = {lab.value} by {lab.by} at {lab.ts}: {why}")
+            else:
+                counted.append(lab)
+        return counted, refused
 
     def marked_by(self, pr: int, head: str) -> str | None:
         """Who wrote the newest `ready` label `ready` read on `pr:{n}@{head}`."""
@@ -5303,13 +5392,14 @@ def off_main_note(pr: PR, prs: list[PR]) -> str | None:
 def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool = False,
           preflight: Callable[[PR, list[PR]], str | None] | None = None, sha: str | None = None,
           sleep: Callable[[float], None] = time.sleep, as_json: bool = False,
-          records: Callable[[PR], str | None] | None = None) -> int:
+          records: Callable[[PR], str | None] | None = None, goals: Callable[[PR], str | None] | None = None) -> int:
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
     it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
     head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
     unless ``again`` (a re-mark at an ejected head would fail a second train on the same line).  Before any of it, a PR
     `PR.outside` refuses (its head on another repository than ``github``'s, or an author the organization doesn't have) is
-    refused, then ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of
+    refused, then ``goals`` (`goal_gate`) refuses a PR whose body names no live goal of the Goals page and no `Issue: none:
+    REASON`, then ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of
     it or of a commit with the same inputs for that package,
     then ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
     (`--sha`) it marks only that head: GitHub's head lags a push by seconds (`git push && research queue ready N --mark` can mark
@@ -5317,7 +5407,7 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
     on another branch is marked all the same, and told that drive won't see it until it is based on `main` (`off_main_note`).
     With ``as_json`` (`--json`) the rest goes to stderr, and stdout gets one object: pr, head, base, exit and warning (that note)."""
     with contextlib.redirect_stdout(sys.stderr) if as_json else contextlib.nullcontext():
-        rc, pr, prs = _ready(github, store, number, by, tier, again, preflight, sha, sleep, records)
+        rc, pr, prs = _ready(github, store, number, by, tier, again, preflight, sha, sleep, records, goals)
         note = off_main_note(pr, prs) if pr is not None else None
         if note:
             print(f"research queue ready: {note}", file=sys.stderr)
@@ -5328,7 +5418,8 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
 
 def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool,
            preflight: Callable[[PR, list[PR]], str | None] | None, sha: str | None,
-           sleep: Callable[[float], None], records: Callable[[PR], str | None] | None = None) -> tuple[int, PR | None, list[PR]]:
+           sleep: Callable[[float], None], records: Callable[[PR], str | None] | None = None,
+           goals: Callable[[PR], str | None] | None = None) -> tuple[int, PR | None, list[PR]]:
     if not sha and number is not None and (p := next((x for x in github.open_prs() if x.number == number), None)) and p.branch \
             and (tip := getattr(github, "branch_tip", lambda _b: None)(p.branch)):
         sha = tip                                           # a mark seconds after a push would preflight GitHub's old head
@@ -5349,6 +5440,9 @@ def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str 
         print(f"research queue ready: #{pr.number} is not marked: GitHub has its head at {pr.head[:12]}, not {sha[:12]}, after "
               f"{SHA_READS} reads {SHA_WAIT_S:g} s apart. Push {sha[:12]} to the PR's branch (or pass the head GitHub shows), then "
               "run this again", file=sys.stderr)
+        return 1, pr, prs
+    if goals is not None and (why := goals(pr)):
+        print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: {why}", file=sys.stderr)
         return 1, pr, prs
     if not again and (why := ejection(store, pr)):
         print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: that head was ejected: {why}. Push the fix "
@@ -5380,12 +5474,13 @@ def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str 
 
 def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callable[[Path], dict] | None = None,
           runs_root: Path | None = None, repo: Path | None = None, url: str | None = None,
-          records: Callable[[PR], str | None] | None = None) -> int:
+          records: Callable[[PR], str | None] | None = None, goals: Callable[[PR], str | None] | None = None) -> int:
     """`research queue judge RUN`: what `ready --on` does once its run ends, for a quick-tier run that already ended (its waiting
     client gone): fetch its records (`research fetch`; a run another VM launched is adopted from its machine, ``on`` or each), judge
     them as `RemoteQuickTier` does, at the head the tier ran at, and mark the open PR at that head ready, or, when none is there now
     and ``repo`` (a clone of ``url``) is given, the one open PR whose head has that head's tree (`same_tree_mark`'s reason).
-    Refused when the run can't be fetched, hasn't ended, isn't a quick tier, failed, or no open PR is at that head or tree now."""
+    Refused when the run can't be fetched, hasn't ended, isn't a quick tier, failed, or no open PR is at that head or tree now,
+    and as `ready` refuses, by ``goals`` (`goal_gate`) and ``records``."""
     from . import cli, remote
     from . import runs as R
 
@@ -5419,6 +5514,8 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
             "which is no open PR's head now, nor its tree (pushed again since, or closed?)"))
     if why := prs[0].outside(github.repo):
         return refuse(f"#{prs[0].number} is not marked ready: {why}")
+    if goals is not None and (why := goals(prs[0])):
+        return refuse(f"#{prs[0].number} is not marked ready at {prs[0].head[:12]}: {why}")
     if records is not None and (why := records(prs[0])):
         return refuse(f"#{prs[0].number} is not marked ready at {prs[0].head[:12]}: {why}")
     covers = allowed(repo or Path.cwd(), tier.get("base") if isinstance(tier, dict) else None)
@@ -5426,7 +5523,9 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
 
 
 def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
-    """`ready = true` on `pr:{n}@{head}`, pushed to the store's remote, unless the quick tier ``failed`` there (the refusal)."""
+    """`ready = true` on `pr:{n}@{head}`, pushed to the store's remote, unless the quick tier ``failed`` there (the refusal), or
+    ``store``, a `labelauth.Signer` (`label_signer`), refuses to write a mark it can't sign."""
+    from .labelauth import AuthError
     from .store.cli import _label_write_through
 
     if isinstance(failed, StillGoing):
@@ -5442,7 +5541,11 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
               f"fix, or run it again: passes are cached by input, so a re-run on the same cache runs only what failed", file=sys.stderr)
         return 1
     target = label_target(pr.number, pr.head)
-    store.add_label(target, vocab.READY, True, by)
+    try:
+        store.add_label(target, vocab.READY, True, by)
+    except AuthError as e:
+        print(f"research queue {command}: #{pr.number} is not marked ready at {pr.head[:12]}: {e}", file=sys.stderr)
+        return 1
     said, lost = _label_write_through(store, target)
     print(f"research queue: #{pr.number} is ready at {pr.head[:12]} ({target}); {said}")
     return 1 if lost else 0
@@ -5454,7 +5557,9 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
     (`unreviewed`), bottom first, the order drive lands them in; with it, write ``verdict`` (`land` or `hold`, ``ref`` its note or
     reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner.  Without
     ``sha`` it refuses when GitHub has a head other than `next`'s, as the reviewer may have read either; a short ``sha`` is the
-    known head or clone commit it starts."""
+    known head or clone commit it starts.  The list names each land verdict ``labels`` doesn't authenticate
+    (`StoreLabels.refusals`); ``store``, a `labelauth.Signer` (`label_signer`), refuses a verdict it can't sign."""
+    from .labelauth import AuthError
     from .store.cli import _label_write_through
 
     q._clone()
@@ -5469,6 +5574,8 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
         for m in chain:
             if (why := unreviewed(labels.reviews(m.pr, m.head), review_owners(q, labels, m.pr, m.head, m.owner, opened))) is None:
                 continue
+            if refused := labels.refusals(m.pr, m.head, vocab.REVIEWED):
+                why += f"; not authenticated: {'; '.join(refused)}"
             files = sorted(changed(q.workdir, f"{m.commit}^1", m.commit))
             rows.append({"pr": m.pr, "head": m.head, "owner": m.owner, "lean": lean_change(q.workdir, m.commit), "files": files,
                          "why": why})
@@ -5503,10 +5610,68 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
         raise QueueError(f"review: #{pr} is {by}'s own PR (its owner, its owner's handle or its ready mark's author; or it has no "
                          "owner), and an owner's verdict doesn't count: a reviewer who isn't its owner reviews it")
     target = label_target(pr, head)
-    store.add_label(target, vocab.REVIEWED, verdict, by, ref=ref or None)
+    try:
+        store.add_label(target, vocab.REVIEWED, verdict, by, ref=ref or None)
+    except AuthError as e:
+        raise QueueError(f"review: #{pr}'s `{verdict}` at {head[:12]} isn't written: {e}") from None
     said, lost = _label_write_through(store, target)
     print(f"research queue: #{pr} reviewed `{verdict}` at {head[:12]} by {by} ({target}); {said}")
     return 1 if lost else 0
+
+
+def delegate(store, agent: str, lane: str, days: int, holders: dict[str, str] | None,
+             mint: Callable[[str], str] | None = None, now: Callable[[], float] = time.time) -> int:
+    """`research queue delegate AGENT --by LANE [--days N]`: as LANE's holder, let the Cursor agent AGENT (a worker) authenticate
+    ready marks and land verdicts as LANE for ``days`` (at most `labelauth.DELEGATION_MAX_DAYS`): a `label_delegation` label on
+    the agent's delegation target, pushed to the store's remote, which `labelauth.Signer` copies into each companion it writes.
+    Refused, nothing written, when this agent isn't LANE's holder in ``holders`` (the registry: its delegation would never count)."""
+    from . import labelauth
+    from .store.cli import _label_write_through
+
+    if not AGENT_RE.fullmatch(agent):
+        raise QueueError(f"delegate: {agent!r} isn't a Cursor agent id (bc-, then a UUID)")
+    if not 1 <= days <= labelauth.DELEGATION_MAX_DAYS:
+        raise QueueError(f"delegate: --days {days}: 1 to {labelauth.DELEGATION_MAX_DAYS}")
+    until = time.strftime(labelauth.TS_FORMAT, time.gmtime(now() + days * 86400))
+    try:
+        value = labelauth.delegation(lane, agent, until, mint or labelauth.cursor_mint)
+        me = labelauth.unverified_claims(value["token"]).get("cloud_agent_id")
+    except labelauth.AuthError as e:
+        raise QueueError(f"delegate: {agent} can't be delegated {lane}: {e}") from None
+    if holders is None or not isinstance(me, str) or _who(holders.get(me, "")) != _who(lane):
+        raise QueueError(f"delegate: this agent ({me}) doesn't hold {lane} in main's registry ({REGISTRY}), so its delegation "
+                         f"would never count: {lane}'s holder runs it")
+    target = labelauth.delegation_target(agent)
+    store.add_label(target, vocab.LABEL_DELEGATION, value, lane)
+    said, lost = _label_write_through(store, target)
+    print(f"research queue: {agent} signs as {lane} until {until}, while this agent holds {lane} in main's registry "
+          f"({target}); {said}")
+    return 1 if lost else 0
+
+
+def label_signer(store, repo: Path | None):
+    """``store`` as the `labelauth.Signer` `ready`, `judge` and `review` write through: required, with the registry's holders, when
+    drive.toml's `signed_verdicts` is on at `origin/main` in ``repo`` (the caller's checkout); otherwise it signs what it can."""
+    from . import labelauth
+
+    main, holders = "refs/remotes/origin/main", None
+    if on := repo is not None and signed_at(repo, main):
+        holders = holders_at(repo, main)
+    return labelauth.Signer(store, labelauth.cursor_mint, required=on, holders=holders,
+                            log=lambda s: print(f"research queue: {s}", file=sys.stderr))
+
+
+def label_verifier(repo: Path, ref: str, keys: Path, log: Callable[[str], None] = print):
+    """The `labelauth.Verifier` of drive.toml's `signed_verdicts`: the registry at ``ref`` in ``repo`` names who holds each handle,
+    and the issuer's keys are fetched (kept at ``keys`` for an outage of the issuer).  QueueError when either can't be had: no
+    mark could be judged, and judging every one absent would take every PR off `next`."""
+    from . import labelauth
+
+    holders = holders_at(repo, ref)
+    try:
+        return labelauth.Verifier(labelauth.issuer_keys(keys, log=log), holders)
+    except labelauth.AuthError as e:
+        raise QueueError(f"no ready mark or land verdict can be authenticated (drive.toml's `signed_verdicts`): {e}") from None
 
 
 def review_owners(q: Queue, labels: StoreLabels, pr: int, head: str, owner: str | None,
@@ -5686,7 +5851,8 @@ def with_issue(body: str, spec: str) -> str:
 
 def issue_app(key: str) -> tuple[linear.Linear, str] | Exception:
     """The Linear app and the id of issue ``key``, resolved before anything is sent; the failure instead when the app can't be
-    asked (no credentials, Linear down), which `link_issue` reports.  A key Linear has no issue for raises QueueError."""
+    asked (no credentials, Linear down), which `open` refuses (`with_goals`) and `link` reports (`link_issue`).  A key Linear
+    has no issue for raises QueueError."""
     try:
         app = linear.Linear()
         return app, app.issue_id(key)
@@ -5709,6 +5875,96 @@ def link_issue(key: str, url: str, app: tuple[linear.Linear, str] | Exception | 
         n = (m := re.search(r"/pull/(\d+)$", url)) and m.group(1)
         raise QueueError(f"{url} is not linked to {key} in Linear ({e}); link it with "
                          f"`research queue link {n or 'N'} --issue {key}`") from None
+
+
+def goal_statuses(cache: Path | None = None) -> dict[str, str]:
+    """Each goal on the Goals page (`research.goals`), its id to its status, written to ``cache`` (`GOALS_CACHE`) at each read.
+    When the page can't be read, the goals last written there, whatever their age, said in one line on stderr; with neither,
+    QueueError naming the outage, to which each caller adds its escape."""
+    from . import goals
+    from .slack import SlackError
+
+    path = (cache or GOALS_CACHE).expanduser()
+    try:
+        got = {str(g["id"]): str(g.get("status")) for g in goals.Route().call()}
+    except (SlackError, OSError, ValueError, KeyError, TypeError) as e:
+        try:
+            kept = json.loads(path.read_text())
+            got = {str(g["id"]): str(g["status"]) for g in kept["goals"]}
+        except (OSError, ValueError, KeyError, TypeError):
+            raise QueueError(f"the Goals page can't be read ({e}) and this machine has no copy of it ({path})") from None
+        print(f"research queue: the Goals page can't be read ({e}): using its {len(got)} goals as this machine read them at "
+              f"{kept.get('read') or 'an unrecorded time'} ({path})", file=sys.stderr)
+        return got
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps({"read": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                                   "goals": [{"id": k, "status": v} for k, v in sorted(got.items())]}, indent=1) + "\n")
+        tmp.replace(path)
+    except OSError as e:
+        print(f"research queue: the Goals page's goals aren't cached at {path} ({e})", file=sys.stderr)
+    return got
+
+
+def live_goals(names: Iterable[str], status: dict[str, str]) -> list[str]:
+    """Those of ``names`` that are a live goal's id: on the Goals page (``status``, `goal_statuses`) and not done; sorted."""
+    return sorted({n for n in names if status.get(n, "done") != "done"})
+
+
+def with_goals(body: str, key: str, app: tuple[linear.Linear, str] | Exception,
+               read: Callable[[], dict[str, str]] | None = None) -> str:
+    """``body``, `with_issue`'s for Linear issue ``key``, with a `Goal <id>` line after its `Refs KEY` line for each live goal
+    (`live_goals`) a label of the issue names (its name is the goal's id), or as it is when its own `Goal` lines name only such
+    goals.  Refused (`QueueError`), sending nothing, when the issue's labels can't be read (``app`` is `issue_app`'s failure)
+    or name no live goal, when ``read`` (`goal_statuses`) has no goals, and when a `Goal` line of the body names another."""
+    escape = "or pass --issue none:REASON; nothing sent"
+    try:
+        if isinstance(app, Exception):
+            raise app
+        labels = app[0].issue_labels(key)
+    except (linear.LinearError, OSError) as e:
+        raise QueueError(f"--issue {key}: the Linear app can't read its labels ({e}): try again once it can, {escape}") from None
+    try:
+        status = (read or goal_statuses)()
+    except QueueError as e:
+        raise QueueError(f"--issue {key}: {e}: try again once the page answers, {escape}") from None
+    if not (live := live_goals(labels, status)):
+        done = [n for n in labels if status.get(n) == "done"]
+        raise QueueError(f"--issue {key}: no label of it names a live goal of the Goals page (its labels: {', '.join(labels) or 'none'}"
+                         f"{'; done goals among them: ' + ', '.join(done) if done else ''}): label {key} with the goal it serves "
+                         f"(its id on the page, `research goals show`), {escape}")
+    for g in GOAL_RE.findall(body):
+        if g not in live:
+            why = (f"a goal no label of {key} names" if g not in labels else "a done goal" if status.get(g) == "done" else
+                   "no goal of the Goals page")
+            raise QueueError(f"--issue {key}: the body's `Goal {g}` names {why}: name one of {key}'s live goals "
+                             f"({', '.join(live)}), or drop the line and `open` writes them; nothing sent")
+    if GOAL_RE.search(body):
+        return body
+    lines = body.splitlines()
+    at = lines.index(ISSUE_LINE.format(key=key)) + 1
+    return "\n".join([*lines[:at], *(GOAL_LINE.format(id=g) for g in live), *lines[at:]]) + "\n"
+
+
+def goal_gate(pr: PR, read: Callable[[], dict[str, str]] | None = None) -> str | None:
+    """The goal gate of `ready` and `judge`: None when ``pr``'s body names a live goal (`live_goals`) on a `Goal <id>` line, or
+    no issue on purpose on an `Issue: none: REASON` line, which reads no page; else why not, with the fix."""
+    if NO_ISSUE_RE.search(pr.body):
+        return None
+    fix = (f"add a `Goal <id>` line naming the live goal it serves (its id on the Goals page, `research goals show`), or an "
+           f"`Issue: none: REASON` line, to its body (`research queue edit {pr.number} --body-file F`)")
+    if not (named := GOAL_RE.findall(pr.body)):
+        return f"its body names no goal: {fix}"
+    try:
+        status = (read or goal_statuses)()
+    except QueueError as e:
+        return (f"{e}: mark it once the page answers, or give its body an `Issue: none: REASON` line (`research queue edit "
+                f"{pr.number} --body-file F`)")
+    if live_goals(named, status):
+        return None
+    dead = "; ".join(f"{g} is done" if g in status else f"the Goals page has no goal {g}" for g in dict.fromkeys(named))
+    return f"its body names no live goal ({dead}): {fix}"
 
 
 def named_issue(body: str, teams: Iterable[str] = ()) -> str | None:
@@ -5870,10 +6126,12 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "link", "stats",
                                             "checked-heads", "review", "baseline", "accept-checked", "lean-check", "drive-shard-add",
+                                            "delegate",
                                             "shadow-report"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; baseline: the "
                     "commit of the landing branch (`checked`, or `main` until `checked` exists) ci knows is green; lean-check: the commit of `next` to Lean-check; "
-                    "accept-checked: `checked`'s tip, which drive didn't write; drive-shard-add: the after-landing run's tip")
+                    "accept-checked: `checked`'s tip, which drive didn't write; drive-shard-add: the after-landing run's tip; "
+                    "delegate: the Cursor agent id to delegate --by's handle to")
     ap.add_argument("shard_run", nargs="*", metavar="K RUN_ID", help="drive-shard-add: the shard and the run to count in it")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one): a later failure of "
@@ -5955,8 +6213,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--issue", metavar="KEY|none:REASON",
                     help="open (required): the PR's Linear issue, a key like ENG-123, written into the body as a `Refs KEY` line "
                          "and linked to the PR through the Linear app (Linear's GitHub integration is off for this "
-                         "repository, so the line alone links nothing); or none:REASON, written as an `Issue: none: REASON` "
-                         "line, for a PR with no issue; link (required): the KEY to link the open PR to")
+                         "repository, so the line alone links nothing), with a `Goal <id>` line after it for each live goal "
+                         "of the Goals page a label of the issue names (refused when none does); or none:REASON, written as an "
+                         "`Issue: none: REASON` line, for a PR with no issue; link (required): the KEY to link the open PR to")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
     ap.add_argument("--tip", default="origin/main", help="checked-heads: whose first-parent line (default origin/main)")
     ap.add_argument("--out", type=Path, metavar="FILE", help="checked-heads: write the checked train heads newest first "
@@ -5966,6 +6225,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--tips", type=int, default=10, metavar="N", help="shadow-report: the newest N `checked` tips drive compared "
                     "with the executor's verdicts (default 10)")
     ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
+    ap.add_argument("--days", type=int, default=7, help="delegate: how long the delegation lasts (default 7, at most 14)")
     ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="stats: the window's end (default now)")
     a = ap.parse_args(argv)
     global MERGED_ROOT
@@ -6010,9 +6270,10 @@ def main(argv: list[str]) -> int:
             if not repo:
                 raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
             app = issue_app(a.issue) if ISSUE_KEY_RE.fullmatch(a.issue) else None
+            if app is not None:
+                body = with_goals(body, a.issue, app)
             if a.dry_run:                                   # --dry-run never opens a real PR
-                link = (f"; would link it to {a.issue} through the Linear app" if isinstance(app, tuple)
-                        else f"; couldn't ask the Linear app to link {a.issue}: {app}" if app else "")
+                link = f"; would link it to {a.issue} through the Linear app" if app else ""
                 print(f"research queue open: would open {a.head}{'@' + a.sha[:12] if a.sha else ''} onto {a.base} in {repo}"
                       f"{' as a draft' if a.draft else ''}: {a.title!r} ({len(body)} bytes of body, ending "
                       f"{body.rstrip().splitlines()[-1]!r}{link}; dry run)")
@@ -6025,7 +6286,7 @@ def main(argv: list[str]) -> int:
         if app:
             try:
                 print(f"research queue open: {link_issue(a.issue, url, app)}")
-            except QueueError as e:                         # the PR is open: only an unknown key fails `open`
+            except QueueError as e:                         # the PR is open: a link that fails doesn't fail `open`
                 print(f"research queue: {e}", file=sys.stderr)
         return 0
     if a.command == "edit":
@@ -6083,8 +6344,10 @@ def main(argv: list[str]) -> int:
         ap.error(f"unrecognized arguments: {' '.join(a.shard_run)}")
     if a.command == "drive-shard-add" and not (a.pr and len(a.shard_run) == 2 and a.shard_run[0].isdigit()):
         ap.error("drive-shard-add TIP K RUN_ID: the after-landing run's tip, the shard's number and the run to count in it")
+    if a.command == "delegate" and not (a.pr and a.by):
+        ap.error("delegate AGENT lets a Cursor agent (a worker) sign as your handle: pass its agent id and --by <your lane>")
     a.by = a.by or "merge-queue"
-    if a.command not in ("judge", "baseline", "accept-checked", "lean-check", "drive-shard-add") and a.pr is not None:
+    if a.command not in ("judge", "baseline", "accept-checked", "lean-check", "drive-shard-add", "delegate") and a.pr is not None:
         if not a.pr.isdigit():
             ap.error(f"{a.command}: {a.pr!r} is not a PR number")
         a.pr = int(a.pr)
@@ -6096,17 +6359,22 @@ def main(argv: list[str]) -> int:
         if not repo:
             raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
         store = LocalStore(a.store)
+        here = _git(Path.cwd(), "rev-parse", "--show-toplevel", check=False).stdout.strip()
+        main_ref, keys = "refs/remotes/origin/main", a.workdir.parent / f"{a.workdir.name}.issuer-keys.json"
+        if a.command == "delegate":
+            return delegate(store, a.pr, a.by, a.days, holders_at(Path(here), main_ref) if here else None)
+        if a.command in ("judge", "ready"):
+            store = label_signer(store, Path(here) if here else None)
         if a.command == "judge":
-            here = _git(Path.cwd(), "rev-parse", "--show-toplevel", check=False).stdout.strip()
             return judge(GitHub(repo), store, a.pr, a.by, on=a.on, repo=Path(here) if here else None, url=remote,
-                         records=RecordsGate(Path(here) if here else Path.cwd(), remote, store))
+                         records=RecordsGate(Path(here) if here else Path.cwd(), remote, store), goals=goal_gate)
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
             pre = None if a.no_preflight else Preflight(top, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by),
                                                              root=a.preflight_root)
             return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha, as_json=a.json,
-                         records=RecordsGate(top, remote, store))
+                         records=RecordsGate(top, remote, store), goals=goal_gate)
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
@@ -6132,6 +6400,8 @@ def main(argv: list[str]) -> int:
             a.marked_after = flags.marked_after
             labels.since = a.marked_after
             q.log(f"research queue drive: flags from {where}: {flags.line()}")
+            if flags.signed_verdicts:
+                labels.verify = label_verifier(q.workdir, main_ref, keys, q.log)
         if not a.marked_after and a.command != "status":
             if a.rules is None:
                 q._clone()
@@ -6163,8 +6433,10 @@ def main(argv: list[str]) -> int:
                 print(_render(entries) + _unnamed(q.listed, teams))
             return 0
         if a.command == "review":
-            return review(q, store, labels, a.pr, "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by,
-                          sha=a.sha, as_json=a.json)
+            if a.pr is None and here and signed_at(Path(here), main_ref):
+                labels.verify = label_verifier(Path(here), main_ref, keys, lambda s: print(f"research queue: {s}", file=sys.stderr))
+            return review(q, label_signer(store, Path(here) if here else None) if a.pr else store, labels, a.pr,
+                          "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by, sha=a.sha, as_json=a.json)
         from .merge import DRIVE_ENV, off_drive, on_drive
 
         if a.command == "baseline":
