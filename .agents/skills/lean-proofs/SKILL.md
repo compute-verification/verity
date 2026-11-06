@@ -51,9 +51,13 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 ## Build, iterate, check
 
 - **The edit loop is `verity lean try FILE`**: `lake env lean FILE` in the Lake package that holds FILE, against its
-  built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. It
-  never writes a record. After editing a file others import, `lake build` its module, then try an importer. It also runs
-  on a project machine with `--on` (the README).
+  built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. Its
+  last line is the axiom probe's, since lean's exit 0 isn't proved: each theorem of FILE whose axioms go beyond `propext`,
+  `Classical.choice` and `Quot.sound` (`sorryAx` too), or none. It never writes a record. After editing a file others
+  import, `lake build` its module, then try an importer. It also runs on a project machine with `--on` (the README).
+  Once a file that adds or renames declarations passes, try it with `--siblings --on NODE`: a name another module of the
+  package declares fails only where both are imported, which is otherwise the package root, an hour into a records run
+  (on Security/Proofs about 15 s and 8 GB, so not on an agent VM).
 - **Build on a CPU machine.** Never `lake update`, and never change a `require`, a revision or `lean-toolchain` in a
   feature PR. The full check, `python tools/verity/lean/check.py PKG`, is the train's; run it by hand only on a machine
   of your own. It refuses a package too big for the machine, naming where to run it; a queued Security audit takes
@@ -162,7 +166,7 @@ repository.
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails` are;
   failing either, it says nothing. `check.py` holds them to it (`witnesses`): both lemmas build their instance, taking
   only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one named
-  premise and the bound fail.
+  premise and the bound fail, or, for an exclusion that takes no premise, a circuit where a tighter bound fails.
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not claims:
   they live in `Proofs/` with one concrete instance where the honest case holds.

@@ -120,7 +120,7 @@ def test_a_recorded_package_passes_and_its_record_is_the_statement():
     assert pol["guarantees"]["P.t"] == {"owner": "@lean", "signature": ["P.t (h : P.Hyp) (n : Nat) : P.f n = n"],
                                         "assumptions": ["P.Hyp"], "type_hash": sha("00000000000000aa")}
     assert len(pol["reads"]["P.Defs"]["digest"]) == 64 and len(pol["reads"]["P.Defs"]["definitions"]["P.f"]) == 64
-    assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and pol["reads"]["P.Defs"]["guarantees"] == ["P.t"]
+    assert list(pol["reads"]["P.Defs"]["definitions"]) == ["P.f"] and set(pol["reads"]["P.Defs"]) == {"digest", "definitions"}
     assert all(g["digest"] == A.module_digest(g["definitions"]) for g in pol["reads"].values())
     assert A.judge(pol, facts(), FILES) == ([], pol)
     assert A.judge(POLICY, facts(), FILES)[0] == ["guarantees: P.t has no record; run `check.py --update` and commit the record",
@@ -133,9 +133,24 @@ def test_every_field_of_a_reads_record_is_checked():
     stale = pol | {"reads": pol["reads"] | {"P.Defs": group | {"digest": "0" * 64}}}
     assert A.judge(stale, facts(), FILES)[0] == ["guarantees: the digest recorded for P.Defs is not the SHA-256 of its definitions; "
                                                  "`python tools/verity/lean/merge.py --normalize` recomputes it"]
-    readers = pol | {"reads": pol["reads"] | {"P.Defs": group | {"guarantees": ["P.t", "P.u"]}}}
-    assert A.judge(readers, facts(), FILES)[0] == ["guarantees: those that read P.Defs are P.t; the record lists "
-                                                   "P.t, P.u; run `check.py --update`"]
+
+
+
+def test_a_lock_listing_its_readers_is_a_record_difference_an_update_drops():
+    """A lock that still lists each module's readers (`guarantees`, or `pins` from before the rename), which the
+    type hashes and the definitions' hashes determine: it fails as `guarantees.readers`, a record difference, and the record
+    regenerated (or updated) is today's, with nothing in the review."""
+    pol = recorded()
+    for key in A.READER_KEYS:
+        listed = pol | {"reads": {m: g | {key: ["P.t"]} for m, g in pol["reads"].items()}}
+        assert A.with_readers(listed) == sorted(pol["reads"])
+        fails = A.judge(listed, facts(), FILES)[0]
+        assert fails == [f"guarantees: `reads` lists the guarantees that read {', '.join(sorted(pol['reads']))}, which the "
+                         "type hashes and the definitions' hashes determine and the record no longer holds; run `check.py "
+                         "--update`, or `python tools/verity/lean/merge.py --normalize` drops them"]
+        assert [f.code for f in fails] == ["guarantees.readers"] and A.RECORD_DIFFERENCE.match(fails[0])
+        assert A.regenerated(listed, facts(), FILES, fails) == pol == A.judge(listed, facts(), FILES, update=True)[1]
+        assert A.review(listed, pol, facts(), {}) == []
 
 
 def test_every_guarantee_has_an_owner_and_an_update_keeps_it():
@@ -815,6 +830,52 @@ def test_moved_declarations_are_compared_under_their_old_names(tmp_path):
     assert [f.split(":")[0] for f in unshaped(rep)] == ["moved"] and "Control.Protocol.f would be Control.f" in rep["failures"][0]
 
 
+SPLIT_KEPT = "def pick : Nat → Nat\n  | 0 => 1\n  | n + 1 => n\ndef three : Fin 5 := ⟨3, by decide⟩\n"
+SPLIT_OFF = "def pick' : Nat → Nat\n  | 0 => 1\n  | n + 1 => n\ndef three' : Fin 5 := ⟨3, by decide⟩\n"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_file_split_changes_no_definition_s_hash_though_lean_renames_the_helpers_it_shared(tmp_path):
+    """Lean shares a matcher and a proof it abstracts out of a definition between the declarations of one module: `pick'`
+    reads `pick.match_1` and `three'` reads `three._proof_1`, until a split moves them into a file of their own, where they
+    get `pick'.match_1` and `three'._proof_1`.  A definition's hash holds those in place, not by name, so after the split
+    every definition read has the hash it had, and the review says only that two moved."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    kept, off = pkg / "Control" / "Split.lean", pkg / "Control" / "SplitOff.lean"
+    kept.write_text(f"namespace Control\n{SPLIT_KEPT}{SPLIT_OFF}end Control\n")
+    off.write_text("namespace Control\nend Control\n")
+    (pkg / "Control" / "SplitThms.lean").write_text(
+        "import Control.Split\nimport Control.SplitOff\nnamespace Control\n"
+        "theorem picked : pick' 0 = 1 := rfl\ntheorem third : three'.val = 3 := rfl\nend Control\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.SplitThms\n")
+    pol = unclaimed(A.load(pkg))
+    names = ("Control.main_thm", "Control.picked", "Control.third")
+    A.dump(pkg, pol | {"layers": pol["layers"] | {"Control.Split": {"imports": []}, "Control.SplitOff": {"imports": []}},
+                       "guarantees": {n: {"owner": "@lean"} for n in names}})
+
+    def built() -> tuple[dict, dict, dict]:
+        subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+        rep = A.audit(pkg, tmp_path / "out", update=True, replay=False, runs=False, log=lambda *_: None)
+        assert unshaped(rep) == []
+        f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": dict.fromkeys(names, {})}, tmp_path)
+        own = {r["name"]: r["own"] for p in ("Control.picked", "Control.third") for r in f["pins"][p]["reads"]}
+        return rep, A.load(pkg), own
+
+    def hashes(rec: dict) -> dict:
+        return {d: h for g in rec["reads"].values() for d, h in A.definitions(g).items()}
+
+    _, before, own = built()
+    assert own["Control.pick'"] == own["Control.three'"] == [], "both use the helpers of the declarations before them"
+    kept.write_text(f"namespace Control\n{SPLIT_KEPT}end Control\n")
+    off.write_text(f"namespace Control\n{SPLIT_OFF}end Control\n")
+    rep, after, own = built()
+    assert (own["Control.pick'"], own["Control.three'"]) == (["Control.pick'.match_1"], ["Control.three'._proof_1"])
+    assert hashes(after) == hashes(before) and after["guarantees"] == before["guarantees"]
+    assert list(after["reads"]["Control.SplitOff"]["definitions"]) == ["Control.pick'", "Control.three'"]
+    assert rep["review"] == [f"reads: 2 {A.MOVED_READS}"]
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_lift_into_guarantees_is_certified_on_a_real_build(tmp_path):
     """`Facts.lean`'s one-step unfolding on a real build, without `--moved`: lifts with no binders, with binders whose argument
@@ -1231,8 +1292,7 @@ def test_regrouped_records_of_unchanged_declarations_are_one_line_the_dm_leaves_
         return A.digest([{**r, "sha256": sha(r["hash"])} for r in rs])
     by_parent = {"P.Enc": sha_(enc, mk, cases), "P.g": sha_(g)}
     first = A.judge(pol, now, FILES, update=True)[1]
-    old = first | {"reads": first["reads"] | {"P.Defs": {"digest": A.module_digest(by_parent), "definitions": by_parent,
-                                                          "guarantees": ["P.t"]}}}
+    old = first | {"reads": first["reads"] | {"P.Defs": {"digest": A.module_digest(by_parent), "definitions": by_parent}}}
     new = A.judge(old, now, FILES, update=True)[1]
     notes = A.review(old, new, now, {})
     assert notes == [f"reads: 2 {A.REGROUPED_OWN}"] and A.statement_changes(notes) == []
@@ -1255,6 +1315,8 @@ def test_update_prints_each_changed_guarantee_and_definition(tmp_path):
     assert text[5] == "definition P.f (P.Defs), read by P.t: changed" and text[-1] == "    def f (n : Nat) : Nat := n"
     assert A.statement_changes(text) == text
     assert A.review(new, new, now, {}) == []
+    gone = facts(pins={"P.t": fact(reads=fact()["reads"][2:])})
+    assert "definition P.f (P.Defs): gone" in A.review(old, A.judge(old, gone, FILES, update=True)[1], gone, {})
     reprinted = dict(new["guarantees"]["P.t"], signature=["P.t (h : P.Hyp) (n : Nat) : LE.le (P.f n) n"])
     text = A.review(new, dict(new, guarantees={"P.t": reprinted}), now, {})
     assert text == [f"guarantee P.t: {A.REPRINTED}"] and A.statement_changes(text) == []
@@ -1695,10 +1757,10 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     """On a real build: a guarantee whose statement is a `def G : Prop` of a proofs-tree module under `trees`' `except`
     and outside `meaning` (`Control.Guarantees.Loop`, as C-Flock's `SessionLoopZKDeployed` is in
     `Proofs.Flock.SessionLoop`) is recorded through `G`'s body. A premise added to it that no named assumption stands for
-    (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry stays, and whose
-    module's readers lose the guarantee), changes the record, which the audit refuses until `--update` records it, and
-    the review prints `G` as it is now. A walk that stopped at `G` would record its name alone, and neither change would
-    move the lock. What `G` reads under `meaning` (`twice`) is recorded too."""
+    (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry and module record
+    stay, though the build no longer has `G` read it), changes the record, which the audit refuses until `--update`
+    records it, and the review prints `G` as it is now. A walk that stopped at `G` would record its name alone, and
+    neither change would move the lock. What `G` reads under `meaning` (`twice`) is recorded too."""
     pkg, build, audit, lock = excepted_toy(
         tmp_path, "Control.Loop", LOOP,
         "theorem doubles : Guarantees.Loop := by\n  unfold Guarantees.Loop\n  intros\n  unfold twice double\n  omega\n",
@@ -1706,28 +1768,29 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
         claims_not={"Control.twice": "the toy Prop the statement reads"})
     loop = pkg / "Control" / "Loop.lean"
     build()
-    assert unshaped(audit(True)) == []
+    rep = audit(True)
+    assert unshaped(rep) == []
     first = lock()
     assert first["guarantees"]["Control.doubles"]["signature"] == ["Control.doubles : Control.Guarantees.Loop"]
     assert list(first["reads"]["Control.Loop"]["definitions"]) == ["Control.Guarantees.Loop"]
-    assert first["reads"]["Control.Loop"]["guarantees"] == ["Control.doubles"]
-    assert "Control.doubles" in first["reads"]["Control.Defs"]["guarantees"], "and through it, what it reads under `meaning`"
+    assert rep["readers"]["Control.Loop"] == ["Control.doubles"]
+    assert "Control.doubles" in rep["readers"]["Control.Defs"], "and through it, what it reads under `meaning`"
     assert "Control.twice" in first["reads"]["Control.Defs"]["definitions"]
     seen = {first["reads"]["Control.Loop"]["digest"]}
-    for text, shows, codes, hyp_readers in (
-            (LOOP.replace("Control.Hyp →", "Control.Hyp → n ≠ 5 →"), "n ≠ 5", ["guarantees.reads-changed"],
-             ["Control.doubles", "Control.main_thm"]),
-            (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.twice n",
-             ["guarantees.readers", "guarantees.reads-changed"], ["Control.main_thm"])):
+    for text, shows, hyp_readers in (
+            (LOOP.replace("Control.Hyp →", "Control.Hyp → n ≠ 5 →"), "n ≠ 5", ["Control.doubles", "Control.main_thm"]),
+            (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.twice n", ["Control.main_thm"])):
         before = lock()
         loop.write_text(text)
         build()
-        assert sorted(f.code for f in audit(False)["failures"] if not f.code.startswith("shape")) == codes
+        codes = sorted(f.code for f in audit(False)["failures"] if not f.code.startswith("shape"))
+        assert codes == ["guarantees.reads-changed"], codes
         rep = audit(True)
         after = lock()
         assert unshaped(rep) == [] and after["guarantees"] == before["guarantees"]
         assert after["assumptions"] == before["assumptions"] and set(after["assumptions"]) == {"Control.Hyp"}
-        assert after["reads"]["Control.Assumptions"]["guarantees"] == hyp_readers
+        assert rep["readers"]["Control.Assumptions"] == hyp_readers
+        assert after["reads"]["Control.Assumptions"] == before["reads"]["Control.Assumptions"]
         assert after["reads"]["Control.Loop"]["digest"] not in seen
         seen.add(after["reads"]["Control.Loop"]["digest"])
         changes = A.statement_changes(rep["review"])
@@ -1918,6 +1981,50 @@ def test_a_bound_hidden_in_an_excepted_module_holds_its_guarantee_to_exclusion_w
     entry = {"Control.bounded": rec["guarantees"]["Control.bounded"]["type_hash"]}
     A.dump(pkg, rec | {"unwitnessed": entry})
     assert witnessing(False) == [] and witnessing(True) == [] and lock()["unwitnessed"] == entry
+
+
+CAPPED = ("theorem capped : Guarantees.Capped := by\n  unfold Guarantees.Capped Bound\n  intro n\n  omega\n"
+          "theorem capped_honest : Bound (min 2 3) 5 ∧ double 1 = 2 := ⟨by unfold Bound; omega, rfl⟩\n"
+          "theorem capped_nontrivial : ¬ Bound (min 4 3) 2 := by unfold Bound; omega\n"
+          "theorem bounded_honest : Fits 3 ∧ double 1 = 2 := ⟨by unfold Fits; omega, rfl⟩\n"
+          "theorem bounded_nontrivial : ¬ Bound 6 5 := by unfold Bound; omega\n")
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_premise_free_exclusion_bound_is_witnessed_by_a_tighter_bound_failing_at_an_explicit_circuit(tmp_path):
+    """On a real build: `Control.capped : Guarantees.Capped`, `∀ n, Bound (min n 3) 5`, takes no premise (as training's
+    `ServingBlocks.UncertifiedElementary` takes none), so its nontrivial witness is the bare `¬ Bound (min 4 3) 2`: a
+    tighter bound fails at an explicit circuit. `Control.bounded`, which takes `Fits n`, still fails with a bare
+    `¬ Bound 6 5`, which drops no premise. A rule that asked every exclusion theorem to drop a premise failed `capped`'s
+    witness too, whatever it stated."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Partition.lean").write_text(PARTITION.replace(
+        "end Guarantees", "def Capped : Prop := ∀ n : Nat, Bound (min n 3) 5\nend Guarantees"))
+    thms = pkg / "Control" / "Thms.lean"
+    thms.write_text("import Control.Partition\n" + thms.read_text().replace("end Control", f"{BOUNDED}{CAPPED}\nend Control"))
+    pol = A.load(pkg)
+    names = [f"Control.{g}{s}" for g in ("capped", "bounded") for s in ("", "_honest", "_nontrivial")]
+    A.dump(pkg, pol | {"trees": pol["trees"] | {"definitions": [*pol["trees"]["definitions"], "Control.Partition"]},
+                       "layers": pol["layers"] | {"Control.Partition": {"imports": [], "why": "the bound imports nothing"}},
+                       "guarantees": pol["guarantees"] | {n: {"owner": "@lean"} for n in names},
+                       "witnesses": {f"Control.{g}": {"honest": [f"Control.{g}_honest"], "nontrivial": f"Control.{g}_nontrivial",
+                                                      "kind": "exclusion"} for g in ("capped", "bounded")}})
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+
+    def witnessing(update):
+        return [f for f in A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)[
+            "failures"] if f.code.startswith("witnesses")]
+    fails = witnessing(True)
+    assert [(f.code, f.entry) for f in fails] == [("witnesses.nontrivial-drops", "Control.bounded_nontrivial")], fails
+    assert "with P one of Control.Fits; a bare `¬ bound` reads none" in fails[0], fails[0]
+    rec = json.loads((pkg / A.POLICY).read_text())
+    A.dump(pkg, rec | {"witnesses": {}})
+    missing = {f.entry: str(f) for f in witnessing(False) if f.code == "witnesses.missing"}
+    assert {"Control.capped", "Control.bounded"} <= set(missing), missing
+    assert "`Control.capped_nontrivial : ¬ Control.Bound c₀ …` (it takes no premise to drop" in missing["Control.capped"]
+    assert "once one named premise is dropped" in missing["Control.bounded"]
 
 
 def test_a_statement_whose_premises_could_not_be_read_fails():
@@ -2580,6 +2687,72 @@ def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
     assert inline_codes(pol | {"shape": {"inline": ["P.t"]}}, grown) == ["shape.inline-form"]
 
 
+WHY = "inline when the rule came"
+
+
+def renamed_inline(was, now, consts, constants, moves=None):
+    """(policy, facts): `P.t`'s `shape.inline` lists ``was``, and its build takes ``now`` instead, naming ``consts``; the
+    build holds ``constants`` ({name: its kind, or (its kind, the text its SHA-256 is of)}) and was read with ``moves``."""
+    pol, f = inlined(premise(now, "Eq") | {"consts": consts})
+    table = {n: {"kind": k} if isinstance(k, str) else {"kind": k[0], "sha256": sha(k[1])} for n, k in constants.items()}
+    return pol | {"shape": {"inline": {"P.t": {was: WHY}}}}, f | {"constants": table, "moves": moves or {}}
+
+
+def test_a_grandfathered_inline_premise_pairs_with_no_other_premise_than_itself_renamed():
+    """An entry takes a premise's place only through renamed declarations, so each of these fails and `--update` drops
+    the entry: a predicate for another that is still declared, a constructor for its sibling (kept or gone), a bound for
+    another with both declared, or the old one gone while the lock read the new one, a type for another with both
+    declared, swapped projections (alone or beside a rename), a rename beside another change or with another field
+    after it, a field of a bound variable for a declaration, two declarations for one, a new name `constants` doesn't
+    hold, and a gone name in facts that hold no constants (an older audit tool's)."""
+    cases = [("P.ok g", "P.bad g", ["P.bad"], {"P.ok": ("def", "ok"), "P.bad": ("def", "bad")}),
+             ("g = P.Gate.and", "g = P.Gate.or", ["P.Gate.or"], {"P.Gate.and": "constructor", "P.Gate.or": "constructor"}),
+             ("g = P.Gate.and", "g = P.Gate.or", ["P.Gate.or"], {"P.Gate.or": "constructor"}),
+             ("x ≤ P.lo", "x ≤ P.hi", ["P.hi"], {"P.lo": ("def", "0"), "P.hi": ("def", "10")}),
+             ("Op", "IntOp", ["IntOp"], {"Op": "inductive", "IntOp": "inductive"}),
+             ("p.1 < p.2", "p.2 < p.1", [], {}),
+             ("P.Old.lt p.1 p.2", "P.New.lt p.2 p.1", ["P.New.lt"], {"P.New.lt": ("def", "lt")}),
+             ("P.Old.lo < x", "P.New.lo ≤ x", ["P.New.lo"], {"P.New.lo": ("def", "lo")}),
+             ("P.Old.δ.floor ≤ x", "P.New.δ.ceil ≤ x", ["P.New.δ"], {"P.New.δ": ("def", "δ")}),
+             ("P.ok x.f", "P.ok P.c", ["P.ok", "P.c"], {"P.ok": ("def", "ok"), "P.c": ("def", "c")}),
+             ("P.a ≤ P.b", "P.c ≤ P.c", ["P.c"], {"P.c": ("def", "c")}),
+             ("P.a ≤ P.c", "P.c ≤ P.c", ["P.c"], {"P.c": ("def", "c")}),
+             ("x ≤ P.Old.lo", "x ≤ P.New.lo", ["P.New.lo"], {})]
+    for was, now, consts, constants in cases:
+        pol, f = renamed_inline(was, now, consts, constants)
+        assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"], (was, now)
+        assert A.inline_failures(pol, f)[1] == {}, (was, now)
+    pol, f = renamed_inline("x ≤ P.lo", "x ≤ P.hi", ["P.hi"], {"P.hi": ("def", "10")})
+    assert inline_codes(pol, f) == []
+    read = pol | {"reads": {"P.Defs": {"definitions": {"P.hi": sha("10")}, "guarantees": ["P.t"]}}}
+    assert inline_codes(read, f) == ["guarantees.inline-hypothesis"]
+    older = {k: v for k, v in f.items() if k != "constants"}
+    assert inline_codes(pol, older) == ["guarantees.inline-hypothesis"]
+
+
+def test_a_grandfathered_inline_premise_follows_its_declarations_renames_and_update_rekeys_it():
+    """A premise that is a grandfathered entry with names renamed takes the entry's place: a declaration `--moved` moved (a
+    namespace's constructor too, and one whose old name is still declared otherwise), one whose old name is gone from the
+    build within its root namespace (with the fields printed after it unchanged), and a definition with the same SHA-256
+    as the old name's. `--update` keys the entry by the premise as printed, with its reason."""
+    cases = [("P.Old.ok g", "P.New.ok g", ["P.New.ok"], {"P.Old.ok": ("def", "ok"), "P.New.ok": ("def", "new")},
+              {"P.Old": "P.New"}),
+             ("List.instMembership.mem t.items (Flock.Firewall.Item.coins k)",
+              "List.instMembership.mem t.items (Flock.Gate.Item.coins k)", ["List.instMembership", "Flock.Gate.Item.coins"],
+              {"Flock.Gate.Item.coins": "constructor", "List.instMembership": ("def", "mem")}, {"Flock.Firewall": "Flock.Gate"}),
+             ("Real.instLE.le (P.Old.size s).cast P.Old.δ.cast", "Real.instLE.le (P.New.size s).cast P.New.δ.cast",
+              ["Real", "Real.instLE", "P.New.size", "P.New.δ"], {"P.New.size": ("def", "size"), "P.New.δ": ("def", "δ")},
+              None),
+             ("P.ok g", "P.ok' g", ["P.ok'"], {"P.ok": ("def", "ok"), "P.ok'": ("def", "ok")}, None)]
+    for was, now, consts, constants, moves in cases:
+        pol, f = renamed_inline(was, now, consts, constants, moves)
+        assert inline_codes(pol, f) == [], (was, now)
+        assert A.inline_failures(pol, f)[1:] == ({"P.t": {now: WHY}}, {"P.t": [now]})
+        assert A.judge(pol, f, FILES, update=True)[1]["shape"] == {"inline": {"P.t": {now: WHY}}}
+    pol, f = renamed_inline("P.Old.ok g", "P.New.ok g", ["P.New.ok"], {"P.Old.ok": ("def", "ok"), "P.New.ok": ("def", "new")})
+    assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"], "without the move, both declared and different"
+
+
 INLINE_G = "import Control.Defs\n\ndef Control.Guarantees.G : Prop := ∀ n : Nat, 0 < n → Control.double n = 5 → True\n"
 INLINE = """import Control.Assumptions
 import Control.Guarantees
@@ -2606,11 +2779,15 @@ def test_inline_hypotheses_are_read_past_lifts_foralls_and_conjunctions_on_a_rea
     family (`∀ i, 0 ≤ w i`), and a named assumption, bare and under a leading `∀ ω`, pass; a bound against a term, an
     equation split out of a conjunction and one under `∀ ω` fail, and so does the equation a guarantee lifted into a
     `Guarantees` definition takes, which the hypotheses rule never sees (its statement as written binds nothing); that
-    definition taken inside a conjunct is another listed guarantee's statement."""
+    definition taken inside a conjunct is another listed guarantee's statement. Each premise names the constants its text
+    shows, and the build reports those and the names of the lock's `shape.inline` texts it declares, with a definition's
+    SHA-256 blind to its name: an entry under a name the build lacks, or under a definition the same as the printed one,
+    takes its premise's place; one under another declared definition doesn't."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     src = pkg / "Control" / "Assumptions.lean"
-    src.write_text(src.read_text().replace("end Control", "def Fits (n : Nat) : Prop := n < 100\n\nend Control"))
+    src.write_text(src.read_text().replace("end Control", "def Fits (n : Nat) : Prop := n < 100\n\n"
+                                           "def twice (n : Nat) : Nat := 2 * n\n\nend Control"))
     (pkg / "Control" / "Guarantees.lean").write_text(INLINE_G)
     (pkg / "Control" / "Inline.lean").write_text(INLINE)
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Inline\n")
@@ -2631,6 +2808,22 @@ def test_inline_hypotheses_are_read_past_lifts_foralls_and_conjunctions_on_a_rea
     assert len(offenders["Control.SecurityProofs.G"]) == 1 and "5" in offenders["Control.SecurityProofs.G"][0]
     fails = [x for x in A.judge(policy, f, A.lean_modules(pkg))[0] if x.code == "guarantees.inline-hypothesis"]
     assert sorted(x.entry for x in fails) == ["Control.SecurityProofs.G", "Control.offends"]
+
+    held = policy | {"shape": {"inline": {"Control.offends": {"Eq (Control.twice n) 4": WHY,
+                                                              "∀ (ω : Nat), Eq (Control.Small ω) n": WHY},
+                                          "Control.SecurityProofs.G": {"Eq (Control.thrice n) 5": WHY}}}}
+    f = A.facts_of(pkg, held, tmp_path)
+    assert [p["consts"] for p in f["pins"]["Control.offends"]["inline"]][1:] == \
+        [["Control.double", "Eq"], ["Nat", "instLTNat"], ["Control.double", "Eq", "Nat"]]
+    c = f["constants"]
+    assert c["Control.twice"]["sha256"] == c["Control.double"]["sha256"] != c["Control.Small"]["sha256"]
+    assert c["Control.double"]["kind"] == "def" and "Control.thrice" not in c and c["Eq"] == {"kind": "inductive"}
+    fails = [x for x in A.judge(held, f, A.lean_modules(pkg))[0] if x.code == "guarantees.inline-hypothesis"]
+    assert [x.entry for x in fails] == ["Control.offends"] and fails[0].startswith(
+        "guarantees: Control.offends takes (Int.instLEInt.le x (instHMul.hMul 2 y)); (∀ (ω : Nat), Eq (Control.double ω) "
+        "n): an inline hypothesis")
+    assert A.judge(held, f, A.lean_modules(pkg), update=True)[1]["shape"]["inline"] == {
+        "Control.SecurityProofs.G": {"Eq (Control.double n) 5": WHY}, "Control.offends": {"Eq (Control.double n) 4": WHY}}
 
 
 def test_a_lifted_guarantee_is_witnessed_as_the_statement_it_lifts():
@@ -2748,6 +2941,37 @@ def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beat
         "acceptance", "it reads P.Run.accepts, a verifier's acceptance")
     device = witnessed(g | {"reads": [cover, run | {"name": "P.Device.Accepts"}]})
     assert A.witness_scope("P.sound", device[0], device[1]["pins"]["P.sound"])[0] == "acceptance"
+
+
+def test_a_premise_free_exclusion_theorem_is_witnessed_by_its_bound_failing_at_an_explicit_circuit():
+    """An exclusion theorem that takes no premise (`premise_free`: training's `ServingBlocks.UncertifiedElementary`, a
+    cap at every unit of every refinement) has none to drop: its nontrivial witness is the bare `¬ bound` at an explicit
+    circuit, where a tighter bound fails, and a missing witness is asked for in that form. It still negates the bound,
+    constructs its circuit and takes only listed assumptions. A hypothesis no constant heads is a premise all the same,
+    and a guarantee with a premise still drops one."""
+    cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
+    g = {"reads": [cover], "premises": [], "hypotheses": [],
+         "body": wbody("LE.le", binders=["∀", "∀"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
+    bare = {"body": wbody("LE.le", negated=True, conclusion=[{"head": "Not", "defs": [], "refl": False,
+                                                              "assumed": False, "negated": True, "inner": "LE.le"}])}
+    pol, f = witnessed(g, nontrivial=bare)
+    assert A.premise_free(f["pins"]["P.sound"]) and A.witness_scope("P.sound", pol, f["pins"]["P.sound"])[0] == "exclusion"
+    assert A.witness_failures(pol, f, WOWN) == []
+    missing = A.witness_failures({**pol, "witnesses": {}}, f, WOWN)[0]
+    assert "`P.sound_nontrivial : ¬ LE.le c₀ …` (it takes no premise to drop, so a tighter bound fails at an explicit " \
+           "circuit c₀)" in missing and '"kind": "exclusion"' in missing, missing
+    assert witness_codes(*witnessed(g, nontrivial={"body": wbody("P.Compiled")})) == ["witnesses.nontrivial-form"]
+    assert witness_codes(*witnessed(g, nontrivial={"body": bare["body"] | {"binders": ["∀"]}})) == \
+        ["witnesses.instance-binders"]
+    other = [{"binder": "h", "type": "P.Other", "closed": True, "named": "P.Other", "module": "P.Defs"}]
+    assert witness_codes(*witnessed(g, nontrivial={"body": bare["body"] | {"binders": ["→"]}, "hypotheses": other})) == \
+        ["witnesses.nontrivial-assumes"]
+    unheaded = g | {"hypotheses": [{"binder": "h", "type": "p n", "closed": False}],
+                    "body": g["body"] | {"binders": ["∀", "∀", "→"]}}
+    assert not A.premise_free(unheaded)
+    assert witness_codes(*witnessed(unheaded, nontrivial=bare)) == ["witnesses.nontrivial-drops"]
+    premised = g | {"premises": [COMPILED], "body": g["body"] | {"binders": ["∀", "∀", "→"]}}
+    assert witness_codes(*witnessed(premised, nontrivial=bare)) == ["witnesses.nontrivial-drops"]
 
 
 def test_a_nontrivial_witness_may_negate_what_the_guarantee_unfolds_to():
@@ -2906,13 +3130,10 @@ def test_a_package_without_a_policy_gets_a_template(tmp_path):
 def test_a_record_from_before_the_rename_is_read_as_guarantees_and_one_holding_both_is_refused(tmp_path):
     pol = recorded()
     old = {("pins" if k == "guarantees" else k): v for k, v in pol.items()}
-    old["reads"] = {m: {("pins" if k == "guarantees" else k): v for k, v in g.items()} for m, g in pol["reads"].items()}
     assert A.as_guarantees(json.loads(json.dumps(old))) == pol
     assert A.judge(A.as_guarantees(old), facts(), FILES) == ([], pol)
     with pytest.raises(ValueError, match=r"the record holds both `pins` and `guarantees`"):
         A.as_guarantees(pol | {"pins": {"P.u": {}}})
-    with pytest.raises(ValueError, match=r"reads\[P.Defs\] holds both"):
-        A.as_guarantees(pol | {"reads": {"P.Defs": pol["reads"]["P.Defs"] | {"pins": ["P.u"]}}})
     pkg = tmp_path / "p"
     pkg.mkdir()
     (pkg / A.POLICY).write_text(A.text(pol | {"pins": {"P.u": {}}}))
@@ -3371,7 +3592,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
 
     def proved(pkg, policy, facts, work, moved, ready):
         order.append("proved")
-        return [], facts | {"pins": {"P.g": {"kind": "theorem"}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
+        return [], facts | {"pins": {"P.g": {"kind": "theorem", "reads": []}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
 
     def stub(name, result):
         def f(*args):

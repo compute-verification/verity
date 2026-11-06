@@ -56,7 +56,8 @@ after_landing_shards = 3
 # lean-agreement,ratchet-gate` on `on` (the preflights and lean-agreement's lean-build with them; lean-agreement left out when
 # nothing it checks changed), with the --base and --ratchet-base a run of every step takes, its reds named and reverted as a
 # run's. `main` follows once every task on the gate passed, the graph has a task of every other job `main` waits for, and that
-# run passed its steps: a red ratchet-gate holds `main` though it is off the gate
+# run passed its preflights and its steps on the gate: a red ratchet-gate, off it (policy.toml's `off_gate`), holds `main` no
+# more than in a run of every step
 executor = "shadow"
 # infra's enqueue command, the words of its argv (`research.executor.QueueTransport`), run with `--priority N --check
 # after-landing:SHA` (and `--schema verity-graph/v2` when on); unset, each tip the executor would check is recorded incomplete
@@ -101,3 +102,9 @@ stale_days = 3
 stale_close_days = 7
 # PRs the stale rule never judges, kept open by their owners with a reason
 stale_keep = [2692, 2693, 2705, 2948, 3205, 3401, 3573]
+# the unlandable rule, hourly: close each open PR based on `main` that nothing will land as it is, its head contained by a PR
+# of the same owner that landed on `checked`, or its change on `checked` already (each file it changes there as its head has
+# it), with a comment naming which and how to keep it open, its branch kept; never one marked ready at its head, on `next`,
+# with a hold label, a draft that says "keep open", one of `stale_keep`, or one reopened at the head drive closed it at.
+# "on"; "log", only log each it would close (`would close #N: why`); "off"
+close_unlandable = "log"

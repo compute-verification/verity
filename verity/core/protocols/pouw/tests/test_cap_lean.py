@@ -50,7 +50,7 @@ def test_credit_pins_are_credit_of():
         dev, g, rows, k, n, value = m[1], *(int(x) for x in m.groups()[1:])
         d = DEVICES[dev]
         assert g == d.g, name
-        assert C.PearlC(forming="v1", device=d).credit_of(Shape(rows, k, n)) == value, name
+        assert C.PearlC(forming="v1", device=d, hashing="h0").credit_of(Shape(rows, k, n)) == value, name
 
 
 def test_cap_pins_are_cap_constants():
