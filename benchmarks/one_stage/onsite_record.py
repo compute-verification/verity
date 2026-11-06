@@ -138,7 +138,11 @@ rests on in the lock at the statement whose hypotheses and antecedents `RESTS_ON
 `COUNTS`) and the coins are live (``coins``), and while any is ``open``, by name, K plus ℓ_a + 1 bits for each audit
 tied to each execution phase's scan (``advice``: the bits each phase adds), the figure, with no tighter figure beside
 it, only how it tightens (``tight``, `TIGHT`), conditional on the coins and on each open premise of `UNCHARGED` while they are open
-(``conditional_on``). Beside the bound, ``advice_charge``: the served run's
+(``conditional_on``). Its ``state_charge`` (`state_charge`, `STATE_CHARGE`) says which charge K applied each audit
+tied to a phase's scan: stateFree, its free inputs with its reads of the scan's state held, only where RowsStateHeld is
+in the lock at the statement and definitions `STATE_PINS` pins, so that its proof stands over the entry a window's
+activations commit, else free; where it is free and a tied audit's parameters state a circuit record, there is no
+figure (`STATE_UNCOVERED`). Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
 audits' unregistered inputs, read off the period's parameters, with no advice length and no cap in them); ``cap`` is
@@ -796,6 +800,26 @@ NO_REGISTRATION = (f"the run published no advice registration ({REGISTRATION}), 
                    "figure of record charges each tied audit while a check or a premise is open")
 TIED_ALL = ("every audit of the case's commitment: the public names no scan's tied audits (scans[j].tied), so each is "
             "charged to every execution phase, exact with one audit")
+#: RowsStateHeld's guarantee, by its name in `LOCKS`, which the rows form's charge of a tied audit's stateFree rests on
+STATE_HELD = "Properties.NetworkPeriod.rowsStateHeld"
+#: `STATE_HELD`'s statement, and the definitions it reads that hold an audit's reads of the scan's state where its
+#: window's activations commit it, each by its digest in `LOCKS`: None is no pin, under which the charge is free
+STATE_PINS: dict[str, str | None] = {
+    STATE_HELD: "201c7e14cff40c3f649f09173ee7e1824cd0e00f9d5c18a1cef22d6ee09aa309",
+    "NetworkCheck.Period.stateHeldIn": None, "NetworkCheck.Period.auditStateEntries": None}
+STATE_CHARGE = ("which charge the rows form's K applied to each audit tied to an execution phase's scan "
+                "(`NetworkCheck.Period.chargeOf`): its free inputs with its reads of the scan's state held (stateFree) "
+                "where its SCAN_STATE is the scan's state in every phase tied to it (stateHeldIn, over the entries "
+                "auditStateEntries reads: its registered ones and its window's activations entry), else its free inputs "
+                "(free). The record states stateFree only where RowsStateHeld is in the lock at the statement, and "
+                "reading stateHeldIn and auditStateEntries at the digests, that `STATE_PINS` pins, so that its proof "
+                "stands over the activations entry, and free otherwise, naming each digest the lock doesn't give as "
+                "pinned (``unpinned``). A tied audit's stateFree is its free unless the period's parameters state its "
+                "circuit record (``with_record``)")
+STATE_UNCOVERED = ("the charge is free (`STATE_CHARGE`), and the period's parameters state a tied audit's circuit "
+                   "record, so the rows form may have charged that audit its stateFree, less than its free, where no "
+                   "proof in the lock stands over the entries it held; the public doesn't separate the two, so the "
+                   "record states no figure of record")
 #: each scaled cell's rule, by the name it gives; `rules` adds each one's sources
 RULES = {
     "per-phase": "the run's K and eps over one of its m execution phases, K/m: their average, which no statement bounds a "
@@ -1677,6 +1701,35 @@ def registered_files(found: Mapping[str, tuple[str, dict[str, Any]]], case: Path
     return res | {"holds": True}
 
 
+def state_charge(case: Mapping[str, Any], public: Mapping[str, Any], audits: int,
+                 locks: Sequence[Path]) -> dict[str, Any]:
+    """Which charge the rows form's K applied to the audits tied to its phases' scans (`STATE_CHARGE`): ``stateFree``
+    where ``locks`` list `STATE_HELD` at each of `STATE_PINS`, its statement's digest and those of the definitions it
+    reads, else ``free`` with ``unpinned``, each such the locks don't give as pinned, by the digest they give (None for
+    none); ``tied``, the tied audits (the public's ``scans[j].tied``, else each of the commitment's ``audits``,
+    `TIED_ALL`), and ``with_record``, those whose parameters state a circuit record, the only ones whose stateFree may be
+    less than their free; and ``missing`` (`STATE_UNCOVERED`) where the charge is free and one is. A lock that can't be
+    read gives none."""
+    seen: dict[str, str | None] = {}
+    for lock in locks:
+        try:
+            doc = json.loads(lock.read_text())
+            if STATE_HELD not in doc["guarantees"]:
+                continue
+            seen[STATE_HELD] = statement(doc, STATE_HELD)
+            seen |= {d: h for r in doc["reads"].values() if STATE_HELD in (r.get("guarantees") or ())
+                     for d, h in (r.get("definitions") or {}).items() if d in STATE_PINS and d != STATE_HELD}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            continue
+    unpinned = {k: seen.get(k) for k, pin in STATE_PINS.items() if pin is None or seen.get(k) != pin}
+    params = case["params"].get("audits") or []
+    tied = sorted({int(i) for s in public["scans"] for i in (s["tied"] if s.get("tied") is not None else range(audits))})
+    with_record = [i for i in tied if i < len(params) and isinstance(params[i], Mapping) and "circuit" in params[i]]
+    out = {"charge": "free" if unpinned else "stateFree", "is": STATE_CHARGE, "tied": tied, "with_record": with_record}
+    return out | ({"unpinned": unpinned} if unpinned else {}) | (
+        {"missing": STATE_UNCOVERED} if unpinned and with_record else {})
+
+
 def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any],
               conditional: Sequence[str] = ()) -> dict[str, Any]:
     """The figure of record (`OPEN`) from the period's public, the audits' caps ``ell``, the tight K's premises
@@ -1696,9 +1749,10 @@ def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mappi
 
 def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int, prem: Mapping[str, Any],
            conditional: Sequence[str] = ()) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The figure of record (`of_record`, at ``conditional``) and ``advice_charge``'s ``cap`` from OUT's advice
-    registration (`REGISTRATION`) and the case's commitment: both the one ``missing`` or ``error`` where either can't
-    be read."""
+    """The figure of record (`of_record`, at ``conditional``), with the charge K applied its tied audits
+    (``state_charge``, `state_charge`), and ``advice_charge``'s ``cap`` from OUT's advice registration
+    (`REGISTRATION`) and the case's commitment: both the one ``missing`` or ``error`` where either can't be read, and
+    the figure ``missing`` beside that charge where it is one the public can't be held to (`STATE_UNCOVERED`)."""
     try:
         cap = advice_cap(json.loads((out / REGISTRATION).read_text()))
     except FileNotFoundError:
@@ -1707,7 +1761,9 @@ def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int
         return (why := {"error": f"{REGISTRATION}: {type(e).__name__}: {e}"}), why
     try:
         ell = caps(case, cap)
-        return of_record(public, ell, K, prem, conditional), {"ell_a": ell, "is": CAP}
+        charge = state_charge(case, public, len(ell), LOCKS)
+        fig = {"missing": charge["missing"]} if "missing" in charge else of_record(public, ell, K, prem, conditional)
+        return fig | {"state_charge": charge}, {"ell_a": ell, "is": CAP}
     except (IndexError, KeyError, TypeError, ValueError) as e:
         return (why := {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}), why
 
