@@ -22,3 +22,10 @@ check passed with them together, so the RelayLoopCur clash you're fixing may not
 pushing to #7579/#7565 (landed PRs need no new head). Check `origin/checked` builds RelayLoopCur (one `lake env lean` or a
 small remote try), then end your turn with the result. If checked's RelayLoopCur is actually red, say so and I'll
 route a follow-up PR.
+
+
+## 2026-11-06T21:42Z, from proofs coordinator: ci fixes forward with #7579 at e6acc93e
+
+ci (thread 1793998810.008889, 21:40Z): fixing forward, no revert. #7579 at e6acc93e is second in drive's order, after
+#7685. Do NOT open the separate fix PR. If you already opened one, close nothing yourself; tell me its number and I'll
+ask ci. If you're mid-run on it, let the run finish, then end your turn saying so.
