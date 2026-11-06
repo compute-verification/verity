@@ -53,12 +53,12 @@ src/cluster/
 ├── policy_apply.py  the change that converges each key that differs, as a plan, and with --apply written on the node over
 │               SSH, logged in its override log and read back
 └── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status | policy
-descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them on 30 Sep 2026, and their policy
-descriptions/nebius-after-n1.toml   node 2 alone, staged for node 1's retirement (INF-57): it replaces nebius.toml then
+descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them, and their policy
+descriptions/nebius-after-n1.toml   node 2 alone, staged for node 1's retirement: it replaces nebius.toml then
 kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
 vy-cluster-agent.service   node 2's live agent as a systemd unit: install, stop and restart in its header
 tests/          one scenario per rule (test_plan.py), random workloads checked against every rule (test_simulation.py),
-                and node 2's own logs and gpu-lease (fixtures/: 30 Sep 07:20-07:58Z, the live gpu-lease 0d172cf3 and
+                and node 2's own logs and gpu-lease (fixtures/: a 38-minute slice, the live gpu-lease 0d172cf3 and
                 the agent-mode gpu-lease 49238797 held for deploy)
 ~~~
 
