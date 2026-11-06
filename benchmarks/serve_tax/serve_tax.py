@@ -396,7 +396,7 @@ def tick_args(source: str | None, given_ms: str | None, load: str = "saturated")
                 "calibrated_from": None}
     src = Path(source)
     if src.is_dir():
-        traces = sorted((src / "server").glob("step_trace.*.jsonl"))
+        traces = step_traces(src)
         meta = json.loads((src / "meta.json").read_text())
         at = [x for x in meta["loads"] if x["load"] == load and x["rep"] == 1]
         if not traces or not at:
@@ -404,7 +404,7 @@ def tick_args(source: str | None, given_ms: str | None, load: str = "saturated")
         recs = window_trace(traces[0], at[0]["t0_unix"], at[0]["t0_unix"] + at[0]["wall_s"])
         where = {"trace": str(traces[0]), "load": load, "t0_unix": at[0]["t0_unix"], "wall_s": at[0]["wall_s"]}
     else:
-        recs = [json.loads(x) for x in src.read_text().splitlines() if x.strip()]
+        recs = trace_records(src)
         where = {"trace": str(src)}
     c = busy_cycle(recs)
     if not c["mean_us"]:
@@ -413,9 +413,21 @@ def tick_args(source: str | None, given_ms: str | None, load: str = "saturated")
             "free_us": round(C.TICK_FREE * c["mean_us"]), "calibrated_from": {**where, **c}}
 
 
+def step_traces(arm_dir: Path) -> list[Path]:
+    """An arm's step traces, one per engine core, plain or gzipped (run.sh gzips them once the job's table is made)."""
+    return sorted((arm_dir / "server").glob("step_trace.*.jsonl*"))
+
+
+def trace_records(trace: Path) -> list[dict]:
+    import gzip
+
+    with (gzip.open if trace.suffix == ".gz" else open)(trace, "rt", encoding="utf-8") as f:
+        return [json.loads(x) for x in f if x.strip()]
+
+
 def window_trace(trace: Path, t0: float, t1: float) -> list[dict]:
     """The step trace's records with times in [t0, t1] (one load's), its header first."""
-    return in_window([json.loads(x) for x in trace.read_text().splitlines() if x.strip()], t0, t1)
+    return in_window(trace_records(trace), t0, t1)
 
 
 def in_window(recs: list[dict], t0: float, t1: float) -> list[dict]:

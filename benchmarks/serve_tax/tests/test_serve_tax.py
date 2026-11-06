@@ -131,3 +131,15 @@ def test_drive_load_counts_what_the_client_sent_and_the_server_did_not_serve(mon
     monkeypatch.setattr(S, "corpus", lambda: Corpus)
     m = S.drive_load(0, "m", [{"i": i} for i in range(4)], 10.0, 1.0, "light1", tmp_path / "rep-1", 1.0, None)
     assert (m["requests"], m["unserved"]) == (4, 1)
+
+
+def test_step_traces_are_read_plain_or_gzipped(tmp_path: Path):
+    import gzip
+
+    (tmp_path / "server").mkdir()
+    lines = "".join(json.dumps(r) + "\n" for r in ({"kind": "header"}, {"kind": "step", "t": 1.0}))
+    (tmp_path / "server" / "step_trace.1.jsonl").write_text(lines)
+    with gzip.open(tmp_path / "server" / "step_trace.2.jsonl.gz", "wt") as f:
+        f.write(lines)
+    plain, gz = S.step_traces(tmp_path)
+    assert S.trace_records(plain) == S.trace_records(gz) == [{"kind": "header"}, {"kind": "step", "t": 1.0}]

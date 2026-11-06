@@ -27,6 +27,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "tools" / "config"))
 sys.path.append(str(ROOT))
 from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
+import serve_tax as S  # noqa: E402 (beside this file)
 
 
 def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
@@ -38,8 +39,8 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
     plan = {r["i"]: r for r in (json.loads(x) for x in plan_file.read_text().splitlines() if x.strip())}
     client = {r["id"]: r for r in (json.loads(x) for x in (arm_dir / load / f"rep-{rep}" / "client.jsonl").read_text().splitlines()
                                    if x.strip())}
-    (trace,) = sorted((arm_dir / "server").glob("step_trace.*.jsonl"))
-    recs = [json.loads(x) for x in trace.read_text().splitlines() if x.strip()]
+    (trace,) = S.step_traces(arm_dir)
+    recs = S.trace_records(trace)
     mine = lambda rid: f"-{tag}-" in rid   # noqa: E731
     arrive = [r for r in recs if r["kind"] == "arrive" and mine(r["request"])]
     if not arrive:
