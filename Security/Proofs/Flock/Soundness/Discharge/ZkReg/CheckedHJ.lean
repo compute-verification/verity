@@ -1,10 +1,13 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
-public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
 public import Proofs.Flock.Soundness.Registered.ReadsX
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 import all Init.Data.Array.Basic
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

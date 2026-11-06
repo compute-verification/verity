@@ -9,7 +9,6 @@ public import Proofs.Flock.Soundness.Discharge.ZkCoins.Leaf
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Hybrid
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Erase
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Reads
-public import Proofs.Flock.Soundness.Discharge.ZkCoins.Session
 import Mathlib.Combinatorics.Matroid.Init
 
 /-!

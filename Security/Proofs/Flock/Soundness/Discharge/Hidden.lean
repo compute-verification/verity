@@ -4,7 +4,6 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
-public import Proofs.Flock.Soundness.Discharge.Hidden.DerivedP
 public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 public import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 public import Proofs.Flock.Soundness.Discharge.Hidden.Binding
@@ -19,7 +18,12 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
 public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 public import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 public import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
-public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Theorems
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Checked
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Upv
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegShape

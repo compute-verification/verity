@@ -1,10 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.ResLowJD
-public import Proofs.Flock.Claims.Recursion.ResLowJP
-public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 public import Proofs.Flock.Claims.Recursion.ResPiecesD
 public import Proofs.Flock.Claims.Recursion.ResTieVV
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.ResLowJP
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

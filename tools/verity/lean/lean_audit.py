@@ -9,7 +9,7 @@ packages whose passes can't be reused, with dependencies kept warm.
     python tools/verity/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/verity/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/verity/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
-    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT` and `BUILDS_MAX_GB`, `REPLAYS_KEPT`, `RECORDS_KEPT` or one per `build` slot, artifacts)
+    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT` and `BUILDS_MAX_GB`, `REPLAYS_KEPT`, `RECORDS_KEPT` or one per `build` slot, artifacts, `UNREAD_KEPT`)
 
 A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
 each file under its path relative to its package (a module's is its name), never the package's own path:
@@ -61,6 +61,14 @@ modules go through the kernel once per change of their `.olean` files. With `--f
 the scratch tree's, so the packages of one run share it and nothing outlives the run. Lean gets this
 machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
 
+The audits of `Security` and `Security/Proofs` (`UNREAD_FACTS`) also write what each constant of the analysis mentions
+(`check.py`'s `unread_facts`), and their passes are stored, and reused, only with those facts beside them (`unread/` in
+the cache, `UNREAD_KEPT` last used kept). After the audits, the run joins both packages' facts, this run's or the reused
+passes', and runs the ratchet on wholly unread modules (`unread_ratchet`, `unread.py`): an area of the analysis whose
+wholly unread modules, or their declarations, rose above its cap in `unread-caps.json` fails the run (`unread` in
+`audit.json`'s `failed`), and one that came down leaves the lowered caps in `unread/` under ``--out``. It builds nothing
+and takes seconds. `unread.py` and the caps are out of every key (`NOT_READ`), so a change to either reruns no audit.
+
 A machine without a package's dependencies restores them from the evidence store instead of cloning them from GitHub, which
 throttles anonymous clones from shared addresses. `lean-deps.json` pins one bundle per `lake-manifest.json`'s fetched entries + `lean-toolchain`
 (`deps_key`; a `path` entry changes no key) by sha256; the launcher sends a presigned URL for each (`--urls`, `check.py --record`), and a bundle is used only when its
@@ -71,6 +79,7 @@ directory, custody puts them on R2, and `--pin RUN` pins them.
 from __future__ import annotations
 
 import argparse
+import base64
 import fcntl
 import gzip
 import hashlib
@@ -163,8 +172,102 @@ NOT_READ = {
     "run_daily.py": "the build cache's daily publish",
     "tool.py": "the store's declarations of the scheduled runs",
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
+    "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
+    "unread-caps.json": "the ratchet's caps, which `unread.py` reads",
     "pyproject.toml": "the tools/verity/lean suite's settings",
 }
+
+#: the packages whose audits write `Unread.lean`'s facts (`check.py`'s `UNREAD_FACTS`): a pass of one is reused only with
+#: the facts it wrote, kept beside it, and the ratchet on wholly unread modules joins theirs (`unread_ratchet`)
+UNREAD_FACTS = ("Security", "Security/Proofs")
+UNREAD = "tools/verity/lean/unread.py"
+UNREAD_SCHEMA = "lean-unread-facts/v1"
+#: the facts entries a node keeps beside the passes (`unread/` in the cache), last stored or reused first: Security/Proofs'
+#: are some 6 MB each, and a pass whose facts went is audited again
+UNREAD_KEPT = 64
+
+
+def reusable(cache: Path, pkg: str, k: str) -> bool:
+    """Whether ``pkg``'s pass under ``k`` is kept in ``cache`` with what its reuse needs: the pass, and for a package of
+    `UNREAD_FACTS` the facts its audit wrote."""
+    return (cache / f"{k}.json").is_file() and (pkg not in UNREAD_FACTS or (cache / "unread" / f"{k}.json").is_file())
+
+
+def keep_facts(cache: Path, pkg: str, k: str, rep: dict, out: Path) -> bool:
+    """Store the facts ``pkg``'s audit wrote (its report's `unread_facts`, under ``out``) beside its pass: `unread/K.json`,
+    a `.json` entry so that a verdict pack carries it. False when the audit wrote none."""
+    f = rep.get("unread_facts") or {}
+    src = out / str(f.get("file", ""))
+    if not f or not src.is_file() or _sha(src) != f.get("sha256"):
+        return False
+    d = cache / "unread"
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = d / f".{k}.tmp"
+    tmp.write_text(json.dumps({"schema": UNREAD_SCHEMA, "package": pkg, "key": k, "sha256": f["sha256"],
+                               "facts": base64.b64encode(src.read_bytes()).decode()}))
+    os.replace(tmp, d / f"{k}.json")
+    return True
+
+
+def kept_facts(cache: Path, pkg: str, k: str, out: Path, log=print) -> Path | None:
+    """The facts kept beside ``pkg``'s pass under ``k``, written out to ``out`` (`unread/PKG.jsonl.gz`), or None when there
+    are none or (logged) they don't read or their bytes aren't the ones the entry's sha256 names."""
+    entry = cache / "unread" / f"{k}.json"
+    if not entry.is_file():
+        return None
+    try:
+        doc = json.loads(entry.read_text())
+        data = base64.b64decode(doc["facts"], validate=True)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        log(f"lean-audit: {pkg}: the facts kept under {k[:12]} don't read ({type(e).__name__}: {e})")
+        return None
+    if doc.get("schema") != UNREAD_SCHEMA or hashlib.sha256(data).hexdigest() != doc.get("sha256"):
+        log(f"lean-audit: {pkg}: the facts kept under {k[:12]} aren't {UNREAD_SCHEMA} bytes of the sha256 they name")
+        return None
+    dst = out / "unread" / f"{pkg.replace('/', '_')}.jsonl.gz"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_bytes(data)
+    os.utime(entry)
+    return dst
+
+
+def prune_facts(cache: Path, kept: int = UNREAD_KEPT) -> int:
+    """Remove all but the ``kept`` facts entries of ``cache`` (its `unread/`) last stored or reused; the number removed."""
+    return prune_replays(cache / "unread", kept)
+
+
+def unread_ratchet(pkgs: list[str], failed: list[str], facts: dict[str, Path], files: list[str], out: Path,
+                   log=print) -> dict | None:
+    """The ratchet on wholly unread modules (`unread.check`, against `unread-caps.json`) on the facts the audits of
+    `UNREAD_FACTS` wrote, joined, with no build: its result, or None where it doesn't run. It runs where both packages are
+    audited or reused: a shard's run that has only one leaves it to the shard that audits the spec, which audits its
+    provers beside it; and a failed audit of either fails the run already."""
+    if missing := [p for p in UNREAD_FACTS if p not in pkgs]:
+        log(f"lean-audit: unread: not run here: {', '.join(missing)} is another run's (the ratchet joins the facts of "
+            f"{' and '.join(UNREAD_FACTS)})")
+        return None
+    if bad := [p for p in UNREAD_FACTS if p in failed]:
+        log(f"lean-audit: unread: not run: the audit of {', '.join(bad)} failed, so the facts the ratchet reads are not there")
+        return None
+    if lack := [p for p in UNREAD_FACTS if p not in facts]:
+        return {"failures": [f"unread: {', '.join(lack)} passed with no facts for the ratchet (check.py's `unread_facts` "
+                             f"writes them in each audit of {' and '.join(UNREAD_FACTS)} that replays)"]}
+    try:
+        u = _module(ROOT / UNREAD, "lean_unread_for_lean_audit")
+        r = u.check(ROOT, files, [facts[p] for p in UNREAD_FACTS], out / "unread")
+    except (OSError, EOFError, ValueError, LookupError, TypeError, AttributeError, ImportError, SyntaxError) as e:
+        return {"failures": [f"unread: {type(e).__name__}: {e}"]}  # anything else raises, which fails the step too
+    for f in r["failures"]:
+        log(f"lean-audit: FAIL: {f}")
+    if r["lower"]:
+        log(f"lean-audit: unread: an area's wholly unread modules came down: {out / 'unread' / 'unread-caps.json'} holds "
+            f"the caps at the counts, to copy over {u.CAPS.relative_to(ROOT)} (or `unread.py --caps "
+            f"{u.CAPS.relative_to(ROOT)} --update-caps`)")
+    if not r["failures"]:
+        n, d = (sum(v["count"][k] for v in r["areas"].values()) for k in ("modules", "declarations"))
+        log(f"lean-audit: unread: PASS in {r['seconds']} s: {n} wholly unread modules ({d} declarations), no area above "
+            f"its cap")
+    return r
 
 
 def tool_files(files: list[str]) -> list[str]:
@@ -1166,6 +1269,9 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             rep["package"] = p
             reports[p] = rep
             if not rep["failures"] and not rep.get("settled") and r.returncode in (0, 1) and p in keys and not fresh:
+                if p in UNREAD_FACTS and not keep_facts(cache, p, keys[p], rep, out):
+                    log(f"lean-audit: {p}: its pass is not stored: its audit wrote no facts for the ratchet (`unread_facts`)")
+                    continue
                 cache.mkdir(parents=True, exist_ok=True)
                 tmp = cache / f".{keys[p]}.tmp"
                 tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep,
@@ -1193,6 +1299,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             builds.give_back(work, kept)
             if n := prune_replays(cache.parent / "lean-replay"):
                 log(f"lean-audit: {n} old replay entries removed")
+            if n := prune_facts(cache):
+                log(f"lean-audit: {n} old facts entries removed")
         shutil.rmtree(work, ignore_errors=True)
     return failed, audited
 
@@ -1222,10 +1330,15 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     comps = {p: components(p, files, FLAGS) for p in pkgs}
     keys = {p: key_of(c) for p, c in comps.items()}
     out.mkdir(parents=True, exist_ok=True)
-    reports, cached = {}, {}
+    reports, cached, facts = {}, {}, {}
     for p, k in keys.items():
         entry = cache / f"{k}.json"
         if not fresh and entry.is_file():
+            if p in UNREAD_FACTS:
+                if (f := kept_facts(cache, p, k, out, log)) is None:
+                    log(f"lean-audit: {p}: its pass ({k[:12]}) is kept without the facts the ratchet reads: audited again")
+                    continue
+                facts[p] = f
             reports[p] = {**json.loads(entry.read_text())["report"], "package": p}      # it may have passed elsewhere, before a move
             cached[p] = k
             log(f"lean-audit: {p}: PASS reused ({k[:12]}): every file its audit reads is unchanged")
@@ -1247,9 +1360,16 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
         log(f"lean-audit: {p}: passed on its regenerated record ({f}), which drive commits over {p}/lean-audit.json")
     for rep in reports.values():                        # a pass cached before check.py reported codes has none to list
         rep.setdefault("failure_codes", [None] * len(rep.get("failures", [])))
+    for p in UNREAD_FACTS:
+        f = (reports.get(p) or {}).get("unread_facts") or {}
+        if p not in facts and p not in cached and f.get("file") and (out / f["file"]).is_file():
+            facts[p] = out / f["file"]
+    unread = unread_ratchet(pkgs, failed, facts, files, out, log)
+    if unread and unread["failures"]:
+        failed.append("unread")
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "cached": cached,
                                                 "packages": [reports[p] for p in pkgs if p in reports],
-                                                "regenerated": regenerated}, indent=1) + "\n")
+                                                "regenerated": regenerated, "unread": unread}, indent=1) + "\n")
     log(f"lean-audit: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}: {len(cached)} of {len(pkgs)} packages reused")
     if export is not None:
         ok = {p: k for p in pkgs if p in reports and not reports[p].get("failures") and (k := deps_key(ROOT / p))}
@@ -1394,7 +1514,8 @@ def main(argv: list[str]) -> int:
         root = Path(argv[argv.index("--cache") + 1]).parent if "--cache" in argv else COMMON.cache_dir()
         got = {"lean-deps": WarmDeps(root / "lean-deps").evict(), "lean-builds": WarmBuilds(root / "lean-builds").evict(),
                "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records"),
-               "lean-artifacts": LakeArtifacts(root / "lean-artifacts").prune()}
+               "lean-artifacts": LakeArtifacts(root / "lean-artifacts").prune(),
+               "lean-audit/unread": prune_facts(root / "lean-audit")}
         print("lean-audit --prune: removed " + ", ".join(f"{v} from {k}" for k, v in got.items()) + f" (under {root})")
         return 0
     if argv[:1] == ["--explain"] and len(argv) in (2, 4):

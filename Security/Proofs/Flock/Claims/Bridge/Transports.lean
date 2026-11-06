@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.C3.RegLevels.ValueTie
-public import Proofs.Flock.Claims.Bridge.BindsColl
+public import Proofs.Flock.Claims.Bridge.WrongSet
 public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Recursive.ValueSrc
 import Mathlib.Algebra.Order.Floor.Extended

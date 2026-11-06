@@ -85,7 +85,8 @@ public import Proofs.Accounting.TS.Session.Lanes.KnownFields
 public import Proofs.Accounting.TS.Session.Lanes.KnownRead
 public import Proofs.Accounting.TS.Session.Lanes.Combine
 public import Proofs.Accounting.TS.Session.Lanes.Lane
-public import Proofs.Pouw.H1Zy.Stream
+public import Definitions.Pouw.H1Zy.Stream
+public import Proofs.Pouw.H1Zy.Tile
 public import Proofs.Accounting.TS.HeldSound
 public import Proofs.Accounting.TS.Session.Tile.Computes
 public import Proofs.Accounting.TS.TileSound

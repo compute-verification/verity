@@ -54,11 +54,11 @@ public import Proofs.Flock.Claims.ZK.InnerTauRep
 public import Proofs.Flock.Claims.ZK.InnerTauLig
 public import Proofs.Flock.Claims.ZK.Assemble
 public import Proofs.Flock.Claims.ZK.Sent
-public import Proofs.Flock.Claims.ZK.Round1
+public import Proofs.Flock.Claims.Complete.ZkTables.Round1
+public import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 public import Proofs.Flock.Claims.ZK.Round1Pads
 public import Proofs.Flock.Claims.ZK.Round1Root
-public import Proofs.Flock.Claims.ZK.Round1Enc
-public import Proofs.Flock.Claims.ZK.Round2
+public import Proofs.Flock.Claims.Complete.ZkTables.Round2
 public import Proofs.Flock.Claims.ZK.Round3Vals
 public import Proofs.Flock.Claims.ZK.SimZerocheck
 public import Proofs.Flock.Claims.ZK.SimPiopGo
@@ -109,7 +109,7 @@ public import Proofs.Flock.Claims.ZK.FrameRep
 public import Proofs.Flock.Claims.ZK.FrameInner
 public import Proofs.Flock.Claims.ZK.FrameZK
 public import Proofs.Flock.Claims.ZK.FrameLive
-public import Proofs.Flock.Claims.ZK.PadsRoot
+import Init.Data.Nat.Power2.Basic
 public import Proofs.Flock.Claims.ZK.NonVacuous
 public import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 public import Proofs.Flock.Claims.ZK.Compose

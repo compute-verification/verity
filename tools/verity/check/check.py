@@ -725,13 +725,13 @@ def lean_regenerates() -> bool:
 
 def lean_audit_misses(cache: bool = True, only: list[str] | None = None) -> bool:
     """Whether the lean-audit step will audit a package (of ``only``, its `--package`s, when given): one whose pass isn't kept
-    here under its key (`lean_audit.run`'s test)."""
+    here under its key with what its reuse needs (`lean_audit.reusable`, `lean_audit.run`'s test)."""
     la = _lean_audit()
     files = tracked_files(ROOT)
     if not cache or files is None:
         return True
     pkgs = [p for p in la.packages(files) if not only or p in only]
-    return any(not (cache_dir() / "lean-audit" / f"{la.key(p, files, la.FLAGS)}.json").is_file() for p in pkgs)
+    return any(not la.reusable(cache_dir() / "lean-audit", p, la.key(p, files, la.FLAGS)) for p in pkgs)
 
 
 def lean_fast(out: Path) -> str | None:

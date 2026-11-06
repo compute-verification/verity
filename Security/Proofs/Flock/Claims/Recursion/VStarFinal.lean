@@ -33,6 +33,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.VStarFitHeld
+public import Proofs.Flock.Claims.Recursion.VStarNets
 
 /-!
 # What each V\* part's circuit accepts on the honest run, with hh's fitting discharged (`honest_partAccepts_final`)

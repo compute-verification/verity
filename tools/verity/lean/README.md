@@ -37,6 +37,8 @@ python tools/verity/lean/check.py --lift LIFTS.json PKG  write each guarantee {"
                                                   `"beside": M` names); then build and run
                                                   `--update --moved LIFTS.json.moved.json PKG` (below)
 python tools/verity/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
+python tools/verity/lean/unread.py --out DIR --build     the Lean nothing reads; lean-audit runs its ratchet on the
+                                                  audits' facts (its docstring: the seeds, the caps, the Properties gap)
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 

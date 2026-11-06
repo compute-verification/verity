@@ -6,7 +6,7 @@ public import Proofs.Pouw.H1Zy.CombineBits
 public import Proofs.Pouw.H1Zy.DequantVectors
 public import Proofs.Pouw.H1Zy.Lane
 public import Proofs.Pouw.H1Zy.LaneBits
-public import Proofs.Pouw.H1Zy.Stream
+public import Definitions.Pouw.H1Zy.Stream
 public import Proofs.Pouw.H1Zy.Tile
 public import Proofs.Pouw.H1Zy.LaneChunk
 import Mathlib.Data.Rat.Cast.Order

@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.Claims.ZK.MaskedTables
-public import Proofs.Flock.Claims.ZK.Round1
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,6 +35,9 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
 import Proofs.Flock.Claims.ZK.Round0
 import Proofs.Flock.Soundness.Discharge.Composed.Setup
+public import Proofs.Flock.Claims.ZK.Sent
+public import Proofs.Flock.Claims.Complete.ZkTables.Round1
+public import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 
 /-!
 # Round `1` of the masked session: the pads trees by tree position

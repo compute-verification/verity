@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.RestVerdictBases
-public import Proofs.Flock.Claims.Recursion.RestVerdictDraw
 import Batteries.Tactic.OpenPrivate
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -40,6 +39,9 @@ import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 import Proofs.Flock.Claims.Recursion.DeployChecked
 import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
+public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+public import Proofs.Flock.Claims.JsonNorm
 
 /-!
 # `hrest`'s base checks, at every reader

@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Claims.Recursion.HonestIVStarR
 public import Proofs.Flock.Claims.Recursion.HonestVerdictR
+public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
+public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+public import Proofs.Flock.Claims.JsonNorm
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 public import Proofs.Flock.Claims.Recursion.VerdictRowDCover

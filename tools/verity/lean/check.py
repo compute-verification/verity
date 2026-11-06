@@ -171,6 +171,10 @@ line each.  `--all` first runs the controls (`controls`): a fixture package buil
 `--build` installs first), which must pass clean and fail each check once a violation is added.
 Each package's report lists, without failing, the spec definitions that no guarantee reads, neither its own nor one of a
 package that requires it by path (`unread_spec`): a definition of the trusted text that nothing cites.
+The audits of `UNREAD_FACTS` that replay also write what each constant of their roots, and of the modules those import
+through the packages they require by path, mentions (`Unread.lean`, `unread_facts`; the report's `unread_facts`), which
+`lean_audit.py`'s ratchet on wholly unread modules reads (`unread.py`): a failure of that program is the package's
+(`unread`).
 The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
 package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
 too, and no two builds that write one `.lake` run at once (`writing`): two dependents of one path dependency take turns.
@@ -1004,40 +1008,76 @@ def dependency_scans(pkg: Path, oleans: list[str], policy: dict) -> tuple[list[s
     return fails, read
 
 
-#: where `facts_program` compiles (None: a temporary directory), one that `run` writes in and every package's `run` reads
+#: where `program` compiles (None: a temporary directory), one that `run` writes in and every package's `run` reads
 PROGRAMS: Path | None = None
-#: {(directory, toolchain, `Facts.lean`'s SHA-256): (the compiled program, its SHA-256)}
+#: {(directory, toolchain, the source's SHA-256): (the compiled program, its SHA-256)}
 _programs: dict[tuple[str, str, str], tuple[Path, str]] = {}
+#: one lock per key of `_programs`, so one program's compile doesn't hold up another's
+_programs_locks: dict[tuple[str, str, str], threading.Lock] = {}
 _programs_lock = threading.Lock()
 
 
 def facts_program(pkg: Path) -> str:
-    """`Facts.lean` compiled (`lean -c`, then `leanc`) with ``pkg``'s toolchain, once per toolchain and source in a process:
-    interpreted (`lean --run`), its own walks were most of a large package's facts run. It exports its symbols
-    (`-rdynamic`, Lake's `supportInterpreter`): elaborating a pin's statement runs the interpreter, which calls the library's
-    native code by symbol, as in `lean`. The program is checked against the digest it had when compiled before each use.
-    Raises RuntimeError when it does not compile or has changed."""
-    src = TOOL / "Facts.lean"
+    """`Facts.lean` compiled with ``pkg``'s toolchain (`program`): interpreted (`lean --run`), its own walks were most of a
+    large package's facts run. It exports its symbols (`-rdynamic`, Lake's `supportInterpreter`): elaborating a pin's
+    statement runs the interpreter, which calls the library's native code by symbol, as in `lean`."""
+    return program(pkg, "Facts.lean")
+
+
+def program(pkg: Path, source: str) -> str:
+    """The tool's Lean program ``source`` (`Facts.lean`, `Unread.lean`) compiled (`lean -c`, then `leanc`) with ``pkg``'s
+    toolchain, once per toolchain and source in a process. The program is checked against the digest it had when compiled
+    before each use. Raises RuntimeError when it does not compile or has changed."""
+    src = TOOL / source
+    stem = src.stem
     toolchain = (pkg / "lean-toolchain").read_text().strip() if (pkg / "lean-toolchain").is_file() else ""
     key = (str(PROGRAMS), toolchain, sha256(src))
     with _programs_lock:
+        lock = _programs_locks.setdefault(key, threading.Lock())
+    with lock:
         if key not in _programs or not _programs[key][0].exists():
             if PROGRAMS is None:
-                d = Path(tempfile.mkdtemp(prefix="lean-facts-"))
+                d = Path(tempfile.mkdtemp(prefix=f"lean-{stem.lower()}-"))
                 atexit.register(shutil.rmtree, d, True)
             else:
                 d = PROGRAMS / hashlib.sha256("\0".join(key[1:]).encode()).hexdigest()[:16]
                 d.mkdir(parents=True, exist_ok=True)
-            for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / "Facts.c"), str(src)],
-                         ["lake", "env", "leanc", "-O3", "-DNDEBUG", "-rdynamic", str(d / "Facts.c"), "-o", str(d / "facts")]):
+            exe = d / stem.lower()
+            for argv in (["lake", "env", "lean", "-R", str(src.parent), "-c", str(d / f"{stem}.c"), str(src)],
+                         ["lake", "env", "leanc", "-O3", "-DNDEBUG", "-rdynamic", str(d / f"{stem}.c"), "-o", str(exe)]):
                 rc, text = run(argv, pkg, d / "compile.log")
                 if rc:
                     raise RuntimeError(f"`{' '.join(argv)}` failed (exit {rc}):\n{text[-3000:]}")
-            _programs[key] = (d / "facts", sha256(d / "facts"))
-        program, digest = _programs[key]
-    if sha256(program) != digest:
-        raise RuntimeError(f"tamper: the compiled `Facts.lean` ({program}) changed after it was compiled")
-    return str(program)
+            _programs[key] = (exe, sha256(exe))
+        exe, digest = _programs[key]
+    if sha256(exe) != digest:
+        raise RuntimeError(f"tamper: the compiled `{source}` ({exe}) changed after it was compiled")
+    return str(exe)
+
+
+#: the packages whose audit writes `Unread.lean`'s facts (`unread_facts`) for `unread.py`'s ratchet, which `lean_audit.py`
+#: runs once both have passed in one run: the security analysis's spec and its proofs, which always share a shard
+UNREAD_FACTS = ("Security", "Security/Proofs")
+
+
+def unread_facts(pkg: Path, modules: list[str], work: Path) -> dict:
+    """`Unread.lean`'s facts (each constant with what it mentions, from the `.olean` files as data) of ``modules`` (the
+    package's modules under its roots, the facts' `modules`) and of every module of the packages it requires by path that
+    they import (`module_files`, ``follow``), gzipped beside the report (`unread-facts.jsonl.gz`, no timestamp): its path
+    under the audit's output, SHA-256 and constants. Raises RuntimeError when the program fails."""
+    plain, gz, config = work / "unread-facts.jsonl", work / "unread-facts.jsonl.gz", work / "unread-config.json"
+    plain.unlink(missing_ok=True)
+    gz.unlink(missing_ok=True)
+    config.write_text(json.dumps({"modules": sorted(modules), "follow": sorted(set(module_files(pkg)) - set(modules)),
+                                  "out": str(plain)}))
+    rc, text = run(["lake", "env", program(pkg, "Unread.lean"), str(config)], pkg, work / "unread.log")
+    if rc or not plain.exists():
+        raise RuntimeError(f"`Unread.lean` failed (exit {rc}):\n{text[-3000:]}")
+    data = plain.read_bytes()
+    gz.write_bytes(gzip.compress(data, mtime=0))
+    plain.unlink()
+    return {"file": f"{work.name}/{gz.name}", "sha256": sha256(gz),
+            "constants": data.count(b"\n") - data.count(b'"module":')}
 
 
 def record_scope(policy: dict) -> list[str]:
@@ -4181,10 +4221,13 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         waited.append(time.monotonic() - w)
         return passed
 
-    replayed = scanned = digested = None
+    replayed = scanned = digested = unread = None
     try:
         facts = facts_of(pkg, current, work, moved)
         rep["seconds"]["facts"] = round(time.monotonic() - s, 1)
+        if replay and not lifts and pkg.resolve().is_relative_to(ROOT) and \
+                pkg.resolve().relative_to(ROOT).as_posix() in UNREAD_FACTS:
+            unread = background.submit(timed, unread_facts, pkg, facts["modules"], work)
         if early:
             replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache,
                                          closure) if replay else None
@@ -4272,6 +4315,12 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         fails += rfails
         if update:
             new["runs"] = now
+    if unread:
+        try:
+            rep["unread_facts"], rep["seconds"]["unread"] = unread.result()
+        except RuntimeError as e:
+            fails.append(Failure("unread", None, f"unread: {e}; the ratchet on wholly unread modules (`unread.py`) reads "
+                                 f"these facts"))
     background.shutdown()
     lfails, listed, lnotes = listings(pkg, files, policy, facts, update)
     fails += lfails

@@ -11,7 +11,7 @@ public import Proofs.Flock.Claims.Complete.Replay.Satisfies
 public import Proofs.Flock.Claims.Complete.Replay.Ligerito
 public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
-public import Proofs.Flock.Claims.Complete.Replay.Walk
+public import Proofs.Flock.Claims.Complete.Reps
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoModel
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal

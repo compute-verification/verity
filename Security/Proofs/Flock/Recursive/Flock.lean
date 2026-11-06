@@ -2,11 +2,12 @@ module
 
 public import Proofs.Flock.Recursive.Finds
 public import Proofs.Flock.Recursive.Sound
+public import Proofs.Flock.Soundness.Discharge.Composed.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 public import Proofs.Flock.Recursive.ZkReg.Off
 public import Proofs.Flock.Soundness.Assumptions.CustodyZk
 public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
-public import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
