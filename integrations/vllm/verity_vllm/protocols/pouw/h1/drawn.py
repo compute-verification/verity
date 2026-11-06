@@ -78,8 +78,8 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw import weights as Wt
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -361,7 +361,7 @@ def unit_outputs(z: dict, win: dict, k: int, roots: tuple[bytes, bytes]) -> dict
     """Each staged unit's outputs as J10-R's word reference computes them (`h1zy.reference`, chunked by
     `chunks_reference`) on its rows, the window's Program salt, its position, its call's roots and (u0, blocks): ``o0``
     its receipt's u16 words, ``o1`` its ok. Refused when a unit's ok is not 1 (its record is not its rows' product)."""
-    from verity.core.protocols.pouw.circuit import h1zy as Z
+    from verity.ml.protocols.pouw.circuit import h1zy as Z
     lay, (r, c), x = win["layout"], tuple(win["layout"]["tile"]), Wt.chunks(k)
     u0, salt = int(z["u0"]), bytes.fromhex(win["salt"])
     n = next(nn for name, kk, nn in lay["linears"] if name == lay["calls"][int(z["call"])][0])

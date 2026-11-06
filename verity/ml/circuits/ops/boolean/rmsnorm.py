@@ -37,7 +37,7 @@ reads x, w and all S chunk sums. Its s is one parameter, so a statement may lay 
 `RmsSumSqPart{K}` of words iK to iK + K - 1.
 
 The square root is `f32_sqrt_rn`, ``PouwF32SqrtRn_v1``'s builder (PoUW's `PouwF32SqrtRn_v2` traces it in
-`verity.core.protocols.pouw.circuit.boolean`, which `verity.ml` can't import): `isqrt` and `f32_sqrt_rn` here are copies of
+`verity.ml.protocols.pouw.circuit.boolean`, which `verity.ml` can't import): `isqrt` and `f32_sqrt_rn` here are copies of
 it. `ops.boolean.sqrt` holds the same builder, which replaces these copies (``from .sqrt import f32_sqrt_rn``).
 """
 from __future__ import annotations
