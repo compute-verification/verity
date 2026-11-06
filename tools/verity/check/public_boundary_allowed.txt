@@ -50,10 +50,11 @@ integrations/vllm/tests/program/predict/test_batch.py -> verity/core/protocols/c
 integrations/vllm/tests/program/predict/test_node.py -> verity/core/protocols/network/nci/lean/scripts/nci_reference.py
 integrations/vllm/tests/program/predict/test_node_registration.py -> verity/core/protocols/network/nci/lean/scripts/nci_reference.py
 integrations/vllm/tests/program/predict/test_steps.py -> verity/core/protocols/certifier/__init__.py
-integrations/vllm/tests/program/predict/test_window_circuit.py -> verity/core/protocols/certifier/__init__.py
+integrations/vllm/tests/program/predict/test_window_circuit.py -> verity/ml/protocols/certifier/__init__.py
 integrations/vllm/tests/program/predict/test_window_rows.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/tests/program/predict/test_window_rows.py -> verity/core/protocols/certifier/active.py
-integrations/vllm/tests/program/test_io_shell.py -> verity/core/protocols/certifier/__init__.py
+integrations/vllm/tests/program/predict/test_window_rows.py -> verity/ml/protocols/certifier/__init__.py
+integrations/vllm/tests/program/test_io_shell.py -> verity/ml/protocols/certifier/__init__.py
 integrations/vllm/tests/program/test_sampling_split.py -> tools/verity/circuit_check/tests/data/sampling_split_tasks.json
 integrations/vllm/tests/program/test_target_cards.py -> verity/hardware/__init__.py
 integrations/vllm/tests/protocols/challenger_host.py -> benchmarks/live_challenger/models.py
@@ -97,8 +98,9 @@ integrations/vllm/verity_vllm/pipeline/source_identity.py -> tools/research/src/
 integrations/vllm/verity_vllm/pipeline/window_advice.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/pipeline/window_advice.py -> verity/core/protocols/certifier/advice.py
 integrations/vllm/verity_vllm/program/predict/scan_state.py -> verity/core/protocols/certifier/__init__.py
+integrations/vllm/verity_vllm/program/predict/scan_state.py -> verity/ml/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/program/predict/steps.py -> verity/core/protocols/certifier/__init__.py
-integrations/vllm/verity_vllm/program/predict/window_rows.py -> verity/core/protocols/certifier/__init__.py
+integrations/vllm/verity_vllm/program/predict/window_rows.py -> verity/ml/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/__init__.py
 integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/layout.py
 integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/schemes/__init__.py
