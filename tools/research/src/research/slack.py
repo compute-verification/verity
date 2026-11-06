@@ -10,7 +10,8 @@ Notes are records, never messages.
 
   research msg send --as NAME [--to @A @B ...] [--thread TS] [--kind WORD] [--quiet] [--urgent] (--text T | --file PATH)
                     [--verify CMD] [--ships URL#sha256=HEX | git:SHA]...     # prints `<ts> <permalink>`; --kind announce: an announcement
-  research msg ask --as NAME --to @OWNER (--text T | --file PATH) [--urgent]   # an issue in OWNER's Linear team, its tag and doorbell
+  research msg ask --as NAME --to @OWNER (--text T | --file PATH) [--urgent]   # an issue in OWNER's Linear team on its current
+                                                                   # milestone, its tag and doorbell (`send` files nothing)
   research msg ask --as NAME --to @daniel --kind K --question Q --why W --option V=L... --recommend V --default V --deadline D
                    --page FILE.md --area AREA                      # to @daniel: the ask's page and card, as `ask-daniel --page`
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
@@ -327,6 +328,9 @@ def load_registry(path: Path, people: bool = True) -> dict:
 
 
 EXAMPLES_MAX, EXAMPLE_CHARS = 5, 160                   # a handle's `examples`: the questions a collaborator might ask it
+HOLDER_RE = re.compile(r"(?:bc-)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")   # one agent's full id (a desktop agent's: no bc-)
+STORE_PATH = "/cursor/stores/"                         # an agent's scratch store, which nothing cites
+LINEAR_LANE = "lane:"                                  # linear.LANE_LABEL: a lane filing in another handle's team labels its issues so
 
 
 def check_registry(reg: dict, path: str) -> dict:
@@ -341,14 +345,28 @@ def check_registry(reg: dict, path: str) -> dict:
         for k in ("remit", "charter"):
             if not isinstance(h.get(k), str) or not h[k]:
                 raise SlackError(f"registry {path}: @{name} has no {k}")
+            if STORE_PATH in h[k]:
+                raise SlackError(f"registry {path}: @{name}'s {k} cites an agent store ({STORE_PATH}...), which is its agent's "
+                                 "scratch: cite a note (note:<id>), a ruling or a PR instead, or say it in plain words")
+        if "holder" in h and not (isinstance(h["holder"], str) and HOLDER_RE.fullmatch(h["holder"])):
+            raise SlackError(f"registry {path}: @{name}'s holder {h['holder']!r}: its coordinator's agent id alone (bc-<8 hex>-"
+                             "<4>-<4>-<4>-<12>, or a desktop agent's bare UUID), with no prose; the agents that post as it are "
+                             "its route's `posters` (`research msg names open --as HANDLE --poster BC_ID`), and what it does "
+                             "goes in its remit")
         if len(h["remit"]) > DESCRIPTION_MAX:
             raise SlackError(f"registry {path}: @{name}'s remit is {len(h['remit'])} characters; its user group's description takes {DESCRIPTION_MAX}")
         for p in h.get("owns", []):
             if not isinstance(p, str) or not p or p.startswith("/") or ".." in p.split("/") or p in owned:
                 raise SlackError(f"registry {path}: @{name} owns {p!r}: a path relative to the checkout that no other handle owns")
             owned[p] = name
-        if "linear" in h and (not LINEAR_KEY_RE.match(str(h["linear"])) or any(o.get("linear") == h["linear"] for o in reg["handles"] if o is not h)):
+        if "linear" in h and (not LINEAR_KEY_RE.match(str(h["linear"])) or "linear_label" not in h and any(
+                o.get("linear") == h["linear"] and "linear_label" not in o for o in reg["handles"] if o is not h)):
             raise SlackError(f"registry {path}: @{name}'s linear {h['linear']!r}: a Linear team key no other handle has")
+        if "linear_label" in h and (h["linear_label"] != LINEAR_LANE + name or not any(
+                o.get("linear") == h.get("linear") and "linear_label" not in o for o in reg["handles"] if o is not h)):
+            raise SlackError(f"registry {path}: @{name}'s linear_label {h['linear_label']!r}: a lane with no Linear team of its "
+                             f"own files in its parent's, so `linear` is that handle's team key and `linear_label` is "
+                             f"{LINEAR_LANE + name!r}")
         ex = h.get("examples", [])
         if not isinstance(ex, list) or len(ex) > EXAMPLES_MAX or not all(isinstance(q, str) and 0 < len(q) <= EXAMPLE_CHARS for q in ex):
             raise SlackError(f"registry {path}: @{name}'s examples: at most {EXAMPLES_MAX} questions, each one line of at most "
@@ -1884,12 +1902,14 @@ def linear_ask(ns: argparse.Namespace, owner: dict, sender: str, body: str) -> s
         if asker:
             raise SlackError(f"--asker: @{owner['handle']} has no Linear team to file the ask in, so nothing would track it")
         return body
+    lane = owner.get("linear_label")
     if ns.dry_run:
-        print(f"dry-run: would file the ask in Linear team {owner['linear']}" + (f" as asked by {asker}" if asker else ""),
-              file=sys.stderr)
+        print(f"dry-run: would file the ask in Linear team {owner['linear']}" + (f" with {lane}" if lane else "")
+              + (f" as asked by {asker}" if asker else ""), file=sys.stderr)
         return f"{linear.first_line(body)}\nLinear: <https://linear.app|{owner['linear']}-?>"
     parent = getattr(ns, "parent", None)
-    issue, why = linear.ask_issue(owner["linear"], sender, body, parent=parent, title=getattr(ns, "title", None), asker=asker)
+    issue, why = linear.ask_issue(owner["linear"], sender, body, parent=parent, title=getattr(ns, "title", None), asker=asker,
+                                  label=lane)
     if not issue and asker:
         raise SlackError(f"not filed on Linear ({why}), and {asker}'s ask must be tracked: nothing was posted; run it again")
     if not issue:
@@ -2056,7 +2076,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 print(f"dry-run: would file {title!r} in {team} as {h['handle']}" + (f" under {ns.parent}" if ns.parent else "")
                       + (f", due {ns.due}" if ns.due else ""))
                 return 0
-            made = lin.file(team, h["handle"], body, parent=ns.parent, title=title)
+            made = lin.file(team, h["handle"], body, parent=ns.parent, title=title, label=None if ns.team else h.get("linear_label"))
             if ns.due:
                 lin.edit(made["identifier"], due=ns.due)
             board = " / ".join(x["name"] for x in (made.get("project"), made.get("projectMilestone")) if x)
@@ -2125,7 +2145,9 @@ def ring_comment(ns: argparse.Namespace, reg: dict, author: str, issue: dict, te
     """Ring the inbox of the issue's team's handle and of each name the comment starts with, as `send` would, so nobody
     polls Linear for comments (no one subscribes to them: every handle writes as one app).  The author is never
     rung.  One line per name."""
-    owner = next((h["handle"] for h in reg["handles"] if h.get("linear") == issue["team"]["key"]), None)
+    from . import linear
+
+    owner = linear.owners(reg).get(issue["team"]["key"])
     names = list(dict.fromkeys(([owner] if owner else []) + lead_names(text, reg)))
     routes, api, lines = routes_of(ns), client(ns), []
     ch = channel_id(ns, reg, FRONT_DOOR)
@@ -2174,15 +2196,15 @@ def _check_audience(to: list[dict], body: str, reg: dict) -> None:
 def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     """The one way to post: top-level (a new thread) or into `--thread`.  The `--to` names lead it, which is what routes it;
     `--kind` rides in the footer.  An announcement (`--kind announce`) gets its header,
-    and with no `--to` it is for every handle."""
+    and with no `--to` it is for every handle.  It files no Linear issue, whatever its kind: `ask` does."""
     h = acting_as(ns, reg, ns.handle)
     to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
     kind = (ns.kind or ("ask" if to and not ns.thread else "")).strip().lower()
     if kind and not NAME_RE.match(kind) or kind in FLAGS:
         raise SlackError(f"--kind {ns.kind!r}: one lower-case word")
-    if (getattr(ns, "parent", None) or getattr(ns, "title", None) or getattr(ns, "asker", None)) and not (
-            kind == "ask" and not ns.thread and len(to) == 1):
-        raise SlackError("--parent, --title and --asker go with an ask, which files an issue: a top-level send --to one handle")
+    if getattr(ns, "parent", None) or getattr(ns, "title", None) or getattr(ns, "asker", None):
+        raise SlackError("--parent, --title and --asker go with an ask, and only `research msg ask --as ME --to @OWNER` files "
+                         "one as an issue; `send` posts without filing anything")
     def own() -> bool:
         return rings_own_inbox(routes_of(ns), h["handle"], self_agent_id())
     if any(t["handle"] == h["handle"] for t in to) and not own():
@@ -2206,8 +2228,6 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
             raise SlackError("--verify and --ships go with --kind announce")
         if to and (m := LEAD_RE.match(body)) and set(lead_names(body, reg)) <= {t["handle"] for t in to}:
             body = body[m.end():]                                    # `--to @NAME` with a body that starts `@NAME` names it once
-        if kind == "ask" and not ns.thread and len(to) == 1:
-            body = linear_ask(ns, to[0], h["handle"], body)
         text = " ".join([*(tag(t) for t in to), body])
     ch = channel_id(ns, reg, FRONT_DOOR) if not (ns.thread or ns.channel) else channel_id(ns, reg)   # --channel: a machine's alert
     quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
@@ -4195,7 +4215,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
                    help="a word the footer carries (ask, the default top-level with --to; announce; "
-                        "fyi, which implies --quiet; ...)")
+                        "fyi, which implies --quiet; ...); none files a Linear issue: `research msg ask` does")
     p.add_argument("--verify", default=None, metavar="CMD", help="announce: a required action, and the command that shows it took")
     p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="announce: code it runs, pinned")
     p.add_argument("--quiet", action="store_true", help="wake only the names it starts with: no reply needed")
