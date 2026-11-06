@@ -41,6 +41,8 @@ PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
     "verity_vllm.engine.spec": "I1: engine spec documents",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
+    "verity_vllm.engine.step_trace": "I2: a built engine's scheduler step trace (StepTrace), the input `verity-vllm advice` "
+                                     "reads",
     "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
                                           "own Build without a trace",
