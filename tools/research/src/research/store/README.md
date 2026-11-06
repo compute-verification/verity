@@ -154,8 +154,9 @@ string, `derivation` a `drv:` id, `inputs`/`outputs` values `art:` ids, the whol
 
 `research data reindex` wipes and rebuilds it from `manifests/`, `attempts/`, `labels/` (local), then, with `--remote`,
 from the remote listing too (manifests and attempts the remote has and we lack are fetched and cached first). Deleting the
-file and reindexing gives the same query results as the incremental index (tested). Tables (denormalised; add columns freely,
-the file is disposable):
+file and reindexing gives the same query results as the incremental index (tested). Tables (denormalised; the file is
+disposable, but every worktree on the machine writes it, older code included, so no shipped table gains a column; a new column
+goes in a side table keyed like its table, as `replica_checks` is for `replicas`):
 
 ~~~text
 artifacts(id, kind, bytes, payload_type, manifest_json, local INTEGER, remote INTEGER, repo_path TEXT)
@@ -171,6 +172,11 @@ labels(target, key, value, by, ts, ref, path)
 replicas(id, location, verified_utc, detail)            verifications, which a rebuild keeps (not a local fact)
 replica_checks(id, location, verified)                  which check (§7): etag-md5 | sha256-readback
 ~~~
+
+Every write finds the rows it reads, replaces or deletes through an index (each `attempt_*` table is indexed on `attempt`;
+tested). A write holds the file's lock until it commits and every process on the machine writes this one file, so a write that
+scanned a table would hold all the others off for the pass, and a refresh's run of writes (`research queue ready`'s records
+gate) would starve them until it ended.
 
 Flattening: nested objects get dotted keys, lists numeric indices (`families.0`), scalars are stored as text (strings raw,
 everything else `json.dumps`: `true`, `null`, `1.5`); `--where` and `--label` compare that text. `local` means manifest + every
