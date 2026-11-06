@@ -11,7 +11,8 @@
 #   4. prove_time.py: out/summary.json
 # env: PT_UNITS="fp8-coord:K=6144 fp8-coord:K=6144+public-weights"  PT_NS="16 64"  PT_DEVICE=gpu (or cpu)  PT_JOBS=4  WARM=1
 #      RUNS=3  VCPUS=4  LEASE_MIN=30  SM=120  PT_CARD (gpu: the leased card's, from nvidia-smi)  FLOCK_WORK (default a
-#      directory under /workspace/tmp, kept)  STEPS="build stage prove"
+#      directory under /workspace/tmp, kept)  STEPS="build stage prove"  PT_BINARY (the prover and verifier binary the
+#      sessions run, by default the one the build step builds: an A/B arm on another build)
 #      PT_PERF=1: each prover process under `perf record -F PT_PERF_HZ` (default 499), its flat profile by symbol in perf.txt
 #      beside prove.tsv (the samples themselves are not kept); upstream's phase traces pass through as arguments
 #      (LIGERITO_TRACE=1 PCS_TRACE=1 LINCHECK_TRACE=1, into prove.err)
@@ -29,7 +30,7 @@ fi
 export PATH=$HOME/.cargo/bin:$PATH FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 CPUS=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))'); NC=$(echo $CPUS | tr , '\n' | wc -l)
 VC=${VCPUS:-4}; PCPU=$(echo $CPUS | cut -d, -f1-$((NC - VC))); VCPU=$(echo $CPUS | cut -d, -f$((NC - VC + 1))-)
-B=$FW/flock-gpu-link/flock/target/release/flock-circuit; PY=$FW/py/bin/python
+BUILT=$FW/flock-gpu-link/flock/target/release/flock-circuit; B=${PT_BINARY:-$BUILT}; PY=$FW/py/bin/python
 has() { case " $STEPS " in *" $1 "*) return 0 ;; esac; return 1; }
 { echo "device=$DEV cpus=$CPUS prover=$PCPU verifier=$VCPU"; lscpu | grep -E 'Model name|^CPU\(s\)'; free -g | head -2
   [ $DEV = gpu ] && nvidia-smi --query-gpu=name,driver_version,memory.total,clocks.max.sm --format=csv; } > $O/host.txt 2>&1
@@ -40,8 +41,9 @@ if has build; then
   ( flock 9; MODE=build GPU=$([ $DEV = gpu ] && echo 1 || echo 0) SM=$SM FLOCK_WORK=$FW RESEARCH_RUN_DIR=$O/build \
     bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 ) 9> $FW/.build.lock \
     || { tail -40 $O/build.log $O/build/out/build.log 2>/dev/null; exit 1; }
-  sha256sum $B | tee $O/binary.sha256
+  sha256sum $BUILT | tee $O/binary.sha256
 fi
+[ $B = $BUILT ] || sha256sum $B | tee $O/binary-sessions.sha256
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $PY ] || { $UV venv -q --python 3.12 $FW/py && $UV pip install -q --python $PY numpy blake3; } || exit 1
@@ -95,7 +97,7 @@ gpu_sample() {
 session() {
   local nm=$(name $1 $2) G= GS=; local d=$FW/data/$nm-$KEY o=$O/$DEV/$nm
   [ $DEV = gpu ] && G=--gpu
-  mkdir -p $o; rm -rf $d/sessions
+  mkdir -p $o $O/stage/$nm; rm -rf $d/sessions; cp $d/stage.json $O/stage/$nm/
   local PORT=$(free_port) PIN=$(sha512sum $d/circuit.txt | cut -d' ' -f1)
   taskset -c $VCPU $B serve --zk --listen 127.0.0.1:$PORT --out $d/sessions --instances $d/pub.bin --circuit $d/circuit.txt \
     --pin $PIN --operator loopback --concurrency $((NSESS + 1)) > $o/serve.log 2>&1 &
