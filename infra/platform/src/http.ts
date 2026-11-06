@@ -3,6 +3,7 @@ import { start } from "workflow/api";
 import { leadWorkflow } from "../workflows/lead.ts";
 import { tick } from "./cron.ts";
 import { runtime } from "./runtime.ts";
+import { SERVICE_NAMES, isService } from "./services.ts";
 import { mentionedLanes, parseSlackEvent, verifySlackSignature } from "./slack.ts";
 import type { HarnessName, Lead } from "./store.ts";
 import { wake } from "./wake.ts";
@@ -110,6 +111,7 @@ type LeadChange = {
   doc?: string;
   slackChannel?: string;
   slackUsergroup?: string;
+  apis?: string[];
   harness?: HarnessName;
   model?: string;
   monthlyBudgetUsd?: number;
@@ -128,6 +130,8 @@ export async function changeLead(req: Request, env: Env = process.env) {
   if (!bearerOk(req, env.PLATFORM_API_TOKEN)) return json({ error: "unauthorized" }, 401);
   const c = (await req.json()) as LeadChange;
   if (!c.lane || !/^[a-z][a-z0-9-]{0,39}$/.test(c.lane)) return json({ error: "lane must match [a-z][a-z0-9-]*" }, 400);
+  const unknown = (c.apis ?? []).filter((a) => !isService(a));
+  if (unknown.length) return json({ error: `unknown apis ${unknown.join(", ")}; known: ${SERVICE_NAMES.join(", ")}` }, 400);
   const rt = await runtime();
   const before = await rt.store.getLead(c.lane);
   const model = c.model ?? before?.model ?? env.PLATFORM_DEFAULT_MODEL ?? "anthropic/claude-opus-5.5";

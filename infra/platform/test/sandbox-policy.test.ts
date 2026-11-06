@@ -2,7 +2,9 @@ import { createCredentialRequestTransformation } from "@ai-sdk/harness/utils";
 import { createVercelNetworkSandboxSessionFromNativeSandbox } from "@ai-sdk/sandbox-vercel";
 import type { NetworkPolicy } from "@vercel/sandbox";
 import { describe, expect, it } from "vitest";
+import type { Credentials } from "../src/credentials.ts";
 import { brokeredSession } from "../src/sandbox/vercel.ts";
+import { credentialRules, placeholder } from "../src/services.ts";
 
 // The parts of a native Vercel sandbox the harness's policy manager reads and
 // writes. The real API reports a rule's transformed headers without their
@@ -77,5 +79,30 @@ describe("sandbox network policy", () => {
     });
     const session = createVercelNetworkSandboxSessionFromNativeSandbox(sandbox);
     await expect(session.addRequestTransformations!([gatewayRule("key-1")])).rejects.toThrow(/cannot be attributed/);
+  });
+
+  it("brokers each granted API the host holds a token for, in its own header form, and no other", async () => {
+    const issued: string[] = [];
+    const credentials = {
+      github: async () => ({ token: "gh-1", expiresAt: "" }),
+      service: async (_subject: string, name: string) => {
+        issued.push(name);
+        return ({ slack: "xoxb-1", linear: "lin-1" } as Record<string, string>)[name] ?? null;
+      },
+    } as unknown as Credentials;
+    const { rules, hosts } = await credentialRules(credentials, "infra", ["slack", "linear", "notion", "bogus"]);
+    expect(issued).toEqual(["slack", "linear", "notion"]);
+    expect(hosts).toEqual(["slack.com", "api.linear.app"]);
+    const rule = (host: string) => rules.filter((r) => r.host === host).map(({ sent, real }) => ({ sent, real }));
+    expect(rule("slack.com")).toEqual([{ sent: `Bearer ${placeholder("slack")}`, real: "Bearer xoxb-1" }]);
+    expect(rule("api.linear.app")).toEqual([{ sent: placeholder("linear"), real: "lin-1" }]);
+    expect(rule("api.github.com").map((r) => r.real)).toEqual(["Bearer gh-1", `Basic ${Buffer.from("x-access-token:gh-1").toString("base64")}`]);
+    expect(rules.some((r) => r.host === "api.notion.com")).toBe(false);
+
+    const allowHosts = [...ALLOW, ...hosts];
+    const { s, sandbox } = nativeSandbox({ allow: ALLOW });
+    const session = await brokeredSession(sandbox, { allowHosts, inject: rules });
+    await session.addRequestTransformations!([gatewayRule("key-1")]);
+    expect(rulesByHost(s.policy)).toEqual({ "ai-gateway.vercel.sh": 1, "github.com": 2, "api.github.com": 2, "slack.com": 1, "api.linear.app": 1 });
   });
 });

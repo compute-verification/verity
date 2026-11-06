@@ -7,13 +7,14 @@ import { openDb } from "./db.ts";
 import { harnessFor } from "./harness/providers.ts";
 import { type JobRunner, jobsApi, memoryJobs } from "./jobs.ts";
 import { localSandboxSession } from "./sandbox/local.ts";
+import { credentialRules } from "./services.ts";
 import { type SlackClient, memorySlack, webSlack } from "./slack.ts";
 import { type HarnessName, type Store, createStore } from "./store.ts";
 
 export type SandboxSession = HarnessV1NetworkSandboxSession | Experimental_SandboxSession;
 
 export type SandboxProvider = {
-  open(name: string, o: { lane: string; subject: string; credentials: Credentials }): Promise<SandboxSession>;
+  open(name: string, o: { lane: string; subject: string; credentials: Credentials; apis: string[] }): Promise<SandboxSession>;
   park(name: string): Promise<void>;
 };
 
@@ -56,12 +57,12 @@ export function runtime(): Promise<Runtime> {
   return g[SLOT];
 }
 
-// A directory per sandbox. It mints the same per-open GitHub grant the Vercel
-// provider does, and like it never writes the token inside.
+// A directory per sandbox. It issues the same per-open credentials the Vercel
+// provider does, and like it never writes them inside.
 export function localSandboxes(root: string): SandboxProvider {
   return {
-    async open(name, { subject, credentials }) {
-      await credentials.github(subject);
+    async open(name, { subject, credentials, apis }) {
+      await credentialRules(credentials, subject, apis);
       const dir = join(root, name);
       await mkdir(dir, { recursive: true });
       return localSandboxSession(dir);
@@ -70,24 +71,13 @@ export function localSandboxes(root: string): SandboxProvider {
   };
 }
 
-export const GITHUB_PLACEHOLDER = "platform-github-placeholder";
-
 export async function vercelSandboxes(o: { vcpus: number; timeoutMs: number }): Promise<SandboxProvider> {
   const { DEFAULT_ALLOW, openVercelSandbox } = await import("./sandbox/vercel.ts");
   const { Sandbox } = await import("@vercel/sandbox");
   return {
-    async open(name, { subject, credentials }) {
-      // git sends Basic x-access-token:<token>, gh and the API send Bearer; the
-      // sandbox is configured with the placeholder for both.
-      const gh = await credentials.github(subject);
-      const basic = (t: string) => `Basic ${Buffer.from(`x-access-token:${t}`).toString("base64")}`;
-      const inject = gh
-        ? ["github.com", "api.github.com"].flatMap((host) => [
-            { host, sent: `Bearer ${GITHUB_PLACEHOLDER}`, real: `Bearer ${gh.token}` },
-            { host, sent: basic(GITHUB_PLACEHOLDER), real: basic(gh.token) },
-          ])
-        : [];
-      return openVercelSandbox(name, { vcpus: o.vcpus, timeoutMs: o.timeoutMs, allowHosts: DEFAULT_ALLOW, inject });
+    async open(name, { subject, credentials, apis }) {
+      const { rules, hosts } = await credentialRules(credentials, subject, apis);
+      return openVercelSandbox(name, { vcpus: o.vcpus, timeoutMs: o.timeoutMs, allowHosts: [...DEFAULT_ALLOW, ...hosts], inject: rules });
     },
     async park(name) {
       const s = await Sandbox.get({ name }).catch(() => null);
@@ -107,6 +97,7 @@ export async function fromEnv(env: NodeJS.ProcessEnv): Promise<Runtime> {
         vercelToken: env.VERCEL_TOKEN,
         teamId: env.VERCEL_TEAM_ID,
         githubBrokerUrl: env.PLATFORM_GITHUB_BROKER_URL,
+        services: { slack: env.SLACK_BOT_TOKEN, linear: env.LINEAR_API_KEY, notion: env.NOTION_API_KEY },
         oidcToken: () => getVercelOidcToken(),
       })
     : localCredentials(store);

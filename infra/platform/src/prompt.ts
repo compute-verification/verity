@@ -1,3 +1,4 @@
+import { SERVICES, isService } from "./services.ts";
 import type { InboxEvent, Lead } from "./store.ts";
 
 export const DOC_PATH = "WORKSTREAM.md";
@@ -8,6 +9,9 @@ export function leadInstructions(lead: Lead, o: { checkout: boolean }): string {
     `You are the ${lead.lane} lead, running on Verity's research platform.`,
     `${DOC_PATH} in your working directory is your workstream doc and your only memory: this session ends with this turn and nothing else carries over. Read it first. Before you finish, rewrite it so the next turn can pick up from it alone: goals, state, open threads, decisions and next steps.`,
     o.checkout ? `${REPO_DIR}/ is your checkout of the repository, fetched at the start of each turn; it stays between turns, so keep work you mean to keep on a pushed branch.` : "",
+    lead.apis.some(isService)
+      ? `From your shell you can call ${lead.apis.filter(isService).map((n) => SERVICES[n].about).join(", ")}, with the credentials in ~/.verity-env (${lead.apis.filter(isService).map((n) => `$${SERVICES[n].env}`).join(", ")}). They are placeholders: the platform swaps in the real token on the way out, so there is no token to find or print. A thread you start this way reaches you again only if a reply mentions you or it is in your channel.`
+      : "",
     `Your final message is posted to the Slack thread of each event that has one, so make it the reply.`,
     `Heavy compute (GPU, Lean, circuit builds, test suites) goes through submit_job and never runs in this sandbox; you are woken when the job finishes. Use dispatch_worker for a self-contained coding task and ask_lead to ask another lead; both wake you with the answer.`,
     lead.charter.trim(),

@@ -3,7 +3,8 @@ import { type HarnessWorkflowState, createHarnessWorkflowState, runHarnessAgentT
 import { tapped } from "../src/harness/tap.ts";
 import { costUsd } from "../src/prices.ts";
 import { DOC_PATH, REPO_DIR, leadInstructions, turnPrompt, workerInstructions } from "../src/prompt.ts";
-import { GITHUB_PLACEHOLDER, type Runtime, runtime } from "../src/runtime.ts";
+import { type Runtime, runtime } from "../src/runtime.ts";
+import { GITHUB_PLACEHOLDER, envExports } from "../src/services.ts";
 import type { HarnessName, InboxEvent, ReplyTo, Usage, Worker } from "../src/store.ts";
 import { hostTools } from "../src/tools.ts";
 import { finalText, foldChunks } from "../src/transcript.ts";
@@ -21,6 +22,7 @@ export type TurnCtx = {
   instructions: string;
   replyTo: ReplyTo | null;
   branch: string | null;
+  apis: string[];
 };
 
 export type Begun = { ctx: TurnCtx; state: HarnessWorkflowState };
@@ -31,7 +33,7 @@ const SLACK_LIMIT = 3500;
 const NO_REPLY = "NO_REPLY";
 
 const openSandbox = (rt: Runtime, ctx: TurnCtx) =>
-  rt.sandbox.open(ctx.sandboxName, { lane: ctx.lane, subject: ctx.subject, credentials: rt.credentials });
+  rt.sandbox.open(ctx.sandboxName, { lane: ctx.lane, subject: ctx.subject, credentials: rt.credentials, apis: ctx.apis });
 
 const shq = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
@@ -67,6 +69,12 @@ async function buildAgent(rt: Runtime, ctx: TurnCtx) {
           session,
           `git config --global credential.helper '!f() { echo username=x-access-token; echo password=${GITHUB_PLACEHOLDER}; }; f' && git config --global user.name verity-platform && git config --global user.email platform@verity.invalid`,
         );
+        if (ctx.apis.length > 0) {
+          await mustRun(
+            session,
+            `printf '%s\\n' ${shq(envExports(ctx.apis))} > "$HOME/.verity-env" && for f in "$HOME/.bashrc" "$HOME/.profile"; do grep -qs verity-env "$f" || echo '. "$HOME/.verity-env"' >> "$f"; done`,
+          );
+        }
         if (!repo) return;
         await session.run({ command: `git -C ${REPO_DIR} fetch -q origin` });
         if (ctx.branch) await mustRun(session, checkout(ctx.branch));
@@ -106,6 +114,7 @@ export async function beginLeadTurn(lane: string, turnId: string, runId: string)
     instructions: leadInstructions(lead, { checkout: rt.repoUrl != null }),
     replyTo: events.find((e) => e.replyTo && "channel" in e.replyTo)?.replyTo ?? null,
     branch: null,
+    apis: lead.apis,
   };
   const prompt = turnPrompt(events);
   if (await rt.store.startTurn({ id: turnId, lane, kind: "lead", runId, harness: lead.harness, model: lead.model, docRevBefore: lead.docRev })) {
@@ -135,6 +144,7 @@ export async function beginWorkerTurn(w: WorkerInput, runId: string): Promise<Be
     instructions: workerInstructions(w, { checkout: rt.repoUrl != null }),
     replyTo: w.replyTo,
     branch: w.branch,
+    apis: [],
   };
   if (await rt.store.startTurn({ id: turnId, lane: w.lane, kind: "worker", workerId: w.id, runId, harness: w.harness, model: w.model })) {
     await rt.store.appendParts(turnId, [

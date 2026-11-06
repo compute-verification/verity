@@ -12,6 +12,8 @@ export type Lead = {
   model: string;
   slackChannel: string | null;
   slackUsergroup: string | null;
+  // The APIs (services.ts) the lead's sandbox may call.
+  apis: string[];
   cronEveryMinutes: number | null;
   nextTickAt: string | null;
   monthlyBudgetUsd: number | null;
@@ -110,6 +112,7 @@ function toLead(r: Record<string, unknown>): Lead {
     model: r.model as string,
     slackChannel: (r.slack_channel as string) ?? null,
     slackUsergroup: (r.slack_usergroup as string) ?? null,
+    apis: String(r.apis ?? "").split(",").filter(Boolean),
     cronEveryMinutes: r.cron_every_minutes == null ? null : num(r.cron_every_minutes),
     nextTickAt: iso(r.next_tick_at),
     monthlyBudgetUsd: r.monthly_budget_usd == null ? null : num(r.monthly_budget_usd),
@@ -197,10 +200,10 @@ export function createStore(db: Db) {
     async upsertLead(l: Partial<Lead> & Pick<Lead, "lane" | "model">): Promise<Lead> {
       const { rows } = await db.query(
         `insert into leads (lane, charter, doc, harness, model, slack_channel, cron_every_minutes,
-                            next_tick_at, monthly_budget_usd, status, slack_usergroup)
+                            next_tick_at, monthly_budget_usd, status, slack_usergroup, apis)
          values ($1, coalesce($2, ''), coalesce($3, ''), coalesce($4, 'claude-code'), $5, $6, $7,
                  case when $7::int is null then null else now() + make_interval(mins => $7::int) end,
-                 $8, coalesce($9, 'active'), $10)
+                 $8, coalesce($9, 'active'), $10, coalesce($11, 'slack,linear'))
          on conflict (lane) do update set
            charter = coalesce($2, leads.charter),
            doc = coalesce($3, leads.doc),
@@ -211,6 +214,7 @@ export function createStore(db: Db) {
            monthly_budget_usd = coalesce($8, leads.monthly_budget_usd),
            status = coalesce($9, leads.status),
            slack_usergroup = coalesce($10, leads.slack_usergroup),
+           apis = coalesce($11, leads.apis),
            updated_at = now()
          returning *`,
         [
@@ -224,6 +228,7 @@ export function createStore(db: Db) {
           l.monthlyBudgetUsd ?? null,
           l.status ?? null,
           l.slackUsergroup ?? null,
+          l.apis ? l.apis.join(",") : null,
         ],
       );
       return toLead(rows[0]!);

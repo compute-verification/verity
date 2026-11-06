@@ -1,8 +1,8 @@
 // Moves leads onto the platform and back, over its HTTP API. Needs PLATFORM_URL
 // and PLATFORM_API_TOKEN in the environment.
 //
-//   swap.ts register LANE --channel C --charter FILE --doc FILE [--usergroup S…] [--model M]
-//                         [--harness claude-code|codex] [--budget USD] [--cron MINUTES] [--kick TEXT]
+//   swap.ts register LANE --channel C --charter FILE --doc FILE [--usergroup S…] [--apis slack,linear,notion]
+//                         [--model M] [--harness claude-code|codex] [--budget USD] [--cron MINUTES] [--kick TEXT]
 //   swap.ts all LEADS.json [--kick TEXT]     register every lead in the file (an array of register's fields)
 //   swap.ts pause LANE                      rollback: the platform stops taking events for LANE
 //   swap.ts resume LANE
@@ -44,6 +44,7 @@ type Entry = {
   lane: string;
   slackChannel?: string;
   slackUsergroup?: string;
+  apis?: string[];
   charterFile?: string;
   docFile?: string;
   model?: string;
@@ -59,6 +60,7 @@ async function register(e: Entry, kick?: string) {
     lane: e.lane,
     slackChannel: e.slackChannel,
     slackUsergroup: e.slackUsergroup,
+    apis: e.apis,
     charter: read(e.charterFile),
     doc: read(e.docFile),
     model: e.model,
@@ -89,6 +91,7 @@ switch (cmd) {
         lane,
         slackChannel: f.channel,
         slackUsergroup: f.usergroup,
+        apis: f.apis ? f.apis.split(",") : undefined,
         charterFile: f.charter,
         docFile: f.doc,
         model: f.model,

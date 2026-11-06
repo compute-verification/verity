@@ -183,13 +183,17 @@ describe("a lead on the platform", () => {
 
   it("issues credentials centrally and never writes them into a sandbox or a transcript", async () => {
     const grants = await t.store.listGrants("infra");
-    expect(grants.length).toBeGreaterThan(0);
-    expect(grants.every((g) => g.kind === "github-app-token" && !g.ref.includes("local-github-token"))).toBe(true);
+    expect(new Set(grants.map((g) => g.kind))).toEqual(new Set(["github-app-token", "api:slack", "api:linear"]));
+    expect(grants.every((g) => !g.ref.includes("local-"))).toBe(true);
     const workerGrants = (await t.store.listGrants()).filter((g) => g.subject.startsWith("infra-w-"));
-    expect(workerGrants.length).toBe(1);
-    for (const f of await filesUnder(t.root)) expect(await readFile(f, "utf8")).not.toContain("local-github-token");
+    expect(workerGrants.map((g) => g.kind)).toEqual(["github-app-token"]);
+    for (const f of await filesUnder(t.root)) expect(await readFile(f, "utf8")).not.toMatch(/local-[a-z]+-token/);
     expect(await readFile(join(t.root, "lead-infra", ".gitconfig"), "utf8")).toContain("password=platform-github-placeholder");
-    const { rows } = await t.store.db.query(`select count(*)::int as n from transcript_parts where text like '%local-github-token%'`);
+    expect(await readFile(join(t.root, "lead-infra", ".verity-env"), "utf8")).toBe(
+      "export SLACK_BOT_TOKEN=platform-slack-placeholder\nexport LINEAR_API_KEY=platform-linear-placeholder\n",
+    );
+    expect(await readFile(join(t.root, "lead-infra", ".bashrc"), "utf8")).toContain(". \"$HOME/.verity-env\"");
+    const { rows } = await t.store.db.query(`select count(*)::int as n from transcript_parts where text ~ 'local-[a-z]+-token'`);
     expect(rows[0]!.n).toBe(0);
   });
 

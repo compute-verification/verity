@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import type { ServiceName } from "./services.ts";
 import type { Store } from "./store.ts";
 
 // Every credential an agent's work uses is issued here, on the host, and
@@ -10,6 +11,7 @@ export type ModelAuth = "ai-gateway" | Record<string, string>;
 export type Credentials = {
   modelAuth(lane: string): Promise<ModelAuth>;
   github(subject: string): Promise<{ token: string; expiresAt: string } | null>;
+  service(subject: string, name: ServiceName): Promise<string | null>;
   provisionGatewayKey(lane: string, monthlyUsd: number): Promise<{ keyId: string }>;
   setGatewayBudget(lane: string, keyId: string, monthlyUsd: number): Promise<void>;
   gatewaySpend(): Promise<{ keyId: string; name: string; spendUsd: number; limitUsd: number | null }[]>;
@@ -41,6 +43,7 @@ export function vercelCredentials(o: {
   vercelToken?: string;
   teamId?: string;
   githubBrokerUrl?: string;
+  services: Partial<Record<ServiceName, string>>;
   oidcToken: () => Promise<string>;
 }): Credentials {
   const team = o.teamId ? `teamId=${encodeURIComponent(o.teamId)}` : "";
@@ -75,6 +78,13 @@ export function vercelCredentials(o: {
       const j = (await r.json()) as { token: string; expires_at: string };
       await o.store.recordGrant({ subject, kind: "github-app-token", scope: "verity-agents", ref: digest(j.token), expiresAt: j.expires_at });
       return { token: j.token, expiresAt: j.expires_at };
+    },
+
+    async service(subject, name) {
+      const token = o.services[name];
+      if (!token) return null;
+      await o.store.recordGrant({ subject, kind: `api:${name}`, scope: "sandbox header rule", ref: digest(token), expiresAt: null });
+      return token;
     },
 
     // https://vercel.com/docs/ai-gateway/observability-and-spend/budgets: the
@@ -123,6 +133,11 @@ export function localCredentials(store: Store): Credentials {
       const expiresAt = new Date(Date.now() + 3600_000).toISOString();
       await store.recordGrant({ subject, kind: "github-app-token", scope: "local", ref: digest(token), expiresAt });
       return { token, expiresAt };
+    },
+    async service(subject, name) {
+      const token = `local-${name}-token-for-${subject}`;
+      await store.recordGrant({ subject, kind: `api:${name}`, scope: "local", ref: digest(token), expiresAt: null });
+      return token;
     },
     async provisionGatewayKey(lane, monthlyUsd) {
       const keyId = `local-key-${lane}`;

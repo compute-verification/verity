@@ -23,6 +23,7 @@ create table if not exists leads (
   updated_at timestamptz not null default now()
 );
 alter table leads add column if not exists slack_usergroup text;
+alter table leads add column if not exists apis text not null default 'slack,linear';
 
 create table if not exists events (
   id bigserial primary key,
