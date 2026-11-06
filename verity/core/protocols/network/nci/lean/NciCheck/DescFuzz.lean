@@ -1,7 +1,7 @@
 module
 
 public import NciCheck.Desc
-public import Std.Data.HashSet
+public import Lean.Data.Json.Parser
 
 /-!
 # The desc fuzzer: the statements behind `DescAgrees`, decided on generated Programs

@@ -1,9 +1,10 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Proofs.Nci.Cover.Area
-public import Proofs.Nci.Cover.FanOutWalk
 public import Definitions.Nci.Guarantees.CoverPartialSum
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Nci.Cover.Area
+import Proofs.Nci.Cover.FanOutWalk
+import Proofs.Nci.Cover.Paths
 
 /-!
 # The partial-sum bounds: partial sums are read

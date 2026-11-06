@@ -1,8 +1,10 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Basic.ENNReal.BigOperators
-public import Mathlib.Basic.ENNReal.Inv
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Basic.ENNReal.Basic
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # hm96's hiding: the claims' hiding assumption

@@ -1,12 +1,51 @@
 module
 
 public import Proofs.Flock.SessionLoop.FinRepErasedCut
-public import Proofs.Flock.SessionLoop.FinRepXs
-public import Proofs.Flock.SessionLoop.FinRepView
-public import Proofs.Flock.Claims.ZK.PiopFree
-public import Proofs.Flock.Claims.ZK.Round1Root
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
+public import Proofs.Flock.Claims.ZK.FinishSwLig
+import Flock.With.SimWalk
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.ZK.CausalExe
+import Proofs.Flock.Claims.ZK.FinishClaimsX
+import Proofs.Flock.Claims.ZK.PiopFree
+import Proofs.Flock.Claims.ZK.Round1Root
+import Proofs.Flock.SessionLoop.FinCommits
+import Proofs.Flock.SessionLoop.FinL0Vals
+import Proofs.Flock.SessionLoop.FinRepErasedAt
+import Proofs.Flock.SessionLoop.FinRepXs
+import Proofs.Flock.SessionLoop.FinRounds
 
 /-!
 # The views' cut PIOP returns where the firewall's rep did

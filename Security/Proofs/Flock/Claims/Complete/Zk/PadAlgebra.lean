@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Zk.Inner
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
+public import Proofs.Flock.Claims.Complete.Zk.Tape
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Fold
 
 /-!
 # The honest pads' algebra

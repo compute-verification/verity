@@ -43,11 +43,7 @@ its word Definition, completeness under Boolean-first), because credited work re
 -/
 module
 
-public import Lean.Data.Json
-public import Std.Data.HashMap
-public import Std.Data.HashSet
 public import Flock.Program
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true

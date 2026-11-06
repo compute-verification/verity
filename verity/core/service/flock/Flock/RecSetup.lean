@@ -12,10 +12,8 @@ recursive one without `--zk`, neither of which `RecursiveKS` covers (`denseOnly`
 module
 
 public import Flock.RecBudget
-public import Flock.RecCoins
 public import Flock.RecRecord
 public import Flock.Witness
-public import Flock.JsonParse
 
 @[expose] public section
 

@@ -1,12 +1,13 @@
 module
 
-public import Proofs.Pouw.Period.Sort
-public import Proofs.Properties.Pouw.Check
-public import Proofs.Properties.Pouw.Draw
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
+public import Properties.Pouw.Check
+import Proofs.Pouw.Period.Sort
+import Proofs.Properties.Pouw.Check
+import Proofs.Properties.Pouw.Draw
 
 /-!
 # PoUW's deployed check accepts H1's honest window at the leg's parameters

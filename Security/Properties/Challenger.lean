@@ -1,8 +1,5 @@
 module
 
-public import CoreProtocol.Live
-public import SampledProofs.ChallengerDraw
-public import SampledProofs.OneStage
 public import SampledProofs.OneStageZk
 
 /-!

@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Json.Hex
 public import Flock.RecCompose
+import Proofs.Flock.Claims.Complete.Json.Hex
 
 /-!
 # What `flock-verify rec-compose` holds V*'s parts to, read back to their files

@@ -1,6 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Refine.Rep
+public import Proofs.Flock.Soundness.Refine.LigeritoRun
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.List.GetD
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The Merkle checks are the model's path checks (PROTOCOL.md §14)

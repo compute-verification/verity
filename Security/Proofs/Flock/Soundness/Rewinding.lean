@@ -1,6 +1,9 @@
 module
 
 public import Definitions.Flock.Rewinding
+public import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
 
 /-!
 # The rewinding lemma: openings off the plurality table cost collisions

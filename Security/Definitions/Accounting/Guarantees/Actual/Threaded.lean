@@ -1,8 +1,10 @@
 module
 
-public import Definitions.Accounting.Guarantees.Actual
 public import Definitions.Nci.Assumptions.Threads
 public import Definitions.Nci.Dark
+public import Definitions.Accounting.Physical
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # The memory cap over threads (trusted)

@@ -1,9 +1,10 @@
 module
 
 public import Definitions.Pouw.Barrier.Pinned
-public import Proofs.Pouw.NCP.Proofs
-public import Proofs.Pouw.Prob
 public import Definitions.Pouw.Guarantees.Barrier
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.NCP.Proofs
+import Proofs.Pouw.Prob
 
 /-!
 # The degenerate-input barrier: proofs

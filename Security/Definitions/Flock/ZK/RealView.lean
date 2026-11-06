@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Flock.ZK.Table
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # Zero knowledge: the real prover's view and `S_shvzk`'s, with real hm96 leaves

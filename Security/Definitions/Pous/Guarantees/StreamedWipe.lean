@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe: secure erasure from streamed PRF labels (experimental)

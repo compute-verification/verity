@@ -8,12 +8,12 @@ verifier's program reads for its unit at that port. A K = 64 A row is 64 int8 co
 -/
 module
 
-public import Flock.Registered
 public import Flock.JsonKeys
 public import Flock.JsonParse
-meta import Flock.Registered
+public import Flock.Registered
 meta import Flock.JsonKeys
 meta import Flock.JsonParse
+meta import Flock.Registered
 
 @[expose] public section
 

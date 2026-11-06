@@ -1,7 +1,10 @@
 module
 
-public import Proofs.NetworkCertifier.Counting
-public import Proofs.NetworkCertifier.Occupancy
+public import Definitions.NetworkCertifier.Assumptions
+public import Mathlib.Data.Set.Card
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.NetworkCertifier.Counting
+import Proofs.NetworkCertifier.Occupancy
 
 /-!
 # Theorem 3: the advice caps

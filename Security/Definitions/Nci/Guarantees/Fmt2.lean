@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Assumptions.Fmt2
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI over threads, each value charged once over its copies: the guarantees

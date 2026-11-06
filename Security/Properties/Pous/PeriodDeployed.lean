@@ -1,6 +1,7 @@
 module
 
 public import Properties.Pous.Period
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS over one period at the deployed ring budget

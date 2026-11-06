@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Core.Game.Runs
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Sequencing strategies, and runs as a game

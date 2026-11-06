@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Expand
+public import Definitions.Core.Formalism
 
 /-!
 # The bit-level expansion's guarantees

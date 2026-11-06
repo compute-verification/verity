@@ -10,8 +10,8 @@ The only divisor of 128 that does not divide 64 is 128 itself.
 module
 
 public import Proofs.Flock.Level3.GF128Ring
-public import Mathlib.FieldTheory.Finite.Extension
 public import Mathlib.Algebra.Field.TransferInstance
+import Mathlib.FieldTheory.Finite.Extension
 
 @[expose] public section
 

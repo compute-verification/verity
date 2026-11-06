@@ -2,6 +2,8 @@ module
 
 public import Definitions.Flock.Sparse
 public import Definitions.Flock.Session
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The holographic table: two reps with hidden units, then the registered opening

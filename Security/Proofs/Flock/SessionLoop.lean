@@ -6,31 +6,12 @@ public import Proofs.Flock.SessionLoop.FinalC
 public import Proofs.Flock.SessionLoop.TakesTau
 public import Proofs.Flock.SessionLoop.Inner
 public import Proofs.Flock.SessionLoop.LiveInner
-public import Proofs.Flock.Claims.ZK.FrameUnrefused
 public import Proofs.Flock.SessionLoop.Link
-public import Proofs.Flock.Claims.ZK.FinishSwFrame
-public import Proofs.Flock.Claims.ZK.FinishSwRep
 public import Proofs.Flock.SessionLoop.FinishParts
 public import Proofs.Flock.SessionLoop.FinCommits
 public import Proofs.Flock.SessionLoop.FinPoints
 public import Proofs.Flock.SessionLoop.FinRounds
 public import Proofs.Flock.SessionLoop.TablesSide
-public import Proofs.Flock.Claims.ZK.FinishBridge
-public import Proofs.Flock.Claims.ZK.FinishTrunc
-public import Proofs.Flock.Claims.ZK.FinHmkLive
-public import Proofs.Flock.Claims.ZK.FinishFwRep
-public import Proofs.Flock.Claims.ZK.FinTau
-public import Proofs.Flock.Claims.ZK.L0PinLoop
-public import Proofs.Flock.Claims.ZK.L0PinCut
-public import Proofs.Flock.Claims.ZK.SimCommit
-public import Proofs.Flock.Claims.ZK.FinishSwVals
-public import Proofs.Flock.Claims.ZK.FinishClaimsX
-public import Proofs.Flock.Claims.ZK.FrameFree
-public import Proofs.Flock.Claims.ZK.PiopFree
-public import Proofs.Flock.Claims.ZK.FinishLigEnd
-public import Proofs.Flock.Claims.ZK.RepCutFw
-public import Proofs.Flock.Claims.ZK.FinishSwMkAny
-public import Proofs.Flock.Claims.ZK.FinishFwL0
 public import Proofs.Flock.SessionLoop.FinishIsLoop
 public import Proofs.Flock.SessionLoop.Phase
 public import Proofs.Flock.SessionLoop.PiopState
@@ -39,6 +20,39 @@ public import Proofs.Flock.SessionLoop.CutInnerLive
 public import Proofs.Flock.SessionLoop.InnerSlot
 public import Proofs.Flock.SessionLoop.InnerUnrefused
 public import Proofs.Flock.SessionLoop.LiveInnerAt
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FrameUnrefused
+import Proofs.Flock.Soundness.CROnly.Hiding
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames

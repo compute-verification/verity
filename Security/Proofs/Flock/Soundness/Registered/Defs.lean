@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Binding.Rows
 public import Proofs.Flock.Verifier.Registered
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Registered reads: the model's objects

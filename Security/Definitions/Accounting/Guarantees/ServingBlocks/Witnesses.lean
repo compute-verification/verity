@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Accounting.Guarantees.ServingBlocks
 public import Definitions.Accounting.ServingBlocks.Instances
 
 /-!

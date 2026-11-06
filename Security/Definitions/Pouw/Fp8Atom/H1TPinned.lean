@@ -1,7 +1,5 @@
 module
 
-public import Mathlib.Data.Fintype.Card
-public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Data.Fintype.Sum
 public import Definitions.Pouw.Fp8Atom.H1TVectors
 

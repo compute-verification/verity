@@ -66,16 +66,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 -/
 module
 
-public import SampledProofs.OneStage
-public import SampledProofs.Slots
-public import SampledProofs.Service
-public import SampledProofs.Run
-public import SampledProofs.Stream
 public import SampledProofs.Fleet
 public import SampledProofs.Hello
-public import SampledProofs.ChallengerRecord
-public import SampledProofs.ChallengerSession
-public import SampledProofs.ChallengerCoins
 public import SampledProofs.ChallengerTrees
 public import SampledProofs.Produced
 public import SampledProofs.HiddenDraw

@@ -1,16 +1,10 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOut
-public import Proofs.Pouw.Prob
-public import Proofs.Pouw.PearlC.Game
-public import Proofs.Pouw.PearlC.Instance
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.Ring
-public import Definitions.Pouw.Guarantees.PearlC
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.Game
+import Proofs.Pouw.PearlC.Instance
+import Proofs.Pouw.Prob
 
 /-!
 # γ from TT_OUT

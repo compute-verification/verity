@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Binding.E2E
 public import Proofs.Flock.Soundness.ExecDrawOS
+public import Proofs.Flock.Soundness.Binding.Rows
+public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Binding.E2E
 
 /-!
 # The headline: the program's rows, SHA-512 throughout, the live draw

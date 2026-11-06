@@ -1,9 +1,15 @@
 module
 
-public import Proofs.Pouw.Witness
-public import Proofs.Pouw.Copy
-public import Mathlib.Data.Set.Finite.List
-public import Mathlib.Data.Fintype.Pigeonhole
+public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.M1
+public import Definitions.Pouw.Witness.Copy
+public import Definitions.Pouw.Witness.Model
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Data.Set.Finite.List
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
+import Proofs.Pouw.Reduction
+import Proofs.Pouw.Witness
 
 /-!
 # Sanity: degenerate instances and side conditions

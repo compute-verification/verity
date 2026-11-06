@@ -2,6 +2,10 @@ module
 
 public import Definitions.Flock.Game.Interleave
 public import Proofs.Flock.Soundness.Game.Basic
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
 
 /-!
 # Two interactions run concurrently

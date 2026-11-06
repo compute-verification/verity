@@ -1,7 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Aesop.BuiltinRules
+public import Flock.HmRow
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecParse
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The link points' count of a `setupH` statement
