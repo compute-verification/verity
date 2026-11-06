@@ -25,9 +25,12 @@ def test_figure2_joins_the_workload_to_the_measured_blocks():
     assert out["uncovered_mac_share"] == pytest.approx(1 - macs / (work.get("served_macs_per_token") or macs))
     assert sum(t["block_share"] for t in out["types"]) == pytest.approx(1)
     assert sum(t["mac_share"] for t in out["types"]) == pytest.approx(1 - out["uncovered_mac_share"])
-    assert out["pending_mac_share"] == pytest.approx(1 - out["uncovered_mac_share"])
-    assert out["derived_model_overhead"] is None
-    assert [s["stands_in"] for s in out["stand_ins"]] == [True]
+    blocks = cards.load("proof_overhead", "GLM-5.3")["value"]["blocks"]
+    assert [t["measured"] for t in out["types"]] == [t["block"] in {b["block"] for b in blocks} for t in out["types"]]
+    assert out["pending_mac_share"] + sum(t["mac_share"] for t in out["types"] if t["measured"]) == pytest.approx(
+        1 - out["uncovered_mac_share"])
+    assert (out["derived_model_overhead"] is None) == (not all(t["measured"] for t in out["types"]))
+    assert [s["block"] for s in out["stand_ins"]] == [b["block"] for b in blocks if b.get("stands_in")]
 
 
 def test_figure2_tells_apart_the_blocks_sharing_a_name():

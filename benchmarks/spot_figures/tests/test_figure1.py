@@ -144,7 +144,8 @@ def test_the_design_card_picks_the_main_panels_lines(out):
 
 
 def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
-    xs = [1.0, 1.5e8, 1e14]
+    vertical = cards.load("proof_overhead", "GLM-5.3")["value"]["model_overhead"]
+    xs = [1.0, vertical, 1e14]
     card = envelope("infiltration", "GLM-5.3", {
         "design": "layer_of_token", "form": "write", "unit": "bit", "caption": "Deferred interiors at a layer.",
         "consumer": None, "series": [{"scope": s, "budget": b, "x": xs, "y": [1e3, 1e9, 1e15]}
@@ -161,7 +162,7 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
     caption = out["scopes"]["world year"]["captions"]["infiltration"]
     head = next(s for s in out["panels"]["exfiltration"]["series"]
                 if (s["scope"], s["budget"], s["design"]) == ("world year", f.RATIO_BUDGET, "two-stage"))
-    ratio = 1e9 / head["y"][head["x"].index(1.5e8)]
+    ratio = 1e9 / head["y"][head["x"].index(vertical)]
     assert caption.startswith("Deferred interiors at a layer. At the measured overhead and 1% of compute, this curve "
                               f"is 1e9 bits, {ratio:.2g}× the exfiltration panel's tokens-only two-stage bound")
     assert out["scopes"]["world year"]["captions"]["exfiltration_appendix"].endswith(
@@ -270,13 +271,17 @@ def test_a_statement_pays_its_fixed_cost_over_its_fill():
 
 
 def test_each_design_is_priced_at_its_fill(world):
-    """One-stage proves one block a statement and request-level a request's blocks (two-stage the k its planner picks,
+    """One-stage proves one block a statement, each type paying its own statement's fixed cost (an unmeasured type the
+    measured ones' pooled cost), MAC-weighted, and request-level a request's blocks (two-stage the k its planner picks,
     at that price: the planner's-design test)."""
     c, part, fill, s = world
     m = f.model(c, part, s, c["proof_overhead"].value, fill)
-    po = c["proof_blocks"].value[0]
-    assert f.cost(m, "one-stage", "leak", 1e12)["fill"] == pytest.approx(1 + po["fixed_seconds"]
-                                                                          / po["seconds_per_block"])
+    strata, blocks = c["partition"].value["strata"], c["proof_blocks"].value
+    by = {b["block"]: b["fixed_seconds"] / b["seconds_per_block"] for b in blocks}
+    pooled = sum(b["fixed_seconds"] for b in blocks) / sum(b["seconds_per_block"] for b in blocks)
+    macs = sum(x["per_token"] * x["macs"] for x in strata)
+    one = sum(x["per_token"] * x["macs"] / macs * (1 + by.get(x["block"], pooled)) for x in strata)
+    assert f.cost(m, "one-stage", "leak", 1e12)["fill"] == pytest.approx(one)
     assert f.cost(m, "request", "leak", 1e18)["fill"] == pytest.approx(fill.factor(f.inf), rel=1e-6)
 
 
@@ -360,14 +365,22 @@ def test_a_request_serves_each_token_as_its_id(monkeypatch):
 
 def test_the_headline_designs_win_at_the_measured_overhead(out):
     """The figure's claim at today's inputs: at the vertical line, two-stage bounds exfiltration below both comparisons,
-    width-stratified at most uniform, and one-stage bounds skipped work below request-level sampling."""
+    width-stratified at most uniform, and one-stage bounds skipped work below request-level sampling; where the
+    winner is at the trivial bound, everything the scope outputs or computes, every design is there with it."""
     rows = f.at_overhead(out)
     for scope in SCOPES:
         for beta in out["budgets"]:
-            at = {(r["panel"], r["design"]): r["bound"] for r in rows if (r["scope"], r["budget"]) == (scope, beta)}
-            assert at["exfiltration", "two-stage"] < min(at["exfiltration", "one-stage"], at["exfiltration", "request"])
+            here = [r for r in rows if (r["scope"], r["budget"]) == (scope, beta)]
+            at = {(r["panel"], r["design"]): r["bound"] for r in here}
+            top = {(r["panel"], r["design"]) for r in here if r["capped"]}
+
+            def wins(panel: str, design: str, *others: str) -> bool:
+                rest = min(at[panel, d] for d in others)
+                return at[panel, design] < rest or ((panel, design) in top and at[panel, design] == rest)
+
+            assert wins("exfiltration", "two-stage", "one-stage", "request")
             assert at["exfiltration", "two-stage"] <= at["exfiltration", "two-stage-uniform"]
-            assert at["skipped_work", "one-stage"] < at["skipped_work", "request"]
+            assert wins("skipped_work", "one-stage", "request")
 
 
 def test_compute_and_skipped_work_are_in_and_gates_too(out):
