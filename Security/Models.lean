@@ -16,7 +16,6 @@ public import Definitions.Nci.Guarantees.Capability
 public import Definitions.Accounting.Guarantees.Coverage
 public import Definitions.Nci.Guarantees.Fmt2
 public import Definitions.Nci.Guarantees.Training
-public import Definitions.Nci.Guarantees.Packed
 public import Definitions.Nci.Guarantees.PackedTraining
 public import Definitions.Nci.Guarantees.Activations
 public import Definitions.Nci.Guarantees.Covering
