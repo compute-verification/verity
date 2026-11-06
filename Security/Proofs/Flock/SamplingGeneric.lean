@@ -17,6 +17,7 @@ public import Proofs.Flock.SamplingGeneric.ZK
 public import Proofs.Flock.SamplingGeneric.FlockZk
 public import Proofs.Flock.SamplingGeneric.Two
 public import Proofs.Flock.SamplingGeneric.TwoCount
+public import Proofs.Flock.SamplingGeneric.TwoTable
 public import Proofs.Flock.SamplingGeneric.TwoBernoulli
 
 /-!
