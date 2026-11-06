@@ -1053,8 +1053,9 @@ def sqrt_grain(beta: float, h: float, target: float, o: float, delta: float, wei
 #: the breakpoints of `two_stage_exfil`'s chords of the escape exponent h; past the last, h is taken at its value there.
 #: Dense from 3 to 8, where a wholly incorrect replay block's y = Σ_t k_t falls once there are a few strata
 CHORDS = (0.0, 2.0 ** -8, 2.0 ** -4, 2.0 ** -2, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0)
-#: `two_stage_design`'s family of designs, one at each κ
-KAPPAS = (0.0, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0)
+#: `two_stage_design`'s family of designs, one at each κ.  Down to 2^-10: capped at a request's served bits, B is the
+#: capped charge, so the patterns' form's best designs sit at κ of 2^-9 to 2^-6
+KAPPAS = (0.0, *(2.0 ** e for e in range(-10, 5)))
 #: the tolerance in ln θ `two_stage_design` compares its designs at, each bound holding at any θ; the chosen one's is
 #: then taken to `two_stage_exfil`'s
 SCREEN = 1e-2
