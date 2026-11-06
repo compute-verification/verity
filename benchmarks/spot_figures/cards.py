@@ -1,0 +1,211 @@
+"""The SPOT figures' input cards (`spot-card/v1`): every number the figures read is a card, marked measured or modeled
+with its source, published to the evidence store and kept here as `cards/SLOT.MODEL.json` with the art id it came from.
+
+A card is one JSON object:
+
+    {"schema": "spot-card/v1", "slot": SLOT, "model": "GLM-5.3" | "DeepSeek-V4-Pro" | null,
+     "status": "measured" | "modeled", "provisional": bool, "source": "...", "runs": ["r..."], "owner": "@lane",
+     "value": {...}}
+
+`SLOTS` gives each slot's `value` fields, every number in the unit its field names; `model` is null only in the slots
+that hold for every model (`MODEL_FREE`).  A proof block's Definition is named as circuit-check names the
+specialization, the key `workload` and `proof_overhead` join on.  A card reaches the figures by art id:
+
+    uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields
+    research data put --kind spot-card/v1 --file CARD.json --preserve --json
+    uv run python benchmarks/spot_figures/cards.py fetch art:...             # checks it, writes cards/SLOT.MODEL.json
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+CARDS = HERE / "cards"
+SCHEMA = "spot-card/v1"
+MODELS = ("GLM-5.3", "DeepSeek-V4-Pro")
+MODEL_FREE = ("design", "commitment", "references", "commit_hillclimb")
+PANELS = ("exfiltration", "infiltration", "skipped_work")
+CUTS = ("tokens", "kv", "layer_of_token", "every_block")
+RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
+NUM = (int, float)
+
+
+@dataclass(frozen=True)
+class F:
+    """A field: its JSON types, whether it may be absent or null, the fields of each entry of a list of objects, and
+    the values it may take."""
+
+    kind: type | tuple
+    required: bool = True
+    nullable: bool = False
+    each: dict | None = None
+    choices: tuple | None = None
+
+
+def _opt(kind: type | tuple, **kw) -> F:
+    return F(kind, required=False, **kw)
+
+
+ENVELOPE = {"schema": F(str, choices=(SCHEMA,)), "slot": F(str), "model": F(str, nullable=True, choices=MODELS),
+            "status": F(str, choices=("measured", "modeled")), "provisional": F(bool), "source": F(str),
+            "runs": F(list), "owner": F(str), "value": F(dict), "art": _opt(str)}
+STRATUM = {"block": F(str), "kind": _opt(str), "per_token": F(NUM), "macs": F(NUM), "out_bits": F(NUM),
+           "in_bits": _opt(NUM), "ands": _opt(NUM), "k_log": _opt(int), "commit_bytes": _opt(NUM)}
+OVERHEAD_BLOCK = {"block": F(str), "stands_in": _opt(bool), "macs": F(NUM), "out_bits": _opt(NUM), "k_log": _opt(int),
+                  "seconds_per_block": F(NUM), "fixed_seconds": F(NUM), "statement_blocks": F(int),
+                  "overhead": F(NUM, nullable=True), "runs": _opt(list)}
+CUT = {"cut": F(str, choices=CUTS), "bytes_per_token": F(NUM), "serve_share": F(NUM, nullable=True), "runs": _opt(list)}
+LINE = {"panel": F(str, choices=PANELS), "label": F(str), "unit": F(str, choices=("bit", "FLOP", "AND")),
+        "value": _opt(NUM), "by_scope": _opt(dict), "source": F(str)}
+SERIES = {"scope": F(str), "budget": F(NUM), "x": F(list), "y": F(list)}
+AXIS = {"label": F(str), "unit": F(str)}
+POINT = {"x": F(NUM), "y": F(NUM), "runs": _opt(list), "note": _opt(str)}
+CURVE = {"label": F(str), "model": _opt(str, nullable=True, choices=MODELS), "points": F(list, each=POINT)}
+SLOTS = {
+    "workload": {"ranks": F(int), "device": F(str), "request": F(dict), "tokens": F(int), "weights_bytes": F(NUM),
+                 "strata": F(list, each=STRATUM), "boundaries": _opt(dict)},
+    "proof_overhead": {"definition": F(str), "device": F(str), "format": F(str, choices=("fp8", "s8", "bf16", "nvfp4")),
+                       "peak_mac_s": F(NUM), "arm": _opt(str), "blocks": F(list, each=OVERHEAD_BLOCK),
+                       "model_overhead": F(NUM, nullable=True), "label": F(str)},
+    "commitment": {"hash_rate": F(NUM), "device": F(str), "scheme": F(str), "cuts": _opt(list, each=CUT)},
+    "replay": {"factor": F(NUM), "batch_layout": F(str, choices=("served", "alone")),
+               "deterministic": F(bool, nullable=True), "gpu_seconds_per_request": _opt(NUM, nullable=True)},
+    "design": {"delta": F(NUM), "budgets": F(list), "overheads": F(list), "token_bytes": F(NUM)},
+    "references": {"lines": F(list, each=LINE)},
+    "infiltration": {"design": F(str, choices=("two-stage", "layer_of_token", "one-stage", "request")),
+                     "form": F(str, choices=("write", "information")), "unit": F(str), "caption": F(str),
+                     "consumer": F(str, nullable=True), "cap_bits_per_block": _opt(NUM),
+                     "replay_blocks_per_token": _opt(NUM), "boundary_bytes_per_token": _opt(NUM),
+                     "vector_bits": _opt(NUM), "series": _opt(list, each=SERIES)},
+    "commit_hillclimb": {"x": F(dict, each=AXIS), "y": F(dict, each=AXIS), "workload": F(str),
+                         "series": F(list, each=CURVE)},
+}
+
+
+def _fields(obj: dict, spec: dict, where: str) -> list[str]:
+    errors = [f"{where}: unknown field {k!r} (the fields are {', '.join(spec)}; ask @proofs to add one)"
+              for k in obj if k not in spec]
+    for name, f in spec.items():
+        at = f"{where}.{name}"
+        if name not in obj:
+            if f.required:
+                errors.append(f"{at}: missing")
+            continue
+        v = obj[name]
+        if v is None:
+            if not f.nullable:
+                errors.append(f"{at}: null, but it takes a value")
+            continue
+        if not isinstance(v, f.kind) or (isinstance(v, bool) and f.kind is not bool):
+            errors.append(f"{at}: {type(v).__name__}, but it is {'a number' if f.kind is NUM else f.kind.__name__}")
+            continue
+        if f.choices is not None and v not in f.choices:
+            errors.append(f"{at}: {v!r}, but it is one of {', '.join(map(repr, f.choices))}")
+        if f.each is not None:
+            for i, entry in enumerate(v if isinstance(v, list) else [v]):
+                sub = f"{at}[{i}]" if isinstance(v, list) else at
+                errors += (_fields(entry, f.each, sub) if isinstance(entry, dict)
+                           else [f"{sub}: {type(entry).__name__}, but it is an object"])
+    return errors
+
+
+def check(card: dict) -> dict:
+    """The card, or ValueError naming every field that breaks the schema."""
+    errors = _fields(card, ENVELOPE, "card")
+    slot, value = card.get("slot"), card.get("value")
+    if slot not in SLOTS:
+        errors.append(f"card.slot: {slot!r}, but it is one of {', '.join(SLOTS)}")
+    elif isinstance(value, dict):
+        errors += _fields(value, SLOTS[slot], f"{slot}.value")
+    if card.get("model") is None and slot not in MODEL_FREE:
+        errors.append(f"card.model: null, but a {slot} card names its model ({', '.join(MODELS)})")
+    errors += [f"card.runs: {r!r} is not a run id" for r in card.get("runs") or [] if not RUN.fullmatch(str(r))]
+    if not str(card.get("source", "")).strip():
+        errors.append("card.source: empty; say what produced the card and from what")
+    if not str(card.get("owner", "@")).startswith("@"):
+        errors.append(f"card.owner: {card['owner']!r}, but it is the maintaining lane's handle, e.g. '@proofs'")
+    if slot == "references" and isinstance(value, dict):
+        errors += [f"references.value.lines[{i}]: give exactly one of value and by_scope"
+                   for i, line in enumerate(value.get("lines") or [])
+                   if isinstance(line, dict) and ("value" in line) == ("by_scope" in line)]
+    if errors:
+        raise ValueError("not a spot-card/v1 card:\n  " + "\n  ".join(errors))
+    return card
+
+
+def path(slot: str, model: str | None) -> Path:
+    return CARDS / f"{slot}.{(model or 'all').lower()}.json"
+
+
+def load(slot: str, model: str | None, required: bool = True) -> dict | None:
+    """The model's card for the slot, else the slot's card for every model."""
+    for p in (path(slot, model), path(slot, None)):
+        if p.exists():
+            return check(json.loads(p.read_text()))
+    if required:
+        raise FileNotFoundError(f"no {slot} card for {model}: its owner publishes one (`research data put --kind "
+                                f"{SCHEMA} --file CARD.json --preserve`) and `cards.py fetch ART` keeps it in {CARDS}")
+    return None
+
+
+def write(card: dict, force: bool = False) -> Path:
+    check(card)
+    p = path(card["slot"], card["model"])
+    if p.exists() and not force:
+        old = json.loads(p.read_text()).get("art")
+        if old == card.get("art"):
+            return p
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(card, indent=1) + "\n")
+    return p
+
+
+def fetch(art: str, force: bool = False) -> Path:
+    """The published card `art`, checked and kept under `cards/` with its art id."""
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(["research", "data", "fetch", art, "--to", tmp], check=True, stdout=subprocess.DEVNULL)
+        found = [p for p in Path(tmp).rglob("*.json")]
+        if len(found) != 1:
+            raise ValueError(f"{art}: a card is one JSON file, found {[p.name for p in found]}")
+        card = json.loads(found[0].read_text())
+    return write(card | {"art": art}, force)
+
+
+def main(argv=None) -> None:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("check").add_argument("cards", type=Path, nargs="+")
+    f = sub.add_parser("fetch")
+    f.add_argument("arts", nargs="+")
+    f.add_argument("--force", action="store_true", help="rewrite a card already kept under the same art id")
+    sub.add_parser("list")
+    args = ap.parse_args(argv)
+    if args.cmd == "check":
+        bad = 0
+        for p in args.cards:
+            try:
+                c = check(json.loads(p.read_text()))
+                print(f"{p}: ok ({c['slot']}, {c['model'] or 'every model'}, {c['status']})")
+            except ValueError as e:
+                bad += 1
+                print(f"{p}: {e}")
+        sys.exit(1 if bad else 0)
+    if args.cmd == "fetch":
+        for art in args.arts:
+            print(fetch(art, args.force))
+    if args.cmd == "list":
+        for p in sorted(CARDS.glob("*.json")):
+            c = json.loads(p.read_text())
+            print(f"{p.name}: {c['status']}{' provisional' if c['provisional'] else ''}, {c.get('art') or 'in tree'}, "
+                  f"{c['owner']}")
+
+
+if __name__ == "__main__":
+    main()

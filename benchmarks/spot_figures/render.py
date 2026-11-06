@@ -23,7 +23,8 @@ from matplotlib.transforms import offset_copy
 
 COLORS = ("#9ECAE1", "#3182BD", "#08306B")
 COMPARISON = {"one-stage": (0, (6, 3)), "request": (0, (1.2, 2.4))}
-NAMES = {"two-stage": "Two-stage", "one-stage": "One-stage, dot-product blocks", "request": "Request-level"}
+NAMES = {"two-stage": "Two-stage", "one-stage": "One-stage, dot-product blocks", "request": "Request-level",
+         "layer_of_token": "Deferred interiors, a layer of a token"}
 VERTICAL = "#E69F00"
 PRIMARY = "world year"
 PANELS = (("exfiltration", "Exfiltration capacity"), ("infiltration", "Infiltration"),
@@ -90,7 +91,8 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
             ax.text(.5, .5, "Pending", transform=ax.transAxes, ha="center", va="center", fontsize=26, color="#909090")
             continue
         scale = 1 / 8 if p["unit"] == "bit" else 1 / out["inputs"]["h100_hour_flop"]["value"]
-        refs = [(r["value"] * scale, r["label"]) for r in p["references"]]
+        shown = [r for r in p["references"] if "value" in r or scope in r["by_scope"]]
+        refs = [((r["value"] if "value" in r else r["by_scope"][scope]) * scale, r["label"]) for r in shown]
         ys = [y * scale for s in series for y in s["y"]]
         top = [y * scale for s in series if s["design"] == p["headline"] for y in s["y"]] + [r for r, _ in refs]
         lo, hi = 10.0 ** floor(log10(min(ys + top))), 10.0 ** (floor(log10(max(top))) + 1)

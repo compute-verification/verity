@@ -1,19 +1,21 @@
-"""Figure 1 of the SPOT post, derived from the sampled-proofs planner: what an adversary serving GLM-5.3 on all of a
+"""Figure 1 of the SPOT post, derived from the sampled-proofs planner: what an adversary serving a model on all of a
 scope's compute over a monitoring period can exfiltrate, infiltrate or skip while evading detection with probability
 above δ, against proof overhead, at each share of compute spent on verification.
 
-Every input is a card (`inputs.json`, the census, rho's reference, `glm53_partition.json`) marked measured or modeled
-with its source, and the output carries them all beside every plotted series (`figure1.json`), which the console reads.
+Every input is a card marked measured or modeled with its source: the model's `spot-card/v1` cards (`cards.py`), the
+census and rho's reference.  The output carries them all beside every plotted series (`figure1.json`), which the
+console reads.
 
 **Workload.**  A scope's compute is its GPUs (the world: rho's `world-h200` fleet, the census's `world-inference-2027`;
 a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`wipe_monitoring.PERIODS`), serving at
-the fleet's MFU on the H200's dense FP8 peak.  It serves GLM-5.3 requests of the census's tokens each, at the circuit's
-MACs a token, cut into proof blocks as `glm53_partition.json` has them.
+the fleet's MFU on the H200's dense FP8 peak.  It serves the model's requests of the census's tokens each, at the
+circuit's MACs a token, cut into proof blocks as the model's `workload` card has them.
 
-**Costs**, in the scope's GPU-seconds: a replay re-runs its request at serving's MFU; proving a proof block takes the
-proof overhead times its FLOP at the dense peak; hashing a byte takes the H200's SHA-512 rate.  A design's cost is the
-planner's (`optimize.grain_costs`), and a curve's point at budget β is the least target whose cost is at most β of the
-scope's GPU-seconds, by bisection, capped at what the scope outputs (exfiltration) or computes (skipped work).
+**Costs**, in the scope's GPU-seconds: a replay costs the `replay` card's factor times its request served at serving's
+MFU; proving a proof block takes the proof overhead times its FLOP at the dense peak; hashing a byte takes the
+`commitment` card's rate.  A design's cost is the planner's (`optimize.grain_costs`), and a curve's point at budget β is
+the least target whose cost is at most β of the scope's GPU-seconds, by bisection, capped at what the scope outputs
+(exfiltration) or computes (skipped work).
 
 **Designs.**
 
@@ -27,20 +29,19 @@ scope's GPU-seconds, by bisection, capped at what the scope outputs (exfiltratio
 Exfiltration is in bits, `consumers.exfiltration_bound`'s form: the incorrect proof blocks' output bits plus which ones
 they are.  Skipped work is the work in incorrect proof blocks, under one-stage and request-level sampling: the
 two-stage design's interior commitments come after its first stage, so they don't show the work was done at serve
-time.  Infiltration is a panel of its own, empty until its consumer is read here.  The horizontal lines are rho's
-reference objects (`REFERENCES`) and GLM-5.3's checkpoint.
-
-    uv run python benchmarks/spot_figures/figure1.py --out DIR [--points N]
+time.  Infiltration is a panel of its own, drawn from the model's `infiltration` card and pending without one.  The
+horizontal lines are rho's reference objects (`REFERENCES`), the model's checkpoint and any `references` card's.
+`figures.py` writes it with Figures 2 and 3.
 """
 from __future__ import annotations
 
-import argparse
 import json
 import tomllib
 from dataclasses import dataclass
 from math import sqrt
 from pathlib import Path
 
+import cards as spot_cards
 from glm53_partition import _k
 from verity.core.protocols.pous.wipe_monitoring import PERIODS
 from verity.core.protocols.sampled_proofs.optimize import Grain, ReplayGrain, grain_costs, leak_count, loc_bits
@@ -85,9 +86,30 @@ def _toml(path: str) -> dict:
     return tomllib.loads((ROOT / path).read_text())
 
 
-def cards() -> dict[str, InputCard]:
-    """Every input: `inputs.json`'s, and those read from the census, rho's reference and the partition card."""
-    out = {k: InputCard(**v) for k, v in json.loads((HERE / "inputs.json").read_text()).items()}
+def slot_cards(model: str) -> dict[str, dict]:
+    """The model's `spot-card/v1` cards Figure 1 reads, the optional ones only where they exist."""
+    out = {s: spot_cards.load(s, model) for s in ("workload", "proof_overhead", "commitment", "replay", "design")}
+    return out | {s: c for s in ("infiltration", "references") if (c := spot_cards.load(s, model, required=False))}
+
+
+def _card(c: dict, value, unit: str, field: str) -> InputCard:
+    art = f" ({c['art']})" if c.get("art") else ""
+    return InputCard(value, unit, c["status"], f"{c['slot']} card's {field}{art}: {c['source']}", c["provisional"])
+
+
+def cards(model: str = "GLM-5.3") -> dict[str, InputCard]:
+    """Every input: the model's slot cards', and those read from the census and rho's reference."""
+    sc = slot_cards(model)
+    design, work, po = sc["design"], sc["workload"], sc["proof_overhead"]
+    if po["value"]["model_overhead"] is None:
+        raise ValueError(f"{model}'s proof_overhead card has no model_overhead: Figure 1's vertical line needs one")
+    out = {k: _card(design, design["value"][k], unit, k) for k, unit in
+           (("delta", ""), ("budgets", "share of compute"), ("overheads", "x"), ("token_bytes", "B"))}
+    out |= {"proof_overhead": _card(po, po["value"]["model_overhead"], "x", "model_overhead"),
+            "hash_rate": _card(sc["commitment"], sc["commitment"]["value"]["hash_rate"], "B/s", "hash_rate"),
+            "replay_factor": _card(sc["replay"], sc["replay"]["value"]["factor"], "x", "factor"),
+            "weights_bytes": _card(work, work["value"]["weights_bytes"], "B", "weights_bytes"),
+            "partition": _card(work, {k: work["value"][k] for k in ("ranks", "tokens", "strata")}, "", "strata")}
     census, dc = _entry(ADVERSARY, CENSUS_WORLD), _entry(DEPLOYMENTS, DATACENTER)
     peak = _entry(HARDWARE, PEAK)
     rho = _toml(RHO)
@@ -120,16 +142,13 @@ def cards() -> dict[str, InputCard]:
     for name, (table, key, field) in REFERENCES.items():
         entry = rho[table][key][field]
         from_rho(name, entry["value"], entry["unit"], f"{table}.{key}", entry)
-    part = json.loads((HERE / "glm53_partition.json").read_text())
-    out["partition"] = InputCard({k: part[k] for k in ("ranks", "tokens", "strata")}, "", part["status"],
-                                 part["source"])
     return out
 
 
 @dataclass(frozen=True)
 class TokenBlocks:
-    """GLM-5.3's proof blocks a token: their count, MACs and committed bytes, and the mean MACs a proof block weighted
-    by count, by MACs (the work target's samples) and by output bits (the leak target's)."""
+    """The model's proof blocks a token: their count, MACs and the bytes one-stage commits, and the mean MACs a proof
+    block weighted by count, by MACs (the work target's samples) and by output bits (the leak target's)."""
 
     blocks: float
     macs: float
@@ -144,7 +163,8 @@ class TokenBlocks:
         n = sum(s["per_token"] for s in strata)
         macs = sum(s["per_token"] * s["macs"] for s in strata)
         bits = sum(s["per_token"] * s["out_bits"] for s in strata)
-        return cls(n, macs, bits / 8, macs / n, sum(s["per_token"] * s["macs"] ** 2 for s in strata) / macs,
+        committed = sum(s["per_token"] * s.get("commit_bytes", s["out_bits"] / 8) for s in strata)
+        return cls(n, macs, committed, macs / n, sum(s["per_token"] * s["macs"] ** 2 for s in strata) / macs,
                    sum(s["per_token"] * s["out_bits"] * s["macs"] for s in strata) / bits, bits / n)
 
 
@@ -200,7 +220,8 @@ def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float)
     return Model(s, dot(part.macs_by_bits), dot(part.macs_by_work),
                  Grain("request", round(s.requests), s.flop_request, c["output_cap"].value, boundary,
                        overhead * s.flop_request / peak),
-                 ReplayGrain(round(s.requests), s.flop_request / (mfu * peak), boundary, c["output_cap"].value),
+                 ReplayGrain(round(s.requests), c["replay_factor"].value * s.flop_request / (mfu * peak), boundary,
+                             c["output_cap"].value),
                  1 / c["hash_rate"].value, c["delta"].value)
 
 
@@ -262,18 +283,27 @@ def overheads(c: dict[str, InputCard], points: int) -> list[float]:
     return sorted(set(grid) | {float(c["proof_overhead"].value)})
 
 
-def references(c: dict[str, InputCard]) -> dict[str, list[dict]]:
-    """The panels' horizontal lines, in the panel's unit: rho's reference objects, and the served model's weights."""
+def references(c: dict[str, InputCard], model: str, card: dict | None = None) -> dict[str, list[dict]]:
+    """The panels' horizontal lines, in the panel's unit (bits, or FLOP for skipped work): rho's reference objects, the
+    served model's weights, and the lines of a `references` card, a line that depends on the scope by scope."""
     def ref(label: str, name: str, scale: float = 1.0) -> dict:
         return {"label": label, "value": c[name].value * scale, "input": name}
 
-    return {"exfiltration": [ref("1,000 SparseLoCo syncs", "ref_sparseloco"),
-                             ref("GLM-5.3's weights", "weights_bytes", 8),
-                             ref("100M tokens of RL rollouts", "ref_rollouts")],
-            "skipped_work": [ref("Pretraining run", "ref_pretrain"), ref("One optimizer step", "ref_step")]}
+    out = {"exfiltration": [ref("1,000 SparseLoCo syncs", "ref_sparseloco"),
+                            ref(f"{model}'s weights", "weights_bytes", 8),
+                            ref("100M tokens of RL rollouts", "ref_rollouts")],
+           "infiltration": [],
+           "skipped_work": [ref("Pretraining run", "ref_pretrain"), ref("One optimizer step", "ref_step")]}
+    flop_per_and = 2 / c["ands_per_mac"].value
+    for line in (card or {}).get("value", {}).get("lines", []):
+        scale = flop_per_and if line["unit"] == "AND" else 1.0
+        row = {"label": line["label"], "input": "references"}
+        out[line["panel"]].append(row | ({"value": line["value"] * scale} if "value" in line else
+                                         {"by_scope": {k: v * scale for k, v in line["by_scope"].items()}}))
+    return out
 
 
-def captions(serve_hash_share: float) -> dict[str, str]:
+def captions(serve_hash_share: float, infiltration: dict | None = None) -> dict[str, str]:
     serve = (f"hashes every proof block's outputs at serve time, {serve_hash_share:.2g}× the scope's compute, outside "
              "the budget")
     return {
@@ -281,15 +311,28 @@ def captions(serve_hash_share: float) -> dict[str, str]:
                          "interiors are committed after the first stage, inside the budget. One-stage (dashed) "
                          f"{serve}. Request-level (dotted) proves each sampled request whole. A bound counts the "
                          "incorrect proof blocks' output bits and which ones they are."),
-        "infiltration": "Pending: the design that certifies infiltration, and its consumer.",
+        "infiltration": (infiltration["value"]["caption"] if infiltration else
+                         "Pending: the design that certifies infiltration, and its consumer."),
         "skipped_work": (f"One-stage (solid) {serve}. Request-level (dotted) proves each sampled request whole. "
                          "Two-stage is left out: its interiors are committed after the first stage, so they don't "
                          "show the work was done at serve time."),
     }
 
 
-def run(points: int = 57, scope_names: tuple[str, ...] | None = None) -> dict:
-    c = cards()
+def infiltration_panel(card: dict | None, scope_names: list[str]) -> dict:
+    """The infiltration panel from the model's `infiltration` card: its series where it carries them, else pending."""
+    if card is None:
+        return {"status": "pending", "series": []}
+    v = card["value"]
+    series = [{"scope": s["scope"], "design": v["design"], "budget": s["budget"], "headline": True, "x": s["x"],
+               "y": s["y"]} for s in v.get("series", []) if s["scope"] in scope_names]
+    return {"status": "card" if series else "pending", "unit": v["unit"], "design": v["design"], "form": v["form"],
+            "headline": v["design"], "consumer": v["consumer"], "series": series}
+
+
+def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, ...] | None = None) -> dict:
+    sc = slot_cards(model_name)
+    c = cards(model_name)
     part = TokenBlocks.of(c["partition"].value["strata"])
     xs = overheads(c, points)
     budgets = c["budgets"].value
@@ -307,7 +350,7 @@ def run(points: int = 57, scope_names: tuple[str, ...] | None = None) -> dict:
                               "serve_hash_share": serve_hash / s.gpu_seconds,
                               "boundary_hash_share": base.replay.replay_blocks * base.replay.boundary_bytes
                               * base.byte_s / s.gpu_seconds,
-                              "captions": captions(serve_hash / s.gpu_seconds)}
+                              "captions": captions(serve_hash / s.gpu_seconds, sc.get("infiltration"))}
         models = [model(c, part, s, x) for x in xs]
         for panel, target in (("exfiltration", "leak"), ("skipped_work", "work")):
             for design in DESIGNS[panel]:
@@ -320,19 +363,21 @@ def run(points: int = 57, scope_names: tuple[str, ...] | None = None) -> dict:
                         "plan": [None if p["row"] is None else {k: p["row"].get(k) for k in
                                  ("q", "k", "draws", "replay_sample", "prove", "replay", "commit", "total")}
                                  for p in pts]})
-    refs = references(c)
+    refs = references(c, model_name, sc.get("references"))
     return {
-        "schema": SCHEMA, "model": "GLM-5.3",
+        "schema": SCHEMA, "model": model_name,
         "inputs": {k: v.__dict__ for k, v in c.items()},
+        "cards": sc,
         "partition": part.__dict__,
         "scopes": out_scopes,
         "budgets": budgets,
         "vertical": {"x": c["proof_overhead"].value, "provisional": c["proof_overhead"].provisional,
-                     "label": "Measured on an H200" + (" (provisional)" if c["proof_overhead"].provisional else "")},
+                     "label": sc["proof_overhead"]["value"]["label"]},
         "panels": {
             "exfiltration": {"unit": "bit", "target": "leak", "headline": HEADLINE["exfiltration"],
                              "references": refs["exfiltration"], "series": series["exfiltration"]},
-            "infiltration": {"status": "pending", "series": []},
+            "infiltration": infiltration_panel(sc.get("infiltration"), list(out_scopes))
+            | {"references": refs["infiltration"]},
             "skipped_work": {"unit": "FLOP", "target": "work", "headline": HEADLINE["skipped_work"],
                              "and_per_flop": and_per_flop, "references": refs["skipped_work"],
                              "series": series["skipped_work"]}},
@@ -351,22 +396,3 @@ def at_overhead(out: dict) -> list[dict]:
                          "bound": s["y"][i], "share": s["share"][i], "capped": s["capped"][i]}
                         | ({"ands": s["y"][i] * p["and_per_flop"]} if "and_per_flop" in p else {}))
     return rows
-
-
-def main(argv=None) -> None:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--points", type=int, default=57, help="proof overheads on the x-axis, the vertical line's besides")
-    args = ap.parse_args(argv)
-    args.out.mkdir(parents=True, exist_ok=True)
-    out = run(args.points)
-    out["at_overhead"] = at_overhead(out)
-    (args.out / "figure1.json").write_text(json.dumps(out, indent=1, default=str) + "\n")
-    from render import render
-
-    for name in out["scopes"]:
-        render(out, name, args.out)
-
-
-if __name__ == "__main__":
-    main()

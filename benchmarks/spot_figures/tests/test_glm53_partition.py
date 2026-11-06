@@ -1,7 +1,5 @@
-"""The partition card's generator on a synthetic census, and the card in the tree against the generator's rules."""
-import json
-from pathlib import Path
-
+"""GLM-5.3's workload card's generator on a synthetic census, and the card in the tree against the generator's rules."""
+import cards
 import glm53_partition as g
 import pytest
 
@@ -27,10 +25,12 @@ def test_a_matmul_is_its_coordinates_and_the_rest_its_words():
     assert tokens == 4
     by = {r["kind"]: r for r in rows}
     assert set(by) == {"EmbeddingShard_v1", "Linear_v1", "SplitK_v1", "ResidualAdd_v1"}
-    pick = ("per_token", "macs", "out_bits", "scale")
-    assert tuple(by["Linear_v1"][k] for k in pick) == (g.RANKS * 8 * 64 * 2 / 4, 4096, 16, 2.0)
-    assert tuple(by["SplitK_v1"][k] for k in pick) == (g.RANKS * 4 * 16 / 4, 512, 32, 1.0)
-    assert tuple(by["ResidualAdd_v1"][k] for k in pick) == (g.RANKS * 4 * 6144 / 4, 0, 16, 1.0)
+    pick = ("per_token", "macs", "out_bits")
+    assert tuple(by["Linear_v1"][k] for k in pick) == (g.RANKS * 8 * 64 * 2 / 4, 4096, 16)
+    assert tuple(by["SplitK_v1"][k] for k in pick) == (g.RANKS * 4 * 16 / 4, 512, 32)
+    assert tuple(by["ResidualAdd_v1"][k] for k in pick) == (g.RANKS * 4 * 6144 / 4, 0, 16)
+    assert by["Linear_v1"]["block"] == "ScaledMmFp8BlockCoordinateGivenScale_v1{K=4096,G=128}"
+    cards.check(g.card(census(), "art:synthetic"))
 
 
 def test_a_kind_with_no_rule_is_refused():
@@ -39,13 +39,15 @@ def test_a_kind_with_no_rule_is_refused():
 
 
 def test_the_card_in_the_tree_follows_the_rules():
-    card = json.loads((Path(g.__file__).parent / "glm53_partition.json").read_text())
-    assert card["status"] == "modeled" and card["source"].startswith("art:") and card["ranks"] == g.RANKS
-    assert card["tokens"] > 0 and card["strata"]
-    for s in card["strata"]:
-        unit = s["unit"].split("{")[0]
+    card = cards.load("workload", "GLM-5.3")
+    v = card["value"]
+    assert card["status"] == "modeled" and card["source"].startswith("art:") and v["ranks"] == g.RANKS
+    assert v["tokens"] > 0 and v["strata"]
+    for s in v["strata"]:
+        unit = s["block"].split("{")[0]
         if unit in g.COORDINATES:
-            assert s["macs"] == g._k(s["unit"]) and s["out_bits"] == g.WORD_BITS * g.COORDINATE_WORDS.get(unit, 1)
+            assert s["macs"] == g._k(s["block"]) and s["out_bits"] == g.WORD_BITS * g.COORDINATE_WORDS.get(unit, 1)
         else:
             assert s["kind"] in g.WORDS and (s["macs"], s["out_bits"]) == (0, g.WORD_BITS), s["kind"]
         assert s["per_token"] > 0
+    assert v["boundaries"]["every_block"] == pytest.approx(sum(s["per_token"] * s["out_bits"] for s in v["strata"]) / 8)

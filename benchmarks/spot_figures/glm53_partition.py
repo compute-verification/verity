@@ -1,4 +1,4 @@
-"""GLM-5.3's partition card (`glm53_partition.json`) from the census of its request Program
+"""GLM-5.3's `workload` card (`cards/workload.glm-5.3.json`) from the census of its request Program
 (`benchmarks/one_stage/a11_kinds.py`'s `kinds.json`, `a10_inputs.json`'s `kinds`): the root Calls of one served request
 on rank 0 of the TP8 B1 row, by Definition kind.
 
@@ -14,8 +14,7 @@ The forward-pass tokens are the embedding's Calls.  A model of the partition, no
 context past the row's is not in it.
 
     research data fetch art:<census> --to DIR
-    uv run python benchmarks/spot_figures/glm53_partition.py DIR/kinds.json --census art:<census> \\
-        --out benchmarks/spot_figures/glm53_partition.json
+    uv run python benchmarks/spot_figures/glm53_partition.py DIR/kinds.json --census art:<census>
 """
 from __future__ import annotations
 
@@ -24,7 +23,15 @@ import json
 import re
 from pathlib import Path
 
+from cards import SCHEMA, write
+
 RANKS = 8
+DEVICE = "H200"
+#: the census row's request: 256 prompt tokens, 32 generated
+REQUEST = {"prefill": 256, "decode": 32}
+#: GLM-5.3's block-FP8 checkpoint at its pinned revision, as `integrations/vllm/manifests/checkpoints.json` (role
+#: GLM53) records its size
+WEIGHTS_BYTES = 7.557e11
 WORD_BITS = 16
 #: the chain's matmul coordinate Definitions, whose `K` is a proof block's MACs
 COORDINATES = ("MoeExpertFp8Coordinate_v1", "MoeExpertFp8CoordinateW_v1", "ScaledMmFp8BlockCoordinateGivenScale_v1",
@@ -97,27 +104,29 @@ def strata(census: dict) -> tuple[int, list[dict]]:
         else:
             raise KeyError(f"census kind {name!r} is neither a matmul with a coordinate nor in WORDS: "
                            "add its output words")
-        out.append({"kind": name, "unit": unit, "per_token": RANKS * e["calls"] * per_call * scale / tokens,
-                    "macs": macs, "out_bits": WORD_BITS * words, "scale": scale,
-                    "gates_share": e["gates"] / census["gates"]})
+        out.append({"block": unit, "kind": name, "per_token": RANKS * e["calls"] * per_call * scale / tokens,
+                    "macs": macs, "out_bits": WORD_BITS * words})
     return tokens, out
 
 
 def card(census: dict, source: str) -> dict:
     tokens, rows = strata(census)
-    return {"status": "modeled",
+    return {"schema": SCHEMA, "slot": "workload", "model": "GLM-5.3", "status": "modeled", "provisional": True,
             "source": f"{source}: benchmarks/one_stage/a11_kinds.py's census of GLM-5.3's request Program, rank 0 "
-                      f"of the TP8 B1 row ({census.get('descriptor', '')}), by `glm53_partition.py`",
-            "ranks": RANKS, "tokens": tokens, "strata": rows}
+                      f"of the TP8 B1 row ({census.get('descriptor', '')}), by `glm53_partition.py`; the weights' "
+                      "bytes from integrations/vllm/manifests/checkpoints.json, role GLM53",
+            "runs": [], "owner": "@proofs",
+            "value": {"ranks": RANKS, "device": DEVICE, "request": REQUEST, "tokens": tokens,
+                      "weights_bytes": WEIGHTS_BYTES, "strata": rows,
+                      "boundaries": {"every_block": sum(r["per_token"] * r["out_bits"] for r in rows) / 8}}}
 
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("kinds", type=Path, help="the census's kinds.json")
     ap.add_argument("--census", required=True, help="the census's art: id, the card's source")
-    ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
-    args.out.write_text(json.dumps(card(json.loads(args.kinds.read_text()), args.census), indent=1) + "\n")
+    print(write(card(json.loads(args.kinds.read_text()), args.census), force=True))
 
 
 if __name__ == "__main__":
