@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Sampled.Defs
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # F2's statements: sampling with prover-chosen batching, the partition hidden

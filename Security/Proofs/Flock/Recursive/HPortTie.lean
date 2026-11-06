@@ -1,11 +1,33 @@
 module
 
-public import Proofs.Flock.C3.Compose.Tied
 public import Proofs.Flock.C3.Compose.HoloEncoded
 public import Proofs.Flock.C3.Sparse.SessionAt
-public import Proofs.Flock.VBridge.Family.Registrants
-public import Proofs.Flock.C3.RegLevels.SharedRows
-public import Std.Data.String.ToNat
+public import Proofs.Flock.C3.RegLevels.AccReads
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.HoloValues.Shape
+import Proofs.Flock.C3.HoloValues.ZcLc
+import Proofs.Flock.C3.RegLevels.OpensRegs
+import Proofs.Flock.C3.RegLevels.SharedRows
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Refine.HoloRefines
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.VBridge.Sparse.Unit
+import Proofs.Flock.Verifier.HmNets
+import Std.Data.String.ToNat
 
 /-!
 # The sparse phase's `h` from the rep's, across two units' reads of one registered row

@@ -1,30 +1,18 @@
 module
 
-public import Mathlib.Combinatorics.SimpleGraph.Clique
-public import Mathlib.Combinatorics.SimpleGraph.Finite
-public import Mathlib.Data.ZMod.Basic
-public import Definitions.Pous.Accounting.LemmaA
-public import Definitions.Pous.Accounting.Params
 public import Definitions.Pous.Accounting.PubMeets
 public import Definitions.Pous.Accounting.GradedMeets
 public import Definitions.Pous.Accounting.Rebuild
-public import Definitions.Pous.Assumptions
-public import Definitions.Pous.Model.HashChain
-public import Definitions.Pous.Model.Dense
 public import Definitions.Pous.Model.Inc
-public import Definitions.Pous.Model.Invertible
-public import Definitions.Pous.Model.Labelling
-public import Definitions.Pous.Model.M1
-public import Definitions.Pous.Model.P3Chain
-public import Definitions.Pous.Model.BandChain
-public import Definitions.Pous.Model.Pebbling
-public import Definitions.Pous.Model.SampledAudit
 public import Definitions.Pous.Guarantees.P2
 public import Definitions.Pous.Guarantees.Obligation
 public import Definitions.Pous.Guarantees.StreamedWipe
-public import Definitions.Pous.Model.BandGraph
 public import Definitions.Pous.Model.SegLift
 public import Definitions.Pous.Model.Continuous
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 
 /-!
 # Guarantees

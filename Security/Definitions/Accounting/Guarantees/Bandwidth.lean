@@ -1,6 +1,11 @@
 module
 
-public import Definitions.Accounting.Bandwidth
+public import Definitions.Accounting.Bandwidth.Interactive
+public import Definitions.Accounting.Bandwidth.Joint
+public import Definitions.Accounting.Bandwidth.Relay
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The bandwidth audit v0: what an accepted device read

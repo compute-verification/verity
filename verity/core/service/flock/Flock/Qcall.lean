@@ -11,12 +11,9 @@ every gate is read: no wiring, no constant folding, no wide fan-in rule.
 -/
 module
 
-public import Std.Data.HashMap
 public import Flock.Program
 public import Flock.Partition
-public import Flock.Canon
-public import Flock.Hash
-public import Flock.JsonParse
+import Std.Data.HashSet.Lemmas
 
 @[expose] public section
 set_option backward.privateInPublic true

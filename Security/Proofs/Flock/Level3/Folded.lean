@@ -7,6 +7,10 @@ module
 
 public import Proofs.Flock.Level3.FoldedBase
 public import Proofs.Flock.Soundness.TmplShare
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Fold
+import Proofs.Flock.Level3.Nodes
 
 @[expose] public section
 

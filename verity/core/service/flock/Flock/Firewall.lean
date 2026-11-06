@@ -5,9 +5,9 @@ it (`flock-firewall`, `verity/ml/flock/tests/test_firewall_agreement.py`).
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Hm96
 public import Flock.JsonParse
+public import Lean.Data.Json.Printer
 
 @[expose] public section
 

@@ -1,7 +1,12 @@
 module
 
 public import Definitions.Pouw.Assumptions.NCP.Chain
-public import Proofs.Pouw.NCP.RelationWitness
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Exact
+import Proofs.Pouw.NCP.GameProofs
+import Proofs.Pouw.NCP.Proofs
+import Proofs.Pouw.NCP.RelationWitness
+import Proofs.Pouw.NCP.WordProofs
 
 /-!
 # The chain end to end: proofs

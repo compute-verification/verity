@@ -1,11 +1,9 @@
 module
 
 public import Mathlib.Data.Fintype.Card
-public import Mathlib.Data.Fintype.Pi
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Tactic.Ring
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # Zero knowledge: equal distributions of functions of uniform randomness

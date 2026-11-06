@@ -1,8 +1,8 @@
 module
 
-public import Mathlib.Data.List.Basic
-public import Mathlib.Logic.Function.Basic
 public import Definitions.Hash.Basic
+public import Mathlib.Tactic.Attr.Core
+import Mathlib.Tactic.Push
 
 /-!
 # Merkle trees (PROTOCOL.md §14)

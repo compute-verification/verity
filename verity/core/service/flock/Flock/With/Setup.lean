@@ -23,7 +23,6 @@ module
 
 public import Flock.With.Hashes
 public import Flock.HmRow
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true

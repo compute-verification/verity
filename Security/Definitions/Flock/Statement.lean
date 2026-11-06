@@ -1,10 +1,12 @@
 module
 
 public import Definitions.Flock.Arith
-public import Mathlib.Data.Matrix.Mul
 public import Mathlib.Basic.Real.Basic
 public import Mathlib.Data.Fintype.Card
+public import Mathlib.Data.Matrix.Mul
+public import Mathlib.Data.ZMod.Basic
 public import Mathlib.Tactic.Ring
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # Statements, witnesses, claims and the committed values

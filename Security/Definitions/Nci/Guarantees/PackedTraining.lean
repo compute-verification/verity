@@ -1,7 +1,11 @@
 module
 
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Assumptions.Baseline
 public import Definitions.Nci.Assumptions.PackedTraining
 public import Definitions.Nci.Dark
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI's partial-sum law with dark gates, on a chain with several products to a gate

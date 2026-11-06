@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Flock.Game.Lock
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # One lockstep among identical games

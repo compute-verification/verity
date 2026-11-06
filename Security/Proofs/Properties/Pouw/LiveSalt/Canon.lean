@@ -1,12 +1,13 @@
 module
 
-public import Batteries.Tactic.OpenPrivate
 public import Properties.Pouw.LiveSalt
-public import Std.Data.String.ToNat
+public import SampledProofs.Challenger
+import Batteries.Tactic.OpenPrivate
 import all Init.Data.Array.QSort.Basic
-import all Lean.Data.Json.Basic
-import all Init.Data.Ord.String
 import all Init.Data.Int.Repr
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import Std.Data.String.ToNat
 
 /-!
 # The coins' binding has one canonical form per layout

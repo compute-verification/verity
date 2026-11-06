@@ -4,6 +4,10 @@ public import Proofs.Flock.Soundness.Refine.Rep
 public import Proofs.Flock.Soundness.Refine.LincheckConverse
 public import Proofs.Flock.Soundness.Refine.OpeningConverse
 public import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # One rep accepts when its stages' checks hold (PROTOCOL.md §9–§14)

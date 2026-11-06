@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Defs
-public import ArkLib.Data.CodingTheory.JohnsonBound.Family
+public import ArkLib.Data.CodingTheory.ReedSolomon.Interleaved
+public import Definitions.Flock.Defs
+import ArkLib.Data.CodingTheory.JohnsonBound.Family
+import Proofs.Flock.Soundness.Defs
 
 /-!
 # The list size: at most `L₀` codewords near any level-0 table

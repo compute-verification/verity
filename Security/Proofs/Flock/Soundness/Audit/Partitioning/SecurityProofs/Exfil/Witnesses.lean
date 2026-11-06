@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+public import Proofs.Flock.Soundness.Audit.Partitioning.Model
+import Proofs.Flock.Soundness.Audit.Law
 
 /-!
 # Exfiltration: the witnesses' facts

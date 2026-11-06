@@ -1,10 +1,30 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Composed.Headline
-public import Proofs.Flock.Soundness.Discharge.Composed.Custody
-public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-public import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.Custody
+import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
+import Proofs.Flock.Soundness.Discharge.Composed.Headline
+import Proofs.Flock.Soundness.Discharge.Composed.Sound
+import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
+import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 
 /-!
 # The public-output `--zk` headlines, over what flock-verify accepts

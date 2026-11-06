@@ -2,6 +2,11 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
+public import Proofs.Flock.Soundness.Refine.Salted
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Plays
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # flock-verify refines each table of a session, under `hm96-sha512/v1` (PROTOCOL.md §5, §9–§14, §16.12)

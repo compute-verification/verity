@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.TmplLayOk
-public import Proofs.Flock.Soundness.TmplWf
 public import Flock.TmplAt
+public import Proofs.Flock.Soundness.TmplPosMap
+import Proofs.Flock.Soundness.TmplLayOk
+import Proofs.Flock.Soundness.TmplWf
 
 /-!
 # A templated unit's committed net exists, checked on its description

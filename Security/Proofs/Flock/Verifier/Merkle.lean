@@ -7,7 +7,8 @@ or SHA-512 collision (`MerkleScheme.collision_hash`). No random oracle.
 module
 
 public import Proofs.Flock.Verifier.Hash
-public import Proofs.Flock.Verifier.Encode
+public import Flock.Merkle
+import Proofs.Flock.Verifier.Encode
 
 @[expose] public section
 

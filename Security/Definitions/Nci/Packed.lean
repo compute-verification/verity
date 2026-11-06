@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # Updated matrix multiplication chains with several products to a gate

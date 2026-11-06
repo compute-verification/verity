@@ -1,11 +1,14 @@
 module
 
 public import Definitions.Pouw.Assumptions.NCP.GamePinned
-public import Proofs.Pouw.NCP.Proofs
 public import Proofs.Pouw.Barrier.Proofs
-public import Proofs.Pouw.Reduction
-public import Proofs.Pouw.Witness
-public import Proofs.Pouw.Sanity
+public import Proofs.Pouw.QTree
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Exact
+import Proofs.Pouw.NCP.Proofs
+import Proofs.Pouw.Prob
+import Proofs.Pouw.Reduction
+import Proofs.Pouw.Sanity
 
 /-!
 # NCP's game instance: proofs

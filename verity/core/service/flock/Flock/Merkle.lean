@@ -5,9 +5,6 @@ must carry. The recorded statements use unsalted SHA-256; the target statement u
 -/
 module
 
-public import Flock.Field
-public import Flock.Hash
-public import Flock.Bytes
 public import Flock.Hm96
 
 @[expose] public section

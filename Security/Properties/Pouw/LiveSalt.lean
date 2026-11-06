@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck
+public import PouwCheck.Pass
 
 /-!
 # PoUW's Pearl-C live salt: what the check of a pass salted by a live challenger session must establish

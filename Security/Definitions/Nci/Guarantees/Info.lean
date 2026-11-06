@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Assumptions.Info
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI over threads, reads counted by information: the guarantees

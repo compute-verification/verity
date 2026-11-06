@@ -18,10 +18,9 @@ depend on the same bits of it.
 -/
 module
 
-public import Flock.RegKnown
-public import Flock.RecResiduals
 public import Flock.ProvedScope
 public import Flock.TmplReads
+public import Flock.Registered
 
 @[expose] public section
 

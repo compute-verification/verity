@@ -1,10 +1,10 @@
 module
 
-public import Definitions.Pous
-public import Definitions.Pous.Assumptions
-public import Proofs.Pous.Statements
-public import Proofs.Pous.Sanity
-public import Proofs.Pous.Accounting.Numbers
+public import Definitions.Pous.Model.ColumnGame
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 
 /-!
 # The two-directional column game: from a winning holding to a schedule

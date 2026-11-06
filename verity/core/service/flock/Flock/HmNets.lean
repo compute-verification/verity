@@ -10,7 +10,6 @@ soundness package (`FlockSoundness.Discharge.Hm`).
 module
 
 public import Flock.Circuit
-public import Flock.Hm96
 
 @[expose] public section
 
