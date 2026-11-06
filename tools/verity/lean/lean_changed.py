@@ -405,8 +405,9 @@ def sandboxed() -> bool:
 RECORDS = "lean-records"
 AUDIT_PY = ROOT / "tools" / "verity" / "lean" / "check.py"
 LEAN_SLOT = _module(ROOT / "tools" / "verity" / "check" / "lean_slot.py", "lean_slot_for_lean_changed")
-#: the Lean slot pool `--records` takes, apart from the `audit` pool's hour-long audits and the `check` pool's merge checks
-FAST_POOL = "build"
+#: the Lean slot pool `--records` takes, apart from the `audit` pool's hour-long audits and the `check` pool's merge checks;
+#: $LEAN_RECORDS_POOL names another, such as a pool a node reserves for one lane, whose trees stay warm for that lane alone
+FAST_POOL = os.environ.get("LEAN_RECORDS_POOL") or "build"
 #: the kind of `--records`' result: an audit without the kernel replay or the tests, which no merge check accepts
 FAST_KIND = "lean-fast/v1"
 #: what a `--records` run found (its `result.json`'s `outcome`, and each package's under `records`), the better first: every
