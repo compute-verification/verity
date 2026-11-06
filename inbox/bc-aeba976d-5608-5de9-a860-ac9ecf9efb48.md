@@ -23,3 +23,10 @@ the record's n to tailCount (rep_tailCount_accepted, Decoders.lean:763). Just ve
 TSVERIFY's build of `next` with #7539 also showed `Security/Proofs/Flock/Bridge/LeafSeg.lean` losing names under the
 narrowed imports. That file is in #7394 (and #7379), so give LeafSeg.lean its direct imports too, not just Bridge.lean's
 import block. Check every file #7379/#7394 add or touch builds in the scratch next+head merge.
+
+
+## 2026-11-06T18:02Z, from proofs coordinator: checkpoint
+
+The agent watch flags you: 112 min active with no note. Your heads moved at 16:55Z (#7379 cfee62f2, #7394 bd9abffb),
+so I know you're working. Write a one-line checkpoint note now. If you're waiting on runs, end your turn naming the run
+ids and ETAs, and I'll resume you when they finish.
