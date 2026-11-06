@@ -27,6 +27,18 @@ alter table leads add column if not exists linear_team text unique;
 alter table leads add column if not exists apis text not null default 'slack,linear';
 create unique index if not exists leads_inbox on leads (slack_channel, slack_inbox) where slack_inbox is not null;
 
+-- What else wakes a lead on Slack, as its subscriptions do on Cursor: a channel's
+-- top-level posts (thread_ts '', set at registration, never lapsing), or every
+-- reply in one thread (watch_thread, until expires_at).
+create table if not exists watches (
+  lane text not null references leads(lane),
+  channel text not null,
+  thread_ts text not null default '',
+  expires_at timestamptz,
+  primary key (lane, channel, thread_ts)
+);
+create index if not exists watches_where on watches (channel, thread_ts);
+
 create table if not exists events (
   id bigserial primary key,
   lane text not null references leads(lane),

@@ -261,6 +261,45 @@ export function createStore(db: Db) {
       return rows[0] ? toLead(rows[0]) : null;
     },
 
+    // The active leads a post wakes besides its inbox's: those subscribed to the
+    // channel for a top-level post (threadTs null), else those watching its thread.
+    async watchers(channel: string, threadTs: string | null): Promise<Lead[]> {
+      const { rows } = await db.query(
+        `select l.* from watches w join leads l on l.lane = w.lane
+         where w.channel = $1 and w.thread_ts = $2 and l.status = 'active' and (w.expires_at is null or w.expires_at > now())
+         order by l.lane`,
+        [channel, threadTs ?? ""],
+      );
+      return rows.map(toLead);
+    },
+
+    // A lead's channel subscriptions are replaced as a set; its thread watches stay.
+    async setSubscriptions(lane: string, channels: string[]) {
+      await db.query(`delete from watches where lane = $1 and thread_ts = '' and not (channel = any($2::text[]))`, [lane, channels]);
+      for (const c of channels) {
+        await db.query(`insert into watches (lane, channel) values ($1, $2) on conflict do nothing`, [lane, c]);
+      }
+    },
+
+    async watchThread(lane: string, channel: string, threadTs: string, days: number): Promise<string> {
+      const { rows } = await db.query(
+        `insert into watches (lane, channel, thread_ts, expires_at) values ($1, $2, $3, now() + make_interval(days => $4))
+         on conflict (lane, channel, thread_ts) do update set expires_at = excluded.expires_at
+         returning expires_at`,
+        [lane, channel, threadTs, days],
+      );
+      return iso(rows[0]!.expires_at)!;
+    },
+
+    async listWatches(lane: string): Promise<{ channel: string; threadTs: string | null; expiresAt: string | null }[]> {
+      const { rows } = await db.query(
+        `select channel, thread_ts, expires_at from watches where lane = $1 and (expires_at is null or expires_at > now())
+         order by thread_ts, channel`,
+        [lane],
+      );
+      return rows.map((r) => ({ channel: r.channel as string, threadTs: (r.thread_ts as string) || null, expiresAt: iso(r.expires_at) }));
+    },
+
     async setLeadStatus(lane: string, status: Lead["status"]) {
       await db.query(`update leads set status = $2, updated_at = now() where lane = $1`, [lane, status]);
     },

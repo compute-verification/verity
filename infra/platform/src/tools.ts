@@ -75,6 +75,12 @@ export async function askLead(ctx: ToolCtx, input: { lane: string; question: str
   return { queued: !r.duplicate, eventId: r.eventId };
 }
 
+export async function watchThread(ctx: ToolCtx, input: { channel: string; thread_ts: string; days?: number }) {
+  const rt = await runtime();
+  const expiresAt = await rt.store.watchThread(ctx.lane, input.channel, input.thread_ts, input.days ?? 30);
+  return { watching: { channel: input.channel, threadTs: input.thread_ts }, expiresAt };
+}
+
 // A worker is one harness turn, so nothing could wake it with a job's outcome
 // or an answer: it gets no host tools, and its report says what its lead should
 // submit or ask.
@@ -106,6 +112,16 @@ export function hostTools(ctx: ToolCtx): ToolSet {
       description: "Ask another lead a question. Returns at once; their answer arrives as an event in a later turn.",
       inputSchema: z.object({ lane: z.string(), question: z.string() }),
       execute: (input, { toolCallId }) => askLead(ctx, input, toolCallId),
+    }),
+    watch_thread: tool({
+      description:
+        "Wake on every reply in one Slack thread, as subscribe_slack_thread does on Cursor: use it where your skills say to subscribe to a thread (your #ask-daniel card, a thread a person may answer in). Not for threads between handles: your inbox already rings you for replies addressed to you. Calling it again renews it.",
+      inputSchema: z.object({
+        channel: z.string().describe("The channel id, e.g. C0123ABCD."),
+        thread_ts: z.string().describe("The thread's root ts."),
+        days: z.number().int().min(1).max(30).optional().describe("How long to watch; default 30."),
+      }),
+      execute: (input) => watchThread(ctx, input),
     }),
   };
 }

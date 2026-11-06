@@ -93,6 +93,27 @@ describe("a lead on the platform", () => {
     expect((await t.store.transcript(turn.id)).some((p) => p.type === "post")).toBe(false);
   });
 
+  it("wakes on top-level posts in the channels it subscribes to and on replies in the threads it watches", async () => {
+    await t.store.setSubscriptions("infra", ["C_ALERTS"]);
+    const alert = await event({ channel: "C_ALERTS", text: "disk 95% on a pod", username: "grafana" });
+    expect(alert.res.routed).toEqual(["infra"]);
+    expect(await reply(alert.ts, "slack/channel-post")).toMatchObject({ channel: "C_ALERTS", username: "infra" });
+    expect((await event({ channel: "C_ALERTS", text: "ack", threadTs: alert.ts, username: "daniel" })).res.routed).toEqual([]);
+    expect((await event({ channel: "C_ALERTS", text: "my own post", username: "infra" })).res.routed).toEqual([]);
+
+    const card = "1700000500.000001";
+    const m = await ring("infra", `please watch your card [[watch C_ASK: ${card}]]`);
+    await reply(m.thread, "watch_thread ->");
+    const answer = await event({ channel: "C_ASK", text: "Decided: yes", threadTs: card, username: "daniel" });
+    expect(answer.res.routed).toEqual(["infra"]);
+    await reply(card, "slack/thread-reply");
+    expect((await event({ channel: "C_ASK", text: "thanks", threadTs: card, username: "infra" })).res.routed).toEqual([]);
+
+    await t.store.setSubscriptions("infra", []);
+    expect((await event({ channel: "C_ALERTS", text: "again", username: "grafana" })).res.routed).toEqual([]);
+    expect(await t.store.listWatches("infra")).toEqual([{ channel: "C_ASK", threadTs: card, expiresAt: expect.any(String) }]);
+  });
+
   it("wakes the lead of an issue's team when the issue is created or changes state, and on nothing else", async () => {
     const env = { LINEAR_WEBHOOK_SECRET: "test-linear-secret" };
     const nowMs = NOW * 1000;
@@ -308,6 +329,7 @@ describe("a lead on the platform", () => {
         lane: "comms",
         slackChannel: COORD,
         slackInbox: INBOX.comms,
+        subscribe: ["C_DIGEST"],
         harness: "fake",
         model: "fake/fake",
         charter: "Keep the public story true.",
@@ -322,6 +344,7 @@ describe("a lead on the platform", () => {
     expect(reg.lead).toMatchObject({ lane: "comms", agentId: leadAgentId("comms"), gatewayKeyId: "local-key-comms", docBytes: 19 });
     await turnOf("comms", "mcp/cutover");
     expect((await t.store.getLead("comms"))!.runId).toBe(reg.runId);
+    expect((await get("lane=comms")).leads[0].watches).toEqual([{ channel: "C_DIGEST", threadTs: null, expiresAt: null }]);
     const m = await ring("comms", "is the post up?");
     await reply(m.thread, "slack/doorbell");
 

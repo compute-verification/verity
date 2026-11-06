@@ -38,24 +38,43 @@ export async function slackEvents(req: Request, env: Env = process.env, nowSecon
   if (!parsed) return json({ ok: true, routed: [] });
   if ("challenge" in parsed) return json({ challenge: parsed.challenge });
   const m = parsed.message;
-  const none = json({ ok: true, routed: [] });
-  // Only a reply in a lead's inbox thread wakes it. Who a post is for is
-  // `research msg`'s rule, applied by whoever sends it: it rings each name the
-  // post addresses with a doorbell in that name's inbox, on Cursor and here alike.
-  if (!m.threadTs || m.threadTs === m.ts) return none;
   const rt = await runtime();
-  const lead = await rt.store.leadByInbox(m.channel, m.threadTs);
-  if (!lead || lead.status !== "active" || m.username === lead.lane || m.username === PLATFORM_NAME) return none;
-  const bell = parseDoorbell(m.text);
-  await wake(lead.lane, {
-    lane: lead.lane,
-    source: "slack",
-    kind: bell ? "doorbell" : "message",
-    payload: { text: m.text, user: m.user, channel: m.channel, ts: m.ts, ...(bell && { from: bell.author, urgent: bell.urgent }) },
-    replyTo: bell ? { channel: bell.channel ?? m.channel, threadTs: bell.thread } : null,
-    dedupeKey: `slack:${m.eventId}`,
-  });
-  return json({ ok: true, routed: [lead.lane] });
+  const own = (lane: string) => m.username === lane || m.username === PLATFORM_NAME;
+  const payload = { text: m.text, user: m.user, channel: m.channel, ts: m.ts };
+  const reply = m.threadTs && m.threadTs !== m.ts ? m.threadTs : null;
+  // Who a post is for is `research msg`'s rule, applied by whoever sends it: it
+  // rings each name the post addresses with a doorbell in that name's inbox, on
+  // Cursor and here alike. A reply in an inbox thread wakes only its lead.
+  const lead = reply ? await rt.store.leadByInbox(m.channel, reply) : null;
+  if (lead) {
+    if (lead.status !== "active" || own(lead.lane)) return json({ ok: true, routed: [] });
+    const bell = parseDoorbell(m.text);
+    await wake(lead.lane, {
+      lane: lead.lane,
+      source: "slack",
+      kind: bell ? "doorbell" : "message",
+      payload: { ...payload, ...(bell && { from: bell.author, urgent: bell.urgent }) },
+      replyTo: bell ? { channel: bell.channel ?? m.channel, threadTs: bell.thread } : null,
+      dedupeKey: `slack:${m.eventId}`,
+    });
+    return json({ ok: true, routed: [lead.lane] });
+  }
+  // Otherwise the leads subscribed to the channel (a top-level post) or watching
+  // the thread (a reply), as a lead on Cursor subscribes to them.
+  const routed: string[] = [];
+  for (const w of await rt.store.watchers(m.channel, reply)) {
+    if (own(w.lane)) continue;
+    await wake(w.lane, {
+      lane: w.lane,
+      source: "slack",
+      kind: reply ? "thread-reply" : "channel-post",
+      payload,
+      replyTo: { channel: m.channel, threadTs: reply ?? m.ts },
+      dedupeKey: `slack:${m.eventId}:${w.lane}`,
+    });
+    routed.push(w.lane);
+  }
+  return json({ ok: true, routed });
 }
 
 export async function linearEvents(req: Request, env: Env = process.env, nowMs = Date.now()) {
@@ -119,6 +138,7 @@ type LeadChange = {
   slackChannel?: string;
   slackInbox?: string;
   linearTeam?: string;
+  subscribe?: string[];
   apis?: string[];
   harness?: HarnessName;
   model?: string;
@@ -152,8 +172,9 @@ export async function changeLead(req: Request, env: Env = process.env) {
   ] as const) {
     if (held && held.lane !== c.lane) return json({ error: `${what} belongs to lead ${held.lane}; move it first (${fix})` }, 409);
   }
-  const { doc, ...change } = c;
+  const { doc, subscribe, ...change } = c;
   let lead = await rt.store.upsertLead({ ...change, doc: before ? undefined : doc, model });
+  if (subscribe) await rt.store.setSubscriptions(c.lane, subscribe);
   // A lead's doc is its memory: the imported doc and every replacement are
   // revisions like any turn's, so the doc a replacement overwrote can be read back.
   if (doc != null && doc !== before?.doc) {
@@ -213,6 +234,7 @@ export async function statusReport(lane?: string) {
       agentId: leadAgentId(l.lane),
       inbox: l.slackInbox ? { channel: l.slackChannel, threadTs: l.slackInbox } : null,
       linearTeam: l.linearTeam,
+      watches: await rt.store.listWatches(l.lane),
       status: l.status,
       harness: l.harness,
       model: l.model,

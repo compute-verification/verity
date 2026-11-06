@@ -7,8 +7,9 @@ import { DOC_PATH } from "../prompt.ts";
 //   [[dispatch: <task>]]   -> dispatch_worker
 //   [[job: <command>]]     -> submit_job
 //   [[ask <lane>: <text>]] -> ask_lead
+//   [[watch <channel>: <thread ts>]] -> watch_thread
 //   [[fail: <reason>]]     -> the turn throws, as a crashed harness would
-const DIRECTIVE = /\[\[(dispatch|job|ask ([\w-]+)):\s*([^\]]+)\]\]/g;
+const DIRECTIVE = /\[\[(dispatch|job|(ask|watch) ([\w-]+)):\s*([^\]]+)\]\]/g;
 const FAIL = /\[\[fail:\s*([^\]]+)\]\]/;
 
 function promptText(prompt: unknown): string {
@@ -55,10 +56,11 @@ export function fakeHarness(): HarnessV1 {
               const calls: { id: string; name: string; input: Record<string, string> }[] = [];
               for (const m of text.matchAll(DIRECTIVE)) {
                 const id = `call_${++counter}`;
-                const arg = m[3]!.trim();
+                const arg = m[4]!.trim();
                 if (m[1] === "dispatch") calls.push({ id, name: "dispatch_worker", input: { task: arg } });
                 else if (m[1] === "job") calls.push({ id, name: "submit_job", input: { command: arg } });
-                else calls.push({ id, name: "ask_lead", input: { lane: m[2]!, question: arg } });
+                else if (m[2] === "watch") calls.push({ id, name: "watch_thread", input: { channel: m[3]!, thread_ts: arg } });
+                else calls.push({ id, name: "ask_lead", input: { lane: m[3]!, question: arg } });
               }
               const available = new Set(tools.map((t) => t.name));
               const results: string[] = [];
