@@ -48,7 +48,7 @@ def draw(kind: str, shape, g: torch.Generator, device) -> torch.Tensor:
     while got < n:
         m = n - got if kind == "e4" else (n - got) * 4 // 3 + 4096
         w = torch.empty((m + 30) // 31, dtype=torch.int64).random_(0, 2**62, generator=g)
-        f = ((w[:, None] >> FIELDS) & 3).to(torch.int8).reshape(-1)[:m]
+        f = (w[:, None] >> FIELDS).to(torch.int8).bitwise_and_(3).reshape(-1)[:m]
         out.append(f if kind == "e4" else f[f != 3])
         got += out[-1].numel()
     return (torch.cat(out) if len(out) > 1 else out[0])[:n].reshape(shape) + lo
@@ -139,19 +139,22 @@ class Rotation(nn.Module):
 
 
 class _ActQ(torch.autograd.Function):
-    """v = round(x / s_x) + e (or x / s_x + e unrounded) on live rows and x / s_x on the sink row, straight through:
-    dv/dx = 1 / s_x."""
+    """v = round(x / s_x) + e (or x / s_x + e unrounded) on live rows and x / s_x on the sink row (position 0, as
+    `Served.base` has it), straight through: dv/dx = 1 / s_x. In place where it can be: on the CPU each full pass over
+    a call's input is a large part of a 70B forward."""
 
     @staticmethod
-    def forward(ctx, x, sx, e, live, rnd=True):
-        u = x.float() / sx
+    def forward(ctx, x, sx, e, rnd=True):
+        u = x.float().div_(sx)
         ctx.save_for_backward(sx)
-        return torch.where(live, (torch.round(u) if rnd else u) + e, u).to(torch.bfloat16)
+        v = (torch.round(u) if rnd else u.clone()).add_(e)
+        v[:, 0] = u[:, 0]
+        return v.to(torch.bfloat16)
 
     @staticmethod
     def backward(ctx, g):
         (sx,) = ctx.saved_tensors
-        return (g.float() / sx).to(g.dtype), None, None, None, None
+        return (g.float() / sx).to(g.dtype), None, None, None
 
 
 class Served:
@@ -224,7 +227,7 @@ class Served:
             e = torch.zeros((), device=x.device) if kind is None else b["e"][kind]
             if mode == "e1":
                 e = torch.floor(e / 2)
-            v = _ActQ.apply(b["xr"], b["sx"], e, b["live"], rnd)
+            v = _ActQ.apply(b["xr"], b["sx"], e, rnd)
             b["v"][mode] = (v, b["sx"], mean * b["live"].float() if mean else None)
         return b["v"][mode]
 
