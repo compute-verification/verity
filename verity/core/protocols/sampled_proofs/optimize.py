@@ -46,7 +46,8 @@ stage samples k_t of the n_t proof blocks of each stratum t in it with fresh coi
 (compute credit isn't certified with deferred interiors), in `CompiledTwo.Exfil`'s form: Σ over the admissible sets T of
 incorrect proof blocks of 2^{b(T)}, each T charged its own blocks' committed bits.  `two_stage_exfil` bounds that count's
 log2 (a wholly incorrect replay block is charged all its bits, so the bound is near Λ/q of them), `two_stage_price`
-prices a sampled replay block's proving, and `two_stage_design` the design with the least bound at a budget, width-stratified
+prices a sampled replay block's proving, its statements its own or shared with its registration's other sampled ones,
+and `two_stage_design` the design with the least bound at a budget, width-stratified
 (the public size classes up to a threshold in one stratum, each wider one in its own) or uniform (one stratum).
 """
 from __future__ import annotations
@@ -1057,6 +1058,8 @@ KAPPAS = (0.0, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0)
 #: the tolerance in ln θ `two_stage_design` compares its designs at, each bound holding at any θ; the chosen one's is
 #: then taken to `two_stage_exfil`'s
 SCREEN = 1e-2
+#: the most steps `two_stage_design` takes a registration's share and q to their fixed point in
+SHARE_STEPS = 10_000
 _LN2F = log(2.0)
 
 
@@ -1274,10 +1277,12 @@ def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks
     return min(min(fc, fd) / _LN2F, every)
 
 
-def two_stage_price(cells: Iterable[Cell], k: Mapping[int, float]) -> tuple[float, float, float]:
+def two_stage_price(cells: Iterable[Cell], k: Mapping[int, float], share: float = 1.0) -> tuple[float, float, float]:
     """A sampled replay block's proved proof blocks, their marginal proving and their proving with the statements'
     fixed costs: stratum t's min(k_t, n_t), each type's share of them in statements of at most its `cap`, a statement's
-    `fixed` cost paid once (below one block, at the chance the type is sampled)."""
+    `fixed` cost paid once (below one block, at the chance the type is sampled).  `share` sampled replay blocks' blocks
+    of a type fill its statements together, so a replay block pays a statement's fixed cost over `share` (at most its
+    blocks over the cap) where they fit one."""
     cells = list(cells)
     strata = _strata(cells, k)
     blocks, marginal, fixed = [], [], []
@@ -1285,8 +1290,14 @@ def two_stage_price(cells: Iterable[Cell], k: Mapping[int, float]) -> tuple[floa
         taken = c.n * min(1.0, k[c.stratum] / strata[c.stratum])
         blocks.append(taken)
         marginal.append(taken * c.prove)
-        fixed.append(c.fixed * taken / max(1.0, min(c.cap, taken)))
+        fixed.append(c.fixed * taken / max(1.0, min(c.cap, share * taken)))
     return fsum(blocks), fsum(marginal), fsum(marginal) + fsum(fixed)
+
+
+def registration_share(sampled: float) -> float:
+    """The sampled replay blocks a statement shares when a registration holds `sampled` of them in expectation: Q/(1 −
+    e^{−Q}), the mean of a Poisson count given that it is at least one, so 1 when a registration rarely holds two."""
+    return sampled / -expm1(-sampled) if sampled > 0 else 1.0
 
 
 def _size_class(bits: float) -> int:
@@ -1297,7 +1308,7 @@ def _size_class(bits: float) -> int:
 
 def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *, budget: float, replay: float,
                      boundary: float = 0.0, h: float = 0.0, stratify: bool = True, served: float | None = None,
-                     union: bool = False) -> dict | None:
+                     union: bool = False, registration: float = 0.0) -> dict | None:
     """The two-stage design with the least `two_stage_exfil` bound at a cost of at most `budget`: width-stratified
     (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`unit_class`) up
     to a threshold into stratum 0 and gives each wider class a stratum of its own, the threshold chosen with κ: at the
@@ -1309,9 +1320,12 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     cap and B is a replay block's capped charge, every T counted.  The first stage's q, at most 1, spends what
     `boundary` (serving's boundary hashing) leaves of the budget on sampled replay blocks, each costing `replay`, its
     interior's `commit_bytes` at `h` a byte, and
-    `two_stage_price`'s proving.  Its row: `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `bound`
-    (bits), `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`, `boundary`, `interior`, `commit` (their
-    sum), `total` and `fill` (proving over its marginal); None when the boundary alone is over the budget."""
+    `two_stage_price`'s proving.  A statement holds one sampled replay block's proof blocks of one Definition, or with
+    `registration` (the replay blocks one interior registration spans) the registration's sampled ones' up to the cap:
+    `two_stage_price` at `share` = `registration_share`(q · registration), q and the share a fixed point.  Its row:
+    `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `share`, `bound` (bits), `replay_sample`, `draws`
+    (proved proof blocks), `prove`, `replay`, `boundary`, `interior`, `commit` (their sum), `total` and `fill` (proving
+    over its marginal); None when the boundary alone is over the budget."""
     cells = list(cells)
     if not cells or not budget >= boundary:
         return None
@@ -1335,12 +1349,19 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
             if (key := (merged, *sorted(k.items()))) in seen:
                 continue
             seen.add(key)
-            blocks, marginal, prove = two_stage_price(split, k)
-            per = replay + interior + prove
-            q = min(1.0, (budget - boundary) / (replay_blocks * per)) if per > 0 else 1.0
+            share = 1.0
+            for _ in range(SHARE_STEPS):
+                blocks, marginal, prove = two_stage_price(split, k, share)
+                per = replay + interior + prove
+                q = min(1.0, (budget - boundary) / (replay_blocks * per)) if per > 0 else 1.0
+                if not registration or abs((nxt := registration_share(q * registration)) - share) <= 1e-9 * share:
+                    break
+                share = nxt
+            else:
+                raise ArithmeticError(f"the registration's share didn't settle in {SHARE_STEPS} steps")
             sampled = q * replay_blocks
             rows.append({"design": "stratified" if stratify else "uniform", "merged": merged, "kappa": kappa,
-                         "k": k, "q": q, "split": split,
+                         "k": k, "q": q, "share": share, "split": split,
                          "bound": two_stage_exfil(split, k, replay_blocks, q, delta, served, union, SCREEN),
                          "replay_sample": sampled, "draws": sampled * blocks, "prove": sampled * prove,
                          "replay": sampled * replay, "boundary": boundary, "interior": sampled * interior,
@@ -1352,10 +1373,11 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
 
 
 __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayGrain", "SHA512_ANDS", "SHA512_ROWS", "TemplateCost",
+           "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayGrain", "SHA512_ANDS", "SHA512_ROWS", "SHARE_STEPS",
+           "TemplateCost",
            "CHORDS", "Cell", "KAPPAS", "acceptance_parts",
            "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target",
            "frontier", "grain_costs", "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits",
            "max_harm", "max_harm_check", "met_replay", "needs_benchmark", "overlaps", "perturb", "pinned_ands",
-           "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost", "touched",
-           "two_stage_design", "two_stage_exfil", "two_stage_price", "weigh", "work_draws", "work_law"]
+           "registration_share", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
+           "touched", "two_stage_design", "two_stage_exfil", "two_stage_price", "weigh", "work_draws", "work_law"]

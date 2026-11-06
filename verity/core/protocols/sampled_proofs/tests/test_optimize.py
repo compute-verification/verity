@@ -3,7 +3,8 @@ bound, `Achievability`'s rates at zero statement cost, the frontier under Flock'
 between a partition and a covering, serving's commitment (per proof block, and the fixed serve-time total with its overlaps), the
 weight classes' weights, the sensitivity queries, and the two-stage design: its exfiltration bound against the
 admissible sets' count enumerated and the adversary's best attack at scale, uncapped and capped at the bits a replay
-block serves, its proving price, and the width-stratified design against the uniform one."""
+block serves, its proving price with its statements a replay block's or shared by a registration's, and the
+width-stratified design against the uniform one."""
 
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ import random
 from dataclasses import replace
 from fractions import Fraction
 from itertools import combinations, product
-from math import ceil, comb, exp, fsum, lgamma, log, log1p, log2, ulp
+from math import ceil, comb, exp, fsum, inf, lgamma, log, log1p, log2, ulp
 from pathlib import Path
 
 import pytest
@@ -25,9 +26,9 @@ from verity.core.protocols.sampled_proofs.optimize import (HM96_ANDS, PROVING_ON
                                                            for_budget, for_target, frontier,
                                                            grain_costs, grain_optimum, leak_count, leak_draws, ln_bound,
                                                            ln_upper, loc_bits, max_harm, max_harm_check, met_replay,
-                                                           needs_benchmark, overlaps, perturb, pinned_ands, replay_cost,
-                                                           row_ands, sensitivity, sqrt_grain, template_cost, touched,
-                                                           two_stage_design, two_stage_exfil, two_stage_price, weigh,
+                                                           needs_benchmark, overlaps, perturb, pinned_ands,
+                                                           registration_share, replay_cost, row_ands, sensitivity,
+                                                           sqrt_grain, template_cost, touched, two_stage_design, two_stage_exfil, two_stage_price, weigh,
                                                            work_law)
 from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
 
@@ -677,6 +678,39 @@ def test_a_sampled_replay_block_proves_each_stratums_k_in_its_types_statements()
     assert two_stage_price(cells, {0: 5}) == (5.0, 4.0 + 3.0, 7.0 + 10.0 + 6.0)
     assert two_stage_price(cells, {0: 20}) == (10.0, 8.0 + 6.0, 14.0 + 20.0 + 6.0)
     assert two_stage_price(cells, {0: 1}) == pytest.approx((1.0, 0.8 + 0.6, 1.4 + 8.0 + 1.2))
+
+
+def test_a_registrations_sampled_replay_blocks_fill_a_types_statements_together():
+    """R sampled replay blocks' blocks of a type share its statements, at most its cap: a statement's fixed cost over R
+    where they fit one, over the cap past it, and unchanged at R = 1 or when one replay block fills a statement.  A
+    registration of Q sampled replay blocks expected shares Q/(1 − e^{−Q}), a Poisson count given at least one."""
+    cells = [Cell(8, 16.0, prove=1.0, fixed=10.0, cap=4), Cell(2, 16.0, prove=3.0, fixed=6.0, cap=4)]
+    for k in ({0: 1}, {0: 5}, {0: 20}):
+        assert two_stage_price(cells, k, 1.0) == two_stage_price(cells, k)
+    assert two_stage_price(cells, {0: 5}, 2.0) == (5.0, 7.0, 7.0 + 10.0 + 3.0)
+    assert two_stage_price(cells, {0: 1}, 2.0) == pytest.approx((1.0, 1.4, 1.4 + 5.0 + 1.2))
+    assert two_stage_price(cells, {0: 1}, inf) == pytest.approx((1.0, 1.4, 1.4 + 2.0 + 0.3))
+    assert registration_share(0.0) == 1.0 and registration_share(1e-12) == pytest.approx(1.0)
+    assert registration_share(1.0) == pytest.approx(1 / (1 - exp(-1))) and registration_share(60.0) == pytest.approx(60.0)
+
+
+def test_a_registration_shares_statements_at_its_own_q():
+    """With a registration of many replay blocks, the design's share is the registration's at its own q, its proving
+    `two_stage_price`'s at that share, and it spends at most the budget; fixed costs shared, it samples more replay
+    blocks and bounds less than a statement per sampled replay block, and a registration of none is that design."""
+    delta, replay_blocks, budget = 2.0 ** -20, 10 ** 8, 1e7
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0),
+             Cell(4, 131072.0, prove=1e-3, fixed=5.0, cap=4, commit_bytes=2.0 ** 14)]
+    kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6}
+    alone = two_stage_design(cells, replay_blocks, delta, **kw)
+    assert alone["share"] == 1.0 and two_stage_design(cells, replay_blocks, delta, registration=0.0, **kw) == alone
+    shared = two_stage_design(cells, replay_blocks, delta, registration=10 ** 4, **kw)
+    assert shared["share"] == pytest.approx(registration_share(shared["q"] * 10 ** 4), rel=1e-8) and shared["share"] > 1
+    strata = [replace(c, stratum=0 if c.bits <= shared["merged"] else 131072) for c in cells]
+    assert shared["prove"] == pytest.approx(shared["replay_sample"] * two_stage_price(strata, shared["k"],
+                                                                                      shared["share"])[2])
+    assert shared["total"] <= budget * (1 + 1e-12)
+    assert shared["q"] > alone["q"] and shared["bound"] < alone["bound"]
 
 
 def test_the_width_stratified_design_beats_the_uniform_one_when_proving_costs():
