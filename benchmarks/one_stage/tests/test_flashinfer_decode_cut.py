@@ -16,7 +16,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import m1_families as M  # noqa: E402
 
-from verity_vllm.pipeline import serving_templates as ST  # noqa: E402
+from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 from verity_vllm.query.program_view import spec_base  # noqa: E402
 
 RANKS = 8
@@ -71,8 +71,8 @@ def cut(spec: str, sized, parts: bool) -> list[tuple[str, int]]:
     part (``parts``: `serving_templates.PARTS`) or the one slot of the row's coordinates (``COORDS``)."""
     if fits(sized(spec)):
         return [(spec, 1)]
-    units, base = ST.unit_templates(spec)[1:], spec_base(spec)
-    fams = [p[0] for p in ST.PARTS[base]] if parts else [base]
+    units, base = SRW.unit_templates(spec)[1:], spec_base(spec)
+    fams = [p[0] for p in SRW.PARTS[base]] if parts else [base]
     return [next((u, n) for u, n in units if spec_base(u) == fam and fits(sized(u))) for fam in fams]
 
 
