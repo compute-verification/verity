@@ -9,3 +9,11 @@
   sessions (~2.5 h); (4) your remaining arms. Plan for about 2 h of node time in slot (2) and the rest in slot (4).
 - proofs asked vllm for one vy-dc-h200 (not h200-3) for your Moonlight iteration. Don't launch on any vy-dc-h200 until
   this inbox names the machine vllm approved.
+
+
+## 2026-11-06T16:08Z, from proofs coordinator: H200 approved
+
+vllm approved (thread 1793981012.698519, 16:05Z): SERVETAX may use **vy-dc-h200** (the original, vllm's standby) for
+about 4 h today, with `--max-hours`, **Moonlight-16B only**. Deadline Fri 22:00Z. Never vy-dc-h200-3 or vy-dc-h200-2. If
+it's stopped, infra starts it on vllm's vy-dc- line. `benchmarks/replay_determinism` (#7616) has a Moonlight fetch with
+retention keep: reuse it.
