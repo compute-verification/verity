@@ -618,6 +618,8 @@ def test_every_record_difference_code_is_one_update_settles():
         "assumptions.unread": (pol | {"assumptions": pol["assumptions"] | {"P.Other": {"owner": "@lean", "digest": "0" * 64}}},
                                facts()),
         "assumptions.read-only": (pol | {"assumptions": pol["assumptions"] | {"P.Sound": {"owner": "@lean"}}}, bare),
+        "assumptions.moved": (opol | {"assumptions": opol["assumptions"] | {"P.Sound": {"owner": "@lean",
+                                                                                         "digest": "0" * 64}}}, opened()),
         "open.digest": (opol, opened("6")),
         "open.unrecorded": (opol | {"open": {"P.Sound": {k: v for k, v in ticket.items() if k != "digest"}}}, opened()),
         "open.unread": (opol | {"open": opol["open"] | {"P.Other": ticket}}, opened()),
@@ -1682,6 +1684,24 @@ def test_a_premise_defined_anywhere_the_repository_builds_is_an_open_premise_and
         ["open.seed-form", "open.unlisted"]
     assert [x.code for x in A.judge({**pol, "open": {"P.Sound": pol["open"]["P.Sound"] | {"due": "soon"}}}, f, FILES)[0]] \
         == ["open.form"]
+
+
+def test_an_open_premise_a_merge_also_kept_under_assumptions_is_a_record_difference_the_update_drops():
+    """A lock merged by a base whose `merge.py` keeps an `assumptions` entry one side changed beside the `open` entry
+    the other side moved it to lists the premise twice. Declared outside `assumptions_module`, it is no named
+    assumption, so the check names one failure, `assumptions.moved`, a record difference, and the update keeps the
+    `open` entry alone."""
+    pin = fact(signature="P.t (n : Nat) : P.Guarantees.t n", hyps=[])
+    pin["premises"] = [{"binder": "h", "head": "P.Sound", "module": "P.Defs"}]
+    f = facts(pins={"P.t": pin}, graph={"P.Defs": {"imports": ["Init"],
+                                                    "olean": "/r/Security/.lake/build/lib/lean/P/Defs.olean"}})
+    ticket = {"P.Defs": {"issue": "LEAN-1", "due": "2026-11-30"}}
+    pol = A.judge({**POLICY, "assumptions": {}, "open_seed": ticket}, f, FILES, update=True)[1]
+    merged = {**pol, "assumptions": {"P.Sound": {"owner": "@lean", "digest": "0" * 64}}}
+    fails = A.judge(merged, f, FILES)[0]
+    assert [x.code for x in fails] == ["assumptions.moved"] and A.RECORD_DIFFERENCE.match(fails[0])
+    new = A.regenerated(merged, f, FILES, fails)
+    assert new["assumptions"] == {} and new["open"] == pol["open"] and A.judge(new, f, FILES)[0] == []
 
 
 def asserted(head, module="P.Assumptions", props=False):
