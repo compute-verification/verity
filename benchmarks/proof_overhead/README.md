@@ -41,9 +41,8 @@ Three parts, run in order:
 What each curve is:
 
 - **Measured:** GPU seconds per block, over the card's peak s8 MAC rate (`verity.hardware`). This is C-Flock's prover in
-  warm loopback sessions with the ZK server's send check off and no host witness (`FC_FIREWALL` and `FC_HOST_WITNESS`
-  unset), so it prices the prover, not the deployed path. `benchmarks/one_stage/zk_cost.py`'s `fw` arm measures the
-  deployed path, with the send check on.
+  warm loopback sessions with the ZK server's send check off (`FC_FIREWALL` unset): SPOT's proving cost. The ZK server is
+  a separate layer, priced apart from it, by `benchmarks/one_stage/zk_cost.py`'s `fw` arm against its `nofw` arm.
 - **The split:** Flock's prover pays for cells. Each instance's block is 2^k_log of them, holding the rows' SHA-512
   compressions, one hm96 slot a row and the block's own units, as `verity_flock.circuit` lays them out (`overhead.layout`,
   checked against every record's k_log). The commitment's share is its slots' share of the used cells.

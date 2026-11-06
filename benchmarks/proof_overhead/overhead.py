@@ -9,8 +9,8 @@ from the run that staged it); their ``STATEMENTS`` hold two instance counts for 
 
 - **Measured.** The per-block GPU seconds are the slope between the two statements' median prove times; the overhead is those
   seconds times the card's peak s8 MACs a second, over the block's MACs. `flock_s8_block`'s sessions run the prover with the
-  ZK server's send check off and no host witness, so this is the prover's cost; the deployed path's is
-  `benchmarks/one_stage/zk_cost.py`'s `fw` arm.
+  ZK server's send check off: SPOT's proving cost. The ZK server is a separate layer (`zk_cost.py`'s `fw` arm against
+  its `nofw` arm).
 - **The layout.** Flock's prover pays for cells: a block of 2^k_log cells per instance (`layout`, `verity_flock.circuit`'s
   rule, checked against each record's k_log) holding the rows' SHA-512 compressions (``sha512x3`` slots, three a 2^18 slot,
   each row's L padded bytes L / 128 of them after its constant prefix block), one ``hm96`` slot of 2^18 a row (its last
@@ -181,7 +181,7 @@ def _plot(a, bs: list[dict], res: dict) -> None:
     curves(ax, "overhead", floor="overhead_floor")
     ax.set_xlabel("Proof block output width (bits)")
     ax.set_ylabel("Proof overhead (GPU-s × peak s8 MAC/s ÷ block MACs)")
-    ax.set_title(f"C-Flock --zk prover (ZK server's send check off), hm96 rows hashed in the circuit, {a.card}", fontsize=9)
+    ax.set_title(f"SPOT's proving cost: C-Flock --zk, hm96 rows hashed in the circuit, {a.card}", fontsize=9)
     ax.legend(fontsize=7)
     fig.savefig(a.out / "overhead_vs_width.png", dpi=200, bbox_inches="tight")
 
