@@ -41,9 +41,16 @@ export function setRuntime(rt: Runtime | Promise<Runtime>) {
   (globalThis as Slot)[SLOT] = Promise.resolve(rt);
 }
 
+// A failed start (the database unreachable, say) is not cached: the next call tries again.
 export function runtime(): Promise<Runtime> {
   const g = globalThis as Slot;
-  g[SLOT] ??= fromEnv(process.env);
+  if (!g[SLOT]) {
+    const p = fromEnv(process.env);
+    g[SLOT] = p;
+    p.catch(() => {
+      if (g[SLOT] === p) delete g[SLOT];
+    });
+  }
   return g[SLOT];
 }
 

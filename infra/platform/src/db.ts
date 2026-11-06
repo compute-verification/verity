@@ -10,7 +10,9 @@ export async function openDb(url: string): Promise<Db> {
   if (url.startsWith("pglite:")) {
     const { PGlite } = await import("@electric-sql/pglite");
     const where = url.slice("pglite:".length);
-    const pg = where === "" || where === "memory" ? new PGlite() : new PGlite(where);
+    const memory = where === "" || where === "memory";
+    if (!memory) await (await import("node:fs/promises")).mkdir(where, { recursive: true });
+    const pg = memory ? new PGlite() : new PGlite(where);
     return {
       query: async <T>(text: string, params?: unknown[]) => {
         const r = await pg.query<T>(text, params as unknown[] | undefined);

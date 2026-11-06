@@ -56,10 +56,11 @@ export function vercelCredentials(o: {
   };
 
   return {
+    // A lead without its own key runs on the deployment's OIDC token, fetched
+    // per turn: the copy in a long-lived instance's environment can be stale.
     async modelAuth(lane) {
       const sealed = await o.store.sealedGatewayKey(lane);
-      if (!sealed) return "ai-gateway";
-      return { AI_GATEWAY_API_KEY: unseal(o.secret, sealed) };
+      return { AI_GATEWAY_API_KEY: sealed ? unseal(o.secret, sealed) : await o.oidcToken() };
     },
 
     async github(subject) {
