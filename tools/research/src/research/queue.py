@@ -4725,6 +4725,8 @@ class MarkOnly:
 #: `lean-audit` step's, `check.py`'s `lean_passes`: each package audited on the commit's own lock with the kernel replay)
 FAST_KIND, CHECK_KINDS = "lean-fast/v1", ("check/v1", "check-shard/v1", "check-deferred/v1")
 PASS_KINDS = (FAST_KIND, *CHECK_KINDS)
+#: the Lean check's step in a check's result
+LEAN_AUDIT_STEP = "lean-audit"
 #: an attempt whose result may list passes (`index_lean_results`): a check (`check.py`) or a records run
 PASS_RUN_RE = re.compile(r"(?:^|[/\s])check\.py\b|lean_changed\.py\b.*\s--records\b")
 #: the attempts the records gate reads from the store's remote for passes: those started in the lookback before now
@@ -5005,7 +5007,7 @@ class RecordsGate:
                 continue
             step = rec = None
             if meta.get("kind") in CHECK_KINDS:
-                step = next((s for s in meta.get("steps") or [] if isinstance(s, dict) and s.get("step") == "lean-audit"), None)
+                step = next((s for s in meta.get("steps") or [] if isinstance(s, dict) and s.get("step") == LEAN_AUDIT_STEP), None)
             elif meta.get("kind") == FAST_KIND:
                 rec = (meta.get("records") or {}).get(pkg)
             if not isinstance(step, dict) and not isinstance(rec, dict):
