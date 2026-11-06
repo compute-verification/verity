@@ -339,7 +339,6 @@
     {"file": "verity/ml/flock/tests/test_lean_witness.py", "count": 2},
     {"file": "verity/ml/flock/tests/zk_rewind_stats.py", "count": 1},
     {"file": "verity/ml/flock/tests/zk_stats.py", "count": 1},
-    {"file": "verity/ml/flock/live/PROTOCOL.md", "count": 1},
     {"file": "Security/Definitions/Accounting/Remote/Draw.lean", "count": 1},
     {"file": "Security/Definitions/Accounting/Wipe.lean", "count": 1},
     {"file": "infra/cluster/src/cluster/usage.py", "count": 2},
