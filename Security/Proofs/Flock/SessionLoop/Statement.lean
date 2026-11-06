@@ -38,7 +38,8 @@ takes from its host and operating system is the tape's, its level-0 inputs (`Loo
 side (`CoinLayer` `Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausal`, `TapeOK`) are its premises, with
 `FinishIs` in place of the `FinalRoundEq` `Flock.zk_server_lean_loop` takes (`LeanRelease.finalRoundEq_ofLoop`, with the
 loop's frames refusing every coin fault, `LeanRelease.frameUnrefused_ofLoop`); `SessionLoopZKDeployed` takes
-`LiveRoundEq`, `FillRoundEq` and the tables' side. The proofs are
+`LiveRoundEq`, `FillRoundEq` and, of the tables' side, only `SwCausal`: the rest holds at `Masked.dataE`
+(`Proofs.Flock.SessionLoop.TablesSide`). The proofs are
 `Flock.SecurityProofs.SessionLoopZK` and `SessionLoopZKDeployed` (`Proofs.Flock.SessionLoop`),
 `Flock.zk_server_lean_ofLoop` at the gap.
 
@@ -336,8 +337,9 @@ def Loop.RepSrc
 does not check). **Every input the session loop takes from its host and its operating system is the tape's** at `x`, in
 two halves: the level-0 inputs (`Loop.Level0Src`: the packed witness the host hands it and the bytes `Level0.draw`
 reads) and the rep draws (`Loop.RepSrc`: the bytes `Frames.startRep` and `Finish.serve` read for each rep). Why it is
-reasonable: the loop runs on the auditor-trusted host (`trusted-host`), whose operating system's random bytes are
-the uniform draws the tape models, and which hands the loop the witness `w` the statement is served at. -/
+reasonable: the loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the
+tape models, and which hands the loop the witness `w` the statement is served at. The host is the developer's, not an
+auditor-trusted one (`trusted-host`), and that is the host to trust here: zero knowledge protects the developer. -/
 def Loop.Src
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -454,7 +456,8 @@ def _root_.Flock.Guarantees.SessionLoopZK : Prop :=
 /-- **C-Flock's zero knowledge at the session loop's own frames, at the deployed tables** (`Masked.dataE`), at the
 loop's own link and `Finish`: `SessionLoopZKAt Masked.dataE` at the release `withFiles (withLink L₀ src) src`, whose link
 is the one the loop's `Commit` carries (`Loop.linkOf src`) and whose files and stop are its `Finish`'s (`Loop.filesE`),
-with no premise on the tables beyond `SessionLoopZKAt`'s. In place of
+with no premise on the tables but `SwCausal`: `Tables`, `Complete`, `DummyReg`, `Causal` and `TapeOK` hold at
+`Masked.dataE` (`Loop.tables_dataE`, `complete_dataE`, `dummyReg_dataE`, `causal_dataE`, `tapeOK_dataE`). In place of
 `LinkRoundEq` it takes that `x` is in the masked verifier's scope (`Claims.Flock.Scope`, the statement check
 `flock-verify verify --zk` runs, `ScopeMatches`) and that the loop's inputs from its host and operating system are the
 tape's (`Loop.Src`). It takes no `FinishIs`: at these premises, with `LiveRoundEq` and `SwCausal`, the loop's `Finish`
@@ -464,11 +467,7 @@ is a premise because the loop does not run that check, and cannot run all of it:
 tables, so its link carries no root while the loop's `Commit` carries each table's. -/
 def _root_.Flock.Guarantees.SessionLoopZKDeployed : Prop :=
   ∀ (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (t : ℕ), 0 < t →
-    (CoinLayer.session Loop.loopNr Masked.dataE).Tables →
-    (CoinLayer.session Loop.loopNr Masked.dataE).Complete
-      (Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) →
-    (CoinLayer.session Loop.loopNr Masked.dataE).DummyReg → (CoinLayer.session Loop.loopNr Masked.dataE).Causal →
-    (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal vs → (CoinLayer.session Loop.loopNr Masked.dataE).TapeOK →
+    (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal vs →
     ∀ (L₀ : LeanRelease Flock.Wit
         ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
       (src : Msg → Flock.Wit →

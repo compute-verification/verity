@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.5: the circuit file: line 1 is `<format> <name>`, line 2 is `META <json>` (the layout), then
+The circuit file: line 1 is `<format> <name>`, line 2 is `META <json>` (the layout), then
 `<keyword> <name> <lines>` blocks, each an expanded circuit in `flock-ir-unit/v2` form (format and keyword are the
 statement's `Tags`). The parser refuses every part the verifier would have to evaluate (a `CUT` line; the META keys `tail`,
 `cut`, `cut_words`, `public_ports`, `public`, `native`, `outputs_by_tail`), and checks the layout's generic shape; the row
