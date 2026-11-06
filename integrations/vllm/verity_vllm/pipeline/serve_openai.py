@@ -6,7 +6,8 @@
         [--retain host|device [--retain-device-gb 32] [--release-after sampled_proofs,pouw_h1 [--draws-dir DIR]]]
         [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
-        [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
+        [--copy-records-to $OUT] [--admit arrival|release-order|tick [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
+        [--tick-bucket-ms 100 --tick-sat-ms MS --tick-free-ms MS]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
 
@@ -40,7 +41,10 @@ request's connection as it comes. The HTTP side is an asyncio server on its own 
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
 certifier's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`; ``serve.json``'s
-``step_rows``). The engine schedules synchronously unless ``--async-scheduling``, which the row's Build of record must declare
+``step_rows``). ``--admit tick`` (`serve_admit.TickGate`) also adds each at the step the certified tick says, from the release
+buckets the network certifier's watermark gives (its ``POST /verity/watermark``, which the server reads as it streams) and the
+engine class's registered step times (``--tick-sat-ms``, ``--tick-free-ms``), the rows kept as under ``release-order``.
+The engine schedules synchronously unless ``--async-scheduling``, which the row's Build of record must declare
 (`serve_row`).
 
 With the Commit on (the default), the server's committer (`serve_seal.committer`) commits every engine step exactly as it does
@@ -117,7 +121,8 @@ from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
                                    serve_remote as SR, serve_row as RW, serve_seal as SS)
-from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
+from verity_vllm.pipeline.serve_admit import (ADMIT, RUN_HEADER, WATERMARK_PATH, Admission, Delta, ReleaseOrder, Tick, TickAdmit, TickGate,
+                                              engine_id_of, keep_scheduler_rows, new_http_id)
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
@@ -225,9 +230,18 @@ class Options:
                                             "chunk (default on)")
     admit: str = option("--admit", choices=ADMIT, default="arrival",
                         help="arrival (default): each request to the engine once parsed; release-order: in the network certifier's release "
-                             "order (x-verity-release), each once every earlier-released one is in")
+                             "order (x-verity-release), each once every earlier-released one is in; tick: in release order, each at "
+                             "the step whose logical time its release bucket has closed by (serve_admit.TickGate)")
     admit_hold_ms: int = option("--admit-hold-ms", type=int, default=5000,
-                                help="release-order: skip a missing earlier release once a later request has waited this long")
+                                help="release-order, tick: skip a missing earlier release once a later request has waited this long; "
+                                     "tick: open the gate once the watermark has stalled this long")
+    tick_bucket_ms: float = option("--tick-bucket-ms", type=float, default=100.0,
+                                   help="tick: the network certifier's bucket (its deployment's bucket_ms)")
+    tick_sat_ms: float = option("--tick-sat-ms", type=float, default=0.0,
+                                help="tick: the engine class's step time while vLLM's waiting queue is nonempty (registered with "
+                                     "the class)")
+    tick_free_ms: float = option("--tick-free-ms", type=float, default=0.0,
+                                 help="tick: the engine class's step time while the waiting queue is empty (registered with the class)")
     protocols: str | None = option("--protocols", default=None,
                                    help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1)")
     protocols_config: str | None = option("--protocols-config", default=None,
@@ -244,13 +258,15 @@ class EngineLoop:
     """The one thread that steps the engine: admissions come through `submit`, outputs go back through each admission's
     ``deliver``. ``engine`` is vLLM's ``LLMEngine`` (``add_request``, ``abort_request``, ``step``,
     ``has_unfinished_requests``); ``commit`` a `CommitWindows` or None. With ``cap`` (``--window-requests``), at most ``cap``
-    requests are in the engine at once: later ones wait in ``held``, in admission order, and go in as running ones finish."""
+    requests are in the engine at once: later ones wait in ``held``, in admission order, and go in as running ones finish.
+    With ``gate`` (``--admit tick``, a `serve_admit.TickGate` installed on ``sched``, the engine's scheduler), its records
+    come through `tick`, in queue order with the admissions, and the loop steps only once the gate is ready."""
 
     _STOP = object()
 
     def __init__(self, engine: Any, commit: CommitWindows | None = None, cap: int = 0,
-                 clock: Callable[[], float] = time.time) -> None:
-        self.engine, self.commit, self.cap, self.clock = engine, commit, int(cap), clock
+                 clock: Callable[[], float] = time.time, gate: TickGate | None = None, sched: Any = None) -> None:
+        self.engine, self.commit, self.cap, self.clock, self.gate, self.sched = engine, commit, int(cap), clock, gate, sched
         self.q: queue.Queue = queue.Queue()
         self.live: dict[str, Admission] = {}
         self.held: collections.deque[Admission] = collections.deque()
@@ -272,12 +288,20 @@ class EngineLoop:
         """Stop once the requests in flight have finished; every request admitted after this is refused with ``why``."""
         self.q.put(("drain", why))
 
+    def tick(self, rec: dict[str, Any]) -> None:
+        self.q.put(("tick", rec))
+
     def _take(self, item: Any) -> bool:
         """Apply one queued item; False for the stop."""
         if item is self._STOP:
             return False
+        if isinstance(item, tuple) and item[0] == "tick":
+            self.gate.take(item[1])
+            return True
         if isinstance(item, tuple) and item[0] == "drain":
             self.draining = self.draining or str(item[1])
+            if self.gate is not None:
+                self.gate.open(f"draining: {self.draining}")
             return True
         if isinstance(item, tuple):
             eid = item[1]
@@ -345,6 +369,12 @@ class EngineLoop:
                     item = self._poll()
                 if not running or not self.engine.has_unfinished_requests():
                     continue
+                if self.gate is not None and not self.gate.ready(self.sched):
+                    try:
+                        running = self._take(self.q.get(timeout=self.gate.poll_s))
+                    except queue.Empty:
+                        pass
+                    continue
                 if self.commit is not None:
                     self.commit.before_step(self.live)
                 for out in self.engine.step():
@@ -383,7 +413,7 @@ class Server:
 
     def __init__(self, *, proto: PlainProtocol, served_name: str, max_model_len: int, tokenizer: Any, defaults: Mapping[str, Any],
                  submit: Callable[[Admission], None], abort: Callable[[str], None], model_root: str = "",
-                 clock: Callable[[], float] = time.time, order: ReleaseOrder | None = None) -> None:
+                 clock: Callable[[], float] = time.time, order: ReleaseOrder | TickAdmit | None = None) -> None:
         self.proto, self.served_name, self.max_model_len = proto, served_name, int(max_model_len)
         self.tokenizer, self.defaults, self.order = tokenizer, dict(defaults), order
         self.submit, self.abort = (submit, abort) if order is None else (order.submit, order.abort)
@@ -398,6 +428,8 @@ class Server:
             lines = head.decode("latin-1").split("\r\n")
             method, path, _ = lines[0].split(" ", 2)
             headers = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in lines[1:] if ln)}
+            if method == "POST" and path.split("?", 1)[0] == WATERMARK_PATH and isinstance(self.order, TickAdmit):
+                return await self.watermark(reader, writer, headers)
             body = await reader.readexactly(int(headers.get("content-length") or 0))
             await self.route(method, path.split("?", 1)[0], body, writer, headers, head + body,
                              {"head": t_head, "received": self.clock()})
@@ -409,6 +441,25 @@ class Server:
                 await writer.wait_closed()
             except (ConnectionError, OSError):
                 pass
+
+    async def watermark(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, headers: Mapping[str, str]) -> None:
+        """The network certifier's watermark (``--admit tick``): its chunked body's lines go to the gate as they come, and
+        its end is answered 200 (400 for a malformed stream)."""
+        w = self.order.watermark(headers.get(RUN_HEADER, "").strip())
+        try:
+            if "chunked" not in headers.get("transfer-encoding", "").lower():
+                w.close("the watermark's body is chunked")
+            while not w.closed:
+                size = int((await reader.readuntil(b"\r\n")).split(b";", 1)[0], 16)
+                if size == 0:
+                    await reader.readuntil(b"\r\n")
+                    w.close()
+                    break
+                w.feed((await reader.readexactly(size + 2))[:-2])
+        except (asyncio.IncompleteReadError, ConnectionError, ValueError) as e:
+            w.close(f"the watermark broke off: {type(e).__name__}")
+        await self._json(writer, 200 if w.error is None else 400,
+                         b"" if w.error is None else error_body(w.error, 400, "BadRequestError"))
 
     @staticmethod
     def _head(status: int, ctype: str, length: int | None) -> bytes:
@@ -634,6 +685,12 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError("--window-steps and --admit-hold-ms are at least 1")
     if opts.window_requests < 0:
         raise UsageError("--window-requests is at least 0 (0: no bound)")
+    if opts.admit == "tick":
+        if min(opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms) * 1000 < 1:
+            raise UsageError("--admit tick: --tick-bucket-ms, --tick-sat-ms and --tick-free-ms are at least 0.001 (the engine "
+                             "class's registered step times)")
+        if opts.window_requests:
+            raise UsageError("--admit tick adds each request at its step; --window-requests would hold it past that")
     if (c := served_class(opts))["R"] < opts.max_num_seqs:
         raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
     if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
@@ -710,12 +767,20 @@ def main(opts: Options) -> int:
     if windows is not None:
         windows.on_floor = loop.drain
     served = opts.served_model_name or opts.model
-    order = rows = None
-    if opts.admit == "release-order":
+    order = rows = ticked = None
+    if opts.admit in ("release-order", "tick"):
         from verity_vllm.engine.handle import model_runner
         from verity_vllm.engine.step_trace import scheduler_of
-        order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
         rows = keep_scheduler_rows(model_runner(llm.vllm), scheduler_of(engine))
+    if opts.admit == "release-order":
+        order = ReleaseOrder(loop.submit, loop.abort, hold_s=opts.admit_hold_ms / 1000)
+    elif opts.admit == "tick":
+        from verity_vllm.engine.engine_driver import external_id
+        from verity_vllm.pipeline.serve_admit import install
+        loop.sched = scheduler_of(engine)
+        loop.gate = TickGate(Tick.of_ms(opts.tick_bucket_ms, opts.tick_sat_ms, opts.tick_free_ms), hold_s=opts.admit_hold_ms / 1000)
+        ticked = install(loop.sched, loop.gate, key=external_id)      # over the advice trace's wrappers, which see admissions
+        order = TickAdmit(loop.submit, loop.abort, loop.tick)
     server = Server(proto=proto, served_name=served, max_model_len=opts.max_model_len, tokenizer=tok,
                     defaults=defaults, submit=loop.submit, abort=loop.abort, model_root=opts.model, order=order)
     http = HttpThread(server, opts.host, opts.port)
@@ -737,6 +802,7 @@ def main(opts: Options) -> int:
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1", "committer": getattr(com, "name", None),
               "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
+              "tick": loop.gate.tick.record() if loop.gate is not None else None,
               "step_rows": "scheduler" if rows is not None else "runner",
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", SS.V1) if com is not None else None,
               "of_record": opts.of_record, "learn_warmup": getattr(com, "learn_warmup", None),
@@ -769,6 +835,7 @@ def main(opts: Options) -> int:
         def stopped(final: bool) -> dict[str, Any]:
             got = {"final": final, "served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
+                   "tick": loop.gate.summary() if loop.gate is not None else None,
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
                    "release": draws.summary() if draws is not None else None,
                    "mirror_errors": mirror.errors[:10] if mirror else None,
@@ -789,6 +856,8 @@ def main(opts: Options) -> int:
         watchdog.stop()
         summary = stopped(True)
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
+        if ticked is not None:
+            ticked.uninstall()
         trace.uninstall()
         if rows is not None:
             rows.uninstall()
