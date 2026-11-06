@@ -164,8 +164,8 @@ class TreeRelay:
     """The step's session as a drawn member's ``--zk`` server takes its session's coin tree from it (``flock-circuit serve
     --tree-from ADDRESS --tree-secret-file FILE``, `Draws.trees`): a thread of the manager's process listening on
     127.0.0.1:0 (`address`), its secret fresh in `file`, mode 0600. It takes one connection whose hello carries the secret
-    (`remote._hello_reason`; a refused hello's connection is closed and the next one taken), closes its listener and
-    answers ``commitment {}``, which the client checks for its form alone. Each ``tree {nonce, spec}`` and ``tree-open
+    (`remote.greet`, which answers a refused hello and hangs up; the next connection is then taken), closes its listener
+    and answers ``commitment {}``, which the client checks for its form alone. Each ``tree {nonce, spec}`` and ``tree-open
     {after, n, round, stream, tree}`` frame is asked of the step's one client by `forward` in the draws' `turn`, and its
     answer, or its refusal, goes back. A ``close`` ends the connection alone, answered ``closed``: the step's session stays
     open until its ranks' sessions are done (`Draws.sessions_done`). Any other frame, a refusal or a broken stream ends the
@@ -180,33 +180,31 @@ class TreeRelay:
             f.write(self._secret.hex() + "\n")
         self._listener = socket.create_server(("127.0.0.1", 0))
         self.address = f"127.0.0.1:{self._listener.getsockname()[1]}"
-        self._lock, self._stopped, self._conn = threading.Lock(), False, None
+        self._lock, self._stopped, self._listening = threading.Lock(), False, True
         self.trees, self.rounds, self.ended = 0, 0, None
         threading.Thread(target=self._run, daemon=True).start()
 
     def _greeted(self) -> socket.socket | None:
-        """The first connection whose hello carries the secret, None once stopped."""
+        """The first connection whose hello carries the secret, its listener then closed; None once stopped (`stop` shuts
+        the listener, which ends a wait for a connection)."""
         while True:
             try:
                 conn, _ = self._listener.accept()
             except OSError:
+                with self._lock:
+                    if not self._stopped:
+                        raise
                 return None
+            why = R.greet(conn, self._secret)
             with self._lock:
-                if self._stopped:
-                    conn.close()
-                    return None
-                self._conn = conn
-            try:
-                why = R._hello_reason(R._Wire(conn).recv(), self._secret)
-            except (Ch.CoinError, OSError) as e:
-                why = str(e)
-            if why is None:
-                return conn
-            try:
-                R._Wire(conn).send({"type": "refused", "reason": why})
-            except OSError:
-                pass
+                stopped = self._stopped
+                if why is None and not stopped:
+                    self._listening = False
+                    self._listener.close()
+                    return conn
             conn.close()
+            if stopped:
+                return None
 
     def _run(self) -> None:
         conn = None
@@ -214,7 +212,6 @@ class TreeRelay:
             conn = self._greeted()
             if conn is None:
                 return
-            self._listener.close()
             wire = R._Wire(conn)
             wire.send({"type": "commitment", "commitment": {}})
             while True:
@@ -237,28 +234,27 @@ class TreeRelay:
                     R._hang_up(conn)
                     return
         except (Ch.CoinError, OSError) as e:
-            if self.ended is None:
-                self.ended = f"the stream broke ({e})"
+            with self._lock:
+                self.ended = self.ended or f"the stream broke ({e})"
         finally:
             self.stop("the relay's thread ended")
-            for s in (conn, self._listener):
-                if s is not None:
-                    s.close()
+            with self._lock:
+                self._listening = False
+            self._listener.close()
+            if conn is not None:
+                conn.close()
 
     def stop(self, why: str) -> None:
         """End the relay (`why`, unless it has ended already): an in-flight frame finishes first and none is forwarded
-        after, its sockets are shut and its secret file is removed."""
+        after, a listener still waiting for its server is shut, and the secret file is removed. A server's connection is
+        left to end by itself: the step's session closes only once its member sessions are done (`Draws.sessions_done`),
+        their servers exited."""
         with self._lock:
-            self._stopped = True
             if self.ended is None:
                 self.ended = why
-            conn = self._conn
-        for s in (conn, self._listener):
-            if s is not None:
-                try:
-                    s.shutdown(socket.SHUT_RDWR)
-                except OSError:
-                    pass
+            if self._listening and not self._stopped:
+                self._listener.shutdown(socket.SHUT_RDWR)
+            self._stopped = True
         self.file.unlink(missing_ok=True)
 
 

@@ -136,6 +136,26 @@ def test_the_relays_close_leaves_the_session_open_until_the_ranks_sessions_are_d
     assert Ch.sessions_tree_reason(trees, [("m0", record)]) is None
 
 
+def test_a_relay_no_server_reached_ends_when_the_session_closes(tmp_path, monkeypatch):
+    """A relay whose member's server never connects (its session failed before serving) holds nothing open: once the
+    rank's sessions are done the session closes, the relay ends with it, having forwarded nothing, its secret file is
+    removed, and the session's evidence is published with the draw's coins released."""
+    manager, draws, opener = RS.local(tmp_path, monkeypatch, [0], trees=True)
+    try:
+        _, segment = drawn(draws)
+        _, file = draws.trees()
+        draws.sessions_done(0)
+        assert draws.closed() and not Path(file).exists()
+        assert draws.relayed() == {"trees": 0, "rounds": 0, "ended": "the step's session closed"}
+        opener.join()
+        published = draws.evidence()
+    finally:
+        manager.shutdown()
+    assert "error" not in published, published.get("error")
+    assert published["trusted"]["released"] == {AC.FAMILY: 1 + len(segment["openings"])}
+    assert Ch.coin_trees_of(published["session"]["log"]) == {}
+
+
 def test_a_second_session_on_the_relay_is_refused(tmp_path, monkeypatch):
     """The relay is one server's: `trees` again is refused, and a frame other than a tree's (a coin's open, which would
     read the step's draw coins) is refused with nothing forwarded, ending its connection with the session still open and
