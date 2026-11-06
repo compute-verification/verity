@@ -673,12 +673,12 @@ def tie_after_sessions(a: argparse.Namespace, rec: dict, mine: CS.Binding, segme
              "record": "auditor" if streamed(a) else "none: a development draw"}, ev)
 
 
-def refuse_after_sessions(out: Path, summary: dict, checks: dict, negatives: dict[str, dict]) -> tuple[dict, bool]:
+def refuse_after_sessions(out: Path, summary: dict, checks: dict) -> tuple[dict, bool]:
     """The audit refused once its sessions are done, by each of ``checks`` that failed (the tie, `tie_after_sessions`): its
-    summary alone is written under ``out``, with the ``negatives`` decided so far, and no audit record, case, release or
-    negatives file, so nothing built from the files the registration's roots completed leaves the auditor; nothing is
+    summary alone is written under ``out``, with no negatives, and no audit record, case, release or negatives file, so
+    nothing decided on the registration's roots, or built from the files they completed, leaves the auditor; nothing is
     retried. -> (the summary, False)."""
-    summary.update(checks=checks, negatives={x: y["refused"] for x, y in negatives.items()})
+    summary.update(checks=checks, negatives={})
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     print("A5 " + json.dumps({"refused_after_sessions": {c: v for c, v in checks.items() if not v["ok"]}}, default=str))
     return summary, False
@@ -987,7 +987,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     if not plain(a):
         after["registered_complete"], complete_neg = complete_drawn(rec, mine, files, publics, reads, drawn, served)
         if not after["registered_complete"]["ok"]:
-            summary.update(checks={**checks, **after}, negatives={x: y["refused"] for x, y in complete_neg.items()})
+            summary.update(checks={**checks, **after}, negatives={})
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
             print("A5 " + json.dumps({"refused_after_draw": {"registered_complete": False}, "checks": after}, default=str))
             return summary, False
@@ -1066,7 +1066,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     if not plain(a):
         after["record"], ev = tie_after_sessions(a, rec, mine, segment, read, rank)
         if not after["record"]["ok"]:
-            return refuse_after_sessions(out, summary, {**checks, **after}, complete_neg)
+            return refuse_after_sessions(out, summary, {**checks, **after})
         complete_neg.update(record_negatives(a, rec, mine, ev, read, rank))
     for got in done:
         mm = got["mm"]
@@ -1600,7 +1600,7 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
             finisher.join()
             published = a.coins.evidence()
             summary["challenger"].update(trusted=published.get("trusted"), error=published.get("error"),
-                                         **(published.get("plan") or {}))
+                                         relayed=published.get("relayed"), **(published.get("plan") or {}))
             manager.shutdown()
     summary["accepted"] = ok_all and sorted(summary["ranks"]) == sorted(str(r) for r in ranks) \
         and not summary.get("challenger", {}).get("error")

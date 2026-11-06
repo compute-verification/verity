@@ -96,38 +96,44 @@ def secret_of(file: str) -> str:
 
 
 def test_the_relays_close_leaves_the_session_open_until_the_ranks_sessions_are_done(tmp_path, monkeypatch):
-    """A trees session stays open past the rank's draw. Its relay listens on 127.0.0.1, its secret fresh in a 0600 file
-    beside the session's evidence directory (`start`'s ``dest``), never in it; a hello without the secret is refused and
-    the next connection taken. The
-    server's coin tree and rounds go through it to the step's one client, and back as the challenger answered them, each
-    opening its tree. The server's close ends the relay's connection alone: the session is still open and its challenger
-    has written no close. Once the rank's sessions are done the session closes and the secret file is gone; the release
-    log holds the tree, the member's record holds to it (`sessions_tree_reason`), and the draw's coins hold beside the
-    tree's lines (`coins_reason`)."""
+    """A trees session stays open past the rank's draw. Its relay listens on 127.0.0.1, its secret fresh in a 0600 file in
+    a 0700 directory of its own in the temporary directory, never under the session's evidence directory (`start`'s
+    ``dest``); a hello without the secret is refused and the next connection taken, and the hello carrying it removes the
+    file. The server's coin tree and rounds go through it to the step's one client, and back as the challenger answered
+    them, each opening its tree. The server's close ends the relay's connection alone: the session is still open and its
+    challenger has written no close. Once the rank's sessions are done the session closes, and once its thread has
+    published, the relay's directory is gone and the evidence says what the relay forwarded; the release log holds the
+    tree, the member's record holds to it (`sessions_tree_reason`), and the draw's coins hold beside the tree's lines
+    (`coins_reason`)."""
     manager, draws, opener = RS.local(tmp_path, monkeypatch, [0], trees=True)
     try:
         coins, segment = drawn(draws)
         assert draws.serves_trees() and not draws.closed() and draws.relayed() is None
         address, file = draws.trees()
-        assert address.startswith("127.0.0.1:") and Path(file) == tmp_path / "challenger.relay-secret"
+        relay = Path(file).parent
+        assert address.startswith("127.0.0.1:") and Path(file).name == "secret" and relay.parent == tmp_path
+        assert relay.name.startswith("a5-relay-") and stat.S_IMODE(relay.stat().st_mode) == 0o700
         assert stat.S_IMODE(Path(file).stat().st_mode) == 0o600
         wrong = Server(address, "00" * 32)
         assert wrong.hello == {"type": "refused", "reason": "the hello's secret is not the session's"}
         wrong.sock.close()
+        assert Path(file).exists()
         server = Server(address, secret_of(file))
-        assert server.hello == {"type": "commitment", "commitment": {}}
+        assert server.hello == {"type": "commitment", "commitment": {}} and not Path(file).exists()
         record = server.session(NONCE)
         assert server.close() == {"type": "closed"}
         assert draws.relayed() == {"trees": 1, "rounds": 2, "ended": "the server closed it"}
         (host_out,) = tmp_path.glob("a5-challenger-*/var/sessions/*/out")
         assert not draws.closed() and (host_out / R.RELEASES).exists() and not (host_out / R.CLOSE).exists()
         draws.sessions_done(0)
-        assert draws.closed() and (host_out / R.CLOSE).exists() and not Path(file).exists()
+        assert draws.closed() and (host_out / R.CLOSE).exists()
         opener.join()
         published = draws.evidence()
     finally:
         manager.shutdown()
+    assert not relay.exists()
     assert "error" not in published, published.get("error")
+    assert published["relayed"] == {"trees": 1, "rounds": 2, "ended": "the server closed it"}
     assert published["trusted"]["close"] is None
     assert published["trusted"]["released"] == {AC.FAMILY: 1 + len(segment["openings"])}
     assert CC.coins_reason(AC.evidence(published, segment), RS.ROOT, RS.AFTER, bytes(coins.read), AC.lms_verify) is None
@@ -139,7 +145,7 @@ def test_the_relays_close_leaves_the_session_open_until_the_ranks_sessions_are_d
 def test_a_relay_no_server_reached_ends_when_the_session_closes(tmp_path, monkeypatch):
     """A relay whose member's server never connects (its session failed before serving) holds nothing open: once the
     rank's sessions are done the session closes, the relay ends with it, having forwarded nothing, its secret file is
-    removed, and the session's evidence is published with the draw's coins released."""
+    removed, and the session's evidence is published with the draw's coins released, the relay's directory then gone."""
     manager, draws, opener = RS.local(tmp_path, monkeypatch, [0], trees=True)
     try:
         _, segment = drawn(draws)
@@ -151,9 +157,27 @@ def test_a_relay_no_server_reached_ends_when_the_session_closes(tmp_path, monkey
         published = draws.evidence()
     finally:
         manager.shutdown()
+    assert not Path(file).parent.exists()
     assert "error" not in published, published.get("error")
+    assert published["relayed"] == {"trees": 0, "rounds": 0, "ended": "the step's session closed"}
     assert published["trusted"]["released"] == {AC.FAMILY: 1 + len(segment["openings"])}
     assert Ch.coin_trees_of(published["session"]["log"]) == {}
+
+
+def test_a_trees_session_refused_before_it_opens_leaves_no_relay_directory(tmp_path, monkeypatch):
+    """A trees session whose rank ended before planning opens nothing and starts no relay, and its relay's directory is
+    gone once the session's thread has published the refusal."""
+    manager, draws, opener = RS.local(tmp_path, monkeypatch, [0], trees=True)
+    try:
+        assert len(list(tmp_path.glob("a5-relay-*"))) == 1
+        draws.skip(0)
+        opener.join()
+        published = draws.evidence()
+        assert draws.relayed() is None
+    finally:
+        manager.shutdown()
+    assert published["error"].startswith("the challenger's session was not opened: ") and "relayed" not in published
+    assert not list(tmp_path.glob("a5-relay-*"))
 
 
 def test_a_second_session_on_the_relay_is_refused(tmp_path, monkeypatch):
@@ -196,8 +220,9 @@ def test_a_tie_failing_after_the_sessions_refuses_the_audit_and_writes_its_summa
     """a5's tie runs once the member's server has proved through the relay and the session has closed
     (`tie_after_sessions`). On the registration the coins were released after it holds, and each of its negatives is
     refused (`record_negatives`). On a registration of another root it fails by name, and the audit is refused
-    (`refuse_after_sessions`): only its summary is written, naming the check, and no audit record, case, release or
-    negatives file, so nothing built from the files that registration's roots completed leaves the auditor."""
+    (`refuse_after_sessions`): only its summary is written, naming the check, with no negatives, and no audit record,
+    case, release or negatives file, so nothing decided on that registration's roots, or built from the files they
+    completed, leaves the auditor."""
     rec = {"window": {"kind": "served", "run": RS.ROOT, "row": 0},
            "roots": [{"port": "x", "root": "01" * 64}, {"port": "out", "root": "02" * 64}]}
     moved = {**rec, "roots": [{"port": "x", "root": "03" * 64}, rec["roots"][1]]}
@@ -230,7 +255,7 @@ def test_a_tie_failing_after_the_sessions_refuses_the_audit_and_writes_its_summa
     out.mkdir()
     checks = {"registration": {"ok": True, "codes": []}, "record": failed}
     population = sum(RS.SILU_MUL)
-    summary, ok = a5.refuse_after_sessions(out, {"population": population}, checks, {})
+    summary, ok = a5.refuse_after_sessions(out, {"population": population}, checks)
     assert ok is False and sorted(p.name for p in out.iterdir()) == ["summary.json"]
     assert json.loads((out / "summary.json").read_text()) == {"population": population, "checks": checks,
                                                                "negatives": {}} == summary
@@ -265,5 +290,6 @@ def test_a_zk_servers_coin_tree_through_the_relay_holds_its_record_to_the_steps_
     assert "error" not in published, published.get("error")
     trees = Ch.coin_trees_of(published["session"]["log"])
     assert list(trees) == [record["coin_tree"]["root"]]
-    assert relayed == {"trees": 1, "rounds": len(trees[record["coin_tree"]["root"]].opened), "ended": "the server closed it"}
+    assert relayed == published["relayed"] == {"trees": 1, "rounds": len(trees[record["coin_tree"]["root"]].opened),
+                                               "ended": "the server closed it"}
     assert Ch.sessions_tree_reason(trees, [("m0", record)]) is None
