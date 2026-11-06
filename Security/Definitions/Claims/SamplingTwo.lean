@@ -17,14 +17,16 @@ are the proof blocks, with `k = 1` and no interior registration.
 1. **The design** (`Design.Two`): the replay partition (`part`, the statement's replay query evaluated on its
    program), the first stage's rules, one per class of it (`replay`), and the second stage's `k` per stratum of the
    proof-block partition (`k`). A cell (`cell`) is a replay block's proof blocks in one stratum; `n_{ρ,t}` is its size.
-2. **The footprint** (`footprint`): replay block `ρ`'s fewest incorrect proof blocks in stratum `t` at any interior
-   consistent with its boundary, which the statement's roots commit. It is fixed before any coin. `ρ` is an incorrect
-   replay block when its footprint is positive in some stratum.
+2. **The footprint** (`footprint`) at interior values `ι`, one interior per replay block: replay block `ρ`'s incorrect
+   proof blocks in stratum `t` on its boundary values, which the statement's roots commit, and its interior `ι ρ`. A
+   replay block's strata are read at one interior, so that its cells' counts are those of one assignment of its values.
+   With one stratum, its least footprint is the fewest incorrect proof blocks of any interior consistent with its
+   boundary, fixed before any coin; `ρ` is an incorrect replay block when every interior leaves one.
 3. **The acceptance probability at the footprint** (`Design.Two.Pa`):
    `P̄_a(w) = E_S ∏_{ρ∈S} e_ρ(w)`, `e_ρ(w) = ∏_t C(n_{ρ,t} − w(ρ, t), k_t)/C(n_{ρ,t}, k_t)` (`Design.Two.esc`, the
    hypergeometric miss, `escCell`), written through the first stage's `P_a`; the confidence set
-   `M̄_δ = {w : P̄_a(w) > δ}` (`Design.Two.M`); and the relation `RTwo`: the extracted boundary trace's footprint is in
-   `M̄_δ`.
+   `M̄_δ = {w : P̄_a(w) > δ}` (`Design.Two.M`); and the relation `RTwo`: at some interiors, the extracted boundary
+   trace's footprint is in `M̄_δ`.
 4. **The compiled verifier** (`CompiledTwo`): a `Compiled` with the statement's two-stage design (`two`) and the
    replay sample (`replaySample`). Its second stage is `Compiled.stage2`, and `iroots x v ρ` is the roots a run shows for
    replay block `ρ`'s interior. Its extractor, errors and numbers are `Compiled`'s.
@@ -95,12 +97,12 @@ noncomputable def wrongIn (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : Au
   (cell Pt Pρ ρ t).filter fun v => ¬ ∃ u r, Pt.blocks[v]? = some u ∧ Pρ.blocks[ρ]? = some r ∧
     s.prog.Correct (s.prog.refIn r (w.val H Cm s) ι) u
 
-/-- **The footprint** `w(ρ, t)`: the fewest incorrect proof blocks in stratum `t` of replay block `ρ` at any interior
-consistent with its boundary, the values the statement's roots commit at serve time. It is fixed before any coin; `ρ`
-is an incorrect replay block when it is positive in some stratum. -/
+/-- **The footprint at interior values `ι`** `w(ρ, t)`, `ι ρ` replay block `ρ`'s interior: cell `(ρ, t)`'s incorrect
+proof blocks on `ρ`'s boundary values, which the statement's roots commit at serve time, and its interior `ι ρ`. Every
+stratum of `ρ` is read at the one interior `ι ρ`. -/
 noncomputable def footprint (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition) (w : Wit)
-    (ρ t : ℕ) : ℕ :=
-  ⨅ ι : ℕ → Bool, (wrongIn H Cm s Pt Pρ w ρ t ι).card
+    (ι : ℕ → ℕ → Bool) (ρ t : ℕ) : ℕ :=
+  (wrongIn H Cm s Pt Pρ w ρ t (ι ρ)).card
 
 /-! ## 3. The acceptance probability at the footprint -/
 
@@ -126,12 +128,13 @@ noncomputable def Design.Two.Pa (d : Design.Two) (Pt : Partition) (fp : ℕ → 
 def Design.Two.M (d : Design.Two) (Pt : Partition) (δ : ℝ) : Set (ℕ → ℕ → ℕ) := {fp | δ < d.Pa Pt fp}
 
 /-- **The two-stage relation** at `δ`, on the statement's bytes: it parses, its proof-block partition and two-stage
-design evaluate (`partition`, `two`, the verifier's own), and the footprint of the boundary trace `w` opens is in
-`M̄_δ`. -/
+design evaluate (`partition`, `two`, the verifier's own), and at some interior values, one interior per replay block,
+the footprint of the boundary trace `w` opens is in `M̄_δ`. The interiors are the relation's to pick: serving commits
+only the boundary. -/
 def RTwo (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
     (partition : AuditStatement → Option Partition) (two : AuditStatement → Option Design.Two) (δ : ℝ) : Rel Wit :=
   fun x w => ∃ s Pt d, parse x = some s ∧ partition s = some Pt ∧ two s = some d ∧
-    footprint H Cm s Pt d.part w ∈ d.M Pt δ
+    ∃ ι : ℕ → ℕ → Bool, footprint H Cm s Pt d.part w ι ∈ d.M Pt δ
 
 /-- **The two-stage scope, readable**: a topologically ordered program, partitioned into proof blocks (`Partitions`),
 each within a block of the replay partition, whose blocks are disjoint, and a well-formed two-stage design. -/
@@ -219,8 +222,9 @@ structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
 
 /-! ## 6. The claims -/
 
-/-- **KS at the footprint**, on the statements in scope, at every `δ ≥ 0`: `Pr[acc ∧ footprint ∉ M̄_δ] ≤ δ + ε_ks +
-ε_bind`, at `Compiled`'s extractor, `κ_δ`, `γ` and `ε_bind = Pr[B_ext]` (`Compiled.KS` at `RTwo`). -/
+/-- **KS at the footprint**, on the statements in scope, at every `δ ≥ 0`: `Pr[acc ∧ no interiors put the footprint in
+M̄_δ] ≤ δ + ε_ks + ε_bind`, at `Compiled`'s extractor, `κ_δ`, `γ` and `ε_bind = Pr[B_ext]` (`Compiled.KS` at
+`RTwo`). -/
 def KS (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop :=
   ∀ δ : ℝ, 0 ≤ δ →
     KSLinOn H L.V L.Scope (RTwo H L.commit L.parse L.partition L.two δ) L.E (L.κ δ) L.γ (fun _ => 1) (Bext H L.V L.E)

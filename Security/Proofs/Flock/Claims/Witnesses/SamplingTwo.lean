@@ -15,7 +15,7 @@ its conclusion fails. Each is at coins `Bool` and the hash SHA-512 (`FlockDeploy
 
 * `sksLTwo`: `sksL` (accepts after one round, samples nothing, opens nothing) with the two-stage design `toyTwo` (its
   replay partition the proof-block partition `{0}`, its first stage `all`, `k = 1`). Its one proof block is incorrect at
-  any interior values, so its footprint is at least `1`, the cell's escape `0` and `P̄_a = 0`: no witness is in the
+  any interior values, so its footprint is at least `1` at every interior, the cell's escape `0` and `P̄_a = 0`: no witness is in the
   relation at `δ = 0`, and `CompiledTwo.KS` fails (`compiledTwoKS_fails`).
 * `twoLTwo`: `twoL` (both proof blocks of `twoStmt` sampled, block `u`'s session at round `u`) with the design `twoTwo`
   (replay blocks the proof blocks `{0}`, `{1}`, first stage `all`, `k = 1`), sampling both replay blocks. It meets
@@ -62,9 +62,9 @@ theorem toy_wrongIn (H : Msg → Msg) (w : Claims.Sampling.Wit) (ι : ℕ → Bo
   rw [rejCm_val] at hb
   cases hb
 
-theorem toy_footprint (H : Msg → Msg) (w : Claims.Sampling.Wit) :
-    1 ≤ footprint H rejCm toyStmt toyPart toyPart w 0 0 :=
-  le_ciInf fun ι => Finset.card_pos.2 ⟨0, toy_wrongIn H w ι⟩
+theorem toy_footprint (H : Msg → Msg) (w : Claims.Sampling.Wit) (ι : ℕ → ℕ → Bool) :
+    1 ≤ footprint H rejCm toyStmt toyPart toyPart w ι 0 0 :=
+  Finset.card_pos.2 ⟨0, toy_wrongIn H w (ι 0)⟩
 
 theorem escCell_one_one {m : ℕ} (hm : 1 ≤ m) : escCell 1 1 m = 0 := by
   simp [escCell, Nat.sub_eq_zero_of_le hm]
@@ -101,12 +101,12 @@ theorem toyTwo_Pa {fp : ℕ → ℕ → ℕ} (h : 1 ≤ fp 0 0) : toyTwo.Pa toyP
 theorem sksLTwo_noR {Coin : Type} (H : Msg → Msg) (x : Msg) (w : Claims.Sampling.Wit) :
     ¬ Claims.Sampling.RTwo H (sksLTwo Coin).commit (sksLTwo Coin).parse (sksLTwo Coin).partition (sksLTwo Coin).two 0
       x w := by
-  rintro ⟨s, Pt, d, hs, hPt, hd, hM⟩
+  rintro ⟨s, Pt, d, hs, hPt, hd, ι, hM⟩
   obtain rfl : s = toyStmt := (Option.some.inj hs).symm
   obtain rfl : Pt = toyPart := (Option.some.inj hPt).symm
   obtain rfl : d = toyTwo := (Option.some.inj hd).symm
-  have hlt : (0 : ℝ) < toyTwo.Pa toyPart (footprint H rejCm toyStmt toyPart toyPart w) := hM
-  rw [toyTwo_Pa (toy_footprint H w)] at hlt
+  have hlt : (0 : ℝ) < toyTwo.Pa toyPart (footprint H rejCm toyStmt toyPart toyPart w ι) := hM
+  rw [toyTwo_Pa (toy_footprint H w ι)] at hlt
   exact lt_irrefl _ hlt
 
 /-- **`CompiledTwo.KS` fails** at `sksLTwo`, at `δ = 0`. -/
