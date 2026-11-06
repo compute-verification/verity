@@ -55,7 +55,7 @@ def test_the_count_is_ncicheck_counts_on_the_session_program(small):
     (cls,) = pub.classes
     fn, m, steps = BC.session(small)
     assert (m, steps, cls.slots, cls.steps, private["total"], private["windows"]) == (2, 3, 2, 3, 2, 1)
-    assert cls.definition == PV2.definition_digest(fn) and not cls.unpriced and private["blocks"] == {cls.definition: 2}
+    assert cls.definition == PV2.id_digest(fn) and not cls.unpriced and private["blocks"] == {cls.definition: 2}
     text = codec.canonical_json(codec.encode_program(population_program(fn, m))).decode()
     key = codec.descriptor_id(fn)
     for n, verdict in ((2, "accept"), (1, "refuse")):

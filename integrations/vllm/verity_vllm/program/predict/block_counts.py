@@ -7,7 +7,7 @@ one session, since no request is carried across windows. A block holds, of each 
 the template's inference entries, the template's units over the window's m slots. As a Definition the block is the
 window's session (`session`): ``TemplatePopulations_v1`` of each template at its units a slot, one specialized Definition
 a window circuit, and a window is m activations of it. A block class is that Definition, which the report names by its
-SHA-512 (`partition_v2.definition_digest`).
+SHA-512 (`partition_v2.id_digest`).
 
 **Gates** are counted as `NciCheck.Count` counts a block Definition's (``boolGates``,
 `verity/core/protocols/network/nci/lean/NciCheck/Count.lean`): once per specialized Definition, callees first, a
@@ -165,7 +165,7 @@ class Day:
         held = (rec, IF.held_params(self.pins, roots))
         if held not in self._fresh:
             self._fresh[held] = fresh(doc, m, self.pins, roots)
-        d = PV2.definition_digest(fn)
+        d = PV2.id_digest(fn)
         c = self._classes.setdefault(d, {"fn": fn, "slots": m, "steps": steps, "fresh": 0, "count": 0})
         c["fresh"], c["count"] = max(c["fresh"], self._fresh[held]), c["count"] + m
         self._windows += 1
