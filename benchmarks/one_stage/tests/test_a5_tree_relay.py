@@ -196,8 +196,9 @@ def test_a_tie_failing_after_the_sessions_refuses_the_audit_and_writes_its_summa
     """a5's tie runs once the member's server has proved through the relay and the session has closed
     (`tie_after_sessions`). On the registration the coins were released after it holds, and each of its negatives is
     refused (`record_negatives`). On a registration of another root it fails by name, and the audit is refused
-    (`refuse_after_sessions`): only its summary is written, naming the check, and no audit record, case, release or
-    negatives file, so nothing built from the files that registration's roots completed leaves the auditor."""
+    (`refuse_after_sessions`): only its summary is written, naming the check, with no negatives, and no audit record,
+    case, release or negatives file, so nothing decided on that registration's roots, or built from the files they
+    completed, leaves the auditor."""
     rec = {"window": {"kind": "served", "run": RS.ROOT, "row": 0},
            "roots": [{"port": "x", "root": "01" * 64}, {"port": "out", "root": "02" * 64}]}
     moved = {**rec, "roots": [{"port": "x", "root": "03" * 64}, rec["roots"][1]]}
@@ -230,7 +231,7 @@ def test_a_tie_failing_after_the_sessions_refuses_the_audit_and_writes_its_summa
     out.mkdir()
     checks = {"registration": {"ok": True, "codes": []}, "record": failed}
     population = sum(RS.SILU_MUL)
-    summary, ok = a5.refuse_after_sessions(out, {"population": population}, checks, {})
+    summary, ok = a5.refuse_after_sessions(out, {"population": population}, checks)
     assert ok is False and sorted(p.name for p in out.iterdir()) == ["summary.json"]
     assert json.loads((out / "summary.json").read_text()) == {"population": population, "checks": checks,
                                                                "negatives": {}} == summary
