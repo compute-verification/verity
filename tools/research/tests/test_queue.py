@@ -390,9 +390,9 @@ def test_a_pr_the_last_sync_left_out_is_tried_above_the_rest_so_a_sync_with_noth
     first = (3, 1, 4)
     members, entries = world.queue(first=first).sync()
     assert [m.pr for m in members] == [2, 1] and entries[3].state == "refused" and entries[4].state == "waiting"
-    for _ in range(2):
+    for reused in ("", ", merges reused for 1"):        # #3 tried above the rest, then that conflict taken from its record
         again, entries = world.queue(first=first).sync()
-        assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 2, merged 0")
+        assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith(f"kept 2, merged 0{reused}")
         assert entries[3].state == "refused" and entries[4].state == "waiting"
     world.gh.put(3, world.change({"c.txt": "3 on main\n"}))                                       # fixed: first again
     members, entries = world.queue(first=first).sync()
@@ -455,7 +455,7 @@ def test_a_sync_by_merge_tree_builds_the_next_and_refusals_the_worktree_merges_b
         files = _git(old.workdir, "diff", "--name-only", "--diff-filter=U").split()
         Q._git(old.workdir, "merge", "--abort", check=False)
         _git(old.workdir, "reset", "-q", "--hard", tip)
-        return None, old._unmerged(r, files, members)
+        return None, old._unmerged((r.stderr or r.stdout).strip()[-200:], files, members)
 
     monkeypatch.setattr(old, "_merge", in_worktree)
 
@@ -1256,11 +1256,127 @@ def test_a_member_merged_again_onto_the_tree_it_was_judged_on_takes_its_verdict_
     assert [_git(world.origin, "rev-parse", f"{m.commit}^{{tree}}") for m in lifted[2:]] == [
         _git(world.origin, "rev-parse", f"{m.commit}^{{tree}}") for m in members[2:]]
     assert entries[5].state == "refused" and entries[5].why == _gate_says(main, "touches bad.txt", merged=True)
-    assert world.logs[-1].endswith("kept 0, merged 4, gates' verdicts reused for 3"), world.logs[-1]
+    assert world.logs[-1].endswith("kept 0, merged 4, merges reused for 3, gates' verdicts reused for 3"), world.logs[-1]
     judged.clear()
     _move_main(world, {"x.txt": "x\n"})
     q.lift = []
     assert [m.pr for m in q.sync()[0]] == [1, 2, 3, 4] and judged == [1, 2, 3, 4, 5]
+
+
+def _merge_trees(monkeypatch) -> list[str]:
+    """The head of each `git merge-tree` the queue runs, from now on."""
+    real, heads = Q._git, []
+
+    def git(repo, *args, **kw):
+        if "merge-tree" in args:
+            heads.append(args[-1])
+        return real(repo, *args, **kw)
+
+    monkeypatch.setattr(Q, "_git", git)
+    return heads
+
+
+def _trees(world: World, members) -> list[str]:
+    return [_git(world.origin, "rev-parse", f"{m.commit}^{{tree}}") for m in members]
+
+
+def test_a_member_merged_again_onto_the_same_tree_takes_its_recorded_merge_and_so_does_a_rebuild_on_a_moved_base(
+        world, monkeypatch):
+    """Each merge costs `git merge-tree` with the merge drivers, the port's codemod and the lock check: tens of seconds on
+    drive's control pod, and a rebuild of `next` merges every member again.  A merge is recorded under the parent's tree (not
+    its commit), the head, their merge bases and what every merge runs with, so a later sync (a new process) merging the same
+    head onto the same tree runs no `git merge-tree` and no lock check, and neither does a rebuild on a `main` moved to a
+    commit with the same tree; the merge commits hold the same trees, on the new base."""
+    world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    world.gh.put(2, h2 := world.change({"b.txt": "2\n"}))
+    members, _ = world.queue().sync()
+    calls, drops = _merge_trees(monkeypatch), []
+    real = Q.lock_drops
+    monkeypatch.setattr(Q, "lock_drops", lambda *a: drops.append(a[2]) or real(*a))
+    _git(world.origin, "update-ref", "-d", "refs/heads/next")
+    again, _ = world.queue().sync()
+    assert calls == [] and drops == [] and _trees(world, again) == _trees(world, members)
+    assert world.logs[-1].endswith("kept 0, merged 2, merges reused for 2"), world.logs[-1]
+    main = _git(world.origin, "rev-parse", "refs/heads/main")
+    moved = _git(world.origin, "commit-tree", f"{main}^{{tree}}", "-p", main, "-m", "main moved, its tree as it was")
+    _git(world.origin, "update-ref", "refs/heads/main", moved)
+    rebuilt, _ = world.queue().sync()
+    assert [(m.pr, m.head) for m in rebuilt] == [(1, h1), (2, h2)] and calls == [] and drops == []
+    assert _trees(world, rebuilt) == _trees(world, members) and _git(world.origin, "rev-parse", f"{rebuilt[0].commit}^1") == moved
+
+
+def test_a_merge_is_made_again_when_its_head_its_parents_tree_or_the_drivers_change_and_judged_again_when_the_gates_do(
+        world, monkeypatch):
+    """A merge record stands only for what it read: a new head, a parent tree that changed (`main` moved under `next`) or a
+    merge driver's command each merge again; a merge taken from its record with the gates changed is judged again, as the
+    gates' verdicts are kept only under `main` and its gates."""
+    from research import clone
+
+    _move_main(world, {**GATED, "gates/h.py": "import sys\nsys.exit(0)\n"})
+    real, judged = Q.gate_refusal, []
+    monkeypatch.setattr(Q, "gate_refusal", lambda repo, m, merge, gates, onto: judged.append(merge) or real(
+        repo, m, merge, gates, onto=onto))
+    world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.queue().sync()
+    calls = _merge_trees(monkeypatch)
+    world.gh.put(2, h2 := world.change({"b.txt": "2 again\n"}))
+    assert [m.pr for m in world.queue().sync()[0]] == [1, 2] and calls == [h2]
+    calls.clear()
+    _move_main(world, {"x.txt": "x\n"})
+    assert [m.pr for m in world.queue().sync()[0]] == [1, 2] and calls == [h1, h2]
+    calls.clear()
+    monkeypatch.setitem(clone.RECORD_DRIVER, "merge.lean-audit.driver", clone.RECORD_DRIVER["merge.lean-audit.driver"] + " ")
+    _git(world.origin, "update-ref", "-d", "refs/heads/next")
+    assert [m.pr for m in world.queue().sync()[0]] == [1, 2] and calls == [h1, h2]
+    calls.clear()
+    judged.clear()
+    _git(world.origin, "update-ref", "-d", "refs/heads/next")
+    assert [m.pr for m in world.queue().sync()[0]] == [1, 2] and calls == [] and judged == []
+    monkeypatch.setattr(Q, "gates_at", lambda repo, ref: ("gates/g.py", "gates/h.py"))
+    _git(world.origin, "update-ref", "-d", "refs/heads/next")
+    members, _ = world.queue().sync()
+    assert [m.pr for m in members] == [1, 2] and calls == [] and judged == [m.commit for m in members]
+
+
+def test_a_recorded_conflict_stays_a_conflict_onto_its_tree_and_the_member_merges_afresh_onto_another(world, monkeypatch):
+    """A conflict is recorded as one, never as a clean merge: the PR left out is tried again above the rest each sync, and
+    onto the same tree it is refused as before without `git merge-tree`; once the member it conflicts with leaves, its merge
+    onto the new tree is made afresh, and it merges."""
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, h2 := world.change({"a.txt": "2\n"}))
+    members, entries = world.queue().sync()
+    why = "conflicts with `next` in a.txt (touched by #1)"
+    assert [m.pr for m in members] == [1] and entries[2].why == why
+    calls = _merge_trees(monkeypatch)
+    again, entries = world.queue().sync()
+    assert again == members and entries[2].state == "refused" and entries[2].why == why and calls == []
+    assert world.logs[-1].endswith("kept 1, merged 0, merges reused for 1"), world.logs[-1]
+    del world.gh.prs[1]
+    members, entries = world.queue().sync()
+    assert [m.pr for m in members] == [2] and calls == [h2]
+    assert _git(world.origin, "show", "refs/heads/next:a.txt") == "2"
+
+
+def test_a_merge_record_whose_tree_the_clone_lacks_is_merged_again_and_the_state_keeps_the_newest_records(world, monkeypatch):
+    """A record names a tree in drive's clone, which a fresh clone or a prune drops: a record whose tree is gone merges again.
+    The state keeps at most `MERGES` records, those the last syncs used."""
+    world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    world.gh.put(2, h2 := world.change({"b.txt": "2\n"}))
+    q = world.queue()
+    members, _ = q.sync()
+    state = q.load_state()
+    for rec in state["merges"]["of"].values():
+        rec["tree"] = "0" * 40
+    q.save_state(state)
+    calls = _merge_trees(monkeypatch)
+    _git(world.origin, "update-ref", "-d", "refs/heads/next")
+    again, _ = world.queue().sync()
+    assert calls == [h1, h2] and _trees(world, again) == _trees(world, members)
+    monkeypatch.setattr(Q, "MERGES", 1)
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    world.queue().sync()
+    assert len(q.load_state()["merges"]["of"]) == 1
 
 
 #: the Markdown caps' landing gate and the caps it reads at `main`, committed into the origin as they are in this checkout

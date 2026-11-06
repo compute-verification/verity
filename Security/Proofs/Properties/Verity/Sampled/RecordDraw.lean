@@ -13,19 +13,17 @@ import all Init.Data.Ord.String
 Clause (i) of `MovesOf`: the record v2 reads in an accepted play decodes (`Exec.recordDraw`) to the session's draw file
 (`Live.dj`) at the proof blocks the play's sample selects.
 
-* **v2's refusal** (`DrawHeld`): wherever composite `k` accepted what the prover sent as a `same` composition
-  (`Verity.SameAccepts`) and v2 drew `units` under the law `L` over `n` units there (`Drew`), the units are ascending
-  below `n` (`unitsAscending`) and the record's `unit_draw` prints as `UnitDraw.toJson ⟨L, n, units, #[]⟩` does
-  (`recordDrawn`). It is a `Prop` about v2's code, taken as a hypothesis.
+* **v2's hold** (`DrawHeld`): wherever composite `k` accepted what the prover sent as a `same` composition
+  (`Verity.SameAccepts`) and v2 drew `units` over `n` units there (`Drew`), the units are ascending below `n`
+  (`unitsAscending`) and the record's `unit_draw` is the subset draw of those units,
+  `UnitDraw.toJson ⟨.subset units.size, n, units, #[]⟩` (`recordDrawn`): v2 accepts only a subset record draw
+  (`recordDraw_subset`), whatever law it drew by. `Sampled/Held.lean` proves it for every composite (`drawHeld`), from
+  the record draw's population and units (`drawHeld_of`).
 * **The record half** (`recordDraw_of_drew`): where `DrawHeld` holds, `k` accepted, v2 drew `units`, and the session's
-  law and population are `L` and `n`, the record decodes to the session's draw file at the proof blocks `units` names,
-  at a session whose draw files `norm` fixes. Both are rebuilt values (`Flock.norm`) that `canonUtf8` prints alike, so they
-  are equal (`eq_of_canonUtf8`): a rebuilt value is well formed (`FlockDeploy.wf_norm`), so its objects hold their keys
-  in order (`sortedKeys_of_wf`), and sorted values that print alike are equivalent
-  (`Properties.Challenger.CanonRead.canon_inj`). The draw file at the units' proof blocks is
-  `UnitDraw.toJson ⟨L, n, units, #[]⟩` (`drawOf_filter`).
-* **The draw files `norm` fixes** (`norm_printedDraw`): the printed draw file at every law but the work law. A work
-  stratum's object (`WorkStratum.toJson`) lists its fields out of key order, so its tree isn't `norm`'s.
+  law and population are v2's, the record decodes to the session's draw file, the subset print of `kd` units
+  (`Live.dj`), at the proof blocks `units` names: v2 drew `kd` units (`Flock.Bridge.drawUnits_size`), and the draw file
+  at the units' proof blocks is `UnitDraw.toJson ⟨.subset kd, n, units, #[]⟩` (`drawOf_filter`).
+* **`norm` fixes a subset draw's file** (`norm_toJson_subset`), as `DrawHeld`'s proof reads it.
 * **v2's coins fit `MAX_COINS` frames** (`coins_size_le`): v2's evidence holds its segment's openings within `LIMITS`
   (`Properties.Challenger.Limits.evidenceOf_within`), and the coins v2 reads are one frame per opening
   (`challengerStream_ok`).
@@ -706,21 +704,19 @@ def unitsAscending (n : ℕ) (units : Array ℕ) : Bool :=
   (List.range units.size).all fun i => units[i]! < n && (i == 0 || units[i - 1]! < units[i]!)
 
 /-- **The record's draw is the one v2 drew**: the units are ascending below `n`, and the record's `unit_draw`
-(`Flock.Witness.recordDraw`) prints as the draw of `units` under the law `L` over `n` units does. -/
-def recordDrawn (L : Flock.Draw.Law) (n : ℕ) (units : Array ℕ) (record : String) : Bool :=
-  unitsAscending n units && match Flock.Witness.recordDraw record with
-    | some r => match Flock.canonUtf8 r, Flock.canonUtf8 (Flock.Draw.UnitDraw.toJson ⟨L, n, units, #[]⟩) with
-      | .ok a, .ok b => a == b
-      | _, _ => false
-    | none => false
+(`Flock.Witness.recordDraw`) is the draw of `units` under the law `L` over `n` units. -/
+def recordDrawn (L : Flock.Draw.Law) (n : ℕ) (units : Array ℕ) (record : String) : Prop :=
+  unitsAscending n units = true ∧
+    Flock.Witness.recordDraw record = some (Flock.Draw.UnitDraw.toJson ⟨L, n, units, #[]⟩)
 
 /-- **v2 holds the record's draw to its own** in what composite `k` accepts: wherever `k` accepted what the prover sent
-as a `same` composition and v2 drew `units` under the law `L` over `n` units there (`Drew`), the record v2 reads there
-is drawn so (`recordDrawn`). Without the acceptance, the record `sentRecord` finds by id can be another entry's than
-the case `Drew` reads in order. -/
+as a `same` composition and v2 drew `units` over `n` units there (`Drew`, under the verifier's law), the record v2
+reads there is the `.subset` print of those units (`recordDrawn` at `.subset units.size`), the member's share of the
+window's draw; the bound is the verifier's law's, from v1's window check. Without the acceptance, the record
+`sentRecord` finds by id can be another entry's than the case `Drew` reads in order. -/
 def DrawHeld (k : Verity.Registration.Composite) : Prop :=
   ∀ s dr L n ξ units record, Verity.SameAccepts k s → Drew k s dr L n ξ units → sentRecord s = some record →
-    recordDrawn L n units record = true
+    recordDrawn (.subset units.size) n units record
 
 theorem exec_recordDraw (record : String) :
     FlockSoundness.Discharge.Exec.recordDraw record = Flock.Witness.recordDraw record :=
@@ -790,57 +786,7 @@ theorem sortedKeys_of_wf : ∀ j : Json, Claims.Json.Wf j → _root_.SampledProo
         rw [Std.TreeMap.Raw.get?_eq_getElem?]
         exact (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).1 hp'
 
-/-- **Two values `norm` fixes that `canonUtf8` prints alike are equal.** -/
-theorem eq_of_canonUtf8 {a b : Json} {s : String} (ha : Flock.norm a = a) (hb : Flock.norm b = b)
-    (hsa : Flock.canonUtf8 a = .ok s) (hsb : Flock.canonUtf8 b = .ok s) : a = b := by
-  have wa : Claims.Json.Wf a := by
-    rw [← ha]
-    exact FlockDeploy.wf_norm a
-  have wb : Claims.Json.Wf b := by
-    rw [← hb]
-    exact FlockDeploy.wf_norm b
-  exact FlockDeploy.eq_of_jsonEquiv_norm ha hb
-    (Properties.Challenger.CanonRead.canon_inj (sortedKeys_of_wf a wa) (sortedKeys_of_wf b wb) hsa hsb)
-
-/-- **The record's draw is the session's draw file at v2's units**: where v2 holds the record's draw to its own
-(`DrawHeld`), composite `k` accepted what the prover sent, v2 drew `units` under the law `L` over `n` units there, and
-the session's law and population are `L` and `n`, the record v2 reads decodes to the session's draw file at the proof
-blocks `units` names, at a session whose draw files `norm` fixes. -/
-theorem recordDraw_of_drew {k : Verity.Registration.Composite} (hH : DrawHeld k) {s : Verity.Sent} {dr : Draws}
-    {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hS : Verity.SameAccepts k s)
-    (hd : Drew k s dr L n ξ units) (A : Live)
-    (hL : A.law = L) (hn : A.n = n) (hfix : ∀ S, Flock.norm (A.dj S) = A.dj S) {record : String}
-    (hr : sentRecord s = some record) :
-    FlockSoundness.Discharge.Exec.recordDraw record =
-      some (A.dj (Finset.univ.filter fun u : Fin A.n => u.val ∈ units)) := by
-  have h := hH s dr L n ξ units record hS hd hr
-  subst hL hn
-  unfold recordDrawn at h
-  rw [Bool.and_eq_true] at h
-  obtain ⟨hu, h⟩ := h
-  have ht : Flock.Draw.UnitDraw.toJson ⟨A.law, A.n, units, #[]⟩ =
-      A.dj (Finset.univ.filter fun u : Fin A.n => u.val ∈ units) := by
-    show _ = (FlockSoundness.Discharge.ZkLink.drawOf A.law A.n _).toJson
-    rw [drawOf_filter hu]
-  rw [ht] at h
-  rw [exec_recordDraw]
-  cases hw : Flock.Witness.recordDraw record with
-  | none => simp [hw] at h
-  | some r =>
-    have hnr : Flock.norm r = r := Claims.Bridge.Custody.recordDraw_norm (record := record) (by
-      rw [exec_recordDraw]
-      exact hw)
-    cases ha : Flock.canonUtf8 r with
-    | error _ => simp [hw, ha] at h
-    | ok a =>
-      cases hb : Flock.canonUtf8 (A.dj (Finset.univ.filter fun u : Fin A.n => u.val ∈ units)) with
-      | error _ => simp [hw, ha, hb] at h
-      | ok b =>
-        simp only [hw, ha, hb, beq_iff_eq] at h
-        subst h
-        exact congrArg some (eq_of_canonUtf8 hnr (hfix _) ha hb)
-
-/-! ## The draw files `norm` fixes -/
+/-! ## `norm` fixes a subset draw's file -/
 
 theorem norm_arr_of {a : Array Json} (h : ∀ x ∈ a, Flock.norm x = x) : Flock.norm (.arr a) = .arr a := by
   rw [FlockDeploy.norm_arr]
@@ -853,62 +799,37 @@ theorem norm_nats (a : Array ℕ) :
     obtain ⟨y, -, rfl⟩ := Array.mem_map.1 hx
     rfl
 
-theorem norm_stratum (s : Flock.Draw.Stratum) : Flock.norm s.toJson = s.toJson := by
-  have h : ∀ a b c : Json, Flock.norm (Json.mkObj [("template", a), ("units", b), ("k", c)]) =
-      Json.mkObj [("template", Flock.norm a), ("units", Flock.norm b), ("k", Flock.norm c)] :=
-    fun _ _ _ => rfl
-  show Flock.norm (Json.mkObj [("template", Json.str s.template),
-    ("units", Json.arr (s.units.map fun (lo, hi) => Json.arr #[Lean.toJson lo, Lean.toJson hi])),
-    ("k", Lean.toJson s.k)]) = _
-  rw [h]
-  congr 4
-  refine norm_arr_of fun x hx => ?_
-  obtain ⟨⟨lo, hi⟩, -, rfl⟩ := Array.mem_map.1 hx
-  exact norm_arr_of fun y hy => by
-    simp only [List.mem_toArray, List.mem_cons, List.not_mem_nil, or_false] at hy
-    rcases hy with rfl | rfl <;> rfl
+/-- **`norm` fixes a subset draw's file.** -/
+theorem norm_toJson_subset (k pop : ℕ) (units cl : Array ℕ) :
+    Flock.norm (Flock.Draw.UnitDraw.toJson ⟨.subset k, pop, units, cl⟩) =
+      Flock.Draw.UnitDraw.toJson ⟨.subset k, pop, units, cl⟩ := by
+  have h : ∀ a b c d : Json, Flock.norm (Json.mkObj [("law", a), ("population", b), ("k", c), ("units", d)]) =
+      Json.mkObj [("law", Flock.norm a), ("population", Flock.norm b), ("k", Flock.norm c), ("units", Flock.norm d)] :=
+    fun _ _ _ _ => rfl
+  show Flock.norm (Json.mkObj [("law", "subset"), ("population", Lean.toJson pop), ("k", Lean.toJson k),
+    ("units", .arr (units.map fun x => Lean.toJson x))]) = _
+  rw [h, norm_nats]
+  rfl
 
-/-- **`norm` fixes the printed draw file at every law but the work law.** -/
-theorem norm_printedDraw {n : ℕ} {law : Flock.Draw.Law} (hw : ∀ K ws, law ≠ .work K ws) (S : Finset (Fin n)) :
-    Flock.norm (printedDraw law S) = printedDraw law S := by
-  have hu := norm_nats ((((S.image Fin.val).sort (· ≤ ·)).toArray))
-  cases law with
-  | subset k =>
-    have h : ∀ a b c d : Json, Flock.norm (Json.mkObj [("law", a), ("population", b), ("k", c), ("units", d)]) =
-        Json.mkObj [("law", Flock.norm a), ("population", Flock.norm b), ("k", Flock.norm c),
-          ("units", Flock.norm d)] :=
-      fun _ _ _ _ => rfl
-    show Flock.norm (Json.mkObj [("law", "subset"), ("population", Lean.toJson n), ("k", Lean.toJson k),
-      ("units", .arr (((S.image Fin.val).sort (· ≤ ·)).toArray.map fun x => Lean.toJson x))]) = _
-    rw [h, hu]
-    rfl
-  | bernoulli a b =>
-    have h : ∀ w x y z : Json, Flock.norm (Json.mkObj [("law", w), ("population", x), ("p", y), ("units", z)]) =
-        Json.mkObj [("law", Flock.norm w), ("population", Flock.norm x), ("p", Flock.norm y),
-          ("units", Flock.norm z)] :=
-      fun _ _ _ _ => rfl
-    show Flock.norm (Json.mkObj [("law", "bernoulli"), ("population", Lean.toJson n), ("p", Json.str s!"{a}/{b}"),
-      ("units", .arr (((S.image Fin.val).sort (· ≤ ·)).toArray.map fun x => Lean.toJson x))]) = _
-    rw [h, hu]
-    rfl
-  | stratified K St =>
-    have h : ∀ a b c d e : Json,
-        Flock.norm (Json.mkObj [("law", a), ("population", b), ("k", c), ("strata", d), ("units", e)]) =
-          Json.mkObj [("law", Flock.norm a), ("population", Flock.norm b), ("k", Flock.norm c),
-            ("strata", Flock.norm d), ("units", Flock.norm e)] :=
-      fun _ _ _ _ _ => rfl
-    show Flock.norm (Json.mkObj [("law", "stratified"), ("population", Lean.toJson n), ("k", Lean.toJson K),
-      ("strata", Json.arr (St.map (·.toJson))),
-      ("units", .arr (((S.image Fin.val).sort (· ≤ ·)).toArray.map fun x => Lean.toJson x))]) = _
-    rw [h, hu, norm_arr_of fun x hx => by
-      obtain ⟨s, -, rfl⟩ := Array.mem_map.1 hx
-      exact norm_stratum s]
-    rfl
-  | work K ws => exact absurd rfl (hw K ws)
-
-/-- **`norm` fixes the session's draw files** at a session whose law isn't the work law. -/
-theorem Live.norm_dj (A : Live) (hw : ∀ K ws, A.law ≠ .work K ws) : ∀ S, Flock.norm (A.dj S) = A.dj S :=
-  norm_printedDraw hw
+/-- **The record's draw is the session's draw file at v2's units**: where v2 holds the record's draw to its own
+(`DrawHeld`), composite `k` accepted what the prover sent, v2 drew `units` under the law `L` over `n` units there, and
+the session's law and population are `L` and `n`, the record v2 reads decodes to the session's draw file at the proof
+blocks `units` names. v2 drew the session's `kd` units (`Flock.Bridge.drawUnits_size`), so the record's subset draw
+is the session's. -/
+theorem recordDraw_of_drew {k : Verity.Registration.Composite} (hH : DrawHeld k) {s : Verity.Sent} {dr : Draws}
+    {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hS : Verity.SameAccepts k s)
+    (hd : Drew k s dr L n ξ units) (A : Live)
+    (hL : A.law = L) (hn : A.n = n) {record : String}
+    (hr : sentRecord s = some record) :
+    FlockSoundness.Discharge.Exec.recordDraw record =
+      some (A.dj (Finset.univ.filter fun u : Fin A.n => u.val ∈ units)) := by
+  obtain ⟨hu, h⟩ := hH s dr L n ξ units record hS hd hr
+  obtain ⟨_, _, _, _, _, _, -, -, -, -, _, hdu⟩ := hd
+  subst hL hn
+  have hk : units.size = A.kd := Flock.Bridge.drawUnits_size A.hlaw hdu
+  rw [exec_recordDraw, h]
+  show _ = some (FlockSoundness.Discharge.ZkLink.drawOf (.subset A.kd) A.n _).toJson
+  rw [drawOf_filter hu, hk]
 
 /-! ## v2's coins fit `MAX_COINS` frames -/
 
@@ -963,8 +884,7 @@ verifier, whose sampled verdict accepts, whose log v2 read is the device's, and 
 bytes are the coins `κ`. Where the play holds more of the family's coins than `κ`, v2's still fit `κ`'s
 (`coins_size_le`, `hm`). -/
 theorem recordDraw_of_coins {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live} {θ : ByteArray}
-    {F : Array ByteArray} (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) (hH : DrawHeld k)
-    (hfix : ∀ S, Flock.norm (A.dj S) = A.dj S) {m : ℕ} (hm : _root_.SampledProofs.Challenger.MAX_COINS ≤ m)
+    {F : Array ByteArray} (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) (hH : DrawHeld k) {m : ℕ} (hm : _root_.SampledProofs.Challenger.MAX_COINS ≤ m)
     {κ : Fin m → Fin 512 → Bool} {ω : A.Ω}
     (hsrc : _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
       _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 κ 0))
@@ -994,7 +914,7 @@ theorem recordDraw_of_coins {V : Vocab d α} {k : Verity.Registration.Composite}
       rw [length_bitsOf, length_fillCoins]
       omega
   rw [draw_of_drew hd A ω hL hn hpre]
-  exact recordDraw_of_drew hH hv.2.1 hd A hL hn hfix hr
+  exact recordDraw_of_drew hH hv.2.1 hd A hL hn hr
 
 /-! ## The record's draw from the sample-coupled first stop -/
 
@@ -1026,7 +946,6 @@ theorem recordDraw_firstStop (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} 
     (hrd : PicksOpenings rd) (hm : _root_.SampledProofs.Challenger.MAX_COINS ≤ m)
     (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
       _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 (κ ω) 0))
-    (hfix : ∀ S, Flock.norm (A.dj S) = A.dj S)
     (ω : (A.extend (sampleMap e V θ F c A rd σ label after κ).widening).L.Ω) {x : Verity.Exchange}
     (hreach : PlayReaches (firstStop V θ F c A rd σ (sampleMap e V θ F c A rd σ label after κ) ω).g'
       (firstStop V θ F c A rd σ (sampleMap e V θ F c A rd σ label after κ) ω).s' x)
@@ -1049,6 +968,6 @@ theorem recordDraw_firstStop (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} 
     rw [hlog] at hP ⊢
     rw [freshCoins_of_stopTail hP htail]
     exact hc
-  exact recordDraw_of_coins hA ht hR hH hfix hm (hsrc ω.1) hθ hv hl hN hc' hrec
+  exact recordDraw_of_coins hA ht hR hH hm (hsrc ω.1) hθ hv hl hN hc' hrec
 
 end Verity.Sampled
