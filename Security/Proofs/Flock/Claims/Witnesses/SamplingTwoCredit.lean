@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Flock.SamplingBoundary
+public import Definitions.Claims.Sampling
+public import Definitions.Claims.SamplingTwo
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoWork
+import Proofs.Flock.SamplingBoundary
+import Proofs.Flock.SamplingGeneric.Two
+import Proofs.Flock.SamplingGeneric.TwoCount
 
 /-!
 # Serve-time interiors recover compute credit, at the proof-block grain
