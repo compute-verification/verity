@@ -50,7 +50,11 @@ from pathlib import Path
 from typing import Callable
 from zoneinfo import ZoneInfo
 
-from research.pods.nebius import settings
+try:
+    from research.pods.nebius import settings
+except ModuleNotFoundError:     # run by path with a bare python3.12 (cloud_watch.toml's instances_command): this file's own tree
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from research.pods.nebius import settings
 
 HERE = Path(__file__).resolve().parent
 FLEET_DIR = Path(os.environ.get("FLEET_DIR", str(Path.home() / ".research" / "fleet")))

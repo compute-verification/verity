@@ -2,7 +2,11 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 from research.pods.nebius import fleet as F
 
@@ -312,3 +316,11 @@ def test_an_unreadable_archive_state_is_the_passes_error_and_nothing_is_put(tmp_
     (tmp_path / "archived.json").write_text("{not json")
     why = F.archive(now, put=lambda p: (_ for _ in ()).throw(AssertionError("an unreadable state puts nothing")))
     assert why.startswith("archived.json unreadable (JSONDecodeError") and why.endswith("nothing archived until it is fixed")
+
+
+def test_fleet_runs_by_path_with_no_research_importable(tmp_path):
+    """cloud_watch.toml runs `python3.12 .../fleet.py instances` with no PYTHONPATH, where `research` isn't installed: a top-level
+    `from research...` import failed there with ModuleNotFoundError. -S keeps the venv's installed `research` out of the run."""
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    p = subprocess.run([sys.executable, "-S", str(Path(F.__file__)), "--help"], capture_output=True, text=True, env=env, cwd=tmp_path)
+    assert p.returncode == 0 and "instances" in p.stdout, p.stderr[-500:]
