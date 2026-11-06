@@ -310,11 +310,17 @@ def test_the_deleted_train_flags_parse_and_are_ignored_with_a_note(world, driven
 
 
 def test_the_priority_file_reaches_the_ticks_queue_and_is_for_sync_and_drive_only(world, monkeypatch, capsys):
-    """`--priority-file PATH` is drive's priority list, which its queue reads at each sync (`Queue.priority_file`)."""
+    """`--priority-file PATH` is drive's priority list, which its queue reads at each sync (`Queue.priority_file`).  The tick's
+    queue makes no `Preflight`: a ready mark admits the PR."""
     rules = world.tmp / "rules.toml"
     rules.write_text('hold_label = "hold"\nmarked_after = "2026-10-12T06:00:00Z"\n')
     monkeypatch.chdir(world.dev)
     files: list[Path | None] = []
+
+    def preflight(*args, **kwargs):
+        raise AssertionError("drive's queue made a preflight")
+
+    monkeypatch.setattr(Q.Preflight, "__init__", preflight)
 
     class Driver:
         def __init__(self, q, **kw):
