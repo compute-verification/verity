@@ -142,6 +142,10 @@ running check from anywhere without its node.  A SIGTERM
 failed), and a recorded run still writes its result, validation `not_run`, and the pack of the passes its steps stored before
 it, then exits 143: a cancelled check's passes are reused.
 
+After the preflight the C++ models are built once (`prebuild`, its output in `prebuild.log`): a prebuild that fails refuses the
+run, a failed `prebuild` record and no group started, since each step would otherwise compile them untraced the first time it
+ran one.
+
 Then the independent groups run at once, the cores split between the first two (`--cores N`, default the CPUs this process may
 use). Which group a step is in, its order there, a step in another group it waits on, and whether its failure halts the run
 come from `tools/verity/check/ci.toml` (`declaration.py`); this file builds each step's command, and refuses one the declaration
@@ -2431,7 +2435,7 @@ class Reused:
     """The passes a recorded check reuses, packed as `REUSED_PACK` beside `verdicts.tar.gz` (which holds only those its steps
     stored), so one recent check's two packs answer for every part it passed, each entry still naming the run that earned it.
     They are what its plan of its own tree (`plan.py --own`: this run's caches, the gathered pack imported) finds passed, of the
-    entries here before its steps ran (``before``).  The plan runs once the twins are built (`run`'s `PREBUILD`, which no other
+    entries here before its steps ran (``before``).  The plan runs once the twins are built (`run`'s `prebuild`, which no other
     process may import while it compiles them), beside the steps; it runs again once circuit-check ends when it found no task
     list to read circuit-check's targets from.  xz with a dictionary spanning many entries (`verdicts.XZ_FILTERS`): one tree's
     circuit-check entries run past a GB, and pack to a few MB.  `gather_verdicts` never takes it; `plan.py` does, for a check
@@ -2613,8 +2617,32 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
 
 #: vLLM's C++ twin models, compiled on first use: built once before the groups start, so that no step compiles them while
 #: another loads them (a check that compiles mid-run is untraceable, and circuit-check stores none of its results)
-PREBUILD = ("try:\n    from verity.ml.definitions.numerics import twins\nexcept ImportError:\n    twins = None\n"
-            "if twins:\n    twins.preload()\n")
+PREBUILD = "import json\nfrom verity.ml.definitions.numerics import twins\nprint(json.dumps(twins.preload()))\n"
+#: the prebuild's output, in the output directory beside the steps' logs
+PREBUILD_LOG = "prebuild.log"
+
+
+def prebuild(out: Path, steps: Steps) -> dict | None:
+    """`PREBUILD` in a process of its own, its output in `PREBUILD_LOG`: None once it built every model, else its record, a
+    `prebuild` step that failed with its exit status (or was stopped by the run's stop), which refuses the run: no group
+    starts, since each would compile the models the first time it ran one."""
+    t0 = time.monotonic()
+    log = out / PREBUILD_LOG
+    with open(log, "wb") as f:
+        rc = subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), stdout=f, stderr=subprocess.STDOUT).returncode
+    seconds = round(time.monotonic() - t0, 1)
+    if rc == 0:
+        print(f"check: prebuild: the C++ models are built in {seconds} s ({PREBUILD_LOG})", flush=True)
+        return None
+    if steps.stopping or rc == -signal.SIGTERM:
+        return steps.end({"step": "prebuild", "status": "stopped", "rc": rc, "log": PREBUILD_LOG, "seconds": seconds,
+                          "detail": f"stopped: {steps.why or 'killed by a SIGTERM this check did not send'}"})
+    tail = log.read_bytes().decode(errors="replace").splitlines()
+    print("\n".join(f"  prebuild| {line}" for line in tail[-40:]), flush=True)
+    why = (f"refused: the C++ models' prebuild exited {rc} ({(tail[-1:] or ['it wrote nothing'])[0].strip()}; {PREBUILD_LOG}), "
+           "so a step would compile them untraced")
+    print(f"check: prebuild: {why}", flush=True)
+    return steps.end({"step": "prebuild", "status": "failed", "rc": rc, "log": PREBUILD_LOG, "seconds": seconds, "detail": why})
 
 
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
@@ -2652,8 +2680,9 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         pre = preflight()
         steps.live.plan([name for name, _, _ in pre])
         results = [_step(name, argv, cwd, out, cache, steps) for name, argv, cwd in pre]
+        if not steps.stopping and all(r["status"] == "passed" for r in results) and (refused := prebuild(out, steps)):
+            results.append(refused)
         if not steps.stopping and all(r["status"] == "passed" for r in results):
-            subprocess.run([sys.executable, "-c", PREBUILD], cwd=ROOT, env=env(), capture_output=True)
             if reused is not None:
                 reused.start()
             gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache, splits=splits)
