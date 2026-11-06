@@ -17,6 +17,7 @@ public import Definitions.Nci.Dark
 public import Definitions.Nci.Packed
 public import Definitions.Nci.Covering
 public import Definitions.Nci.Capability
+public import Definitions.Nci.Cut
 public import Definitions.Nci.Formalism
 public import Definitions.Nci.Formalism.Instances
 public import Definitions.Pous

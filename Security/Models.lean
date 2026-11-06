@@ -25,6 +25,8 @@ public import Definitions.Nci.Guarantees.Activations
 public import Definitions.Nci.Guarantees.Covering
 public import Definitions.Nci.Guarantees.CoveringTwoCosts
 public import Definitions.Nci.Guarantees.CoveringPriced
+public import Definitions.Nci.Assumptions.Cut
+public import Definitions.Nci.Guarantees.Cut
 public import Definitions.Nci.Guarantees.CoverAdditive
 public import Definitions.Nci.Guarantees.CoverFanOut
 public import Definitions.Nci.Guarantees.CoverFanOutValue
