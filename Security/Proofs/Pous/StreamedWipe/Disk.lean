@@ -1,8 +1,12 @@
 module
 
 public import Definitions.Pous.Guarantees.StreamedWipeDisk
-public import Proofs.Pous.StreamedWipe.Server
-public import Proofs.Pous.StreamedWipe.Witnesses
+public import Definitions.Pous.Model.StreamedWipeDisk
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.StreamedWipe.Server
+import Proofs.Pous.StreamedWipe.Witnesses
 
 /-!
 # The streamed-label wipe with a server's disks in the fill

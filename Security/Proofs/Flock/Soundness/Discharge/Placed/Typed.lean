@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Placed.Setup
-public import Proofs.Flock.Soundness.Types.ProgramPlaces
 public import Proofs.Flock.Soundness.ExecFlatCopies
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # `ProgPlaces` on the typed path

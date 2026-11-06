@@ -6,7 +6,6 @@ the challenger's coins, raw bytes with no derivation, which `drawFirst` reads as
 -/
 module
 
-public import Flock.Draw
 public import SampledProofs.Partition
 
 @[expose] public section
@@ -37,7 +36,7 @@ def deriveLaw (p : Program) (query law : Json) (table : Option Json) : V (Option
 def derive (p : Program) (query law : Json) (table : Option Json) : V Json :=
   return ((← deriveLaw p query law table).map (·.toJson)).getD law
 
-/-- `draw.same_law`: the same canonical bytes. -/
+/-- `draw.same_design`: the same canonical bytes. -/
 def sameLaw (a b : Json) : Bool := jeq a b
 
 /-- `draw.law_of`: the law a draw names. -/

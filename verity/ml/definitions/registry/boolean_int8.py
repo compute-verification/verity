@@ -7,12 +7,17 @@ row builds Boolean-first (`verity.ml.definitions.boolean`).
                         multiplexer tree of `TableRead{IB}x{EW}_v2`) over fattn's 256 entries as constant bits, which fold: only
                         an entry's 7 low bits are ever set
     U8ToU16_v2          (t: Array<8, Value<1>>) -> Array<16, Value<1>>; word view: U8ToU16_v1.  No gates: t's bits, then 8 zeros
+    U8x4ToU32_v2        (a, b, c, d: Array<8, Value<1>>) -> Array<32, Value<1>>; word view: U8x4ToU32_v1.  No gates: a's bits,
+                        then b's, c's and d's
     Int8QuantElement_v2, Int8RowScale_v2{K}, Int8StaticQuant_v2{K}, Int8RowQuant_v2{K}, Int8Linear_v2{K,N}, Int8AttnScale_v2{SCALE},
     Int8LutSoftmax_v3{S}, Int8AttnOut_v2, Int8LutAttentionRow_v3{D,S,SCALE}, Int8ColumnQuant_v2{S,D}, Int8KvQuant_v2{S,D}
                         σ of the word composite (`boolean.sigma_lift`): its body at each binding with each Call the Boolean
                         version of its Definition; word views: their _v1 at the same statics
     Int8RowQuant_v4{K,R}
                         σ of `Int8RowQuant_v3{K,R}` likewise, x as R rows of K/R values; word view: Int8RowQuant_v3
+    Int8RowQuant_v6{K,R,ROUND}
+                        σ of `Int8RowQuant_v5{K,R,ROUND}` likewise: v4 and the row as one leaf, no gate beyond v4's; word
+                        view: Int8RowQuant_v5
 
 `Int8LutSoftmax_v2` and `Int8LutAttentionRow_v2`, the forms that read `exp2_lut127` as an operand, have no Boolean version here;
 `_v3` of each is σ of `_v1`, whose LUT is the Definition's own.  The callees beyond this module's leaves are core's
@@ -58,6 +63,9 @@ Exp2Lut127 = definition("Exp2Lut127", 3, _exp2_lut127, (("t", CODE),), I32, word
                             "constant entries")
 U8ToU16 = definition("U8ToU16", 2, lambda C, t: [*t, *const_bits(0, 8)], (("t", CODE),), Array(16, BIT), word=IE.U8ToU16,
                      doc="the byte zero-extended to a 16-bit word on bits: U8ToU16_v1, its high 8 bits the constant 0")
+U8x4ToU32 = definition("U8x4ToU32", 2, lambda C, a, b, c, d: [*a, *b, *c, *d], (("a", CODE), ("b", CODE), ("c", CODE), ("d", CODE)),
+                       I32, word=IE.U8x4ToU32, doc="four bytes as one little-endian 32-bit word on bits: U8x4ToU32_v1, a's bits "
+                                                   "low, then b's, c's and d's")
 
 Int8QuantElementV2 = sigma_lift(IE.Int8QuantElement, 2)
 Int8RowScaleV2 = sigma_lift(IE.Int8RowScale, 2)
@@ -71,7 +79,9 @@ Int8LutAttentionRowV3 = sigma_lift(IE.Int8LutAttentionRow, 3)
 Int8ColumnQuantV2 = sigma_lift(IE.Int8ColumnQuant, 2)
 Int8KvQuantV2 = sigma_lift(IE.Int8KvQuant, 2)
 Int8RowQuantV4 = sigma_lift(IE.Int8RowQuantV3, 4)
+Int8RowQuantV6 = sigma_lift(IE.Int8RowQuantV5, 6)
 
-INT8_LEAVES = [F32Rint, F32ToS8Rzi, S8ToF32, F32MulWide, F64Mul, F64ToU32RniSat, LutIndex, Exp2Lut127, U8ToU16]
+INT8_LEAVES = [F32Rint, F32ToS8Rzi, S8ToF32, F32MulWide, F64Mul, F64ToU32RniSat, LutIndex, Exp2Lut127, U8ToU16, U8x4ToU32]
 INT8_SIGMA = [Int8QuantElementV2, Int8RowScaleV2, Int8StaticQuantV2, Int8RowQuantV2, Int8LinearV2, Int8AttnScaleV2,
-              Int8LutSoftmaxV3, Int8AttnOutV2, Int8LutAttentionRowV3, Int8ColumnQuantV2, Int8KvQuantV2, Int8RowQuantV4]
+              Int8LutSoftmaxV3, Int8AttnOutV2, Int8LutAttentionRowV3, Int8ColumnQuantV2, Int8KvQuantV2, Int8RowQuantV4,
+              Int8RowQuantV6]

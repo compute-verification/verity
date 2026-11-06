@@ -2,7 +2,7 @@
 name: friction
 description: >
   What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask its owner or your
-  coordinator when you can't tell, take only claims and his own clicks to Daniel, record a ruling where the next agent reads
+  coordinator when you can't tell, decide rather than wait on Daniel, record a ruling where the next agent reads
   it, or leave a friction note. Holds the standing rulings AGENTS.md and the other skills don't state (what an agent may
   change without asking, protocol and claim rulings) and the friction note format. Use when you worked around something,
   a step bit you twice or keeps you waiting, you see a better abstraction, you're unsure a change is yours, you just got a
@@ -45,9 +45,9 @@ A change is near the line when it changes what other agents must do or what a ga
 in-flight files, or deletes others' work. If `AGENTS.md`, the owning skill or a standing ruling below covers the case,
 follow it. Otherwise ask the owner of what the change touches, or your coordinator when owners disagree or you can't tell
 (a handle holder: `research msg send --to @HANDLE`; a worker: its report), with the case, the change and your
-recommendation in a few lines, and prepare the change meanwhile. Only keys and access, and claims (what a guarantee says
-or rests on), go on to Daniel (`.agents/skills/asking-daniel/SKILL.md`). Spend, a short budget line included, is the call
-of the lead whose line pays.
+recommendation in a few lines, and prepare the change meanwhile. Nothing waits on Daniel: a claim (what a guarantee says
+or rests on) goes to him decided provisionally, and a click only he can make gets a workaround where one exists
+(`.agents/skills/asking-daniel/SKILL.md`). Spend, a short budget line included, is the call of the lead whose line pays.
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`.
 
@@ -125,9 +125,8 @@ Keys and access:
 
 - Keys and access between our own machines and accounts are the lanes' call: the lane that needs a key or a grant
   (a lane key, a forced-command key, a challenger's or a wipe's key) sets it up with the machine's owner, infra for
-  shared nodes, with no ask and no wait. This is a simulation: nothing mimics deployment settings, and it needn't be
-  perfect. Daniel only clicks what needs an account he holds (the GitHub organization's admin, billing, the Nebius and
-  Cloudflare consoles).
+  shared nodes, with no ask and no wait. Daniel only clicks what needs an account he holds (the GitHub organization's
+  admin, billing, the Nebius and Cloudflare consoles).
 - The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
   so stopping a machine never waits on an agent VM.
 - Workers open and edit their own lane's PRs with `research queue open|edit`, through a GitHub App on the
@@ -196,6 +195,10 @@ Protocols and claims:
 - A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
+- Sampling is one design, two-stage in general: serving commits the replay blocks' boundaries, the first stage samples
+  replay blocks, the prover commits their interiors, and the second stage samples k proof blocks in each on fresh coins.
+  Harm is read at a replay block's footprint, the fewest incorrect proof blocks of any interior its boundary allows
+  (compute credit charges it whole). One-stage is the case where each replay block is one proof block.
 - The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts

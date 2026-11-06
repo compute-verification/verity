@@ -693,7 +693,8 @@ def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int |
 
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
-                  with_desc: bool = True, C: int = 0, dead_free: bool = False, finish: Callable | None = None) -> BuildResult:
+                  with_desc: bool = True, C: int = 0, dead_free: bool = False, finish: Callable | None = None,
+                  batch: list | None = None) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     first C prompt rows are a prefix-cache hit (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`) whose every layer's key and
@@ -701,7 +702,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     units (`program.prune`, as the Build's derive does): the last layer's rows before the prefill's last, which no sample reads.
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
     `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
-    `BuildResult.named`), as `naming.named_program` names a request Program."""
+    `BuildResult.named`), as `naming.named_program` names a request Program. `batch`: the request's launch batch (`common._Launch`,
+    the Build's `--launch-context '{"batch": ...}'`) in place of the one φ's workload gives it (`launch_batch`)."""
     t0 = time.time()
     net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
     kind = (phi.sampling or {}).get("kind", "greedy")
@@ -746,10 +748,10 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=Coll(params[2][1], Affine("p", 2, 0, events)) if s["splits"] == "derived" else None,
                              S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
     model = net.model(B, W, peers)
-    if (batch := launch_batch(phi, LP, T) if wrapper == "request" else None) is not None:
+    if (batch := (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None) is not None:
         if not getattr(model, "reads_launch", False):
-            raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance, {len(phi.requests)} "
-                                f"requests), whose kernel choices the {net.model_class} decoder reads at its own rows")
+            raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance), whose kernel "
+                                f"choices the {net.model_class} decoder reads at its own rows")
         model.launch = _Launch(batch)
     if wrapper == "request" and isinstance(model, _Model):
         model.ctx = launch_rows(phi, LP, T, C)

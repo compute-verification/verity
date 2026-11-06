@@ -1,8 +1,9 @@
 module
 
-public import Mathlib.Tactic.Ring
 public import Definitions.Flock.Lowering
 public import Flock.Net
+public import Mathlib.Tactic.Ring
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # The rows the verifier parses, as the audit's `Rows`

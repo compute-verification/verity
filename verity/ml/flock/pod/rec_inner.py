@@ -1,6 +1,6 @@
 """The first recursive session's inner side (hiding model architectures; ``80-rec-inner.sh``): the inner
 statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the unmodified prover against
-``verity_flock.rec_live``'s proxy and coin server.
+``verity_flock.rec_live``'s proxy and challenger.
 
     python rec_inner.py stage --n N --sets DIR --out DIR [--plain-leaves] [--subcircuit ID] [--seed S]
                               [--sparse SHAPE --stacked FLOCK_CIRCUIT [--forge cell]]
@@ -19,7 +19,7 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
     python rec_inner.py forge --what challenge|query --inner DIR [--record session|prover]
                                                              flips one coin of rep 0 in DIR's session.json (session/'s, or
                                                              prover/'s: candidate 3's, challenge only) and public.json,
-                                                             written in the coin server's own format (rec_live.record_bytes)
+                                                             written in the challenger's own format (rec_live.record_bytes)
     python rec_inner.py forge --what nodraw|partial --inner DIR [--record session|prover]
                                                              the record without its sample, or with its last sampled proof block dropped
     python rec_inner.py forge --what top|unsalted --inner DIR
@@ -69,7 +69,7 @@ def _population(sub, n: int, sets: Path, seed: int):
 
 
 def _write_binding(out: Path, part: dict, program) -> None:
-    """``partition.json``, ``program.json`` and the draw the coin server answers ``Register`` with, every unit
+    """``partition.json``, ``program.json`` and the draw the challenger answers ``Register`` with, every unit
     (`rec_live.full_draw`), ``draw.json``."""
     from verity.ml.circuits.codec import canonical_json, encode_program
 
