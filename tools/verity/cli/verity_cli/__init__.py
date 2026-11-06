@@ -23,11 +23,14 @@
                                     workload on its placement
     verity example --status         every example's protocol, workload, run and proof, and each one's next missing evidence
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
-                                    holds it, exiting with lean's status (on a project machine with --on NODE [--pool P])
+                                    holds it, exiting with lean's status, and last the axiom probe: each theorem whose
+                                    axioms go beyond the standard three (`sorryAx` too), or none (on a project machine with
+                                    --on NODE [--pool P])
 """
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import re
 import shutil
@@ -106,8 +109,17 @@ def _snapshot(tree: Path, tmp: Path) -> Path:
     return tmp / "tree"
 
 
+def _probe():
+    """`tools/verity/lean/axiom_probe.py`, which `lean_changed.py --try` runs too."""
+    spec = importlib.util.spec_from_file_location("axiom_probe_for_verity_cli", HERE / "lean" / "axiom_probe.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
 def _lean_here(file: str) -> int:
-    """`lake env lean FILE` in the directory of the nearest lakefile above FILE, against that package's built imports."""
+    """`lake env lean` in the directory of the nearest lakefile above FILE, against that package's built imports, on a copy
+    of FILE with the axiom probe appended (`axiom_probe.py`), whose line is the last; lean's status on FILE's own lines."""
     path = (Path(file) if Path(file).is_file() else _tree(file) / file).resolve()
     pkg = next((d for d in path.parents if any((d / name).is_file() for name in LAKEFILES)), None)
     if not path.is_file() or path.suffix != ".lean" or pkg is None:
@@ -118,15 +130,27 @@ def _lean_here(file: str) -> int:
     if not Path(lake).is_file():
         raise SystemExit(f"verity lean try: no `lake` here: `bash tools/verity/lean/setup.sh {where}` installs elan, the "
                          "toolchain and the package's dependencies, then `lake build` there builds its imports")
-    rel = os.path.relpath(path, pkg)
-    print(f"verity lean try: lake env lean {rel} (in {where})", flush=True)
-    return subprocess.run([lake, "env", "lean", rel], cwd=pkg).returncode
+    rel, probe = os.path.relpath(path, pkg), _probe()
+    print(f"verity lean try: lake env lean {probe.COPIES / rel}, {rel} with the axiom probe after its last line "
+          f"(in {where})", flush=True)
+
+    def lean(copy: str) -> tuple[int, str]:
+        p = subprocess.run([lake, "env", "lean", copy], cwd=pkg, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        print(p.stdout, end="", flush=True)
+        return p.returncode, p.stdout
+
+    rc, said, _ = probe.probe(pkg, rel, path.read_text(), lean)
+    if said:
+        print(f"verity lean try: {rel}: {said}", flush=True)
+    return rc
 
 
 def _lean(args: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="verity lean try", description="Elaborate one Lean file: `lake env lean FILE` in the Lake "
                                  "package that holds it (the nearest lakefile above FILE), against that package's built "
-                                 "imports (`lake build` there first), exiting with lean's status.")
+                                 "imports (`lake build` there first), exiting with lean's status; its last line, the "
+                                 "axiom probe's, names each theorem whose axioms go beyond propext, Classical.choice and "
+                                 "Quot.sound (sorryAx too), or says none do.")
     ap.add_argument("file", metavar="FILE", help="the .lean file: a path from here, or from the root of "
                     "the checkout you're in, which is the tree it elaborates")
     ap.add_argument("--on", metavar="NODE", help="elaborate it on a project machine instead")
