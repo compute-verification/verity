@@ -1,8 +1,8 @@
 """`registry.torch_words` and `registry.boolean_torch_words`: each word primitive against torch CPU (the int64 and uint8 arithmetic
-and casts with wraparound, int64 -> f32 around every rounding position, f32 -> f16 at every exponent from below f16's subnormals
-to past 65504 around each rounding position, and every f16 word to f32), the NaN words against the GPU's as the primitives define
-them, the order keys sorting values as torch's radix select does and inverting; and each Boolean version against its word on
-special and random words."""
+and casts with wraparound, int64 -> f32 around every rounding position, f32 -> int64 and -> uint8 at every exponent from below 1 to
+past 2^63, f32 -> f16 at every exponent from below f16's subnormals to past 65504 around each rounding position, and every f16 word
+to f32), the NaN and saturated words against the GPU's as the primitives define them, the order keys sorting values as torch's
+radix select does and inverting; and each Boolean version against its word on special and random words."""
 from __future__ import annotations
 
 import itertools
@@ -57,6 +57,16 @@ def _f16_range(rng) -> np.ndarray:
     return np.concatenate([w, w | np.uint32(0x80000000)])
 
 
+def _i64_range(rng) -> np.ndarray:
+    """Every exponent field from 120 (below 1) to 195 (past 2^63), each under 64 significands (all zeros, all ones and random);
+    both signs."""
+    e = np.arange(120, 196, dtype=np.uint32)[:, None] << np.uint32(23)
+    m = rng.integers(0, 1 << 23, (1, 64), dtype=np.uint64).astype(np.uint32)
+    m[0, :2] = (0, 0x7FFFFF)
+    w = (e | m).reshape(-1)
+    return np.concatenate([w, w | np.uint32(0x80000000)])
+
+
 def _nan32(w: np.ndarray) -> np.ndarray:
     return ((w & 0x7F800000) == 0x7F800000) & ((w & 0x7FFFFF) != 0)
 
@@ -94,6 +104,21 @@ def test_an_int64_rounds_to_f32_as_torch_rounds_it() -> None:
     t = np.concatenate([_i64(_I64 + ties), _random_i64(rng, 20000)])
     want = torch.from_numpy(_signed(t).copy()).to(torch.float32).numpy().view(np.uint32)
     _same(E.evaluate_batch(W.I64ToF32Rn, t), want, "I64ToF32Rn")
+
+
+def test_f32_truncates_to_int64_as_torch_cpu_below_2_63() -> None:
+    """torch CPU's conversion to int64, and to uint8 (its low byte: c10 converts through int64), wherever x is no NaN and below
+    2^63 in magnitude or -2^63; a NaN 0, from 2^63 up INT64_MAX and below -2^63 INT64_MIN, the GPU's saturation."""
+    torch = pytest.importorskip("torch")
+    x = np.concatenate([F32_SPECIALS, _i64_range(np.random.default_rng(4))])
+    ok = (~_nan32(x) & (np.abs(x.view(np.float32).astype(np.float64)) < 2.0 ** 63)) | (x == 0xDF000000)
+    got = np.asarray(E.evaluate_batch(W.F32ToI64Rz, x)).astype(np.uint64)
+    t = torch.from_numpy(x[ok].view(np.float32).copy())
+    _same(got[ok], t.to(torch.int64).numpy().view(np.uint64), "F32ToI64Rz")
+    _same(got[ok] & np.uint64(0xFF), t.to(torch.uint8).numpy(), "F32ToI64Rz's low byte")
+    nan, big = _nan32(x), ~_nan32(x) & ~ok
+    _same(got[nan], np.zeros(int(nan.sum())), "F32ToI64Rz on NaNs")
+    _same(got[big], [1 << 63 if w >> 31 else (1 << 63) - 1 for w in x[big].tolist()], "F32ToI64Rz past 2^63")
 
 
 def test_f32_rounds_to_f16_as_torch_rounds_it_but_a_nan() -> None:
@@ -149,12 +174,17 @@ def _inputs(d, rng) -> list[np.ndarray]:
     if d is BW.F16ToF32:
         return [np.arange(1 << 16, dtype=np.uint16)]
     rand = rng.integers(0, 1 << 32, n, dtype=np.uint64).astype(np.uint32)
-    extra = _f16_range(rng) if d is BW.F32ToF16Rn else np.array([W.M32, 0x80000000, 0x7FFFFFFF], np.uint32)
+    if d is BW.F32ToF16Rn:
+        extra = _f16_range(rng)
+    elif d is BW.F32ToI64Rz:
+        extra = _i64_range(rng)
+    else:
+        extra = np.array([W.M32, 0x80000000, 0x7FFFFFFF], np.uint32)
     return [np.concatenate([F32_SPECIALS, rand, extra])]
 
 
-@pytest.mark.parametrize("d", [BW.I64Add, BW.I64Le, BW.SelectI64, BW.I64ToU8, BW.U8ToI64, BW.I64ToF32Rn, BW.F32ToF16Rn,
-                               BW.F16ToF32, BW.F32OrderKey, BW.OrderKeyF32], ids=lambda d: d.name)
+@pytest.mark.parametrize("d", [BW.I64Add, BW.I64Le, BW.SelectI64, BW.I64ToU8, BW.U8ToI64, BW.I64ToF32Rn, BW.F32ToI64Rz,
+                               BW.F32ToF16Rn, BW.F16ToF32, BW.F32OrderKey, BW.OrderKeyF32], ids=lambda d: d.name)
 def test_the_boolean_version_is_its_word(d) -> None:
     target = bind(d)
     word = TR.word_of(target)
