@@ -1,6 +1,7 @@
 """The sibling check (`siblings.py`) that `verity lean try --siblings` runs once FILE elaborates: which modules its stub
 imports, and, with a real toolchain, that a module redeclaring a name another built module of its package declares fails
-the try naming both, as the package's root fails a records run an hour in."""
+the try naming both, as the package's root fails a records run an hour in. And the package's Lean options every try
+takes from it: with a real toolchain, an auto-bound name fails a try where the package sets `autoImplicit = false`."""
 from __future__ import annotations
 
 import importlib.util
@@ -80,6 +81,16 @@ def test_modules_sit_under_src_dir_and_a_plain_sibling_makes_the_stub_plain(tmp_
     assert "not a module of its package" in S.plan(outer, "Proofs/Core.lean")
 
 
+def test_options_are_the_packages_lean_options_each_weak(tmp_path):
+    """A dotted option name is a TOML table, flattened back; a package with a `lakefile.lean` gives none."""
+    write(tmp_path / "p", {"lakefile.toml": 'name = "p"\n\n[leanOptions]\nautoImplicit = false\nbackward.proofsInPublic = '
+                                            'true\nmaxHeartbeats = 400000\nlinter.style = "x"\n'})
+    assert S.options(tmp_path / "p") == ["-Dweak.autoImplicit=false", "-Dweak.backward.proofsInPublic=true",
+                                         "-Dweak.maxHeartbeats=400000", "-Dweak.linter.style=x"]
+    write(tmp_path / "q", {"lakefile.toml": 'name = "q"\n', "r/lakefile.lean": ""})
+    assert S.options(tmp_path / "q") == [] and S.options(tmp_path / "q" / "r") == []
+
+
 def test_the_line_names_both_modules_of_a_clash_and_counts_what_it_left_unchecked():
     p = S.Plan("P.D", True, ["P.C"], [f"P.U{i}" for i in range(S.SHOWN + 2)])
     rc, line = S.verdict(p, 1, "error: import P.C failed, environment already contains 'Q.bar' from P.D\n", 3.2, 900)
@@ -118,3 +129,20 @@ def test_try_with_siblings_fails_a_module_that_redeclares_a_name_another_built_m
     out = capsys.readouterr().out
     assert "siblings: no built module of its package that doesn't import P.D declares a name it does (4 imported" in out, out
     assert out.splitlines()[-1].startswith("verity lean try: P/D.lean: axiom probe:"), "the probe's line stays last"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_try_refuses_an_auto_bound_name_where_its_package_sets_auto_implicit_false(tmp_path, capsys):
+    """`lake env lean` alone takes `α` for an implicit argument, as the package's build doesn't (`options`)."""
+    shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", tmp_path)
+    for name, opts in (("loose", ""), ("strict", "[leanOptions]\nautoImplicit = false\n\n")):
+        write(tmp_path / name, {"lakefile.toml": f'name = "{name}"\n\n{opts}[[lean_lib]]\nname = "P"\n',
+                                "lean-toolchain": (tmp_path / "lean-toolchain").read_text(),
+                                "P/A.lean": "def P.same (x : α) : α := x\n"})
+    cli = _cli()
+    assert cli.main(["lean", "try", str(tmp_path / "loose" / "P" / "A.lean")]) == 0
+    capsys.readouterr()
+    assert cli.main(["lean", "try", str(tmp_path / "strict" / "P" / "A.lean")]) == 1
+    out = capsys.readouterr().out
+    assert "lake env lean -Dweak.autoImplicit=false .lake/axiom-probe/P/A.lean" in out, out
+    assert "unknown identifier" in out.lower() and "α" in out, out
