@@ -97,10 +97,10 @@ EXPECT = {"root": (FW + "level-0 root: the device committed ", True), "witness":
           "cut-silent": (DEV + "silent past the firewall's deadline", None), "cut-decode": (DEV + "the device's output does not decode", None),
           "cut-tree": ("", True), "inner": ("", True)}
 # a second detection a control may carry and never needs: a session stops at its first failure, every rep with it
-# (`Frames.Sessions.stopped`: each later round leaves as a stopped rep's scheduled round), so where the Lean frame stops a rep
-# before the device's rounds are in (cut-tree at round 0, every inner round), the ZK server's own check of the proof's exposed
-# values against the ones the frame passed may refuse it too
-ALSO = {"cut-tree": FW + "the proof's exposed value ", "inner": FW + "the proof's exposed value "}
+# (`Frames.Sessions.stopped`: each later round leaves as a stopped rep's scheduled round), so where the Lean frame alone stops
+# a rep (the opening's rounds, cut-tree at round 0, every inner round), the ZK server's own check of the proof's exposed values
+# against the ones the frame passed may refuse it too
+ALSO = {c: FW + "the proof's exposed value " for c in ("opening", "opening-frame", "cut-tree", "inner")}
 rows = [json.loads(l) for l in open(sys.argv[1])]
 rounds = (rows[0].get("auditor") or {}).get("rounds") if rows else None
 for r in rows:

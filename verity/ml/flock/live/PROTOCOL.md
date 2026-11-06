@@ -1040,8 +1040,9 @@ every stream runs its schedule, and `Finish` goes without proofs, the auditor's 
 as an honest session's. The prover's record has the refusal: `prover_stopped` the ZK server's, where its own checks caught
 it, and the verdict's `why` the loop's `PROVER-STOPPED: the Lean frame stopped table I rep R` where the rep's frame stopped
 it (both, for some). `verifier/firewall_controls.sh` runs each control through the loop and holds it to that outcome,
-after an honest session that must be accepted with no rep's frame stopped and no `prover_stopped`. For `cut-tree` and the
-inner rounds (`FC_INNER_TAMPER`, §10.4) it requires the frame's stop and admits, never requires, the ZK server's
+after an honest session that must be accepted with no rep's frame stopped and no `prover_stopped`. For `opening`,
+`opening-frame`, `cut-tree` and the inner rounds (`FC_INNER_TAMPER`, §10.4) it requires the frame's stop and admits, never
+requires, the ZK server's
 `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` beside it: the session stops at its
 first failure, every rep with it (§10.1), so the ZK server's own check of the proof against the values the frame passed may
 refuse it too. `later-NAME` is `NAME`
@@ -1053,8 +1054,8 @@ the same way at the second table:
 | `root` | flips a bit of its level-0 root | `FIREWALL-REFUSED: level-0 root: the device committed … where the recheck has …` |
 | `witness` | proves a witness one bit off the host's | `FIREWALL-REFUSED: level-0 root: …` |
 | `label` | flips a label byte in the algebraic phase | the frame's stop at the round; `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` |
-| `opening` | flips an observed value in the opening's first round | the frame's stop at the round alone |
-| `opening-frame` | flips an observed value in the opening's second round | the frame's stop at the round alone |
+| `opening` | flips an observed value in the opening's first round | the frame's stop at the round; the ZK server's `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` may come with it |
+| `opening-frame` | flips an observed value in the opening's second round | as `opening` |
 | `algebra` | flips a masked value, in its frame and its proof alike | `FIREWALL-REFUSED: circuit: the constraints … fail on a rep's pads` |
 | `steer` | sets each rep's first masked value to a word of its own, in its frame and its proof alike | as `algebra`; the word reaches the verifier in no request |
 | `algebra-proof` | flips a masked value in its returned proof only | `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` |
