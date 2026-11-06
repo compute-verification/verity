@@ -50,6 +50,9 @@ per-row fingerprints stay in `SCRATCH` under `WORK`. `N`, `PHASES`, `PY` (a Pyth
 `compare.md` answers:
 
 - whether replay matches replay, and served matches replay: schedule, tokens, every row's module outputs, logits rows;
-- alone against in-batch, over the positions whose inputs agree: the rows bit-identical, by prefill and decode, and for
-  the rest the first module output that differs, by op and by layer; logits rows and argmax; tokens per request;
+- alone against in-batch, over the positions whose inputs agree: the rows bit-identical, by prefill and decode and, for
+  prefill, by whether the row's chunk had the same boundaries; for the rest the first module output that differs, by op
+  and by layer; the rows whose router picks another expert; logits rows and argmax; tokens per request;
+- each op's batch variance: over the rows where everything the op reads (for MLA attention, the keys of every earlier
+  position too) is bit-identical alone and in the batch, how many rows of its output still differ;
 - the GPU-seconds of each phase.
