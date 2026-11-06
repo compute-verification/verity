@@ -69,6 +69,7 @@ from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/c
 SCHEMA = "verity-bench/serve-tax/v0"
 PLUGIN_ENV = "VERITY_SERVETAX"
 TICK_MIDDLEWARE = "verity_vllm.pipeline.tick_plugin.TickFeed"
+TICK_PLUGIN = ROOT / "integrations/vllm/verity_vllm/pipeline/tick_plugin.py"
 #: two-sided 95% Student-t quantiles by degrees of freedom
 T95 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 8: 2.306, 10: 2.228, 20: 2.086, 30: 2.042}
 
@@ -370,6 +371,9 @@ def tick_args(source: str | None, given_ms: str | None, load: str = "saturated")
     mean busy cycle of a ``record`` step trace (a file, or a ``record`` arm's dir: its trace over ``load``'s first rep),
     or given as ``SAT,FREE`` ms."""
     C = corpus()
+    if not (TICK_PLUGIN.is_file() and hasattr(C, "TICK_BUCKET_MS")):
+        raise SystemExit(f"the tick arms need the certified tick ({TICK_PLUGIN.relative_to(ROOT)} and the trace corpus's "
+                         "TICK_* constants), which this tree lacks: run them from a tree that has --admit tick")
     if (source is None) == (given_ms is None):
         raise SystemExit("the tick arms take τ from one of --tick-from STEP_TRACE|RECORD_DIR and --tick-ms SAT,FREE")
     if given_ms is not None:
