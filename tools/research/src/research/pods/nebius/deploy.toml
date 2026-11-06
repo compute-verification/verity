@@ -309,13 +309,13 @@ owner = "infra"
 [[file]]
 path = "/etc/systemd/system/vy-challenger@.service"
 src = "tools/research/src/research/pods/nebius/challenger/vy-challenger@.service"
-nodes = ["vy-challenger-1"]
+nodes = ["vy-challenger-1", "vy-auditor-2"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-certifier@.service"
 src = "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service"
-nodes = ["vy-challenger-1"]
+nodes = ["vy-challenger-1", "vy-auditor-2"]
 owner = "infra"
 
 [[file]]
