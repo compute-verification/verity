@@ -6046,6 +6046,29 @@
     "Flock.Reader.runAll": "594a689f002bd4cb1265b8751b63b805266db21c63dbc2b0c202dfa051387cac"
    }
   },
+  "Flock.CanonForm": {
+   "digest": "b2cb8c8142462dcd913aeb640f549bee62e370300d395d64d88f5df69d180b45",
+   "definitions": {
+    "Flock.Firewall.Tok": "7801fe6fa7997d4814eecedfaf70355c142426a95503539ad42749b39fad22d5",
+    "Flock.Firewall.Tok.arr": "00a3dd2e8ad2ecff4213dc27682d1400a09a3e9e9562e8ee8c94865bcb7d3bed",
+    "Flock.Firewall.Tok.bool": "5470011b9dec1110a77c35b2d6042a0f3218cfef05896e72a4e6748cad3414c6",
+    "Flock.Firewall.Tok.casesOn": "a6f97a54ac636088bd02d482a12657165e63be294631ef6edbe635a2f6f451d6",
+    "Flock.Firewall.Tok.close": "90e87e86571a5f2d0bbe181832409fbdbe15e54b1e6b855afcad56f33784c49e",
+    "Flock.Firewall.Tok.key": "3b5d9461831a5f54183a0f932dbc6c06275f2ab482a03ffb2a61d566cc0b6a1e",
+    "Flock.Firewall.Tok.null": "1564b3a362a6d66d818fbde4043c7170d59595b84d7a2ae949e113a43cc589e1",
+    "Flock.Firewall.Tok.num": "a584e0aa300e118285cc98ffd8fdfaa7034ba82e94cd30d37cdcb36449573c4e",
+    "Flock.Firewall.Tok.obj": "aa5ab5261c270184ab6fcabf5bbf14d7866bd8dde65e017b879d8b7ec61e613b",
+    "Flock.Firewall.Tok.rec": "b3bc6f3c9762157b4a369676d1363d5d060b18fc77dc34e20dc4ed9d08676b2e",
+    "Flock.Firewall.Tok.str": "8b6b2945a59c0332d7005cebe014cd70bfeb6a8a8d4dbead7936fcb42eb5d048",
+    "Flock.Firewall.canonForm": "5e4d04acb658b64f3c1bdfab1ce66a23c712b59e03997f2b027e17f4ee8ed6bb",
+    "Flock.Firewall.canonFormList._f": "0670dbba36c2797189a5cbf0068ae803467d731baa1cd763844dd838da2dddc7",
+    "Flock.Firewall.canonFormList.match_1": "6060d757dcc26e312cfd4f44a953fda011a0bf0476ccd56d1edd7bafd69e7dd2",
+    "Flock.Firewall.canonFormObj._f": "dcfa8771f01a8b3a90ac124d4ef8adbe90f5625c6bebfdb001bc8e39738088bc",
+    "Flock.Firewall.canonFormObj.match_1": "439e5b2b1212b13743e6043b163fa23016fe7026ee7e990d5fb7252847634378",
+    "Flock.Firewall.instDecidableEqTok": "6db661a2dab25e822a94f73a028373ff9f15ccfefaea45ae804086615cc2104e",
+    "Flock.Firewall.instDecidableEqTok.decEq": "4f4812d6346b68e340092afa1ad4d4f88230866f12550cb37b82cbc9db358c48"
+   }
+  },
   "Flock.Circuit": {
    "digest": "4d415fb046de4cc8eb11c54ca184f963cdd181323b1926fad645c0f7fa697b61",
    "definitions": {
