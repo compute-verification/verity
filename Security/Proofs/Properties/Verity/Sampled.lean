@@ -116,11 +116,11 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **The session v2 sets up on the parameters and the committed files**: V5's binders, each the value v2's check
-derives (the files' parse, the public file over the circuit's empty public input ports, the circuit's ports named once
-with one domain at each root, the population, the registration's descriptor and query and the population's order, the
-law on the registration's strata and the draw's size), the device's byte stream the draw reads, A3 at those bytes and
-the verify command's tags as fields, and the bound's parameters. The registration, the draw file (the printed one),
-the writer and the rounds' digest are the ones the period's registration fixes (`Live.Reg`, `Live.dj`, `Live.wr`,
+derives (the files' parse, the public file over the circuit's empty public input ports, the ports' published domains
+distinct with one domain at each root, the population, the registration's descriptor and query and the population's
+order, the law on the registration's strata and the draw's size), the device's byte stream the draw reads, A3 at those
+bytes and the verify command's tags as fields, and the bound's parameters. The registration, the draw file (the printed
+one), the writer and the rounds' digest are the ones the period's registration fixes (`Live.Reg`, `Live.dj`, `Live.wr`,
 `Live.dg`), and `live-verifier` holds at the writer under the law (`Live.hCust`). The live rounds' count and the tree
 openings the session reads after a digest are its coin tree's (`Live.N`, `Live.rounds`). -/
 structure Live where
@@ -141,8 +141,8 @@ structure Live where
   pubO : Flock.Public
   hpubO : Flock.HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pubO
   hscope : FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true
-  /-- the circuit names each of its ports once -/
-  hdup : Flock.Registered.dupName D.unroll = none
+  /-- no two of the circuit's ports have one published domain -/
+  hdup : Flock.PortRoots.dupId D.unroll pub = false
   /-- two ports with one root at the public file's leaf map have one domain -/
   hroots : Flock.Bridge.RootFixesDomainL D.unroll (Flock.Bridge.LeafMap.ofPublic D.unroll pub n)
   hn : pub.n = n

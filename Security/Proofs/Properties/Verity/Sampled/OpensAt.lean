@@ -99,7 +99,7 @@ theorem placeOfRead_eq {r : Verity.FileRead} (hr : r = A.fileRead) (hN : r.circu
 port of the row's root, which is then the row's own), and rows shorter than `2^64` bits. -/
 structure OpensReady : Prop where
   rows : A.D.unroll.ports.all (fun p => p.v2 || p.segs.isSome) = true
-  domain : ∀ q < A.D.unroll.ports.size, (Flock.Bridge.domOf A.D.unroll q).size = 64
+  domain : ∀ q < A.D.unroll.ports.size, (Flock.Bridge.domOf A.D.unroll A.pub q).size = 64
   roots : ∀ q q', q' < q → q < A.D.unroll.ports.size → A.roots.getD q' [] ≠ A.roots.getD q []
   width : ∀ i, (Flock.Bridge.placeOf A.Cc A.rows i).1 < 2 ^ 64
 
@@ -151,7 +151,11 @@ theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : C
       have hpo : Flock.Bridge.portOfPos A.Cc A.rows A.D.unroll i = some A.D.unroll.ports[r.port] := by
         simp [Flock.Bridge.portOfPos, hr, hq]
       simp only [Flock.Bridge.rowDep, hpo]
-    have hdom : reg.domain.size = 64 := by rw [← hreg]; exact hA.domain r.port hq
+    have hdom : reg.domain.size = 64 := by
+      rw [← hreg]
+      show (A.Lm.dom r.port).size = 64
+      rw [Live.Lm, Flock.Bridge.LeafMap.ofPublic_dom]
+      exact hA.domain r.port hq
     have hacc := Flock.Bridge.Spec.opensLeaf_accepts sha512_hashOf hdom hop
     rw [Claims.Sampling.bs_bytes, Flock.Bridge.Spec.sha512Msg_hm96Outer sha512_hashOf, hrow, rowMsg_digest hpr,
       ← hschema] at hacc
