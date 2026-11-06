@@ -74,6 +74,17 @@ uv run python benchmarks/sampling_plan/h200.py --out DIR [--share S] [--batch B]
 uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
 ```
 
+- `glm53.py`: GLM-5.3 as served (vLLM, H200, TP8, FP8) as the planner's candidates, from its proof-block census
+  (`glm53_blocks.json`, `benchmarks/one_stage/block_census.py`'s card over the Commit Build it names, the census in the
+  store): each proof-block Definition one candidate, its units one request's count over every rank, its work its
+  estimated ANDs, its outputs committed and its opened rows' bytes; the gaps, rows no cut fits, are listed by row family
+  and are no candidate. It prints the proof blocks, output bits, ANDs, served MACs and opened bytes per prefill token,
+  per decode token and per request, and the gaps.
+
+```text
+uv run python benchmarks/sampling_plan/glm53.py [--requests N]
+```
+
 - `cpu_budget.py`: the block's draw sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its
   templates, their n, S and proved ANDs), prices each template's statements (up to 8 drawn units each) from measured
   firewalled Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
