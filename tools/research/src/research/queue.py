@@ -165,7 +165,9 @@ that's unusable, a failed pull) the command fails with `STALE`, never answering 
 
 Preflight.  What breaks or cancels a train is cheap to catch at mark time: a conflict with a PR already on `next`, a stale Lake
 pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry, a test that reads
-a row another queued PR refits away (an error at collection), one lane's unlanded branch carried in two PRs, and a failure of
+a row another queued PR refits away (an error at collection), one lane's unlanded branch carried in two PRs, a merge of `next`
+that carries a PR's head the PR no longer lands (closed, rebuilt without it, or withdrawn: `stale_carried`; the sync leaves such
+a head off `next` too), and a failure of
 `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight runs too, as it runs the landing gates the
 sync would (on the head; the sync, on its merge onto `next`).  A Lean change can pass its own Lean check and break a module
 another PR on `next` owns (a changed signature, dropped premises, a dropped import), which drive's Lean check of the stack finds
@@ -1438,6 +1440,40 @@ def contained(repo: Path, base: str, head: str, heads: dict[str, int]) -> list[i
     return sorted({heads[h] for h in _out(repo, "rev-list", f"{base}..{head}").split() if h in heads})
 
 
+def carried_heads(repo: Path, landed: str, head: str) -> list[tuple[int, str, str]]:
+    """(N, H, C) for each commit C drive made on `next` for #N at head H (`Queue: #N`, its `PR:` and `Head:` lines) that
+    ``head`` holds above ``landed``, the landing branch's tip, newest first, but those whose H ``landed`` holds (a `next`
+    rebuilt since landed #N at a merge of its own): what a branch that merged `next` carries of the PRs on it."""
+    log = _out(repo, "log", "--format=%H%x1f%B%x1e", "--grep=^Queue: #", f"{landed}..{head}")
+    out = []
+    for c, _, body in (r.strip("\n").partition("\x1f") for r in log.split("\x1e") if r.strip()):
+        n, h = re.search(r"^PR: #(\d+)$", body, re.M), re.search(r"^Head: ([0-9a-f]{40})$", body, re.M)
+        if n and h and _git(repo, "merge-base", "--is-ancestor", h[1], landed, check=False).returncode:
+            out.append((int(n[1]), h[1], c))
+    return out
+
+
+def stale_carried(repo: Path, carried: Iterable[tuple[int, str, str]], heads: dict[int, str],
+                  admitted: Callable[[int], str | None], landed: str) -> dict[int, str]:
+    """{N: the refusal} for each PR of ``carried`` (`carried_heads`) whose commits the head would land without it: #N is
+    closed (not in ``heads``, each open PR's head), its current head doesn't hold the carried one (rebuilt without it), or it
+    isn't admitted at its current head (``admitted``: why not, or None), as when its owner withdrew it after the branch
+    merged `next`: a branch that merged `next` doesn't carry a PR's change the way a rebuild does (`Queue._carried`)."""
+    out: dict[int, str] = {}
+    for n, h, c in carried:
+        if n in out:
+            continue
+        at, cur = f"it carries #{n}'s head {h[:12]} through `{BRANCH}`'s merge {c[:12]}", heads.get(n)
+        fix = f"merge origin/main and #{n}'s current head instead of `{BRANCH}`, or drop #{n}'s commits"
+        if cur is None:
+            out[n] = f"{at}, and #{n} is closed: drop #{n}'s commits (rebuild the branch on origin/main, without `{BRANCH}`)"
+        elif h != cur and _git(repo, "merge-base", "--is-ancestor", h, cur, check=False).returncode:
+            out[n] = f"{at}, which neither `{landed}` nor #{n}'s current head {cur[:12]} holds: {fix}"
+        elif (no := admitted(n)) is not None:
+            out[n] = f"{at}, and #{n} isn't admitted at {cur[:12]} ({no}): {fix}"
+    return out
+
+
 def _brought(parents: dict[str, list[str]], heads: Iterable[tuple[int, str]]) -> dict[str, int]:
     """Each commit of ``parents`` (`rev-list --parents` of `next` above its base) that one of ``heads`` ((position on `next`,
     member head), lowest first) contains, with the position of the lowest that does: the member whose merge brings it."""
@@ -1916,6 +1952,19 @@ class Queue:
                 or (self.marked_by is not None and not self.ready(a.pr.number, a.pr.head)
                     and not (self.before_cutoff and self.before_cutoff(a.pr.number, a.pr.head))    # then it's a `true`
                     and _who(self.marked_by(a.pr.number, a.pr.head) or "") == who))
+
+    def _stale_carry(self, pr: PR, entries: dict[int, Entry]) -> str | None:
+        """The preflight's (g) (`stale_carried`) of ``pr``'s head, judged by this sync's ``entries``, so a mark the preflight
+        never saw (a label written directly) doesn't land a PR's commits without it either: the refusal, or None."""
+        if not (carried := [c for c in carried_heads(self.workdir, self.base, pr.head) if c[0] != pr.number]):
+            return None
+        def why(n: int) -> str | None:
+            if (e := entries[n]).state == "ready":
+                return None
+            return f"not marked ready at {e.pr.head[:8]}" if e.why.startswith("not marked ready") else e.why
+
+        heads = {n: e.pr.head for n, e in entries.items()}
+        return "; ".join(stale_carried(self.workdir, carried, heads, why, self.into).values()) or None
 
     def order(self, chain: list[Member], entries: dict[int, Entry], lift: Iterable[int] = (),
               park: Iterable[int] = ()) -> list[int]:
@@ -2727,6 +2776,9 @@ class Queue:
                 i += 1
                 e = entries[n]
                 self._preflight_ahead.discard(n)
+                if why := self._stale_carry(e.pr, entries):
+                    refuse(n, why)
+                    continue
                 if blocked := [a for a in e.after if a in dropped]:
                     e.state, e.why = "waiting", f"contains {e.contains(blocked[0])}, which " + (
                         "waits for its preflight" if blocked[0] in unrun else "didn't merge")
@@ -4460,8 +4512,10 @@ class Preflight:
     or one requiring it by path (`lean_graph`), built by ``lean`` (`LakeBuild`, on a node's warm Lean tree) within `lean_s`, naming the
     module, its first error and the PR on `next` that owns it (`touched_by`), or for a module of its own, those that changed what it
     imports; or (f) merged onto `next` as the sync merges it (`lock_drops`), drops from a lock it changes a `shape.inline` premise or
-    a `shape.frozen` key `next`'s statements still need (`dropped_entries`), naming each and the fix (`LOCK_DROP_FIX`).  A train
-    most often breaks on one of (a) to (c), and a Lean break is most often one of (e) or (f).
+    a `shape.frozen` key `next`'s statements still need (`dropped_entries`), naming each and the fix (`LOCK_DROP_FIX`); or (g)
+    carries, through a merge of `next` (`carried_heads`), a PR's head that isn't on the landing branch and that the PR closed,
+    rebuilt without, or isn't admitted at (`stale_carried`), naming each and the fix.  A train most often breaks on one of (a) to
+    (c), and a Lean break is most often one of (e) or (f).
 
     `next` is fetched fresh; a PR already on it is merged onto the commit below its old head, as drive's next sync would rebuild
     it.  The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
@@ -4597,21 +4651,24 @@ class Preflight:
         with the fix.  The sync's own admission judges it (`Queue.entries` over this head, taken as marked, and the PRs it
         contains): not marked ready at that head, ejected there, held, with no owner, or containing such a PR itself, unless this
         PR carries its change (`Queue._carried`) or that head is on the landing branch (`land_into`'s tip), so such a mark is
-        refused here rather than taken and left for the next sync to say "contains #N, which isn't admitted"."""
+        refused here rather than taken and left for the next sync to say "contains #N, which isn't admitted".  (g): each PR
+        whose head this head carries through a merge of `next` that drive's sync leaves off for it (`stale_carried`)."""
         main = "refs/queue/preflight/main"
         heads = {p.head: p.number for p in prs}
+        land = f"refs/queue/preflight/{into_at(self.repo, main)}"
+        landed = land if not _git(self.repo, "rev-parse", "-q", "--verify", f"{land}^{{commit}}", check=False).returncode else main
+        carried = [c for c in carried_heads(self.repo, landed, pr.head) if c[0] != pr.number]
         inside = set(contained(self.repo, main, pr.head, heads)) - {pr.number}
-        if not inside:
+        if not inside and not carried:
             return []
         rules = rules_at(self.repo, main) or Rules()
         labels = StoreLabels(self.store, log=lambda s: print(s, file=sys.stderr), since=rules.marked_after)
         q = Queue(self.repo, remote=self.remote, github=None, ready=lambda n, h: (n, h) == (pr.number, pr.head) or labels.ready(n, h),
                   store=self.store, rules=rules, log=self.log, before_cutoff=labels.before_cutoff, marked_by=labels.marked_by,
                   marked_at=labels.marked_at, prefetch=labels.prefetch)
-        land = f"refs/queue/preflight/{into_at(self.repo, main)}"
-        landed = land if not _git(self.repo, "rev-parse", "-q", "--verify", f"{land}^{{commit}}", check=False).returncode else main
+        judged = inside | {n for n, _, _ in carried}
         try:
-            entries = q.entries([pr, *(p for p in prs if p.number in inside)], {"ejected": {}}, base=main, landed=landed,
+            entries = q.entries([pr, *(p for p in prs if p.number in judged)], {"ejected": {}}, base=main, landed=landed,
                                 queued=f"refs/queue/preflight/{BRANCH}")
         except QueueError as e:
             self.log(f"research queue: preflight: can't tell whether the open PRs this head contains are admitted ({e})")
@@ -4623,10 +4680,13 @@ class Preflight:
                 return f"ejected at {e.pr.head[:8]} by {lab.by}: {lab.ref}"
             return f"not marked ready at {e.pr.head[:8]}" if e.why.startswith("not marked ready") else e.why
 
+        held = [n for n in entries[pr.number].after if entries[n].state != "ready"]
+        stale = stale_carried(self.repo, (c for c in carried if c[0] not in held), {n: e.pr.head for n, e in entries.items()},
+                              lambda n: None if entries[n].state == "ready" else why(n), landed.rsplit("/", 1)[-1])
         return [f"it contains {entries[pr.number].holds(n)}, and #{n} isn't admitted ({why(n)}), so drive holds this PR "
                 f"behind it: mark #{n} ready first, so it lands first, or drop #{n}'s commits from this branch (if this PR carries "
                 f"#{n}'s change, #{n}'s owner withdraws its mark: `research data label pr:{n}@{entries[n].pr.head[:12]} ready false "
-                f"--by OWNER`)" for n in entries[pr.number].after if entries[n].state != "ready"]
+                f"--by OWNER`)" for n in held] + list(stale.values())
 
     def _gates(self, pr: PR, notes: list[str]) -> list[str]:
         """(d): what drive.toml's `landing_gates` at `main` refuse (`gate_refusal`).  A gate that can't judge is a note: the sync
