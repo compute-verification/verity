@@ -1,11 +1,13 @@
 """The serve tax: what each change to the production server costs on every token, against stock compiled vLLM at the
 integration's pin, on the same node, workload and SLO.
 
+    serve_tax.py plan --model-id ID --c4 C4.json.gz --rates NAME=R,... [--span-s 90] [--requests N] --out PLAN.jsonl
     serve_tax.py run --arm ARM --model-id ID --c4 C4.json.gz --rates NAME=R,... [--checkpoint DIR] [--reps 3] [--span-s 90]
-                     [--requests N] [--window-s S] [--tick-ms SAT,FREE | --tick-from STEP_TRACE] --out DIR
+                     [--requests N] [--plan PLAN.jsonl] [--window-s S] [--kv-window-s S]
+                     [--tick-ms SAT,FREE | --tick-from STEP_TRACE|RECORD_ARM_DIR] --out DIR
     serve_tax.py metrics DIR [--slo-ttft-s S --slo-tpot-s S]
     serve_tax.py table DIR... --out DIR [--slo-ttft-s S --slo-tpot-s S]
-    serve_tax.py tick STEP_TRACE
+    serve_tax.py tick STEP_TRACE|RECORD_ARM_DIR [--load saturated]
 
 `run` serves one arm (`ARMS`) on one server lifetime of vLLM's own OpenAI server (`vllm.entrypoints.openai.api_server`):
 a warm-up load, then each named load REPS times, rep by rep (light, medium, saturated, light, ...), each from an empty prefix
@@ -28,6 +30,11 @@ The arms, each one engine configuration; each adds its change to the arm it name
   τ_free given or calibrated on a ``record`` trace (`tick`), the client standing in for the certifier (`corpus.StandIn`);
 - ``tokens``: each window's tokens committed: every prompt id and every sampled id, 4 bytes a token, in ``rows-sha512``
   rows (`verity_vllm.commit.step_rows`), hashed off the engine loop at each window's close (`servetax_plugin.TokenCommit`).
+- ``kv``: the paged KV cache committed at window edges (every ``--kv-window-s``): the whole pool, between two steps, in
+  ``rows-sha512`` rows of 1 MiB hashed on the GPU on a side stream ordered after the step by an event, with no hook inside
+  a CUDA graph (`servetax_plugin.KvEdge`).
+
+`plan` fixes the requests every arm serves, so a job's arms and reps read one file (``--plan``).
 
 `metrics` reads each load's client records: throughput (output tokens and requests a second over the load's span, its
 first send to its last done), TTFT and ITL (the gaps between a request's streamed chunks) at p50 and p99, and goodput, the
@@ -52,7 +59,6 @@ import time
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -178,7 +184,7 @@ def reset_prefix_cache(port: int, tries: int = 30) -> bool:
     """Empty the server's prefix cache between loads (a dev-mode route); False if it never could (blocks still held)."""
     for _ in range(tries):
         req = urllib.request.Request(f"http://127.0.0.1:{port}/reset_prefix_cache", method="POST", data=b"")
-        with urllib.request.urlopen(req, timeout=30) as r:
+        with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310
             if json.loads(r.read() or b"{}").get("success", True):
                 return True
         time.sleep(1.0)
