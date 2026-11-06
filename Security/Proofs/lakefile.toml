@@ -46,8 +46,6 @@ path = "../../verity/core/service/vstar/recursive"
 name = "security_properties"
 path = "../Properties"
 
-# J10-R's binding (`Proofs.Pouw.PeriodJ10R.Binding`) is a root of its own, not imported by `Proofs.Pouw`: it reads PoUS's
-# model, which the public export doesn't carry (the public boundary lists the module private).
 [[lean_lib]]
 name = "Proofs"
 roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.NetworkCertifier", "Proofs.Flock",
@@ -57,7 +55,7 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Nci", "Proofs.Properties.CertifierDevice", "Proofs.Properties.Pous",
   "Proofs.Properties.Pous.TimedAudit", "Proofs.Properties.Pous.MemoryChallenger", "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Pous.Setup", "Proofs.Properties.Pous.RunAt", "Proofs.Properties.Pous.Wipe",
-  "Proofs.Properties.Pous.Component", "Proofs.Pouw.PeriodJ10R.Binding",
+  "Proofs.Properties.Pous.Component",
   "Proofs.Properties.NetworkCertifier", "Proofs.Properties.CertifierNetwork", "Proofs.Properties.CertifierNetwork.Runs",
   "Proofs.Properties.Identity", "Proofs.Properties.Nci.DescVerdict", "Proofs.Properties.Nci.DescAgree",
   "Proofs.Properties.Nci.Walk", "Proofs.Properties.Nci.Resolve", "Proofs.Properties.Nci.BodiesOk",
