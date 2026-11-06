@@ -32,6 +32,7 @@
   "Properties.NetworkScan",
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
+  "Properties.SampledProofs.Second",
   "Properties.SampledProofs.Halt",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
@@ -863,7 +864,7 @@
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
-   "except": ["Properties.SampledProofs.Draw"],
+   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Second"],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.CertifierNetwork": {
@@ -906,6 +907,11 @@
    "imports": ["Definitions.Claims", "SampledProofs"],
    "except": [],
    "why": "what the draw misses is stated against `Select.select`'s slots (`SampledProofs.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
+  },
+  "Properties.SampledProofs.Second": {
+   "imports": ["Definitions.Claims", "SampledProofs", "Properties.SampledProofs.Draw"],
+   "except": [],
+   "why": "what the second stage misses is stated against `Select.selectSecond`'s draw (`SampledProofs.Select`, from bytes as `Properties.SampledProofs.bytesOf` reads them) and the two-stage claims' per-cell escape `escCell` (`Definitions.Claims.SamplingTwo`), never a proof"
   },
   "Properties.Accounting.Compose": {
    "imports": ["Definitions.Accounting", "SampledProofs", "Properties.SampledProofs.Draw"],
