@@ -86,6 +86,7 @@ from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
+from verity_vllm.engine.profiles.devices import CLASS_G_DEVICE
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.prune import dead_units
@@ -115,7 +116,7 @@ _TRANSPORT = ("prompt", "model", "user", "stream", "stream_options", "return_tok
 #: domain), and the engine limits (each stated, at most these) that keep every launch where `predict.dsa` writes it: steps of at
 #: most 2,048 tokens (its captured statics), at most 2,048 keys a row (DSA's top-k is the identity there, and deterministic), and
 #: prefill chunks of at most 256 rows (its decode route at 8 heads a rank)
-CLASS_G = {"model_type": "glm_moe_dsa", "world": 8, "execution": "eager", "device_name": "NVIDIA H200"}
+CLASS_G = {"model_type": "glm_moe_dsa", "world": 8, "execution": "eager", "device_name": CLASS_G_DEVICE}
 CLASS_G_LIMITS = {"max_num_batched_tokens": 2048, "max_model_len": 2048, "long_prefill_token_threshold": 256}
 
 
