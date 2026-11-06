@@ -106,7 +106,7 @@ using-slack skill).
 - **Map the premises before staffing proofs.** Before staffing proof workers for a guarantee or bound, write one premise
   map: a row per premise, with the code check that discharges it, its Lean Property and its owner. Check each row against
   AGENTS.md's design rules (zero knowledge, no Python premise, one vocabulary, O(descriptor)), take the map to @soundness
-  for one ruling, then staff. On 3 Nov eight rulings in three hours reworked eight staffed pieces of one bound (TOP-212).
+  for one ruling, then staff. A ruling that arrives after staffing reworks every piece already staffed.
 
 ## How long, and where
 
@@ -133,9 +133,8 @@ using-slack skill).
 - **When a goal you own changes, and at least every 12 hours:** update it on the Goals page (the writing-goals skill).
 - **On a launch:** file the sub-issue first, then launch the worker named after it.
 - **At each checkpoint:** list your workers by state (`batch-fetch-details`) and resume each idle one whose runs have
-  ended or that has inbox messages queued. Completion notices can lapse, and the inbox reaches only running agents
-  (until INF-476 rings for it). Judge a running worker by its commits, PRs, runs and notes: a fetched transcript lacks a
-  resumed turn.
+  ended or that has inbox messages queued. Completion notices can lapse, and the inbox reaches only running agents.
+  Judge a running worker by its commits, PRs, runs and notes: a fetched transcript lacks a resumed turn.
 
 top's hourly sweep (`infra/control/top_watch.py`) runs the same audit. It rings a lane with findings once every 12
 hours, a person's ask off track every hour (and @top) until it holds (a slip once per new date), and records the counts in `linear-audit.jsonl`.
