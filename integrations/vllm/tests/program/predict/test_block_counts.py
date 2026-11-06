@@ -1,7 +1,7 @@
 """verity_vllm.program.predict.block_counts: a day's (c, k)-inference blocks from its served windows' circuit records,
 judged against its declared c, k and n. On a small circuit (two catalog templates over two slots) its count, a block's
-gates, its gate table and its verdict agree with `NciCheck.Count`'s Python reference (`nci_reference.check_count`, which
-`nci-count-difftest` holds the Lean to) on the session Program, m activations of the block Definition; the public judgment
+gates, its gate table and its verdict agree with `NciCheck.Count`'s Python reference (`nci_reference.check_count_detail`
+and `check_count`, which `nci-count-difftest` holds the Lean to) on the session Program, m activations of the block Definition; the public judgment
 holds only its record's fields and no count, so days of different counts under n publish the same bytes, and a refusal past
 n names n; the exact counts are in the private file alone (0600); a block reaching an unpriced primitive leaves the gates
 undecided; and on `test_window_circuit`'s TINY window a block's fresh bits are B's k (`inference_blocks.budgets`).
@@ -59,9 +59,11 @@ def test_the_count_is_ncicheck_counts_on_the_session_program(small):
     text = codec.canonical_json(codec.encode_program(population_program(fn, m))).decode()
     key = codec.descriptor_id(fn)
     for n, verdict in ((2, "accept"), (1, "refuse")):
-        got = _reference().check_count({"program": text, "theta": [], "blocks": [key], "table": dict(pub.table),
-                                        "c": cls.gates, "k": 10 ** 12, "n": n})
+        inst = {"program": text, "theta": [], "blocks": [key], "table": dict(pub.table), "c": cls.gates, "k": 10 ** 12,
+                "n": n}
+        got = _reference().check_count_detail(inst)
         assert got["blocks"][0][:2] == [key, cls.gates] and got["blocks"][0][3] == m == got["total"]
+        assert _reference().check_count(inst) == {"complies": got["complies"]}
         mine, _ = BC.judgment(DAY, [(small, None)], {"c": cls.gates, "k": 10 ** 12, "n": n})
         assert mine.verdict == verdict == ("accept" if got["complies"] else "refuse")
     by = {t: BC.gates(BC.resolve(t), pub.table)[0] for t in (GEMM, ROPE)}
