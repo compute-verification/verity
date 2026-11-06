@@ -1048,7 +1048,12 @@ every stream runs its schedule, and `Finish` goes without proofs, the auditor's 
 as an honest session's. The prover's record has the refusal: `prover_stopped` the ZK server's, where its own checks caught
 it, and the verdict's `why` the loop's `PROVER-STOPPED: the Lean frame stopped table I rep R` where the rep's frame stopped
 it (both, for some). `verifier/firewall_controls.sh` runs each control through the loop and holds it to that outcome,
-after an honest session that must be accepted with no rep's frame stopped and no `prover_stopped`. `later-NAME` is `NAME`
+after an honest session that must be accepted with no rep's frame stopped and no `prover_stopped`. For `opening`,
+`opening-frame`, `cut-tree` and the inner rounds (`FC_INNER_TAMPER`, §10.4) it requires the frame's stop and admits, never
+requires, the ZK server's
+`FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` beside it: the session stops at its
+first failure, every rep with it (§10.1), so the ZK server's own check of the proof against the values the frame passed may
+refuse it too. `later-NAME` is `NAME`
 on every table of a several-table session but the first, and is refused
 the same way at the second table:
 
@@ -1057,8 +1062,8 @@ the same way at the second table:
 | `root` | flips a bit of its level-0 root | `FIREWALL-REFUSED: level-0 root: the device committed … where the recheck has …` |
 | `witness` | proves a witness one bit off the host's | `FIREWALL-REFUSED: level-0 root: …` |
 | `label` | flips a label byte in the algebraic phase | the frame's stop at the round; `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` |
-| `opening` | flips an observed value in the opening's first round | the frame's stop at the round alone |
-| `opening-frame` | flips an observed value in the opening's second round | the frame's stop at the round alone |
+| `opening` | flips an observed value in the opening's first round | the frame's stop at the round; the ZK server's `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` may come with it |
+| `opening-frame` | flips an observed value in the opening's second round | as `opening` |
 | `algebra` | flips a masked value, in its frame and its proof alike | `FIREWALL-REFUSED: circuit: the constraints … fail on a rep's pads` |
 | `steer` | sets each rep's first masked value to a word of its own, in its frame and its proof alike | as `algebra`; the word reaches the verifier in no request |
 | `algebra-proof` | flips a masked value in its returned proof only | `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` |
@@ -1068,7 +1073,7 @@ the same way at the second table:
 | `cut-panic` | panics at that round | `FIREWALL-REFUSED: the device failed: panicked: the worker panics at its round …` |
 | `cut-silent` | falls silent at that round (it ticks the deadline's injected clock, so no test waits on the wall clock) | `FIREWALL-REFUSED: the device failed: silent past the firewall's deadline` |
 | `cut-decode` | returns output that does not decode, from the rep that holds that round | `FIREWALL-REFUSED: the device failed: the device's output does not decode: …` |
-| `cut-tree` | samples its first tree at or after that round one leaf larger than the statement's (the CPU device: its trees sample through the salt context) | the frame's stop at the opening round that differs, alone |
+| `cut-tree` | samples its first tree at or after that round one leaf larger than the statement's (the CPU device: its trees sample through the salt context) | the frame's stop at the opening round that differs; cut at round 0, the ZK server's `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` may come with it |
 
 `FC_FIREWALL_CUT_AT` counts the table's device rounds over both reps (default 0; a rep's bucket has the count so far as
 `firewall_device_rounds`, which leaves out the rounds the host's inner proof sends), and a `cut-` control fires once a table.
