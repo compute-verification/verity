@@ -4,6 +4,7 @@ run total) on three recorded runs with per-step `n_bytes`, refuses by name over 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -145,6 +146,12 @@ def test_lag_rows_chunking_and_the_rope_correction_are_named_and_monotone():
         ADM.scheduled_step_bytes(sizing, [{"prompt_len": 0, "max_tokens": 1, "arrive_step": 0}])
 
 
+def _bare_env() -> dict[str, str]:
+    """PATH and the tree on PYTHONPATH, beside the suite's read guard's own variables and path so the child is still traced."""
+    path = os.pathsep.join(filter(None, [str(REPO), str(REPO / "vllm-poc"), os.environ.get("PYTHONPATH")]))
+    return {**{k: v for k, v in os.environ.items() if k.startswith("VERITY_SUITE_")}, "PYTHONPATH": path, "PATH": "/usr/bin:/bin"}
+
+
 def test_cli_is_torch_free_and_reports_the_observed_check(tmp_path):
     sizing, wl, obs = _fixture("b16")
     sz = tmp_path / "sizing.json"; sz.write_text(json.dumps(sizing))
@@ -153,11 +160,11 @@ def test_cli_is_torch_free_and_reports_the_observed_check(tmp_path):
     cmd = [sys.executable, "-c", "import sys; sys.modules['torch'] = None; from verity_vllm.pipeline import cli; sys.exit(cli.main(['admission-bound', *sys.argv[1:]]))",
            "--workload", str(REPO / "workloads" / f"{wl['sweep']['row_id']}.json"), "--sizing", str(sz),
            "--cap-bytes", str(CAP_CP_BIG), "--observed", str(st)]
-    p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, env={"PYTHONPATH": f"{REPO}:{REPO / 'vllm-poc'}", "PATH": "/usr/bin:/bin"})
+    p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, env=_bare_env())
     assert p.returncode == 0, p.stdout + p.stderr
     assert "ADMITTED" in p.stdout and "SOUND" in p.stdout and "under-predicted 0" in p.stdout
     p2 = subprocess.run(cmd[:-2] + ["--cap-bytes", str(16 << 30)], cwd=REPO, capture_output=True, text=True,
-                        env={"PYTHONPATH": f"{REPO}:{REPO / 'vllm-poc'}", "PATH": "/usr/bin:/bin"})
+                        env=_bare_env())
     assert p2.returncode == 3 and "REFUSED" in p2.stdout
 
 
