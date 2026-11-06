@@ -3155,7 +3155,9 @@
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
   "Flock.SecurityProofs.SessionLoopZKDeployed": "19b9ed293bdf1729089ef8b18463bb7f832ece9b92432e1e88d38c7c4a4b9659",
-  "Flock.SecurityProofs.SoundAtBridge": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc"
+  "Flock.SecurityProofs.SoundAtBridge": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc",
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": "25bb13b79dd739375049d34f8168300966c182117594c7a5a67767779cd0ea9c",
+  "Verity.SecurityProofs.PrivateFitsOfLocal": "64f42467cd87ee1d655ab157a39ee9412d15a923c2cbbd93d790f98f69f9029b"
  },
  "layers": {
   "Definitions.Core": {
