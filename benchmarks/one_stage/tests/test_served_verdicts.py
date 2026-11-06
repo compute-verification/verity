@@ -1861,7 +1861,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "FLOCK_WORK": str(tmp_path / "fw"),
            "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
            "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
-           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "NODE_MEM_GB": "512",
+           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "NODE_MEM_GB": "512", "MIN_FREE_INODES": "0",
            "MAIN_FILE": str(tmp_path / "main.txt"), "GIT_CEILING_DIRECTORIES": str(tmp_path)}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
@@ -2652,6 +2652,27 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])
     assert not (tmp_path / "root").exists() and not (tmp_path / "fw").exists()
+
+
+@pytest.mark.parametrize("total, free, refused", [
+    ("2000000", "499999", True), ("2000000", "500000", False), ("0", "0", False), ("-", "-", False)])
+def test_the_preflight_refuses_a_serve_whose_serve_dirs_filesystem_has_fewer_free_inodes_than_min_free_inodes(
+        tmp_path, total, free, refused):
+    """Step 6 commits the class window into the serve dir, an inode a file, after the whole serve, so a filesystem short
+    of inodes would fail the run only there: the preflight reads the free inodes of the serve dir's nearest existing
+    directory and refuses under MIN_FREE_INODES (default 500000), the fix in its line, before anything is made. A
+    filesystem with no fixed inode table (a total of 0 or -) has no floor."""
+    _script(tmp_path / "df" / "df", f'echo "$2" >> {tmp_path}/df-at\nprintf " Inodes IFree\\n%s %s\\n" "{total}" "{free}"')
+    rc, lines, order, _limits = _v3c(
+        tmp_path, (), PATH=f"{tmp_path / 'df'}:{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", HOST="vy-dc-h200-2",
+        PREFLIGHT_ONLY="1", D=str(tmp_path / "root" / "run"), MIN_FREE_INODES=None)
+    assert (tmp_path / "df-at").read_text().split() == [str(tmp_path)]
+    line = (f"PREFLIGHT: the serve commits its class window into the serve dir, an inode a file, and {tmp_path}'s "
+            "filesystem has 499999 free inodes, under MIN_FREE_INODES 500000: remove old serve dirs' class windows (their "
+            "v3c-w* dirs, once each serve dir has its copy and its run its custody), or serve on a node with the inodes")
+    passed = f"PREFLIGHT passed on vy-dc-h200-2, 512 GB: the serve's lease 60 min, capped at 128 GB. {ONLY}"
+    assert (rc, lines, order) == ((3, [line], []) if refused else (0, [passed], []))
+    assert not (tmp_path / "root").exists()
 
 
 def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_path):

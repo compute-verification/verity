@@ -301,6 +301,8 @@
 # PREFLIGHT_ONLY=1 runs the preflight alone (the settings, the row dir and taps, gpu-lease, the front's flags, H1_TIE's and
 # a follow-on's checks), says what the run would do (PREFLIGHT passed: its lease, or its deferral) and exits 0 before the
 # serve dir is made, kept or anything built but a follow-on's venv, which its checks run.
+# A run that serves is refused where the serve dir's filesystem has fewer free inodes than MIN_FREE_INODES (default
+# 500000): step 6 commits the class window there, an inode a file.
 # `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
 # `served_verdicts.sh advice-charge`, with PRODUCT=remote, measures honest serving's advice charge on a test run whose
 # inputs and counts are public, never on a served run: steps 0 to 2 at the run of record's serving (T, WINDOW_STEPS, the
@@ -483,6 +485,15 @@ NODE_MEM_GB=${NODE_MEM_GB:-$(awk '/^MemTotal:/ {print int($2 / 1048576)}' /proc/
 short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, saying both
   [ "$NODE_MEM_GB" -lt "$V3C_AUDIT_MEM_GB" ] || return 1
   echo "this node has $NODE_MEM_GB GB, under the $V3C_AUDIT_MEM_GB GB V3c's audit needs (V3C_AUDIT_MEM_GB)"
+}
+MIN_FREE_INODES=${MIN_FREE_INODES:-500000}
+short_of_inodes() {  # 0 iff the serve dir's filesystem has fewer free inodes than MIN_FREE_INODES, saying both
+  local at=$D total free
+  until [ -e "$at" ]; do at=$(dirname "$at"); done
+  # a filesystem with no fixed inode table (btrfs, some network ones) says a total of 0 or -, and has no floor
+  read -r total free < <(df --output=itotal,iavail "$at" 2>/dev/null | tail -1)
+  [[ ${total:-} =~ ^[1-9][0-9]*$ && ${free:-} =~ ^[0-9]+$ ]] && [ "$free" -lt "$MIN_FREE_INODES" ] || return 1
+  echo "$at's filesystem has $free free inodes, under MIN_FREE_INODES $MIN_FREE_INODES"
 }
 tree_sha() { git -C "$TREE" rev-parse HEAD 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-}"; }
 window_commit() {  # window K of $D committed as V3C's class circuit's units in $VW/window, its answer in $1 and its errors
@@ -1224,7 +1235,10 @@ case ${1:-} in v3c | advice-charge) ;; *)  # a run that serves and reaches step 
   if DEFER=$(short_of_memory); then  # step 6's audit and the composite go to a follow-on
     [ "$PRODUCT" != onsite ] || [ -z "${COMPOSITE-1}" ] \
       || { say "PREFLIGHT: where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, remote-network or remote-network-no-pouw, COMPOSITE set empty, or a node with the memory"; exit 3; }
-  fi ;;
+  fi
+  # step 6 commits the class window after the whole serve, so out of inodes the run would fail only there
+  why=$(short_of_inodes) \
+    && { say "PREFLIGHT: the serve commits its class window into the serve dir, an inode a file, and $why: remove old serve dirs' class windows (their v3c-w* dirs, once each serve dir has its copy and its run its custody), or serve on a node with the inodes"; exit 3; } ;;
 esac
 OF=
 if [ -n "${OF_RECORD:-}" ] && [ "${1:-}" != advice-charge ] && { [ "${1:-}" != v3c ] || [ -n "$FOLLOW" ]; }; then
