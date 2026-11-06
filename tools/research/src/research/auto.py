@@ -40,8 +40,9 @@ DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
 #: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: on 27 Oct cpu-5 and cpu-6 ran out of
-#: inodes with half their bytes free, and every job placed there failed shipping its source or mid-build with ENOSPC
-DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 400_000, 50
+#: inodes with half their bytes free, and every job placed there failed shipping its source or mid-build with ENOSPC. One run of
+#: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
+DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
 
 
 class Unplaceable(Exception):
