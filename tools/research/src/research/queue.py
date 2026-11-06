@@ -3355,8 +3355,10 @@ def chain_of(repo: Path, base: str, ref: str) -> list[Member]:
 
 
 def queue_merges(repo: Path, base: str, ref: str) -> list[Member]:
-    """The members on ``ref`` above ``base``, oldest first, from the trailers of its first-parent merges, passing over each commit
-    without them, where `chain_of` finds none: from `main`, `next`'s chain crosses the lock commits drive adds to `checked`."""
+    """The members on ``ref``'s first-parent chain that ``base`` doesn't contain, oldest first, from their merges' trailers,
+    passing over each commit without them.  `chain_of` finds none on a chain that crosses one (from `main`, the lock commits
+    drive adds to `checked`) or whose ``base`` isn't below ``ref`` (a `checked` a landing moved off `next` until the sync
+    rebuilds `next` on it)."""
     out = []
     log = _out(repo, "log", "--first-parent", "--reverse", "--format=%H%x00%B%x1e", f"{base}..{ref}")
     for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
@@ -4477,8 +4479,8 @@ class Preflight:
     most often breaks on one of (a) to (c), and a Lean break is most often one of (e) or (f).
 
     `next` is fetched fresh; a PR already on it is merged onto the commit below its merge there, as drive's next sync would
-    rebuild it, found by its trailers past the commits without them (the lock commits drive adds to `checked`, which a walk
-    from `main` crosses: `_fetch`).
+    rebuild it, found by its trailers among the commits of `next` the landing branch doesn't hold, past those without them
+    (`_fetch`).
 
     The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
     first, within `lean_s`, while the tree is clean (a `research run` ships it), then (b) with its own environment (`sync`;
@@ -4581,10 +4583,10 @@ class Preflight:
         return [f"{mv.commit[:12]} ({mv.map})" for mv in moves] if moves and set(files) <= moved else []
 
     def _fetch(self, pr: PR) -> tuple[str, str, list[Member]]:
-        """The commit to merge the head onto, how to name it, and `next`'s members up to it.  The members are `next`'s merges above
-        the landing branch's tip (`main`'s when that can't be fetched), by their trailers, past the commits without them
-        (`queue_merges`); the commit is the one below the PR's newest merge among them, else `next`'s tip, or with no `next` that
-        landing tip."""
+        """The commit to merge the head onto, how to name it, and `next`'s members up to it.  The members are the merges of `next`
+        that the landing branch's tip (`main`'s when that can't be fetched) doesn't contain, by their trailers, past the commits
+        without them (`queue_merges`); the commit is the one below the PR's newest merge among them, else `next`'s tip, or with no
+        `next` that landing tip."""
         _git(self.repo, *STALL, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/preflight/main",
              f"+refs/pull/{pr.number}/head:refs/queue/preflight/pr")
         missing = lambda: _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode   # noqa: E731

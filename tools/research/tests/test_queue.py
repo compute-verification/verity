@@ -2982,6 +2982,28 @@ def test_the_preflight_finds_a_prs_merge_on_next_past_a_lock_commit_on_checked_w
     assert _no_worktree_left(world)
 
 
+def test_the_preflight_finds_a_prs_merge_on_next_while_a_landing_has_moved_checked_off_it(world, capsys):
+    """A landing moves `checked` off `next` (here drive's lock commit on the prefix it landed) until the sync rebuilds `next`
+    on it: `checked` isn't below `next` then, and a PR on `next` above that prefix still merges onto the commit below its merge
+    there, not onto `next`'s tip, where its rewritten head conflicted with its old one."""
+    from research.queue import MarkOnly, ready
+
+    world.with_store_remote()
+    _move_main(world, {DRIVE_FLAGS: 'land_into = "checked"\n'})
+    _git(world.origin, "update-ref", "refs/heads/checked", "refs/heads/main")
+    world.gh.put(1, world.change({"a.txt": "a1\n"}))
+    world.gh.put(2, h2 := world.change({"b.txt": "b2\n"}))
+    one, two = world.queue().sync()[0]
+    assert (one.pr, two.pr, two.head) == (1, 2, h2)
+    lock = _git(world.origin, "commit-tree", f"{one.commit}^{{tree}}", "-p", one.commit, "-m", "Lock records regenerated for #1")
+    _git(world.origin, "update-ref", "refs/heads/checked", lock)
+    world.gh.put(2, world.change({"b.txt": "b2, again\n"}), ready=False)          # rewritten, not on top of h2
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight" in s)
+    assert f"merged onto `next` below its merge of #2 at {h2[:8]} ({one.commit[:12]})" in said, said
+    assert "conflict" not in capsys.readouterr().err
+
+
 def test_the_preflight_runs_its_checks_on_a_merge_whose_only_conflict_is_in_a_pin_rebuilt_as_the_sync_rebuilds_it(world, capsys):
     """A PR that regenerated a pin for its own input conflicts with one on `next` that did the same, only in the pin, which drive's
     sync rebuilds from the merged tree (as PoUS's TRUSTED.sha256): the preflight merges it the same way and checks that tree,
