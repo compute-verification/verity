@@ -897,16 +897,11 @@ def checkRows (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Opti
 
 def ACC_VALUE : String := "rec-acc"
 
-/-- The first name two of the verifier's registered ports share. -/
-def dupName? (registered : Array Registered.Port) : Option String :=
-  let names := registered.toList.map (·.name)
-  names.find? fun nm => names.count nm != 1
-
-/-- **The verifier's reads file names each port once** (`dupName?`): `checkAcc` and `checkAccReads` read a name's first
-port (`find?`), so a second port of that name would be one neither checks. A file `Registered.ofJson` parses names each
-once (a JSON object's keys); the refusal holds whatever list of ports the verifier is given. -/
+/-- **The verifier's reads file names each port once** (`Registered.dupName?`): `checkAcc` and `checkAccReads` read a
+name's first port (`find?`), so a second port of that name would be one neither checks. `Registered.ofJson` refuses a file
+naming a port twice by the same check; this refusal holds whatever list of ports the verifier is given. -/
 def checkNames (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit :=
-  match dupName? registered with
+  match Registered.dupName? registered.toList with
   | some nm => throw s!"{s.name}: the registered reads name two ports {nm}, and each check reads a name's first"
   | none => pure ()
 
