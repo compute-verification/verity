@@ -10,8 +10,9 @@ secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listin
 multi-line key's lines too).
 `compgen -e` lists names only and passes. Also refused: full command lines of every process or of any selection beyond one pid
 (`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
-token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
-`grep`/`rg`, and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into a `grep`/`rg` that keeps only matching
+lines (an inverted one, `grep -v`, prints the rest, so `ps -ef | grep -v grep` is refused and `ps -ef | grep -v grep | grep
+NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
 
 Builds and tests run on our nodes, not on agent VMs: on a shared VM one OOM kill takes down every worker on it. So it refuses,
 always, a local pytest that names no test file or `-k` selection, `lake build|exe`, `cargo build|test|run|check`, nvcc and
@@ -69,7 +70,7 @@ REASON = ("this command would print environment variables' values (a multi-line 
           "`cut -d= -f1`) or every process's full command line (tokens sit in some daemons' argv). List variable names with "
           "`compgen -e` (filter with `compgen -e | rg NAME`); check one variable with `[ -n \"${NAME:-}\" ] && echo set`. "
           "List processes with `ps -eo pid,stat,etimes,comm`, or filter full command lines with "
-          "`ps -eo pid,args | grep \"[p]attern\"` or `pgrep -af PATTERN`.")
+          "`ps -eo pid,args | grep \"[p]attern\"` (not `grep -v`, which prints every other line) or `pgrep -af PATTERN`.")
 
 
 def secret(name: str) -> bool:
@@ -244,13 +245,29 @@ def filter_cmd(words: list[str]) -> bool:
     return bool(words) and os.path.basename(words[0]) in FILTERS
 
 
+def inverted(words: list[str]) -> bool:
+    """Whether a `grep`/`rg` prints the lines that don't match: `-v`, alone or in a cluster such as `-iv`, or `--invert-match`,
+    which GNU grep takes from `--inv` on."""
+    return any(a.startswith("--inv") and "--invert-match".startswith(a) or re.fullmatch(r"-\w*v\w*", a)
+               for a in unwrap(strip_redirections(words))[1:])
+
+
+def filtered(commands: list[tuple[list[str], str]], i: int) -> bool:
+    """Whether command `i` pipes straight into a `grep`/`rg` that keeps only matching lines, read past inverted ones
+    (`ps -ef | grep -v grep | grep NAME`)."""
+    while commands[i][1] == "|" and i + 1 < len(commands) and filter_cmd(commands[i + 1][0]):
+        i += 1
+        if not inverted(commands[i][0]):
+            return True
+    return False
+
+
 def refused_text(text: str) -> bool:
     if ENVIRON.search(text):
         return True
     try:
         commands = words_of(text)
-        return any(refused(w, op == "|" and i + 1 < len(commands) and filter_cmd(commands[i + 1][0]))
-                   for i, (w, op) in enumerate(commands))
+        return any(refused(w, filtered(commands, i)) for i, (w, _) in enumerate(commands))
     except ValueError:                                   # unbalanced quotes: judge the raw text
         return bool(FALLBACK.search(text))
 
