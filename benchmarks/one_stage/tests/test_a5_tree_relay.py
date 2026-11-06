@@ -19,6 +19,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import settings
 
 from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, remote as R, service as S
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
@@ -215,8 +216,8 @@ def test_a_tie_failing_after_the_sessions_refuses_the_audit_and_writes_its_summa
                                                                "negatives": {}} == summary
 
 
-@pytest.mark.skipif(not (os.environ.get("VERITY_ONE_STAGE_TREE_FROM") and os.environ.get("FLOCK_CIRCUIT")),
-                    reason="VERITY_ONE_STAGE_TREE_FROM and FLOCK_CIRCUIT (a release build of flock-circuit) unset: a real "
+@pytest.mark.skipif(not (settings.TREE_FROM and Path(settings.FLOCK_CIRCUIT).is_file()),
+                    reason="VERITY_ONE_STAGE_TREE_FROM=1 and FLOCK_CIRCUIT (a release build of flock-circuit) unset: a real "
                            "serve --zk --tree-from session on RoPE's two captured heads through the relay, about a minute")
 def test_a_zk_servers_coin_tree_through_the_relay_holds_its_record_to_the_steps_session(tmp_path, monkeypatch):
     """``flock-circuit serve --zk --tree-from`` (``FLOCK_CIRCUIT``) on RoPE's two captured heads, through the relay as a5
@@ -231,7 +232,7 @@ def test_a_zk_servers_coin_tree_through_the_relay_holds_its_record_to_the_steps_
         drawn(draws)
         with socket.create_server(("127.0.0.1", 0)) as s:
             port = s.getsockname()[1]
-        record, live = a0.session(os.environ["FLOCK_CIRCUIT"], st, 2, "subset:2", port, tmp_path / "session", zk=True,
+        record, live = a0.session(settings.FLOCK_CIRCUIT, st, 2, "subset:2", port, tmp_path / "session", zk=True,
                                   tree_from=draws.trees())
         relayed = draws.relayed()
         draws.sessions_done(0)
