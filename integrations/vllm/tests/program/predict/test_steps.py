@@ -5,6 +5,7 @@ bodies contradict, a forged cache hit, and what v0 can't compile.
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 from pathlib import Path
@@ -634,17 +635,48 @@ def test_class_g_refuses_a_request_whose_program_misses_a_launch_it_ran_in(sessi
         plan_steps(_class_g(tmp_path), *session)
 
 
+def _traced_form(reg: Registered, u) -> str:
+    """`u`'s request Program digest in the form the B8 row's Build was traced in, as `aot.compare` predicts a traced request:
+    `request_program`'s Program without `dead_free` (the Build without `--dead-free`), at the same launch context."""
+    phi = Phi.from_json({**reg.phi.to_json(), "sampling": u.policy})
+    return build_program(phi, "request", LP=u.LP, T=u.T, C=u.C, batch=u.batch()).digest
+
+
+def _b8_record() -> dict:
+    return json.loads((MANIFESTS / "records.json").read_text())["rows"][GLM53_B8]["programs"]["0"]["requests"]
+
+
 @pytest.mark.slow
-def test_a_class_g_window_compiles_to_the_traced_build(tmp_path):
-    """GLM-5.3's B8 mixed-arrivals row as a window's advice, compiled at rank 0 under a class-G registration: every request Program,
-    each at the launch context the advice gives it, is the one the Build traced for the row (`records.json`, as `aot.compare` reads
-    the traced Build), and the batch rules pass (R1 over GP-01 of the eight, R2 alone at the same launch context). The only test that
-    builds a compilation off batch invariance: the fast tests plan it, and only the DeepSeek sparse-attention decoder reads a launch."""
+def test_a_class_g_request_compiles_to_the_traced_build(tmp_path):
+    """GLM-5.3's B8 row as a window's advice under a class-G registration at rank 0, its first request (LP 11, T 12, whose last
+    four decodes run beside the second request's prefill and first decodes): at the launch context the advice gives it, its
+    Program in the traced Build's form is the row's record, and compiled (`partial`: the window's other requests brought no body,
+    so are refused, their rows still in its launches) in the registered compiler's form, the batch rules pass. What no cheaper
+    test can: that a registration without a workload, at the advice's launch, builds the Program the Build traced, and that
+    `compile_steps` compiles a class-G request. Two GLM-5.3 builds of minutes each, so the window's other seven are
+    `VERITY_VLLM_CLASS_G_WINDOW`'s."""
     reg, (advice, ingress, _) = _class_g(tmp_path), _b8_window()
+    u = plan_steps(reg, advice, ingress).requests[0]
+    assert (u.LP, u.T) == (11, 12) and _traced_form(reg, u) == _b8_record()["build_request_LP11_T12"]
+    c = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True)
+    assert c.batch_rule is None and len(c.programs) == 1 and sorted(c.refused) == list(range(1, 8))
+    assert c.requests[0].launch == u.launch and [len(step) for step in u.launch] == [1] * 9 + [2] * 4
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(os.environ.get("VERITY_VLLM_CLASS_G_WINDOW") != "1",
+                    reason="VERITY_VLLM_CLASS_G_WINDOW=1: GLM-5.3's B8 window whole, its eight request Programs built in each form at "
+                           "rank 0 (most of an hour and about 25 GB on one core)")
+def test_a_class_g_window_compiles_to_the_traced_build(tmp_path):
+    """GLM-5.3's B8 row as a window's advice under a class-G registration at rank 0, whole: each of its eight request Programs, at
+    the launch context the advice gives it, is in the traced Build's form the row's record (`aot.compare` over the window, one
+    build at a time), and the window compiles in the registered compiler's form with the batch rules passing (R1 over GP-01 of the
+    eight, R2 each alone at the same launch context)."""
+    reg, (advice, ingress, _) = _class_g(tmp_path), _b8_window()
+    plan = plan_steps(reg, advice, ingress)
+    assert {f"build_request_LP{u.LP}_T{u.T}": _traced_form(reg, u) for u in plan.distinct()} == _b8_record()
     c = compile_steps(reg, advice, ingress)
-    record = json.loads((MANIFESTS / "records.json").read_text())["rows"][GLM53_B8]["programs"]["0"]["requests"]
-    assert {f"build_request_LP{u.LP}_T{u.T}": u.digest for u in c.requests} == record
-    assert c.batch_rule is None and len(c.programs) == 8
+    assert c.batch_rule is None and len(c.programs) == 8 and [u.launch for u in c.requests] == [u.launch for u in plan.requests]
 
 
 def test_the_traced_side_is_one_build_a_distinct_program(tmp_path):
