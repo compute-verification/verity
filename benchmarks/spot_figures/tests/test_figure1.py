@@ -334,14 +334,15 @@ def test_the_capped_curves_charge_at_most_what_a_request_serves(tmp_path):
     p = out["panels"]["exfiltration"]
     assert p["capped"] == {"two-stage-capped": {"form": "sets", "status": "card_influenceTwo_le_served_min",
                                                 "served": "card_influenceTwo_le_min"},
-                           "two-stage-patterns": {"form": "patterns", "status": "no lemma states it yet"}}
+                           "two-stage-patterns": {"form": "patterns", "status": "no lemma states it yet",
+                                                  "served": "card_influenceTwo_le_two_pow_outs"}}
     assert p["main"] == ["two-stage", "two-stage-capped"]
     ys = {(s["design"], s["budget"]): s["y"] for s in p["series"]}
     served = out["scopes"]["datacenter week"]["served_bits"]
     for beta in out["budgets"]:
         for patterns, sets, every in zip(*(ys[d, beta] for d in ("two-stage-patterns", "two-stage-capped",
                                                                   "two-stage"))):
-            assert patterns <= sets * (1 + 1e-3) and sets <= every * (1 + 1e-3) and sets <= served
+            assert patterns <= sets * (1 + 1e-3) and sets <= every * (1 + 1e-3) and max(sets, patterns) <= served
     caps = out["scopes"]["datacenter week"]["captions"]
     assert (f"Capped (dash-dot; card_influenceTwo_le_served_min): two-stage with each request charged at most the "
             f"{out['inputs']['served_bits']['value']:,.0f} bits it serves") in caps["exfiltration"]

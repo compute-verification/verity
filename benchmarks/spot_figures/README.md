@@ -80,9 +80,11 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
       commits. Beside it (dash-dot) is the same design with each request charged at most the bits it serves, every one
       of its tokens as the token select's 32-bit output word, the `design` card's `token_bytes` (`served_bits`), in
       `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`), which still counts which of a request's proof
-      blocks are incorrect, and never above the scope's served bits (`card_influenceTwo_le_min`). `--request workload` sizes a request as the `workload` card's instead of the census's mean. The
-      appendix figure adds the uniform designs (one sample over a request's proof blocks), the patterns' form, which
-      no lemma states yet (a request's incorrect sets of more than its served bits count once), and one-stage
+      blocks are incorrect, and never above the scope's served bits (`card_influenceTwo_le_min`). `--request
+      workload` sizes a request as the `workload` card's instead of the census's mean. The appendix figure adds the
+      uniform designs (one sample over a request's proof blocks), the patterns' form, which no lemma states yet (a
+      request's incorrect sets of more than its served bits count once; at most the scope's served bits by
+      `card_influenceTwo_le_two_pow_outs`), and one-stage
       sampling of dot-product proof blocks, in `consumers.exfiltration_bound`'s form (the incorrect proof blocks'
       output bits and which ones they are), where the adversary makes the widest ones incorrect first and each is
       charged the widest block's output bits;

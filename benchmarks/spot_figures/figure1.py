@@ -37,7 +37,8 @@ block's outputs under one-stage, outside the budget, and the token ids under two
   served as the token select's output word), in `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`),
   which still counts which of a request's proof blocks are incorrect, and never above the scope's served bits
   (`card_influenceTwo_le_min`), or its patterns' form (no lemma states it yet), which counts a request's sets of more
-  than its served bits once.  `CAP_STATUS` and `SERVED_STATUS` say what each rests on.
+  than its served bits once, at most the served bits too (`card_influenceTwo_le_two_pow_outs`).  `CAP_STATUS`,
+  `SERVED_STATUS` and `OUTS_STATUS` say what each rests on.
 * `one-stage`: every proof block sampled uniformly, each sampled one's request replayed.  Its serve-time commitment,
   every proof block's outputs, is outside the budget, and the output gives its share of compute (`serve_hash_share`).
   For exfiltration it is in `consumers.exfiltration_bound`'s form, the incorrect proof blocks' output bits plus which
@@ -97,6 +98,8 @@ TWO_STAGE = {"two-stage": (True, None), "two-stage-uniform": (False, None), "two
 CAP_STATUS = {"sets": "card_influenceTwo_le_served_min", "patterns": "no lemma states it yet"}
 #: what puts the sets' form at most the scope's served bits: the influence set is a set of served outputs
 SERVED_STATUS = "card_influenceTwo_le_min"
+#: what puts the patterns' form there: on any statement the influence set has at most 2^|outs| members
+OUTS_STATUS = "card_influenceTwo_le_two_pow_outs"
 #: a request's tokens: the census's mean, or the `workload` card's request
 REQUESTS = ("census", "workload")
 #: the deployment each panel assumes: what serving commits, and the replay block
@@ -409,12 +412,12 @@ def served_total(m: Model) -> float:
 def point(m: Model, design: str, target: str, budget: float, rel: float = 1e-4) -> dict:
     """The least target whose cost is at most `budget` GPU-seconds, by bisection in log, capped at `cap`; a two-stage
     design's bound at the budget, which certifies exfiltration alone (its interiors are committed after its first
-    stage), the sets' form at most the scope's served bits too (`SERVED_STATUS`)."""
+    stage), a capped form at most the scope's served bits too (`SERVED_STATUS`, `OUTS_STATUS`)."""
     top = cap(m, target)
     if design in TWO_STAGE:
         if target != "leak":
             raise ValueError("the two-stage design's interior commitments come after its first stage: no work target")
-        if TWO_STAGE[design][1] == "sets":
+        if TWO_STAGE[design][1]:
             top = min(top, served_total(m))
         row = two_stage(m, design, budget)
         bound = top if row is None else min(row["bound"], top)
@@ -574,7 +577,7 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
                   "flat where that binds.")
         patterns = (f" Patterns (dash-dot-dot; {CAP_STATUS['patterns']}): a request's incorrect sets of more than "
                     f"{cap:,.0f} bits serve at most 2^{cap:,.0f} outputs together, so they count once, at the least "
-                    "escape among them.")
+                    f"escape among them; never above the scope's served bits either ({OUTS_STATUS}).")
     inf = infiltration["value"] if infiltration else None
     out = {
         "exfiltration": (f"{DEPLOYMENT['exfiltration']} Two-stage, width-stratified (solid): {two}; the second stage "
@@ -639,7 +642,7 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
     chosen = [s for s in scopes(c, part) if scope_names is None or s.name in scope_names]
     infiltration = infiltration_panel(sc.get("infiltration"), [s.name for s in chosen])
     capped = {d: {"form": TWO_STAGE[d][1], "status": CAP_STATUS[TWO_STAGE[d][1]]}
-                 | ({"served": SERVED_STATUS} if TWO_STAGE[d][1] == "sets" else {})
+                 | {"served": SERVED_STATUS if TWO_STAGE[d][1] == "sets" else OUTS_STATUS}
               for d in planned["exfiltration"] if d in TWO_STAGE and TWO_STAGE[d][1]}
     out_scopes, series = {}, {"exfiltration": [], "skipped_work": []}
     for s in chosen:
