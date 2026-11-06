@@ -203,7 +203,9 @@ above a moved or dropped member or on a `checked` moved to the same tree, takes 
 pins and lock drops (the state's `merges`), and only `git commit-tree` runs; drive's low-risk lane merges onto `checked` through
 the same records (`Queue._recorded`).  A merge whose only conflicts are in pins (`tools/verity/check/pins.py`'s `PINS`, generated
 sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from the merged tree (`repinned`): two PRs that each
-change a pinned input both change its pin.  So a new push moves its PR to the tip, a dropped PR takes the commits after it
+change a pinned input both change its pin.  Two that each change what a JSON pin holds besides its digests (each adds vectors)
+conflict in it, since keeping either side's text drops the other's.
+So a new push moves its PR to the tip, a dropped PR takes the commits after it
 along (they're merged again), and a `checked` that drive moved outside the sync (a landing, a revert, a merge of `main`) rebuilds
 `next` on it; one drive didn't write holds drive's tick, which syncs nothing on it until `checked` is reset to the last tip
 drive wrote or ci accepts it (`Driver._unwritten`, `accept-checked`).  No rebuild while `checked` moved only by files a member
@@ -2047,7 +2049,8 @@ class Queue:
         without the checkout: `git merge-tree` merges, with ``tip``'s merge drivers (`merged_tree`), and `git commit-tree`
         makes the merge commit, so a candidate that conflicts costs one call (merging each candidate in the worktree, with
         many of them conflicting, takes tens of minutes).  A merge whose every conflict is in a pin is kept, each pin rebuilt
-        from the merged tree (`repinned`), and the merged tree's Lean takes the Lean module system once the tree has it
+        from the merged tree, unless both sides changed what a JSON pin holds besides its digests (`repinned`), and the
+        merged tree's Lean takes the Lean module system once the tree has it
         (`ported`), which refuses the merge when it can't.  A git without `--attr-source` (before 2.40) raises: merging
         without it would leave out every PR whose only conflict is a pin (drive refuses its tick before, `Driver._old_git`).
         ``head``: the commit merged in its place, its head restacked through a move (`_merge_through`), under the same
@@ -2763,9 +2766,9 @@ def merged_tree(repo: Path, base: str, head: str, *, plain: bool = True,
     """``head`` merged onto ``base`` by `git merge-tree` (no worktree touched), with ``base``'s merge drivers (`--attr-source`)
     run from ``base``'s tools (`base_drivers`, unless ``config`` gives git's `-c` options; drive's clone sits at `checked`'s
     tip, whose own `merge.py` predates one a member of `next` brings): (the merged tree, the conflicted files, `git
-    merge-tree`'s result).  A merge whose every conflict is in a pin, or in a `.lean` file one side deleted that the other
-    changed only by porting it (`port_deletions`), gives the tree with each pin rebuilt (`repinned`) and each such file
-    deleted, and those files (`taken` tells them apart); one that doesn't merge gives None.  A git without `--attr-source`
+    merge-tree`'s result).  A merge whose every conflict is in a pin `repinned` rebuilds, or in a `.lean` file one side
+    deleted that the other changed only by porting it (`port_deletions`), gives the tree with each pin rebuilt and each such
+    file deleted, and those files (`taken` tells them apart); one that doesn't merge gives None.  A git without `--attr-source`
     (before 2.40) merges without the drivers, or with ``plain`` False gives None and its refusal (exit 129)."""
     if config is None:
         with base_drivers(repo, base) as config:
@@ -2880,7 +2883,7 @@ def base_drivers(repo: Path, base: str):
 def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
     """The files a merge of ``head`` onto ``base`` would leave conflicted, so `status` names a conflict on any VM, not only on
     the one whose last sync recorded it; [] when it merges cleanly.  It merges as `Queue._merge` does (`merged_tree`): a
-    conflict only in pins counts as none, since the sync rebuilds them (a conflict over PoUS's TRUSTED.sha256, which the sync
+    conflict only in pins the sync rebuilds (`repinned`) counts as none (a conflict over PoUS's TRUSTED.sha256, which the sync
     merges, refuses nothing), and so does one over a `.lean` file one side deletes that the other only ported
     (`port_deletions`)."""
     tree, files, _ = merged_tree(repo, base, head)
@@ -2925,39 +2928,61 @@ def _blobs(repo: Path, specs: list[str]) -> dict[str, bytes]:
 
 
 def repinned(repo: Path, tree: str, ours: str, theirs: str, conflicted: list[str]) -> str | None:
-    """The merged ``tree`` with each conflicted pin rebuilt, when every path in ``conflicted`` is a pin (`pins_at` ``ours``);
-    else None.  A pin records the union of the paths both sides' versions record, OURS's in its order then THEIRS's new
-    ones, less those the merged tree lacks, each with the sha256 of its blob there; a JSON pin keeps the rest of OURS's text.
-    `pins.py --merged` would run each pin's command instead, which needs a checkout and Lake: two PRs that each changed a
-    pinned input both changed the pin, and drive would eject the second (as over the PoUS TRUSTED.sha256)."""
+    """The merged ``tree`` with each conflicted pin rebuilt, when every path in ``conflicted`` is a pin (`pins_at` ``ours``)
+    whose content besides its digests the sides agree on or only one of them changed (`_kept`; a `sha256sum` listing is all
+    digests); else None.  A pin records the union of the paths both sides' versions record, OURS's in its order then
+    THEIRS's new ones, less those the merged tree lacks, each with the sha256 of its blob there; a JSON pin keeps the rest of
+    the text of the side that changed it, OURS's when the sides agree on it.  `pins.py --merged` would run each pin's command
+    instead, which needs a checkout and Lake: two PRs that each changed a pinned input both changed the pin, and drive would
+    eject the second (as over the PoUS TRUSTED.sha256)."""
     pins = pins_at(repo, ours)
     if not conflicted or any(p not in pins for p in conflicted):
         return None
+    bases = _git(repo, "merge-base", "--all", ours, theirs, check=False).stdout.split()
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         env = {"GIT_INDEX_FILE": str(Path(tmp, "index"))}
         _git(repo, "read-tree", tree, env=env)
         for path in conflicted:
             key, under = pins[path]
-            if not (sides := _blobs(repo, [f"{ours}:{path}", f"{theirs}:{path}"])):
+            texts = _blobs(repo, [f"{c}:{path}" for c in (ours, theirs, *bases)])
+            if not (sides := [texts[s] for s in (f"{ours}:{path}", f"{theirs}:{path}") if s in texts]):
                 return None
             recorded: dict[str, str] = {}
             try:
-                for text in (b.decode() for b in sides.values()):
+                for text in (b.decode() for b in sides):
                     pairs = ([ln.split("  ", 1)[::-1] for ln in text.splitlines() if ln.strip()] if key is None
                              else json.loads(text)[key].items())
                     recorded |= {p: h for p, h in pairs if p not in recorded}
+                kept = sides[0] if key is None else _kept(key, texts.get(f"{ours}:{path}"), texts.get(f"{theirs}:{path}"),
+                                                          [texts.get(f"{b}:{path}") for b in bases])
             except (ValueError, KeyError, TypeError, AttributeError):
+                return None
+            if kept is None:
                 return None
             full = {p: posixpath.normpath(posixpath.join(under, p)) for p in recorded}
             found = _blobs(repo, [f"{tree}:{f}" for f in full.values()])
             digests = {p: hashlib.sha256(found[f"{tree}:{f}"]).hexdigest() for p, f in full.items() if f"{tree}:{f}" in found}
             text = ("".join(f"{h}  {p}\n" for p, h in digests.items()) if key is None
-                    else _with_json(next(iter(sides.values())).decode(), key, digests))
+                    else _with_json(kept.decode(), key, digests))
             blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=repo, input=text.encode(), capture_output=True,
                                   env=git_env(GIT_TERMINAL_PROMPT="0"), check=True).stdout.decode().strip()
             mode = _out(repo, "ls-tree", tree, "--", path).split(" ", 1)[0] or "100644"
             _git(repo, "update-index", "--add", "--cacheinfo", f"{mode},{blob},{path}", env=env)
         return _git(repo, "write-tree", env=env).stdout.strip()
+
+
+def _kept(key: str, ours: bytes | None, theirs: bytes | None, bases: list[bytes | None]) -> bytes | None:
+    """The side of a conflicted JSON pin whose text a merge keeps, from each side's and each merge base's (None: no pin there),
+    by what each holds besides its digests (the object less ``key``): OURS when the sides agree on it, else the side that alone
+    changed it from every base; None when both changed it (two PRs that each added vectors), since keeping either side's
+    text drops the other's change, or when the side kept has no pin."""
+    def rest(text: bytes | None) -> dict | None:
+        return None if text is None else {k: v for k, v in json.loads(text).items() if k != key}
+
+    o, t, was = rest(ours), rest(theirs), [rest(b) for b in bases]
+    if o == t or (was and all(w == t for w in was)):
+        return ours
+    return theirs if was and all(w == o for w in was) else None
 
 
 def _with_json(text: str, key: str, value: dict) -> str:
