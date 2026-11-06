@@ -183,9 +183,9 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
   whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
   audit's registration, every such entry at that root and domain, with the entry of that value in its `window`'s
-  `activations.values`, where a window circuit's registration commits its per-window values
-  (`auditStateEntries`); and the scan's registration states its units' reads
-  of that state and opens its row 0, its `window`'s
+  `activations.values`, where a window circuit's registration commits its per-window values (`auditStateEntries`,
+  which its driver, not one-stage's registration checks, holds its reads to); and the scan's registration states its
+  units' reads of that state and opens its row 0, its `window`'s
 
       "reads": {"scan/state": {"o1": {"leaf": 1, "units": [0, T − 1]}, "sin": {"leaf": 1, "units": [1, T]}}, …},
       "empty": {"scan/state": {"words": W, "salt": hex, "path": hex}, …}
@@ -1182,9 +1182,11 @@ def stateEntries (reg : Json) : Array Json :=
   (entries "roots").filter (named "port" stateName) ++ (entries "registered").filter (named "value" stateValue)
 
 /-- A compute audit's state entries: its `stateEntries` and, where its `window` commits its per-window values
-(`window.activations.values`, fixed with the record before the sample, the entries its registered reads of those values
-open against), its entry of `stateValue` when that entry's `value` is `stateValue`. A scan's state entries are its
-`stateEntries` alone. -/
+(`window.activations.values`, fixed with the record before the sample), its entry of `stateValue` when that entry's
+`value` is `stateValue`. That entry is the root the audit's reads of `stateValue` open at only where its verifier is given
+those reads at its window's entries: one-stage's registration checks hold `roots` and `registered` but read nothing of
+`window`, so it is the audit's driver, which pins each per-window value from `activations.values`, that holds it. A
+scan's state entries are its `stateEntries` alone. -/
 def auditStateEntries (reg : Json) : Array Json :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   stateEntries reg ++ #[(((reg.getObjValD "window").getObjValD "activations").getObjValD "values").getObjValD
@@ -1229,9 +1231,10 @@ def stateRead (s : Schedule) (reg : Json) : Bool :=
 
 /-- The scan's state is the state its slots' Programs read, read where the scan's transitions chain it: the scan's
 registration states its state reads as the chain (`stateRead`: unit `t`'s `sin` at leaf `t`, its `o1` at leaf `t + 1`, but
-the last unit's `o1`, which no leaf holds), has a state entry (`stateEntries`), every one at one root and domain, and an audit `wired` to the scan's `prog` has one
-(`auditStateEntries`), every one at that root and domain. So the `SCAN_STATE` that audit's Programs read is the chain of the scan's
-transitions, each row past row 0 the one the unit before registered. -/
+the last unit's `o1`, which no leaf holds), has a state entry (`stateEntries`), every one at one root and domain, and an
+audit `wired` to the scan's `prog` has one (`auditStateEntries`), every one at that root and domain. So the `SCAN_STATE`
+that audit's Programs read is the chain of the scan's transitions, each row past row 0 the one the unit before
+registered. -/
 def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   stateRead s reg && match (stateEntries reg)[0]? with
