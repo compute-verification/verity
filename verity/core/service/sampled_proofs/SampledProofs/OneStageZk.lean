@@ -31,7 +31,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   the service's run refuses at registration (`Run.run`, `population-order`), else the check refuses, before any session
   is verified. v1's R2 holds only their count, and the session's knowledge soundness reads slot `u` as proof block `u`;
 * **public** (`publicHeld`): the public file's header held to the registration (`Record.matchesPublic`): its scheme,
-  roots and their domains and its instance count the record's, else the check refuses, before any session is verified;
+  roots and their domains and its instance count the record's, and its `units.indices` the population's units in
+  order (`indicesHeld`, `indicesHeld_of_publicHeld`), so no header written after the draw relabels an instance as
+  another unit; else the check refuses, before any session is verified;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports, domains and roots,
@@ -52,6 +54,7 @@ public import CoreProtocol.Blobs
 public import SampledProofs.Slots
 public import SampledProofs.FilePart
 public import Flock
+public import Flock.JsonParse
 public import Flock.KnownRead
 public import Flock.KsScope
 public import Flock.RecSetup
@@ -63,6 +66,7 @@ meta import CoreProtocol.Blobs
 meta import SampledProofs.Slots
 meta import SampledProofs.FilePart
 meta import Flock
+meta import Flock.JsonParse
 meta import SampledProofs.ChallengerTrees
 meta import SampledProofs.OneStage
 
@@ -263,33 +267,51 @@ def programDigest (b : ByteArray) : Option String := do
     | x => x
   return Flock.hexOf (Flock.Sha512.hash (← (Flock.canon bare).toOption).toUTF8)
 
-private def headerLine (b : ByteArray) : ByteArray := Id.run do
-  for i in [0:b.size] do
-    if b[i]! == 10 then return b.extract 0 i
-  return b
+/-- The refusal of a public file whose instances are not the registration's population units in order (`indicesHeld`). -/
+def INDICES_WHY : String :=
+  "public file: its units.indices are not the registration's population units in order (instance i is unit i)"
 
-/-- The public file's header as `HmRow.loadPublic` reads it: parsed, then `Flock.norm`. -/
-private def headerOf (pubB : ByteArray) : V Json := do
-  let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
-  Flock.norm <$> (Flock.JsonParse.parse line).mapError (s!"the public file's header is not JSON: {·}")
+/-- The header `h`'s `units.indices` are the registration `rec`'s population units in order, `[0, population)`: the unit
+v1 credits for an instance a session proves (`provedUnits`) is that instance's slot, which the session's knowledge
+soundness reads (`popHeld`), fixed by the registration before any coin rather than by a header written after it. -/
+def indicesHeld (rec h : Json) : Bool :=
+  match nat? (getD rec "population"), getD (getD h "units") "indices" with
+  | some n, .arr is => is.size == n && (List.range n).all fun i => (is[i]? >>= nat?) == some i
+  | _, _ => false
 
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the draw): its header's scheme, `frame_v3` roots and their `domain_ids`, and
-`instances` against the record's scheme, roots, domains and population. A refusal names the codes that fail. -/
+`instances` against the record's scheme, roots, domains and population, a refusal naming the codes that fail; then its
+`units.indices` the population's units in order (`indicesHeld`). -/
 def publicHeld (rec : Json) (pubB : ByteArray) : V Unit := do
-  let h ← headerOf pubB
+  let h ← FilePart.header pubB
   let fv := getD h "frame_v3"
   let c := Record.matchesPublic rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids") (getD h "instances")
   if !c.codes.isEmpty then throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
+  if !indicesHeld rec h then throw INDICES_WHY
 
-/-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`) of the instances the session's
-record drew (`unit_draw.units`), ascending. -/
+/-- `publicHeld` passes only on a public file whose header's `units.indices` are the registration's population units in
+order (`indicesHeld`): the unit `provedUnits` credits for instance `i` is `i`, fixed by the registration before any coin. -/
+theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} (h : publicHeld rec pubB = .ok ()) :
+    ∃ hd, FilePart.header pubB = .ok hd ∧ indicesHeld rec hd = true := by
+  unfold publicHeld at h
+  cases hh : FilePart.header pubB with
+  | error e => simp [hh, bind, Except.bind] at h
+  | ok hd =>
+    refine ⟨hd, rfl, ?_⟩
+    cases hi : indicesHeld rec hd
+    · simp only [hh, hi, bind, Except.bind, Bool.not_false, ↓reduceIte, throw, throwThe, MonadExceptOf.throw] at h
+      split at h <;> simp_all
+    · rfl
+
+/-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`, as the population check reads
+them: `FilePart.indicesOf` of `FilePart.header`) of the instances the session's record drew (`unit_draw.units`),
+ascending. -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
-  let h ← headerOf pubB
-  let .arr is := getD (getD h "units") "indices" | throw "the public file's header names no units.indices"
+  let is ← FilePart.indicesOf (← FilePart.header pubB)
   let .arr ds := getD (getD (← Flock.JsonParse.parse record) "unit_draw") "units"
     | throw "the record's unit_draw names no units"
-  let units ← ds.mapM fun d => match nat? d >>= fun i => is[i]? >>= nat? with
+  let units ← ds.mapM fun d => match nat? d >>= (is[·]?) with
     | some u => pure u
     | none => throw "the record draws an instance the public file's units.indices does not name"
   return units.qsort (· < ·)
@@ -663,7 +685,14 @@ private def refusal : V Unit → String
   | .ok () => ""
 
 #guard refusal (publicHeld heldRecord
-  "{\"frame_v3\":{\"domain_ids\":{\"x\":\"dd\"},\"roots\":{\"x\":\"aa\"}},\"instances\":2,\"scheme\":\"s\"}\nrest".toUTF8) == ""
+  ("{\"frame_v3\":{\"domain_ids\":{\"x\":\"dd\"},\"roots\":{\"x\":\"aa\"}},\"instances\":2,\"scheme\":\"s\"," ++
+    "\"units\":{\"indices\":[0,1]}}\nrest").toUTF8) == ""
+#guard [("[1,0]" : String), "[0,2]", "[0]", "[0,1,2]", "[\"0\",1]"].all fun is => refusal (publicHeld heldRecord
+  ("{\"frame_v3\":{\"domain_ids\":{\"x\":\"dd\"},\"roots\":{\"x\":\"aa\"}},\"instances\":2,\"scheme\":\"s\"," ++
+    "\"units\":{\"indices\":" ++ is ++ "}}").toUTF8) == INDICES_WHY
+#guard refusal (publicHeld heldRecord
+  "{\"frame_v3\":{\"domain_ids\":{\"x\":\"dd\"},\"roots\":{\"x\":\"aa\"}},\"instances\":2,\"scheme\":\"s\"}".toUTF8) ==
+  INDICES_WHY
 #guard refusal (publicHeld heldRecord
   "{\"frame_v3\":{\"domain_ids\":{\"x\":\"dd\"},\"roots\":{\"x\":\"ab\"}},\"instances\":2,\"scheme\":\"s\"}".toUTF8) ==
   "public file: not the registration's: roots"

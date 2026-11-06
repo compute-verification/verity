@@ -25836,14 +25836,17 @@
    }
   },
   "SampledProofs.FilePart": {
-   "digest": "1e8cca2bcc9b71b12c00e3dba18a05f936db0fac94019e844231379662811132",
+   "digest": "97e4af1f26c6ea95d9daabd75b65c03ab6a29cc030a8c6e4c3993db7be44a30c",
    "definitions": {
-    "SampledProofs.FilePart.check": "2150871a481ef81d0f8740ffbe8479ca95f1c73655722adb0fe85dd366f84e1c",
+    "SampledProofs.FilePart.check": "2c023418a77fdbce92498c480b1efbdb05938a75c35d6fec6b3f4e12e5e106c4",
+    "SampledProofs.FilePart.header": "5a38a6ded315deaee14a38a5448556e3e5bd065397cd7c4f9ee3128692dd15ab",
+    "SampledProofs.FilePart.header._sparseCasesOn_1": "aa5844cff5299f978e99ab0ec27baf6fcc7440b30ea7dad88b4ed29dbe2df8b9",
+    "SampledProofs.FilePart.headerLine": "3be47ddacbe75e06d31606b09d57367eefcda36227f87ed8c11090e5e5be1b36",
+    "SampledProofs.FilePart.indicesOf": "f378c0e92877cb7538b42fb42c0b4f04b66e4aa2c5030e0518f0baf77368b690",
+    "SampledProofs.FilePart.indicesOf._sparseCasesOn_1": "a75aea189736fc7d61e090e92494180d413b7b9829862e1892c7e7247c2c915d",
     "SampledProofs.FilePart.sizes": "4dd450dc9b5a101526aa1c0457d5db0d706b503cc4cc8a799480df09cb0d47e0",
     "SampledProofs.FilePart.srcAt.match_3": "23acaa142a06cb279b09d55d3e4b2b294c22ff35e724535f1f96e20ac527e462",
-    "SampledProofs.FilePart.unitIndices": "b9569d9c15ba195f85f9a30646c49c13252859a905fcd915756c27e04baddf81",
-    "SampledProofs.FilePart.unitIndices._sparseCasesOn_1": "33bac7c0a9db5d95f5da0a8641dda76c5f2a94a52c3a9ff9489c0783ca2e0f2c",
-    "SampledProofs.FilePart.unitIndices._sparseCasesOn_4": "d054832a3de18b1c2f23128c969b5467d6c3ac5e3a94eb46cde9f4df0f57b59b",
+    "SampledProofs.FilePart.unitIndices": "32fd9a2f760303ed20093a4ed3bafc2f2ad13e63143bb4dac1cd838af99a703a",
     "SampledProofs.FilePart.why": "909915642b5b0a09c2bd01826d37356bd3e40395e86c88329638e9dd9e357130"
    }
   },
@@ -25878,10 +25881,12 @@
    }
   },
   "SampledProofs.OneStageZk": {
-   "digest": "86abe8e920bd47c677a3ac056a8b3f6f6444bead085659151a00c9adb979b6a3",
+   "digest": "ef4d366c61082a96d799186b906e81514ca5010dddff8374c319433d044b31b8",
    "definitions": {
+    "SampledProofs.OneStageZk.INDICES_WHY": "312a163469c0c494655a3fa7a7d2ce2925fda421dd88be5dadb4ea639c998261",
     "SampledProofs.OneStageZk.checkIdentifier": "2fd8c67dfca865e4f5ef6c301b5ed5dcc80837cbe5ac4606f38372f80bfec899",
     "SampledProofs.OneStageZk.evidenceOf": "fdf9e90bb51bb508e7175d556e41a9cda1e1587380b4872960f641179cb28d82",
+    "SampledProofs.OneStageZk.indicesHeld": "71508045fe1bfc463509560a1972f331dc112616d7c29e6603c8f562f8a39028",
     "SampledProofs.OneStageZk.programDigest": "1203586e1a289f82fd3cb9d12de401779ee02b4594feeebffbd358999b3b52c6",
     "SampledProofs.OneStageZk.proofsOf": "5e7f119f22f986b2132251e279ad0804f328368f17d44867b40c1b1b2ec8cc76",
     "SampledProofs.OneStageZk.proofsOf._sparseCasesOn_4": "fbc75a5ad47a1d9c0fb5cea5b59fd0b4306057cd018c133ce224ca7823458937",

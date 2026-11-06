@@ -1,6 +1,7 @@
 module
 
 public import Properties.SampledProofs
+public import Proofs.Properties.SampledProofs.FilePart
 import all Init.Data.Array.QSort.Basic
 import Std.Data.TreeMap.Raw.Lemmas
 
