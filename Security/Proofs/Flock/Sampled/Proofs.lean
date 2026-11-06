@@ -1,8 +1,12 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Fin
-public import Mathlib.Data.Fintype.BigOperators
 public import Proofs.Flock.Sampled.Statements
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The sampled audit's statements, proved

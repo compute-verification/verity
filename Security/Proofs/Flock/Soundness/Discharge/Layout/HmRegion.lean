@@ -1,8 +1,14 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Layout.Region
-public import Proofs.Flock.Soundness.ExecSetup
 import all Init.Data.Array.Basic
+public import Flock.HmRow
+public import Proofs.Flock.Soundness.Binding.Layout
+public import Proofs.Flock.Soundness.ExecPlacement
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Layout.Bytes
+import Proofs.Flock.Soundness.Discharge.Layout.Region
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The `b ‖ c` that the statement pins at the `hm96` slots' outputs

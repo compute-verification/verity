@@ -1,6 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
+public import Proofs.Flock.Soundness.Audit.Partitioning.Model
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
 
 /-!
 # Exfiltration: a law that certifies the target

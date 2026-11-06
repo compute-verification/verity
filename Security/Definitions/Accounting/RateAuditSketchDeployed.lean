@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.RateAuditSketch
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A deployed session of verbatim sketch receipts (trusted)

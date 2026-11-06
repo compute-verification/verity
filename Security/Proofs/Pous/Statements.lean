@@ -1,6 +1,13 @@
 module
 
-public import Definitions.Pous.Guarantees
+public import Definitions.Pous.Assumptions
+public import Definitions.Pous.Model.BandGraph
+public import Definitions.Pous.Model.Continuous
+public import Definitions.Pous.Model.HashChain
+public import Definitions.Pous.Model.Invertible
+public import Definitions.Pous.Model.SampledAudit
+public import Definitions.Pous.Model.SegLift
+public import Mathlib.Combinatorics.SimpleGraph.Clique
 
 /-!
 # PoUS's lemmas, stated

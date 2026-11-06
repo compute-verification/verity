@@ -1,8 +1,6 @@
 module
 
 public import PouwWindow.Grid
-public import Flock.Hash
-public import Flock.Hm96
 public import Flock.HmRow
 public import PouwCommit.Frame
 

@@ -1,9 +1,50 @@
 module
 
-public import Proofs.Flock.Claims.Sampling.Runs
-public import Proofs.Flock.Claims.Sampling.RunsExp
 public import Proofs.Flock.SamplingGeneric.Session
-public import Proofs.Flock.SamplingGeneric.Bits
+public import Proofs.Flock.Claims.Recursion.Serve
+public import Proofs.Flock.Claims.Sampling.Cost
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Monotonicity.Lemmas
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Presheaf
+import Proofs.Flock.Claims.ERep
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.Cost
+import Proofs.Flock.Claims.Sampling.Runs
+import Proofs.Flock.Claims.Sampling.RunsExp
+import Proofs.Flock.SamplingGeneric.Coins
 
 /-!
 # The compiled extractor's costs
@@ -607,7 +648,7 @@ theorem slot_exp_le (hS : L.Sessions H) {x : Msg} (s : AuditStatement)
         Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ) ≤ L.es x := by
   have he0 : 0 ≤ L.es x := maxBelow_nonneg _ _
   have hres := Ex_resample (fun d => L.selRounds x (L.slotSel x i) (forkOn (L.stage2 x) r d))
-    (selRounds_resample hS (L.slotSel x i) r) fun d =>
+    (selRounds_resample hS.toRunsFixed (L.slotSel x i) r) fun d =>
       (if (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
         Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ
   beta_reduce at hres

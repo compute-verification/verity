@@ -2,6 +2,8 @@ module
 
 public import Definitions.Core.Expand
 public import Definitions.Nci
+public import Definitions.Core.Formalism
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI's policy as a `(c, k)`-partition

@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.E2E
 public import Proofs.Flock.Soundness.Types.ProgramPlaces
 public import Proofs.Flock.Soundness.Discharge.Const.Inst
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # `hConst`: only a unit's constant column sits on the constant's gate

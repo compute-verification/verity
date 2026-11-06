@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pous.Model.ColumnGame
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The band graph of the column game (trusted)

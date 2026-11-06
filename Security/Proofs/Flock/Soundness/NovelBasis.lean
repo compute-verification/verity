@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.LigeritoDecode
+public import Proofs.Flock.Soundness.ListSize
+import Proofs.Flock.Soundness.LigeritoDecode
 
 /-!
 # The novel basis: `X̂_c` has degree at most `c`

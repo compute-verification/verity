@@ -1,7 +1,8 @@
 module
 
 public import Definitions.Nci.Guarantees.Layered
-public import Proofs.Nci.Threads
+import Mathlib.Data.NNRat.Floor
+import Proofs.Nci.Threads
 
 /-!
 # Proofs that keyed circuits are threaded

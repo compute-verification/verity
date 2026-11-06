@@ -1,7 +1,8 @@
 module
 
 public import Definitions.Flock.Audit.Harm
-public import Proofs.Flock.Soundness.Audit.Law
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Harm bounds

@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Flock.Recursive.Compose
-public import Proofs.Flock.Soundness.Game.Seq
+public import Proofs.Flock.Recursive.Defs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Recursive.Compose
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Recursion: several outer sessions in a row

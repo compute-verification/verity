@@ -3,6 +3,8 @@ module
 public import Definitions.Core.Game.Lock
 public import Definitions.Flock.Game.Expect
 public import Definitions.Flock.Game.Interleave
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # C-Flock's game vocabulary is Core's: `Lock`

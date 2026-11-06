@@ -1,10 +1,13 @@
 module
 
+public import Definitions.Claims.Hm96
+public import Definitions.Core.Game
+public import Definitions.Flock.Arith
+public import Definitions.Flock.Game.Expect
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Proofs.Flock.Soundness.Game.Expect
 public import Randomness
-public import Definitions.Flock.Arith
-public import Definitions.Claims.Hm96
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Named assumptions

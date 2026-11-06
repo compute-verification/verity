@@ -1,12 +1,17 @@
 module
 
-public import Proofs.Nci.CoveringPriced
-public import Mathlib.Algebra.BigOperators.Field
 public import Mathlib.Data.Fin.VecNotation
-public import Mathlib.Data.Fintype.Powerset
 public import Mathlib.Data.Fintype.Prod
-public import Mathlib.Tactic.FinCases
-public import Mathlib.Tactic.NormNum
+public import Definitions.Nci.Assumptions.CoveringPriced
+public import Definitions.Nci.Assumptions.CoveringTwoCosts
+import Mathlib.Algebra.BigOperators.Field
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The priced covering bound is not vacuous, and beats every uniform weight cost

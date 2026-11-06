@@ -2,6 +2,7 @@ module
 
 public import Definitions.Nci
 public import NciCheck.Check
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # The NCI check's properties, stated against the Lean function

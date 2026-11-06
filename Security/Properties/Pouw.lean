@@ -1,6 +1,7 @@
 module
 
-public import PouwWindow
+public import PouwWindow.Draw
+public import PouwWindow.Public
 
 /-!
 # PoUW's window: what its Lean code (`PouwWindow`) does

@@ -1,7 +1,8 @@
 module
 
-public import Flock.With.SimSetup
 public import Proofs.Flock.Claims.Complete.CostWalk
+public import Flock.With.Log
+public import Flock.With.Setup
 
 /-!
 # The setup's hash calls, counted function by function, in any hash

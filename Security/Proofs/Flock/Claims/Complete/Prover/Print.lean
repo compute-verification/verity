@@ -1,6 +1,6 @@
 module
 
-public import Lean.Data.Json
+public import Lean.Data.Json.Basic
 
 /-!
 # The record's printer

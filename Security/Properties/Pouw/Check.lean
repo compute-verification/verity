@@ -1,6 +1,6 @@
 module
 
-public import PouwCheck
+public import PouwCheck.Protocol
 
 /-!
 # PoUW's window check: what its Lean code (`PouwCheck.protocol`) does

@@ -2,6 +2,8 @@ module
 
 public import Definitions.Pouw.PearlC.Tile
 public import Definitions.Core.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The hidden audit (trusted)

@@ -1,16 +1,11 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Data.Fintype.Powerset
-public import Mathlib.Tactic.FieldSimp
-public import Mathlib.Tactic.GCongr
-public import Mathlib.Tactic.Linarith
-public import Definitions.Pous
-public import Definitions.Pous.Assumptions
-public import Proofs.Pous.Statements
-public import Proofs.Pous.Sanity
-public import Proofs.Pous.Accounting.Numbers
+public import Definitions.Pous.Model.Inc
+public import Mathlib.Algebra.Group.End
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.Pous.Sanity
 
 /-!
 # Report Theorem 1(i), timed: `PousProofs.theorem1_i_timed`, as drafted

@@ -2580,6 +2580,22 @@
    "Claims.SamplingGeneric.ZkCompiled.ZK": {
     "fails": "Claims.SamplingGeneric.ZkCompiled.ZK_fails",
     "meets": ["Claims.Sampling.masked_meets_zk", "Claims.Witness.SamplingGeneric.echo_meets"]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.KS": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.KS_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.Exfil": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.Exfil_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
    }
   },
   "not": {
@@ -2632,7 +2648,11 @@
    "Claims.SamplingGeneric.FlockKS": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKS`)",
    "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)",
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
-   "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier"
+   "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
+   "Claims.SamplingGeneric.CompiledTwo.Scope": "a helper the claims read: the two-stage scope on the statement's bytes, which `CompiledTwo.KS` reads",
+   "Claims.SamplingGeneric.CompiledTwo.Sessions": "a helper the claims read: the two-stage compiler's contract, the code facts `CompilerKSTwo` takes of a compiled two-stage verifier",
+   "Claims.Sampling.InScopeTwo": "a helper the claims read: the programs, partitions and two-stage designs the two-stage scope takes",
+   "Claims.Sampling.Design.Two.WellFormed": "a helper the claims read: a well-formed two-stage design, a well-formed first stage and one `k ≥ 1` per stratum"
   },
   "generic": {
    "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",
@@ -2641,7 +2661,9 @@
    "Claims.SamplingGeneric.CompilerBits": "Claims.SamplingGeneric.compilerBits",
    "Claims.SamplingGeneric.CompilerEfficient": "Claims.SamplingGeneric.compilerEfficient",
    "Claims.SamplingGeneric.CompilerZK": "Claims.SamplingGeneric.compilerZK",
-   "Claims.ZKOutLeak": "Claims.zkOutLeak"
+   "Claims.ZKOutLeak": "Claims.zkOutLeak",
+   "Claims.SamplingGeneric.CompilerKSTwo": "Claims.SamplingGeneric.compilerKSTwo",
+   "Claims.SamplingGeneric.CompilerExfilTwo": "Claims.SamplingGeneric.compilerExfilTwo"
   }
  },
  "witnesses": {
@@ -2781,6 +2803,14 @@
   "Verity.SecurityProofs.RegisteredLeakage": {
    "honest": ["Verity.SecurityProofs.RegisteredLeakage_honest"],
    "nontrivial": "Verity.SecurityProofs.RegisteredLeakage_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerExfilTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerExfilTwo_nontrivial"
   }
  },
  "unwitnessed": {
@@ -6204,6 +6234,24 @@
    "assumptions": [],
    "type_hash": "196e6f2701cbab3465fe7f07ad01cc4bb6f385d3d01b8dfa60ab2a8d643eeef0"
   },
+  "Claims.SamplingGeneric.CompiledTwo.Exfil_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.Exfil_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.Exfil H L)"
+   ],
+   "assumptions": [],
+   "type_hash": "e4243fbaf1ee1c234ce100d08e628977ca71758e0c37225e2636dd725e44e044"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.KS_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.KS H L)"
+   ],
+   "assumptions": [],
+   "type_hash": "4bad71657d26ec907352689f45442dbd782f32e32ed982af684bf697305d4c26"
+  },
   "Claims.SamplingGeneric.ZkArg.ZK_fails": {
    "owner": "@proofs",
    "signature": [
@@ -6261,6 +6309,21 @@
    "assumptions": [],
    "type_hash": "0814e558ebc0f993b64a533606f001e547f745202d8429cafed17c9d61d34593"
   },
+  "Claims.SamplingGeneric.compilerExfilTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerExfilTwo : Claims.SamplingGeneric.CompilerExfilTwo"],
+   "assumptions": [],
+   "type_hash": "6eb82a093d77251702eeca50731885afcf81548a584290ad4f12f1fa6d5ca34e"
+  },
+  "Claims.SamplingGeneric.compilerExfilTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.Exfil FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "type_hash": "c988a93104be12490891b9c6f062bef07f7fc39a8bc0cca3901f23255751af48"
+  },
   "Claims.SamplingGeneric.compilerKS": {
    "owner": "@proofs",
    "signature": ["Claims.SamplingGeneric.compilerKS : Claims.SamplingGeneric.CompilerKS"],
@@ -6296,6 +6359,46 @@
    ],
    "assumptions": [],
    "type_hash": "02b874bf1dad6f1c0a57e8bc140ad86d05eee47b3301c6ae2d1cb742d2915a90"
+  },
+  "Claims.SamplingGeneric.compilerKSTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSTwo : Claims.SamplingGeneric.CompilerKSTwo"],
+   "assumptions": [],
+   "type_hash": "a48429565d46e6a9b348700bbb4eb813a300258fe7b32558e605b50eb344f53f"
+  },
+  "Claims.SamplingGeneric.compilerKSTwo_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSTwo_honest :",
+    "  And (Claims.SamplingGeneric.Arg.KS FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoA Bool))",
+    "    (And",
+    "      (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool).commit)",
+    "      (And",
+    "        (Claims.SamplingGeneric.CompiledTwo.Sessions FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool))",
+    "        (And ((Claims.Witness.SamplingGeneric.twoLTwo Bool).Scope List.nil)",
+    "          (∀ (r : Fin ((Claims.Witness.SamplingGeneric.twoLTwo Bool).V.k List.nil) → Bool),",
+    "            And",
+    "              (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Bool).replaySample List.nil r)",
+    "                (List.cons 0 (List.cons 1 List.nil)))",
+    "              (And",
+    "                (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Bool).checked List.nil r)",
+    "                  (List.cons 0 (List.cons 1 List.nil)))",
+    "                (Eq",
+    "                  (Claims.run FlockDeploy.sha512 Claims.Witness.silentP (Claims.Witness.SamplingGeneric.twoLTwo Bool).V",
+    "                      List.nil Unit.unit r).out",
+    "                  Claims.Out.acc))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "14127d0737102c740a7dd6c497d9726d833d6aba8c16de458569681ad5ff5488"
+  },
+  "Claims.SamplingGeneric.compilerKSTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.KS FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "type_hash": "eab81deaee26391d40a2ce9e727de7234b53c13c3313f1a1d4ead2fc52bed009"
   },
   "Claims.SamplingGeneric.compilerKS_honest": {
    "owner": "@proofs",
@@ -6940,6 +7043,30 @@
    ],
    "assumptions": [],
    "type_hash": "db05dd40452c35e361a969c884c781189c12aab8ab7523a98889559519b52312"
+  },
+  "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  And (Claims.SamplingGeneric.Arg.KS H (Claims.Witness.SamplingGeneric.twoA Coin))",
+    "    (And (Claims.Sampling.CommitmentScheme.Binds H (Claims.Witness.SamplingGeneric.twoLTwo Coin).commit)",
+    "      (And (Claims.SamplingGeneric.CompiledTwo.Sessions H (Claims.Witness.SamplingGeneric.twoLTwo Coin))",
+    "        (And ((Claims.Witness.SamplingGeneric.twoLTwo Coin).Scope List.nil)",
+    "          (∀ (r : Fin ((Claims.Witness.SamplingGeneric.twoLTwo Coin).V.k List.nil) → Coin),",
+    "            And",
+    "              (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Coin).replaySample List.nil r)",
+    "                (List.cons 0 (List.cons 1 List.nil)))",
+    "              (And",
+    "                (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Coin).checked List.nil r)",
+    "                  (List.cons 0 (List.cons 1 List.nil)))",
+    "                (Eq",
+    "                  (Claims.run H Claims.Witness.silentP (Claims.Witness.SamplingGeneric.twoLTwo Coin).V List.nil",
+    "                      Unit.unit r).out",
+    "                  Claims.Out.acc))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "06d21a25430f4a147151327ecd1dc1a0e8f79485b98ee26f582910c9f3925ef4"
   },
   "Claims.Witness.SamplingGeneric.twoSessions_meets": {
    "owner": "@proofs",
@@ -14922,23 +15049,27 @@
    "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced": {
     "∀ (u : Nat), instLTNat.lt u U.layout.N → Eq (P.Wref U.layout u) (instHMul.hMul κ (w u).cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nonempty (Accounting.PearlCCoins Q R S U w t)": "Nonempty taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le (instHMul.hMul (d.rate Accounting.Op.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced": {
     "∀ (prog : CM.Prog) (H : Q → R) (U : Pouw.PearlC.Workload) (act : Nat → Pouw.PearlC.Codes) (σ : Pouw.PearlC.State) (s : S), Real.instLE.le 0 (CM.cost prog H U act σ s)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Nat), instLTNat.lt u U.layout.N → Eq (P.Wref U.layout u) (instHMul.hMul κ (w u).cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nonempty (Accounting.PearlCCoins Q R S U w t)": "Nonempty taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le (instHMul.hMul (d.rate Accounting.Op.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.ComputeOfPouw": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nonempty (Accounting.PouwCoins P U t)": "Nonempty taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le (instHMul.hMul (d.rate Accounting.Op.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.ComputeOfPouwPerRun": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Nonempty (Accounting.PouwCoins P U t)": "Nonempty taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (instHMul.hMul (d.rate Accounting.OpClass.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le (instHMul.hMul (d.rate Accounting.Op.oracle) (r.win Accounting.Resource.compute).len) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.DeclaredCircuitRequirement": {
     "instLENat.le E (instHMul.hMul (instHMul.hMul 3 Accounting.Gates.p1024.squarings) es)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15029,13 +15160,19 @@
     "∀ (g : Accounting.Gates.IntGate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.IntOp.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → And (Accounting.Gates.InWindow C (x t)) (∀ (l : Nat), instLTNat.lt l n → Eq (Accounting.Gates.val C (x t) (out l)) (Accounting.Gates.byte (instHMod.hMod (instHPow.hPow (Accounting.Gates.nibbles s t) 2) p) l).cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → And (Accounting.Gates.InWindow C (x t)) (∀ (l : Nat), instLTNat.lt l n → Eq (Accounting.Gates.val C (x t) (out l)) (Accounting.Gates.byte (instHMod.hMod (instHPow.hPow (Accounting.Gates.nibbles s t) 2) p) l).cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (g : Accounting.Gates.Gate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.Op.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Gates.UnitsFooling": {
     "∀ (g : Accounting.Gates.IntGate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.IntOp.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → Ne s s' → Exists fun o => And (List.instMembership.mem out o) (Not ((instHPow.hPow 2 j).ModEq (Accounting.Gates.val C (x s) o) (Accounting.Gates.val C (x s') o)))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → Ne s s' → Exists fun o => And (List.instMembership.mem out o) (Not ((instHPow.hPow 2 j).ModEq (Accounting.Gates.val C (x s) o) (Accounting.Gates.val C (x s') o)))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (g : Accounting.Gates.Gate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.Op.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.HMu.PersistentOneWord": {
     "∀ (n : Nat) (x : W), Function.Injective fun s => step n s x": "an injectivity, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15050,7 +15187,8 @@
     "∀ (y : ι → ZMod p), Real.instLE.le (ν y) κR": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.JointHorizonBlocksLive": {
-    "∀ (b : Fin B) (s : G.Strategy), ENNReal.instLE.le (Verity.Game.prob (fun o => And ((S.block b).accepts Accounting.Audit.pous o) (Not (S.MemoryTerm (σ b) s b o))) G s) (δPous b s)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (b : Fin B) (s : G.Strategy), ENNReal.instLE.le (Verity.Game.prob (fun o => And ((S.block b).accepts Accounting.Audit.pous o) (Not (S.MemoryTerm (σ b) s b o))) G s) (δPous b s)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (b : Fin B) (s : G.Strategy), ENNReal.instLE.le (Verity.Game.prob (fun o => And ((S.wipe b).accepts o) (Not ((S.wipe b).Survives fw o))) G s) (εWipe b s)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.JointPeriodLiveECR": {
     "∀ (a : Accounting.Audit), Monotone (loss a)": "Monotone taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15152,16 +15290,21 @@
    },
    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": {
     "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Accounting.Remote.Draw.Coins n κ X), T.accepts ω → Real.instLE.le (D.pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (ω : Accounting.Remote.Draw.Coins n κ X), T.accepts ω → Real.instLE.le (D.pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ω : Accounting.Remote.Draw.Coins n κ X), T.accepts ω → Real.instLE.le ((F.play com).pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ω : Accounting.Remote.Draw.DrawCoins n κ X), T.accepts ω → Real.instLE.le ((F.play com).pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ω : Accounting.Remote.Draw.DrawCoins n κ X), T.accepts ω → Real.instLE.le (D.pooled δ ω) W": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.PooledDraw": {
     "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.DrawCoins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": {
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.DrawCoins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
     "instLENat.le T.passes P": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15574,7 +15717,8 @@
     "instLENat.le n (instHMul.hMul K₀ kd)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le W (instHPow.hPow 2 40)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le t' (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le v (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le v (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le p (instHDiv.hDiv 1 (instHPow.hPow 2 200))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEnd": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15703,7 +15847,8 @@
    "Flock.SecurityProofs.RanRegisteredRun": {
     "com.Opens rt p op₀": "com.Opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (b : β), acc b → com.Opens rt (prog b) (op b)": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "ENNReal.instLE.le (FlockSoundness.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.RecursiveCircuitIndist": {
     "honest o P w": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -16635,10 +16780,12 @@
     "∀ (i : Fin m), Real.instLE.le (instHMul.hMul q (n i).cast) (k i).cast": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
-    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakRegistered": {
-    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.SecurityProofs.BackgroundRebuildExcluded": {
     "List.instMembership.mem (List.cons { fst := 0, snd := 111 } (List.cons { fst := 1, snd := 160 } (List.cons { fst := 2, snd := 203 } (List.cons { fst := 3, snd := 243 } List.nil)))) tk": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -16830,7 +16977,8 @@
     "Finset.instPartialOrder.le U (Finset.range N)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FleetSound": {
-    "∀ (u : Fin N) (ω : Ω), Real.instLE.le (κ u (A u ω)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (u : Fin N) (ω : Ω), Real.instLE.le (κ u (A u ω)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (u : Fin N) (y : (Subtype fun v => Ne v u) → Fin k → Prod P.Draw P.Chk), Real.instLE.le (κ u (A u y)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FreedOfFloor": {
     "∀ (j : Pd.J) (r : G.Res), Real.instLE.le 0 (Pd.needs j r)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -16852,7 +17000,10 @@
     "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin k), Set.instMembership.mem Reg (reg w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (a : P.Inst), Set.instMembership.mem Reg a → And (Real.instLT.lt 0 (Hmm a)) (And (Real.instLT.lt 0 (Hsha a)) (And (Real.instLE.le 0 (Ho a)) (And (Real.instLE.le (pubmm a) (Hmm a)) (Real.instLE.le (pubsha a) (Hsha a)))))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm (reg w)) (Hsha (reg w))) (Ho (reg w))) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": {
     "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -16861,7 +17012,10 @@
     "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (o : nf.Orc) (r : nf.Root) (c : Prod (Fin nf.n) (Prod (Fin nf.n') (Fin nf.nb))) (v : Pouw.Dither.Word) (p : nf.Path), nf.opens o r c v p → And (Pouw.MerkleExtract.Opens (EquivLike.toFunLike.coe eo o) E (rD r) (pl p) v) (Eq (List.map Prod.fst (pl p)) (dirs c))": "nf.opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin k), Set.instMembership.mem Reg (reg w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (a : (Pouw.Dither.noFoldRound nf).Inst), Set.instMembership.mem Reg a → And (Real.instLT.lt 0 (Hmm a)) (And (Real.instLT.lt 0 (Hsha a)) (And (Real.instLE.le 0 (Ho a)) (And (Real.instLE.le (pubmm a) (Hmm a)) (Real.instLE.le (pubsha a) (Hsha a)))))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm (reg w)) (Hsha (reg w))) (Ho (reg w))) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.EndToEnd": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -17151,6 +17305,24 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
+    "∀ (u : Fin B), SetLike.instMembership.mem S u → And (instLENat.le (P.gates u).card (cS u)) (instLENat.le (d.unregistered (P.gates u)).card (kS u))": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
+    "∀ (v : Fin d.D.N), SetLike.instMembership.mem J.V v → Real.instLE.le (J.ω v) ωmax": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest": {
+    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial": {
+    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest": {
+    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
+    "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": {
+    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
+    "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
    }
   }
  },
@@ -22849,16 +23021,22 @@
     "Claims.SamplingGeneric.Compiled.KSCount_fails",
     "Claims.SamplingGeneric.Compiled.KSReg_fails",
     "Claims.SamplingGeneric.Compiled.KS_fails",
+    "Claims.SamplingGeneric.CompiledTwo.Exfil_fails",
+    "Claims.SamplingGeneric.CompiledTwo.KS_fails",
     "Claims.SamplingGeneric.ZkCompiled.ZK_fails",
     "Claims.SamplingGeneric.compilerBits",
     "Claims.SamplingGeneric.compilerBits_nontrivial",
     "Claims.SamplingGeneric.compilerEfficient",
     "Claims.SamplingGeneric.compilerEfficient_nontrivial",
+    "Claims.SamplingGeneric.compilerExfilTwo",
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS",
     "Claims.SamplingGeneric.compilerKSCount",
     "Claims.SamplingGeneric.compilerKSCount_nontrivial",
     "Claims.SamplingGeneric.compilerKSReg",
     "Claims.SamplingGeneric.compilerKSReg_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS_nontrivial",
     "Claims.SamplingGeneric.compilerZK",
     "Claims.SamplingGeneric.compilerZK_nontrivial",
@@ -23195,17 +23373,24 @@
     "Claims.SamplingGeneric.Compiled.KSCount_fails",
     "Claims.SamplingGeneric.Compiled.KSReg_fails",
     "Claims.SamplingGeneric.Compiled.KS_fails",
+    "Claims.SamplingGeneric.CompiledTwo.Exfil_fails",
+    "Claims.SamplingGeneric.CompiledTwo.KS_fails",
     "Claims.SamplingGeneric.ZkCompiled.ZK_fails",
     "Claims.SamplingGeneric.compilerBits",
     "Claims.SamplingGeneric.compilerBits_honest",
     "Claims.SamplingGeneric.compilerBits_nontrivial",
     "Claims.SamplingGeneric.compilerEfficient",
     "Claims.SamplingGeneric.compilerEfficient_nontrivial",
+    "Claims.SamplingGeneric.compilerExfilTwo",
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS",
     "Claims.SamplingGeneric.compilerKSCount",
     "Claims.SamplingGeneric.compilerKSCount_nontrivial",
     "Claims.SamplingGeneric.compilerKSReg",
     "Claims.SamplingGeneric.compilerKSReg_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo",
+    "Claims.SamplingGeneric.compilerKSTwo_honest",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS_honest",
     "Claims.SamplingGeneric.compilerKS_nontrivial",
     "Claims.SamplingGeneric.compilerZK",
@@ -23213,6 +23398,7 @@
     "Claims.SamplingGeneric.compilerZK_nontrivial",
     "Claims.Witness.SamplingGeneric.echo_meets",
     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+    "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets",
     "Claims.Witness.SamplingGeneric.twoSessions_meets",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
@@ -23366,6 +23552,8 @@
     "Claims.SamplingGeneric.Compiled.KSCount_fails",
     "Claims.SamplingGeneric.Compiled.KSReg_fails",
     "Claims.SamplingGeneric.Compiled.KS_fails",
+    "Claims.SamplingGeneric.CompiledTwo.Exfil_fails",
+    "Claims.SamplingGeneric.CompiledTwo.KS_fails",
     "Claims.SamplingGeneric.ZkArg.ZK_fails",
     "Claims.SamplingGeneric.ZkCompiled.ZK_fails",
     "Claims.SamplingGeneric.compilerBits",
@@ -23373,11 +23561,16 @@
     "Claims.SamplingGeneric.compilerBits_nontrivial",
     "Claims.SamplingGeneric.compilerEfficient",
     "Claims.SamplingGeneric.compilerEfficient_nontrivial",
+    "Claims.SamplingGeneric.compilerExfilTwo",
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS",
     "Claims.SamplingGeneric.compilerKSCount",
     "Claims.SamplingGeneric.compilerKSCount_nontrivial",
     "Claims.SamplingGeneric.compilerKSReg",
     "Claims.SamplingGeneric.compilerKSReg_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo",
+    "Claims.SamplingGeneric.compilerKSTwo_honest",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS_honest",
     "Claims.SamplingGeneric.compilerKS_nontrivial",
     "Claims.SamplingGeneric.compilerZK",
@@ -23385,7 +23578,59 @@
     "Claims.SamplingGeneric.compilerZK_nontrivial",
     "Claims.Witness.SamplingGeneric.echo_meets",
     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+    "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets",
     "Claims.Witness.SamplingGeneric.twoSessions_meets"
+   ]
+  },
+  "Definitions.Claims.SamplingTwo": {
+   "digest": "b0faba548f01976801260903c59aed354b707a52619665121aecb103f9f9c4d5",
+   "definitions": {
+    "Claims.Sampling.Design.Two": "d1c7605e035e8d2d77209adadc6b25301fae1804f7e8ea858fa1aa597e7d4a00",
+    "Claims.Sampling.Design.Two.M": "f685c3eac9cb1ebfd1f1bbbb8f78fe8368792ef6b2d7193895d63189ec9b51e7",
+    "Claims.Sampling.Design.Two.Pa": "fe77e76e5f11969aff55dce1914e72b14d8d412edf8c4e694ff9e368122a19c4",
+    "Claims.Sampling.Design.Two.WellFormed": "b7cc3dd0a3125939273b4946c219c8e31a97a3acf8cd283f7a1c1f5d6823240f",
+    "Claims.Sampling.Design.Two.esc": "db01bb7d132447619f2e9a41c30252de6ce6c789b11831131bbb56c990ed9588",
+    "Claims.Sampling.Design.Two.k": "3a1b7d06e5002007728c85700d8d8b29e73a60e4ec35dd036626b7fc7b5e3c7c",
+    "Claims.Sampling.Design.Two.part": "62aed119073122d2b64c1924d9477e5a1dabc5b6114f6682a0f76f1aeabe93fc",
+    "Claims.Sampling.Design.Two.replay": "9ccfe1e923e1c1ab4497e4530aaa6d7688d882662069951b6a2744662043aa4a",
+    "Claims.Sampling.InScopeTwo": "54d52ad10bb17118bb32e7c108b7b17656ea700c2e9d8830a07c2d76473e2c0c",
+    "Claims.Sampling.Partition.strata": "ef54861ec2e83602e5e78b161f1af421e370618c2c50a7b22b2cb1fb64af6d47",
+    "Claims.Sampling.Partition.stratumOf": "f4aab9b02cc5565cc5092a56f17cfbb6e44f697ff270a8d73a116021efba5d4f",
+    "Claims.Sampling.RInflTwo": "51d5b0c0ded7489da69d6675077894e94ca0b23612dd2cf60377e24864fa70d4",
+    "Claims.Sampling.RTwo": "42c07bc94c4de895514992e428152bcf06b17f2afa76f3905122ebd9a2593c07",
+    "Claims.Sampling.admissibleTwo": "bf76f9290a586852d471c372d660af19a98a695d298296c3fea8a6fc1a0db968",
+    "Claims.Sampling.bitsOf": "49e095144b8f61fd9089b7c5c583c9c8e8d6ba2fb0053ecd653876f23c33cdc1",
+    "Claims.Sampling.cell": "8907137168290395d637224cfeec928fda35e415f4e3f952fe5cb842d40d585f",
+    "Claims.Sampling.counts": "079f9a465074884a4f68c64275ba82d3f35f9294ecfda15689ae1acb4daa31bd",
+    "Claims.Sampling.escCell": "2df351680cfc4f8102912671169f8a73fe3abc89e91d48b77d54493967dcf098",
+    "Claims.Sampling.footprint": "31431658b67323f62539e20d5190ab04f4d26d72085bb394003c4e5c0c1e47a4",
+    "Claims.Sampling.influenceTwo": "8d779a5c36f3b37f05a46f73bb677682a2516801cbe4ae05cb76cea274731bb9",
+    "Claims.Sampling.inputsOf": "9c159e3b97080814925776999ffb810979c1b99451c65183ea7852789887fa44",
+    "Claims.Sampling.replayOf": "e2d867e725f85e66d2a2834e2b7ab0799351cb864202cea27dace396884219ee",
+    "Claims.Sampling.replayOf._sparseCasesOn_1": "77c89d3091cd8e495f75b17b9ce2f40b0e67d4e25eb1771a5f18d905c8e0596a",
+    "Claims.Sampling.served": "8c0f871fe2402b0353337634e34ee75707f8ae5053172d22e8e98f60ef375334",
+    "Claims.Sampling.stratumIdx": "40906385747c7442a82ead1ef2e694a8cd12fc476b68b4d711b421959abeb02b",
+    "Claims.Sampling.wrongIn": "14680f6d84fe901a6f2e2decdb57837625368c557cbf82c262fdb7caad920355",
+    "Claims.SamplingGeneric.CompiledTwo": "1e25965b53856ad51df8689214d9d45be650b291cbdc5e15e73975a9b6b4d5ec",
+    "Claims.SamplingGeneric.CompiledTwo.Exfil": "802ad425758d4f9a5142febbe8c6b7218dca8b1ee9f99f5fced4de5012b1a4e5",
+    "Claims.SamplingGeneric.CompiledTwo.KS": "a1248a70c0faedf4a598de524bcb491f3f08cd20d7dff39d0502a1dc8c78f936",
+    "Claims.SamplingGeneric.CompiledTwo.Scope": "c5b24307da73e3fd56aa75fc4617e03dfd0f41984fb40bccb792e97a43515735",
+    "Claims.SamplingGeneric.CompiledTwo.Sessions": "b75b47678cd68dec4024450995083072fa2ed0fa5dda902d273c398682193b77",
+    "Claims.SamplingGeneric.CompiledTwo.replaySample": "bc99ecaee387a6c05784d9894a69e22031f3ec413d1cbc3efa4f596a3f029841",
+    "Claims.SamplingGeneric.CompiledTwo.toCompiled": "0c63c2616b1bb25764ab651b8c1f7e5428848cea5d0fa4e874c241d8ccec06a2",
+    "Claims.SamplingGeneric.CompiledTwo.two": "bb5d61d75e180d0e5265c7ed2a38bbd6e337091d093c853487fe82047d09b02e",
+    "Claims.SamplingGeneric.CompilerExfilTwo": "20db2a73640612ec3c9de0b6ea3d3ed5f3a2049f7744d0579ce182e7cc196176",
+    "Claims.SamplingGeneric.CompilerKSTwo": "2f34960aa5248cf8bb1d7da7cd439645e6b8cc5e051e7b29e12ed2a0991345bf"
+   },
+   "guarantees": [
+    "Claims.SamplingGeneric.CompiledTwo.Exfil_fails",
+    "Claims.SamplingGeneric.CompiledTwo.KS_fails",
+    "Claims.SamplingGeneric.compilerExfilTwo",
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo",
+    "Claims.SamplingGeneric.compilerKSTwo_honest",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
+    "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
    ]
   },
   "Definitions.Claims.ZKOut": {
@@ -25281,6 +25526,8 @@
     "Claims.SamplingGeneric.Compiled.KSCount_fails",
     "Claims.SamplingGeneric.Compiled.KSReg_fails",
     "Claims.SamplingGeneric.Compiled.KS_fails",
+    "Claims.SamplingGeneric.CompiledTwo.Exfil_fails",
+    "Claims.SamplingGeneric.CompiledTwo.KS_fails",
     "Claims.SamplingGeneric.ZkArg.ZK_fails",
     "Claims.SamplingGeneric.ZkCompiled.ZK_fails",
     "Claims.SamplingGeneric.compilerBits",
@@ -25288,11 +25535,16 @@
     "Claims.SamplingGeneric.compilerBits_nontrivial",
     "Claims.SamplingGeneric.compilerEfficient",
     "Claims.SamplingGeneric.compilerEfficient_nontrivial",
+    "Claims.SamplingGeneric.compilerExfilTwo",
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS",
     "Claims.SamplingGeneric.compilerKSCount",
     "Claims.SamplingGeneric.compilerKSCount_nontrivial",
     "Claims.SamplingGeneric.compilerKSReg",
     "Claims.SamplingGeneric.compilerKSReg_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo",
+    "Claims.SamplingGeneric.compilerKSTwo_honest",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS_honest",
     "Claims.SamplingGeneric.compilerKS_nontrivial",
     "Claims.SamplingGeneric.compilerZK",
@@ -25345,6 +25597,7 @@
     "Claims.Witness.Recursion.ZK_meets",
     "Claims.Witness.SamplingGeneric.echo_meets",
     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+    "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets",
     "Claims.Witness.SamplingGeneric.twoSessions_meets",
     "Claims.Witness.SamplingGeneric.zkOutLeak_honest",
     "Claims.Witness.SamplingGeneric.zkOutLeak_nontrivial",
@@ -25600,6 +25853,8 @@
     "Claims.SamplingGeneric.Compiled.KSCount_fails",
     "Claims.SamplingGeneric.Compiled.KSReg_fails",
     "Claims.SamplingGeneric.Compiled.KS_fails",
+    "Claims.SamplingGeneric.CompiledTwo.Exfil_fails",
+    "Claims.SamplingGeneric.CompiledTwo.KS_fails",
     "Claims.SamplingGeneric.ZkArg.ZK_fails",
     "Claims.SamplingGeneric.ZkCompiled.ZK_fails",
     "Claims.SamplingGeneric.compilerBits",
@@ -25607,11 +25862,16 @@
     "Claims.SamplingGeneric.compilerBits_nontrivial",
     "Claims.SamplingGeneric.compilerEfficient",
     "Claims.SamplingGeneric.compilerEfficient_nontrivial",
+    "Claims.SamplingGeneric.compilerExfilTwo",
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS",
     "Claims.SamplingGeneric.compilerKSCount",
     "Claims.SamplingGeneric.compilerKSCount_nontrivial",
     "Claims.SamplingGeneric.compilerKSReg",
     "Claims.SamplingGeneric.compilerKSReg_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo",
+    "Claims.SamplingGeneric.compilerKSTwo_honest",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS_honest",
     "Claims.SamplingGeneric.compilerKS_nontrivial",
     "Claims.SamplingGeneric.compilerZK",
@@ -25664,6 +25924,7 @@
     "Claims.Witness.Recursion.ZK_meets",
     "Claims.Witness.SamplingGeneric.echo_meets",
     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+    "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets",
     "Claims.Witness.SamplingGeneric.twoSessions_meets",
     "Claims.Witness.SamplingGeneric.zkOutLeak_honest",
     "Claims.Witness.SamplingGeneric.zkOutLeak_nontrivial",
@@ -40864,8 +41125,11 @@
     "Claims.SamplingGeneric.compilerBits_honest",
     "Claims.SamplingGeneric.compilerBits_nontrivial",
     "Claims.SamplingGeneric.compilerEfficient_nontrivial",
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKSCount_nontrivial",
     "Claims.SamplingGeneric.compilerKSReg_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo_honest",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS_honest",
     "Claims.SamplingGeneric.compilerKS_nontrivial",
     "Claims.SamplingGeneric.compilerZK_honest",
@@ -54215,8 +54479,11 @@
     "Claims.SamplingGeneric.compilerBits_honest",
     "Claims.SamplingGeneric.compilerBits_nontrivial",
     "Claims.SamplingGeneric.compilerEfficient_nontrivial",
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKSCount_nontrivial",
     "Claims.SamplingGeneric.compilerKSReg_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo_honest",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS_honest",
     "Claims.SamplingGeneric.compilerKS_nontrivial",
     "Claims.SamplingGeneric.compilerZK_honest",
@@ -54468,8 +54735,11 @@
     "Claims.SamplingGeneric.compilerBits_honest",
     "Claims.SamplingGeneric.compilerBits_nontrivial",
     "Claims.SamplingGeneric.compilerEfficient_nontrivial",
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKSCount_nontrivial",
     "Claims.SamplingGeneric.compilerKSReg_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo_honest",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS_honest",
     "Claims.SamplingGeneric.compilerKS_nontrivial",
     "Claims.SamplingGeneric.compilerZK_honest",
@@ -57573,8 +57843,10 @@
    "guarantees": [
     "Claims.SamplingGeneric.compilerBits_nontrivial",
     "Claims.SamplingGeneric.compilerEfficient_nontrivial",
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKSCount_nontrivial",
     "Claims.SamplingGeneric.compilerKSReg_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS_nontrivial",
     "Claims.SamplingGeneric.compilerZK_honest",
     "Claims.SamplingGeneric.compilerZK_nontrivial",
@@ -57601,14 +57873,18 @@
     "Claims.SamplingGeneric.compilerBits_honest",
     "Claims.SamplingGeneric.compilerBits_nontrivial",
     "Claims.SamplingGeneric.compilerEfficient_nontrivial",
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKSCount_nontrivial",
     "Claims.SamplingGeneric.compilerKSReg_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo_honest",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS_honest",
     "Claims.SamplingGeneric.compilerKS_nontrivial",
     "Claims.SamplingGeneric.compilerZK_honest",
     "Claims.SamplingGeneric.compilerZK_nontrivial",
     "Claims.Witness.SamplingGeneric.echo_meets",
     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+    "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets",
     "Claims.Witness.SamplingGeneric.twoSessions_meets"
    ]
   },
@@ -57643,6 +57919,21 @@
     "Claims.Witness.SamplingGeneric.zkOutLeak_nontrivial"
    ]
   },
+  "Proofs.Flock.Claims.Witnesses.SamplingTwo": {
+   "digest": "1639978600d3853cdee1693a3e81a0899f959fc61adb2edb305c3d0fdcd074b9",
+   "definitions": {
+    "Claims.Witness.SamplingGeneric.sksLTwo": "5f9c5d5642c0bb69915e483da28d6de19b5514edb0ea75df62e089fa9a9fcdda",
+    "Claims.Witness.SamplingGeneric.toyTwo": "7210475e26c3a3fd843518adfe0a4012b6eda68f7deae0ae6de7d42261e4ffac",
+    "Claims.Witness.SamplingGeneric.twoLTwo": "50fbf176a9705e89026cf3974b238432828c9aea0b5ad4270d5e8f179c456dbb",
+    "Claims.Witness.SamplingGeneric.twoTwo": "ddd8445d33c7ed6a26bd6dd7b5738019b1f45791da9b72a37c51c544df738d4c"
+   },
+   "guarantees": [
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo_honest",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
+    "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+   ]
+  },
   "Proofs.Flock.Claims.Witnesses.Shared": {
    "digest": "43ef0326aaa8b02e727adc5cd7a68020c6e7f9e494bcd89848d5bfb7e95e490c",
    "definitions": {
@@ -57655,8 +57946,11 @@
     "Claims.SamplingGeneric.compilerBits_honest",
     "Claims.SamplingGeneric.compilerBits_nontrivial",
     "Claims.SamplingGeneric.compilerEfficient_nontrivial",
+    "Claims.SamplingGeneric.compilerExfilTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKSCount_nontrivial",
     "Claims.SamplingGeneric.compilerKSReg_nontrivial",
+    "Claims.SamplingGeneric.compilerKSTwo_honest",
+    "Claims.SamplingGeneric.compilerKSTwo_nontrivial",
     "Claims.SamplingGeneric.compilerKS_honest",
     "Claims.SamplingGeneric.compilerKS_nontrivial",
     "Claims.SamplingGeneric.compilerZK_honest",
@@ -57685,6 +57979,7 @@
     "Claims.Witness.Recursion.ZK_fails",
     "Claims.Witness.SamplingGeneric.echo_meets",
     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+    "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets",
     "Claims.Witness.SamplingGeneric.twoSessions_meets"
    ]
   },
@@ -74624,11 +74919,11 @@
   "LeanSearchClient": "10aad9bd3954ead737fba8bd3b55709e5171edda2656068ad330158e6ad622c9",
   "Qq": "7e75bb83a56f636baeb8e63ef3d44e1ac8b33e2ed4bf187462e0cc9bbdb55adf",
   "aesop": "b36c1fbce9f43510169424e3ec097b69126f0e6afe5a801760e86c4da75f285d",
-  "batteries": "83d6487a6f41072714347b765ec3e233bad10d8b25d822e8543ab47531f610be",
+  "batteries": "e03e397af9fb0838e4e21d9b32e512f18603e964649945aa2c154127c030c83e",
   "importGraph": "c2a38b9540d4202c5331616b78727f2aeec0a2ae1b203889c6c6a2c8d6cb2ca3",
-  "mathlib": "4b2e37339cdaa30627ba7f4ee6e6e866f14180ea06b549d7e9a386ea89e52601",
+  "mathlib": "2db76e564b69971a86f7eb60f652189d5796428097b55358d447fab493dea560",
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
-  "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
-  "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+  "proofwidgets": "4edab11dd995fc9c2cbf6c1e03d9a99e1f77e91b6b904838c87c7dad86c9c323",
+  "toolchain": "aa972bbb9beca661b6dff9dc137830b371ecc15504c0130bbeaa1554de1d1c03"
  }
 }

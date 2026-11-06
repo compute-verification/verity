@@ -1,6 +1,9 @@
 module
 
-public import Proofs.Pouw.PearlC.TileGamma
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.TileGamma
 
 /-!
 # TT_OUT and γ at a device record

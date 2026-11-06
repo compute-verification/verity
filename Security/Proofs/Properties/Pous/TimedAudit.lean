@@ -1,9 +1,20 @@
 module
 
 public import Properties.Pous.TimedAudit
-public import Proofs.Properties.NetworkCertifier.Bytes
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+public import Aesop.BuiltinRules
+public import Mathlib.Tactic.Simps
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.Nat.Basic
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.Push
+import Mathlib.Tactic.Set
+import Mathlib.Tactic.SetLike
+import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # The timed audit's property, proved
