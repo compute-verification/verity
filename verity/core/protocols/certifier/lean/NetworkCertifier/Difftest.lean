@@ -2,8 +2,7 @@ module
 
 public import NetworkCertifier.Ingress
 public import NetworkCertifier.Schedule
-public import Lean.Data.Json.FromToJson.Basic
-public import Lean.Data.Json.Parser
+public import Lean.Data.Json
 
 /-!
 # The difftest: the certifier program against the Python audit, on random instances

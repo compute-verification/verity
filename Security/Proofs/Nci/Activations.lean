@@ -1,10 +1,7 @@
 module
 
 public import Definitions.Nci.Guarantees.Activations
-import Mathlib.Data.NNRat.Floor
-import Proofs.Core.Circuit
-import Proofs.Nci.Pull
-import Proofs.Nci.Threads
+public import Proofs.Nci.Threads
 
 /-!
 # Proofs of NCI's activations bound over all of training

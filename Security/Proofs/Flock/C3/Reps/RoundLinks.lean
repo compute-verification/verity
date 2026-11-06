@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.Compose.HoloEncoded
 public import Proofs.Flock.C3.Compose.RsFacts
 public import Proofs.Flock.C3.Reps.SentKeys
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -15,7 +16,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.VBridge.Pinned

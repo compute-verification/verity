@@ -1,10 +1,10 @@
 module
 
 public import Definitions.Nci.Guarantees.CoverPartialSum
+public import Proofs.Nci.Cover.PartialSumCube
+public import Proofs.Nci.Cover.PartialSumRate
 import Mathlib.Combinatorics.Enumerative.DoubleCounting
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Nci.Cover.PartialSumCube
-import Proofs.Nci.Cover.PartialSumRate
 import Proofs.Nci.Cover.PartialSumRead
 import Proofs.Nci.Cover.Paths
 

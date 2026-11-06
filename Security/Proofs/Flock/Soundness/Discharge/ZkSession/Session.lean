@@ -1,13 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Table
+public import Proofs.Flock.Soundness.SessionBatch
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Lowering
 public import Proofs.Flock.Soundness.ExecDrawOS
-import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Batch
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Lowering
 
 /-!
 # A batched `--zk` session and its audit (live/PROTOCOL.md §1–§7, PROTOCOL.md §5)

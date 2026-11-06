@@ -1,9 +1,11 @@
 module
 
-public import Properties.Attest
-public import Proofs.Properties.Pous.MemoryChallenger.Tree
-import all Init.Data.String.Defs
 public import Lms.Sign
+public import Proofs.Flock.Claims.Finder
+public import Proofs.Properties.CertifierDevice.Lms
+public import Proofs.Properties.Pous.MemoryChallenger.Tree
+public import Properties.Attest
+import all Init.Data.String.Defs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,9 +40,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Claims.Prob
-import Proofs.Properties.CertifierDevice.Lms
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 

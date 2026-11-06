@@ -2,8 +2,6 @@ module
 
 public import Definitions.Pouw.NCP.Word
 public import Proofs.Pouw.Copy
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Prob
 
 /-!
 # R_word-NCP: the bound under NzNCP, the floor, and the witnesses

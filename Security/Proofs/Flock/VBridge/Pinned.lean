@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.VBridge.Verifier
+public import Std.Data.String.ToNat
 public import VStar.Stage
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
@@ -17,7 +18,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Std.Data.String.ToNat
 import VCVio.Prelude.Core
 
 /-!

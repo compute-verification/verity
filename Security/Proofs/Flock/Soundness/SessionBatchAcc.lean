@@ -1,9 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.SessionBatch
 public import Proofs.Flock.Soundness.ExtractAcc
+public import Proofs.Flock.Soundness.SessionAcc
+public import Proofs.Flock.Soundness.SessionBatch
 import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.SessionAcc
 
 /-!
 # Several tables in one batched session, from accepted reruns (DESIGN.md §3)

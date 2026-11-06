@@ -1,6 +1,7 @@
 module
 
 public import Definitions.NetworkCertifier.SampledCharge
+public import Proofs.NetworkCertifier.Advice
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.NetworkCertifier.Advice
 import Proofs.NetworkCertifier.Counting
 import Std.Tactic.BVDecide.Normalize.Prop
 

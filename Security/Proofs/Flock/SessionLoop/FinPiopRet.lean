@@ -1,10 +1,11 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FinishSwLig
+public import Proofs.Flock.Claims.ZK.PiopFree
 public import Proofs.Flock.SessionLoop.FinRepErasedCut
+import Flock.With.SimWalk
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
-public import Proofs.Flock.Claims.ZK.FinishSwLig
-import Flock.With.SimWalk
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,7 +40,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.ZK.CausalExe
 import Proofs.Flock.Claims.ZK.FinishClaimsX
-import Proofs.Flock.Claims.ZK.PiopFree
 import Proofs.Flock.Claims.ZK.Round1Root
 import Proofs.Flock.SessionLoop.FinCommits
 import Proofs.Flock.SessionLoop.FinL0Vals

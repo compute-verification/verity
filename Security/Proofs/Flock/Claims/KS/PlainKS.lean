@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainBound
+public import Proofs.Flock.Claims.KS.Trim
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployTables
-import Proofs.Flock.Claims.KS.Trim
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts

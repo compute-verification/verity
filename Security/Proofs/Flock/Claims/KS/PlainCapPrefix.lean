@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.KS.CapChunk
 public import Proofs.Flock.Claims.KS.PlainLevels
 public import Proofs.Flock.Claims.KS.PlainSim
 import Flock.With.Returns
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.KS.CapChunk
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.PlainStep
 import Proofs.Flock.Claims.KS.Width

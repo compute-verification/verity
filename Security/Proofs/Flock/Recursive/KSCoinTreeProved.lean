@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.DeployNil
 public import Proofs.Flock.Recursive.KSCoinTreeStatement
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -32,7 +33,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.DeployNil
 import Proofs.Flock.Recursive.KSProved
 
 /-!

@@ -2,11 +2,6 @@ module
 
 public import Definitions.Flock.HoloCompiled
 public import Proofs.Flock.C3.Fork.CouplingPull
-public import Proofs.Flock.C3.Fork.CouplingGame
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Algebra.Order.Ring.Star
-import Mathlib.MeasureTheory.Integral.Bochner.Basic
-import VCVio.Prelude.Core
 
 /-!
 # a1l, step 3: the holographic table in lockstep

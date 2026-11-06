@@ -1,9 +1,11 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainR
+public import Proofs.Flock.Claims.Recursion.VerdictLoop
 public import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
 public import Proofs.Flock.Claims.Recursion.VerdictRowE
 public import Proofs.Flock.Claims.Recursion.VerdictRowR
+public import Proofs.Flock.Claims.Recursion.VerdictRun
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +38,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.VerdictAssembly
-import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 
 /-!

@@ -3,10 +3,6 @@ module
 public import Proofs.Flock.Soundness.ExecDraw
 public import Proofs.Flock.Soundness.Audit.Stratified
 public import Proofs.Flock.Soundness.E2E
-import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The executable stratified draw, and the e2e theorems at its law

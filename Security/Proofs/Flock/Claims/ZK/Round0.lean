@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.ZK.OneTape
 public import Proofs.Flock.Claims.Complete.ZkTables.Round0
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+public import Proofs.Flock.Claims.ZK.OneTape
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Soundness.Discharge.Composed.Setup
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 

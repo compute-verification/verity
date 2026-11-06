@@ -3,7 +3,6 @@ module
 public import Definitions.Nci.Support
 public import Definitions.Nci.Threads
 public import Mathlib.Analysis.SpecialFunctions.Log.Base
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # The inference-only policy's reads counted by information: the vocabulary

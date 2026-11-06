@@ -2,6 +2,7 @@ module
 
 public import Definitions.Hash.Guarantees
 public import Mathlib.Tactic.Basic
+public import Proofs.Hash.Bytes
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Hash.Bytes
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

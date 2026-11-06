@@ -1,8 +1,9 @@
 module
 
+public import Mathlib.Data.UInt
+public import Proofs.Flock.Claims.Complete.Zk.Coins
 public import Proofs.Flock.Claims.Recursion.DeployOuter
 public import Proofs.Flock.Claims.Recursion.Scope
-public import Mathlib.Data.UInt
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

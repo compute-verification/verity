@@ -29,8 +29,10 @@ the clock's (`late`).
 module
 
 public import SampledProofs.OneStage
+public import SampledProofs.Select
 public import SampledProofs.Slots
 public import SampledProofs.Service
+public import SampledProofs.ChallengerCoins
 
 @[expose] public section
 set_option backward.privateInPublic true

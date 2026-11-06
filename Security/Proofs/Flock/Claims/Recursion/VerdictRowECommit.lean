@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Recursion.LayoutBDeployed
 public import Proofs.Flock.Claims.Recursion.RegSetup
+public import Proofs.Flock.Claims.Recursion.RegSetupOpens
+public import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -33,8 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.RegSetupOpens
-import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
 
 /-!
 # Two staged parts' `rec-acc` slots at one chain position carry one commit string

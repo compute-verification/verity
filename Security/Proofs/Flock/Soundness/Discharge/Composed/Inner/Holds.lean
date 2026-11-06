@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.Composed.Coined
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lane
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.RingSwitch
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
 public import Proofs.Flock.Soundness.Refine.Setup
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -18,7 +19,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
 import Proofs.Flock.Soundness.LigeritoCoins
 import Proofs.Flock.Soundness.Refine.Arith
 

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Hash.Guarantees
+public import Proofs.Hash.TreeBinding
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Hash.Bytes
-import Proofs.Hash.TreeBinding
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

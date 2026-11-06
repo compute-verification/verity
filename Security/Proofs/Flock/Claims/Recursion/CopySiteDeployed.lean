@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.DeployInputs
+public import Proofs.Flock.Recursive.ValueInner
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

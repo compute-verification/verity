@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.SessionLoop.FinishParts
 public import Proofs.Flock.Claims.ZK.FinishRep
+public import Proofs.Flock.Claims.ZK.FinishTrunc
+public import Proofs.Flock.SessionLoop.FinishParts
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,7 +40,6 @@ import Proofs.Flock.Claims.Complete.ZkTables.Table
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.Scope.Check
 import Proofs.Flock.Claims.Scope.Sizes
-import Proofs.Flock.Claims.ZK.FinishTrunc
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup

@@ -3,9 +3,6 @@ module
 public import Proofs.Flock.Soundness.Headline
 public import Proofs.Flock.Soundness.Discharge.Exec.Event
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
-import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # A draft of the headline at the executable (R11)

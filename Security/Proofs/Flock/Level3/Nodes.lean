@@ -6,11 +6,8 @@ subspace or a coset, and the barycentric denominator `Π_{j ≠ i} (x_i − x_j)
 -/
 module
 
+public import Proofs.Flock.Level3.ArithFacts
 public import Mathlib.LinearAlgebra.Lagrange
-public import Flock.Piop
-public import Proofs.Flock.Level3.Seam
-import Mathlib.Combinatorics.Matroid.Init
-import Mathlib.Data.Nat.Totient
 
 @[expose] public section
 

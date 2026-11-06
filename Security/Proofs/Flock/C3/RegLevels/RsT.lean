@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.C3.RegLevels.SrcUnits
+public import Proofs.Flock.C3.Opening.SrcCover
 public import Proofs.Flock.C3.Opening.SrcOpening
+public import Proofs.Flock.C3.RegLevels.SrcOpenRel
+public import Proofs.Flock.C3.RegLevels.SrcUnits
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -15,8 +17,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.Opening.SrcCover
-import Proofs.Flock.C3.RegLevels.SrcOpenRel
 import Proofs.Flock.C3.RegLevels.SrcRun
 import Proofs.Flock.Soundness.Refine.Seam
 

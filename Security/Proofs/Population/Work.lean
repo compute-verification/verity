@@ -2,9 +2,9 @@ module
 
 public import Definitions.Population.Dataflow
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Proofs.Population.Determinacy
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Proofs.Population.Determinacy
 
 /-!
 # Skippable work: what the faulty proof blocks' cones and luck bound

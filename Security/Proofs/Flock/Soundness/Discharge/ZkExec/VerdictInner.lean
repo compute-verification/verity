@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Inner
 public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+public import Proofs.Flock.Soundness.Refine.Arith
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -17,10 +19,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Soundness.Discharge.ZkExec.Inner
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
-import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Plays
 
 /-!

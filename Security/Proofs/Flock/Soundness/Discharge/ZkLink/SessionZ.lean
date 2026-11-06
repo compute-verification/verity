@@ -2,10 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.AccZ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Analysis
-import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Lock
+public import Proofs.Flock.Soundness.SessionBatchAcc
 
 /-!
 # Knowledge soundness of a compiled `--zk` table in the session, from accepted reruns

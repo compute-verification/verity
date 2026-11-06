@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Periods
 public import Batteries.Data.ByteArray
+public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Soundness.Audit.Periods
 public import Properties.Pous.Period
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Pous.Period
 

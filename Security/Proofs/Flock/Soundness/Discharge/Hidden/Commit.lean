@@ -5,6 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 public import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
 public import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
 public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+public import Proofs.Flock.Soundness.TmplLayout
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -27,7 +28,6 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.ParseStmt
 import Proofs.Flock.Soundness.ParseUnitPre
 import Proofs.Flock.Soundness.Refine.Setup
-import Proofs.Flock.Soundness.TmplLayout
 import Proofs.Flock.Soundness.TmplNetOK
 import Proofs.Flock.Soundness.TmplUnitAt
 import Proofs.Flock.Soundness.TmplUnitNet

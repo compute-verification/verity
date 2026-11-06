@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Accounting.Guarantees.Additive
+public import Proofs.Core.Accel.Model
 import Mathlib.Data.Nat.SuccPred
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Core.Accel.Model
 
 /-!
 # Compute additivity's capacity from the machine model 𝓜: proofs

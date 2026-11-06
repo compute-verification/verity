@@ -5,10 +5,10 @@ public import Proofs.Flock.Soundness.CompiledLock
 public import Proofs.Flock.Soundness.Game.Expect
 public import Proofs.Flock.Soundness.LigeritoPhase
 public import Proofs.Flock.Soundness.LinkSound
+public import Proofs.Flock.Soundness.Soundness
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Lock
 import Proofs.Flock.Soundness.Merkle
-import Proofs.Flock.Soundness.Soundness
 
 /-!
 # Compiled soundness under collision resistance (README.md §1.2)

@@ -1,10 +1,9 @@
 module
 
+public import Proofs.Flock.Soundness.E2E
 public import Proofs.Flock.Soundness.ExecStratified
+public import Proofs.Flock.Soundness.Binding.Weights
 public import Proofs.Flock.Soundness.StrictCR
-public import Proofs.Flock.Soundness.Binding.Rows
-import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The end-to-end theorem with the value binding of `hm96-sha512/row/v1` rows

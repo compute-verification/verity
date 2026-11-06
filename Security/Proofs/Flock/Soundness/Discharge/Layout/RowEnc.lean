@@ -2,7 +2,6 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.OutPin
 import all Init.Data.String.Defs
-import Mathlib.Combinatorics.Matroid.Init
 
 @[expose] public section
 

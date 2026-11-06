@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci.Assumptions.Info
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # The inference-only policy over threads, reads counted by information: the guarantees

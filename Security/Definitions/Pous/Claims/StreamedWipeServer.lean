@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pous.Model.StreamedWipeServer
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe per server, as claims of an acceptance rule

@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Refine.Opening
 public import Proofs.Flock.Soundness.Refine.Tapes
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.CategoryTheory.Category.Init

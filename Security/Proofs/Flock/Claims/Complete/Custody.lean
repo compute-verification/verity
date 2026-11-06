@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Json
 public import Proofs.Flock.Claims.Complete.Json.Goals
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

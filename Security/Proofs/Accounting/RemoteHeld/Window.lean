@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Accounting.Assumptions.RemoteHeld
+public import Proofs.Accounting.RemoteHeld.OverTime
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Accounting.RemoteHeld.OverTime
 
 /-!
 # Held over time from any start in the first group's window

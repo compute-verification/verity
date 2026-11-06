@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.LastSharedR
 public import Proofs.Flock.Claims.Recursion.NextRHonest
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.KS.PlainDrawJRun
-import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.NextRFits
 
 /-!

@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.Basic.Prob
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Tactic.Positivity
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Rat.Cast.Order

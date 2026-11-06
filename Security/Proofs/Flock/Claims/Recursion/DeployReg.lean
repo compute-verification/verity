@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.DeployPremises
 public import Proofs.Flock.Claims.Recursion.VStar
+public import Proofs.Flock.Claims.Recursion.VStarKS
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,7 +39,6 @@ import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
 import Proofs.Flock.Claims.Recursion.KSStated
-import Proofs.Flock.Claims.Recursion.VStarKS
 
 /-!
 # The recursion's premises at `deployRec`, with registered ties

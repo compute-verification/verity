@@ -1,8 +1,8 @@
 module
 
-import all Init.Data.Array.QSort.Basic
+public import Proofs.Properties.RemoteAudit.Sort
 import Batteries.Tactic.OpenPrivate
-import Proofs.Properties.RemoteAudit.Sort
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # `Array.qsort` sorts strings

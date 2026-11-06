@@ -1,25 +1,10 @@
 module
 
-public import Flock.Desc
-public import Mathlib.Tactic.Echelon.Zsqrtd
-public import Mathlib.Tactic.NormNum.Irrational
-public import Mathlib.Tactic.NormNum.IsCoprime
-public import Mathlib.Tactic.NormNum.IsSquare
-public import Mathlib.Tactic.NormNum.LegendreSymbol
-public import Mathlib.Tactic.NormNum.ModEq
-public import Mathlib.Tactic.NormNum.NatFib
-public import Mathlib.Tactic.NormNum.NatLog
-public import Mathlib.Tactic.NormNum.NatSqrt
-public import Mathlib.Tactic.NormNum.Ordinal
-public import Mathlib.Tactic.NormNum.Parity
-public import Mathlib.Tactic.NormNum.Prime
-public import Mathlib.Tactic.NormNum.RealSqrt
 public import Proofs.Flock.EndToEnd.Joint.MT.Draw
 public import Proofs.Flock.EndToEnd.Period.Run
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 public import Proofs.Flock.Soundness.Assumptions.Zk
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
-public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
-public import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
+public import Flock.Desc
 
 /-!
 # The joint stratified bound over sampling blocks of several tables (trusted)

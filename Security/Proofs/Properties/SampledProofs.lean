@@ -1,8 +1,8 @@
 module
 
 public import Properties.SampledProofs
+public import Proofs.Properties.Challenger
 import all Init.Data.Array.QSort.Basic
-import Std.Data.TreeMap.Raw.Lemmas
 
 /-! # Proofs of sampled proofs' one-stage property (`Properties.SampledProofs`)
 

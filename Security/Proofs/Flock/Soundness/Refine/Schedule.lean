@@ -1,7 +1,8 @@
 module
 
-public import Flock.Schedule
 public import Definitions.Flock.Compiled
+public import Flock.Schedule
+public import Proofs.Flock.Soundness.Model.Compiled
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 

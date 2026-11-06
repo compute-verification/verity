@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.Scope.Fit
 public import Proofs.Flock.Claims.Scope.Readable
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,10 +36,8 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.Setup
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 

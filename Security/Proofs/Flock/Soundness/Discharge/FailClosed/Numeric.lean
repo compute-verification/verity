@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.FailClosed.One
+public import Proofs.Flock.VBridge.Family.Lig
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -19,7 +20,6 @@ import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Accounting.Numbers
 import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.VBridge.Family.Lig
 
 /-!
 # Soundness at `fast100`'s numbers, over everything flock-verify accepts without `--zk`

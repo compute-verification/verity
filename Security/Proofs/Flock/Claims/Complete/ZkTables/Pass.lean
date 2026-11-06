@@ -2,7 +2,9 @@ module
 
 public import Proofs.Flock.Claims.Complete.Json.Session
 public import Proofs.Flock.Claims.Complete.Zk.Exact
+public import Proofs.Flock.Claims.Complete.Zk.Stops
 public import Proofs.Flock.Claims.Complete.ZkTables.Files
+public import Proofs.Flock.Claims.Complete.ZkTables.Table
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,8 +41,6 @@ import Proofs.Flock.Claims.Complete.Shaped
 import Proofs.Flock.Claims.Complete.Zk.Count
 import Proofs.Flock.Claims.Complete.Zk.Json.Session
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
-import Proofs.Flock.Claims.Complete.Zk.Stops
-import Proofs.Flock.Claims.Complete.ZkTables.Table
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 import Std.Tactic.BVDecide.Normalize.Prop

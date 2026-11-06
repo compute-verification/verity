@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.C3.Fork.Coupling
+public import Proofs.Flock.C3.Fork.OracleTable
 public import Proofs.Flock.Recursive.HoloExec
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -14,8 +16,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.Fork.Coupling
-import Proofs.Flock.C3.Fork.OracleTable
 import Proofs.Flock.Recursive.CompileRuns
 import Proofs.Flock.Soundness.Game.Prob
 

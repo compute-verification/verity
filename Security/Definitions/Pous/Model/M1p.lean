@@ -2,7 +2,6 @@ module
 
 public import Mathlib.Algebra.BigOperators.Fin
 public import Definitions.Pous.Model.M1
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Model M1 on P2's exact domain `[0, p)`

@@ -5,10 +5,10 @@ modulo the GHASH polynomial `G = X^128 + X^7 + X^2 + X + 1`. An element `⟨lo, 
 -/
 module
 
-public import Proofs.Flock.Level3.Bits
+public import Batteries.Data.UInt
 public import Flock.Field
 public import Mathlib.Algebra.Polynomial.Div
-import Batteries.Data.UInt
+public import Proofs.Flock.Level3.Bits
 import Mathlib.Data.ZMod.Basic
 import Mathlib.Tactic.ComputeDegree
 import Mathlib.Tactic.IntervalCases

@@ -1,9 +1,8 @@
 module
 
+public import Proofs.Pouw.NCP.RelationProofs
+public import Proofs.Pouw.NCP.GameProofs
 public import Definitions.Pouw.Guarantees.NCP
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.NCP.GameProofs
-import Proofs.Pouw.NCP.RelationProofs
 
 /-!
 # The shift by 24: independent checkpoints, hence relation-free; FinalOnly and the floor under independence

@@ -1,10 +1,11 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Link
 public import Proofs.Flock.Claims.Complete.CostWalk
+public import Proofs.Flock.Claims.Complete.Link
+public import Proofs.Flock.Claims.DeployK
+import Flock.With.SimWalk
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
-import Flock.With.SimWalk
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Bool
 

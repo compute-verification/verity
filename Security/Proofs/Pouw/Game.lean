@@ -1,10 +1,9 @@
 module
 
 public import Definitions.Pouw.Guarantees.Game
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Reduction
-import Proofs.Pouw.Sampling
-import Proofs.Pouw.Theorem1
+public import Proofs.Pouw.Sampling
+public import Proofs.Pouw.Theorem1
+public import Proofs.Pouw.Reduction
 
 /-!
 # Proofs of the game's guarantees

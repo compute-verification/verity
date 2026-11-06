@@ -1,10 +1,11 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.VerdictLog
-import all Init.Data.Repr
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
 public import Proofs.Flock.Claims.Deploy
 public import Proofs.Flock.Claims.Recursion.DecodeLog
+public import Proofs.Flock.Claims.Recursion.VerdictLog
 import Flock.With.SimVerify
+import all Init.Data.Repr
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Width

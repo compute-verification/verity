@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci.Links
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # The inference-only policy's activations premise over all of training's counted multiplications

@@ -1,10 +1,6 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.Live
-public import Proofs.Flock.Soundness.Binding.RowsX
-import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
-import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # R11 for one-table sessions, with the decoder right at the law's draws only

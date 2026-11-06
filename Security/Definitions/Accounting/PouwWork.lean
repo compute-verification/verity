@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Confidence
+public import Definitions.Pouw.Basic.Prob
 
 /-!
 # PoUW's work on one node, on the actual circuit (trusted)

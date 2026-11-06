@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.ZK.InnerTauRep
 public import Proofs.Flock.Claims.ZK.InnerTauVal
 public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
 import Mathlib.Algebra.Order.Floor.Extended
@@ -41,7 +42,6 @@ import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.InnerBatched
-import Proofs.Flock.Claims.ZK.InnerTauRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 

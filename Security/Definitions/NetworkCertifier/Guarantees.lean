@@ -1,9 +1,10 @@
 module
 
+public import Definitions.NetworkCertifier
 public import Definitions.NetworkCertifier.Assumptions
-public import Mathlib.Data.Set.Card
 public import Definitions.NetworkCertifier.Ingress
 public import Definitions.NetworkCertifier.Schedule
+public import Mathlib.Data.Set.Card
 import Mathlib.Data.Sym.Sym2.Init
 
 /-!

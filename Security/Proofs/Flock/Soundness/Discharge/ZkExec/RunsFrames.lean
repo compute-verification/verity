@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -16,8 +18,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
 /-!
 # `repProg` emits a `--zk` rep's frames

@@ -2,7 +2,10 @@ module
 
 public import Flock.Firewall.Drive
 public import Proofs.Flock.Claims.ZK.FinishBridge
+public import Proofs.Flock.Claims.ZK.FinishLive
 public import Proofs.Flock.Claims.ZK.FrameOpenCut
+public import Proofs.Flock.Claims.ZK.FramePlan
+public import Proofs.Flock.Claims.ZK.L0Pin
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,8 +38,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FinishLig
-import Proofs.Flock.Claims.ZK.FinishLive
-import Proofs.Flock.Claims.ZK.FramePlan
 
 /-!
 # Level 0's scheduled rounds, fed

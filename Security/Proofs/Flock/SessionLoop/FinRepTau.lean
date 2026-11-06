@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FinTau
 public import Proofs.Flock.Claims.ZK.FinishSwTau
+public import Proofs.Flock.SessionLoop.FinHmkLive
 public import Proofs.Flock.SessionLoop.FinRepOpen
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +39,6 @@ import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
 import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.ZK.CausalExe
-import Proofs.Flock.Claims.ZK.FinTau
 import Proofs.Flock.Claims.ZK.FinishSwBit
 import Proofs.Flock.Claims.ZK.FinishSwFw
 import Proofs.Flock.Claims.ZK.FinishSwInner
@@ -48,7 +49,6 @@ import Proofs.Flock.Claims.ZK.FinishTau
 import Proofs.Flock.Claims.ZK.FrameUnrefused
 import Proofs.Flock.Claims.ZK.InnerTauRep
 import Proofs.Flock.Claims.ZK.PiopSrcSv
-import Proofs.Flock.SessionLoop.FinHmkLive
 import Proofs.Flock.SessionLoop.FinRepRows
 import Proofs.Flock.SessionLoop.FinRepXs
 import Proofs.Flock.SessionLoop.RepSrc

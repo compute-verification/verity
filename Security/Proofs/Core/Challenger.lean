@@ -1,12 +1,12 @@
 module
 
 public import Definitions.Core.Guarantees.Challenger
+public import Proofs.Core.Game.Prob
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Inv
 import Mathlib.Data.Fintype.BigOperators
 import Proofs.Core.Game.Basic
-import Proofs.Core.Game.Prob
 
 /-!
 # The sample from a challenger's coin: proof

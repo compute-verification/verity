@@ -1,6 +1,8 @@
 module
 
 public import Flock.Firewall.Link
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
+public import Proofs.Flock.Claims.Complete.Zk.Level0Pad
 public import Proofs.Flock.Claims.Complete.Zk.Ligerito
 public import Proofs.Flock.Soundness.Refine.Tapes
 import Mathlib.Algebra.Order.Floor.Extended

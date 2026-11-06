@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.Claims.Complete.Json.Record
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
@@ -38,7 +39,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Complete.Json.Canon
 import Proofs.Flock.Claims.Complete.Json.Hex
 import Proofs.Flock.Claims.Complete.Json.RoundTrip
 import Proofs.Flock.Claims.Complete.Json.Spec

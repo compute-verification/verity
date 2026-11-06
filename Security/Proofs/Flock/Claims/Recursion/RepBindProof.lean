@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.RepOpenings
 public import Proofs.Flock.Claims.KS.PlainLevels
+public import Proofs.Flock.Claims.Recursion.RepFramesLig
+public import Proofs.Flock.Claims.Recursion.RepOpenings
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.PlainQueryRound
-import Proofs.Flock.Claims.Recursion.RepFramesLig
 import Proofs.Flock.Soundness.Refine.Seam
 import Std.Tactic.BVDecide.Normalize.Bool
 

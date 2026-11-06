@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.KS.Joint
+public import Proofs.Flock.Claims.KS.PlainEvent
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.ConflictTied
-import Proofs.Flock.Claims.KS.PlainEvent
 import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts

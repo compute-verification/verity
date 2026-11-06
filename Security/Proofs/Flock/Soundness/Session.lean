@@ -3,11 +3,12 @@ module
 public import Definitions.Flock.Extract
 public import Definitions.Flock.Game.Batch
 public import Proofs.Flock.Soundness.CompiledTable
+public import Proofs.Flock.Soundness.Game.Batch
 public import Proofs.Flock.Soundness.Game.Runs
+public import Proofs.Flock.Soundness.Knowledge
 import Proofs.Flock.Soundness.CompiledAlign
 import Proofs.Flock.Soundness.Extract
 import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Batch
 import Proofs.Flock.Soundness.Game.Expect
 import Proofs.Flock.Soundness.Game.Interleave
 import Proofs.Flock.Soundness.Game.Lock

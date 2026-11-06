@@ -1,10 +1,10 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkLink.AlignLevel
 public import Proofs.Flock.Soundness.Discharge.ZkLink.LockLevel
 public import Proofs.Flock.Soundness.Discharge.ZkLink.OracleP
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Push
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.ZkLink.AlignLevel
 import Proofs.Flock.Soundness.Game.Batch
 import Proofs.Flock.Soundness.Game.Lock
 

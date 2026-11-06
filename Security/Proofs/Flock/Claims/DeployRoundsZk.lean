@@ -1,9 +1,10 @@
 module
 
-public import Flock.With.Zk
 public import Aesop.BuiltinRules
+public import Flock.With.Zk
 public import Mathlib.Algebra.Group.Nat.Defs
 public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Claims.DeployRounds
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -19,7 +20,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Claims.DeployRounds
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams

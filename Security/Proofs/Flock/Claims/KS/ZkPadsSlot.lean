@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.KS.ZkPadsPair
 public import Proofs.Flock.Claims.KS.ZkBatch
+public import Proofs.Flock.Claims.KS.ZkBatchSim
+public import Proofs.Flock.Claims.KS.ZkPadsPair
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.ZkBatchSim
 import Proofs.Flock.Claims.KS.ZkLiveSched
 import Proofs.Flock.Soundness.Game.Expect
 

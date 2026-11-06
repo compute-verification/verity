@@ -1,11 +1,7 @@
 module
 
+public import Proofs.Flock.Soundness.Game.Lock
 public import Proofs.Flock.Soundness.LinkFinder
-public import Definitions.Flock.Game.Lock
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Lock
-import Proofs.Flock.Soundness.Game.Seq
 
 /-!
 # The compiled table bound, linearly: a link finder at each slot

@@ -2,8 +2,11 @@ module
 
 public import Proofs.Flock.Claims.ZK.L0Pin
 public import Proofs.Flock.Claims.ZK.L0PinChain
+public import Proofs.Flock.Claims.ZK.L0PinCut
+public import Proofs.Flock.Claims.ZK.L0PinLoop
 public import Proofs.Flock.Claims.ZK.L0PinRec
 public import Proofs.Flock.SessionLoop.FinRep
+public import Proofs.Flock.SessionLoop.FinRepXs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,10 +43,7 @@ import Proofs.Flock.Claims.Complete.ZkTables.View
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.FinishSwRep
 import Proofs.Flock.Claims.ZK.FrameRankFault
-import Proofs.Flock.Claims.ZK.L0PinCut
-import Proofs.Flock.Claims.ZK.L0PinLoop
 import Proofs.Flock.Claims.ZK.PrefixLive
-import Proofs.Flock.SessionLoop.FinRepXs
 import Proofs.Flock.SessionLoop.FinRounds
 
 /-!

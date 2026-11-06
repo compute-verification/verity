@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.DeployedR
 public import Proofs.Flock.Claims.Recursion.NextRSession
+public import Proofs.Flock.Claims.Recursion.NextRTables
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

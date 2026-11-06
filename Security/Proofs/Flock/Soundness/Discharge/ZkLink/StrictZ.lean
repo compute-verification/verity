@@ -1,11 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 public import Proofs.Flock.Soundness.StrictCR
-public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
-import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.ZkLink.Count
-import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # The compiled `--zk` knowledge term under strict-time collision resistance

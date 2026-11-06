@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.C3.PubRows.Honest
+public import Proofs.Flock.C3.VStarList.Shape
+public import Proofs.Flock.VBridge.Sparse.Unit
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -14,12 +16,10 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.VBridge.Family.Structure
 import Proofs.Flock.VBridge.Pinned
-import Proofs.Flock.VBridge.Sparse.Unit
 
 /-!
 # n1: a rec-sparse unit the verifier checked is at its RecSparse shape

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Accounting.TS.Session.Group.Guarantees
+public import Proofs.Flock.C3.RegLevels.TopLeaf
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Proofs.Accounting.TS.CheckedSound
 import Proofs.Accounting.TS.HeldSound
 import Proofs.Accounting.TS.Session.Lanes.KnownRead
 import Proofs.Flock.C3.Compose.RowsReg
-import Proofs.Flock.C3.RegLevels.TopLeaf
 import Proofs.Flock.SoundAtBridge.ServedProof
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.ExecPlacement
+public import Proofs.Flock.Soundness.TmplUnitNet
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -18,7 +19,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.ExecParse
 import Proofs.Flock.Soundness.SparseRows
-import Proofs.Flock.Soundness.TmplUnitNet
 import Proofs.Flock.Soundness.TmplUnrollAt
 import VCVio.Prelude.Core
 

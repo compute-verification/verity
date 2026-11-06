@@ -1,8 +1,9 @@
 module
 
+public import Definitions.Core.Assumptions
+public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 public import Definitions.NetworkCertifier.Period
 public import Definitions.NetworkCertifier.Tap
-public import Definitions.Core.Assumptions
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

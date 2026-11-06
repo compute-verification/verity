@@ -1,12 +1,8 @@
 module
 
 public import Definitions.Nci.Guarantees.FitRate
-public import Definitions.Nci.Reads
-public import Proofs.Nci.Pull
-import Mathlib.Data.NNRat.Floor
-import Proofs.Accounting.Actual.Split
-import Proofs.Accounting.Actual.Windows
-import Proofs.Nci.Fit
+public import Proofs.Accounting.Actual.Windows
+public import Proofs.Nci.Fit
 
 /-!
 # Proof of the fit bound on a run

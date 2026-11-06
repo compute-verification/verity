@@ -1,10 +1,11 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
-public import Proofs.Flock.Claims.Recursion.CapLowerPin
-public import Proofs.Flock.Claims.Recursion.DeployedBrings
-public import Proofs.Flock.Claims.Recursion.DecompBDeployed
 public import Proofs.Flock.C3.RegLevels.OpensRegs
+public import Proofs.Flock.C3.RegLevels.VRows
+public import Proofs.Flock.Claims.Recursion.CapLowerPin
+public import Proofs.Flock.Claims.Recursion.DecompBDeployed
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
 public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -39,7 +40,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.C3.RegLevels.VRows
 import Proofs.Flock.Claims.Recursion.InnerExtras
 import Proofs.Flock.Claims.Recursion.LabelsDeployed
 import Proofs.Flock.Claims.Recursion.OpensReads

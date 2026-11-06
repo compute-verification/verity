@@ -7,6 +7,7 @@ general instance form (`scopeOkI`, once `wiresAcyclic` passed); with public outp
 module
 
 public import Flock.HmRow
+public import Flock.JsonParse
 
 @[expose] public section
 

@@ -1,7 +1,7 @@
 module
 
+public import Proofs.Properties.RemoteAudit.Plan
 public import Properties.RemoteAudit
-import Proofs.Properties.RemoteAudit.Plan
 
 /-!
 # The session's bookkeeping (`AcceptedMinPasses`, `PassesStepped`, `PassesReadDistinct`, `ReceiptsBelowLimit`,

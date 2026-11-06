@@ -1,14 +1,14 @@
 module
 
-public import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
+public import Proofs.Pouw.Fp8Atom.H1TFlipProofs
+public import Proofs.Pouw.Fp8Atom.H1TGammaProofs
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Data.Sym.Sym2.Init
 import Mathlib.Tactic.NormNum.GCD
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Fp8Atom.H1TFlipProofs
-import Proofs.Pouw.Fp8Atom.H1TGammaProofs
 import Proofs.Pouw.Fp8Atom.H1TProofs
 
 /-!

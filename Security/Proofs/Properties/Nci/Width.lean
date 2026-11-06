@@ -4,6 +4,7 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Algebra.GroupWithZero.Nat
 public import Mathlib.Order.Interval.Finset.Nat
 public import NciCheck.Desc
+public import Proofs.Properties.RemoteAudit.Sort
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -23,7 +24,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Properties.Nci.Desc
-import Proofs.Properties.RemoteAudit.Sort
 
 /-!
 # `Desc.novelWidth` is the width of its segments' gates

@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pous.Model.P3Chain
 public import Definitions.Pous.Model.Dense
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The band scheme and the dense chain scheme over the overwrite chain on `Π₂`

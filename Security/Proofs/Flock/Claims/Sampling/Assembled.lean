@@ -2,10 +2,12 @@ module
 
 public import Proofs.Flock.Claims.DeployEfficient
 public import Proofs.Flock.Claims.Sampling.Leaf
-public import Proofs.Flock.Claims.Sampling.Select.Scope
 public import Proofs.Flock.Claims.Sampling.Runs
+public import Proofs.Flock.Claims.Sampling.RunsExp
+public import Proofs.Flock.Claims.Sampling.Select.Scope
 public import Proofs.Flock.Claims.Sampling.Session
 public import Proofs.Flock.Claims.Sampling.Universal
+public import Proofs.Flock.SamplingBoundary
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,8 +39,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Sampling.RunsExp
-import Proofs.Flock.SamplingBoundary
 
 /-!
 # The sampling block's claims, with what remains as hypotheses

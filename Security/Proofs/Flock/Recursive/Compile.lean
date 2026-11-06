@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.Recursive.CompileRuns
+public import Proofs.Flock.Recursive.ForkInner
 public import Proofs.Flock.Recursive.Target
 public import Proofs.Flock.Soundness.Assumptions.Recursive
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -15,8 +17,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Recursive.CompileRuns
-import Proofs.Flock.Recursive.ForkInner
 import Proofs.Flock.Recursive.ForkRuns
 import Proofs.Flock.Soundness.Accounting.Numbers
 

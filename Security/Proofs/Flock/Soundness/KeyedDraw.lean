@@ -1,14 +1,14 @@
 module
 
-public import Proofs.Flock.Soundness.PlanDraw
-public import Proofs.Flock.Soundness.Audit.Window
-public import Proofs.Flock.Soundness.Audit.RegDraw
-import all Init.Data.String.Defs
 public import Proofs.Flock.Soundness.Assumptions
+public import Proofs.Flock.Soundness.Audit.RegDraw
+public import Proofs.Flock.Soundness.Audit.Window
 public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecDrawOS
+public import Proofs.Flock.Soundness.PlanDraw
+import all Init.Data.String.Defs
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.ExecDrawOS
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Prob
 import Std.Data.HashMap.Lemmas

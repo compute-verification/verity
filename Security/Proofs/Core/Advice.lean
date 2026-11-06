@@ -1,12 +1,9 @@
 module
 
-public import Definitions.Core.Advice
 public import Mathlib.Logic.Equiv.List
 public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.List.OfFn
-import Mathlib.Basic.Countable.Basic
-import Mathlib.Data.Fintype.EquivFin
-import Mathlib.Data.Nat.Size
+public import Definitions.Core.Advice
 
 /-!
 # The advice tree binds its rows, up to a collision among the strings it hashes

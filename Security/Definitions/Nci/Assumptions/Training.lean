@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci.Threads
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # The inference-only policy's one assumption about training

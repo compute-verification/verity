@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.C3.VStarList.Default
+public import Proofs.Flock.C3.VStarList.Parse
 public import Proofs.Flock.Recursive.HoloExec
 public import Proofs.Flock.Recursive.VStarCheck
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -15,8 +17,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.VStarList.Default
-import Proofs.Flock.C3.VStarList.Parse
 
 /-!
 # Piece (h): V*'s statements over the verifier's list (gap 4(c)), and R's shape

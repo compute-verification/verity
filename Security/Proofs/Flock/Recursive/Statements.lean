@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Assumptions.Recursive
+public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
 public import Proofs.Flock.Soundness.ZK.HidingAdaptive
 import Mathlib.Tactic.Echelon.Zsqrtd

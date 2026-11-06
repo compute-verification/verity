@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.DeployedR
 public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.Claims.Recursion.PartsVStar
 public import Proofs.Flock.Claims.Recursion.RestFinal
 public import Proofs.Flock.Claims.Recursion.RestRead
 import all Init.Data.Array.Basic
@@ -40,7 +41,6 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.BoundAccepts
-import Proofs.Flock.Claims.Recursion.PartsVStar
 import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.SchedDense
 import Proofs.Flock.Claims.Recursion.SlotsCheck

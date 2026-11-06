@@ -1,10 +1,11 @@
 module
 
-import all Init.Data.Array.Basic
-import all Init.Data.Range.Basic
-import all Init.Data.Nat.Power2.Basic
 public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.KS.Deploy
 public import Proofs.Flock.Claims.KS.Flock
+import all Init.Data.Array.Basic
+import all Init.Data.Nat.Power2.Basic
+import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.Deploy
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 

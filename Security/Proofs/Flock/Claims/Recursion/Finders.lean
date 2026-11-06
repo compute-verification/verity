@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.Transport
 public import Definitions.Claims.Recursion
+public import Proofs.Flock.Claims.Recursion.Cost
+public import Proofs.Flock.Claims.Recursion.Transport
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

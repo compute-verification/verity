@@ -1,8 +1,10 @@
 module
 
+public import Proofs.Flock.Claims.ZK.AdmitsOf
 public import Proofs.Flock.Claims.ZK.FinishRound
-public import Proofs.Flock.Claims.ZK.LinkRecheck
 public import Proofs.Flock.Claims.ZK.FrameLoop
+public import Proofs.Flock.Claims.ZK.FrameZK
+public import Proofs.Flock.Claims.ZK.LinkRecheck
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +36,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.ZK.AdmitsOf
 
 /-!
 # `FrameAdmits` at the session loop: the tables' side and the frame's

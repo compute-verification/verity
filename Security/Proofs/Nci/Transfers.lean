@@ -2,8 +2,6 @@ module
 
 public import Definitions.Nci
 public import Definitions.Nci.Transfers
-public import Definitions.Core.Boolean
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI from the bits on the wire and the credited gates

@@ -1,13 +1,10 @@
 module
 
 public import Definitions.Pouw.Assumptions.NCP.RouteUGame
+public import Proofs.Pouw.NCP.GameProofs
+public import Proofs.Pouw.Sanity
+public import Proofs.Pouw.NCP.ChainProofs
 public import Definitions.Pouw.Guarantees.NCP
-public import Proofs.Pouw.Exact
-public import Proofs.Pouw.QTree
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.NCP.ChainProofs
-import Proofs.Pouw.NCP.GameProofs
-import Proofs.Pouw.NCP.Proofs
 
 /-!
 # NCP's checked values on route U: proofs

@@ -12,10 +12,6 @@ public import Proofs.Pouw.PearlC.UOnlyGamma
 public import Proofs.Pouw.PearlC.TTOutW1
 public import Proofs.Pouw.PearlC.TTOutFp4W1
 public import Proofs.Pouw.PearlC.TTOutW1Item1
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.ServedRev1Gamma
 
 /-!
 # Proofs of Pearl-C's guarantees

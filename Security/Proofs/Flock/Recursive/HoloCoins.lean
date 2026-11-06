@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.HoloValues.Shape
 public import Proofs.Flock.Recursive.HoloExec
 public import Proofs.Flock.Recursive.StageKinds
 import Mathlib.Tactic.Echelon.Zsqrtd

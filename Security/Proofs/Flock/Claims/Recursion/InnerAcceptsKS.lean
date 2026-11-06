@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.InnerAccepts
 public import Proofs.Flock.Claims.Recursion.FlockKSAcc
+public import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 public import Proofs.Flock.Claims.Recursion.InnerAbort
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.Abort
-import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 
 /-!
 # The recursion's KS where the inner view may reject on a collision

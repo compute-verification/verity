@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Recursive.ForkRuns
 public import Proofs.Flock.Recursive.Registrants
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -16,7 +17,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Recursive.Compose
-import Proofs.Flock.Recursive.ForkRuns
 import Proofs.Flock.Recursive.StageRead
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Prob

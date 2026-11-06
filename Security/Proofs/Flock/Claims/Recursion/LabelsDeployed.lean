@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.CopySiteDeployed
 public import Proofs.Flock.Claims.Recursion.DeployPremises
+public import Proofs.Properties.Nci.ReadsExact
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -45,7 +46,6 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Refine.Walk
-import Proofs.Properties.Nci.ReadsExact
 
 @[expose] public section
 

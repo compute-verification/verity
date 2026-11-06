@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Zero.Delta
-import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # A VU's stacked inputs that read the zero (`hZero`, e2e, untyped statements)

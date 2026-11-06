@@ -1,7 +1,7 @@
 module
 
+public import Definitions.Accounting.RateAudit
 public import Definitions.Accounting.RateAuditJoint
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The rate audit with partial completion (trusted)

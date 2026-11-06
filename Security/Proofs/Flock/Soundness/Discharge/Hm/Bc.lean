@@ -8,6 +8,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Aliased.Copies
 public import Proofs.Flock.Soundness.Discharge.Hm.Delta
+public import Proofs.Flock.Soundness.Discharge.Hm.Flat
 public import Proofs.Flock.Soundness.Discharge.Hm.Place
 public import Proofs.Flock.Soundness.Discharge.Hm.Port
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -23,7 +24,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.Hm.Flat
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
 @[expose] public section

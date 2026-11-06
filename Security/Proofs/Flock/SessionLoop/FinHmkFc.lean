@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Complete.Zk.InnerGo
 public import Proofs.Flock.Claims.ZK.FinishSwSrc
 public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.SessionLoop.FinHmkCut
 public import Proofs.Flock.SessionLoop.FinRep
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

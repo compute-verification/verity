@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pous.Model.PubEncoder
 public import Definitions.Pous.Accounting.Params
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The requirement with a public encoder

@@ -1,9 +1,10 @@
 module
 
-public import Proofs.Accounting.TS.Session.Lanes.Combine
 public import Definitions.Pouw.H1Zy.Chain
 public import Definitions.Pouw.H1Zy.LaneBits
+public import Proofs.Accounting.TS.Session.Lanes.Combine
 public import Proofs.Accounting.TS.Session.Lanes.Decode
+public import Proofs.Pouw.H1Zy.LaneBits
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,7 +39,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.H1Zy.Lane
-import Proofs.Pouw.H1Zy.LaneBits
 import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!

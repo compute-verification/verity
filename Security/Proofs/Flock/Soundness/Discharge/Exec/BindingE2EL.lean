@@ -1,12 +1,9 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Exec.E2EL
 public import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
+public import Proofs.Flock.Soundness.Binding.E2E
 public import Proofs.Flock.Soundness.Binding.RowsX
-public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
-public import Proofs.Flock.Soundness.E2E
-import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Binding.E2E
-import Proofs.Flock.Soundness.Discharge.Exec.E2EL
 
 /-!
 # The end-to-end theorem with the value binding of `hm96-sha512/row/v1` rows

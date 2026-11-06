@@ -1,6 +1,8 @@
 module
 
+public import Definitions.Pouw.FpG1
 public import Definitions.Pouw.FpG1.Gemm
+public import Proofs.Pouw.Exact
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -36,7 +38,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Pouw.Exact
 
 /-!
 # FP8-g1 and W4A8-g1: ranges, the coin's rank-one terms and the epilogue's exactness

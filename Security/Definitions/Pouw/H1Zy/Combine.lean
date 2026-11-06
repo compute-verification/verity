@@ -1,5 +1,6 @@
 module
 
+public import Mathlib.Data.BitVec
 public import Mathlib.Data.Nat.Notation
 public import Mathlib.Tactic.Attr.Core
 public import Mathlib.Tactic.Basic

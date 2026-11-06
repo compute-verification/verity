@@ -1,7 +1,8 @@
 module
 
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditJoint
 public import Definitions.Accounting.RateAuditInteractive
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The rate audit: what an accepted device held and read (trusted)

@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Nci.Guarantees.CoverPartialSum
+public import Proofs.Nci.Cover.FanOutRootCost
 import Mathlib.Combinatorics.Enumerative.DoubleCounting
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Nci.Cover.FanOutRootCost
 import Proofs.Nci.Cover.FanOutValue
 import Proofs.Nci.Cover.FanOutWalk
 import Proofs.Nci.Cover.Paths

@@ -2,7 +2,6 @@ module
 
 public import Definitions.Nci
 public import Mathlib.Data.FinEnum
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI's incompressibility in support form: the vocabulary

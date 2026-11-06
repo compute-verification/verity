@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FrameFree
 public import Proofs.Flock.Claims.ZK.FinishSwSrc
+public import Proofs.Flock.Claims.ZK.FrameFree
 public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.SessionLoop.FinL0Vals
 public import Proofs.Flock.SessionLoop.FinRep
 import Flock.With.SimWalk
 import Mathlib.Algebra.Order.Floor.Extended
@@ -46,7 +47,6 @@ import Proofs.Flock.Claims.ZK.InnerBatched
 import Proofs.Flock.Claims.ZK.L0PinCoins
 import Proofs.Flock.Claims.ZK.L0PinCut
 import Proofs.Flock.Claims.ZK.L0PinLoop
-import Proofs.Flock.SessionLoop.FinL0Vals
 import Proofs.Flock.SessionLoop.FinRepView
 import Proofs.Flock.SessionLoop.FinRounds
 

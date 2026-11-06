@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.PlainKSLinR
 public import Proofs.Flock.Claims.KS.PlainOff
 public import Proofs.Flock.Claims.KS.PlainR
+public import Proofs.Flock.Claims.KS.PlainRConflict
 public import Proofs.Flock.Claims.KS.SimLead
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.PlainOffLive
-import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.KS.PlainRawL
 import Proofs.Flock.Claims.KS.Range
 import Proofs.Flock.Claims.KS.SessionRaw

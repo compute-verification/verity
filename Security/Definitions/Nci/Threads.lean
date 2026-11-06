@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # The inference-only policy over threads: the vocabulary

@@ -1,10 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Exec.Setup
-public import Proofs.Flock.Soundness.Discharge.Tables.Session
-import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.Tables.Accepts
-import Proofs.Flock.Soundness.Discharge.Tables.Headline
+public import Proofs.Flock.Soundness.Discharge.Tables.Headline
+public import Proofs.Flock.Soundness.Discharge.Tables.Accepts
 
 /-!
 # Sessions of `J` tables: the statements

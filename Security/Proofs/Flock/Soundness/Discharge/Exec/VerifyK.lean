@@ -1,10 +1,10 @@
 module
 
-public import Flock.With.VerifyE
+public import Flock.With.Deployed
 public import Flock.With.Eq
+public import Flock.With.VerifyE
 public import Proofs.Flock.Soundness.Discharge.Exec.Event
 public import Proofs.Flock.Soundness.Refine.Frames
-import Flock.With.Deployed
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Tables
 

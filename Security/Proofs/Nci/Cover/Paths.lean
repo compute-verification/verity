@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Nci.Assumptions.Cover
 public import Definitions.Nci.Cover
 import Mathlib.Algebra.Order.AbsoluteValue.Basic
 import Mathlib.Algebra.Order.Field.Basic

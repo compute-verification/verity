@@ -1,8 +1,10 @@
 module
 
-public import Proofs.Flock.C3.RegLevels.TopRead
-public import Proofs.Flock.Recursive.HPortTie
 public import Proofs.Flock.C3.RegLevels.SharedRows
+public import Proofs.Flock.C3.RegLevels.TopRead
+public import Proofs.Flock.C3.RegLevels.TopTie
+public import Proofs.Flock.C3.Reps.RoundLinks
+public import Proofs.Flock.Recursive.HPortTie
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -16,8 +18,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.RegLevels.TopTie
-import Proofs.Flock.C3.Reps.RoundLinks
 import Proofs.Flock.Soundness.Registered.Binding
 
 /-!

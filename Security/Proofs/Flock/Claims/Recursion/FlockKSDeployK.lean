@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.DeployVK
 public import Proofs.Flock.Claims.KS.ConflictWithin
+public import Proofs.Flock.Claims.Recursion.ConflictTiedE
 public import Proofs.Flock.Claims.Recursion.FlockKSRecord
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

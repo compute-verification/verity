@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FirstRefusal
+public import Proofs.Flock.Claims.ZK.FrameAdmits
 public import Proofs.Flock.Claims.ZK.FramePlan
+public import Proofs.Flock.Claims.ZK.FrameTaken
 public import Proofs.Flock.Claims.ZK.FrameZK
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +39,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.FrameInner
-import Proofs.Flock.Claims.ZK.FrameTaken
 
 /-!
 # The frames refuse `β = 0` (`FrameUnrefused`'s `β` fault)

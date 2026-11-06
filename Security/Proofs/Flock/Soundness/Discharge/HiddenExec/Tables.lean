@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Soundness.Discharge.Integrate
 public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

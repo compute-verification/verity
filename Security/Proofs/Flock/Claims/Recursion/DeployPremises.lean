@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.Deploy
 public import Proofs.Flock.Claims.Recursion.DeployMargin
+public import Proofs.Flock.Claims.Recursion.DeployScopeRuns
 public import Proofs.Flock.Claims.Recursion.FlockKSAcc
 public import Proofs.Flock.Claims.Recursion.FlockKSRecord
 public import Proofs.Flock.Claims.Recursion.InnerAccepts
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DeployFacts
-import Proofs.Flock.Claims.Recursion.DeployScopeRuns
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.KSStated
 

@@ -1,9 +1,7 @@
 module
 
 public import Definitions.Core
-public import Definitions.Core.Partition
 public import Mathlib.Analysis.Real.Sqrt
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # The inference-only policy

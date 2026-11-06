@@ -1,9 +1,7 @@
 module
 
 public import Definitions.Nci.Assumptions.Baseline
-public import Definitions.Nci
-import Mathlib.Data.NNRat.Floor
-import Proofs.Core.Circuit
+public import Proofs.Core.Circuit
 
 /-!
 # Pulling a division back through a containment

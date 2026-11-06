@@ -1,11 +1,7 @@
 module
 
 public import Properties.Pous.EndToEndAt
-import Mathlib.Basic.ENNReal.Real
-import Proofs.Properties.Pous.MemoryChallenger
-import Proofs.Properties.Pous.Run
-import Proofs.Properties.Pous.Setup
-import Proofs.Properties.Pous.TimedAudit
+public import Proofs.Properties.Pous.Run
 
 /-!
 # The composed check's property at every point, proved

@@ -1,8 +1,9 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Compiled
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
-public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -16,7 +17,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 
 /-!
 # The coin half of `DecodesZK` at the compiled `--zk` table

@@ -2,11 +2,6 @@ module
 
 public import Definitions.Pouw.Assumptions.Dimension.H100
 public import Proofs.Pouw.Dimension.EmbedProofs
-import Mathlib.Data.Sym.Sym2.Init
-import Mathlib.Tactic.NormNum.GCD
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Dimension.Proofs
-import Proofs.Pouw.NCP.RelationWitness
 
 /-!
 # `MH100` and its per-word bound: proofs

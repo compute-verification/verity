@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Boolean
-import Proofs.Core.Circuit
+public import Proofs.Core.Circuit
 
 /-!
 # The Boolean profile evaluates gate by gate

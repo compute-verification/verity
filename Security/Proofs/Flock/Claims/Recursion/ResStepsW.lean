@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.ResChainW
 public import Proofs.Flock.Claims.Recursion.CapLowerPin
+public import Proofs.Flock.Claims.Recursion.ResChainW
+public import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
+public import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,8 +40,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.PartsVStar
 import Proofs.Flock.Claims.Recursion.RowDAccept
 import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
-import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 
 /-!

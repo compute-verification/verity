@@ -1,14 +1,14 @@
 module
 
-public import Definitions.Flock.Piop
 public import Definitions.Core.Game
+public import Definitions.Flock.Piop
 public import Mathlib.Algebra.Polynomial.Degree.Defs
 public import Mathlib.Algebra.Polynomial.Eval.Defs
+public import Proofs.Flock.Soundness.Game.Poly
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Algebra.Polynomial.Degree.Lemmas
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Flock.Soundness.Game.Poly
 
 /-!
 # One sumcheck round

@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Work
 public import Definitions.Core.Interaction
+public import Proofs.Flock.Claims.Prob
+public import Proofs.Flock.Soundness.Audit.Work
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Layout
 public import Proofs.Flock.Soundness.Discharge.Hm.Flat
+public import Proofs.Flock.Soundness.ParseUnitPre
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -20,7 +22,6 @@ import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.Hm.Nets
 import Proofs.Flock.Soundness.ExecLookup
-import Proofs.Flock.Soundness.ParseUnitPre
 
 /-!
 # A hidden-output statement's flat twin, and its output rows' message bits

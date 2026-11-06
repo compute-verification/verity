@@ -1,8 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Json.Record
-import all Init.Data.Repr
+public import Proofs.Flock.Claims.Complete.ZkTables.Count
 public import Proofs.Flock.Claims.Complete.ZkTables.Skeleton
+import all Init.Data.Repr
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

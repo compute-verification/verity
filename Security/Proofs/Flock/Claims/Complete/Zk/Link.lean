@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Link
+public import Proofs.Flock.Claims.Complete.Zk.Discharge
 public import Proofs.Flock.Claims.Complete.Zk.Skeleton
 import Flock.With.SimVerify
 import Flock.With.SimWalk

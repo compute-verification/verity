@@ -3,6 +3,7 @@ module
 public import Flock.RecVStar
 public import Proofs.Flock.VBridge.AlgHolds
 public import Proofs.Flock.VBridge.Stages
+public import Proofs.Flock.VBridge.Top
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

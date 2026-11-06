@@ -9,8 +9,9 @@ template instance `g`'s `sha512x3` and `hm96` slots hold the verifier's layouts 
 -/
 module
 
-public import Proofs.Flock.Soundness.ExecTemplatePlace
 public import Proofs.Flock.Soundness.Discharge.Hm.Laid
+public import Proofs.Flock.Soundness.Discharge.Hm.Nets
+public import Proofs.Flock.Soundness.ExecTemplatePlace
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -26,7 +27,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Soundness.Discharge.Hm.Nets
 import Proofs.Flock.Soundness.Lowering
 import Proofs.Flock.Soundness.SparseRows
 

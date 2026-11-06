@@ -34,8 +34,6 @@ public import Definitions.Flock.ZK.Table
 public import Definitions.Flock.ZK.Cut
 public import Definitions.Flock.ZK.RealView
 public import Definitions.Flock.ZK.SHVZK
-import Mathlib.Algebra.Order.Algebra
-import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # C-Flock's definitions

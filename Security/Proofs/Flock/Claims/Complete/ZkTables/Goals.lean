@@ -1,6 +1,10 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Json.Text
 public import Proofs.Flock.Claims.Complete.ZkTables.Complete
+public import Proofs.Flock.Claims.Complete.ZkTables.Decode
+public import Proofs.Flock.Claims.Complete.ZkTables.Prover
+public import Proofs.Flock.Claims.Complete.ZkTables.Session
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,13 +40,9 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Encode
 import Proofs.Flock.Claims.Complete.Json.Canon
 import Proofs.Flock.Claims.Complete.Json.Goals
-import Proofs.Flock.Claims.Complete.Json.Text
 import Proofs.Flock.Claims.Complete.Zk.Discharge
-import Proofs.Flock.Claims.Complete.ZkTables.Decode
 import Proofs.Flock.Claims.Complete.ZkTables.Names
-import Proofs.Flock.Claims.Complete.ZkTables.Prover
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
-import Proofs.Flock.Claims.Complete.ZkTables.Session
 import Proofs.Flock.Claims.DeployK
 import Std.Tactic.BVDecide.Normalize.Prop
 

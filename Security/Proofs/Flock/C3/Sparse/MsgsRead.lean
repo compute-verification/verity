@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.C3.Reps.RepsRead
 public import Proofs.Flock.C3.Compose.PartRead
+public import Proofs.Flock.C3.Reps.RepsRead
+public import Proofs.Flock.C3.Sparse.SrcLayer
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

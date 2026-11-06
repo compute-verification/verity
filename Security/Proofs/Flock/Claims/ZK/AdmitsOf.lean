@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.ExePlan
+public import Proofs.Flock.Claims.ZK.FinishRank
 public import Proofs.Flock.Claims.ZK.Stopped
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Table
-import Proofs.Flock.Claims.ZK.FinishRank
 
 /-!
 # Every table admits the coins where no refusal shows

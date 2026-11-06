@@ -1,8 +1,6 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.OneStage
-import Mathlib.Algebra.Order.Module.Field
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Audits whose draw depends on the registration

@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pous.Model.Graded
 public import Definitions.Pous.Accounting.Params
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The requirement with grace `t`

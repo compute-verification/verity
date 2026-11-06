@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Flock.Accounting.Bound
+public import Mathlib.Tactic.IntervalCases
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 

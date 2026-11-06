@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.KS.LiveMix
 public import Proofs.Flock.Claims.Bridge.Custody
+public import Proofs.Flock.Claims.KS.LiveMix
+public import Proofs.Flock.Claims.KS.PlainEvent
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

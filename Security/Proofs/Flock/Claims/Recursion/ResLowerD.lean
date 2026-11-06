@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.ResPiecesD
+public import Proofs.Flock.Claims.Recursion.ResTieVV
 public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 public import Proofs.Flock.Claims.Recursion.ResLowJP
 import Mathlib.Algebra.Order.Floor.Extended

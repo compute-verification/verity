@@ -1,8 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Binding.RowSeg
-import all Init.Data.String.Defs
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowCommit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
+import all Init.Data.String.Defs
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -16,7 +17,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
 
 /-!
 # A segmented row's commit string from its chains

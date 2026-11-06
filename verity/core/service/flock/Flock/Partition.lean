@@ -7,6 +7,7 @@ module
 
 public import Flock.Bytes
 public import Lean.Data.Json.Printer
+public import Std.Data.HashSet
 
 @[expose] public section
 set_option backward.privateInPublic true

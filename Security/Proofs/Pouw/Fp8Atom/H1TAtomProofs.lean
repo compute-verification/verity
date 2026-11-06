@@ -1,10 +1,11 @@
 module
 
 public import Definitions.Pouw.Fp8Atom.H1TLemmas
+public import Mathlib.Data.Nat.Bitwise
+public import Proofs.Pouw.Fp8Atom.H1TProofs
 public import Proofs.Pouw.Fp8Atom.Proofs
 import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Data.Nat.Bitwise
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 

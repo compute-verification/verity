@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Replay.Trace
 public import Proofs.Flock.Claims.Complete.Skeleton
+public import Proofs.Flock.Claims.Scope.StmtOf
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,10 +36,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Discharge
-import Proofs.Flock.Claims.Complete.Replay.Trace
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.Sizes
-import Proofs.Flock.Claims.Scope.StmtOf
 
 /-!
 # The deployed table as the statement the soundness proof plays

@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.CutOpens
 public import Proofs.Flock.Claims.Recursion.SaltRowsSlots
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.BoundAccepts
 import Proofs.Flock.Claims.Recursion.CapPorts
-import Proofs.Flock.Claims.Recursion.CutOpens
 import Proofs.Flock.Claims.Recursion.HmOpen
 import Proofs.Flock.Claims.Recursion.RestFinal
 import Proofs.Flock.Claims.Recursion.RestLens

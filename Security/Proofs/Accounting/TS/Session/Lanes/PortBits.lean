@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Accounting.TS.HeldSound
+public import Proofs.Accounting.TS.Session.Lanes.Holds
 public import Proofs.Accounting.TS.Session.Lanes.Range
 public import Proofs.Flock.SoundAtBridge.Served
 import Mathlib.Algebra.Order.Floor.Extended
@@ -33,7 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.TS.HeldSound
 import Proofs.Flock.VBridge.Family.Registrants
 
 /-!

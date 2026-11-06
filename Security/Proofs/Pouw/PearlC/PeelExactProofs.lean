@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.PearlC.PeelExact
+public import Proofs.Pouw.PearlC.AtomErr
 public import Proofs.Pouw.PearlC.Freeze
 import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.Floor.Semifield
@@ -8,7 +9,6 @@ import Mathlib.Data.List.GetD
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 import Proofs.Pouw.Fp8Atom.H1TAtomProofs
-import Proofs.Pouw.PearlC.AtomErr
 
 /-!
 # P2 on the served U (staging, nothing pinned)

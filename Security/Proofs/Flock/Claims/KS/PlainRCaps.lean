@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainAccPrR
+public import Proofs.Flock.Claims.KS.PlainRLevels
 import Flock.With.SimVerify
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +38,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.KS.PlainCapPrefix
 import Proofs.Flock.Claims.KS.PlainRConflict
-import Proofs.Flock.Claims.KS.PlainRLevels
 import Proofs.Flock.Claims.KS.PlainRTable
 import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ

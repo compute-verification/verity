@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
+public import Proofs.Flock.Claims.Complete.Zk.Level0Honest
 public import Proofs.Flock.Claims.Complete.Zk.Level0Model
 public import Proofs.Flock.Claims.Complete.Zk.Ligerito
 import Mathlib.Algebra.Order.Floor.Extended

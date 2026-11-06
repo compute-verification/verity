@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.SessionLoop.FinPoints
 public import Proofs.Flock.SessionLoop.FinRepView
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -36,7 +37,6 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.ZK.FrameLinks
 import Proofs.Flock.Claims.ZK.FrameRankFault
-import Proofs.Flock.SessionLoop.FinPoints
 
 /-!
 # (c.3)'s `FinRepXs`: the extra claims' coordinates

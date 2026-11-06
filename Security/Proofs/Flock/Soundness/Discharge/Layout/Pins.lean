@@ -2,7 +2,6 @@ module
 
 public import Proofs.Flock.Soundness.Binding.Rows
 public import Proofs.Flock.Soundness.Discharge.Layout.Readers
-import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # A layout and its rows from three pinning facts

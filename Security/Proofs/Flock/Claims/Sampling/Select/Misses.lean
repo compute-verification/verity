@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Sampling.Select.Bounds
 public import Proofs.Flock.Claims.Sampling.Select.Steps
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.Sampling.Select.Bounds
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 

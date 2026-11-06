@@ -1,8 +1,8 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Const.ConstCols
 public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.Const.ConstCols
 import Proofs.Flock.Soundness.Discharge.Zero.Uniform
 
 /-!

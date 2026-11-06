@@ -1,13 +1,27 @@
 module
 
+public import Definitions.Pouw.PearlC.DeviceKernelWref
 public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.PearlC.Device
+public import Definitions.Pouw.PearlC.DeviceFp4
+public import Definitions.Pouw.PearlC.DeviceFp4Issue
+public import Definitions.Pouw.PearlC.DeviceRev1
+public import Definitions.Pouw.PearlC.Game
+public import Definitions.Pouw.PearlC.Instance
+public import Definitions.Pouw.PearlC.Tile
+public import Definitions.Pouw.Assumptions.PearlC.RowSeedAssumptions
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
+public import Definitions.Pouw.PearlC.DeviceChainOnly
 public import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
 public import Definitions.Pouw.PearlC.DevicePrices
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
 
 /-!

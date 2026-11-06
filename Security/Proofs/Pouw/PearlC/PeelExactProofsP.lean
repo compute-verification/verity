@@ -2,11 +2,7 @@ module
 
 public import Proofs.Pouw.PearlC.FormingP
 public import Proofs.Pouw.PearlC.PeelExactProofs
-public import Definitions.Pouw.PearlC.PeelExactP
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Fp8Atom.H1TAtomProofs
-import Proofs.Pouw.PearlC.AccumProofs
+public import Proofs.Pouw.PearlC.AccumProofs
 
 /-!
 # P2(b) and (c) on `PeelExactP`'s U, at any step width (sm_120 at width 26)

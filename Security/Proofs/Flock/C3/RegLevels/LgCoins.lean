@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.C3.Compose.HoloEncoded
 public import Proofs.Flock.C3.RegLevels.SrcMaps
+public import Proofs.Flock.C3.RegLevels.StackedCoins
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -17,7 +18,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.RegLevels.StackedCoins
 import Proofs.Flock.C3.RegLevels.TopHold
 
 /-!

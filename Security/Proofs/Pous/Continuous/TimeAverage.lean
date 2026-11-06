@@ -1,11 +1,7 @@
 module
 
+public import Mathlib.Data.Fintype.Fin
 public import Proofs.Pous.Continuous.PerAnswer
-import Proofs.Pous.Continuous.MissCount
-import Proofs.Pous.Continuous.Verifier
-import Proofs.Pous.Sanity
-import Proofs.Pous.Thm1.Theorem1iiSeq
-import Proofs.Pous.Thm1.Theorem1iiiTimed
 
 /-!
 # The continuous audit's time-averaged bound: `Pous.Guarantees.ContinuousTimeAverage`

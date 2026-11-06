@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.DecodeZL
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
 public import Proofs.Flock.Soundness.Discharge.Tables.Statements

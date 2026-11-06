@@ -31,6 +31,7 @@ module
 public import Firewall.Release
 public import Flock.Firewall.Session
 public import Flock.Firewall.Values
+public import Std.Time
 
 @[expose] public section
 

@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.RecRecord
 public import Proofs.Flock.Claims.Recursion.DeploySessions
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Properties.Verity.Recursive.ScheduleInner
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Properties.Verity.Recursive.ScheduleInner
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

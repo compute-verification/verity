@@ -1,7 +1,6 @@
 module
 
 public import CoreProtocol.Cli
-public import CoreProtocol.Protocol
 public import CoreProtocol.Ratio
 public import RemoteAudit.Difftest
 meta import CoreProtocol.Cli

@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FrameRankFault
 public import Proofs.Flock.SessionLoop.Statement
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
-import Proofs.Flock.Claims.ZK.FrameRankFault
 
 /-!
 # The rep draws as the finish reads them

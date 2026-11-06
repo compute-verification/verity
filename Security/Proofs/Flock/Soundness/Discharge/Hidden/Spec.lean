@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

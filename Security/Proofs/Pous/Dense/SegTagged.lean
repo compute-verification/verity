@@ -1,11 +1,7 @@
 module
 
+public import Proofs.Pous.Dense.DenseReCert
 public import Definitions.Pous.Model.SegLift
-public import Definitions.Pous.Accounting.Params
-import Proofs.Pous.B5.ExPostFacto
-import Proofs.Pous.Dense.DenseMeets
-import Proofs.Pous.Dense.DenseReCert
-import Proofs.Pous.Thm1.Theorem1iTimed
 
 /-!
 # The 14 GB theorem for the implementation's tagged keying

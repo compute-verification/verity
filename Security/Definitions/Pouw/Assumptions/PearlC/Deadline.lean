@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.Game.Deadline
+public import Definitions.Pouw.PearlC.Deadline
 public import Definitions.Pouw.PearlC.Game
 
 /-!

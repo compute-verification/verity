@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Level3
 public import Proofs.Flock.Level3.Nodes
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.IVStarCalls
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.Recursion.AcceptedScope
-import Proofs.Flock.Claims.Recursion.IVStarCalls
 
 /-!
 # `c_V` at the decisions the deployed reader makes

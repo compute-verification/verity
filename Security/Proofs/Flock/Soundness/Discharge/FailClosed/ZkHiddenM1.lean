@@ -1,27 +1,11 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
+public import Proofs.Flock.Soundness.Discharge.ZkLink.M1
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Link
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
-import Mathlib.Tactic.Echelon.Zsqrtd
-import Mathlib.Tactic.NormNum.Irrational
-import Mathlib.Tactic.NormNum.IsCoprime
-import Mathlib.Tactic.NormNum.IsSquare
-import Mathlib.Tactic.NormNum.LegendreSymbol
-import Mathlib.Tactic.NormNum.ModEq
-import Mathlib.Tactic.NormNum.NatFib
-import Mathlib.Tactic.NormNum.NatLog
-import Mathlib.Tactic.NormNum.NatSqrt
-import Mathlib.Tactic.NormNum.Ordinal
-import Mathlib.Tactic.NormNum.Parity
-import Mathlib.Tactic.NormNum.Prime
-import Mathlib.Tactic.NormNum.RealSqrt
-import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.Soundness.Accounting.Fast100
-import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
-import Proofs.Flock.Soundness.Discharge.ZkLink.M1
-import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.Soundness.Instance
 
 /-!
 # The hidden-output `--zk` tables are at C-Flock ZK's parameters, and `ε_ks` in closed form

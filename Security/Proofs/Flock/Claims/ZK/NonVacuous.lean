@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.Claims.DeployOC
+public import Proofs.Flock.Claims.ZK.Congr
 public import Proofs.Flock.Claims.ZK.Statement
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,9 +37,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.DeployOC
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.ZK.Congr
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

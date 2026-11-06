@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.PiopSrcLc
+public import Proofs.Flock.Claims.ZK.SentE
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +37,6 @@ import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.ZK.SentE
 import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts

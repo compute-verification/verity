@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
 public import Proofs.Flock.Soundness.Registered.ReadsX
@@ -20,7 +22,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Tables.Headline
 import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 import Proofs.Flock.Soundness.Game.Prob
 
 /-!

@@ -25,6 +25,9 @@ nothing of level 0 under the firewall.
 -/
 module
 
+public import Flock.Firewall.Coins
+public import Flock.Ligerito
+public import Flock.Merkle
 public import Flock.Zk
 
 @[expose] public section

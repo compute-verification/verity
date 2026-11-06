@@ -1,7 +1,7 @@
 module
 
+public import Proofs.Properties.Pouw.Grid
 public import Properties.Pouw
-import Proofs.Properties.Pouw.Grid
 import Std.Data.DTreeMap.Internal.Operations
 
 /-!

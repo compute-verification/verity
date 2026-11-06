@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.Sampling
+public import Proofs.Flock.Claims.Sampling.Binding
 public import Std.Tactic.BVDecide.Normalize.Prop
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -40,7 +41,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.Sampling.Binding
 
 /-!
 # `B_ext` at the claims block's finder, and the block's bits from its KS

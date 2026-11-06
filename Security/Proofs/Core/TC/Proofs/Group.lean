@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Core.TC.Proofs.Fold
-import Proofs.Core.TC.Proofs.Norm
+public import Proofs.Core.TC.Proofs.Norm
 
 /-!
 # One group, the relation's side: what the predicates force

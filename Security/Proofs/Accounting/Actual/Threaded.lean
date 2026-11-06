@@ -1,14 +1,8 @@
 module
 
 public import Definitions.Accounting.Guarantees.Actual.Threaded
-public import Definitions.Nci.Reads
-import Mathlib.Data.NNRat.Floor
-import Proofs.Accounting.Actual.Physical
-import Proofs.Accounting.Actual.Windows
-import Proofs.Core.Circuit
-import Proofs.Nci.Fit
-import Proofs.Nci.ReadsIn
-import Proofs.Nci.Threads
+public import Proofs.Accounting.Actual.Windows
+public import Proofs.Nci.Threads
 
 /-!
 # The memory cap over threads

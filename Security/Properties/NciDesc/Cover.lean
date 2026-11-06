@@ -1,10 +1,10 @@
 module
 
 public import Definitions.Nci.BitView
+public import Definitions.Nci.Assumptions.Baseline
 public import Definitions.Nci.Assumptions.Cover
 public import NciCheck.Baseline
 public import Properties.NciDesc.Verdict
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # A verdict of compliance of the check of record carries the cover theorem's factor

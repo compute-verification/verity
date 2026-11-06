@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci.Assumptions.Fmt2
-import Mathlib.Data.NNRat.Floor
 public import Definitions.Nci.Assumptions.Info
 
 /-!

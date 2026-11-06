@@ -1,8 +1,13 @@
 module
 
+public import Definitions.Pouw.Assumptions.Pinned
+public import Proofs.Pouw.Prob
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Algebra.Order.Field.Power
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Ring
 public import Definitions.Pouw.Guarantees.Game
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Prob
 
 /-!
 # (c) Work-weighted sampling: `δ_s = (1 − ε_s)^t`

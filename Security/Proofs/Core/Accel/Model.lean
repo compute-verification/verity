@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Core.Assumptions.Accel
+public import Mathlib.Algebra.Order.Monoid.Canonical.Basic
+public import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Positivity.Finset
 
 /-!

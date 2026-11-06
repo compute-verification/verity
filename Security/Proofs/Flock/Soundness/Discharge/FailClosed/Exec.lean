@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.HdecCor.Headlines
 public import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -17,7 +18,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.HdecCor.Headlines
 
 /-!
 # The non-ZK headlines, over what flock-verify accepts

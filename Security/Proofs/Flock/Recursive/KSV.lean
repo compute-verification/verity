@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.KSDec
+public import Proofs.Flock.Claims.Recursion.RegSetupOpens
 public import Proofs.Flock.Claims.Recursion.ResLowerD
 public import Proofs.Flock.Recursive.KSStatement
 import Mathlib.Algebra.Order.Floor.Extended

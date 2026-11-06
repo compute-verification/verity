@@ -1,10 +1,12 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.NonVacuousRows
-public import Proofs.Flock.Claims.Recursion.VPiecesDeployed
 public import Proofs.Flock.Claims.Recursion.CapLower
+public import Proofs.Flock.Claims.Recursion.NonVacuousRows
 public import Proofs.Flock.Claims.Recursion.RestRead
+public import Proofs.Flock.Claims.Recursion.RestReadsAt
 public import Proofs.Flock.Claims.Recursion.RestVerdictBases
+public import Proofs.Flock.Claims.Recursion.RowDAccept
+public import Proofs.Flock.Claims.Recursion.VPiecesDeployed
 public import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -40,7 +42,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DecodeAt
 import Proofs.Flock.Claims.Recursion.OpenLowerJointV
 import Proofs.Flock.Claims.Recursion.RestLens
-import Proofs.Flock.Claims.Recursion.RowDAccept
 import Proofs.Flock.Claims.Recursion.SchedDense
 
 /-!

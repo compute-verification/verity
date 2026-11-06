@@ -1,22 +1,11 @@
 module
 
+public import Properties.NetworkCertifier
+public import Proofs.Properties.Identity
+public import Mathlib.Data.Set.Card
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
-public import Aesop.BuiltinRules
-public import Mathlib.Algebra.Group.Int.Defs
-public import Mathlib.Algebra.Group.Nat.Defs
-public import Mathlib.Tactic.Attr.Core
-public import Mathlib.Tactic.Basic
-public import Mathlib.Tactic.ToDual
-public import NetworkCheck.Check
-public import Properties.Identity
-import Mathlib.Algebra.Order.Ring.Nat
-import Mathlib.Algebra.Order.Sub.Basic
-import Mathlib.Algebra.Ring.Int.Defs
-import Mathlib.Data.Finset.Attr
-import Mathlib.Data.Nat.SuccPred
-import Proofs.Properties.Identity
 
 /-!
 # The record's encodings are injective

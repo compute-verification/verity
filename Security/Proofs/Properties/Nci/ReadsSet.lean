@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Nci.ReadsExact
+public import Proofs.Properties.Nci.ReadsOneNode
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.NNRat.Floor
 import Mathlib.Tactic.ENatToNat

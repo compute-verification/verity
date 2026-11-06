@@ -1,5 +1,6 @@
 module
 
+public import NciCheck.Desc
 public import NciCheck.DescDifftest
 
 /-!

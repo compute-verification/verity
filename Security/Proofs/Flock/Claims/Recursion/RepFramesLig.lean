@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.RepFramesFields
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -16,7 +17,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Claims.Recursion.RepFramesBind
-import Proofs.Flock.Claims.Recursion.RepFramesFields
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!

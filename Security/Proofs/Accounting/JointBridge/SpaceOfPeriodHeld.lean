@@ -1,11 +1,11 @@
 module
 
+public import Proofs.Pous.Period
 public import Properties.Accounting.JointBridge.SpaceOfPeriodHeld
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.Data.Sym.Sym2.Init
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pous.Period
 import Proofs.Pouw.Prob
 
 /-!

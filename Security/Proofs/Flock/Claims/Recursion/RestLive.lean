@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.RestReadR
+public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 import all Lean.Data.Json.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -36,7 +37,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.Recursion.CallsAgree
-import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 
 /-!
 # `DecLive`: the reader's record reads as custody's

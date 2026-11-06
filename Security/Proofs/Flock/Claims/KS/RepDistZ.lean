@@ -1,5 +1,6 @@
 module
 
+public import Batteries.Data.ByteArray
 public import Proofs.Flock.Claims.KS.RepDist
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
 public import Proofs.Flock.Soundness.Discharge.ZkLink.LockRep

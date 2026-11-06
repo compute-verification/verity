@@ -1,6 +1,7 @@
 module
 
 public import Flock.HmRow
+public import Proofs.Flock.Recursive.VStarCheck
 public import Properties.Flock.Circuit.Rows
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.MeasureTheory.Integral.Bochner.Basic

@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.Reps.KeysInW
 public import Proofs.Flock.C3.Reps.WithReads
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -15,7 +16,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Flock.C3.Reps.KeysInW
 
 /-!
 # Ligerito's names in w: `wKey` at its sumcheck messages, out-of-domain values and final `yr`

@@ -42,6 +42,8 @@ public import Flock.Firewall.FinishProver
 public import Flock.Firewall.Frame
 public import Flock.Firewall.Hello
 public import Flock.Firewall.Level0
+public import Flock.Firewall.Link
+public import Flock.Witness
 import all Init.System.ST
 
 @[expose] public section

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.Zk.Json.Decode
+public import Proofs.Flock.Claims.Complete.ZkTables.Names
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import all Lean.Data.Json.Basic
@@ -40,7 +41,6 @@ import Proofs.Flock.Claims.Complete.Json.Canon
 import Proofs.Flock.Claims.Complete.Json.Hex
 import Proofs.Flock.Claims.Complete.Json.RoundTrip
 import Proofs.Flock.Claims.Complete.Json.Spec
-import Proofs.Flock.Claims.Complete.ZkTables.Names
 import Proofs.Flock.Claims.JsonNorm
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop

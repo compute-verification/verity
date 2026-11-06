@@ -2,11 +2,11 @@ module
 
 public import Properties.RemoteAudit.Schedule
 public import Definitions.Accounting.Assumptions.Stacking
+public import Mathlib.Tactic.Choose
+public import Batteries.Lean.Except
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
 import all Init.Data.Repr
-public import Definitions.Accounting.Schedule
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The schedule check fixes each credited pass's plan (`ScheduleChecked`, `ScheduleFixesLayout`)

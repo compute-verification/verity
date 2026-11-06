@@ -1,14 +1,7 @@
 module
 
-public import Proofs.Pouw.PearlC.TileCheck8Words
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Fp8Atom.H1TAtomProofs
-import Proofs.Pouw.Fp8Atom.H1TSliceProofs
-import Proofs.Pouw.PearlC.HonestWords
-import Proofs.Pouw.PearlC.RowStats
-import Proofs.Pouw.PearlC.TileValues
+public import Proofs.Pouw.PearlC.RowStats
+public import Proofs.Pouw.PearlC.HonestWords
 
 /-!
 # The peel's rows exist (proofs)

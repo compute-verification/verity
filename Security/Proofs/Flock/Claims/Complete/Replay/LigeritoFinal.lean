@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

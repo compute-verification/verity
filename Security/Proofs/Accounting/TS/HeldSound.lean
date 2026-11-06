@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Accounting.TS.CheckedSound
 public import Proofs.Accounting.TS.Session.Held.Guarantees
+public import Proofs.Pouw.RelativeSecurity
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -33,8 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.TS.CheckedSound
-import Proofs.Pouw.RelativeSecurity
 
 /-!
 # A checked unit's proof layer with its served checks is sound through its C-Flock sessions (the proof)

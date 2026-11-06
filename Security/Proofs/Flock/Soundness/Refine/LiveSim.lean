@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Flock.Compiled
+public import Proofs.Flock.Soundness.Model.Compiled
 public import Proofs.Flock.Soundness.Refine.Live
 public import Proofs.Flock.Soundness.Refine.Plays
 import Mathlib.Algebra.Order.Floor.Semifield

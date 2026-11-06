@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Assumptions.Capability.Information
+public import Definitions.Core.Guarantees.Formalism
 
 /-!
 # Local bounds: budgets, from information

@@ -1,11 +1,11 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FinishSwSrc
 public import Proofs.Flock.Claims.ZK.FrameFree
 public import Proofs.Flock.Claims.ZK.FrameTape
 public import Proofs.Flock.Claims.ZK.Round1Root
 import Init.Data.Nat.Power2.Basic
 public import Proofs.Flock.Claims.ZK.FrameLive
-public import Proofs.Flock.Claims.ZK.FinishSwSrc
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

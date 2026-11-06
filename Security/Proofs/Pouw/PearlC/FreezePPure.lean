@@ -1,13 +1,8 @@
 module
 
+public import Proofs.Pouw.Fp8Atom.H1TSliceProofs
+public import Proofs.Pouw.PearlC.AccumProofs
 public import Proofs.Pouw.PearlC.FreezeP
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Fp8Atom.Fp32Proofs
-import Proofs.Pouw.Fp8Atom.H1TAtomProofs
-import Proofs.Pouw.Fp8Atom.H1TSliceProofs
-import Proofs.Pouw.PearlC.AccumProofs
 
 /-!
 # `pearl-c-sm120-v2`: the pure chain's lone skips and its identities (staging)
