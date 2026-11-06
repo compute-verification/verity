@@ -14,7 +14,7 @@ accounting, its one measured term (`commit_floor`) and nothing else.
 
 Replay: serving keeps only the requests' tokens and the weights (a commitment is a hash, and the Commit retains no value), so
 a drawn unit's witness is rebuilt by re-running its request, one 2K prompt, from its committed tokens through every layer at
-the plain rate: the `request` replay domain, met when the draw holds any of its units.  A request's values depend on its
+the plain rate: the `request` replay grain, met when the draw holds any of its units.  A request's values depend on its
 own tokens alone (the served engine is batch-invariant), so no co-scheduled request is re-run with it.
 
     uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
@@ -36,7 +36,7 @@ from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, SHA512, Model, l
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressure  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
-                                                           ReplayDomain, for_budget, for_target, frontier,
+                                                           ReplayGrain, for_budget, for_target, frontier,
                                                            needs_benchmark, overlaps, perturb, row_ands, structure,
                                                            weigh)
 
@@ -112,7 +112,7 @@ def classes(context: int) -> dict[int, float]:
 
 def workload(v: dict, window_rounds: float, m: Model) -> dict:
     """Per op: its root shape and its instances a request (one prompt of `context` tokens through every layer); the window's
-    requests, the `request` replay domain's units; its tokens; and its work."""
+    requests, the `request` replay grain's replay blocks; its tokens; and its work."""
     bits = int(v["noise_bits"])
     tokens = v["tokens_per_s"] * v["round"] * window_rounds
     context = int(v["context"])
@@ -158,18 +158,18 @@ def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -
 
 def model(v: dict, fit_: Fitted, requests: int, *, commitments: tuple[Commitment, ...] = (), commit: float = 1.0,
           statement: float = 1.0) -> CostModel:
-    """The fit with the commitment rate, the serve-time commitments and the `request` replay domain: each of the window's
+    """The fit with the commitment rate, the serve-time commitments and the `request` replay grain: each of the window's
     requests re-run whole, its `context` tokens at `tokens_per_s`."""
     m = fit_.model()
     m = replace(m, commit_per_bit=v["commit_per_byte"] / 8 * commit, serve=commitments,
-                replay={"request": ReplayDomain(requests, v["context"] / v["tokens_per_s"])})
+                replay={"request": ReplayGrain(requests, v["context"] / v["tokens_per_s"])})
     return perturb(m, "statement", statement) if statement != 1.0 else m
 
 
 def candidates(w: dict, costs: CostModel, objective: Objective, grid: int = 31):
     out, alts, hints = [], {}, []
     for op, (root, per) in w["ops"].items():
-        cs, a, h = cuts(op, root, per * w["requests"], costs, objective, grid=grid, replay=("request", w["requests"]))
+        cs, a, h = cuts(op, root, per * w["requests"], costs, objective, grid=grid, grain=("request", w["requests"]))
         out += cs
         alts[op] = {label: [list(u) for u in units] for label, units in a.items()}
         hints += [{"op": op, **h.__dict__} for h in h]
@@ -330,7 +330,7 @@ def main(argv=None) -> None:
     hints_at = [] if base_plan is None else [
         {"op": op, **h.__dict__} for op, (root, per) in w["ops"].items()
         for h in pressure(op, root, per * w["requests"], costs, objective, base_plan.lam,
-                          replay=("request", w["requests"]))]
+                          grain=("request", w["requests"]))]
     benchmark = [] if base_plan is None else needs_benchmark(
         cands, costs, objective, operating * w["window_gpu_s"] - extra, grid=31, exact=False)
 
