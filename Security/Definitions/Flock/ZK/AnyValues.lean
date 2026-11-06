@@ -31,9 +31,9 @@ public regions makes true of every worker.
   dummy's pre-final view there.
 * `Release.Gated out full w`: a table's file leaves at an outcome only where its values pass its constraint.
 
-`Flock.Guarantees.TableReleaseAny` and `Flock.Guarantees.TablesReleaseAny` (`Definitions/Flock/Guarantees/ZkAny.lean`)
-state that the released bytes are simulated per outcome (`PerOutcome`) at every witness carrying the public region data,
-with no premise that its values pass the constraint.
+At the table model the released bytes are simulated per outcome (`PerOutcome`) at every witness carrying the public
+region data, with no premise that its values pass the constraint; the guarantee reads that at the session loop's release,
+in `ZKOut`'s form.
 -/
 
 @[expose] public section

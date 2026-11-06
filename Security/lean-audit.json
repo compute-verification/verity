@@ -1206,22 +1206,6 @@
    "owner": "@proofs",
    "digest": "4234584c8c100c10bc25e561da0e248d6b2c394ea401c2310eac1fcb610131e6"
   },
-  "FlockSoundness.ZK.Release.Gated": {
-   "owner": "@proofs",
-   "digest": "582d4504db0536a964cfa4f72671e4d1341036951dc0bc66b4b72e69c1afb775"
-  },
-  "FlockSoundness.ZK.Table.Gated": {
-   "owner": "@proofs",
-   "digest": "cdf70b4bc5bb88ef28338ea152ed5d8e33005d22c95abb0ef1ffdae061f8c055"
-  },
-  "FlockSoundness.ZK.Table.RegPublic": {
-   "owner": "@proofs",
-   "digest": "4db41b9530f8e25fac9c810a0e9b3a4c9a4baf9533ffc01fb41cb5f6ed42a9f3"
-  },
-  "FlockSoundness.ZK.Table.Simulable": {
-   "owner": "@proofs",
-   "digest": "177b757840a80a271c675d352c250359908ef911eb8c194b0e12e15e7ad49bad"
-  },
   "FlockVBridge.ColsHold": {
    "owner": "@proofs",
    "digest": "4c6283114e6093bce72430d7e41df49d280807a9f7dcfd337e81398948a04d9f"
@@ -7465,18 +7449,6 @@
    "signature": ["Flock.SecurityProofs.SoundAtBridge : Flock.Guarantees.SoundAtBridge"],
    "assumptions": [],
    "type_hash": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc"
-  },
-  "Flock.SecurityProofs.TableReleaseAny": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.TableReleaseAny : Flock.Guarantees.TableReleaseAny"],
-   "assumptions": [],
-   "type_hash": "f98b0d348ecd86c4b91db53c7ec00823d18603b0cbddc777db87498243c0edb3"
-  },
-  "Flock.SecurityProofs.TablesReleaseAny": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.TablesReleaseAny : Flock.Guarantees.TablesReleaseAny"],
-   "assumptions": [],
-   "type_hash": "4e1646add368aa79f8d35a0c5f74c8e58556b2abecd85faa13a821cbe141d408"
   },
   "Flock.SecurityProofs.ZeroKnowledgeHidden": {
    "owner": "@proofs",
@@ -14337,7 +14309,6 @@
    "Nci.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Flock.SecurityProofs.SessionLoopZK": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release (ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), it takes the loop's obligation (Flock.Guarantees.LoopInnerRound0), the tables' obligation (Flock.Guarantees.TablesAdmitUnrefused), the transport's round trusts (LeanRelease.LinkRoundEq, FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
    "Flock.SecurityProofs.SessionLoopZKDeployed": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release at the deployed tables (Masked.dataE, ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), at the loop's own link and Finish (ofLoopLink: Loop.linkOf, the level-0 roots the loop draws; LeanRelease.withFiles, Loop.filesE: each rep's Finish.proofFile on what the loop holds of it, and the record the auditor assembles, recordJson of the streams it saw), it takes the statement in scope (Claims.Flock.Scope, which the loop does not check and the verifier checks only at its verdict), every input the loop takes from its host and operating system being the tape's (Loop.Src, flock-firewall-os-src: its level-0 inputs, Loop.Level0Src, and its rep draws, Loop.RepSrc), the loop's obligation (Flock.Guarantees.LoopInnerRound0), the transport's round trusts (LeanRelease.FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
-   "Flock.SecurityProofs.TableReleaseAny": "frozen (no-function): one table's release behind the ZK server's check, simulated at each outcome of the check (FlockSoundness.ZK.PerOutcome, error 0), at any witness carrying the public region data and with no premise that its values pass the inner constraint: as a simulation statement against every worker it has no acceptance of a function to take, and it is stated over the table model (FlockSoundness.ZK.Table), not yet at the session loop's release, where Table.Gated stands for the check.",
    "Accounting.SecurityProofs.Remote.PooledDraw": "frozen (no-function): It is about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.PooledDraw at a fixed W, about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
    "Accounting.SecurityProofs.Remote.HeldDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.Held with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
@@ -14569,7 +14540,6 @@
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
    "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
-   "Flock.SecurityProofs.TablesReleaseAny": "frozen (no-function): a release of J tables behind the ZK server's checks, simulated at each outcome (FlockSoundness.ZK.PerOutcome, error 0), at any witnesses carrying the public region data and with no premise that their values pass the inner constraint: as a simulation statement against every worker it has no acceptance of a function to take, and it is stated over the table model (FlockSoundness.ZK.Table), not yet at the session loop's release, where Release.Gated stands for the checks that replace RowsOK.",
    "Nci.SecurityProofs.HeldBudget": "frozen (no-function): It is Lemma 1 with description hardness, about an arbitrary registration of a (c,k)-partition, item family, decoder and evaluator (Nci.Capability.HeldPriceAtMost, Nci.Assumptions.DescriptionHard, Security/Definitions/Nci/Capability/Items.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
    "Nci.SecurityProofs.StatHeldBudget": "frozen (no-function): It is the statistical held budget, about an arbitrary registration of a (c,k)-partition, item family and distribution of honest runs (Nci.Capability.HeldPriceAtMost, Nci.Assumptions.MinEntropyHard, Security/Definitions/Nci/Assumptions/Capability/Information.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
    "Nci.SecurityProofs.RecoveredBudget": "frozen (no-function): It is Lemma 1 with a recoverable hard source, about an arbitrary registration of a (c,k)-partition, decoder, evaluator and source (Nci.Assumptions.SourceHard, Nci.Assumptions.Recovers, Security/Definitions/Nci/Assumptions/Capability/Information.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
@@ -24735,8 +24705,6 @@
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed",
     "Flock.SecurityProofs.SoundAtBridge",
-    "Flock.SecurityProofs.TableReleaseAny",
-    "Flock.SecurityProofs.TablesReleaseAny",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "Flock.SecurityProofs.recursiveZK_os_gap",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
@@ -27474,14 +27442,6 @@
    },
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
-  "Definitions.Flock.Guarantees.ZkAny": {
-   "digest": "176d0075b67387a5e3fa598fbe6cddb6a80f51fb4f9e2dd0b0ad561a1df9c50d",
-   "definitions": {
-    "Flock.Guarantees.TableReleaseAny": "5881f0ba062f72b9a5d6eed9b596f919964f8a00d94738249913158c4aaad931",
-    "Flock.Guarantees.TablesReleaseAny": "2cdc41fc6d977edf74dbf0e93e16e27f3b32d15eb8933b9dd92a3df271936cb3"
-   },
-   "guarantees": ["Flock.SecurityProofs.TableReleaseAny", "Flock.SecurityProofs.TablesReleaseAny"]
-  },
   "Definitions.Flock.Ligerito": {
    "digest": "64fe5b1ada90b55a9a8ab53bef7115801dfd28b10ace5bced5246d124943b750",
    "definitions": {
@@ -28081,23 +28041,6 @@
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
   },
-  "Definitions.Flock.ZK.AnyValues": {
-   "digest": "c71bdbd0335ae35648bf0dc3e5e0afca0d3b2db69b5adbf5c10a83d59b4e0055",
-   "definitions": {
-    "FlockSoundness.ZK.PerOutcome": "7565f4ff0bb73d7b10c6075d1fb5d306fe97b38c426e0db31e1aa50fd8cf2fc1",
-    "FlockSoundness.ZK.Release.Gated": "582d4504db0536a964cfa4f72671e4d1341036951dc0bc66b4b72e69c1afb775",
-    "FlockSoundness.ZK.Release.bytesAt": "b0513ec001ef24efe97c794494a976c6b94d71ea80aec5b615cbe7753ecc613a",
-    "FlockSoundness.ZK.Release.simAt": "35b83db4afec233e042b71d63b0e6c11dbb3883b3b94ad10b8b4a3ec369516e2",
-    "FlockSoundness.ZK.Table.Gated": "cdf70b4bc5bb88ef28338ea152ed5d8e33005d22c95abb0ef1ffdae061f8c055",
-    "FlockSoundness.ZK.Table.HoldsAt": "acc8b72575992a06cdf735920f0fb20adb2b98f0daec2f0e157828e23231276e",
-    "FlockSoundness.ZK.Table.RegPublic": "4db41b9530f8e25fac9c810a0e9b3a4c9a4baf9533ffc01fb41cb5f6ed42a9f3",
-    "FlockSoundness.ZK.Table.Simulable": "177b757840a80a271c675d352c250359908ef911eb8c194b0e12e15e7ad49bad",
-    "FlockSoundness.ZK.Table.release": "0eca57e643ce06a36b692f62abf7e48254f79cb3ecb5ee525d62507ad4cb45a8",
-    "FlockSoundness.ZK.gated": "f808ac180e6abba449e6794abf5f3ba6628efa4326910ee52c9fe8526bfa4678",
-    "FlockSoundness.ZK.gatedSim": "bb3c54642e7c5842c96d7babcfd404dea7b49926491b8dd7e52894b50d27baa0"
-   },
-   "guarantees": ["Flock.SecurityProofs.TableReleaseAny", "Flock.SecurityProofs.TablesReleaseAny"]
-  },
   "Definitions.Flock.ZK.Cut": {
    "digest": "52a51c3e5d109812a049929c2e9793bb3e5383c92885a2e71f075ef35d231047",
    "definitions": {
@@ -28186,14 +28129,12 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed",
-    "Flock.SecurityProofs.TableReleaseAny",
-    "Flock.SecurityProofs.TablesReleaseAny",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
   "Definitions.Flock.ZK.Table": {
-   "digest": "00e051f076ede041c379d0f2571805e104b65959563df82d6aa1a3e8f4b0719a",
+   "digest": "4b13ee00f39cdf25ae12dfb8fa60e5eb51898f305cb92ec3dc08ee255b322c5d",
    "definitions": {
     "FlockSoundness.ZK.PadIdx": "44b47a037d5bb4710f8f332fae4b71a31c1085bc119ff36532f8f348186f1f34",
     "FlockSoundness.ZK.Table": "911b8587e62e4b52de0be0440ac45226a0d6b36317a345a4e1c878247a9ae373",
@@ -28203,8 +28144,6 @@
     "FlockSoundness.ZK.Table.Gp": "41e16efe5c993fbbbbb989a175b6be6b284fa80f3c4072935b96a92fcfd48564",
     "FlockSoundness.ZK.Table.L": "4eeaf0bf0345251bab403d07ab9f8836a280d8e12709a4f1e01c2206daf3b92f",
     "FlockSoundness.ZK.Table.Mask": "0c914aa9d42c8dd0b42ddd8a30587ea7e4e26079a060d0d9890c205e42d16a45",
-    "FlockSoundness.ZK.Table.PadOnto": "7f19d3029e3c9aeec75ef5861f59b0961e3a2c22896bdc1467f46219ce64cb5c",
-    "FlockSoundness.ZK.Table.PadsOnto": "ed21825b7559da379c4b9ea27056e1ac2f4ee5ec18f07d0a648480fa072cfaf7",
     "FlockSoundness.ZK.Table.PreView": "7bc23dd04ff24b3b08c3db6b00483c8470097d3a9d4a04a624851b9638bf5c4d",
     "FlockSoundness.ZK.Table.PreView.Y1": "5142999f05b80e47c0c127cb7492b74f65e709430a5a08ebb907d2fd1d620931",
     "FlockSoundness.ZK.Table.PreView.Y2": "ad7c939eea79ce1ab1a95f9de8787d26378f7f2d17936f2d91c755b4da7d89ec",
@@ -28219,7 +28158,6 @@
     "FlockSoundness.ZK.Table.PreView.y1": "014662433e9ea641ae5fe5309ee9aab7006b22d06378df8d3c8e07710eb73e92",
     "FlockSoundness.ZK.Table.PreView.ybar": "5a6f68ac22795b73c96ac8b22dc0a27b22b855af97f1269a6c8c40e0e0abeea9",
     "FlockSoundness.ZK.Table.Rand": "1a432d7d9b94004c78b4a54d1e02a088dd74842e0eb1b555aa180937b6f33855",
-    "FlockSoundness.ZK.Table.Rank": "d1a12baa161d1faf2f42c46549c3e2ef2790896b9fab687a32183213e767ff7b",
     "FlockSoundness.ZK.Table.Seeds": "9bc35e319d50ed83fa0f618039db8fa5e09a7a81f677d253770b94951bdfa531",
     "FlockSoundness.ZK.Table.SimRand": "7039356c0691dd6a72f9b978c38e7404dbaf7d21069cde6f220ee03a91578450",
     "FlockSoundness.ZK.Table.View": "28f3f17d6949f30c545a155d6f14aabe15be38fcfeaa3ab8638b045df36f4780",
@@ -28302,8 +28240,6 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.SessionLoopZK",
     "Flock.SecurityProofs.SessionLoopZKDeployed",
-    "Flock.SecurityProofs.TableReleaseAny",
-    "Flock.SecurityProofs.TablesReleaseAny",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
