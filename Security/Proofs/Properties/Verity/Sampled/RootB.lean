@@ -41,9 +41,11 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 /-! ## The line `coinTreesOf` takes as a tree's round -/
 
 /-- **A release log line opening a round, after the bytes the tree shows**: a coin tree's line opening round `o.round`
-of stream `o.stream` of the tree whose root is `root` (`OpensRound`), whose `after` is `o.after`. -/
+of stream `o.stream` of the tree whose root is `root` (`OpensRound`), whose `after` is `o.after` and whose `n` is
+`o.n`. -/
 def AfterLine (l root : String) (o : TreeOpening) : Prop :=
-  OpensRound l root o.stream o.round ∧ ∃ d, event l = .ok d ∧ getD d "after" = .str o.after
+  OpensRound l root o.stream o.round ∧
+    ∃ d, event l = .ok d ∧ getD d "after" = .str o.after ∧ nat? (getD d "n") = some o.n
 
 /-- Each round a tree of `trees` shows opened is a line of `log` opening it after the bytes the tree shows. -/
 def OpenedAfter (log : List String) (trees : Array LoggedTree) : Prop :=
@@ -126,7 +128,7 @@ theorem opened_after {log : List String} {trees : Array LoggedTree} (h : coinTre
           · obtain ⟨l, hl, hol⟩ := hI _ htmem o ho
             exact ⟨l, List.mem_append_left _ hl, hol⟩
           refine ⟨line, List.mem_append_right _ (List.mem_singleton_self _),
-            ⟨htl, d, hev, by simpa using hopen, by simpa [hroot] using htree, hstream, hkn.1⟩, d, hev, ?_⟩
+            ⟨htl, d, hev, by simpa using hopen, by simpa [hroot] using htree, hstream, hkn.1⟩, d, hev, ?_, hkn.2⟩
           cases hc : getD d "after" <;> rw [hc] at hhex <;> first | rfl | cases hhex
         · cases hr
 
@@ -265,7 +267,7 @@ theorem link_answers {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
   unfold LoggedTree.opening at ho
   have hp := Array.find?_some ho
   simp only [Bool.and_eq_true, beq_iff_eq] at hp
-  obtain ⟨l', hl', hal, d', hev', haft'⟩ := opened_after hct t (by simp) o (Array.mem_of_find?_eq_some ho)
+  obtain ⟨l', hl', hal, d', hev', haft', -⟩ := opened_after hct t (by simp) o (Array.mem_of_find?_eq_some ho)
   rw [hp.1, hp.2] at hal
   obtain rfl := opensRound_unique hct hlm' hl' hro.1 hal
   obtain ⟨-, -, d, hev, -, aft, haft'', hu⟩ := hro

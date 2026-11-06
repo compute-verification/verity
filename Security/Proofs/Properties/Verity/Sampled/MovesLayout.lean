@@ -55,7 +55,7 @@ theorem opening_after {lines : List String} {trees : Array LoggedTree} (hT : coi
     _root_.SampledProofs.getD d "after" = .str o.after := by
   have hp := Array.find?_some ho
   simp only [Bool.and_eq_true, beq_iff_eq] at hp
-  obtain ⟨l', hl', hr', d', hd', ha⟩ := opened_after hT t ht o (Array.mem_of_find?_eq_some ho)
+  obtain ⟨l', hl', hr', d', hd', ha, -⟩ := opened_after hT t ht o (Array.mem_of_find?_eq_some ho)
   rw [hp.1, hp.2] at hr'
   obtain rfl := opensRound_unique hT hl hl' hr hr'
   rw [hd] at hd'
