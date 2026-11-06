@@ -24,9 +24,14 @@ INBOX = Path(os.environ.get("AGENT_INBOX", "/tmp/agent-inbox"))
 STAMP = re.compile(r"^\[(\d{4}-\d\d-\d\dT\d\d:\d\dZ)\]$", re.M)
 
 
+#: a conversation id as the hook reads it (`conversation_id`): a UUID, `bc-` before it for a cloud agent or subagent
+AGENT_ID = re.compile(r"(bc-)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
 def send(agent: str, text: str, inbox: Path = INBOX) -> Path:
-    if not agent or "/" in agent or agent.startswith("."):
-        raise SystemExit(f"inbox: {agent!r} is no agent id (a conversation id such as bc-…)")
+    if not AGENT_ID.fullmatch(agent or ""):
+        raise SystemExit(f"inbox: {agent!r} is no full agent id; the hook delivers only to the whole conversation id, "
+                         "e.g. bc-1228808b-7b57-5204-a99d-e0b46dbae2e6 (the id the Task call returned), never a prefix")
     if not text.strip():
         raise SystemExit("inbox: the message is empty")
     inbox.mkdir(parents=True, exist_ok=True)

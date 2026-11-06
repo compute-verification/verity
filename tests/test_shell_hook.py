@@ -240,40 +240,49 @@ def queue(agent: str, text: str, inbox: Path) -> None:
 
 
 def test_a_queued_message_refuses_the_agents_next_command_once_with_the_message_as_its_text(tmp_path):
-    queue("bc-worker", "rebase on main first", tmp_path)
-    queue("bc-worker", "then mark nothing", tmp_path)
-    first = hook("ls", "bc-worker", tmp_path)
+    queue("bc-11111111-1111-4111-8111-111111111111", "rebase on main first", tmp_path)
+    queue("bc-11111111-1111-4111-8111-111111111111", "then mark nothing", tmp_path)
+    first = hook("ls", "bc-11111111-1111-4111-8111-111111111111", tmp_path)
     assert first["permission"] == "deny"
     assert "re-run it exactly as it was" in first["user_message"]
     assert "rebase on main first" in first["user_message"] and "then mark nothing" in first["user_message"]
-    assert hook("ls", "bc-worker", tmp_path) == {"permission": "allow"}
-    assert "rebase on main first" in (tmp_path / "bc-worker.delivered").read_text()
+    assert hook("ls", "bc-11111111-1111-4111-8111-111111111111", tmp_path) == {"permission": "allow"}
+    assert "rebase on main first" in (tmp_path / "bc-11111111-1111-4111-8111-111111111111.delivered").read_text()
 
 
 def test_a_message_is_only_its_agents_and_a_secret_refusal_keeps_it_queued(tmp_path):
-    queue("bc-worker", "hello", tmp_path)
-    assert hook("ls", "bc-other", tmp_path) == {"permission": "allow"}
-    refused = hook("env | cut -d= -f1", "bc-worker", tmp_path)
+    queue("bc-11111111-1111-4111-8111-111111111111", "hello", tmp_path)
+    assert hook("ls", "bc-22222222-2222-4222-8222-222222222222", tmp_path) == {"permission": "allow"}
+    refused = hook("env | cut -d= -f1", "bc-11111111-1111-4111-8111-111111111111", tmp_path)
     assert refused["permission"] == "deny" and "hello" not in refused["user_message"]
-    assert "hello" in hook("ls", "bc-worker", tmp_path)["user_message"]
+    assert "hello" in hook("ls", "bc-11111111-1111-4111-8111-111111111111", tmp_path)["user_message"]
 
 
 def test_the_inbox_list_says_since_when_a_message_is_pending(tmp_path):
-    queue("bc-worker", "first", tmp_path)
-    queue("bc-worker", "second", tmp_path)
-    queue("bc-done", "delivered", tmp_path)
-    hook("ls", "bc-done", tmp_path)
+    queue("bc-11111111-1111-4111-8111-111111111111", "first", tmp_path)
+    queue("bc-11111111-1111-4111-8111-111111111111", "second", tmp_path)
+    queue("bc-33333333-3333-4333-8333-333333333333", "delivered", tmp_path)
+    hook("ls", "bc-33333333-3333-4333-8333-333333333333", tmp_path)
     listed = subprocess.run([sys.executable, INBOX_TOOL, "list"], env={**os.environ, "AGENT_INBOX": str(tmp_path)},
                             check=True, capture_output=True, text=True).stdout.splitlines()
-    stamp = (tmp_path / "bc-worker.md").read_text().splitlines()[0].strip("[]")
-    assert any(x.startswith("pending   bc-worker ") and x.endswith(f"bytes  since {stamp}") for x in listed)
-    assert any(x.startswith("delivered bc-done ") and "since" not in x for x in listed)
+    stamp = (tmp_path / "bc-11111111-1111-4111-8111-111111111111.md").read_text().splitlines()[0].strip("[]")
+    assert any(x.startswith("pending   bc-11111111-1111-4111-8111-111111111111 ") and x.endswith(f"bytes  since {stamp}") for x in listed)
+    assert any(x.startswith("delivered bc-33333333-3333-4333-8333-333333333333 ") and "since" not in x for x in listed)
+
+
+def test_send_refuses_an_id_the_hook_would_never_deliver_to(tmp_path):
+    """The hook reads the whole conversation id, so a message queued under a prefix (bc-1228808b) was never delivered."""
+    for agent in ("bc-1228808b", "bc-worker", "../etc/passwd", ""):
+        p = subprocess.run([sys.executable, INBOX_TOOL, "send", agent, "--text", "x"], capture_output=True, text=True,
+                           env={**os.environ, "AGENT_INBOX": str(tmp_path)})
+        assert p.returncode != 0 and "full agent id" in p.stderr, agent
+    assert not any(tmp_path.iterdir())
 
 
 def test_an_unreadable_inbox_or_a_path_as_an_id_never_blocks_a_command(tmp_path):
     inbox = tmp_path / "not-a-dir"
     inbox.write_text("")
-    assert hook("ls", "bc-worker", inbox) == {"permission": "allow"}
+    assert hook("ls", "bc-11111111-1111-4111-8111-111111111111", inbox) == {"permission": "allow"}
     assert hook("ls", "../etc/passwd", tmp_path) == {"permission": "allow"}
 
 
