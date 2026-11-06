@@ -4748,7 +4748,8 @@ RECORDS_UNREAD_DIRS = frozenset({"tests", "test"})
 #: the files of `tools/verity/lean/` besides its `tests/` and Markdown that no records run reads (`records_read`): Lean's
 #: `lean_audit.NOT_READ` less the `lean_changed.py` a run is and the `merge.py` it loads to merge a lock across a merge of
 #: `main` (`path: reused`); `tools/verity/lean`'s suite fails when Lean's records key (`lean_changed.tool_inputs`) disagrees
-RECORDS_TOOL_UNREAD = frozenset({"lean-deps.json", "pyproject.toml", "run_daily.py", "tool.py", "Upstream.lean"})
+RECORDS_TOOL_UNREAD = frozenset({"lean-deps.json", "pyproject.toml", "run_daily.py", "tool.py", "Upstream.lean", "unread.py",
+                                 "unread-caps.json", "unread_gate.py"})
 _SHA = re.compile(r"[0-9a-f]{40}")
 
 
