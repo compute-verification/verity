@@ -22,3 +22,30 @@ To pull PRF-419 item 1 from Mon to Fri 6 PM PST (Sat 02:00Z), you get two helper
 - ZKL8C (bc-8c43e6a4) takes SecondMisses entirely (statement + proof of Select.selectSecond's miss bound). Do NOT write it yourself; if you already started, push what you have to your branch now and say so in your note so ZKL8C builds on it.
 - REGENC (bc-aeba976d) prepares the refusal lift on a branch off yours: deleting Select.uncertifiedRule / UNCERTIFIED_RULE(S) + its test hook, the difftest, test_two_stage.py, README and docstrings (not the locks). You merge it once the deploy instance is proved.
 You keep: the Bernoulli(Q/N) replay-level lemma, compiledTwo / sessionsTwo_compiled / ksTwo_masked, the code instance, the final records and the mark. New targets (UTC): Bernoulli lemma Fri 12:00Z; deploy instance Fri 22:00Z; records + mark Sat 02:00Z. Push after every proved step so helpers can merge.
+
+## 2026-11-06T06:57Z from ZKL8C (SecondMisses statement pushed: be1077e8d1 on cursor/proofs-secondmisses-d646)
+- **Branch** `cursor/proofs-secondmisses-d646`, head be1077e8d1, on d0f55b9dcd (the merge of 1a00925f70 and bda9aed7c6;
+  your `cursor/proofs-twodeploy-d913` isn't on the remote, so I based on the same two heads). Try
+  r20261106-064633-ab05 green (lean exit 0 in 41 s).
+- **New file** `Security/Properties/SampledProofs/Second.lean` (namespace `Properties.SampledProofs`), registered as a
+  root in `Security/Properties/lakefile.toml` and in `Security/Properties/lean-audit.json` (`roots`, a `trees` layer
+  entry, and the `Properties.SampledProofs` layer's `except`). It touches no file of yours.
+- **Statement:**
+  ```lean
+  def secondOf : Flock.V (Json × ℕ) → Array Int
+    | .ok (draw, _) => Draw.proved draw
+    | .error _ => #[]
+
+  def SecondMisses : Prop :=
+    ∀ (sample : Array ℕ) (n k L : ℕ) (X : Finset ℕ),
+      Claims.Pr (fun src : Fin L → Fin 256 =>
+        (Select.selectSecond sample n k (bytesOf src)).isOk = true ∧
+          ∀ u ∈ X, (u : Int) ∉ secondOf (Select.selectSecond sample n k (bytesOf src))) ≤
+        ∏ i ∈ Finset.range sample.size,
+          Claims.Sampling.escCell n k (X ∩ Finset.Ico (i * n) ((i + 1) * n)).card
+  ```
+  Unit `i·n + j` is proof block `j` of the i-th sampled replay block (`secondLaw`'s strata). The event is the
+  interior audit's (`Draw.proved draw`, as `interiorAudit` reads it when `provedUnits` is absent).
+- **Proof next:** `Properties.SampledProofs.SecurityProofs.secondMisses : SecondMisses` in a new
+  `Security/Proofs/Flock/Claims/Sampling/Select/Second.lean`, from `strata_bound` once `flockLaw (secondLaw …)` is
+  shown to parse to one stratum `[i·n, (i+1)·n)` of `k` per replay block. Target 16:00Z; I'll post the head here.
