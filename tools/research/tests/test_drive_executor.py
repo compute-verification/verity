@@ -112,6 +112,63 @@ def test_the_executor_enqueues_a_graph_with_a_key_for_each_task_and_folds_each_k
                                                                       keys["flock-rust-tests"]: "pending"}
 
 
+def test_error_is_not_run_and_clears_the_fail_before_it(tmp_path):
+    """A false fail (a run that gave no result, labelled fail) written over as error reads as not run, and the key's rerun
+    that passes is its verdict; error never reads as pass or fail."""
+    from research.executor import ERROR
+
+    fake = FileTransport(tmp_path)
+    ex = Executor(fake)
+    for v in ("fail", ERROR):
+        fake.finish(K_SUITE, v)
+    fake.finish(K_LEAN, ERROR)
+    assert ex.verdicts([K_SUITE, K_LEAN]) == {K_SUITE: "pending", K_LEAN: "pending"}
+    fake.finish(K_SUITE, "pass")
+    fake.finish(K_LEAN, "fail")
+    assert ex.verdicts([K_SUITE, K_LEAN]) == {K_SUITE: "pass", K_LEAN: "fail"}
+    assert ERROR in vocab.TASK_VERDICTS, "the store takes the executor's error label"
+
+
+def test_a_fail_stands_when_a_rerun_passes():
+    """A flake must not go green on a rerun: a fail with no error label after it is the key's verdict whatever came later,
+    and only an error written after it (a false fail relabelled) lets a later pass count."""
+    from research.executor import ERROR, fold
+
+    assert fold(["fail", "pass"]) == "fail"
+    assert fold(["pass", "fail", "pass"]) == "fail"
+    assert fold(["fail", ERROR, "pass"]) == "pass"
+    assert fold(["fail", ERROR, "pass", "fail", "pass"]) == "fail"
+    assert fold(["pass", ERROR]) == "pending"
+    assert fold(["fail", "pass", ERROR]) == "pending"
+    assert fold([]) == "pending"
+
+
+def test_the_queue_transport_pulls_every_key_not_passed_here(monkeypatch):
+    """A key failed here may since have been written over as error or rerun on the remote, so only a passed key (which the
+    executor never reruns) is read from the local store alone."""
+    from types import SimpleNamespace
+
+    from research.executor import ERROR, QueueTransport
+    from research.store import labels_sync
+
+    new = "c" * 128
+    here = {f"task:{K_SUITE}": ["pass"], f"task:{K_LEAN}": ["fail"]}
+    remote = {f"task:{K_LEAN}": ["fail", ERROR], f"task:{new}": ["pass"]}
+
+    class Store:
+        def __init__(self):
+            self.remote = object()
+
+        def labels(self, target, key=None):
+            return [SimpleNamespace(value=v) for v in here.get(target, [])]
+
+    pulled = []
+    monkeypatch.setattr(labels_sync, "pull_targets",
+                        lambda store, targets, jobs: pulled.extend(targets) or here.update({t: remote[t] for t in targets}))
+    assert Executor(QueueTransport(Store())).verdicts([K_SUITE, K_LEAN, new]) == {K_SUITE: "pass", K_LEAN: "pending", new: "pass"}
+    assert pulled == [f"task:{K_LEAN}", f"task:{new}"]
+
+
 def test_the_comparison_is_per_task_where_the_run_records_one_and_per_job_where_it_records_the_job_whole():
     ids = {"pytest:pkg": "k1", "circuit-check:1/2": "k2", "circuit-check:2/2": "k3", "lean-changed": "k4"}
     old = {"pytest": "pass", "pytest:pkg": "pass", "circuit-check": "fail", "lean-changed": "pass"}

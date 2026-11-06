@@ -31,7 +31,7 @@ reuse_key = sha256 hex of canon({"derivation": drv_id, "source": <source identit
 attempt id = run id (r20260922-105905-2021)
 pr:<number>@<40-hex commit>                             a pull request at one head; only labels target it
 ckpt:<HF repo id>@<40-hex revision>                     a checkpoint at one revision; only labels target it
-task:<sha512 hex of a task's key>                       a check's task: the executor's verdicts and results on it; only labels target it
+task:<sha512 hex of a task's key>                       a check's task: the executor's verdicts (pass, fail or error; a fail stands until an error after it, else the newest is the key's) and results on it; only labels target it
 commit:<40-hex commit>                                  a commit: the executor's task graphs of it and drive's shadow record of its check; only labels target it
 ~~~
 
