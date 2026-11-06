@@ -3,7 +3,8 @@
 The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
 prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session on the auditor host, that port is
 one of the prover machine's certifier coin link (`benchmarks/live_challenger/auditor.py`,
-the coins' path; the premises `CoinsConfidential` and `OneClock` are this package's README's); in development
+the coins' path; the premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`) and `OneClock` are named in
+this package's README); in development
 (`benchmarks/live_challenger/run.sh`) it is `ssh -R PORT` to the prover's machine, as `benchmarks/remote_session` places
 its verifier.  On its host, before the stream opens, `open_session` signs the challenger's record and writes it, the key
 and the head of the release log to the challenger's directory (`record.json`, `key.json`, `releases.jsonl`), for the
