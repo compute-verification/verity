@@ -10,9 +10,9 @@ looked up among every module of `verity.ml.circuits.ops.boolean` and of `verity.
 it serves only the callers that bind it (`HopperBF16WgmmaDot16_v3`, the training routes' k16 step), never `boolean_version`,
 so adding it moves no served Program.  A function-valued static is bound to its own Boolean version; a
 static the word has no counterpart for, to the Boolean version of the word Definition the Boolean Definition's ``word_statics``
-names for it.  A word primitive made on demand (`prims.const`'s `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`) has its
-Boolean version made on demand too (`_families`, by id: `made_on_demand`), since no module can register one per constant or
-vocabulary size ahead.
+names for it.  A word primitive made on demand (`prims.const`'s `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`,
+`GatherF32x{V}`) has its Boolean version made on demand too (`_families`, by id: `made_on_demand`), since no module can register
+one per constant or vocabulary size ahead.
 
 `sigma_lift(word, version)` is a word composite as a registered Boolean Definition: at each binding, its word body with each Call
 the Boolean version of its Definition, over the bits each word operand occupies (`lift_body`); `boolean_version` serves it
@@ -177,6 +177,7 @@ def _families() -> tuple:
             (re.compile(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$"), lambda m: SC.const_word(int(m[1]), int(m[2], 16))),
             (re.compile(r"^GatherBf16x(\d+)_v1$"), lambda m: BGA.gather_bf16(int(m[1]))),
             (re.compile(r"^GatherI32x(\d+)_v1$"), lambda m: BGA.gather_i32(int(m[1]))),
+            (re.compile(r"^GatherF32x(\d+)_v1$"), lambda m: BGA.gather_f32(int(m[1]))),
         ])
     return tuple(_FAMILIES)
 
