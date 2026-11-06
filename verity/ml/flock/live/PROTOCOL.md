@@ -593,9 +593,15 @@ frame fails each of its rounds, releasing the statement's round in its place. Th
 without its proofs, and the auditor
 sees the stop there. What leaves before `Finish` has the form and the distribution of an honest session's, wherever the
 check failed: under pads `h + v` a stopped rep releases byte for byte what the honest rep with values `v` releases under `h`
-(`tests/test_firewall_frame.py`). So the stop reveals one bit a session (stop at `Finish` or not), and `log₂ Σ_{i≤b}
-C(m, i)` bits over `m` sessions with at most `b` stopped (the claims' `ZkServer.zk_deferred` and
-`stream_leak_deferred`). A ZK server that refuses is evidence against its rack.
+(`tests/test_firewall_frame.py`). So a stop the ZK server makes reveals one bit a session (stop at `Finish` or not), and
+`log₂ Σ_{i≤b} C(m, i)` bits over `m` sessions with at most `b` stopped (the claims' `ZkServer.zk_deferred` and
+`stream_leak_deferred`). Where the release ends is the prover's choice, though: the Lean loop
+(`Flock.Firewall.Session.relay`) ends it where the prover closes its connection or sends a frame the loop can't read, and
+closes the auditor's connection there, so the auditor sees how many of the session's frames reached it. A release therefore
+also leaks its end position: a session of `M` messages has up to `M + 1` stops beside its finish, `log₂(M + 2)` bits rather
+than one. It is counted by position, as `Flock.Guarantees.RecursiveZKLoopAnySum` counts a recursive session's stops
+(`1 + Σ_p (M_p + 1)`, `LoopAny.card_loopStops`), and the bound that holds at a prover that cuts is §10.5's (its table's first
+row a recursive session, and its bound over a stream). A ZK server that refuses is evidence against its rack.
 
 What the deferral costs: a bad worker is caught only at its session's `Finish`, one session's latency later than at its
 first bad message, and the rest of a doomed session's device and ZK server work is spent for nothing (the ZK server's share
