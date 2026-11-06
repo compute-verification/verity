@@ -111,6 +111,7 @@
   "Proofs.Properties.Verity.Sampled.MovesReachAt",
   "Proofs.Properties.Verity.Sampled.OpenErr",
   "Proofs.Properties.Verity.Sampled.LeafErr",
+  "Proofs.Properties.Verity.Sampled.Charge",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
