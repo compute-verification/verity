@@ -1,6 +1,5 @@
 module
 
-public import Proofs.Properties.NetworkCertifier.Bytes
 public import Proofs.Properties.Pouw.LiveSalt
 public import Proofs.Properties.Pouw.LiveSalt.Canon
 public import Properties.Pouw.LiveSalt
