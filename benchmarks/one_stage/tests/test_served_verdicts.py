@@ -4,7 +4,8 @@ with the command it lacks and given no verdict, one that refused to run is missi
 wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to a pending block record that
 `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing composes to reject with no
 block record. The record accepts only when every subprotocol accepted on its node, and names each one missing, rejecting,
-malformed or about another server. The wipe composes only when its answer accepts on the record's server. PoUW's
+malformed or about another server. The wipe composes only when its answer accepts on the record's server. Remote's
+product runs no onsite piece and composes sampled proofs and PoUW alone, the others dropped. PoUW's
 development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
@@ -175,7 +176,7 @@ def test_a_published_line_names_no_window_and_counts_none_of_a_windows_own(tmp_p
 def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_public_form(tmp_path):
     """`publish`, once the run is done: a file whose path names a window is held whole in the serve dir's private/out, one
     whose text or JSON names or counts a window is held there in full with its public form left in out/, and the rest,
-    the bench Build's requests by name, a window named ``all`` and a binary file among them, stay byte for byte. Then out/
+    the bench Build's requests by name, a window named ``all`` and the gzipped declared Program, stay byte for byte. Then out/
     names no window and counts none of a window's own, and a second pass holds nothing."""
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
     files = {
@@ -211,6 +212,31 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
     assert (out / "verdicts.txt").read_text() == ("SERVE stopped (exit 0): window(s) closed, sealed\n"
                                                   "COMPOSITE CASE verity/pous/p2/v4/run accept\n")
     assert gzip.decompress((out / "serve" / "h1" / "window-program.json.gz").read_bytes()) == b'{"rows": 512}'
+    assert S.publish(out, private) == []
+
+
+def test_publish_holds_whole_each_file_that_isnt_text_but_the_declared_program(tmp_path, monkeypatch):
+    """`publish` fails closed on a file it can't read as text: bytes that aren't UTF-8, a gzip stream that doesn't
+    decompress, and gzipped JSON, whether or not it names a window, are each held whole in private/out. Only the declared
+    Program (`PUBLIC_FILES`) stays in out/, byte for byte and unread, even past `PUBLISH_MAX`."""
+    monkeypatch.setattr(S, "PUBLISH_MAX", 64)
+    out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    program = gzip.compress(json.dumps({"rows": list(range(256))}).encode())
+    public = gzip.compress(json.dumps({"rows": 512}).encode())
+    files = {"serve/h1/window-program.json.gz": program,
+             "blob.bin": b"\xff\x00window 7",
+             "broken.json.gz": public[:-6],
+             "public.json.gz": public,
+             "named.json.gz": gzip.compress(json.dumps({"window": 7}).encode())}
+    assert len(program) > S.PUBLISH_MAX
+    for rel, body in files.items():
+        (out / rel).parent.mkdir(parents=True, exist_ok=True)
+        (out / rel).write_bytes(body)
+    assert S.publish(out, private) == ["blob.bin", "broken.json.gz", "named.json.gz", "public.json.gz"]
+    assert (out / "serve" / "h1" / "window-program.json.gz").read_bytes() == program
+    assert not (private / "serve" / "h1" / "window-program.json.gz").exists()
+    for rel in ("blob.bin", "broken.json.gz", "named.json.gz", "public.json.gz"):
+        assert not (out / rel).exists() and (private / rel).read_bytes() == files[rel], rel
     assert S.publish(out, private) == []
 
 
@@ -565,6 +591,49 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
     else:
         assert line["missing"] == {} and line["elsewhere"] == {name: "vy-dc-h200-2"}
         assert rec["legs"][leg]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [leg]
+
+
+def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(tmp_path, monkeypatch, capsys):
+    """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
+    each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
+    composed, whatever their pieces left, and composes accept from sampled proofs' and PoUW's accepts on its node. The
+    same pieces composed for onsite reject on the wipe's answer."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    pieces, ran = tmp_path / "pieces", tmp_path / "ran"
+    pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
+    env = {"POUW_CMD": f"echo '{json.dumps(pouw)}' > \"$3/answer.json\"",
+           **{f"{c}_CMD": f"touch {ran}" for c in ("POUS", "BANDWIDTH", "CERTIFIER")}}
+    got = S.pieces(tmp_path, 1, pieces, env=env, node="vy-dc-h200", product="remote")
+    why = "not run: the remote product composes sampled proofs and PoUW alone"
+    assert not ran.exists()
+    assert got == {"pouw": {"verdict": "accept", "rc": 0},
+                   **{c: {"verdict": "dropped", "why": why} for c in ("pous", "bandwidth", "certifier")}}
+    dropped = [x.split(" (")[0] for x in capsys.readouterr().out.splitlines() if x.startswith("DROPPED ")]
+    assert dropped == ["DROPPED PoUS", "DROPPED the bandwidth audit", "DROPPED the network certifier"]
+    (pieces / "wipe").mkdir()
+    (pieces / "wipe" / "answer.json").write_text(json.dumps(WIPE_REJECT))
+    (pieces / "wipe" / S.SERVED).write_text(json.dumps({"server": "vy-dc-h200"}))
+    (tmp_path / "serve").mkdir()
+    argv = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
+            str(tmp_path / "audit"), "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
+            "--product", "remote"]
+    rc = S.main(argv)
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert rc == 0 and line["check"] == {} == BR.check(rec)
+    assert (line["product"], line["composed"], line["record_missing"], line["missing"]) == ("remote", "accept", [], {})
+    names = ("PoUS", "the bandwidth audit", "the network certifier", "the wipe")
+    assert line["dropped"] == {n: why for n in names} and all(line["verdicts"][n] == "dropped" for n in names)
+    assert line["reason"] == "sampled proofs: accept; PoUW: accept; " + "; ".join(f"{n}: dropped, {why}" for n in names)
+    assert (rec["composed"]["product"], rec["composed"]["dropped"]) == ("remote", ["bandwidth", "certifier", "pous", "wipe"])
+    assert rec["composed"]["legs"] == {"integrity": "accept", "pouw": "accept"} and rec["legs"]["wipe"] is None
+    report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
+    assert report["protocols"]["wipe"] == {"verdict": "dropped", "owner": "memory-accounting", "why": why}
+    assert S.main([*argv, "--product", "onsite"]) == 1
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
 
 
 SID = "s20261026T221500Z-ab12"
@@ -951,6 +1020,48 @@ def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_
     assert (rc, said) == ((3, [line]) if line else (0, []))
 
 
+@pytest.mark.parametrize("product, extra, line", [
+    ("remote", {}, None),
+    ("remote", {"POUS_CMD": "true"}, "PREFLIGHT: PRODUCT=remote runs no onsite piece, and POUS_CMD is set: unset it"),
+    ("remote", {"CERTIFIER_CHAIN_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CHAIN_CMD is set: unset it"),
+    ("remote", {"CERTIFIER_FRONT": FRONT},
+     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_FRONT is set: unset it"),
+    ("onsite", {}, None),
+    ("offsite", {}, "PREFLIGHT: PRODUCT is onsite or remote, not offsite"),
+])
+def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_command(tmp_path, product, extra, line):
+    """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece its default WIPE_CMD isn't set, and
+    the preflight refuses any onsite piece's command set, before anything runs."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "PRODUCT": product, **extra}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused(tmp_path):
+    """SETTINGS names the file a load's counts are launched from, so the job record's command holds only its path."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    settings = tmp_path / "private" / "settings.env"
+    settings.parent.mkdir()
+    settings.write_text("LOAD=front\nCERTIFIER_FRONT=\n")
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "SETTINGS": str(settings)}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines()
+    assert (rc, said) == (3, ["PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"])
+    got = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree,
+                         env={**env, "SETTINGS": str(tmp_path / "missing.env")}, check=False, capture_output=True, text=True)
+    assert (got.returncode, got.stderr.strip()) == (3, f"PREFLIGHT: SETTINGS={tmp_path / 'missing.env'} is not a readable file")
+
 FAKE_COMPOSITE = '''import json, sys
 from pathlib import Path
 COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"),
@@ -975,7 +1086,8 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     or Γ while ALPHA and GAMMA are unset; each product gets the cases of its own subprotocols; OUT/verdicts.txt gets each
     CASE line's protocol and verdict, each case not written by its protocol, and each product's NOT_ESTABLISHED and
     VERDICT lines, never a PIECE line, a reason, a log or a path; each product's public output is OUT/composite/PRODUCT;
-    and without composite.py in the tree it says so and fails, since no Lean answered."""
+    and without composite.py in the tree it says so and fails, since no Lean answered. PRODUCT=remote needs no
+    served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
     _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
@@ -1028,6 +1140,18 @@ sys.exit(1)
     shutil.rmtree(out / "composite")
     assert run().returncode == 1
     assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    (tree / "benchmarks" / "pous" / "served_case.sh").unlink()
+    (out / "verdicts.txt").unlink()
+    shutil.rmtree(d / "private")
+    env["PRODUCT"] = "remote"
+    r = run()
+    assert r.returncode == 0, r.stderr
+    assert (out / "verdicts.txt").read_text().splitlines() == [
+        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
+        "COMPOSITE NOT_WRITTEN verity/inference-only/v0", "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
+        "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components"]
+    assert sorted(x.name for x in (out / "composite").iterdir()) == ["remote"] and not (p / "onsite").exists()
 
 
 DIGEST = "5e" * 64

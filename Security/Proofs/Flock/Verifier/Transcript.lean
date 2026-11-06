@@ -1,5 +1,5 @@
 /-
-Level 3, L3-S (PROTOCOL.md §6.2, §17.4 stage 1c's slot): session binding at the transcript. A squeeze that succeeds
+Level 3, L3-S (`Flock.Transcript`, `verity/ml/flock/verifier/README.md` stage 1c's slot): session binding at the transcript. A squeeze that succeeds
 returns exactly the recorded coins of the next round, and only after the framed bytes it answers are that round's retained
 bytes (or hash to its recorded digest when the server kept none). So every coin the verifier reads came after, and is bound
 to, the prover's messages before it.
