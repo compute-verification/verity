@@ -1,8 +1,8 @@
 # The research platform: Verity's agents on Vercel
 
 The platform runs Verity's leads (the coordinators) and their workers on Vercel instead of Cursor. A lead is a durable
-workflow with one inbox. Slack messages, cron ticks, finished jobs, finished workers, other leads' questions and MCP
-calls all land in that inbox. Each wake is one disposable turn of a native coding harness, Claude Code or Codex,
+workflow with one inbox. Slack doorbells, Linear issue events, cron ticks, finished jobs, finished workers, other
+leads' questions and MCP calls all land in that inbox. Each wake is one disposable turn of a native coding harness, Claude Code or Codex,
 inside a persistent sandbox. The lead's workstream doc is its only memory. Postgres keeps the record: leads, events,
 turns, full transcripts, usage and cost, doc revisions, workers, jobs and credential grants. Credentials stay on the
 host. A sandbox holds placeholders, and Vercel's sandbox firewall swaps in the real value on the way out.
@@ -54,7 +54,7 @@ From what failed on Cursor (the incident record is in the report page, not here)
 | --- | --- | --- |
 | An agent loop and its model access | The harness's own Claude Code or Codex loop, with models through the AI Gateway | Replaced |
 | A VM per agent, booted from our environment | A persistent named Vercel Sandbox per lead and per worker, with the repository cloned once and fetched each turn | Replaced |
-| Wakes: Slack and Linear apps, thread subscriptions, timers | One inbox table. Slack events arrive at our endpoint, ticks come from cron, and jobs, workers, leads and MCP write events directly | Replaced, with no lapses |
+| Wakes: Slack and Linear apps, thread subscriptions, timers | One inbox table. Replies in a lead's inbox thread and its Linear team's issue events arrive at our endpoints, ticks come from cron, and jobs, workers, leads and MCP write events directly | Replaced, with no lapses |
 | Sending to a running agent (missing; the guard's inbox works around it) | An event that arrives mid-turn waits in the inbox for the next turn | Fixed |
 | Agent identity (Cursor OIDC, which the GitHub broker trusts) | The project's Vercel OIDC, with the lead named in `X-Verity-Agent` | Needs the broker to trust it |
 | Team secrets on every VM | The platform project's environment, sealed per-lead gateway keys, and header rules at the sandbox firewall | Narrower |
@@ -100,7 +100,8 @@ One Vercel project (`platform-agents`) holds a Next.js app with:
   use the project's OIDC token.
 - **Vercel Cron** calls `/api/cron/tick` every minute and `/api/cron/rot-check` weekly.
 
-Outside the project, it reuses Slack (its own app), the GitHub broker (for App tokens) and the jobs API (for heavy
+Outside the project, it reuses Slack (an app of its own for events, Verity's bot for posting), `research msg` and the
+inbox routes in the notes repository, a Linear webhook, the GitHub broker (for App tokens) and the jobs API (for heavy
 work).
 
 The HTTP surface (`src/http.ts`, mounted under `app/api/`):
@@ -108,6 +109,7 @@ The HTTP surface (`src/http.ts`, mounted under `app/api/`):
 | Route | Who calls it | Auth |
 | --- | --- | --- |
 | `POST /api/slack/events` | Slack | Slack's signature (`SLACK_SIGNING_SECRET`), five-minute window |
+| `POST /api/linear/webhook` | Linear | Linear's signature (`LINEAR_WEBHOOK_SECRET`), one-minute window |
 | `GET /api/cron/tick`, `GET /api/cron/rot-check` | Vercel Cron | `CRON_SECRET` |
 | `POST /api/jobs/callback/<token>` | A job runner, optionally | The URL's per-job token (a capability for one job) |
 | `GET`/`POST /api/leads` | `swap.ts`, `smoke.ts` | `PLATFORM_API_TOKEN` |
@@ -127,8 +129,8 @@ owns it. It records its run id, then drains:
    time slice (`runHarnessAgentTimeSlice`, `PLATFORM_SLICE_SECONDS`, 600 by default), stores the slice's transcript parts
    and usage, and renews the lease.
 3. **`endTurn`** (a step) reads `WORKSTREAM.md` back as a new doc revision and prices the usage. It replies once in every
-   Slack thread the events came from (or in the lead's channel when none had one), answers each lead that asked, and
-   releases the lease.
+   Slack thread the events came from, with `research msg reply` run in the sandbox (Section 3.5); a tick's turn posts
+   nothing. It answers each lead that asked, and releases the lease.
 4. **`parkLead`** stops the sandbox once the inbox is empty. The run then waits on its hook.
 
 After 25 turns a run starts its successor on the latest deployment and ends, which bounds each run's event log and moves
@@ -158,21 +160,38 @@ the tool call, so a retried step finds what it already made.
 
 ### 3.5 Slack and MCP
 
-Slack events are routed in order: by a mention of a lead (`@lane`, or the lead's user group as `<!subteam^ID>` with or
-without its handle); then by the thread's owner (every thread a lead posts in or is woken from is bound to it); then by
-the channel's lead. The platform ignores only its own bot's posts. Posts by other bots, such as agents still on Cursor
-posting through the team's bot and the machines' alerts, are messages like any other.
+**Slack works as it does on Cursor, and the platform has no routing rule of its own.** Who a post is for is
+`research msg`'s rule (`route_targets`, pinned by research's routing vectors), applied by whoever sends the post: it
+rings a doorbell in each addressed handle's inbox thread in `#agent-coordination`. People's posts in `#ask-the-team`
+and the chat channels are rung the same way by the Slack events service. A lead on Cursor subscribes to its inbox
+thread; a lead on the platform is registered with it (`swap register --channel C --inbox TS`), and any reply there
+wakes it, except a post under the lead's own name or the platform's.
+
+A doorbell (`from AUTHOR, [#CHANNEL ]thread T[, reply R]: TEXT`) names the thread the post is in, and the turn's final
+message is posted there with `research msg reply --as LANE`, run in the lead's sandbox. So the reply rings whoever
+research's rule says, a lead on Cursor included, and both kinds of lead can talk while some have moved. The lead uses
+`research msg` for everything else (asks, announcements, closing an ask, Linear), as its skills say. A reply research
+refuses (over 120 words in the front door, say) is recorded and handed back to the lead once.
+
+A lead holds its handle's inbox route under a stable agent id (`swap id LANE`, a UUID derived from the lane), which
+its sandbox exports as `RESEARCH_AGENT_URL`, so `--as LANE` passes research's holder check. Moving a lead is
+`research msg names open --as LANE --succeeds --holder ID`, which keeps the inbox thread and its unread doorbells.
+
+**Linear.** A lead on Cursor subscribes to its Linear team's issue creations and state changes, never comments.
+Linear's webhook delivers the same to `/api/linear/webhook`, which wakes the lead registered with the issue's team key
+(`--linear KEY`).
 
 The MCP server (`src/mcp.ts`, stateless streamable HTTP) has five tools:
 
 - `ask_lead` queues a question and can wait up to 50 s for the answer;
-- `assign` hands a lead a task, optionally answered in a given thread;
+- `assign` hands a lead a task, answered in a given Slack thread or read back with `get_answer`;
 - `get_answer` reads what became of an event;
 - `status` reports each lead's pending events, running turn, last reply, running workers, and month-to-date spend
   against its budget, with the gateway's own figure for the lead's key;
 - `search_transcripts` searches by lead, time window and text.
 
-Beyond its reply, a lead calls Slack's, Linear's and Notion's APIs from its sandbox (Section 6), as granted per lead.
+The APIs research and the lead call (Slack's, Linear's and Notion's, as granted per lead) go through the sandbox
+firewall like GitHub's (Section 6).
 
 ## 4. Requirements and pain points, mapped
 
@@ -186,7 +205,7 @@ Beyond its reply, a lead calls Slack's, Linear's and Notion's APIs from its sand
 | R6, P1, P4 | Each event is a row before anything else happens; a lease means one turn at a time per lead; a wake never waits on a running turn; events wait in the inbox and nothing lapses |
 | R7, P3 | `workerWorkflow`; a worker's failure is reported to its lead like its success; workers are runs, not agents, so no seat cap applies |
 | R8, P6 | `submit_job`, with the instructions forbidding heavy work in the sandbox; job ends arrive by callback or by polling |
-| R9 | `/api/slack/events`, and `/api/mcp` with `ask_lead`, `assign`, `get_answer`, `status`, `search_transcripts` |
+| R9 | Doorbells in each lead's inbox thread (`/api/slack/events`) and replies through `research msg`, as on Cursor; Linear issue events (`/api/linear/webhook`); and `/api/mcp` with `ask_lead`, `assign`, `get_answer`, `status`, `search_transcripts` |
 | R10 | The cron's recovery rules (Section 9); visible failed turns; force-claimed hooks |
 | R11 | One project and one database; exact pins; `scripts/rot-check.sh`, run weekly in a sandbox by `rotCheckWorkflow` |
 
@@ -197,23 +216,22 @@ and this record is what lasts.
 
 | Entity | Table | What a row is |
 | --- | --- | --- |
-| Lead | `leads` | One lead: lane, charter, doc and `doc_rev`, harness, model, Slack channel and user group, granted `apis`, cron interval and next tick, monthly budget, gateway key id and sealed key, status (`active`, `paused`, `retired`), current run id, lease |
-| Inbox event | `events` | One thing for a lead: source (`slack`, `cron`, `job`, `worker`, `mcp`, `lead`), kind, payload, `reply_to` (a Slack thread, an asking lead, or an MCP caller), `dedupe_key` (unique), `turn_id` once claimed; pending events are indexed |
+| Lead | `leads` | One lead: lane, charter, doc and `doc_rev`, harness, model, inbox (channel and thread ts, unique), Linear team key (unique), granted `apis`, cron interval and next tick, monthly budget, gateway key id and sealed key, status (`active`, `paused`, `retired`), current run id, lease |
+| Inbox event | `events` | One thing for a lead: source (`slack`, `linear`, `cron`, `job`, `worker`, `mcp`, `lead`), kind, payload, `reply_to` (a Slack thread, an asking lead, or an MCP caller), `dedupe_key` (unique), `turn_id` once claimed; pending events are indexed |
 | Turn | `turns` | One harness turn of a lead or worker: run id, status, harness, model, start and end, token counts by kind, `cost_usd`, final text, error, doc revision before and after |
-| Transcript | `transcript_parts` | One part of a turn, in order: instructions, prompt, reasoning, text, tool call, tool result, file change, error, finish, post; JSON content plus searchable text |
+| Transcript | `transcript_parts` | One part of a turn, in order: instructions, prompt, reasoning, text, tool call, tool result, file change, error, finish, post, post error; JSON content plus searchable text |
 | Doc history | `doc_revisions` | Every version of a lead's doc, with the turn that wrote it (or `admin` for an import or replacement) |
 | Usage | columns of `turns` | Input, output, cache-read, cache-write and reasoning tokens, and their list-price cost; the gateway's per-key spend is read live |
 | Credential grant | `grants` | One issuance: subject (lane or worker id), kind (`github-app-token`, `api:slack`, `ai-gateway-key`, …), scope, a reference (key id or a 16-hex SHA-256 prefix, never the value), issue and expiry times |
 | Worker | `workers` | Task, branch, harness, model, status, run id, where its report goes, its result |
 | Job | `jobs` | Spec, status, callback token, the queue's job id, where its outcome goes, result |
-| Thread | `threads` | A Slack thread bound to the lead that posts in it |
 | Alert | `alerts` | A raised alert's key, so each alert is posted once |
 
 ## 6. Security
 
 **No long-lived credential in a sandbox.** A sandbox's environment and files hold only placeholders, such as
-`platform-github-placeholder` in git's credential helper, and `SLACK_BOT_TOKEN=platform-slack-placeholder` and
-`LINEAR_API_KEY=platform-linear-placeholder` in `~/.verity-env`. The network policy is allow-listed by host. For each
+`platform-github-placeholder` in git's credential helper and as `RESEARCH_NOTES_TOKEN`, and
+`SLACK_BOT_TOKEN=platform-slack-placeholder` and `LINEAR_API_KEY=platform-linear-placeholder` in `~/.verity-env`. The network policy is allow-listed by host. For each
 brokered host it carries a header rule: a request whose `authorization` equals the placeholder form has it replaced
 with the real value outside the sandbox. Each rule applies only to its host. A request with any other value passes
 unchanged, and the real value never enters the sandbox. The rules are replaced on every sandbox open, so the previous
@@ -232,8 +250,12 @@ project's OIDC token and names the lead or worker in `X-Verity-Agent`. A Vercel 
 lead, so the broker authenticates the project and only attributes the agent. Our code sets the header from the
 lead's lane; the model never chooses it.
 
-**APIs per lead** (`src/services.ts`). Slack's Web API, Linear and Notion are brokered the same way. A lead gets the
-APIs in its `apis` field (Slack and Linear by default, Notion only when granted), and a worker gets GitHub only.
+**APIs per lead** (`src/services.ts`). Slack's Web API, Linear and Notion are brokered the same way, and so are the
+notes repository's raw files, under the GitHub token. A lead gets the APIs in its `apis` field (Slack and Linear by
+default, Notion only when granted), and a worker gets GitHub only. The Slack token is Verity's bot's, since
+`research msg` tells its own posts and doorbells by that bot's id. That gives a platform lead the bot's full scopes,
+where a lead on Cursor reaches Slack through the Slack broker's narrower set of methods. Header rules match a host,
+not a path, so narrowing this needs the broker to accept the platform's identity (Section 12).
 
 **What an agent can read and do.** It can read its sandbox: the doc, the checkout and its own files. It can reach the
 allow-listed hosts: the gateway, GitHub, npm, PyPI, and its granted APIs. Through its host tools it can start workers,
@@ -244,14 +266,16 @@ any real credential. Two limits are inherent to an agent that codes:
 - it can send anything it reads to an allow-listed host, such as a public branch or a Slack post.
 
 **Inputs are untrusted.** Anyone in the workspace can wake a lead, and the budget bounds what a wake can spend. Slack
-requests are signature-checked, job callbacks carry a one-job capability, and the cron route takes `CRON_SECRET`.
+and Linear requests are signature-checked, job callbacks carry a one-job capability, and the cron route takes
+`CRON_SECRET`. A doorbell's text is the sender's: the lead reads it as `research msg` lets any agent read it, and the
+using-slack skill's `verify-author` applies before acting on a request to change what runs.
 
 **The admin token.** `PLATFORM_API_TOKEN` guards `/api/leads`, `/api/transcripts` and `/api/mcp`, and transcripts can
 hold whatever a tool printed. Per-caller tokens are an open item (Section 12).
 
 **Where the secrets live.** They are in the platform project's environment: `DATABASE_URL`, `PLATFORM_SECRET`,
-`PLATFORM_API_TOKEN`, `CRON_SECRET`, the Slack app's two values, `VERCEL_TOKEN`, the jobs token, and `LINEAR_API_KEY`
-and `NOTION_API_KEY` if used. Anyone who can deploy the project can read them, so the project deploys from one
+`PLATFORM_API_TOKEN`, `CRON_SECRET`, the Slack app's signing secret and Verity's bot token, the Linear webhook's secret,
+`VERCEL_TOKEN`, the jobs token, and `LINEAR_API_KEY` and `NOTION_API_KEY` if used. Anyone who can deploy the project can read them, so the project deploys from one
 protected branch.
 
 ## 7. Cost per lead per month
@@ -316,6 +340,10 @@ Lean builds don't fit a sandbox: they peak near 15 GB against 16 GB at most, so 
 | Two runs at once | The lease | Only the lease holder takes events; the other waits |
 | A turn runs too long | The tick: a turn running over 120 minutes | An alert is posted once; each slice is bounded by `PLATFORM_SLICE_SECONDS` |
 | The harness crashes, or the model errors | The slice's status is `failed` | The turn is recorded as failed and the thread is told, with the error and the transcript id |
+| A reply isn't posted (research refuses it, or Slack does) | The post's exit status | A `post-error` part records why, and the lead is handed a `reply-failed` event once; a turn on `reply-failed` alone hands back nothing |
+| The sandbox's bootstrap fails (the clone, or installing uv or `research`) | The step throws | The turn fails; the bootstrap's marker is written only on success, so the next session runs it again |
+| A lead turn fails and no thread hears of it (a tick's turn, or a notice that couldn't be posted) | The tick: a failed lead turn with no `post` part | An alert is posted once, with the error |
+| A lead's inbox route moves (its handle opened again elsewhere) | **Not detected** | Doorbells ring the new inbox and the platform lead hears nothing (Section 12) |
 | A step's function dies mid-slice | The workflow runtime | The step is retried from the last recorded state; tool ids, posts and events are idempotent |
 | A worker fails | `workerWorkflow` ends | Its lead is woken with `worker-done: failed` |
 | A job ends without calling back | The tick reads each open job's state from the queue | The lead is woken once |
@@ -326,6 +354,7 @@ Lean builds don't fit a sandbox: they peak near 15 GB against 16 GB at most, so 
 | Code drifts from the current deployment | Turns-per-run, and the tick rolling a run idle for 24 hours | Leads move to the latest deployment |
 | An SDK release breaks the platform | The weekly rot check: a fresh sandbox installs every dependency at `@latest`, typechecks and runs both suites | The result is posted to the alert channel |
 | A Slack event is lost while the platform is down | Slack retries three times | **Not detected after that** (Section 12) |
+| A Linear event is lost while the platform is down | Linear retries | **Not detected after that** (Section 12) |
 | Vercel itself is down | Nothing on Vercel | **A probe from outside Vercel is needed** (Section 12) |
 
 ## 10. Cutover and rollback
@@ -333,15 +362,18 @@ Lean builds don't fit a sandbox: they peak near 15 GB against 16 GB at most, so 
 `SWAP.md` has the exact commands. The estimate, with every key and account below in hand:
 
 - **Setup, once, about 35 minutes.** Link the project, create the database, set the environment, deploy, point the
-  Slack app at `/api/slack/events`, and run the fake-harness smoke and then a real-harness smoke.
-- **One lead, about 5 minutes.** The Cursor lead writes its handoff; `swap register` imports it as the doc, sets the
-  channel, user group, model, budget and APIs, starts a run and kicks it. A reply appears in the lead's channel, and
-  the Cursor agent is archived.
-- **All leads, about 10 minutes more** with `swap all LEADS.json`, built from the handle registry.
+  platform's Slack app at `/api/slack/events` and a Linear webhook at `/api/linear/webhook`, and run the fake-harness
+  smoke and then a real-harness smoke.
+- **One lead, about 5 minutes.** The Cursor lead writes its handoff. `swap id LANE` prints the lead's stable agent id,
+  and `research msg names open --as LANE --succeeds --holder ID` moves the handle's inbox route to it, keeping the
+  inbox thread, whose channel and ts it prints. `swap register` imports the handoff as the doc, sets the inbox, Linear
+  team, model, budget and APIs, starts a run and kicks it. A `research msg send --to @LANE` then gets its reply in its
+  thread, and the Cursor agent is archived.
+- **All leads, about 10 minutes more** with `swap all LEADS.json`, built from the handle registry and the inbox routes.
 
 Rollback of one lead takes about 5 minutes: `swap pause LANE` stops the platform taking its events, `swap doc LANE`
-exports the doc, and `launch_coordinator.py launch` with `--text-file` relaunches it on Cursor from Daniel's laptop.
-Undoing a pause is `swap resume LANE`.
+exports the doc, and `launch_coordinator.py launch` with `--text-file` relaunches it on Cursor from Daniel's laptop;
+its successor's `names open --succeeds` takes the inbox route back. Undoing a pause is `swap resume LANE`.
 
 ## 11. What retires
 
@@ -359,22 +391,28 @@ and Slack.
 
 ## 12. Open questions
 
-1. **Slack.** Recommended: a Slack app for the platform, so its own posts are told apart by bot id while it hears
-   the team bot. The other option is pointing the team app at the platform, which then needs a different own-post
-   test.
+1. **Slack.** Recommended: a Slack app of the platform's own that only receives events (`channels:history` in
+   `#agent-coordination`), while every post goes out under Verity's bot through `research msg`, so research's own-post
+   and doorbell tests hold unchanged. The other option is pointing the team app's events at the platform, which takes
+   them from the slack-events service.
 2. **The broker.** It must trust the platform project's Vercel OIDC subject. A project-level identity lets any code in
    the project mint App tokens for any lead. Deploying only from a protected branch bounds that, and one project per
-   lead removes it at the cost of a project each.
-3. **The `research` CLI.** Which subcommands do leads need from a sandbox? Paths that go through the site's brokers
-   need a Cursor or Vercel OIDC token, and a sandbox has neither by design. Direct API calls (Section 6) cover Slack,
-   Linear and Notion.
+   lead removes it at the cost of a project each. The Slack broker accepting the same identity would let a platform
+   lead's Slack calls go through its narrower set of methods, instead of the bot token's full scopes (Section 6).
+3. **The `research` CLI.** It is installed in each lead's sandbox, and `research msg` works there through the
+   brokered Slack token and the notes repository's raw files (read under the GitHub App token, which must be able to
+   read the notes repository). Subcommands that go through the site's brokers (`research run`, `research goals`)
+   need a Cursor or Vercel OIDC token, which a sandbox doesn't hold by design; a lead submits heavy work with
+   `submit_job` instead. Which of those subcommands leads need is open. Unverified live: research in a Vercel
+   sandbox.
 4. **Linear identity.** A brokered personal key files every issue as that person. The Linear app's client
    credentials (`createAsUser` per handle) need the host to mint the app token, which is a small change in
    `credentials.service`.
-5. **Mixed period.** A platform lead reaches a Cursor lead only by a Slack mention in a channel the Cursor lead
-   watches. `ask_lead` works between platform leads.
-6. **Uptime.** The control pod's watch should probe the platform from outside Vercel, and a missed Slack event should
-   be reconciled from `conversations.history`.
+5. **Inbox routes.** The platform reads a lead's inbox from its registration, not from the notes repository's routes.
+   If the handle is opened again elsewhere, its doorbells ring the new inbox and the platform lead hears nothing. The
+   tick should compare each lead's registration with its route and alert on a difference.
+6. **Uptime.** The control pod's watch should probe the platform from outside Vercel, and a missed Slack or Linear
+   event should be reconciled (Slack's `conversations.replies` on each inbox thread, Linear's issues by update time).
 7. **Harness endpoints.** Should the adapters use the gateway's dedicated endpoints (`/claude-code`, `/codex/v1`) or
    their defaults? The live smoke shows which works.
 8. **Codex and new OpenAI models.** Does the Codex adapter accept a model the day it ships on the gateway? The swap is
@@ -392,10 +430,14 @@ Names only. Values go into the project's environment with `vercel env add`, neve
 - **`VERCEL_TOKEN`**, a token belonging to a user who can manage the team's AI Gateway keys and budgets, and
   **`VERCEL_TEAM_ID`**.
 - **`DATABASE_URL`**, a Postgres database (a Neon project or branch).
-- **A Slack app for the platform**: **`SLACK_SIGNING_SECRET`** and **`SLACK_BOT_TOKEN`** (scopes `chat:write`,
-  `channels:history`, `groups:history`, `app_mentions:read`). Its events go to `/api/slack/events`, and its bot is
-  invited to each lead's channel and to the coordination channel.
-- **The GitHub broker trusting the project's OIDC subject**, and its URL as **`PLATFORM_GITHUB_BROKER_URL`**.
+- **A Slack app for the platform that only receives events**: its **`SLACK_SIGNING_SECRET`**. It needs the
+  `channels:history` scope and the `message.channels` event, sent to `/api/slack/events`, and its bot is invited to
+  `#agent-coordination`. It never posts.
+- **`SLACK_BOT_TOKEN`**: Verity's own bot token, held by @infra, which `research msg` posts under and tells its own
+  posts and doorbells by. The platform brokers it into each lead's sandbox and posts its alerts with it.
+- **`LINEAR_WEBHOOK_SECRET`**: the signing secret of a Linear webhook on Issue events, pointed at `/api/linear/webhook`.
+- **The GitHub broker trusting the project's OIDC subject**, and its URL as **`PLATFORM_GITHUB_BROKER_URL`**. The App
+  token it mints must be able to read the notes repository, where `research msg` reads the inbox routes.
 - **The jobs API**: a token with `jobs:enqueue` (**`PLATFORM_JOBS_TOKEN`**), **`PLATFORM_JOBS_URL`**, and a budget line
   **`PLATFORM_JOBS_LINE`**.
 - **`LINEAR_API_KEY`** (or the Linear app's client credentials, Section 12) and **`NOTION_API_KEY`**, for the leads
@@ -406,8 +448,9 @@ Names only. Values go into the project's environment with `vercel env add`, neve
   provide a `VERCEL_TOKEN`.
 
 Whoever deploys generates `PLATFORM_SECRET`, `PLATFORM_API_TOKEN` and `CRON_SECRET`. Configuration that isn't secret:
-`PLATFORM_SANDBOX=vercel`, `PLATFORM_SANDBOX_TIMEOUT_MINUTES`, `PLATFORM_REPO_URL`, `PLATFORM_ALERT_CHANNEL`,
-`PLATFORM_DEFAULT_MODEL`, and `PLATFORM_ROTCHECK_REPO`, `_REF` and `_DIR`.
+`PLATFORM_SANDBOX=vercel`, `PLATFORM_SANDBOX_TIMEOUT_MINUTES`, `PLATFORM_REPO_URL` (required on Vercel, since replies
+are posted by `research` from the checkout), `PLATFORM_ALERT_CHANNEL`, `PLATFORM_DEFAULT_MODEL`, and
+`PLATFORM_ROTCHECK_REPO`, `_REF` and `_DIR`.
 
 ## 14. Versions and the rot check
 
@@ -418,8 +461,10 @@ weekly in a fresh sandbox and posts the result. An upgrade is a change to the pi
 
 ## 15. Tests
 
-`npm run check` runs the typecheck, the unit suite and the end-to-end suite. The end-to-end suite runs the whole
-platform in one process, with:
+`npm run check` runs the typecheck, the unit suite (26 tests) and the end-to-end suite (21 tests, about 10 seconds).
+The unit suite parses every doorbell in research's own routing vectors
+(`tools/research/tests/slack_routing_vectors.json`), so a change to the doorbell format fails here. The end-to-end
+suite runs the whole platform in one process, with:
 
 - real Workflow DevKit runs (the local world);
 - the real `HarnessAgent` driving a scripted harness (`src/harness/fake.ts`) in directory sandboxes;
@@ -427,18 +472,24 @@ platform in one process, with:
 
 It covers:
 
-- Slack wakes, replies and routing;
+- doorbells waking a lead, and its reply in the doorbell's thread, a channel's included;
+- only the inbox waking a lead, and none of its own or the platform's posts;
+- Linear issue events, signed and routed by team;
 - dedupe and signatures;
-- other bots heard, and the platform's own posts ignored;
-- cron ticks, and jobs ending by callback and by polling;
+- a refused reply handed back once;
+- cron ticks posting nothing, and jobs ending by callback and by polling;
 - workers and asks between leads;
 - MCP, transcripts and usage;
-- credentials kept out of sandboxes and transcripts;
+- credentials kept out of sandboxes and transcripts, and the sandbox's `research` environment;
 - run supersession;
-- the admin endpoint;
+- the admin endpoint, including an inbox another lead holds;
 - checkouts;
-- recovery: a failed turn, stuck events, a stale turn and an idle roll.
+- recovery: a failed turn, stuck events, a stale turn, an idle roll, and a failure no thread heard of.
 
-`npm run smoke` drives a deployed platform over its public API, and `smoke/live-turn/` is a one-function deployment
-that runs one real harness turn in a Vercel Sandbox and checks by digest that the model credential is in no process
-environment or file inside it.
+`npm run smoke` drives a running platform over its public API: an MCP question, the turn's transcript, usage and doc.
+With `--signed` it also signs what Slack and Linear would send: posts that must wake nothing, a doorbell whose reply
+is addressed to its own thread, and an issue of the lead's team. Its channel is made up, so on a deployment the reply
+is refused by Slack rather than posted. Against a local `next start`, unset `SLACK_BOT_TOKEN`, `LINEAR_API_KEY` and
+`NOTION_API_KEY`, or the local server uses real credentials. `smoke/live-turn/` is a one-function deployment that runs
+one real harness turn in a Vercel Sandbox and checks by digest that the model credential is in no process environment
+or file inside it.
