@@ -1,8 +1,8 @@
 module
 
-public import SampledProofs.Bound
+public import Batteries.Tactic.OpenPrivate
 public import Proofs.Flock.Claims.Sampling.Escape
-import Batteries.Tactic.OpenPrivate
+public import SampledProofs.Bound
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real

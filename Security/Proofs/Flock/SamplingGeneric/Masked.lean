@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.Masked
+public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Deployed
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -32,8 +34,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Masked
-import Proofs.Flock.SamplingGeneric
 
 /-!
 # The sampled compiler over C-Flock's masked record, at SHA-512
