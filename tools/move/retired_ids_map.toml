@@ -21,7 +21,7 @@
 #   `nSegments`, only in the files that read D1's (`Claims.Flock.Stmt.nBlocks` counts a statement's blocks and stays).
 # - Server blocks: `benchmarks/rho`'s `ServingBlock` is `ServerBlock`, only there (the Lean's `ServingBlockBound` and
 #   `ServingBlocks` are other names).
-# - `block_of`, one name in six senses, each renamed only in the files that use it: a zone of the device graph
+# - `block_of`, one name in seven senses, each renamed only in the files that use it: a zone of the device graph
 #   (`zone_of`), a kernel's KV tile (`tile_of`), a SASS basic block (`basic_block_of`), a 128-byte SHA-512 message chunk
 #   (`chunk_of`), Marlin's MoE block size (`moe_block_size_of`), a sampled index's slot and layout unit (`position_of`)
 #   and a model's layer (`layer_of`). A file under `examples/` is listed under `demos/` too, and the `CertifierNetwork`
