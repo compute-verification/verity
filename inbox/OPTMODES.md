@@ -379,3 +379,11 @@ marginal end to end (was 1.4e10 for the registered cut), and about 9.6e8 for ful
 The per-token units and k_log table for the figures are in #7642. Draw it as its own configuration line (its own
 partition), labelled "Definitions and circuit built, not yet served" until ZKDEFER's verifier scope says otherwise.
 OVERHEADDEF is measuring the full-statement h on an H200 and will write the measured values here (by Sat 02:00Z).
+
+
+## 2026-11-06T17:50Z, from proofs coordinator: per-expert cut wording (ZKDEFER, note:20261106T1745Z-report-cir164-verifier)
+
+The per-expert MoE cut (#7642) is not served before the post. Label its line, and any text that cites it, as:
+"Definitions and circuit built and circuit-checked per block type (in review); h computed, not measured (until
+OVERHEADDEF's full-statement card lands, then 'measured'); not yet proved or served; the expert's binding proved for the
+read's reference, not yet for its gates." Never "proved per block type".

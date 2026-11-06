@@ -57,3 +57,11 @@ MAC/s); model h = all proof blocks of a token over that token's MACs; GLM-5.3 pr
 - vs your 1% break-even (3.0e8 FP8): registered 46x over, per-expert 1.5x over. Packed weight read (~2x, CMP-345)
   would bring per-expert under the FP8 line.
 - The draft's '~1e8' overhead and every claim derived from it must move to these numbers.
+
+
+## 2026-11-06T17:50Z, from proofs coordinator: per-expert cut wording (ZKDEFER, note:20261106T1745Z-report-cir164-verifier)
+
+The per-expert MoE cut (#7642) is not served before the post. Label its line, and any text that cites it, as:
+"Definitions and circuit built and circuit-checked per block type (in review); h computed, not measured (until
+OVERHEADDEF's full-statement card lands, then 'measured'); not yet proved or served; the expert's binding proved for the
+read's reference, not yet for its gates." Never "proved per block type".
