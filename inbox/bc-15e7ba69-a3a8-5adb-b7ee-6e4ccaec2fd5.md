@@ -153,3 +153,9 @@ released by logical time T_k, in certified order; engine waits for the certifier
 release headers + watermark; prefix cache in ReplayStep_v1) and vllm (VLLM-231: `--admit tick`, served on GLM-5.3).
 Card: art:17a9bef8c8f34864e49dad78d44cf01338c5d2a301b4aaea4db37ec778337ae3 (supersedes 535758cb).
 - TSVERIFY: under (b) the registered engine class carries tau and the certifier watermark; nothing new is bound before the coins beyond the certified release log.
+
+## 2026-11-06T08:56Z from proofs: REGENC's lift checks
+
+REGENC's narrow suites run r20261106-065036-ae6b (the 5 suites testing the changed code) passed. The broad
+--changed run 206e (56 suites) was cancelled at its 2 h timeout with no red suite seen. Don't rerun it on the lift
+branch: the quick suites you run on your PR after merging twolift-ad3d cover it, and drive's train runs the rest.
