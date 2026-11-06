@@ -25,8 +25,9 @@ label of the round it releases:
 * **`rank_of_release`**: where a frame releases a device round at a state alike the coin step's, at the model's
   configuration, in the place of a round that is the empty round or the opening's first (at any count) wherever the
   rank stop fails, the rank stop passes (`Flags.rankFails_of_step`; the frame's check refuses the empty round).
-* `ofLoop_fed`, **`coins_run_fed`**: where the frame takes a round's coins at a state alike the model's after the
-  round, the model's coin step takes them one message on (`fed`, by `answer_unstop`), whatever the round after.
+* `ofLoop_fed`, **`coins_run_fed`**, `roundRun_fed`: where the frame takes a round's coins at a state alike the
+  model's after the round, the model's coin step takes them one message on (`fed`, by `answer_unstop`), whatever the
+  round after; at a `RoundRun`, where the round leaves the frame `roundPlace` readied at that state.
 -/
 
 @[expose] public section
@@ -243,6 +244,42 @@ theorem coins_run_fed (T : ZKMal.CoinLayer.TableData)
     rfl
   rw [e] at hc
   exact ofLoop_fed T L₀ real x ρ e0 (h1 ++ [(v, a.data.toList)]) hc hu hco
+
+open Loop LeanRelease in
+/-- **The coins of a frame round as the loop ran it, one message on**: at a `RoundRun` at the model's count whose
+content is the worker's message `v`, whose round releases and whose coins the rep's frame took off the auditor's answer
+`a`, where the frame `roundPlace` readied has the model's configuration and the round leaves it at the loop's state
+after the history with `(v, a)` (`progOf`) but for `stopped`, the model's coin step takes the coins after that history,
+whatever the round after (`roundRun_next`, `coins_run_fed`). -/
+theorem roundRun_fed (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      Nat → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (e0 : Msg × Msg) (h1 : List (Msg × Msg)) {sid : Nat} {st : State} {pl : _root_.Flock.Firewall.Session.Placed}
+    {stream : String} {i r : Nat} {dm : ByteArray} {v : Msg} {e : Env} {R : _root_.Flock.Firewall.Frames.Sessions}
+    {L0 : _root_.Flock.Firewall.Level0.Slots} {R₃ : _root_.Flock.Firewall.Frames.Sessions}
+    (hr : RoundRun sid st pl stream (loopNr x h1.length) i r dm ⟨v.toArray⟩ e R L0 R₃)
+    (hreq : st.request pl (.round stream (loopNr x h1.length)) = none) (hfr : (frameAt R sid i r).isSome)
+    {q p₁ : _root_.Flock.Firewall.Frames.Rep} {pl' : Place} {f : Bool} {nd : Option String} {o : ByteArray}
+    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dm ⟨v.toArray⟩ (loopNr x h1.length) =
+      .ok (q, pl', f, nd))
+    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dm ⟨v.toArray⟩ (loopNr x h1.length)).out = .ok o)
+    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dm ⟨v.toArray⟩ (loopNr x h1.length)).put =
+      some p₁) {a : ByteArray} (ha : e.ans = some a) (hb : _root_.Flock.Firewall.Session.byte? a 0 = some 2)
+    (hs : (st.answer (.round stream (loopNr x h1.length)) a).1.stop = none) (hco : e.coins = .ok ())
+    {pre : List _root_.Flock.Firewall.Frame.Req} {ev : List (Nat × ByteArray × Place × Array _root_.Flock.F128)}
+    (hR : RepRun pre ev q) (hcq : q.cfg = (ofLoop T L₀ real).cfg x ρ (e0 :: h1))
+    (hu : unstop (_root_.Flock.Firewall.Frame.step q.cfg q.st
+        (.round (loopNr x h1.length) (if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray)) pl')).2.m =
+      unstop (progOf x ((h1 ++ [(v, a.data.toList)]).map fun p => ZKMal.CoinLayer.rd p.2))) :
+    (ofLoop T L₀ real).fed x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = true := by
+  obtain ⟨st₂, hc, -, -⟩ := roundRun_next hr hreq hfr hrp ho hput ha hb hs hco hR
+  obtain ⟨hpc, hps⟩ := roundStep_put_of hrp hput
+  rw [← hps] at hu
+  exact coins_run_fed T L₀ real x ρ e0 h1 v a (by rw [hpc, hcq]; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩) hu hc
 
 end Relay
 

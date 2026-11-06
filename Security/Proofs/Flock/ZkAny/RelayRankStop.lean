@@ -75,9 +75,7 @@ theorem rankFails_coins {c : Cfg} {s : Masker} (hr : LeanRelease.rankFails c s =
 theorem answer_ite {c : Cfg} {b : Bool} {s m : Masker} {cs : Array F128}
     (h : (if b = true then ({} : Masker) else s).answer c cs = .ok m) : b = false ∧ s.answer c cs = .ok m := by
   cases b
-  · first
-      | exact ⟨rfl, h⟩
-      | exact ⟨rfl, by simpa only [Bool.false_eq_true, ↓reduceIte] using h⟩
+  · exact ⟨rfl, h⟩
   · exact absurd h (answer_owed_none _ rfl)
 
 /-- **The loop's state at a rep's round `j + 1`**, below the inner proof's end, is the frame's along the rep's first

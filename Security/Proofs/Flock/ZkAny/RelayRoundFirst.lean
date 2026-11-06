@@ -19,8 +19,9 @@ the next stream's first round as a stream of more does:
   rep's frame with the history's words for its one round, as many as its count (`roundRun_handoff` at one round).
 * `roundRun_step_first`: `roundRun_step` at a stream's first round, from the loop's start of the rep (`freshOf`,
   `round_progOf_first`).
-* **`roundRun_same_first`**: so where the next round is the same rep's and the found frame has the model's
-  configuration, the frame the session's next request finds keeps `SameInv` (`roundRun_same` from the stream's first).
+* **`roundRun_same_first`**: so where the found frame has the model's configuration the model's coin step takes the
+  round's coins, and where the next round is the same rep's the frame the session's next request finds keeps
+  `SameInv` (`roundRun_same` from the stream's first).
 -/
 
 @[expose] public section
@@ -149,7 +150,8 @@ theorem roundRun_handoff_first (x : Msg) (e0 : Msg × Msg) (h1 : List (Msg × Ms
 open Loop LeanRelease in
 /-- **A rep's frame at the session's next round, at the model's state, from its stream's first round**: as
 `roundRun_step`, at the rep's stream's first round (`hj₀`), where the frame `roundPlace` readied is at the loop's start
-of the rep (`freshOf`) but for `stopped`, in the place of the rep's first scheduled round with its count. -/
+of the rep (`freshOf`) but for `stopped`, in the place of the rep's first scheduled round with its count: the model's
+coin step takes the round's coins, and where the next round is the same rep's (`hj`) the frame is at its state. -/
 theorem roundRun_step_first (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -157,10 +159,9 @@ theorem roundRun_step_first (T : ZKMal.CoinLayer.TableData)
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
       Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
     (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
-    (e0 : Msg × Msg) (h1 : List (Msg × Msg)) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q₀ j : Nat}
+    (e0 : Msg × Msg) (h1 : List (Msg × Msg)) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q₀ : Nat}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q₀ + 1)
-    (hj₀ : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q₀).2 = 0)
-    (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 h1.length).2 = j + 1) {c' : Cfg}
+    (hj₀ : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q₀).2 = 0) {c' : Cfg}
     {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array F128)} {hi : Array ByteArray}
     (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q₀).1
       (wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) 0) = .ok (c', t, dom, xs, hi))
@@ -181,15 +182,14 @@ theorem roundRun_step_first (T : ZKMal.CoinLayer.TableData)
     (hs : (st.answer (.round stream (loopNr x h1.length)) a).1.stop = none) (hco : e.coins = .ok ())
     {pre : List Req} {ev : List (Nat × ByteArray × Place × Array F128)} (hR : RepRun pre ev q)
     (hcq : q.cfg = (ofLoop T L₀ real).cfg x ρ (e0 :: h1)) (hu₀ : unstop q.st.m = unstop m₀)
-    (hpl : pl' = .sched (rsched.getD 0 (.empty, 0)).1) (hn : loopNr x h1.length = (rsched.getD 0 (.empty, 0)).2)
-    {m : Masker} (hA : (ofLoop T L₀ real).answeredR x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m) :
-    ∃ p, frameAt R₃ sid i r = some p ∧
-      RepRun pre (ev ++ [(loopNr x h1.length, if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray), pl',
-        _root_.Flock.Firewall.Frames.feedOf (loopNr x h1.length) a.data.toList)]) p ∧
-      unstop p.st.m = unstop m := by
-  have hcfg : CfgAlike q.cfg ((ofLoop T L₀ real).cfg x ρ (e0 :: (h1 ++ [(v, a.data.toList)]))) := by
-    rw [hcq, cfg_same T L₀ real x ρ e0 h1 hx hq hj (v, a.data.toList)]
-    exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+    (hpl : pl' = .sched (rsched.getD 0 (.empty, 0)).1) (hn : loopNr x h1.length = (rsched.getD 0 (.empty, 0)).2) :
+    (ofLoop T L₀ real).fed x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = true ∧
+      ∀ j, (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 h1.length).2 = j + 1 → ∀ m,
+        (ofLoop T L₀ real).answeredR x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m →
+        ∃ p, frameAt R₃ sid i r = some p ∧
+          RepRun pre (ev ++ [(loopNr x h1.length, if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray),
+            pl', _root_.Flock.Firewall.Frames.feedOf (loopNr x h1.length) a.data.toList)]) p ∧
+          unstop p.st.m = unstop m := by
   have hu : unstop (_root_.Flock.Firewall.Frame.step q.cfg q.st (.round (loopNr x h1.length)
       (if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray)) pl')).2.m =
       unstop (progOf x ((h1 ++ [(v, a.data.toList)]).map fun p => ZKMal.CoinLayer.rd p.2)) := by
@@ -204,16 +204,21 @@ theorem roundRun_step_first (T : ZKMal.CoinLayer.TableData)
     have hlen : (h1.map fun p => ZKMal.CoinLayer.rd p.2).length = q₀ + 1 := by rw [List.length_map, hq]
     rw [List.map_append, List.map_cons, List.map_nil]
     exact round_progOf_first x _ _ hx hlen hj₀ hm hph (by rw [hcq]; exact hc) hrs hs' hlt hu₀ hres
+  refine ⟨roundRun_fed T L₀ real x ρ e0 h1 hr hreq hfr hrp ho hput ha hb hs hco hR hcq hu, fun j hj m hA => ?_⟩
+  have hcfg : CfgAlike q.cfg ((ofLoop T L₀ real).cfg x ρ (e0 :: (h1 ++ [(v, a.data.toList)]))) := by
+    rw [hcq, cfg_same T L₀ real x ρ e0 h1 hx hq hj (v, a.data.toList)]
+    exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
   exact roundRun_carry T L₀ real x ρ e0 h1 hx hj hr hreq hfr hrp ho hput ha hb hs hco hR hcfg hu hA
 
 open Loop LeanRelease in
 /-- **A rep's frame keeps `SameInv` from its stream's first round to the rep's next**: at `roundRun_last_first`'s
-`RoundRun` of the stream's first round (`hj₀`) whose next round is the same rep's (`hj`), where the found frame has the
-model's configuration (`hcf`), the frame `roundPlace` readied is at the loop's start of the rep (`freshOf`) but for
-`stopped` (`hm`, `hu₀`: `roundPlace_switch0` at rep 0, `roundPlace_switch1` at rep 1), the frame's schedule on no
-coins holds the round (`hlt`) and is of one shape with the placeholder's (`hrs`), whose count is the round's (`hn'`),
-the round is in the place of the frame's first scheduled round, and the frame the session's next request finds keeps
-`SameInv` at the history with `(v, a)`, one round of the rep. -/
+`RoundRun` of the stream's first round (`hj₀`), where the found frame has the model's configuration (`hcf`), the frame
+`roundPlace` readied is at the loop's start of the rep (`freshOf`) but for `stopped` (`hm`, `hu₀`:
+`roundPlace_switch0` at rep 0, `roundPlace_switch1` at rep 1), the frame's schedule on no coins holds the round
+(`hlt`) and is of one shape with the placeholder's (`hrs`), whose count is the round's (`hn'`), the model's coin step
+takes the round's coins, and where the next round is the same rep's (`hj`) the round is in the place of the frame's
+first scheduled round and the frame the session's next request finds keeps `SameInv` at the history with `(v, a)`,
+one round of the rep. -/
 theorem roundRun_same_first (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -221,10 +226,9 @@ theorem roundRun_same_first (T : ZKMal.CoinLayer.TableData)
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
       Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
     (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
-    (e0 : Msg × Msg) (h1 : List (Msg × Msg)) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q₀ j : Nat}
+    (e0 : Msg × Msg) (h1 : List (Msg × Msg)) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q₀ : Nat}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q₀ + 1)
-    (hj₀ : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q₀).2 = 0)
-    (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 h1.length).2 = j + 1) {c' : Cfg}
+    (hj₀ : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q₀).2 = 0) {c' : Cfg}
     {t' : _root_.Flock.Firewall.Finish.Tab} {dom' : ByteArray} {xs' : Array (Array F128)} {hi' : Array ByteArray}
     (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q₀).1
       (wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) 0) = .ok (c', t', dom', xs', hi'))
@@ -258,13 +262,15 @@ theorem roundRun_same_first (T : ZKMal.CoinLayer.TableData)
     (hrs : Sched.RoundsAt sched sched') (hlt : 0 < sched.size)
     (hcf : p.cfg = (ofLoop T L₀ real).cfg x ρ (e0 :: h1)) {m₀ : Masker}
     (hm : freshOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2) = .ok m₀) (hu₀ : unstop q.st.m = unstop m₀) :
-    pl' = .sched (sched.getD 0 (.empty, 0)).1 ∧
-      ∃ p₃, frameAt R₃ sid i r = some p₃ ∧
-        SameInv (ofLoop T L₀ real) x ρ (e0 :: (h1 ++ [(v, a.data.toList)]))
-          ((h1 ++ [(v, a.data.toList)]).map fun p => ZKMal.CoinLayer.rd p.2) (q₀ + 1) 0 t
-          (s.spec.domain name r).toUTF8 xs hi pre
-          [(loopNr x h1.length, if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray), pl',
-            _root_.Flock.Firewall.Frames.feedOf (loopNr x h1.length) a.data.toList)] p₃ := by
+    (ofLoop T L₀ real).fed x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = true ∧
+      ∀ j, (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 h1.length).2 = j + 1 →
+        pl' = .sched (sched.getD 0 (.empty, 0)).1 ∧
+        ∃ p₃, frameAt R₃ sid i r = some p₃ ∧
+          SameInv (ofLoop T L₀ real) x ρ (e0 :: (h1 ++ [(v, a.data.toList)]))
+            ((h1 ++ [(v, a.data.toList)]).map fun p => ZKMal.CoinLayer.rd p.2) (q₀ + 1) 0 t
+            (s.spec.domain name r).toUTF8 xs hi pre
+            [(loopNr x h1.length, if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray), pl',
+              _root_.Flock.Firewall.Frames.feedOf (loopNr x h1.length) a.data.toList)] p₃ := by
   have hfr : (frameAt R sid i r).isSome := by
     rw [hfa]
     rfl
@@ -285,10 +291,11 @@ theorem roundRun_same_first (T : ZKMal.CoinLayer.TableData)
   obtain ⟨P3, hat3, hcf3⟩ := roundRun_cfg hr hreq hfr hf hrp ho hput ha hb hs hco hR
   obtain rfl := Option.some.inj (hat3.symm.trans hat)
   have hcq : q.cfg = (ofLoop T L₀ real).cfg x ρ (e0 :: h1) := (roundPlace_cfg hf hrp).trans hcf
-  refine ⟨hpl, _, hat, hrun, ?_, fun m hA => ?_, hcw, hinv⟩
+  obtain ⟨hfd, hstep⟩ := roundRun_step_first T L₀ real x ρ e0 h1 hx hq hj₀ hph hc hrs hs' hlt hm hr hreq hfr hrp ho
+    hput ha hb hs hco hR hcq hu₀ hpl hn2
+  refine ⟨hfd, fun j hj => ⟨hpl, _, hat, hrun, ?_, fun m hA => ?_, hcw, hinv⟩⟩
   · rw [hcf3, hcf, cfg_same T L₀ real x ρ e0 h1 hx hq hj (v, a.data.toList)]
-  · obtain ⟨P5, hat5, -, hu5⟩ := roundRun_step_first T L₀ real x ρ e0 h1 hx hq hj₀ hj hph hc hrs hs' hlt hm hr hreq
-      hfr hrp ho hput ha hb hs hco hR hcq hu₀ hpl hn2 hA
+  · obtain ⟨P5, hat5, -, hu5⟩ := hstep j hj m hA
     obtain rfl := Option.some.inj (hat5.symm.trans hat)
     exact hu5
 

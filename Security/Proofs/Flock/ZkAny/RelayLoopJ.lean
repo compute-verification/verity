@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.ZkAny.RelayLoopLink
 public import Proofs.Flock.ZkAny.RelaySame
+public import Proofs.Flock.ZkAny.RelayTook
 
 /-!
 # The relay's invariant at the deployed loop, kept at the control slots and the `Hello`
@@ -26,21 +27,29 @@ public import Proofs.Flock.ZkAny.RelaySame
   run failed; no stream seen before the `Hello` left; `RepJ` at each rep stream seen; the session's plan the setup's
   (`PlanOk`); `SeenAt` at the model's history so far; no stream seen before the model's link; `BuiltAt` past the
   `Commit`; the session's entry the setup's once its `Hello` left (`SessOn`); its `Hello` and coins at the setup's
-  link points (`LinksOk`); and past the `Commit`, at a level 0 bound to it, its entry linked to the history's link
-  coins (`LinkOn`).
+  link points (`LinksOk`); past the `Commit`, at a level 0 bound to it, its entry linked to the history's link
+  coins (`LinkOn`); and, while the model's run has a message there, what the loop took of the coins so far against
+  the model's release (`LoopModel.TookAt`).
 * `repJ_stays`: updates that keep the rep's frame and what the session's rounds read of it (`Stays`) keep `RepJ`, the
   model's history as it was.
+* `answer_head`, `start_byte`, `answer_hello_start`, `sendHello_hello`, `stepK_hello_start`: past the `Hello` the
+  session's coin tree is the one the auditor's answer, which is coins, begins under the setup's `Hello` at the
+  request's nonce.
+  `coins_open`, `stepK_coin_open`: past a `Commit` or a frame round it is the one its tree opens
+  the auditor's coins to as the schedule's next opening.
 * **`loopKept_ctl`**, `loopKept_ctl_all`: `LoopJ` is kept at every slot that reads no model message.
-  **`loopKept_hello`**: and at the `Hello`, whose round the model's run passes. `liveBefore_one`: past the `Hello`
-  every earlier round passed. **`loopKept_commit`**: and at the `Commit`, where the worker's link is the firewall's
-  own, below the `Finish`, the loop's level 0s for the session being those `Session.level0` drew (`LoopRead`).
+  **`loopKept_hello`**: and at the `Hello`, whose round the model's run passes, where the model's coin check reads
+  the setup's `Hello` at the relay's nonce. `liveBefore_one`: past the `Hello` every earlier round passed.
+  **`loopKept_commit`**: and at the `Commit`, where the worker's link is the firewall's own, below the `Finish`, the
+  loop's level 0s for the session being those `Session.level0` drew (`LoopRead`), the model's requests the loop's and
+  its frame taking the coins after the `Hello`.
 -/
 
 @[expose] public section
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session (State Placed)
+open _root_.Flock.Firewall.Session (State Placed byte? helloOf reqAt)
 open _root_.Flock (SessionSpec Stmt F128)
 
 /-- **What the loop holds of rep stream `k`'s frame** `p` (table `k / 2`'s rep `k % 2`) at the model `M`'s history
@@ -257,8 +266,9 @@ stream seen; the session's plan the setup's once its `Hello` left; the streams s
 model's next (`SeenAt`); none seen while the session's slots took at most the model's `Hello`; past the `Commit`
 every level 0 bound to the session the one the loop drew for its table (`BuiltAt`); once its `Hello` left the
 session's entry the setup's (`SessOn`); the session's `Hello` and coins at the setup's link points (`LinksOk`); past
-the `Commit`, where a level 0 is bound to the session, its entry linked to the history's link coins (`LinkOn`); and
-once its `Hello` left the setup's sizes within its frames' (`Session.sizesOk`). -/
+the `Commit`, where a level 0 is bound to the session, its entry linked to the history's link coins (`LinkOn`); once
+its `Hello` left the setup's sizes within its frames' (`Session.sizesOk`); and, while the model's run has a message
+there, what the loop took of the coins so far against the model's release (`LoopModel.TookAt`). -/
 structure LoopJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt)
     (seen : List String) (st : State) (σ : LoopAt) : Prop where
   stop : σ.R.stopped sid = (st.sent && !M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ.c))
@@ -272,6 +282,7 @@ structure LoopJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSp
   links : LinksOk spec st
   link : 2 ≤ σ.c → ∀ name l0, _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → LinkOn M sid σ
   sizes : st.sent = true → _root_.Flock.Firewall.Session.sizesOk spec sts = true
+  took : σ.c < M.τ.length → M.TookAt st σ.c
 
 /-- **`RepJ` is kept from one of the session's requests to the next** where the updates between keep the rep's frame
 (`Kept`) and what the session's rounds read of it (`Stays`), and the slot took no model message. -/
@@ -289,15 +300,164 @@ theorem repJ_stays {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sessio
   · rw [hc]
     exact streamAt_stay (hs.2 name l0 hl0) hA
 
+/-- **`Hello`'s answer, where it checks, is `Resp::Coins`' frame**, so its first byte is the coins' tag. -/
+theorem answer_head {l : List UInt8} {p : ByteArray × List UInt8}
+    (h : _root_.Flock.Firewall.Coins.answer l = .ok p) : l.head? = some 2 := by
+  unfold _root_.Flock.Firewall.Coins.answer at h
+  cases hb : (l.length == 325 && l.take 5 == _root_.Flock.Firewall.Coins.frame 20 [])
+  · rw [hb] at h
+    simp at h
+  · simp only [Bool.and_eq_true, beq_iff_eq] at hb
+    have e := congrArg List.head? hb.2
+    simpa [List.head?_take, _root_.Flock.Firewall.Coins.frame] using e
+
+/-- **The auditor's answer that begins the session's coin tree is coins.** -/
+theorem start_byte {h : _root_.Flock.Firewall.Coins.Hello} {a : ByteArray} {C : _root_.Flock.Firewall.Coins.Release}
+    (hs : _root_.Flock.Firewall.Coins.Release.start h a.data.toList = .ok C) : byte? a 0 = some 2 := by
+  have hh : a.data.toList.head? = some 2 := by
+    unfold _root_.Flock.Firewall.Coins.Release.start at hs
+    rcases ha : _root_.Flock.Firewall.Coins.answer a.data.toList with e | p
+    · rw [ha] at hs
+      cases hs
+    · exact answer_head ha
+  obtain ⟨⟨l⟩⟩ := a
+  cases l with
+  | nil => cases hh
+  | cons b l =>
+    cases hh
+    rfl
+
+/-- **Past `Hello`'s answer, where the session goes on, its coin tree is the one the answer begins** under the
+session's `Hello`. -/
+theorem answer_hello_start {S : State} {r id : ByteArray} (h : S.stop = none)
+    (hn : (S.answer .hello r id).1.stop = none) :
+    ∃ hh C, S.hello = some hh ∧ _root_.Flock.Firewall.Coins.Release.start hh r.data.toList = .ok C ∧
+      (S.answer .hello r id).1.session = some C := by
+  revert hn
+  unfold State.answer
+  simp only [h]
+  rcases hhel : S.hello with _ | hh
+  · dsimp only
+    split <;> intro hn <;> exact absurd hn (Option.isSome_iff_ne_none.mp rfl)
+  · dsimp only
+    rcases hs : _root_.Flock.Firewall.Coins.Release.start hh r.data.toList with e | C
+    · intro hn
+      exact absurd hn (Option.isSome_iff_ne_none.mp rfl)
+    · intro _
+      exact ⟨hh, C, rfl, hs, rfl⟩
+
+/-- **The `Hello` that leaves at the setup `spec`, `sts`** leaves the session reading the setup's `Hello` at its
+nonce. -/
+theorem sendHello_hello {S S' : State} {spec : SessionSpec} {sts : Array Stmt} {n o : ByteArray}
+    (he : S.sendHello (.ok (spec, sts)) n = .ok (S', o)) : S'.hello = helloOf spec sts n := by
+  unfold State.sendHello at he
+  rcases hst : S.stop with _ | why
+  · rw [hst] at he
+    dsimp only at he
+    split at he
+    · cases he
+    · split at he
+      · cases he
+      · cases he
+        rfl
+  · rw [hst] at he
+    cases he
+
+/-- **Past the `Hello`, where the session goes on, its coin tree is the one the auditor's answer begins** under the
+setup's `Hello` at the request's nonce. -/
+theorem stepK_hello_start {st : State} {pl : Placed} {e : Env} {spec : SessionSpec} {sts : Array Stmt}
+    (h : st.stop = none) (he : e.setup = .ok (spec, sts))
+    (hgo : ((stepK true st pl (some (tagOf .hello)) (.ok .hello) e).go &&
+      (stepK true st pl (some (tagOf .hello)) (.ok .hello) e).st.stop.isNone) = true) :
+    ∃ hh a C, helloOf spec sts e.nonce = some hh ∧ e.ans = some a ∧
+      _root_.Flock.Firewall.Coins.Release.start hh a.data.toList = .ok C ∧
+      (stepK true st pl (some (tagOf .hello)) (.ok .hello) e).st.session = some C := by
+  obtain ⟨hg, hn⟩ := go_live hgo
+  rcases hr : st.request pl .hello with _ | ⟨st', o⟩
+  · rw [stepK_hello hr] at hg hn ⊢
+    rcases hh : st.sendHello e.setup e.nonce with ⟨st', o⟩ | ⟨st', o⟩
+    · rw [hh] at hn
+      exact absurd hn (Option.isSome_iff_ne_none.mp (sendHello_error h hh))
+    · obtain ⟨_, _, hstop, -⟩ := sendHello_ok hh
+      have hhel : st'.hello = helloOf spec sts e.nonce := by
+        rw [he] at hh
+        exact sendHello_hello hh
+      rcases ha : e.ans with _ | a
+      · rw [hh, ha] at hg
+        simp at hg
+      · rw [hh, ha] at hn
+        obtain ⟨hh', C, hs1, hs2, hs3⟩ := answer_hello_start (r := a) (id := e.id)
+          (show st'.stop = none by rw [hstop, h]) hn
+        exact ⟨hh', a, C, hhel.symm.trans hs1, rfl, hs2, hs3⟩
+  · rw [stepK_refused (by decide) (by decide) (by decide) hr] at hn
+    exact absurd hn (Option.isSome_iff_ne_none.mp (request_stop h hr))
+
+/-- **Coins the session goes on past are opened by its coin tree** as the schedule's next opening (`reqAt`), and the
+session after holds the tree after it. -/
+theorem coins_open {st : State} {r : ByteArray} {C : _root_.Flock.Firewall.Coins.Release} (h : st.stop = none)
+    (hs : st.session = some C) (hn : (st.coins r).1.stop = none) :
+    ∃ C' c, C.open (reqAt st.plan C.hello.links C.opened.length).1 (reqAt st.plan C.hello.links C.opened.length).2
+      r.data.toList = .ok (C', c) ∧ (st.coins r).1.session = some C' := by
+  revert hn
+  unfold State.coins
+  rw [h, hs]
+  dsimp only
+  rcases ho : C.open (reqAt st.plan C.hello.links C.opened.length).1 (reqAt st.plan C.hello.links C.opened.length).2
+      r.data.toList with e | ⟨C', c⟩
+  · intro hn
+    exact absurd hn (Option.isSome_iff_ne_none.mp rfl)
+  · intro _
+    exact ⟨C', c, rfl, rfl⟩
+
+/-- **Past a `Commit` or a frame round, where the session goes on, its coin tree is the one its tree before opens the
+auditor's coins to** as the schedule's next opening (`reqAt`). -/
+theorem stepK_coin_open {st : State} {pl : Placed} {k : _root_.Flock.Firewall.Session.Kind} {e : Env}
+    {C : _root_.Flock.Firewall.Coins.Release} (h : st.stop = none) (hk : k = .commit ∨ ∃ s n, k = .round s n)
+    (hC : st.session = some C)
+    (hgo : ((stepK true st pl (some (tagOf k)) (.ok k) e).go &&
+      (stepK true st pl (some (tagOf k)) (.ok k) e).st.stop.isNone) = true) :
+    ∃ a C' c, e.ans = some a ∧ byte? a 0 = some 2 ∧
+      C.open (reqAt st.plan C.hello.links C.opened.length).1 (reqAt st.plan C.hello.links C.opened.length).2
+        a.data.toList = .ok (C', c) ∧
+      ∀ D, (stepK true st pl (some (tagOf k)) (.ok k) e).st.session = some D → D = C' := by
+  obtain ⟨hg, hn⟩ := go_live hgo
+  have hk' : k ≠ .hello ∧ k ≠ .finish ∧ k ≠ .ping ∧ k ≠ .proof := by
+    rcases hk with rfl | ⟨s, n, rfl⟩ <;> exact ⟨by simp, by simp, by simp, by simp⟩
+  rcases hr : st.request pl k with _ | ⟨st', o⟩
+  · rcases stepK_frame_ans hk'.1 hk'.2.1 hk'.2.2.1 hk'.2.2.2 hr hg with hst | ⟨a, ha, hst, -⟩
+    · exact absurd hn (Option.isSome_iff_ne_none.mp hst)
+    · rw [hst] at hn ⊢
+      have haa := afterAnswer_coin hn
+      rw [haa] at hn ⊢
+      have hb : byte? a 0 = some 2 := by
+        by_cases hb : byte? a 0 = some 2
+        · exact hb
+        · rcases hk with rfl | ⟨s, n, rfl⟩
+          · rw [answer_commit, if_neg hb] at hn
+            exact absurd hn (Option.isSome_iff_ne_none.mp (noCoins_stop _ _ _))
+          · rw [answer_round, if_neg hb] at hn
+            exact absurd hn (Option.isSome_iff_ne_none.mp (noCoins_stop _ _ _))
+      have hco : (st.answer k a).1 = (st.coins a).1 := by
+        rcases hk with rfl | ⟨s, n, rfl⟩
+        · rw [answer_commit, if_pos hb]
+        · rw [answer_round, if_pos hb]
+      rw [hco] at hn ⊢
+      obtain ⟨C', c, ho, hs'⟩ := coins_open h hC hn
+      exact ⟨a, C', c, ha, hb, ho, fun D hD => Option.some.inj (hD.symm.trans hs')⟩
+  · obtain ⟨h9, h5, h6⟩ := tagOf_ne hk'.2.2.1 hk'.2.2.2 hk'.2.1
+    rw [stepK_refused h9 h5 h6 hr] at hn
+    exact absurd hn (Option.isSome_iff_ne_none.mp (request_stop h hr))
+
 /-- **`LoopJ` is kept at a slot that reads no model message**: where the loop's reading of it brings only updates that
-keep every rep's frame, the session's stop and what its rounds read of it, and takes no model message. -/
+keep every rep's frame, the session's stop and what its rounds read of it, and takes no model message; such a slot
+keeps the session's coin tree (`stepK_ctl_session`), so what the loop took stays. -/
 theorem loopKept_ctl {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {k : _root_.Flock.Firewall.Session.Kind} (hm : isModel k = false)
     (hs : ∀ seen, seenAfter seen k = seen)
     (hr : ∀ st pl e σ σ', LoopRead M sid spec sts nonce k st pl e σ σ' →
       Between sid σ.R σ'.R ∧ σ'.c = σ.c ∧ Stays sid σ σ') :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) k := by
-  intro seen st pl e σ σ' _ he hF hJ hra _
+  intro seen st pl e σ σ' hsl he hF hJ hra hgo
   obtain ⟨hbt, hcc, hst⟩ := hr _ _ _ _ _ hra
   have hk : (Except.ok k : Except String _root_.Flock.Firewall.Session.Kind) ≠ .ok .hello := by
     intro h
@@ -310,11 +470,14 @@ theorem loopKept_ctl {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sess
     fun h => hJ.early (by rwa [hcc] at h), fun h => builtAt_stays hst (hJ.built (by rwa [hcc] at h)),
     fun h => sessOn_sessKept hbt.2 (hJ.sess (by rw [hsent] at h; exact h)), stepK_links he hJ.links,
     fun h => linkOn_stays (hJ.sess (sent_of_two hF (by rwa [hcc] at h))) hst (by rwa [hcc] at h) (by omega)
-      (hJ.link (by rwa [hcc] at h)), fun h => hJ.sizes (by rw [hsent] at h; exact h)⟩
+      (hJ.link (by rwa [hcc] at h)), fun h => hJ.sizes (by rw [hsent] at h; exact h), ?_⟩
   · rw [hsent, hcc, stopped_sessKept hbt.2]
     exact hJ.stop
   · rw [hcc]
     exact hJ.seenAt
+  · intro h
+    rw [hcc] at h ⊢
+    exact LoopModel.TookAt.congr (stepK_ctl_session hF.live hsl hm hgo) (hJ.took h)
 
 /-- **`LoopJ` is kept at every slot that reads no model message**: each such slot's reading is only the updates between
 the session's requests, keeping what its rounds read of it. -/
@@ -374,17 +537,20 @@ theorem stepK_hello_sizes {st : State} {pl : Placed} {e : Env} {spec : SessionSp
     exact absurd (Option.isNone_iff_eq_none.mp hgo) hst
 
 /-- **`LoopJ` is kept at the `Hello`**: before it no stream was seen and the session had not stopped; past it the
-session has sent its `Hello`, the model's `Hello` round passed, and the updates between keep the session's stop. -/
+session has sent its `Hello`, the model's `Hello` round passed, and the updates between keep the session's stop; and,
+where the model's release reads the setup's `Hello` at the nonce (`hchk`), the session's coin tree is the one the
+model's first answer begins (`LoopModel.TookAt.hello`). -/
 theorem loopKept_hello {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
-    {nonce : ByteArray} : LoopKept M sid spec sts nonce (LoopJ M sid spec sts) .hello := by
+    {nonce : ByteArray} (hchk : ∀ hl, helloOf spec sts nonce = some hl → M.L.helloChk M.x M.ρ = .ok hl) :
+    LoopKept M sid spec sts nonce (LoopJ M sid spec sts) .hello := by
   intro seen st pl e σ σ' hsl he hF hJ hra hgo
-  obtain ⟨-, -, hbt, hcc, hlb, hso⟩ := hra
+  obtain ⟨hans, hnon, hbt, hcc, hlb, hso⟩ := hra
   have hs0 : st.sent = false := (slot_hello hsl).2
   have hseen : seen = [] := hJ.unsent hs0
   have hsent := stepK_hello_sent hgo
   refine ⟨?_, fun h => ?_, fun i r s _ hc => ?_, stepK_plan he hJ.plan, ?_, fun _ => hseen,
     fun h => absurd h (by rw [hcc, hF.start hs0]; omega), fun _ => hso he, stepK_links he hJ.links,
-    fun h => absurd h (by rw [hcc, hF.start hs0]; omega), fun _ => stepK_hello_sizes he hgo⟩
+    fun h => absurd h (by rw [hcc, hF.start hs0]; omega), fun _ => stepK_hello_sizes he hgo, ?_⟩
   · rw [hsent, hlb, stopped_sessKept hbt.2, hJ.stop, hs0]
     rfl
   · rw [hsent] at h
@@ -393,6 +559,21 @@ theorem loopKept_hello {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
   · show SeenAt spec sts (M.hist σ'.c) seen
     rw [hseen]
     exact seenAt_nil (by rw [hcc, hF.start hs0, LoopModel.hist, length_histOf_take]; omega)
+  · intro _
+    obtain ⟨hh, a, C, hho, hae, hst, hsC⟩ := stepK_hello_start hF.live he hgo
+    obtain ⟨hj, hA⟩ := hans
+    have key : ∀ c, c = 0 → ∀ hj : c < M.τ.length, (M.τ[c]'hj).2 = .msg a.data.toList →
+        ∃ hlt : 0 < M.τ.length, (M.τ[0]'hlt).2 = .msg a.data.toList := by
+      intro c hc hj h
+      subst hc
+      exact ⟨hj, h⟩
+    obtain ⟨hlt, hm⟩ := key σ.c (hF.start hs0) hj (hA a hae (start_byte hst))
+    rw [hcc, hF.start hs0]
+    refine LoopModel.TookAt.hello hlt (hchk hh (by rw [← hnon]; exact hho)) fun C' hC' => ?_
+    rw [hsC] at hC'
+    cases hC'
+    rw [hm]
+    exact hst
 
 /-- **Past the `Hello` every earlier round passed**, below the `Finish`: the `Hello` passes (`toSrv_pass_own`). -/
 theorem liveBefore_one {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker) (x : Claims.Msg) (w : W) (ρ : Rr)
@@ -414,16 +595,20 @@ seen; the updates between keep the session's stop; and every round before the mo
 and after it, where the worker's link is the firewall's own, below the `Finish` (`liveBefore_one`, `liveBefore_two`);
 and past it, at a level 0 bound to the session, the session's entry is linked to the history's link coins
 (`linkOn_commit`): that level 0 is a table's (`BuiltAt`), so the setup has a rep stream, whose sizes (`LoopJ.sizes`)
-put the setup's link points within `Frames.COIN_MAX` words. -/
+put the setup's link points within `Frames.COIN_MAX` words; and, where the model's release requests the loop's
+openings (`hreq`) and frames its first answer (`hf1`), the session's coin tree past it is the one its tree before
+opens the model's answer to at the schedule's first opening (`LoopModel.TookAt.succ`). -/
 theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {s0 : FlockDeploy.Ins} (hx : FlockDeploy.setupOf true M.x = some (s0, spec, sts))
     (hlast : 1 < M.L.last M.x)
-    (hwk : M.wk M.x M.w M.ρ (M.hist 1) 0 = some (M.L.ownMsg M.x M.w M.ρ (M.hist 1), false)) :
+    (hwk : M.wk M.x M.w M.ρ (M.hist 1) 0 = some (M.L.ownMsg M.x M.w M.ρ (M.hist 1), false))
+    (hreq : ∀ j, M.L.req M.x j = Loop.reqOf M.x j)
+    (hf1 : 0 < M.τ.length → (M.L.frameAnswer M.x M.ρ (M.hist 1)).isOk = true) :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) .commit := by
   intro seen st pl e σ σ' hsl he hF hJ hra hgo
   have hlk : spec.points * spec.mPts ≤ _root_.Flock.Firewall.Frames.COIN_MAX → LinkOn M sid σ' :=
     fun hpm => linkOn_commit hx hpm hsl hF hJ.links hra hgo
-  obtain ⟨⟨hlt, -⟩, ⟨_, -, hL0⟩, -, ⟨_, _, hda, hdr, -⟩, -, hbt, hcc⟩ := hra
+  obtain ⟨⟨hlt, hA⟩, ⟨_, -, hL0⟩, -, ⟨_, _, hda, hdr, -⟩, -, hbt, hcc⟩ := hra
   obtain ⟨hs1, -, hop⟩ := slot_commit hsl
   have hbuilt : BuiltAt M spec sts σ'.L0 sid := by
     intro name l0 hl
@@ -448,7 +633,7 @@ theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : S
   have hlb2 := liveBefore_two M.L M.wk M.x M.w M.ρ M.κ _ hl2 hlast (by rw [ht]; exact hwk)
   refine ⟨?_, fun _ => hseen, fun i r s _ hc => ?_, stepK_plan he hJ.plan, ?_, fun _ => hseen, fun _ => hbuilt,
     fun _ => sessOn_sessKept hbt.2 (hJ.sess hs1), stepK_links he hJ.links, fun _ name l0 hl => ?_,
-    fun _ => hJ.sizes hs1⟩
+    fun _ => hJ.sizes hs1, ?_⟩
   · rw [hsent, stopped_sessKept hbt.2, hJ.stop, hlb1, hlb2]
   · simp [seenAfter, hseen] at hc
   · show SeenAt spec sts (M.hist σ'.c) seen
@@ -460,5 +645,19 @@ theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : S
       rw [Claims.Bridge.Custody.repStreams_size]
       omega
     exact hlk (Loop.sizesOk_at (hJ.sizes hs1) hk).1.2.2
+  · intro _
+    obtain ⟨C, hC⟩ := Option.isSome_iff_exists.mp (hF.reach.sess hs1)
+    obtain ⟨a, C', c, hae, hb, ho, hs'⟩ := stepK_coin_open hF.live (.inl rfl) hC hgo
+    have hm := hA a hae hb
+    have hlen : C.opened.length = 0 := by
+      rw [← opened_of hC]
+      exact hop
+    have hq : reqAt st.plan C.hello.links C.opened.length = M.L.req M.x (σ.c - 1) := by
+      rw [hreq, Loop.reqOf_eq hx, hJ.plan hs1, hJ.links.2 C hC, hlen, show σ.c - 1 = 0 by omega]
+    rw [hcc]
+    refine LoopModel.TookAt.succ hlt (hJ.took hlt) (by omega) hC (by rw [← hq, hm]; exact ho) hs'
+      (by rw [hc1]; exact hf1 (by omega)) (M.L.fed_of_le M.x M.ρ ?_)
+    rw [LoopModel.hist, length_histOf_take]
+    omega
 
 end Claims.ZKServer.Relay

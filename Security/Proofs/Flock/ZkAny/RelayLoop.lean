@@ -24,6 +24,7 @@ the `Hello`'s proved:
 * `SaltsSrc`: the salts for levels ≥ 1 the loop holds at the session's level-0 roots the ones the host and the operating
   system handed the loop for the rep stream.
 * `InnerSrc`: the rounds of the inner proof the loop's finish computed so far for a rep the model's finish's.
+* `StartOk`: a rep has a frame only where its table's statement starts (`Drive.start`).
 * `SessOn`: the session's entry set up on the setup. `sessOn_sessKept`: the updates that keep the session's stop keep
   it.
 * `LoopRead`: what the relay reads at a slot as the loop answers it, and the loop at the session's next request: the
@@ -33,7 +34,8 @@ the `Hello`'s proved:
   level 0s the loop drew for the session, each `Level0.ofDraws` on the host's and the operating system's bytes, and
   the session's entry linked to the words of the coins the prover receives (`Frame.words`); a
   frame round as the loop ran it (`RoundRun`) on the worker's value at the model's history, the rep's frame
-  at the model's configuration there, its rounds of the inner proof `InnerSrc` and the loop's salts `SaltsSrc`; at the
+  at the model's configuration there, its rounds of the inner proof `InnerSrc`, its start `StartOk` and the loop's
+  salts `SaltsSrc`; at the
   `Finish`, once the hold's barrier passes, the session not stopped, the run at its last round, the firewall's own
   `Finish` not stopping, the worker's value the firewall's own, and that message the `Final` of the loop's proof files
   as `Proof` frames; at the `Hello`, the `Commit` and each frame round the auditor answering as `V*` did, and at the
@@ -144,6 +146,12 @@ def InnerSrc {W Rr : Type} (M : LoopModel W Rr) (sid i r : Nat) (σ : LoopAt) : 
     _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
     ∀ (k : Nat) (b : ByteArray), (σ.R.innerOf l0.root r)[k]? = some b → (M.fin (M.hist σ.c))[k]? = some b
 
+/-- **Table `i`'s rep `r` of session `sid` has a frame only where the table's statement starts**, at the loop at `σ`:
+the loop pushes a rep's frame only once `Drive.start` passed at the session's statement for the table
+(`Frames.startRep`). -/
+def StartOk (sts : Array Stmt) (sid i r : Nat) (σ : LoopAt) : Prop :=
+  ∀ p, frameAt σ.R sid i r = some p → ∃ lm, _root_.Flock.Firewall.Drive.start sts[i]! = .ok lm
+
 /-- **Session `sid`'s entry in the loop's frames `R` is set up on `spec` and `sts`**, as its `Hello` began it
 (`Sessions.begin`). -/
 def SessOn (spec : SessionSpec) (sts : Array Stmt) (R : Sessions) (sid : Nat) : Prop :=
@@ -222,8 +230,9 @@ coins the session goes on past, the session's entry at its next request linked t
 receives (`Frame.words` after its tag and count, as the loop links them); at a frame round a `RoundRun` from
 `σ`'s frames and level 0s to `σ'`'s frames, its content the worker's value at the model's history so far, the rep's
 frame at the model's configuration there (as the loop started it, on the draws the model's tapes hold), the rounds of
-the inner proof the loop's finish computed so far for the rep the model's finish's (`InnerSrc`), and the salts the
-loop holds at the session's level 0s those the host handed it for each rep stream (`SaltsSrc`); at the `Finish`,
+the inner proof the loop's finish computed so far for the rep the model's finish's (`InnerSrc`), the rep's frame only
+where its table's statement starts (`StartOk`), and the salts the loop holds at the session's level 0s those the host
+handed it for each rep stream (`SaltsSrc`); at the `Finish`,
 once the hold's barrier passes, the session not stopped, the run at its last round, the firewall's own `Finish` not
 stopping, the worker's value the firewall's own, and that message the `Final` of the loop's proof files as `Proof`
 frames. At the `Hello`, the `Commit` and each frame round the auditor answers as `V*` did (`LoopModel.Ans`), and at
@@ -255,7 +264,8 @@ def LoopRead {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec)
   | .round stream n, st, pl, e, σ, σ' =>
     M.Ans σ.c e ∧ (∃ i r dom, ∃ v : Claims.Msg, M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) ∧
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R ∧
-      (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) ∧ InnerSrc M sid i r σ) ∧
+      (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) ∧ InnerSrc M sid i r σ ∧
+      StartOk sts sid i r σ) ∧
       σ'.c = σ.c + 1 ∧ Stays sid σ σ' ∧ SaltsSrc M sid σ
   | .finish, _, _, e, σ, σ' =>
     σ.c < M.τ.length ∧

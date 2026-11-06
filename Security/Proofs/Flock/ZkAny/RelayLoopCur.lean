@@ -20,9 +20,10 @@ model's next round:
   keeping `SameInv` keeps it at salts the round lemmas read, the rep's from its opening's first round on.
 * `ofLoop_placeholder`, `ofLoop_cfgAlike`: past a rep's first round the loop's frame takes coins only at the rep's
   placeholder, whose configuration is alike the tape's.
-* **`repJ_same`**: past its stream's first round, where the next round is the same stream's and within the rep's
-  schedule, the frame the session's next request finds keeps `SameInv` one round more of the rep (`roundRun_same`), at
-  the loop's own frames, the session's entry being the setup's and the model's own table the rep's level 0's.
+* **`repJ_same`**: past its stream's first round and within the rep's schedule, at the loop's own frames, the
+  session's entry being the setup's and the model's own table the rep's level 0's, the model's coin step takes the
+  round's coins, and where the next round is the same stream's the frame the session's next request finds keeps
+  `SameInv` one round more of the rep (`roundRun_same`).
 -/
 
 @[expose] public section
@@ -339,7 +340,8 @@ theorem ofLoop_cfgAlike (T : ZKMal.CoinLayer.TableData)
   exact Loop.cfgAlike_ofBytes lay _ _ (some mask)
 
 open Loop LeanRelease in
-/-- **The round's own rep one round on, where the next round is the same stream's**: as `repJ_next`, where the round
+/-- **The round's coins taken, and the round's own rep one round on where the next round is the same stream's**: the
+model's coin step takes the round's coins (`roundRun_same`, `ofLoop_fed_snd`), and as `repJ_next`, where the round
 after it is the rep's next (`hsame`), at the loop's own frames (`hrel`), the session's entry being the setup's with
 the `Commit`'s words as its link (`hK2`), the model's own table at the rep the one the rep's level 0 gives (`hK3`; it
 is of the placeholder's shape where `real` answers the loop's own, `hR`, within the bounds `hS` and `hP` give), and the
@@ -368,8 +370,7 @@ theorem repJ_same (T : ZKMal.CoinLayer.TableData)
     {sid : Nat} {st : State} {pl : Placed} {stream : String} {i r : Nat} {dom : ByteArray} {v : Claims.Msg} {e : Env}
     {σ σ' : LoopAt} {e0 : Claims.Msg × Claims.Msg} {h1 : List (Claims.Msg × Claims.Msg)} {q₀ j₀ : Nat}
     (hmem : (i, r, stream) ∈ spec.repStreams.toList) (hh : M.hist σ.c = e0 :: h1) (hq : h1.length = q₀ + 1)
-    (hk : nextAt spec sts (M.hist σ.c) = (2 * i + r, j₀ + 1))
-    (hsame : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q₀ + 1)).1 = 2 * i + r) {m₀ : Masker}
+    (hk : nextAt spec sts (M.hist σ.c) = (2 * i + r, j₀ + 1)) {m₀ : Masker}
     (hA₀ : M.L.answered M.x M.ρ (M.hist σ.c) = .ok m₀) (hlast : (M.hist σ.c).length < M.L.last M.x)
     (hK2 : ∀ rel : Release, sessAt σ.R sid = some rel → rel.spec = spec ∧ rel.sts = sts ∧
       rel.link = some (wordsAt M.x ((M.hist σ.c).tail.map fun y => ZKMal.CoinLayer.rd y.2) 0))
@@ -391,7 +392,8 @@ theorem repJ_same (T : ZKMal.CoinLayer.TableData)
     {o : ByteArray} (ho : e.round = .ok o) {a : ByteArray} (ha : e.ans = some a) (hb : byte? a 0 = some 2)
     (hs : (st.answer (.round stream (loopNr M.x h1.length)) a).1.stop = none) (hco : e.coins = .ok ())
     {m' : Claims.Msg} (hh' : M.hist σ'.c = M.hist σ.c ++ [(m', a.data.toList)]) (hSt : Stays sid σ σ')
-    (hJ : RepJ M sid spec sts i r σ) : RepJ M sid spec sts i r σ' := by
+    (hJ : RepJ M sid spec sts i r σ) : M.L.fed M.x M.ρ (M.hist σ'.c) = true ∧
+      ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q₀ + 1)).1 = 2 * i + r → RepJ M sid spec sts i r σ') := by
   obtain ⟨p, rel, name, l0, hfa, hss, hn, hl0, hA⟩ := hJ
   have hss' : σ.R.sessions.find? (·.sid == sid) = some rel := hss
   obtain ⟨hsp, hsts, hlk⟩ := hK2 rel hss
@@ -498,20 +500,19 @@ theorem repJ_same (T : ZKMal.CoinLayer.TableData)
     rw [hq]
     exact (Loop.loopNr_succ hx hki hqs).trans (Count.plan_sched spec sts (2 * i + r) (j₀ + 1) _ c' t' dom' xs' hip
       p.coins sched' hph' (by rw [hmod]; exact hs') hlt' hpts hdm' hcn hxs2)
-  have hj2 : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q₀ + 1)).2 = j₀ + 1 + 1 := by
-    rw [Loop.locate_succ _ _ _ (hsame.trans hk1.symm), hk2]
-  have hj' : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 h1.length).2 = j₀ + 1 + 1 := by
-    rw [hq]
-    exact hj2
   have ho' := (hr.round hreq).symm.trans ho
   obtain ⟨p₁, hput⟩ := roundStep_put_some hrp
   rw [hrel] at hI'
-  obtain ⟨-, p₃, hat, hI3⟩ := roundRun_same T L₀ real M.x M.ρ e0 h1 hx hq hk2 hj' hph hc
+  obtain ⟨hfd, hsm⟩ := roundRun_same T L₀ real M.x M.ρ e0 h1 hx hq hk2 hph hc
     (by rw [hk1, hmod]; exact hs0) hn' hr hreq hrp ho' hput ha hb hs hco hfa hss' hn hl0 hst' hlink hsalt htab hxs
     hI' hsc hal hlt hA₀
   have hsnd : (e0 :: (h1 ++ [(v, a.data.toList)])).map Prod.snd = (M.hist σ'.c).map Prod.snd := by
     rw [hh', hh]
     simp
+  refine ⟨by rw [hrel]; exact (ofLoop_fed_snd T L₀ real M.x M.ρ hsnd).symm.trans hfd, fun hsame => ?_⟩
+  have hj2 : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q₀ + 1)).2 = j₀ + 1 + 1 := by
+    rw [Loop.locate_succ _ _ _ (hsame.trans hk1.symm), hk2]
+  obtain ⟨-, p₃, hat, hI3⟩ := hsm _ (by rw [hq]; exact hj2)
   have hI4 := sameInv_snd hsnd hI3
   have hcs : ((h1 ++ [(v, a.data.toList)]).map fun y => ZKMal.CoinLayer.rd y.2) =
       (M.hist σ'.c).tail.map fun y => ZKMal.CoinLayer.rd y.2 := by

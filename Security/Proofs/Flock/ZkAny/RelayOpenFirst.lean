@@ -40,7 +40,7 @@ theorem forIn_first_err {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep 
 
 theorem rsLoopB_zero (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t : Transcript) {N : ℕ}
     (hN : N ≠ 0) : rsLoopB sv coin L (pcsT t) 0 = rsBody sv N t.pending.data.toList 0 := by
-  rw [rsLoopB_eq, rsBody, if_pos (Nat.pos_of_ne_zero hN), if_pos rfl]
+  rw [rsLoopB_eq, rsBody, ite_eq_left (Nat.pos_of_ne_zero hN), ite_eq_left rfl]
   simp only [rsLoopT, pcsT, label_enc, List.append_assoc]
 
 /-- **The cut ring switch, cut at its first ask**: from the empty log it stops past the openings having sent its first
@@ -124,8 +124,7 @@ theorem openStep_first (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom :
     exact FlockComplete.bind_go_err hL
   have e2 := congrArg Array.toList (Prod.mk.inj (hro.symm.trans e)).2
   rw [hpe, empty_toList, hna] at e2
-  simp only [Array.toList_append, List.toList_toArray, Array.toList_empty, List.nil_append, Array.size_empty,
-    Nat.sub_zero, Nat.zero_add] at e2
+  simp only [Array.toList_append, List.nil_append, Array.size_empty, Nat.sub_zero, Nat.zero_add] at e2
   exact e2.symm
 
 /-- **A rep's round at the algebraic phase's round count is the opening's first**: fed at least the algebraic phase's
@@ -151,7 +150,7 @@ theorem sched_pcs {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : Byte
   obtain ⟨sv, hsv, hbody⟩ := openStep_first t rep dom xs hi (cr.extract 0 alg.size) hdom hdg hcap hm hmk
     (cr.extract alg.size cr.size).toList hne
   have hb := sched_bytes (N := 0) (B := rsBody sv (xs.size + 2) []) hdrop
-    (by first | exact hbody | simpa using hbody)
+    (by exact hbody)
     (Nat.pos_of_ne_zero fun hz => hne (List.eq_nil_of_length_eq_zero hz)) (le_refl 0)
   have hN0 : xs.size + 2 ≠ 0 := by omega
   have hc := sched_count hal hs hdom hdg hcap hm hx hk hn hq (i := 0) (by omega)
