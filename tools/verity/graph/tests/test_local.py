@@ -212,5 +212,6 @@ def test_execute_turns_a_bad_run_into_a_fail_or_an_error(tree, tmp_path):
         runners._deadline[-1] = float("-inf")
         return {"status": "pass" if runners.call(["true"], work, work) == 0 else "fail"}
     res = runners.execute({**a, "outputs": []}, doc, tmp_path / "4", runner=late)
-    assert res["status"] == "fail" and res["detail"]["timeout_s"] == 60 and "outlived" in res["detail"]["error"]
+    assert res["status"] == "error" and res["detail"]["timeout_s"] == 60 and "outlived" in res["detail"]["error"], \
+        "a timeout is no verdict: the key leaves timeout_s out, so a cached fail would outlive a longer limit"
     assert (tmp_path / "4" / graph.LOG).read_text().startswith("$ true")
