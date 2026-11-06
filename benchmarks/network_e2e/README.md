@@ -54,12 +54,12 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   verdict, with late, extra and drop as its negatives (`e2e.CLAIM_ADVICE`). There a negative is refused only when the
   check names its own violation (`e2e.OWN_CODE`).
 - `--endpoint-run SERVE_DIR` is a `verity-vllm serve-openai` run's `out/serve`. Its records (`chain.ENDPOINT`) are
-  copied into `DIR/endpoint`, and `verity-vllm advice` writes one I1 v0 advice for each closed Commit window, bound to
+  copied into `DIR/endpoint`, and `verity-vllm advice` writes one I1 v0 advice for each closed Commit period, bound to
   the honest run and rebuilt from its certified I/O (`chain.served_advice`). `--advice FILE` (with `--serving-config`)
   gives an advice instead.
 - `--prove-path DIR` adopts a `prove_path.py audit` run's output. Each arm's committed advice must be the report's
-  advice of its Commit window by content (`chain.held_to`), and only a prove path bound to these runs counts in the OK.
-  `--prove-path-registered FILE` says who registered each audited Commit window's advice and where its serving record
+  advice of its Commit period by content (`chain.held_to`), and only a prove path bound to these runs counts in the OK.
+  `--prove-path-registered FILE` says who registered each audited Commit period's advice and where its serving record
   is; when it was registered is read off the record and the endpoint's trace (`chain.serve_record`, `chain.closes`).
 - The registry of negatives (`benchmarks/network_traces/negatives.py`'s `suite`) runs on the runs unless
   `--no-negatives`; each row that ran must be refused by the code it names. On the advice profile the I/O tie

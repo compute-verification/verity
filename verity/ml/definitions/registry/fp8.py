@@ -389,10 +389,12 @@ def ScaledMmFp8Block(B, S, xq, sx, w, ws):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the same blockwise GEMM with each weight block's scale products computed once (`TargetProfile.fp8_scale_construction`, the default).
+# the same blockwise GEMM with each weight block's scale products computed once (`TargetProfile.fp8_scale_construction`'s one value).
 # `ScaledMmFp8Block_v1` forms `s = FMUL(sx[kb], sw[kb])` inside every coordinate, so the G coordinates of one weight block compute
-# the same K/G products in G units: G - 1 recomputes of each.  Here a weight block's products are one node its G coordinates read,
-# and the partition commits them: K/G f32 words per weight block, N/G * K/G per Call.
+# the same K/G products in G proof blocks: G - 1 recomputes of each, which the partition refuses in a Call, so no served Program
+# calls it.
+# Here a weight block's products are one node its G coordinates read, and the partition commits them: K/G f32 words per weight
+# block, cdiv(N, G) * K/G per Call.
 # ---------------------------------------------------------------------------------------------------------
 
 

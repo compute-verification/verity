@@ -50,6 +50,9 @@ shared = [
     "tools/config",
     "Security/Properties/SampledProofs/Draw.lean",
     "Security/Proofs/Properties/RemoteAudit/Sort.lean",
+    # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
+    # Draw.lean's
+    "Security/Properties/SampledProofs/Second.lean",
 ]
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "Security/lean-audit.json", "Security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
