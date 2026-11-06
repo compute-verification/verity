@@ -1216,7 +1216,7 @@
   },
   "Hash.RowLeaf.accepts": {
    "owner": "@kernels",
-   "digest": "222e8726f5ed724c4ac0c6e6e32ce63ba3aa8b9a4ff0e0a223d20b98219cc220"
+   "digest": "7c85663b1fdb49ed17b4a905bb619ce5c1b2773925d43e9bacedc4ded938e6e0"
   },
   "Hash.Tree.accepts": {
    "owner": "@kernels",
@@ -2902,6 +2902,7 @@
   "Accounting.SecurityProofs.TS.DrawnBindingOfFork": "fc4ae1010af73e95ee2ac4299cf6aaaad4d267967b850103ad37b012c3648d86",
   "Accounting.SecurityProofs.TS.DrawnRightOff": "8201b64a7c1751fb3ae112dfce4ae56af89d24390b9572ddc6024aaf4ad10a64",
   "Accounting.SecurityProofs.TS.HeldSessionSound": "2a7a97f97088d84cba544f59a8af31d277ef7a011c9d793f4dd2a945f23b27f6",
+  "Accounting.SecurityProofs.TS.LeafGroupSound": "c5838adef54e7043e01608e725162fec80d4fa1d31294cfd50cf33fa2061efc2",
   "Accounting.SecurityProofs.TS.LeafLanesSound": "7d6f085de620acb57a098c5d2bf42c2f0248b2b5f84aad583eb15a2f5c36aab8",
   "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn": "deab04dfcfe2b047967e13801a426edafa0433d2325d2653dfd7a94dab219841",
   "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": "0d86ac02d35b0a45cdccc1e8ace9d5a097be7b41f6ca5997353812461c532783",
@@ -2936,11 +2937,17 @@
   "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
   "Flock.SecurityProofs.EndToEndRegisteredFlat": "74ac90d3b329af83ebb584e436936ef773a7538c4ccd6a3f49a9a9067b0f81b4",
   "Flock.SecurityProofs.EndToEnd_refSetup": "8c16cab1cb3a82846dac85a5de468d2758e66e0a407507d41a0c262fa17efc20",
+  "Flock.SecurityProofs.IntegrityBlock": "bc19323ffca15deed7d9c8fa88a5522bedeedf1483773412e274d835920cec34",
+  "Flock.SecurityProofs.IntegrityBlockCarried": "9bfec7bb00d7b2f13e68fcb0efa8c72cbcbeb570f6b2395e2749070aa96cf2a1",
   "Flock.SecurityProofs.IntegrityBlocks": "fb2e861a74fe610166c44a14c65d9cfc6742b80e602e1c1b66a7ce70439f9824",
   "Flock.SecurityProofs.IntegrityHorizon": "1d67559b6d5a8972bf15dd6e9487a9631c08027cfe36527058dd22d76a8c3a0f",
+  "Flock.SecurityProofs.IntegrityHorizonBlocks": "5f90cfba614bcea60cda979d8dc6fdbc1cec675bdecbeafb68caca66bd8ebe5d",
   "Flock.SecurityProofs.IntegrityHorizonCarried": "89fbbeb7e268642019ee085f30b6bfc54063bc0970ba372d4c4a1a79f7e26037",
   "Flock.SecurityProofs.IntegrityPeriod": "320a3ed8346171425b3ea7537f61689dcef36bf45963401c24dbad1a97342ccc",
   "Flock.SecurityProofs.IntegrityPeriodLog": "20a8497e59180c39414fe50e1e41293894b8d2c6b974786bb7b8d58803dd58cc",
+  "Flock.SecurityProofs.JointServed": "7336cb84d9ce7d76a08b717e7b412bbe3b5fbbf7f79068bb0af0d60ef45c9a79",
+  "Flock.SecurityProofs.JointServed_honest": "b322a5ee756839ec18d249d2c4868b17f088400afc0a3556da10d5f9ff4073b7",
+  "Flock.SecurityProofs.JointServed_nontrivial": "3dfd9d37c2f1a836bc2f967261d6545049dcbfde0a0c1fff234dd9fe63a0a947",
   "Flock.SecurityProofs.JointStratified": "8a0d33c3f05e59012d7c2818198770e9a9b1ab6c83d82a51a9acd510ca33da6b",
   "Flock.SecurityProofs.JointStratifiedHorizon": "3e9e80ee60615d188982786bdec4907b7de3104db18d5eb28be48bfb02f945ee",
   "Flock.SecurityProofs.JointStratifiedHorizonMT": "b6e7f9ecc68c0bab5aac13a82c681beb4ba36c38b90508f1952d0b7f2503414d",
@@ -3044,6 +3051,7 @@
   "Nci.SecurityProofs.Training": "b3e344c8c136829d0a3a4130fa3fc8a8d5bb34e0a0fe3f5673183e5e7cd2cf3a",
   "Nci.SecurityProofs.UpdatedMatMul": "159e7399036e8f45f9a0af577ce7677b603914d42b48a260efc4b24f7b46c55b",
   "Nci.SecurityProofs.UpdatedMatMulReads": "3d44d307610a81a4747f64dcc7d3945c2dcfe9ea92f7a0339d49a79417e45c83",
+  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "7ccec3c51a3940931ea87fc0b3800d793566789cdc927ea9d9c011bcd1ef9e72",
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": "650045ec93f3bbadeb3f68796211ea24031bfbd9d8e4e0d267e7d5d5728382a6",
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts": "823fadfc71bbd70bb7d1b371d8148c6a54e6e63a9a6843d371d743d001f741c8",
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": "5caed7ee8a100a9d93ca89b56802ab4a910a4db1c88e5e7788023283170da941",
@@ -3085,6 +3093,7 @@
   "Pous.SecurityProofs.StreamedWipeMeets2600GB": "a3671a8a99f4c7b653b5751bd24cb714a5764f731e9563fa3b20b1072228a5e2",
   "Pous.SecurityProofs.StreamedWipeMeets96GiB": "610f906d2a73a8612b035d1cfe33141715f61fda55f081c36162e0dc9afda003",
   "Pous.SecurityProofs.StreamedWipeMeetsFamily": "c26c23adbc15ab18912cbd9a9ff20ad52027001e35dd08dc661c67472b511255",
+  "Pous.SecurityProofs.StreamedWipeMeetsH200": "49f1879512445eac6ccc2bc32c426083fbb60df54d2005bdff69ca69d154ec51",
   "Pous.SecurityProofs.StreamedWipeMeetsInfoStated": "413276f220ff5f0da10702f8a3fc55ad0586acaee0ec41098be683abe4f02df7",
   "Pous.SecurityProofs.StreamedWipeMeetsReads": "a2f5444f8d5e25a0cfbb34ecce8550e64849fff88fd423a419993391aa377856",
   "Pous.SecurityProofs.StreamedWipeMeetsReadsTight": "8a49cf1cd6bc038083f46f503c9d0c48e1783f53288309186a2a45615d02a9c1",
@@ -3131,6 +3140,7 @@
   "RecDeploy.lamLin2_deployed_ge": "b4fd7e214a758b1d725d21f4bd374da8a4ee62ffdb18a7fe42e253ebc720465a",
   "RecDeploy.lamLin2_deployed_ge_dep": "eb376632437aa4a4d256ff9b890ea8f0159fa5593e7c5440ca2b13b27cfee626",
   "Verity.SecurityProofs.BlockDescription": "80baa463fd43086b3ca137b50dc78ace3b4400bfbabdb344ddc3c090d1f6dbeb",
+  "Verity.SecurityProofs.CapacityWithinEstimate": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370",
   "Verity.SecurityProofs.Counting": "34e0729bbd40c2fd7311fc30725f7d8bb1f2fb2daed521891c0dada5afd70f77",
   "Verity.SecurityProofs.CountingSum": "1b2f164ab74dfac250ebe357db6363a1d52294716405d3ed10596cb21004e4ef",
   "Verity.SecurityProofs.ExpandAndSize": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60",
@@ -3138,17 +3148,7 @@
   "Verity.SecurityProofs.InferenceCap": "0035c5e37498f2d808d066ae0a6d0bd50791b4ad147383f0feba37bf8362c9fc",
   "Verity.SecurityProofs.PrivateOutBitsLe": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
   "Verity.SecurityProofs.RefineWrong": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
-  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-  "Flock.SecurityProofs.IntegrityBlockCarried": "9bfec7bb00d7b2f13e68fcb0efa8c72cbcbeb570f6b2395e2749070aa96cf2a1",
-  "Flock.SecurityProofs.IntegrityBlock": "bc19323ffca15deed7d9c8fa88a5522bedeedf1483773412e274d835920cec34",
-  "Flock.SecurityProofs.IntegrityHorizonBlocks": "5f90cfba614bcea60cda979d8dc6fdbc1cec675bdecbeafb68caca66bd8ebe5d",
-  "Accounting.SecurityProofs.TS.LeafGroupSound": "c5838adef54e7043e01608e725162fec80d4fa1d31294cfd50cf33fa2061efc2",
-  "Flock.SecurityProofs.JointServed": "7336cb84d9ce7d76a08b717e7b412bbe3b5fbbf7f79068bb0af0d60ef45c9a79",
-  "Flock.SecurityProofs.JointServed_honest": "b322a5ee756839ec18d249d2c4868b17f088400afc0a3556da10d5f9ff4073b7",
-  "Flock.SecurityProofs.JointServed_nontrivial": "3dfd9d37c2f1a836bc2f967261d6545049dcbfde0a0c1fff234dd9fe63a0a947",
-  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "7ccec3c51a3940931ea87fc0b3800d793566789cdc927ea9d9c011bcd1ef9e72",
-  "Pous.SecurityProofs.StreamedWipeMeetsH200": "49f1879512445eac6ccc2bc32c426083fbb60df54d2005bdff69ca69d154ec51",
-  "Verity.SecurityProofs.CapacityWithinEstimate": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370"
+  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8"
  },
  "layers": {
   "Definitions.Core": {
@@ -28370,15 +28370,17 @@
    ]
   },
   "Definitions.Hash.RowLeaf": {
-   "digest": "ace6c0cf3cc26bb04c095e982cb74def70ad7fb75a18e455f342bfaac66b2542",
+   "digest": "150e1f4be122cfe883cf540580519c1051c1603184de60532da058e4b30513e1",
    "definitions": {
     "Hash.RowLeaf.Format": "0472c90a1d50acced878693c13e313afdaae2a4b9dbbd2da94f839c468a5b7db",
-    "Hash.RowLeaf.Format.casesOn": "8141a54d622f92d6417272ffd595ff544ff949fbfa08635c12929413d01becbd",
-    "Hash.RowLeaf.Format.digest": "e6f330082c28169134c4ba238517c2cf863dfccbdd8eec409a5ee2ec8d066d00",
-    "Hash.RowLeaf.Format.hashed": "bd069eae5e658558b4d02e1db1de7add6dbee9dcb81cefbf1961bcddb9f39705",
-    "Hash.RowLeaf.Format.rec": "a86989681110fe016c7cd15c844338a25ca4bc324445cb19c461eab9ec003ce2",
-    "Hash.RowLeaf.Format.schema": "cd534d52df63aea28b64a0f311bba20d5ee61f2ba0c58b4840349bb91b92799f",
+    "Hash.RowLeaf.Format.Fits": "101fce92b0c45b7ca55bbdf9cb5f02fd4398b30d639c947253a5d9dd464d7886",
+    "Hash.RowLeaf.Format.casesOn": "b17f2c714ce95775f116ffefb821a3d9ddd5936539fdfcc4bfad50ae974b747d",
+    "Hash.RowLeaf.Format.digest": "daf12a620698ce6501d896c94dbdfe6bb7d1df71278985ed54d60c2590953097",
+    "Hash.RowLeaf.Format.hashed": "48a4d17dec0c85c36653156d7785c0a1f0bd53ae2096f5d4e9e59350fa6bbe7a",
+    "Hash.RowLeaf.Format.rec": "3908b76222ed3292a1964bdf04bc076a4569ba88c874c889832f8714597094bb",
+    "Hash.RowLeaf.Format.schema": "3084c2999edda963d085a27410ebe225865ab3a1905e58e93328afaebaa4aa26",
     "Hash.RowLeaf.Format.seg": "c1bb382b8bbae77a74eecc4b89a9ed6ff895ed83b131e4da8e930d041066d56c",
+    "Hash.RowLeaf.Format.v1": "347198699f1baeb17eb9c1b7536855a52d7d182105240021190893012a574741",
     "Hash.RowLeaf.Format.v2": "dc0d6378518d88053662a388757ec3bc4f309527dbf963f2f16fc599560f469e",
     "Hash.RowLeaf.Opening": "ee52bc8f704e1c803550968502ea104e893bda6ae6857d46131a9c2c47c5d0e2",
     "Hash.RowLeaf.Opening.row": "1a7f3e8cb436f751b4c19bb2ba565ea5e78c6bfb137833818fb458c31c37e74a",
@@ -28388,7 +28390,7 @@
     "Hash.RowLeaf.Verifier.domain": "4479c28106a028df16b1f30df58372370ba5dd780d55d4a71388b47aad3c46a2",
     "Hash.RowLeaf.Verifier.format": "fe2503ef5d3838c25a26f2289c713703af3a8b9ab72d3bc42ded003ae33c149b",
     "Hash.RowLeaf.Verifier.key": "543756473d4ccec741c25fd709e743fdcb1fd596ef49e4828d2ee92e1b8893bf",
-    "Hash.RowLeaf.accepts": "222e8726f5ed724c4ac0c6e6e32ce63ba3aa8b9a4ff0e0a223d20b98219cc220",
+    "Hash.RowLeaf.accepts": "7c85663b1fdb49ed17b4a905bb619ce5c1b2773925d43e9bacedc4ded938e6e0",
     "Hash.RowLeaf.innerHashed": "004ba97424a9c1d61cc0b1e3d4c97cbc28e9fe647e4cfdd30f9312ef58ae4af6",
     "Hash.RowLeaf.leafMsg": "54465ddeb2f593c5961d6c3c067549db1eeb1456f0da32ba6ae3bd7c47ede69a",
     "Hash.RowLeaf.outerHashed": "97a592e6362f9c49719236357a2f9239270cadabe16de6de6e171aed1e51d7fb"
@@ -28422,6 +28424,29 @@
     "Hash.RowSeg.segmentMsg": "4cddf759310c04a6c81641ec0e1eb5bb6f011dc786e42ee759b43ad7b50b2c2c",
     "Hash.RowSeg.segmentMsgs": "06d9f0294b3435c558727cf0fcbb49bae36cc32a705d683476e81cb81c8cb10a",
     "Hash.RowSeg.segmentPrefix": "17d166519a13a99d5f75b079467ff2419a10f206a6767e6f65027a12a05c0152"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Flock.SecurityProofs.RecursiveAuditC3",
+    "Hash.SecurityProofs.EmbeddingReadBinding",
+    "Hash.SecurityProofs.RowBinding"
+   ]
+  },
+  "Definitions.Hash.RowV1": {
+   "digest": "41e91673435376337cbb6eed77094b757e6f7fbc2e686f8b704477bc398838e2",
+   "definitions": {
+    "Hash.RowV1.ROLE": "5a5998f44c82c0483bff41adeb6ee113f270d5b008bd4a58efe6fa7416c658a5",
+    "Hash.RowV1.WORD_BITS": "52457af8f0590b4bace4a005a033ec6dc5766517e36c7ab3399211602992fb72",
+    "Hash.RowV1.digest": "39c90cdb8986126ac6c4873fba20c6cd0bdde8c72984e33fe4b32bdaf322880a",
+    "Hash.RowV1.hashed": "6466e795420df2aeeb768a3c327332606946e004d42a553b8fb2d71b440ef911",
+    "Hash.RowV1.msg": "877c21e21610edfdbdb16bfa0213463f34841bd159ff5493ce83fcd4f6a35091",
+    "Hash.RowV1.rowPrefix": "2a129c9d971a5a591a341f7f8b5d2c62e0164d8d2633563ac6aa5ffa288e6d0e"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.HeldDrawn",
