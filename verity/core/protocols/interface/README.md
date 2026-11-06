@@ -103,12 +103,12 @@ own profile type and JSON.
 
 `Core.Registration` is a deployment's one registration log, which every subprotocol and both composites read. It is
 append-only: each entry names the head of the log before it (`previous`), the digest of its last entry or of its
-composite's genesis, so the head names the whole log. An entry is in one of three formats, each with its own versioned
-id:
+composite's genesis, so the head names the whole log. An entry is one of three kinds, each with its own versioned
+format:
 
 | format | what it registers |
 | --- | --- |
-| `verity/registration/hardware/v1` | the site's cards (each device's registered figures: SKU, tensor clock, peak rate per operand class, memory figures), locations (site, hosts, devices, memory leaves by tier and bytes, the auditor's certifiers and challengers with their keys) and links (`β`, latency) |
+| `verity/registration/site/v1` | the Site's own site entry (`Core.Site.Registration.Entry`, `CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON, digest and check |
 | `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the builder `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
 | `verity/registration/declaration/v1` | a day's circuit (`day`, the day's index among the monitoring period's days; `program`, its program's SHA-512; `blocks`, its block Definitions by descriptor key); one a day, before the day's first coin |
 
@@ -117,22 +117,17 @@ Program and parameters, and the proof system, are that protocol's public verifie
 each window's program is held to its day's declared one (the sampled-proofs registration record's R2, `day` and
 `declarations`).
 
-An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, a card's is under `verity/registration/card/v1`, and the
-genesis is under `verity/registration/genesis/v1` over `{"composite": "onsite" | "remote"}`. `check` holds each entry to
-the log before it and refuses the first that fails by name (`previous`, `duplicate-id`, `unknown-ref`, `kind`,
-`card-digest`, `figures`, `capacity`, `owner`, and onsite `uncertified` and `challenger-reach`, then `duplicate-information`
-and `duplicate-declaration`, a second declaration of a day). A component reads its view of an accepted log by projection
-(`View`: the site, θ's values, the builder and the days' declared circuits, at the head).
-Registration is ASCII-only without DEL: a log or parameters holding any other character is refused as `ascii` before
-any digest is taken. As a core protocol, `protocol` (`verity/registration/log/v1`, the `core-registration` executable) takes the
-auditor's parameters (`{"composite", "keys", "sheets", "tolerance"}`), the log as commitment (`{"composite", "entries"}`, its head
-the digest) and `{}` as evidence; it makes public the log's view and rejects as `entry I: REFUSAL`. `figures` is registration's check of a device's
-registered figures against the auditor's estimates (`DeviceFigures.Accepted`): the SKU is the sheet's, the clock and
-each peak rate (`peakRate`, one per operand class: `uniform-s8`, `uniform-s2`, `uniform-u2`, `uniform-u4`, `zero`) are
-within the auditor's tolerance `num / den` of the sheet's in both directions, every peak rate is positive, and the
-memory figures are the sheet's.
-`verity.core.protocols.registration` is its Python, held to it by the composition suite's difftest
-(`../composition/tests/test_registration_difftest.py`).
+An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, and the genesis is the Site's, so a log of site entries alone
+has the Site's head. `check` holds each entry to the log before it and refuses the first that fails by name: a site
+entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), an information entry by
+`previous` and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`, a second
+declaration of a day. A component reads its view of an accepted log by projection (`View`: the Site, θ's values, the
+builder and the days' declared circuits, at the head). As a core protocol, `protocol` (`verity/registration/log/v1`, the
+`core-registration` executable) takes the auditor's parameters (`{"auditor", "composite"}`, the auditor the Site's
+`Core.Site.Registration.Auditor`), the log as commitment (`{"composite", "entries"}`, its head the digest) and `{}` as
+evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and refuses a log or parameters outside
+ASCII without DEL as `Core.canonicalJson` does. `verity.core.protocols.registration` is its Python, held to it by the
+composition suite's difftest (`../composition/tests/test_registration_difftest.py`).
 
 ## Properties
 
