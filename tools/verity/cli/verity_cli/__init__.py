@@ -19,9 +19,9 @@
     verity graph run ID --work DIR  run one task of it here and print its result (`verity-result/v1`)
     verity graph check --local [--family F]
                                     run the graph serially here, uncached: the reference executor
-    verity example NAME [ARGS]      examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
+    verity demo NAME [ARGS]         examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
                                     workload on its placement
-    verity example --status         every example's protocol, workload, run and proof, and each one's next missing evidence
+    verity demo --status            every demo's protocol, workload, run and proof, and each one's next missing evidence
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
                                     holds it, with its Lean options as `lake build` gives them, exiting with lean's
                                     status, and last the axiom probe: each theorem whose
@@ -251,15 +251,15 @@ def main(argv: list[str] | None = None) -> int:
         from . import run
 
         return (run.run_main if args[0] == "run" else run.config_main)(args[1:])
-    if args[0] == "example" and args[1:] == ["--status"]:
+    if args[0] == "demo" and args[1:] == ["--status"]:
         from verity_cli.examples import status
         return status(ROOT)
-    if args[0] == "example":
+    if args[0] == "demo":
         if args[1:] and (config := ROOT / "examples" / args[1].replace("-", "_") / "config.toml").is_file():
             from . import run
 
             return run.run_main([str(config), *args[2:]])
-        return _runner("examples", "example", args[1:])
+        return _runner("examples", "demo", args[1:])
     if args[0] == "lean":
         return _lean(args[1:])
     raise SystemExit(f"verity: no command {args[0]!r}\n{__doc__}")

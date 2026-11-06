@@ -10,7 +10,7 @@ A spec-level reference for network accounting's timing channel:
 - one execution phase's certificates through the proof system (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
   its fields, its counts against the public occupancy profile, and its record digest under the certifier's salt
-  against the digest its certificate signs), with a host-side verifier of record (no proof of the
+  against the digest its certificate signs), with a host-side verifier (no proof of the
   check yet) that compares no grid in the clear. Its claim is counts only: on every execution phase the head check holds
   the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
   is at the profile. Nothing here holds the frames, the rest of the egress grid (N3, the content check prototyped in
@@ -265,7 +265,7 @@ A spec-level reference for network accounting's timing channel:
   `NetworkIngressTieBucket` (one gate
   naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
   (`warden_rows.bucket_port`) and its lanes and output row off values the verifier registers at known content
-  (`IngressTie.known`), decided by the verifier of record on its own lanes from the advice and the warden's
+  (`IngressTie.known`), decided by the verifier on its own lanes from the advice and the warden's
   release, and `IngressTie.tie`, which builds `IoTieVerdict` on the link and the stream's registrations from the
   stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the verifier's own tie source,
   which gives the verdict only on its own link. A size class no sidecar pins has no accepted proof.
@@ -325,7 +325,7 @@ counts to the occupancy profile on every link-window (on a served link, to the o
 the declared sync), beside the proved timing bound (provisional). N3, the content check,
 is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
-N2's verifier of record, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
+N2's verifier, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
 block (`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of Flock's Lean
 verifier accepts the proof, the proof's public row opens to its own copy of the proof block's public arguments, the
 output row's verdict and deadline bits are 1, the certificates verify on their public fields (`LinkWindows.certified`),
