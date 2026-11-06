@@ -2133,6 +2133,8 @@ theorem wServed_eq (a b : ℚ) (cA cB : Code)
   rw [hA', hB']
   rfl
 
+-- the kernel evaluates `peelExact` at `k := 32` and two concrete noises (`decide +kernel`); unbounded until a bound is
+-- measured
 set_option maxHeartbeats 0 in
 /-- **(c) on the served U**: at `Peel.lean`'s degenerate inputs (`x = 0` with `β = 1`, `B = 0` with `β = 1/3`), two
 salts give different entries of `peelExactVal`: `0` under the all-ones noise and `10` when `E_A`'s row starts with `2`

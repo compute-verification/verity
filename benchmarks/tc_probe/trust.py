@@ -224,8 +224,8 @@ INDEPENDENT_REFERENCES: dict[str, tuple[IndependentReference, ...]] = {
         IndependentReference("hawkeye-hopper-fp8", "simulator", _HAWKEYE, note="Hawkeye's Hopper FP8 simulator does not describe Ada (D10)"),
     ),
     "sm90.wgmma.m64n8k32.e4m3": (
-        IndependentReference("veritor-h100-wgmma-fp8", "second-compiled-path", ("verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json",),
-                             replica="verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json",
+        IndependentReference("veritor-h100-wgmma-fp8", "second-compiled-path", ("verity/ml/circuits/silicon/captures/veritor-tc-fp8.json",),
+                             replica="verity/ml/circuits/silicon/captures/veritor-tc-fp8.json",
                              note="veritor: Triton tl.dot -> wgmma m64n64k32, 144,543,744 words"),
         IndependentReference("hawkeye-hopper-fp8", "simulator", _HAWKEYE, note="Hawkeye (H100 FP8, zero accumulator only): groups (32,), width 14, floor -139"),
     ),
@@ -381,7 +381,7 @@ def _target_aliases() -> dict[str, Target]:
 
 
 def subjects(name: str) -> Subject:
-    """Resolve a target name (``first-campaign-target/2026-09-21``), a target constant (``FIRST``) or an instruction id."""
+    """Resolve a target name (a key of ``TARGETS``), a target constant (``FIRST``) or an instruction id."""
     aliases = _target_aliases()
     if name in aliases:
         t = aliases[name]

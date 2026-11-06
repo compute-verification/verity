@@ -100,20 +100,20 @@ def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
     assert len(tiles) == 2 and len(plan.drawn) == 2 + len(lay.strata) - 1   # each other stratum at its floor of one
 
 
-def test_the_work_table_and_law_object_are_362s():
+def test_the_work_table_and_design_object_are_362s():
     """`work_table` is the verifier's `--work-table` (W_ref per tile, 0 elsewhere, and each template's floor f_s);
-    `law_object` is the law `flock-verify draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
+    `design_object` is the law `flock-verify draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
     verifier's table raises a zero-work stratum's draws to it."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile, deq = _by_role(lay)["tile"], _by_role(lay)["dequant"]
     table = PL.work_table(lay)
     assert table == {s.name: {"work": lay.tile_work() if s is tile else 0, "floor": 1} for s in lay.strata}
-    law = PL.law_object(lay, PL.WorkLaw(3))
+    law = PL.design_object(lay, PL.WorkLaw(3))
     assert law == {"law": "work", "k": 3, "strata": [{"template": s.name, "units": s.ranges(), "work": table[s.name]["work"],
                                                       "floor": 1, "k": 3 if s is tile else 1} for s in lay.strata]}
     floored = PL.WorkLaw(3, floors=((deq.name, 5),))
     assert PL.work_table(lay, floored)[deq.name] == {"work": 0, "floor": 5}
-    assert {s["template"]: (s["floor"], s["k"]) for s in PL.law_object(lay, floored)["strata"]}[deq.name] == (5, 5)
+    assert {s["template"]: (s["floor"], s["k"]) for s in PL.design_object(lay, floored)["strata"]}[deq.name] == (5, 5)
 
 
 def test_openings_are_one_leaf_per_row():
@@ -163,7 +163,7 @@ def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
     assert laws[0].budget(lay.strata) == -(-PL.RECORD_K // 10_000) == 3
     deq = _by_role(lay)["dequant"]                                   # y's floor ⌈K_y·1,024/(10,000·1,024)⌉ (option B)
     assert laws[0].sizes(lay.strata) == {s.name: 3 if s in (tile, deq) else 1 for s in lay.strata}
-    assert PL.law_object(lay, laws[0])["k"] == 3                     # the work law at the call's share
+    assert PL.design_object(lay, laws[0])["k"] == 3                     # the work law at the call's share
     assert sum(law.sizes(lay.strata)[tile.name] for law in laws) <= PL.RECORD_K + 10_000 * len(lay.strata)
 
 
@@ -192,7 +192,7 @@ def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
         assert k_c == min(n_c, f_c) and (k_c * big_n >= PL.RECORD_K * n_c or k_c == n_c)
         tile = _by_role(lay)["tile"].name
         assert law.sizes(lay.strata)[tile] == tiled.sizes(lay.strata)[tile]
-        assert PL.law_object(lay, law)["strata"][[s.name for s in lay.strata].index(deq.name)]["floor"] == f_c
+        assert PL.design_object(lay, law)["strata"][[s.name for s in lay.strata].index(deq.name)]["floor"] == f_c
         ks.append(k_c)
     assert PL.RECORD_K <= sum(ks) <= PL.RECORD_K + len(lays)
     rng = random.Random(105)
@@ -223,7 +223,7 @@ def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
     two = dataclasses.replace(lay, strata=tuple(dataclasses.replace(s, work=len(s.units)) if s is deq else s
                                                  for s in lay.strata))
     for refused in (lambda: PL.work_table(two), lambda: PL.WorkLaw().sizes(two.strata), lambda: PL.window_laws([lay, two]),
-                    lambda: PL.law_object(two, PL.WorkLaw()), lambda: PL.draw(_key(), two, PL.WorkLaw())):
+                    lambda: PL.design_object(two, PL.WorkLaw()), lambda: PL.draw(_key(), two, PL.WorkLaw())):
         with pytest.raises(ValueError, match="one stratum"):
             refused()
     a, b = PL.StratumSpec("a", "tile", (0, 1, 2, 3), 2 * 4), PL.StratumSpec("b", "tile", (4, 5), 5 * 2)
@@ -612,9 +612,9 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
     t, an = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call)
     rows = [bytes(v & 0xFF for v in r) for r in call.a]
     binding = audit.activation_binding(call.salt, 7)
-    domain = audit.rows_domain(binding, 7, len(rows))
-    tree = audit.commit_rows(binding, 7, rows)
-    other = audit.commit_rows(binding, 7, [bytes(len(r)) for r in rows])
+    domain = audit.rows_domain(binding, 7, len(rows), "sha256")
+    tree = audit.commit_rows(binding, 7, rows, "sha256")
+    other = audit.commit_rows(binding, 7, [bytes(len(r)) for r in rows], "sha256")
     _receipt, window = _window(t, [an], commitments=[tree.commitment.root])
     assert window.commitment(an) == tree.commitment.root
     plan = t.draw(PL.WorkLaw(2), an, window)

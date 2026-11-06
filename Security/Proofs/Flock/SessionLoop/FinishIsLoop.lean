@@ -44,7 +44,8 @@ import Mathlib.Topology.Sheaves.Init
 (`Loop.finRepTarget`), the restart (`Loop.finRepRestart`) and level 0's openings (`Loop.finRepL0`). Each holds in the
 masked scope with a witness where the loop draws level 0 from the tape (`Loop.Src`'s level-0 half).
 
-**`Loop.finishIs`**: `FinishIs` at `SessionLoopZKDeployed`'s premises, with no other hypothesis.
+**`Loop.finishIsOn`**: `FinishIs` at `SessionLoopZKDeployed`'s premises, with no other hypothesis; `Loop.finishIs` is
+it at causal switched values.
 -/
 
 @[expose] public section
@@ -65,18 +66,27 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
 
 /-- **`FinishIs` at `SessionLoopZKDeployed`'s premises**: in the masked scope, with a witness, at a statement the loop
 serves whose inner round 0 is the loop's and whose inputs from its host are the tape's, at live rounds the loop's and
-causal switched values, the `Finish` the loop runs is the session's (`finishIs_of_ret`, at `finRepTarget`,
-`finRepRestart` and `finRepL0`). -/
+switched values causal at `Loop.SwOk`'s coins, the `Finish` the loop runs is the session's (`finishIs_of_ret`, at
+`finRepTarget`, `finRepRestart` and `finRepL0`). -/
+theorem finishIsOn (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
+    (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
+    (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w) (hSrc : Loop.Src L₀ src x w)
+    (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) :
+    LeanRelease.FinishIs finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w :=
+  finishIs_of_ret vs L₀ src wk x w hsc hR hServe hL0 hSrc hE hc
+    (finRepTarget vs L₀ src (realOf src) wk x w hsc hR hServe hSrc.1)
+    (finRepRestart vs L₀ src (realOf src) wk x w hsc hR hSrc.1)
+    (finRepL0 vs L₀ src (realOf src) wk x w hsc hR hSrc.1)
+
+/-- **`finishIsOn` at causal switched values** (`swCausalOn_of_swCausal`). -/
 theorem finishIs (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w) (hSrc : Loop.Src L₀ src x w)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
     (hc : finS.SwCausal vs) :
     LeanRelease.FinishIs finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w :=
-  finishIs_of_ret vs L₀ src wk x w hsc hR hServe hL0 hSrc hE hc
-    (finRepTarget vs L₀ src (realOf src) wk x w hsc hR hServe hSrc.1)
-    (finRepRestart vs L₀ src (realOf src) wk x w hsc hR hSrc.1)
-    (finRepL0 vs L₀ src (realOf src) wk x w hsc hR hSrc.1)
+  finishIsOn vs L₀ src wk x w hsc hR hServe hL0 hSrc hE (finS.swCausalOn_of_swCausal vs _ hc)
 
 end Loop
 

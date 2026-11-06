@@ -385,6 +385,8 @@ theorem finalProgZ_of {p : LigeritoProof} {basisAt : Array F256 → ℕ → Arra
 
 /-! ## The walk -/
 
+-- one proof down `Zk.ligeritoWith`'s unfolded rounds against the masked model, `omega` on the round indices at each
+-- step
 set_option maxHeartbeats 4000000 in
 /-- **The masked verifier's Ligerito returns** on rounds `R` that carry the masked model's from `t.k` on: from a
 transcript that has recorded its rounds, at a proof with the lengths fast100's `R + 1 ≥ 2` levels fix, whose level-0 cap

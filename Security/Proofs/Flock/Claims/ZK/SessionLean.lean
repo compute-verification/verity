@@ -76,7 +76,7 @@ open _root_.Flock.Firewall.Session (INNER_CONS replayCoins ligeritoCoins repCoin
 open _root_.Flock.Firewall.Frame (Cfg Masker Draws MaskSlot)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace Loop
 
@@ -677,7 +677,8 @@ theorem Flock.zk_server_lean_loop
     (hS : (CoinLayer.session Loop.loopNr T).Tables)
     (hV : (CoinLayer.session Loop.loopNr T).Complete (Flock.R (FlockDeploy.deployZk rel).parse))
     (hD : (CoinLayer.session Loop.loopNr T).DummyReg) (hc : (CoinLayer.session Loop.loopNr T).Causal)
-    (hsc : (CoinLayer.session Loop.loopNr T).SwCausal vs) (hT : (CoinLayer.session Loop.loopNr T).TapeOK)
+    (Ok : (x : Msg) → (Fin (refK x) → (CoinLayer.session Loop.loopNr T).Coin) → Prop)
+    (hsc : (CoinLayer.session Loop.loopNr T).SwCausalOn Ok vs) (hT : (CoinLayer.session Loop.loopNr T).TapeOK)
     (L₀ L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
     (hL : L = LeanRelease.loop Loop.loopNr T L₀)
@@ -685,6 +686,8 @@ theorem Flock.zk_server_lean_loop
     (pc : Msg → List (CoinLayer.session Loop.loopNr T).Coin → Masker)
     (fc : Msg → List (CoinLayer.session Loop.loopNr T).Coin → Except String Masker)
     (hPr : LeanRelease.ProgReads (CoinLayer.session Loop.loopNr T) L pc fc x)
+    (hOk : (CoinLayer.session Loop.loopNr T).StopsOk
+      (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) Ok)
     (hLk : LeanRelease.LinkRoundEq (CoinLayer.session Loop.loopNr T) vs L x w)
     (hF : LeanRelease.FinalRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
     (hE : LeanRelease.LiveRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
@@ -714,8 +717,8 @@ theorem Flock.zk_server_lean_loop
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).swP vs).prover w) Vs θ x).Pr
               CoinOpen.shaH) := by
   subst hL
-  exact Flock.zk_server_lean_coinLayer rel Loop.loopNr T vs t ht hT1 hδ₁ hS hV hD hc hsc hT _ wk x w hR
-    (LeanRelease.loop_last Loop.loopNr T L₀ x) pc fc Loop.readCoins ⟨hPr, LeanRelease.loop_coinsRead Loop.loopNr T L₀ x⟩
+  exact Flock.zk_server_lean_coinLayer rel Loop.loopNr T vs t ht hT1 hδ₁ hS hV hD hc Ok hsc hT _ wk x w hR
+    (LeanRelease.loop_last Loop.loopNr T L₀ x) pc fc Loop.readCoins hOk ⟨hPr, LeanRelease.loop_coinsRead Loop.loopNr T L₀ x⟩
     (LeanRelease.loop_helloIs Loop.loopNr T L₀ x)
     (LeanRelease.loop_helloParses Loop.loopNr T L₀ x) (LeanRelease.loop_reqsFollow T L₀ x) hLk hF hE hEf Vs θ hk Ev
 

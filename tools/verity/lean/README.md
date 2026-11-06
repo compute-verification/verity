@@ -17,6 +17,8 @@ the same way, a `module`'s from the private part holding its proofs. The only pa
 after the facts and the replay, the tests' under `runs` (each deciding only its own pass), in a sandbox where the machine
 allows one; a test's data generator is the repository's code and runs outside it.
 
+A run keeps the facts only gzipped (`facts.json.gz`; `stored_facts` reads an older `facts.json` too).
+
 ~~~text
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
                                                   Mathlib is a dependency, and main's cached build of PKG (below)
@@ -41,7 +43,7 @@ python tools/verity/lean/merge.py --install              once per clone: git mer
 ~~~
 
 The edit loop is `verity lean try FILE`: `lake env lean FILE` in the nearest Lake package above FILE, against its built
-imports, exiting with lean's status, the axiom probe's line last. `--siblings` then imports FILE's build beside each built
+imports, with its `[leanOptions]` as a build has them, exiting with lean's status, the axiom probe's line last. `--siblings` then imports FILE's build beside each built
 module of its package not importing it, failing on a name two declare (`siblings.py`). With `--on NODE`, through `research
 run`, it runs `lean_changed.py --try FILE` on this checkout's working tree: in a node's `build` Lean slot, on the tree
 `--records` keeps warm, `lake build +MODULE:deps` and then `lake env lean FILE`. Neither runs this audit or writes a record
@@ -105,7 +107,8 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   and no hypothesis is `False` (`vacuous_meets`). A closed `def C : Prop` proved of every instance goes under
   `claims.generic` with its guarantee, which reads only the claims and Core and skips `shape` and the inline rule;
 - a guarantee of an acceptance or an exclusion has `honest` and `nontrivial` witnesses of the form `witness_failures`
-  states, or an `unwitnessed` entry, which only shrinks (`witness_failures`);
+  states, or an `unwitnessed` entry, which only shrinks (`witness_failures`); `nontrivial` is one theorem or a list,
+  each past the first in the exclusion form and dropping a premise no earlier one drops;
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
@@ -132,7 +135,7 @@ passes, 1 when one fails, and 2 on a usage error or a refusal.
 
 A package that pins ArkLib (`Security/Proofs`, and `Security`, which audits it beside itself) is refused, exit 2, on a
 machine with less than `MEM_FLOOR_GIB` (24 GiB, memory and swap within the cgroup), by `check.py` and the fast path
-alike; the refusal prints the fast path's `research run --on …` line (`ON_NODE`). `VERITY_LEAN_MEM_FLOOR_GIB` sets
+alike; the refusal prints the fast path's `research run --on auto …` line (`ON_NODE`). `VERITY_LEAN_MEM_FLOOR_GIB` sets
 another floor (0: none). Lake runs as many `lean` at once as `LEAN_NUM_THREADS`, so the build of a package that pins Mathlib
 or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, from the
 process's own cgroup, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
@@ -434,7 +437,8 @@ so a merge that is clean but wrong (a definition that changed on one side withou
 other side's new guarantee reads it) fails there. `merge.py --normalize FILE` recomputes a record's digests without a build.
 The fast path (`lean_changed.py --records`) takes such a candidate as it is: after a merge of `main` that takes every Lean
 input of a package it changes whole from main's side and its lock from `merge.py`, on top of a commit whose records passed, it runs
-nothing for that package (`merged`), and neither does it on inputs whose records already passed on that node (`kept`).
+nothing for that package (`merged`), and neither does it on inputs whose records already passed on that node or in a result
+the node's store holds (`kept`, by `inputs_key`; `lean_changed.py --inputs-key PKG --head SHA` prints the key from git alone).
 
 ## Noticing when a dependency proves what we assume: `upstream.py`
 

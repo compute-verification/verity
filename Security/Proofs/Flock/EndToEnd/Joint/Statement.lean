@@ -16,9 +16,9 @@ subcircuit and no sum of per-subcircuit worst cases.
 
 `StratifiedBlock` is such a sampling block: one hidden-output `--zk` session of one table (a stratified draw is a
 one-table session: flock-verify takes only the subset draw at more than one table, `RecordCustodyZKJ`) whose units the
-verifier draws by the live stratified draw (`Flock.Draw.drawOS` at `.stratified`, `Law.execOS`), with every binder of
-`zk_session_soundH_custody` but the prover. Its wrong units are `wrongRegZ` in the committed transcript fixed at
-registration (`XplurZC`), as `SamplingBlock`'s are.
+challenger's coins sample by the live stratified draw (`Flock.Draw.drawWith` at `.stratified`, `Law.execOS`), with every
+binder of `zk_session_soundH_custody` but the prover. Its wrong units are `wrongRegZ` in the committed transcript fixed
+at registration (`XplurZC`), as `SamplingBlock`'s are.
 
 * `JointStratified`, per sampling block: except with probability `δ + ε_ks + ε_bind`, if flock-verify accepts, the
   sampling block's wrong units `B` lie in the confidence set (`Law.stratified`'s escape of `B` is at least `δ`), so they
@@ -114,7 +114,7 @@ open Classical
 
 variable (w : StratifiedBlock)
 
-/-- The sampling block's draw: `Flock.Draw.drawOS`'s stratified draw on the verifier's byte sources. -/
+/-- The sampling block's draw: `Flock.Draw.drawWith`'s stratified draw on the challenger's coins. -/
 def L : Law w.n := Law.execOS (n := w.n) w.src (.stratified w.Kd (Array.ofFn w.St)) w.pop
 
 /-- The stratified law the draw is held to under A3 (`Law.execOS_escape_le`): `ks s` of subcircuit `s`'s units, uniform

@@ -58,7 +58,7 @@ open Game Audit Exec Refine Flock FlockLevel3 Model ZkSession ZkLink ZkExec Deco
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 local notation "𝔽" => FlockLevel3.GF128
 

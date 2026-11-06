@@ -1,4 +1,4 @@
-"""PoUS's memory challenger as a party of its own, so it runs on a host the prover doesn't control (the challenger host,
+"""PoUS's memory challenger as a party of its own, so it runs on a host the developer doesn't control (the challenger host,
 `trusted-host`) while the prover stays on its node.
 
 The challenger listens and the prover connects. Each round is one frame each way: the challenger sends `u64be index`
@@ -420,7 +420,7 @@ def side_of(period: Mapping[str, Any], node: str, device: str | Path) -> Side:
 
 def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
-    machine the prover doesn't control, which is never the prover's node."""
+    machine the developer doesn't control, which is never the developer's node."""
     held = host != node
     return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
             PREMISE: (f"holds: the memory challenger ran on {host}, not the prover's {node}" if held else

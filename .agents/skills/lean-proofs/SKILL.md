@@ -50,7 +50,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), with lean's status. Lean's exit 0
   isn't proof: the last line, the axiom probe's, names each theorem of FILE whose axioms go beyond `propext`,
   `Classical.choice` and `Quot.sound` (`sorryAx` too). After editing a file others import, `lake build` its module, then
-  try an importer. Try one that adds or renames declarations with `--siblings --on NODE` too: a name another module
+  try an importer. Try one that adds or renames declarations with `--siblings --on auto` too: a name another module
   declares otherwise clashes first at the package root, an hour into a records run.
 - **Build on a CPU machine.** Never `lake update` or change an external dependency (a git `require` or its revision,
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
@@ -61,16 +61,17 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   docstring).
 
   ~~~text
-  research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- \
+  research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- \
     python3 tools/verity/lean/lean_changed.py --records PKG --update
   ~~~
 
-  In cpu-1's research pool the runner takes the check slot: don't wrap it in `slot.py`. On vy-nebius-1 wrap it in n1's
-  Lean-record pool, `env CHECK_SLOTS=/workspace/research/locks/leanrec/slots python3 tools/verity/check/slot.py --by
-  LANE -- python3 …`. Commit each record it kept under `lean-audit/record/` (its log says over what). Its result,
-  `lean-fast/v1`, no merge check accepts. It repairs a slot tree another run left mid-way: never delete or copy one.
-- **A full record**: `research run --on POD --project verity --source . --cwd clone -- python3
-  tools/verity/lean/check.py --build --update PKG`, unwrapped, leaves it at `lean-audit/audit-TAG/lean-audit.json`.
+  `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
+  Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
+  `lean-audit/record/` (its log says over what). Its result, `lean-fast/v1`, no merge check accepts. It repairs a slot
+  tree another run left mid-way: never delete or copy one.
+- **A full record**: `research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --cwd clone --
+  python3 tools/verity/lean/check.py --build --update PKG`, unwrapped, leaves it at
+  `lean-audit/audit-TAG/lean-audit.json`; below a package's memory floor check.py refuses and prints the line to run.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
   /tmp/scratch/Probe.lean`): `#print axioms X` (a `sorry` shows as `sorryAx`), `example … := by exact?`, or
   `trace_state` before a `sorry`. Probe what you build on too: a section `variable` typed through a local notation can
@@ -155,7 +156,9 @@ Their history is in the decisions log.
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails`;
   failing either, it says nothing. Both build their instance (`witnesses` in `check.py`), taking
   only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one named
-  premise and the bound fail, or, for an exclusion that takes no premise, a circuit where a tighter bound fails.
+  premise and the bound fail, or, for an exclusion with no premise, one where a tighter bound fails. `nontrivial` may
+  be a list: each lemma past the first has that exclusion form, whatever the guarantee's kind, and drops a premise no
+  earlier one drops (a `Wf` negation, when `Wf` is a premise).
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not
   claims: they live in `Proofs/` with one concrete instance where the honest case holds.
@@ -165,7 +168,7 @@ Their history is in the decisions log.
 - Probability and games are our own minimal definitions over Mathlib's `PMF`; soundness bridges to VCVio where needed.
 - What a physical region reads is not a premise: it follows from the circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
-  server-window is stated on `Accounting.Placed` with `WindowsAt`.
+  server block is stated on `Accounting.Placed` with `WindowsAt`.
 - Verifier code compares `Json` by a match the kernel reduces, never by `BEq Json`'s `==`, a `partial def` no proof can
   read. A string is compared by `SampledProofs.jsonStrIs`, which `Properties.Pouw.LiveSalt.jsonStrIs_eq` reads back.
   Replacing such an `==` or a partial reading with a total one that means the same (it refuses on every parse failure

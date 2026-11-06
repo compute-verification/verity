@@ -92,8 +92,8 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
   slots' rows and the midstates, chain copies, constants and digest copies Δ writes (`Any.port_commit_seg`);
 * `Wide.SegTgt`: those copies from Δ at a segmented row's columns (`Any.seg_copies_tgt`), so a segmented row's `b ‖ c`
   in a satisfying witness of the untyped statement (`Any.seg_bc_tgt`);
-* `Wide.SegFit`: `Wide.Fit`'s output-row lemmas with only the output rows unsegmented (`Any.PadRow`, `Any.OutRowsS`), an
-  input row of any kind (`Any.msg_copyF`, `Any.sat_flatF`);
+* `Wide.SegFit`: `Wide.Fit`'s output-row lemmas with each output row unsegmented or a `sha512/row-seg/v1` row
+  (`Any.PadRow`, `Any.SegRow`, `Any.OutRowsS`), an input row of any kind (`Any.msg_copyF`, `Any.sat_flatF`);
 * `Wide.SegFitP`: those at public inputs, off the unit input rows `HmIn.delta` drops (`unitIn_of_drop`,
   `Any.msg_copyFP`, `Any.sat_flatFP`);
 * `Wide.FitS`: the rows the hidden-output headlines cover, each unsegmented (`Any.PadRow`) or a `sha512/row-seg/v1` row

@@ -9,6 +9,8 @@ public import NciCheck.DescFuzz
 public import NciCheck.Baseline
 public import NciCheck.BaselineDifftest
 public import NciCheck.Protocol
+public import NciCheck.Count
+public import NciCheck.CountDifftest
 
 /-!
 # The NCI policy's check
@@ -18,7 +20,7 @@ isolation units meets `Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`)
 the cost of the descriptor: `NciCheck.Desc.check`, one summary per Definition, never a walk over the unrolled circuit
 (AGENTS.md "Design rules"), then each θ entry's provenance, registered public data that the first record of the
 deployment's registration log registers and never an earlier run's output, against the service's log
-(`NciCheck.Baseline`, CMP-66; `NciCheck.BaselineDifftest` holds it to the Python reference).
+(`NciCheck.Baseline`; `NciCheck.BaselineDifftest` holds it to the Python reference).
 `NciCheck.check` is the same check gate by gate, with the input format and its mapping to the definition's circuit in
 `NciCheck.Check`'s docstring, kept as the reference: `NciCheck.Difftest` holds it to the Python reference, and
 `NciCheck.DescDifftest` holds `NciCheck.Desc` to it and to the Python reference, `NciCheck.DescLiveness` to it on
@@ -33,6 +35,13 @@ the inference-only policy's subprotocol of onsite and remote, on the core interf
 C-Flock's decoder doesn't check that a reference reads a leaf at the width it was committed with, which the
 Python codec refuses as it decodes (`E_REINTERPRET`), so every Program the check reads goes through
 `NciCheck.decodeProgram`, which refuses one that doesn't, with a message.
+
+`NciCheck.Count.check` (`nci-check --count`) is the count of `(c, k)`-inference blocks: that a Boolean declaration's
+computed gates divide into at most `n` proof blocks of a `(c, k)`-partition (`Nci.CompliesAtMost`), the blocks the
+activations of the block Definitions the declaration names, with each block Definition's Boolean gates from the gate
+table and its fresh bits from `NciCheck.Desc`'s summaries. It publishes only the judgment against `n`, `{complies}`;
+the whole verdict, with the counts, is `NciCheck.Count.checkDetail`, for the private record. `NciCheck.CountDifftest`
+holds both to the Python reference.
 -/
 
 @[expose] public section

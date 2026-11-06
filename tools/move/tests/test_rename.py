@@ -290,6 +290,17 @@ def test_the_recorded_paths_are_the_moves_up_to_the_end_of_each_renamed_span():
         M.renamed_paths([("v/warden/a.py", "v/certifier/a.py"), ("v/warden/b.py", "v/guard/b.py")])
 
 
+def test_a_directory_is_recorded_only_when_it_moves_whole():
+    one = [("v/identity/Identity/Domains.lean", "v/randomness/Randomness/Domains.lean")]
+    present = ["v/identity/Identity/Domains.lean", "v/identity/Identity/Tagged.lean", "v/identity/Identity.lean"]
+    assert M.renamed_paths(one) == {"v/identity/Identity/": "v/randomness/Randomness/"}
+    assert M.renamed_paths(one, present) == dict(one)                    # Tagged.lean stays in Identity/
+    moves = [("v/warden/a.py", "v/certifier/a.py"), ("v/warden/tests/test_warden.py", "v/certifier/tests/test_certifier.py")]
+    assert M.renamed_paths(moves, [o for o, _ in moves]) == {"v/warden/": "v/certifier/", **dict(moves[1:])}
+    excluded = [o for o, _ in moves] + ["v/warden/fixtures/x.json"]           # a file the map excludes stays
+    assert M.renamed_paths(moves, excluded) == dict(moves)
+
+
 def git(root: Path, *args: str) -> str:
     return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True).stdout
 

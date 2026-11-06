@@ -39,7 +39,7 @@ theorem _root_.Flock.Bridge.constsOfP_isInput {c : Flock.Circuit} {hU : Built c.
     unfold Bridge.constsOfP at h
     split at h
     · rename_i b' hb'
-      simp only [Bridge.constsOf] at hb'
+      simp only [Bridge.constWiresOf] at hb'
       split_ifs at hb' with h1 h2
       · subst h1; show 0 < 2 + n * Discharge.Layout.keyB c hU; omega
       · subst h2; show 1 < 2 + n * Discharge.Layout.keyB c hU; omega

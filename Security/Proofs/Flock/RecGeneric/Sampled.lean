@@ -1,6 +1,8 @@
 module
 
-public import Proofs.Flock.RecGeneric.Statement
+public import Definitions.Claims.RecursionGeneric
+public import Proofs.Flock.RecGeneric.Outer
+public import Proofs.Flock.RecGeneric.ZK
 public import Proofs.Flock.SampledGeneric.Statements
 
 /-!
@@ -124,7 +126,7 @@ and the server `Sv`, its extractor `E*` (`Comp.E`) and relation (`Comp.R`), wher
 L1's hypotheses hold at every sampled statement (`Comp.OuterKSAt`, nonnegative `κ_O` and `γ_O`, `Comp.Contract`):
 $$\Pr[\text{accept}] \le P_a(F) + \mathbb E_S \max_{u \in S} \mathrm{Comp.err}(\mathrm{stmt}(S, R), P_S) +
 \varepsilon_{\rm bind},$$
-at the inner loop bounds `mI` and the link's `Mo`. It follows from L1 (`GenericRecursiveKS`) and B1. -/
+at the inner loop bounds `mI` and the link's `Mo`. It follows from L1 (`Claims.RecGeneric.CompositionKS`) and B1. -/
 def RecursiveSampledKS : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (I : Proto Coin W)
     (Sv : Server) (K : Claims.RecGeneric.Comp Coin) (mI : Fin I.nT → ℕ) (Mo : ℕ) (n : ℕ) (Reg Dh : Type)

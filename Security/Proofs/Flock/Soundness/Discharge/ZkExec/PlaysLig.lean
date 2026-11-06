@@ -352,6 +352,8 @@ theorem queryLevel0_bind {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Lev
 
 /-! ## Ligerito under `--zk` -/
 
+-- one proof of several hundred lines down `Zk.ligerito`'s unfolded levels, a `*_bind` step per bind and `rw` and
+-- `omega` on the round indices
 set_option maxHeartbeats 4000000 in
 theorem zk_ligerito_plays : ZkLigeritoPlays := by
   intro ms sch T cap p basisAt zl t t' rec hdim hlv hα1 hk0 hwf h

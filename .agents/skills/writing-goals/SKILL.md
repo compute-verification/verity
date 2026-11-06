@@ -21,15 +21,13 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
 The page is how Daniel sees what is being done, so it moves when the work does:
 
 - **When a goal's state changes**, rewrite where it stands, and its status the moment it slips; don't wait for a sync.
-- **At least every 12 hours** while it's open, rewrite it or `research goals confirm ID` (it still holds as written).
-- **A goal due within a week names its next step with a day** no more than a day out.
 - **Work serves a goal on the page:** its issue carries the goal's label (the `goal` label group, one label per id),
   and its PR names that issue and the goal: `research queue open --issue KEY` writes a `Goal <id>` line for each live
   goal KEY's labels name, and `open` and `research queue ready` warn, never refusing, of a body naming no live goal so
   and not saying `Issue: none: REASON`. Work that serves none starts by writing its goal, or asking top.
 - **One outcome, one goal.** Before adding one, look for it under another owner's goal, and make yours a piece of it.
 
-top's hourly audit rings the owner of a goal past its due, unchanged for 12 hours, or past a step's day.
+Once a day top rings the owner of a goal past its due, for a new date or its evidence.
 
 ## A goal
 
@@ -46,9 +44,10 @@ top's hourly audit rings the owner of a goal past its due, unchanged for 12 hour
 - **A due date** (`--due YYYY-MM-DD`, the end of that day, or `YYYY-MM-DDTHH:MM-08:00` when the hour matters).
 - **A priority**, 1 to 3: anyone may set one (`research goals priority ID 1|2|3|clear`), and the page shows
   who set it and when. A goal nobody set takes the highest priority of the goals waiting on it.
-- **A next step** (`--next TEXT --next-due WHEN`), dated within a day, for every open goal due within a week. The
-  page shows it on the goal's row, red once its date passes; from Thu 10 AM PST the site refuses a write to such a goal
-  that names none. `--no-next` clears it.
+- **Today's step, as a goal of its own.** An open goal due within a week waits on a tier-3 goal due within a day: write
+  the step (`research goals set SUB --tier 3 ...`), then list it among what the parent waits on (`--wait goal:SUB`,
+  repeated for every link, since `--wait` replaces the list). A goal has no separate next-step field, and the site
+  refuses one.
 - **A status:** `on-track`, `off-track` or `done`, your forecast of whether it will be true by its date.
   - Off track says why: link what it waits on, or say what's wrong in `--blockers`. The site refuses an off-track goal
     with neither.
@@ -75,7 +74,7 @@ top's hourly audit rings the owner of a goal past its due, unchanged for 12 hour
     the state that finishes it.
   - Tier 2, a piece of a project: a dated state you can check. The soundness theorem and the H200 accounting are
     pieces of the remote demo; a full check's time is a piece of "Efficient automated tasks".
-  - Tier 3, a step toward a piece.
+  - Tier 3, a step toward a piece, due within a day.
 - **The tier is derived:** a project waits on its pieces (`--wait goal:ID`), so a goal nothing waits on is tier 1, and
   one is a tier deeper than the shallowest goal that needs it, down to 3. `--tier N` overrides it; `--no-tier` goes
   back to the derived one.

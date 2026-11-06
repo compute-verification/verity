@@ -23,7 +23,7 @@ One distribution, one module per concern. Import from the module that owns an ob
 | `verity.ml.definitions` | The served workloads' kernel Definitions (`registry`) with their vectorised twins and row evaluators (`numerics`), their Boolean versions (`boolean`), the word replay (`replay`), the proof-block cut (`word`, `cross_call`, `call_scope`) and a Definition's encoding and digest (`encoding`). The vLLM integration builds each served Program from them; no verifier reads them, so they are off the soundness path. |
 | `verity.hardware` | The card files, one TOML a SKU (`hardware/cards/<sku>.toml`), the one source of each card's numbers. GPU cards (the RTX PRO 6000 Server Edition, the H200 SXM and the B200 SXM) give a GPU's SMs, clocks, stores, per-pipe rates, device memory's bus and bandwidth and tensor weights; host cards (the RTX node's two Xeon 6776P and the H200 nodes' two Xeon Platinum 8468) give a server's CPUs, AMX peak, DRAM rates and on-chip bytes. Each number has its unit, its source and its mark (`ceiling`, `measurement` or `placeholder`); `load(sku) -> dict` refuses a number without them, and `skus(kind)` lists one kind. The Lean card tables (`Security/Definitions/Core/Accel/{H200,Sm120}.lean`) are held to them number by number (`hardware/tests/test_lean.py`). Stdlib only, and it imports no other unit. |
 | `verity.core.protocols.profile` | `IntegrityProfile`: what an accepted audit established (the exhaustive facts, a verifier's sampling design over named levels of a partition hierarchy, and δ). |
-| `verity.core.protocols.registration` | The registration log, the Python of `Core.Registration`: one append-only log of hardware entries (the site's cards, locations and links) and information entries (θ's registered values by committed root, the registered compiler B), chained by `previous` and named by its SHA-512 head; its check, refusal by refusal, and each subprotocol's view of it. |
+| `verity.core.protocols.registration` | The registration log, the Python of `Core.Registration`: one append-only log of the Site's site entries (`verity.core.site.Entry`: its sheets, locations and links), information entries (θ's registered values by committed root, the registered compiler B) and declarations (each day's circuit), chained by `previous` and named by its SHA-512 head; its check, the Site's for a site entry, and each subprotocol's view of it. |
 | `verity.core.protocols.sampled_proofs` | Sampled proofs as the one-stage audit (`one_stage`), sampled with the verifier's own randomness (`coins`). Plans and consumers are `verity.core.protocols.sampled_proofs`. |
 | `verity.core.protocols.pouw` | Proof of useful work: the `PoUWScheme` interface, its commitments and epoch (`audit`) and the named schemes (`schemes.get`), each with pinned vectors. |
 | `verity.core.protocols.record` | `Core.Record`: a record entry, one signed and chained message of a run's transcript, `{body, kind, prev, schema, seq, session, sig}`; the auditor's ledger is written and read through it. |
@@ -51,7 +51,7 @@ Build, evaluate and query a circuit from the primitive library:
 
 ~~~python
 from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits import Program, query
+from verity.ml.circuits import Program, query_ast
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.ops.gemm import GEMM_AMPERE, Gemm
@@ -61,5 +61,5 @@ x, W = [0x3F80] * 64, [0x3F80] * (8 * 64)     # BF16 encodings of 1.0, with W fl
 evaluate(gemm, x, W)                          # eight BF16 words 0x4280, that is 64.0
 program = Program(gemm)
 program_digest(program)                       # the circuit's name: its SHA-512 digest
-query(program.circuit, "//GemmCoordinate")    # its 8 output coordinates, each with its interval of gates
+query_ast.evaluate(program, "//GemmCoordinate")  # its 8 output coordinates, each a set of gates (`intervals()`)
 ~~~

@@ -116,6 +116,7 @@ def _module(path: Path, name: str):
 #: contract, which `module_keys` loads (`test_lean_audit.py` holds it)
 COMMON = _module(ROOT / "tools" / "verity" / "check" / "common.py", "check_common_for_lean_audit")
 MK = _module(Path(__file__).resolve().parent / "module_keys.py", "lean_module_keys_for_lean_audit")
+SETTINGS = _module(Path(__file__).resolve().parent / "settings.py", "lean_settings_for_lean_audit")
 #: the task graph's contract, which `module_keys` keys each module with (`module_keys.CONTRACT`)
 CONTRACT = "tools/verity/graph/verity_graph/contract.py"
 
@@ -642,7 +643,7 @@ def prune(pkg: Path) -> int:
 BUILDS_KEPT = 48
 #: the GB the kept builds may take on a node before its least recently used go, whatever their number: a Security/Proofs
 #: build is about 17 GB, so `BUILDS_KEPT` of them alone would fill a node's root disk. Each package's newest stays past it too
-BUILDS_MAX_GB = float(os.environ.get("VERITY_LEAN_BUILDS_MAX_GB", "120"))
+BUILDS_MAX_GB = SETTINGS.BUILDS_MAX_GB
 #: the kept dependency trees (one per manifest and toolchain, `deps_key`) a node holds before its least recently used go:
 #: Security/Proofs' is about 35k files, so two dozen of them take some 800k inodes
 DEPS_KEPT = 8

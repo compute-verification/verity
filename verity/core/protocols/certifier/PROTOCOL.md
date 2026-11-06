@@ -8,12 +8,13 @@ order of every frame are fixed by the declared Program.
 
 - **Trust.** The certifier is auditor-trusted: it runs on a host the prover doesn't control, and the auditor trusts it
   to run the grid and to sign what it ran. That trust, with the custody of its keys and of its LMS leaf state, is the
-  named assumption `trusted-host`. The challenger's live coins reach it on two more premises, stated with the coins'
-  path in `benchmarks/live_challenger/auditor.py` and `verity/core/protocols/sampled_proofs/README.md`:
-  `CoinsConfidential` (the challenger's coins reach the certifier only inside auditor-trusted hosts, `trusted-host`, and
-  no prover-controlled host reads a coin before the certifier admits it) and `OneClock` (the challenger's release times
-  and the certifier's ingress ticks are read on one clock; on two devices, within 1.03 s of each other). No Lean
-  statement reads either yet.
+  named assumption `trusted-host`. The challenger's live coins reach it on two more premises, named in
+  `verity/core/protocols/sampled_proofs/README.md`, with the coins' path in `benchmarks/live_challenger/auditor.py`:
+  `CoinsConfidential`, stated as `Pouw.Assumptions.CoinsConfidential`
+  (`Security/Definitions/Pouw/Assumptions/Dither.lean`: a replica's coins reach no machine outside the certifier's
+  boundary before it has them), and `OneClock` (the challenger's release times and the certifier's ingress ticks are
+  read on one clock; on two devices, within 1.03 s of each other), prose only. The certifier program's Lean reads
+  neither.
 - **What it signs.** An LMS signature (SHA-512, n = 64) over a message binding its key, its session, the execution phase
   and the record's digest hidden under a salt the certifier samples ("Network certificates").
 - **Public parameters.** Each direction's grid (T, τ_b, r, B and Q, "The certifier (`grid`)"), the set of clock-sync
@@ -88,17 +89,17 @@ On each link:
 ## The published record (`commitment`)
 
 A raw grid is 2.3 GiB per execution phase at r = 1,024, B = 4 KiB and T = 600. The certifier publishes one digest and
-the status instead, which is 32 bytes per execution phase, or about 46 KB per link per day.
+the status instead, which is 64 bytes per execution phase, or about 92 KB per link per day.
 
 - **Padding is elided.** Left-packing (W4) fixes a row by its count n and its n real frames, so a row's digest covers
-  only those: `tagged_sha256("verity-network-warden/row/v1", u32be(n) ‖ f_0 ‖ … ‖ f_{n−1})`. A row that isn't
-  left-packed has no encoding.
-- **The record digest** is `tagged_sha256("verity-network-warden/record/v1", …)`. It covers:
+  only those: `tagged_sha512("verity-network-certifier/row-sha512/v1", u32be(n) ‖ f_0 ‖ … ‖ f_{n−1})`. A row that
+  isn't left-packed has no encoding.
+- **The record digest** is `tagged_sha512("verity-network-certifier/record-sha512/v1", …)`. It covers:
   - the canonical JSON of the link, the window, (T, r, B, τ_b) and the status;
-  - then the T row digests.
+  - then the T 64-byte row digests.
 
-  `tagged_sha256` is `verity.ml.commitments.identity`'s.
-- **The check** recomputes the digest from the Program's grid, with a complete status, and compares. Under `cr/sha-256`,
+  `tagged_sha512` is `verity.ml.commitments.identity`'s, and the Lean check's is `Identity.taggedSha512`.
+- **The check** recomputes the digest from the Program's grid, with a complete status, and compares. Under `cr/sha-512`,
   equal digests mean equal records, so the audit stays exact. The verifier never needs the raw grid, because the
   Program fixes every egress frame.
 - **The status in the clear** is only for classifying a violation. The digest binds it too, so a published status that
@@ -163,7 +164,7 @@ signature verifies (`CertifiedRecord.verify`; the signature alone is `Certificat
 and D). On egress the audit recomputes the record digest from the Program's grid, with a complete status, the deadline
 bit set and the parameters digest of `params` and Σ_sync, and compares it with the head's. Under `cr/sha-512`, equal
 digests mean equal records, so the audit stays exact. A certified record rests on `cr/sha-512`,
-on the signature's unforgeability, and on an honest certifier; not on `cr/sha-256`.
+on the signature's unforgeability, and on an honest certifier.
 
 ## Through the proof system (`service`)
 
@@ -207,7 +208,7 @@ One execution phase's certificates are registered through the proof system
   `LinkWindows.certifier_session`, over its public fields and its signed digest, and names the execution phase). A proof
   states the proof block on rows ``pub`` (its public parameters), ``wit`` (each end's head, leaf salt, siblings and
   certifier's salt) and the output row ``o0``, one u16 word (`LinkWindows.layout`, `service.OUT_BITS`), its circuit
-  `LinkWindows.proof_unit`. The head check is a Boolean Definition,
+  `LinkWindows.proof_block`. The head check is a Boolean Definition,
   `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are each end's statics), with one output, the ok
   bit, whose `signed` input is its end's signed digest. It opens the head at leaf 2 + direction under the registered
   root, a hiding read (`NetworkHidingRead`), and accepts when the head's link, direction and window are the
@@ -865,7 +866,7 @@ if every execution phase of every link the audit checks is, so an accepted verdi
 window audited.
 
 Every capacity bound holds on accepted runs only. A rejected window may already have carried up to its unbound capacity,
-about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-256`; on certified
+about 8·T·r·B bits (`capacity.unbound_bits`). On committed records, the bounds also assume `cr/sha-512`; on certified
 records, `cr/sha-512`, the signature's unforgeability and an honest network certifier.
 
 ## Capacity (`capacity`)
@@ -1554,7 +1555,7 @@ hit ReplayStep_v1 reads derived by `CacheStep_v1`'s calls on the certified token
 verdict flags, reference (`check`), stand-ins and the phase-9 attack's cases (`phase9`) are `compile_slice`'s docstring.
 Its step rows are held to the committed ``srv`` row, which the verifier holds by b‖c to the served rows the Commit side
 registers before the sample (`served_rows`), so the phase-10 attack's six passes are refused; at G < P, the served rows'
-blocks, its P / G rows (`CompileSliceBlocks_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its charge is
+blocks, its P / G rows (`CompileSliceRowGroups_v1`, [protocol/served-statics.md](protocol/served-statics.md)). Its charge is
 `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
 chain. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
 advised window is proved, a served window at its engine's class (w212 under its AsyncScheduler, 1,021,302 ANDs, and
@@ -1970,12 +1971,28 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   runs the same rehearsal on the auditor's host.
 - The server's copy of each request carries its release order (`release`), so that `serve-openai --admit
   release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
-  index among the ingress records' `END` cells, and `x-verity-release-run:` the network certifier's `run_id` (in
-  `deployment.json`). The server gets a request whole at its `END`'s release, and nothing of a connection that fails
-  before it. The headers are on the server's side only. No cell or record holds them, so the cell counts, the prompt
-  lengths and the I/O tie's request frames are unchanged. They reach the server, never the client, so the leak bound
-  is unchanged. The active certifier's served proxy adds the same headers (`active_replay.ReleaseProxy`), with
-  N = s − 1 for request stream s.
+  index among the ingress records' `END` cells, `x-verity-release-run:` the network certifier's `run_id` (in
+  `deployment.json`), and `x-verity-release-bucket: a`, the bucket of that `END`. The server gets a request whole at
+  its `END`'s release, and nothing of a connection that fails before it.
+- With the watermark (`Warden(watermark=…)`, `warden_serve.py serve --watermark`), the server also gets one stream,
+  `POST /verity/watermark`, chunked, with one line `t n l…` for each tick t: n the `END`s released through bucket t,
+  and each l, rising, a release of bucket t that its server connection lost (closing, its connect failed or the
+  connection ended before the request was written whole and its transport's buffer emptied). So the releases of
+  buckets ≤ t are exactly N < n, t steps by 1 and n never decreases. Tick t makes the line and it goes out, in order,
+  only once each release of bucket t has been written or lost: a release whose connection is still opening, or whose
+  bytes are still buffered, holds its line and the later ones, never a tick, at most until its connection ends. A
+  server whose engine admits at logical time T exactly the releases of buckets ≤ T, in N order, waits for line T and
+  every N < n_T that no line through T names lost: each has been handed to its connection's socket before line T, but
+  on a connection of its own, so the server may read line T first. A release named lost may still arrive (a close
+  sends what its transport held); the engine skips it. The network certifier never reads that stream and no tick waits
+  on it: one holding more than `WRITE_BACKLOG` unwritten is closed.
+- The headers and the stream are on the server's side only. No cell or record holds them, so the cell counts, the
+  prompt lengths and the I/O tie's request frames are unchanged. They reach the server, never the client, so the leak
+  bound is unchanged. N, a and n are functions of the signed ingress record, which the prover holds as witness, a
+  line's lost releases the prover's own server connections' state, and nothing reaches the auditor. No guarantee reads them: the replay takes each step's arrivals from the certified
+  records, so a server that misreads the stream changes only its own schedule, which the advice charges. The active
+  certifier's served proxy adds the release order and the run (`active_replay.ReleaseProxy`), with N = s − 1 for
+  request stream s, but no bucket: it forwards a request's head before its last frame.
 
 **Named gaps:**
 - TLS isn't terminated: both sides are plain TCP.

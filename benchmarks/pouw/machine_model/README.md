@@ -1,4 +1,4 @@
-# The machine model
+# machine_model: the ACCEL model of each measured card
 
 `machine-model` prices PoUW's designs on the ACCEL model 𝓜 of each measured card. For a card it holds, as data, the rows
 (the measured ceilings: a pipe, a port, or a joint frontier of several classes), the census that places every warp
@@ -432,7 +432,7 @@ a card, with the counts by mark and every hole.
   gitignored): `suites.py` fetches them before the tests, and `uv run research data fetch-fixtures
   benchmarks/pouw/machine_model/data/cover benchmarks/pouw/sass_census/data` brings them into a checkout. `rows.toml`,
   the reviewed table, stays in Git.
-- **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, envelope op with its pipe, stores or formats,
+- **A row** (`rows.toml`) names its opcodes, devices, census kinds, mark, ACCEL op (`envelope`) with its pipe, stores or formats,
   units a warp instruction, register words, rate (card-table keys, or `rate_value` with its unit), argument and source.
   A row with `forms` (regexes over the dotted form) covers those forms; the opcode's plain row covers the rest. A unit
   outside the SM pipes is a `[[unit]]` with the same marks.

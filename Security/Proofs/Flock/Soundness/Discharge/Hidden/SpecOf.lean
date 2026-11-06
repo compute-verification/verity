@@ -62,6 +62,7 @@ structure SpecOf (parsed : V Circuit) (tags : Tags) (pf : ByteArray) (coins : Co
   sigma : st.sigma = Sha512.hash (tags.sigmaTag.toUTF8 ++ st.c.sha ++ st.digest ++ st.pub.sha)
   hello : helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello
 
+-- `walk_step` down `Stmt.setupHiddenOf`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **What `Stmt.setupHiddenOf` accepted** is its `SpecOf`. -/
 theorem setupHiddenOf_spec (h : Stmt.setupHiddenOf parsed tags pf coins draw partition program = .ok st) :

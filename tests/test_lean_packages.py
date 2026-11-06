@@ -72,7 +72,7 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-UNWITNESSED = {"Security": 335, "Security/Properties": 192, "verity/core/service/flock": 7}
+UNWITNESSED = {"Security": 333, "Security/Properties": 192, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():

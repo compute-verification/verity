@@ -69,6 +69,7 @@ open FlockSoundness.Discharge
 open CoinLayer
 
 open _root_.Flock FlockSoundness.Refine in
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **What `Stmt.setupH` returns has each region's bytes its free bits** (its `checkRegionBytes`). -/
 theorem setupH_regionBytes {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
@@ -85,6 +86,7 @@ theorem setupH_regionBytes {tags : Tags} {cf pf : ByteArray} {coins : Coins} {ta
     assumption
 
 open _root_.Flock FlockSoundness.Refine in
+-- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **What `Stmt.setupHidden` returns has each region's bytes its free bits** (its `checkRegionBytes`). -/
 theorem setupHidden_regionBytes {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}

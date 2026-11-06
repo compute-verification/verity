@@ -26,7 +26,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `Security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `examples/`: one directory per example: its workload, placement, commands and doneness (`examples/README.md`).
+- `examples/`: one directory per demo: its workload, placement, commands and doneness (`examples/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
@@ -46,7 +46,7 @@ Nothing outside `infra/` imports it (`INFRA_IMPORTERS`), and nothing under `veri
 package name or by a path put on `sys.path` or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a
 protocol uses reaches it through a card file citing an `art:` id.
 
-`verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|example NAME`, `verity --help`.
+`verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|demo NAME`, `verity --help`.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu        # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
@@ -94,6 +94,10 @@ The rules in force, each stated as itself; the friction skill has the standing r
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
   (`NciCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
   (the walks still open are its `ALLOWED`), and `benchmarks/verifier_cost/` measures it.
+- **PoUW is mostly useful work.** A PoUW scheme leaves the useful work at least half of the honest prover's GPU
+  effort, its commitments and checks included. The trivial PoUW, which hashes every product and leaves
+  useful work near 1% of that effort, is ruled out as an answer; it stays on main only as a reference. Pearl+ is held
+  to the same floor.
 - **Auditor-trusted devices.** The network certifiers and memory challengers sign what they see; what they sign is
   witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the prover doesn't
   control, never a process on the prover's node, and trust in it and its host is the named assumption `trusted-host`.
@@ -239,8 +243,9 @@ and its parameters). What a run measured, what happened and who decided live out
 - **In the tree:** code, tests, Lean, circuits and their pins, the parameters and configuration code reads (with their
   public sources: a data sheet, the census), small fixtures beside their generators, and maintained current-truth docs
   (`README.md`, `AGENTS.md`, `ARCHITECTURE.md`, the root's `GLOSSARY.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`,
-  `CHANGELOG.md`, `*.template.md`, `PROTOCOL.md`; `tests/test_repository.py`). A protocol keeps its `PROTOCOL.md` only
-  while experimental: the PR whose Lean covers it deletes it, leaving a README of outline, signposts and core API.
+  `CHANGELOG.md`, `*.template.md`, `PROTOCOL.md`; `tests/test_repository.py`). The root has no README: an agent starts at
+  this file and `ARCHITECTURE.md`, and a directory keeps a README only where an agent couldn't find its way without one.
+  A protocol keeps its `PROTOCOL.md` only while experimental: the PR whose Lean covers it deletes it, leaving a README of outline, signposts and core API.
 - **Not in the tree, and not cited from it** (code, comments, docstrings, Lean, READMEs, docs): measured results
   (numbers, tables, plots, overheads), reports and drafts, and the process's ids and names: run, `art:` and `note:` ids,
   Notion pages, Linear issues, Slack threads, PR numbers, agent ids, lane and worker names, dates, and attributions such

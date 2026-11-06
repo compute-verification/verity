@@ -300,13 +300,6 @@
    "targets": [
     "c3-policy-throttles-pretraining"
    ],
-   "found_by": [
-    "systems",
-    "algorithms",
-    "gaming",
-    "round2-formal",
-    "round2-empirical"
-   ],
    "title": "Recommitting theta makes the throttle per declaration",
    "mechanism": "Theta has no provenance or cadence rule. Commit a checkpoint, train a block's worth reading only theta, emit a gradient, recommit. Even daily release lets blocks take hundreds of local steps (DiLoCo-style) from committed weights.",
    "effect": "efficiency 0.3-1 if theta could be refreshed; closed by one registration phase, except through any re-registration channel the policy later allows",
@@ -325,11 +318,6 @@
    "targets": [
     "c2-one-declaration"
    ],
-   "found_by": [
-    "compression",
-    "theory",
-    "round2-formal"
-   ],
    "title": "The theorem charges values, not bits",
    "mechanism": "Packing a crossing into a few wide values, or deriving operands from theta, slips under the per-value charge.",
    "effect": "proven ceiling loosens to about 9.4e-4 - 1.2e-2",
@@ -346,10 +334,6 @@
    "status": "open",
    "targets": [
     "c2-one-declaration"
-   ],
-   "found_by": [
-    "compression",
-    "systems"
    ],
    "title": "Boundary width is the attacker's choice",
    "mechanism": "Subspace-confined residuals cut a crossing about 140x at 1T; joint coding may cut more until the per-step optimizer-state floor.",
@@ -373,9 +357,6 @@
    "targets": [
     "c2-one-declaration"
    ],
-   "found_by": [
-    "theory"
-   ],
    "title": "Threading is unproven for any transformer and false as instantiated",
    "mechanism": "Layer 1 needs no thread reads when the corpus is committed; the unembedding needs e >= vocabulary.",
    "effect": "the blue line is a conditional estimate; repaired, within about 1.1x at 1e28",
@@ -388,11 +369,6 @@
    "status": "repair-proposed",
    "targets": [
     "c2-one-declaration"
-   ],
-   "found_by": [
-    "blue-formal",
-    "systems",
-    "theory"
    ],
    "title": "Most of the band is the theorem's slack",
    "mechanism": "The thread theorem never charges partial sums, so its ceiling loosens as models widen.",
@@ -407,10 +383,6 @@
    "targets": [
     "c2-one-declaration"
    ],
-   "found_by": [
-    "compression",
-    "systems"
-   ],
    "title": "The construction omits reads",
    "mechanism": "Gradient aggregation and attention reads are not charged.",
    "effect": "the red line should drop 2-4x",
@@ -423,11 +395,6 @@
    "status": "repair-proposed",
    "targets": [
     "c2-one-declaration"
-   ],
-   "found_by": [
-    "scaling",
-    "algorithms",
-    "gaming"
    ],
    "title": "The bound covers one literal recipe",
    "mechanism": "Contains embeds one recipe gate for gate; equivalent re-wirings (re-association, Strassen, recompute) escape it; recipe choice moves the theorem 2-4x.",
@@ -442,10 +409,6 @@
    "targets": [
     "c2-one-declaration"
    ],
-   "found_by": [
-    "systems",
-    "gaming"
-   ],
    "title": "A declared gate is not a chip-second",
    "mechanism": "size is unweighted and blind to width.",
    "effect": "an exchange-rate factor of 0.005-10",
@@ -458,9 +421,6 @@
    "status": "repair-proposed",
    "targets": [
     "c3-policy-throttles-pretraining"
-   ],
-   "found_by": [
-    "theta-workstream"
    ],
    "title": "Committed data silences the theorem and frees small models",
    "mechanism": "With the corpus in theta, Contains fails; budgets bound but don't close smuggling (a one-hot activation copies any theta entry; checkpoint slack holds about 2e11 tokens).",
@@ -478,11 +438,6 @@
    "status": "open",
    "targets": [
     "c5-capability-and-time"
-   ],
-   "found_by": [
-    "scaling",
-    "gaming",
-    "algorithms"
    ],
    "title": "Loss is not capability, and inference is free",
    "mechanism": "Search, test-time compute and tiny-update RL buy capability back in verifiable domains.",
@@ -503,10 +458,6 @@
    "status": "open",
    "targets": [
     "c4-known-methods"
-   ],
-   "found_by": [
-    "library",
-    "theta-workstream"
    ],
    "title": "Seed-based post-training fits in a block",
    "mechanism": "A seed pool's decoding fits under Gamma, and under the 11 MB policy every seed row does.",
@@ -532,10 +483,6 @@
    "targets": [
     "c4-known-methods"
    ],
-   "found_by": [
-    "algorithms",
-    "round2-empirical"
-   ],
    "title": "In-block families beat the stall at mid scale",
    "mechanism": "Routing over small experts, retrieval, recursion and test-time training stay inside blocks.",
    "effect": "x6-150 between 1e23 and 3e25; x1 at frontier loss",
@@ -549,10 +496,6 @@
    "targets": [
     "c4-known-methods"
    ],
-   "found_by": [
-    "systems",
-    "algorithms"
-   ],
    "title": "Padding is free compute",
    "mechanism": "Padding gates can do theta-only work: data curation, rephrasing, distillation from committed teachers.",
    "effect": "x2-10 on the comparator",
@@ -565,9 +508,6 @@
    "status": "open",
    "targets": [
     "c1-inference-complies"
-   ],
-   "found_by": [
-    "gaming"
    ],
    "title": "Calibration capture",
    "mechanism": "K is set by the most permissive session: long text, video tokens, embedding inputs.",
@@ -589,9 +529,6 @@
    "targets": [
     "c6-unknown-algorithms"
    ],
-   "found_by": [
-    "capability-review"
-   ],
    "title": "A few bits elicit a lot",
    "mechanism": "Every demonstrated small-update gain elicits latent skill; the policy caps new information, not what it unlocks.",
    "effect": "a one-time elicitation overhang",
@@ -609,9 +546,6 @@
    "status": "open",
    "targets": [
     "c6-unknown-algorithms"
-   ],
-   "found_by": [
-    "theory-review"
    ],
    "title": "Generic lower bounds hit known barriers",
    "mechanism": "Much stronger generic round lower bounds would separate P from NC1, so no proof covers every algorithm.",

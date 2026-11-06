@@ -178,6 +178,7 @@ theorem piopCut_cut_agree (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap 
   sim_walk [zerocheckCut_cut_agree coin hnN, lincheckCut_cut_agree coin hnN, rankCheckP_agree,
     ringSwitchCut_cut_agree coin hnN]
 
+-- `sim_walk` down `ligeritoCut`'s unfolded run, a step lemma per call
 set_option maxHeartbeats 1000000 in
 theorem ligeritoCut_cut_agree (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (b : Array F128)
     (lay : Zk.PadLayout) (src : RepSrc) :
@@ -344,6 +345,7 @@ theorem piopCut_shift (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap root
   unfold piopCut
   sim_walk [zerocheckCut_shift coin N, lincheckCut_shift coin N, rankCheckP_shift, ringSwitchCut_shift coin N]
 
+-- `sim_walk` down `ligeritoCut`'s unfolded run, a step lemma per call
 set_option maxHeartbeats 1000000 in
 theorem ligeritoCut_shift (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (b : Array F128)
     (lay : Zk.PadLayout) (src : RepSrc) :

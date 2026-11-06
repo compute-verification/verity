@@ -47,6 +47,7 @@ integrations/vllm/tests/pipeline/test_source_identity.py -> tools/research/src/r
 integrations/vllm/tests/pipeline/test_window_advice.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/tests/program/predict/test_batch.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/tests/program/predict/test_batch.py -> verity/core/protocols/certifier/advice.py
+integrations/vllm/tests/program/predict/test_block_counts.py -> verity/core/protocols/network/nci/lean/scripts/nci_reference.py
 integrations/vllm/tests/program/predict/test_node.py -> verity/core/protocols/network/nci/lean/scripts/nci_reference.py
 integrations/vllm/tests/program/predict/test_node_registration.py -> verity/core/protocols/network/nci/lean/scripts/nci_reference.py
 integrations/vllm/tests/program/predict/test_steps.py -> verity/core/protocols/certifier/__init__.py
@@ -113,6 +114,7 @@ integrations/vllm/verity_vllm/protocols/remote_bandwidth/registry.py -> verity/c
 integrations/vllm/verity_vllm/protocols/remote_bandwidth/registry.py -> verity/core/protocols/remote_bandwidth/store.py
 integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py -> verity/core/protocols/remote_bandwidth/__init__.py
 integrations/vllm/verity_vllm/protocols/remote_bandwidth/verify.py -> verity/core/protocols/remote_bandwidth/__init__.py
+integrations/vllm/verity_vllm/protocols/remote_bandwidth/verify.py -> verity/core/protocols/remote_bandwidth/receipts.py
 pyproject.toml -> verity/core/protocols/certifier/calibration.py
 verity/core/protocols/pouw/lean/check/PouwCheck/Check.lean -> verity/core/primitives/identity/Identity/Domains.lean
 verity/core/protocols/pouw/lean/check/PouwCheck/Credit.lean -> verity/core/primitives/identity/Identity/Domains.lean

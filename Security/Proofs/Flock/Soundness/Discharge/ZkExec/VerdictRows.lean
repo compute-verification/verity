@@ -274,6 +274,8 @@ theorem zk_inner_qpos {lay : Zk.PadLayout} {pr : Zk.InnerProof} {finalC : F128} 
   dsimp only
   rw [ZkLink.qposOf, dite_eq_left hjj, hc₃]
 
+-- one proof of over a hundred lines down the rep's masked and rest programs (`repProg`), `rw` and `omega` on the rows'
+-- indices
 set_option maxHeartbeats 1000000 in
 /-- **`repProg`'s run has an inner check that holds** (`zk_rep_plays` with its inner check): the run of the compiled
 rep that `zk_rep_plays` builds, at a table whose pads and inner code are the executable's and whose statement's fold

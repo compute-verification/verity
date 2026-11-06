@@ -9,8 +9,10 @@ Its credit at pub(μ°) against W_reg is superseded, tentatively: credit is a sa
 statement about values, and 𝓜's resources appear only inside the exclusion argument (`GLOSSARY.md`, "Size, credit and
 exclusion"). This document still states the protocol at pub(μ°) until it is restated in sizes.
 
-The protocol is experimental. Its guarantee is `Pouw.Guarantees.Dither.WorkSound` and its card instances
-`Pouw.Guarantees.DitherInstance.WorkSoundAt`, over the ACCEL model `Accel`, with the clocks of `Timed`. The change whose
+The protocol is experimental. Its Lean headlines are `Pouw.Guarantees.Dither.WorkSound` and its card instances
+`Pouw.Guarantees.DitherInstance.WorkSoundAt`, over the ACCEL model `Accel`, with the clocks of `Timed`. The only round
+protocols the Lean defines are the no-fold round's (`noFoldRound`), so they don't cover v3.2's proof block, which no
+guarantee states yet. The change whose
 Lean covers this document deletes it. The numbers are D6 v1.1's, and the segment and noise periods NOFOLD-OPT's (see
 "The segment and the noise period").
 
@@ -66,7 +68,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
 The Lean predates these names. Its round is a sampling block, and its word is a proof block's committed value. Its `k`
 and `nsb` are k, and `k_draw` is q. Its `C` is W_reg, `H` is W_b, `H_o` is W_ans and `δ` is δ_coin. Its fleet's unit is
 a replica, and θ is 𝓜. A rename is to follow. Two premises have new names, which the Lean is to take: SHA-512's
-premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof service's "the proof system is sound" is
+premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof system's premise, "the proof system is sound", is
 `ProofSystemSound` (the Lean's `ServiceSound`).
 
 ## What is committed

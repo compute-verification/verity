@@ -1115,7 +1115,7 @@ def witTwiceRest : Accounting.Gates.IntDag ℕ :=
         Accounting.Gates.s32Max false,
       witGateR (.affine 0 [1]) [106] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
-/-- The window of one product for two units (`witTwice`, `ServedTwice.lean`): two units of one call, unit 1's served
+/-- The window of one product for two units (`witTwice`): two units of one call, unit 1's served
 product a copy of unit 0's, each unit with its own `y` and its own receipt over its own noised GEMM. -/
 def witTwice : Declared ℕ where
   dag := witPre ++ witTwiceRest
@@ -1208,7 +1208,7 @@ def witWSRest : Accounting.Gates.IntDag ℕ :=
         Accounting.Gates.s32Max false,
       witGateR (.affine 0 [1]) [102] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
-/-- The window of an A and a B word as the scales (`witWS`, `ServedTwice.lean`): `witZ` with its served `y`'s scales
+/-- The window of an A and a B word as the scales (`witWS`): `witZ` with its served `y`'s scales
 the A row's first word and the B column's first word. -/
 def witWS : Declared ℕ := { witZ with dag := witPre ++ witWSRest }
 

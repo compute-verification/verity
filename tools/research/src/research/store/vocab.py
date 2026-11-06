@@ -162,7 +162,7 @@ AUTHENTICATION_VALUES = ("included", "included-hash", "included-hash-shared", "e
 MODES = ("interactive", "fiat-shamir")
 SCOPES = ("unit", "vu", "component")
 TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
-#: Mirrors the Glossary's backend families (`README.md`, "Backend family").  A `candidate` label written today names one of these.
+#: The proof systems (AGENTS.md's map).  A `candidate` label written today names one of these.
 BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
 #: The backend families, then the values the frozen ledger's import derived from a ledger lane, which recorded labels carry
 #: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not Flock), `SP1` (D-SP1 as the frozen ledger and
@@ -223,9 +223,9 @@ LABEL_DELEGATION = "label_delegation"
 LEAN_REVIEW = "lean_review"
 #: On a run a landing's `Check:` or `Checked:` trailer names: main's commit that landed what it checked (`research merge`).
 LANDED = "landed"
-#: On `task:<key>`, by the executor's worker that ran it (`verity tasks run`): its verdict (`research.executor`).
+#: On `task:<key>`, by the executor from its run (`verity tasks run`): its verdict, or error with none (`research.executor`).
 TASK_VERDICT = "verdict"
-TASK_VERDICTS = ("pass", "fail")
+TASK_VERDICTS = ("pass", "fail", "error")
 #: On `commit:<sha>`, by drive in shadow mode: its after-landing run's verdicts beside the executor's (`executor.compare`).
 EXECUTOR_SHADOW = "executor_shadow"
 #: On `commit:<sha>`, by the executor: the art: id of the after-landing task graph it listed for that commit on a worker
@@ -418,8 +418,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "needs a statement reviewer"),
     _k(LANDED, GROUP_VERIFICATION, TEXT, "on a run (a check, or a part of one), by research-merge: main's commit whose Check: or "
        "Checked: trailer names it (`research merge`; `--label-landed` for past landings)", pattern=r"[0-9a-f]{40}"),
-    _k(TASK_VERDICT, GROUP_VERIFICATION, ENUM, "on task:<key>, by the executor's worker that ran `verity tasks run`: pass (passed "
-       "or skipped) or fail; a key with any fail is failed (`research.executor.fold`)", TASK_VERDICTS),
+    _k(TASK_VERDICT, GROUP_VERIFICATION, ENUM, "on task:<key>, by the executor from its run of `verity tasks run`: pass (passed) "
+       "or fail (failed), or error when no run gave a result, which reads as not run; a step that skipped gets none; a fail "
+       "stands until an error after it, else the newest is the key's verdict (`research.executor.fold`)", TASK_VERDICTS),
     _k(TASKS_GRAPH, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: the art: id of the after-landing task graph "
        "(`tasks-graph/v1`) it listed for that commit on a worker; drive reads verdicts under its tasks' keys",
        pattern=r"art:[0-9a-f]{64}"),

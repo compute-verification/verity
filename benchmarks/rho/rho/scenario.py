@@ -78,13 +78,13 @@ class Scenario:
         """The inventory's share of capacity a construction trains with, the monitored fleet's and the dark leaves':
         `MFU₀`, the reference training algorithm's, which the overhead is a multiple against."""
         f = self.context.fleet
-        return f.eps_dark * f.dark_mfu + (1 - f.eps_dark) * f.mfu_train
+        return f.eps_unreg * f.dark_mfu + (1 - f.eps_unreg) * f.mfu_train
 
     @property
     def total_phi(self) -> float:
         """`Φ_total`: the inventory's gates per second, the monitored fleet's and the dark leaves' (`ε_dark` of it)."""
         f = self.context.fleet
-        return f.count * self.context.location.phi / (1 - f.eps_dark)
+        return f.count * self.context.location.phi / (1 - f.eps_unreg)
 
     @property
     def reference(self) -> float:

@@ -1,7 +1,7 @@
 # Benchmarks
 
 `benchmarks/` holds measurement only: each directory measures something, or holds the data measurements are computed
-against. End-to-end examples, what a person runs to serve and audit a workload, are in `examples/`. Results are not
+against. End-to-end demos, what a person runs to serve and audit a workload, are in `examples/`. Results are not
 committed: a run publishes its outputs to the evidence store, and tables are rendered from the store on demand.
 `verity-bench` (`harness/`) is the shared harness for what an arm adds to served inference against stock vLLM, with its
 specs in `specs/`; `verity bench NAME` runs a directory's own runner.
@@ -25,10 +25,11 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `specs/` | the harness's specs and sweeps, one TOML file each | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
+| `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
 | `g2/` | the served Commit's overhead curve over stock, rendered from the evidence store; it measures nothing itself | maintained |
+| `serve_tax/` | what each change to the production server (step trace, release order, the certified tick, committing tokens and the KV cache) costs vLLM's own server against stock compiled vLLM at three loads, and replaying a recorded window under its committed schedule | maintained |
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
 | `resource_accounting/` | a chain of dependent matmuls at Llama-3.1-8B's shapes on one RTX PRO 6000, natively and under each protocol, with what each run certifies | maintained |
-| `load_time/` | the time from spawn to engine-ready for a large model under vLLM at TP 8, by page-cache, compile-cache and loader state | frozen |
 | `rho/` | a lower bound on the slowdown a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
 | `nci/` | the sources, parameters and policies the inference-only policy's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
 
@@ -60,8 +61,10 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `proof_throughput/` | the proof blocks a second C-Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size | maintained |
 | `commitments/` | the commitment schemes' cost: hashing leaves and building the tree, hiding leaves per row, and serving's per-step row tables | maintained |
 | `sampling_plan/` | the sampling plan for one served workload: a cost model fitted to proving measurements, and ε at δ over the verification overhead (a model, not a measurement) | maintained |
+| `spot_figures/` | the SPOT post's Figures 1-3 for a model from its cards (`spot-card/v1`) and the sampled-proofs planner: what an adversary serving it on all of a scope's compute can exfiltrate, infiltrate or skip against proof overhead per share of compute for verification, proof overhead per proof-block type, and the serve-time commitment's cost over fast serving (a model, not a measurement) | maintained |
 | `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
 | `recursion_e2e/` | recursive witness zero knowledge, timed step by step: the inner proof, V* proved with `--zk`, and the Lean verifier | maintained |
+| `recursion_figures/` | a recursion bench result's session scaled over the census's fleets and the monitoring periods: its cost, knowledge-soundness error and stop-leak bound per window and pooled | maintained |
 | `private_circuit/` | the universal unit, which runs any private circuit of a size class, proved under `--zk` and verified by the Lean verifier | frozen |
 | `live_challenger/` | the proof system's challenger on an auditor host: each session's live coins, recorded in a signed ledger before the first coin | maintained |
 

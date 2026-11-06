@@ -116,10 +116,12 @@ section Nonempty
 
 variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B] [AddCommGroup Salt] [AddCommGroup Hi]
 
+-- `Nonempty` of `Table.Rand`, a product of up to fifteen factors
 set_option synthInstance.maxHeartbeats 1000000 in
 theorem rand_nonempty (T : FlockSoundness.ZK.Table F K W Salt (B × Salt) D Hi VL) : Nonempty T.Rand := by
   unfold FlockSoundness.ZK.Table.Rand; infer_instance
 
+-- `Nonempty` of `Table.SimRand`, a product of up to fifteen factors
 set_option synthInstance.maxHeartbeats 1000000 in
 theorem simRand_nonempty (T : FlockSoundness.ZK.Table F K W Salt (B × Salt) D Hi VL) : Nonempty T.SimRand := by
   unfold FlockSoundness.ZK.Table.SimRand; infer_instance
@@ -127,6 +129,7 @@ theorem simRand_nonempty (T : FlockSoundness.ZK.Table F K W Salt (B × Salt) D H
 end Nonempty
 
 set_option maxRecDepth 8000 in
+-- `prCoin` over the product of `J` tables' randomness and salts, each table's bound composed by `prCoin_pi_close`
 set_option maxHeartbeats 4000000 in
 /-- **Zero knowledge at `J` `CoinedSetup`s from their facts**: Lemma B (`table_shvzk_hm96`) at each table, their leaves'
 hiding at any hm96 hiding bound `δ₁` (`hT1`), row (ii) `padOnto_M1`'s from `PadNonvanishing` (`ZK.padNonvanishing40`), composed over the tables' independent

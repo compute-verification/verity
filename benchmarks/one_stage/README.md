@@ -62,7 +62,7 @@ negatives.
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
-- `examples/vllm/commit.sh` (the vLLM example's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
+- `examples/vllm/commit.sh` (the vLLM demo's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
@@ -93,7 +93,8 @@ negatives.
   the certifier's piece reads. Each
   step's verdict line is in `out/verdicts.txt`. The network certifier's piece, the longest, starts as soon as the window is
   picked. No line counts a window's requests: the serve dir's request lists, serve-openai's log and the load's records,
-  timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate.
+  timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate, less the load's counts,
+  tokens and span, which `publish` holds in the serve dir's private/out.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
@@ -109,6 +110,21 @@ negatives.
   byte run with any case's evidence. With `--exe`, it runs `onsite check` or `remote check` and exits with
   Lean's code. It decides nothing: a subprotocol with no case is left out, Lean's verdict on what remains stands (a
   rejection naming the missing case), and the run is labelled `NOT_ESTABLISHED` with what is missing.
+- `pouw_piece.py`: PoUW's `--cases` directory for `composite.py`, remote's `verity/pouw/v1` (`v1`: the verifier's params,
+  the window's one-stage registration and the proof service's answer to it) or onsite's `verity/pouw/period/v1`
+  (`period`: the key, main's first-parent history, the period's name, the auditor's ledger, the pins log and each
+  window's evidence), and its answer, `pouw-check`'s or `pouw-period`'s with `--exe`, written private as `composite.py`
+  reads it. From a served run (`--serve-run DIR --window K`) it names the piece MISSING with why and writes no case, so
+  `composite.py` leaves it out: an H1 window has no `v1` case, and no `period` case outside a period or without its drawn
+  units' proof outcomes.
+- `v2_case.py`: sampled proofs v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
+  partition, public file, sessions and circuit file), with its own Lean answer with `--exe`. A circuit file the run didn't
+  keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin.
+- `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
+  `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
+  (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the drawn and live legs'
+  statements, `POUW_STATEMENTS` and `POUW_LIVE`), v2's (`v2_case.py`) and every kept piece holding a case beside its
+  answer, all private in scratch, and runs `composite.py remote` and `onsite`; `$OUT` gets only their public output.
 - `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
   a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
   Lean, honest and with a tampered block, a scan of everything the verifier received for the sampled proof blocks' bytes, and the
@@ -173,15 +189,26 @@ negatives.
   samples from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
   ANDs, table reads and assertions from its leaves lowered once (an upper bound on the flat count), against 2^26, and
   the log2 of M0's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below), the
-  same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use.
+  same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use, with
+  each unit's served MACs and the bits of each of its ports; `--steps all` takes every request step.
+- `block_census.py` (run by `block_census.sh ROW_DIR` on the machine holding the row's Build): the proof-block census of
+  a TP Commit's Build. Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
+  row itself when it fits C-Flock's block and a size class, else each slot of its split at its coarsest fitting unit, else
+  a gap with the reason), and per proof-block Definition its count in the prefill step and the decode steps, output bits
+  and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
+  and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
+  `benchmarks/sampling_plan/glm53.py`).
   `m1_unit.py` builds one family's unit through M0's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
 - `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
   served with `serve-openai --no-commit` and no protocol, once per fresh endpoint for `REPS` endpoints. `served_overhead.py
   table` compares the composed run with it on two clocks, each the same code in both runs: the client's
-  (`serve_load.py --varied`'s timings files) and the engine's step trace (`advice_trace.jsonl`). The trace and the load's
-  records stay in the serve dir on the node, where `served_overhead.py metrics` reads them, and each run publishes only
-  that aggregate (`overhead.json`), which `table` reads. It reports time per output
+  (`serve_load.py`'s timings files: `--varied`'s, or with `FIXED` set `--fixed`'s, the composed run's `LOAD=fixed`) and the
+  engine's step trace (`advice_trace.jsonl`). The trace and the load's
+  records stay in the serve dir on the node, where `served_overhead.py metrics` reads them. Its aggregate (`overhead.json`)
+  holds the load's request and token counts, so a stock run's stays there too, and the composed run publishes its own less
+  its load's counts, tokens and span. `table` reads the full ones on the node, the stock runs' and the composed run's
+  private/out/serve/overhead.json, and `table --public` publishes ratios alone. It reports time per output
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
 - `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases

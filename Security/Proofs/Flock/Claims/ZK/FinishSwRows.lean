@@ -59,7 +59,7 @@ view's first seven rows (`SwRows`): seven constraints, each of the layout's leng
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace FlockSoundness.Discharge.Composed
 open Flock Model ZkSession ZkView ZK Refine

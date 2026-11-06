@@ -360,6 +360,8 @@ theorem answered_ok_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Wor
   | error e => rw [hA] at hp; cases hp
   | ok m => exact ⟨m, rfl⟩
 
+-- one proof of a few hundred lines down `FlockComplete.piopRoundsZk`'s unfolded rounds, `rw` and `omega` on the round
+-- indices
 set_option maxHeartbeats 2000000 in
 /-- **The loop's level-0 messages**: at a `Live` statement the loop serves, on a live history of `refK x` openings
 whose last coins the frame takes, whose messages are the release's own and whose tables are the loop's (`RealTabs`),

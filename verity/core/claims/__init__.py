@@ -83,8 +83,8 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("io-getrandombytes", "IO.getRandomBytes"),
     # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window
     Instance("python-secrets", "Python's secrets"),
-    # A6: each round's coins from Flock's Rust coin server (/dev/urandom outside seed mode), sampled after the prover's message
-    Instance("flock-coin-server", "Flock's coin server"),
+    # A6: each round's coins from Flock's challenger (Rust, /dev/urandom outside seed mode), sampled after the prover's message
+    Instance("flock-coin-server", "Flock's challenger"),
     # verity.ml.crypto.lms: LMS (RFC 8554) over SHA-512, its whole 64-byte output, the network certifier's and the
     # memory challenger's signatures; its EUF-CMA rests on SHA-512 itself: multi-target second-preimage resistance under RFC
     # 8554's prefixes (its §9) and, for keys derived from a seed (its Appendix A), SHA-512 as a PRF keyed by the seed
@@ -238,7 +238,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "coins not yet released; what it learns of them is what p's outputs carry", "Secret party", "standard"),
     Entry("confined", "assumption",
           "Confined p: the auditor party p's only outputs are the messages of its declared channels (toward the auditor, "
-          "its manifest's public messages, such as one liveness record per sampling block): no other channel, timing "
+          "its manifest's public messages, such as one liveness record per execution phase): no other channel, timing "
           "included, carries its state out", "Confined party", "standard"),
     Entry("witness-path-private", "assumption",
           "Witness path private: the path between an auditor party and the prover carries no observer but its two "
@@ -440,7 +440,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "order, pinning (accounting-ts-proofs-pin) and E1(c) (accounting-ts-right-fixed), ProofsSound: outside an "
           "event of probability at most S·(δ_bind + n_π·δ_ZK), an accepted window is accepted by the ideal game and its "
           "owned right fixed words per unit are at least (1 − Σ_w d_w/S)·N_w, rightness read on the path's coins. The "
-          "headlines (sm_120's, the H200's and the B200's) take the two alone as named premises: binding in its fork "
+          "headlines (sm_120's, the H200's and the B200's) take the two alone as assumptions: binding in its fork "
           "form at δ_fork (BindingForkAt: at every round w, on a run and on its continuation from w on fresh coins, "
           "which share w's commitment, every proof of round w is accepted and some proof opens w's leaves differently, "
           "with probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's "
@@ -535,11 +535,25 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "least the words of the units that are fixed under option A, computed, and with every unit steering them "
           "computed, over the rounds, and the folded words at least the words of the units whose receipts commit their "
           "folds", "TS counts fixed", "conjectured"),
+    # `Claims.ZKServer.Relay.RelayServes` and `Claims.ZKServer.Relay.WorkerDeterministic`
+    # (Security/Proofs/Flock/ZkAny/RelayServes.lean) are their Lean forms, premises of the relay's `envPre_run`
+    Entry("flock-relay-serves", "assumption",
+          "The firewall's relay serves each session's requests as its IO code reads: at each request that reaches a "
+          "slot of the session's schedule, the loop's references (the rep frames, the level 0s, the link, the loop's "
+          "own proofs, the inner proof's rounds and the salts the finish keeps) change as the IO function the relay "
+          "calls there changes them, stated with the pure functions it calls, and each answer the relay reads on the "
+          "auditor's connection is the auditor's to everything the relay sent it", "Relay serves", "standard"),
+    Entry("flock-worker-deterministic", "assumption",
+          "The prover's worker behind the ZK server gives each frame round's content as a function of its history: "
+          "the content LiveChallenger::round sends in its Req::Round is the value the model's worker gives at the "
+          "coins the worker has received, from the statement, the witness and its tapes", "Worker deterministic",
+          "standard"),
     # `Claims.ZKServer.Loop.Src` (Security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
     # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
     Entry("flock-firewall-os-src", "assumption",
           "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
-          "for each table's level 0, the witness's packed table at the tape's mask words and the tape's extra lanes, lane "
+          "for each table's level 0, at the sizes it draws: the witness's packed table at the tape's mask words and the "
+          "tape's extra lanes, lane "
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
           "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
           "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "

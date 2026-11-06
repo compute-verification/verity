@@ -64,6 +64,7 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {draw partition : Option Json} {program own : Option ByteArray} {work : Option (ℕ × Array (String × ℕ × ℕ))}
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Flock.Stmt}
 
+-- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **`setupTables` sets up each table with `setupHidden` at the verifier's public inputs** under a tag with hidden
 outputs (`setupTables_okH` at any `own`). -/
