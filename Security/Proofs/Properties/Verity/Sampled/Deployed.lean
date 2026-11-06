@@ -9,10 +9,10 @@ import all Lean.Data.Json.FromToJson.Basic
 /-!
 # A3 and `live-verifier` at the session the deployment runs, with no premise but V5's law
 
-`Verity.Sampled.Live` carries two of V5's hypotheses as fields, A3 at the device's bytes the draw reads (`Live.hA3`)
-and `live-verifier` at the writer whose record v2 decodes (`Live.hCust`, `RecordCustodyZKJPLaw` under the session's law,
-with the draw file's size, V5's `hsz`). This file proves both at the deployment's session, for the vocabulary instance
-to cite:
+`Verity.Sampled.Live` proves two of V5's hypotheses from this file, `live-verifier` at the writer whose record v2
+decodes (`Live.hCust`, `RecordCustodyZKJPLaw` under the session's law) and the draw file's size (V5's `hsz`,
+`Live.hsz`), and carries a third as a field, A3 at the device's bytes the draw reads (`Live.hA3`), which the session as
+deployed takes from here (`Live.deployed`). This file proves the three at the deployment's session:
 
 * **The draw file** (`printedDraw law`): at each draw `S`, the one `flock-verify draw` prints for the verifier's own draw
   of `S` under `law` over the `n` proof blocks (`UnitDraw.toJson` of `ZkLink.drawOf`); at a subset law it is
