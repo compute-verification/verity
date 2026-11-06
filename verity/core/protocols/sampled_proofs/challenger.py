@@ -107,6 +107,7 @@ more entries, its `period-open` and `period-close`, which name the prover in the
     end     = body {closed, files, record_leaf, commitment, refused_hellos, complete, ...}    files: each file's SHA-512
     period  = body {period, lane, ...} (session null); a close lists its windows as {root, session, complete}, root
               null for a reserve never opened
+    declaration = body {by, [for], blocks, day, declared_utc, pinned, program} (session null)
     message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
 each entry a record entry (`verity.core.protocols.record`, `Core.Record`), each line as the auditor writes it
@@ -132,6 +133,14 @@ the ledger's heads;
 `ledger_head` checks each, refuses any two that don't extend one another, and takes the longest.  Every entry is under
 the one pinned key, so a ledger whose key changes is refused: no entry, signed under the old key, hands the ledger to a
 new one.  `ledger_line` writes an entry as the auditor does.
+
+**A lane's day** is a UTC day, numbered from 1970-01-01 (`day_of`), and its program is the one the lane's `declaration`
+entry names for it: its program's SHA-512 and its blocks' descriptor keys, declared at `declared_utc`, the challenger's
+own clock, for that day or a later one.  A lane declares a day once.  Once a lane has declared, each later `open` of its
+windows (the window's registration, before its first coin) is on a day it declared earlier: its `started_utc`'s, the
+challenger's clock too, so the ledger orders a day's declaration before every coin of the day.  `_days` checks both in a
+second pass over the entries the first accepted; a lane that never declares opens as before.  `declared_day` is what a
+per-day check reads of the ledger: the day of the window's open and the lane's declarations before it.
 
 **A window counts toward its period** only when it proves the circuit the period's open committed (`credited_session`):
 the period's `circuit` is the registered circuit's SHA-512 (`circuit_of`), and the verifier holds the descriptor of the
@@ -192,7 +201,7 @@ import string
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -267,6 +276,7 @@ LEDGER_ROLE = "verity/challenger-auditor-record/v1"
 LEDGER_TAGS = {LEDGER_SCHEMA_V1: "verity/challenger-auditor/entry/v1", LEDGER_SCHEMA: "verity/challenger-auditor/entry/v2"}
 PERIOD_KINDS = ("period-open", "period-close")
 SESSION_KINDS = ("reserve", "open", "end")
+DECLARATION = "declaration"
 #: the request a reserve records and its session's open carries
 RESERVED = ("by", "for", "peer", "scheme", "epoch", "families", "minutes")
 #: a reserve's most minutes
@@ -300,8 +310,9 @@ LEDGER_FORM = ("an auditor's ledger line is an entry {body, kind, prev, schema, 
                "key (key_sha512) and in v2 its opener (by, and for when opened for a lane); kind reserve, its body the "
                "window's request; kind end, its body whether its client closed the session (closed), the SHA-512 of each "
                "file the session left (files) and in v2 the leaf its record was signed at, if any; kind period-open, its "
-               "period, lane and key_sha512; or kind period-close, its period, lane, windows ({complete, root, session} "
-               "each, root null for a reserve never opened) and whether all are complete")
+               "period, lane and key_sha512; kind period-close, its period, lane, windows ({complete, root, session} "
+               "each, root null for a reserve never opened) and whether all are complete; or kind declaration, its body "
+               "a lane's day and the program it declared")
 END_FORM = ("a window's end names the leaf its record was signed at (record_leaf), its commitment's root (commitment), how "
             "many hellos it refused (refused_hellos) and seals " + ", ".join(SEALED_FILES))
 HEADS_FORM = "the auditor's published heads are a list of ledgers, each its lines"
@@ -1061,6 +1072,15 @@ def later(t: Any, minutes: int) -> str | None:
     return f"{d.year:04d}-{d.month:02d}-{d.day:02d}T{d.hour:02d}:{d.minute:02d}:{d.second:02d}Z"
 
 
+def day_of(t: Any) -> int | None:
+    """The UTC day of `t` (`later`'s form): the days from 1970-01-01 to its date, a natural number; None when `t` isn't
+    such a time or falls before 1970."""
+    if type(t) is not str or later(t, 0) != t:
+        return None
+    d = (date(int(t[:4]), int(t[5:7]), int(t[8:10])) - date(1970, 1, 1)).days
+    return d if d >= 0 else None
+
+
 def cap_of(v: Any) -> int:
     """A period's cap: the most windows it may hold, a positive integer; ValueError otherwise."""
     if type(v) is not int or not CAP[0] <= v <= CAP[1]:
@@ -1079,7 +1099,9 @@ def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes],
     plus its minutes; one `open` a root, whatever its period label, in canonical lowercase, and after the first reserve
     each open binds its session's reserve (`reserve`, its seq), carries its request, is by its prover and falls inside its
     minutes and before its period's close; one `end` a session, after its `open`, and a v2 end's `record_leaf` between its
-    session's open and end and no entry's or other record's; periods as `verify_periods` checks them. Returns root ->
+    session's open and end and no entry's or other record's; periods as `verify_periods` checks them; and then each
+    lane's days (`_days`): each `declaration` v2 and of its form, one a lane's day, and once a lane has declared, each
+    later open of it on a day it declared earlier. Returns root ->
     {"reserve" (None for a one-step open), "open", "end" or None}: S is the open's `session`, R its root; raises
     ValueError at the first entry that fails. It reads one head: a verifier takes the operator's newest published head,
     and refuses
@@ -1117,6 +1139,7 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
     periods: dict[str, dict] = {}
     current: dict[str, str] = {}
     reserves: dict[str, dict] = {}
+    es: list[dict] = []
     prev, last, v2, two_step = _ZERO, -1, False, False
 
     def join(i: int, lane: str | None, session: str) -> str | None:
@@ -1138,7 +1161,8 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
         v2 = v2 or e["schema"] == LEDGER_SCHEMA
         kind = e.get("kind")
         period_kind = kind in PERIOD_KINDS
-        if (e.get("session") is not None if period_kind else type(e.get("session")) is not str) or type(e.get("body")) is not dict:
+        if ((e.get("session") is not None if period_kind or kind == DECLARATION else type(e.get("session")) is not str)
+                or type(e.get("body")) is not dict):
             raise ValueError(f"entry {i}: a session's entry has a session, a period's none, and each a body")
         q = leaf_of(e.get("sig"))
         if not verify(ledger_message(I, e), bytes.fromhex(e["sig"])):
@@ -1231,15 +1255,54 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
                     raise ValueError(f"entry {i}: period {name}'s close doesn't list exactly its windows and their outcomes")
                 p["close"] = e
                 del current[lane]
-        else:
+        elif kind != DECLARATION:
             raise ValueError(f"entry {i}: kind {kind!r}")
+        es.append(e)
         leaves.add(q)
         prev, last = core_record.prev_of(ln), q
     if reused := sorted(leaves & set(records)):
         raise ValueError(f"entry {records[reused[0]]}: record leaf {reused[0]} is also an entry's")
+    _days(es)
     return ({root: {"reserve": (reserves.get(w["open"]["session"]) or {}).get("entry"), "open": w["open"], "end": w["end"]}
              for root, w in windows.items()},
             {name: {k: p[k] for k in ("lane", "open", "close", "windows", "cap", "circuit")} for name, p in periods.items()})
+
+
+DECLARATION_FORM = ("a declaration is v2 and names its prover, its program (a SHA-512 in lowercase hex), its blocks (a "
+                    "list of strings), the pinned commit and a day no earlier than its declared_utc's")
+
+
+def _declaration(b: dict) -> bool:
+    """A declaration's body: its prover's names, its program's SHA-512 and its blocks' keys, the commit the challenger
+    ran, and a natural `day` no earlier than the day of `declared_utc` (`day_of`)."""
+    blocks, at = b.get("blocks"), day_of(b.get("declared_utc"))
+    return (_period(b.get("by")) and ("for" not in b or _period(b["for"])) and _digest_hex(b.get("program"))
+            and type(blocks) is list and all(type(k) is str for k in blocks) and _digest_hex(b.get("pinned"), 40)
+            and _nat(b.get("day")) and at is not None and at <= b["day"])
+
+
+def _days(es: list[dict]) -> None:
+    """`_verify`'s second pass, over the entries its first accepted: each declaration v2 and of its form
+    (`DECLARATION_FORM`), and a lane's day declared once; once a lane has declared, each later open of it on a day it
+    declared earlier, its `started_utc`'s (`day_of`)."""
+    declared: set[tuple[str, int]] = set()
+    for i, e in enumerate(es):
+        b = e["body"]
+        if e["kind"] == DECLARATION:
+            if e["schema"] != LEDGER_SCHEMA or not _declaration(b):
+                raise ValueError(f"entry {i}: {DECLARATION_FORM}")
+            lane = lane_of(e)
+            if (lane, b["day"]) in declared:
+                raise ValueError(f"entry {i}: lane {lane} declares day {b['day']} twice")
+            declared.add((lane, b["day"]))
+        elif e["kind"] == "open" and any(lane == lane_of(e) for lane, _ in declared):
+            day, lane = day_of(b.get("started_utc")), lane_of(e)
+            if day is None:
+                raise ValueError(f"entry {i}: session {e['session']}'s open names no day (started_utc), and its lane "
+                                 f"{lane} declares its days")
+            if (lane, day) not in declared:
+                raise ValueError(f"entry {i}: session {e['session']} opens on day {day}, which its lane {lane} hasn't "
+                                 "declared")
 
 
 def ledger_text(entry: dict) -> str:
@@ -1284,7 +1347,7 @@ def _ledger_entry(line: Any) -> dict | None:
     if kind in SESSION_KINDS:
         if not _session_id(e["session"]):
             return None
-    elif kind in PERIOD_KINDS:
+    elif kind in PERIOD_KINDS or kind == DECLARATION:
         if e["session"] is not None:
             return None
     else:
@@ -1293,7 +1356,7 @@ def _ledger_entry(line: Any) -> dict | None:
         ok = ((_window(b.get("window")) if v2 else _v1_window(b.get("window"))) and _host(b.get("host"))
               and _digest_hex(b.get("pinned"), 40) and _digest_hex(b.get("key_sha512"))
               and (not v2 or type(b.get("by")) is str and type(b.get("for", "")) is str))
-    elif kind == "reserve":
+    elif kind in ("reserve", DECLARATION):
         ok = True
     elif kind == "end":
         files = b.get("files")
@@ -1407,6 +1470,29 @@ def _audited(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> tu
         raise CoinError(f"the auditor's ledger's period {name}, which holds session {s}, commits no cap or circuit")
     return Audited(s, o["body"]["host"], lane_of(o), dict(b["files"]), b["record_leaf"], b["commitment"],
                    b["refused_hellos"], o["body"]["pinned"], name, p["cap"], p["circuit"]), o["body"]
+
+
+def declared_day(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> dict:
+    """Lean `Challenger.declaredDay`: the day the auditor's ledger `ledger` (its lines) opens window `window`
+    (``{root}``) on under the pinned key `key`, the UTC day of its v2 open's `started_utc` (`day_of`), and the
+    declarations its lane signed before that open, each ``{blocks, day, program}``: ``{"day", "declarations"}``, what a
+    per-day check holds the window's program to.  Raises `CoinError` naming why when the ledger is refused
+    (`audited_session`'s check), opens no session for the window, or opens it on no day."""
+    if not _window(window):
+        raise CoinError(f"the window's identity is malformed: {WINDOW_FORM}")
+    windows, _ = _checked(ledger, key, verify)
+    w = windows.get(window["root"])
+    if w is None:
+        raise CoinError("the auditor's ledger opens no challenger session for this window")
+    o = w["open"]
+    day = day_of(o["body"].get("started_utc")) if o["schema"] == LEDGER_SCHEMA else None
+    if day is None:
+        raise CoinError(f"the auditor's ledger opens this window's session {o['session']} on no day: its open is not v2 "
+                        "or names no started_utc of 1970 or later")
+    lane = lane_of(o)
+    mine = [e["body"] for e in map(_ledger_entry, ledger)
+            if e["kind"] == DECLARATION and e["seq"] < o["seq"] and lane_of(e) == lane]
+    return {"day": day, "declarations": [{"blocks": b["blocks"], "day": b["day"], "program": b["program"]} for b in mine]}
 
 
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:

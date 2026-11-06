@@ -7529,12 +7529,16 @@
    }
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "9e4081ae85004f13ccc3f332249ced9c1710555212b62da704497b2706bce570",
+   "digest": "eba9c7f664ea278cd153b75b98b85daa4cac897965780840234435797da95fd4",
    "definitions": {
+    "SampledProofs.Challenger.DECLARATION_FORM": "b5722bfe8994c251866297aeb248b642151e4ee65631d61945bd63b076cc1dbf",
     "SampledProofs.Challenger.circuitReason": "23e4bf4502c444a403160f17c1834e83cf25a4b923b17c23106c8830afd90819",
     "SampledProofs.Challenger.creditedSession": "841f7fa489a57f899e1cfcfaefee1c86d54b0bd7107111ba02f797b3d9a8f0f9",
+    "SampledProofs.Challenger.dayOf": "d0d7693d70fd0841c2f02e7b5d6e1121653f55f33fa9bf41c2e2e0bbf11091b1",
     "SampledProofs.Challenger.releasedRootsOf": "c8efef619f3e76e906436ef3eaf78e97e9154fc8c8987fcc69f579f111bcfe65",
-    "SampledProofs.Challenger.treeLine": "3d9e21631d42f02b4098705d83fc9f6df9cce0da21d16aa031e1c271f6df7b0b"
+    "SampledProofs.Challenger.treeLine": "3d9e21631d42f02b4098705d83fc9f6df9cce0da21d16aa031e1c271f6df7b0b",
+    "SampledProofs.Challenger.verifyDays": "4fd16ee48bf8474e1845e683b2ab1310f9cbfcb94e8648b0bb3a062352165495",
+    "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.isDeclaration": "54bf610d1269c2dc1a62d41ede5515a7cb36631f7fadc913f608fa8021e03aae"
    }
   },
   "SampledProofs.ChallengerTrees": {
