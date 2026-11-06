@@ -158,8 +158,11 @@ A spec-level reference for network accounting's timing channel:
   runs it;
 - the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
   0-based place in its run's release order) and `x-verity-release-run: ID` on the server's copy of each request it
-  releases, for `serve-openai --admit release-order`. The headers never appear in a cell or record, so nothing
-  certified changes;
+  releases, for `serve-openai --admit release-order`. The network certifier adds `x-verity-release-bucket: a`, the
+  bucket of the request's `END`. With `Warden(watermark=…)` it also sends the server a watermark stream:
+  one chunked `POST /verity/watermark` carrying one line `t n` a tick, meaning bucket t has closed and the releases of
+  buckets ≤ t are exactly N < n. An engine that admits at a logical time in certifier buckets waits on that line.
+  The headers and the stream never appear in a cell or record, so nothing certified changes;
 - the network certifier's cells as rows (`warden_rows`): each execution phase's cells committed one `hm96-sha512/row/v2`
   row a bucket, padding and empty slots included, under a frame-v3-sha512 root the network certifier signs with the
   certifier's signer, beside a salted digest of the window's wiring. The registration is what a proof block's
