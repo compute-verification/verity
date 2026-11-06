@@ -1,13 +1,15 @@
-"""Replay of a drawn request under a TP engine in eager mode (GLM-5.3 TP8): whether a request served in a batch replays bit for bit
-(its tokens, and the values the model's modules return at its rows, with the DSA indexer's top-k indices and each attention layer's
-core output) when it runs again in the same batch, beside fillers of the same shapes, alone, or in another batch; and what a
+"""Replay of a drawn request under a TP engine in eager mode (GLM-5.3 TP8, or DeepSeek-V4-Pro with ``--case``): whether a request
+served in a batch replays bit for bit (its tokens, and the values the model's modules return at its rows, with GLM-5.3's DSA
+indexer's top-k indices and each attention layer's core output) when it runs again in the same batch, beside fillers of the
+same shapes, alone, or in another batch; and what a
 replay costs in GPU-seconds with its prompt's KV computed (cold) or read from the prefix cache (warm). Measurement only.
 
     bash benchmarks/served_commit/tp_replay.sh      (its header has the knobs)
 
 The served batch (`SERVED`, `arms`) is eight requests, each prompt a tiling of the row's prompt at its own rotation so that no two
-share a cache block: three drawn (``d-short``, 256 tokens greedy; ``d-long``, 3,072 tokens greedy, whose later rows read more keys
-than the 2,048 the DSA top-k keeps; ``d-seed``, 512 tokens sampled with its own seed) and five companions arriving over the
+share a cache block: three drawn (``d-short``, 256 tokens greedy; ``d-long``, `LONG` tokens greedy (``--long``), whose later
+rows read more keys than the 2,048 GLM-5.3's DSA top-k keeps; ``d-seed``, 512 tokens sampled with its own seed) and five
+companions arriving over the
 first six steps. Every request decodes to its cap (``ignore_eos``), so an arm's schedule doesn't depend on its tokens. The arms:
 
 - ``served``, the reference, and ``served-2``, the same batch again (a window replay: the same requests and arrivals);
@@ -67,6 +69,9 @@ OTHER = (("o0", 2304, 12, 0, {}), ("o1", 160, 40, 0, {"temperature": 0.9, "seed"
          ("o9", 320, 44, 5, {}), ("o10", 832, 32, 7, {}), ("o11", 1792, 18, 9, {}))
 #: the drawn requests' order and arrival in ``other``
 OTHER_DRAWN = (("d-seed", 1), ("d-long", 1), ("d-short", 1))
+#: ``d-long``'s default prompt length: past GLM-5.3's 2,048-key top-k shortcut (``--long`` moves it, e.g. past DeepSeek-V4's
+#: TOPK x CSA_R = 4,096 tokens)
+LONG = 3072
 MAX_SEQS = 16
 FILLER_SEED = 0x7E9_1A7
 FP_SEED = 0x5EED_F1A6
@@ -98,10 +103,11 @@ def filler(r: dict[str, Any], i: int, vocab: int, rng: np.random.Generator) -> d
     return {**keep, "request_id": f"filler-{i}", "prompt_token_ids": rng.integers(3, vocab - 1, size=len(r["prompt_token_ids"])).tolist()}
 
 
-def arms(base: list[int], vocab: int) -> dict[str, list[dict[str, Any]]]:
-    """Every arm's requests, in admission order (the module docstring has them). Each request's rotation of ``base`` is its own."""
+def arms(base: list[int], vocab: int, long: int = LONG) -> dict[str, list[dict[str, Any]]]:
+    """Every arm's requests, in admission order (the module docstring has them), ``d-long``'s prompt ``long`` tokens. Each
+    request's rotation of ``base`` is its own."""
     rot = iter(range(7, 7 * 64, 7))
-    served = [request(row, base, next(rot)) for row in SERVED]
+    served = [request((rid, long, *rest) if rid == "d-long" else (rid, n, *rest), base, next(rot)) for rid, n, *rest in SERVED]
     drawn = {r["request_id"]: r for r in served if r["request_id"] in DRAWN}
     rng = np.random.default_rng(FILLER_SEED)
     out = {REFERENCE: served, "served-2": served,
@@ -593,6 +599,7 @@ def main() -> None:
     ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
     ap.add_argument("--tp", type=int, default=8)
     ap.add_argument("--reps", type=int, default=2, help="pass 2's runs of every arm, interleaved")
+    ap.add_argument("--long", type=int, default=LONG, help="d-long's prompt length")
     ap.add_argument("--engine-arg", action="append", default=[])
     ap.add_argument("--rpc-timeout", type=float, default=3600.0)
     a = ap.parse_args()
@@ -607,7 +614,7 @@ def main() -> None:
     llm, eng, wl, world = E.llm, E.eng, E.wl, E.world
     sampling = wl["sampling"]
     vocab = int(llm.llm_engine.vllm_config.model_config.hf_config.vocab_size)
-    plan = arms([int(t) for t in wl["requests"][0]["prompt_token_ids"]], vocab)
+    plan = arms([int(t) for t in wl["requests"][0]["prompt_token_ids"]], vocab, a.long)
     longest = max(len(r["prompt_token_ids"]) + int(r["max_tokens"]) for v in plan.values() for r in v)
     if longest > int(E.kw.get("max_model_len") or 0):
         raise SystemExit(f"max_model_len {E.kw.get('max_model_len')} is below the longest request's {longest} tokens")

@@ -162,6 +162,20 @@ def test_arms_keep_the_drawn_requests_and_their_companions_shapes():
     assert long["request_id"] == "d-long" and long["arrive_step"] > 10 ** 6
 
 
+def test_long_moves_only_d_longs_prompt():
+    base = np.random.default_rng(5).integers(3, 1000, size=256).tolist()
+    A, B = D.arms(base, 1000), D.arms(base, 1000, 6144)
+    for arm in A:
+        for a, b in zip(A[arm], B[arm], strict=True):
+            if a["request_id"] == "d-long" or (arm == "warm" and a["request_id"] == D.PRODUCER):
+                assert len(b["prompt_token_ids"]) == 6144 and b["prompt_token_ids"][:3072] == a["prompt_token_ids"]
+                assert {k: v for k, v in a.items() if k != "prompt_token_ids"} == {k: v for k, v in b.items() if k != "prompt_token_ids"}
+            elif a["request_id"].startswith("filler-"):
+                assert len(a["prompt_token_ids"]) == len(b["prompt_token_ids"])
+            else:
+                assert a == b
+
+
 def test_steps_and_span():
     st = D.Steps()
     outs = [[SimpleNamespace(request_id="p", finished=False, num_cached_tokens=0)],
