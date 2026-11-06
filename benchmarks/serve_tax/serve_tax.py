@@ -370,10 +370,10 @@ def tick_args(source: str | None, given_ms: str | None, load: str = "saturated")
     """The certified tick's constants in µs: τ_b the corpus's bucket, τ_sat and τ_free the corpus's multiples of the
     mean busy cycle of a ``record`` step trace (a file, or a ``record`` arm's dir: its trace over ``load``'s first rep),
     or given as ``SAT,FREE`` ms."""
+    if not TICK_PLUGIN.is_file():
+        raise SystemExit(f"the tick arms need the certified tick ({TICK_PLUGIN.name}), which this tree lacks: run them "
+                         "from a tree that has --admit tick")
     C = corpus()
-    if not (TICK_PLUGIN.is_file() and hasattr(C, "TICK_BUCKET_MS")):
-        raise SystemExit(f"the tick arms need the certified tick ({TICK_PLUGIN.name} and the trace corpus's "
-                         "TICK_* constants), which this tree lacks: run them from a tree that has --admit tick")
     if (source is None) == (given_ms is None):
         raise SystemExit("the tick arms take τ from one of --tick-from STEP_TRACE|RECORD_DIR and --tick-ms SAT,FREE")
     if given_ms is not None:
