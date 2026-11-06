@@ -162,8 +162,7 @@ owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the qui
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and one post per
 root cause names each PR it leaves out. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
-The mark and sync refuse a lock merge dropping an entry `next` needs (`lock_drops`). The sync runs no preflight: it admits
-a merge on the mark's or a pool run's verdict.
+The mark and sync refuse a lock merge dropping an entry `next` needs (`lock_drops`).
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
