@@ -53,6 +53,7 @@ from verity_vllm.program.frontend.registration import RegisteredInputs, RunInput
 from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
 from verity.ml.definitions.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
+from verity_vllm.program.frontend.value_types import Alloc
 from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
 
 DERIVE_VERSION = "verity_vllm.program.frontend.derive/2026-09-09.d4"  # d4: rotary table without terminal cast, 0-d buffer operand in Elementwise; d3: embedding padding_idx, bf16 inv_freq rotary table; d2: HF 5.x plumbing
@@ -81,14 +82,6 @@ class StaticIndex:
 
     def __repr__(self) -> str:
         return f"StaticIndex({self.tensor.dtype}, {list(self.shape)})"
-
-
-@dataclass(eq=False)
-class Alloc:
-    """An uninitialised allocation (`empty`, `empty_like`, `new_empty`): the write target of an in-place rule.
-    Reading it before a rule writes it is refused."""
-    type: Type
-    node: Any
 
 
 @dataclass

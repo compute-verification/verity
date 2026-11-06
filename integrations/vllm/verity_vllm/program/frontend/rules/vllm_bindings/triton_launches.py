@@ -11,10 +11,10 @@ from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, rows_of, shape
+from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, row_value, rows_of, shape
 from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
 from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value, _strides, _untransposed
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides, _untransposed
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, QKV_RMS_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_bias_role,
                                                                    gemm_pins_for, lookup_key)
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
@@ -50,7 +50,7 @@ class TritonRmsNormRule(InPlaceRule):
         x, w, out = (launch_tensor(node, meta, n) for n in ("input_ptr", "weight_ptr", "output_ptr"))
         if x is None or w is None or out is None:
             return "tensor arguments input_ptr/weight_ptr/output_ptr not all present"
-        r = _row_value(ctx, x, "input") or _row_value(ctx, w, "weight")
+        r = row_value(ctx, x, "input") or row_value(ctx, w, "weight")
         if r:
             return r
         if not isinstance(ctx.val(out), (Alloc, Coll)):
@@ -157,7 +157,7 @@ class FusedQKvRmsNormRule(InPlaceRule):
             return "q_out and kv_out are not two tensors apart from the inputs"
         T = None
         for (name, _, _, _, in_stride, out_stride, size_key), (x, out, w) in zip(QKV_ARGS, tensors):
-            r = _row_value(ctx, x, name) or _row_value(ctx, w, f"{name} weight")
+            r = row_value(ctx, x, name) or row_value(ctx, w, f"{name} weight")
             if r:
                 return r
             if not isinstance(ctx.val(out), Alloc) or not dtype_is(ctx, out, BF16):
@@ -242,7 +242,7 @@ class TritonGemmRule(InPlaceRule):
         a, b, c = (launch_tensor(node, meta, n) for n in ("a_ptr", "b_ptr", "c_ptr"))
         if a is None or b is None or c is None:
             return "tensor arguments a_ptr/b_ptr/c_ptr not all present"
-        r = _row_value(ctx, a, "a") or _row_value(ctx, b, "b")
+        r = row_value(ctx, a, "a") or row_value(ctx, b, "b")
         if r:
             return r
         if not isinstance(ctx.val(c), (Alloc, Coll)):
