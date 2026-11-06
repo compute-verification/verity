@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.InnerForm
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
-import Proofs.Flock.Soundness.Discharge.Hidden.Public
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerForm
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+public import Proofs.Flock.Soundness.Discharge.Hidden.Public
 
 /-!
 # A full draw sets the inner statement up as its files do, region for region
@@ -17,6 +19,8 @@ it: the extra claims at any points (`Stmt.extraClaims`) and the lincheck's circu
 * `extraClaims_congr`, `circuitFold_congr`: the extra claims read a statement's `k_log`, `m`, `nbl` and regions, and the
   circuit fold its circuit, leaf, pin and Δ.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -260,9 +264,8 @@ theorem innerSetup_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
   rw [hfs] at hsh
   obtain ⟨spec', st', hstm, -, -, -, -, hform⟩ := checkShape_files hsh
   obtain ⟨hst', hspec'⟩ := files_stmt hstm
-  obtain ⟨hs1, hs2, hs3, b, d, D, hb, hjd, hD, hpr⟩ := checkForm_ok hform
+  obtain ⟨hs1, hs3, b, d, D, hb, hjd, hD, hpr⟩ := checkForm_ok hform
   have hs1 : r.innerRaw.statement = Tags.circuitPlainLeaves.name := hs1
-  have hs2 : r.innerRaw.osCoins = true := hs2
   have hs3 : r.innerRaw.tables = [] := hs3
   have hb : r.innerRaw.draw = some b := hb
   obtain ⟨hdec, -, hok⟩ := readX_inner hr
@@ -277,7 +280,7 @@ theorem innerSetup_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
     · cases hw
     change r.innerRaw.ins.toOption = some s at hw
     exact ⟨not_not.1 hz, toOption_eq_some hw⟩
-  obtain ⟨z1, z2, z3, z4, z5, -, z7, z8, z9, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
+  obtain ⟨z1, z2, z3, z4, z5, -, z7, z8, z9, -⟩ := ins_plainLeaves hw.2 hw.1 hs1
   obtain ⟨hcount, hpi⟩ := check_plain hchk z1
   have hpart : s.read.I.partition = some p := by
     have hpa := (readX_spec hr).2.1

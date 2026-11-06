@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.HonestRun
-import Proofs.Flock.Claims.Recursion.VStarDeployed
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestRun
+public import Proofs.Flock.Claims.Recursion.VStarDeployed
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 
 /-!
 # The honest run's inner rounds before the last are their rows' commit strings (`hmsg_run`)
@@ -14,6 +16,8 @@ round `i` before the last, the run's message is round `i`'s rows' commit strings
   (`commitThen_flatten`): each row's digest masked under its salt, then the salt's hash, which is the row's commit
   string (`leaf_rowCommit`, through the executable's `Hm96.Default512.commitString`, `ResLower.commitString_exec`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

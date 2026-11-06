@@ -1,5 +1,7 @@
-import Proofs.Pouw.Receipt.DuoReceipt
-import Proofs.Pouw.Receipt.Fx1
+module
+
+public import Proofs.Pouw.Receipt.DuoReceipt
+public import Proofs.Pouw.Receipt.Fx1
 
 /-!
 # Two duo words have no all-state XOR kernel
@@ -22,6 +24,8 @@ equal. Write `c₁ = d₁ ⊕ e₁`, `t = 2^(n−1)`, the start state through `u
 
 fx1 is duo on the words times odd multipliers (`fx1Pair`), so the same holds for it.
 -/
+
+@[expose] public section
 
 namespace Pouw.ReceiptProofs
 

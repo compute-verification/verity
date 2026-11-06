@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VStarPartsHolo
-import Proofs.Flock.Claims.Recursion.VStarPartsSparse
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Claims.Recursion.DeployLayout
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarPartsHolo
+public import Proofs.Flock.Claims.Recursion.VStarPartsSparse
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Claims.Recursion.DeployLayout
 
 /-!
 # V*'s part links, shared across the shapes
@@ -73,6 +75,8 @@ that link once for every kind and every shape, with what is the circuit's own pr
   call is a copy's climb call and that the layout records the copies' gadgets (`LevelLogReads`,
   `stmtReadsTo_levelLogs`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 
@@ -1635,15 +1639,14 @@ theorem agrees_layoutOf_of_ownPorts_nil {x : Msg} {r : XR} (hr : readX x = some 
 file. -/
 theorem rawIns_fields {w : FlockDeploy.Raw} {i : FlockDeploy.Ins} (h : w.ins = .ok i) :
     i.read.zk = w.zk ∧ i.read.I.circuitFile = w.circuit ∧ i.read.I.tables = w.tables ∧ i.read.I.count = w.count ∧
-      ∃ tags, Flock.Tags.byName? w.statement = some tags ∧ i.read.I.tags = tags.withCoins
-        (if w.zk then .tree (Flock.Zk.coinSpec (tags.tableNames w.count)) else if w.osCoins then .os else .seed) := by
+      ∃ tags, Flock.Tags.byName? w.statement = some tags ∧ i.read.I.tags = tags := by
   unfold FlockDeploy.Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first | (cases h; done) | skip
   all_goals
     cases h
-    exact ⟨rfl, rfl, rfl, rfl, _, by assumption, by dsimp only; split_ifs; simp_all⟩
+    exact ⟨rfl, rfl, rfl, rfl, _, by assumption, rfl⟩
 
 /-- **A raw statement with its public file swapped reads the same tags, circuit file and tables.** -/
 theorem rawIns_publicFile {w : FlockDeploy.Raw} {pf : ByteArray} {i i' : FlockDeploy.Ins} (h : w.ins = .ok i)

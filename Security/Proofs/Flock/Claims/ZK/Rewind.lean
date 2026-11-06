@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.GK
-import Proofs.Flock.Claims.Prob
+module
+
+public import Proofs.Flock.Claims.ZK.GK
+public import Proofs.Flock.Claims.Prob
 
 /-!
 # The rewinding argument, over abstract runs
@@ -16,6 +18,8 @@ import Proofs.Flock.Claims.Prob
   involution swapping the first run with the first successful rewind; what is left is the first run opening some coins
   and no rewind opening any, `Q·(1−Q)^N ≤ 1/(N+1)` (`mul_one_sub_pow_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

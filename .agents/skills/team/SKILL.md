@@ -50,8 +50,11 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F
   --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY` and
   linked through the Linear app, since Linear's GitHub integration is off here; a failed link prints its retry, `research
-  queue link N --issue KEY`), or `none:REASON`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A
-  push makes a new head, which needs a new mark and a new review. `research queue status` says what each PR waits for and
+  queue link N --issue KEY`), or `none:REASON`. The issue carries the label of the goal it serves (its id on the Goals
+  page), which `open` writes as `Goal <id>`, refusing an issue whose labels name no live goal. It marks it ready at its
+  head, `research queue ready N --mark --by LANE`, which refuses a body with neither a `Goal <id>` line naming a live goal
+  nor `Issue: none: REASON` (fix it with `research queue edit N --body-file F`). A push makes a new head, which needs a
+  new mark and a new review. `research queue status` says what each PR waits for and
   lists the PRs naming no issue. A `hold` label, a conflict on `next` or a Markdown file over its cap keeps a PR out, and a
   PR from a fork, or by an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at
   admission.
@@ -82,8 +85,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   it back until that member lands. Members above it are restacked across it, and only a conflict of their own refuses them.
   Drive closes the PR once `main` reaches it. Only drive's App pushes `main`, `checked` and `next`: on a `checked` tip drive
   didn't write, drive holds and rings @ci and @top until it is reset or ci accepts it (`drive.sh queue accept-checked SHA`).
-- `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit in M's NAME
-  pool.
+- `check.py --record --on auto --pool research`, from a checkout, records `check` as an Attempt of the clean commit in the
+  research pool `research run --on auto` would spill to (`--on M --pool NAME`: M's NAME pool).
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
 - Anyone may do whatever it takes to cut check time: a change to how `check` runs lands without its file owner's review,
   and the owner is told. infra owns check time and its spend, and ci owns landing: no agent acts between a ready mark
@@ -91,9 +94,10 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
 ## Outside the tree
 
-- **Work and its status** are Linear issues in the owner's team, each in a project and milestone; the projects, grouped
-  by Goal, are the campaign map. Slack carries rings and conversation, never the brief or status (the coordinating
-  skill).
+- **The plan is the Goals page**, Daniel's interface and the record of what is being done: every lead keeps its goals
+  there as current as the work (the writing-goals skill). Work is Linear issues in the owner's team, each labelled
+  with the goal it serves, and a PR names its issue. Slack carries rings and conversation, never the brief or status
+  (the coordinating skill).
 - **Notes** (lane reports, checkpoints, findings, drafts, friction notes) are Markdown under
   `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`,
   `kind`, `status`, `repo`, `origin`), cited as `note:<id>` and published with `research notes sync --path lanes/<lane>`.
@@ -124,6 +128,10 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there, and names an inbox branch it reads hourly
   (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
   its branch and SHA for its launcher to.
+- **Pick a subagent's effort by how conceptually heavy its task is**, and pass it as `Task`'s `model`
+  (`claude-opus-5-5-<effort>`; `inherit` runs it at your own effort), a standing request for every agent here: `max` for
+  the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for slightly heavy work, `medium` for routine
+  execution, `low` for trivial lookups.
 - **Reach a running subagent** on your VM through its next shell command, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'`. Agents on other VMs: through their coordinator on Slack.
 - **Stay reachable.** Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a run, end

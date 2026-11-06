@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Complete.Zk.Piop
-import Proofs.Flock.Claims.Complete.Zk.Inner
-import Proofs.Flock.Claims.Complete.Prover.Session
-import Proofs.Flock.Soundness.Discharge.ZkView.Wire
-import Proofs.Flock.Claims.Complete.Zk.MaskRank
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Piop
+public import Proofs.Flock.Claims.Complete.Zk.Inner
+public import Proofs.Flock.Claims.Complete.Prover.Session
+public import Proofs.Flock.Soundness.Discharge.ZkView.Wire
+public import Proofs.Flock.Claims.Complete.Zk.MaskRank
 
 /-!
 # The masked prover's session
@@ -22,6 +24,8 @@ order (`prove_cpu_zk`, `zk_finish`).
   then the rep streams in `spec.repStreams` order, each with its pads (`padsOf`) committed (`innerCommitP`) before its
   first coin; the record is `recordJson`'s, the keyed coin tree's `hello` and `coin_tree` included.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

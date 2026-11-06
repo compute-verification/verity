@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Flock.Claims.Recursion.ComposeShared
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
+public import Proofs.Flock.Claims.Recursion.ComposeShared
 
 /-!
 # `flock-verify rec-compose` at the compiled verifier's parts
@@ -24,6 +26,8 @@ retried until it accepts is refused. That the record is the challenger's, and th
 answers, is the auditor-trusted challenger's (`trusted-host`), as its other records are.
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Flock
@@ -33,7 +37,7 @@ open FlockDeploy (Raw)
 and its bindings. -/
 def RecRaw.shared (w : RecRaw) : RecShared :=
   ⟨w.recInner, w.recRows, w.innerCircuit, w.innerPublic, w.innerPartition, w.innerCoins, w.innerSession, w.transcript,
-    w.registration, w.innerStatement, w.innerStatementCoins, w.innerTables, w.innerDraw, w.recLinks, w.innerProgram⟩
+    w.registration, w.innerStatement, w.innerTables, w.innerDraw, w.recLinks, w.innerProgram⟩
 
 /-- **Part `s`'s recursive statement** from what every part shares `S` (the link table among it), its Flock statement
 `base` and its bindings. -/
@@ -51,7 +55,6 @@ def RecRaw.ofShared (S : RecShared) (base : Raw) (s : ℕ) (bindings : Option By
   transcript := S.transcript
   registration := S.registration
   innerStatement := S.innerStatement
-  innerStatementCoins := S.innerStatementCoins
   innerTables := S.innerTables
   innerDraw := S.innerDraw
   recLinks := S.links
@@ -67,7 +70,7 @@ theorem RecRaw.ofShared_shared {w : RecRaw} {s : ℕ} (h : w.recPart = some s) :
 def stagedShared (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) : RecShared :=
   ⟨some r.w.recInner, some (st.rows x ms), some r.innerRaw.circuit, some r.innerRaw.publicFile, r.innerRaw.partition,
     none, some (st.record x ms), some (st.transcript x ms), r.w.registration, some r.innerRaw.statement,
-    some r.innerRaw.osCoins, some r.innerRaw.tables, r.innerRaw.draw, r.w.links, r.innerRaw.program⟩
+    some r.innerRaw.tables, r.innerRaw.draw, r.w.links, r.innerRaw.program⟩
 
 /-- **Part `s` of the compiled verifier is `RecRaw.ofShared`** at what every part shares, its staged Flock statement
 and its bindings. -/

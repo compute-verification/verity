@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
-import Proofs.Flock.Soundness.Refine.Lincheck
-import Proofs.Flock.Soundness.Refine.ArithK
-import Proofs.Flock.Soundness.LigeritoDecode
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
+public import Proofs.Flock.Soundness.Refine.Lincheck
+public import Proofs.Flock.Soundness.Refine.ArithK
+public import Proofs.Flock.Soundness.LigeritoDecode
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 
 /-!
 # The model's forms are the executable's
@@ -16,6 +18,8 @@ What `zk_inner_of_rep` reads its rows through.
 * `plays_prefix`, `plays_bind_split`: a run of a game is the only one on a prefix of its messages and coins, so a run
   of `g >>= f` continues, past a known run of `g`, with a run of `f` at its result.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

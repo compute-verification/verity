@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
-import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
-import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
 
 /-!
 # `RunsZC`'s decoder half: the `--zk` rep's frames and the messages they carry (statements)
@@ -30,6 +32,8 @@ by its wires (`wRestZ`: the non-ZK session's after round 0, the opening's, `wLIG
 * `ZkCut`: on rounds that retained `repFramesZ`'s chunks, the rep's messages, cut along `shapeZE` (`repShapeZ` at the
   executable's dimensions), are `decZ`'s groups of the rounds, with no tail: `RepRun`'s cut.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -196,7 +200,7 @@ def ZkRepFrames : Prop :=
     ∃ T : F128, (chunks (repFramesZ st sch dom (2 + extras.size) zp T)).1.length = rounds.size ∧
       ∀ k < rounds.size, Retains rounds[k]! (encs ((chunks (repFramesZ st sch dom (2 + extras.size) zp T)).1.getD k []))
 
-/-- **A decoded `--zk` proof's lengths**: the pair's are the non-ZK session's (`ProofSizes`, PROTOCOL.md §8, read by
+/-- **A decoded `--zk` proof's lengths**: the pair's are the non-ZK session's (`ProofSizes`, `Flock.Proof`, read by
 `Zk.reader` as by `decodeProof`), and the inner proof's `Y` has fewer than `2^64` words (its `u64` length). -/
 def ZkDecodeSizes : Prop :=
   ∀ (sh : Shape) (bytes : ByteArray) (zp : Zk.ZkProof), Zk.decode sh bytes = .ok zp →

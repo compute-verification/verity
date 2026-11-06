@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.DeployReg
-import Proofs.Flock.Claims.Recursion.DeployScopeRuns
-import Proofs.Flock.Claims.Recursion.DeployLayout
-import Proofs.Flock.Claims.Recursion.InnerLeaf
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployReg
+public import Proofs.Flock.Claims.Recursion.DeployScopeRuns
+public import Proofs.Flock.Claims.Recursion.DeployLayout
+public import Proofs.Flock.Claims.Recursion.InnerLeaf
 
 /-!
 # V*'s cross-part facts at `deployRec`
@@ -36,7 +38,7 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
   statement without a draw (`innerOk`), so at a statement the reader parses the inner statement holds one
   (`innerDrawn_checked`, in `DeployChecked`).
 * **Flock's statement check passes the inner statement only in the plain-leaves form** (`check_plain_of_decode`,
-  `inner_check_plain`): `RecVStar.innerOf` reads plain leaves off the circuit file (§16.16), and
+  `inner_check_plain`): `RecVStar.innerOf` reads plain leaves off the circuit file (`Tags.withPlainLeaves`), and
   `ProvedScope.check` passes them at hidden outputs without `--zk` (`InnerLeaf.check_of_innerOf`). The reader requires
   that check (`innerOk`), so what `Decomp` asks at the checked reader is `DeployChecked`'s.
 * **`LogDecomp` over Flock's deployed verifier asks the parts for its setup's calls** (`logDecomp_setup`,
@@ -53,6 +55,8 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
   inner setup always hashes (its digest and sigma), so off such a collision no inner replay at the parts' points accepts
   under `LogDecomp`; `VStarParts` asks for `LogDecompPub` instead, which admits those calls.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

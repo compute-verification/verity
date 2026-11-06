@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Sparse.Values
+module
+
+public import Proofs.Flock.VBridge.Sparse.Values
 
 /-!
 # The sparse-phase unit's steps
@@ -10,6 +12,8 @@ rows hold, if the message ports' first elements carry `w`, the `v` port carries 
 bridge's `residualForms_eq` to `sound_residualForms` (`rval`); the two claim chains are loops over a range
 (`sound_chain`); Φ's product, the type-selected sum and H4 are the gadgets' (`Gadgets.lean`, `Values.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

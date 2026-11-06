@@ -22,6 +22,7 @@ untraced = [
     "tests/test_audit.py",
     "tests/test_cache.py",
     "tests/test_merge.py",
+    "tests/test_sandbox.py",
     "tests/test_setup.py",
     "tests/test_upstream.py",
 ]

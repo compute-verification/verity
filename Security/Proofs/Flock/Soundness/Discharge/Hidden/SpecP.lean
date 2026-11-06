@@ -1,5 +1,7 @@
-import Flock.Desc
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+module
+
+public import Flock.Desc
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 
 /-!
 # What `Stmt.setupHidden` checked and produced, at any public inputs (`SpecP`)
@@ -13,6 +15,8 @@ verifier's own public input words `own`, any value: the circuit's public input p
 * `setupHidden_specP`: every statement `Stmt.setupHidden` accepts at `own` is its `SpecP`.
 * `SpecP.spec`: at `own = none`, `SpecP` is `Spec`.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Lean (Json)

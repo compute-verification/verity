@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Scope.Fit
+module
+
+public import Proofs.Flock.Claims.Scope.Fit
 
 /-!
 # The deployed relation splits by table
@@ -14,6 +16,8 @@ Each table of a session is its own statement with its own units: the verifier se
   Every table fits the first table's blocks (`tables_fit`), so a table fits its own blocks exactly when it fits the
   session's.
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

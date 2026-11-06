@@ -55,9 +55,17 @@ The difftest's pieces: `challenger_close` (`ChallengerClose.from_json` and `clos
 `challenger_session` (`trusted_session_of`), `challenger_credited` (`credited_session`) and `challenger_pinned`
 (`pinned_session`), each `{"refused": why}` where Python refuses.
 -/
-import CoreProtocol.Record
-import SampledProofs.ChallengerRecord
-import SampledProofs.PyJson
+module
+
+public import CoreProtocol.Record
+public import SampledProofs.ChallengerRecord
+public import SampledProofs.PyJson
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 
@@ -192,7 +200,7 @@ def ChallengerClose.toJson (c : ChallengerClose) : Json :=
 characters. -/
 def event (line : String) : V Json := do
   unless line.length ≤ MAX_LOG_LINE do throw LOG_MALFORMED
-  let .ok j := Json.parse line | throw LOG_MALFORMED
+  let .ok j := Flock.JsonParse.parse line | throw LOG_MALFORMED
   let .ok text := Flock.canon j | throw LOG_MALFORMED
   unless text == line do throw LOG_MALFORMED
   pure j
@@ -412,7 +420,7 @@ and is of the ledger's form: a schema of the ledger's, a session's entry naming 
 def ledgerEntry? (line : Json) : Option LedgerEntry := do
   let .str text := line | none
   guard (text.length ≤ MAX_LEDGER_LINE)
-  let e ← (Json.parse text).toOption
+  let e ← (Flock.JsonParse.parse text).toOption
   guard ((PyJson.canonical e).toOption == some text && !escapesSurrogate text && (Flock.canon e).toOption.isSome)
   let r ← (Core.Record.ofJson e).toOption
   let _ ← ledgerTag? r.schema
@@ -751,7 +759,7 @@ def circuitReason (period : Option String) (circuit : Json) (descriptor : ByteAr
 `{commit, main, pinned_utc}`, two commits in 40 lowercase hex and a time `later` holds fixed. -/
 def pinOf? (line : Json) : Option String := do
   let .str text := line | none
-  let e ← (Json.parse text).toOption
+  let e ← (Flock.JsonParse.parse text).toOption
   guard ((PyJson.canonical e).toOption == some text && keys? e == some #["commit", "main", "pinned_utc"])
   guard (isDigest (getD e "commit") 40 && isDigest (getD e "main") 40)
   let .str t := getD e "pinned_utc" | none

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.BatchMove
+module
+
+public import Proofs.Flock.Claims.KS.BatchMove
 
 /-!
 # The simulated strategy of `J` tables follows the batch's schedule
@@ -23,6 +25,8 @@ openings with `nul`, follows the batch's schedule (`Lock.Front` over the tables 
   slot, the session's table's rep 1 and rep 0, a table in front rep by rep, and the tables from `t` on;
 * `front_simRJ`: the tables in front of `j` by `Lock.Front`, then table `j` by `Lock.Sess`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

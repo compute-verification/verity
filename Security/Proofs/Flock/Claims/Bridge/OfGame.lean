@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Bridge.Coins
+module
+
+public import Proofs.Flock.Claims.Bridge.Coins
 
 /-!
 # The public-coin verifier of a game, and its run, path by path
@@ -18,6 +20,8 @@ and a coin's reply carries the projected game coin's bytes only (`reply`: `enc (
   `outcome`, the game played by `stratOf` on the run's coins, its verifier log is `d x`'s calls, and replaying the
   run's messages (`replay`) gives back that outcome.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.TakenVals
-import Proofs.Flock.Claims.ZK.FrameBeta
-import Proofs.Flock.Claims.ZK.ExePlan
-import Proofs.Flock.Claims.ZK.FrameRankFault
+module
+
+public import Proofs.Flock.SessionLoop.TakenVals
+public import Proofs.Flock.Claims.ZK.FrameBeta
+public import Proofs.Flock.Claims.ZK.ExePlan
+public import Proofs.Flock.Claims.ZK.FrameRankFault
 
 /-!
 # Where the inner proof's rounds sit in the session
@@ -21,6 +23,8 @@ schedule is the whole of the rep's algebraic phase and opening, so the history's
   `repSlot (2j + r) (innerOff (i - sched.size))`, within the rep's rounds, where the loop asks the inner proof's rounds
   for `1`, `INNER_CONS`, `1` and `Q` coins.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
