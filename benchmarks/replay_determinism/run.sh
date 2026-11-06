@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Replay determinism on one GPU (README.md).  Under `research run`, which sets OUT:
-#   run.sh fetch   download the model to MODEL_DIR, refusing unless DISK_FLOOR_GB and INODE_FLOOR stay free
+#   run.sh fetch   download the model to MODEL_DIR, refusing unless DISK_FLOOR_GB and INODE_FLOOR stay free, and register
+#                  it with `research keep` (KEEP_OWNER, KEEP_EXPIRES, KEEP_PRIORITY)
 #   run.sh         build the window, then under one `gpu-lease 1`: serve it, replay it (twice captured, once plain),
 #                  serve each request alone; then compare.  MODEL_DIR may be any local checkpoint (a dense baseline), and
-#                  BATCH_INVARIANT=1 serves every phase with VLLM_BATCH_INVARIANT=1
+#                  BATCH_INVARIANT=1 serves every phase with VLLM_BATCH_INVARIANT=1.  The fingerprints go to SCRATCH, by
+#                  default a `mktemp -d` under WORK that run.sh removes when it exits; a SCRATCH you give is left in place
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 root=$(cd "$here/../.." && pwd)
@@ -31,6 +33,11 @@ if [[ ${1:-} == fetch ]]; then
   mkdir -p "$WORK"
   HF_HUB_OFFLINE=0 HF_HOME="$WORK/hf" "$PY" "$here/replay_det.py" fetch --dir "$MODEL_DIR"
   rm -rf "$WORK/hf" "$MODEL_DIR/.cache"
+  PYTHONPATH="$root/tools/research/src" "$PY" -m research keep "$MODEL_DIR" --owner "${KEEP_OWNER:-@vllm}" \
+    --expires "${KEEP_EXPIRES:-never}" --priority "${KEEP_PRIORITY:-keep}" \
+    --regenerate "MODEL_DIR=$MODEL_DIR bash benchmarks/replay_determinism/run.sh fetch" \
+    --why "replay_determinism's model at its pinned revision, read by every phase" \
+    ${RESEARCH_AGENT_URL:+--by "$RESEARCH_AGENT_URL"} || { echo "no retention record on $MODEL_DIR"; exit 4; }
   floor 0
   exit 0
 fi
@@ -69,7 +76,7 @@ fi
 [[ -d $MODEL_DIR ]] || { echo "no model at $MODEL_DIR: run.sh fetch first"; exit 2; }
 floor 3
 mkdir -p "$WORK"
-SCRATCH=${SCRATCH:-$(mktemp -d "$WORK/scratch.XXXXXX")}
+if [[ -z ${SCRATCH:-} ]]; then SCRATCH=$(mktemp -d "$WORK/scratch.XXXXXX"); trap 'rm -rf -- "$SCRATCH"' EXIT; fi
 export SCRATCH OUT PY MODEL_DIR PHASES BATCH_INVARIANT
 echo "scratch $SCRATCH"
 "$PY" "$here/replay_det.py" workload --model "$MODEL_DIR" --corpus "$root" --n "$N" --out "$OUT/workload.json"

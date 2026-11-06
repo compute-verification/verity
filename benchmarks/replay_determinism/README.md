@@ -41,11 +41,17 @@ research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_
     -- bash benchmarks/replay_determinism/run.sh
 ~~~
 
-`fetch` downloads the model to `MODEL_DIR` (default `/workspace/research/scratch/replay-determinism/moonlight`) and
-refuses unless 50 GB and 100,000 inodes stay free on `/workspace`. The run writes the window (`workload.json`), each phase's steps, tokens, timing
-and logits rows, `lease.json` (the lease's wall time, its GPU-seconds) and `compare.json` and `compare.md` to `$OUT`; the
-per-row fingerprints stay in `SCRATCH` under `WORK`. `N`, `PHASES`, `PY` (a Python with vLLM at the pin), `WORK` and
-`LEASE_MIN` are settable.
+`fetch` downloads the model to `MODEL_DIR` (default `/workspace/research/scratch/replay-determinism/moonlight`),
+refuses unless 50 GB and 100,000 inodes stay free on `/workspace`, and registers `MODEL_DIR` with `research keep`: owner
+`@vllm`, never expiring, priority `keep` (`KEEP_OWNER`, `KEEP_EXPIRES`, `KEEP_PRIORITY`; lowering it takes top's yes),
+with the fetch as its regenerate command; it is deleted only by `research retention rm`. The run writes the window
+(`workload.json`), each phase's steps, tokens, timing and logits rows, `lease.json` (the lease's wall time, its
+GPU-seconds) and `compare.json` and `compare.md` to `$OUT`; the per-row fingerprints go to `SCRATCH`, a `mktemp -d` under
+`WORK` that the run removes when it exits, passed or failed (a `SCRATCH` you set is left in place). `N`, `PHASES`, `PY` (a
+Python with vLLM at the pin), `WORK` and `LEASE_MIN` are settable.
+
+`tests/` checks the row fingerprint and `compare.py` on a synthetic window, the per-op table included, on CPU
+(`uv run tools/verity/check/suites.py benchmarks/replay_determinism`).
 
 A dense baseline is the same run with `MODEL_DIR` set to a local Llama-architecture checkpoint, a hub snapshot such as
 `$HF_HOME/hub/models--ORG--NAME/snapshots/REV` (its prompts take the checkpoint's chat template, or for a base model its
