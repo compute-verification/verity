@@ -1,0 +1,20 @@
+[project]
+name = "verity-lin"
+version = "0.1.0"
+description = "Lin: SPOT's proof system for exact-integer matrix proof blocks, after FlashProve's linear layer, on SHA-512 and live coins."
+requires-python = ">=3.12"
+dependencies = ["verity"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["python/verity_lin"]
+
+[tool.uv.sources]
+verity = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

@@ -116,17 +116,17 @@ ALLOWED = {
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
-FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
+FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_lin", "verity_torch", "verity_cli", "verity_difftest",
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
                       "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
-#: Trees under ``verity/`` with import roots of their own: Flock's distribution (``verity_flock``) and its verifier's
-#: scripts, the differential test of the Lean against its Python (``verity_difftest``, which their tests import, on
+#: Trees under ``verity/`` with import roots of their own: Flock's and Lin's distributions (``verity_flock``,
+#: ``verity_lin``) and Flock's verifier's scripts, the differential test of the Lean against its Python (``verity_difftest``, which their tests import, on
 #: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
 #: which holds it to the wire's Python reference through ``verity_difftest``.
-SEPARATE = ("ml/flock", "core/difftest", "core/protocols/pous/check")
+SEPARATE = ("ml/flock", "ml/lin", "core/difftest", "core/protocols/pous/check")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("ml/circuits", "ml/randomness", "core/claims", "hardware")
 NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/circuits/ops")

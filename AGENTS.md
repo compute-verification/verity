@@ -18,8 +18,9 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
-    (the served workloads' Definitions) and `flock/` (`verity_flock`, its own distribution: C-Flock, the proof
-    system's prover, with its verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its
+ (the served workloads' Definitions), `flock/` (`verity_flock`, its own distribution: C-Flock, the proof
+ system's prover, with its verifier's specification in `verifier/`) and `lin/` (`verity_lin`, its own distribution: Lin,
+ the proof system for exact-integer matrix proof blocks, plain and routed to by no protocol yet). Until each protocol's verifier is Lean, the units its
     Python verifier reads are on the soundness path: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`,
     `ml.kernels`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which only shrinks). The rest
     can't affect soundness.

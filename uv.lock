@@ -40,6 +40,7 @@ members = [
     "verity-flock",
     "verity-graph",
     "verity-lean-audit",
+    "verity-lin",
     "verity-machine-model",
     "verity-native-peak",
     "verity-network-e2e",
@@ -2388,6 +2389,17 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "research", editable = "tools/research" }]
+
+[[package]]
+name = "verity-lin"
+version = "0.1.0"
+source = { editable = "verity/ml/lin" }
+dependencies = [
+    { name = "verity" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity", editable = "." }]
 
 [[package]]
 name = "verity-machine-model"
