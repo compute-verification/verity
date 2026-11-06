@@ -2,6 +2,8 @@ module
 
 public import Definitions.Core.Draw
 public import Definitions.Core.Assumptions.Challenger
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The sample from a challenger's coin

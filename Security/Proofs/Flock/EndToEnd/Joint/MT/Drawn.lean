@@ -1,8 +1,34 @@
 module
 
 public import Proofs.Flock.EndToEnd.Joint.MT.Statement
-public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 public import Proofs.Flock.Soundness.Audit.HarmBound
+public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.EndToEnd.Joint.MT.Draw
+import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Batch
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game.Lock
+import Proofs.Flock.Soundness.Game.LockChoose
+import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game.Union
 
 /-!
 # A sampling block of `J` tables stratified by subcircuit: its drawn units, its draw's miss, and its one budget

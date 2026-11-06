@@ -1,11 +1,12 @@
 module
 
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Ring
 public import Proofs.Pouw.PearlC.Forming
 public import Proofs.Pouw.PearlC.Freeze
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 
 /-!
 # P3: the atom-mix's `PairErr` (staging)

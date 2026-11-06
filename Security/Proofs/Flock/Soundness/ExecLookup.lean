@@ -3,7 +3,11 @@ module
 public import Proofs.Flock.Soundness.ExecPlacement
 -- level3 already realizes `Lookup.row`'s and `Lookup.decode`'s equation lemmas, so this file reuses them rather than
 -- declaring them a second time, which the audit's kernel replay refuses
-public import Proofs.Flock.Level3.LookupRows
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.LookupRows
+import Proofs.Flock.Soundness.SparseRows
 
 /-!
 # What `Lookup.build` builds

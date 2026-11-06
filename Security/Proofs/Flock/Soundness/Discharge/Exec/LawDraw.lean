@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.ExecDrawOS
 public import Proofs.Flock.Soundness.Discharge.Exec.Pts
+import Mathlib.Combinatorics.Matroid.Init
+import Std.Data.HashMap.Lemmas
 
 /-!
 # How many units the live law draws
