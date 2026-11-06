@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Flock.RecGeneric.Proto
-public import Proofs.Flock.RecGeneric.Plans
+public import Definitions.Claims.RecursionGeneric.Proto
+public import Definitions.Claims.RecursionGeneric.Plans
 public import Definitions.Claims.Sampling
 
 /-!
@@ -15,7 +15,7 @@ searches at a rerun (`calls`: those the witnesses record and those the finder ev
 inner verifier's on the witnesses' messages) and the compiled verifier's own at a run's staged statements (`own`).
 
 Nothing here fixes the outer proof system: `E_O` is any extractor meeting `Claims.KS` at `RO`. An outer argument embedded
-session by session (`Proofs.Flock.RecGeneric.Outer`, `Compiled.toComp`) is one; Flock's `E_O`
+session by session (`Definitions.Claims.RecursionGeneric.Outer`, `Compiled.toComp`) is one; Flock's `E_O`
 (`Claims.Recursion.EO`) at today's compiled record is another (`Proofs.Flock.RecGeneric.AtFlock`).
 
 `E*` (`Comp.E`) is the inner protocol's `E^rep` at the inner statement, each rerun served by `E_O` at that rerun, the
