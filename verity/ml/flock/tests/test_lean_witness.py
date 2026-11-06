@@ -88,8 +88,8 @@ F1_STATEMENTS = (("rec-open/l64-h8", 436), ("rec-open/l16-h7", 212), ("rec-open/
                  ("rec-residuals/m27-k24-c8-p0", 2), ("rec-residuals/m27-k24-c8-p1", 2), ("rec-cap/n128-l1", 128),
                  ("rec-cap/n128-l2", 128), ("rec-cap/n64-l3", 64), ("rec-cap/n128", 128))
 #: the gate's level statements and the recorded level 3 were staged before a level registered its opened rows and their
-#: siblings, so their reads files name no `row`, and `Registered.checkComplete` refuses them at setup (PRF-421 re-records
-#: the gate and restages the recorded level)
+#: siblings, so their reads files name no `row`, and `Registered.checkComplete` refuses them at setup until the gate is
+#: re-recorded and the recorded level restaged
 UNREGISTERED_ROWS = pytest.mark.skip(reason="PRF-421: the reads file names no row port (staged before levels registered "
                                      "row and aux), so Registered.checkComplete refuses it before the checks this test reads")
 _STALE = ("L0", "L1", "L2", "L3")
