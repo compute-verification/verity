@@ -170,14 +170,14 @@ def _lean_prefix(world: World, monkeypatch) -> tuple[Review, str, list[str]]:
     return h, chain[2].commit, [m.commit for m in chain]
 
 
-def test_first_and_new_prs_go_above_a_running_lean_checks_prefix_even_one_it_contains(world, monkeypatch):
-    """A `--first` change while a Lean check runs keeps that check's commit in `next`'s chain and doesn't launch it again: a
-    new PR goes above its prefix, and so does a PR at a commit a prefix member contains (one a stacked member was branched
-    from), which sorted below that member, rebuilding `next` under the check on every such admission."""
+def test_the_priority_list_and_new_prs_go_above_a_running_lean_checks_prefix_even_one_it_contains(world, monkeypatch):
+    """An edit of drive's priority list while a Lean check runs keeps that check's commit in `next`'s chain and doesn't launch
+    it again: a new PR goes above its prefix, and so does a PR at a commit a prefix member contains (one a stacked member was
+    branched from), which sorted below that member, rebuilding `next` under the check on every such admission."""
     h, check, prefix = _lean_prefix(world, monkeypatch)
     world.gh.put(5, world.change({"e.txt": "5\n"}))
     world.gh.put(6, _git(world.dev, "rev-parse", f"{world.gh.prs[2].head}^"))     # the commit #2 was branched from
-    h.q.first = (6, 5)
+    world.prioritize(h.q, 6, 5)
     h.tick()
     chain = h.q.chain()
     assert [m.commit for m in chain[:3]] == prefix and [m.pr for m in chain] == [1, 2, 3, 5], world.logs
@@ -301,16 +301,34 @@ def test_under_a_running_lean_check_a_reviewed_pr_stays_above_an_unreviewed_one_
     assert [m.pr for m in chain] == [1, 2, 5, 3, 4] and [m.commit for m in chain[:2]] == prefix
 
 
-def test_under_a_running_lean_check_first_goes_below_the_reviewed_members_the_lift_moves(world, monkeypatch):
+def test_under_a_running_lean_check_the_priority_list_goes_below_the_reviewed_members_the_lift_moves(world, monkeypatch):
     h, prefix = _lean_running(world, monkeypatch)
     _put(world, 3, 4, 5)
     h.tick()
     h.review(4)
     h.review(5)
-    h.q.first = (5,)
+    world.prioritize(h.q, 5)
     h.tick()
     chain = h.q.chain()
     assert [m.pr for m in chain] == [1, 2, 5, 4, 3] and [m.commit for m in chain[:2]] == prefix and h.cancelled == []
+
+
+def test_drive_lands_the_priority_files_prs_in_its_order_above_a_running_lean_checks_prefix(world, monkeypatch):
+    """The priority file's order is the landing order: #9 and #7, listed in that order, go above the prefix a running Lean
+    check holds, below #5 (reviewed too, not listed), and land in the file's order with that check's pass."""
+    h, prefix = _lean_running(world, monkeypatch)
+    _put(world, 5, 7, 9)
+    for n in (5, 7, 9):
+        h.review(n)
+    world.prioritize(h.q, 9, 7)
+    assert not h.tick().startswith("landed"), world.logs
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 9, 7, 5] and [m.commit for m in chain[:2]] == prefix and h.cancelled == []
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #5"), world.logs
+    assert _landed(world, 5) == [5, 7, 9, 2, 1] and h.q.chain() == [] and len(h.launched) == 1, world.logs
 
 
 def test_the_lift_moves_nothing_inside_a_running_lean_checks_prefix(world, monkeypatch):

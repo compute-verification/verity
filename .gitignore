@@ -57,6 +57,7 @@ benchmarks/one_stage/tests/fixtures/bundle-window
 verity/ml/flock/tests/fixtures/f1-gate
 verity/ml/flock/tests/fixtures/forged-proofs
 verity/ml/flock/tests/fixtures/hidden-outputs
+verity/ml/flock/tests/fixtures/honest-session
 verity/ml/flock/tests/fixtures/honest-plain
 verity/ml/flock/tests/fixtures/plain-tree
 benchmarks/pouw/machine_model/data/cover/corpus.json
