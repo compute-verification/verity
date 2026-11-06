@@ -214,9 +214,9 @@ class _Builder:
 
     def value(self, tid: str, port: str, at: int, param: str, row: int, rows: int) -> None:
         """Unit ``at`` of ``tid`` reads ``port`` as row ``row`` of the registered parameter ``param``, ``rows`` rows of the
-        port's width (a per-window value, not the weights record)."""
+        port's width (a per-window value, not the weights record); an output row ``port`` is held to that row (`IF.Read`)."""
         lay = IF.layout(self.fns[tid])
-        words = dict(lay.rows)[port]
+        words = dict(lay.rows + lay.outs)[port]
         if self.params.setdefault(param, rows * words) != rows * words:
             raise Unexpressible(f"{param}: read as {rows} rows of {words} words and as {self.params[param]} leaves")
         self.reads.append(IF.Read(tid, port, param, at=at, radix=(1,), base=row * words, step=(0,)))
