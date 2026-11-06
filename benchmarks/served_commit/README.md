@@ -14,7 +14,7 @@ labeled run, `served.py` the served arm's runs).
   kernels and `out/pin_check.txt` says so, which a counted compiled ratio needs.
 - `run.sh`: `verity bench served_commit`, one spec's sweep in one process; `SPEC` names the spec.
 - `tp_decode.py` and `tp_decode.sh`: one Commit arm against stock in one TP engine, eager (GLM-5.3 TP8).
-- `tp_replay.py` and `tp_replay.sh`: whether a drawn request replays bit for bit (its tokens and every module's values at its
+- `tp_replay.py` and `tp_replay.sh`: whether a sampled request replays bit for bit (its tokens and every module's values at its
   rows, the DSA top-k and the attention core among them) in the same batch, beside fillers of its companions' shapes, alone and
   in another batch, and its replay's GPU-seconds with its prompt's KV cold or in the prefix cache (GLM-5.3 TP8, eager).
   `tp_env.sh` is both TP drivers' node setup.

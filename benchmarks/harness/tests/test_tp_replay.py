@@ -1,7 +1,7 @@
 """served_commit's replay driver (`benchmarks/served_commit/tp_replay.py`): its fingerprint is the keyed sum of a row's 32-bit words
 mod 2^64 for every dtype and byte width, sees one flipped bit, doesn't depend on the row's place or alignment, and refuses a row
 wider than its keys; its rows and logits rows read an input batch as the runner builds one; `flatten` and `compare` count equal,
-differing and one-sided entries and name the first difference; its arms keep the drawn requests the same across arms and the
+differing and one-sided entries and name the first difference; its arms keep the sampled requests the same across arms and the
 fillers in their companions' shapes; `span` and `summarize` read a run's steps. CPU tensors, no engine."""
 from __future__ import annotations
 
@@ -132,7 +132,7 @@ def test_flatten_and_compare_count_and_name_the_first_difference():
     assert (same["compared"], same["equal"], same["differ"], same["first_differ"]) == (9, 9, 0, None)
 
 
-def test_arms_keep_the_drawn_requests_and_their_companions_shapes():
+def test_arms_keep_the_sampled_requests_and_their_companions_shapes():
     base = np.random.default_rng(5).integers(3, 1000, size=256).tolist()
     A = D.arms(base, 1000)
     served = {r["request_id"]: r for r in A["served"]}
@@ -141,22 +141,22 @@ def test_arms_keep_the_drawn_requests_and_their_companions_shapes():
     assert {r["arrive_step"] for r in A["reordered"]} == {0} and [r["arrive_step"] for r in A["staggered"]] == list(range(0, 16, 2))
     assert all(r["prompt_token_ids"] == served[r["request_id"]]["prompt_token_ids"] for arm in ("reordered", "staggered") for r in A[arm])
     assert [(r["request_id"], len(r["prompt_token_ids"])) for r in A["served"]][:3] == [("d-short", 256), ("d-long", 3072), ("d-seed", 512)]
-    firsts = [tuple(r["prompt_token_ids"][:64]) for arm in ("served", "other") for r in A[arm] if not (arm == "other" and r["request_id"] in D.DRAWN)]
+    firsts = [tuple(r["prompt_token_ids"][:64]) for arm in ("served", "other") for r in A[arm] if not (arm == "other" and r["request_id"] in D.SAMPLED)]
     assert len(set(firsts)) == len(firsts) == len(D.SERVED) + len(D.OTHER)
     for arm, reqs in A.items():
         assert len(reqs) <= D.MAX_SEQS and max(len(r["prompt_token_ids"]) + r["max_tokens"] for r in reqs) <= 4096
         for r in reqs:
-            if r["request_id"] in D.DRAWN:
+            if r["request_id"] in D.SAMPLED:
                 assert {k: v for k, v in r.items() if k != "arrive_step"} == {k: v for k, v in served[r["request_id"]].items() if k != "arrive_step"}
     for s, f in zip(A["served"], A["shape"]):
-        if s["request_id"] in D.DRAWN:
+        if s["request_id"] in D.SAMPLED:
             assert f is s
         else:
             assert f["request_id"].startswith("filler-") and f["prompt_token_ids"] != s["prompt_token_ids"]
             assert {k: v for k, v in f.items() if k not in ("request_id", "prompt_token_ids")} == \
                 {k: v for k, v in s.items() if k not in ("request_id", "prompt_token_ids")} and len(f["prompt_token_ids"]) == len(s["prompt_token_ids"])
-    assert sum(len(r["prompt_token_ids"]) > 2048 for r in A["other"] if r["request_id"] not in D.DRAWN) == 4
-    assert [(r["request_id"], r["arrive_step"]) for r in A["other"] if r["request_id"] in D.DRAWN] == list(D.OTHER_DRAWN)
+    assert sum(len(r["prompt_token_ids"]) > 2048 for r in A["other"] if r["request_id"] not in D.SAMPLED) == 4
+    assert [(r["request_id"], r["arrive_step"]) for r in A["other"] if r["request_id"] in D.SAMPLED] == list(D.OTHER_SAMPLED)
     prod, long = A["warm"]
     assert prod["request_id"] == D.PRODUCER and prod["max_tokens"] == 1 and prod["prompt_token_ids"] == long["prompt_token_ids"]
     assert long["request_id"] == "d-long" and long["arrive_step"] > 10 ** 6
@@ -321,7 +321,7 @@ def test_interior_folds_every_module_per_row_and_compares_runs_across_batches(mo
     for arm, steps in (("served", batched), ("alone", alone), ("changed", changed)):
         D.begin(worker)
         _serve(worker.model_runner, steps)
-        out[arm] = D.end(worker, arm=arm, drawn=["d", "c"], reference="served")
+        out[arm] = D.end(worker, arm=arm, sampled=["d", "c"], reference="served")
     ref, al, ch = (out[a]["per_request"]["d"] for a in ("served", "alone", "changed"))
     forward = ["model.embed_tokens", "L0.attn", "L0.topk", "L0.self_attn", "L0.mlp", "L0", "L1.attn", "L1.topk", "L1.self_attn", "L1.mlp",
                "L1", "model.norm", "root"]
@@ -369,8 +369,8 @@ def test_summarize_sums_ranks_and_takes_medians():
             {"pass": 2, "arm": "warm", "wall_s": 2.0, "tokens_equal_pass1": True, "spans": {"d-long": 0.5}, "cached_tokens": {"d-long": 3008}}]
     s = D.summarize(rows, 8)
     assert s["distinct_sequences"] == {}
-    assert s["arms"]["served"]["drawn"]["d-long"]["bit_exact"] is True
-    d = s["arms"]["alone-d-long"]["drawn"]["d-long"]
+    assert s["arms"]["served"]["sampled"]["d-long"]["bit_exact"] is True
+    d = s["arms"]["alone-d-long"]["sampled"]["d-long"]
     assert (d["bit_exact"], d["differ"], d["ranks_differ"], d["first_differ"], d["kinds_differ"]) == (False, 3, 2, {"pos": 3090, "group": "L5.attn"}, {"topk": 3})
     assert s["arms"]["alone-d-long"]["gpu_s"] == 20.0
     assert s["replay"]["d-long cold"] == {"gpu_s": 20.0, "reps": 2}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tp_replay.py (a drawn request's replay: same batch, fillers, alone, another batch; cold and warm prefix) in one TP engine, eager,
+# tp_replay.py (a sampled request's replay: same batch, fillers, alone, another batch; cold and warm prefix) in one TP engine, eager,
 # from the source tree's root on an 8-GPU H200 node:
 #   RESEARCH_RUN_DIR=DIR bash benchmarks/served_commit/tp_replay.sh
 # ROW (the workload, default GLM-5.3's TP8 eager B1, whose prompt every request tiles), CASE (default GLM53), TP (default 8), REPS

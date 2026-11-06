@@ -1,4 +1,4 @@
-"""Replay of a drawn request under a TP engine in eager mode (GLM-5.3 TP8, or DeepSeek-V4-Pro with ``--case``): whether a request
+"""Replay of a sampled request under a TP engine in eager mode (GLM-5.3 TP8, or DeepSeek-V4-Pro with ``--case``): whether a request
 served in a batch replays bit for bit (its tokens, and the values the model's modules return at its rows, with GLM-5.3's DSA
 indexer's top-k indices and each attention layer's core output) when it runs again in the same batch, beside fillers of the
 same shapes, alone, or in another batch; and what a
@@ -7,17 +7,17 @@ replay costs in GPU-seconds with its prompt's KV computed (cold) or read from th
     bash benchmarks/served_commit/tp_replay.sh      (its header has the knobs)
 
 The served batch (`SERVED`, `arms`) is eight requests, each prompt a tiling of the row's prompt at its own rotation so that no two
-share a cache block: three drawn (``d-short``, 256 tokens greedy; ``d-long``, `LONG` tokens greedy (``--long``), whose later
-rows read more keys than the 2,048 GLM-5.3's DSA top-k keeps; ``d-seed``, 512 tokens sampled with its own seed) and five
+share a cache block: three sampled (``d-short``, 256 tokens greedy; ``d-long``, `LONG` tokens greedy (``--long``), whose later
+rows read more keys than the 2,048 GLM-5.3's DSA top-k keeps; ``d-seed``, 512 tokens, stochastic with its own seed) and five
 companions arriving over the
 first six steps. Every request decodes to its cap (``ignore_eos``), so an arm's schedule doesn't depend on its tokens. The arms:
 
 - ``served``, the reference, and ``served-2``, the same batch again (a window replay: the same requests and arrivals);
-- ``shape``: the drawn requests in place, each companion a filler of its length, cap, arrival and sampling (random tokens);
+- ``shape``: the sampled requests in place, each companion a filler of its length, cap, arrival and sampling (random tokens);
 - ``reordered`` and ``staggered``: the served requests in other compositions, admitted in reverse at step 0, or request i at
   step 2i;
-- ``alone-<drawn>``: each drawn request by itself;
-- ``other``: the drawn requests in another order, arriving at step 1, among `OTHER`'s twelve companions (four over 2,048 tokens);
+- ``alone-<sampled>``: each sampled request by itself;
+- ``other``: the sampled requests in another order, arriving at step 1, among `OTHER`'s twelve companions (four over 2,048 tokens);
 - ``warm``: a producer with ``d-long``'s prompt and one output token, then ``d-long`` once the engine is idle, its prompt's blocks
   in the prefix cache.
 
@@ -28,19 +28,19 @@ Pass 1 runs every arm with `Interior` on every rank: a forward hook on every mod
 ``_sparse_indexer_and_attn`` (the shared top-k buffer as the layer's indexer leaves it, and the attention's core output), and the
 runner's ``prepare_inputs`` and ``sample`` for each step's rows. Each value is fingerprinted on the GPU per token row
 (`fingerprint`: two keyed sums of the row's 32-bit words mod 2^64), a module group's calls (`group_of`) folded into one 128-bit
-value per (request, position, group), and each arm compared on its rank with ``served`` for the drawn requests (`compare`).
-Rank 0 also keeps each step's composition (`composition`) and the top-1 - top-2 logit gap of every sampled row, so each arm
-says whether its schedule was served's and, per request both served, how many output tokens flipped, where the first did and
-at what gap (`flips`); `distinct` counts each request's output sequences over every run. Values
+value per (request, position, group), and each arm compared on its rank with ``served`` for the sampled requests (`compare`).
+Rank 0 also keeps each step's composition (`composition`) and the top-1 - top-2 logit gap of every row the sampler reads, so
+each arm says whether its schedule was served's and, per request both served, how many output tokens flipped, where the first
+did and at what gap (`flips`); `distinct` counts each request's output sequences over every run. Values
 inside fused kernels that no module returns (router ids, expert intermediates, quantized activations, all-reduce partials) are
 compared only through the module outputs that read them. Pass 2 runs every arm again ``--reps`` times without hooks, its tokens
 checked against pass 1's, and times it: GPU-seconds are wall time times the world size; ``warm``'s replay is ``d-long``'s span
 after the producer finished, with its cached-token count, against ``alone-d-long``'s.
 
-`summary.json` has per arm and drawn request: tokens equal to ``served``, the compared, equal and differing entries summed over
+`summary.json` has per arm and sampled request: tokens equal to ``served``, the compared, equal and differing entries summed over
 ranks, those only one run has, the first differing (position, group), the group kinds that differ, and whether the request
 replayed bit for bit (its tokens, and every entry both runs have equal, with none only the replay has: ``warm`` skips the
-positions its prefix cache held); and the timings. Exit 3 when the instrument failed: a rank's reference compared nothing for a drawn request, or a hook stayed installed.
+positions its prefix cache held); and the timings. Exit 3 when the instrument failed: a rank's reference compared nothing for a sampled request, or a hook stayed installed.
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ from typing import Any
 
 import numpy as np
 
-DRAWN = ("d-short", "d-long", "d-seed")
+SAMPLED = ("d-short", "d-long", "d-seed")
 REFERENCE = "served"
 PRODUCER = "warm-producer"
 #: (request id, prompt length, cap, arrive step, sampling): greedy unless the request names its own
@@ -67,8 +67,8 @@ OTHER = (("o0", 2304, 12, 0, {}), ("o1", 160, 40, 0, {"temperature": 0.9, "seed"
          ("o3", 704, 24, 1, {}), ("o4", 96, 48, 1, {"temperature": 0.6, "top_p": 0.8, "seed": 22}), ("o5", 2176, 20, 2, {}),
          ("o6", 1152, 28, 2, {}), ("o7", 448, 36, 3, {"temperature": 1.0, "top_k": 50, "seed": 23}), ("o8", 3328, 8, 3, {}),
          ("o9", 320, 44, 5, {}), ("o10", 832, 32, 7, {}), ("o11", 1792, 18, 9, {}))
-#: the drawn requests' order and arrival in ``other``
-OTHER_DRAWN = (("d-seed", 1), ("d-long", 1), ("d-short", 1))
+#: the sampled requests' order and arrival in ``other``
+OTHER_SAMPLED = (("d-seed", 1), ("d-long", 1), ("d-short", 1))
 #: ``d-long``'s default prompt length: past GLM-5.3's 2,048-key top-k shortcut (``--long`` moves it, e.g. past DeepSeek-V4's
 #: TOPK x CSA_R = 4,096 tokens)
 LONG = 3072
@@ -108,16 +108,16 @@ def arms(base: list[int], vocab: int, long: int = LONG) -> dict[str, list[dict[s
     request's rotation of ``base`` is its own."""
     rot = iter(range(7, 7 * 64, 7))
     served = [request((rid, long, *rest) if rid == "d-long" else (rid, n, *rest), base, next(rot)) for rid, n, *rest in SERVED]
-    drawn = {r["request_id"]: r for r in served if r["request_id"] in DRAWN}
+    sampled = {r["request_id"]: r for r in served if r["request_id"] in SAMPLED}
     rng = np.random.default_rng(FILLER_SEED)
     out = {REFERENCE: served, "served-2": served,
-           "shape": [r if r["request_id"] in DRAWN else filler(r, i, vocab, rng) for i, r in enumerate(served)]}
+           "shape": [r if r["request_id"] in SAMPLED else filler(r, i, vocab, rng) for i, r in enumerate(served)]}
     out["reordered"] = [{**r, "arrive_step": 0} for r in reversed(served)]
     out["staggered"] = [{**r, "arrive_step": 2 * i} for i, r in enumerate(served)]
-    out.update({f"alone-{d}": [{**drawn[d], "arrive_step": 0}] for d in DRAWN})
+    out.update({f"alone-{d}": [{**sampled[d], "arrive_step": 0}] for d in SAMPLED})
     others = [request(row, base, next(rot)) for row in OTHER]
-    out["other"] = others[:3] + [{**drawn[d], "arrive_step": s} for d, s in OTHER_DRAWN] + others[3:]
-    long = drawn["d-long"]
+    out["other"] = others[:3] + [{**sampled[d], "arrive_step": s} for d, s in OTHER_SAMPLED] + others[3:]
+    long = sampled["d-long"]
     out["warm"] = [{**long, "request_id": PRODUCER, "max_tokens": 1, "arrive_step": 0}, {**long, "arrive_step": 1 << 30}]
     return out
 
@@ -449,10 +449,10 @@ class Interior:
             return run
         return make
 
-    def end(self, arm: str, drawn: list[str], reference: str) -> dict[str, Any]:
+    def end(self, arm: str, sampled: list[str], reference: str) -> dict[str, Any]:
         self.flush()
         keys, fp, dups = flatten(self.steps)
-        codes = {d: self.req_code[d] for d in drawn if d in self.req_code}
+        codes = {d: self.req_code[d] for d in sampled if d in self.req_code}
         if arm == reference:
             self.ref = (keys, fp)
         res = compare(self.ref, (keys, fp), codes, self.groups) if self.ref is not None else {}
@@ -489,8 +489,8 @@ def begin(worker: Any) -> None:
     worker._tp_replay.begin()
 
 
-def end(worker: Any, *, arm: str, drawn: list[str], reference: str) -> dict[str, Any]:
-    return worker._tp_replay.end(arm, drawn, reference)
+def end(worker: Any, *, arm: str, sampled: list[str], reference: str) -> dict[str, Any]:
+    return worker._tp_replay.end(arm, sampled, reference)
 
 
 def uninstall(worker: Any) -> dict[str, Any]:
@@ -567,13 +567,13 @@ def distinct(rows: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def summarize(rows: list[dict[str, Any]], world: int) -> dict[str, Any]:
-    """Per arm and drawn request, pass 1's comparison summed over ranks; per arm, every request's flips against ``served`` and
-    whether its schedule was served's; pass 2's median wall and GPU-seconds; the drawn requests' replay GPU-seconds alone, cold,
+    """Per arm and sampled request, pass 1's comparison summed over ranks; per arm, every request's flips against ``served`` and
+    whether its schedule was served's; pass 2's median wall and GPU-seconds; the sampled requests' replay GPU-seconds alone, cold,
     and ``d-long``'s warm; and each request's distinct output sequences over both passes."""
     doc: dict[str, Any] = {"world": world, "arms": {}, "distinct_sequences": distinct(rows)}
     for r in (x for x in rows if x["pass"] == 1):
         per: dict[str, Any] = {}
-        for d in DRAWN:
+        for d in SAMPLED:
             rk = [x["per_request"][d] for x in r["ranks"] if d in x["per_request"]]
             if not rk:
                 continue
@@ -588,12 +588,12 @@ def summarize(rows: list[dict[str, Any]], world: int) -> dict[str, Any]:
                       "bit_exact": bool(r["tokens_equal_served"].get(d)) and s["compared"] > 0 and not (s["differ"] or s["only_run"])}
         timed = [x for x in rows if x["pass"] == 2 and x["arm"] == r["arm"]]
         walls = [x["wall_s"] for x in timed]
-        doc["arms"][r["arm"]] = {"drawn": per, "flips": r.get("flips"), "schedule_equal_served": r.get("schedule_equal_served"),
+        doc["arms"][r["arm"]] = {"sampled": per, "flips": r.get("flips"), "schedule_equal_served": r.get("schedule_equal_served"),
                                  "wall_s": statistics.median(walls) if walls else None,
                                  "gpu_s": world * statistics.median(walls) if walls else None,
                                  "tokens_equal_pass1": all(x["tokens_equal_pass1"] for x in timed) if timed else None}
     replay: dict[str, Any] = {}
-    for d in DRAWN:
+    for d in SAMPLED:
         s = [x["spans"][d] for x in rows if x["pass"] == 2 and x["arm"] == f"alone-{d}" and x["spans"].get(d) is not None]
         replay[f"{d} cold"] = {"gpu_s": world * statistics.median(s), "reps": len(s)} if s else None
     w = [x for x in rows if x["pass"] == 2 and x["arm"] == "warm" and x["spans"].get("d-long") is not None]
@@ -604,7 +604,7 @@ def summarize(rows: list[dict[str, Any]], world: int) -> dict[str, Any]:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="replay of drawn requests: same batch, fillers, alone, another batch; cold and warm")
+    ap = argparse.ArgumentParser(description="replay of sampled requests: same batch, fillers, alone, another batch; cold and warm")
     ap.add_argument("--workload", required=True, help="the row (its first request's prompt is every request's tile)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--case", default=None)
@@ -654,16 +654,16 @@ def main() -> None:
             cold(llm)
             llm.collective_rpc(begin, timeout=a.rpc_timeout)
             r = run_workload(eng, reqs, sampling)
-            ranks = llm.collective_rpc(end, timeout=a.rpc_timeout, kwargs={"arm": arm, "drawn": list(DRAWN), "reference": REFERENCE})
+            ranks = llm.collective_rpc(end, timeout=a.rpc_timeout, kwargs={"arm": arm, "sampled": list(SAMPLED), "reference": REFERENCE})
             r0 = min(ranks, key=lambda x: x["rank"])
             tok1[arm], gaps1[arm], sched1[arm] = r["tokens"], r0.pop("gaps"), r0.pop("schedule")
-            eq = {d: r["tokens"][d] == tok1[REFERENCE][d] for d in DRAWN if d in r["tokens"]}
+            eq = {d: r["tokens"][d] == tok1[REFERENCE][d] for d in SAMPLED if d in r["tokens"]}
             fl = flips(tok1[REFERENCE], r["tokens"], gaps1[REFERENCE], gaps1[arm], {q["request_id"]: len(q["prompt_token_ids"]) for q in reqs})
             put({"pass": 1, "arm": arm, "wall_s": r["wall_s"], "steps": r["iterations"], "tokens_equal_served": eq, "flips": fl,
                  "schedule_equal_served": sched1[arm] == sched1[REFERENCE], "schedule": sched1[arm], "gaps": gaps1[arm],
                  "tokens": r["tokens"], "ranks": ranks})
             if arm == REFERENCE:
-                broken += [f"rank {x['rank']}: {d} compared nothing" for x in ranks for d in DRAWN
+                broken += [f"rank {x['rank']}: {d} compared nothing" for x in ranks for d in SAMPLED
                            if not x["per_request"].get(d, {}).get("compared")]
             print(f"[tp-replay] pass 1 {arm}: tokens {eq}; schedule equal served {sched1[arm] == sched1[REFERENCE]}; flipped "
                   + str({k: v["flipped"] for k, v in fl.items() if v["flipped"]}) + "; rank 0 "
@@ -678,7 +678,7 @@ def main() -> None:
                 cold(llm)
                 r = run_workload(eng, reqs, sampling, step=st)
                 broken += cache_misuse(arm, st.cached)
-                spans = {d: span(r["step_wall_s"], st.done, d, PRODUCER if arm == "warm" else None) for d in DRAWN}
+                spans = {d: span(r["step_wall_s"], st.done, d, PRODUCER if arm == "warm" else None) for d in SAMPLED}
                 put({"pass": 2, "rep": rep, "arm": arm, "wall_s": r["wall_s"], "gpu_s": world * r["wall_s"], "steps": r["iterations"],
                      "tokens_equal_pass1": r["tokens"] == tok1[arm], "spans": spans, "cached_tokens": st.cached,
                      "step_wall_s": r["step_wall_s"], "tokens": r["tokens"]})
@@ -688,7 +688,7 @@ def main() -> None:
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     for arm, d in summary["arms"].items():
         print(f"[tp-replay] {arm}: " + "; ".join(f"{k} bit-exact {v['bit_exact']} (tokens {v['tokens_equal']}, {v['differ']} of "
-                                                 f"{v['compared']} differ, first {v['first_differ']})" for k, v in d["drawn"].items())
+                                                 f"{v['compared']} differ, first {v['first_differ']})" for k, v in d["sampled"].items())
               + f"; {d['gpu_s']} GPU-s", flush=True)
     print(f"[tp-replay] replay GPU-s: {summary['replay']}; distinct output sequences {summary['distinct_sequences']}", flush=True)
     if broken:
