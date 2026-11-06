@@ -1,0 +1,138 @@
+"""`block_census.py`: each row's cut (the row itself when it fits, else each slot's coarsest fitting option, else a gap with
+its finest option's reason; no proof block for a row of no gate or no input), the slots of each kind of split the serving
+rows' tables name, and the census's counts per Definition, phase, token and request over the ranks. The sized units are
+stand-ins: nothing is bound or lowered."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+import block_census as B  # noqa: E402
+
+
+def unit(spec, n=1, *, ands=1000, out=(16,), ins=(64,), est_log=22, rows_log=21, **extra):
+    """A sized unit as `m1_families.sized` gives it."""
+    return {"spec": spec, "n": n, "ands": ands, "macs": 0, "reads": 0, "asserts": 0, "unpieced": [], **extra,
+            "block": {"in_bits": list(ins), "out_bits": list(out), "est_log": est_log, "rows_log": rows_log}}
+
+
+def family(spec, units=(), *, steps=None, gates=10, **row):
+    e = unit(spec, **row)
+    del e["spec"], e["n"]
+    return {"rows": sum((steps or {"0": 1}).values()), "steps": steps or {"0": 1}, "word_gates": gates,
+            "estimate": {**e, "units": list(units)}}
+
+
+@pytest.mark.parametrize("e, why", [
+    ({"error": "does not bind"}, "does not bind"),
+    (unit("X_v1{}", unpieced=["Erf_v1"]), "C-Flock has no piece for Erf_v1"),
+    (unit("X_v1{}", rows_log=28, est_log=28), "its rows alone need a 2^28 block"),
+    (unit("X_v1{}", est_log=28, ands=2**27), "a 2^28 block at 134,217,728 ANDs"),
+    (unit("X_v1{}", out=(262_144, 16)), "262,160 output bits, past the widest size class"),
+    (unit("X_v1{}", out=(262_144,)), None)])
+def test_a_unit_fits_or_says_why_not(e, why):
+    assert B.misfit(e) == why
+
+
+def test_a_parts_rows_slots_are_its_parts_each_whole_then_finer():
+    q, g, g1 = (unit(s) for s in ("Fp8GroupQuantUe8m0_v1{K=8}", "ScaledMmFp8BlockSharedScale_v1{K=8,N=4}",
+                                  "ScaledMmFp8BlockSharedScale_v1{K=8,N=1}"))
+    assert B.slots("DeepGemmFp8Linear_v1{K=8,N=4}", [q, g, g1]) == [[[q]], [[g], [g1]]]
+
+
+@pytest.mark.parametrize("row", ["RoPE_v1{D=64}", "SparseMlaSplit_v1{T=9,NS=2}"])
+def test_a_cut_or_split_rows_units_are_each_a_slot(row):
+    a, b = unit("A_v1{}"), unit("B_v1{}")
+    assert B.slots(row, [a, b]) == [[[a]], [[b]]]
+
+
+def test_a_kchunks_rows_slot_is_its_coordinate_or_its_chunks_of_one_width():
+    c = unit("MoeExpertFp8Gemm_v1{K=512,N=1}", 4)
+    ch = [unit(f"MoeExpertFp8CoordinateChunk_v1{{K={k},FIRST={f},LAST={la}}}", n)
+          for k, f, la, n in ((256, "true", "false", 4), (256, "false", "true", 4), (128, "true", "false", 4),
+                              (128, "false", "false", 8), (128, "false", "true", 4))]
+    assert B.slots("MoeExpertFp8Gemm_v1{K=512,N=4}", [c, *ch]) == [[[c], ch[:2], ch[2:]]]
+
+
+def test_a_coords_cols_or_slices_rows_slot_is_its_units_coarse_to_fine():
+    h2, h4 = unit("MoeSum_v1{H=4}", 2), unit("MoeSum_v1{H=2}", 4)
+    assert B.slots("MoeSum_v1{H=8}", [h2, h4]) == [[[h2], [h4]]]
+    assert B.slots("Whole_v1{N=8}", []) == []
+
+
+def test_a_row_that_fits_is_its_own_proof_block():
+    kind, units, why = B.cut("MoeSum_v1{H=8}", family("MoeSum_v1{H=8}", [unit("MoeSum_v1{H=4}", 2)]))
+    assert (kind, [(u["spec"], u["n"]) for u in units], why) == ("row", [("MoeSum_v1{H=8}", 1)], None)
+
+
+def test_a_row_that_doesnt_fit_takes_each_slots_coarsest_fitting_option():
+    q, g, g1 = (unit("Fp8GroupQuantUe8m0_v1{K=8}"), unit("ScaledMmFp8BlockSharedScale_v1{K=8,N=4}", est_log=28),
+                unit("ScaledMmFp8BlockSharedScale_v1{K=8,N=1}", 4))
+    kind, units, why = B.cut("DeepGemmFp8Linear_v1{K=8,N=4}", family("DeepGemmFp8Linear_v1{K=8,N=4}", [q, g, g1], est_log=29))
+    assert (kind, [(u["spec"], u["n"]) for u in units], why) == (
+        "split", [("Fp8GroupQuantUe8m0_v1{K=8}", 1), ("ScaledMmFp8BlockSharedScale_v1{K=8,N=1}", 4)], None)
+
+
+def test_a_row_with_a_slot_no_option_fits_is_a_gap_with_its_finest_options_reason():
+    h2, h4 = unit("MoeSum_v1{H=4}", 2, est_log=29), unit("MoeSum_v1{H=2}", 4, est_log=28)
+    kind, units, why = B.cut("MoeSum_v1{H=8}", family("MoeSum_v1{H=8}", [h2, h4], est_log=30, ands=5))
+    assert (kind, units) == ("gap", [])
+    assert why == "a 2^30 block at 5 ANDs; finest split MoeSum_v1{H=2}: a 2^28 block at 1,000 ANDs"
+    assert B.cut("Whole_v1{N=8}", family("Whole_v1{N=8}", est_log=30, ands=5)) == ("gap", [], "a 2^30 block at 5 ANDs")
+
+
+def test_a_row_of_no_gate_or_no_input_is_no_proof_block():
+    assert B.cut("AllGather_v1{WORLD=8}", family("AllGather_v1{WORLD=8}", gates=0))[0] == "no gates"
+    assert B.cut("Const_v1{}", family("Const_v1{}", ins=()))[0] == "const"
+
+
+def doc(rank, families, prompt=4, steps=3):
+    return {"rank": rank, "requests": {"r0": {"prompt_len": prompt, "steps": steps, "families": families}}}
+
+
+def test_the_census_counts_each_definition_per_phase_token_and_request_over_the_ranks():
+    """Two ranks of one request (a prefill step of 4 tokens, 2 decode steps): rank 0's row fits whole, rank 1's splits
+    into 4 coordinates of a unit shared with rank 0's other row, and a gap row counts its rows but no proof block."""
+    coord = unit("Lin_v1{N=1}", 4, ands=10, out=(16,), ins=(64, 32))
+    r0 = {"Lin_v1{N=4}": family("Lin_v1{N=4}", [coord], steps={"0": 2, "1": 1, "2": 1}, ands=30, macs=8, out=(64,)),
+          "Lin_v1{N=1}": family("Lin_v1{N=1}", steps={"0": 1}, ands=10, out=(16,), ins=(64, 32)),
+          "Big_v1{}": family("Big_v1{}", steps={"1": 3}, est_log=30, ands=7)}
+    r1 = {"Lin_v1{N=4}": family("Lin_v1{N=4}", [coord], steps={"0": 1, "2": 2}, ands=30, est_log=28, macs=8)}
+    c = B.census([doc(0, r0), doc(1, r1)])
+    assert c["ranks"] == [0, 1] and c["tokens"] == {"prefill": 4, "decode": 2}
+    d = c["definitions"]
+    assert {s: (x["prefill"], x["decode"], x["of"]) for s, x in d.items()} == {
+        "Lin_v1{N=4}": (2, 2, {"Lin_v1": "row"}), "Lin_v1{N=1}": (1 + 4, 4 * 2, {"Lin_v1": "split"})}
+    assert d["Lin_v1{N=1}"]["rows"] == [8, 4, 2] and d["Lin_v1{N=1}"]["row_bytes"] == 14
+    t = c["totals"]
+    assert (t["prefill"]["blocks"], t["decode"]["blocks"]) == (2 + 5, 2 + 8)
+    assert (t["prefill"]["ands"], t["decode"]["ands"]) == (2 * 30 + 5 * 10, 2 * 30 + 8 * 10)
+    assert (t["prefill"]["out_bits"], t["prefill"]["class_bits"]) == (2 * 64 + 5 * 16, 2 * 64 + 5 * 16)
+    assert t["decode"]["circuit_ands"] == 2 * 30 + 3 * 7 + 2 * 30 and t["decode"]["circuit_macs"] == 4 * 8
+    assert (t["decode"]["rows gap"], t["prefill"]["rows split"]) == (3, 1)
+    assert c["per_token"]["prefill"]["blocks"] == 7 / 4 and c["per_token"]["decode"]["blocks"] == 10 / 2
+    assert c["per_request"]["blocks"] == 17 and c["per_request"]["rows"] == 4 + 7
+    assert c["per_rank"][1]["decode"]["blocks"] == 8 and c["per_rank"][0]["prefill"]["blocks"] == 3
+    assert list(c["gaps"]) == ["Big_v1{}"] and c["gaps"]["Big_v1{}"]["decode"] == 3
+    card = B.card(c)
+    assert card["definitions"]["Lin_v1{N=1}"] == {"family": "Lin_v1", "prefill": 5, "decode": 8, "out_bits": 16, "ands": 10,
+                                                  "macs": 0, "rows": [8, 4, 2], "k_log": 22, "of": ["Lin_v1"]}
+    assert "Big_v1{}" in B.table(c) and "| proof blocks | 1.8 | 5 | 17 |" in B.table(c)
+
+
+def test_the_census_refuses_ranks_of_two_request_shapes():
+    with pytest.raises(ValueError, match="one request shape"):
+        B.census([doc(0, {}, prompt=4), doc(1, {}, prompt=8)])
+
+
+def test_main_writes_the_census_the_table_and_the_card(tmp_path, monkeypatch):
+    (tmp_path / "s0.json").write_text(json.dumps(doc(0, {"Lin_v1{N=1}": family("Lin_v1{N=1}")})))
+    monkeypatch.setattr(sys, "argv", ["block_census.py", "--sized", str(tmp_path / "s0.json"), "--out", str(tmp_path / "o")])
+    assert B.main() == 0
+    assert {p.name for p in (tmp_path / "o").iterdir()} == {"census.json", "table.md", "card.json"}
