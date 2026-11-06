@@ -40,11 +40,11 @@ deadline `Δ_late` plus the round trip. The memory challenger's arrival times `a
    challenge but the open one and `run_continuous` drops a reply naming any other.
 3. It waits at most `D_late` units. The round closes at the answer, or after `D_late` units with no answer
    (`contNext`). A round with no answer by then, or whose answer took more than `Q_late` queries, is **rejected**
-   (`contVerdict`): past the hard deadline, its block never checked (`Answer.rejected`, past `Δ_late + RTT`, closed by
-   `respond()`, `expire()` or the next `challenge()`).
+   (`contVerdict`): past the hard deadline, its block never checked (`ChallengeReply.rejected`, past `Δ_late + RTT`,
+   closed by `respond()`, `expire()` or the next `challenge()`).
 4. Any other answer that took more than `D` units or `Q` queries is **late**, whatever its block: past `Δ`
-   (`Answer.on_time` is false past `Δ + RTT`). An answer within `(D, Q)` is a **hit** if it is the block `C i_j`
-   (`Answer.correct`), and **wrong** otherwise.
+   (`ChallengeReply.on_time` is false past `Δ + RTT`). An answer within `(D, Q)` is a **hit** if it is the block
+   `C i_j` (`ChallengeReply.correct`), and **wrong** otherwise.
 5. With tolerance `f₀` it accepts iff at most `f₀` rounds are not hits: rejected, late or wrong (`contAccepts`), as
    `ContinuousMemoryChallenger.accepted` compares `AuditResult.misses` with `max_misses`.
 
