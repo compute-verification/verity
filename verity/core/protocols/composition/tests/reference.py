@@ -523,7 +523,7 @@ def window_records(commitment: bytes, evidence: bytes) -> list[bytes] | core_che
 #: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
 STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
                       ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
-#: `Core.Remote.windows`: every window of PoUW's period on the policy's record.
+#: `Core.Remote.windows`: every window of PoUW's period on the policy's record, remote's tie and onsite's.
 WINDOWS = Tie("record", ((INFERENCE_ONLY.id, policy_record), (POUW_PERIOD.id, window_records)))
 
 
@@ -561,9 +561,9 @@ class TiedSame(Same):
 
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order of their ids: each one's
-#: policy and integrity committing to one registration record, every window of remote's PoUW period naming the policy's
-#: record, and onsite's PoUS and PoUB-P2 on one store.
+#: policy and integrity committing to one registration record, every window of each one's PoUW period naming the
+#: policy's record, and onsite's PoUS and PoUB-P2 on one store (`Core.Onsite.ties`, in its order).
 REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS), (INFERENCE_ONLY.id, SAMPLED_PROOFS.id),
                   (WINDOWS,))
 ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
-                  (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (STORE,))
+                  (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (WINDOWS, STORE))
