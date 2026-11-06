@@ -27,7 +27,8 @@ of V3c's audit's memory. There
 step 6 defers the audit and the composite, leaving the follow-on's settings and its every input, listed and hashed, and
 nothing in $OUT but a line; the follow-on holds the copy to those sums, refuses another setting, a node short of the
 memory or another tree, and audits, records about the served node and composes, each saying it composed elsewhere, as
-the record says where it was composed and what was deferred. Its load, `serve_load.py
+the record says where it was composed and what was deferred. What it publishes holds a load's tokens and span by path,
+leaving the inference-only policy, its digest and its verdict line as written. Its load, `serve_load.py
 --varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
 endpoint."""
 from __future__ import annotations
@@ -231,6 +232,86 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
                                                   "COMPOSITE CASE verity/pous/p2/v4/run accept\n")
     assert gzip.decompress((out / "serve" / "h1" / "window-program.json.gz").read_bytes()) == b'{"rows": 512}'
     assert S.publish(out, private) == []
+
+
+#: `served_overhead.py metrics`' aggregate of a composed run's one load: 4 requests of 4 tokens, so 16 tokens, one block
+#: a request
+AGGREGATE = {"schema": "verity-bench/served-overhead-metrics/v0", "run_id": "r1", "commit": True, "protocols": ["commit"],
+             "identity": {"precision": "verity_int8"}, "scheduler": {"max_num_batched_tokens": 512},
+             "loads": [{"requests": 4, "tokens": 16, "steps": 9, "span_s": 2.5, "windows": {"n": 1, "open_s": 0.5, "h1": ["tied"]},
+                        "time_per_output_token_s": 0.15625, "tokens_per_s": 6.4, "client_tokens_per_s": 6.1}]}
+#: an inference-only policy as `inference_only.py policy` writes it, whose ``n_inputs.span_s`` is the lease's, not a load's
+POLICY = {"format": "verity-bench/inference-only-policy/v1", "written_utc": "2026-11-06T05:58:00+00:00", "tree": "ab" * 20,
+          "class": {"slots": 4, "prompt": 32, "outputs": 4, "positions": 35},
+          "serve": {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d", "precision": "verity_int8"},
+          "session": {"definition": "cd" * 32, "key": "Session_v1{S=4}", "slots": 4, "positions": 35},
+          "c": 123_456_789, "k": 4_096, "n": 25_165_824,
+          "theta": "every weight parameter the class's circuit registers (147), held",
+          "table": {"sha512": "ef" * 64, "entries": 40, "priced": ["BitAtx32_v1"]},
+          "n_inputs": {"n": 25_165_824, "raw": 24_570_799, "grid_bits": 3,
+                       "rate": {"macs_per_s": 989_429_760_000_000, "clock_mhz": 1830, "source": "θ"},
+                       "utilization": [1, 4], "span_s": 3600, "utilization_source": "the declared share",
+                       "span_source": "the serve's GPU lease limit",
+                       "work": {"linears": 34_057_748_480, "attention": 41_287_680, "lm_head": 1_050_673_152,
+                                "theta_macs": 36_241_670_144, "source": "one slot of the class's fixed load"}}}
+
+
+def test_publish_holds_the_loads_tokens_and_span_by_path_and_leaves_the_policy_and_its_digest_as_written(tmp_path):
+    """The load's tokens over a block's outputs are its exact block count, so `publish` holds each load's ``tokens`` and
+    ``span_s`` (`OWN_AT`, by path) with its counts, keeping its rates; the inference-only policy's ``n_inputs.span_s``, a
+    ``tokens`` under no load and the verdict citing the policy's digest stay byte for byte, and the digest is the same
+    before and after."""
+    import inference_only as IO
+
+    out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    (out / "serve").mkdir(parents=True)
+    (out / "serve" / "overhead.json").write_text(json.dumps(AGGREGATE) + "\n")
+    IO._write(out / "inference-only-policy.json", POLICY)
+    before = IO.digest(json.loads((out / "inference-only-policy.json").read_text()))
+    verdict = {"format": IO.VERDICT_FORMAT, "verdict": "accept", "reason": None, "complies": True, "failure": None,
+               "policy": {"sha512": before, "written_utc": POLICY["written_utc"]}, "c": POLICY["c"], "k": POLICY["k"],
+               "n": POLICY["n"], "classes": [["cd" * 32, 1_000, 4_000]], "counts": IO.COUNTS, "slots": 4, "positions": 35}
+    IO._write(out / "record" / "inference-only.json", verdict)
+    (out / "pieces" / "pearlplus").mkdir(parents=True)
+    (out / "pieces" / "pearlplus" / "load.json").write_text(json.dumps({"tokens": 1024, "span_s": 9.5, "served_tokens": 64}))
+    kept = {p: p.read_bytes() for p in out.rglob("*.json") if p.name != "overhead.json"}
+    assert S.publish(out, private) == ["serve/overhead.json"]
+    (ld,) = json.loads((out / "serve" / "overhead.json").read_text())["loads"]
+    assert ld == {"time_per_output_token_s": 0.15625, "tokens_per_s": 6.4, "client_tokens_per_s": 6.1}
+    assert json.loads((private / "serve" / "overhead.json").read_text()) == AGGREGATE
+    assert {p: p.read_bytes() for p in kept} == kept
+    after = json.loads((out / "inference-only-policy.json").read_text())
+    assert after["n_inputs"]["span_s"] == 3600 and IO.digest(after) == before == IO.digest(POLICY)
+    assert json.loads((out / "record" / "inference-only.json").read_text())["policy"]["sha512"] == before
+    assert S.public_json(POLICY) == POLICY and S.public_json(verdict) == verdict
+    assert S.publish(out, private) == []
+
+
+def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference_only_lines(tmp_path):
+    """A verdict line's published form has no load's ``tokens`` or ``span_s`` in its JSON, in a JSON string's text or in a
+    JSON object cut short, and the INFERENCE-ONLY lines, the policy's (its span in seconds) and the verdict's (the policy's
+    digest), are their own published form."""
+    import inference_only as IO
+
+    agg = json.dumps(AGGREGATE)
+    assert S.public_line(f"OVERHEAD {agg}") == "OVERHEAD " + json.dumps(S.public_json(AGGREGATE))
+    assert not re.search(r'"(?:tokens|span_s)"', S.public_line(f"OVERHEAD {agg}"))
+    assert S.public_line('OVERHEAD {"loads": [{"tokens": 16, "span_s": 2.5, "tokens_per_s": 6.') == f"OVERHEAD {S.CUT}"
+    quoted = json.dumps({"said": agg})
+    assert json.loads(json.loads(S.public_line(quoted))["said"]) == S.public_json(AGGREGATE)
+    for kept in ('{"n_inputs": {"span_s": 3600, "raw": 24570799}}', '{"tokens": 1024, "span_s": 9.5}',
+                 'POLICY {"n_inputs": {"span_s": 3600, "raw": 2457',
+                 'PEARL+ {"load": {"requests": "all", "prompt_tokens": 1024}, "served_tokens": 64}'):
+        assert S.public_line(kept) == kept
+    i = POLICY["n_inputs"]
+    policy_line = (f"INFERENCE-ONLY POLICY at class 4,32,4: c {POLICY['c']} gates, k {POLICY['k']} fresh bits, n {POLICY['n']} "
+                   f"sessions (⌈{i['utilization'][0]}/{i['utilization'][1]} x {i['rate']['macs_per_s']} MAC/s x {i['span_s']} s / "
+                   f"{i['work']['theta_macs']} θ-MACs⌉ = {i['raw']}, on the grid); session {POLICY['session']['definition'][:16]}…, "
+                   f"policy {IO.digest(POLICY)[:16]}…")
+    pub = {"verdict": "accept", "reason": None, "classes": [["cd" * 32, 1_000, 4_000]], "registered_session": True,
+           "c": POLICY["c"], "k": POLICY["k"], "n": POLICY["n"], "policy": {"sha512": IO.digest(POLICY)}}
+    for line in (policy_line, f"INFERENCE-ONLY {IO.line(pub)}", f"INFERENCE-ONLY {json.dumps(pub)}"):
+        assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
 
 def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):

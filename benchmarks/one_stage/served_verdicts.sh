@@ -34,11 +34,12 @@
 #     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
 #     line says only `served_verdicts.py front-line`'s fields) stays in the serve dir on the node; what leaves it is their
 #     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
-#     control compares to) and verdict lines that name no window and count none of a window's own: no window's number, no
-#     count of the windows closed, sealed or refused, no engine step, request count or user of one. Each line goes out
-#     through `served_verdicts.py public-lines`, in full to the serve dir's private/verdicts.txt, and once the run is
-#     done, however it ends, `served_verdicts.py publish` holds in full in the serve dir's private/out each file of $OUT
-#     that names or counts a window, its public form in its place. The advice registration's published copies
+#     control compares to) less the load's counts and span, and verdict lines that name no window and count none of a
+#     window's own: no window's number, no count of the windows closed, sealed or refused, no engine step, request count or
+#     user of one. Each line goes out through `served_verdicts.py public-lines`, in full to the serve dir's
+#     private/verdicts.txt, and once the run is done, however it ends, `served_verdicts.py publish` holds in full in the
+#     serve dir's private/out each file of $OUT that names or counts a window or holds a load's tokens or span (the
+#     aggregate's, which `served_overhead.py table` reads there), its public form in its place. The advice registration's published copies
 #     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
 #     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
@@ -1759,7 +1760,8 @@ EOF
 cp "$D/period.json" "$OUT/serve/" 2>/dev/null
 [ -d "$D/h1" ] && (cd "$D" && cp --parents h1/window-program.json.gz h1/window-program.meta.json "$OUT/serve/" 2>/dev/null)
 [ -n "${H1_CIRCUITS:-}" ] && [ -f "$H1_CIRCUITS/circuit-files.json" ] && cp "$H1_CIRCUITS/circuit-files.json" "$OUT/serve/"
-# the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate.
+# the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate,
+# in full in the serve dir's private/out/serve once `publish` holds the load's counts and span.
 # A front's load is the warden's, paced by its buckets, which no stock run's is, and one window's aggregate is its timing.
 if [ "$LOAD" = front ]; then
   say "OVERHEAD: none with LOAD=front (the warden paces its requests, so no stock control compares)"
