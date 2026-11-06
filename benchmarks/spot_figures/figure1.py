@@ -235,8 +235,9 @@ def cards(model: str = "GLM-5.3", request: str = "census") -> dict[str, InputCar
 @dataclass(frozen=True)
 class TokenBlocks:
     """The model's proof blocks a token: their count, MACs and the bytes one-stage commits, the mean MACs a proof
-    block weighted by count (a uniformly sampled block's) and by MACs (the work target's samples), and the mean and
-    widest output bits; beside them the whole circuit's MACs a token and those in `modeled` strata."""
+    block is proved at (`price`) weighted by count (a uniformly sampled block's) and by MACs (the work target's
+    samples), and the mean and widest output bits; beside them the whole circuit's MACs a token and those in `modeled`
+    strata."""
 
     blocks: float
     macs: float
@@ -255,7 +256,8 @@ class TokenBlocks:
         bits = sum(s["per_token"] * s["out_bits"] for s in strata)
         committed = sum(s["per_token"] * s.get("commit_bytes", s["out_bits"] / 8) for s in strata)
         modeled = sum(s["per_token"] * s["macs"] for s in strata if s.get("modeled"))
-        return cls(n, macs, committed, macs / n, sum(s["per_token"] * s["macs"] ** 2 for s in strata) / macs,
+        return cls(n, macs, committed, sum(s["per_token"] * price(s) for s in strata) / n,
+                   sum(s["per_token"] * s["macs"] * price(s) for s in strata) / macs,
                    bits / n, max(s["out_bits"] for s in strata if s["per_token"] > 0), served_macs or macs, modeled)
 
     def coverage(self) -> dict:
@@ -265,8 +267,8 @@ class TokenBlocks:
 
 
 def price(stratum: dict) -> float:
-    """The MACs a stratum's block is proved at: its `price_macs` where its partition prices proving by staged witness
-    bits, else its MACs."""
+    """The MACs a stratum's block is proved at: its `price_macs` where its proving is priced in seconds
+    (`total_cost.priced`), else its MACs."""
     return stratum.get("price_macs", stratum["macs"])
 
 
@@ -274,8 +276,9 @@ def price(stratum: dict) -> float:
 class Fill:
     """Proving's price over its marginal at a statement's fill, per proof-block type: its share of the proof blocks, its
     share of their proving (`price`), its statement's fixed GPU-seconds over a block's marginal ones, and its
-    statement's cap in blocks.  A type the `proof_overhead` card doesn't measure takes the measured blocks' pooled fixed
-    cost and least cap.  Proving GPU-seconds go as `price`, so a design's price is the types' mean weighted by it."""
+    statement's cap in blocks: the stratum's own where it is priced in seconds, else the `proof_overhead` card's block
+    of its name, else the measured blocks' pooled fixed cost and least cap.  Proving GPU-seconds go as `price`, so a
+    design's price is the types' mean weighted by it."""
 
     types: tuple[tuple[float, float, float, int], ...]
 
@@ -288,7 +291,8 @@ class Fill:
         macs = sum(s["per_token"] * price(s) for s in strata)
         return cls(tuple((s["per_token"] / n, s["per_token"] * price(s) / macs,
                           *((b["fixed_seconds"] / b["seconds_per_block"], b["statement_blocks"])
-                            if (b := by.get(s["block"])) else pooled)) for s in strata))
+                            if (b := s if "fixed_seconds" in s else by.get(s["block"])) else pooled))
+                         for s in strata))
 
     def factor(self, blocks: float) -> float:
         """The price over the marginal when a replay block holds `blocks` sampled proof blocks, each type's in

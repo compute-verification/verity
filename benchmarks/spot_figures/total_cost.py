@@ -7,8 +7,9 @@ A configuration (`CONFIGURATIONS`) is what serving commits at serve time, the re
 design the audit samples with.  Its serve tax, what that change to the production server costs on every token, is one
 number in the model's `serve_tax` card, priced (`priced_card`) or measured.  A line's x is its tax plus β, the share
 of the scope's compute the audit spends on replays, interior commitments and proofs of the sampled proof blocks, and
-its y the bound at β, every cost at the `proof_overhead` card's marginal overhead on Figure 1's model
-(`figure1.model`).  So each line starts at its own tax.
+its y the bound at β on Figure 1's model (`figure1.model`).  So each line starts at its own tax.  Every line prices a
+proof block the same way (`priced`): at its type's seconds on the `proof_overhead` card, or computed from its staged
+witness bits where the card doesn't measure the type; a line's marginal overhead is what its blocks come to.
 
 * `tokens` (A): serving commits the token ids, the schedule record and the KV cache at each window edge; a replay block
   is a request, and the design the width-stratified two-stage one.  Exfiltration is its capped sets' form
@@ -21,9 +22,8 @@ its y the bound at β, every cost at the `proof_overhead` card's marginal overhe
   most its request's served bits, which is at least the lemma's charge because min(·, S) is subadditive, and never
   above the scope's served bits.  Infiltration is its write form at a footprint of the layer's boundary bits.
 * `per_expert` (A′): (A)'s serving and tax on another cut of the circuit, the model's `partition` card `per-expert`
-  (the MoE cut per expert: the router's slots, table reads at each slot's expert and per-expert GEMMs), at that card's
-  marginal overhead and its proving priced as the card says, labelled with the card's `label`; a line only for a
-  model with that card.
+  (the MoE cut per expert: the router's slots, table reads at each slot's expert and per-expert GEMMs), labelled with
+  the card's `label`; a line only for a model with that card.
 * `every_block` (C): serving commits every proof block's outputs, and the audit samples them one-stage; its tax is a
   lower bound, the hashing alone.  Exfiltration is `consumers.exfiltration_bound`'s form, at most the served bits by
   the same count, which Lean states for two-stage only; infiltration is its write form (the K incorrect blocks the plan
@@ -39,11 +39,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from math import ceil, expm1, floor, inf, log, log1p, log10
 from pathlib import Path
+from statistics import linear_regression, median
 from textwrap import fill
 
 import cards as spot_cards
@@ -65,6 +67,9 @@ LIVE = (0.15, 0.05, 0.5)
 HASH_RATES = (4096 / 44 * 4.79e9, 4096 / 44 * 3.1e9)
 #: GLM-5.3's K/V and indexer keys a token, the state a later token reads (576 BF16 a layer and the indexer keys)
 KV_BYTES = 92_628
+#: the witness bits a full statement holds: the H200's ceiling, at which the `proof_overhead` card's statements are
+#: proved
+STATEMENT_BITS = 2 ** 35
 
 
 @dataclass(frozen=True)
@@ -151,22 +156,57 @@ def taxes(card: dict, names: tuple[str, ...] = tuple(CONFIGURATIONS)) -> dict[st
 
 def cut(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     """The inputs with the circuit cut by a `partition` card: its strata in place of the `workload` card's of the kinds
-    it replaces, at its marginal overhead, each stratum's proving at its staged witness bits' share of the token's MACs
-    where the card prices by witness bits."""
+    it replaces."""
     v, part = card["value"], c["partition"]
     strata = [x for x in part.value["strata"] if x.get("kind") not in v["replaces"]] + v["strata"]
-    if v["price"] == "witness_bits":
-        if missing := [x["block"] for x in strata if "k_log" not in x]:
-            raise ValueError(f"{v['name']} prices proving by staged witness bits, but {missing} give no k_log")
-        macs = sum(x["per_token"] * x["macs"] for x in strata)
-        bits = sum(x["per_token"] * 2 ** x["k_log"] for x in strata)
-        strata = [x | {"price_macs": macs * 2 ** x["k_log"] / bits} for x in strata]
     art = f" ({card['art']})" if card.get("art") else ""
     return c | {"partition": replace(part, value=part.value | {"strata": strata},
-                                     source=f"{part.source}; cut by the partition card {v['name']}{art}"),
-                "proof_overhead": f1.InputCard(v["model_overhead"], "x", card["status"],
-                                               f"partition card {v['name']}'s model_overhead{art}: {v['overhead_label']}",
-                                               card["provisional"])}
+                                     source=f"{part.source}; cut by the partition card {v['name']}{art}")}
+
+
+def _definition(block: str) -> tuple[str, int | None]:
+    k = re.search(r"[{,]K=(\d+)", block)
+    return block.split("{")[0], int(k.group(1)) if k else None
+
+
+def priced(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
+    """The inputs with every proof block priced in GPU-seconds from the `proof_overhead` card, and the marginal
+    overhead they come to.  A stratum whose type the card measures (its block, else the card's block of the same
+    Definition and K) takes its seconds a block, its statement's fixed seconds and its cap; a type the card doesn't
+    measure is `computed` from its staged witness bits: the measured types' median seconds a witness bit, a statement's
+    fixed seconds on their least-squares line in k_log, and as many blocks as a full statement holds.  Each stratum's
+    `price` is the MACs that cost its seconds at that overhead, so the planner's cells and grains prove it at them."""
+    v, part = card["value"], c["partition"]
+    if abs(c["peak_flops"].value / (2 * v["peak_mac_s"]) - 1) > 1e-3:
+        raise ValueError(f"the planner's peak, {c['peak_flops'].value:.6g} FLOP/s, isn't twice the proof_overhead "
+                         f"card's {v['peak_mac_s']:.6g} MAC/s, so its overheads don't price the planner's MACs")
+    by_name = {b["block"]: b for b in v["blocks"]}
+    types = {_definition(b["block"]): b for b in v["blocks"]}
+    rate = median(b["seconds_per_block"] / 2 ** b["k_log"] for b in types.values())
+    slope, intercept = linear_regression([b["k_log"] for b in types.values()],
+                                         [b["fixed_seconds"] for b in types.values()])
+    strata = []
+    for x in part.value["strata"]:
+        if b := by_name.get(x["block"]) or types.get(_definition(x["block"])):
+            strata.append(x | {k: b[k] for k in ("seconds_per_block", "fixed_seconds", "statement_blocks")}
+                          | {"priced": "measured"})
+        elif "k_log" in x:
+            strata.append(x | {"seconds_per_block": rate * 2 ** x["k_log"],
+                               "fixed_seconds": max(0.0, intercept + slope * x["k_log"]),
+                               "statement_blocks": max(1, STATEMENT_BITS >> x["k_log"]), "priced": "computed"})
+        else:
+            raise ValueError(f"{x['block']}: the proof_overhead card doesn't measure its type, and it gives no k_log "
+                             "to compute its proving from")
+    seconds = sum(x["per_token"] * x["seconds_per_block"] for x in strata)
+    h = seconds * v["peak_mac_s"] / sum(x["per_token"] * x["macs"] for x in strata)
+    computed = sum(x["per_token"] * x["seconds_per_block"] for x in strata if x["priced"] == "computed") / seconds
+    art = f" ({card['art']})" if card.get("art") else ""
+    return c | {"partition": replace(part, value=part.value | {
+                    "strata": [x | {"price_macs": x["seconds_per_block"] * v["peak_mac_s"] / h} for x in strata],
+                    "computed_share": computed}),
+                "proof_overhead": f1.InputCard(h, "x", card["status"],
+                                               f"the proof_overhead card's blocks{art} by stratum, {computed:.2%} of "
+                                               "the marginal computed from staged witness bits", card["provisional"])}
 
 
 def _size_class(bits: float) -> int:
@@ -283,19 +323,22 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         parts = ", ".join(f"{p['part']} {_share(p['share'])}" for p in t["parts"])
         return f"serve tax {_share(t['tax'])} ({_share(t['low'])} to {_share(t['high'])}; {kind}: {parts})"
 
+    conf = out["configurations"]
     head = ("x is the serve tax, what each configuration's change to the production server costs on every token, plus "
             "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
-            f"tax, hollow where the tax is priced. At the measured marginal proof overhead, {out['overhead']:.3g}×, "
-            "but where a line names its own. Every β has its own plan, the one with the least bound.")
+            "tax, hollow where the tax is priced. Every line proves a proof block at its type's measured seconds, a "
+            "block's and its statement's fixed ones, and a type not yet measured at its staged witness bits (computed): "
+            f"the registered circuit's marginal proof overhead comes to {out['overhead']:.3g}×, "
+            f"{_share(conf['tokens']['computed_share'])} of it computed. Every β has its own plan, the one with the "
+            "least bound.")
     a, b, c = CONFIGURATIONS["tokens"], CONFIGURATIONS["layer_of_token"], CONFIGURATIONS["every_block"]
-    cuts = {n: (CONFIGURATIONS[n], conf["cut"]) for n, conf in out["configurations"].items() if "cut" in conf}
+    cuts = {n: (CONFIGURATIONS[n], k["cut"]) for n, k in conf.items() if "cut" in k}
     short = a.label.split(" ")[0]
-    pricing = {"witness_bits": "its blocks proved at their staged witness bits' share of a token's proving",
-               "macs": "its blocks proved at their MACs"}
     exfil_cuts = "".join(
         f" {e.label} (dash-dot; {k['label']}): {short}'s serving and serve tax on the partition card {k['name']}'s "
-        f"cut, at its marginal overhead, {k['overhead_label']}, {pricing[k['price']]}; the same form: "
-        f"{_binds(out['betas'], lines['exfiltration'][n]['binds'])}." for n, (e, k) in cuts.items())
+        f"cut, its marginal proof overhead {conf[n]['overhead']:.3g}×, {_share(conf[n]['computed_share'])} of it "
+        f"computed; the same form: {_binds(out['betas'], lines['exfiltration'][n]['binds'])}."
+        for n, (e, k) in cuts.items())
     infil_cuts = "".join(f" {e.label} (dash-dot): {short}'s footprint at its own design." for e, _ in cuts.values())
     trivial = [CONFIGURATIONS[n].label.split(" ")[0] for n, s in lines["exfiltration"].items()
                if f1.RATIO_BUDGET in out["betas"] and s["binds"][out["betas"].index(f1.RATIO_BUDGET)] == "served"]
@@ -341,14 +384,15 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
     cuts = {card["value"]["name"]: card for card in spot_cards.load_all("partition", model_name)}
     confs = {n: conf for n, conf in CONFIGURATIONS.items() if conf.partition is None or conf.partition in cuts}
     tax = taxes(spot_cards.load("serve_tax", model_name), tuple(confs))
-    inputs = {n: cut(c, cuts[conf.partition]) if conf.partition else c for n, conf in confs.items()}
+    inputs = {n: priced(cut(c, cuts[conf.partition]) if conf.partition else c, sc["proof_overhead"])
+              for n, conf in confs.items()}
 
-    def priced(i: dict[str, f1.InputCard]) -> tuple:
+    def line(i: dict[str, f1.InputCard]) -> tuple:
         strata = i["partition"].value["strata"]
         return (f1.TokenBlocks.of(strata, i["partition"].value["served_macs_per_token"]),
                 f1.Fill.of(strata, i["proof_blocks"].value), i["proof_overhead"].value)
 
-    lines = {n: priced(i) for n, i in inputs.items()}
+    lines = {n: line(i) for n, i in inputs.items()}
     part, fill, h = lines["tokens"]
     betas = sorted(set(BETAS) | set(c["budgets"].value))
     inf_card = sc["infiltration"]["value"]
@@ -360,7 +404,7 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
     series: dict[str, list[dict]] = {p: [] for p in PANELS}
     out_scopes = {}
     for s in chosen:
-        base = f1.model(c, part, s, h, fill)
+        base = f1.model(inputs["tokens"], part, s, h, fill)
         for name, conf in confs.items():
             tb, fl, oh = lines[name]
             m = f1.model(inputs[name], tb, s, oh, fl) if conf.partition else base
@@ -382,12 +426,12 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
     out = {"schema": SCHEMA, "model": model_name, "request": request, "overhead": h,
            "overhead_label": sc["proof_overhead"]["value"]["label"], "betas": betas, "budgets": c["budgets"].value,
            "served_bits_request": c["served_bits"].value, "footprint_bits": [c["served_bits"].value, boundary],
-           "configurations": {n: conf.__dict__ | {"panels": list(conf.panels)} | (
-               {"cut": {k: used[conf.partition]["value"][k] for k in ("name", "label", "price", "model_overhead",
-                                                                      "overhead_label")}
+           "configurations": {n: conf.__dict__ | {"panels": list(conf.panels), "overhead": lines[n][2],
+                                                  "computed_share": inputs[n]["partition"].value["computed_share"]} | (
+               {"cut": {k: used[conf.partition]["value"][k] for k in ("name", "label")}
                        | {"art": used[conf.partition].get("art")}} if conf.partition else {})
                for n, conf in confs.items()},
-           "taxes": tax, "inputs": {k: v.__dict__ for k, v in c.items()},
+           "taxes": tax, "inputs": {k: v.__dict__ for k, v in inputs["tokens"].items()},
            "cards": sc | ({"partition": list(used.values())} if used else {}), "scopes": out_scopes,
            "panels": {"exfiltration": {"unit": "bit", "series": series["exfiltration"],
                                        "references": [r for r in refs["exfiltration"] if r["main"]]},

@@ -20,8 +20,7 @@ def test_the_configurations_are_the_cards():
 
 def test_a_partition_card_cuts_the_circuit_and_keeps_its_macs():
     """The per-expert cut: its strata in place of the registered cut's MoE GEMMs and router, every MAC of the circuit
-    kept, each block proved at its staged witness bits' share of a token's MACs (a table read too, which has none), at
-    the card's overhead; a witness-priced card without a block's k_log is refused."""
+    kept; a card without a block's k_log is refused."""
     c = f1.cards("GLM-5.3")
     card = next(x for x in cards.load_all("partition", "GLM-5.3") if x["value"]["name"] == "per-expert")
     cut = t.cut(c, card)
@@ -30,13 +29,43 @@ def test_a_partition_card_cuts_the_circuit_and_keeps_its_macs():
     assert any(x.get("kind") in kinds for x in old) and not any(x.get("kind") in kinds for x in new)
     macs = sum(x["per_token"] * x["macs"] for x in old)
     assert sum(x["per_token"] * x["macs"] for x in new) == pytest.approx(macs, rel=1e-12)
-    assert sum(x["per_token"] * f1.price(x) for x in new) == pytest.approx(macs, rel=1e-12)
-    reads = [x for x in new if x.get("kind") == "EmbeddingRead_v1"]
-    assert reads and all(x["macs"] == 0 < f1.price(x) for x in reads)
-    assert cut["proof_overhead"].value == card["value"]["model_overhead"] < c["proof_overhead"].value
     bare = [{k: v for k, v in x.items() if k != "k_log"} for x in card["value"]["strata"]]
     with pytest.raises(ValueError, match="no k_log"):
         cards.check(card | {"value": card["value"] | {"strata": bare}})
+
+
+def test_every_line_prices_its_blocks_one_way():
+    """Both cuts price a block at its measured type's seconds (its name's, else its Definition and K's) and an
+    unmeasured type at its staged witness bits, by one rule; each stratum's price keeps a token's MACs, so the line's
+    overhead is its blocks' seconds over its MACs at the card's peak; a block neither measured nor staged is refused."""
+    c, po = f1.cards("GLM-5.3"), cards.load("proof_overhead", "GLM-5.3")
+    card = next(x for x in cards.load_all("partition", "GLM-5.3") if x["value"]["name"] == "per-expert")
+    blocks, peak = po["value"]["blocks"], po["value"]["peak_mac_s"]
+    by_name = {b["block"]: b for b in blocks}
+    lines = {n: t.priced(i, po) for n, i in (("registered", c), ("per-expert", t.cut(c, card)))}
+    rates = {}
+    for name, p in lines.items():
+        strata = p["partition"].value["strata"]
+        for x in strata:
+            if x["block"] in by_name:
+                assert x["priced"] == "measured" and x["seconds_per_block"] == by_name[x["block"]]["seconds_per_block"]
+            if x["priced"] == "computed":
+                rates.setdefault(x["seconds_per_block"] / 2 ** x["k_log"], x["block"])
+                assert x["statement_blocks"] == t.STATEMENT_BITS >> x["k_log"]
+        variant = next(x for x in strata if x["priced"] == "measured" and x["block"] not in by_name)
+        assert t._definition(variant["block"]) in {t._definition(b) for b in by_name}
+        macs = sum(x["per_token"] * x["macs"] for x in strata)
+        assert sum(x["per_token"] * f1.price(x) for x in strata) == pytest.approx(macs, rel=1e-12)
+        seconds = sum(x["per_token"] * x["seconds_per_block"] for x in strata)
+        assert p["proof_overhead"].value == pytest.approx(seconds * peak / macs, rel=1e-12)
+    assert len({round(r, 20) for r in rates}) == 1, rates
+    reads = [x for x in lines["per-expert"]["partition"].value["strata"] if x.get("kind") == "EmbeddingRead_v1"]
+    assert reads and all(x["macs"] == 0 < f1.price(x) and x["priced"] == "computed" for x in reads)
+    assert 0 < lines["registered"]["partition"].value["computed_share"] < .01
+    assert lines["per-expert"]["proof_overhead"].value < lines["registered"]["proof_overhead"].value
+    stray = c["partition"].value | {"strata": [{"block": "Unstaged_v1{K=3}", "per_token": 1, "macs": 3, "out_bits": 16}]}
+    with pytest.raises(ValueError, match="no k_log"):
+        t.priced(c | {"partition": f1.InputCard(stray, "", "measured", "one unstaged block")}, po)
 
 
 def test_the_kept_priced_taxes_are_the_generators():

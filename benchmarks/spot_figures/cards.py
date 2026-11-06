@@ -16,10 +16,9 @@ total parameters, scales the references that go as the model's size.  The `refer
 of a model add up: each is kept as `cards/references.MODEL.ART.json`, under the first twelve hex digits of its art id,
 and the figures plot every card's lines, with its `caption` appended to the caption of each panel it has lines on; a
 line at 0 is named in its panel's caption, not plotted.  A `partition` card is another cut of the model's circuit: its
-strata take the place of the `workload` card's strata of the kinds it `replaces`, at its own `model_overhead`, its
-proving priced by `price` (a stratum's MACs, or its staged witness bits, 2^k_log); they add up as `references` cards do,
-each Figure 1's line of its own.  A card reaches the figures by art id, a later one naming the earlier card it
-replaces:
+strata take the place of the `workload` card's strata of the kinds it `replaces`, each with the k_log it is staged at,
+which prices it until the `proof_overhead` card measures its type; they add up as `references` cards do, each Figure
+1's line of its own.  A card reaches the figures by art id, a later one naming the earlier card it replaces:
 
     uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields
     research data put --kind spot-card/v1 --file CARD.json --preserve --json
@@ -107,8 +106,7 @@ SLOTS = {
     "commit_hillclimb": {"x": F(dict, each=AXIS), "y": F(dict, each=AXIS), "workload": F(str),
                          "series": F(list, each=CURVE)},
     "serve_tax": {"baseline": F(str), "configurations": F(list, each=TAX)},
-    "partition": {"name": F(str), "label": F(str), "replaces": F(list), "strata": F(list, each=STRATUM),
-                  "price": F(str, choices=("macs", "witness_bits")), "model_overhead": F(NUM), "overhead_label": F(str)},
+    "partition": {"name": F(str), "label": F(str), "replaces": F(list), "strata": F(list, each=STRATUM)},
 }
 
 
@@ -164,8 +162,9 @@ def check(card: dict) -> dict:
                    if names.count(n) > 1]
         errors += [f"serve_tax.value.configurations[{i}]: low <= tax <= high, but {t['low']}, {t['tax']}, {t['high']}"
                    for i, t in enumerate(value["configurations"]) if not 0 <= t["low"] <= t["tax"] <= t["high"]]
-    if slot == "partition" and not errors and value["price"] == "witness_bits":
-        errors += [f"partition.value.strata[{i}]: no k_log, so no staged witness bits to price it by"
+    if slot == "partition" and not errors:
+        errors += [f"partition.value.strata[{i}]: no k_log, so no staged witness bits to price it by until its type is "
+                   "measured; give the k_log circuit-check stages it at"
                    for i, x in enumerate(value["strata"]) if "k_log" not in x]
     if slot == "workload" and not errors and value.get("served_macs_per_token") is not None:
         in_blocks = sum(s["per_token"] * s["macs"] for s in value["strata"])

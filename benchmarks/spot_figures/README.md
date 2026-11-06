@@ -43,12 +43,17 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   configuration by configuration, and the figure plots a priced tax hollow.
 
   A `partition` card is another cut of the model's circuit: its strata take the place of the `workload` card's strata
-  of the kinds it `replaces`, at its own `model_overhead`, its blocks proved at their MACs or at their staged witness
-  bits' share of a token's proving (`price`), and its `label` says how far it has got.
+  of the kinds it `replaces`, each with the k_log it is staged at, and its `label` says how far it has got.
 - **Figure 1** (`total_cost.py`): what an adversary serving the model on all of a scope's compute over a monitoring
   period can exfiltrate or infiltrate while evading detection with probability above δ, against total cost as a share
   of serving compute, the serve tax plus β (the share spent on replays, interior commitments and proofs of the sampled
-  proof blocks), at the `proof_overhead` card's marginal overhead; skipped work is a figure of its own.
+  proof blocks); skipped work is a figure of its own.
+  - Every line prices a proof block one way (`priced`): at its type's seconds on the `proof_overhead` card, a block's
+    and its statement's fixed ones, with its statement's cap, the type being the card's block of the same name, else
+    of the same Definition and K; a type the card doesn't measure is computed from its staged witness bits (the
+    measured types' median seconds a witness bit, a fixed cost on their least-squares line in k_log, a statement's
+    2^35 bits), and the caption gives each line's computed share. A line's marginal overhead is what its blocks come
+    to over its MACs at the card's peak.
   - One line per server configuration (`CONFIGURATIONS`), each starting at its own tax, hollow while the tax is
     priced, with its range as a bar: (A) tokens only (the token ids, the schedule record and the KV cache at window
     edges committed; a replay block is a request), (B) each layer's state (a replay block is one layer of one token),
@@ -128,6 +133,5 @@ Limits of the model:
   returns more (logits, state) serves more, and the cap is then too low.
 - The two-stage write forms need a harm bound at the footprint, which no lemma states yet, and (B) replays a layer of
   one token at its share of its request's replay, from state it retains.
-- The registered cut's lines prove each block at its MACs and (A′)'s at its staged witness bits, so where the two
-  disagree on a block's share of a token's proving, the lines price it differently; (A′)'s overhead is computed
-  from staged k_log, not measured.
+- A type the `proof_overhead` card doesn't measure is priced from its staged witness bits, not measured: (A′)'s
+  per-expert types are, until a card measures them.
