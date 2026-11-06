@@ -54,6 +54,8 @@ public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
+public import Definitions.WeightSecurity.Assumptions
+public import Definitions.WeightSecurity.Guarantees
 
 /-! Each component's named assumptions and guarantee statements. -/
 
