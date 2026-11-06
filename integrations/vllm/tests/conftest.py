@@ -11,6 +11,7 @@ its word Definition on every merge, and each file's special-word and edge cases 
 from __future__ import annotations
 
 import os
+import shutil
 
 import pytest
 
@@ -81,8 +82,8 @@ def code_versions_stood_in(monkeypatch):
 
 @pytest.fixture
 def outside_a_checkout(monkeypatch):
-    """A tree a test builds under its tmp_path is no git checkout: the store's file listing (`research.store.tool`) says so
-    without asking git, which the suite's read guard can't trace, and walks it as it would."""
-    from research.store import tool
-    monkeypatch.setattr(tool, "_in_git_tree", lambda root: False)
+    """A tree a test builds under its tmp_path is no git checkout. With no git to find (`shutil.which`), the code identity's file
+    listing walks it as it walks any tree outside a checkout, and starts no git, which the suite's read guard can't trace."""
+    which = shutil.which
+    monkeypatch.setattr(shutil, "which", lambda cmd, *a, **k: None if cmd == "git" else which(cmd, *a, **k))
 
