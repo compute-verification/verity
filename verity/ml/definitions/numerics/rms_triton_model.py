@@ -72,7 +72,7 @@ CUDA_VARIANTS = {
 CUDA_KERNEL = {
     "source": "csrc/libtorch_stable/layernorm_kernels.cu::vllm::rms_norm_kernel<c10::BFloat16, VEC_SIZE=8, NUM_DIMS=2, HasWeight=true> (vLLM d9105ea8)",
     "entry": "torch.ops._C.rms_norm(out, x, w, eps)  -- not launched by the pinned profile's engine (every RMSNorm call carries a residual "
-             "or goes to the Triton kernel); modelled as the third rms_norm variant of numerics.md",
+             "or goes to the Triton kernel); modelled as the third rms_norm variant",
     "launch": "grid = rows, block = min(n_cols / 8, 1024) threads (192 for n_cols 1536), one 8-vector per thread per iteration",
     "reduction": "FFMA chain per vector (element order), cub WarpReduce shfl_down tree (1,2,4,8,16), cub BlockReduce<1024> warp aggregates added sequentially",
     "scalar_ops": "IEEE div.rn.f32 (MUFU.RCP + FFMA refinement + FCHK), FADD eps, rsqrt.approx.f32 -> MUFU.RSQ with 2^24 / 2^12 range scaling",
