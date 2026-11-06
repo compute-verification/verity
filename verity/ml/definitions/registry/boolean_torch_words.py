@@ -3,6 +3,12 @@
     I64Add_v2         (a, b: Array<64, Value<1>>) -> Array<64, Value<1>>        word view: I64Add_v1, a ripple-carry adder
     I64Le_v2          (a, b: Array<64, Value<1>>) -> Value<1>                   word view: I64Le_v1, not b < a unsigned with the
                                                                                 sign bits flipped
+    I64Shl_v2         (a, b: Array<64, Value<1>>) -> Array<64, Value<1>>        word view: I64Shl_v1, a barrel shifter by b's low six
+                                                                                bits, zero when a higher bit of b is set
+    I64Shr_v2         (a, b: Array<64, Value<1>>) -> Array<64, Value<1>>        word view: I64Shr_v1, a logical barrel shifter between
+                                                                                two XORs with the sign, by 63 when a higher bit of b
+                                                                                is set
+    I64And_v2         (a, b: Array<64, Value<1>>) -> Array<64, Value<1>>        word view: I64And_v1
     SelectI64_v2      (c: Value<1>, a, b: Array<64, Value<1>>) -> Array<64, Value<1>>    word view: SelectI64_v1
     I64ToU8_v2        (t: Array<64, Value<1>>) -> Array<8, Value<1>>            word view: I64ToU8_v1, no gates
     U8ToI64_v2        (t: Array<8, Value<1>>) -> Array<64, Value<1>>            word view: U8ToI64_v1, no gates
@@ -18,7 +24,7 @@
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, shl_window, sub
+from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, shl_window, shr, sub
 from verity.ml.circuits.boolean.trace import definition
 from verity.ml.circuits.ops.boolean.scalar import gt_u, select
 from verity.ml.circuits.silicon import fp
@@ -26,8 +32,8 @@ from verity.ml.circuits.types import Array
 
 from . import torch_words as W
 
-__all__ = ["F16ToF32", "F32OrderKey", "F32ToF16Rn", "F32ToI64Rz", "I64Add", "I64Le", "I64ToF32Rn", "I64ToU8", "OrderKeyF32",
-           "SelectI64", "U8ToI64"]
+__all__ = ["F16ToF32", "F32OrderKey", "F32ToF16Rn", "F32ToI64Rz", "I64Add", "I64And", "I64Le", "I64Shl", "I64Shr", "I64ToF32Rn",
+           "I64ToU8", "OrderKeyF32", "SelectI64", "U8ToI64"]
 
 BIT = BL.BIT
 I64, U8, F16, F32 = Array(64, BIT), Array(8, BIT), Array(16, BIT), Array(32, BIT)
@@ -39,6 +45,20 @@ def i64_le(C, a, b):
     def flip(x):
         return list(x[:63]) + [NOT(x[63])]
     return [NOT(gt_u(C, flip(a), flip(b)))]
+
+
+def i64_shl(C, a, b):
+    """``I64Shl_v1``: a shifted left by b's low six bits, as `shr` shifts the reversed word right, zero when a higher bit of b is
+    set (b < 0 or b >= 64)."""
+    return shr(C, list(a)[::-1], b[:6], zero_if=or_reduce(C, b[6:]))[::-1]
+
+
+def i64_shr(C, a, b):
+    """``I64Shr_v1``: a shifted right with its sign shifted in, a logical shift of a XOR its sign, XORed with the sign again; by
+    63 (b's low six bits all ones) when a higher bit of b is set (b < 0 or b >= 64)."""
+    big = or_reduce(C, b[6:])
+    s = a[63]
+    return [y ^ s for y in shr(C, [x ^ s for x in a], [OR(C, big, k) for k in b[:6]])]
 
 
 def i64_to_f32(C, t):
@@ -87,6 +107,10 @@ def f32_order_key(C, x):
 I64Add = definition("I64Add", 2, lambda C, a, b: add(C, a, b, width=64), _AB, I64, word=W.I64Add,
                     doc="add.s64 on bits: I64Add_v1, a + b modulo 2^64")
 I64Le = definition("I64Le", 2, i64_le, _AB, BIT, word=W.I64Le, doc="signed 64-bit a <= b on bits: I64Le_v1")
+I64Shl = definition("I64Shl", 2, i64_shl, _AB, I64, word=W.I64Shl, doc="a << b on 64-bit words, on bits: I64Shl_v1")
+I64Shr = definition("I64Shr", 2, i64_shr, _AB, I64, word=W.I64Shr, doc="a >> b, the sign shifted in, on bits: I64Shr_v1")
+I64And = definition("I64And", 2, lambda C, a, b: [C.AND(x, y) for x, y in zip(a, b)], _AB, I64, word=W.I64And,
+                    doc="a & b on 64-bit words, on bits: I64And_v1")
 SelectI64 = definition("SelectI64", 2, lambda C, c, a, b: select(C, c[0], a, b), (("c", BIT), ("a", I64), ("b", I64)), I64,
                        word=W.SelectI64, doc="c ? a : b on 64-bit words, on bits: SelectI64_v1")
 I64ToU8 = definition("I64ToU8", 2, lambda C, t: list(t[:8]), (("t", I64),), U8, word=W.I64ToU8,
