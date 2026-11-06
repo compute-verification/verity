@@ -369,7 +369,7 @@ def test_a_registered_session_with_filler_planned_is_credited_the_circuit_s_read
                          {v: steps - 1 for v in width},
                          {t: frozenset((*weights, 100 + tokens[t], *(200 + u for u in range(t)))) for t in range(steps)},
                          steps, {})
-    layout = RQ.Store.Placement({**{v: v // 4 for v in weights}, **{v: 4 + (v - 100) // 8 for v in rows},
+    layout = RQ.Store.Packing({**{v: v // 4 for v in weights}, **{v: 4 + (v - 100) // 8 for v in rows},
                                  **{v: 100 + t for v, t in kv.items()}},
                                 {**{v: v % 4 * 8192 for v in weights}, **{v: (v - 100) % 8 * 4096 for v in rows},
                                  **{v: 0 for v in kv}},
