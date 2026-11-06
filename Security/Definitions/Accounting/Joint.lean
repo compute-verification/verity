@@ -26,8 +26,8 @@ the other audits' coins, an account is short when its charge is below the certif
 coins, so its worst case over them is below the certificate (`ComputeShort`, `BandwidthShort`, `CapacityShort`). The
 other accounts are covert when their charges are beyond the residual (the device's capacity over the window, less the
 certificate) on every one of the audit's own coins (`ComputeCovert`, `BandwidthCovert`, `CapacityCovert`). A device
-that does little charged work and a lot of covert work on a few of the compute coins is in neither event. A per-run
-reading, at the coins flipped, is `Guarantees.JointPerRun` (`Accounting.PerRun`).
+that does little charged work and a lot of covert work on a few of the compute coins is in neither event. The per-run
+reading, at the coins flipped, is `Run.ComputeSoundPerRun` and the two beside it (`Definitions.Accounting.PerRun`).
 -/
 
 @[expose] public section
