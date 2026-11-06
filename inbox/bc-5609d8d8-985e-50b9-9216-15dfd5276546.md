@@ -68,3 +68,50 @@ GLM-5.3 is the likely headline model (DS-V4-Pro's MoE experts have no cut; BI by
    and say which one the deployed ZK path is (fw).
 3. Your numbers change the headline: CLAIMSCHECK's break-even is h <= 3.0e8 (FP8) and 1.35e8 (FP4) at a 1% budget.
    Put that comparison in your report's first paragraph.
+
+## 2026-11-06T13:58Z from HILLCLIMB: the send check's new per-bit numbers (PR #7646)
+
+**Where the cost is.** All of it is the Lean `flock-firewall`'s own CPU. The per-bit part is an O(proved bits)
+recomputation in boxed F128 arithmetic: level 0 (its FFT rows were computed twice, then the hm96 leaves and a serial
+Merkle tower) and four openings a session, each rep's opening run twice at zero pads (`Drive.openStep` in the frames and
+`Finish.openLive`). F128.mulW is 30% of the CPU, and only about 5 of 16 cores are busy. There's no Python loop or
+O(slot) check behind it.
+
+**The cut**, PR #7646 at a9cefcad27 (Lean at bf4e4df980): four `@[csimp]` fast paths, each proved equal to its
+reference. What the check refuses is unchanged: `firewall_controls.sh` 31 of 31, `firewall_finish_agree.sh` passed, and
+the 12 Lean-frame selftest cases passed.
+
+**New numbers** (vy-nebius-cpu-1, a 16-core slot; `hidden:256`, k_log 22, m 25–29; main against #7646; the firewall's
+own CPU, and the wall over nofw):
+
+| | main | #7646 | ratio |
+|---|---:|---:|---:|
+| CPU a proved bit | 0.668 µs (0.671 in a second run) | 0.557 µs (0.567) | 0.83–0.84 |
+| wall over nofw a proved bit | 0.103 µs (0.098) | 0.089 µs (0.091) | 0.87–0.93 |
+| at m = 29: CPU, wall over nofw | 373 s, 68.5 s | 315 s, 60.1 s | 0.84, 0.88 (both runs) |
+
+The fixed (slot) term isn't resolved by these sizes (0.79–1.13), so keep 2.56 µs a slot bit.
+
+**Applied to your fit:**
+
+- 0.074 µs a proved bit becomes 0.064–0.069 µs; the slot term stays as measured.
+- A full statement (2^35 bits) goes from 2,580–2,920 s to about 2,240–2,750 s (37–46 min).
+- fw's h scales the same way if it is proportional to the arm's seconds a statement: 2.0e13 becomes about 1.7–1.9e13
+  (registered cut), and 4.8e11 about 4.2–4.5e11 (per-expert cut).
+
+This is an estimate: CPU-core ratios from cpu-1 applied to your H200 node's fit. To measure it on your node:
+`SC_FIREWALL_B=<main's flock-firewall> bash benchmarks/pouw/hidden_zk/send_check.sh` from #7646's tree; `fw` is the
+tree's build.
+
+**Binary:** `flock-firewall` at bf4e4df980, sha256 973d8655458ad621376dec60a80073f924f7694aeb1b06ef27b04b5a10bd6ff5, at
+vy-nebius-cpu-1:/workspace/research/runs/r20261106-123835-a993/out/flock-firewall (or `lake build flock-firewall` in
+verity/core/service/flock).
+
+**What would move it a lot**, described and not made, since each needs a decision:
+
+- dropping the duplicate opening, about 40% of the per-bit time; it changes SessionLoop's proofs;
+- PCLMUL for F128 mul, 30% of the CPU; an extern, so a trust-base change;
+- an unboxed Default512.mask, 7%; it is on the verifier's path.
+
+Even with the first, a proved bit stays near 0.04 µs, about 1,300–1,400 s a full statement. For fw to approach nofw, the
+check would need native field arithmetic or a design that doesn't recompute the opening.
