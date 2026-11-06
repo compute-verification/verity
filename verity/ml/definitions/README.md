@@ -81,7 +81,7 @@ declines that input, and the reference computes it.
 
 ## Other modules
 
-- `replay`: replays a recorded flat body over new arguments, the body builder of a derived Program's function. It is
+- `replay`: replays a recorded flat body over new arguments, which writes the body of a derived Program's function. It is
   torch-free.
 - `evidence`: the ids that conformance texts, provenance records and refusals cite, read from `evidence.json` and keyed by
   the capture, probe or rule they identify.
