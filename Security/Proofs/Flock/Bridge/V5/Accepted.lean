@@ -247,7 +247,8 @@ rows of distinct names, no two registered roots one root under different domains
 the query `qr` give the game's `n` units in order), and the claims relation fails, under the registration's law on its
 layout's strata (`Bridge.LawOn` at `Bridge.nsOf`) at `δ` that law's own miss of `B`, as in `SampledKSLiveV5`. It has none
 of V5's hypotheses `RowsOk`, `dupName = none`, `RootFixesDomainL` and `PopMatches`; the game's `n` is the public file's
-population (`pub.n = n`). `SampledKSLiveV5` implies it (`sampledKSLiveV5Accepted_of`). -/
+population (`pub.n = n`). It reads the circuit file flat (`Flock.Desc.parse`), as `PortRoots` does, and V5 at it through
+`Flock.Desc.parseStmt_of_parse`. `SampledKSLiveV5` implies it (`sampledKSLiveV5Accepted_of`). -/
 def SampledKSLiveV5Accepted : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
@@ -271,7 +272,8 @@ def SampledKSLiveV5Accepted : Prop :=
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the verify command's tags, and live-verifier at `own` and the law
     (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr
+      fun _ => law)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
     -- the proof blocks whose miss is `δ`
@@ -282,12 +284,13 @@ def SampledKSLiveV5Accepted : Prop :=
     (q : Claims.Sampling.Query),
     let L := Bridge.execSel (n := n) src law n
     let P := (keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)
-    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub).bindingZ
-      (rsZHJP_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub)
+    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) hscope hU hpi
+        hpub).bindingZ
+      (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) hscope hU hpi hpub)
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesZCJH_custodyP I own ht (Flock.Desc.parse_flat hD) law kd hdiv dj y₀ wr _ hTags hCust
-        (Bridge.lawOn_size hlaw hCust.2)) τ
+      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) law kd hdiv dj y₀ wr
+        _ hTags hCust (Bridge.lawOn_size hlaw hCust.2)) τ
     let Xr := XplurZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw
     -- the deployed commitment's layout: the game's rows, read off the circuit file, at the public file's leaf map
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
@@ -330,9 +333,9 @@ theorem sampledKSLiveV5Accepted_of (h : Flock.Guarantees.SampledKSLiveV5) : Samp
   · obtain ⟨⟨hck, _, _, hks⟩, p, hp, hpo⟩ := hc
     obtain ⟨hdup, hroots⟩ := v5Files_of_checks (Flock.Desc.parse_flat hD) hpi hpub hn hck hks
     exact (prob_mono (fun o ho => ⟨ho.1.1.1, ho.2⟩) _ τ).trans
-      (h n Reg I own ht D hD hU pi hpi pub hpub hscope (Bridge.rowsOk_of_scopeOkH hscope) hdup hroots desc qr
-        (Bridge.popMatches_of_popOk hp hpo) law kd hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw
-        hM ρ hρ hr t' ht' B τ qF qS q hT hL)
+      (h n Reg I own ht D (Flock.Desc.parseStmt_of_parse hD) hU pi hpi pub hpub hscope
+        (Bridge.rowsOk_of_scopeOkH hscope) hdup hroots desc qr (Bridge.popMatches_of_popOk hp hpo) law kd hlaw hdiv dj
+        S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q hT hL)
   · exact (prob_mono (q := fun _ => False) (fun o ho => hc ⟨⟨ho.1.1.2.1, ho.1.1.2.2⟩, ho.1.2⟩) _ τ).trans
       ((prob_false _ τ).le.trans zero_le)
 
