@@ -46,9 +46,8 @@ in-flight files, or deletes others' work. If `AGENTS.md`, the owning skill or a 
 follow it. Otherwise ask the owner of what the change touches, or your coordinator when owners disagree or you can't tell
 (a handle holder: `research msg send --to @HANDLE`; a worker: its report), with the case, the change and your
 recommendation in a few lines, and prepare the change meanwhile. Nothing waits on Daniel: a claim (what a guarantee says
-or rests on) goes to him decided provisionally, and a click only his account can make gets a way around it where one
-exists (`.agents/skills/asking-daniel/SKILL.md`). Spend, a short budget line included, is the call
-of the lead whose line pays.
+or rests on) goes to him decided provisionally, and a click only he can make gets a workaround where one exists
+(`.agents/skills/asking-daniel/SKILL.md`). Spend, a short budget line included, is the call of the lead whose line pays.
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`.
 
@@ -126,9 +125,8 @@ Keys and access:
 
 - Keys and access between our own machines and accounts are the lanes' call: the lane that needs a key or a grant
   (a lane key, a forced-command key, a challenger's or a wipe's key) sets it up with the machine's owner, infra for
-  shared nodes, with no ask and no wait. This is a simulation: nothing mimics deployment settings, and it needn't be
-  perfect. Daniel only clicks what needs an account he holds (the GitHub organization's admin, billing, the Nebius and
-  Cloudflare consoles).
+  shared nodes, with no ask and no wait. Daniel only clicks what needs an account he holds (the GitHub organization's
+  admin, billing, the Nebius and Cloudflare consoles).
 - The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
   so stopping a machine never waits on an agent VM.
 - Workers open and edit their own lane's PRs with `research queue open|edit`, through a GitHub App on the
