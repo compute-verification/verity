@@ -1,7 +1,13 @@
 module
 
 public import Definitions.Flock.Audit.Law
-public import Proofs.Flock.Soundness.Game.Prob
+import Mathlib.Algebra.BigOperators.Group.Finset.Sigma
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Data.Fintype.Fin
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Draw laws

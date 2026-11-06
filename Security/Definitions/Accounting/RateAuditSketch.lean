@@ -1,8 +1,12 @@
 module
 
-public import Mathlib.Data.ZMod.Basic
 public import Definitions.Pous.Game.Prob
 public import Definitions.Accounting.Tag.Sketch
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Data.ZMod.Defs
+public import Mathlib.Order.Lattice.Nat
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The rate audit with a sketch-then-hash tag, for a device that reads sectors verbatim (trusted)

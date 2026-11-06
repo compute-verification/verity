@@ -1,14 +1,17 @@
 module
 
 public import Definitions.Pouw.Basic.Prob
-public import Mathlib.Algebra.Order.Field.Basic
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Logic.Equiv.Prod
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.FieldSimp
-public import Mathlib.Tactic.Ring
-public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.FieldSimp
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Positivity.Finset
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # Lemmas about `pr`

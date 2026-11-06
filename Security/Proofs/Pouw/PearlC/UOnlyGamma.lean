@@ -1,9 +1,11 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceCapGamma
-public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.Guarantees.PearlC
-public import Proofs.Pouw.PearlC.TTOutW1Variants
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceRev1Gamma
+import Proofs.Pouw.PearlC.TTOutW1Variants
+import Proofs.Pouw.Prob
 
 /-!
 # TT_OUT over U alone: it asserts more than the (C̃, U) row, and γ from it

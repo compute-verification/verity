@@ -2,8 +2,11 @@ module
 
 public import Proofs.Core.Game.Lock
 public import Definitions.Flock.Game.Lock
-public import Proofs.Flock.Soundness.Game.Expect
-public import Proofs.Flock.Soundness.Game.Interleave
+public import Definitions.Flock.Rewinding
+public import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Algebra.Order.Chebyshev
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # C-Flock's game library is Core's: `Lock`

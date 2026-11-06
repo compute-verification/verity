@@ -1,12 +1,9 @@
 module
 
-public import Mathlib.Tactic.LinearCombination
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Ring
 public import Definitions.Pouw.Fp8Atom.Pinned
-public import Proofs.Pouw.Fp8Atom.Checks.Add
+import Mathlib.Tactic.LinearCombination
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Checks.Add
 
 /-!
 # Proofs of the FP32 add statements

@@ -32,10 +32,10 @@ line's end, a budget or release time past 2^64, a statement name that isn't a st
 -/
 module
 
-public import Lean.Data.Json
-public import Flock.Canon
 public import Flock.Bytes
 public import Firewall.PyJson
+public import Lean.Data.Json.Parser
+import Flock.Canon
 
 @[expose] public section
 set_option backward.privateInPublic true

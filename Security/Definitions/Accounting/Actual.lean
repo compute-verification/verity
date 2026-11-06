@@ -1,8 +1,6 @@
 module
 
-public import Definitions.Core.Circuit
 public import Definitions.Core.RegisteredCircuit
-public import Mathlib.Order.Interval.Set.Defs
 
 /-!
 # The actual circuit (trusted)

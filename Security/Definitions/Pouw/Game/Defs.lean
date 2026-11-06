@@ -3,6 +3,8 @@ module
 public import Definitions.Pouw.Basic.Prob
 public import Definitions.Pouw.Basic.Mat
 public import Definitions.Pouw.Basic.QTree
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
 
 /-!
 # The γ-gap game (trusted; problem statement §3.2–§3.5)

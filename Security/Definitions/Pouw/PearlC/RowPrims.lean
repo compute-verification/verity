@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.PearlC.Tile4Circuit
+public import Definitions.Pouw.PearlC.Instance
 
 /-!
 # PoUW's own primitives in the row units, as word functions (definitions only)

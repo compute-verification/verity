@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Joint
+public import Mathlib.Data.Fintype.Prod
 
 /-!
 # The joint guarantee (trusted)

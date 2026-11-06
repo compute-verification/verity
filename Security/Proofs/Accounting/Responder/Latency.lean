@@ -1,8 +1,10 @@
 module
 
-public import Definitions.Accounting.Window
 public import Definitions.Accounting.Guarantees.Responder
-public import Proofs.Accounting.Responder
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.Accounting.Responder
 
 /-!
 # B2's oracle-location form, proved: a window as a ring responder

@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Accounting.Guarantees.TS.LowBit
-public import Mathlib.Data.FinEnum
-public import Mathlib.Data.Fintype.Card
+import Mathlib.Algebra.GroupWithZero.Nat
+import Mathlib.Data.FinEnum
 
 /-!
 # A one-register fold's low bit

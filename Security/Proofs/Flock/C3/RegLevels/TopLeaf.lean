@@ -1,12 +1,24 @@
 module
 
-public import Proofs.Flock.C3.RegLevels.TopTie
 public import Proofs.Flock.C3.RegLevels.TopRead
-public import Proofs.Flock.C3.RegLevels.AccReads
-public import Proofs.Flock.C3.PubRows.Check
-public import Proofs.Flock.C3.Reps.RoundLinks
-public import Proofs.Flock.Recursive.Registrants
 public import Proofs.Flock.Recursive.HPortTie
+public import Proofs.Flock.C3.RegLevels.SharedRows
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.RegLevels.TopTie
+import Proofs.Flock.C3.Reps.RoundLinks
+import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # `hT_of_leaf`'s `hleaf` at R's levels' `out` reads, and two sessions' reads of one row

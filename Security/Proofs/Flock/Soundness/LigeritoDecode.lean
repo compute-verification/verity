@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.LigeritoRes
 public import Proofs.Flock.Soundness.LigeritoLevels
-public import Proofs.Flock.Soundness.ListSize
+public import Proofs.Flock.Soundness.LigeritoFolds
+public import Proofs.Flock.Soundness.LigeritoMCA
+import Proofs.Flock.Soundness.LigeritoRes
 
 /-!
 # Decoding a fold near a codeword (`Flock.Ligerito`)

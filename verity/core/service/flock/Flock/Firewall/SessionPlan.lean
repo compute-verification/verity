@@ -18,7 +18,8 @@ The analysis holds them to the coin layer (`Claims/ZK/SessionLean.lean`).
 -/
 module
 
-public import Flock.Firewall.Hello
+public import Flock.Firewall.Coins
+public import Flock.Zk
 
 @[expose] public section
 

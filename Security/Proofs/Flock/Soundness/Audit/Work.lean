@@ -1,8 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Stratified
-public import Mathlib.Analysis.MeanInequalities
 public import Definitions.Flock.Guarantees.Audit
+import Mathlib.Analysis.MeanInequalities
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The work law
