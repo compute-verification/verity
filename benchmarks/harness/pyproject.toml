@@ -119,7 +119,7 @@ tests = ["tests/test_bench.py"]
 paths = ["verity/core/protocols/pouw/lean/check/models.json"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_breakdown.py", "tests/test_served_table.py"]
+tests = ["tests/test_breakdown.py", "tests/test_overhead.py", "tests/test_served_table.py"]
 paths = ["fixtures/artifacts.json"]
 
 [[tool.verity.tests.reads]]

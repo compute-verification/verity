@@ -56,7 +56,8 @@ after_landing_shards = 3
 # lean-agreement,ratchet-gate` on `on` (the preflights and lean-agreement's lean-build with them; lean-agreement left out when
 # nothing it checks changed), with the --base and --ratchet-base a run of every step takes, its reds named and reverted as a
 # run's. `main` follows once every task on the gate passed, the graph has a task of every other job `main` waits for, and that
-# run passed its steps: a red ratchet-gate holds `main` though it is off the gate
+# run passed its preflights and its steps on the gate: a red ratchet-gate, off it (policy.toml's `off_gate`), holds `main` no
+# more than in a run of every step
 executor = "shadow"
 # infra's enqueue command, the words of its argv (`research.executor.QueueTransport`), run with `--priority N --check
 # after-landing:SHA` (and `--schema verity-graph/v2` when on); unset, each tip the executor would check is recorded incomplete
