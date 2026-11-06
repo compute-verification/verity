@@ -85,15 +85,12 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    its all-reduce and residual add in column blocks as ``COLS`` (``in0`` the partials, ``in1``
                                    the residual -> ``out.<member>``, the row's r), its norm whole (``in0`` the row's committed r,
                                    ``in1`` the weight -> ``out.<member>``, the row's normed output); one index entry per row
-  ``Fp8GroupQuantUe8m0_v1{..}``, ``ScaledMmFp8BlockSharedScale_v1{N=1,..}``  the parts of every ``DeepGemmFp8Linear_v1`` row
-                                   (``PARTS``, at G = 128, ``PART_STATICS``): its quantisation whole (``in0`` the row's x ->
-                                   ``out.<member>``, its q and s; packed ports, `part_rows.read_part`), its GEMM in coordinates as
-                                   ``COORDS`` (``in0``, ``in1`` the row's committed q and s, ``in2``, ``in3`` ``w[n]`` and
-                                   ``ws[n // 128]`` -> ``out.<member>``, its y word n); one index entry per row
-  ``FlashInferFp8Quant1x128_v1{..}``, ``ScaledMmFp8BlockSharedScale_v1{N=1,..}``  the parts of every ``FlashInferFp8Linear_v1``
-                                   row, likewise: its quantisation once (``in0`` x -> ``o0``, ``o1``: q and s, intermediates
-                                   its twin computes, `part_rows.MIDS`), then the same coordinates, whose ``in0`` and ``in1``
-                                   rows are wired to those (`part_rows.wire`); both chunked (``chunk_cap``), v2 bit rows
+  ``Fp8GroupQuantUe8m0_v1{..}``/``FlashInferFp8Quant1x128_v1{..}``, ``ScaledMmFp8BlockSharedScale_v1{N=1,..}``  the parts of every
+                                   ``DeepGemmFp8Linear_v1``/``FlashInferFp8Linear_v1`` row (``PARTS``, at G = 128): its quantisation
+                                   whole (``in0`` x -> its q and s: DeepGEMM's committed ``out.<member>``, FlashInfer's intermediates
+                                   ``o0``, ``o1``, `part_rows.MIDS`), its GEMM in coordinates as ``COORDS`` (``in0``, ``in1`` q and s,
+                                   committed or wired to ``o0``, ``o1``, `part_rows.wire`; ``in2``, ``in3`` ``w[n]``, ``ws[n // 128]``
+                                   -> ``out.<member>``, its y word n); packed ports (`part_rows`); one index entry per row
   ``Gemm_v2{N=1,..}``, ``BatchedGemm_v1{B=1,N=1,..}``, ..  every slice of the rows of that Definition at any extents along its
                                    axes (``SLICES``): ``in<g>`` per argument group, its element along each axis it carries and
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
@@ -132,8 +129,7 @@ from verity_vllm.commit import index as IX, row_tables as RTB
 from verity.ml.windows import interface as IF
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR, ingress_rows as IR
-from verity_vllm.pipeline import kchunk_rows as KC
-from verity_vllm.pipeline import part_rows as PR
+from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline import split_rows as SP, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words

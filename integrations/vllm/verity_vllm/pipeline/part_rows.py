@@ -219,6 +219,12 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
     (both are bit rows, the partition's ``chunk_cap``)."""
     from verity_vllm.query.program_view import spec_base
 
+    ps = [p for row in PARTS.values() for p in row]
+    writes = {p[0] for p in ps if any(isinstance(j, str) for j in p[2])}
+    reads = {p[0] for p in ps if any(src == "mid" for src, _ in p[1])}
+    word = {t: spec_base(template(t).word) for t in tmpls}
+    if not any(word[t] in reads for t in tmpls):
+        return list(ms)
     base: dict[str, int] = {}
     bits: dict[str, bool] = {}
     for m in ms:
@@ -226,6 +232,8 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
         bits[m.template] = bits.get(m.template, True) and bool(m.schemas)
     writer: dict[tuple[str, int, str], tuple[int, str, str]] = {}
     for t, rs in zip(tmpls, rows, strict=True):
+        if word[t] not in writes:
+            continue
         at = base[t]
         for rid, _pi, r, d in rs:
             p = part(template(t).word, r["spec"])
@@ -235,6 +243,8 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
             at += units(t, d)
     plans: dict[str, tuple[list[tuple], np.ndarray, dict[str, np.ndarray]]] = {}
     for t, rs in zip(tmpls, rows, strict=True):
+        if word[t] not in reads:
+            continue
         kinds: dict[tuple, int] = {(): 0}
         code, ns, by = [], [], {}
         for rid, _pi, r, d in rs:
