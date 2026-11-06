@@ -277,10 +277,9 @@ def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep
     assert [m.commit for m in again] == [m.commit for m in members]
 
 
-def test_a_sync_merges_what_changes_no_lean_below_every_lean_change_in_first_then_admission_order(world):
-    """A member above a Lean change waits for that change's Lean check, ~1 h, though
-    it changes no Lean itself.  What a sync merges goes non-Lean first, `--first`'s order then admission's within each part; a PR
-    that contains a Lean change stays above it, and one stacked on a member already on `next` is judged by its own change."""
+def test_a_sync_merges_a_lean_change_like_any_other_in_first_then_admission_order(world):
+    """A Lean change waits for no check before it lands, so a sync merges it like any other member: `--first`'s order, then
+    admission's, each PR above the PRs it contains; what the sync keeps never moves for what it adds."""
     world.gh.put(1, h1 := world.change({"pkg/A.lean": "-- 1\n"}))
     world.gh.put(2, h2 := world.change({"a.txt": "2\n"}))
     world.gh.put(3, h3 := world.change({"pkg/B.lean": "-- 3\n"}))
@@ -288,16 +287,16 @@ def test_a_sync_merges_what_changes_no_lean_below_every_lean_change_in_first_the
     world.gh.put(5, world.change({"c.txt": "5\n"}, base=h1))                 # changes no Lean, but contains #1
     world.gh.put(6, world.change({"d.txt": "6\n"}, base=h2))
     members, _ = world.queue(first=(3, 4)).sync()
-    assert [m.pr for m in members] == [4, 2, 6, 3, 1, 5]
+    assert [m.pr for m in members] == [3, 4, 1, 2, 5, 6]
     world.gh.put(9, world.change({"pkg/C.lean": "-- 9\n"}))
-    world.gh.put(10, world.change({"e.txt": "10\n"}, base=h3))               # its own change, against #3's head, is no Lean
+    world.gh.put(10, world.change({"e.txt": "10\n"}, base=h3))
     world.gh.put(11, world.change({"f.txt": "11\n"}))
     again, _ = world.queue().sync()
-    assert [m.pr for m in again] == [4, 2, 6, 3, 1, 5, 10, 11, 9]
+    assert [m.pr for m in again] == [3, 4, 1, 2, 5, 6, 9, 10, 11]
     assert [m.commit for m in again[:6]] == [m.commit for m in members]      # what the sync keeps never moves for it
-    world.gh.put(4, world.change({"b.txt": "4 rewritten\n"}))                # off the bottom: the rest merged again, in order
+    world.gh.put(4, world.change({"b.txt": "4 rewritten\n"}))                # moved: the rest merged again, in order
     rebuilt, _ = world.queue().sync()
-    assert [m.pr for m in rebuilt] == [2, 6, 3, 1, 5, 10, 11, 9, 4]
+    assert [m.pr for m in rebuilt] == [3, 1, 2, 5, 6, 9, 10, 11, 4]
 
 
 def test_a_sync_with_one_new_admission_keeps_every_member_and_merges_only_it(world):
@@ -307,7 +306,7 @@ def test_a_sync_with_one_new_admission_keeps_every_member_and_merges_only_it(wor
     world.gh.put(2, world.change({"pkg/A.lean": "-- 2\n"}))
     world.gh.put(3, world.change({"b.txt": "3\n"}))
     members, _ = world.queue().sync()
-    assert [m.pr for m in members] == [1, 3, 2]
+    assert [m.pr for m in members] == [1, 2, 3]
     for n, files in ((4, {"c.txt": "4\n"}), (5, {"pkg/B.lean": "-- 5\n"})):
         world.gh.put(n, world.change(files))
         again, _ = world.queue().sync()
@@ -316,9 +315,9 @@ def test_a_sync_with_one_new_admission_keeps_every_member_and_merges_only_it(wor
         members = again
 
 
-def test_members_merged_again_above_a_moved_one_keep_their_order_and_only_new_prs_go_nonlean_first(world):
-    """Members above a moved or dropped member are merged again in `next`'s order: sorting them non-Lean first again would undo
-    drive's lift (reviewed members first), and the next lift would merge them all again, each tick.  What comes new is sorted."""
+def test_members_merged_again_above_a_moved_one_keep_their_order_and_only_new_prs_are_sorted(world):
+    """Members above a moved or dropped member are merged again in `next`'s order: sorting them again would undo drive's lift
+    (reviewed members first), and the next lift would merge them all again, each tick.  What comes new is sorted."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"pkg/A.lean": "-- 2\n"}))
     world.gh.put(3, world.change({"b.txt": "3\n"}))
@@ -336,53 +335,24 @@ def test_members_merged_again_above_a_moved_one_keep_their_order_and_only_new_pr
     assert world.queue().sync()[0] == members and world.logs[-1].endswith("kept 6, merged 0")
 
 
-def test_a_first_pr_still_goes_to_the_bottom_and_sorts_what_is_above_it(world):
-    """`--first` restacks `next` from the bottom as it always has: the PRs it names go below every member, and what is merged
-    again above them goes non-Lean first; the next sync with the same `--first` keeps it all."""
+def test_a_first_pr_goes_to_the_bottom_and_the_members_above_it_keep_their_order(world):
+    """`--first` restacks `next` from the bottom: the PRs it names go below every member, which are merged again above them
+    in their order; the next sync with the same `--first` keeps it all."""
     world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
     world.gh.put(2, world.change({"a.txt": "2\n"}))
     world.gh.put(3, world.change({"pkg/B.lean": "-- 3\n"}))
-    _git(world.dev, "push", "-q", "origin", f"{world.change({DRIVE_FLAGS: 'nonlean_first = false'})}:refs/heads/main")
     assert [m.pr for m in world.queue().sync()[0]] == [1, 2, 3]
     world.gh.put(9, world.change({"fix.txt": "9\n"}))
-    members, _ = world.queue(first=(9,), nonlean_first=True).sync()
-    assert [m.pr for m in members] == [9, 2, 1, 3] and world.logs[-1].endswith("kept 0, merged 4")
-    again, _ = world.queue(first=(9,), nonlean_first=True).sync()
+    members, _ = world.queue(first=(9,)).sync()
+    assert [m.pr for m in members] == [9, 1, 2, 3] and world.logs[-1].endswith("kept 0, merged 4")
+    again, _ = world.queue(first=(9,)).sync()
     assert again == members and world.logs[-1].endswith("kept 4, merged 0")
 
 
-def test_nonlean_first_off_at_main_keeps_first_then_admission_order_and_turning_it_on_rebuilds_nothing(world):
-    """drive.toml's `nonlean_first` at `main` decides a sync that isn't given it.  Turned on, it reorders only what a sync merges
-    anyway: a rebuild just to reorder would take a running Lean check's commit off `next`."""
-    _git(world.dev, "push", "-q", "origin", f"{world.change({DRIVE_FLAGS: 'nonlean_first = false'})}:refs/heads/main")
-    world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
-    world.gh.put(2, world.change({"a.txt": "2\n"}))
-    world.gh.put(3, world.change({"b.txt": "3\n"}))
-    members, _ = world.queue(first=(3,)).sync()
-    assert [m.pr for m in members] == [3, 1, 2]
-    assert [m.commit for m in world.queue(nonlean_first=True).sync()[0]] == [m.commit for m in members]
-    _git(world.dev, "push", "-q", "origin", f"{world.change({'x.txt': 'x\n'})}:refs/heads/main")      # `next` is rebuilt
-    assert [m.pr for m in world.queue(nonlean_first=True).sync()[0]] == [2, 3, 1]
-
-
-def test_first_naming_a_lean_change_before_a_nonlean_one_builds_a_next_the_same_sync_keeps(world):
-    """A sync compares `next` with the order it would build, non-Lean first, so `--first`'s order, which non-Lean first
-    overrides, rebuilds nothing on the next tick."""
-    world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
-    world.gh.put(2, world.change({"a.txt": "2\n"}))
-    world.gh.put(3, world.change({"pkg/B.lean": "-- 3\n"}))
-    world.gh.put(4, world.change({"b.txt": "4\n"}))
-    members, _ = world.queue(first=(3, 4), nonlean_first=True).sync()
-    assert [m.pr for m in members] == [4, 2, 3, 1]
-    again, _ = world.queue(first=(3, 4), nonlean_first=True).sync()
-    assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 4, merged 0")
-
-
 def test_a_pr_the_last_sync_left_out_is_tried_above_the_rest_so_a_sync_with_nothing_new_keeps_next(world):
-    """A PR that didn't merge, left where `--first`, or non-Lean first, put it in the order the sync compares `next` with, would
-    have every member above it merged again (new commits) on each tick with `main` still, throwing away every Lean check of
-    `next` but drive's own.  Left out at a head, it (and a PR that contains it) is tried above the rest until that head
-    moves."""
+    """A PR that didn't merge, left where `--first` put it in the order the sync compares `next` with, would have every member
+    above it merged again (new commits) on each tick with `main` still.  Left out at a head, it (and a PR that contains it) is
+    tried above the rest until that head moves."""
     world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
     world.gh.put(2, world.change({"a.txt": "2\n"}))
     world.gh.put(3, world.change({"c.txt": "3\n"}))
@@ -390,14 +360,14 @@ def test_a_pr_the_last_sync_left_out_is_tried_above_the_rest_so_a_sync_with_noth
     _git(world.dev, "push", "-q", "origin", f"{world.change({'c.txt': 'main\n'})}:refs/heads/main")
     first = (3, 1, 4)
     members, entries = world.queue(first=first).sync()
-    assert [m.pr for m in members] == [2, 1] and entries[3].state == "refused" and entries[4].state == "waiting"
+    assert [m.pr for m in members] == [1, 2] and entries[3].state == "refused" and entries[4].state == "waiting"
     for reused in ("", ", merges reused for 1"):        # #3 tried above the rest, then that conflict taken from its record
         again, entries = world.queue(first=first).sync()
         assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith(f"kept 2, merged 0{reused}")
         assert entries[3].state == "refused" and entries[4].state == "waiting"
     world.gh.put(3, world.change({"c.txt": "3 on main\n"}))                                       # fixed: first again
     members, entries = world.queue(first=first).sync()
-    assert [m.pr for m in members] == [3, 2, 1] and entries[4].state == "refused"     # #4 holds the old #3, which conflicts
+    assert [m.pr for m in members] == [3, 1, 2] and entries[4].state == "refused"     # #4 holds the old #3, which conflicts
     again, _ = world.queue(first=first).sync()
     assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 3, merged 0")
 
