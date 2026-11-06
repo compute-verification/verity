@@ -1,9 +1,11 @@
-import Proofs.Flock.VBridge.OfVStar
-import Proofs.Flock.VBridge.AccUnits
-import Proofs.Flock.Soundness.Discharge.Hm.Salt
-import Proofs.Flock.Soundness.Discharge.Hm.Commit
-import VStar.Link
-import Flock.RecLinkRef
+module
+
+public import Proofs.Flock.VBridge.OfVStar
+public import Proofs.Flock.VBridge.AccUnits
+public import Proofs.Flock.Soundness.Discharge.Hm.Salt
+public import Proofs.Flock.Soundness.Discharge.Hm.Commit
+public import VStar.Link
+public import Flock.RecLinkRef
 
 /-!
 # The gadgets and the row check of V*'s `RecLink{UB, PB}` unit
@@ -18,6 +20,8 @@ import Flock.RecLinkRef
   XOR zero exactly when they are equal (`allZero_xor`).
 * Freshness: each gadget adds rows only as `fresh` does (`fresh_okForms`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.RecLink
 

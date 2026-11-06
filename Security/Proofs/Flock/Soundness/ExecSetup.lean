@@ -1,6 +1,10 @@
-import Proofs.Flock.Soundness.ExecCircuit
-import Proofs.Flock.Soundness.ExecCheck
-import Proofs.Flock.Soundness.ExecLookup
+module
+
+public import Proofs.Flock.Soundness.ExecCircuit
+public import Proofs.Flock.Soundness.ExecCheck
+public import Proofs.Flock.Soundness.ExecLookup
+
+@[expose] public section
 
 open Flock FlockLevel3
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.PlainClashL
-import Proofs.Flock.Claims.KS.Entries
-import Proofs.Flock.Claims.DeployRounds
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainClashL
+public import Proofs.Flock.Claims.KS.Entries
+public import Proofs.Flock.Claims.DeployRounds
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # Every level's queries in the plain verifier over the hash oracle
@@ -26,6 +28,8 @@ of that position against one root in the run's own log, a `PlainLevelClash` (`pl
   plain record, each an `Opening` in an accepted run's log against the rep's proof's cap, and two of them at one
   position that differ clash there.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,6 +1,8 @@
-import Proofs.Pous.Statements
-import Proofs.Pous.Graded.Tail
-import Proofs.Pous.Continuous.PerAnswer
+module
+
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Graded.Tail
+public import Proofs.Pous.Continuous.PerAnswer
 
 /-!
 # Completeness of the continuous audit: `Pous.Guarantees.ContinuousComplete`
@@ -22,6 +24,8 @@ it is a miss, bounded by `q`.
 `honest_complete` instantiates it at `q = 0` with the honest responder (`honest`), which keeps `C` and answers by
 lookup: it is accepted at every tolerance `f₀ ≥ 0`, so the hypothesis is met by the protocol's honest strategy.
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 

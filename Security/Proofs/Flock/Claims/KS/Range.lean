@@ -1,6 +1,11 @@
-import Proofs.Flock.Claims.KS.Deploy
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+module
+
+public import Proofs.Flock.Claims.KS.Deploy
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # `k ≥ 8` wherever the deployed verifier accepts, at SHA-512
@@ -13,6 +18,8 @@ At `H = SHA-512` the deployed verifier accepts only by a decision (`next_decide_
 (`k_range_plain`, `k_range_zk`), and KS at the deployed instances asks only one wait's bound
 (`plain_of_oneWait_sha512`, `zk_of_oneWait_sha512`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

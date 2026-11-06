@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.Stage
+module
+
+public import Proofs.Flock.Recursive.Stage
 
 /-!
 # Recursion: V*'s stages at the wires V* reads
@@ -14,6 +16,8 @@ agrees with them on the read wires decodes alike (`VDecodesR`), so that wire is 
   `VDecodesR`, with the same bounds;
 * `vFullR_of_vFull`, `vDecodes_of_vDecodesR`: `VFull` gives `VFullR`, and `VDecodesR` gives `VDecodes`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

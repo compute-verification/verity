@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DeployedBrings
-import Proofs.Flock.Claims.Recursion.LamDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.LamDeployed
 
 /-!
 # The deployed brings' setup in λ₂'s call bound
@@ -14,6 +16,8 @@ is at most `nS x · c` when each statement's `deployedSetup` has at most `c` inp
 (`deployedSetup_length`), and the latter are at most `|sts| · |own| · N · D` (`regIns_length_le`): one opening per
 instance, port and table, each of `2 + log2ceil leaves` inputs (`opensInputs_length`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

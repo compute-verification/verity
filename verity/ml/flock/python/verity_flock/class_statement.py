@@ -40,6 +40,7 @@ import os
 import re
 import resource
 import subprocess
+import sys
 import threading
 import time
 import weakref
@@ -59,6 +60,7 @@ from verity.ml.circuits.cut import DefinitionCut
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.units import Activation, PartitionUnits, UnitCircuit
 
+from . import challengers as CH
 from . import circuit as FC
 from . import class_sweep
 from . import gf2
@@ -201,7 +203,7 @@ def _packs(packed: bool | Sequence[bool], groups: list[list[int]]) -> list[bool]
 @dataclass
 class Wiring:
     """A class statement of a template-instance partition (`Q_template_instance(s)` v0, the class one template's instances) whose
-    units may read other units' outputs (PROTOCOL.md §16.13, Linking): the program, the query, and each staged instance's unit
+    units may read other units' outputs (`HmOut`, Linking): the program, the query, and each staged instance's unit
     (ascending). Each such read is a link port: the reader's row of exactly the writer's output row's words (`link_ports`),
     committed under the writer's output row's salt, so the two rows' ``b || c`` are equal and the verifiers compare them
     (`link_triples`). This binds a public topology; it does not hide the topology: the verifiers derive the wiring from
@@ -627,10 +629,9 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     every input word zero, one source identity of their own per port (so the fillers open one committed row, zero, per port),
     and the output the class lowering's own on them, checked as every lane's is (`stage_tiled`'s ``real``).
 
-    ``share_rows=False`` (an unwired class): every instance opens its own row per port, equal rows included, and the public file
-    has no shared-row tables, the form a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``)."""
-    if wiring is not None and not share_rows:
-        raise ValueError("a wired class's link rows are its writers' shared rows (share_rows)")
+    ``share_rows=False``: every instance opens its own row per port, equal rows included, and the public file has no shared-row
+    tables, the form a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``); a wired class's link
+    rows are then each reading instance's own, still under its writer's ``out`` salt."""
     core_rows = CORE_ROWS if core_rows is None else core_rows
     packed = True if core_rows else PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
@@ -728,16 +729,17 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     salts = None
     if links:
         ports = FC._meta_ports(meta)
-        salts = FC.stage_salts(iset, 0, n, ports, salt_key, {p.name: len(tables[p.name]) if p.name in tables else n for p in ports})
+        salts = FC.stage_salts(iset, 0, n, ports, salt_key,
+                               {p.name: len(tables[p.name]) if p.name in tables else n for p in ports} if share_rows else None)
         out_name = ports[-1].name
         for i, ws in enumerate(writers):
             if ws is None:
                 continue
-            for r, k in enumerate(firsts[f"p{i}"]):
+            for r, k in enumerate(firsts[f"p{i}"] if share_rows else range(n)):
                 w = ws[k]
                 if w is None:
                     continue
-                row = tables[f"p{i}"][r]
+                row = tables[f"p{i}"][r] if share_rows else per_port[f"p{i}"][k]
                 if wiring.strict and (not np.array_equal(row[:outs.shape[1]], outs[w]) or row[outs.shape[1]:].any()):
                     raise AssertionError(f"class {name}: instance {k}'s link row p{i} is not instance {w}'s output row")
                 if wiring.writer_salts:
@@ -1253,9 +1255,9 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
         if not f.exists():
             return {"accepted": False, "why": f"FC_VERIFIERS: no verifier serving these {warm + runs} sessions ({f} is missing)"}
         remote = json.loads(f.read_text())
-        srvs, addrs = [], remote["addrs"]
+        srvs, addrs, chs = [], remote["addrs"], []
     else:
-        srvs, addrs = _serve(binary, d, pub, circ, pin, warm + runs, "127.0.0.1", port, "loopback-stress")
+        srvs, addrs, chs = _serve(binary, d, pub, circ, pin, warm + runs, "127.0.0.1", port, "loopback-stress")
     try:
         with open(d / "prove.out", "w") as fo, open(d / "prove.err", "w") as fe:
             # user and system CPU seconds, then the peak RSS in KB, last
@@ -1263,16 +1265,26 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
             pr = subprocess.Popen(timer + [binary, "prove", "--verifier", ",".join(addrs) or f"127.0.0.1:{port}", "--instances", str(inst),
                                            "--circuit", str(circ), "--runs", str(runs), "--warm", str(warm)] + (["--gpu"] if gpu else [])
                                   + _zk(), stdout=fo, stderr=fe)
-            pr.wait()
+            # the verifier processes' peaks while they live: a challenger's server exits after its last session
+            peak = [0.0] * len(srvs)
+            while pr.poll() is None:
+                peak = [max(p, _vm_hwm(s.pid) or 0.0) for p, s in zip(peak, srvs)]
+                time.sleep(1)
         rusage = (d / "prove.maxrss").read_text().split() if timer else []
         prover_gb = int(rusage[-1]) / 2**20 if rusage else None   # the prover's own peak, KB
         prover_cpu_s = round(float(rusage[-3]) + float(rusage[-2]), 2) if len(rusage) >= 3 else None
-        hwm = [_vm_hwm(s.pid) for s in srvs]
-        verifier_gb = round(sum(hwm), 2) if srvs and None not in hwm else None    # the verifier processes' peaks, summed
+        hwm = [max(p, _vm_hwm(s.pid) or 0.0) for p, s in zip(peak, srvs)]
+        verifier_gb = round(sum(hwm), 2) if srvs and all(hwm) else None    # the verifier processes' peaks, summed
     finally:
         for s in srvs:
+            if chs:     # bounded: it closes after writing its last session's record
+                try:
+                    s.wait(timeout=120)
+                except subprocess.TimeoutExpired:
+                    print(f"verifier process {s.pid} still open 120 s after the prover: killed", file=sys.stderr, flush=True)
             s.kill()
             s.wait()
+    challengers = _challengers_end(d, srvs, chs) if chs else None
     out, err = (d / "prove.out").read_text(), (d / "prove.err").read_text()
     live = [json.loads(ln[5:]) for ln in out.splitlines() if ln.startswith("LIVE")]
     if not live:
@@ -1283,8 +1295,9 @@ def prove(binary: str, d: Path, n: int, port: int, selftest: bool | str = False,
     rejected = [x.get("run") for x in live if x.get("accepted") is not True]
     broke = (f"prove exited {pr.returncode}" if pr.returncode else
              f"{len(live)} LIVE records, not warm + runs = {warm + runs}" if len(live) != warm + runs else
-             f"sessions {rejected} not accepted" if rejected else None)
-    return {"accepted": broke is None, "why": broke or v.get("why")} | \
+             f"sessions {rejected} not accepted" if rejected else
+             f"challengers {challengers}" if challengers and not all(c["ok"] for c in challengers) else None)
+    return {"accepted": broke is None, "why": broke or v.get("why")} | ({"challengers": challengers} if challengers else {}) | \
         {k: v.get(k) for k in ("prover", "instances", "vus_per_block", "k_log", "nbl", "dense_m", "e2e_s",
                                "witness_s", "witness_prebuilt_s", "pipeline_depth", "verify_ahead", "prove_s", "prove_total_s", "proof_bytes", "wire_sent",
                                "wire_recv", "statement_digest", "buckets", "calls", "wait_e2e_s", "open_rtt_ms", "open_rtt_min_ms")} | \
@@ -1302,23 +1315,37 @@ def _zk() -> list[str]:
     return ["--zk"] if os.environ.get("FLOCK_ZK") == "1" else []
 
 
+_challenger = CH.start
+
+
+def _challengers_end(d: Path, srvs: list[subprocess.Popen], chs: list[subprocess.Popen]) -> list[dict]:
+    """Each server's challenger (``d/challenger-<i>``) once the server has closed, and its audit of that server's session
+    records, the directories named for its pid (`challengers.end`)."""
+    return [CH.end(d / f"challenger-{i}", p, CH.records(d / "sessions", f"*-{s.pid}")) for i, (s, p) in enumerate(zip(srvs, chs))]
+
+
 def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int, host: str, port: int, operator: str,
-           bounded: bool = False, points: int = 1) -> tuple[list[subprocess.Popen], list[str]]:
-    """The verifier processes for ``sessions`` sessions of one circuit, listening on ``host``, and their addresses. The prover's
-    FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once, by FC_VERIFY_SERVERS (default 1,
-    at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port`` and the rest on ports the
-    system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills them), for ``points``
-    provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits. FLOCK_DRAW_LAW (a
-    law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier samples by that law at its
-    Register, the staged statement their population. FLOCK_ZK=1: M1's masked sessions (`--zk`, server and prover alike)."""
+           bounded: bool = False, points: int = 1) -> tuple[list[subprocess.Popen], list[str], list[subprocess.Popen]]:
+    """The verifier processes for ``sessions`` sessions of one circuit, listening on ``host``, their addresses, and their
+    challengers. The prover's FC_VERIFY_AHEAD sessions awaiting their verdicts, and the one it proves, are served at once, by
+    FC_VERIFY_SERVERS (default 1, at most ``sessions``) processes taking turns (session k the (k mod n)th's), the first on ``port``
+    and the rest on ports the system picks; ``bounded``: each exits once it has served its own sessions (otherwise the caller kills
+    them), for ``points`` provers one after another, each numbering its sessions from 0 and awaiting every verdict before it exits.
+    FLOCK_DRAW_LAW (a law object's file, `flock-circuit serve --draw-law`): every session proves the units the verifier samples by
+    that law at its Register, the staged statement their population. FLOCK_ZK=1: M1's masked sessions (`--zk`, server and prover
+    alike). FLOCK_CHALLENGER=1: each process takes its sessions' coin trees from its own challenger (`_challenger`, `serve
+    --tree-from`), so each is bounded; none otherwise."""
     servers = max(1, min(sessions, int(os.environ.get("FC_VERIFY_SERVERS") or 1)))
     concurrency = -(-(1 + int(os.environ.get("FC_VERIFY_AHEAD") or 0)) // servers)
     logs = [d / ("serve.log" if i == 0 else f"serve-{i}.log") for i in range(servers)]
     law = ["--draw-law", os.environ["FLOCK_DRAW_LAW"]] if os.environ.get("FLOCK_DRAW_LAW") else []
+    chs = [_challenger(d / f"challenger-{i}") for i in range(servers)] if CH.wanted(os.environ) else []
+    bounded = bounded or bool(chs)
     srvs = [subprocess.Popen([binary, "serve", "--listen", f"{host}:{port if i == 0 else 0}", "--out", str(d / "sessions"),
                               "--instances", str(pub), "--circuit", str(circ), "--pin", pin, "--operator", operator,
                               "--concurrency", str(concurrency)] + law + _zk()
-                             + (["--sessions", str(points * len(range(i, sessions, servers)))] if bounded else []),
+                             + (["--sessions", str(points * len(range(i, sessions, servers)))] if bounded else [])
+                             + (chs[i][1] if chs else []),
                              stdout=open(log, "w"), stderr=subprocess.STDOUT)
             for i, log in enumerate(logs)]
     addrs = []
@@ -1328,7 +1355,7 @@ def _serve(binary: str, d: Path, pub: Path, circ: Path, pin: str, sessions: int,
                 addrs.append(ln.split()[1])
                 break
             time.sleep(0.2)
-    return srvs, addrs
+    return srvs, addrs, [p for p, _ in chs]
 
 
 def _served_name(pin: str, n: int, sessions: int) -> str:
@@ -1346,7 +1373,7 @@ def serve_remote(binary: str, d: Path, n: int, where: Path, sessions: int, point
     pin = FC.digest(circ.read_text())
     import socket
     ip = os.environ.get("FC_SERVE_HOST") or socket.gethostbyname(socket.gethostname())
-    srvs, bound = _serve(binary, d, pub, circ, pin, sessions, "0.0.0.0", 0, "verifier-pod", bounded=True, points=points)
+    srvs, bound, chs = _serve(binary, d, pub, circ, pin, sessions, "0.0.0.0", 0, "verifier-pod", bounded=True, points=points)
     if len(bound) != len(srvs):
         for s in srvs:
             s.kill()
@@ -1359,13 +1386,14 @@ def serve_remote(binary: str, d: Path, n: int, where: Path, sessions: int, point
     tmp = f.with_name(f"{f.name}.tmp{os.getpid()}")
     tmp.write_text(json.dumps(doc))
     os.replace(tmp, f)
-    return {"file": f, "srvs": srvs, "doc": doc, "d": d, "t0": time.time()}
+    return {"file": f, "srvs": srvs, "chs": chs, "doc": doc, "d": d, "t0": time.time()}
 
 
 def serve_wait(entries: list[dict], limit_s: float) -> list[dict]:
     """Wait for every `serve_remote` entry's processes to serve their sessions (killed after ``limit_s``), withdraw the address
-    files, and return each one's record: its sessions' verdicts and verify seconds (``sessions/index.jsonl``) and the
-    processes' peak memory, summed."""
+    files, and return each one's record: its sessions' verdicts and verify seconds (``sessions/index.jsonl``), the
+    processes' peak memory, summed, and under FLOCK_CHALLENGER=1 their challengers (`_challengers_end`), every one of which
+    must pass for the entry to be accepted."""
     peak = {id(s): 0.0 for e in entries for s in e["srvs"]}
     deadline = time.time() + limit_s
     while any(s.poll() is None for e in entries for s in e["srvs"]) and time.time() < deadline:
@@ -1380,14 +1408,16 @@ def serve_wait(entries: list[dict], limit_s: float) -> list[dict]:
             s.kill()
             s.wait()
         e["file"].unlink(missing_ok=True)
+        challengers = _challengers_end(e["d"], e["srvs"], e["chs"]) if e.get("chs") else None
         idx = e["d"] / "sessions" / "index.jsonl"
         lines = [json.loads(ln) for ln in idx.read_text().splitlines() if ln.strip()] if idx.exists() else []
         vs = [x["verify_s"] for x in lines if x.get("verify_s") is not None]
         out.append(e["doc"] | {"served": len(lines), "accepted": bool(lines) and len(lines) == e["doc"]["sessions"] * e["doc"].get("points", 1)
-                               and all(x.get("accepted") is True for x in lines),
+                               and all(x.get("accepted") is True for x in lines) and all(c["ok"] for c in challengers or []),
                                "timed_out": timed_out, "wall_s": round(time.time() - e["t0"], 3),
                                "verify_s_median": sorted(vs)[len(vs) // 2] if vs else None,
-                               "verifier_peak_gb": round(sum(peak[id(s)] for s in e["srvs"]), 2)})
+                               "verifier_peak_gb": round(sum(peak[id(s)] for s in e["srvs"]), 2)}
+                   | ({"challengers": challengers} if challengers else {}))
     return out
 
 

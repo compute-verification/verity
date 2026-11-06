@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.HonestHalf
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestHalf
 
 /-!
 # The honest deployed recursive run (`HonestFixture`)
@@ -9,6 +11,8 @@ conjuncts are the named Props that theorem reads, with their statements unchange
 (`HonestRunAccepted` and `NoCollAt` in `HonestHalf`, `HonestWitSatisfies` in `HonestWitR`, `IrShaped` in `VStarDense`),
 and the tape exception, named here (`TopsAt`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

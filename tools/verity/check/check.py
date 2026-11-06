@@ -34,24 +34,27 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             (`tools/verity/check/slot.py`), the lock and cores the train checks take,
                                                             and in the run's own clone of the shipped tree (`--cwd clone`);
                                                             --priority takes the next free slot ahead of waiting lane checks,
-                                                            and one of TRAIN_GB or more when it runs pytest or circuit-check
+                                                            and one of TRAIN_GB or more when it runs pytest, lean-suites or
+                                                            circuit-check
                                                             (`train_gb`: a machine without one is skipped or refused, exit 75);
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is;
-                                                            --on auto (AUTO: vy-nebius-2) or --on M1,M2 picks M
+                                                            --on auto (the machines in AUTO) or --on M1,M2 picks M
                                                             from `--slots` (`choose`): the first where a check slot no window
                                                             blocks and a Lean `check` slot are free, else the one with the
                                                             fewest waiters ahead (priority ones only, with --priority), and
                                                             refuses when no machine's slots can be read; with no slot free on
                                                             any, twins: the check on each machine it can run on (`twins`),
                                                             the first to take a slot runs; exit 75 when none ran: rerun
-    uv run python tools/verity/check/check.py --record --on M --pool NAME [--deferred STEP,...]
-                                                            the same in a slot of M's NAME pool (`research run --pool`'s pools,
-                                                            e.g. `--on vy-nebius-cpu-1 --pool research`, any lane's), not its
-                                                            merge-check slots, which on the CPU nodes take train checks alone:
-                                                            a lane's own recorded check.  Launch it from a checkout, never inside
-                                                            a `research run`, where --record is refused with the command to run
+    uv run python tools/verity/check/check.py --record --on auto|M --pool NAME [--deferred STEP,...]
+                                                            the same in a slot of M's NAME pool (`research run --pool`'s pools),
+                                                            not its merge-check slots, which on the CPU nodes take train checks
+                                                            alone: a lane's own recorded check.  `--on auto --pool research`
+                                                            (any lane's) takes the machine whose research pool `research run
+                                                            --on auto` would spill to (`lane_machine`).  Launch it from a
+                                                            checkout, never inside a `research run`, where --record is refused
+                                                            with the command to run
     uv run python tools/verity/check/check.py --slots [M ...]      each machine's check slots (holders, blocking and upcoming
                                                             windows), check line, and Lean audit slots and their waiters, read
                                                             over ssh by this tree's slot.py and lean_slot.py (`--status --json`);
@@ -363,16 +366,17 @@ RATCHET_BASE_FILE = "check-ratchet-base.txt"
 AUTO_PLAN = "check-shard-plan.json"
 #: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
 SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
-#: the least slot memory a train check that runs pytest or circuit-check takes (slot.py's MIN_MEM_ENV): the train slots' mem=. In a
-#: lane slot every parallel suite gets one test worker and circuit-check one target at a time, about twice the wall time
+#: the least slot memory a train check that runs pytest, lean-suites or circuit-check takes (slot.py's MIN_MEM_ENV): the train
+#: slots' mem=. In a lane slot every parallel suite gets one test worker, the one-process suites share one process and circuit-check
+#: runs one target at a time: two to four times a train slot's wall time
 TRAIN_GB = 300
 #: the steps that need a train slot's memory
-TRAIN_STEPS = ("pytest", "circuit-check")
+TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check")
 
 
 def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combining: bool) -> int | None:
-    """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs pytest or
-    circuit-check, all of a check (``parts`` None) or a shard or post-landing run holding one; else None."""
+    """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs pytest,
+    lean-suites or circuit-check, all of a check (``parts`` None) or a shard or post-landing run holding one; else None."""
     if not priority or pool is not None or combining:
         return None
     return TRAIN_GB if parts is None or any(p.partition(":")[0] in TRAIN_STEPS for p in parts) else None
@@ -380,8 +384,8 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's, so it takes the next
-    slot ahead of drive's unranked Lean checks) and --twin for one of a check's twins."""
+    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's and lock run's, so
+    they take the next slot ahead of unranked priority checks) and --twin for one of a check's twins."""
     by = SETTINGS.RESEARCH_LANE or SETTINGS.RESEARCH_AGENT_URL
     rank = SETTINGS.CHECK_SLOT_RANK
     return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []),
@@ -409,15 +413,15 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
 #: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
 #: only=trains)
 AUTO = ("vy-nebius-2",)
-#: where a lane's own recorded check goes when it names no machine (`nested_record`): a pool any lane takes, one of
-#: research.auto's SPILL
-LANE_POOL = ("vy-nebius-cpu-1", "research")
+#: the pool a lane's own recorded check takes when it names none (`nested_record`): any lane's, research.auto's SPILL pool, on
+#: the machine `lane_machine` picks
+LANE_POOL = "research"
 #: how long reading one machine's slots may take, ssh included
 SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
 FULL_CHECK_S = 9000
 #: a lane's own test run, which no landing needs (a PR lands on review, and drive's full check decides what reaches `main`)
-LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
 #: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
@@ -711,8 +715,8 @@ LEAN_SLOT_WRAP = [sys.executable, str(ROOT / "tools" / "verity" / "check" / "lea
 
 def lean_regenerates() -> bool:
     """Whether this tree's lean-audit job takes `--regenerate`: a package whose only failures are record differences passes,
-    and its report names the regenerated lock, which drive commits onto the train it lands.  Read from the job, so a
-    tree from before it runs as it always did."""
+    and its report names the regenerated lock, which drive commits after its lock run (`research.drive.Driver._commit_locks`).
+    Read from the job, so a tree from before it runs as it always did."""
     try:
         return '"--regenerate"' in (LEAN_JOBS / "lean_audit.py").read_text()
     except OSError:
@@ -994,7 +998,7 @@ def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
     pool `research run --pool NAME` takes (`slot_only.pool_slots`), rather than its merge-check slots, which on the CPU nodes are
     only=trains: slot.py reads the pool's slots file from CHECK_SLOTS.  The command stays `slot_wrap`'s around the declared one,
     not `slot_only.in_pool`'s (`env ... nice -n 19`), so `research merge` and `gather_verdicts` read the attempt as a check of its
-    commit.  ValueError when the pool can't be taken so."""
+    commit.  ValueError when the pool can't be taken so; with --on auto or none, `lane_machine` picks the machine."""
     if pool is None:
         return []
     from research.pods.nebius import slot_only
@@ -1002,18 +1006,38 @@ def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
     if not slot_only.POOL_NAME.fullmatch(pool):
         raise ValueError(f"{pool}: no such pool; a pool is a name of letters, digits, '_' or '-' (the pools every node may have are "
                          f"{', '.join(sorted(slot_only.POOLS))}; a node's own are under {slot_only.LOCKS})")
-    if not on or on == "auto" or "," in on:
-        raise ValueError(f"{pool} needs --on MACHINE, the one machine whose pool it waits in (`--on {LANE_POOL[0]} --pool "
-                         f"{LANE_POOL[1]}`); --on auto and lists choose among merge-check slots")
+    if on and "," in on:
+        raise ValueError(f"{pool} waits in one machine's pool: `--on auto --pool {LANE_POOL}` or --on MACHINE, not a list, which "
+                         f"chooses among merge-check slots")
     if priority:
         raise ValueError(f"{pool} takes no --priority: that is the lander's train checks' place in the merge-check slots' line")
     return ["--env", f"CHECK_SLOTS={slot_only.pool_slots(pool)}"]
 
 
+def lane_machine(pool: str) -> str:
+    """The machine a `--record --on auto --pool NAME` check waits on: the one whose NAME pool `research run --on auto` would
+    spill a run to now (`research.auto.choose` on the SPILL machines' lines, read as it reads them).  ValueError when NAME is
+    no SPILL pool (a node's own pool takes --on MACHINE) or no SPILL machine's pool can take it."""
+    from research import auto
+
+    spill = sorted({p for _, p in auto.SPILL})
+    if pool not in spill:
+        raise ValueError(f"{pool}: --on auto takes only research.auto's pools ({', '.join(spill)}); a node's own pool takes "
+                         f"--on MACHINE, the machine that keeps it")
+    try:
+        target, why = auto.choose(auto.read(ROOT, 1), 1, 0)
+    except auto.Unplaceable as e:
+        raise ValueError(f"{pool}: --on auto: {e}") from None
+    if target is None or target[1] != pool:
+        raise ValueError(f"{pool}: --on auto: no machine's {pool} pool can take it ({why}); name one with --on MACHINE")
+    print(f"check: --on auto --pool {pool}: {target[0]} ({why})", flush=True)
+    return target[0]
+
+
 def nested_record(argv: list[str]) -> str:
     """The command that records ``argv``'s check from outside a `research run`: `record` launches a `research run` of its own,
-    so inside one it is refused with this.  With no --on, on `LANE_POOL`, any lane's pool."""
-    where = [] if "--on" in argv else ["--on", LANE_POOL[0], *([] if "--pool" in argv else ["--pool", LANE_POOL[1]])]
+    so inside one it is refused with this.  With no --on, `--on auto` in its --pool, else `LANE_POOL`."""
+    where = [] if "--on" in argv else ["--on", "auto", *([] if "--pool" in argv else ["--pool", LANE_POOL])]
     return shlex.join(["uv", "run", "python", "tools/verity/check/check.py", "--record", *where,
                        *(a for a in argv if a != "--record")])
 
@@ -1027,8 +1051,9 @@ def record(argv: list[str]) -> int:
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
-    gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`) waits for a slot of that
-    machine's NAME pool instead of its merge-check slots (`pool_env`); `--timeout S` is the run's (`research run --timeout`, custody 24 h).
+    gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`, or `--on auto` or none for
+    the machine `lane_machine` picks) waits for a slot of that machine's NAME pool instead of its merge-check slots (`pool_env`);
+    `--timeout S` is the run's (`research run --timeout`, custody 24 h).
     `--shard auto:K/N --shard-plan-file PLAN` (with --on) is shard K of the auto plan PLAN, sent as the run's `AUTO_PLAN` input."""
     on = base = ratchet_base = pool = timeout = plan_file = None
     agreement = priority = False
@@ -1055,6 +1080,8 @@ def record(argv: list[str]) -> int:
             rest.append(x)
     try:
         pooled = pool_env(pool, on, priority) + (["--timeout", timeout, "--custody-ttl", "24h"] if timeout else [])
+        if pool is not None and on in (None, "auto"):
+            on = lane_machine(pool)
     except ValueError as e:
         print(f"check: --pool {e}", file=sys.stderr)
         return 2

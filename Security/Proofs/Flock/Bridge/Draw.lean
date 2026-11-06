@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Sampling.Select.DrawLaw
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-import Proofs.Flock.Soundness.ExecStrataOf
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+public import Proofs.Flock.Soundness.ExecStrataOf
 
 /-!
 # The deployed draw at the registration's strata
@@ -26,6 +28,8 @@ and its `δ` is that law's own `P_a`. This file holds what the statement reads a
 * `All`: the rule's law is `subset n` over the `n` units (`Select.Rule.lawOver`), on the strata at `kd = n`
   (`lawOn_all`), and under it the deployed draw holds every unit whatever its bytes (`drawUnits_all`, `execSel_all`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

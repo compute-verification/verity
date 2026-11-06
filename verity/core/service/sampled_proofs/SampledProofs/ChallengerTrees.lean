@@ -12,18 +12,28 @@ session's signed close covers them:
 `coinTreesOf` reads those lines (`coin_trees_of`): each tree's key, nonce and root in lowercase hex and a spec the
 challenger samples (`isTreeSpec`), no root or key twice; each round of a tree sampled on an earlier line, of one of its
 streams, that stream's next round, below `2^rounds_log`, at most `block` coins. `sessionTreeReason` holds a session's
-record to them (`session_tree_reason`): its `coin_tree` a logged tree, its link points that tree's `session` round 0,
-opened after its link's `root_F` and each table's `root_B` in table-name order (`linkAfter`), and each round `k` of each
-of its streams that tree's round `k` of the stream, opened after its `msg_sha512`, its `n` coins hashing to the logged
-digest (each coin's 16 bytes as the record's 32 hex digits write them). `sessionsTreeReason` holds an audit's sessions
-to them (`sessions_tree_reason`): each session's record so, no tree two sessions', and every tree a session's, so no
-statement's coins are flipped twice. `trustedTreesOf` reads the trees from the one session the auditor's ledger opens on
-the verifier's window (`trustedSessionOf`), the session the sample's coins come from.
+record on its tables, each with the byte length its statement fixes for its `root_B` where the caller set one up, to
+them (`session_tree_reason`): its `coin_tree` a logged tree, its link's `root_b` keys exactly its session's tables
+(`LINK_TABLES`), each entry that table's length (`LINK_ROOT_LEN`), its link points that tree's `session` round 0, opened
+after its link's `root_F` and each table's `root_B` in table-name order (`linkAfter`), and each round `k` of each of its
+streams that tree's round `k` of the stream, opened after its `msg_sha512`, its `n` coins hashing to the logged digest
+(each coin's 16 bytes as the record's 32 hex digits write them). `sessionsTreeReason` holds an audit's sessions on one
+statement's tables to them (`sessions_tree_reason`): each session's record so, at its own tables' lengths, no tree two
+sessions', and every tree a session's, so no statement's coins are flipped twice. `trustedTreesOf` reads the trees from
+the one session the auditor's ledger opens on the verifier's window (`trustedSessionOf`), the session the sample's coins
+come from.
 
 The difftest's pieces: `challenger_coin_trees` (`coin_trees_of`) and `challenger_session_trees`
-(`sessions_tree_reason` over the log's trees), each `{"refused": why}` where Python refuses.
+(`sessions_tree_reason` over the log's trees and the request's records, each with its tables), each `{"refused": why}`
+where Python refuses.
 -/
-import SampledProofs.ChallengerDraw
+module
+
+public import SampledProofs.ChallengerDraw
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 
@@ -42,6 +52,17 @@ def UNUSED_TREE : String := "a tree no session records is a second sample, and e
 def TREE_RECORD_FORM : String :=
   "its record names no coin_tree, link {points, root_b, root_f} and streams [{stream, rounds: [{coins, msg_sha512, " ++
   "n}]}] in lowercase hex, as a --zk session's record does"
+/-- The link points are opened after every `root_b` entry (`linkAfter`) and `Flock.Record.decode` reads only the
+session's tables' (S5), so a key of no table, or a table without its key, would let the prover pick a table's `root_B`
+after the link's coins. -/
+def LINK_TABLES : String := "its link's root_b keys are not exactly its session's tables"
+/-- The link points are opened after the SHA-512 of `root_F`, then each table's `root_B` in table-name order
+(`linkAfter`), concatenated with no length prefix. A table's `root_B` is its proof's level-0 cap, `2^cap₀` digests of
+its Merkle scheme at its statement's `m` (`OneStageZk.rootBLen`), so its statement fixes its length. Refusing any other
+length before the hash is what makes the message parse one way: the `root_B`s are its last bytes, each of its table's
+length in table order, and `root_F` is the rest. Without it one message could read as other roots. -/
+def LINK_ROOT_LEN : String :=
+  "its link's root_b for a table is not the length its statement fixes for that table's root_B (2^cap0 digests)"
 
 /-- A round of a coin tree the release log shows opened: stream `stream`'s round `round`, its first `n` coins, after
 `after`, whose SHA-512 is `coins`, each lowercase hex. -/
@@ -93,7 +114,7 @@ private def isStream (j : Json) : Bool :=
 /-- `tree_spec_reason`'s domain: `{block, rounds_log, scheme, streams}`, `TREE_SCHEME`, 1 to `MAX_BLOCK` coins a round,
 at most `2^MAX_ROUNDS_LOG` rounds a stream, and its streams distinct names (`isStream`). -/
 def isTreeSpec (spec : Json) : Bool :=
-  keys? spec == some #["block", "rounds_log", "scheme", "streams"] && getD spec "scheme" == Json.str TREE_SCHEME &&
+  keys? spec == some #["block", "rounds_log", "scheme", "streams"] && jsonStrIs (getD spec "scheme") TREE_SCHEME &&
     (match nat? (getD spec "block") with | some b => 1 ≤ b && b ≤ MAX_BLOCK | none => false) &&
     (match nat? (getD spec "rounds_log") with | some r => r ≤ MAX_ROUNDS_LOG | none => false) &&
     (match getD spec "streams" with
@@ -107,7 +128,7 @@ def coinTreesOf (log : List String) : V (Array LoggedTree) := do
   for line in log do
     unless treeLine line do continue
     let d ← event line
-    if getD d "event" == Json.str TREE_EVENT then
+    if jsonStrIs (getD d "event") TREE_EVENT then
       unless keys? d == some #["event", "key", "nonce", "root", "spec"] && isHexN (getD d "key") 512 &&
           isHexN (getD d "nonce") 64 && isHexN (getD d "root") 128 && isTreeSpec (getD d "spec") do
         throw LOG_MALFORMED
@@ -123,7 +144,7 @@ def coinTreesOf (log : List String) : V (Array LoggedTree) := do
       let .str s := getD d "stream" | throw LOG_MALFORMED
       let (some k, some n) := (nat? (getD d "round"), nat? (getD d "n")) | throw LOG_MALFORMED
       let streams := match getD t.spec "streams" with | .arr ss => ss | _ => #[]
-      unless streams.contains (Json.str s) && k == (t.opened.filter (·.stream == s)).size &&
+      unless streams.any (jsonStrIs · s) && k == (t.opened.filter (·.stream == s)).size &&
           k >>> (nat? (getD t.spec "rounds_log")).getD 0 == 0 && n ≤ (nat? (getD t.spec "block")).getD 0 &&
           isHexN (getD d "after") 128 && isHexN (getD d "coins") 128 do
         throw LOG_MALFORMED
@@ -137,22 +158,25 @@ def linkAfter (rootF : ByteArray) (rootB : Array (String × ByteArray)) : ByteAr
   Flock.Sha512.hash ((rootB.qsort (·.1 < ·.1)).foldl (fun acc (_, b) => acc ++ b) rootF)
 
 /-- `_record_coins`: a record's coins, each 32 lowercase hex digits, as their bytes in order. -/
-private def recordCoins? (cs : Json) : Option ByteArray :=
+def recordCoins? (cs : Json) : Option ByteArray :=
   match cs with
   | .arr xs => xs.foldlM (init := ByteArray.empty) fun acc c => match c with
     | .str s => if s.length == 32 then (Flock.unhex s).toOption.map (acc ++ ·) else none
     | _ => none
   | _ => none
 
-/-- `session_tree_reason` (module docstring): why `record`, a `--zk` session's record, doesn't show its coins to be ones
-the release log shows the challenger released (`trees`, `coinTreesOf`'s); `none` when it does. -/
-def sessionTreeReason (trees : Array LoggedTree) (record : Json) : Option String := Id.run do
+/-- `session_tree_reason` (module docstring): why `record`, a `--zk` session's record on the tables `tables`, each with
+its `root_B`'s byte length where its statement is set up, doesn't show its coins to be ones the release log shows the
+challenger released (`trees`, `coinTreesOf`'s); `none` when it does. -/
+def sessionTreeReason (trees : Array LoggedTree) (tables : Array (String × Option Nat)) (record : Json) :
+    Option String := Id.run do
   let ct := getD record "coin_tree"
-  let some t := trees.find? (fun (t : LoggedTree) => getD ct "root" == Json.str t.root) | return some NO_TREE
+  let some t := trees.find? (fun (t : LoggedTree) => jsonStrIs (getD ct "root") t.root) | return some NO_TREE
   unless jeq ct t.record do
     return some "its coin tree is not the one the challenger's release log shows it sampled under that root"
   let link := getD record "link"
   let (.obj _, .obj _, .arr ps) := (link, getD link "root_b", getD link "points") | return some TREE_RECORD_FORM
+  unless keys? (getD link "root_b") == some (sortStrings (tables.map (·.1))) do return some LINK_TABLES
   let flat := ps.foldl (fun (acc : Array Json) (p : Json) => match p with
     | .arr cs => acc ++ cs
     | _ => acc.push Json.null) #[]
@@ -163,6 +187,9 @@ def sessionTreeReason (trees : Array LoggedTree) (record : Json) : Option String
       | .str s => (Flock.unhex s).toOption
       | _ => none), recordCoins? (Json.arr flat), getD record "streams") | return some TREE_RECORD_FORM
   unless rootB.size == (entries (getD link "root_b")).size do return some TREE_RECORD_FORM
+  unless tables.all (fun (tn : String × Option Nat) => tn.2.all fun n =>
+      rootB.any fun (kb : String × ByteArray) => kb.1 == tn.1 && kb.2.size == n) do
+    return some LINK_ROOT_LEN
   let linkOk := match t.opening TREE_SESSION 0 with
     | some o => o.n == points.size / 16 && o.after == Flock.hexOf (linkAfter rootF rootB) && o.coins == sha512Hex points
     | none => false
@@ -174,21 +201,22 @@ def sessionTreeReason (trees : Array LoggedTree) (record : Json) : Option String
       let (some coins, some n) := (recordCoins? (getD r "coins"), nat? (getD r "n")) | return some TREE_RECORD_FORM
       unless isHexN (getD r "msg_sha512") 128 do return some TREE_RECORD_FORM
       let ok := match t.opening name k with
-        | some o => o.n == n && Json.str o.after == getD r "msg_sha512" && o.coins == sha512Hex coins
+        | some o => o.n == n && jsonStrIs (getD r "msg_sha512") o.after && o.coins == sha512Hex coins
         | none => false
       unless ok do
         return some s!"its {name} round {k} is not coins the challenger opened under its tree after that round's message"
   return none
 
-/-- `sessions_tree_reason` (module docstring): why the `--zk` sessions `records`, each its name and its record, don't
-show their coins to be the ones the release log shows sampled and opened (`trees`), one tree a session; `none` when they
-do. In order, each session's coins its tree's (`sessionTreeReason`), a tree no earlier session's (`SHARED_TREE`); then
-every tree a session's (`UNUSED_TREE`). -/
-def sessionsTreeReason (trees : Array LoggedTree) (records : Array (String × Json)) : Option String := Id.run do
+/-- `sessions_tree_reason` (module docstring): why the `--zk` sessions `records`, each its name, its tables with their
+`root_B` lengths (`sessionTreeReason`'s) and its record, don't show their coins to be the ones the release log shows
+sampled and opened (`trees`), one tree a session; `none` when they do. In order, each session's coins its tree's
+(`sessionTreeReason`), a tree no earlier session's (`SHARED_TREE`); then every tree a session's (`UNUSED_TREE`). -/
+def sessionsTreeReason (trees : Array LoggedTree) (records : Array (String × Array (String × Option Nat) × Json)) :
+    Option String := Id.run do
   let mut used : Array String := #[]
-  for (name, record) in records do
+  for (name, tables, record) in records do
     let root := strOf (getD (getD record "coin_tree") "root")
-    let why := sessionTreeReason trees record <|> if used.contains root then some SHARED_TREE else none
+    let why := sessionTreeReason trees tables record <|> if used.contains root then some SHARED_TREE else none
     if let some w := why then
       return some s!"session {name}'s coins are not the challenger's: {w}"
     used := used.push root
@@ -224,16 +252,20 @@ def coinTreesPiece (j : Json) : V Json := do
   pure <| refusing do
     return Json.mkObj [("trees", Json.arr ((← coinTreesOf lines).map (·.toJson)))]
 
-/-- `{"log", "records": [{name, record}, ...]}` to `sessions_tree_reason`'s over `coin_trees_of`'s trees of `log`,
-`{"reason"}`. -/
+/-- `{"log", "records": [{name, record, tables: {table: length or null}}, ...]}` to `sessions_tree_reason`'s over
+`coin_trees_of`'s trees of `log`, `{"reason"}`. -/
 def sessionTreesPiece (j : Json) : V Json := do
   unless keys? j == some #["log", "records"] do throw "a request's keys are log, records"
   let lines ← logOf j
-  let .arr rs := getD j "records" | throw "records is not a list of {name, record}"
+  let .arr rs := getD j "records" | throw "records is not a list of {name, record, tables}"
   let records ← rs.mapM fun r => do
-    unless keys? r == some #["name", "record"] do throw "records is not a list of {name, record}"
-    let .str name := getD r "name" | throw "records is not a list of {name, record}"
-    pure (name, getD r "record")
+    unless keys? r == some #["name", "record", "tables"] do throw "records is not a list of {name, record, tables}"
+    let (.str name, .obj _) := (getD r "name", getD r "tables") | throw "records is not a list of {name, record, tables}"
+    let tables ← (entries (getD r "tables")).mapM fun (t, n) => match n, nat? n with
+      | .null, _ => pure (t, none)
+      | _, some n => pure (t, some n)
+      | _, none => throw "a record's tables are not lengths or null"
+    pure (name, tables, getD r "record")
   pure <| refusing do
     let why := sessionsTreeReason (← coinTreesOf lines) records
     return Json.mkObj [("reason", why.elim Json.null Json.str)]

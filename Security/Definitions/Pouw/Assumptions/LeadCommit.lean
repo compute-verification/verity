@@ -1,5 +1,7 @@
-import Definitions.Hash.Keyed
-import Definitions.Hash.Hm96
+module
+
+public import Definitions.Hash.Keyed
+public import Definitions.Hash.Hm96
 
 /-!
 # The lead's commitment premises the code can't be checked against yet (trusted; `Prop`s taken as hypotheses)
@@ -18,6 +20,8 @@ A drawn unit's proof is the protocol's (`Opens pos rank v ks y₀ sibs`: it open
 `pos` under the key `ks`, the key leaf's salt `y₀` and the path `sibs`): what it establishes is a parameter, so a
 statement reads these at its own acceptance relation. `Pouw.Guarantees.KeyedLeafBinds` reads both.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 

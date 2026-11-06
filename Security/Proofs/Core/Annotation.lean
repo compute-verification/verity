@@ -1,4 +1,6 @@
-import Definitions.Core.Annotation
+module
+
+public import Definitions.Core.Annotation
 
 /-!
 # Proofs about annotations
@@ -7,6 +9,8 @@ A `Verity.Partition` is a partition-shaped annotation (`Partition.toAnnotation_i
 annotations' (`Partition.toAnnotation_refines`). Relabelling composes (`Annotation.map_id`, `Annotation.map_map`), and
 a partition pulls back to a partition along a containment (`Annotation.IsPartition.pullback`).
 -/
+
+@[expose] public section
 
 namespace Verity
 

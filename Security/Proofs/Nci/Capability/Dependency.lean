@@ -1,7 +1,9 @@
-import Definitions.Nci.Guarantees.Capability.Dependency
-import Proofs.Nci.Capability.Items
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Nci.Guarantees.Capability.Dependency
+public import Proofs.Nci.Capability.Items
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Local bounds: proofs of the caps from dependency
@@ -16,6 +18,8 @@ import Mathlib.Tactic.Linarith
 * `WeightedProductCap`: the completed products lie in the rectangle of their slots and uses, whose weighted sum factors,
   and their slots are a selection the block holds.
 -/
+
+@[expose] public section
 
 namespace Nci.Covering.FeedsWithin
 
@@ -41,7 +45,7 @@ open Verity Finset Nci.Capability
 theorem ImportOrRecompute : Guarantees.ImportOrRecompute := by
   intro R κ _ K ω hK hω u
   classical
-  set F := R.P.gates u
+  set F := R.d.𝓘.gates u
   set Sv := K.servedIn F
   set S := R.d.unregistered F
   rw [← sum_filter_add_sum_filter_not Sv (fun c => K.G c ⊆ F)]
@@ -110,19 +114,19 @@ theorem RecomputeByState : Guarantees.RecomputeByState := by
 theorem WeightedProductCap : Guarantees.WeightedProductCap := by
   intro R B W ω h hS hω hW u
   classical
-  set P := completedIn B (R.P.gates u)
-  have hP : ∀ q ∈ P, q ∈ B.P ∧ B.m q ⊆ R.P.gates u := fun q hq => mem_filter.1 hq
+  set P := completedIn B (R.d.𝓘.gates u)
+  have hP : ∀ q ∈ P, q ∈ B.P ∧ B.m q ⊆ R.d.𝓘.gates u := fun q hq => mem_filter.1 hq
   obtain ⟨σ, hσ, hσ'⟩ :=
-    exists_selection W P Prod.fst B.m (R.P.gates u) (fun q hq => hS q (hP q hq).1) (fun q hq => (hP q hq).2)
+    exists_selection W P Prod.fst B.m (R.d.𝓘.gates u) (fun q hq => hS q (hP q hq).1) (fun q hq => (hP q hq).2)
   have hU := hW u _ σ hσ hσ'
-  have hV : 0 ≤ ∑ j ∈ served B (R.P.gates u), ω j := sum_nonneg fun j _ => hω j
+  have hV : 0 ≤ ∑ j ∈ served B (R.d.𝓘.gates u), ω j := sum_nonneg fun j _ => hω j
   calc ∑ q ∈ P, W.price q.1 * ω q.2
       ≤ ∑ q ∈ (P.image Prod.fst) ×ˢ (P.image Prod.snd), W.price q.1 * ω q.2 := by
         refine sum_le_sum_of_subset_of_nonneg (fun q hq => ?_) fun q _ _ => mul_nonneg (W.price_nonneg _) (hω _)
         exact mem_product.2 ⟨mem_image_of_mem _ hq, mem_image_of_mem _ hq⟩
-    _ = (∑ i ∈ P.image Prod.fst, W.price i) * ∑ j ∈ served B (R.P.gates u), ω j := by
+    _ = (∑ i ∈ P.image Prod.fst, W.price i) * ∑ j ∈ served B (R.d.𝓘.gates u), ω j := by
         rw [sum_product, sum_mul_sum]
         rfl
-    _ ≤ h * ∑ j ∈ served B (R.P.gates u), ω j := mul_le_mul_of_nonneg_right hU hV
+    _ ≤ h * ∑ j ∈ served B (R.d.𝓘.gates u), ω j := mul_le_mul_of_nonneg_right hU hV
 
 end Nci.SecurityProofs

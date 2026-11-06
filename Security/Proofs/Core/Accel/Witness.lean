@@ -1,11 +1,13 @@
-import Definitions.Core.Accel.H200
-import Proofs.Core.Accel.Model
-import Mathlib.Algebra.BigOperators.Intervals
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Algebra.Order.Ring.NNRat
-import Mathlib.Tactic.IntervalCases
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Core.Accel.H200
+public import Proofs.Core.Accel.Model
+public import Mathlib.Algebra.BigOperators.Intervals
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Algebra.Order.Ring.NNRat
+public import Mathlib.Tactic.IntervalCases
+public import Mathlib.Tactic.Linarith
 
 /-!
 # The honest lemma: the deployed INT8 GEMM meets the H200's model
@@ -30,6 +32,8 @@ Each instruction is the whole text of a thread of its own (`prog`), and the sche
 * `gemm_cardWithinAccel`: so the card premise holds at the honest instance (`gemmCan`, the card running this
   kernel), at the exact `s8` semantics, which meets (P1) and (P2).
 -/
+
+@[expose] public section
 
 open scoped NNRat
 
@@ -211,7 +215,7 @@ theorem kernel_use (n : ℕ) (r : Res) : ((kernel n).map fun a => card.use a.1 r
   simp [mma, store, copyN, List.map_const', List.sum_replicate, nsmul_eq_mul]
 
 theorem rho_pos (r : Res) : 0 < card.ρ r := by
-  cases r <;> norm_num [card, clock]
+  cases r <;> norm_num [card, clock, tensorClock]
 
 theorem le_rho_mul {ρ q T : ℚ≥0} (hρ : 0 < ρ) (h : q / ρ ≤ T) : q ≤ ρ * T := by
   rw [mul_comm]; exact (div_le_iff₀ hρ).mp h

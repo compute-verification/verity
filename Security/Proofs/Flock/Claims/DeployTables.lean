@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Claims.Scope.Split
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
+module
+
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.Scope.Split
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 
 /-!
 # The deployed records' tables are the parsed statement's
@@ -16,6 +18,8 @@ its own statement's (`relS_split`). So `assemble`, which takes each table's firs
 statement, returns only witnesses in the relation (`relS_of_assemble`), and at one table, whose own statement is the
 statement, both records' `assemble` reads as before (`assemble_deployZk_one`, `assemble_deployPlain_one`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

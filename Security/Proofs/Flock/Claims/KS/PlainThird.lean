@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainFirst
+module
+
+public import Proofs.Flock.Claims.KS.PlainFirst
 
 /-!
 # The third bound of the plain mixture, from a simulation of the runs
@@ -9,6 +11,8 @@ import Proofs.Flock.Claims.KS.PlainFirst
 pointwise implication alone: wherever `pL` holds at the live outcome of `P'` at the tape `(ω, u)` and the live coins
 `r'`, `E` holds at `plainCoins (u, r')` (`liveMix_le_Pr`, `Pr_mergeAt`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

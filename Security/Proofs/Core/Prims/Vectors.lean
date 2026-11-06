@@ -1,4 +1,6 @@
-import Definitions.Core.Prims
+module
+
+public import Definitions.Core.Prims
 
 /-!
 # Vectors: the casts of `verity.ml.prims`
@@ -8,6 +10,8 @@ Each theorem is one input of a cast of `verity.ml.prims` and the word its Python
 `packages/verity/tests/ml/test_lean_scalar_vectors.py` checks the same vectors against the Python, so a change on either
 side fails a build: the transcription cannot drift silently. Every operand is a word of its parameter's width.
 -/
+
+@[expose] public section
 
 namespace Verity.Prims.Vectors
 

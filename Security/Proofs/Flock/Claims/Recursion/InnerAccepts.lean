@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.InnerAbort
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAbort
 
 /-!
 # `InnerAccepts` at the inner shapes
@@ -23,6 +25,8 @@ units, no sparse phase; `PublicAudit`'s), holo (`Form.Holo`: private inner circu
   (`Pr_innerRejects_le_fork`), so it costs at most `Pr[Be]` (`Pr_innerRejects_le`). `InnerAcceptsKS.lean` carries
   `InnerKS` over it at the same `γ_eA`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

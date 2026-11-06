@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Sparse.MsgsRead
-import Proofs.Flock.C3.Sparse.SessionAt
-import Proofs.Flock.C3.Reps.IoCols
+module
+
+public import Proofs.Flock.C3.Sparse.MsgsRead
+public import Proofs.Flock.C3.Sparse.SessionAt
+public import Proofs.Flock.C3.Reps.IoCols
 
 /-!
 # The sparse phases' messages from V*'s sessions
@@ -18,6 +20,8 @@ import Proofs.Flock.C3.Reps.IoCols
   stage `c₀ + i · nS + roundOf m` reads, at unit `un i` of `sess i`, the port each column of message `m`'s words reads
   (S's `SelPort`). `sparseMsgsOfLayers_of_sessions`: the three give `SparseMsgsOfLayers` at `rdOf`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

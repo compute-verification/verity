@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.7: the program format `verity-ir/descriptor/v1` (core's `verity/ir/PROTOCOL.md`), as the verifier
+`Flock.Partition`: the program format `verity-ir/descriptor/v1` (core's `verity/ir/PROTOCOL.md`), as the verifier
 reads its own copy of a Program: the canonical JSON domain and the program's SHA-512 (§1), types and leaves (§2), reference
 sequences (§3), the descriptor and what the decoder refuses (§4), input nodes (§5), the canonical layout (§6) and scope
 resolution (§7).
@@ -10,13 +10,19 @@ bound at registration; §5.2) must declare no parameters and `Value<w>`. Definit
 are decoded on demand from the root and from the functions `program_fn`'s record names, as core decodes them, and each callee
 gets a smaller index than its callers.
 -/
-import Lean.Data.Json
-import Std.Data.HashMap
-import Flock.Canon
-import Flock.Hash
-import Flock.Sizes
-import Flock.Steps
-import Flock.JsonParse
+module
+
+public import Lean.Data.Json
+public import Std.Data.HashMap
+public import Flock.Canon
+public import Flock.Hash
+public import Flock.Sizes
+public import Flock.Steps
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Program
 

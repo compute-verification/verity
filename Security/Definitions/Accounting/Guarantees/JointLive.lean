@@ -1,5 +1,7 @@
-import Definitions.Accounting.JointLive
-import Definitions.Core.Blocks
+module
+
+public import Definitions.Accounting.JointLive
+public import Definitions.Core.Blocks
 
 /-!
 # The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks (trusted)
@@ -32,6 +34,8 @@ Two statements say the bound is not vacuous: an honest prover meets every claim 
 
 The proofs are `Accounting.SecurityProofs.JointPeriodLive` and its siblings.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

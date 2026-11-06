@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.HonestStreams
-import Proofs.Flock.Claims.Recursion.NextShaDec
-import Proofs.Flock.Claims.Complete.WalkPacked
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestStreams
+public import Proofs.Flock.Claims.Recursion.NextShaDec
+public import Proofs.Flock.Claims.Complete.WalkPacked
 
 /-!
 # The verdict passes on the honest proofs at the reader's record
@@ -18,6 +20,8 @@ which accepts (`Run.verdict_ok`).
 * **The honest record's reads** (`run_recordJ`): `Run.json`'s, with the decode of every value alike the record.
 * **The verdict** (`honestVerdict`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

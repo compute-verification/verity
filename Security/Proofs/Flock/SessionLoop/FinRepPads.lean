@@ -1,9 +1,11 @@
-import Proofs.Flock.SessionLoop.FinRepCm
-import Proofs.Flock.SessionLoop.RepSrc
-import Proofs.Flock.Claims.ZK.SimCommit
-import Proofs.Flock.Claims.ZK.FinishInner
-import Proofs.Flock.Claims.ZK.FinishSwInner
-import Proofs.Flock.Claims.ZK.Blind
+module
+
+public import Proofs.Flock.SessionLoop.FinRepCm
+public import Proofs.Flock.SessionLoop.RepSrc
+public import Proofs.Flock.Claims.ZK.SimCommit
+public import Proofs.Flock.Claims.ZK.FinishInner
+public import Proofs.Flock.Claims.ZK.FinishSwInner
+public import Proofs.Flock.Claims.ZK.Blind
 
 /-!
 # The pads commitment from the views
@@ -21,6 +23,8 @@ at its base:
 
 **`Loop.padsView_ic`** states it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.Table
 

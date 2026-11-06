@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.Statements
-import Proofs.Flock.Recursive.StopLeak
-import Proofs.Flock.Soundness.ZK.Hiding
+module
+
+public import Proofs.Flock.Recursive.Statements
+public import Proofs.Flock.Recursive.StopLeak
+public import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Proofs of the recursive audit's guarantees
@@ -19,6 +21,8 @@ import Proofs.Flock.Soundness.ZK.Hiding
   released cut at a stop is then `prCoin_cut_le` (`Proofs.Flock.Recursive.StopLeak`) over the whole view's bound, and
   `recursiveZK_whole` is the guarantee at one stop, the whole view's bound.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

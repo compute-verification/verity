@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.OuterKS
+module
+
+public import Proofs.Flock.Claims.Recursion.OuterKS
 
 /-!
 # The inner protocol's KS against provers that may abort
@@ -18,6 +20,8 @@ on the inner protocol's KS against such provers, `Inner.KSAbort`, which the clai
   (`BAbort`, `PrBAbort`).
 * With no aborts (`A = Unit`, nothing refused) it is `Inner.KS` (`KSAbort_KS`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

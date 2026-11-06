@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS.Receipt
+module
+
+public import Definitions.Accounting.TS.Receipt
 
 /-!
 # A round's unfolded share and the whole-unit luck (trusted)
@@ -13,6 +15,8 @@ that no word of the unit determines, so the round's check passes only if it gues
   round with a positive unfolded share keeps the honest committed value with probability at most `p₀`. This is HMU's
   B′ at a unit whose fold the run skips.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

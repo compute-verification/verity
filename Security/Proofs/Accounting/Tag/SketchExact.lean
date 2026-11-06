@@ -1,6 +1,8 @@
-import Mathlib.Data.Nat.Bitwise
-import Mathlib.Tactic
-import Proofs.Accounting.Tag.Signs
+module
+
+public import Mathlib.Data.Nat.Bitwise
+public import Mathlib.Tactic
+public import Proofs.Accounting.Tag.Signs
 
 /-!
 # Exactness of integer ±1 sketches on sm_120's E4M3 tensor cores
@@ -17,6 +19,8 @@ step writes its FP32 word, and the next step reads it back (`fp32Value_packTerm`
 `TensorCoreNonCollision`, from `exact` and the row bound of `Signs.lean`. `fp32Value_packTerm` restates
 `Pouw.Fp8Atom.fp32Value_packTerm` so this area doesn't import PoUW's proofs.
 -/
+
+@[expose] public section
 
 namespace Accounting.TagProofs
 

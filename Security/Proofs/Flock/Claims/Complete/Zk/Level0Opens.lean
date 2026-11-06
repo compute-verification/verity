@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Level0Honest
-import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Level0Honest
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
 
 /-!
 # The honest masked Ligerito's openings pass the masked verifier's Merkle checks
@@ -9,6 +11,8 @@ import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
 the check at that width (`merkle_openW`). The masked prover's Ligerito opens every level honestly (`Lg.Opens`) at the
 query coins of the rounds two after plain's, the pair's two coins coming between (`ligeritoPZk_opens`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.L0
 

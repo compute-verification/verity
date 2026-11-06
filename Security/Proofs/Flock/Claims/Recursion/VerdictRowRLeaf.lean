@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.ElemRead
+module
+
+public import Proofs.Flock.Claims.Recursion.ElemRead
 
 /-!
 # Row R's leaf at the concrete readers
@@ -10,6 +12,8 @@ leaf of `recKSDecompL_of_leaves` with `elemAt := Rows.elemReadC (Top.accRC rd ke
 (`ResPiecesAt`): for each rep `r` and group `p` of S, one of part `p`'s `S` keyed by group `p` at a copy `(o, g)` with
 `o + g = r`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecompBR
 

@@ -76,8 +76,8 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
 1. **Setup phase**, once, before any coin. It fixes the public parameters (the protocol and its version, the sampling
    design and δ, the size classes, the inference-only policy's c and k, the advice length ℓ_a, and each subprotocol's
    public Program and parameters, by digest), the registered information θ (for example the weights) and the registered
-   compiler B. It fixes no circuit. The Lean (`Verity.Declaration`, `Verity.Committed`) still states the older shape, a
-   circuit with a partition committed beside it.
+   compiler B. It fixes no circuit: in the Lean (`Verity.RegisteredCircuit`, `Compiler.run`), D, θ, 𝓘 and the proof
+   blocks are B's output on the log's θ and the advice; the committed trace is `Verity.Committed`.
 2. **Execution phase** j. The hardware runs, and the developer commits every value it computes under hiding commitments
    in SHA-512 trees: the committed trace.
 3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, "How an audit works"):
@@ -224,8 +224,8 @@ The time credit adds the data sheet's rates.
 
 - Remote's rule, the composition's product rule `check`: `Properties.Composition.AcceptMeans`, **proved**. What it
   accepts fits its subprotocols, each accepts its own case, and the commitment binds their digests.
-- Sampled proofs: `Properties.SampledProofs.AcceptMeans`, **proved**, covers v1's `OneStage.check`, remote's one-stage
-  form.
+- Sampled proofs: `Properties.SampledProofs.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
+  form (v2) ends, on its own run's verdicts.
 - PoUW's period credit: `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, `CheckedCreditPeriod`'s conclusion
   at `PouwCheck.Credit.window`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
   (`GUARANTEE`) and refuses every other window form for, **proved** under the premises above.
@@ -238,11 +238,11 @@ The time credit adds the data sheet's rates.
 ### 4. The inference-only policy
 
 **Establishes.** The registered circuit divides into inference blocks of at most Γ gates, each reading at most α_f
-fresh bits per gate, anything outside the registered information θ (`Nci.Complies Γ α_f`); and θ is registered
+fresh bits per gate, anything outside the registered information θ (`Nci.CompliesRate Γ α_f`); and θ is registered
 information. A partition meeting that is, once padded, a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋, or
 k = ⌊α_f·Γ·W⌋ for the bit-level expansion at Γ·W gates,
 (`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. With gates up to W bits wide, the bit-level
-expansion meets it at Γ·W gates. The Lean slowdown bound `DampenerRemote` instead takes `Complies` as a hypothesis.
+expansion meets it at Γ·W gates. `DampenerRemote` instead takes `Nci.Complies c k` of d.
 
 **How it is checked.**
 
@@ -275,12 +275,12 @@ part 6's premises say why that shape trains little.
    is a proof lemma (`Security/Proofs/Nci/Cover/Checked.lean`), not a locked property, and the policy's check has no
    `AcceptMeans`: **open** as a property. θ's provenance: `NciCheck.Properties.SecurityProofs.BaselineProvenance`,
    **proved**.
-3. *A compliance verdict of `Desc.evaluate` ⇒ `Nci.Complies Γ α_f` of the laid-out registered circuit (a `Verity.Declaration`), on every
+3. *A compliance verdict of `Desc.evaluate` ⇒ `Nci.CompliesRate Γ α_f` of the laid-out `Verity.RegisteredCircuit`, on every
    expansion:*
    `NciCheck.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
-   is the definition's), **proved**. `Witnessed` yields exactly `DampenerRemote`'s hypothesis `Complies Γ α d`, so for
-   the Lean bound only links 1 and 2 remain open.
-4. *`Complies` ⇒ the padded (c, k)-partition the local bounds read:* `Nci.Guarantees.CompliesCK`, and through the
+   is the definition's), **proved**; `refines` bounds the unrolled check's blocks by (Γ, α_f·Γ). `DampenerRemote`
+   takes `Complies c k d`, which a verdict gives only padded (link 4): links 1, 2 and that step are open.
+4. *`CompliesRate` ⇒ the padded (c, k)-partition the local bounds read:* `Nci.Guarantees.CompliesCK`, and through the
    bit-level expansion `Nci.Guarantees.ExpandComplies`, **proved**. Joining them to link 3 for the run's registered circuit
    is open with links 1 and 2.
 5. *A block's effective fresh input:* k plus k_F, the bits faulty proof blocks inject into it, plus k_a, the advice bits
@@ -325,8 +325,8 @@ $$ \eta + \delta + \delta_s + n\,(\varepsilon_{ks} + \varepsilon_{bind} + \delta
 
 plus part 1's cryptographic terms: coverage's η, sampled proofs' δ with their per-phase knowledge-soundness and binding
 errors (part 5), and PoUW's δ_s = 2⁻⁴⁰ with its per-phase δ_ks and δ_bind. δ_ks and δ_bind have no number yet, so
-neither does the total. With e the per-phase sum, a week, a month and a year (n = 168, 730 and 8,766 at one
-verification phase an hour) give η + δ + 2⁻⁴⁰ + 168·e, + 730·e and + 8,766·e.
+neither does the total. With e the per-phase sum, a week, a month and a year at one verification phase an hour give
+η + δ + 2⁻⁴⁰ + 168·e, + 730·e and + 8,766·e.
 
 - Ω_* is the weighted count of analysed computation any covered method needs.
 - C_ref is measured: the fleet-time at which the reference training algorithm reaches the target with probability
@@ -412,16 +412,17 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - `ServiceSound` and `PouwSound` are undischarged premises.
   - `JointHorizonLive` isn't instantiated with parts 2 and 3.
   - Today the parts compose by hand.
-- **The verifier's verdicts.** Sampled proofs' one-stage form is v1, which takes the sessions' verdicts as evidence
-  instead of computing them, and the recursive form runs V*'s compiled check; v2 (`verity/sampled-proofs/one-stage/v2`)
-  runs the proof check (`verity verify proof`, today's `flock-verify --zk`) itself, and remote doesn't read v2 yet.
+- **The verifier's verdicts.** Sampled proofs' one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
+  the proof check (`verity verify proof`, today's `flock-verify --zk`) itself, and the recursive form runs V*'s
+  compiled check; v1, which takes the verdicts as evidence, is refused. No Lean statement yet carries v2's acceptance
+  to `SampledKSLiveV3`'s event.
 - **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileDrawIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
 - **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
   with a rule tying its registration to the one sampled proofs and PoUW bind; the policy's check accepting as a
-  property (`baseline_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading the
-  result instead of assuming `Complies`.
+  property (`baseline_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading a
+  verdict's rate.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
   its check inside the ZK server is open.
 - **The utilization policy.** Nothing bounds the free share f over every accepted run.
@@ -434,7 +435,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
     `SourceHard` and `Recovers` hold against a decoder that compresses one string, each parameter spent (at 0 it
     fails); at a toy task, coverage holds at η = 1/2 but not at 0, a one-gate guess escaping it. No instance meets the
     premises on a training circuit.
-  - The displayed slowdown bound has no Lean statement; `DampenerRemote` is the older threaded slowdown bound.
+  - The displayed slowdown bound has no Lean statement.
 
 ### Promising directions
 
@@ -509,7 +510,7 @@ The slowdown, `DampenerRemote`:
 - `Nci.Assumptions.WeightsIncompressible` (`Security/Definitions/Nci/Assumptions/Threads.lean`): no small subcircuit
   rebuilds the weights it uses from fewer bits than their width. It is the older form, which the local bounds below
   replace (`Security/README.md`, part 2).
-- `Nci.Complies` (`Security/Definitions/Nci.lean`): the registration meets the inference-only policy, in its older form.
+- `Nci.Complies c k` (`Security/Definitions/Nci.lean`): the registration has a (c, k)-partition.
   `DampenerRemote` takes it as a hypothesis; part 4 is what discharges it once its open links close.
 
 The local bounds (part 6):
@@ -523,8 +524,8 @@ The local bounds (part 6):
 ## Results per monitoring period
 
 These figures come from a third route, neither part 6's displayed bound nor `DampenerRemote`: the slowdown
-calculator's partial-sum route. The calculator is `benchmarks/rho` (`verity bench rho`; it is being renamed to
-the slowdown calculator). Its `periods.py` gives the slowdown bound for monitoring periods of a week, a month and a year, over one datacenter
+calculator's partial-sum route. The calculator is `benchmarks/rho` (`verity bench rho`).
+Its `periods.py` gives the slowdown bound for monitoring periods of a week, a month and a year, over one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`
 (`uv run python benchmarks/rho/periods.py --scenario reference-remote-h200`):
 
@@ -546,7 +547,7 @@ the slowdown calculator). Its `periods.py` gives the slowdown bound for monitori
 
 ## The demo
 
-**No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. Lifecycle is the only example that steps through the whole remote composite, with a stand-in prover; h200
+**No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. Lifecycle is the only example that steps through the whole remote composite; h200
 runs remote's sampled-proofs half for real, and the vLLM demo runs both halves on one served run, PoUW's as a
 development run:
 

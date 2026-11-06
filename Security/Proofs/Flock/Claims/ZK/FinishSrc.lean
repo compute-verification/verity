@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.FinishRep
-import Proofs.Flock.Claims.ZK.SimLig
-import Proofs.Flock.Claims.ZK.SimInner
-import Proofs.Flock.Claims.ZK.CausalExe
+module
+
+public import Proofs.Flock.Claims.ZK.FinishRep
+public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.Claims.ZK.SimInner
+public import Proofs.Flock.Claims.ZK.CausalExe
 
 /-!
 # The firewall's rep against the rep from a source
@@ -22,6 +24,8 @@ reads (`eraseZ`):
 * **`repCut_fw`**: where the firewall's rep returns, the rep from the source, at level 0's commitment erased, returns the
   same transcript and log, and a proof equal to the firewall's up to `eraseZ`.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

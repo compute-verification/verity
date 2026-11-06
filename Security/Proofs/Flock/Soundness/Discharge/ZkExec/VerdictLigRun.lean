@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigModel
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigFinal
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigModel
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigFinal
 
 /-!
 # The hiding Ligerito's run, with its values
@@ -12,6 +14,8 @@ and the blinded claim `T'` carry over (`lane_vals`); level 0's enforced sum is `
 the extra lanes' terms it is the model's padded column (`consPad_eq`). Levels ≥ 1 are the non-ZK session's
 (`LigeritoRun.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

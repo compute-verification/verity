@@ -4,7 +4,11 @@ gate unrolled, to each gate's last reader. `Partition.committedBits` reads the s
 (`Gates.readTo`), and the `committed_bits` difftest piece holds the two equal on every Definition a `Q_call` partition
 cuts. The verifier never runs this.
 -/
-import Flock.Qcall
+module
+
+public import Flock.Qcall
+
+@[expose] public section
 
 namespace SampledProofs.Partition
 

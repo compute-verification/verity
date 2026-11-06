@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.Bandwidth.Interactive
+module
+
+public import Mathlib
+public import Proofs.Accounting.Bandwidth.Interactive
 
 /-!
 # B3 for the chip as a tick-by-tick transducer over the links' signals
@@ -28,6 +30,8 @@ Two forms of B3 follow, as the model's B3 row has them:
 
 `audit_reads_ro` and `audit_ro` are `AuditInteractiveRO`'s bounds when the rest ignores the oracle.
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 

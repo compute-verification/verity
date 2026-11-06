@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Reference
-import Proofs.Flock.Claims.ZK.Cut
-import Proofs.Flock.Claims.ZK.Rewind
+module
+
+public import Proofs.Flock.Claims.ZK.Reference
+public import Proofs.Flock.Claims.ZK.Cut
+public import Proofs.Flock.Claims.ZK.Rewind
 
 /-!
 # The ZK server: untrusted workers compute, the server releases
@@ -58,6 +60,8 @@ filled with the commit strings of fixed digests under its own salts, kinds `fixe
   `2` of `leaky1`, the simulator that guesses whether the session stops (`zk_deferred`): one bit a session, and over a
   stream of `m` sessions with at most `b` stops, one stop form, `log₂ ∑_{i ≤ b} C(m, i)` bits (`stream_leak_deferred`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

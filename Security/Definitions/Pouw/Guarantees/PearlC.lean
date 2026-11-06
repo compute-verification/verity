@@ -1,26 +1,28 @@
-import Definitions.Pouw.PearlC.DeviceKernelWref
-import Definitions.Pouw.PearlC.DevicePricesLoop
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
-import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
-import Definitions.Pouw.PearlC.Device
-import Definitions.Pouw.PearlC.DeviceFp4
-import Definitions.Pouw.PearlC.DeviceFp4Issue
-import Definitions.Pouw.PearlC.DeviceRev1
-import Definitions.Pouw.PearlC.Game
-import Definitions.Pouw.PearlC.Instance
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Pouw.Assumptions.PearlC.RowSeedAssumptions
-import Definitions.Pouw.Assumptions.PearlC.TTOut
-import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
-import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
-import Definitions.Pouw.PearlC.DeviceChainOnly
-import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
-import Definitions.Pouw.PearlC.DevicePrices
-import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
-import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
-import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
+module
+
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.PearlC.Device
+public import Definitions.Pouw.PearlC.DeviceFp4
+public import Definitions.Pouw.PearlC.DeviceFp4Issue
+public import Definitions.Pouw.PearlC.DeviceRev1
+public import Definitions.Pouw.PearlC.Game
+public import Definitions.Pouw.PearlC.Instance
+public import Definitions.Pouw.PearlC.Tile
+public import Definitions.Pouw.Assumptions.PearlC.RowSeedAssumptions
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
+public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
+public import Definitions.Pouw.PearlC.DeviceChainOnly
+public import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
+public import Definitions.Pouw.PearlC.DevicePrices
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
+public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
 
 /-!
 # Pearl-C's guarantees (trusted)
@@ -40,6 +42,8 @@ Pearl-C4's headline readers rest on `TTOutFp4Sm120W1` or `TTOutTileFp4Sm120W1` a
 `W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt` (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). The rest (the
 row-seed readers) are still stated over any `CostModel`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.PearlC
 

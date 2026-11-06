@@ -1,4 +1,6 @@
-import RemoteAudit.Shared
+module
+
+public import RemoteAudit.Shared
 
 /-!
 # One window in flight: `audit.Pace.in_flight`
@@ -14,6 +16,8 @@ they are `Shared.step g` and `Shared.run g` (`step_two`, `run_two`): every prope
 `Session.run` is about the two-in-flight session, and none yet covers f = 1. The difftest's `session` runs `run f g`,
 and the registry `step f g`.
 -/
+
+@[expose] public section
 
 namespace RemoteAudit.Flight
 

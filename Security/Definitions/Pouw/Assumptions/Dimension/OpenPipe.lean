@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.Forest
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Forest
 
 /-!
 # The open quadratic pipe (trusted statements; staged)
@@ -19,6 +21,8 @@ product of two non-constant factors multiplies two free values (`QuadStep` over 
 * **The open pipe widens the class the model bound covers** (`OpenPipeWitness`: a program that feeds a tensor-core
   word into an FFMA, which no closed pipe is).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.OpenPipe
 

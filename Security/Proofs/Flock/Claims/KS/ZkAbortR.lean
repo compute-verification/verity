@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkSimW
-import Proofs.Flock.Claims.Recursion.FlockKSRecord
+module
+
+public import Proofs.Flock.Claims.KS.ZkSimW
+public import Proofs.Flock.Claims.Recursion.FlockKSRecord
 
 /-!
 # The recursion's KS over the masked record, from the masked table bound counted per round
@@ -21,6 +23,8 @@ one table wherever some run accepts; the bound follows from a simulator of each 
 (`FlockDeploy.KS.zk_tableBoundθOnAccR_of_simWJ`, `FlockDeploy.KS.zk_KSAbort_of_simWJ`,
 `FlockDeploy.KS.zk_KSFlock_of_simWJ`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

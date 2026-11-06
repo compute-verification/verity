@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 
 /-!
 # The public inputs the verifier derives itself
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 * `derivedGroups_some`: with public input ports, each derived, port `k`'s group at `k`.
 * `checkDerived_words`: an accepted `HmIn.checkDerived` pins every instance `i`'s word of port `k` to `i mod G_k`.
 -/
+
+@[expose] public section
 
 open Flock
 

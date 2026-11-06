@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Sampling.Select.Steps
-import Proofs.Flock.Claims.Sampling.Escape
-import Proofs.Flock.Claims.Sampling.ExecBernoulli
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Steps
+public import Proofs.Flock.Claims.Sampling.Escape
+public import Proofs.Flock.Claims.Sampling.ExecBernoulli
 
 /-!
 # The draw `drawUnits` makes misses a set of units no more often than its law's `P_a`
@@ -15,6 +17,8 @@ bound (`seqMiss_le`) multiplies them.
 * `strata_bound`: a stratified or work draw misses the units of its strata at the slots of `W` with probability at most
   `strataPa` of its strata's sizes and draws.
 -/
+
+@[expose] public section
 
 open SampledProofs
 

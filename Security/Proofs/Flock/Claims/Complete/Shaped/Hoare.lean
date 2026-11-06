@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Reps
+module
+
+public import Proofs.Flock.Claims.Complete.Reps
 
 /-!
 # What the honest rep's steps keep: a Hoare layer on `Total`
@@ -14,6 +16,8 @@ query, consistency or claim nonce), `challengeP_H` (one message, the table halve
 `oodIntroP_H` (a message, a claim nonce and an out-of-domain value) and `queryP_H` (a query and a consistency nonce, and
 the opening at the level's positions of some coins).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

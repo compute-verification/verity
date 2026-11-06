@@ -1,6 +1,9 @@
-import Proofs.Nci.Chain
-import Proofs.Nci.Inequalities
-import Proofs.Nci.LoomisWhitney
+module
+
+public import Proofs.Nci.Chain
+public import Proofs.Nci.Inequalities
+public import Proofs.Nci.LoomisWhitney
+public import Proofs.Nci.Rate
 
 /-!
 # Updated matrix multiplications are throttled
@@ -15,6 +18,8 @@ incompressibility charges (`sum_card_outputsOther_le`). The two read counts, wei
 `min{c₁, c₂} G ≤ α size(D)` for every `μ`, since the IUs' products add up to `G` (`sum_card_products`), and so
 `F · 2G ≤ size(D)`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 
@@ -179,7 +184,12 @@ end Counting
 open Classical in
 /-- **Updated matrix multiplications are throttled** (the draft's theorem, "Throttling updated matrix
 multiplications"). -/
-theorem UpdatedMatMul : Guarantees.UpdatedMatMul := by
+theorem UpdatedMatMul_rate :
+    ∀ (Γ : ℕ) (α b_w b_a : ℝ) (D : RegisteredCircuit) (c : Chain D.D) (d : ℕ),
+      0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, d ≤ c.d ℓ) → CompliesRate Γ α D →
+      Assumptions.ActivationsIncompressible D c Γ (α * Γ) b_w b_a →
+      Assumptions.PartialSumsIncompressible D c Γ (α * Γ) b_w b_a →
+        F α (α * Γ) b_w b_a d * (2 * c.G) ≤ D.D.size D.D.computed := by
   intro Γ α b_w b_a D c d hα hw ha hd ⟨n, P, hP⟩ hA hPS
   have hcap : ∀ u, (novelReads D (P.gates u) : ℝ) ≤ α * Γ := fun u =>
     (hP u).2.trans (mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα.le)
@@ -267,6 +277,13 @@ theorem UpdatedMatMul : Guarantees.UpdatedMatMul := by
       _ = D.D.size D.D.computed / (2 * c.G) := by
           field_simp
   rwa [le_div_iff₀ (by positivity)] at hle
+
+/-- **Updated matrix multiplications are throttled** at `(c, k)`: `UpdatedMatMul_rate` at the rate `k / c`. -/
+theorem UpdatedMatMul : Guarantees.UpdatedMatMul := by
+  intro c k b_w b_a D ch d hc hk hw ha hd hD hA hP
+  have h := UpdatedMatMul_rate c (k / c) b_w b_a D ch d (div_pos (Nat.cast_pos.2 hk) (Nat.cast_pos.2 hc)) hw ha hd
+    (compliesRate_of_complies hD) (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
+  rwa [rate_mul _ hc] at h
 
 /-- **Frontier training is throttled** (the draft, "From updated matrix multiplications to training"). -/
 theorem Training : Guarantees.Training :=

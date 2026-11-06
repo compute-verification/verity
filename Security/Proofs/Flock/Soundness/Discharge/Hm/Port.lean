@@ -5,9 +5,13 @@ output (`bcCol`, the address `HmRow.regions` pins). When the slots' nets hold on
 holds Δ's copies (the first `cv` the midstate, each next `cv` the previous output, the hm96 `cv` the last output, its `pad`
 the padding block), the bytes at `bcCol` are the commit string of the row and salt (`port_commit`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Row
-import Proofs.Flock.Soundness.ExecTyped
-import Proofs.Flock.Soundness.Binding.Layout
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Row
+public import Proofs.Flock.Soundness.ExecTyped
+public import Proofs.Flock.Soundness.Binding.Layout
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

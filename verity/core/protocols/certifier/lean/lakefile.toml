@@ -9,6 +9,7 @@ defaultTargets = ["NetworkCertifier", "certifier-difftest", "certifier-charge-di
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[lean_lib]]
 name = "NetworkCertifier"

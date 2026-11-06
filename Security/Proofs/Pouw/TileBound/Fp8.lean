@@ -1,5 +1,7 @@
-import Proofs.Pouw.TileBound.Proofs
-import Definitions.Pouw.TileBound.Fp8Defs
+module
+
+public import Proofs.Pouw.TileBound.Proofs
+public import Definitions.Pouw.TileBound.Fp8Defs
 
 /-!
 # The FP8-tile model: the E4M3 count from the FP4-tile core (proofs)
@@ -29,6 +31,8 @@ format-specific.
 * **Tightness:** `honest8_crossOn`, `honest8_cost` and `honest8_representable`. The honest E4M3 program is correct,
   representable and costs `price .fp8 · m·k·n`.
 -/
+
+@[expose] public section
 
 namespace Pouw.TileBound
 

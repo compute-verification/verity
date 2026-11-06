@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinExe
-import Proofs.Flock.Claims.ZK.SplitInner
+module
+
+public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.SplitInner
 
 /-!
 # The session rep's `τ` is its view's (`RepTau`)
@@ -12,6 +14,8 @@ batching coins, and its `τ` is `InZ.tau` at the coins from the round it began (
 that round at the rep's `ε` slot. With no refusal at the opened coins (`not_refused_of_admits`), the run of the shared
 phases is `InnerAt`, and `InnerTauVal` gives `τ` as the view's.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

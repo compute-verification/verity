@@ -81,6 +81,7 @@ def test_a_root_is_checked_by_its_calls_naming_the_binding_each_relies_on(declar
     sidecar(*_small())
     e = BC.check(root)
     assert e["mode"] == "by-calls" and e["gates"] is None and e["failures"] == [], e["failures"]
+    assert e["conformance"] == "not-yet-established"
     record = e["by_calls"]
     assert record["nodes"] == 3 and len(record["entry_sha512"]) == 128 and "not the whole Program" in record["entry_of"]
     rows = {r["callee"]: r for r in record["callees"]}
