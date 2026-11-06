@@ -2946,6 +2946,42 @@ def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=None) == 0         # --no-preflight: the lander's
 
 
+def test_the_preflight_finds_a_prs_merge_on_next_past_a_lock_commit_on_checked_when_it_walks_from_main(world, capsys):
+    """When `checked` can't be fetched the preflight walks `next` from `main`, across the commit drive puts on `checked`
+    without the queue's trailers (`Lock records regenerated for #N`).  A PR already on `next` still merges onto the commit
+    below its merge there, so its rewritten head isn't refused for conflicting with its old one, and one landed on `checked`
+    (open until `main` reaches it) and on `next` again below its newest merge; a conflict with a PR landed on `checked` still
+    names that PR."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    _move_main(world, {DRIVE_FLAGS: 'land_into = "checked"\n'})
+    _git(world.origin, "update-ref", "refs/heads/checked", "refs/heads/main")
+    world.gh.put(3, h3 := world.change({"c.txt": "c3\n"}))
+    assert [m.pr for m in world.queue().sync()[0]] == [3]
+    landed = _git(world.origin, "rev-parse", "refs/heads/next")
+    lock = _git(world.origin, "commit-tree", f"{landed}^{{tree}}", "-p", landed, "-m", "Lock records regenerated for #3")
+    _git(world.origin, "update-ref", "refs/heads/checked", lock)
+    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}))
+    world.gh.put(3, h3b := world.change({"d.txt": "d3\n"}, base=h3))           # a fix on top of #3's landed head
+    one, three = world.queue().sync()[0]
+    assert (one.pr, one.head, three.pr, three.head) == (1, h1, 3, h3b)
+    assert _git(world.origin, "rev-parse", f"{one.commit}^1") == lock
+    _git(world.origin, "update-ref", "-d", "refs/heads/checked")               # its fetch fails: the preflight's base is `main`
+    for m, files, base in ((one, {"a.txt": "a1, again\n"}, "origin/main"), (three, {"d.txt": "d3, again\n"}, h3)):
+        world.gh.put(m.pr, new := world.change(files, base=base), ready=False)   # rewritten, not on top of the head `next` has
+        world.logs.clear()
+        pre = _preflight(world)
+        assert ready(world.gh, world.store, m.pr, f"lane-{m.pr}", MarkOnly(), preflight=pre) == 0, capsys.readouterr().err
+        said, below = next(s for s in world.logs if "preflight" in s), _git(world.origin, "rev-parse", f"{m.commit}^1")
+        assert f"merged onto `next` below its merge of #{m.pr} at {m.head[:8]} ({below[:12]})" in said, said
+        assert "conflict" not in capsys.readouterr().err and StoreLabels(world.store, log=world.logs.append).ready(m.pr, new) is True
+    world.gh.put(4, world.change({"c.txt": "c4\n"}), ready=False)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=_preflight(world)) == 1
+    assert "it conflicts with `next` at" in (err := capsys.readouterr().err) and "in c.txt (touched by #3)" in err, err
+    assert _no_worktree_left(world)
+
+
 def test_the_preflight_runs_its_checks_on_a_merge_whose_only_conflict_is_in_a_pin_rebuilt_as_the_sync_rebuilds_it(world, capsys):
     """A PR that regenerated a pin for its own input conflicts with one on `next` that did the same, only in the pin, which drive's
     sync rebuilds from the merged tree (as PoUS's TRUSTED.sha256): the preflight merges it the same way and checks that tree,

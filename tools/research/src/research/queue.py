@@ -3354,6 +3354,19 @@ def chain_of(repo: Path, base: str, ref: str) -> list[Member]:
     return out
 
 
+def queue_merges(repo: Path, base: str, ref: str) -> list[Member]:
+    """The members on ``ref`` above ``base``, oldest first, from the trailers of its first-parent merges, passing over each commit
+    without them, where `chain_of` finds none: from `main`, `next`'s chain crosses the lock commits drive adds to `checked`."""
+    out = []
+    log = _out(repo, "log", "--first-parent", "--reverse", "--format=%H%x00%B%x1e", f"{base}..{ref}")
+    for rec in filter(None, (x.strip() for x in log.split("\x1e"))):
+        commit, body = rec.split("\x00", 1)
+        t = dict(TRAILER_RE.findall(body))
+        if {"PR", "Head", "Owner"} <= set(t):
+            out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
+    return out
+
+
 @dataclass(frozen=True)
 class Move:
     """A move drive regenerated (`Queue._regenerate`), on `next` or landed: its commit, one on its base, and its word map."""
@@ -4463,8 +4476,11 @@ class Preflight:
     a `shape.frozen` key `next`'s statements still need (`dropped_entries`), naming each and the fix (`LOCK_DROP_FIX`).  A train
     most often breaks on one of (a) to (c), and a Lean break is most often one of (e) or (f).
 
-    `next` is fetched fresh; a PR already on it is merged onto the commit below its old head, as drive's next sync would rebuild
-    it.  The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
+    `next` is fetched fresh; a PR already on it is merged onto the commit below its merge there, as drive's next sync would
+    rebuild it, found by its trailers past the commits without them (the lock commits drive adds to `checked`, which a walk
+    from `main` crosses: `_fetch`).
+
+    The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
     first, within `lean_s`, while the tree is clean (a `research run` ships it), then (b) with its own environment (`sync`;
     ``python`` stands in for its interpreter), under `budget_s` together, and the worktree is removed whatever happens.  Before
     (b), the fetched fixtures under the collected suites' inputs come into it (``fetch``, by default `_fetch_fixtures`: through
@@ -4565,8 +4581,10 @@ class Preflight:
         return [f"{mv.commit[:12]} ({mv.map})" for mv in moves] if moves and set(files) <= moved else []
 
     def _fetch(self, pr: PR) -> tuple[str, str, list[Member]]:
-        """The commit to merge the head onto (`next`, below the PR's own member when it has one; `main` when there's no `next`),
-        how to name it, and `next`'s members."""
+        """The commit to merge the head onto, how to name it, and `next`'s members up to it.  The members are `next`'s merges above
+        the landing branch's tip (`main`'s when that can't be fetched), by their trailers, past the commits without them
+        (`queue_merges`); the commit is the one below the PR's newest merge among them, else `next`'s tip, or with no `next` that
+        landing tip."""
         _git(self.repo, *STALL, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/preflight/main",
              f"+refs/pull/{pr.number}/head:refs/queue/preflight/pr")
         missing = lambda: _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode   # noqa: E731
@@ -4586,8 +4604,8 @@ class Preflight:
             raise QueueError(f"git ls-remote {self.remote}: {(r.stderr or r.stdout).strip()[-200:]}")
         _git(self.repo, *STALL, "fetch", "-q", self.remote, f"+refs/heads/{BRANCH}:refs/queue/preflight/{BRANCH}")
         tip = _out(self.repo, "rev-parse", f"refs/queue/preflight/{BRANCH}")
-        members = chain_of(self.repo, main, tip)
-        if own := next((m for m in members if m.pr == pr.number), None):
+        members = queue_merges(self.repo, main, tip)
+        if own := next((m for m in reversed(members) if m.pr == pr.number), None):
             below = _out(self.repo, "rev-parse", f"{own.commit}^1")
             return below, f"`{BRANCH}` below its merge of #{pr.number} at {own.head[:8]} ({below[:12]})", members[:members.index(own)]
         return tip, f"`{BRANCH}` at {tip[:12]}", members
