@@ -251,10 +251,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - **Noise period** L′: the period of Dither's noise along K; a segment is t = L/L′ noise periods.
 - **Prefix sums** T_s: Dither's committed running sums along a segment, stored as 16-bit elements.
 - **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md` while
-  experimental). Its Lean headlines are stated for the no-fold round (`Pouw.Dither`), not v3.2's proof block. Its
-  receipt: each segment's noised prefix sums are committed as SHA-512 hiding commitments of 16 KiB, before the check
-  coin, and the sampled cells opened after it. The served PoUW moves to it; `SharedNoiseLucks` (the served H1 and J10-R
-  folds') has no place in it.
+  experimental). Its Lean covers the no-fold round (`Pouw.Dither`), not v3.2's proof block. Its receipt: each segment's
+  noised prefix sums are committed in 16 KiB SHA-512 hiding commitments before the check coin, and the sampled cells
+  opened after it. The served PoUW moves to it; `SharedNoiseLucks` (the H1 and J10-R folds') has no place in it.
 
 ## Narrower senses
 
