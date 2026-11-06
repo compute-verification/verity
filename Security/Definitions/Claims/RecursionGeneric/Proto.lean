@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Flock.RecGeneric.Plan
-public import Proofs.Flock.RecGeneric.Server
+public import Definitions.Claims.RecursionGeneric.Plan
+public import Definitions.Claims.RecursionGeneric.Server
 
 /-!
 # The inner protocol, abstract
@@ -13,7 +13,6 @@ coin's), and its knowledge error against provers that may abort after its rounds
 
 `Proto.WF` is what the recursion's proof reads of the terms: the answers decode to their coins, weights and tails are
 nonnegative, and each term's finder meets a bad run at most `d` times as often as one run is bad (`RunFinder.ReadsLe`).
-`Proto.openInner` is the protocol over a server's commitments (`Server.IVStar`), its extractor reading opened views.
 
 The inner extractor is the repetition extractor `E^rep`: it reruns the whole protocol on fresh coins, waits for accepted
 reruns, and assembles a witness from their opened views. So the recursion covers inner protocols whose knowledge
@@ -80,11 +79,5 @@ def Proto.LastCoinFree (H : Msg → Msg) (I : Proto Coin W) : Prop :=
     cs'.length = as.length → cs.dropLast = cs'.dropLast →
     (bindOC (I.V.next x as cs) fun b => OC.ret (decide (b = .acc))).eval H =
       (bindOC (I.V.next x as cs') fun b => OC.ret (decide (b = .acc))).eval H
-
-/-- **The inner protocol over a server's commitments**: its verifier is `Open(V, S)` (`Server.IVStar` at its answers),
-and its extractor reads each view opened (`Server.openView`); its relation, scope, waits, accepted reruns per wait,
-truncation, assembly, check and errors are its own. -/
-def Proto.openInner (I : Proto Coin W) (S : Server) : Claims.Recursion.Inner Coin W :=
-  { I.toInner with V := S.IVStar I.V I.ans, opens := fun v => I.opens (S.openView v) }
 
 end Claims.RecGeneric

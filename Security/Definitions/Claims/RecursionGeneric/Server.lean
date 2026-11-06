@@ -102,10 +102,4 @@ def Server.Binds (S : Server) : Prop :=
     ∃ q ∈ queries H (S.opens a row y) ++ queries H (S.opens a row' y'),
       ∃ q' ∈ queries H (S.opens a row y) ++ queries H (S.opens a row' y'), Collision H q q'
 
-/-- **The server's commitments open** (completeness, at a hash whose outputs are 64 bytes): a commit string the server
-makes for a row under a salt opens to that row under that salt. -/
-def Server.Opens (S : Server) : Prop :=
-  ∀ H : Msg → Msg, Out64 H → ∀ (row : Msg) (y : S.Salt),
-    ((S.opens ((S.commit row y).eval H).1 row y).eval H).1 = true
-
 end Claims.RecGeneric
