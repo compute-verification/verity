@@ -133,10 +133,11 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - Merge `main` in rather than rebasing, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; only a conflict it refuses needs `check.py --update` on the merged tree.
   Fetch `main` first: a checkout whose `merge.py` is older than `origin/main`'s merges by `origin/main`'s.
-- Record your lock at your own head, then mark (`ready` refuses a changed lock no records run of that head passed); a
-  passing Lean check, a clean merge of `main` over a passing head, or a commit of exactly the records under `record/` a
-  passing run kept needs no new run. Once your PR lands, drive's lock run regenerates records that differ only because
-  another PR moved what yours reads; re-record only what it can't (a refused conflict, `shape`, a move's map).
+- Recording your lock before you mark is optional: `ready` warns of a changed lock no records run of your head passed,
+  naming the run that would record it, and doesn't refuse. Once your PR lands, drive's lock run regenerates the records
+  that differ; what it can't (a refused conflict, `shape`, a move's map) fails that run, which reverts your PR, so record
+  those at your own head first (a passing Lean check, a clean merge of `main` over a passing head, or a commit of exactly
+  the records under `record/` a passing run kept needs no new run).
 
 ## Standing rulings
 
