@@ -6509,9 +6509,14 @@
    }
   },
   "Flock.RecBudget": {
-   "digest": "192cb0373479d6de770aa12b5a7ae7cee0b7765dbf83d5ff2e7ee1e0c4fbe4a9",
+   "digest": "d9557079ba590a3dd1de1d9b0f2fa16025dc3eedef2760d9081dbc01ed383720",
    "definitions": {
+    "Flock.RecBudget.MAX_RECORDED": "6ceafce6a1aca74596646843ff9a6a812a046b34a8494a25a166558200ef0d8f",
     "Flock.RecBudget.innerRows": "9d9f02af1b3113733a16fc2e335b8635e25fc80c4ac54937cd59c96a1a7aa9fb",
+    "Flock.RecBudget.recorded": "f9b560dac17ea83adef1666c128b051f435152aac8a30aa71cdb3a8b583e95ae",
+    "Flock.RecBudget.recordedAt": "b88927110838d76cc89b8de190e37a369ebfc91d4f5761c714dc5a0915f8971c",
+    "Flock.RecBudget.recordedAt._sparseCasesOn_1": "c42eea3056db9fa639bb0d892e59da777ae62a591040985efb0c1d315cbe3f22",
+    "Flock.RecBudget.recordedCalls": "81edfa451d9006aafa962d30f0a21d244ed532e0692ee36a81d0ab67f250afd4",
     "Flock.RecBudget.regs": "8ee9dea0e887dc3afe61892982235adec10ea5521bb2a948d3db219802c16d73",
     "Flock.RecBudget.statements": "cf58c0b75b752607bca16f20584d930bc60f9eb5176f3c42647d87116fbf1df1",
     "Flock.RecBudget.table": "79f1527ada8d39130fccf1633b5312c0ed2cc0f59ac5ec445ad533c80ef30561"
