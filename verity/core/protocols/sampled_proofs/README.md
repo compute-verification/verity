@@ -26,9 +26,10 @@ accepts, at most the profile's count of proof blocks are incorrect. Its top stat
 `Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
 `Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
-and the V5 guarantees cover sessions of non-templated statements only: knowledge soundness for a templated statement
-(`Flock.Tags.templated`), whose acceptance `flock_verify_sound` covers, is open until the V5 guarantees are restated
-over the statement circuit. It rests on these named assumptions:
+covers sessions of non-templated statements, as `Flock.Desc.parse` reads a flat file. The V5 guarantees
+(`Bridge.SampledKSLiveV5` and those behind it) read the file through `Flock.Desc.parseStmt`, so they also cover templated
+statements (`Flock.Tags.templated`, whose acceptance `flock_verify_sound` covers), at the circuit `HmOut.unrolled`
+builds. The top statement rests on these named assumptions:
 
 - `UniformRandomBytes`: the bytes the verifier's draw reads from its operating system are uniform (the CSPRNG
   idealized; its docstring says what that leaves out).

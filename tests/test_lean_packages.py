@@ -67,11 +67,10 @@ def test_one_mathlib():
     assert revs and len(set(revs.values())) == 1, revs
 
 
-#: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
-#: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
-#: PRs on `next` then brought, and the exclusion bounds that read a partition once a derived circuit's registration built
-#: its one-block partition (`RegisteredCircuit.ofCircuit`)
-UNWITNESSED = {"Security": 615, "Security/Properties": 237, "verity/core/service/flock": 8}
+#: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
+#: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
+#: (`check.py`'s `witness_failures`)
+UNWITNESSED = {"Security": 335, "Security/Properties": 192, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -225,9 +224,11 @@ def test_every_open_conjecture_names_a_test_that_exists():
 
 #: the size of each lock's `shape.inline`, in premises: the inline hypotheses lock-listed guarantees took that are neither
 #: a named assumption, another listed guarantee's statement nor a plain range when the inline rule came (`check.py`'s
-#: `inline_failures`), with those the PRs on `next` then brought and those `main` landed before the rule reached them; a
-#: renamed or restated premise counts twice, under both texts, until `--update` drops the one no tree prints
-INLINE = {"Security": 1960, "Security/Properties": 530, "verity/core/service/flock": 6}
+#: `inline_failures`), with those the PRs on `next` then brought and those `main` landed before the rule reached them, less
+#: the 392 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
+#: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
+#: drops the one no tree prints
+INLINE = {"Security": 1567, "Security/Properties": 528, "verity/core/service/flock": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -237,5 +238,6 @@ def test_the_inline_list_only_shrinks():
     got = {str(p.relative_to(ROOT)): sum(map(len, json.loads((p / "lean-audit.json").read_text()).get("shape", {})
                                              .get("inline", {}).values())) for p in lake_packages()}
     grown = {p: f"{n} > {INLINE.get(p, 0)}" for p, n in got.items() if n > INLINE.get(p, 0)}
-    assert not grown, (f"`shape.inline` grew in {grown}: it only shrinks; name the hypothesis as a Prop in an "
-                       f"Assumptions module and list it in the lock, or state it as a lock-listed guarantee's conclusion")
+    assert not grown, (f"`shape.inline` grew in {grown}: it only shrinks; name the hypothesis as a Prop and list it "
+                       f"in the lock (under `open`, with its issue and due date), or state it as a lock-listed "
+                       f"guarantee's conclusion")

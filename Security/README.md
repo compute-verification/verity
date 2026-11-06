@@ -68,8 +68,8 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
   - E_j, the execution block: a Boolean circuit whose inputs are θ, earlier blocks' outputs and fresh input;
   - 𝒫_j, a partition of E_j's gates into proof blocks, each block's outputs within its public size class and their
     number within a public cap;
-  - 𝓘_j, a partition of E_j's gates into inference blocks, each of exactly c gates (padded) reading at most k bits of
-    fresh input, which is anything outside θ;
+  - 𝓘_j, a partition of E_j's gates into inference blocks, each of at most c gates reading at most k bits of fresh
+    input, which is anything outside θ;
   - loc_j : gates(E_j) → registered devices × ticks, the placement.
 
   a_j, E_j, 𝒫_j, 𝓘_j and loc_j are private, their padded counts public. The registered circuit is D = E_1 ‖ … ‖ E_n.
@@ -379,7 +379,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Step | Lean | Status |
 |---|---|---|
 | The actual circuit | `Accounting.Placed`, `Accounting.Placed.region` | Defined |
-| Registered objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Declaration`, `Verity.Committed`; the site and its registration log, `Verity.Site` and `Verity.Registration`; B, a_j and loc_j not yet in Lean | Partly defined |
+| Registered objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.RegisteredCircuit`, `Verity.Committed`; the site and its registration log, `Verity.Site` and `Verity.Registration`; B, a_j and loc_j not yet in Lean | Partly defined |
 | Coverage | `Nci.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
 | Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.MinEntropyHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
@@ -393,7 +393,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Protocol soundness | `Accounting.Slowdown.restricted`; `Verity.Soundness` not yet in Lean | Open |
 | Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
 | PoUW | `Accounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
-| The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.Complies` | Proved; k_F (what faulty blocks inject) and k_a (the advice's share) are unbounded |
+| The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.CompliesRate`, `Nci.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `NciCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what faulty blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.PeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
@@ -404,8 +404,9 @@ None of these is assumed silently; each would restate the conclusion:
 ## Three trees
 
 - `Definitions/` (package `security`, with `Models.lean`): the spec, the part a reader reads. Each area (`Core`, `Pouw`,
-  `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its named assumptions (`Assumptions`) and its
-  guarantee statements (`Guarantees`), each a `def G : Prop`.
+  `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its premises (`Assumptions`) and its guarantee
+  statements (`Guarantees`), each a `def G : Prop`. The real assumptions, the few the guarantees rest on without proof,
+  are declared in one module, `Definitions/Assumptions.lean`; a premise declared anywhere else is open (The lock).
 - `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each protocol
   runs, one `Properties.<Protocol>` module per protocol.
 - `Proofs/` (package `security_proofs`): every proof, `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each
@@ -420,15 +421,22 @@ guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by m
 
 ## The lock
 
-Each package's `lean-audit.json` is its lock. For each guarantee it records the signature, the named assumptions among
-its hypotheses and a SHA-256 hash of its type, and, per module, every definition the statements read with a digest. The
+Each package's `lean-audit.json` is its lock. For each guarantee it records the signature, its premises (the named
+assumptions, the domain hypotheses, the open premises, and the `Prop`s of an assumptions module its statement only reads) and a SHA-256 hash of
+its type, and, per module, every definition the statements read with a digest. A named assumption, under `assumptions`, is
+declared in `Definitions/Assumptions.lean` (`assumptions_module`); every other named premise is open, under `open` with
+the Linear issue that discharges it and its due date, and `--update` adds none on its own, so that list only shrinks. A
+hypothesis that is part of what its guarantee says (a domain, a scope, the layer below's guarantee) is under `domain`
+with a one-line `why` instead, and a guarantee with an honest witness must have that witness conclude it. The
 Lean check (`tools/verity/lean/check.py`) builds every file, replays every declaration through Lean's kernel, and fails
 when:
 
 - a declaration uses an axiom other than `propext`, `Classical.choice` and `Quot.sound` (so no `sorry`, `axiom` or
   `native_decide`), or an option that skips the kernel;
-- a guarantee has a `Prop` hypothesis that is not a named assumption: a `Prop` listed by name in the lock, with an owner
+- a guarantee has a `Prop` hypothesis that is not a named premise: a `Prop` listed by name in the lock, with an owner
   and its definition's digest;
+- a premise is listed under the wrong kind (a named assumption declared outside `Definitions/Assumptions.lean`), or an
+  open premise is not listed;
 - a statement reads a definition outside the spec, or breaks `layers` or `trees`;
 - a claim definition lacks its witnesses: a theorem that it fails at a toy instance, and one per deployed record that its
   checkable antecedents hold there;
