@@ -1709,24 +1709,24 @@ def state_charge(case: Mapping[str, Any], public: Mapping[str, Any], audits: int
     none); ``tied``, the tied audits (the public's ``scans[j].tied``, else each of the commitment's ``audits``,
     `TIED_ALL`), and ``with_record``, those whose parameters state a circuit record, the only ones whose stateFree may be
     less than their free; and ``missing`` (`STATE_UNCOVERED`) where the charge is free and one is. A lock that can't be
-    read gives none."""
+    read gives none, and ``unread`` names it, by its path under the tree where it is one, with why."""
     seen: dict[str, str | None] = {}
+    unread: list[str] = []
     for lock in locks:
         try:
             doc = json.loads(lock.read_text())
-            if STATE_HELD not in doc["guarantees"]:
-                continue
-            seen[STATE_HELD] = statement(doc, STATE_HELD)
-            seen |= {d: h for r in doc["reads"].values() if STATE_HELD in (r.get("guarantees") or ())
-                     for d, h in (r.get("definitions") or {}).items() if d in STATE_PINS and d != STATE_HELD}
-        except (OSError, ValueError, KeyError, TypeError, AttributeError):
-            continue
+            if STATE_HELD in doc["guarantees"]:
+                seen[STATE_HELD] = statement(doc, STATE_HELD)
+                seen |= {d: h for r in doc["reads"].values() if STATE_HELD in (r.get("guarantees") or ())
+                         for d, h in (r.get("definitions") or {}).items() if d in STATE_PINS and d != STATE_HELD}
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+            unread.append(f"{lock.relative_to(ROOT) if lock.is_relative_to(ROOT) else lock}: {type(e).__name__}")
     unpinned = {k: seen.get(k) for k, pin in STATE_PINS.items() if pin is None or seen.get(k) != pin}
     params = case["params"].get("audits") or []
     tied = sorted({int(i) for s in public["scans"] for i in (s["tied"] if s.get("tied") is not None else range(audits))})
     with_record = [i for i in tied if i < len(params) and isinstance(params[i], Mapping) and "circuit" in params[i]]
     out = {"charge": "free" if unpinned else "stateFree", "is": STATE_CHARGE, "tied": tied, "with_record": with_record}
-    return out | ({"unpinned": unpinned} if unpinned else {}) | (
+    return out | ({"unpinned": unpinned} if unpinned else {}) | ({"unread": unread} if unread else {}) | (
         {"missing": STATE_UNCOVERED} if unpinned and with_record else {})
 
 

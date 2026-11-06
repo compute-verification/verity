@@ -802,6 +802,7 @@ def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it
     assert (of["open"], of["K"]) == (["free-count"], KR)
     (why,) = of["premises"]["unread"]
     assert why.startswith(f"{props}: {error}: ")
+    assert of["state_charge"]["unread"] == [f"{props}: {error}"]
     (why,) = OR.premises((lock, props), root=tmp_path / "tree")["unread"]
     assert why.startswith(f"Security/Properties/lean-audit.json: {error}: ") and str(tmp_path) not in why
 
@@ -1077,15 +1078,21 @@ def test_a_published_advice_registration_stating_no_cap_of_at_least_1_bit_refuse
     assert rec["periods"] == {"missing": f"no figure of record: {why}"} and rec["bound"]["K"] == K
 
 
-def test_a_commitment_the_record_cant_read_leaves_no_figure_of_record_and_no_periods(tmp_path):
+def test_a_commitment_the_record_cant_read_leaves_no_figure_of_record_and_no_bound(tmp_path):
+    """The case's commitment holds the period's audits. Where the record can't read it, the figure of record is its
+    error (the audits' caps), and scan-state-pinned can't say whether an audit's window commits the scan's state, so it
+    doesn't hold: the network certifier's verdict is not established and there is no bound."""
     out = accepted(tmp_path)
-    case = json.loads((out / OR.CASE).read_text())
-    (out / OR.CASE).write_text(json.dumps(dict(case, commitment="00")))
+    case = dict(json.loads((out / OR.CASE).read_text()), commitment="00")
+    (out / OR.CASE).write_text(json.dumps(case))
+    fig, cap = OR.figure(out, case, PUBLIC, K, {"open": []})
+    assert fig == cap and fig["error"].startswith(f"{OR.CASE} commitment: JSONDecodeError")
     rec = record(out)
-    assert rec["bound"]["of_record"]["error"].startswith(f"{OR.CASE} commitment: JSONDecodeError")
-    assert rec["advice_charge"]["cap"] == rec["bound"]["of_record"]
-    assert rec["periods"]["missing"].startswith("no figure of record") and "periods_tight" not in rec
-    assert rec["bound"]["K"] == K and rec["bound"]["connections"]["count"] == 252
+    assert rec["checked"][OR.SCAN_STATE_PINNED] == {
+        "is": OR.CHECKED[OR.SCAN_STATE_PINNED], "holds": False,
+        "why": f"{OR.CASE}'s commitment doesn't list the period's audits: JSONDecodeError"}
+    assert rec["verdicts"]["the network certifier"]["open"] == [OR.SCAN_STATE_PINNED]
+    assert "missing" in rec["bound"] and rec["periods"] == {"missing": "no bound"} and "periods_tight" not in rec
 
 
 def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever_the_traffic(tmp_path):
