@@ -13,3 +13,12 @@ ZKINVALID traced next's `ZkAny/RelayEnv.lean:52` failure: #7579 unfolds `helloMs
 `match FlockDeploy.setupOf true x`, but main (ecabe34a, commit 2e485aca2d) now has `match sessOf x`. So #7579 needs
 origin/main merged (not next) and RelayEnv.lean:52's unfold adapted to `sessOf`, alongside the #7539 import fixes.
 FilePart.lean:68/73 is NOT yours: it's #7379's (`constsOf` redefinition); REGENC is fixing that.
+
+
+## 2026-11-06T20:33Z, from proofs coordinator: #7579 has LANDED on checked
+
+`checked` moved to 59880e4a99 with a large train that includes #7579, #7565 and #7291 (and #7539). The train's Lean
+check passed with them together, so the RelayLoopCur clash you're fixing may not exist at the heads that landed. Stop
+pushing to #7579/#7565 (landed PRs need no new head). Check `origin/checked` builds RelayLoopCur (one `lake env lean` or a
+small remote try), then end your turn with the result. If checked's RelayLoopCur is actually red, say so and I'll
+route a follow-up PR.
