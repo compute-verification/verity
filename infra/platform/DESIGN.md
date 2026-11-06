@@ -54,7 +54,7 @@ From what failed on Cursor (the incident record is in the report page, not here)
 | --- | --- | --- |
 | An agent loop and its model access | The harness's own Claude Code or Codex loop, with models through the AI Gateway | Replaced |
 | A VM per agent, booted from our environment | A persistent named Vercel Sandbox per lead and per worker, with the repository cloned once and fetched each turn | Replaced |
-| Wakes: Slack and Linear apps, thread subscriptions, timers | One inbox table. Replies in a lead's inbox thread and its Linear team's issue events arrive at our endpoints, ticks come from cron, and jobs, workers, leads and MCP write events directly | Replaced, with no lapses |
+| Wakes: Slack and Linear apps, channel and thread subscriptions, timers | One inbox table. Replies in a lead's inbox thread, top-level posts in its subscribed channels, replies in threads it watches and its Linear team's issue events arrive at our endpoints, ticks come from cron, and jobs, workers, leads and MCP write events directly | Replaced, with no lapses |
 | Sending to a running agent (missing; the guard's inbox works around it) | An event that arrives mid-turn waits in the inbox for the next turn | Fixed |
 | Agent identity (Cursor OIDC, which the GitHub broker trusts) | The project's Vercel OIDC, with the lead named in `X-Verity-Agent` | Needs the broker to trust it |
 | Team secrets on every VM | The platform project's environment, sealed per-lead gateway keys, and header rules at the sandbox firewall | Narrower |
@@ -157,6 +157,8 @@ the tool call, so a retried step finds what it already made.
   queue, whichever comes first, once.
 - **`ask_lead(lane, question)`** puts an `ask` event in the other lead's inbox. Its answer comes back as an `answer`
   event in the asker's thread.
+- **`watch_thread(channel, thread_ts, days?)`** wakes the lead on every reply in that thread for up to 30 days;
+  calling it again renews it (Section 3.5).
 
 ### 3.5 Slack and MCP
 
@@ -172,6 +174,12 @@ message is posted there with `research msg reply --as LANE`, run in the lead's s
 research's rule says, a lead on Cursor included, and both kinds of lead can talk while some have moved. The lead uses
 `research msg` for everything else (asks, announcements, closing an ask, Linear), as its skills say. A reply research
 refuses (over 120 words in the front door, say) is recorded and handed back to the lead once.
+
+A lead on Cursor also subscribes to what `research msg subscriptions --as LANE` lists: top-level posts in the channels
+its handle subscribes to in the registry (`#agent-alerts` and `#ask-daniel` for @infra, say), and each thread a person
+may answer in, such as its `#ask-daniel` card. On the platform the first are registered (`swap register --subscribe
+C1,C2`) and never lapse, and the second are the `watch_thread` host tool, which the instructions name wherever the
+skills say `subscribe_slack_thread`. A post by the lead itself wakes neither.
 
 A lead holds its handle's inbox route under a stable agent id (`swap id LANE`, a UUID derived from the lane), which
 its sandbox exports as `RESEARCH_AGENT_URL`, so `--as LANE` passes research's holder check. Moving a lead is
@@ -205,7 +213,7 @@ firewall like GitHub's (Section 6).
 | R6, P1, P4 | Each event is a row before anything else happens; a lease means one turn at a time per lead; a wake never waits on a running turn; events wait in the inbox and nothing lapses |
 | R7, P3 | `workerWorkflow`; a worker's failure is reported to its lead like its success; workers are runs, not agents, so no seat cap applies |
 | R8, P6 | `submit_job`, with the instructions forbidding heavy work in the sandbox; job ends arrive by callback or by polling |
-| R9 | Doorbells in each lead's inbox thread (`/api/slack/events`) and replies through `research msg`, as on Cursor; Linear issue events (`/api/linear/webhook`); and `/api/mcp` with `ask_lead`, `assign`, `get_answer`, `status`, `search_transcripts` |
+| R9 | Doorbells in each lead's inbox thread, its subscribed channels and its watched threads (`/api/slack/events`), and replies through `research msg`, as on Cursor; Linear issue events (`/api/linear/webhook`); and `/api/mcp` with `ask_lead`, `assign`, `get_answer`, `status`, `search_transcripts` |
 | R10 | The cron's recovery rules (Section 9); visible failed turns; force-claimed hooks |
 | R11 | One project and one database; exact pins; `scripts/rot-check.sh`, run weekly in a sandbox by `rotCheckWorkflow` |
 
@@ -217,6 +225,7 @@ and this record is what lasts.
 | Entity | Table | What a row is |
 | --- | --- | --- |
 | Lead | `leads` | One lead: lane, charter, doc and `doc_rev`, harness, model, inbox (channel and thread ts, unique), Linear team key (unique), granted `apis`, cron interval and next tick, monthly budget, gateway key id and sealed key, status (`active`, `paused`, `retired`), current run id, lease |
+| Watch | `watches` | What else wakes a lead on Slack: a channel's top-level posts (no thread, no expiry), or every reply in one thread until its expiry |
 | Inbox event | `events` | One thing for a lead: source (`slack`, `linear`, `cron`, `job`, `worker`, `mcp`, `lead`), kind, payload, `reply_to` (a Slack thread, an asking lead, or an MCP caller), `dedupe_key` (unique), `turn_id` once claimed; pending events are indexed |
 | Turn | `turns` | One harness turn of a lead or worker: run id, status, harness, model, start and end, token counts by kind, `cost_usd`, final text, error, doc revision before and after |
 | Transcript | `transcript_parts` | One part of a turn, in order: instructions, prompt, reasoning, text, tool call, tool result, file change, error, finish, post, post error; JSON content plus searchable text |
@@ -367,7 +376,10 @@ Lean builds don't fit a sandbox: they peak near 15 GB against 16 GB at most, so 
 - **One lead, about 5 minutes.** The Cursor lead writes its handoff. `swap id LANE` prints the lead's stable agent id,
   and `research msg names open --as LANE --succeeds --holder ID` moves the handle's inbox route to it, keeping the
   inbox thread, whose channel and ts it prints. `swap register` imports the handoff as the doc, sets the inbox, Linear
-  team, model, budget and APIs, starts a run and kicks it. A `research msg send --to @LANE` then gets its reply in its
+  team, subscribed channels (from `research msg subscriptions --as LANE`), model, budget and APIs, starts a run and
+  kicks it. The kick asks the lead to `watch_thread` each thread it still awaits a person in (its open `#ask-daniel`
+  cards, which `research msg ask-daniel pages --as LANE` lists), since the Cursor lead's thread subscriptions don't
+  move with it. A `research msg send --to @LANE` then gets its reply in its
   thread, and the Cursor agent is archived.
 - **All leads, about 10 minutes more** with `swap all LEADS.json`, built from the handle registry and the inbox routes.
 
@@ -392,7 +404,7 @@ and Slack.
 ## 12. Open questions
 
 1. **Slack.** Recommended: a Slack app of the platform's own that only receives events (`channels:history` in
-   `#agent-coordination`), while every post goes out under Verity's bot through `research msg`, so research's own-post
+   `#agent-coordination` and every channel a lead subscribes to or watches a thread in), while every post goes out under Verity's bot through `research msg`, so research's own-post
    and doorbell tests hold unchanged. The other option is pointing the team app's events at the platform, which takes
    them from the slack-events service.
 2. **The broker.** It must trust the platform project's Vercel OIDC subject. A project-level identity lets any code in
@@ -432,7 +444,7 @@ Names only. Values go into the project's environment with `vercel env add`, neve
 - **`DATABASE_URL`**, a Postgres database (a Neon project or branch).
 - **A Slack app for the platform that only receives events**: its **`SLACK_SIGNING_SECRET`**. It needs the
   `channels:history` scope and the `message.channels` event, sent to `/api/slack/events`, and its bot is invited to
-  `#agent-coordination`. It never posts.
+  `#agent-coordination`, `#ask-daniel`, `#agent-alerts` and every other channel a lead subscribes to. It never posts.
 - **`SLACK_BOT_TOKEN`**: Verity's own bot token, held by @infra, which `research msg` posts under and tells its own
   posts and doorbells by. The platform brokers it into each lead's sandbox and posts its alerts with it.
 - **`LINEAR_WEBHOOK_SECRET`**: the signing secret of a Linear webhook on Issue events, pointed at `/api/linear/webhook`.
@@ -461,7 +473,7 @@ weekly in a fresh sandbox and posts the result. An upgrade is a change to the pi
 
 ## 15. Tests
 
-`npm run check` runs the typecheck, the unit suite (26 tests) and the end-to-end suite (21 tests, about 10 seconds).
+`npm run check` runs the typecheck, the unit suite (26 tests) and the end-to-end suite (22 tests, about 10 seconds).
 The unit suite parses every doorbell in research's own routing vectors
 (`tools/research/tests/slack_routing_vectors.json`), so a change to the doorbell format fails here. The end-to-end
 suite runs the whole platform in one process, with:
@@ -474,6 +486,7 @@ It covers:
 
 - doorbells waking a lead, and its reply in the doorbell's thread, a channel's included;
 - only the inbox waking a lead, and none of its own or the platform's posts;
+- subscribed channels' top-level posts, and replies in a thread the lead watches from a turn;
 - Linear issue events, signed and routed by team;
 - dedupe and signatures;
 - a refused reply handed back once;
