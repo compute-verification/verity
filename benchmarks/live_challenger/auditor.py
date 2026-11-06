@@ -199,7 +199,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
   --prompts --tokens 24`. `--watermark` (recorded and passed on only when given) has the warden also send the
   endpoint, through the same tunnel, the watermark stream an engine admitting at certified ticks waits on
-  (`verity.core.protocols.certifier.release`: `POST /verity/watermark`, one line `t n` a tick); the warden reads nothing
+  (`verity.core.protocols.certifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
+  bucket t its server connections lost); the warden reads nothing
   back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt

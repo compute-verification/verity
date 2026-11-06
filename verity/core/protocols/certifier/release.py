@@ -7,16 +7,20 @@ order it reads their bodies in, and the advice needn't carry the permutation bet
 
 **The watermark** is a stream on which the server learns that a bucket has closed. The network certifier opens one
 connection to the server for it and sends one HTTP/1.1 request, `POST /verity/watermark`, whose head (`watermark_head`)
-names the run. Its chunked body has one chunk a tick (`watermark_chunk`), the ASCII line `t n`: bucket t has closed, and
-the releases of buckets ≤ t are exactly those numbered N < n. t steps by 1 from 0, n never decreases, and the run's end
-sends the terminating chunk (`WATERMARK_END`). The line is sent once bucket t's releases are written, but a release can
-still reach the server after it, on its own connection (one that opened late), so a server that admits at bucket t waits
-for every N < n, which `read_watermark` gives. The network certifier never reads the server's side of that connection
-and never waits on it.
+names the run. Its chunked body has one chunk a tick (`watermark_chunk`), the ASCII line `t n`, then any lost releases
+` l …`: bucket t has closed, the releases of buckets ≤ t are exactly those numbered N < n, and each l, rising, is a
+release of bucket t that its server connection lost, closing, failed or ended before the request was written whole
+and its transport's buffer emptied. t steps by 1 from 0, n never decreases, and the run's end sends the terminating
+chunk (`WATERMARK_END`). Line t is sent only once each release of bucket t has been written or lost, so a server that
+has read line t has been sent every N < n that no line through t names. Those come on their own connections, which it
+may read after line t, so a server that admits at bucket t waits for each of them, and skips a lost one should its
+bytes still arrive (`read_watermark` gives t, n and the lost). The network certifier never reads the server's side of
+that connection and never waits on it.
 
 The headers and the watermark are the certifier's, sent to the server only. The link's frames, the network certifier's
 cells and every record hold the client's bytes, so what is certified and tied (cell counts, prompt lengths, the I/O
-tie's request frames) is the same with them or without. N, A and n are read back from the signed ingress records: the
+tie's request frames) is the same with them or without. A lost release is the server connection's state, which the
+server sees itself. N, A and n are read back from the signed ingress records: the
 network certifier's `END` cells in record order and the bucket of each (`warden.Warden`), and on the active certifier's
 link request s in `active.Requests`' cut, which ends before s + 1 starts, so it is release s − 1
 (`benchmarks/network_traces/active_replay.ReleaseProxy`, which sends no bucket: it forwards a request's head before its
@@ -26,12 +30,13 @@ unchanged. A live shim that rebuilds the POST copies the headers onto it (`relea
 from __future__ import annotations
 
 import re
+from typing import Sequence
 
 RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = b"x-verity-release", b"x-verity-release-run", b"x-verity-release-bucket"
 WATERMARK_PATH = b"/verity/watermark"
 WATERMARK_END = b"0\r\n\r\n"
 _REQUEST_LINE = re.compile(rb"[!#$%&'*+.^_`|~0-9A-Za-z-]+ [^\s]+ HTTP/1\.[01]")
-_LINE = re.compile(rb"(0|[1-9][0-9]*) (0|[1-9][0-9]*)\n")
+_LINE = re.compile(rb"(0|[1-9][0-9]*) (0|[1-9][0-9]*)((?: (?:0|[1-9][0-9]*))*)\n")
 
 
 def _count(name: str, value: object) -> int:
@@ -107,20 +112,31 @@ def watermark_head(run: bytes) -> bytes:
             run.hex().encode() + b"\r\ncontent-type: text/plain\r\ntransfer-encoding: chunked\r\n\r\n")
 
 
-def watermark_chunk(t: int, n: int) -> bytes:
-    """Tick t's chunk of the watermark stream: the line `t n`, bucket t closed with n releases through it."""
-    line = b"%d %d\n" % (_count("a bucket", t), _count("a release count", n))
+def _rising(lost: Sequence[int], least: int, n: int) -> bool:
+    return all(least <= k < n for k in lost) and all(a < b for a, b in zip(lost, lost[1:]))
+
+
+def watermark_chunk(t: int, n: int, lost: Sequence[int] = ()) -> bytes:
+    """Tick t's chunk of the watermark stream: the line `t n`, bucket t closed with n releases through it, then each of
+    `lost`, the releases below n that their server connections lost, rising."""
+    line = b"%d %d" % (_count("a bucket", t), _count("a release count", n))
+    if not _rising([_count("a lost release", k) for k in lost], 0, n):
+        raise ValueError(f"the lost releases rise below n = {n}, not {list(lost)!r}")
+    line += b"".join(b" %d" % k for k in lost) + b"\n"
     return b"%x\r\n%s\r\n" % (len(line), line)
 
 
-def read_watermark(line: bytes, last: tuple[int, int] | None = None) -> tuple[int, int]:
-    """(t, n) of a watermark line, `t n` and its newline, or ValueError unless it follows `last`, the line before it:
-    t one past last's (0 first) and n at least last's, so the watermark only advances."""
+def read_watermark(line: bytes, last: tuple[int, ...] | None = None) -> tuple[int, int, tuple[int, ...]]:
+    """(t, n, lost) of a watermark line, `t n`, any lost releases and its newline, or ValueError unless it follows
+    `last`, the line before it (its (t, n, …)): t one past last's (0 first), n at least last's, and the lost rising
+    from last's n to below n, so the watermark only advances and names each lost release once."""
     m = _LINE.fullmatch(line)
     if m is None:
-        raise ValueError(f"a watermark line is 't n' and a newline, not {line[:40]!r}")
-    t, n = int(m[1]), int(m[2])
+        raise ValueError(f"a watermark line is 't n', any lost releases and a newline, not {line[:40]!r}")
+    t, n, lost = int(m[1]), int(m[2]), tuple(int(k) for k in m[3].split())
     want, least = (0, 0) if last is None else (last[0] + 1, last[1])
     if t != want or n < least:
         raise ValueError(f"watermark ({t}, {n}) after {last}: t steps by 1 from 0 and n never decreases")
-    return t, n
+    if not _rising(lost, least, n):
+        raise ValueError(f"watermark ({t}, {n}) after {last}: its lost releases {list(lost)} rise from {least} below n")
+    return t, n, lost

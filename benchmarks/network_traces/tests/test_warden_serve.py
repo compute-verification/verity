@@ -449,7 +449,7 @@ def test_the_fake_endpoint_reads_the_watermark_stream_to_its_end_and_answers_not
     isn't a completion request, so the fake endpoint takes all of it, answers nothing and closes; `serve --watermark`
     and `rehearse --watermark` both take the flag."""
     stream = watermark_head(bytes(32)) + b"".join(watermark_chunk(t, n) for t, n in ((0, 0), (1, 2), (2, 2))) + \
-        WATERMARK_END
+        watermark_chunk(3, 4, [2]) + WATERMARK_END
 
     async def main() -> bytes:
         server = await asyncio.start_server(lambda r, w: ws.fake_endpoint(r, w, sleep=_no_sleep), "127.0.0.1", 0)

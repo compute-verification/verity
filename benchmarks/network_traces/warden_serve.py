@@ -13,8 +13,9 @@ Nothing here is the network certifier's but bytes. Tonight's clients send HTTP/1
 half-closes toward a server). The server gets each request whole at its release, with its place in the network
 certifier's release order, its release bucket and the network certifier's run id (`release`), which `deployment.json`
 names (`run_id`). With `--watermark` the network certifier also sends the server the watermark stream (`release`'s
-`POST /verity/watermark`, one line `t n` a tick) on a connection of its own, which it never reads; `warden.json` keeps
-its last line and why it stopped, if it did (`watermark`).
+`POST /verity/watermark`, one line `t n` a tick, naming the releases its server connections lost) on a connection of
+its own, which it never reads; `warden.json` keeps its last line, the lost releases and why it stopped, if it did
+(`watermark`).
 
 **What it can't enforce here.**
 - Run directly, the network certifier runs on the server's host (`trusted-host` stands for the auditor's host). The
@@ -793,7 +794,8 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
            "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors,
            "ticks_ms": [round(x, 3) for x in lateness]}
     if watermark:
-        log["watermark"] = {"last": warden.watermarked and list(warden.watermarked), "error": warden.watermark_error}
+        log["watermark"] = {"last": warden.watermarked and list(warden.watermarked), "lost": warden.watermark_lost,
+                            "error": warden.watermark_error}
     if warden.paced is not None:
         log["paced"] = {"ms": paced_ms, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
                         "releases": [[r.t, round(r.arrived * 1000, 3), round(r.start * 1000, 3),
@@ -1210,7 +1212,8 @@ def parser() -> argparse.ArgumentParser:
                             "before the next boundary); 0: the warden writes each bucket on its loop")
         q.add_argument("--watermark", action="store_true",
                        help="also send the server the watermark stream, a chunked POST /verity/watermark on its own "
-                            "connection, one line 't n' a tick: bucket t has closed and its releases are N < n")
+                            "connection, one line 't n l...' a tick: bucket t has closed, its releases are N < n, and "
+                            "each l is one of its releases that the release's server connection lost")
         for field in dataclasses.fields(WardenParams):
             q.add_argument(f"--{field.name.replace('_', '-')}", type=int, default=SCHEDULE[field.name])
     s.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT")

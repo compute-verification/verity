@@ -96,7 +96,9 @@ def test_the_watermark_stream_is_one_chunked_post_of_one_line_a_tick():
     fields = dict(f.split(b": ", 1) for f in head[:-4].split(b"\r\n")[1:])
     assert fields[RUN_HEADER] == RUN.hex().encode() and fields[b"transfer-encoding"] == b"chunked"
     assert watermark_chunk(0, 0) == b"4\r\n0 0\n\r\n" and watermark_chunk(599, 12) == b"7\r\n599 12\n\r\n"
-    stream = b"".join(watermark_chunk(t, n) for t, n in [(0, 0), (1, 2), (2, 2), (3, 10)]) + WATERMARK_END
+    assert watermark_chunk(3, 10, [2, 9]) == b"9\r\n3 10 2 9\n\r\n"
+    stream = b"".join(watermark_chunk(t, n, lost) for t, n, lost in [(0, 0, ()), (1, 2, ()), (2, 2, ()),
+                                                                      (3, 10, (2, 9))]) + WATERMARK_END
     lines, rest = [], stream
     while True:
         size, _, rest = rest.partition(b"\r\n")
@@ -106,26 +108,37 @@ def test_the_watermark_stream_is_one_chunked_post_of_one_line_a_tick():
         lines.append(rest[:int(size, 16)])
         assert rest[int(size, 16):int(size, 16) + 2] == b"\r\n"
         rest = rest[int(size, 16) + 2:]
-    assert lines == [b"0 0\n", b"1 2\n", b"2 2\n", b"3 10\n"]
+    assert lines == [b"0 0\n", b"1 2\n", b"2 2\n", b"3 10 2 9\n"]
     with pytest.raises(ValueError, match="a run id is non-empty bytes"):
         watermark_head(b"")
     for t, n in ((-1, 0), (0, -1), (True, 0), (0, 1.0)):
         with pytest.raises(ValueError, match="is a non-negative integer"):
             watermark_chunk(t, n)
+    for lost in ((10,), (3, 3), (5, 2), (-1,)):
+        with pytest.raises(ValueError, match="rise below n|is a non-negative integer"):
+            watermark_chunk(3, 10, lost)
 
 
 def test_a_watermark_line_is_read_only_when_it_advances():
-    """Each line is t one past the last line's, from 0, with n at least the last's: one that skips or repeats a bucket,
-    or lowers n, is refused, as is anything but two decimal counts and a newline."""
+    """Each line is t one past the last line's, from 0, with n at least the last's, and the lost releases it names
+    rising from the last line's n to below its own: one that skips or repeats a bucket, lowers n, or names a release
+    of another bucket, out of order or twice, is refused, as is anything but decimal counts, single spaces and a
+    newline."""
     last = None
-    for t, n in [(0, 0), (1, 0), (2, 3), (3, 3), (4, 9)]:
-        last = read_watermark(b"%d %d\n" % (t, n), last)
-        assert last == (t, n)
-    for line in (b"6 9\n", b"4 9\n", b"5 8\n", b"3 9\n"):
+    for t, n, lost in [(0, 0, ()), (1, 0, ()), (2, 3, (0, 2)), (3, 3, ()), (4, 9, (3,)), (5, 9, ())]:
+        line = b"%d %d" % (t, n) + b"".join(b" %d" % k for k in lost) + b"\n"
+        last = read_watermark(line, last)
+        assert last == (t, n, lost)
+    for line in (b"7 9\n", b"5 9\n", b"6 8\n", b"4 9\n"):
         with pytest.raises(ValueError, match="t steps by 1 from 0 and n never decreases"):
             read_watermark(line, last)
+    for line in (b"6 12 8\n", b"6 12 12\n", b"6 12 10 9\n", b"6 12 10 10\n"):
+        with pytest.raises(ValueError, match="rise from 9 below n"):
+            read_watermark(line, last)
+    assert read_watermark(b"6 12 9 11\n", last) == (6, 12, (9, 11))
     with pytest.raises(ValueError, match="t steps by 1 from 0"):
         read_watermark(b"1 0\n")
-    for line in (b"5 9", b"5 9\r\n", b"05 9\n", b"5  9\n", b"+5 9\n", b"5 -9\n", b" 5 9\n", b"5 9\n\n", b"\xd9\xa1 9\n"):
+    for line in (b"6 9", b"6 9\r\n", b"06 9\n", b"6  9\n", b"+6 9\n", b"6 -9\n", b" 6 9\n", b"6 9\n\n", b"\xd9\xa1 9\n",
+                 b"6 12 09\n", b"6 12  9\n", b"6 12 9 \n"):
         with pytest.raises(ValueError, match="a watermark line is"):
             read_watermark(line, last)

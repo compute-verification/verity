@@ -1974,16 +1974,21 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   `deployment.json`), and `x-verity-release-bucket: a`, the bucket of that `END`. The server gets a request whole at
   its `END`'s release, and nothing of a connection that fails before it.
 - With the watermark (`Warden(watermark=…)`, `warden_serve.py serve --watermark`), the server also gets one stream,
-  `POST /verity/watermark`, chunked. At the end of each tick t, after that tick's releases are written or held for
-  their server connections, the stream carries the line `t n`, n the `END`s released through bucket t. So the releases
-  of buckets ≤ t are exactly N < n, t steps by 1 and n never decreases. A server whose engine admits at logical time
-  T exactly the releases of buckets ≤ T, in N order, waits for line T and every N < n_T: a release can reach it after
-  its bucket's line, on a server connection that opened late. The network certifier never reads that stream and no
-  tick waits on it: one holding more than `WRITE_BACKLOG` unwritten is closed.
+  `POST /verity/watermark`, chunked, with one line `t n l…` for each tick t: n the `END`s released through bucket t,
+  and each l, rising, a release of bucket t that its server connection lost (closing, its connect failed or the
+  connection ended before the request was written whole and its transport's buffer emptied). So the releases of
+  buckets ≤ t are exactly N < n, t steps by 1 and n never decreases. Tick t makes the line and it goes out, in order,
+  only once each release of bucket t has been written or lost: a release whose connection is still opening, or whose
+  bytes are still buffered, holds its line and the later ones, never a tick, at most until its connection ends. A
+  server whose engine admits at logical time T exactly the releases of buckets ≤ T, in N order, waits for line T and
+  every N < n_T that no line through T names lost: each has been handed to its connection's socket before line T, but
+  on a connection of its own, so the server may read line T first. A release named lost may still arrive (a close
+  sends what its transport held); the engine skips it. The network certifier never reads that stream and no tick waits
+  on it: one holding more than `WRITE_BACKLOG` unwritten is closed.
 - The headers and the stream are on the server's side only. No cell or record holds them, so the cell counts, the
   prompt lengths and the I/O tie's request frames are unchanged. They reach the server, never the client, so the leak
-  bound is unchanged. N, a and n are functions of the signed ingress record, which the prover holds as witness, and
-  nothing reaches the auditor. No guarantee reads them: the replay takes each step's arrivals from the certified
+  bound is unchanged. N, a and n are functions of the signed ingress record, which the prover holds as witness, a
+  line's lost releases the prover's own server connections' state, and nothing reaches the auditor. No guarantee reads them: the replay takes each step's arrivals from the certified
   records, so a server that misreads the stream changes only its own schedule, which the advice charges. The active
   certifier's served proxy adds the release order and the run (`active_replay.ReleaseProxy`), with N = s − 1 for
   request stream s, but no bucket: it forwards a request's head before its last frame.
