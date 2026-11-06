@@ -2,29 +2,29 @@
 """Cursor's `beforeShellExecution` hook (`.cursor/hooks.json`): refuses shell commands that would print secrets wholesale.
 
 Cursor runs every agent shell command through it, on any VM, so it holds where the redacting `env` (`install.sh`) was never
-installed. A multi-line secret defeats `env | cut -d= -f1`: its later lines print as if they were names, which is how a line
-of the Nebius key reached agents' transcripts at least five times by 6 Oct. Refused, anywhere in the command (pipelines,
+installed. A multi-line secret defeats `env | cut -d= -f1`: its later lines print as if they were names, and so reach an
+agent's transcript. Refused, anywhere in the command (pipelines,
 `$(...)`, `bash -c`, `ssh HOST CMD`, `research pods ssh POD -- CMD`): `env` or `printenv` with nothing to run, `printenv` of a
 secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, reading `/proc/*/environ`, and
-`tmux show-environment` (`showenv`) with no name or a secret's (11 Oct: piping tmux's global environment through `cut -d= -f1`
-printed the Nebius key's lines again).
+`tmux show-environment` (`showenv`) with no name or a secret's (tmux's global environment through `cut -d= -f1` prints a
+multi-line key's lines too).
 `compgen -e` lists names only and passes. Also refused: full command lines of every process or of any selection beyond one pid
 (`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
 token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
 `grep`/`rg`, and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
 
-Builds and tests run on our nodes, not on agent VMs (every handle, at Daniel's request, 18 Oct: three OOM kills that day each
-took down every worker on a shared VM). So it refuses, always, a local pytest that names no test file or `-k` selection,
-`lake build|exe`, `cargo build|test|run|check`, nvcc and `circuit-check --all`, pointing to `research run --on auto`; and while
-the VM has less than $AGENT_GUARD_MIN_AVAIL (default 0.25) of its memory available (MemAvailable, or, when that is less, its
-cgroup's limit less its working set: its use less its inactive file cache, which the kernel reclaims on demand) it also refuses
-the lighter ones: a pytest of named files, `lake env`, the check's suites and `verity check`. The same command through `research
-run`, or over ssh, runs elsewhere and passes; `AGENT_GUARD_LOCAL_OK=1` anywhere in the command passes it too.
+Builds and tests run on our nodes, not on agent VMs: on a shared VM one OOM kill takes down every worker on it. So it refuses,
+always, a local pytest that names no test file or `-k` selection, `lake build|exe`, `cargo build|test|run|check`, nvcc and
+`circuit-check --all`, pointing to `research run --on auto`; and while the VM has less than $AGENT_GUARD_MIN_AVAIL (default
+0.25) of its memory available (MemAvailable, or, when that is less, its cgroup's limit less its working set: its use less its
+inactive file cache, which the kernel reclaims on demand) it also refuses the lighter ones: a pytest of named files, `lake env`,
+the check's suites and `verity check`. The same command through `research run`, or over ssh, runs elsewhere and passes;
+`AGENT_GUARD_LOCAL_OK=1` anywhere in the command passes it too.
 
-No tool call may block more than 20 minutes (Daniel, 19 Oct: an agent blocked in one long call looks silent and misses its
-wake-ups). So it refuses a command that plainly would: a `sleep` past BLOCK_CAP_S (`sleep 3000`, `sleep 30m`, `sleep 2h`,
-`sleep infinity`), there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends it sooner or it runs in the
-background (`&`), and `research run --wait-max S` past the cap. A polling loop is judged only by the sleeps it names.
+No tool call may block more than 20 minutes: an agent blocked in one long call looks silent and misses its wake-ups. So it
+refuses a command that plainly would: a `sleep` past BLOCK_CAP_S (`sleep 3000`, `sleep 30m`, `sleep 2h`, `sleep infinity`),
+there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends it sooner or it runs in the background (`&`), and
+`research run --wait-max S` past the cap. A polling loop is judged only by the sleeps it names.
 
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
 a branch registered to another agent.
@@ -155,7 +155,7 @@ def one_pid(args: list[str]) -> bool:
 
 def every_argv(args: list[str]) -> bool:
     """Whether `ps ARGS` prints full command lines of more than one named process: of every process, or of a selection such as
-    `--ppid N`, `-C NAME` or `-u USER` (17 Oct, INF-52: `ps -o pid,etime,cmd --ppid N` printed a git child's token-bearing URL)."""
+    `--ppid N`, `-C NAME` or `-u USER` (`ps -o pid,etime,cmd --ppid N` prints a git child's token-bearing URL)."""
     fmt = next((args[i + 1] for i, a in enumerate(args[:-1])
                 if a == "--format" or re.fullmatch(r"-?[a-zA-Z]*[oO]", a)), None)
     fmt = fmt or next((a.split("=", 1)[1] for a in args if a.startswith("--format=")), None)
@@ -337,7 +337,7 @@ def local_work_reason(command: str) -> str | None:
             f"tests or a build here: on a VM other agents share, the kernel would OOM-kill some agent's processes. " + remote)
 
 
-#: no tool call may block longer (Daniel, 19 Oct): an agent blocked in one long call looks silent and misses its wake-ups
+#: no tool call may block longer: an agent blocked in one long call looks silent and misses its wake-ups
 BLOCK_CAP_S = 1200
 DURATION = re.compile(r"(\d+(?:\.\d*)?|\.\d+)([smhd]?)")
 UNIT_S = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
