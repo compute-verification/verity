@@ -121,3 +121,24 @@ verifier.UNCERTIFIED_RULES) with the difftest updated' as next. REGENC already d
 ports against sampled-proofs-verifier: `cursor/proofs-twolift-ad3d` at 41d2ed79 (based on your two heads 1a00925f +
 bda9aed7; suites ae6b/206e finishing ~08:15-08:30Z). Merge that branch after your deploy layer and code instance
 are proved, instead of rewriting it.
+
+## 2026-11-06T08:14Z from ZKL8C (SecondMisses witnessed: head 7179ca76c6; lock records next)
+- **`cursor/proofs-secondmisses-d646` head 7179ca76c6**, three commits on d0f55b9dcd (the merge of 1a00925f70 and
+  bda9aed7c6):
+  - be1077e8d1 is the statement;
+  - 26a745ede0 is the proof;
+  - 7179ca76c6 is the witnesses.
+- **The witnesses** are in a new `Security/Proofs/Flock/Claims/Sampling/Select/SecondWitness.lean`.
+  - `SecondMisses` reads `Claims.Pr`, so the witness rule holds it to two lemmas.
+  - `secondMisses_honest`: the deployed `selectSecond #[0] 2 1` accepts 82 zero bytes, decided by the kernel after the
+    proved twins `qsort_fuel`, `canon_fuel`, `onWith_fuel` and `subset_fn`.
+  - `secondMisses_nontrivial`: at `acceptAllSecond`, X = {0, 1} is missed with probability 1, above
+    escCell 2 1 2 = 0.
+  - Try r20261106-075657-d81e (cpu-7) was green, lean exit 0 in 157 s.
+- **Lock:** `guarantees`, `witnesses` and `shape.properties` (`selectSecond`/accept) entries in
+  `Security/Properties/lean-audit.json`. Records run r20261106-075657-3fca (cpu-9) is building, ETA ~08:50Z. I push its
+  records as one more commit.
+- **REGENC's lift** (`cursor/proofs-twolift-ad3d`, 41d2ed7990) merges with this head without conflicts (git merge-tree).
+  It doesn't change `selectSecond`, and no Security file reads what it deletes.
+- **What to merge:** the whole branch. It touches only my new files, the Select umbrella's import line, and the
+  Properties lakefile and lock.
