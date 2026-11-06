@@ -1,6 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.RestVerdictDraw
+public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
+public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
 
 /-!

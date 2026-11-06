@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Assembled
-public import Proofs.Flock.Claims.Sampling.AssembledPlain
 public import Proofs.Flock.Claims.Sampling.Bext
 public import Proofs.Flock.Claims.Sampling.Committed
 public import Proofs.Flock.Claims.Sampling.Count
@@ -13,13 +12,12 @@ public import Proofs.Flock.Claims.Sampling.EndToEndDeploy
 public import Proofs.Flock.Claims.Sampling.EndToEndDraw
 public import Proofs.Flock.Claims.Sampling.Escape
 public import Proofs.Flock.Claims.Sampling.ExecBernoulli
-public import Proofs.Flock.Claims.Sampling.PooledPr
+public import Proofs.Flock.Soundness.Audit.Pooled
 public import Proofs.Flock.Claims.Sampling.InputSlot
 public import Proofs.Flock.Claims.Sampling.KS
 public import Proofs.Flock.Claims.Sampling.Leaf
-public import Proofs.Flock.Claims.Sampling.Live
 public import Proofs.Flock.Claims.Sampling.Path
-public import Proofs.Flock.Claims.Sampling.Raise
+public import Proofs.Flock.Claims.KS.Refit
 public import Proofs.Flock.Claims.Sampling.Reference
 public import Proofs.Flock.Claims.Sampling.Select
 public import Proofs.Flock.Claims.Sampling.Seq
@@ -44,7 +42,7 @@ bits from Flock's KS at the checked units' sessions and the deployed sampled ver
 Flock's KS at those sessions from `Claims.Flock.KS` (`Sampling.Session`), and at a raised `N₀` with the weight scaled
 by `k` (`Sampling.Raise`); the deployed draw's miss bound and `DrawLaw` from it (`Sampling.Select`); the universal
 unit's gates running its private circuit (`Sampling.Universal`); the block's claims assembled, with what remains as
-hypotheses (`Sampling.Assembled`, at any Flock record; at SHA-512 at the plain one, `Sampling.AssembledPlain`), and at the
+hypotheses (`Sampling.Assembled`, at any Flock record), and at the
 deployed record over any Flock record (`Sampling.Deployed`); its zero knowledge by sequential composition of the
 masked sessions' at the masked deployed record, the route of record (`Sampling.Seq`), and, the earlier route,
 from a committed-coin protocol given the leaf layer (`Sampling.ZK`), at the sampled masked protocol with every coin

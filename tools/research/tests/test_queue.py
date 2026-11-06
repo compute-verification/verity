@@ -104,10 +104,20 @@ class World:
         (self.tmp / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{self.tmp / "vault"}"\n')
         self.store = LocalStore(self.tmp / "store", config_path=self.tmp / "store.toml")
 
-    def queue(self, **kw) -> Queue:
+    def queue(self, first: tuple[int, ...] | None = None, **kw) -> Queue:
+        """A queue on this world's origin; ``first``: the PRs drive's priority file lists, first to land first (`prioritize`)."""
         kw.setdefault("ready", lambda n, h: (n, h) in self.gh.ready)
-        return Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh,
-                     store=self.store, log=self.logs.append, **kw)
+        q = Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh,
+                  store=self.store, log=self.logs.append, **kw)
+        if first is not None:
+            self.prioritize(q, *first)
+        return q
+
+    def prioritize(self, q: Queue, *prs: int) -> None:
+        """Write drive's priority file, ``prs`` in their order, first to land first, and give it to ``q`` as `--priority-file`
+        does: each of ``q``'s syncs reads it again."""
+        (path := self.tmp / "priority").write_text(" ".join(map(str, prs)) + "\n")
+        q.priority_file = path
 
     def on_next(self, q: Queue) -> list[int]:
         q.fetch()
@@ -262,10 +272,10 @@ def test_a_pr_github_has_no_pull_ref_for_waits_and_the_others_sync(world):
     assert [m.pr for m in q.sync()[0]] == [1, 2]
 
 
-def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep_their_place(world):
-    """A fix for a test that fails on `main` needn't sit behind the next train: `--first` restacks `next` so the next train
-    starts with the fix.  A PR in `--first` that isn't ready is passed over, and another queue's sync without the
-    flag keeps the new order."""
+def test_the_priority_list_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep_their_place(world):
+    """A fix for a test that fails on `main` needn't sit behind the next train: drive's priority list restacks `next` so the
+    next train starts with the fix.  A PR in the list that isn't ready is passed over, and another queue's sync without the
+    list keeps the new order."""
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
     world.queue().sync()
@@ -277,10 +287,49 @@ def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep
     assert [m.commit for m in again] == [m.commit for m in members]
 
 
-def test_a_sync_merges_what_changes_no_lean_below_every_lean_change_in_first_then_admission_order(world):
+def test_the_priority_files_order_is_the_landing_order_above_the_members_a_check_holds(world):
+    """Drive's priority list is the landing order: its ready PRs go at the bottom of `next` in the file's order, first to land
+    first (#9, then #7, whatever their numbers), above only the members a running or passed check covers (`Queue.hold`), which
+    keep their place and their merges."""
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    q = world.queue()
+    held = q.sync()[0][0]
+    for n in (7, 9):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    world.prioritize(q, 9, 7)
+    q.hold = 1
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [1, 9, 7, 2, 3] and members[0] == held, world.logs
+    assert world.logs[-1].endswith("kept 1, merged 4"), world.logs[-1]
+
+
+def test_an_edit_of_the_priority_file_reorders_next_at_the_next_sync_from_the_first_pr_whose_place_changed(world):
+    """Each sync reads drive's priority file again: a number repeated keeps its first place, so it moves nothing; swapping two
+    PRs rebuilds `next` from the lower one, and listing one more after them merges again only what is above them."""
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    q = world.queue()
+    q.sync()
+    for n in (7, 9):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    world.prioritize(q, 9, 7)
+    assert [m.pr for m in q.sync()[0]] == [9, 7, 1, 2, 3] and "kept 0, merged 5" in world.logs[-1], world.logs[-1]
+    world.prioritize(q, 9, 7, 9)
+    assert [m.pr for m in q.sync()[0]] == [9, 7, 1, 2, 3] and "kept 5, merged 0" in world.logs[-1], world.logs[-1]
+    world.prioritize(q, 7, 9)
+    assert [m.pr for m in q.sync()[0]] == [7, 9, 1, 2, 3] and "kept 0, merged 5" in world.logs[-1], world.logs[-1]
+    world.prioritize(q, 7, 9, 2)
+    members, _ = q.sync()
+    assert [m.pr for m in members] == [7, 9, 2, 1, 3] and "kept 2, merged 3" in world.logs[-1], world.logs[-1]
+    assert q.sync()[0] == members and "kept 5, merged 0" in world.logs[-1], world.logs[-1]
+
+
+def test_a_sync_merges_what_changes_no_lean_below_every_lean_change_above_the_priority_lists_prs_in_its_order(world):
     """A member above a Lean change waits for that change's Lean check, ~1 h, though
-    it changes no Lean itself.  What a sync merges goes non-Lean first, `--first`'s order then admission's within each part; a PR
-    that contains a Lean change stays above it, and one stacked on a member already on `next` is judged by its own change."""
+    it changes no Lean itself.  What a sync merges goes non-Lean first, in admission order within each part, above the PRs of
+    drive's priority list, which stay at the bottom in its order, a Lean change among them too; a PR that contains a Lean
+    change stays above it, and one stacked on a member already on `next` is judged by its own change."""
     world.gh.put(1, h1 := world.change({"pkg/A.lean": "-- 1\n"}))
     world.gh.put(2, h2 := world.change({"a.txt": "2\n"}))
     world.gh.put(3, h3 := world.change({"pkg/B.lean": "-- 3\n"}))
@@ -288,16 +337,16 @@ def test_a_sync_merges_what_changes_no_lean_below_every_lean_change_in_first_the
     world.gh.put(5, world.change({"c.txt": "5\n"}, base=h1))                 # changes no Lean, but contains #1
     world.gh.put(6, world.change({"d.txt": "6\n"}, base=h2))
     members, _ = world.queue(first=(3, 4)).sync()
-    assert [m.pr for m in members] == [4, 2, 6, 3, 1, 5]
+    assert [m.pr for m in members] == [3, 4, 2, 6, 1, 5]
     world.gh.put(9, world.change({"pkg/C.lean": "-- 9\n"}))
     world.gh.put(10, world.change({"e.txt": "10\n"}, base=h3))               # its own change, against #3's head, is no Lean
     world.gh.put(11, world.change({"f.txt": "11\n"}))
     again, _ = world.queue().sync()
-    assert [m.pr for m in again] == [4, 2, 6, 3, 1, 5, 10, 11, 9]
+    assert [m.pr for m in again] == [3, 4, 2, 6, 1, 5, 10, 11, 9]
     assert [m.commit for m in again[:6]] == [m.commit for m in members]      # what the sync keeps never moves for it
     world.gh.put(4, world.change({"b.txt": "4 rewritten\n"}))                # off the bottom: the rest merged again, in order
     rebuilt, _ = world.queue().sync()
-    assert [m.pr for m in rebuilt] == [2, 6, 3, 1, 5, 10, 11, 9, 4]
+    assert [m.pr for m in rebuilt] == [3, 2, 6, 1, 5, 10, 11, 9, 4]
 
 
 def test_a_sync_with_one_new_admission_keeps_every_member_and_merges_only_it(world):
@@ -336,9 +385,9 @@ def test_members_merged_again_above_a_moved_one_keep_their_order_and_only_new_pr
     assert world.queue().sync()[0] == members and world.logs[-1].endswith("kept 6, merged 0")
 
 
-def test_a_first_pr_still_goes_to_the_bottom_and_sorts_what_is_above_it(world):
-    """`--first` restacks `next` from the bottom as it always has: the PRs it names go below every member, and what is merged
-    again above them goes non-Lean first; the next sync with the same `--first` keeps it all."""
+def test_a_pr_of_the_priority_list_goes_to_the_bottom_and_sorts_what_is_above_it(world):
+    """Drive's priority list restacks `next` from the bottom: the PRs it names go below every member, and what is merged
+    again above them goes non-Lean first; the next sync with the same list keeps it all."""
     world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
     world.gh.put(2, world.change({"a.txt": "2\n"}))
     world.gh.put(3, world.change({"pkg/B.lean": "-- 3\n"}))
@@ -351,7 +400,7 @@ def test_a_first_pr_still_goes_to_the_bottom_and_sorts_what_is_above_it(world):
     assert again == members and world.logs[-1].endswith("kept 4, merged 0")
 
 
-def test_nonlean_first_off_at_main_keeps_first_then_admission_order_and_turning_it_on_rebuilds_nothing(world):
+def test_nonlean_first_off_at_main_keeps_the_priority_lists_then_admission_order_and_turning_it_on_rebuilds_nothing(world):
     """drive.toml's `nonlean_first` at `main` decides a sync that isn't given it.  Turned on, it reorders only what a sync merges
     anyway: a rebuild just to reorder would take a running Lean check's commit off `next`."""
     _git(world.dev, "push", "-q", "origin", f"{world.change({DRIVE_FLAGS: 'nonlean_first = false'})}:refs/heads/main")
@@ -365,30 +414,30 @@ def test_nonlean_first_off_at_main_keeps_first_then_admission_order_and_turning_
     assert [m.pr for m in world.queue(nonlean_first=True).sync()[0]] == [2, 3, 1]
 
 
-def test_first_naming_a_lean_change_before_a_nonlean_one_builds_a_next_the_same_sync_keeps(world):
-    """A sync compares `next` with the order it would build, non-Lean first, so `--first`'s order, which non-Lean first
-    overrides, rebuilds nothing on the next tick."""
+def test_the_priority_list_naming_a_lean_change_before_a_nonlean_one_keeps_its_order_and_the_next_sync_keeps_next(world):
+    """The priority list's order is the landing order, Lean changes or not: non-Lean first sorts only what goes above its PRs,
+    and a sync compares `next` with the order it would build, so the next tick rebuilds nothing."""
     world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
     world.gh.put(2, world.change({"a.txt": "2\n"}))
     world.gh.put(3, world.change({"pkg/B.lean": "-- 3\n"}))
     world.gh.put(4, world.change({"b.txt": "4\n"}))
     members, _ = world.queue(first=(3, 4), nonlean_first=True).sync()
-    assert [m.pr for m in members] == [4, 2, 3, 1]
+    assert [m.pr for m in members] == [3, 4, 2, 1]
     again, _ = world.queue(first=(3, 4), nonlean_first=True).sync()
     assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 4, merged 0")
 
 
 def test_a_pr_the_last_sync_left_out_is_tried_above_the_rest_so_a_sync_with_nothing_new_keeps_next(world):
-    """A PR that didn't merge, left where `--first`, or non-Lean first, put it in the order the sync compares `next` with, would
-    have every member above it merged again (new commits) on each tick with `main` still, throwing away every Lean check of
-    `next` but drive's own.  Left out at a head, it (and a PR that contains it) is tried above the rest until that head
+    """A PR that didn't merge, left where drive's priority list, or non-Lean first, put it in the order the sync compares `next`
+    with, would have every member above it merged again (new commits) on each tick with `main` still, throwing away every Lean
+    check of `next` but drive's own.  Left out at a head, it (and a PR that contains it) is tried above the rest until that head
     moves."""
     world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
     world.gh.put(2, world.change({"a.txt": "2\n"}))
     world.gh.put(3, world.change({"c.txt": "3\n"}))
     world.gh.put(4, world.change({"d.txt": "4\n"}, base=world.gh.prs[3].head))
     _git(world.dev, "push", "-q", "origin", f"{world.change({'c.txt': 'main\n'})}:refs/heads/main")
-    first = (3, 1, 4)
+    first = (3, 2, 4, 1)
     members, entries = world.queue(first=first).sync()
     assert [m.pr for m in members] == [2, 1] and entries[3].state == "refused" and entries[4].state == "waiting"
     for reused in ("", ", merges reused for 1"):        # #3 tried above the rest, then that conflict taken from its record
@@ -753,9 +802,9 @@ def test_a_new_head_is_preflighted_though_its_change_onto_next_is_the_old_heads_
 
 
 def test_a_pass_read_back_takes_no_place_in_the_pool_and_none_of_the_budget(world):
-    """A verdict read back starts no preflight, so it spends none of `PREFLIGHT_BUDGET_S`: a `--first` PR whose preflight takes
-    the whole budget goes below two members, whose passes stand on the new base, and they enter, where a preflight would wait
-    for a later sync.  One preflight at a time here."""
+    """A verdict read back starts no preflight, so it spends none of `PREFLIGHT_BUDGET_S`: a PR of drive's priority list whose
+    preflight takes the whole budget goes below two members, whose passes stand on the new base, and they enter, where a
+    preflight would wait for a later sync.  One preflight at a time here."""
     for n in (2, 3):
         world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
     q = world.queue()
@@ -1033,9 +1082,9 @@ def test_a_pr_of_drives_priority_list_and_those_it_contains_go_first_and_start_t
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, two := world.change({"pkg/A.lean": "-- 2\n"}))
     world.gh.put(3, world.change({"c.txt": "3\n"}, base=two))
-    q = world.queue()
+    q = world.queue(first=(3, 99))
     q.preflight, now, calls = _slow_preflight()
-    q.clock, q.preflight_parallel, q.priority = lambda: now[0], 1, frozenset({3, 99})
+    q.clock, q.preflight_parallel = lambda: now[0], 1
     members, entries = q.sync()
     assert [m.pr for m in members] == [2, 3] and calls == [2, 3] and now[0] == 2 * PREFLIGHT_BUDGET_S, world.logs
     assert entries[1].state == "waiting" and entries[1].why == (
@@ -1046,7 +1095,8 @@ def test_a_pr_of_drives_priority_list_and_those_it_contains_go_first_and_start_t
 
 def test_a_pr_of_drives_priority_list_starts_its_preflight_ahead_of_the_prs_the_last_sync_left_waiting(world):
     """While a PR the last sync left waiting (#3) is still to come, any other PR waits for a later sync (#1); one of drive's
-    priority list (#4) doesn't: its preflight starts first, and spends the budget #3 would have taken."""
+    priority list (#4) doesn't: its preflight starts first, and spends the budget #3 would have taken.  It goes below #2,
+    whose pass stands on its new base."""
     for n in (2, 3):
         world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
     q = world.queue()
@@ -1055,21 +1105,22 @@ def test_a_pr_of_drives_priority_list_starts_its_preflight_ahead_of_the_prs_the_
     assert [m.pr for m in q.sync()[0]] == [2] and q.load_state()["preflight_waited"] == [3]
     for n in (1, 4):
         world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
-    q.priority = frozenset({4})
+    world.prioritize(q, 4)
     members, entries = q.sync()
-    assert [m.pr for m in members] == [2, 4] and calls == [2, 4], world.logs
+    assert [m.pr for m in members] == [4, 2] and calls == [2, 4], world.logs
     assert entries[1].why == ("its preflight onto `next` hasn't run: the PRs the last sync left waiting for theirs go first "
                               "(#3), so a later sync runs it")
     assert entries[3].why.startswith("its preflight onto `next` hasn't run: this sync's preflights took their"), entries[3].why
     assert q.load_state()["preflight_waited"] == [1, 3]
 
 
-def test_drives_priority_list_is_read_again_at_each_sync_and_one_it_cant_read_is_empty_its_error_logged_once(world):
-    """`--priority-file` (`Queue.priority_file`): each sync reads the file again and logs the list when it changes; no file is an
-    empty list, and so is one it can't read, its error logged once while it stays the same, whichever tick's queue meets it."""
+def test_drives_priority_list_is_read_again_at_each_sync_in_its_order_and_one_it_cant_read_is_empty_its_error_logged_once(world):
+    """`--priority-file` (`Queue.priority_file`): each sync reads the file again, in its order, first to land first, a number
+    repeated keeping its first place, and logs the list when it changes, its order too; no file is an empty list, and so is one
+    it can't read, its error logged once while it stays the same, whichever tick's queue meets it."""
     path = world.tmp / "priority"
 
-    def sync() -> frozenset[int]:
+    def sync() -> tuple[int, ...]:
         q = world.queue()
         q.priority_file = path
         q.sync()
@@ -1078,23 +1129,28 @@ def test_drives_priority_list_is_read_again_at_each_sync_and_one_it_cant_read_is
     def said() -> list[str]:
         return [line for line in world.logs if "priority" in line]
 
-    assert sync() == frozenset() and said() == []
+    def listed(prs: str) -> str:
+        return f"research queue: drive's priority list ({path}), first to land first: {prs}"
+
+    assert sync() == () and said() == []
     path.write_text("12, 7\n3,")
-    assert sync() == sync() == {3, 7, 12} and said() == [f"research queue: drive's priority list ({path}): #3 #7 #12"]
+    assert sync() == sync() == (12, 7, 3) and said() == [listed("#12 #7 #3")]
+    path.write_text("7 12 7, 3 12")
+    assert sync() == sync() == (7, 12, 3) and said()[1:] == [listed("#7 #12 #3")]
     path.write_text("12 #7")
-    assert sync() == sync() == frozenset()
-    assert said()[1:] == [f"research queue: --priority-file {path} holds '#7', which is not a PR number: write PR numbers "
+    assert sync() == sync() == ()
+    assert said()[2:] == [f"research queue: --priority-file {path} holds '#7', which is not a PR number: write PR numbers "
                           "separated by spaces or commas; drive's priority list is empty until the file is fixed"]
     path.unlink()
     path.mkdir()
-    assert sync() == sync() == frozenset() and len(said()) == 3
-    assert said()[2].startswith(f"research queue: --priority-file {path} can't be read (Is a directory): "), said()
+    assert sync() == sync() == () and len(said()) == 4
+    assert said()[3].startswith(f"research queue: --priority-file {path} can't be read (Is a directory): "), said()
     path.rmdir()
-    assert sync() == frozenset() and len(said()) == 3
+    assert sync() == () and len(said()) == 4
     path.write_text("5")
-    assert sync() == {5} and said()[3:] == [f"research queue: drive's priority list ({path}): #5"]
+    assert sync() == (5,) and said()[4:] == [listed("#5")]
     path.unlink()
-    assert sync() == frozenset() and said()[4:] == [f"research queue: drive's priority list ({path}): empty"]
+    assert sync() == () and said()[5:] == [listed("empty")]
 
 
 def test_a_conflict_in_any_file_besides_the_pins_still_refuses_the_merge(world):
@@ -1750,6 +1806,33 @@ def test_a_pr_carries_a_contained_unmarked_pr_of_its_own_owner_or_one_whose_owne
     assert q.sync()[0] == []
 
 
+def test_the_sync_leaves_off_next_a_head_that_merged_next_carrying_a_pr_head_its_pr_no_longer_lands(world):
+    """A mark written as a label skips the preflight's (g), so the sync judges such a head itself: one that merged `next`
+    lands after the PRs it carries from there while they land as they stand, and is refused, with the fix, once one of them
+    is rebuilt without the carried head, or withdrawn by its owner, which carries it only for a rebuild."""
+    world.gh.put(5, five := world.change({"x.txt": "x\n"}))
+    world.gh.put(6, six := world.change({"y.txt": "y\n"}))
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [5, 6]
+    tip = _git(world.origin, "rev-parse", "refs/heads/next")
+    by = {n: _git(world.origin, "log", "-1", "--format=%H", f"--grep=^Queue: #{n} ", tip) for n in (5, 6)}
+    world.gh.put(4, world.change({"z.txt": "z\n"}, base=tip))
+    assert [m.pr for m in q.sync()[0]] == [5, 6, 4]
+    world.gh.put(5, new := world.change({"x.txt": "x2\n"}))
+    members, entries = q.sync()
+    assert sorted(m.pr for m in members) == [5, 6] and entries[4].state == "refused"
+    assert entries[4].why == (f"it carries #5's head {five[:12]} through `next`'s merge {by[5][:12]}, which neither `main` nor "
+                              f"#5's current head {new[:12]} holds: merge origin/main and #5's current head instead of `next`, "
+                              "or drop #5's commits")
+    world.gh.put(5, five)
+    world.gh.ready.discard((6, six))
+    q.marked_by = lambda n, h: "lane-6" if n == 6 else None                 # #6's owner wrote its `ready = false`
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [5] and entries[4].why == (
+        f"it carries #6's head {six[:12]} through `next`'s merge {by[6][:12]}, and #6 isn't admitted at {six[:12]} (not marked "
+        f"ready at {six[:8]}): merge origin/main and #6's current head instead of `next`, or drop #6's commits")
+
+
 def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
@@ -1798,6 +1881,119 @@ def test_the_clone_keeps_the_merge_drivers_side_files_of_a_reader_that_let_the_l
     stray.write_text("left over\n")
     world.queue()._clone()
     assert side.read_text() == "a side\n" and not stray.exists()
+
+
+def _queue_at(world: World, workdir: Path, remote: str) -> Queue:
+    return Queue(workdir, remote=remote, github=world.gh, ready=lambda n, h: True, store=world.store, log=world.logs.append)
+
+
+def _bare(world: World, name: str) -> Path:
+    """Another repository than `world`'s origin, holding its `main`."""
+    path = world.tmp / name
+    _git(world.tmp, "init", "-q", "--bare", "-b", "main", str(path))
+    _git(world.dev, "push", "-q", str(path), "main")
+    return path
+
+
+def test_repo_alone_takes_its_github_remote_and_a_clone_of_its_own_and_a_remote_of_another_repository_is_refused(
+        world, monkeypatch, capsys):
+    """`--remote` defaulted to the caller's origin whatever `--repo` said, so `status --repo` of another repository than the
+    caller's read that one's PRs against the caller's pull refs, each waiting forever on a head the two disagreed on.
+    `--repo OWNER/NAME` alone takes https://github.com/OWNER/NAME.git and ~/.research/queue/NAME; with neither, the caller's
+    origin and ~/.research/queue/verity stay; a `--remote` naming another repository on GitHub is refused before any clone."""
+    from research.queue import remote_and_repo
+
+    assert remote_and_repo(None, "o/infra", world.dev) == ("https://github.com/o/infra.git", "o/infra")
+    assert remote_and_repo(str(world.origin), "o/infra", world.dev) == (str(world.origin), "o/infra")     # a path: no OWNER/NAME
+    with pytest.raises(QueueError, match=re.escape(f"can't tell OWNER/NAME from '{world.origin}': pass --repo")):
+        remote_and_repo(None, None, world.dev)
+    for same in ("https://github.com/o/infra", "https://u@github.com/O/Infra.git", "git@github.com:o/infra.git",
+                 "ssh://git@github.com/o/infra.git/"):
+        assert remote_and_repo(same, "o/infra", world.dev) == (same, "o/infra")
+    for other, shown in (("https://x-access-token:" "dummy@github.com/o/verity.git", "https://github.com/o/verity.git"),
+                         ("git@github.com:o/verity", "git@github.com:o/verity")):
+        with pytest.raises(QueueError) as e:
+            remote_and_repo(other, "o/infra", world.dev)
+        assert str(e.value) == (f"--remote {shown} is o/verity on GitHub, not --repo o/infra: pass --repo alone (its remote is "
+                                "https://github.com/o/infra.git), or a --remote of o/infra")
+    with pytest.raises(QueueError, match="--repo 'https://github.com/o/infra': OWNER/NAME on GitHub"):
+        remote_and_repo(None, "https://github.com/o/infra", world.dev)
+
+    _git(world.dev, "remote", "set-url", "origin", "https://verity-agent@github.com/o/verity")
+    monkeypatch.chdir(world.dev)
+    monkeypatch.setattr(Q, "WORKDIR", world.tmp / "home" / ".research" / "queue" / "verity")
+    monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
+    cloned = []
+
+    def clone(q: Queue) -> None:
+        cloned.append((q.workdir, q.remote))
+        raise QueueError("cloned nothing")
+
+    monkeypatch.setattr(Queue, "_clone", clone)
+    store = ["--store", str(world.tmp / "qs")]
+    assert research_main(["queue", "status", "--repo", "o/infra", *store]) == 1
+    assert research_main(["queue", "status", *store]) == 1
+    assert cloned == [(world.tmp / "home" / ".research" / "queue" / "infra", "https://github.com/o/infra.git"),
+                      (Q.WORKDIR, "https://verity-agent@github.com/o/verity")]
+    capsys.readouterr()
+    assert research_main(["queue", "status", "--repo", "o/infra", "--remote", "git@github.com:o/verity.git", *store]) == 1
+    assert "research queue: --remote git@github.com:o/verity.git is o/verity on GitHub, not --repo o/infra" in capsys.readouterr().err
+    assert len(cloned) == 2
+
+
+def test_the_queue_never_repoints_the_origin_of_a_checkout_it_did_not_clone(world, monkeypatch, capsys):
+    """`_clone` set the workdir's origin to the queue's remote whatever the workdir held: pointed with `--workdir` at a clone of
+    another repository, it made that clone's origin the caller's, and a later `git push` there went to the wrong repository.
+    A checkout the queue didn't clone keeps its origin: one of another repository is refused before anything in it changes,
+    and one of the remote's repository, in another URL's form, is used as it is."""
+    infra = _bare(world, "infra.git")
+    theirs = world.tmp / "infra-clone"
+    _git(world.tmp, "clone", "-q", str(infra), str(theirs))
+    (theirs / "notes.txt").write_text("not committed\n")
+    with pytest.raises(QueueError) as e:
+        _queue_at(world, theirs, str(world.origin)).status()
+    assert str(e.value) == (f"{theirs} is a checkout the queue didn't clone (its git config has no research.queueclone), whose "
+                            f"origin, {infra}, is another repository than the queue's remote {world.origin}, and the queue never "
+                            f"repoints such a checkout: pass --workdir a directory of its own, where the queue clones "
+                            f"{world.origin}, or --remote {infra}, the repository that checkout is a clone of")
+    monkeypatch.chdir(world.dev)
+    monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
+    argv = ["queue", "status", "--workdir", str(theirs), "--remote", str(world.origin), "--repo", "o/verity",
+            "--store", str(world.tmp / "qs")]
+    assert research_main(argv) == 1
+    assert f"research queue: {e.value}\n" in capsys.readouterr().err
+    assert _git(theirs, "remote", "get-url", "origin") == str(infra) and (theirs / "notes.txt").read_text() == "not committed\n"
+    drivers = subprocess.run(["git", "config", "--local", "--get-regexp", r"^merge\."], cwd=theirs, capture_output=True, text=True)
+    assert drivers.stdout == "", "nothing in it changed: not even the record merge drivers"
+
+    mine = world.tmp / "verity-clone"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(mine))
+    _git(mine, "remote", "set-url", "origin", "https://verity-agent@github.com/o/verity")
+    for remote in ("git@github.com:o/verity.git", "https://github.com/O/verity"):
+        _queue_at(world, mine, remote)._clone()
+        assert _git(mine, "remote", "get-url", "origin") == "https://verity-agent@github.com/o/verity"
+    with pytest.raises(QueueError, match=f"^{re.escape(str(mine))} is a checkout the queue didn't clone .* is another repository "
+                                         r"than the queue's remote https://github\.com/o/infra\.git, and"):
+        _queue_at(world, mine, "https://x-access-token:" "dummy@github.com/o/infra.git")._clone()
+
+
+def test_a_clone_the_queue_made_follows_the_remote_marked_copied_or_at_the_default_workdir(world, monkeypatch):
+    """What drive relies on: its clone's origin follows the remote it is given, as the URL changes.  The queue marks each clone
+    it makes in that clone's git config, a copy keeps the mark (drive seeds its clone with `cp -a`), and a clone at the
+    default workdir is the queue's whether marked or not, since it made those before it marked any."""
+    q = world.queue()
+    q._clone()
+    assert _git(q.workdir, "config", "--local", "--get", "research.queueclone") == "true"
+    other = _bare(world, "other.git")
+    copy = world.tmp / "copy"
+    shutil.copytree(q.workdir, copy, symlinks=True)
+    _queue_at(world, copy, str(other))._clone()
+    assert _git(copy, "remote", "get-url", "origin") == str(other)
+
+    monkeypatch.setattr(Q, "WORKDIR", world.tmp / "home" / ".research" / "queue" / "verity")
+    _git(world.tmp, "clone", "-q", str(other), str(Q.WORKDIR))
+    _queue_at(world, Q.WORKDIR, str(world.origin))._clone()
+    assert _git(Q.WORKDIR, "remote", "get-url", "origin") == str(world.origin)
 
 
 HTTP_BACKEND = Path(subprocess.run(["git", "--exec-path"], capture_output=True, text=True).stdout.strip()) / "git-http-backend"
@@ -3092,6 +3288,44 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
     world.gh.put(6, six := world.change({"z.txt": "z\n"}), ready=False, body="Lane `lane-4`.")
     world.gh.put(4, world.change({"w.txt": "w\n"}, base=six), ready=False)
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #6 is lane-4's own: #4 carries it
+
+
+def test_the_preflight_refuses_a_head_that_merged_next_carrying_a_pr_head_its_pr_no_longer_lands(world, capsys):
+    """Branches that merged an older `next` carried the heads of PRs rebuilt or withdrawn since, which would land under their
+    marks.  A head carried through `next`'s merge (`Queue: #N`) refuses the mark, with the fix, when #N's current head doesn't
+    hold it, #N is closed, or #N isn't admitted, even when #N's owner withdrew it, which carries it for a rebuild; one #N still
+    lands as it stands refuses nothing, nor does one the landing branch holds (an older merge of a PR landed since)."""
+    from research.queue import MarkOnly, carried_heads, ready
+    from research.store.cli import _label_write_through
+
+    world.with_store_remote()
+    world.gh.put(5, five := world.change({"x.txt": "x\n"}))
+    world.gh.put(6, six := world.change({"y.txt": "y\n"}))
+    assert [m.pr for m in world.queue().sync()[0]] == [5, 6]
+    tip = _git(world.origin, "rev-parse", "refs/heads/next")
+    by = {n: _git(world.origin, "log", "-1", "--format=%H", f"--grep=^Queue: #{n} ", tip) for n in (5, 6)}
+    world.gh.put(4, four := world.change({"z.txt": "z\n"}, base=tip), ready=False)
+    world.gh.put(5, new := world.change({"x.txt": "x2\n"}), ready=False)                   # #5 rebuilt on `main`
+    for n in (5, 6):
+        assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=None) == 0
+    pre = _preflight(world)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
+    err = capsys.readouterr().err
+    assert (f"it carries #5's head {five[:12]} through `next`'s merge {by[5][:12]}, which neither `main` nor #5's current head "
+            f"{new[:12]} holds: merge origin/main and #5's current head instead of `next`, or drop #5's commits") in err, err
+    assert "#6's" not in err                                                     # #6 lands at the head #4 carries
+    del world.gh.prs[5]
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
+    assert (f"it carries #5's head {five[:12]} through `next`'s merge {by[5][:12]}, and #5 is closed: drop #5's commits "
+            "(rebuild the branch on origin/main, without `next`)") in capsys.readouterr().err
+    world.store.add_label(label_target(6, six), vocab.READY, False, "lane-6")
+    _label_write_through(world.store, label_target(6, six))
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
+    err = capsys.readouterr().err
+    assert (f"it carries #6's head {six[:12]} through `next`'s merge {by[6][:12]}, and #6 isn't admitted at {six[:12]} (not "
+            f"marked ready at {six[:8]}): merge origin/main and #6's current head instead of `next`, or drop #6's commits") in err
+    assert "it contains #6's head" not in err                                   # a withdrawn PR a rebuild would carry
+    assert [n for n, _, _ in carried_heads(world.dev, five, four)] == [6]       # #5's head on the landing branch
 
 
 #: Lake packages as the Lean step reads them: `lean/a` (library `A`), `lean/a/Proofs` nested in it with `srcDir = ".."` and its
@@ -4819,10 +5053,11 @@ def test_a_lane_line_names_its_handle_without_a_trailing_period():
 
 
 #: a lock as `check.py --update` writes one: F, G and H listed, F frozen, G's two inline premises and H's one, G and H reading M
-PREMISE_LOCK = {"guarantees": {"F": {"type_hash": "f"}, "G": {"owner": "@lean", "type_hash": "g"}, "H": {"type_hash": "h"}},
+PREMISE_LOCK = {"guarantees": {"F": {"type_hash": "f"}, "G": {"owner": "@lean", "signature": ["G : Guarantees.G"], "type_hash": "g"},
+                               "H": {"signature": ["H : Guarantees.H"], "type_hash": "h"}},
         "shape": {"frozen": {"F": "frozen: a game's bound"},
                   "inline": {"G": {"p1": "a membership", "p2": "a bound"}, "H": {"q": "a bound"}}},
-        "reads": {"M": {"definitions": {"Guarantees.G": "1", "Guarantees.H": "2"}, "guarantees": ["G", "H"]}}}
+        "reads": {"M": {"definitions": {"Guarantees.G": "1", "Guarantees.H": "2"}}}}
 
 
 def _lock_text(edit: Callable[[dict], object] = lambda d: None) -> str:
@@ -4842,12 +5077,10 @@ def _lock_files() -> dict[str, str]:
 def _renamed(d: dict) -> None:
     d["guarantees"]["G2"] = d["guarantees"].pop("G")
     d["shape"]["inline"]["G2"] = d["shape"]["inline"].pop("G")
-    d["reads"]["M"]["guarantees"] = ["G2", "H"]
 
 
 def _removed(d: dict) -> None:
     del d["guarantees"]["G"], d["shape"]["inline"]["G"]
-    d["reads"]["M"]["guarantees"] = ["H"]
 
 
 def _rekeyed(d: dict) -> None:
@@ -4916,7 +5149,8 @@ def test_dropped_entries_reads_a_frozen_reason_reworded_at_its_key_as_kept_and_a
 
 def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guarantee_recorded_otherwise():
     """A premise `next` lists under G that the merged lock lists under a key it adds is renamed, and a guarantee whose record
-    (its owner aside) differs was restated; a new owner alone restates nothing."""
+    (its owner aside) differs, or a definition its signature names has another hash, was restated; a new owner alone, or
+    another guarantee's definition rehashed, restates nothing."""
     from research.queue import dropped_entries
 
     def lock(edit: Callable[[dict], object]) -> dict:
@@ -4926,6 +5160,9 @@ def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guar
     assert dropped_entries(base, lock(lambda d: d["shape"]["inline"].update(G2=d["shape"]["inline"].pop("G")))) == []
     assert dropped_entries(base, lock(lambda d: (d["guarantees"]["G"].update(type_hash="g2"),
                                                  d["shape"]["inline"]["G"].pop("p1")))) == []
+    assert dropped_entries(base, lock(_restated)) == [], "G is lifted into Guarantees.G, rehashed"
+    assert dropped_entries(base, lock(lambda d: (d["reads"]["M"]["definitions"].update({"Guarantees.H": "4"}),
+                                                 d["shape"]["inline"]["G"].pop("p1")))) == ["shape.inline[G]: p1"]
     assert dropped_entries(base, lock(lambda d: (d["guarantees"]["G"].update(owner="@proofs"),
                                                  d["shape"]["inline"]["G"].pop("p1")))) == ["shape.inline[G]: p1"]
     long = "∀ (i : Fin n), " + "x" * 80

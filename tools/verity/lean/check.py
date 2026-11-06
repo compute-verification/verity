@@ -53,7 +53,8 @@ environment extension loaded, so none of the package's code runs), and replays t
     guarantees   a theorem in `guarantees` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop`
                  hypothesis that is not a listed assumption, or no longer says what its record says:
                  signature, named assumptions, type hash, and (under `reads`, per module) the definitions the guarantees
-                 read, the guarantees that read them and the digest of those definitions; the hashes are SHA-256 over a
+                 read and the digest of those definitions, which with the type hashes fix what each guarantee reads, so
+                 the record lists no readers (one that does fails until `--update`); the hashes are SHA-256 over a
                  canonical form of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are
                  checked as they are until `--update` rewrites them); a record written before guarantees were called
                  that holds them as `pins`, and is read so (`as_guarantees`); or an entry has no `owner`, the handle
@@ -64,7 +65,7 @@ environment extension loaded, so none of the package's code runs), and replays t
                  verifier that accepts everything) under `witnesses`; or an exclusion theorem (a bound over a partition
                  or covering, reading no acceptance) names no `honest` lemma at the deployed partition and parameters
                  and `nontrivial` one at an explicit circuit where its other premises hold, a named premise fails and
-                 the bound fails; or a
+                 the bound fails (with no premise, where a tighter bound fails); or a
                  witness doesn't have that form, ranges over its instance instead of building it, takes a hypothesis
                  that is no named assumption the lock lists, or is an honest one at an accept-all verifier
                  (`witness_failures`), unless `unwitnessed`, which only shrinks, lists the guarantee with its
@@ -77,13 +78,15 @@ environment extension loaded, so none of the package's code runs), and replays t
     inline       a `Prop` a guarantee takes, its `Guarantees` definition unfolded once, past a leading `∀` over data and
                  split at `∧`, is neither a named assumption the lock lists, another listed guarantee's statement nor a
                  plain range (`0 < x`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and numerals), unless
-                 `shape.inline`, which only shrinks, lists it (`inline_failures`); its size is the AUDIT line's inline debt
+                 `shape.inline`, which only shrinks, lists it (`inline_failures`), or did under names a rename changed
+                 (`paired`); its size is the AUDIT line's inline debt
     trees        (`trees`: which module prefixes are the definitions, properties and proofs trees, its own and those of
                  the packages it requires by path) a guarantee's statement reads a definition of a module of the proofs
                  tree, or an audited module of the definitions or properties tree imports one, unless a prefix of `trees`'
                  `except` lists the read module or the importing one with a reason (an entry that excepts nothing fails);
                  the record follows a statement through an excepted module's definitions as through `meaning`'s
-                 (`record_scope`), so the definitions it reads there, a premise among them, are in `reads`
+                 (`record_scope`), so the definitions it reads there, a premise among them, are in `reads`, and a claim
+                 or verifier it reads there holds it to witnesses as one under `meaning` does
     proved_in    (a spec package whose guarantees another package proves) a package `proved_in` names does not require this
                  one by path, holds guarantees in its own policy, shares a module root with a package it requires, or
                  imports modules of its own outside its roots; or a guarantee is proved by none of this package and those, or
@@ -135,11 +138,12 @@ guarantee reads with its source now.  A weakened definition passes every axiom c
 those changes: the landing DM lists them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
 `--update` whose every failure is a record difference (its code is in `RECORD_DIFFERENCE`: two records each right on its
 side of a merge whose definitions changed, an owned entry with no record yet, a premise the lock doesn't list) writes the
-same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a train's
-merge carries its record.  Every failure carries a code (`Failure`: `guarantees.signature`, `orphan.file`), which the report
+same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a merge
+on `next` carries its record.  Every failure carries a code (`Failure`: `guarantees.signature`, `orphan.file`), which the report
 lists beside its text (`failure_codes`, `settled_codes`); what settles is decided by code, never by the text.  With
-`--regenerate` (a train's lean-audit step) such a package passes instead, and `audit.json`'s `regenerated` maps each to its record for the train to commit before it lands; the package's own lock is never written,
-and every other failure fails as before.  A guarantee whose
+`--regenerate` (the lean-audit step of the Lean check of a commit of `next`) such a package passes instead, and
+`audit.json`'s `regenerated` maps each to its record for drive to commit when it lands that commit; the package's own lock
+is never written, and every other failure fails as before.  A guarantee whose
 statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
 one line, and so does a definition read in another module with the same content.  `--update` keeps each entry's `owner`
 and writes a new entry only with one, from `--owner`; an owner changed by hand gets one line, since it changes who answers
@@ -226,9 +230,9 @@ CONTROLS = {"control": "violations.json", "modules": "module-violations.json"}
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "claims", "witnesses",
-         "unwitnessed", "compile_time",
+         "unwitnessed", "witnesses_assumed", "compile_time",
          "dependency_unchecked", "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
-#: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
+#: a guarantee's `owner`: the handle of the lane that answers for it (`@lane`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 
 
@@ -236,7 +240,7 @@ class Failure(str):
     """A failure: its text as the audit prints and reports it, with a stable ``code`` (`check.kind`, its check the text's
     leading word, spaces as `-`) and the ``entry`` it is about (a guarantee, a module, a file; None when it is about several
     or the package).  What follows from a failure (`RECORD_DIFFERENCE`, `regenerated`) reads its code, never its text, so a
-    reworded message changes nothing a train settles.  The report's `failure_codes` lists the codes beside `failures`."""
+    reworded message changes nothing a Lean check settles.  The report's `failure_codes` lists the codes beside `failures`."""
     code: str
     entry: str | None
 
@@ -506,19 +510,22 @@ def load(pkg: Path) -> dict:
 
 def as_guarantees(policy: dict) -> dict:
     """A record under today's names: one written before guarantees were called that, on a branch from before the rename,
-    holds them as `pins` (and each `reads` module its readers as `pins`).  A record holding both is refused (`ValueError`):
-    the audit would check one and drop the other."""
-    groups = [("the record", policy),
-              *((f"reads[{m}]", g) for m, g in (policy.get("reads") or {}).items() if isinstance(g, dict))]
-    if both := [w for w, g in groups if "pins" in g and "guarantees" in g]:
-        raise ValueError(f"{', '.join(both)} holds both `pins` and `guarantees` (a merge with a branch from before the "
-                         f"rename): move the `pins` entries under `guarantees` and run `check.py --update`")
-    if "pins" in policy:
-        policy = {("guarantees" if k == "pins" else k): v for k, v in policy.items()}
-    for group in (policy.get("reads") or {}).values():
-        if isinstance(group, dict) and "pins" in group:
-            group["guarantees"] = group.pop("pins")
-    return policy
+    holds them as `pins`.  A record holding both is refused (`ValueError`): the audit would check one and drop the other."""
+    if "pins" in policy and "guarantees" in policy:
+        raise ValueError("the record holds both `pins` and `guarantees` (a merge with a branch from before the rename): move "
+                         "the `pins` entries under `guarantees` and run `check.py --update`")
+    return {("guarantees" if k == "pins" else k): v for k, v in policy.items()} if "pins" in policy else policy
+
+
+#: the keys under which a `reads` group of an older record lists the guarantees that read it; the type hashes and the
+#: definitions' hashes determine those, so the build gives them (`readers`), and a record holding one fails until `--update`
+#: (`merge.py` drops them)
+READER_KEYS = ("guarantees", "pins")
+
+
+def with_readers(policy: dict) -> list[str]:
+    """The modules under ``policy``'s `reads` whose group still lists its readers (`READER_KEYS`)."""
+    return sorted(m for m, g in (policy.get("reads") or {}).items() if isinstance(g, dict) and any(k in g for k in READER_KEYS))
 
 
 def layout(v, pad: str = "") -> str:
@@ -1034,19 +1041,25 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     (`unfolded_sha256`, `Facts.lean`'s `liftOf`).  With ``moved`` ({old name: new name}), each guarantee and read definition
     also gets `moved`: its name before the move (`as`) and the SHA-256 of its text under the old names, and a guarantee with a
     `lift` (`head`) that of its unfolded type under the old names (`unfolded_sha256`).  Each entry of `assumption_reads` (a
-    named assumption's walk, `Facts.lean`) gets the SHA-256 of its text (`sha256`)."""
+    named assumption's walk, `Facts.lean`) gets the SHA-256 of its text (`sha256`), and so does each definition and theorem
+    of `constants` (the names of the lock's `shape.inline` texts, and those its premises print, that the build holds), for
+    `paired`, which reads ``moved`` as `moves`."""
     out, canon = work / "facts.json", work / "canon.jsonl"
     out.unlink(missing_ok=True)
     canon.unlink(missing_ok=True)
     config = work / "facts-config.json"
     premises = (policy.get("shape") or {}).get("premises")
+    inline = (policy.get("shape") or {}).get("inline")
+    texts = [t for es in inline.values() if isinstance(es, dict) for t in es] if isinstance(inline, dict) else []
+    asked = sorted({".".join(p[:i]) for t in texts for n in NAMES.findall(t) for p in [n.split(".")] for i in range(1, len(p) + 1)})
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                                  "recorded": record_scope(policy), "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
+                                  "recorded": record_scope(policy), "bounds": list(BOUND_HEADS),
+                                  "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
                                   "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
                                   "assumptions": sorted(a for a in policy.get("assumptions", {}) if isinstance(a, str)),
                                   "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
-                                  "moved": sorted([new, old] for old, new in (moved or {}).items()),
+                                  "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
                                   "out": str(out), "canon": str(canon)}))
     rc, text = run(["lake", "env", facts_program(pkg), str(config)], pkg, work / "facts.log")
     if rc or not out.exists():
@@ -1076,6 +1089,10 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     for es in facts.get("assumption_reads", {}).values():
         for r in es:
             r["sha256"] = hashes[f"read:{r['name']}"]
+    for c, e in facts.get("constants", {}).items():
+        if f"const:{c}" in hashes:
+            e["sha256"] = hashes[f"const:{c}"]
+    facts["moves"] = dict(moved or {})
     return facts
 
 
@@ -1090,8 +1107,11 @@ def renamed(name: str, moved: dict[str, str]) -> str:
 
 
 def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
-    """The policy's `witnesses` and `unwitnessed` with every guarantee and theorem they name `renamed` by ``moved``."""
+    """The policy's `witnesses`, `unwitnessed` and `witnesses_assumed` with every guarantee, theorem and assumption they
+    name `renamed` by ``moved``."""
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
+    if isinstance(taken := policy.get("witnesses_assumed"), dict):
+        out["witnesses_assumed"] = {renamed(a, moved): why for a, why in taken.items()}
     if isinstance(ws, dict):
         out["witnesses"] = {renamed(g, moved): {k: [renamed(n, moved) if isinstance(n, str) else n for n in v]
                                                 if isinstance(v, list) else renamed(v, moved) if isinstance(v, str) else v
@@ -1153,25 +1173,30 @@ def guarantee_reads(facts: dict) -> dict[str, dict[str, dict]]:
 
 
 def read_groups(reads: dict[str, dict[str, dict]], old: bool = False) -> dict:
-    """The `reads` records: per module, a digest per definition read there (generated constants with their declaration), the
-    module's digest of those, and the guarantees that read it; in SHA-256, or (``old``) as records written before it."""
+    """The `reads` records: per module, a digest per definition read there (generated constants with their declaration) and
+    the module's digest of those; in SHA-256, or (``old``) as records written before it."""
     out, key = {}, group_keys(reads)
     for m, es in sorted(reads.items()):
         groups: dict[str, list] = {}
         for n, e in es.items():
             groups.setdefault(key[n], []).append(e)
         defs = {p: digest(g, old)[:OLD] if old else digest(g) for p, g in sorted(groups.items())}
-        out[m] = {"digest": module_digest(defs), "definitions": defs,
-                  "guarantees": sorted(set().union(*(e["guarantees"] for e in es.values())))}
+        out[m] = {"digest": module_digest(defs), "definitions": defs}
     return out
+
+
+def readers(reads: dict[str, dict[str, dict]]) -> dict[str, list[str]]:
+    """{module: the guarantees that read a definition there}, from the build (`guarantee_reads`)."""
+    return {m: sorted(set().union(*(e["guarantees"] for e in es.values()))) for m, es in reads.items()}
 
 
 def group_keys(reads: dict[str, dict[str, dict]]) -> dict[str, str]:
     """{read constant: the definition its `reads` digest is part of}: a generated constant goes with its declaration when the
     declaration is read in its module and reaches it through its own type, value or constructors (`own`, transitively through
-    its other generated constants, as a structural recursion's `_f` reaches the matchers), so
-    the group is the same whichever guarantees read the declaration; any other read constant (an inductive's `casesOn`
-    another definition's match uses, an equation lemma a statement names) is a definition of its own."""
+    its other generated constants), so the group is the same whichever guarantees read the declaration.  The matchers and
+    proofs Lean shares between a module's declarations are no reads: a definition's hash holds them in place (`Facts.lean`'s
+    `readCanon`).  Any other read constant (an inductive's `casesOn` a definition's match uses, an equation lemma a
+    statement names) is a definition of its own."""
     entries = {n: e for es in reads.values() for n, e in es.items()}
     key = {}
     for n, e in entries.items():
@@ -1402,7 +1427,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                                      f"guarantees: {name}'s {k.replace('_', ' ')} changed:\n{diff}"))
                 break
     reads = guarantee_reads(facts)
-    now_reads, old_reads = read_groups(reads), read_groups(reads, old=True)
+    now_reads, old_reads, by = read_groups(reads), read_groups(reads, old=True), readers(reads)
     if not update and ("reads" in policy or any(map(unowned, policy.get("guarantees", {}).values()))):
         old = policy.get("reads", {})
         for m in sorted(set(old) | set(now_reads)):
@@ -1410,7 +1435,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             b = (old_reads if a is not None and old_group(a) else now_reads).get(m)
             if a is None:
                 fails.append(Failure("guarantees.reads-new", m, f"guarantees: they now read definitions in {m} "
-                                     f"({', '.join(b['guarantees'])})"))
+                                     f"({', '.join(by[m])})"))
             elif b is None:
                 fails.append(Failure("guarantees.reads-gone", m, f"guarantees: they no longer read {m}"))
             elif (x := definitions(a)) != (y := b["definitions"]):
@@ -1419,19 +1444,21 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                     f"new: {', '.join(sorted(set(y) - set(x)))}", f"gone: {', '.join(sorted(set(x) - set(y)))}")
                     if not s.endswith(": ")) or "a definition's content"
                 fails.append(Failure("guarantees.reads-changed", m, f"guarantees: definitions in {m} that "
-                                     f"{', '.join(b['guarantees'])} read changed ({change})"))
-            elif a.get("guarantees") != b["guarantees"]:
-                fails.append(Failure("guarantees.readers", m, f"guarantees: those that read {m} are "
-                                     f"{', '.join(b['guarantees'])}; the record lists "
-                                     f"{', '.join(a.get('guarantees', [])) or 'none'}; run `check.py --update`"))
+                                     f"{', '.join(by[m])} read changed ({change})"))
             elif a.get("digest") != b["digest"]:
                 fails.append(Failure("guarantees.reads-digest", m, f"guarantees: the digest recorded for {m} is not the "
                                      f"SHA-256 of its definitions; `python tools/verity/lean/merge.py --normalize` "
                                      f"recomputes it"))
+        if listed := with_readers(policy):
+            more = f" and {len(listed) - 8} more" if len(listed) > 8 else ""
+            fails.append(Failure("guarantees.readers", None, f"guarantees: `reads` lists the guarantees that read "
+                                 f"{', '.join(listed[:8])}{more}, which the type hashes and the definitions' hashes "
+                                 f"determine and the record no longer holds; run `check.py --update`, or "
+                                 f"`python tools/verity/lean/merge.py --normalize` drops them"))
     walked = {a: (next((e["module"] for e in es if e["name"] == a), None), digest(es))
               for a, es in facts.get("assumption_reads", {}).items() if es}
-    records, why = assumption_records(policy, now_reads, update, owner, premised, unfolds, walked)
-    fails += why
+    records, why = assumption_records(policy, now_reads, update, owner, premised, unfolds, walked, by)
+    fails += why + assumed_failures(policy, facts, records)
     ifails, inline, _ = inline_failures(policy, facts)
     fails += ifails
     out = dict(policy)
@@ -1719,7 +1746,8 @@ def vacuous_meets(body: dict, claim: str) -> str | None:
 #: starts with one of `VERIFIER_PREFIXES`, in any case (a verifier's acceptance: `PeriodRun.accepts`, `Audits.Accepts`,
 #: `Flock.Zk.verify`), the
 #: `acceptance` kind; with none, a read of a module whose last component is one of `EXCLUSION_MODULES` and a conclusion
-#: headed by one of `BOUND_HEADS` (a partition's or a covering's bound, which no verifier accepts), the `exclusion` kind
+#: headed by one of `BOUND_HEADS` (a partition's or a covering's bound, which no verifier accepts), as written or at the end
+#: of the definitions it unfolds through (`Facts.lean`'s `chain`, which `facts_of` hands `BOUND_HEADS`), the `exclusion` kind
 SCOPE_COMPONENT = "Claims"
 SCOPE_MODULES = ("Properties.Verity",)
 VERIFIER_PREFIXES = ("accept", "verify")
@@ -1744,16 +1772,12 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
     `acceptance` when it states what an acceptance means (a property of a function's acceptance, `accepted`, or a
     statement reading a claim, a `SCOPE_COMPONENT` module, the one theorem's vocabulary, `SCOPE_MODULES`, or a verifier's
     acceptance, `VERIFIER_PREFIXES`); `exclusion` when it reads none of those but a partition or a covering
-    (`EXCLUSION_MODULES`) and concludes a bound (`BOUND_HEADS`). A guarantee with no such read is about something else
-    (a bound on a hash, a count, a device), where neither form means anything."""
+    (`EXCLUSION_MODULES`) and concludes a bound (`BOUND_HEADS`, or a definition that unfolds to one, `concluded`). A
+    guarantee with no such read is about something else (a bound on a hash, a count, a device), where neither form means
+    anything."""
     if fns := accepted(policy, name):
         return "acceptance", f"a property of {' or '.join(fns)} accepting"
-    # what a statement reads only through `trees`' `except` (`record_scope`: the reads outside `meaning_reads`) is
-    # recorded, but brings no guarantee into scope: `unwitnessed` only shrinks, and the statements still in the proofs
-    # tree carry no witnesses
-    inner = None if pin.get("meaning_reads") is None else set(pin["meaning_reads"])
-    reads = sorted((r for r in pin.get("reads") or [] if inner is None or r.get("name") in inner),
-                   key=lambda r: r.get("name", ""))
+    reads = sorted(pin.get("reads") or [], key=lambda r: r.get("name", ""))
     for r in reads:
         m = r.get("module") or ""
         if SCOPE_COMPONENT in m.split("."):
@@ -1780,8 +1804,8 @@ def statement_read(pin: dict) -> dict:
 
 def concluded(pin: dict) -> tuple[list[str], int]:
     """The constants a guarantee's conclusion is headed by (`Facts.lean`'s `body` as written and `lifted`: the head past
-    its binders, its own definition among them, each conjunct's, and each definition the head unfolds through, `chain`),
-    and how many `∃` stand before its conclusion (`binders`, as `statement_read` reads it)."""
+    its binders, its own definition among them, each conjunct's, and each definition the head unfolds through with the
+    bound it ends at, `chain`), and how many `∃` stand before its conclusion (`binders`, as `statement_read` reads it)."""
     body, heads = pin.get("body") or {}, []
     for b in (body, body.get("lifted") or {}):
         for h in [b.get("head"), *(k.get("head") for k in b.get("conclusion") or []), *(b.get("chain") or [])]:
@@ -1815,24 +1839,57 @@ def assumed_module(module: str, policy: dict) -> bool:
 
 def honest_premises(pin: dict, policy: dict, own: set[str]) -> list[str]:
     """The premises of a guarantee (`Facts.lean`'s `premises`) that its honest lemmas conclude at the deployed instance:
-    each headed by a constant of a module this repository builds (``own``) outside `assumed_module`. A premise that can
-    never hold makes the guarantee say nothing, and only its honest lemma shows that it can."""
-    return sorted({p["head"] for p in pin.get("premises") or []
-                   if p.get("head") and (m := p.get("module") or "") in own and not assumed_module(m, policy)})
+    each headed by a constant of a module this repository builds (``own``) outside `assumed_module` and not under
+    `witnesses_assumed` (`assumed_failures`). A premise that can never hold makes the guarantee say nothing, and only its
+    honest lemma shows that it can."""
+    taken = policy.get("witnesses_assumed")
+    taken = taken if isinstance(taken, dict) else {}
+    return sorted({p["head"] for p in pin.get("premises") or [] if p.get("head") and p["head"] not in taken
+                   and (m := p.get("module") or "") in own and not assumed_module(m, policy)})
+
+
+def assumed_failures(policy: dict, facts: dict, records: dict) -> list[Failure]:
+    """`witnesses_assumed` ({named assumption: why}, hand-written: `--update` keeps it as it is and adds none) lists the
+    named assumptions a witness takes as it stands rather than concluding, as it takes one of an `assumed_module`: a
+    computational assumption no theorem concludes, say. Every other premise is still concluded (`honest_premises`). An
+    entry no guarantee the lock lists takes as a premise fails, and so does one that is no named assumption under
+    `assumptions` (as the update writes them, ``records``)."""
+    taken = policy.get("witnesses_assumed")
+    if taken is None:
+        return []
+    if not isinstance(taken, dict) or not all(isinstance(v, str) and v.strip() for v in taken.values()):
+        return [Failure("witnesses.assumed-form", None, "witnesses: `witnesses_assumed` is {named assumption: why a witness "
+                        "takes it rather than concluding it}, each reason one sentence")]
+    premised = {p.get("head") for g in policy.get("guarantees") or {}
+                for p in (facts["pins"].get(g) or {}).get("premises") or []}
+    fails = []
+    for a in sorted(taken):
+        if a not in premised:
+            fails.append(Failure("witnesses.assumed-stale", a, f"witnesses: `witnesses_assumed` lists {a}, which no "
+                                 f"guarantee the lock lists takes as a premise; remove the entry"))
+        elif a not in records:
+            fails.append(Failure("witnesses.assumed-unlisted", a, f"witnesses: `witnesses_assumed` lists {a}, which is no "
+                                 f"named assumption under `assumptions`: a witness takes only a listed one as it stands"))
+    return fails
 
 
 def assumes(pin: dict, policy: dict, own: set[str]) -> list[str]:
     """Why a witness assumes more than the named assumptions the lock lists, one line each: a hypothesis over its own
-    inputs (it holds at one instance), a closed one that is no listed assumption, or a premise that is no `assumed_module`
-    assumption (it is to be concluded, not taken)."""
-    listed = policy.get("assumptions") or {}
+    inputs (it holds at one instance), a closed one that is no listed assumption nor headed by one `witnesses_assumed`
+    lists (`Hm96Hiding mask c δ₁`, applied at the instance), or a premise that is neither an `assumed_module` assumption
+    nor one `witnesses_assumed` lists (it is to be concluded, not taken)."""
+    listed, taken = policy.get("assumptions") or {}, policy.get("witnesses_assumed")
+    taken = set(taken) if isinstance(taken, dict) else set()
+    heads: dict[str, set[str]] = {}
+    for p in pin.get("premises") or []:
+        heads.setdefault(p.get("binder"), set()).add(p.get("head"))
     out = []
     for h in pin.get("hypotheses") or []:
         if not h.get("closed"):
             out.append(f"takes ({h['binder']} : {h['type']}), a hypothesis over its own inputs")
-        elif h.get("named") not in listed:
+        elif h.get("named") not in listed and not (heads.get(h["binder"]) and heads[h["binder"]] <= taken):
             out.append(f"takes ({h['binder']} : {h['type']}), which is no named assumption the lock lists")
-    out += [f"rests on {h}, no named assumption of an `Assumptions` or `shape.premises` module"
+    out += [f"rests on {h}, no named assumption of an `Assumptions` or `shape.premises` module or `witnesses_assumed`"
             for h in honest_premises(pin, policy, own)]
     return out
 
@@ -1841,6 +1898,14 @@ def premise_names(pin: dict) -> set[str]:
     """The named assumptions and premise heads a statement takes (`Facts.lean`'s `hypotheses` and `premises`)."""
     return {h["named"] for h in pin.get("hypotheses") or [] if h.get("named")} | \
         {p["head"] for p in pin.get("premises") or [] if p.get("head")}
+
+
+def premise_free(pin: dict) -> bool:
+    """Whether a statement takes no premise: no `premise_names`, and no `→` binder as written or lifted (a hypothesis
+    whose type no constant heads names no premise, but is one)."""
+    body = pin.get("body") or {}
+    return not premise_names(pin) and "→" not in [*(body.get("binders") or []),
+                                                  *((body.get("lifted") or {}).get("binders") or [])]
 
 
 def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
@@ -1862,16 +1927,19 @@ def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
     if kind == "exclusion":
         premises = " or ".join(sorted(premise_names(pin))) or "its named premise"
         entry[name]["kind"] = "exclusion"
+        nontrivial = (f"¬ {shown} c₀ …` (it takes no premise to drop, so a tighter bound fails at an explicit "
+                      f"circuit c₀)" if premise_free(pin) else
+                      f"(each other premise at c₀) ∧ ¬ ({premises}) c₀ … ∧ ¬ {shown} c₀ …` (an explicit circuit c₀ "
+                      f"beats the bound once one named premise is dropped)")
         return (f"prove `{name}_honest : {honest}` (its hypotheses hold at the deployed partition and parameters d) and "
-                f"`{name}_nontrivial : (each other premise at c₀) ∧ ¬ ({premises}) c₀ … ∧ ¬ {shown} c₀ …` (an explicit "
-                f"circuit c₀ beats the bound once one named premise is dropped).{construct} List both under "
-                f"`guarantees`, and write {json.dumps(entry, ensure_ascii=False)[1:-1]} under `witnesses` (LEAN-66)")
+                f"`{name}_nontrivial : {nontrivial}.{construct} List both under `guarantees`, and write "
+                f"{json.dumps(entry, ensure_ascii=False)[1:-1]} under `witnesses` (LEAN-66)")
     nontrivial = f"{'∀ X…, ' if exists else ''}¬ {shown} at acceptAll …"
     why = (", the break included, so a break that always holds can't make the bound say nothing" if head == "Or" else "") + (
         f", each of the {exists} `∃` of its conclusion a `∀` before the `¬`, since a value the prover picks fits anything "
         f"there" if exists else "")
     return (f"prove `{name}_honest : {honest}` (its hypotheses hold at the honest deployed instance d, at the deployed "
-            f"verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module) and "
+            f"verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module or `witnesses_assumed`) and "
             f"`{name}_nontrivial : {nontrivial}` (its conclusion is false for a verifier that accepts everything{why})."
             f"{construct} List both under `guarantees`, and write {json.dumps(entry, ensure_ascii=False)[1:-1]} under "
             f"`witnesses` (LEAN-66)")
@@ -1885,18 +1953,21 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     named assumptions the lock lists (`assumes`). Read as `statement_read` reads them:
 
     - `honest`: together their conclusions conclude, at the honest deployed instance, each premise of the guarantee outside
-      a named assumption's module (`honest_premises`) and, for a property, its function's acceptance (`accepted`): a
+      a named assumption's module and `witnesses_assumed` (`honest_premises`) and, for a property, its function's
+      acceptance (`accepted`): a
       conjunct headed by or applying each. Each says something (`vacuous_meets`), and none applies a verifier that accepts
       everything (`accept_all`: that is the nontrivial lemma's object). A premise that can never hold fails here;
     - `nontrivial`: past its binders, `¬ C …` with `C` a head of the guarantee's conclusion, or one it unfolds through
       (`concluded`). For the `acceptance` kind, at the verifier that accepts everything, with a `∀` before the `¬` for each
       `∃` of the conclusion: a conclusion with an `∃` the prover picks, and a bound whose break (`C ∨ Break`) always
       holds, fail here. For the `exclusion` kind, a conjunction at an explicit circuit: (each other premise holds) ∧
-      ¬ (a named premise) ∧ ¬ (the bound) (`exclusion_failures`), so a bare `¬ bound` fails.
+      ¬ (a named premise) ∧ ¬ (the bound) (`exclusion_failures`), so a bare `¬ bound` fails; of a guarantee that takes
+      no premise (`premise_free`), the bare `¬ bound` at an explicit circuit, where a tighter bound fails.
 
     A guarantee in scope without witnesses fails unless `unwitnessed` ({guarantee: its record's type hash}, the
-    guarantees in scope when the rule came) lists it with the hash of its statement as built: a new guarantee, and one
-    whose statement changed, carry both. An entry {type_hash, missing, why} exempts only the half `missing` names, of a
+    guarantees in scope when the rule came) lists it with the hash of its statement as built, or, under `--moved`, with that
+    of its text under the old names when its record has that hash too (renamed, it says the same, and `--update` re-keys
+    the entry): a new guarantee, and one whose statement changed, carry both. An entry {type_hash, missing, why} exempts only the half `missing` names, of a
     guarantee whose `witnesses` entry lists the other (`unwitnessed_entry`). An entry beside the witnesses it would exempt,
     or of a witness, does nothing (the witnesses are held to their form) and `--update` drops it, so a PR that brings
     witnesses and one that lists the guarantee land in either order. An entry whose guarantee the lock doesn't list yet
@@ -1931,7 +2002,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                 fails.append(Failure("witnesses.unwitnessed-half", g, f"witnesses: `unwitnessed` exempts only {g}'s "
                                      f"{half} witness, and `witnesses` lists none of its: list the other half there"))
                 continue
-            if h != pin.get("type_sha256"):
+            mv, rec = pin.get("moved") or {}, guarantees.get(g) or {}
+            if h != pin.get("type_sha256") and not (h == mv.get("sha256") == rec.get("type_hash")):
                 fails.append(Failure("witnesses.unwitnessed-changed", g, f"witnesses: {g} changed since `unwitnessed` "
                                      + (f"exempted its {half} witness, so it carries that witness now" if half else
                                         f"listed it, and the rule holds it to witnesses ({why}), so it carries them now")
@@ -1986,8 +2058,9 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
             what = [*missing, *([f"{' or '.join(fns)} accepting"] if fns and not any(reaches(f, reached) for f in fns) else [])]
             fails.append(Failure("witnesses.honest-uncovered", g, f"witnesses: {g}'s `honest` witnesses "
                                  f"({', '.join(w['honest'])}) conclude nothing of {', '.join(what)} at the deployed instance: "
-                                 f"each premise outside a named assumption's module, and a property's acceptance, is a "
-                                 f"conjunct of one (a premise that can never hold makes {g} say nothing)"))
+                                 f"each premise outside a named assumption's module and `witnesses_assumed`, and a "
+                                 f"property's acceptance, is a conjunct of one (a premise that can never hold makes {g} "
+                                 f"say nothing)"))
         if skip == "nontrivial":
             continue
         n = w["nontrivial"]
@@ -2024,18 +2097,19 @@ def exclusion_failures(n: str, g: str, read: dict, np_: dict, pin: dict, heads: 
     at an explicit circuit, (each other premise of ``g`` holds) ∧ ¬ (a named premise of ``g``) ∧ ¬ (``g``'s bound). Among
     the conjuncts of its conclusion (`Facts.lean`'s `conclusion`, in any order), one is `¬ C …` with C a head of ``g``'s
     conclusion, one is `¬ P …` with P one of ``g``'s premises (under its own `∀` binders if it has them), and the others,
-    with the named assumptions ``n`` takes, conclude each other premise of ``g``. A bare `¬ bound` reads no premise."""
+    with the named assumptions ``n`` takes, conclude each other premise of ``g``. A bare `¬ bound` reads no premise, and
+    is the form only where ``g`` takes none (`premise_free`): there it states that a tighter bound fails at an explicit
+    circuit, and no premise is dropped or concluded."""
     cs, out = read.get("conclusion") or [], []
     negs = {k.get("inner") for k in cs if k.get("negated") and k.get("inner")}
-    premises = {p["head"] for p in pin.get("premises") or [] if p.get("head")} | \
-        {h["named"] for h in pin.get("hypotheses") or [] if h.get("named")}
+    premises = premise_names(pin)
     if not negs & set(heads):
         out.append(Failure("witnesses.nontrivial-form", n, f"witnesses: {n} does not state that {g}'s bound fails at an "
                            f"explicit circuit: one conjunct of its conclusion is `¬ C …` with C one of "
                            f"{', '.join(heads) or 'its heads (none reported)'}, and it negates "
                            f"{', '.join(sorted(negs)) or 'nothing'}"))
     dropped = negs & premises
-    if not dropped:
+    if not dropped and not premise_free(pin):
         out.append(Failure("witnesses.nontrivial-drops", n, f"witnesses: {n} drops no premise of {g}: an exclusion's "
                            f"nontrivial lemma states, at an explicit circuit, (each other premise holds) ∧ ¬ (the dropped "
                            f"premise) ∧ ¬ (the bound), one conjunct `¬ P …` with P one of "
@@ -2107,6 +2181,45 @@ def printed(text: str) -> str:
     return " ".join(text.split())
 
 
+#: a name as a premise prints it: a dotted identifier, not one after a `.` (a field, `(f x).g`; a projection, `p.1`)
+NAMES = re.compile(r"(?<![\w.'!?])([^\W\d][\w'!?]*(?:\.[^\W\d][\w'!?]*)*)")
+
+
+def paired(was: str, now: str, consts: set[str], facts: dict, known: set[str]) -> bool:
+    """Whether the premise ``now`` prints (``consts``: the constants it names) is the grandfathered ``was`` under renames:
+    the two texts split alike at their names (`NAMES`), and each name that differs is, in ``now``, a declaration with the
+    fields after it that ``was`` has after the old name, one new name for each old one, neither kept elsewhere in the
+    text; and the old name `--moved` moved to the new one, or is gone from the build (`constants`) and shares the new
+    one's root namespace while the lock read no definition of the new name (``known``), or is a definition or theorem
+    with the new one's SHA-256. A constructor is renamed only by `--moved`, and a field or projection never."""
+    a, b, constants = NAMES.split(was), NAMES.split(now), facts.get("constants")
+    if len(a) != len(b) or a[::2] != b[::2] or constants is None:
+        return False
+    subst, kept = {}, set()
+    for o, n in zip(a[1::2], b[1::2]):
+        parts = n.split(".")
+        i = next((i for i in range(len(parts), 0, -1) if ".".join(parts[:i]) in consts), 0)
+        c, tail, op = ".".join(parts[:i]), parts[i:], o.split(".")
+        if o == n:
+            kept.add(c)
+        elif not c or len(op) <= len(tail) or op[len(op) - len(tail):] != tail or \
+                subst.setdefault(".".join(op[:len(op) - len(tail)]), c) != c:
+            return False
+    if not subst or len(set(subst.values())) < len(subst) or kept & (set(subst) | set(subst.values())):
+        return False
+    for o, n in subst.items():
+        x, y = constants.get(o), constants.get(n)
+        if renamed(o, facts.get("moves") or {}) == n:
+            continue
+        if y is None or "constructor" in (y.get("kind"), (x or {}).get("kind")):
+            return False
+        gone = x is None and "." in o and o.split(".")[0] == n.split(".")[0] and n not in known
+        same = x is not None and x.get("sha256") is not None and x["sha256"] == y.get("sha256")
+        if not (gone or same):
+            return False
+    return True
+
+
 def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dict[str, list[str]]]:
     """(failures, the `shape.inline` an `--update` writes, every offender: {guarantee: its inline hypotheses as
     printed}, those `shape.inline` lists among them). Every `Prop` binder a lock-listed guarantee takes, its
@@ -2130,7 +2243,9 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     hypothesis of the statement as written is the hypotheses rule's. `--update` keeps an entry only while its premise
     still offends, and that of a guarantee the lock doesn't list yet (one a PR ahead on `next` brings), and adds none, so
     the map only shrinks; its size is the formalization debt the AUDIT line prints. `--moved` carries an entry to its
-    guarantee's new name (`renamed_witnesses`, which renames `shape.inline` with the witnesses)."""
+    guarantee's new name (`renamed_witnesses`, which renames `shape.inline` with the witnesses). A premise no entry lists
+    takes the place and reason of one of its guarantee's entries that no longer offends when the two are one premise under
+    renames (`paired`), and `--update` keys the entry by the premise as printed."""
     spec = policy.get("shape") or {}
     allow = spec.get("inline", {})
     if not isinstance(allow, dict) or not all(isinstance(v, dict) and v and all(isinstance(w, str) and w.strip()
@@ -2145,6 +2260,7 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     lifts = {g: (facts["pins"].get(g) or {}).get("lift") or {} for g in guarantees}
     statements = {v["head"]: g for g, v in lifts.items() if v.get("head") and spec_module(v.get("module") or "")}
     fails, kept, offenders = [], {g: v for g, v in allow.items() if g not in guarantees}, {}
+    known = {d for r in (policy.get("reads") or {}).values() if isinstance(r, dict) for d in definitions(r)}
     for g in sorted(guarantees):
         pin, old = facts["pins"].get(g) or {}, allow.get(g) or {}
         if g in held:
@@ -2172,9 +2288,17 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
             and statements.get(p.get("head"), g) == g))
         if bad:
             offenders[g] = bad
-        if still := {b: old[b] for b in bad if b in old}:
+        consts: dict[str, set[str]] = {}
+        for p in pin["inline"]:
+            consts.setdefault(printed(p["type"]), set()).update(p.get("consts") or [])
+        gone, rekeyed = [o for o in old if o not in bad], {}
+        for b in [b for b in bad if b not in old]:
+            if (o := next((o for o in gone if paired(o, b, consts[b], facts, known)), None)) is not None:
+                rekeyed[b] = old[o]
+                gone.remove(o)
+        if still := {b: old[b] for b in bad if b in old} | rekeyed:
             kept[g] = still
-        if new := [b for b in bad if b not in old]:
+        if new := [b for b in bad if b not in old and b not in rekeyed]:
             fails.append(Failure("guarantees.inline-hypothesis", g, f"guarantees: {g} takes "
                                  f"{'; '.join(f'({b})' for b in new)}: an inline hypothesis, neither a named assumption "
                                  f"the lock lists, another listed guarantee's statement nor a plain range (`0 < x`, "
@@ -2213,8 +2337,8 @@ def unfolding(d: str, unfolds: dict, listed) -> tuple[list[str], list[str]] | No
 
 
 def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str | None,
-                       premised: dict | None = None, unfolds: dict | None = None, walked: dict | None = None
-                       ) -> tuple[dict, list[str]]:
+                       premised: dict | None = None, unfolds: dict | None = None, walked: dict | None = None,
+                       read_by: dict | None = None) -> tuple[dict, list[str]]:
     """The `assumptions` records as the build has them, and the failures: each named assumption (a definition of the spec,
     stated as a `Prop` and taken as a hypothesis or read inside a guarantee's statement) has an `owner` and a `digest`, so a
     changed assumption shows as its own record, and an entry no guarantee reads fails.  The digest is the one its `reads`
@@ -2223,7 +2347,8 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     digest of it and every definition it reads in `meaning` and this repository's modules)}, `Facts.lean`'s
     `assumption_reads`), so a change to its statement or to anything it reads changes its record.  An
     update writes the digests, drops an entry no guarantee reads, and converts a list of assumption modules into the
-    definitions the guarantees read there, each owned by the one owner of the guarantees that read it (or ``owner``).
+    definitions the guarantees read there, each owned by the one owner of the guarantees that read its module (``read_by``,
+    `readers`; or ``owner``).
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
     a statement takes, headed by a constant of an assumptions module or of any module this repository builds
     (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
@@ -2234,7 +2359,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     premised in its place.  Under an update, a premise that doesn't unfold counts as listed, since the update adds it."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
     premised, unfolds = {d: set(by) for d, by in (premised or {}).items()}, unfolds or {}
-    read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
+    read = {d: (m, h, (read_by or {}).get(m, [])) for m, g in now_reads.items() for d, h in g["definitions"].items()}
     owners = {n: (r or {}).get("owner") for n, r in policy.get("guarantees", {}).items()}
     if isinstance(assumed, list):
         if not update:
@@ -2318,7 +2443,7 @@ class Codes(frozenset):
 RECORD_DIFFERENCE = Codes({
     "guarantees.signature", "guarantees.assumptions", "guarantees.type-hash",       # its record's statement differs
     "guarantees.reads-new", "guarantees.reads-gone", "guarantees.reads-changed",    # a `reads` group differs
-    "guarantees.readers", "guarantees.reads-digest",
+    "guarantees.reads-digest", "guarantees.readers",                                # or still lists its readers
     "guarantees.unrecorded",                                                        # owned, with no record yet
     "assumptions.digest", "assumptions.unrecorded", "assumptions.unlisted-premise",
     "assumptions.unread",
@@ -2622,6 +2747,18 @@ def reaches(function: str, reached: set[str]) -> bool:
 def unowned(rec: dict | None) -> dict:
     """A guarantee's record without its `owner`: what the build writes and the audit compares."""
     return {k: v for k, v in (rec or {}).items() if k != "owner"}
+
+
+def restated(base: dict, side: dict) -> list[str]:
+    """The guarantees the record ``side`` adds or restates against the record ``base``: its entry under `guarantees`
+    differs, its owner aside, or a definition its signature names has another hash under `reads` (a guarantee lifted into
+    a `Guarantees` definition is restated there, its own entry unchanged).  The record lists no readers, so a definition
+    read only through others is not seen."""
+    def hashes(rec: dict) -> dict:
+        return {d: h for g in (rec.get("reads") or {}).values() if isinstance(g, dict) for d, h in definitions(g).items()}
+    was, now, old, new = base.get("guarantees") or {}, side.get("guarantees") or {}, hashes(base), hashes(side)
+    return sorted(g for g, r in now.items() if not isinstance(r, dict) or g not in was or unowned(r) != unowned(was[g])
+                  or any(old.get(n) != new.get(n) for n in NAMES.findall(" ".join(r.get("signature") or []))))
 
 
 def spec_of(policy: dict) -> list[str]:
@@ -2949,8 +3086,10 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
     for _, f, _ in sources:
         for a, es in f.get("assumption_reads", {}).items():
             walked.setdefault(a, es)
+    tables = [f.get("constants") for _, f, _ in sources]
+    constants = None if None in tables else {c: e for t in tables for c, e in t.items()}
     return fails + more, facts | {"pins": pins, "moved_conflicts": conflicts, "own_modules": own,
-                                  "assumption_reads": walked}, by
+                                  "assumption_reads": walked, "constants": constants}, by
 
 
 REPRINTED = "printed differently: the same statement (type hash and named assumptions unchanged)"
@@ -2999,9 +3138,10 @@ def lifted_into(a: dict, b: dict, fact: dict, mv: dict, renames: dict[str, str] 
 
 def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames: dict[str, str] | None = None) -> list[str]:
     """What an `--update` changed: each changed guarantee's signature before and after, and each changed definition a
-    guarantee reads, with the guarantees that read it and its source as it is now.  A guarantee whose statement is the same
-    but prints differently (a toolchain's printer, notation) gets one line, and so does one whose 32-bit record is rewritten
-    with SHA-256 while the 32-bit hash still matches; read groups rewritten that way are counted on one line, and so are
+    guarantee reads, with the guarantees that read it in the build (none for one gone) and its source as it is now.  A
+    guarantee whose statement is the same but prints differently (a toolchain's printer, notation) gets one line, and so
+    does one whose 32-bit record is rewritten with SHA-256 while the 32-bit hash still matches; read groups rewritten that
+    way are counted on one line, and so are
     records whose declarations are unchanged but whose generated constants `group_keys` groups differently.
     Definitions are compared by name, whichever module reads them.  A guarantee lifted into a `Guarantees` definition that
     says what its record says (`lifted_into`) gets one line, and the definition, new and read by nothing else, needs no
@@ -3047,8 +3187,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
                        f"{', '.join(b.get('assumptions', [])) or 'none'}")
     spans = {r["name"]: r.get("lines") for p in facts["pins"].values() for r in p.get("reads", [])}
     oreads = old.get("reads", {})
-    recorded = {d: {"module": m, "hash": h, "guarantees": rec.get("guarantees", [])}
-                for m, rec in oreads.items() for d, h in definitions(rec).items()}
+    recorded = {d: {"module": m, "hash": h} for m, rec in oreads.items() for d, h in definitions(rec).items()}
     greads = guarantee_reads(facts)
 
     def records(key: dict[str, str]) -> dict[str, dict]:
@@ -3090,7 +3229,7 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
         state = "new" if not x else "gone" if not y else "changed" if x["hash"] is not None else "in a changed module"
         z = y or x
         out.append(f"definition {y['name'] if y else d} ({z['module']})" + (f", was {d} ({x['module']})" if away else "") +
-                   f", read by {', '.join(z['guarantees'])}: {state}")
+                   (f", read by {', '.join(y['guarantees'])}" if y else "") + f": {state}")
         span, src = (spans.get(y["name"]), sources.get(y["module"])) if y else (None, None)
         if span and src is not None and src.exists():
             text = src.read_text().splitlines()[span[0] - 1:span[1]]
@@ -3770,7 +3909,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             f"move out of it: {', '.join(unread[:8])}{more} (`unread_spec` in its report.json)")
     rep |= {"lean": facts["lean"], "modules": len(facts["modules"]), "declarations": facts["declarations"],
             "axioms": facts["axioms"], "escapes": facts["escapes"], "guarantees": new.get("guarantees", {}), "reads": new.get("reads", {}),
-            "failures": fails}
+            "readers": readers(guarantee_reads(facts)), "failures": fails}
     rep["seconds"]["total"] = round(time.monotonic() - t, 1)
     (work / "report.json").write_text(json.dumps(reported(rep), indent=1, ensure_ascii=False) + "\n")
     return rep
@@ -3915,9 +4054,10 @@ def main(argv: list[str]) -> int:
                     "\"into\": spec module[, \"beside\": module]}}; write each as `def G : Prop` in the spec module and "
                     "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
                     "auditing, and FILE.moved.json for `--update --moved`")
-    ap.add_argument("--regenerate", action="store_true", help="a train's audit: a package whose every failure is a record "
-                    "difference (a code in `RECORD_DIFFERENCE`) passes, and audit.json's `regenerated` names the record `--update` writes "
-                    "for it under --out, which the train commits; the package's own lock is never written")
+    ap.add_argument("--regenerate", action="store_true", help="the Lean check of a commit of `next`: a package whose every "
+                    "failure is a record difference (a code in `RECORD_DIFFERENCE`) passes, and audit.json's `regenerated` names "
+                    "the record `--update` writes for it under --out, which drive commits when it lands that commit; the "
+                    "package's own lock is never written")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
     ap.add_argument("--dev-cache", action="store_true", help="restore the dependencies from the verified build cache "
                     "(`cache.py get`, Mathlib's `cache get`) for a development check: our packages are still built and "
@@ -4093,8 +4233,8 @@ def main(argv: list[str]) -> int:
               f"each package's reports)", flush=True)
     regen = {os.path.relpath(r["package"], a.repo.resolve()): r["regenerated"] for r in reports if r.get("settled")}
     for p, f in regen.items():
-        print(f"audit: {p}: every failure is a record difference, settled by {f}, which the train commits over "
-              f"{p}/{POLICY}", flush=True)
+        print(f"audit: {p}: every failure is a record difference, settled by {f}, which drive commits over "
+              f"{p}/{POLICY} when it lands", flush=True)
     doc = {"passed": not failed, "failed": failed, "packages": reports, "regenerated": regen}
     if DEV_CACHE:
         doc["kind"] = DEV_KIND

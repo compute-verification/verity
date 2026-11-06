@@ -94,9 +94,9 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld", "Properties.Attest", "Properties.Pous.Component",
   "Properties.NetworkCertifier", "Properties.NetworkCertifier.LinkWindow", "Properties.CertifierNetwork",
   "Properties.CertifierNetwork.Runs", "Properties.Identity", "Properties.Annot", "Properties.NciDesc",
-  "Properties.NciDesc.Verdict",
-  "Properties.NciDesc.Cover", "Properties.Nci.Baseline", "Properties.SampledProofs", "Properties.SampledProofs.Draw",
-  "Properties.SampledProofs.Halt", "Properties.Evaluate", "Properties.NetworkRecords", "Properties.NetworkPeriod",
+  "Properties.NciDesc.Verdict", "Properties.NciDesc.Cover", "Properties.Nci.Baseline", "Properties.Nci.Count",
+  "Properties.SampledProofs", "Properties.SampledProofs.Draw", "Properties.SampledProofs.Halt", "Properties.Evaluate",
+  "Properties.NetworkRecords", "Properties.NetworkPeriod",
   "Properties.NetworkScan", "Properties.Accounting.Requirement", "Properties.Accounting.Compose",
   "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
@@ -105,4 +105,5 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Composition", "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Pous.WipeSigned", "Properties.Challenger",
   "Properties.Firewall", "Properties.Core.Site", "Properties.Flock.Circuit", "Properties.Nci.Protocol",
-  "Properties.Verity.Soundness", "Properties.Verity.Game", "Properties.Verity.Idle", "Properties.Remote"]
+  "Properties.Verity.Soundness", "Properties.Verity.Game", "Properties.Verity.Idle", "Properties.Remote",
+  "Properties.Verity.Subprotocols"]

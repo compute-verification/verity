@@ -62,7 +62,7 @@ class Lines:
 
 def consume(deps: Deps, payload: dict, delivery_count: int) -> str:
     """Process one delivery; returns the decision.  Raises Retry for a delivery to come, and after MAX_DELIVERIES failures
-    acknowledges instead: it dead-letters the message, says so in the thread and rings @top."""
+    acknowledges instead: it dead-letters the message, says so in the thread and rings the admin."""
     eid = str(payload.get("event_id") or "")
     if not eid:
         deps.log("dropped", why="no event_id")
@@ -84,7 +84,7 @@ def consume(deps: Deps, payload: dict, delivery_count: int) -> str:
 
 def process(deps: Deps, payload: dict) -> str:
     if payload.get("kind") == "interactivity":
-        # TODO(comms): #ask-daniel's buttons. The decision is recorded by the website's /api/agent-approvals route, which
+        # TODO: #ask-daniel's buttons. The decision is recorded by the website's /api/agent-approvals route, which
         # only a card's asker can reach (Cursor OIDC); `ring_decision` needs that record. README "Needs".
         deps.log("interactivity-unhandled", event_id=payload.get("event_id"), type=(payload.get("payload") or {}).get("type"))
         return "interactivity-unhandled"
@@ -133,7 +133,7 @@ def is_line_for(m: dict, ts: str, reg: dict, rs: Any) -> bool:
 
 
 def line_names(m: dict, reg: dict) -> list[str]:
-    """The names a routing line gives: its metadata's, else the `@name`s in its text; the handles among them, else @top."""
+    """The names a routing line gives: its metadata's, else the `@name`s in its text; the handles among them, else the admin's."""
     handles = {h["handle"] for h in reg["handles"]}
     got = ((m.get("metadata") or {}).get("event_payload") or {}).get("names")
     if not isinstance(got, list):
@@ -164,7 +164,7 @@ def post_line(deps: Deps, ch: str, thread: str, ts: str, text: str, names: list[
 def route(deps: Deps, eid: str, ev: dict) -> str:
     """A person's post in a chat or ask channel: `deliver`, as `research msg deliver --channel KEY --event` does.  An
     unaddressed one rings the names of its routing line: the one already in its thread, else a new one naming the
-    model's picks, which in no-model mode is @top."""
+    model's picks, which in no-model mode is the admin."""
     rs, api, ch = deps.rs, deps.slack, ev["channel"]
     reg = registry_for(deps, ch)
     key = rs.key_of(reg, ch)
@@ -212,11 +212,11 @@ def route(deps: Deps, eid: str, ev: dict) -> str:
 
 
 def pick(deps: Deps, msg: dict, thread: list[dict], reg: dict) -> tuple[list[str], str]:
-    """The names an unaddressed post rings and the routing line that says so: the model's valid handles (never @top), else
-    @top."""
+    """The names an unaddressed post rings and the routing line that says so: the model's valid handles (never the admin's),
+    else the admin's."""
     try:
         got = router.route_unaddressed(msg, thread, reg)
-    except Exception as e:  # noqa: BLE001 - a model failure sends the post to @top, never drops it
+    except Exception as e:  # noqa: BLE001 - a model failure sends the post to the admin, never drops it
         deps.log("router-error", error=error(e))
         return ["top"], MODEL_DOWN
     if got is None:
@@ -250,7 +250,7 @@ def newcomer(deps: Deps, ev: dict) -> str:
 
 def dead_letter(deps: Deps, payload: dict, delivery_count: int, e: BaseException) -> None:
     """Park the message on DEAD_TOPIC and count it (best effort, in the cache health reads), then, best effort too, a
-    failure line in its thread, which is its routing line from now on, and @top rung."""
+    failure line in its thread, which is its routing line from now on, and the admin rung."""
     eid = str(payload["event_id"])
     deps.queue.send(DEAD_TOPIC, {"payload": payload, "error": type(e).__name__, "deliveries": delivery_count},
                     idempotency_key=eid)

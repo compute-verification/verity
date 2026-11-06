@@ -296,7 +296,7 @@ def _tile_side_sig(S_):
 
 
 def _tile_side_body(B, S_, ac, bc, pa, pb, ia, jb):
-    return B.call(templates(S_.K, (S_.TM, S_.TN), S_.DEV, True)["tile"], ac, bc, pa, pb)
+    return B.call(templates(S_.K, (S_.TM, S_.TN), S_.DEV, True, "h0")["tile"], ac, bc, pa, pb)
 
 
 Pc8TileSideDef = CompositeDefinition(
@@ -384,9 +384,12 @@ SEEDS = {"seed_a": C.LABELS["seed-A"].decode(), "seed_b": C.LABELS["seed-B"].dec
 
 @lru_cache(maxsize=16)
 def templates(k: int, tile: tuple[int, int] = TILE, dev: str = "sm120",
-              hidden: bool = False, hashing: str = "h0") -> dict[str, SpecializedDefinition]:
+              hidden: bool = False, hashing: str | None = None) -> dict[str, SpecializedDefinition]:
     """The unit templates at depth ``k``, tile ``tile`` (rows, columns) and device ``dev``, by role; ``hidden``, the
-    hiding tile, under ``hashing`` h0 (`Pc8TileHidden`) or h3 (`Pc8TileHiddenH3`)."""
+    hiding tile, under ``hashing`` h3 (`Pc8TileHiddenH3`, the default) or h0 (`Pc8TileHidden`, by name).  The plain tile
+    is h0's, and takes no hashing or h0."""
+    if hashing is None:
+        hashing = "h3" if hidden else "h0"
     if hashing not in C.HASHINGS or (hashing != "h0" and not hidden):
         raise ValueError(f"Pearl-C's tile takes hashing {' or '.join(C.HASHINGS)}, and h3 only hiding: {hashing!r}")
     td = Pc8TileDef if not hidden else Pc8TileHiddenDef if hashing == "h0" else Pc8TileHiddenH3Def
@@ -474,7 +477,7 @@ def _call_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, bc, p
     A row's unit cut into `rowk`'s pieces.  A short last tile row (r = m mod TM rows) is its own batch of the tile template
     at r × TN."""
     tm, tn = tile
-    tp = templates(k, tile, dev, hidden)
+    tp = templates(k, tile, dev, hidden, "h0")
     m, n = len(a), len(bc)
     if row_k is None:
         rows = B.batch(tp["row_a"], a, ea, fa, fb, axes=(0, 0, None, None))
@@ -488,7 +491,7 @@ def _call_units(B, k: int, tile: tuple[int, int], dev: str, a, ea, fa, fb, bc, p
     acs, pas, bcs, pbs = blocks(whole_a, ms, tm), blocks(whole_p, ms, tm), blocks(bc, ns, tn), blocks(pb, ns, tn)
     tiles = [B.batch(tp["tile"], acs[rs], bcs, pas[rs], pbs, axes=(None, 0, None, 0)) for rs in range(ms)]
     if r:
-        short = templates(k, (r, tn), dev, hidden)["tile"]
+        short = templates(k, (r, tn), dev, hidden, "h0")["tile"]
         tiles.append(B.batch(short, ac[ms * tm:], bcs, pa[ms * tm:], pbs, axes=(None, 0, None, 0)))
     if hidden:
         return array_of([array_of([tiles[rs][cs] for cs in range(ns)]) for rs in range(len(tiles))]), ok
@@ -614,7 +617,7 @@ def _role_of() -> dict[int, str]:
 
 def tile_templates(shape: Shape) -> list[SpecializedDefinition]:
     """The tile template of each distinct tile row height (`Shape.tile_rows`), top to bottom: TM × TN, then r × TN."""
-    return [templates(shape.k, (h, shape.tile[1]), shape.dev, shape.hidden)["tile"] for h in dict.fromkeys(shape.tile_rows())]
+    return [templates(shape.k, (h, shape.tile[1]), shape.dev, shape.hidden, "h0")["tile"] for h in dict.fromkeys(shape.tile_rows())]
 
 
 def query(shape: Shape, side: str = "check") -> dict[str, Any]:
@@ -627,7 +630,7 @@ def query(shape: Shape, side: str = "check") -> dict[str, Any]:
         from . import cap
         tp = cap.unit_templates(shape.k, shape.dev, shape.tile, shape.n, row_rho=shape.row_rho)
         return PO.template_instances_query([tp[r] for r in cap.ROLES[side]])
-    tp = templates(shape.k, shape.tile, shape.dev, shape.hidden)
+    tp = templates(shape.k, shape.tile, shape.dev, shape.hidden, "h0")
     return PO.template_instances_query([t for r in ROLES[side] for t in (tile_templates(shape) if r == "tile" else [tp[r]])])
 
 

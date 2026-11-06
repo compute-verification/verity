@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Claims.Bridge.BindsColl
+public import Proofs.Flock.Claims.Bridge.WrongSet
 public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 public import Proofs.Flock.C3.RegLevels.ValueTie

@@ -31,8 +31,24 @@ def test_try_runs_lake_env_lean_in_the_nearest_package_and_passes_its_status(tmp
     file.write_text("theorem t : True := trivial\n")
     called = stand_in_lake(tmp_path, monkeypatch, 3)
     assert verity_cli.main(["lean", "try", str(file)]) == 3
-    assert called.read_text().splitlines() == [str(pkg.resolve()), "env lean Inner/Area/File.lean"]
-    assert f"verity lean try: lake env lean Inner/Area/File.lean (in {pkg.resolve()})" in capsys.readouterr().out
+    assert called.read_text().splitlines() == [str(pkg.resolve()), "env lean .lake/axiom-probe/Inner/Area/File.lean"]
+    assert (f"verity lean try: lake env lean .lake/axiom-probe/Inner/Area/File.lean, Inner/Area/File.lean with the axiom "
+            f"probe after its last line (in {pkg.resolve()})") in capsys.readouterr().out
+    assert not (pkg / ".lake" / "axiom-probe" / "Inner" / "Area" / "File.lean").exists()
+
+
+def test_try_ends_with_the_axiom_probes_line_when_lean_exits_0(tmp_path, monkeypatch, capsys):
+    (tmp_path / "lakefile.toml").write_text('name = "P"\n')
+    (tmp_path / "T.lean").write_text("theorem t : True := sorry\n")
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "lake").write_text("#!/bin/sh\necho \"'t' depends on axioms: [sorryAx]\"\n")
+    (bin_ / "lake").chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
+    assert verity_cli.main(["lean", "try", str(tmp_path / "T.lean")]) == 0
+    assert capsys.readouterr().out.splitlines()[-1] == (
+        "verity lean try: T.lean: axiom probe: 1 of its 1 theorems use axioms beyond propext, Classical.choice and "
+        "Quot.sound: t (sorryAx)")
 
 
 def test_try_refuses_a_file_in_no_package_and_remote_options_without_on(tmp_path, monkeypatch, capsys):

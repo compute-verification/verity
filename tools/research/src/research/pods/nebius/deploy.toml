@@ -156,6 +156,27 @@ src = "tools/research/src/research/pods/nebius/user-cpuset.conf"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
+# Inbound IPv4 TCP packets carrying IP options are dropped, and MPTCP is off (vm_setup.sh writes the same three files at first
+# boot). After installing them: `sudo systemctl daemon-reload && sudo systemctl enable --now vy-drop-ipv4-options.service &&
+# sudo sysctl -p /etc/sysctl.d/90-vy-mptcp-off.conf`.
+[[file]]
+path = "/etc/vy/drop-ipv4-options.nft"
+src = "tools/research/src/research/pods/nebius/drop-ipv4-options.nft"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-drop-ipv4-options.service"
+src = "tools/research/src/research/pods/nebius/vy-drop-ipv4-options.service"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+owner = "infra"
+
+[[file]]
+path = "/etc/sysctl.d/90-vy-mptcp-off.conf"
+src = "tools/research/src/research/pods/nebius/mptcp-off.conf"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+owner = "infra"
+
 # Memory: user 1001's slice, each login session's scope (a run's own cap), the user manager's OOM score, and ssh.service, where a
 # login goes when logind can't make its scope. install's daemon-reload applies them to running units; nothing restarts.
 [[file]]
@@ -679,14 +700,14 @@ owner = "infra"
 [[file]]  # hourly `research retention gc --apply` while /workspace is over 80% (n2 sat at 80% with 3.5 TiB collectable, 19 Oct)
 path = "/etc/systemd/system/vy-retention-gc.service"
 src = "tools/research/src/research/pods/nebius/sky/retention_gc.service"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-retention-gc.timer"
 src = "tools/research/src/research/pods/nebius/sky/retention_gc.timer"
-nodes = ["vy-nebius-1", "vy-nebius-2"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 

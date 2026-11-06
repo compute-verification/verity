@@ -9,7 +9,9 @@ public import Proofs.Flock.Claims.Scope.Tables
 
 `RecursiveKS`'s nontrivial lemma (`Flock.Guarantees.recursiveKS_nontrivial`) is about one compiled statement that the
 deployed readers read: dense, with at least one V\* session, its inner statement in the plain scope (the checks
-`PlainIn` reads, `setupView`), and its V\* parts in scope at a coin-server record. Its inner statement need not be
+`PlainIn` reads, `setupView`) with one table, and its V\* parts in scope at a coin-server record, at the deployment's
+sizes (`RecDeploy.SizesAt`: one table each, at most 16 parts, at most `2^32` inner setup calls), which
+`RecursiveBitsKDeployed`'s nontrivial lemma also reads. Its inner statement need not be
 false: at the verifier that accepts everything the record stages no V\* statement, so `E*` extracts nothing from the
 silent prover, whatever the inner statement. What the kernel can't build is the reading: the deployed reader reads a
 statement only through `jsonOf`, whose `Lean.Json.Parser.anyCore` is a `partial def` the kernel can't unfold, and only
@@ -35,12 +37,12 @@ def setupView (t : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.F
 
 /-- **What the deployed readers make of the bytes `x`**: the compiled statement's parse (`RecDeploy.parse`) has the
 dense form (no holo inner circuits, no RecSparse phase); it has at least one V\* session (`nS`); and Flock's plain
-setup of its inner statement (`xIOf x`) passes `PlainIn`'s checks.
+setup of its inner statement (`xIOf x`) passes `PlainIn`'s checks and has one table.
 
-Assumption record. No claim: three evaluations of deterministic deployed code on public bytes, which say nothing about
-the prover or the world. It is witnessed outside Lean by a run that stages V\* over an honest inner statement with the
+Assumption record. No claim: evaluations of deterministic deployed code on public bytes, which say nothing about the
+prover or the world. It is witnessed outside Lean by a run that stages V\* over an honest inner statement with the
 deployed recursive driver, feeds the compiled statement's bytes to the compiled verifier's reader and Flock's setup, and
-records the three readings.
+records the readings.
 
 The run records its readings in its `summary.json`, over the bytes an honest deployed recursive run staged (the
 staging run). `flock-verify` built at 53a30ae7bc
@@ -53,23 +55,31 @@ the staging run's, at main 4331ec922a. -/
 def DeployedParses (x : Msg) : Prop :=
   (parse x).map (fun s => (s.form.holo, s.form.sparse)) = some (false, none) ∧
   0 < nS x ∧
-  (FlockDeploy.setupOf false (xIOf x)).map setupView = some true
+  (FlockDeploy.setupOf false (xIOf x)).map setupView = some true ∧
+  (FlockDeploy.setupOf false (xIOf x)).map (fun t => t.2.2.size) = some 1
 
-/-- **The V\* parts are in scope at the run's coin-server record**: each part `j < nS x`, staged at the transcript
-`tr`, is in the parts' scope (`PartIn`), there are at most `2^16` parts and at most `2^56` inner setup inputs.
+/-- **The V\* parts are in scope at the run's coin-server record, at the deployment's sizes**: each part `j < nS x`,
+staged at the transcript `tr`, is in the parts' scope (`PartIn`) with one table, there are at most 16 parts, and the
+inner statement's plain setup makes at most `2^32` SHA-512 calls (`innerSetupIns`). With `DeployedParses`' one inner
+table these are `RecDeploy.SizesAt`'s readings.
 
 Assumption record. No claim: `RecDeploy.lamLin2_deployed_ge_dep`'s scope premises (`hO`, `hn`, `hS`), which every
-statement `λ₂`'s numbers are stated at takes; the parts are V\*'s at the deployed shape, fixed by the deployment, not by
-the fixture's inner statement. Witnessed outside Lean by the fixture's run, which records each part's setup.
+statement `λ₂`'s numbers are stated at takes, at `SizesAt`'s sizes; the parts are V\*'s at the deployed shape, fixed by
+the deployment, not by the fixture's inner statement. Witnessed outside Lean by the fixture's run, which records each
+part's setup, and by a reading run on the same bytes, which counts the inner setup's calls.
 
 The run is `DeployedParses`'s, at the staging run's coin-server record (the inner session and its `public.json`
 transcript). Each of the 10 parts' `--zk` setup gave 1 table, 2 points, `mPts` from 27 to 33 and `(m, k_log, regions)`
-within `m` 26–32, `k_log` 22–26 and at most 48 regions, inside `PartIn`, and each was accepted. 10 ≤ `2^16`, and the
-whole tree is 1.8 GB, under `2^56` inputs. It is weaker than the Prop in that the parts are those the staging run's
-driver staged, not `pick`'s choice, which is `Classical.choose`. -/
+within `m` 26–32, `k_log` 22–26 and at most 48 regions, inside `PartIn`, and each was accepted; 10 ≤ 16. A reading run
+on the same staged bytes counted the inner setup's calls: the compiled verifier's plain verify of the inner session, its
+setup at the session record's draw, with a `dbgTrace` of `Stmt.setupCalls` at SHA-512 at the setup's own arguments (the
+length of `innerSetupIns`'s list, `FlockDeploy.setupM_eval` and `FlockDeploy.hOf_sha512`), counted 152 calls, under
+`2^32`, and was accepted. It is weaker than the Prop as `DeployedParses`' readings are, and in that the parts are those
+the staging run's driver staged, not `pick`'s choice, which is `Classical.choose`. -/
 def PartsInScope (x : Msg) (tr : Msg → List (Msg × Out) → ByteArray) : Prop :=
-  (∀ j < nS x, ∃ i spec' sts', PartIn (staged (Stage.ofMsg tr) x (pick (Stage.ofMsg tr) x j) j) i spec' sts') ∧
-    nS x ≤ 2 ^ 16 ∧ (innerSetupIns (xIOf x)).length ≤ 2 ^ 56
+  (∀ j < nS x, ∃ i spec' sts', PartIn (staged (Stage.ofMsg tr) x (pick (Stage.ofMsg tr) x j) j) i spec' sts' ∧
+      sts'.size = 1) ∧
+    nS x ≤ 16 ∧ (innerSetupIns (xIOf x)).length ≤ 2 ^ 32
 
 /-- **`RecursiveKS`'s nontrivial fixture**: some bytes `x` the deployed readers read as `DeployedParses` says, with a
 coin-server record at whose transcript its parts are in scope (`PartsInScope`). The bytes and the record are the

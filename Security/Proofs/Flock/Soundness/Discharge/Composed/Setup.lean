@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Composed.Coins
-public import Proofs.Flock.Soundness.Discharge.Composed.Geometry
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
 public import Proofs.Flock.Soundness.Discharge.Composed.Pads
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
 
