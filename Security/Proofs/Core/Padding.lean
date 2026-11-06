@@ -1,16 +1,9 @@
 module
 
 public import Definitions.Core.Guarantees.Formalism
-public import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Rat.Cast.Order
-import Mathlib.Tactic.Linarith.Frontend
-import Mathlib.Tactic.NormNum.Abs
-import Mathlib.Tactic.NormNum.DivMod
-import Mathlib.Tactic.NormNum.OfScientific
-import Proofs.Core.Circuit
-import Proofs.Core.Expand
-import Proofs.Core.Formalism
+public import Proofs.Core.Formalism
+public import Proofs.Core.Expand
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Proofs of padding and of Theorem 3 at the serving blocks

@@ -1,10 +1,10 @@
 module
 
 public import Definitions.Core.Guarantees.Formalism
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Ring.RingNF
-import Proofs.Core.Circuit
+public import Proofs.Core.Circuit
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Ring
 
 /-!
 # Proofs of the working draft's Lemma 1 and Theorem 3

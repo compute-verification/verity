@@ -2,7 +2,7 @@ module
 
 public import Definitions.Core.Guarantees.Expand
 public import Definitions.Core.Boolean
-import Proofs.Core.Circuit
+public import Proofs.Core.Circuit
 
 /-!
 # Proofs of the bit-level expansion's guarantees
