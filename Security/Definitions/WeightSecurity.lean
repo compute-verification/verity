@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Core.Declaration
+public import Definitions.Core.RegisteredCircuit
 public import Definitions.Core.Interaction
 
 /-!
@@ -33,7 +33,7 @@ namespace WeightSecurity
 
 /-- **The function the declaration `d` serves**: the weights are the values of its registered inputs `d.θ`, a query
 the values of its other input gates, and the answer the values of its output gates on the honest trace. -/
-def served (d : Verity.Declaration) (θ : (g : {g // g ∈ d.θ}) → BitVec (d.D.w g.1))
+def served (d : Verity.RegisteredCircuit) (θ : (g : {g // g ∈ d.θ}) → BitVec (d.D.w g.1))
     (x : (g : {g // d.D.isInput g = true ∧ g ∉ d.θ}) → BitVec (d.D.w g.1)) :
     (o : {o // o ∈ d.D.outputs}) → BitVec (d.D.w o.1) :=
   fun o => d.D.eval (fun g => if h : g ∈ d.θ then θ ⟨g, h⟩ else
