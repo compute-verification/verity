@@ -64,6 +64,8 @@ public import Definitions.Pouw.PearlC.Fp4
 public import Definitions.Pouw.PearlC.Fp4Chain
 public import Definitions.Pouw.PearlC.Fp4Skip
 public import Definitions.Pouw.PearlC.Fp4Vectors
+public import Definitions.Pouw.PearlC.FlockTile.Bridge
+public import Definitions.Pouw.PearlC.FlockTile.Audit
 public import Definitions.Pouw.PearlC.Game
 public import Definitions.Pouw.PearlC.Hidden
 public import Definitions.Pouw.PearlC.HiddenTileGame
