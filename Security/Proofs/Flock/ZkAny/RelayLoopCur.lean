@@ -85,7 +85,7 @@ theorem sched_of_placeOf {salts : Array (ByteArray × Nat × Array ByteArray)}
   · exact ⟨p.alg, schedSoFar_alg t dom xs hi p hal hlt⟩
   · rw [schedSoFar_open t dom xs hi p hal hlt]
     rcases hop with ⟨hn, ho, hle⟩ | ⟨hle, ho, hS⟩ | ⟨hle, ho, hn, x, hx⟩
-    · have hF : openFed t dom xs hi p = (_root_.Flock.Firewall.Drive.openStep t p.rep dom xs hi
+    · have hF : openFed t dom xs hi p = (_root_.Flock.Firewall.Drive.openStepM t p.rep dom xs hi
           (p.coins.extract 0 p.alg.size), #[]) := by
         unfold openFed
         rw [Array.extract_empty_of_size_le_start hle]
@@ -93,7 +93,7 @@ theorem sched_of_placeOf {salts : Array (ByteArray × Nat × Array ByteArray)}
       rw [placeOf_none salts l0 s p dom hlt ho hn hst hlink (hsalt (by omega) ho hn) htab, ← hxs] at hv
       rw [hF]
       revert hv
-      generalize _root_.Flock.Firewall.Drive.openStep t p.rep dom xs hi (p.coins.extract 0 p.alg.size) = S
+      generalize _root_.Flock.Firewall.Drive.openStepM t p.rep dom xs hi (p.coins.extract 0 p.alg.size) = S
       intro hv
       cases S with
       | ask c' n k' => exact ⟨_, rfl⟩
