@@ -36,7 +36,6 @@
     {"file": "Security/Proofs/Flock/Claims/Sampling/Select/Steps.lean", "count": 1},
     {"file": "Security/Proofs/Flock/Claims/Sampling/Seq.lean", "count": 2},
     {"file": "Security/Proofs/Flock/Claims/Witnesses/Sampling.lean", "count": 1},
-    {"file": "Security/Proofs/Flock/Claims/WrongUnits.lean", "count": 3},
     {"file": "Security/Proofs/Flock/EndToEnd/Joint/MT/Statement.lean", "count": 3},
     {"file": "Security/Proofs/Flock/EndToEnd/Joint/Statement.lean", "count": 3},
     {"file": "Security/Proofs/Flock/EndToEnd/Period/Statement.lean", "count": 2},
