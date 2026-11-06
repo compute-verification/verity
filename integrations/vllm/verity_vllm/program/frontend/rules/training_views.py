@@ -5,8 +5,8 @@ of a value that is not one run leaf by leaf, up to a limit. `BoxPermute` represe
 tensor mapped affinely onto one producer's leaves, permutes the boxes, and writes the result back as strided references
 (`_view_permute` and `_view_expand` do the same for the rules that read a permuted or broadcast operand). `StaticFloats` keeps a
 float tensor the step fixes without reading a value (a literal, the causal mask, a fill) as the tensor torch computes on the CPU
-(`StaticFloat`); it becomes constant gates only where an op reads it. `Copy` takes a functionalized `copy_`'s result as its
-source's values, by reference.
+(`StaticFloat`); it becomes constant gates only where an op reads it or the step returns it. `Copy` takes a functionalized
+`copy_`'s result as its source's values, by reference.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.patterns import _constant_tensor
 from verity_vllm.program.frontend.strided_views import (_EXPLICIT_LIMIT, _constant_run, _expand, _permute, _row_major, _strided_refs,
                                                         _tensor_type)
-from verity_vllm.program.frontend.value_types import shape_of
+from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
 
 aten = torch.ops.aten
 _PARTS = 1 << 18  # reference parts a view or a constant tensor may take
@@ -231,11 +231,23 @@ def _permute_dims(node, rank: int) -> tuple[int, ...]:
 @dataclass(eq=False)
 class StaticFloat:
     """A float tensor the step fixes without reading a value (a literal, the causal mask, a fill), as torch computes it on the CPU;
-    it becomes constant gates only where an op reads it. A bf16 one is held as the f32 tensor of its values."""
+    it becomes constant gates only where an op reads it or the step returns it. A bf16 one is held as the f32 tensor of its
+    values."""
     tensor: torch.Tensor
 
     def __repr__(self) -> str:
         return f"StaticFloat{list(self.tensor.shape)}"
+
+    def returned(self, ctx, node) -> Coll:
+        """The tensor as a value the step returns (a fill of a mutated input, say): its words in `node`'s dtype, a constant gate a
+        distinct word. A NaN is refused, as where an op reads one: torch CPU's NaN word is not the GPU's."""
+        from verity_vllm.program.frontend.rules.training_emit import _static_words, _words
+
+        if bool(torch.isnan(self.tensor).any()):
+            refuse("numerics_unregistered", node, ctx.module_path(node), "a returned static NaN (torch CPU's NaN word is not the GPU's)")
+        dt = ctx.dtype_of(node)
+        w = WIDTH_OF_DTYPE[dt]
+        return _static_words(ctx, node, _words(self.tensor.to(dt), w), w).reshape(_tensor_type(list(self.tensor.shape), w))
 
 
 

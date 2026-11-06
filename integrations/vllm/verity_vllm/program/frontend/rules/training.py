@@ -16,8 +16,7 @@ the tensor core's dot (`HopperBF16WgmmaDot16_v1`); `add`, `sub`, `mul` and `div`
 `silu_backward`'s operations and `_foreach_add`'s (`SiluBackward`, `ForeachAdd`); a vector norm or a sum of a whole tensor is its
 `reduce_kernel`'s (`rules.training_reduce.FullReduce`); an f32 embedding's gradient is its kernels' (`EmbeddingDenseBackward`);
 and the conversions to bf16 and to and from f16 and a `kthvalue` are its own (`rules.training_masks`).
-A random op's values are an input of the step, committed with its generator's seed (`rules.training_draws.Random`). A training op
-with no Definition to lower it to is refused with the Definition it needs (`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
+A random op's values are an input of the step, committed with its generator's seed (`rules.training_draws.Random`).
 
     training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
 
@@ -447,19 +446,27 @@ class SoftmaxBackward(_TrainRule):
 
 
 class LogSoftmax(_TrainRule):
-    """`_log_softmax`: refused. Its value is `x - max - log(sum(exp(x - max)))`, and the reference vocabulary has no f32 log: it needs
-    a correctly-rounded `F32LogRn` (the twin of `F32ExpRn_v1`), registered with its Boolean version."""
-    info = _info("LogSoftmax", "aten._log_softmax (refused: no f32 log Definition)", "never applies")
+    """`_log_softmax(x, -1, False)` of f32 = `(x - max) - log(sum(exp(x - max)))` per row: `LogSoftmaxRef_v1{N,f32}` rows."""
+    info = _info("LogSoftmax", "aten._log_softmax over the last axis of f32", "the operand is an f32 value", "half_to_float is false")
 
     def targets(self):
         return {aten._log_softmax.default}
 
     def applies(self, node, ctx):
-        return ("numerics_unregistered: log_softmax needs a correctly-rounded f32 log (F32LogRn, the twin of F32ExpRn_v1) and the "
-                "reference vocabulary has none")
+        why = _operand_ok(ctx, node.args[0])
+        if why or not isinstance(ctx.val(node.args[0]), Coll):
+            return why or "the operand is not a value"
+        if node.args[2]:
+            return "numerics_unregistered: half_to_float"
+        return _last_dim(ctx, node, node.args[0], node.args[1]) or True
 
     def emit(self, node, ctx):
-        raise AssertionError("never applies")
+        x = ctx.coll(node.args[0])
+        S = shape_of(x.type)[0]
+        x2, Rn, N = _rows(x, S)
+        out = _batch(ctx, node, bind(R.LogSoftmaxRef, N=N, DT="f32"), x2, axes=(0,))
+        ctx.define(node, out.reshape(_tensor_type(S, 32)))
+        ctx.record(self, node, {"rows": Rn, "N": N}, emitted=f"LogSoftmaxRef_v1{{N={N},DT=f32}} x{Rn}")
 
 
 class LogSoftmaxBackward(_TrainRule):

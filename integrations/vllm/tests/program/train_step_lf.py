@@ -107,7 +107,7 @@ def loss_fn(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
 
 
 def square_loss(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
-    """The sum of the logits' squares: a loss with no log, so every op of its step derives (the tests' step without holes)."""
+    """The sum of the logits' squares: the tests' loss of one element-wise op and one sum, with no cross-entropy."""
     return model(x[:, :-1]).float().square().sum()
 
 
