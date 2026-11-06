@@ -29543,6 +29543,8 @@
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
+    "Verity.circuit_files_by_path_agree",
+    "Verity.circuit_files_by_path_agree_nontrivial",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_honest",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_nontrivial",
