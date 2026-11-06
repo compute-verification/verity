@@ -26,6 +26,7 @@ export async function testRuntime() {
     harness: harnessFor,
     credentials: localCredentials(store),
     baseUrl: "http://platform.test",
+    repoUrl: null,
     sliceSeconds: 30,
     leaseSeconds: 120,
   };

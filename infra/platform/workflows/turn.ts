@@ -2,7 +2,7 @@ import { HarnessAgent } from "@ai-sdk/harness/agent";
 import { type HarnessWorkflowState, createHarnessWorkflowState, runHarnessAgentTimeSlice } from "@ai-sdk/workflow-harness";
 import { tapped } from "../src/harness/tap.ts";
 import { costUsd } from "../src/prices.ts";
-import { DOC_PATH, leadInstructions, turnPrompt, workerInstructions } from "../src/prompt.ts";
+import { DOC_PATH, REPO_DIR, leadInstructions, turnPrompt, workerInstructions } from "../src/prompt.ts";
 import { GITHUB_PLACEHOLDER, type Runtime, runtime } from "../src/runtime.ts";
 import type { HarnessName, InboxEvent, ReplyTo, Usage, Worker } from "../src/store.ts";
 import { hostTools } from "../src/tools.ts";
@@ -20,6 +20,7 @@ export type TurnCtx = {
   subject: string;
   instructions: string;
   replyTo: ReplyTo | null;
+  branch: string | null;
 };
 
 export type Begun = { ctx: TurnCtx; state: HarnessWorkflowState };
@@ -32,7 +33,21 @@ const NO_REPLY = "NO_REPLY";
 const openSandbox = (rt: Runtime, ctx: TurnCtx) =>
   rt.sandbox.open(ctx.sandboxName, { lane: ctx.lane, subject: ctx.subject, credentials: rt.credentials });
 
+const shq = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
+
+async function mustRun(session: { run(o: { command: string }): PromiseLike<{ exitCode: number; stderr: string }> }, command: string) {
+  const r = await session.run({ command });
+  if (r.exitCode !== 0) throw new Error(`${command.split(" ").slice(0, 3).join(" ")}: exit ${r.exitCode}: ${r.stderr.slice(0, 300)}`);
+}
+
+// The checkout is cloned once per sandbox (the harness marks a sandbox as
+// bootstrapped per bootstrapHash, and a persistent sandbox keeps the marker
+// and the clone) and fetched at the start of every turn; a worker's sits on
+// its own branch.
 async function buildAgent(rt: Runtime, ctx: TurnCtx) {
+  const repo = rt.repoUrl;
+  const checkout = (branch: string) =>
+    `git -C ${REPO_DIR} checkout -q ${shq(branch)} 2>/dev/null || git -C ${REPO_DIR} checkout -q -b ${shq(branch)} origin/HEAD`;
   return new HarnessAgent({
     harness: await rt.harness(ctx.harness, { auth: await rt.credentials.modelAuth(ctx.lane) }),
     model: ctx.model,
@@ -41,12 +56,20 @@ async function buildAgent(rt: Runtime, ctx: TurnCtx) {
     permissionMode: "allow-all",
     sandboxConfig: {
       workDir: ".",
+      ...(repo && {
+        bootstrapHash: `checkout:${repo}`,
+        onBootstrap: ({ session }) => mustRun(session, `git clone -q --filter=blob:none ${shq(repo)} ${REPO_DIR}`),
+      }),
       // git and gh inside the sandbox send a placeholder; the sandbox firewall
       // swaps in the short-lived token on the way out.
       onSession: async ({ session }) => {
-        await session.run({
-          command: `git config --global credential.helper '!f() { echo username=x-access-token; echo password=${GITHUB_PLACEHOLDER}; }; f' && git config --global user.name verity-platform && git config --global user.email platform@verity.invalid`,
-        });
+        await mustRun(
+          session,
+          `git config --global credential.helper '!f() { echo username=x-access-token; echo password=${GITHUB_PLACEHOLDER}; }; f' && git config --global user.name verity-platform && git config --global user.email platform@verity.invalid`,
+        );
+        if (!repo) return;
+        await session.run({ command: `git -C ${REPO_DIR} fetch -q origin` });
+        if (ctx.branch) await mustRun(session, checkout(ctx.branch));
       },
     },
   });
@@ -80,8 +103,9 @@ export async function beginLeadTurn(lane: string, turnId: string, runId: string)
     model: lead.model,
     sandboxName: `lead-${lane}`,
     subject: lane,
-    instructions: leadInstructions(lead),
+    instructions: leadInstructions(lead, { checkout: rt.repoUrl != null }),
     replyTo: events.find((e) => e.replyTo && "channel" in e.replyTo)?.replyTo ?? null,
+    branch: null,
   };
   const prompt = turnPrompt(events);
   if (await rt.store.startTurn({ id: turnId, lane, kind: "lead", runId, harness: lead.harness, model: lead.model, docRevBefore: lead.docRev })) {
@@ -108,8 +132,9 @@ export async function beginWorkerTurn(w: WorkerInput, runId: string): Promise<Be
     model: w.model,
     sandboxName: `worker-${w.id}`,
     subject: w.id,
-    instructions: workerInstructions(w),
+    instructions: workerInstructions(w, { checkout: rt.repoUrl != null }),
     replyTo: w.replyTo,
+    branch: w.branch,
   };
   if (await rt.store.startTurn({ id: turnId, lane: w.lane, kind: "worker", workerId: w.id, runId, harness: w.harness, model: w.model })) {
     await rt.store.appendParts(turnId, [

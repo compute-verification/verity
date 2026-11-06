@@ -1,4 +1,6 @@
-import { readdir, readFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -229,5 +231,38 @@ describe("a lead on the platform", () => {
 
     expect((await (await admin({ lane: "comms", status: "paused" })).json()).lead.status).toBe("paused");
     expect(await t.store.leadByChannel("C_COMMS")).toBeNull();
+  });
+
+  it("gives a lead a checkout that lasts between turns and a worker one on its own branch", async () => {
+    const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+    const git = (cwd: string, ...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd, env, encoding: "utf8" }).trim();
+    const seed = await mkdtemp(join(tmpdir(), "platform-seed-"));
+    git(seed, "init", "-q", "-b", "main");
+    await writeFile(join(seed, "README.md"), "seed\n");
+    git(seed, "add", "README.md");
+    git(seed, "commit", "-q", "-m", "seed");
+    t.rt.repoUrl = `file://${seed}`;
+    try {
+      await t.store.upsertLead({ lane: "circuits", model: "fake/fake", harness: "fake", slackChannel: "C_CIRCUITS", doc: "# circuits\n" });
+      const first = await say("C_CIRCUITS", "[[dispatch: add a pin]]");
+      await reply(first.thread, "worker/worker-done");
+      const lead = join(t.root, "lead-circuits", "verity");
+      expect(await readFile(join(lead, "README.md"), "utf8")).toBe("seed\n");
+      await writeFile(join(lead, "scratch.txt"), "kept\n");
+      git(seed, "commit", "-q", "--allow-empty", "-m", "second");
+
+      const second = await say("C_CIRCUITS", "anything new?");
+      await reply(second.thread, "slack/message");
+      expect(await readFile(join(lead, "scratch.txt"), "utf8")).toBe("kept\n");
+      expect(git(lead, "log", "-1", "--format=%s", "origin/main")).toBe("second");
+
+      const [w] = await t.store.listWorkers({ lane: "circuits" });
+      expect(git(join(t.root, `worker-${w!.id}`, "verity"), "branch", "--show-current")).toBe(w!.branch);
+      const [turn] = (await t.store.listTurns({ lane: "circuits" })).filter((x) => x.kind === "lead");
+      const parts = await t.store.transcript(turn!.id);
+      expect(parts.find((p) => p.type === "instructions")!.text).toContain("verity/ is your checkout");
+    } finally {
+      t.rt.repoUrl = null;
+    }
   });
 });

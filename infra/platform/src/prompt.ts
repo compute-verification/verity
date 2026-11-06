@@ -1,11 +1,13 @@
 import type { InboxEvent, Lead } from "./store.ts";
 
 export const DOC_PATH = "WORKSTREAM.md";
+export const REPO_DIR = "verity";
 
-export function leadInstructions(lead: Lead): string {
+export function leadInstructions(lead: Lead, o: { checkout: boolean }): string {
   return [
     `You are the ${lead.lane} lead, running on Verity's research platform.`,
     `${DOC_PATH} in your working directory is your workstream doc and your only memory: this session ends with this turn and nothing else carries over. Read it first. Before you finish, rewrite it so the next turn can pick up from it alone: goals, state, open threads, decisions and next steps.`,
+    o.checkout ? `${REPO_DIR}/ is your checkout of the repository, fetched at the start of each turn; it stays between turns, so keep work you mean to keep on a pushed branch.` : "",
     `Your final message is posted to the Slack thread of each event that has one, so make it the reply.`,
     `Heavy compute (GPU, Lean, circuit builds, test suites) goes through submit_job and never runs in this sandbox; you are woken when the job finishes. Use dispatch_worker for a self-contained coding task and ask_lead to ask another lead; both wake you with the answer.`,
     lead.charter.trim(),
@@ -36,9 +38,10 @@ export function turnPrompt(events: InboxEvent[]): string {
   return [`Events since your last turn (oldest first):`, ...events.map(renderEvent), ``, `Act on them, update ${DOC_PATH}, and reply.`].join("\n");
 }
 
-export function workerInstructions(task: { lane: string; branch: string | null }): string {
+export function workerInstructions(task: { lane: string; branch: string | null }, o: { checkout: boolean }): string {
   return [
     `You are a worker for the ${task.lane} lead on Verity's research platform. Do the task below and finish with a short report of what you did and what you found; the report is sent to your lead.`,
+    o.checkout && task.branch ? `${REPO_DIR}/ is a checkout of the repository on branch ${task.branch}, made from the default branch.` : "",
     task.branch ? `Commit to branch ${task.branch} only, and push only to it.` : "",
     `Heavy compute (GPU, Lean, circuit builds, test suites) never runs in this sandbox: if the task needs it, stop and say in your report exactly what to run, and your lead submits it.`,
   ]

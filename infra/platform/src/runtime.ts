@@ -30,6 +30,8 @@ export type Runtime = {
   harness: HarnessProvider;
   credentials: Credentials;
   baseUrl: string;
+  // Cloned into each sandbox the first time a harness uses it; null leaves sandboxes empty.
+  repoUrl: string | null;
   sliceSeconds: number;
   leaseSeconds: number;
 };
@@ -124,6 +126,7 @@ export async function fromEnv(env: NodeJS.ProcessEnv): Promise<Runtime> {
     harness: harnessFor,
     credentials,
     baseUrl,
+    repoUrl: env.PLATFORM_REPO_URL ?? null,
     sliceSeconds: Number(env.PLATFORM_SLICE_SECONDS ?? 600),
     leaseSeconds: Number(env.PLATFORM_LEASE_SECONDS ?? 900),
   };
