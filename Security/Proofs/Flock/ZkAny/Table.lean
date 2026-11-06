@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Flock.Guarantees.ZkAny
 public import Proofs.Flock.ZkAny.Generic
 public import Proofs.Flock.Claims.ZK.Worker
 
@@ -16,7 +15,6 @@ server's check neither is needed:
 * `release_any`: where the check passes, the constraint holds at the drawn pads, so the view is the derived view there
   (`psi_realCore_at`); where it fails, the pre-final view leaves, which Lemma A (`table_prefinal_indep`) bounds at any
   witness carrying the public region data. `gate_perOutcome` makes the released bytes simulated per outcome.
-* `Flock.SecurityProofs.TableReleaseAny`: `release_any`, the statement `Flock.Guarantees.TableReleaseAny`.
 * `worker_release_any`: `release_any` at a worker's clear values (`onVals`), with no premise on them or on the honest
   values beyond the public region data.
 * `sim_onVals`: there the simulator reads none of the dummy's clear values, so it is one simulator, fixed before the
@@ -77,13 +75,3 @@ theorem sim_onVals (T : Table F K W Salt Seed D Hi VL) (w₀ : W) (v v' : T.Vals
   rfl
 
 end FlockSoundness.ZK.Table
-
-namespace Flock.SecurityProofs
-
-/-- **One table's release behind the ZK server's check, at any values** (`Flock.Guarantees.TableReleaseAny`). -/
-theorem TableReleaseAny : Flock.Guarantees.TableReleaseAny := by
-  intro F K W Salt Seed D Hi VL _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ T go w w₀ hsim hreg hreg₀ hgo
-  obtain ⟨hrank, hpad, hW, hpads, hβ⟩ := hsim
-  exact T.release_any hrank hpad hW hpads hβ go w w₀ hreg hreg₀ hgo
-
-end Flock.SecurityProofs

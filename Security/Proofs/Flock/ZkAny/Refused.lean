@@ -14,7 +14,7 @@ no constraint, so the cut is the dummy's at any witnesses carrying the public re
 
 * `Table.rank_of_rankOn`: the rank check over every claim is `Rank`.
 * `Release.simulable_of_passes`: where every check of table `j` passes, its coins are non-degenerate for it
-  (`Table.Simulable`, with the table's own `PadOnto` and `PadsOnto`), which `TablesReleaseAny` takes.
+  (`Table.Simulable`, with the table's own `PadOnto` and `PadsOnto`), which `Release.release_any` takes.
 * **`Release.cut_within`**: at every coin vector, the release's cut is simulated exactly by the dummy's.
 -/
 
