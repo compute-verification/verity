@@ -36,3 +36,10 @@ The notes clone refused the push (no lane binding), so the hourly lines live her
   another lead's inbox or team was an empty 500 (now a 409 naming the holder). The local server had inherited the VM's
   Slack token and tried two replies to a made-up channel, which Slack refused; local runs now unset it. 26 unit and 20
   end-to-end tests pass. top's inbox for this lane is still absent. Next: the report's remaining sections, SWAP.md.
+- 09:10Z: a lead now hears what it heard on Cursor: top-level posts in the channels `research msg subscriptions` lists
+  for it, and replies in threads it watches (`watch_thread`, which replaces `subscribe_slack_thread`). A failed turn
+  that told no thread is alerted once. `SWAP.md` has the exact commands to set up, move one lead, move all and roll
+  back, each checked against the CLIs' help; `scripts/leads.py` builds a lead's entry from research's routes and
+  subscriptions (checked on two real handles). `smoke --signed` passes locally in 6 s. The live harness turn is still
+  blocked: the Vercel connection reads Daniel's scope but writes are refused (403) until a person re-authorizes it.
+  26 unit and 22 end-to-end tests pass. top's inbox for this lane is absent. Next: the Notion report, the final message.
