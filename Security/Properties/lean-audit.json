@@ -5850,7 +5850,7 @@
    }
   },
   "Definitions.Core.Site": {
-   "digest": "7c77febf021d3393f883d35b2216256c5848244ef8a10e229170af12b43b6fc5",
+   "digest": "f20d330590519fdfd918cc95413063f68f1269726b67ad939ba60072952f1112",
    "definitions": {
     "Verity.Registration": "19abeebc07b97795968bf46f58273cd0f421c08a96fa7f67c8af825c0732d9c1",
     "Verity.Registration.Auditor": "625eec8c800db32cc74de43bc0c35aadce84e8c88036031c6f1ffd9e9e5b564a",
@@ -5866,26 +5866,34 @@
     "Verity.Registration.Composite.onsite": "3a7e6bf56f4c7e7efa3a155b116410f9fb147c0d4516e8a421d4cb3a7cc14656",
     "Verity.Registration.Composite.rec": "d51de7befd20e2119ca04658efc6fa59d92972919de3142c0dc5fda4474855e1",
     "Verity.Registration.Composite.remote": "90abf5816d63155166f790644bba00602853bdd5a59cdb49e6a91cbdc25392a0",
+    "Verity.Registration.Declared": "19ec364a529867d84086e19a86d2eb55146219369a71933ddddb1c4db9868d49",
+    "Verity.Registration.Declared.day": "b9672ef317ae97d32d170d8ffa6b19d1b17a279a0542557cb396fb84ccfa0e57",
     "Verity.Registration.Digests": "0a180aa1db6c1e6bbcac38796eca3c144d72bfe1cbfa2c2563a2e9b84079bdb3",
     "Verity.Registration.Digests.entry": "4e71ca7cc7802153856c543f3faf7396bab25d2580d9d707056b1b61fa630124",
     "Verity.Registration.Digests.genesis": "d11d13187d977eecd83675957a0c084bb97c9f23134fcf9bc2de8fad2aaa7814",
     "Verity.Registration.Digests.sheet": "7858061de3118eac7ad930e44a214ac987993bba0080c2a0811b094cfda2c640",
     "Verity.Registration.Entry": "cf77aec916a338f85f7b9c3ac5858168d0d2d430f39e7d80ac70509511aa69ae",
-    "Verity.Registration.Entry.Checks": "dc19058d3cf8b822d71d9b081e0edf7ba2c83ce787714f0865d22cef5fea2889",
+    "Verity.Registration.Entry.Checks": "99301fd3b03f319eab54dc9ddee213fabcc96c2763368dc970129ad5a296b70c",
+    "Verity.Registration.Entry.DayOnce": "b3566c49bb12e9ab8c40302d28830a5e6dbf6259492f1115314c98fd2e8aeea8",
     "Verity.Registration.Entry.Follows": "3697f8e3c4c181ee6680fd3dc72be96296cef1d37c03acb206a0dd1a64ae823a",
-    "Verity.Registration.Entry.Once": "db4a6b409a094e1066885d186ca427dcc96eadd883166962c93dd05dfd4ba5de",
+    "Verity.Registration.Entry.ItemsOnce": "5575adb4713c070c2e29f0b82662b84a1f7f334f9ef9f484a02db1a6b72bbf22",
+    "Verity.Registration.Entry.Once": "3e8caf1a9c60fe6bb40ecbd27bf676519695962c9f7dac942e9bf7bc14966edd",
     "Verity.Registration.Entry.Valid": "10052306e2edb1c10037216360edc80cb67f79a559ba601e1477b90e1d53c64f",
-    "Verity.Registration.Entry.added": "e6c2ca07ca319fe20dd0532761606180f945e56428a6103ef8c55bbba37358fe",
-    "Verity.Registration.Entry.casesOn": "c1fcb2fa8ec1c51ea58f6144b0869ccd7e6816351346cae6e3f05471710ac390",
+    "Verity.Registration.Entry.added": "9c66a472ec64c7042d4812a31cdbf41fd25f71dbb1b2d4882774749260667adc",
+    "Verity.Registration.Entry.casesOn": "ff6f8e6cf4c7dad0c3a08f31e6ce45170a8125ccf8cb2db93278d281a349d76a",
+    "Verity.Registration.Entry.declaration": "ba37f3a00672c5e04f349d9d47f5260e004dd98f1d5683e91ca18627700aa440",
+    "Verity.Registration.Entry.declared?": "d803a6f678ba8893b9d1c90a997d9e2ef5008639a85fef3c7618ee989562de49",
     "Verity.Registration.Entry.information": "9028bdb4ec51ebb417f1fa5be855d880e60a787b00b6bb7429dbcc7860aa3b3f",
-    "Verity.Registration.Entry.instDecidableChecks": "ed4ca6907169a97b09a0ca1a00a6fd06b075b5bd41707c643fbf1a177f8908b3",
+    "Verity.Registration.Entry.instDecidableChecks": "7d8fe425777e3029336b1397d0527cde1aec7d3ccd881a73d99f48225cddc333",
+    "Verity.Registration.Entry.instDecidableDayOnce": "1a09719a770962ef7e009ca6f0ac4417e371971740a4e5845b4fbff6cad0d55d",
     "Verity.Registration.Entry.instDecidableFollows": "ce7bea899d447d6a7dc20699855d2b69598aa1d216f0572a0eee92bb4dfeca95",
-    "Verity.Registration.Entry.instDecidableOnce": "65994971407ade42fb1cc773a6d32a69fb673000876b731252609928f7b3fdd0",
+    "Verity.Registration.Entry.instDecidableItemsOnce": "5c98112b531aaaafe9f9654a1d6c381aff90e0874451e033c185e219c3467202",
+    "Verity.Registration.Entry.instDecidableOnce": "813b946034f4be473ac09f85c1448ee67480120d8799508755da30d6603868d4",
     "Verity.Registration.Entry.instDecidableValid": "23a9224078d9aee64a2abbfb8d9ee51cca88f25185b83c965643b49ab13bbc62",
-    "Verity.Registration.Entry.items": "d92f821cbc7006d00b6e4b4cace50d9cdd44f232253f06d193ec193d45615962",
-    "Verity.Registration.Entry.kindRefusal": "d326599b12f487502ea8ac52311f6f45fc9f9223de084961b3ecf14a8aab392d",
-    "Verity.Registration.Entry.previous": "b380f1c7a1cca4df96c179b4656304a250a7952837ff9296ff95b8e352ada9b1",
-    "Verity.Registration.Entry.rec": "e7fecb709ae951659ad8320f95ee1aef4303661a1599c9e0f68bfadfe54095c7",
+    "Verity.Registration.Entry.items": "82e276ba9bdca40b9284a658a2db7a087f75584f30d68b4e8dc42fec2543006c",
+    "Verity.Registration.Entry.kindRefusal": "369e426106810e04a25f913869495a3a65022be60e0ff9982ae12274d158139e",
+    "Verity.Registration.Entry.previous": "1687e9978bf21cb8b82e34765eaeec8bf1cfbc854bd714b6535ec09a79f85317",
+    "Verity.Registration.Entry.rec": "6eae3570a3bc160f1a27a3840980e90dbcc967c3956ee329bba856c1d7ad8ad7",
     "Verity.Registration.Entry.refusal": "b9a87a7efe8247293fe619de7531feb05c36c27c44420ffed608a5ed109e70f3",
     "Verity.Registration.Entry.site": "8deec6ad8d76cc90bf17eb90f2d707bc7f1409c1366a1d1900e3157e10b0a5c1",
     "Verity.Registration.Item": "d3d0837256154918a98cb2ea1d91c1e11cd0a08d95b965a3d79721d90352715b",
@@ -5897,7 +5905,9 @@
     "Verity.Registration.Refusal": "097720fc581df7c8ac1e0238d7ed0986c8c3ae31c3143606b7a0ed5d31f11f1f",
     "Verity.Registration.Refusal.capacity": "8e0d229672dcb37f87ab891d75c680387b24954e2fa37a2f507d68be56d7ce90",
     "Verity.Registration.Refusal.challengerReach": "ba674d188b816cccb908b8bbf050f9a6de339ce98d3bc483b48fdf45b7572b85",
+    "Verity.Registration.Refusal.duplicateDeclaration": "9b22165f65f07cb075331fc6bc4325cad6d4e9c957366957d11584a63964e027",
     "Verity.Registration.Refusal.duplicateId": "57d7f6c4f38316a4e2fe96b2843459238c79f26799f07acc91e21cd7473b54b6",
+    "Verity.Registration.Refusal.duplicateInformation": "3e3d5c634b795cfca8a5cd86b9a7fc54ae3bbbd6070ad511c2575070d57e044f",
     "Verity.Registration.Refusal.figures": "6351fc64f24026f972567dedf37b1606a4537923a1cd25c1e9cbb576a9c5d7d1",
     "Verity.Registration.Refusal.kind": "813dfcac9ee6d9f95a9156abf00a2cbee34b5701f553ee01c960aadbbd05443d",
     "Verity.Registration.Refusal.owner": "ba3eb1bcb80feae730f375cf153f8df52a22272f11f65c14c9bca457ab722476",
@@ -5907,6 +5917,7 @@
     "Verity.Registration.Refusal.unknownRef": "91bcb0761cf240eb9ce349e97e4bd85bff57fd9c272a7268f98c33ddc709fec1",
     "Verity.Registration.Valid": "fb8e5fd0ef576a9e1fe98b87364e700ea7a92b2b2777bb2d20272a2c8cdb5382",
     "Verity.Registration.builder?": "01b91da2d6985de11273bcd70aa08d59f0f63459b18221b7bedfcc672730a8b8",
+    "Verity.Registration.days": "1b15209f4049edeaa9ad491b098a9489d69cfb48c09797de6a55772bc118daea",
     "Verity.Registration.head": "299f01f74a7b069106131577c68600dbfe6d3c5045e69dc3691290be28e4da15",
     "Verity.Registration.instDecidableEqComposite": "dcfa97f3862baf2522df1a93d51c3c8772e9adb41bca66f09245d22f95cbfb30",
     "Verity.Registration.instDecidableValid": "76d07333ee6beacd614e8801d28f0f074f3afe8f63b529eec60e79a0e8081ca7",
@@ -7202,6 +7213,12 @@
     "FlockSoundness.Rows.stackRow": "ea13fbfb8031b32212e1cada9a7c80a52d11097d6aad0ad9f9d55eee2a3a7f60"
    }
   },
+  "Properties.SampledProofs": {
+   "digest": "acea6695d0e5f812174c8505fa3cf5e9f6d0e4da3ce070bd4bbc088f45b6546f",
+   "definitions": {
+    "Properties.SampledProofs.DeclaredDay": "433f9b51a29802e5dd92e50f82843e0752d91d76ba1dc5d3b7cf3fbd7638e855"
+   }
+  },
   "Properties.SampledProofs.Draw": {
    "digest": "d9419226b88168afc63126c6acad61432fd6a93b3ce33d43b99d988d38811216",
    "definitions": {
@@ -7419,7 +7436,7 @@
    }
   },
   "SampledProofs.OneStage": {
-   "digest": "486a5df333fc18ab07b6420885d49ad065cf978ca5c84656bebcd075ce02af6e",
+   "digest": "1f3218d2094349a383601e4322a78dfc8cb2a6ca7d001cffa8fb6c3bb8066d46",
    "definitions": {
     "SampledProofs.OneStage.checkAt": "c7336fc93c76e8d56efc3a617dd04b626f037d8319525d8e802014665590d9e2",
     "SampledProofs.OneStage.coinsOf": "e8e6915912aea01361f66daa0042b1fa5a732cc62d3f86bb3a780e46d39e8796",
@@ -7427,6 +7444,8 @@
     "SampledProofs.OneStage.coinsWhy": "9e4020e0d3e33c40662296c74109dff3a31450e1821626e9dad9eb13c5983f77",
     "SampledProofs.OneStage.evidenceParsed": "a449e63206bb91d6d937a037002e302dfd38d6ebe6433f7fcedf051f9cd3d644",
     "SampledProofs.OneStage.paramsParsed": "e7e5556c77f5d92f392f0246064b56f3eb4458d2b4300603c0e5e4bf958ac8b7",
+    "SampledProofs.OneStage.paramsParsed._sparseCasesOn_27": "f4cb8215966aadb754d74fbb78d538951ccfbbe7b81fd6cba97c97b9fb827ee0",
+    "SampledProofs.OneStage.paramsParsed._sparseCasesOn_30": "cea58cee393016ff902ef396de8e51f718b9587e686cfcb196801ec05ebda8d3",
     "SampledProofs.OneStage.publicJson": "c5221f841fa847941e11d42119a7f08d525f093721671f60d7473358e0c5b8a1",
     "SampledProofs.OneStage.rule": "3810df4edcc0f1b3a55f69639f978bc4cff5a60832c7771bcb03741e1d005a6a",
     "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.logRecord": "d2a12e338c720d7f818efcafa7169d8e5d9cf4c06346d7f6dca013309442e6b7",
@@ -7526,6 +7545,15 @@
     "SampledProofs.Registered.inputNodes": "dc6974dfb09a9944114a118c8179d7a54c3b0ee36967b72e9f8106ac6d800652",
     "SampledProofs.Registered.lower": "057becf634522a4050adfbeaaba57ef38f48e5c83412a64b5a5259ba5a3a16a9",
     "SampledProofs.Registered.params": "9b3c5cacc23ec5ac41a863482f84de66a563e07021366029c2fa99f4753d1c6d"
+   }
+  },
+  "SampledProofs.Registration": {
+   "digest": "1e4274c33411c74db2760cad2db2baa0b0458748c3190f97050775a97e5db8f3",
+   "definitions": {
+    "SampledProofs.Registration.Verifier.declared": "28e905ee4f744d0b2ad35e013c9e924ba42197c92dfd37062381b68f46c422f1",
+    "SampledProofs.Registration.declaredCode": "779ea7af4a21b0201645bf98d8d2cd598838dacb9471d14e10e2fb8650d78435",
+    "SampledProofs.Registration.declaredCode._sparseCasesOn_1": "f4002e986d24a8aea14e87770ab6bcd0289e45fb7f6b1a9a7d0ef86c08c3ec0e",
+    "SampledProofs.Registration.declaredOf": "d60f639ff93cd6b05167ca63901bc6b93cc3a7e45ce458546fe5ba4eaae5e776"
    }
   },
   "SampledProofs.Select": {
