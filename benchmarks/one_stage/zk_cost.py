@@ -590,6 +590,11 @@ def overhead(a) -> int:
     proves = [r for r in read_jsonl(out / "records" / "prove.jsonl") if r.get("unit") and r["accepted"]]
     verifies = [r for r in read_jsonl(out / "records" / "verify.jsonl") if r.get("unit")]
     gpu = (out / "records" / "gpu.csv").read_text().splitlines()[1:2] if (out / "records" / "gpu.csv").exists() else []
+    if gpu:
+        name, cc = gpu[0].split(",")[0].strip(), gpu[0].split(",")[4].strip().replace(".", "")
+        if card.get("arch", "").rstrip("a") != f"sm_{cc}":
+            raise SystemExit(f"overhead: the run's GPU is {name} (sm_{cc}) but --card {a.card} is {card.get('arch')}; pass the "
+                             "card it ran on (zk_cost.sh's ZK_CARD, e.g. h200-sxm-141gb for an H200)")
     types: dict[str, dict] = {}
     for tag in dict.fromkeys(r["tag"] for r in stages):
         st = {r["c"]: r for r in stages if r["tag"] == tag}
