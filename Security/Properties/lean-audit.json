@@ -20631,9 +20631,9 @@
    ]
   },
   "Properties.Accounting.DeclaredCircuit": {
-   "digest": "8676f7df273c8afdf7e30729914c10b3a3a39de45aaf7819d2f6e3b895983371",
+   "digest": "977f9016c49fb0fc8997ae6a3d5b7db0e3807207a95e51d25c82b99b2a9a76b3",
    "definitions": {
-    "Properties.DeclaredCircuit.ScheduledRequirement": "0693670a8f68ce5fd7c10252c166940556b570750bad6817537d492aa0d0e354"
+    "Properties.DeclaredCircuit.ScheduledRequirement": "5154eb1080bff4b59306fcdc4c24fec38a718b041aabba484eb12631941be73f"
    },
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },

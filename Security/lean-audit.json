@@ -906,9 +906,17 @@
    "owner": "@proofs",
    "digest": "5a7d5592f9380c093278345fa04d22f36b3df8fcd73f96f321b5b923cfc0ce59"
   },
+  "Flock.Bridge.DrawsUnder": {
+   "owner": "@proofs",
+   "digest": "4abc5d864ced1e67194111af4d2122149bb5e799458282f37b5c35064bf1204f"
+  },
   "Flock.Bridge.LawOn": {
    "owner": "@proofs",
    "digest": "ad38e9ab065be8ae4f61cb5124e00636bd5da3f615a9d5b285c6555e61bfdf5f"
+  },
+  "Flock.Bridge.NotBernoulli": {
+   "owner": "@proofs",
+   "digest": "7fbb409621af22209f87159630d58bfdb550a9f4402f53926ac16f9a45ad3e4d"
   },
   "Flock.Bridge.RootFixesDomainL": {
    "owner": "@proofs",
@@ -15129,7 +15137,7 @@
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, Security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code.",
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary registered circuit, a partition of it and their expansions (Verity.Circuit.andSize, Verity.RegisteredCircuit.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
    "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
-   "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs under the registration's law on its layout's strata (LawOn), proved by its own assembly at keyProgP, with delta the law's own miss of a set of proof blocks; it reads SampledKSLiveV5 (Security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each proof block's public input bits), under RecordCustodyZKJPLaw (RecordCustodyZKJP at the registration's law), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs under the law the verifier draws under from the registration (DrawsUnder: drawnLaw, deriveLaw over Partition.strata, else flockLaw), no Bernoulli law (NotBernoulli), which PopMatches puts on its layout's strata (LawOn, lawOn_drawsUnder), proved by its own assembly at keyProgP, with delta the law's own miss of a set of proof blocks; it reads SampledKSLiveV5 (Security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each proof block's public input bits), under RecordCustodyZKJPLaw (RecordCustodyZKJP at the registration's law), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.SampledKSLiveV5Honest": "frozen (no-function): the honest witness of SampledKSLiveV5, not a run of a Lean function: from one named premise, ServedFilesParseV5 (that the served registered --zk session art:88544efa's files, pinned by SHA-512, parse to a descriptor in scopeOkH with distinct port names whose public input ports parse and whose public file loads over them, as runs r20261027-025931-f22c and r20261027-114351-93be evaluated), every hypothesis that statement takes of the files holds there (Built, RowsOk, TagsOkZHJ, untyped tags, the parse, the public input ports, the public file, scopeOkH, dupName, the draw sizes' divisibility); it reads SampledKSLiveV5Honest (Security/Proofs/Flock/Bridge/V5/Honest.lean), so the lock records its text.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": "frozen (no-function): It is stated over an arbitrary registered circuit (Verity.RegisteredCircuit) with a training class's counted operations, a partition (Verity.Partition) whose units S are the serving blocks and a (c, k)-partition of inference blocks refining it (Verity.Partition.IsCK, Verity.Partition.Refines), and takes the serving blocks' sizes, the per-block caps, the operations' bodies and their overlap, and the uncertified caps as named premises about it (Security/Definitions/Accounting/ServingBlocks.lean), not a function's acceptance; it is Theorem 3 per serving block, summed through Verity.SecurityProofs.ServingBlockSum and Verity.SecurityProofs.InferenceCap, with what a serving block's own cap leaves charged to its unregistered inputs (omega_max mu k_S), and Layer 2's envelopes supply its premises.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": "frozen (no-function): Like Accounting.SecurityProofs.ServingBlocks.ServingBlockBound, it is stated over an arbitrary declaration, its counted operations and partitions under named premises about them, not a function's acceptance; it keeps only the inference cap, the remote case.",
@@ -19965,9 +19973,9 @@
    ]
   },
   "Definitions.Accounting.Guarantees.DeclaredCircuit": {
-   "digest": "6285565506ddab79d1e87e99d50ef46b0e20ac846d42d0cf871160d71ba470bc",
+   "digest": "3cca337f651de0cbc53fbc82a155e1f6e56840c2d4811d6383e645b647ca647c",
    "definitions": {
-    "Accounting.Guarantees.DeclaredCircuitRequirement": "13a8c0306cbff41fa934e600abf4dc72341eafb70c726b2e99df984281ce9ead"
+    "Accounting.Guarantees.DeclaredCircuitRequirement": "091b801caa2f623314bacba8b14efc5a18d155a511d804584af3dacc21dd5d81"
    },
    "guarantees": ["Accounting.SecurityProofs.DeclaredCircuitRequirement"]
   },
@@ -55354,9 +55362,10 @@
    ]
   },
   "Proofs.Flock.Bridge.Draw": {
-   "digest": "26a67368718c752d94532f2a9dc0d358041236719287050ebbff3f2d225ec07f",
+   "digest": "9d9435657595ee9069351f32ef80782d1a2eae27877db444e2d28137727241f5",
    "definitions": {
     "Flock.Bridge.LawOn": "ad38e9ab065be8ae4f61cb5124e00636bd5da3f615a9d5b285c6555e61bfdf5f",
+    "Flock.Bridge.NotBernoulli": "7fbb409621af22209f87159630d58bfdb550a9f4402f53926ac16f9a45ad3e4d",
     "Flock.Bridge.StrataOn": "9e321e9e08db693606ee76a41d9c53de59f3b86d75d13e40de5bd27350e5fa72",
     "Flock.Bridge.execSel": "f86bcb7e33b38503680c6340770c9a3e26510e2054f4d5570d9e769224b89194"
    },
@@ -55366,6 +55375,15 @@
     "Flock.SecurityProofs.JointShareV5",
     "Flock.SecurityProofs.SampledKSLiveV5"
    ]
+  },
+  "Proofs.Flock.Bridge.DrawnLaw": {
+   "digest": "97939cb25341aa3a641931f63fa840e0eb1e16ea7e84b2c8fba9d627204cf1b3",
+   "definitions": {
+    "Flock.Bridge.DrawsUnder": "4abc5d864ced1e67194111af4d2122149bb5e799458282f37b5c35064bf1204f",
+    "Flock.Bridge.drawnLaw": "d3d5d8aebbdd734c0b832c56f88c1218c761f8ca6f936cbdc586a2aafd695d3c",
+    "Flock.Bridge.lawK": "4f756291c816d28e1b04483ae2b944ede55d7503bc88c73ec63d26c500b166ec"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
   "Proofs.Flock.Bridge.Honest": {
    "digest": "0b798ba5631315260eae644e8baef5564c4225ea63f1b48a210f046e45d85bd8",
@@ -59787,9 +59805,15 @@
    "guarantees": [
     "Flock.SecurityProofs.JointHorizonV5",
     "Flock.SecurityProofs.JointSampledV5",
-    "Flock.SecurityProofs.JointShareV5",
-    "Flock.SecurityProofs.SampledKSLiveV5"
+    "Flock.SecurityProofs.JointShareV5"
    ]
+  },
+  "Proofs.Flock.Claims.Sampling.Select.Steps": {
+   "digest": "cabc7866b4daa207b5f3e6e37d2c7042a89693e20c85677df2e1a71976987252",
+   "definitions": {
+    "Properties.SampledProofs.SecurityProofs.lawObj": "e37ff0ea95a4fbcfb351782803b11d1a551fbf26eaae398f574028819cccb1e6"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
   "Proofs.Flock.Claims.Sampling.Universal": {
    "digest": "42315f512de440a6ae734b33dd20f9580ddeca80d3d2cec74658efc713748533",
@@ -63616,7 +63640,7 @@
    "guarantees": ["Flock.SecurityProofs.LoopInnerRound0Own"]
   },
   "Proofs.Flock.SessionLoop.Statement": {
-   "digest": "16b5981c24d0928efb5574c6c951a200b0cc57bb44367f1bce694caf8b2ab194",
+   "digest": "eb449eb4cda71462f7ecf76bc475e9157f2e47998f1aa5e37461f171029a14d3",
    "definitions": {
     "Claims.ZKServer.LeanRelease.ofLoopLink": "6ea2d801cbe2cac165a76d952632b570750ff98ff40e7e4eeb7b7553f40be804",
     "Claims.ZKServer.LeanRelease.withFiles": "65872386b21258c02579b8fc6e24405802944751b115328e77e1dcf462f9cb40",
@@ -63643,7 +63667,7 @@
     "Flock.Guarantees.LoopInnerRound0": "f64e8082f75703d9a88c97efaf1cd075063cfe5c8110a85748cded71495bc6d2",
     "Flock.Guarantees.SessionLoopZK": "6a6e72455d80b20cac5fadffc668486e5eb7cdf349ba49ff30645e91a29dd38c",
     "Flock.Guarantees.SessionLoopZKAt": "a23944b0866201363e98e2f6c51f5af07e53d01bd57d3f9820e79f51e7fb2d4f",
-    "Flock.Guarantees.SessionLoopZKDeployed": "74fac704e1778f805a074241038f1de42373c9dc974ad41b1a0633b06d2b0f4a"
+    "Flock.Guarantees.SessionLoopZKDeployed": "596b6c75deb71672d2827b3c8bd9b132ffe643d140b7de63ffc2e521290cff40"
    },
    "guarantees": [
     "Flock.SecurityProofs.LoopInnerRound0Own",
