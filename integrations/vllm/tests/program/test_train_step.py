@@ -6,8 +6,8 @@ of the Definitions it names, and to a tolerance against torch; the functional Ad
 `BoxPermute` against torch's permute; the tiny step in f32 and in bf16 (its linears' operands cast, as autocast casts them), and
 its survey with a loss term no rule lowers; the bf16 GEMMs on sm_120 (`training_rules(cc=(12, 0))`), each its captured route's
 Definition and, on stand-in routes at small shapes, bit for bit that route's model; and the element-wise ops on sm_120 bit for bit
-against the GPU's arithmetic as torch CPU's f32 operations compute it on NaN-free words, and `silu_backward` against its stated
-form in the GPU's Definitions."""
+against the GPU's arithmetic as torch CPU's f32 operations compute it on NaN-free words, and `silu_backward` and a fused AdamW
+step against their stated forms in the GPU's Definitions."""
 from __future__ import annotations
 
 import bisect
@@ -219,6 +219,15 @@ EXACT = {
     "foreach_add": (lambda a, s: torch._foreach_add([a, s], 1.0), (X67, torch.tensor(7.0))),
     "returned_static": (lambda a: (a * 2.0, torch.zeros_like(a)), (X,)),
     "returned_static_bf16": (lambda a: (a * 2.0, torch.full((3,), 0.375, dtype=torch.bfloat16)), (X,)),
+    "foreach_lerp": (lambda a, b, c, d: torch._foreach_lerp([a, c], [b, d], 0.1), (X67, Y67, X, Y)),
+    "foreach_lerp_large_weight": (lambda a, b, c, d: torch._foreach_lerp([a, c], [b, d], 0.9), (X67, Y67, X, Y)),
+    "static_division": (lambda a: (a * (torch.full((16,), 3.0) / 7.0),), (X,)),
+    "copy_widens_bf16": (lambda a, b: (torch.empty_like(a).copy_(b) * a,), (X, XB)),
+    "nll_forward_none": (lambda logp, t: aten.nll_loss_forward(logp, t, None, 0, -100), (X, torch.tensor([3, -100, 15, 7]))),
+    "nll_backward_none": (lambda go, logp, t, tw: (aten.nll_loss_backward(go, logp, t, None, 0, -100, tw),),
+                          (Y[:, 0].contiguous(), X, torch.tensor([3, -100, 15, 7]), torch.tensor(0.0))),
+    "nll_backward_none_static": (lambda logp, t: (aten.nll_loss_backward(torch.full((4,), 0.25), logp, t, None, 0, 0,
+                                                                        torch.zeros(())),), (X, torch.tensor([3, 0, 15, 7]))),
 }
 
 
@@ -475,9 +484,9 @@ def test_bf16_rounding_in_between_is_refused(f, x, why: str) -> None:
     (lambda a: (a * 2.0, torch.full((4,), float("nan"))), X, "a returned static NaN"),
     (lambda a: (a * (torch.full((16,), 3.0, dtype=torch.bfloat16) * 0.1),), XB, "a static bf16 or f16 result")])
 def test_copy_and_static_arithmetic_refusals(f, x, why: str) -> None:
-    """A copy that converts is `_to_copy`'s arithmetic, which `Copy` doesn't take; a static NaN result is refused (torch CPU's NaN
-    word is not the GPU's), as is a returned static NaN, and so is a static bf16 result (torch CPU rounds a number in a bf16 add to
-    bf16 first)."""
+    """A copy that rounds f32 to bf16 is the GPU's rounding, which `Copy` takes only at a compute capability; a static NaN result is
+    refused (torch CPU's NaN word is not the GPU's), as is a returned static NaN, and so is a static bf16 result (torch CPU rounds
+    a number in a bf16 add to bf16 first)."""
     gm = make_fx(torch.func.functionalize(f, remove="mutations"), tracing_mode="fake")(x)
     u = derive_graph(gm, (x,), mode="reference", rules=training_rules(), name="T").unsupported
     assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered" and why in u.hint, u
@@ -513,6 +522,13 @@ GPU = {
     "mul_mask": (lambda a, k: (a * k,), (M67, ROW67 > 0), lambda a, k: a * k),
     "foreach_add": (lambda a, s: torch._foreach_add([a, s], 1.0), (X67, torch.tensor(7.0)),
                     lambda a, s: torch.cat([(a + 1.0).reshape(-1), (s + 1.0).reshape(-1)])),
+    "foreach_lerp": (lambda a, b, c, d: torch._foreach_lerp([a, c], [b, d], 0.1), (X67, Y67, X, Y),
+                     lambda a, b, c, d: torch.cat([torch.lerp(a, b, 0.1).reshape(-1), torch.lerp(c, d, 0.1).reshape(-1)])),
+    "lerp_large_weight": (lambda a, b: (torch.lerp(a, b, 0.9),), (X67, Y67), lambda a, b: torch.lerp(a, b, 0.9)),
+    "static_div_number": (lambda a: (a * (torch.full((16,), 3.0) / 7.0),), (X,),
+                          lambda a: a * (torch.full((16,), 3.0) * _recip(7.0))),
+    "copy_rounds_to_bf16": (lambda a, b: (torch.empty_like(b).copy_(a) * b,), (X, XB),
+                            lambda a, b: (a.bfloat16().float() * b.float()).bfloat16()),
 }
 
 
@@ -525,8 +541,8 @@ def test_gpu_binary_is_the_gpus_arithmetic(name: str) -> None:
 
 def test_gpu_and_cpu_numbers_differ() -> None:
     """The cases where the GPU's arithmetic is not the CPU's give different words on their data: a bf16 add of a number bf16
-    doesn't hold, and an f32 division by a number (a bf16 one rounds both to the same word)."""
-    for name in ("add_number_bf16", "sub_tie_bf16", "div_number"):
+    doesn't hold, and an f32 division by a number, of a value or of a static tensor (a bf16 one rounds both to the same word)."""
+    for name in ("add_number_bf16", "sub_tie_bf16", "div_number", "static_div_number"):
         f, xs, _gpu = GPU[name]
         cpu, gpu = (_outputs(_program(f, *xs, rules=r), *xs) for r in (None, training_rules(cc=CB.TRAIN_CC)))
         assert not torch.equal(cpu.view(torch.int32), gpu.view(torch.int32)), name
@@ -572,6 +588,64 @@ def test_gpu_silu_backward_is_its_stated_arithmetic(dt: torch.dtype) -> None:
     if dt == torch.bfloat16:
         want = [P.F2fpBf16.evaluate(w) << 16 for w in want]
     _same_bits(_outputs(prog, dy, x), torch.from_numpy(np.array(want, dtype=np.uint32).view(np.float32).copy()))
+
+
+FUSED_ADAMW = dict(lr=1e-3, beta1=0.9, beta2=0.95, weight_decay=0.1, eps=1e-8, amsgrad=False, maximize=False)
+
+
+def _fused_adamw_step(p0, p1, g0, g1, m0, m1, v0, v1, s0, s1, **kw):
+    """`_fused_adamw` over two tensors: the new parameters, first moments and second moments."""
+    out = aten._fused_adamw([p0, p1], [g0, g1], [m0, m1], [v0, v1], [], [s0, s1], **(FUSED_ADAMW | kw))
+    return [*out[0], *out[2], *out[3]]
+
+
+def _fused_adamw_arithmetic(ps, gs, ms, vs, steps, lr, beta1, beta2, weight_decay, eps, **_):
+    """`FusedAdamW`: per tensor `1 - beta^step` = `F32Sub_v2(1, F32ExpRn_v1(F32Mul_v2(step, F32LogRn_v1(beta))))`, the step size
+    `F32Div_v2(lr, 1 - beta1^step)` and `F32Sqrt_v1(1 - beta2^step)`; per element p1 = `F32Fma_v2(-(lr * wd), p, p)`, m1 =
+    `F32Fma_v2(beta1, m, F32Fma_v2(-beta1, g, g))`, v1 the same of `F32Mul_v2(g, g)` with beta2, and `p1 - (step size * m1) /
+    (sqrt(v1) / sqrt(1 - beta2^step) + eps)` in `F32Sub_v2`, `F32Div_v2`, `F32Mul_v2`, `F32Sqrt_v1` and `F32Add_v2`."""
+    lr, b1, b2, wd, eps = (np.float32(x) for x in (lr, beta1, beta2, weight_decay, eps))
+
+    def one_minus_pow(beta, s):
+        return P.F32SubV2.evaluate(ONE, R.F32ExpRn.evaluate(P.F32MulV2.evaluate(s, R.f32_log_rn_bits(_f32(beta)))))
+
+    new_p, new_m, new_v = [], [], []
+    for p, g, m, v, s in zip(ps, gs, ms, vs, steps, strict=True):
+        s = _bits(s)[0]
+        size, bc2 = P.F32DivV2.evaluate(_f32(lr), one_minus_pow(b1, s)), R.F32Sqrt.evaluate(one_minus_pow(b2, s))
+        for pi, gi, mi, vi in zip(_bits(p), _bits(g), _bits(m), _bits(v), strict=True):
+            p1 = P.F32FmaV2.evaluate(_f32(-(lr * wd)), pi, pi)
+            m1 = P.F32FmaV2.evaluate(_f32(b1), mi, P.F32FmaV2.evaluate(_f32(-b1), gi, gi))
+            gg = P.F32MulV2.evaluate(gi, gi)
+            v1 = P.F32FmaV2.evaluate(_f32(b2), vi, P.F32FmaV2.evaluate(_f32(-b2), gg, gg))
+            den = P.F32AddV2.evaluate(P.F32DivV2.evaluate(R.F32Sqrt.evaluate(v1), bc2), _f32(eps))
+            new_p.append(P.F32SubV2.evaluate(p1, P.F32DivV2.evaluate(P.F32MulV2.evaluate(size, m1), den)))
+            new_m.append(m1)
+            new_v.append(v1)
+    return new_p + new_m + new_v
+
+
+def test_gpu_fused_adamw_is_its_kernels_arithmetic() -> None:
+    """At `cc` a fused AdamW step is its CUDA kernel's arithmetic in the GPU's Definitions, with `beta^step` as
+    `exp(step * log(beta))` (CUDA's `powf` is not modeled), bit for bit over two tensors of different lengths and step counts, and
+    close to torch's own fused AdamW; it is refused without `cc` (torch CPU's kernel is another arithmetic) and with maximize, as
+    with amsgrad, a gradient scale or an inf flag."""
+    ps, gs, ms = ([_data(67, seed=40 + k), _data(4, 16, seed=43 + k)] for k in range(3))
+    vs = [_data(67, positive=True, seed=46) * 1e-3, _data(4, 16, positive=True, seed=47) * 1e-3]
+    steps = [torch.tensor(3.0), torch.tensor(1.0)]
+    xs = (*ps, *gs, *ms, *vs, *steps)
+    prog = _program(_fused_adamw_step, *xs, rules=training_rules(cc=CC))
+    ids = {nd.fn.id.split("{")[0] for nd in prog.root.body.nodes}
+    assert {"F32Fma_v2", "F32Mul_v2", "F32Div_v2", "F32Add_v2", "F32Sub_v2", "F32Sqrt_v1", "F32ExpRn_v1"} <= ids, ids
+    got = _outputs(prog, *xs)
+    want = _fused_adamw_arithmetic(ps, gs, ms, vs, steps, **FUSED_ADAMW)
+    _same_bits(got, torch.from_numpy(np.array(want, dtype=np.uint32).view(np.float32).copy()))
+    torch.testing.assert_close(got, torch.cat([t.reshape(-1) for t in _fused_adamw_step(*xs)]), rtol=1e-5, atol=1e-6)
+    for rules, kw, why in ((training_rules(), {}, "computes in double"), (training_rules(cc=CC), {"maximize": True}, "maximize")):
+        f = functools.partial(_fused_adamw_step, **kw)
+        gm = make_fx(torch.func.functionalize(f, remove="mutations"), tracing_mode="fake")(*xs)
+        u = derive_graph(gm, xs, mode="reference", rules=rules, name="T").unsupported
+        assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered" and why in u.hint, u
 
 
 def _adamw_inputs(seed: int = 0, n: int = 64):

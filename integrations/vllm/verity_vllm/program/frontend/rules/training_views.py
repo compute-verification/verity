@@ -4,9 +4,9 @@ A step's tensors are large and its views compose (`t(t(W))`, the transpose of a 
 of a value that is not one run leaf by leaf, up to a limit. `BoxPermute` represents such a value as boxes, each a region of the
 tensor mapped affinely onto one producer's leaves, permutes the boxes, and writes the result back as strided references
 (`_view_permute` and `_view_expand` do the same for the rules that read a permuted or broadcast operand). `StaticFloats` keeps a
-float tensor the step fixes without reading a value (a literal, the causal mask, a fill) as the tensor torch computes on the CPU
-(`StaticFloat`); it becomes constant gates only where an op reads it or the step returns it. `Copy` takes a functionalized
-`copy_`'s result as its source's values, by reference.
+float tensor the step fixes without reading a value (a literal, the causal mask, a fill) as the tensor torch computes on the CPU,
+at a compute capability with a division by a number as the GPU's product by its reciprocal (`StaticFloat`); it becomes constant
+gates only where an op reads it or the step returns it.
 """
 
 from __future__ import annotations
@@ -295,7 +295,8 @@ _VIEWS = {aten.view.default, aten._unsafe_view.default, aten.reshape.default, at
           aten.alias.default}
 _MAKERS = {aten.scalar_tensor.default, aten.ones_like.default, aten.zeros_like.default, aten.full_like.default, aten.full.default,
            aten.ones.default, aten.zeros.default, aten.fill.Scalar, aten.where.self}
-_ARITH = {aten.add.Tensor, aten.add.Scalar, aten.sub.Tensor, aten.sub.Scalar, aten.mul.Tensor, aten.mul.Scalar}
+_DIV = {aten.div.Tensor, aten.div.Scalar}
+_ARITH = {aten.add.Tensor, aten.add.Scalar, aten.sub.Tensor, aten.sub.Scalar, aten.mul.Tensor, aten.mul.Scalar} | _DIV
 _FLOATS = (torch.float32, torch.bfloat16, torch.float16)
 
 
@@ -303,15 +304,21 @@ class StaticFloats(ViewRule):
     """A float tensor fixed without reading a value: `scalar_tensor`, `ones_like` / `zeros_like` / `full_like` / `fill.Scalar` (of
     any tensor: only its shape is read), `full` / `ones` / `zeros`, `where.self` of a static condition and static values, a tensor
     constant the graph holds (`lift_fresh_copy` of a table; an integral one is a `StaticIndex`), a static tensor converted to a
-    float dtype (`_to_copy`), an f32 `add`, `sub` or `mul` of static float tensors and numbers, and views of these, computed by
-    torch on the CPU (`StaticFloat`). A conversion and an f32 add, sub or mul are torch CPU's, which are the GPU's on every value
-    but a NaN, so a static NaN converted and a static NaN result are refused; a bf16 or f16 result of an add, sub or mul is
-    refused too (torch CPU rounds a number in a bf16 add to bf16 first, the GPU doesn't)."""
+    float dtype (`_to_copy`), an f32 `add`, `sub`, `mul` or `div` of static float tensors and numbers, and views of these, computed
+    by torch on the CPU (`StaticFloat`). A conversion and an f32 add, sub, mul or true division are torch CPU's, which are the GPU's
+    on every value but a NaN, so a static NaN converted and a static NaN result are refused; a bf16 or f16 result of arithmetic is
+    refused too (torch CPU rounds a number in a bf16 add to bf16 first, the GPU doesn't). At a compute capability `cc` a division
+    by a number is the product by its reciprocal `RN(1 / f32(s))`, as `Binary` lowers a value's, and a division by a 0-d static
+    tensor is refused (the GPU multiplies by a CPU scalar's reciprocal and divides by a device tensor)."""
     info = _info("StaticFloats", "aten float makers, fills, where.self of static operands, tensor constants, conversions, f32 "
-                 "add / sub / mul of static operands and views of static float tensors", "the result is float32, bfloat16 or "
-                 "float16", "every operand read for its value is static", "a conversion of no NaN", "add / sub / mul: an f32 "
-                 "result and no NaN", "no gates: constants are made where read", kind="view")
+                 "add / sub / mul / div of static operands and views of static float tensors", "the result is float32, bfloat16 or "
+                 "float16", "every operand read for its value is static", "a conversion of no NaN", "arithmetic: an f32 result "
+                 "and no NaN", "div: no rounding mode; at cc no 0-d static divisor", "no gates: constants are made where read",
+                 kind="view")
     accepts_constants = True
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
 
     def targets(self):
         return _MAKERS | _VIEWS | _ARITH | {aten.lift_fresh_copy.default, aten._to_copy.default}
@@ -328,6 +335,9 @@ class StaticFloats(ViewRule):
 
     def _arith(self, ctx, node) -> torch.Tensor:
         args = [self._static(ctx, a) if isinstance(a, torch.fx.Node) else a for a in node.args]
+        if self.cc is not None and node.target in _DIV and isinstance(args[1], (int, float)):
+            inv = torch.tensor(1.0, dtype=torch.float32) / torch.tensor(args[1], dtype=torch.float32)
+            return torch.as_tensor(args[0], dtype=torch.float32) * inv
         return node.target(*args, **node.kwargs)
 
     def applies(self, node, ctx):
@@ -356,6 +366,13 @@ class StaticFloats(ViewRule):
                 return "an operand is a value (or not a static float tensor or a number)"
             if ctx.dtype_of(node) != torch.float32:
                 return "numerics_unregistered: a static bf16 or f16 result (torch CPU rounds a number to it first, the GPU doesn't)"
+            if t in _DIV:
+                if node.kwargs.get("rounding_mode") is not None:
+                    return "numerics_unregistered: a rounding mode"
+                b = node.args[1]
+                if self.cc is not None and isinstance(b, torch.fx.Node) and ctx.val(b).tensor.dim() == 0:
+                    return ("numerics_unregistered: a division by a 0-d static tensor on the GPU (a CPU scalar's reciprocal or a "
+                            "device tensor's quotient)")
             if bool(torch.isnan(self._arith(ctx, node)).any()):
                 return "numerics_unregistered: a static NaN result (torch CPU's NaN word is not the GPU's)"
         return True
@@ -393,35 +410,4 @@ class StaticFloats(ViewRule):
         ctx.record(self, node, {"shape": list(S)}, emitted="static")
 
 
-class Copy(ViewRule):
-    """`copy(self, src)` (a functionalized `copy_`): `src`'s values in `self`'s shape, broadcast, whatever `self` holds (an
-    allocation such as autograd's `new_empty_strided` for a gradient, which stays unread, or a value); `src` a value or a static
-    float tensor of `self`'s dtype."""
-    modes = frozenset({"reference"})
-    info = _info("Copy", "aten.copy of a value or a static float tensor into a tensor of its dtype", "src has self's dtype",
-                 "src broadcasts to self's shape", "self's values are not read", "no gates: references only", kind="view")
-
-    def targets(self):
-        return {aten.copy.default}
-
-    def applies(self, node, ctx):
-        src = node.args[1]
-        if not isinstance(src, torch.fx.Node) or not isinstance(ctx.val(src), (Coll, StaticFloat)):
-            return "src is not a value or a static float tensor"
-        if ctx.dtype_of(src) != ctx.dtype_of(node):
-            return f"numerics_unregistered: a conversion from {ctx.dtype_of(src)} to {ctx.dtype_of(node)} (`_to_copy`'s)"
-        return True
-
-    def emit(self, node, ctx):
-        src, S = node.args[1], tuple(ctx.shape_of_node(node))
-        v = ctx.val(src)
-        if isinstance(v, StaticFloat):
-            shape, out = tuple(v.tensor.shape), StaticFloat(v.tensor.broadcast_to(S).contiguous())
-        else:
-            shape = tuple(shape_of(v.type)[0])
-            out = v if shape == S else _view_expand(v, list(S), node.name)
-        ctx.define(node, out)
-        ctx.record(self, node, {"shape": list(S), "src_shape": list(shape)}, emitted="references")
-
-
-__all__ = ["BoxPermute", "Copy", "StaticFloat", "StaticFloats"]
+__all__ = ["BoxPermute", "StaticFloat", "StaticFloats"]

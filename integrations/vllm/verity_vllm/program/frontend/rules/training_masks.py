@@ -7,6 +7,7 @@ f32 arithmetic. Each is exact and the same word on torch's CPU and CUDA kernels,
     Where       where.self with an f32, bf16 or int64 result
     Clamp       clamp by Python numbers of an int64 or f32 value
     Cast        conversions between int64, uint8, bool and f32, and at `cc` the GPU's to bf16 and to and from f16
+    Copy        a functionalized copy_: its source by reference, or converted as `Cast` converts (bf16 to f32 too)
     IntSum      sum of a bool or int64 value to int64
     Index       a static float table (a codebook) indexed by an integer value
     KthValue    kthvalue of an f32 value at `cc`, as the GPU's radix select
@@ -29,7 +30,7 @@ from verity.ml.definitions.registry.dsv4_decode_indices import gather_i32
 from verity_vllm.program.frontend.rules.training_emit import (_DT, _batch, _bits, _const, _converted, _ew, _flat, _from_bits,
                                                               _operand, _operand_ok, _ref, _shape, _static_coll, _tokens,
                                                               _TrainRule, _tree, _word_ok, _word_operand, aten)
-from verity_vllm.program.frontend.rules.training_views import StaticFloat, _info, _view_permute
+from verity_vllm.program.frontend.rules.training_views import StaticFloat, _info, _view_expand, _view_permute
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
 
@@ -257,13 +258,60 @@ class Cast(_TrainRule):
     def emit(self, node, ctx):
         a = node.args[0]
         src, dst = ctx.dtype_of(a), ctx.dtype_of(node)
-        if src == torch.bool:
-            y, fn = _from_bits(ctx, node, ctx.coll(a), dst), "SelectF32_v1" if dst == torch.float32 else "SelectI64_v1"
-        else:
-            f = _EXACT.get((src, dst)) or _GPU[(src, dst)]
-            y, fn = _converted(ctx, node, ctx.coll(a), f, WIDTH_OF_DTYPE[dst]), f.id
+        y, fn = _convert(ctx, node, ctx.coll(a), src, dst)
         ctx.define(node, y)
         ctx.record(self, node, {"from": str(src), "to": str(dst)}, emitted=f"{fn} x{math.prod(ctx.shape_of_node(node))}")
+
+
+def _convert(ctx, node, x: Coll, src, dst) -> tuple[Coll, str]:
+    """(the value x converted from `src` to `dst` as torch's kernels convert it, the Definition): bool by `_from_bits`, bf16 to
+    f32 widened exactly (`Bf16ToF32_v1`), or a pair of `_EXACT` or `_GPU`."""
+    if src == torch.bool:
+        return _from_bits(ctx, node, x, dst), "SelectF32_v1" if dst == torch.float32 else "SelectI64_v1"
+    f = P.Bf16ToF32 if (src, dst) == (torch.bfloat16, torch.float32) else _EXACT.get((src, dst)) or _GPU[(src, dst)]
+    return _converted(ctx, node, x, f, WIDTH_OF_DTYPE[dst]), f.id
+
+
+class Copy(_TrainRule):
+    """`copy(self, src)` (a functionalized `copy_`): `src`'s values in `self`'s shape, broadcast, whatever `self` holds (an
+    allocation such as autograd's `new_empty_strided` for a gradient, which stays unread, or a value); `src` a value or a static
+    float tensor of `self`'s dtype, or a value of another dtype converted as torch's copy kernel converts it, with `_to_copy`'s
+    casts: bf16 to f32 exactly (`Bf16ToF32_v1`), `Cast`'s exact pairs, and at a compute capability `cc` the GPU's to bf16 and to
+    and from f16. Refused without `cc`: f32 to bf16 and the f16 conversions."""
+    info = _info("Copy", "aten.copy of a value or a static float tensor into a tensor", "src has self's dtype, or is a value "
+                 "converted as `_to_copy` converts it", "src broadcasts to self's shape", "self's values are not read")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
+
+    def targets(self):
+        return {aten.copy.default}
+
+    def applies(self, node, ctx):
+        src = node.args[1]
+        if not isinstance(src, torch.fx.Node) or not isinstance(ctx.val(src), (Coll, StaticFloat)):
+            return "src is not a value or a static float tensor"
+        pair = (ctx.dtype_of(src), ctx.dtype_of(node))
+        if pair[0] == pair[1]:
+            return True
+        if isinstance(ctx.val(src), Coll) and (pair == (torch.bfloat16, torch.float32) or pair in _EXACT or (
+                pair[0] == torch.bool and pair[1] in (torch.float32, torch.int64)) or (self.cc and pair in _GPU)):
+            return True
+        return f"numerics_unregistered: a conversion from {pair[0]} to {pair[1]} (lowered at a compute capability, or not at all)"
+
+    def emit(self, node, ctx):
+        src, S = node.args[1], tuple(ctx.shape_of_node(node))
+        v, fn = ctx.val(src), None
+        if isinstance(v, StaticFloat):
+            shape, out = tuple(v.tensor.shape), StaticFloat(v.tensor.broadcast_to(S).contiguous())
+        else:
+            if ctx.dtype_of(src) != ctx.dtype_of(node):
+                v, fn = _convert(ctx, node, v, ctx.dtype_of(src), ctx.dtype_of(node))
+            shape = tuple(shape_of(v.type)[0])
+            out = v if shape == S else _view_expand(v, list(S), node.name)
+        ctx.define(node, out)
+        ctx.record(self, node, {"shape": list(S), "src_shape": list(shape), "conversion": fn},
+                   emitted=f"{fn} x{math.prod(shape)}" if fn else "references")
 
 
 def _dims(node, r: int) -> list[int]:
@@ -418,4 +466,4 @@ class KthValue(_TrainRule):
         ctx.record(self, node, {"k": k, "slice": N, "slices": rows}, emitted=f"radix select of {N} keys x{rows} (32 steps)")
 
 
-__all__ = ["Compare", "Logic", "Where", "Clamp", "Cast", "IntSum", "Index", "KthValue"]
+__all__ = ["Compare", "Logic", "Where", "Clamp", "Cast", "Copy", "IntSum", "Index", "KthValue"]
