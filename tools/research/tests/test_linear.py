@@ -37,10 +37,16 @@ class FakeLinear:
         self.state_type = "backlog"
         self.projects, self.open, self.updated, self.refuse_project = PROJECTS, [], [], False
         self.visible, self.team_key = None, "INF"
+        self.project_teams = {"PJ3": [{"id": "T-infra", "key": "INF"}]}
+        self.project_state = {"PJ3": {"targetDate": "2026-10-28", "status": {"name": "In Progress"}}}
         self.parent = {"id": "P1", "project": {"id": "PJ1"}, "projectMilestone": {"id": "MS3"}}
         self.relations, self.wrote = [], []
         self.users = [{"id": "U1", "name": "Daniel Reuter"}, {"id": "U2", "name": "Verity Asks"}]
         self.asked, self.ask_filter, self.tags = [], None, {}
+
+    def _project(self, pid: str) -> dict:
+        name = next(p["name"] for p in PROJECTS if p["id"] == pid)
+        return {"name": name, **self.project_state.get(pid, {}), "teams": {"nodes": self.project_teams.get(pid, [])}}
 
     @staticmethod
     def _issue(x: str) -> dict:
@@ -66,13 +72,22 @@ class FakeLinear:
             raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, io.BytesIO(b'{"errors": [{"message": "auth"}]}'))
         user = "the app" if headers["Authorization"].startswith("Bearer") else "Daniel"
         if m := re.search(r"\{ (issueRelationCreate|issueRelationDelete|projectUpdateCreate|projectCreate|projectMilestoneCreate|"
-                          r"projectMilestoneUpdate)\(", q):
+                          r"projectMilestoneUpdate|projectUpdate)\(", q):
             self.wrote.append((m[1], v))
             if m[1] == "issueRelationCreate":
                 self.relations.append({"id": f"R{len(self.wrote)}", "type": v["i"]["type"], "issue": self._issue(v["i"]["issueId"]),
                                        "relatedIssue": self._issue(v["i"]["relatedIssueId"])})
             if m[1] == "issueRelationDelete":
                 self.relations = [r for r in self.relations if r["id"] != v["id"]]
+            if m[1] == "projectUpdate":
+                st, i = self.project_state.setdefault(v["id"], {}), v["i"]
+                if "teamIds" in i:
+                    self.project_teams[v["id"]] = [{"id": t, "key": t[2:5].upper()} for t in i["teamIds"]]
+                if "targetDate" in i:
+                    st["targetDate"] = i["targetDate"]
+                if "statusId" in i:
+                    st["status"] = {"name": i["statusId"][3:]}
+                return {"data": {"projectUpdate": {"success": True, "project": self._project(v["id"])}}}
             return {"data": {m[1]: {"success": True, "project": {"url": "https://linear.app/x/project/1"},
                                     "projectUpdate": {"url": "https://linear.app/x/update/1"}}}}
         if "inverseRelations" in q:
@@ -82,6 +97,11 @@ class FakeLinear:
                              "b": self._issue(v["b"])}}
         if "projects(filter" in q:
             return {"data": {"projects": {"nodes": [{"name": p["name"]} for p in self.projects if p["name"].lower() == v["n"].lower()]}}}
+        if "projectStatuses" in q:
+            return {"data": {"projectStatuses": {"nodes": [{"id": f"PS-{n}", "name": n} for n in
+                                                           ("Backlog", "Planned", "In Progress", "Completed", "Canceled")]}}}
+        if "project(id:" in q:
+            return {"data": {"project": self._project(v["id"])}}
         if "users(first" in q:
             return {"data": {"users": {"nodes": self.users}}}
         if q.startswith("{ teams(first"):
@@ -797,6 +817,12 @@ def stateless(fake: FakeLinear) -> bool:
     return not any(k in json.dumps(v) for q, v, _ in fake.calls if q != "grant" for k in ("stateId", "statusId"))
 
 
+def issue_stateless(fake: FakeLinear) -> bool:
+    """As `stateless`, but a project's status, which `project edit --status` sets on purpose, may be sent."""
+    return not any("stateId" in json.dumps(v) or ("statusId" in json.dumps(v) and "projectUpdate(" not in q)
+                   for q, v, _ in fake.calls if q != "grant")
+
+
 def test_relate_sends_each_kind_its_way_round_and_refuses_one_issue_twice_or_a_relation_that_exists(tmp_path):
     fake = FakeLinear()
     lin = linear.Linear(APP, fake, cache=tmp_path / "t")
@@ -863,6 +889,25 @@ def test_project_create_sends_its_teams_lead_date_and_body_and_refuses_a_name_ta
     assert len(fake.wrote) == 1 and stateless(fake)
 
 
+def test_project_edit_adds_teams_sets_the_target_and_status_and_prints_them_after(tmp_path):
+    fake = FakeLinear()
+    lin = linear.Linear(APP, fake, cache=tmp_path / "t")
+    assert lin.project_edit("Full s", ["INF", "comms"]) == "Full stack: target 2026-10-28, status In Progress, added teams COM"
+    assert fake.wrote == [("projectUpdate", {"id": "PJ3", "i": {"teamIds": ["T-infra", "T-comms"]}})]
+    assert lin.project_edit("Full s", ["INF"]) == "Full stack: target 2026-10-28, status In Progress (nothing to change)"
+    assert lin.project_edit("Full s", date="2026-11-03", status="back") == "Full stack: target 2026-11-03, status Backlog"
+    assert fake.wrote[-1] == ("projectUpdate", {"id": "PJ3", "i": {"targetDate": "2026-11-03", "statusId": "PS-Backlog"}})
+    assert lin.project_edit("Full s", date="none") == "Full stack: target none, status Backlog" and len(fake.wrote) == 3
+    for args, kw, says in ((("Full s",), {}, "project edit: give --team KEY, --date YYYY-MM-DD or --status STATUS"),
+                           (("Full s", ["NOPE"]), {}, "no Linear team named 'NOPE'"),
+                           (("Full s",), {"date": "3 Nov"}, "--date '3 Nov': give a date as YYYY-MM-DD"),
+                           (("Full s",), {"status": "Paused"}, "project status 'Paused' matches none of"),
+                           (("Full",), {"date": "2026-11-03"}, "active project 'Full' matches 2 of")):
+        with pytest.raises(linear.LinearError, match=re.escape(says)):
+            lin.project_edit(*args, **kw)
+    assert len(fake.wrote) == 3 and issue_stateless(fake)
+
+
 def test_milestone_create_and_edit_by_prefix_and_refuse_a_name_the_project_has_in_any_case(tmp_path):
     fake = FakeLinear()
     lin = linear.Linear(APP, fake, cache=tmp_path / "t")
@@ -906,12 +951,14 @@ def test_the_relation_and_project_verbs_from_the_cli_print_one_line_and_refuse_w
             (["project", "create", "Smaller", "Lean", "--team", "INF", "--team", "COM", "--target", "2026-11-30",
               "--description-file", str(body)],
              "project Smaller Lean created: teams INF COM, targetDate 2026-11-30, content 15 characters https://linear.app/x/project/1"),
+            (["project", "edit", "Full", "stack", "--team", "COM", "--date", "2026-11-03", "--status", "Planned"],
+             "Full stack: target 2026-11-03, status Planned, added teams COM"),
             (["milestone", "create", "E2E", "M4 · served", "--date", "2026-11-02"], f"{e2e} / M4 · served: created, targetDate 2026-11-02"),
             (["milestone", "edit", "E2E", "M3", "--rename", "M3 · served", "--description-file", str(body)],
              f"{e2e} / M3 · composed: set name M3 · served, description 15 characters")):
         assert run(capsys, "linear", *argv) == (0, want + "\n", "")
     assert [w for w, _ in lin.wrote] == ["issueRelationCreate", "issueRelationDelete", "projectUpdateCreate", "projectCreate",
-                                         "projectMilestoneCreate", "projectMilestoneUpdate"]
+                                         "projectUpdate", "projectMilestoneCreate", "projectMilestoneUpdate"]
     assert lin.wrote[2][1]["i"]["body"] == "M3 slips a day\n" and lin.wrote[3][1]["i"]["content"] == "M3 slips a day\n"
     for argv, says in ((["relate", "INF-1", "INF-2"], "linear relate: give ISSUE blocks|blocked-by|related|duplicate OTHER"),
                        (["relate", "INF-1", "blocks", "INF-1"], "INF-1 and INF-1 are one issue"),
@@ -920,14 +967,15 @@ def test_the_relation_and_project_verbs_from_the_cli_print_one_line_and_refuse_w
                        (["update", "--health", "onTrack", "--body-file", str(body)], "linear update: give the PROJECT"),
                        (["update", "E2E", "--health", "onTrack", "--body-file", str(tmp_path / "missing.md")], "No such file"),
                        (["update", "E2E", "--body-file", str(body)], "--health: give one of onTrack, atRisk, offTrack"),
-                       (["project", "edit", "Smaller", "Lean"], "linear project: give `create NAME`"),
+                       (["project", "rename", "Smaller", "Lean"], "linear project: give `create NAME` or `edit PROJECT [--team KEY]"),
+                       (["project", "edit", "Full", "s"], "project edit: give --team KEY, --date YYYY-MM-DD or --status STATUS"),
                        (["project", "create", "--team", "INF"], "linear project: give the project's NAME"),
                        (["milestone", "rename", "E2E", "M3"], "linear milestone: give `create` or `edit`, then PROJECT NAME"),
                        (["milestone", "create", "E2E"], "linear milestone create: give PROJECT"),
                        (["relate", "INF-1", "blocks", "INF-2", "--dry-run"], "linear relate has no --dry-run (it would write)")):
         rc, _, err = run(capsys, "linear", *argv)
         assert rc == 2 and says in err, (argv, err)
-    assert len(lin.wrote) == 6 and stateless(lin)
+    assert len(lin.wrote) == 7 and issue_stateless(lin)
 
 
 def slack_bot(registry) -> str:

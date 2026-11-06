@@ -94,7 +94,9 @@ using-slack skill).
   - `research msg linear edit ISSUE --title T --due D`;
   - `research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER`, and `unrelate ISSUE OTHER`;
   - `research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F`, a project update;
-  - `research msg linear project create NAME --team KEY` and `milestone create|edit PROJECT NAME [--date D]`.
+  - `research msg linear project create NAME --team KEY`, `project edit PROJECT [--team KEY] [--date D] [--status S]`
+    (a team its issues need, a target date that hasn't passed, Backlog for a paused project) and
+    `milestone create|edit PROJECT NAME [--date D]`.
 
 ## Workers
 
