@@ -373,7 +373,7 @@ def test_refuses_cond():
 
     with pytest.raises(CaptureRefused) as e:
         capture_fn(step, model, (torch.empty(4, 8),))
-    assert e.value.reason == "dynamic_control_flow"
+    assert e.value.reason == "dynamic_control_flow", e.value
 
 
 def test_refuses_batch_dependent_graph():
