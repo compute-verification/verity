@@ -379,9 +379,11 @@ k_exfil. Dither needs these of the challenger and the certifier:
 
 - **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`). No machine
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
-  the certifier counts. Both it and its placement premise are prose only (no `.lean` file defines either): the premise
-  `WitnessPathPrivate` discharges it: private messages (the devices' signed records and salts, the prover's witness, a
-  server's coins) travel only on private links, and the certifier sits on the server's own uplink.
+  the certifier counts. Its statement is `Pouw.Assumptions.CoinsConfidential`'s docstring
+  (`Security/Definitions/Pouw/Assumptions/Dither.lean`). The placement premise `WitnessPathPrivate`
+  (`Accounting.Assumptions.Parties.WitnessPathPrivate`) discharges it in prose, with no Lean proof yet: private
+  messages (the devices' signed records and salts, the prover's witness, a server's coins) travel only on private
+  links, and the certifier sits on the server's own uplink.
   - **The MVP: the certifier's device is the challenger.** The device that runs the
     replica's network certifier produces its live coins, so each coin is made at the boundary it enters: no path carries
     one in from outside and no key is needed for it. A multi-node replica's challenger is the certifier device of its
@@ -391,10 +393,8 @@ k_exfil. Dither needs these of the challenger and the certifier:
     the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
     RTX PRO 6000 V4 replica's 24.0 GB/s.
   - The challenger's side is two premises, named as in `verity/core/protocols/sampled_proofs/README.md`:
-    - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor
-      hosts, or the challenger and the certifier are one device at the boundary. In the Lean it is the named Prop
-      `Pouw.Assumptions.CoinsConfidential`, listed in the lock, which `FleetSound` takes: a replica's strategy reads
-      none of its own coins.
+    - `CoinsConfidential`: the named Prop `Pouw.Assumptions.CoinsConfidential` above, listed in the lock, which
+      `FleetSound` takes: a replica's strategy reads none of its own coins.
     - `OneClock`: the challenger's release times and the certifier's ingress and receipt times are read on one clock,
       and a challenger on a device of its own keeps its clock within 1.03 s of the certifier's (the one clock below).
       It is a spec premise: the Lean reads every time on one axis and names no Prop for it.

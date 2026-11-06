@@ -18,10 +18,10 @@ of its imports as their parts there have them (each import's own task replayed i
 toolchain's and the fetched packages') at the private level. A declaration's axiom set takes an imported declaration's
 from its module's record where the task read one, and otherwise walks its body as the parts have it: a theorem whose proof
 only an absent private part holds counts as an axiom, so the task fails rather than miss one. An env module's declarations
-take theirs from the env's record, which every task reads at `families.lean_env.AXIOMS` (`runners/lean_env.py` writes
-it): a record of another env than the package's (`env_key`), or one that lacks an env module the replay imported or
-names other bytes for it than this worker's (`env_digests`), is an error. A declaration that uses an axiom outside
-`STANDARD` fails the task.
+take theirs from the env's record, which every task reads where `families.lean_env.read` puts it (`runners/lean_env.py`
+writes it): a record of another env than the package's (`families.lean_env.env_key`), or one that lacks an env module the
+replay imported or names other bytes for it than this worker's (`env_digests`), is an error. A declaration that uses an
+axiom outside `STANDARD` fails the task.
 
 The `lean` env on a worker: the toolchain of the package's `lean-toolchain` (elan's), and for a package that fetches
 packages (Mathlib, ArkLib and the rest) its `.lake/packages` at its manifest and toolchain (`lean_audit.deps_key`), made once
@@ -45,7 +45,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .. import ROOT, contract
-from ..families.lean_env import AXIOMS as ENV_RECORD
+from ..families import lean_env as env_family
 from ..families.lean_module import la
 from ..graph import LOG
 from . import Timeout, call
@@ -175,12 +175,6 @@ def program(name: str, tc: Path, work: Path) -> Path:
 
 #: the schema of the lean env's record (`runners/lean_env.py`)
 ENV_SCHEMA = "verity-lean-env-axioms/v1"
-
-
-def env_key(pkg: Path) -> str:
-    """The env ``pkg`` compiles in, as `families/lean_env.py` groups packages: its `lean_audit.deps_key`, or its
-    toolchain's line when it fetches no package."""
-    return la.deps_key(pkg) or (pkg / "lean-toolchain").read_text().strip()
 
 
 def env_libs(pkg: Path, tc: Path, deps: Path | None) -> list[Path]:
@@ -346,12 +340,14 @@ def run(task: dict, work: Path) -> dict:
         tc = toolchain(pkg, work)
         deps = packages(pkg, work)
         replay = program("Replay", tc, work)
-        key, record = env_key(pkg), work / ENV_RECORD
+        if (env_read := env_family.read(task)) is None:
+            raise ValueError("the task reads no lean env's axioms")
+        key, record = env_family.env_key(pkg), work / env_read[1]
         head = env_header(record)
     except (EnvError, Timeout) as e:
         return {"status": "error", "detail": {"error": f"the lean env: {type(e).__name__}: {e}"}}
     except (OSError, ValueError) as e:
-        return {"status": "error", "detail": {"error": f"the lean env's record ({ENV_RECORD}): {type(e).__name__}: {e}"}}
+        return {"status": "error", "detail": {"error": f"the lean env's record: {type(e).__name__}: {e}"}}
     if head.get("schema") != ENV_SCHEMA or head.get("env") != key:
         return {"status": "error", "detail": {"error": f"the lean env's record is of env {head.get('env')!r} "
                                                        f"({head.get('schema')}), and {v['package']} compiles in {key!r} "

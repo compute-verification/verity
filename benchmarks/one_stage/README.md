@@ -187,6 +187,12 @@ negatives.
 - `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
   (PoUS's `served_case.sh`), then gets remote's and onsite's Lean verdicts on the run's cases (soundness's composite
   reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
+- `onsite_periods.py`: the onsite record (`verity/onsite-network-record/v1`) per monitoring period, a week, a month and a
+  year by the node, a datacenter and the world, each cell its K, share of the weights and δ_net beside K over one
+  execution phase, marked proved or scaled by the record's rules. It refuses a record whose labels its rules contradict:
+  K/m proved past one phase, a node cell proved over a period the run doesn't cover, a datacenter or world cell proved,
+  a proved statement outside the lock, a rule without its sources. The tight K is shown conditional on what is open.
+  Its test reads stand-ins cut from the writer's own record (`tests/fixtures/onsite_periods/make.py`).
 - `served_util.sh` (with `served_util.py`): the whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B
   prefill mix (prompts of 1,024 ids, `max_tokens` 1, all queued at once, T tokens a step), one arm a run (stock, the
   Commit unsealed or sealed, the Commit with PoUW H1 on in-process coins), under Nsight Systems' GPU metrics.

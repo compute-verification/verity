@@ -49,7 +49,7 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("KEEP_DATA", str, None, WHERE, "1 keeps 85's data/TAG for a later job: retention, not what is measured"),
     # ---- 85's, which the job sets a default for (verity/ml/flock/pod/85-rec-reprice.sh)
     S("K", int, 4096, VALUE, "the inner statement's GemmCoordinate_v2 K"),
-    S("N", int, 2, VALUE, "the inner statement's instances"),
+    S("N", int, 2, VALUE, "the inner statement's template instances"),
     S("WARM", int, 1, VALUE, "the inner step's warm runs"),
     S("RUNS", int, 3, VALUE, "the inner step's timed runs"),
     S("GPU", str, None, VALUE, "0: 85 proves on the CPU; unset, 1"),
