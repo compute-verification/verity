@@ -698,8 +698,6 @@ KNOWN: dict[str, str] = {
         "homonym, a block of rows and columns of one design: rename (compute-accounting)",
     "benchmarks/pouw/theory/checked_strip.py::Ledger":
         "homonym, a strategy's priced products: rename (compute-accounting)",
-    "benchmarks/pouw/theory/ksw_k.py::Layout":
-        "homonym, the bits of a theory model's coin groups: rename (compute-accounting)",
     "benchmarks/property_redteam/demo.py::Circuit":
         "homonym, a red-team demo's multi-precision arithmetic builder: rename (memory-accounting)",
     "benchmarks/property_redteam/renorm.py::Gate":
