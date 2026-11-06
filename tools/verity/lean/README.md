@@ -141,8 +141,9 @@ one process, `leanchecker --fresh`'s check of every root at once; warm, nothing 
 an own module replays it and what imports it, as without `--closure`. The cache is shared between packages, so
 `Security` reuses the Mathlib modules `Security/Proofs` checked. For a module's verdict to be a function of its key,
 `Replay.lean` refuses a declaration that mentions a constant its module neither declares nor imports, checks a theorem
-that two modules each declare (an equation lemma realized in both) once per module, and requires the quotient's
-constants to be the ones the kernel makes. A change to `Replay.lean` changes every key, so the next run is cold.
+that two modules each declare (an equation lemma realized in both) once per module, taking a reused module's public
+part's axiom copy as Lean's import does (`subsumesInfo`), and requires the quotient's constants to be the ones the
+kernel makes. A change to `Replay.lean` changes every key, so the next run is cold.
 The audit prints `closure: N modules checked, M reused` under each package's line. `check`'s lean-audit step runs
 `--closure` against the node's kept cache (`lean_audit.FLAGS`, `lean-replay/`), so a dependency module that skipped the
 kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. Cold, after a bump of the
@@ -421,8 +422,8 @@ the digest is recomputed. A guarantee's `owner` merges apart from the rest of it
 other side's restatement both apply.
 
 What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
-`reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
-them. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
+`reads` and assumption digests merge as the union or ours' value, named on stderr, and drive's lock run regenerates them
+once the merge lands. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
 conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree. Git runs the driver
 from the worktree you merge into, and one whose rules are older than `origin/main`'s runs `origin/main`'s (`deferred`), so
 fetch `main` before you merge.

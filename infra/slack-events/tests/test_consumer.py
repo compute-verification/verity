@@ -1,5 +1,5 @@
 """The consumer: routing by `research msg`'s `deliver` with Slack as the record (the routing line read back on a
-redelivery), no-model mode's @top, the dead letter and the newcomers' `team_join`."""
+redelivery), no-model mode's ring to the admin, the dead letter and the newcomers' `team_join`."""
 from __future__ import annotations
 
 import json
@@ -72,7 +72,7 @@ def test_what_the_consumer_leaves_alone(world, where, msg, why):
 
 
 def test_an_external_posters_post_through_our_bot_rings_by_the_rule_even_at_the_front_door(world):
-    """Codex, Daniel's desktop agent, posts through Verity's bot without `research msg`, so no sender rings for its asks to
+    """Codex, a person's desktop agent, posts through Verity's bot without `research msg`, so no sender rings for its asks to
     lanes.  The service delivers them, by the names they start with only."""
     codex = {"bot_id": BOT, "username": "Codex", "subtype": "bot_message"}
     ask = world.slack.add(COORD, text="@circuits @kernels both of you claimed the launch; who owns it?", **codex)
@@ -94,8 +94,8 @@ def test_an_edit_or_another_event_type_is_acknowledged_and_ignored(world):
 
 
 def test_a_redelivery_after_the_routing_line_rings_only_the_missing_lanes_with_no_second_pick(world, monkeypatch):
-    """The first delivery picked, posted its line and rang @circuits, then failed to ring @kernels.  The redelivery finds
-    the line, so the model isn't asked again, and rings @kernels alone; @circuits keeps its one doorbell."""
+    """The first delivery picked, posted its line and rang `circuits`, then failed to ring `kernels`.  The redelivery finds
+    the line, so the model isn't asked again, and rings `kernels` alone; `circuits` keeps its one doorbell."""
     model = Model(monkeypatch, ["circuits", "kernels"])
     post = world.slack.add(CHAT, text="how is the TP8 kernel validated?", user=LUKE)
     payload = world.event(CHAT, post, "EvR")
