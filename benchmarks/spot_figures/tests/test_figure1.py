@@ -83,6 +83,15 @@ def test_the_headline_designs_win_at_the_measured_overhead(out):
             assert at["skipped_work", "one-stage"] < at["skipped_work", "request"]
 
 
+def test_compute_and_skipped_work_are_in_and_gates_too(out):
+    rate = out["inputs"]["ands_per_mac"]["value"] / 2
+    assert out["panels"]["skipped_work"]["and_per_flop"] == rate
+    for scope in SCOPES:
+        assert out["scopes"][scope]["ands"] == pytest.approx(out["scopes"][scope]["flop"] * rate)
+    for r in f.at_overhead(out):
+        assert ("ands" in r) == (r["panel"] == "skipped_work")
+
+
 def test_the_json_is_plain_and_renders(out, tmp_path):
     back = json.loads(json.dumps(out, allow_nan=False, default=str))
     assert back["schema"] == f.SCHEMA and back["panels"]["infiltration"]["status"] == "pending"

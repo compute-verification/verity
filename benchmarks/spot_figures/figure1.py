@@ -41,6 +41,7 @@ from dataclasses import dataclass
 from math import sqrt
 from pathlib import Path
 
+from glm53_partition import _k
 from verity.core.protocols.pous.wipe_monitoring import PERIODS
 from verity.core.protocols.sampled_proofs.optimize import Grain, ReplayGrain, grain_costs, leak_count, loc_bits
 
@@ -58,6 +59,9 @@ SCHEMA = "spot-figure1/v1"
 #: the reference objects rho's reference rules, as cards: (table, key, field)
 REFERENCES = {"ref_sparseloco": ("exfil", "sparseloco-1000", "bits"), "ref_rollouts": ("exfil", "rl-rollouts", "bits"),
               "ref_pretrain": ("work", "v4-pretrain", "flops"), "ref_step": ("work", "v4-step", "flops")}
+#: the circuit-check pin a MAC's AND gates are read from: the Hopper dot's FP8 MoE coordinate
+AND_PIN = ("verity/ml/definitions/registry/boolean_fp8_moe.circuit-check.json",
+           "MoeExpertFp8BlockCoordinateW_v4{K=128,G=128,KB=128,SWAP=True,DOT=HopperE4m3MmaV2Dot32_v2}")
 
 
 @dataclass(frozen=True)
@@ -93,15 +97,20 @@ def cards() -> dict[str, InputCard]:
     def from_rho(name: str, value, unit: str, where: str, entry: dict) -> None:
         out[name] = InputCard(value, unit, "modeled", f"{RHO} {where}: {entry['source']}")
 
+    pin, coordinate = AND_PIN
+    ands = json.loads((ROOT / pin).read_text())["definitions"][coordinate]["and"]
     out |= {
         "tokens_per_request": InputCard(census["tokens_per_request"], "token", "modeled",
-                                   f"{ADVERSARY} {CENSUS_WORLD}: tokens a request"),
+                                        f"{ADVERSARY} {CENSUS_WORLD}: tokens a request"),
         "datacenter_gpus": InputCard(dc["machines"] * dc["gpus_per_machine"], "GPU", "modeled",
-                                f"{DEPLOYMENTS} {DATACENTER}"),
+                                     f"{DEPLOYMENTS} {DATACENTER}"),
         "peak_flops": InputCard(peak["flop_per_second"], "FLOP/s", "modeled",
-                           f"{HARDWARE} {PEAK}, the H200's dense FP8 peak: {peak['sources'][0]['label']}"),
+                                f"{HARDWARE} {PEAK}, the H200's dense FP8 peak: {peak['sources'][0]['label']}"),
         "h100_hour_flop": InputCard(census["h100_hour_flop"], "FLOP", "modeled",
-                               f"{ADVERSARY} {CENSUS_WORLD}: an H100-hour at the dense FP8 peak"),
+                                    f"{ADVERSARY} {CENSUS_WORLD}: an H100-hour at the dense FP8 peak"),
+        "ands_per_mac": InputCard(ands / _k(coordinate), "AND/MAC", "modeled",
+                                  f"{pin} {coordinate}: {ands:,} ANDs over its K MACs, the pinned Boolean lowering "
+                                  "nearest GLM-5.3's FP8 MoE coordinates, taken for every MAC"),
     }
     session = rho["policy"]["v4-pro-session"]["k"]
     from_rho("output_cap", session["value"], "bit", "policy.v4-pro-session.k", session)
@@ -284,6 +293,7 @@ def run(points: int = 57, scope_names: tuple[str, ...] | None = None) -> dict:
     part = TokenBlocks.of(c["partition"].value["strata"])
     xs = overheads(c, points)
     budgets = c["budgets"].value
+    and_per_flop = c["ands_per_mac"].value / 2
     out_scopes, series = {}, {"exfiltration": [], "skipped_work": []}
     for s in scopes(c, part):
         if scope_names is not None and s.name not in scope_names:
@@ -293,7 +303,8 @@ def run(points: int = 57, scope_names: tuple[str, ...] | None = None) -> dict:
         out_scopes[s.name] = {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
                               "gpu_seconds": s.gpu_seconds, "requests": s.requests, "flop_request": s.flop_request,
                               "proof_blocks": base.dot.units, "output_bits": cap(base, "leak"),
-                              "flop": cap(base, "work"), "serve_hash_share": serve_hash / s.gpu_seconds,
+                              "flop": cap(base, "work"), "ands": cap(base, "work") * and_per_flop,
+                              "serve_hash_share": serve_hash / s.gpu_seconds,
                               "boundary_hash_share": base.replay.replay_blocks * base.replay.boundary_bytes
                               * base.byte_s / s.gpu_seconds,
                               "captions": captions(serve_hash / s.gpu_seconds)}
@@ -323,19 +334,22 @@ def run(points: int = 57, scope_names: tuple[str, ...] | None = None) -> dict:
                              "references": refs["exfiltration"], "series": series["exfiltration"]},
             "infiltration": {"status": "pending", "series": []},
             "skipped_work": {"unit": "FLOP", "target": "work", "headline": HEADLINE["skipped_work"],
-                             "references": refs["skipped_work"], "series": series["skipped_work"]}},
+                             "and_per_flop": and_per_flop, "references": refs["skipped_work"],
+                             "series": series["skipped_work"]}},
     }
 
 
 def at_overhead(out: dict) -> list[dict]:
-    """Each series' point at the vertical line: the figure's table."""
+    """Each series' point at the vertical line: the figure's table, skipped work in AND gates too."""
     x = out["vertical"]["x"]
     rows = []
     for panel in ("exfiltration", "skipped_work"):
-        for s in out["panels"][panel]["series"]:
+        p = out["panels"][panel]
+        for s in p["series"]:
             i = s["x"].index(x)
             rows.append({"panel": panel, "scope": s["scope"], "design": s["design"], "budget": s["budget"],
-                         "bound": s["y"][i], "share": s["share"][i], "capped": s["capped"][i]})
+                         "bound": s["y"][i], "share": s["share"][i], "capped": s["capped"][i]}
+                        | ({"ands": s["y"][i] * p["and_per_flop"]} if "and_per_flop" in p else {}))
     return rows
 
 

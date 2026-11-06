@@ -28,7 +28,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve          # for the
 - `inputs.json`: the figure's own cards: δ, the budgets, the x-axis, the measured proof overhead (the vertical line,
   provisional until the proof-overhead card is defined), the hashing rate, a token's bytes and GLM-5.3's checkpoint.
   The tokens a request, the GPUs, the MFU, the peak, the output cap and the reference lines are read from the census
-  and rho's reference.
+  and rho's reference, and a MAC's AND gates, which state each scope's compute and the skipped work in AND gates, from
+  the FP8 MoE coordinate's circuit-check pin.
 - `glm53_partition.py` writes `glm53_partition.json`, GLM-5.3's proof blocks a token, from the census of its request
   Program (`benchmarks/one_stage/a11_kinds.py`, the TP8 B1 row's rank 0, scaled to its 8 ranks): each matmul is its
   output coordinates, every other Call its output words. Attention's growth with context past the census's row is not
