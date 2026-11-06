@@ -42,12 +42,12 @@ for m in "$@"; do
     else
       "$PY" "$here/ladder.py" replay --model "$m" --out "$d" --index "$i" > "$d/replay-$i.log" 2>&1 || { tail -n 40 "$d/replay-$i.log"; rc=1; }
     fi
-    tail -n 1 "$d/replay-$i.log"
+    grep '^{"mode"' "$d/replay-$i.log" | tail -n 1
   done
   if [ "$ALONE" -gt 0 ]; then
     echo "== $m alone $(date -u +%FT%TZ)"
     "$PY" "$here/ladder.py" alone --model "$m" --out "$d" --requests "$ALONE" > "$d/alone.log" 2>&1 || { tail -n 40 "$d/alone.log"; rc=1; }
-    tail -n 1 "$d/alone.log"
+    grep '^{"model"' "$d/alone.log" | tail -n 1
   fi
   gzip -f "$d"/*/server/step_trace.*.jsonl 2>/dev/null
 done

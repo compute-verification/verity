@@ -221,7 +221,7 @@ def model_row(d: Path) -> dict:
     win = serve_meta.get("window") or {}
     row["window"] = {"sent": win.get("sent"), "served": win.get("ok"), "output_tokens": win.get("output_tokens"),
                      "span_s": win.get("span_s"), "req_s": win.get("req_per_s")}
-    for rd in sorted(d.glob("replay-*"), key=lambda p: int(p.name.split("-")[1])):
+    for rd in sorted((p for p in d.glob("replay-*") if p.is_dir()), key=lambda p: int(p.name.split("-")[1])):
         f = rd / "replay.json"
         if not f.is_file():
             row["replays"].append({"index": int(rd.name.split("-")[1]), "error": "no replay.json"})

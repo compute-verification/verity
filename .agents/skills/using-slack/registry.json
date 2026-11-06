@@ -121,6 +121,7 @@
         "verity/core/protocols/sampled_proofs/",
         "benchmarks/one_stage/",
         "benchmarks/serve_tax/",
+        "benchmarks/replay_ladder/",
         "benchmarks/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
