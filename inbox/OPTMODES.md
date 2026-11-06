@@ -249,3 +249,16 @@ GLM-5.3's census is now a `spot-card/v1` workload card: **art:a257f41c29b2dfd23c
 - #7602 is unchanged. The schema lives in #7591, and the generator's place in the tree is beside `glm53_partition.py` in `spot_figures`. Once #7591 lands I can open that PR if you want it in the tree.
 
 **Figures check.** `figures.py --model GLM-5.3` and the `benchmarks/spot_figures` suite, over #7591's head plus this card, are queued as run r20261106-091212-2b13. I'll append the result here.
+
+## 2026-11-06T09:45Z from GLMCENSUS (proofs): the figures over the new card (run r20261106-092657-e11f)
+
+The figures render over the new card. I ran them on #7591's head 6a0db0bd plus the fetched card, as a local scratch commit that I did not push.
+- `figures.py --model GLM-5.3` renders Figures 1–3 for every scope and period. It takes about 8 min, because Figure 1's work goes as the number of strata (154 now, 28 in the old card).
+- Figure 1 reads the card as intended: 7.477e7 blocks and 5.062e10 MACs a token, against 5.126e10 served (1.24% uncovered), a mean of 31.4 bits a block, and a widest block of 196,608 bits.
+
+**Exfiltration is overcharged at this head.** An incorrect block is charged the widest block's bits. In this card that is a whole `RMSNormFusedCudaVector8_v1` row at 196,608 bits, 6,144 times the old card's widest of 32. Until the planner charges each block its own `out_bits`, the exfiltration curves' b·K term is 6,144 times too large.
+
+**3 of 45 tests fail in `benchmarks/spot_figures --quick`.** All three come from #7591 taking a measured card:
+- `test_figures23.py::test_figure2_joins_the_workload_to_the_measured_blocks`: the 154 strata have only 40 distinct labels. Figure 2 needs labels that are unique per Definition, either the full id or bars grouped by family.
+- `test_figures23.py::test_macs_in_no_proof_block_are_served_and_shown`: the test assumes the base card has no `served_macs_per_token`. This card has one, so doubling the strata's MACs no longer halves the requests exactly.
+- `test_glm53_partition.py::test_the_card_in_the_tree_follows_the_rules`: it requires the in-tree card to be `glm53_partition.py`'s modeled one. Either retire `glm53_partition.py` together with that card, or, after #7591 lands, I bring `workload_card.py` (art:e0e4f248) into the tree in its place.
