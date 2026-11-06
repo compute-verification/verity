@@ -2,6 +2,7 @@ module
 
 public import Proofs.Accounting.HeadlineDc.Branches
 public import Definitions.Accounting.Guarantees.HeadlineDc
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The B200's headline at the data sheet

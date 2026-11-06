@@ -4,7 +4,9 @@ public import Definitions.Accounting.PouwWork
 public import Definitions.Accounting.Requirement.Placed
 
 /-!
-# PoUW's credits and help when a node runs a declared circuit as placed (trusted)
+# PoUW's credits and help when a node runs a declared circuit as placed: lemmas
+
+These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
 PoUW's work statement (`Definitions/Accounting/Guarantees/PouwWork.lean`) reads a run's credits and help
 (`Accounting.PouwWork.credits`, `help`). On the actual run of a declared circuit `W`'s placed execution

@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Nci.Guarantees
 public import Proofs.Nci.LoomisWhitneyBase
+public import Proofs.Nci.Lemmas
 
 /-!
 # The discrete Loomis–Whitney inequality
