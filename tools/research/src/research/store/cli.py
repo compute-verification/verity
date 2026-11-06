@@ -14,7 +14,7 @@
   research data fetch ART [--to DIR] [--path GLOB]... [--list [--json]]
                                                    materialise the payload (file or tree, or just the files matching --path); prints the path;
                                                    --list prints the tree's files (path, bytes, local/remote) and fetches nothing
-  research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D]] [--min-mb M] [--keep-trees] [--keep-registry FILE]...
+  research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D] [--verify-remote]] [--min-mb M] [--keep-trees] [--keep-registry FILE]...
                      [--src-dir D [--src-origin URL]] [--json]
                                                    free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
                                                    --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached;
@@ -346,7 +346,10 @@ def cmd_evict(argv: list[str]) -> int:
                     help="keep every blob an artifact of this registry holds (fixtures/artifacts.json's form: its `art:` keys); repeatable")
     ap.add_argument("--runs", action="store_true", help="also evict preserved big files from finished run directories (writes run-files.evicted.json)")
     ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root for --runs (default $RESEARCH_RUNS or ~/.research/runs)")
-    ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 30)")
+    ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 1440, a day)")
+    ap.add_argument("--verify-remote", action="store_true",
+                    help="--runs on an agent VM: a run's tree the local catalog records no verified replica of counts once its manifest "
+                         "and blobs are on the remote at their sizes (HEADs, no read-back; evict.py `on_remote`)")
     ap.add_argument("--src-dir", default=None, metavar="DIR",
                     help="also delete the `research run` source trees under DIR (<root>/src) recoverable on the node that nothing uses, "
                          "whatever the target (evict.py `evict_src`; needs root or CAP_SYS_PTRACE to read /proc)")
@@ -368,7 +371,7 @@ def cmd_evict(argv: list[str]) -> int:
         from ..runs import runs_root  # noqa: PLC0415
 
         rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
-                                    quiet_s=ns.quiet_min * 60, log=say)
+                                    quiet_s=ns.quiet_min * 60, log=say, remote_check=ns.verify_remote)
     if ns.src_dir:
         rep["src"] = EV.evict_src(Path(ns.src_dir), origin=ns.src_origin, dry_run=ns.dry_run, keep_s=ns.src_keep_h * 3600, log=say)
     if ns.json:
