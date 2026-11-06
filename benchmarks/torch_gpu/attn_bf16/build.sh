@@ -18,9 +18,11 @@ ship_cuda /usr/local/cuda /usr/local/cuda-13.0
 OUT=${1:-/tmp/attn-bf16-ship}; shift || true
 ship_fresh
 ship_toolchain
+ship_stage benchmarks/torch_gpu/attn_bf16
 for ARCH in sm_90a sm_120a; do
   ship_cubin_flags "$ARCH"
-  "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/attn_bf16.$ARCH.cubin" "$HERE/attn_bf16.cu" 2> "$OUT/ptxas.$ARCH.txt" \
+  "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/attn_bf16.$ARCH.cubin" "$SRC/benchmarks/torch_gpu/attn_bf16/attn_bf16.cu" \
+    2> "$OUT/ptxas.$ARCH.txt" \
     || { cat "$OUT/ptxas.$ARCH.txt" >&2; exit 1; }
   "$CUDA/bin/cuobjdump" -sass "$OUT/attn_bf16.$ARCH.cubin" > "$OUT/attn_bf16.$ARCH.sass"
   python3 "$HERE/sass_gate.py" "$ARCH" "$OUT/ptxas.$ARCH.txt" "$OUT/attn_bf16.$ARCH.sass" "$OUT/sass.$ARCH.json"

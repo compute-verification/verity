@@ -12,12 +12,13 @@
 #   source.txt                             the commit, and the sha256 of every source the Makefile names
 #   MANIFEST.sha256                        every file above
 # CUDA names a toolkit (nvcc >= 12.8); else the node's /usr/local/cuda-13.0 or /usr/local/cuda. It builds in ship.sh's
-# frame, so a rebuild at the same commit, source path and toolkit path reproduces the cubins.
+# frame from its staged sources, so a rebuild at the same commit and toolkit path reproduces the cubins.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../ship.sh"
 OUT=${1:-${OUT:?usage: build.sh OUT}}; ARCH=${ARCH:-sm_90a}
-P2=$ROOT/benchmarks/pous/p2_v1
+ship_stage benchmarks/pous/p2_v1 benchmarks/pous/p2_gpu verity/ml/kernels
+P2=$SRC/benchmarks/pous/p2_v1
 S=$(mktemp -d "${TMPDIR:-/tmp}/p2-stage-build.XXXXXX"); trap 'rm -rf "$S"' EXIT
 mkdir -p "$OUT/lib"
 

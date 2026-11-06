@@ -18,6 +18,7 @@ VARIANTS=${VARIANTS:-"w2:-DP2ST_WARPS=2 w4:-DP2ST_WARPS=4 w2sb:-DP2ST_WARPS=2:-D
 S=$(mktemp -d "${TMPDIR:-/tmp}/s8-dec-build.XXXXXX"); trap 'rm -rf "$S"' EXIT
 ship_fresh; mkdir -p "$OUT/lib" "$OUT/p2v1"
 : > "$OUT/toolchain.txt"
+ship_stage benchmarks/torch_gpu/s8_dec_linear benchmarks/pous/p2_v1 benchmarks/pous/p2_gpu verity/ml/kernels
 
 fetch_redist() {   # $1 version, $2 destination: the components nvcc needs to compile and link a shared library and dump SASS
   python3 - "$1" "$2" <<'EOF'
@@ -52,7 +53,7 @@ for v in $VARIANTS; do
   name=${v%%:*}; IFS=: read -r -a defs <<< "${v#*:}"
   d=$OUT/lib/$name; mkdir -p "$d"
   cmd=("$NVCC" -O3 -std=c++17 -gencode "arch=compute_${ARCH#sm_},code=$ARCH" -Xcompiler -fPIC -shared "${defs[@]}"
-       -I "$CUDA/include" -L "$CUDA/lib" -Xptxas -v -o "$d/libp2stage.so" "$HERE/p2stage.cu")
+       -I "$CUDA/include" -L "$CUDA/lib" -Xptxas -v -o "$d/libp2stage.so" "$SRC/benchmarks/torch_gpu/s8_dec_linear/p2stage.cu")
   echo "${cmd[*]}" >> "$OUT/toolchain.txt"
   "${cmd[@]}" 2> "$d/ptxas.txt" || { cat "$d/ptxas.txt" >&2; exit 1; }
   PATH="$CUDA/bin:$PATH" "$CUDA/bin/cuobjdump" -sass "$d/libp2stage.so" > "$S/$name.sass"
@@ -69,7 +70,7 @@ fi
 git clone -q https://github.com/NVlabs/CGBN "$S/CGBN"
 git -C "$S/CGBN" checkout -q "$(cat "$ROOT/benchmarks/pous/p2_gpu/CGBN.commit")"
 P2ARCH=${ARCH%a}
-mk=(make -C "$ROOT/benchmarks/pous/p2_v1" NVCC="$NVCC -I $CUDA/include -L $CUDA/lib" CGBN="$S/CGBN" BIN="$OUT/p2v1" ARCH="$P2ARCH" ${GMPINC:+"INC=-I $GMPINC"})
+mk=(make -C "$SRC/benchmarks/pous/p2_v1" NVCC="$NVCC -I $CUDA/include -L $CUDA/lib" CGBN="$S/CGBN" BIN="$OUT/p2v1" ARCH="$P2ARCH" ${GMPINC:+"INC=-I $GMPINC"})
 echo "${mk[*]}" >> "$OUT/toolchain.txt"
 "${mk[@]}" > "$S/p2v1-make.log" 2>&1 || { tail -30 "$S/p2v1-make.log" >&2; exit 1; }
 grep -E "Compiling entry|registers|spill" "$OUT/p2v1/libp2v1.so.ptxas" | head -40 > "$OUT/p2v1/ptxas-summary.txt" || true

@@ -8,8 +8,9 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 # addresses, whose layout also moves with the lengths of the paths it reads (the source's, the toolkit's, TMPDIR's), and
 # some follow elapsed time, which a busy machine stretches. So a build that sources this runs itself once more, as a child
 # of this shell, with address randomization off (setarch -R), TMPDIR a fresh directory whose path has one length, and
-# ship_clock.c's clock inside cicc (LD_PRELOAD), all inherited by its compilers; it refuses where the kernel won't turn
-# randomization off. A rebuild at the same commit, source path and toolkit path then reproduces every cubin
+# ship_clock.c's clock inside cicc (LD_PRELOAD), all inherited by its compilers, and compiles its sources from a copy at a
+# path of one length (ship_stage); it refuses where the kernel won't turn randomization off. A rebuild at the same commit,
+# with the same toolkit at the same path and the same host compiler, then reproduces every cubin
 if [ -z "${SHIP_FRAME:-}" ] || [ ! -e "$SHIP_FRAME/ship_clock.so" ] \
     || [ $(( 0x$(cat /proc/self/personality) & 0x40000 )) -eq 0 ]; then
   setarch "$(uname -m)" -R true 2> /dev/null || {
@@ -47,6 +48,14 @@ ship_cubin_flags() {
   case " ${FLAGS[*]} " in
     *ftz*|*fast-math*|*fast_math*|*prec-div*|*prec-sqrt*|*lineinfo*) echo "a refused flag: ${FLAGS[*]}" >&2; exit 1;;
   esac
+}
+
+# SRC: the paths named (from ROOT) copied into the frame, under a path of one length, for nvcc to compile from in place of
+# ROOT, whose length is the checkout's
+ship_stage() {
+  SRC=$SHIP_FRAME/src
+  local p
+  for p in "$@"; do mkdir -p "$SRC/$(dirname "$p")"; cp -a "$ROOT/$p" "$SRC/$(dirname "$p")/"; done
 }
 
 # OUT, emptied

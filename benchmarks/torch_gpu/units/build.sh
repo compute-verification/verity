@@ -22,9 +22,11 @@ ship_cuda /usr/local/cuda-13.0 /usr/local/cuda
 OUT=${1:-/tmp/units-ship}
 ship_fresh
 ship_toolchain
+ship_stage benchmarks/torch_gpu/units
 for A in 90a 120a; do
   ship_cubin_flags "sm_$A"
-  "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/units.sm_$A.cubin" "$HERE/units.cu" 2> "$OUT/ptxas.sm_$A.txt" \
+  "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/units.sm_$A.cubin" "$SRC/benchmarks/torch_gpu/units/units.cu" \
+    2> "$OUT/ptxas.sm_$A.txt" \
     || { cat "$OUT/ptxas.sm_$A.txt" >&2; exit 1; }
   "$CUDA/bin/cuobjdump" -sass "$OUT/units.sm_$A.cubin" > "$OUT/units.sm_$A.sass"
   python3 "$HERE/build_check.py" "$OUT/ptxas.sm_$A.txt" "$OUT/units.sm_$A.sass" "$OUT/build-check.sm_$A.json" "sm_$A"

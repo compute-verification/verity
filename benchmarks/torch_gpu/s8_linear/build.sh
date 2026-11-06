@@ -19,12 +19,14 @@ OUT=${1:-/tmp/s8-linear-ship}; PY=${PY:-$ROOT/.venv/bin/python}
 ship_fresh
 ship_toolchain
 ship_cubin_flags sm_90a
-"$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/s8_wgmma.cubin" "$HERE/s8_wgmma.cu" 2> "$OUT/ptxas.txt" || { cat "$OUT/ptxas.txt" >&2; exit 1; }
+ship_stage benchmarks/torch_gpu/s8_linear integrations/vllm/verity_vllm
+"$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/s8_wgmma.cubin" "$SRC/benchmarks/torch_gpu/s8_linear/s8_wgmma.cu" 2> "$OUT/ptxas.txt" \
+  || { cat "$OUT/ptxas.txt" >&2; exit 1; }
 "$CUDA/bin/cuobjdump" -sass "$OUT/s8_wgmma.cubin" > "$OUT/s8_wgmma.sass"
 python3 "$HERE/sass_gate.py" "$OUT/ptxas.txt" "$OUT/s8_wgmma.sass" "$OUT/sass.json"
 if [ -x "$PY" ]; then
   H=$(mktemp -d); trap 'rm -rf "$H"' EXIT
-  HOME=$H PATH="$CUDA/bin:$PATH" PYTHONPATH="$ROOT/integrations/vllm:$ROOT" "$PY" -c \
+  HOME=$H PATH="$CUDA/bin:$PATH" PYTHONPATH="$SRC/integrations/vllm:$ROOT" "$PY" -c \
     "from verity_vllm.commit import row_tables_device as D; print(D.device_lib('90')._name)"
   cp -r "$H/.cache/verity/row_table" "$OUT/row_table"
 else
@@ -32,5 +34,5 @@ else
 fi
 echo "nvcc ${FLAGS[*]} -o s8_wgmma.cubin s8_wgmma.cu" >> "$OUT/toolchain.txt"
 ship_source benchmarks/torch_gpu/s8_linear integrations/vllm/verity_vllm/commit \
-  integrations/vllm/verity_vllm/protocol_options/pouw_cuda
+  integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda
 ship_manifest
