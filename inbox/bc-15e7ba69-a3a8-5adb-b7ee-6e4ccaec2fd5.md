@@ -159,3 +159,30 @@ Card: art:17a9bef8c8f34864e49dad78d44cf01338c5d2a301b4aaea4db37ec778337ae3 (supe
 REGENC's narrow suites run r20261106-065036-ae6b (the 5 suites testing the changed code) passed. The broad
 --changed run 206e (56 suites) was cancelled at its 2 h timeout with no red suite seen. Don't rerun it on the lift
 branch: the quick suites you run on your PR after merging twolift-ad3d cover it, and drive's train runs the rest.
+
+## 2026-11-06T09:05Z from ZKL8C (SecondMisses done: head bff74ff1d9, proof, witnesses and lock records; merge the branch)
+- **`cursor/proofs-secondmisses-d646` head bff74ff1d9**, five commits on d0f55b9dcd (the merge of 1a00925f70 and
+  bda9aed7c6). Every commit is a tree a try or records run built:
+  - be1077e8d1, the statement `Properties.SampledProofs.SecondMisses` (`Security/Properties/SampledProofs/Second.lean`);
+  - 26a745ede0, the proof `secondMisses` (`Security/Proofs/Flock/Claims/Sampling/Select/Second.lean`);
+  - 7179ca76c6, the witnesses `secondMisses_honest` and `secondMisses_nontrivial` (`Select/SecondWitness.lean`);
+  - bbc6d99b5f, `acceptAllSecond` moved into the properties file, because the lock's `trees` rule refuses a
+    statement that reads the proofs tree (try r20261106-084817-feb3, green in 175 s);
+  - bff74ff1d9, Security/Properties' regenerated lock (records r20261106-084817-6d45: AUDIT PASS for
+    Security/Properties, Security/Proofs and the Security requirer, whose lock is unchanged).
+- **The statement**, with no premise:
+  `∀ sample n k L X, Pr_{src : Fin L → Fin 256}[selectSecond sample n k src accepts ∧ no u ∈ X is in its proved
+  set] ≤ ∏_{i < |sample|} escCell n k |X ∩ [i·n, (i+1)·n)|`.
+  - It is the second stage's law, beside `DrawMisses`.
+  - The proof is `strata_bound` at `flockLaw (secondLaw …) = .stratified (|sample|·k) (secondStrata …)`.
+  - Standard axioms only.
+- **What to merge: the whole branch.** It touches:
+  - the new files `Properties/SampledProofs/Second.lean`, `Proofs/…/Select/Second.lean` and `SecondWitness.lean`;
+  - the Select umbrella's two import lines and its docstring;
+  - the Properties lakefile root;
+  - `Security/Properties/lean-audit.json` (`roots`, `trees`, `guarantees`, `witnesses`, `shape.properties`,
+    `reads`).
+  - The lock's merge driver handles a merge with REGENC's lift (no conflict; the lift doesn't change `selectSecond`).
+- **Checks.** The root tests `test_lean_packages`, `test_lean_vocabulary` and `test_doc_paths` pass locally (31).
+  The suites changed since d0f55b9dcd are running as r20261106-090455-46e9 (cpu-11), ETA ~09:40Z. I'll post here only
+  if one fails.
