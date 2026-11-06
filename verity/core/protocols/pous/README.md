@@ -74,7 +74,7 @@ compiled circuit to that code.
 
 As an auditor party with a device identity, the challenger reports its sessions under its party's per-period root
 instead (`period_reports`, on `verity.core.attest`): each session is an execution phase whose one public output is its
-liveness record, and the period's root is signed once at its close, for the developer only. The party starts its
+liveness record, and the period's root is signed once at its close, for the prover only. The party starts its
 attachment on its key once (`lms.PartyKey.start`), so a challenger restarted within the attachment signs no more of its
 sessions. `period_reports.PERIOD` is not in `memory_challenger.SCHEMES` until `PousCheck.RunProtocol` reads
 `Attest.accepts`.
@@ -131,8 +131,8 @@ print(v.public())                                                              #
 ~~~
 
 A period's wipe is `wipe_period`: one streamed wipe of the node, the memory challenger a party of its own on
-`period.json`'s `challenger_host` (`wipe_party`, which streams the fill and times the reads over a socket), judged as the
-wipe subprotocol of onsite Verity, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
+`period.json`'s `challenger_host` (`wipe_party`, which streams the fill and times the reads over a socket), judged as onsite
+Verity's wipe subprotocol, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
 `verity/core/devices/memory_challenger/lean/`). An accepted wipe publishes `M` (every declared tier), the reads `k` the
 memory challenger chose (`wipe_party --reads`, 2152 by default; the prover never names them), `r = ratio(k)` and the
 foreign content it may leave, `StreamedWipeMeetsReads`' `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `2^-128` with
@@ -149,11 +149,11 @@ On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: t
 before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
 and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its
 `foreign_bytes` makes the prover the cheat that keeps prior content in place of the fill's first labels (`fM`: one label
-past the published figure, which must reject), its `reads` the reads the run expects, and its `placement` `simulated` names a challenger on the developer's node the stand-in for
-one on its own host. The run's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
+past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the prover's node the stand-in for
+one on its own host. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
-the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's run
-declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the run declares the larger
+the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's wipe
+declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the wipe declares the larger
 of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an egress signed `UNCOUNTED`. It
 also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
 which a network certifier counts the egress over.
