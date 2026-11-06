@@ -20,6 +20,9 @@ firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `
   masked Ligerito, `repOpening`; the verifier's own replay and the ring-switch and lane-phase constraints, `repCons`; the
   inner proof), its proof file
   `encZk` at `shapeZk`; a constraint that fails on the rep's pads (`failingOn`) stops it, and no file leaves. The rank check is the Lean frame's (`Frame.maskRank`), which stops the rep before this runs.
+* `Memo`, `repOpeningMemo`: what a rep's opening computes that its proof computes again, the claims' switched vectors and
+  the batched basis, left by the session loop's opening of the rep and read back by its proof, which stays the same
+  (`repOpeningMemo_fst`, `repConsWith_eq`).
 * `asksOf`: a rep's rounds answered by the coins the stream answered them, round by round.
 * `liveAsks`, `openLive`, `innerLive`: the rep's rounds past its recorded coins sent to the firewall as they come, each
   waiting for the coins the stream answered it: the opening's (`repPiop` and `repOpening` at zero values and pads), the
@@ -374,6 +377,98 @@ def repOpening (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArr
     lanePad salt (fun _ _ => 0)
   return (ss, lg, zl, rec)
 
+deriving instance DecidableEq for Flock.Switched
+
+/-- **What a rep's opening computed that its proof computes again**: each claim's switched vector on the packed table `g`
+(`switchVec`, which reads a claim's coordinates alone, the claims' `xs`) and the batched basis on `2^l` points at the
+switched claims `sws` (`basisVals`). The session loop's opening of the rep (`Drive.openStepM`) leaves it in the rep's
+frame, and the rep's proof (`innerLiveK`) reads it back (`repOpeningMemo`). -/
+structure Memo where
+  g : Array F128
+  xs : Array (Array F128)
+  sv : Array (Array F128)
+  sv_eq : ∀ claims : Array Claim, claims.map (·.x) = xs →
+    sv = (Array.range claims.size).map fun k => switchVec g claims[k]!
+  sws : Array Switched
+  l : Nat
+  bv : Array F128
+  bv_eq : bv = basisVals sws l
+
+theorem switchVecs_x (g : Array F128) {a b : Array Claim} (h : a.map (·.x) = b.map (·.x)) :
+    (Array.range a.size).map (fun k => switchVec g a[k]!) = (Array.range b.size).map fun k => switchVec g b[k]! := by
+  have hs : a.size = b.size := by simpa using congrArg Array.size h
+  rw [hs]
+  refine Array.map_congr_left fun k hk => ?_
+  have hk := Array.mem_range.1 hk
+  have e := congrArg (fun c : Array (Array F128) => c[k]?) h
+  simp only [Array.getElem?_map, Array.getElem?_eq_getElem (show k < a.size by omega), Array.getElem?_eq_getElem hk,
+    Option.map_some, Option.some.injEq] at e
+  rw [Fast.getElem!_eq a (show k < a.size by omega), Fast.getElem!_eq b hk]
+  unfold switchVec
+  rw [e]
+
+/-- `claims`' switched vectors on `g`: `memo`'s where it holds them for `g` (the same array, else an equal one) and claims
+at the same coordinates, else computed, a task to a claim (`ringSwitchPFast`'s). -/
+def Memo.switchVecs (memo : Option Memo) (g : Array F128) (claims : Array Claim) :
+    {sv : Array (Array F128) // sv = (Array.range claims.size).map fun k => switchVec g claims[k]!} :=
+  match memo with
+  | some M =>
+    match withPtrEqDecEq M.g g (fun _ => inferInstance) with
+    | .isTrue hg =>
+      if hx : claims.map (·.x) = M.xs then ⟨M.sv, by rw [M.sv_eq claims hx, hg]⟩
+      else ⟨Fast.parTab 1 (fun k => switchVec g claims[k]!) claims.size, Fast.parTab_eq _ _ _⟩
+    | .isFalse _ => ⟨Fast.parTab 1 (fun k => switchVec g claims[k]!) claims.size, Fast.parTab_eq _ _ _⟩
+  | none => ⟨Fast.parTab 1 (fun k => switchVec g claims[k]!) claims.size, Fast.parTab_eq _ _ _⟩
+
+/-- The batched basis on `2^l` points at `sws`: `memo`'s where it holds it at `sws` and `l`, else computed. -/
+def Memo.basis (memo : Option Memo) (sws : Array Switched) (l : Nat) : {bv : Array F128 // bv = basisVals sws l} :=
+  match memo with
+  | some M => if h : M.sws = sws ∧ M.l = l then ⟨M.bv, by rw [M.bv_eq, h.1, h.2]⟩ else ⟨basisVals sws l, rfl⟩
+  | none => ⟨basisVals sws l, rfl⟩
+
+/-- The `Memo` of `claims`' switched vectors `sv` on `g` and the batched basis `bv` on `2^l` points at `sws`. -/
+def Memo.of (g : Array F128) (claims : Array Claim)
+    (sv : {sv : Array (Array F128) // sv = (Array.range claims.size).map fun k => switchVec g claims[k]!})
+    (sws : Array Switched) (l : Nat) (bv : {bv : Array F128 // bv = basisVals sws l}) : Memo :=
+  { g, xs := claims.map (·.x), sv := sv.1, sv_eq := fun _ hc => sv.2.trans (switchVecs_x g hc.symm), sws, l,
+    bv := bv.1, bv_eq := bv.2 }
+
+/-- **`repOpening` reading and leaving a `Memo`** (`repOpeningMemo_fst`): the same rounds and the same proof, the claims'
+switched vectors and the batched basis read off `memo` where it holds them (`Memo.switchVecs`, `Memo.basis`), else
+computed, and the `Memo` of the ones it used. -/
+def repOpeningMemo (memo : Option Memo) (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit)
+    (st : Setup) (sch : Flock.Schedule) (lay : Zk.PadLayout) (tPad rep : Nat) (g : Array F128) (cm0 : Commit)
+    (claims : Array Claim) (h : Array F128) (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
+    TMW M ((Array (Array F128) × LigeritoProof × Zk.Level0Msgs × Zk.L0Rec) × Memo) := do
+  let sv := Memo.switchVecs memo g claims
+  let (ss, T, sws) ← ringSwitchP io (fun k => if k < claims.size then sv.1[k]! else switchVec g claims[k]!) claims
+  let bv := Memo.basis memo sws (st.m - 7)
+  let (lg, zl, rec) ← ligeritoPZk io commit st.merkle sch T cm0 g bv.1 lay h rep tPad extra lanePad salt (fun _ _ => 0)
+  return ((ss, lg, zl, rec), Memo.of g claims sv sws (st.m - 7) bv)
+
+/-- **Reading a `Memo` changes no rep's opening**: `repOpeningMemo` at any `memo` is `repOpening` with its `Memo`. -/
+theorem repOpeningMemo_fst [LawfulMonad M] (memo : Option Memo) (io : Asks M)
+    (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (st : Setup) (sch : Flock.Schedule)
+    (lay : Zk.PadLayout) (tPad rep : Nat) (g : Array F128) (cm0 : Commit) (claims : Array Claim) (h : Array F128)
+    (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
+    Prod.fst <$> repOpeningMemo memo io commit st sch lay tPad rep g cm0 claims h extra lanePad salt =
+      repOpening io commit st sch lay tPad rep g cm0 claims h extra lanePad salt := by
+  unfold repOpeningMemo repOpening
+  have hs : (fun k => if k < claims.size then (Memo.switchVecs memo g claims).1[k]! else switchVec g claims[k]!) =
+      fun k => switchVec g claims[k]! := by
+    funext k
+    split
+    · rw [(Memo.switchVecs memo g claims).2]
+      exact Fast.getElem!_range_map _ ‹_›
+    · rfl
+  dsimp only
+  rw [hs, map_bind]
+  refine bind_congr fun ⟨ss, T, sws⟩ => ?_
+  dsimp only
+  rw [(Memo.basis memo sws (st.m - 7)).2, map_bind]
+  refine bind_congr fun ⟨lg, zl, rec⟩ => ?_
+  simp only [map_pure]
+
 /-- **A rep up to its inner proof**, as rep `rep` of a stream whose transcript starts at `dom`: its PIOP on the passed
 values `vals` (by pad index) masked by the rep's pads `pads` committed as `ic`, its opening (`repOpening`) on the
 statement's extra claims `extras` and the table's extra lanes and paddings, then the verifier's own replay of them and the
@@ -395,6 +490,35 @@ def repCons (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArray)
   let ccC := Zk.claimCheck rp.claims[1]! ss[1]!
   let lgc ← StateT.lift (monadLift (Zk.ligeritoConstraints lay rec lg zl) : M (Array (String × Zk.Lin)))
   return (p, zl, rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc)
+
+/-- `repCons` with its opening reading `memo` (`repOpeningMemo`), which changes nothing it returns (`repConsWith_eq`). -/
+def repConsWith (memo : Option Memo) (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit)
+    (st : Setup) (sch : Flock.Schedule) (tPad rep : Nat) (dom : ByteArray) (g : Array F128) (cm0 : Commit)
+    (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit) (vals : Array F128) (extra lanePad : Nat → Nat → F128)
+    (salt : Nat → Nat → ByteArray) : TMW M (Proof × Zk.Level0Msgs × Array (String × Zk.Lin)) := do
+  let lay := Zk.PadLayout.new st.m st.kLog sch.k0
+  let (zp, lp, claims) ← repPiop io st lay (flat cm0.cap) ic.root extras fun i => vals[i]! + pads.h[i]!
+  let ((ss, lg, zl, rec), _) ← repOpeningMemo memo io commit st sch lay tPad rep g cm0 claims pads.h extra lanePad salt
+  let p : Proof := { cap := cm0.cap, params := pcsParams st.merkle sch, zerocheck := zp, lincheck := lp,
+                     ringSwitches := ss, ligerito := lg }
+  let tr' ← get
+  let (rp, _) ← StateT.lift (monadLift ((Zk.replay st lay p ic.root).run (Transcript.init tr'.rounds dom)) :
+    M (Zk.Replayed × Transcript))
+  let ccAb := Zk.claimCheck rp.claims[0]! ss[0]!
+  let ccC := Zk.claimCheck rp.claims[1]! ss[1]!
+  let lgc ← StateT.lift (monadLift (Zk.ligeritoConstraints lay rec lg zl) : M (Array (String × Zk.Lin)))
+  return (p, zl, rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc)
+
+theorem repConsWith_eq [LawfulMonad M] (memo : Option Memo) (io : Asks M)
+    (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (st : Setup) (sch : Flock.Schedule) (tPad rep : Nat)
+    (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
+    (vals : Array F128) (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
+    repConsWith memo io commit st sch tPad rep dom g cm0 extras pads ic vals extra lanePad salt =
+      repCons io commit st sch tPad rep dom g cm0 extras pads ic vals extra lanePad salt := by
+  unfold repConsWith repCons
+  refine bind_congr fun ⟨zp, lp, claims⟩ => ?_
+  dsimp only
+  rw [← repOpeningMemo_fst memo, bind_map_left]
 
 /-- **The firewall's proof of one rep**: `repCons`, then the inner proof on the rep's pads and the constraints it returns.
 A constraint that fails on the pads stops the rep before its inner proof, and no file leaves (`zk_finish_fw`'s
@@ -448,13 +572,15 @@ structure RepIn where
 (`drawsOf`), and what the finish holds the rep's requests to (`RepIn.differs`): the values the frame took by pad index,
 the extra claims at the session's link points, the coins the stream answered each of the rep's rounds so far, and whether
 the frame took the coins of every round of the rep's algebraic phase, before which the rep's salts for levels ≥ 1 are
-not drawn (`serve`'s `salts`). -/
+not drawn (`serve`'s `salts`). Once the loop's opening of the rep ended, until the rep's inner proof's first round, it
+also holds what that opening computed (`memo`), which the rep's proof reads back (`innerLiveK`). -/
 structure Own where
   draws : Frame.Draws
   vals : Array F128
   xs : Array (Array F128)
   coins : Array (Array F128)
   algebraEnded : Bool
+  memo : Option Memo := none
 
 /-- **Where the request `q` is not what the loop holds of the rep (`o`)**, or none: its passed values, its extra claims or
 its coins. Its draws are `o`'s (`drawsOf`). `final_c`'s slot (`lay.fc`) is the request's: the passed values fix it, and
@@ -661,18 +787,20 @@ def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : Rep
 
 /-- **A rep's inner proof, live, kept** (`innerLiveK_discard`): `innerLive`, returning the names of its constraints that
 fail on the pads (`failingOn`) and the proof it computed, which is `repFw`'s where none does: `repFw` on `q` with every coin
-this took, the proof `proofFile` computes on a `rep` request with those inputs and coins (`Kept`). -/
+this took, the proof `proofFile` computes on a `rep` request with those inputs and coins (`Kept`). Its opening reads
+`memo` (`repConsWith`), which changes none of it. -/
 def innerLiveK (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn)
     (sent : Nat → ByteArray → IO (Option String) := fun _ _ => pure none)
-    (held : Nat → Array F128 → IO (Option String) := fun _ _ => pure none) : LiveM (Array String × Zk.ZkProof) := do
+    (held : Nat → Array F128 → IO (Option String) := fun _ _ => pure none) (memo : Option Memo := none) :
+    LiveM (Array String × Zk.ZkProof) := do
   let pads := padsOf q.draws
   let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) pads (saltAt q.draws.salts) : V InnerCommit) : LiveM InnerCommit)
   let hs : Hashes LiveM := Hashes.ofSha512 Sha512.hash
   let commit : Level → Array F128 → (Nat → ByteArray) → LiveM Commit := fun lv g salt => pure (commitFw lv g salt)
   let salt : Nat → Nat → ByteArray := fun l => saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)
   let prog : TMW LiveM (Array String × Zk.ZkProof) := do
-    let (p, zl, cons) ← repCons (liveAsks ch q.coins false) commit t.st t.sch t.tPad rep dom t.g t.cm0 (claimsOf q.xs)
-      pads ic q.vals t.extra t.lanePad salt
+    let (p, zl, cons) ← repConsWith memo (liveAsks ch q.coins false) commit t.st t.sch t.tPad rep dom t.g t.cm0
+      (claimsOf q.xs) pads ic q.vals t.extra t.lanePad salt
     let k := (← getThe (Array (Array F128))).size
     if let some why := consWhy q.coins.size k cons pads.h then throwThe String why
     let b := consBytes cons
@@ -692,12 +820,14 @@ instance instLawfulEST {ε σ : Type} : LawfulMonad (EST ε σ) := LawfulMonad.m
 
 instance instLawfulEIO {ε : Type} : LawfulMonad (EIO ε) := inferInstanceAs (LawfulMonad (EST ε IO.RealWorld))
 
-/-- `innerLiveK` is `innerLive` with its result kept: the same rounds, the same bytes to the firewall, the same coins. -/
+/-- `innerLiveK` is `innerLive` with its result kept, at any `memo`: the same rounds, the same bytes to the firewall, the
+same coins. -/
 theorem innerLiveK_discard (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn)
-    (sent : Nat → ByteArray → IO (Option String)) (held : Nat → Array F128 → IO (Option String)) :
-    (do let _ ← innerLiveK ch t rep dom q sent held) = innerLive ch t rep dom q sent held := by
+    (sent : Nat → ByteArray → IO (Option String)) (held : Nat → Array F128 → IO (Option String))
+    (memo : Option Memo) :
+    (do let _ ← innerLiveK ch t rep dom q sent held memo) = innerLive ch t rep dom q sent held := by
   unfold innerLiveK innerLive
-  simp only [StateT.run_bind, map_bind, bind_pure_comp]
+  simp only [repConsWith_eq, StateT.run_bind, map_bind, bind_pure_comp]
   congr 1; funext ic; congr 1; funext a; congr 1; funext b
   have h : ∀ {α} (X : TMW LiveM α) s,
       (fun _ => ()) <$> Prod.fst <$> X.run s = (fun _ => ()) <$> ((fun _ => ()) <$> X).run s := by
@@ -791,8 +921,9 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
 * `open I R LEN`: rep `R`'s opening on table `I`, after its salts, on the extra claims and the algebraic phase's coins
   (`parseOpen`): each of its rounds goes to the firewall as it comes and waits for its coins (`openLive`, `liveAsks`), the
   rounds the Lean frame holds the device's opening rounds to; answered `ok 0` after the last.
-* `inner I R LEN`: rep `R`'s request (`parseRep`) with the coins of its PIOP and opening: its constraints, then its inner
-  proof's rounds, live (`innerLive`), its `j`-th handed to `inner` with the table's level-0 root before it goes, and
+* `inner I R LEN`: rep `R`'s request (`parseRep`) with the coins of its PIOP and opening: its constraints, its opening
+  reading back what the session loop's opening of the rep computed where the loop holds it (`Own.memo`, `innerLiveK`),
+  then its inner proof's rounds, live (`innerLive`), its `j`-th handed to `inner` with the table's level-0 root before it goes, and
   where `inner` refuses it, so does this; answered after the last with the names of its constraints that fail on the
   rep's pads (`namesBytes`). Its proof file is then `rep`'s on every round's coins, where none does.
 * `rep I R LEN`: rep `R`'s request (`parseRep`) on table `I`, after its salts; the answer is its proof file
@@ -914,10 +1045,14 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
           | .error _ => pure none
       if let some why := why then return (← refuse why)
       kept := kept.filter fun k => !(k.i == i && k.r == r)
+      let memo ← if line.startsWith "open " then pure none else do
+        match ← own i r (flat t.cm0.cap) with
+        | some (.ok o) => pure o.memo
+        | _ => pure none
       let run : V (LiveM (Option Kept × ByteArray)) := if line.startsWith "open " then
           (parseOpen b).map fun (xs, coins) => do openLive ch t r dom xs s coins; return (none, ByteArray.empty)
         else (parseRep t d s b).map fun q => do
-          let (fails, proof) ← innerLiveK ch t r dom q (inner (flat t.cm0.cap) r) (coinsWhy own i r t)
+          let (fails, proof) ← innerLiveK ch t r dom q (inner (flat t.cm0.cap) r) (coinsWhy own i r t) memo
           let coins ← getThe (Array (Array F128))
           return (if fails.isEmpty then some ({ i, r, q, coins, proof } : Kept) else none, namesBytes fails)
       match run with
