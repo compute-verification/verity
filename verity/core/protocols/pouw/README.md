@@ -6,7 +6,9 @@ committed, noised checked values. An accepted run establishes a credited size S 
 behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof system registers each execution phase, samples
 its proof blocks with the challenger's coins, proves them in zero knowledge (Flock `--zk`) and verifies them; PoUW
 states what each execution phase commits, the Program each sampled proof block must pass, and what the outcome credits.
-It carries no policy parameter: it surfaces the ε at δ its sample established.
+It carries no policy parameter: it surfaces the ε at δ its sample established. A scheme must leave the useful work at
+least half of the honest prover's GPU effort (AGENTS.md, "PoUW is mostly useful work"): the trivial PoUW, which hashes
+every product, is a reference, not an answer.
 
 ## PoUW in the remote protocol
 
