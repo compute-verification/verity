@@ -104,7 +104,7 @@ export async function fromEnv(env: NodeJS.ProcessEnv): Promise<Runtime> {
   if (env.VERCEL && env.PLATFORM_SANDBOX !== "vercel") throw new Error("PLATFORM_SANDBOX=vercel is required on Vercel: local sandboxes isolate nothing");
   const sandbox =
     env.PLATFORM_SANDBOX === "vercel"
-      ? await vercelSandboxes({ vcpus: Number(env.PLATFORM_SANDBOX_VCPUS ?? 2), timeoutMs: 45 * 60_000 })
+      ? await vercelSandboxes({ vcpus: Number(env.PLATFORM_SANDBOX_VCPUS ?? 2), timeoutMs: Number(env.PLATFORM_SANDBOX_TIMEOUT_MINUTES ?? 45) * 60_000 })
       : localSandboxes(env.PLATFORM_SANDBOX_DIR ?? ".data/sandboxes");
   const baseUrl =
     env.PLATFORM_BASE_URL ??
