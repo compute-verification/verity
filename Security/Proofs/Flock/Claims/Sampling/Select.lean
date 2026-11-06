@@ -13,6 +13,7 @@ public import Proofs.Flock.Claims.Sampling.Select.Refusals
 public import Proofs.Flock.Claims.Sampling.Select.Code
 public import Proofs.Flock.Claims.Sampling.Select.OS
 public import Proofs.Flock.Claims.Sampling.Select.Second
+public import Proofs.Flock.Claims.Sampling.Select.SecondWitness
 
 /-! The deployed sampled verifier's draw (`SampledProofs.Slots.select`) against the claims' `P_a`: a sequential draw's
 stopping-time bound (`Select.Seq`); the draw's coins read in order and its law's stages (`Select.Take`); a subset draw
@@ -23,6 +24,7 @@ verifier's partition as the claims' slots (`Select.Layout`); `Select.select`'s s
 (`Select.DrawLaw`); `designWellFormed`, which proves `Properties.SampledProofs.DesignWellFormed` (`Select.Design`); and
 `ScopeMatches` and `Refuses` from it, where the scope check is the readable scope's program part (`Select.Scope`); that
 program part as five refusals of the verifier's evaluation, each needed (`Select.Refusals`); and `secondMisses`, which
-proves `Properties.SampledProofs.SecondMisses`, the second stage's draw (`Select.Second`). -/
+proves `Properties.SampledProofs.SecondMisses`, the second stage's draw (`Select.Second`), with its honest and
+nontrivial lemmas (`Select.SecondWitness`). -/
 
 @[expose] public section

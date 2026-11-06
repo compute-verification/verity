@@ -491,6 +491,10 @@
    "honest": ["Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest"],
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial"
   },
+  "Properties.SampledProofs.SecurityProofs.secondMisses": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.secondMisses_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial"
+  },
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
   },
@@ -3674,6 +3678,15 @@
    "assumptions": [],
    "type_hash": "303f59f6e5d086c022bcd5f65d8494f0da4a42aa9cb9b2d7b80aaba186bfc119"
   },
+  "Properties.SampledProofs.SecurityProofs.secondMisses": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.secondMisses_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.acceptMeans": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.acceptMeans : Properties.SampledProofs.AcceptMeans"],
@@ -4796,6 +4809,10 @@
    },
    "Properties.SampledProofs.SecurityProofs.drawMisses": {
     "function": "SampledProofs.Slots.select",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.secondMisses": {
+    "function": "SampledProofs.Select.selectSecond",
     "outcome": "accept"
    },
    "Properties.Requirement.topological": {
