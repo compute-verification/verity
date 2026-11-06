@@ -138,12 +138,12 @@
   "art:5af0506acb63abdf5f70c7edeefaa080d46afd35d75307f04f08d6130afdc5b7": "integrations/vllm/workloads/workload_phi3_mini_32x16_1req.json",
   "art:5467343b0a5b2030b21b6285b73a679823ec6404260a900139b66626094b76ec": "integrations/vllm/workloads/workload_qwen05_32x16_1req.json",
   "art:124a9d7ed54e99b74b05e0f90b7dbf48b7f2e6a59a16b2247ab2420addf04bc9": "integrations/vllm/workloads/workload_qwen15_32x16_1req.json",
-  "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a": "verity/ml/flock/tests/fixtures/plain-tree",
-  "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": "verity/ml/flock/tests/fixtures/rec-coins",
-  "art:22fbef314a3ba3e417b9e49bfa30fe460a364913f1dbcc926768c7a254c5b50c": "verity/ml/flock/tests/fixtures/f1-gate",
-  "art:2cf0182ca5bd415214ed211025a1d2b53b223540c46779284b49fdd344938798": "verity/ml/flock/tests/fixtures/rec-c3-inner",
   "art:cc0144301c8d6f1c8c82c22e7eaabc1e7faeccfaa78722e37678183e3004f390": "benchmarks/one_stage/tests/fixtures/bundle-window",
   "art:b87fde52ae9f7ac0d129141534fcd4e56cc9bd06728bb0b658d155b521c3cdf9": "verity/ml/flock/tests/fixtures/honest-session",
+  "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a": "verity/ml/flock/tests/fixtures/plain-tree",
+  "art:2cf0182ca5bd415214ed211025a1d2b53b223540c46779284b49fdd344938798": "verity/ml/flock/tests/fixtures/rec-c3-inner",
+  "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": "verity/ml/flock/tests/fixtures/rec-coins",
+  "art:22fbef314a3ba3e417b9e49bfa30fe460a364913f1dbcc926768c7a254c5b50c": "verity/ml/flock/tests/fixtures/f1-gate",
   "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": "verity/ml/flock/tests/fixtures/rec-links",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
@@ -181,6 +181,9 @@
     "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": [
       "art:b77622446779b9f9b1e46861300e60973433f96d4edf43322acff35d13502d35"
     ],
+    "art:b87fde52ae9f7ac0d129141534fcd4e56cc9bd06728bb0b658d155b521c3cdf9": [
+      "art:824640c83f0408af007797dc8b5ceb902aafac8aaaeb81ae0f4859f89d5f3560"
+    ],
     "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a": [
       "art:8bfe414af3d247db7b062b4c99a13b2d50f757cebeadf6c7411c39387bbed65c"
     ],
@@ -205,9 +208,6 @@
       "art:8d90528b4e090d58e5754e313080ef05d74a35b805fce8ace5a15cc12e75b728",
       "art:bb558d7a1288f1a1f7cc0bb62ce699e36e711928ab4db6b403cd5ac2859dc2bd",
       "art:d59791332598d1b33958ed907b08e1cdbebc33c556ea98bc76451f8a709a2df8"
-    ],
-    "art:b87fde52ae9f7ac0d129141534fcd4e56cc9bd06728bb0b658d155b521c3cdf9": [
-      "art:824640c83f0408af007797dc8b5ceb902aafac8aaaeb81ae0f4859f89d5f3560"
     ],
     "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": [
       "art:76a4a543fed5f92fba901007ddfd4e035844421cb3893d243780d2d7c9974e06",
