@@ -304,7 +304,8 @@ theorem kappa_eps_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
 
 /-- **The deployment's sizes at a statement `x`**, `kappa_eps_deployed`'s side conditions on `x`: its inner statement
 is one plain table, each V\* part it stages is one `--zk` table, and its inner setup has at most `2^32` calls. The
-parts' count is none: the verifier refuses more than `RecBudget.MAX_STATEMENTS = 16` (`nS_le_of_partIn`). -/
+parts' count is none: the verifier refuses more than `RecBudget.MAX_STATEMENTS = 16` (`nS_le_of_partIn`). Every
+statement the compiled verifier accepts is at these sizes (`sizesAt_of_run_acc`). -/
 def SizesAt (b : Brings) (x : Msg) : Prop :=
   (∃ s spec sts, FlockDeploy.PlainIn (xIOf x) s spec sts ∧ sts.size = 1) ∧
     (∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts' ∧ sts'.size = 1) ∧

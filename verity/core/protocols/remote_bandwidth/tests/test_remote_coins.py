@@ -307,10 +307,11 @@ def test_an_openings_coin_opened_before_its_windows_root_is_refused(store, tmp_p
 
 
 def test_a_coin_asked_for_ahead_goes_in_one_round_trip_with_the_coin_before_it(store, tmp_path, sign):
-    """`SessionCoins.ahead`: window 0's openings coin and σ_1 after its root go in one `open_many`, the openings coin first,
-    and σ_1 is then taken from the batch with no frame sent: the same coins, the same roots recorded for each family
-    and the challenger's release log byte for byte as asking them one after the other. σ_1 asked for after another
-    root, or a coin asked for ahead that is not its family's next, is refused, the latter before any frame is sent."""
+    """`SessionCoins.ahead`: window 0's openings coin and chal_1 after its root go in one `open_many`, the openings coin
+    first, and chal_1 is then taken from the batch with no frame sent: the same coins, the same roots recorded for each
+    family and the challenger's release log byte for byte as asking them one after the other. chal_1 asked for after
+    another root, or a coin asked for ahead that is not its family's next, is refused, the latter before any frame is
+    sent."""
     root = hashlib.sha512(b"window 0's root").digest()
 
     def ask(directory, ahead: bool):

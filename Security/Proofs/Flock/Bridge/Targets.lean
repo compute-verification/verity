@@ -79,8 +79,10 @@ def AssemblyTarget : Prop :=
 
 /-- **rel_deploy**: at the deployed sampling record of a verifier's code whose layout is `commitDep`'s, and which
 parses `x` to `stmtOf` and partitions it to `partOf`, a `witDep` outside `RelS` at SHA-512 and `commitDep` is outside
-the record's `R`. Nothing discharges the partition hypothesis yet; a verifier check that computes `partOf` from the
-circuit file and refuses a registration whose slots differ from it in count, strata, order or owned inputs would. -/
+the record's `R`. The partition hypothesis holds where the deployed partition is `SampledProofs.FilePart.ofCircuit`'s
+blocks (`partOf`'s, `FilePartTarget`) in the registration's strata, which the v2 audit's population check
+(`SampledProofs.FilePart.check`) holds to the circuit file's units in order; the deployed `Slots.layout` is not yet
+built from them, so nothing discharges it yet. -/
 def RelDeployTarget : Prop :=
   ∀ {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (cd : SamplingDeploy.Code)
     {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)

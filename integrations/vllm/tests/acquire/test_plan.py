@@ -297,7 +297,7 @@ def test_a_call_boundary_sized_plan_serialises_in_one_pass(monkeypatch):
     pass gives the same document, so the same digest."""
     p, _, _ = make_plan(base_rows())
     many = [P.ValuePlan(f"body.blocks.0.norm_in/mul_{i}", "out", "call_boundaries", 1, status="chosen",
-                        chosen=P.Site("registered_input", f"body.blocks.0.norm_in/mul_{i}", "out")) for i in range(3000)]
+                        chosen=P.AcquisitionSite("registered_input", f"body.blocks.0.norm_in/mul_{i}", "out")) for i in range(3000)]
     shared = [P.ValuePlan(f"body.blocks.0.act/v{i}", "out", "instance_outputs", 2, status="chosen", chosen=p.values[0].chosen) for i in range(5)]
     p.values = p.values + many + shared + [P.ValuePlan("body.gone", "out", "instance_outputs", 1, why="no legal site")]
     want = _body_by_site_scan(p)

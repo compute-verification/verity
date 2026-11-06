@@ -24,7 +24,7 @@ import re
 from test_repository import REGISTRY, ROOT, _tracked
 
 #: Top-level names the tree had before a move, so a mention of one is still read as a path.
-RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs", "frontends", "archive"})
+RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs", "frontends", "archive", "glossary"})
 #: (document, token as written) that reads as a repository path but names something else, each with why.
 NOT_PATHS = {
     ("verity/ml/circuits/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",

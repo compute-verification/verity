@@ -240,7 +240,7 @@ def test_steps_run_in_chained_windows_with_the_readers_roots():
 
 
 def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_registration():
-    """The verifier's message ends the window at the next pass's start, however many passes it held; σ_0's window
+    """The verifier's message ends the window at the next pass's start, however many passes it held; chal_0's window
     chains from the registration digest the binder was given."""
     from verity.core.protocols.remote_bandwidth import receipts as rb
     s, recs, inbox = NodeMemory(), [], Inbox()
