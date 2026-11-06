@@ -11,20 +11,16 @@ model's run having a message there), and the model's worker giving the worker's 
 the IO code's readings are the named trust `flock-relay-serves`, the worker's the named trust
 `flock-worker-deterministic`, and the auditor's a statement about `V*`:
 
-* `modelSlots`: the requests of the relay's run at its model slots (`isModel`), each with its slot's kind, in order, up
-  to the session's stop or end, as `LoopReads` walks them.
 * `LoopServe`: `LoopRead` without the couplings: a frame round runs on the worker's round value at the model's history.
-  `LoopServe.count_model`, `LoopServe.count_ctl`: each model slot takes one of the model's messages, and no other slot
-  does.
 * `ReadsBy`: `LoopReads`' walk over the requests at any reading of a slot. `AudReads`: the relay's answers are the
   auditor's, to everything that left so far.
 * **`RelayServes`**: the relay's requests from its start, each served so (`ReadsBy` at `LoopServe`), with the
   auditor's answers (`AudReads`).
 * **`WorkerDeterministic`**: the model's worker gives the worker's round values, a function of the history.
-* `AnsPart`: what `LoopRead` asks of a slot beyond `LoopServe`'s clauses and the worker's values; `AuditorAnswers`: at
-  the relay's `j`-th model slot, `AnsPart` at the model's `j`-th message.
-* `loopRead_of_serve`, **`loopReads_of_serves`**, `RelayServes.loopReads`: so the requests are read as the loop answers
-  them (`LoopReads`), where the model's worker answers the `Finish` with the firewall's own message.
+* `AnsPart`: what `LoopRead` asks of a slot beyond `LoopServe`'s clauses and the worker's values.
+* `loopRead_of_serve`: so a slot is read as the loop answers it (`LoopRead`) where its `AnsPart` holds and the model's
+  worker answers the `Finish` with the firewall's own message. `RelayAuditor`'s `loopReads_auditorV` gives `AnsPart` at
+  each slot where the auditor is `V*`, and so `LoopReads`.
 -/
 
 @[expose] public section
@@ -34,22 +30,6 @@ namespace Claims.ZKServer.Relay
 open _root_.Flock.Firewall.Session
 open _root_.Flock.Firewall hiding State
 open _root_.Flock (SessionSpec Stmt)
-
-/-- **The requests of the relay's run at its model slots**, from the session `st` and placement `pl`: of the requests
-`es`, each at a `Hello`, a coin request or the `Finish` (`isModel`), with its slot's kind, in order, up to the session's
-stop or end, as `LoopReads` walks them. -/
-def modelSlots : State → Placed → List Env → List (Session.Kind × Env)
-  | _, _, [] => []
-  | st, pl, e :: rest =>
-    match slot st pl with
-    | none => []
-    | some k =>
-      (if isModel k then [(k, e)] else []) ++
-        if ((stepK true st pl (some (tagOf k)) (.ok k) e).go &&
-            (stepK true st pl (some (tagOf k)) (.ok k) e).st.stop.isNone) = true then
-          modelSlots (stepK true st pl (some (tagOf k)) (.ok k) e).st
-            (stepK true st pl (some (tagOf k)) (.ok k) e).pl rest
-        else []
 
 /-- **What the relay's IO code does at a slot of kind `k` of session `sid`**: `LoopRead`'s clauses but the run's
 couplings to the model's (the auditor's answers, at the `Finish` the run having a message, and the worker's values), a
@@ -159,48 +139,12 @@ def AnsPart {W Rr : Type} (M : LoopModel W Rr) (c : Nat) (e : Env) : Session.Kin
   | .finish => c < M.τ.length
   | _ => True
 
-/-- **The auditor answered the relay's model slots as `V*` did**: at the `j`-th of the model slots `sl`, `AnsPart` at
-the model's `j`-th message. -/
-def AuditorAnswers {W Rr : Type} (M : LoopModel W Rr) (sl : List (Session.Kind × Env)) : Prop :=
-  ∀ j k e, sl[j]? = some (k, e) → AnsPart M j e k
-
 /-- **A control slot asks nothing beyond what the IO code serves.** -/
 theorem AnsPart.of_ctl {W Rr : Type} {M : LoopModel W Rr} {c : Nat} {e : Env} {k : Session.Kind}
     (hm : isModel k = false) : AnsPart M c e k := by
   cases k
   case hello | commit | round | finish => exact absurd hm (by decide : ¬(true = false))
   all_goals exact True.intro
-
-/-- **A model slot takes one of the model's messages.** -/
-theorem LoopServe.count_model {W Rr : Type} {M : LoopModel W Rr}
-    {rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
-    {nonce : ByteArray} {k : Session.Kind} {st : State} {pl : Placed} {e : Env} {σ σ' : LoopAt}
-    (h : LoopServe M rv sid spec sts nonce k st pl e σ σ') (hm : isModel k = true) : σ'.c = σ.c + 1 := by
-  cases k
-  case hello =>
-    obtain ⟨-, -, hc, -, -⟩ := h
-    exact hc
-  case commit =>
-    obtain ⟨-, -, -, -, -, hc⟩ := h
-    exact hc
-  case round =>
-    obtain ⟨-, hc, -, -⟩ := h
-    exact hc
-  case finish =>
-    obtain ⟨-, hc⟩ := h
-    exact hc
-  all_goals exact absurd hm (by decide : ¬(false = true))
-
-/-- **A control slot takes none of the model's messages.** -/
-theorem LoopServe.count_ctl {W Rr : Type} {M : LoopModel W Rr}
-    {rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
-    {nonce : ByteArray} {k : Session.Kind} {st : State} {pl : Placed} {e : Env} {σ σ' : LoopAt}
-    (h : LoopServe M rv sid spec sts nonce k st pl e σ σ') (hm : isModel k = false) : σ'.c = σ.c := by
-  cases k
-  case hello | commit | round | finish => exact absurd hm (by decide : ¬(true = false))
-  all_goals
-    obtain ⟨-, hc, -⟩ := h
-    exact hc
 
 /-- **What the IO code serves at a slot is what the relay reads there**, where the slot's `AnsPart` holds (`hA`), the
 model's worker gives the worker's round values (`hw`), and it answers the `Finish` with the firewall's own message
@@ -228,60 +172,5 @@ theorem loopRead_of_serve {W Rr : Type} {M : LoopModel W Rr}
     rw [LoopModel.hist, length_histOf_take, Nat.min_eq_left hlt.le]
     exact hl
   all_goals exact hs
-
-/-- **The requests the IO code serves are read as the loop answers them**: at `ReadsBy` at `LoopServe` from the loop
-at `σ`, where at the `j`-th of its model slots (`modelSlots`) `AnsPart` holds at the model's `σ.c + j`-th message, the
-model's worker gives the worker's round values (`hw`) and answers the `Finish` with the firewall's own message
-(`hfw`): `LoopReads`, each model slot taking the model's next message (`LoopServe.count_model`,
-`LoopServe.count_ctl`). -/
-theorem loopReads_of_serves {W Rr : Type} {M : LoopModel W Rr}
-    {rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
-    {nonce : ByteArray} (hw : WorkerDeterministic M rv)
-    (hfw : ∀ h : List (Claims.Msg × Claims.Msg), h.length = M.L.last M.x →
-      M.wk M.x M.w M.ρ h 0 = some (M.L.ownMsg M.x M.w M.ρ h, false))
-    {σ : LoopAt} {st : State} {pl : Placed} {es : List Env}
-    (h : ReadsBy (LoopServe M rv sid spec sts nonce) σ st pl es) :
-    (∀ j k e, (modelSlots st pl es)[j]? = some (k, e) → AnsPart M (σ.c + j) e k) →
-      LoopReads M sid spec sts nonce σ st pl es := by
-  induction h with
-  | nil σ st pl => exact fun _ => .nil σ st pl
-  | stop hs => exact fun _ => .stop hs
-  | @step σ σ' st pl e rest k hk hs _ ih =>
-    intro hA
-    have hms : modelSlots st pl (e :: rest) = (if isModel k then [(k, e)] else []) ++
-        if ((stepK true st pl (some (tagOf k)) (.ok k) e).go &&
-            (stepK true st pl (some (tagOf k)) (.ok k) e).st.stop.isNone) = true then
-          modelSlots (stepK true st pl (some (tagOf k)) (.ok k) e).st
-            (stepK true st pl (some (tagOf k)) (.ok k) e).pl rest
-        else [] := by
-      simp only [modelSlots, hk]
-    refine .step k hk (loopRead_of_serve hs hw hfw ?_) fun hgo => ih hgo fun j k' e' hj => ?_
-    · rcases hm : isModel k with _ | _
-      · exact AnsPart.of_ctl hm
-      · exact hA 0 k e (by rw [hms, ite_eq_left hm]; simp)
-    · rw [ite_eq_left hgo] at hms
-      rcases hm : isModel k with _ | _
-      · rw [ite_eq_right (show ¬(isModel k = true) by rw [hm]; decide), List.nil_append] at hms
-        rw [hs.count_ctl hm]
-        exact hA j k' e' (by rw [hms]; exact hj)
-      · rw [ite_eq_left hm] at hms
-        rw [hs.count_model hm, show σ.c + 1 + j = σ.c + (j + 1) by omega]
-        exact hA (j + 1) k' e' (by rw [hms]; simpa using hj)
-
-/-- **The relay's requests, served from its start, are read as the loop answers them**: at `RelayServes` from the loop
-at `σ`, whose count of the model's messages is `0`, where `AnsPart` holds at the relay's model slots
-(`AuditorAnswers`), the model's worker gives the worker's round values (`WorkerDeterministic`) and answers the
-`Finish` with the firewall's own message (`hfw`). -/
-theorem RelayServes.loopReads {W Rr : Type} {M : LoopModel W Rr}
-    {rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
-    {nonce : ByteArray} {σ : LoopAt} {ins : List (ByteArray × Env)} {aud : List ByteArray → Option ByteArray}
-    (hR : RelayServes M rv aud sid spec sts nonce σ ins) (hw : WorkerDeterministic M rv)
-    (hfw : ∀ h : List (Claims.Msg × Claims.Msg), h.length = M.L.last M.x →
-      M.wk M.x M.w M.ρ h 0 = some (M.L.ownMsg M.x M.w M.ρ h, false))
-    (hc : σ.c = 0) (hA : AuditorAnswers M (modelSlots {} {} (pick true {} {} ins))) :
-    LoopReads M sid spec sts nonce σ {} {} (pick true {} {} ins) :=
-  loopReads_of_serves hw hfw hR.1 fun j k e h => by
-    rw [hc, Nat.zero_add]
-    exact hA j k e h
 
 end Claims.ZKServer.Relay
