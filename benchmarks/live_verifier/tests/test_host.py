@@ -33,10 +33,10 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(RS))
 sys.path.insert(0, str(ROOT))
 
-from benchmarks.remote_session import challengers  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import challengers  # noqa: E402
 import host as H  # noqa: E402
 import store_layout as SL  # noqa: E402
-from benchmarks.remote_session import verifier as V  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import verifier as V  # noqa: E402
 from benchmarks.remote_session import verifier_process as VP  # noqa: E402
 
 T0 = datetime(2026, 10, 21, 13, 0, 0, tzinfo=timezone.utc)
