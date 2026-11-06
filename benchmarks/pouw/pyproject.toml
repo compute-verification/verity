@@ -96,6 +96,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "integrations/vllm/verity_vllm/protocols/pouw/h1/registered_device.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/requests.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/served.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/h1/served_program.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/h1/public_rows.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/settings.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/static.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
