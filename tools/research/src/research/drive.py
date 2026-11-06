@@ -99,7 +99,9 @@ ratchet-gate ended with a verdict (`postland["ratchet_judged"]`: passed, or fail
 re-judge every landing since; while one stands, the base that run judged above; the last verified commit when none was
 judged or the judged tip left the tip's history (a revert or reset); with drive.toml's `after_landing_shards` N, as N runs at
 once (`--shard K/N` each, on machines of `on` no other
-shard has while there are N: `shard_machines`), passed once every shard passed, launched once circuit-check's records step
+shard has while there are N: `shard_machines`), passed once every shard passed, a step more than one shard holds (lean-audit's
+packages, lean-suites' suites and lean-build beside them) passed, for `main` and for its green, only once each of those passed
+it (`shard_steps`, each shard's plan its live record's), launched once circuit-check's records step
 (`_records`: `train.sh TIP MACHINES --cc-records`) passed, each shard given its artifact (`--cc-records-from ART@SHA256`) so no
 shard builds the bindings' records; with "auto" (or "auto:MAX"), N is the shard planner's, its plan made once beside the
 records step (`_plan`: `check.py --shard-plan`) and each shard `--shard auto:K/N --shard-plan-file PLAN`; a run ci launched in
@@ -541,6 +543,8 @@ def launched(launch: dict) -> tuple[list[str] | None, str]:
 PROGRESS = ("steps.jsonl", "suites.failed.json", "suites-lean.failed.json")
 #: a check's trace/v1 spans (`tools/verity/check/spans.py`), whose root span opens as the check starts its steps
 SPANS = "spans.jsonl"
+#: a check's live record (`tools/verity/check/live.py`): each step it planned, pending until it starts and running until it ends
+LIVE = "check-live.json"
 #: the steps a check runs first, one after another, before its groups start (check.py's `preflight`)
 PREFLIGHT = tuple(s for s in CHECK_STEPS if s.startswith("preflight-"))
 
@@ -637,9 +641,9 @@ def failing(run_dir: Path) -> str | None:
 
 def run_states(repo: Path, ids: list[str]) -> dict[str, tuple]:
     """Each run's (state, rc, ended_utc, what has failed so far while it runs: `failing`, the machine it runs on) from `research
-    status RUN --json`, which fetches `PROGRESS` with its records (a check waiting in its machine's slot line reads `waiting`); a run
-    it can't read is ("unknown", None, None, None)."""
-    also = [x for n in PROGRESS for x in ("--also", n)]
+    status RUN --json`, which fetches `PROGRESS` and a check's live record (`LIVE`) with its records, so those of a run that ended
+    are its last (a check waiting in its machine's slot line reads `waiting`); a run it can't read is ("unknown", None, None, None)."""
+    also = [x for n in (*PROGRESS, LIVE) for x in ("--also", n)]
 
     def one(rid: str) -> tuple:
         r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
@@ -734,13 +738,14 @@ def _merge_thread() -> str:
 
 
 def _docs(run_dir: Path, *names: str) -> list[dict]:
+    """The objects the JSON files ``names`` of ``run_dir`` hold: a list's, or the file's own; none of one missing or unreadable."""
     out = []
     for name in names:
         try:
             doc = json.loads((run_dir / name).read_text())
         except (OSError, ValueError):
             continue
-        out += [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else []
+        out += [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else [doc] if isinstance(doc, dict) else []
     return out
 
 
@@ -759,10 +764,10 @@ def _fetch(repo: Path, rid: str, names: list[str]) -> Path | None:
 
 
 def evidence(repo: Path, ids: list[str]) -> list[Path]:
-    """The local run dirs of ``ids`` with their steps, spans, suite reports and failed suites' logs fetched (`research status
-    --also`)."""
+    """The local run dirs of ``ids`` with their steps, live records, spans, suite reports and failed suites' logs fetched
+    (`research status --also`)."""
     def one(rid: str) -> Path | None:
-        if (d := _fetch(repo, rid, [*PROGRESS, SPANS, "suites.json", "suites-lean.json"])) is None:
+        if (d := _fetch(repo, rid, [*PROGRESS, SPANS, LIVE, "suites.json", "suites-lean.json"])) is None:
             return None
         logs = [f"suites/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log")]
         logs += [Path(st["log"]).name for st in failed_steps(d) if st.get("log") and st.get("step") not in ("pytest", "lean-suites")]
@@ -993,6 +998,71 @@ def step_records(run_dir: Path) -> list[dict]:
             with contextlib.suppress(ValueError):
                 out.append(json.loads(line))
     return out
+
+
+def live_steps(run_dir: Path) -> list[dict]:
+    """The steps a check's live record (`LIVE`) names, each with its `state`: `stopped` for one still pending or running in the
+    record of a check that ended (a group that stopped on a failure never starts the rest); none without one."""
+    doc = next(iter(_docs(run_dir, LIVE)), {})
+    over, steps = doc.get("state") in ("passed", "failed", "stopped"), doc.get("steps")
+    return [{**s, "state": "stopped"} if over and s.get("state") in ("pending", "running") else s
+            for s in steps if isinstance(s, dict)] if isinstance(steps, list) else []
+
+
+#: what a shard's twin says of a step against its other twin, for the shard both run (`shard_steps`): a pass answers for the
+#: shard, a step one still has to run may yet pass, and a stop (a cancel's, or a step its ended check never started) says least
+RANK = {"passed": 4, None: 3, "failed": 2, "skipped": 1, "stopped": 0}
+
+
+def shard_steps(groups: list[list[Path]], done: list[bool]) -> list[dict[str, str | None]] | None:
+    """Each shard's steps, from its twins' run dirs (``groups``): {step: the status its twins give it, the highest by `RANK`, None
+    while one has it pending or running and none passed it}, a twin's by its steps.jsonl (`stopped` for a step a cancel stopped,
+    `not_run`), else its live record (`live_steps`), which names every step the check planned.  None, of more than one shard,
+    while a shard's plan isn't known: no twin's live record names a step past the preflight, and none exited 0 (``done``), as a
+    check does only once every step it planned ended."""
+    out = []
+    for dirs, known in zip(groups, done):
+        got: dict[str, str | None] = {}
+        for d in dirs:
+            live = live_steps(d)
+            known = known or any(s.get("step") not in PREFLIGHT for s in live)
+            mine = {s.get("step") or "": s.get("state") for s in live}
+            mine.update({st.get("step") or "": "stopped" if not_run(st) else st.get("status") or "failed" for st in step_records(d)})
+            for step, v in mine.items():
+                v = None if v in ("pending", "running", None) else v
+                if step not in got or RANK.get(v, RANK["failed"]) > RANK.get(got[step], RANK["failed"]):
+                    got[step] = v
+        if len(groups) > 1 and not known:
+            return None
+        out.append(got)
+    return out
+
+
+def shard_passed(view: list[dict[str, str | None]] | None, allowed: set[str] = frozenset()) -> set[str]:
+    """The steps a run passed (``view``, `shard_steps`'): passed in a shard, or failed there only on what an allowance covers
+    (``allowed``, `Driver._allowed_steps`), and so, or skipped, in every shard that holds them."""
+    def ok(s: str, x: str | None) -> bool:
+        return x == "passed" or (x == "failed" and s in allowed)
+    return {s for v in view or () for s, x in v.items() if ok(s, x) and all(ok(s, w[s]) or w[s] == "skipped" for w in view if s in w)}
+
+
+def shard_ended(view: list[dict[str, str | None]] | None) -> set[str]:
+    """The steps every shard that holds them has ended (``view``, `shard_steps`')."""
+    return {s for v in view or () for s in v if all(w[s] is not None for w in view if s in w)}
+
+
+def suite_passed(rows: list[dict]) -> bool:
+    """Whether a suite's rows from a run's dirs (`suite_rows`') make its pass: none failed, and one passed whole or the passed ones
+    are every part of one partition (`part`: parts `ks` of `m`, of the partition `digest`), as a sharded run's shards run a suite
+    that declares parts (`suites.py SUITE:K/M`)."""
+    if any(r.get("status") == "failed" for r in rows):
+        return False
+    ok = [r for r in rows if r.get("status") == "passed"]
+    if any(not isinstance(r.get("part"), dict) for r in ok):
+        return True
+    of = {(r["part"].get("m"), r["part"].get("digest")) for r in ok}
+    m = next(iter(of))[0] if len(of) == 1 else None
+    return isinstance(m, int) and {k for r in ok for k in r["part"].get("ks") or ()} == set(range(1, m + 1))
 
 
 def not_run(st: dict) -> bool:
@@ -1875,16 +1945,28 @@ class Driver:
 
     def _gate_passed(self, pl: dict, run: dict) -> None:
         """An after-landing run, ended or still running, that passed every step `main` waits for at its tip (`_gating`), or
-        failed it only on failures an allowance covers (`_allowed_steps`), whatever a step off the gate does or did
-        (circuit-check, pending or red): its tip is `gated` (with "gated_run", its ids), a commit `_promote` may move `main` to."""
+        failed it only on failures an allowance covers (`_allowed_steps`), in every shard that holds it (`shard_passed`: none
+        has it still to run), whatever a step off the gate does or did (circuit-check, pending or red): its tip is `gated`
+        (with "gated_run", its ids), a commit `_promote` may move `main` to."""
         tip, ids = run["tip"], " ".join(run["ids"])
         if (g := pl.get("gated")) and (g == tip or not self._ancestor(g, tip)):
             return
-        dirs = self._evidence(Verdict("failed", ids))
-        passed = {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "passed"}
-        if set(self._gating(tip)) <= passed | self._allowed_steps(tip, dirs):
+        view, dirs = self._shard_steps(run), [d for ds in self._shards(run) for d in ds]
+        if view is not None and set(self._gating(tip)) <= shard_passed(view, self._allowed_steps(tip, dirs)):
             pl["gated"], pl["gated_run"] = tip, ids
             pl.pop("gated_by", None)
+
+    def _shards(self, run: dict) -> list[list[Path]]:
+        """The run dirs of each shard of ``run`` (``groups``, its twins', by run id; an unsharded run is one), fetched once a
+        tick."""
+        dirs = self._evidence(Verdict("failed", " ".join(run["ids"])))
+        return [[d for d in dirs if d.name in g] for g in run["groups"]] if run.get("groups") else [dirs]
+
+    def _shard_steps(self, run: dict) -> list[dict[str, str | None]] | None:
+        """`shard_steps` of ``run``'s shards, one whose twin exited 0 known by its steps.jsonl."""
+        groups = run.get("groups") or [run["ids"]]
+        states = self._states(run["ids"]) if len(groups) > 1 else {}
+        return shard_steps(self._shards(run), [any(r in states and states[r][1] == 0 for r in g) for g in groups])
 
     def _shards_launched(self, drive: dict, pl: dict, run: dict) -> bool:
         """Whether every shard of a sharded after-landing run (`start_postland`) has its run ids, which then become the run's own
@@ -2044,7 +2126,7 @@ class Driver:
     def _only_allowed(self, run: dict) -> bool:
         """Whether ``run`` failed only on failures its tip's allowances cover: some step failed, and each failed step is
         `_allowed_steps`'."""
-        dirs = self._evidence(Verdict("failed", " ".join(run["ids"])))
+        dirs = [d for ds in self._shards(run) for d in ds]
         failed = {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "failed" and not not_run(st)}
         return bool(failed) and failed <= self._allowed_steps(run["tip"], dirs)
 
@@ -2135,23 +2217,23 @@ class Driver:
 
     def _red(self, drive: dict, pl: dict, run: dict, ended: bool = False, steps: tuple[str, ...] | None = None) -> int:
         """Read an after-landing run's records, still running or ``ended``: each suite and step it passed is green at its tip
-        (`_green`), and each it failed is named (`_name`): a step a cancel stopped is `not run`, never failed.  pytest and
-        lean-suites are named by their suites, and only as a step when no suite of theirs failed (a timeout, a kill).  A
-        failure an unexpired allowance of the tip's policy covers (`_allowed`) is not red: it is named nothing, and once the run
-        ended its red record ends as a pass's would; one whose allowance expired is named with it, so its ring says which.  With
-        ``steps``, only those of its steps are read, and none of its suites (`_follow_slim`).  The number of failed suites and
-        steps not covered."""
+        (`_green`): a suite once the run ended, failed in no shard and passed whole or in every part (`suite_passed`), a step
+        once every shard that holds it passed it (`shard_passed`); and each it failed is named (`_name`): a step a cancel stopped
+        is `not run`, never failed.  pytest and lean-suites are named by their suites, and only as a step when no suite of theirs
+        failed (a timeout, a kill).  A failure an unexpired allowance of the tip's policy covers (`_allowed`) is not red: it is
+        named nothing, and once the run ended its red record ends as a pass's would; one whose allowance expired is named with
+        it, so its ring says which.  With ``steps``, only those of its steps are read, and none of its suites (`_follow_slim`).
+        The number of failed suites and steps not covered."""
         tip = run["tip"]
-        dirs = self._evidence(Verdict("failed", " ".join(run["ids"])))
         fails: dict[str, tuple[Path, dict]] = {}
         stopped: set[str] = set()
         judged: tuple[Path, dict] | None = None
-        for d in dirs:
+        rows: dict[str, list[dict]] = {}
+        for d in (d for ds in self._shards(run) for d in ds):
             for name, s in (suite_rows(d) if steps is None else {}).items():
+                rows.setdefault(name, []).append(s)
                 if s["status"] == "failed":
                     fails[f"suite {name}"] = (d, s)
-                elif s["status"] == "passed" and ended:
-                    self._green(pl, f"suite {name}", tip)
             for st in step_records(d):
                 step = st.get("step") or ""
                 if steps is not None and step not in steps:
@@ -2163,8 +2245,10 @@ class Driver:
                 elif st.get("status") == "failed":
                     if step not in ("pytest", "lean-suites") or not any(s["step"] == step for _, s in fails.values()):
                         fails[f"step {step}"] = (d, st)
-                elif st.get("status") == "passed":
-                    self._green(pl, f"step {step}", tip)
+        for name in sorted(n for n, rs in rows.items() if ended and suite_passed(rs)):
+            self._green(pl, f"suite {name}", tip)
+        for step in sorted(s for s in shard_passed(self._shard_steps(run)) if steps is None or s in steps):
+            self._green(pl, f"step {step}", tip)
         expired: dict[str, tuple[policy.Allowance, ...]] = {}
         for key, (d, rec) in list(fails.items()):
             v = self._allowed(tip, key, d, rec)
@@ -2477,13 +2561,14 @@ class Driver:
         return landed
 
     def _tail_left(self, run: dict) -> bool:
-        """Whether every step of an after-landing run but `TAIL` (and those it skips by name) has ended, by its steps.jsonl, and,
-        while no step `main` waits for (`_gating`) failed, those of `TAIL` too: a red only off the gate (circuit-check) cancels
-        nothing that could still let `_promote` move `main` to its tip."""
-        recs = [st for d in self._evidence(Verdict("failed", " ".join(run["ids"]))) for st in step_records(d)]
-        ended = {st.get("step") for st in recs}
-        gating = self._gating(run["tip"])
-        held = any(st.get("step") in gating and st.get("status") == "failed" for st in recs)
+        """Whether every step of an after-landing run but `TAIL` (and those it skips by name) has ended in every shard that holds
+        it (`shard_ended`: by its steps.jsonl, and its live record for what it has still to run), and, while no step `main` waits
+        for (`_gating`) failed, those of `TAIL` too: a red only off the gate (circuit-check) cancels nothing that could still let
+        `_promote` move `main` to its tip."""
+        if (view := self._shard_steps(run)) is None:
+            return False
+        ended, gating = shard_ended(view), self._gating(run["tip"])
+        held = any(v.get(s) == "failed" for v in view for s in gating)
         return all(s in ended for s in AFTER_LANDING
                    if s not in run.get("skip", ()) and (s not in TAIL or (not held and s in gating)))
 
