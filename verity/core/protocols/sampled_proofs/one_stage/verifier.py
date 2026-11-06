@@ -236,7 +236,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             registered: Mapping[str, int] | None, supplied: Mapping[str, Any] | None = None,
             pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None) -> dict[str, Any]:
+            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
+            day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
@@ -259,6 +260,9 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["held"] = list(held)
     if outputs is not None:
         p["outputs"] = {v: dict(o) for v, o in outputs.items()}
+    if day is not None or declarations is not None:
+        p["day"] = day
+        p["declarations"] = None if declarations is None else [dict(d) for d in declarations]
     return p
 
 
@@ -269,14 +273,16 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
           binding: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
           window_root: str | None = None, held: Sequence[str] | None = None,
-          outputs: Mapping[str, Mapping[str, str]] | None = None) -> Verdict:
-    """`registration.check` (R1-R7) by the verifier."""
+          outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
+          declarations: Sequence[Mapping[str, Any]] | None = None) -> Verdict:
+    """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
-                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held)
+                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,
+                 day=day, declarations=declarations)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held, outputs),
+                                                  window_root, held, outputs, day, declarations),
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
