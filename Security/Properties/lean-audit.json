@@ -79,7 +79,7 @@
  "proved_in": ["../Proofs"],
  "assumptions": {
   "Accounting.Assumptions.ChainSum": {
-   "owner": "@compute-accounting",
+   "owner": "@memory-accounting",
    "digest": "7ad0fc65bedd3bcb11daf125be103ea1315686f4dd0d691971d279a0c78ec748"
   },
   "Accounting.Assumptions.CircuitCarriers": {
@@ -95,7 +95,7 @@
    "digest": "853ef0a90886823abe7731abc7684c9e03ead7fd60b2b3c8317fbd79cf4b70ab"
   },
   "Accounting.Assumptions.KeyBinding": {
-   "owner": "@compute-accounting",
+   "owner": "@memory-accounting",
    "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
   },
   "Accounting.Assumptions.Parties.Confined": {
@@ -115,15 +115,15 @@
    "digest": "95b15bbd9de1d0f6541b0df00c336a62ff80b53330fb7cdcb768e6f2dfd5a74f"
   },
   "Accounting.Assumptions.SketchHashBudget": {
-   "owner": "@compute-accounting",
+   "owner": "@memory-accounting",
    "digest": "7152c3bee14ef89d534145e9ca82a0933d6aee2891e6a7e1beaa5a973944558b"
   },
   "Accounting.Assumptions.SketchRank": {
-   "owner": "@compute-accounting",
+   "owner": "@memory-accounting",
    "digest": "727be124ba9dbc421e926b9388e089735913296fe529e8940e43750724733d8c"
   },
   "Accounting.Assumptions.SquaringFloor": {
-   "owner": "@compute-accounting",
+   "owner": "@memory-accounting",
    "digest": "e3221c1341a83a0850d517579322dff20f661fb87ad013ef4b547cc75d2f1a9a"
   },
   "Accounting.Assumptions.TS.OperandHMu": {
