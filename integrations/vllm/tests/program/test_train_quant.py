@@ -1,6 +1,7 @@
 """The training rules for a quantizer's masks, integers, conversions and order statistics (`rules.training_masks`), each Program
 run on small CPU tensors and its output words compared with torch's: comparisons (of f16 values too), logic, int64 adds, shifts and
-ands (a code packed into bytes and back, and split into bit planes as bools and summed back), `where` (of f16 values too),
+ands (a code packed into bytes and back, shifts by static amounts across a tensor wider than a constant's runs, and a code split
+into bit planes as bools and summed back), `where` (of f16 values too),
 `clamp`, integer sums, the conversions among int64, uint8, bool and f32, a codebook lookup (static, and a value), `amax`, `floor`
 and a static f32 `arange` with a row scattered in, bit for bit against torch CPU on words with signed zeros, infinities and NaNs,
 with and without a compute capability; at one, a clamp by ±0 against the GPU kernel's
@@ -27,6 +28,7 @@ from verity.ml.definitions.registry import cublas_bf16 as CB
 from verity.ml.definitions.registry import int8_exact as IE
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
+from verity_vllm.program.frontend.rules import training_views as TV
 from verity_vllm.program.frontend.rules.training import training_rules
 from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE
 
@@ -282,6 +284,20 @@ def test_int64_adds_shifts_and_ands(rules) -> None:
         return packed, ((word.unsqueeze(-1) >> (2 * lanes)) & 3).reshape(c.shape)
 
     _check(through_bytes, torch.randint(0, 4, (4, 16), generator=torch.Generator().manual_seed(17)), rules=rules)
+
+
+@BOTH
+def test_static_amounts_across_a_wide_tensor(rules) -> None:
+    """Codes shifted left by a row of eight static amounts, and a column shifted right by them, one row past what a constant
+    tensor's runs allow in the result's order (there each amount is a run of one), as a wide quantizer packs its code."""
+    rows = TV._PARTS // 8 + 1
+
+    def f(c, w):
+        s = 2 * torch.arange(8)
+        return c.reshape(-1, 8) << s, w[:, None] >> s
+
+    g = torch.Generator().manual_seed(22)
+    _check(f, torch.randint(0, 4, (rows * 8,), generator=g), torch.randint(-2 ** 62, 2 ** 62, (rows,), generator=g), rules=rules)
 
 
 @BOTH

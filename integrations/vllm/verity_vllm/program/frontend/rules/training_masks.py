@@ -32,8 +32,8 @@ from verity.ml.definitions.registry import torch_words as W
 from verity.ml.definitions.registry.dsv4_decode_indices import gather_i32
 from verity_vllm.program.frontend.rules.training_emit import (_DT, _alpha, _batch, _bits, _broadcast, _const, _converted, _ew,
                                                               _flat, _from_bits, _operand, _operand_ok, _ref, _shape,
-                                                              _static_coll, _tokens, _TrainRule, _tree, _word_ok, _word_operand,
-                                                              aten)
+                                                              _static_coll, _tokens, _TrainRule, _tree, _word_ew, _word_ok,
+                                                              _word_operand, aten)
 from verity_vllm.program.frontend.rules.training_views import StaticFloat, _info, _view_expand, _view_permute
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
@@ -146,7 +146,7 @@ class Logic(_TrainRule):
 
     def emit(self, node, ctx):
         S, fn = ctx.shape_of_node(node), _LOGIC[node.target]
-        ctx.define(node, _ew(ctx, node, fn, [_word_operand(ctx, node, a, S, torch.bool) for a in self._args(node)], S, w=1))
+        ctx.define(node, _word_ew(ctx, node, fn, self._args(node), S, torch.bool))
         ctx.record(self, node, {"shape": list(S)}, emitted=f"{fn.id} x{math.prod(S)}")
 
 
@@ -180,7 +180,7 @@ class IntOps(_TrainRule):
 
     def emit(self, node, ctx):
         S, fn = ctx.shape_of_node(node), _INT_OPS[node.target]
-        ctx.define(node, _ew(ctx, node, fn, [_word_operand(ctx, node, a, S, torch.int64) for a in node.args[:2]], S, w=64))
+        ctx.define(node, _word_ew(ctx, node, fn, node.args[:2], S, torch.int64))
         ctx.record(self, node, {"shape": list(S)}, emitted=f"{fn.id} x{math.prod(S)}")
 
 
