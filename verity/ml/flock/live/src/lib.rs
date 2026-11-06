@@ -41,6 +41,7 @@ pub mod record_text;
 pub mod run_record;
 #[cfg(feature = "glue")]
 pub mod tables;
+pub mod tree_from;
 pub mod typed;
 pub mod vllm_block;
 pub mod zk_hooks;
@@ -199,7 +200,7 @@ pub fn sha256(b: &[u8]) -> [u8; 32] {
     Sha256::digest(b).into()
 }
 
-/// The unit sample (the Lean verifier's PROTOCOL.md §7.3): the verifier samples the units to prove in the clear from its OS
+/// The unit sample (the Lean verifier's `Flock.Draw`): the verifier samples the units to prove in the clear from its OS
 /// randomness, after registration and before the statement is fixed, with `verity.ml.randomness`'s exact samplers read straight
 /// from OS bytes (no derivation). The sample is the object `{"law": "subset", "population": N, "k": K, "units": [...]}`,
 /// `{"law": "bernoulli", "population": N, "p": "num/den", "units": [...]}` or `{"law": "stratified", "population": N, "k": K,
@@ -1189,7 +1190,7 @@ pub struct SessionConfig {
     /// The prime prover's coins are served in this session (`Prime` rounds); `Commit` needs at least one before it.
     pub prime_live: bool,
     /// Step 0 (`coin_seed::SCHEME`): the verifier commits to a seed in answer to `Hello`, derives every coin from it and reveals
-    /// it in its verdict (lane flock-circuit). Off for every statement that does not ask for it.
+    /// it in its verdict. Off for every statement that does not ask for it.
     pub coin_seed: bool,
     /// The coin server keeps every round's bytes and the replay compares the proof's messages with them byte for byte (the
     /// round digests stay, as framing); the record carries them. Off for every statement that does not ask for it.
@@ -1385,9 +1386,11 @@ pub struct Server {
     on_draw: Option<DrawHook>,
     /// a test harness's step-0 seed and nonce (feature `seed-injection` only), used at `Hello` instead of the OS's
     seed_inject: Option<([u8; 32], [u8; 32])>,
-    /// M2: the committed coin schedule (sampled at `Hello`), and a test harness's random tape for it (the verifier's coins as a
-    /// function of the tape: the simulator's rewinding model)
-    coin_tree: Option<coin_tree::CoinTree>,
+    /// M2: the committed coin schedule (sampled at `Hello`, here or by the challenger), and a test harness's random tape for
+    /// it (the verifier's coins as a function of the tape: the simulator's rewinding model)
+    coin_tree: Option<coin_tree::Held>,
+    /// where the committed coin schedule is sampled: the challenger (`--tree-from`), or this host
+    tree_from: Option<tree_from::Shared>,
     /// the prover's nonce from its `Hello` (the keyed coin tree's prefix; in the record)
     coin_nonce: Option<[u8; coin_tree::NONCE_BYTES]>,
     coin_tape: Option<[u8; 32]>,
@@ -1421,6 +1424,12 @@ impl Server {
         self
     }
 
+    /// A server whose committed coin schedule the challenger samples and opens ([`tree_from`]), not this host.
+    pub fn with_tree_from(mut self, c: tree_from::Shared) -> Self {
+        self.tree_from = Some(c);
+        self
+    }
+
     pub fn try_new(cfg: SessionConfig, verifier: Box<dyn StatementVerifier>) -> Result<Self, String> {
         cfg.check()?;
         Ok(Self {
@@ -1447,6 +1456,7 @@ impl Server {
             on_draw: None,
             seed_inject: None,
             coin_tree: None,
+            tree_from: None,
             coin_nonce: None,
             coin_tape: None,
             coin_edit: None,
@@ -1484,10 +1494,10 @@ impl Server {
     }
 
     /// M2: `n` coins of `stream`'s round `round` from the committed schedule, and the answer's words (coins, then opening).
-    fn committed_coins(&mut self, stream: &str, round: usize, n: usize) -> Result<(Vec<F128>, Vec<F128>), String> {
+    fn committed_coins(&mut self, stream: &str, round: usize, n: usize, after: &[u8; 64]) -> Result<(Vec<F128>, Vec<F128>), String> {
         let t = self.coin_tree.as_ref().ok_or("no committed coin schedule")?;
         let si = t.spec.stream_index(stream).ok_or(format!("{stream} is outside the committed coin schedule"))?;
-        t.open(si, round, n)
+        t.open(si, round, n, after)
     }
 
     /// The live prime rounds, and how many preceded `Commit`.
@@ -1657,6 +1667,23 @@ impl Server {
                 if h != want {
                     return self.refuse(format!("R7: session parameters {h} differ from the verifier's {want}"));
                 }
+                if let (Some(spec), Some(nonce), Some(c)) = (self.cfg.coin_tree.clone(), nonce, self.tree_from.clone())
+                    && !self.replaying
+                {
+                    // the challenger opens each round after its message's SHA-512, which the audit reads as its msg_sha512
+                    if !self.cfg.sha512_digests {
+                        return self.refuse("coin tree: the challenger's rounds follow their messages' SHA-512, which a SHA-256 record doesn't show".into());
+                    }
+                    let tree = match coin_tree::Held::challenger(spec, &nonce, c) {
+                        Ok(t) => t,
+                        Err(e) => return self.refuse(format!("coin tree: {e}")),
+                    };
+                    let w = tree.answer_words();
+                    self.coin_tree = Some(tree);
+                    self.coin_nonce = Some(nonce);
+                    self.hello = Some(h);
+                    return Resp::Coins(w);
+                }
                 // a live server draws the session's key and coins from the OS: without a source it refuses, rather than answer
                 // Ok and leave the prover to fail on a missing commitment
                 if self.cfg.coin_tree.is_some() && self.urandom.is_none() && !self.replaying {
@@ -1679,7 +1706,7 @@ impl Server {
                     };
                     // the session key leaves the verifier here, with the root, and not before
                     let w = tree.answer_words();
-                    self.coin_tree = Some(tree);
+                    self.coin_tree = Some(coin_tree::Held::here(tree));
                     self.coin_nonce = Some(nonce);
                     self.hello = Some(h);
                     return Resp::Coins(w);
@@ -1761,7 +1788,8 @@ impl Server {
                 self.commit = Some(CommitRec { root_f, roots, publics, publics_digest: pd });
                 self.prime_before_commit = Some(self.prime.len());
                 if self.coin_tree.is_some() {
-                    let (c, w) = match self.committed_coins(coin_tree::SESSION, 0, spec.points * spec.m) {
+                    let after = self.commit.as_ref().map(|c| tree_from::link_after(&c.root_f, c.roots.values())).expect("committed");
+                    let (c, w) = match self.committed_coins(coin_tree::SESSION, 0, spec.points * spec.m, &after) {
                         Ok(x) => x,
                         Err(e) => return self.refuse(e),
                     };
@@ -1853,7 +1881,7 @@ impl Server {
                 }
                 let at = self.streams[&stream].rounds.len();
                 let (coins, answer) = if self.coin_tree.is_some() {
-                    match self.committed_coins(&stream, at, n as usize) {
+                    match self.committed_coins(&stream, at, n as usize, &Sha512::digest(&content).into()) {
                         Ok(x) => x,
                         Err(e) => return self.refuse(e),
                     }
@@ -2570,6 +2598,81 @@ mod coin_server_tests {
         let mut s = Server::try_new(cfg(), Box::new(NoProofs)).unwrap();
         s.urandom = None;
         assert!(matches!(s.handle(Req::Hello(hello)), Resp::Refused(ref e) if e.contains("no OS random source")));
+    }
+
+    fn linked() -> SessionConfig {
+        let mut c = cfg();
+        c.link = Some(LinkSpec { sigma: vec![1; 32], m: 1, points: 2 });
+        c.sha512_digests = true;
+        c
+    }
+
+    /// Hello, the Commit of `root_f` and `root_b` (the link points), y, and rep 0's binding round.
+    fn session(root_f: &[u8], root_b: &[u8]) -> Vec<Req> {
+        let mut binding = frame_domain(&[]);
+        for (op, b) in [(OP_LABEL, LABEL_R1CS), (OP_BYTES, &[0u8; 32][..]), (OP_BYTES, root_b)] {
+            push_header(&mut binding, op, 0, b.len() as u64);
+            push_padded(&mut binding, b);
+        }
+        vec![Req::Hello(linked().hello_with_nonce(&[7; coin_tree::NONCE_BYTES])),
+             Req::Open { stream: rep_stream("t", 0), parent: String::new(), label: vec![], at: 0 },
+             Req::Commit { root_f: root_f.to_vec(), roots: vec![("t".into(), root_b.to_vec())], publics: vec![] },
+             Req::Link(vec![0; 32]),
+             Req::Round { stream: rep_stream("t", 0), content: binding, n: 3 }]
+    }
+
+    /// A session whose coin tree the challenger samples answers the prover word for word as one drawn here on the same tape,
+    /// and records the same coins; the challenger opened its link points after its record's link roots and its round after
+    /// the round's msg_sha512, as the audit of its release log holds the record to.
+    #[test]
+    fn a_session_on_the_challengers_tree_is_the_session_its_tape_draws_here() {
+        let (address, served) = tree_from::fake::challenger([3; 32], tree_from::fake::How::Honest);
+        let c = Arc::new(Mutex::new(tree_from::Challenger::connect(&address, None).unwrap()));
+        let mut there = Server::try_new(linked(), Box::new(NoProofs)).unwrap().with_tree_from(c.clone());
+        let mut here = Server::try_new(linked(), Box::new(NoProofs)).unwrap();
+        here.coin_tape = Some([3; 32]);
+        for (a, b) in session(&[5; 64], &[9; 64]).into_iter().zip(session(&[5; 64], &[9; 64])) {
+            let (x, y) = (there.handle(a), here.handle(b));
+            assert!(matches!(x, Resp::Coins(_) | Resp::Ok), "{x:?}");
+            assert_eq!(format!("{x:?}"), format!("{y:?}"));
+        }
+        c.lock().unwrap().close().unwrap();
+        let (rec, want) = (there.record_json(), here.record_json());
+        for k in ["coin_tree", "link", "streams"] {
+            assert_eq!(rec[k], want[k], "{k}");
+        }
+        let opens: Vec<Value> = served.join().unwrap().into_iter().filter(|h| h["type"] == "tree-open").collect();
+        let unhex = |v: &Value| (0..v.as_str().unwrap().len() / 2).map(|i| u8::from_str_radix(&v.as_str().unwrap()[2 * i..2 * i + 2], 16).unwrap()).collect::<Vec<u8>>();
+        let root_b: BTreeMap<String, Vec<u8>> = rec["link"]["root_b"].as_object().unwrap().iter().map(|(t, r)| (t.clone(), unhex(r))).collect();
+        assert_eq!(opens[0], json!({"type": "tree-open", "after": hex(&tree_from::link_after(&unhex(&rec["link"]["root_f"]), root_b.values())),
+                                    "n": 2, "round": 0, "stream": coin_tree::SESSION, "tree": rec["coin_tree"]["root"]}));
+        let r = &rec["streams"][0]["rounds"][0];
+        assert_eq!(opens[1], json!({"type": "tree-open", "after": r["msg_sha512"], "n": 3, "round": 0, "stream": rep_stream("t", 0),
+                                    "tree": rec["coin_tree"]["root"]}));
+        assert_eq!(opens.len(), 2);
+    }
+
+    /// The coin server refuses a session whose tree the challenger samples under another nonce, or whose round doesn't open
+    /// its tree, at that request; and a server whose record would show only rounds' SHA-256 takes no tree from it.
+    #[test]
+    fn a_challengers_tree_under_another_nonce_a_bad_round_or_a_sha256_record_is_refused() {
+        use tree_from::fake::How;
+        for (how, at, why) in [(How::OtherNonce, 0, "under the nonce asked for"), (How::Tampered, 2, "the challenger's coin tree round")] {
+            let (address, _served) = tree_from::fake::challenger([3; 32], how);
+            let c = Arc::new(Mutex::new(tree_from::Challenger::connect(&address, None).unwrap()));
+            let mut s = Server::try_new(linked(), Box::new(NoProofs)).unwrap().with_tree_from(c);
+            for (i, req) in session(&[5; 64], &[9; 64]).into_iter().enumerate().take(at + 1) {
+                let r = s.handle(req);
+                assert_eq!(matches!(&r, Resp::Refused(e) if e.contains(why)), i == at, "{i}: {r:?}");
+            }
+        }
+        let (address, _served) = tree_from::fake::challenger([3; 32], How::Honest);
+        let c = Arc::new(Mutex::new(tree_from::Challenger::connect(&address, None).unwrap()));
+        let mut c256 = linked();
+        c256.sha512_digests = false;
+        let mut s = Server::try_new(c256.clone(), Box::new(NoProofs)).unwrap().with_tree_from(c);
+        let r = s.handle(Req::Hello(c256.hello_with_nonce(&[7; coin_tree::NONCE_BYTES])));
+        assert!(matches!(&r, Resp::Refused(e) if e.contains("a SHA-256 record")), "{r:?}");
     }
 }
 

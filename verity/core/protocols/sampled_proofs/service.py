@@ -41,9 +41,9 @@ digest) as the Lean verifier's `Flock.Draw.drawWith` does (`coins.draw_first` ov
 and no derivation, or by the stream's `sampler`; either draw is held to `draw.check_draw`. Neither the stream nor the
 verifier has coins of its own: a stream whose selection reads coins refuses any source but the challenger's
 (`NO_OWN_COINS`), and the verifier's run refuses a sample that read coins without the challenger's log to show they are
-its (`outcome`'s `coins`). A work sample carries the challenger's closure map's closure (`select(closure=)`, a map over
-`[0, N)`, refused under another sampling design or out of range before any coin is read; `coins.closure_of`), which the proof
-proves with the sampled proof blocks.
+its (`outcome`'s `coins`). A closure map (`select(closure=)`) is refused before any coin is read (`closure`): a work
+sample widened by one proves a set whose size varies with the sample, which the sampled audit's soundness statement
+doesn't cover.
 From the selection rule to the sample object it is `selection_law`, `draw.derive` and `select_draw`, which the Lean
 verifier's `SampledProofs.Select` ports, held to them by its difftest on fixed coins.
 
@@ -56,7 +56,8 @@ later than the deadline, or before any salt, as `late-registration`, whatever it
 never retried, and it ends the epoch: the stream receives no registration after it (`epoch-ended`) and never reissues
 the salt (`salted`). It is the rule of `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`), with `ts` =
 `salted_at`, `tr` = `received_at` and `td` = `ts` + the deadline. The readings are the challenger's own: the stream's
-epoch log (`Stream.epoch_log`) and each `Registration` carry them, and neither the receipt nor an outcome's record does.
+epoch log (`Stream.epoch_log`) and each `WindowCommitmentRecord` carry them, and neither the receipt nor an outcome's
+record does.
 `salt(n=64)` is `n` bytes of the challenger's coins, read in order with the draws'. A level's stream created at its
 first registration still measures from the epoch's release. A salt that isn't non-empty bytes, or a release that isn't a
 finite number, raises `ValueError`, and after the epoch ends a salt of either kind is refused (`epoch-ended`). The epoch
@@ -82,7 +83,7 @@ before its own draw, and so before every later round's. The first covered round'
 session. `deliver` delivers the session once, and every covered draw's outcome binds the same session records. Each
 draw's `outcome` runs its own audit record, on its own proof blocks and its own table's roots, and its record names the
 session's rounds (`session`). A late session is `late` for every round it covers. C-Flock's verifier refuses
-such a session (`verity/ml/flock/verifier/PROTOCOL.md` §16.12); `Stream.session` has its refusals.
+such a session (`Flock.ProvedScope`, `Draw.tablesWhy`); `Stream.session` has its refusals.
 
 **The failure budget.** A stream counts its failures, and at the `budget`-th it stops and refuses further registrations.
 It holds at most `budget` minus its failures open registrations (and at most `rounds`), so it never ends with more than
@@ -113,7 +114,8 @@ its `draw` is null when the registration was not sampled. `Outcome.record` is it
 
 **Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
 check with no proof deadline. After R1 to R7, `register` refuses a sampling design whose drawn count varies (`shapes`: `bernoulli`
-at `0 < p < 1`); a work draw's closure varies too and is not refused (a planned design).
+at `0 < p < 1`), and `select` refuses a closure map (`closure`), which the sampled audit's soundness statement doesn't
+cover either.
 """
 from __future__ import annotations
 
@@ -418,9 +420,10 @@ _O = TypeVar("_O", Outcome, tuple[Outcome, ...])
 
 
 @dataclass(frozen=True)
-class Registration:
-    """A registration the challenger accepted: one-stage's `record`, its `receipt` and `digest`, and `order`, its audit's
-    index in the stream. The receipt's `received` is the record's position in
+class WindowCommitmentRecord:
+    """A window's commitment record the challenger admitted: one-stage's `record`, its `receipt` and `digest`, and
+    `order`, its audit's index in the stream. It is Verification's, not an entry of the registration log, which registers
+    only the site, θ and the builder. The receipt's `received` is the record's position in
     the stream's log; the challenger's clock stays its own. Under `Check.registration_deadline`, `salted_at` and
     `received_at` are its readings of the salt's release and of this registration's receipt (None otherwise)."""
 
@@ -437,7 +440,7 @@ class Draw:
     """The challenger's one sample for a registration: `law` (its sampling design, expanded over the challenger's own program) and
     `draw`, one-stage's draw object (with a work sample's `closure`), which goes to the ZK server."""
 
-    registration: Registration
+    registration: WindowCommitmentRecord
     law: Mapping[str, Any]
     draw: Mapping[str, Any]
 
@@ -612,8 +615,8 @@ def selection_law(rule: Selection, n: int) -> dict[str, Any]:
 
 def count_varies(law: Mapping[str, Any]) -> bool:
     """Whether `law` (a `selection_law`) draws a count that varies from draw to sample, so the sessions of one registration
-    set up tables of different shapes: `bernoulli` at 0 < p < 1. A work sampling design's closure varies too, but the work sample with
-    a producer closure is a planned design, so it is not refused. The Lean verifier's `Run.countVaries` is this. A Spec
+    set up tables of different shapes: `bernoulli` at 0 < p < 1. A work sample's closure varies too, and `Stream.select`
+    refuses a closure map (`closure`). The Lean verifier's `Draw.countVaries` is this. A Spec
     that wants Bernoulli's public rate at a fixed count states the rate sampling design, `rate:NUM/DEN[:T]`."""
     if law.get("law") != "bernoulli":
         return False
@@ -645,7 +648,7 @@ def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable
 
 @dataclass
 class _Entry:
-    registration: Registration
+    registration: WindowCommitmentRecord
     law: Mapping[str, Any]
     program: Program
     work_table: Mapping[str, Any] | None = None
@@ -685,11 +688,11 @@ def _token(x: Any, k: str) -> str:
     return x
 
 
-def _order(r: Registration) -> int | None:
+def _order(r: WindowCommitmentRecord) -> int | None:
     return r.order if _nat(r.order) else None
 
 
-def _registration_token(r: Registration) -> str:
+def _registration_token(r: WindowCommitmentRecord) -> str:
     """The token `_Control` and `SampledProofs.Stream` know a registration by: equal exactly when the registrations are."""
     return _sha512({"record": dict(r.record), "receipt": dict(r.receipt), "digest": r.digest, "order": r.order,
                     "salted_at": r.salted_at, "received_at": r.received_at})
@@ -1360,7 +1363,7 @@ class Stream:
                  work_table: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None,
                  pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
                  window_root: str | None = None, held: Sequence[str] | None = None,
-                 counts: Mapping[str, int] | None = None) -> Registration:
+                 counts: Mapping[str, int] | None = None) -> WindowCommitmentRecord:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
@@ -1372,7 +1375,7 @@ class Stream:
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
-        (`Registration.salted_at`, `received_at`) and is logged with them. Raises
+        (`WindowCommitmentRecord.salted_at`, `received_at`) and is logged with them. Raises
         `Refused`: when the stream has stopped or halted (`halted`) or its epoch ended (`epoch-ended`), while it holds as
         many registrations without a final outcome as it may (`open`, `ready`), when it is late, when a window's `counts`
         aren't at least one instance for each of its templates and N in all, or a single proof block's stream is given any
@@ -1460,11 +1463,11 @@ class Stream:
                               [(v.name, v.registered) for v in values], [p.item for p in self.spec.public])
 
     def _registration(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
-                      received_at: float | None = None) -> Registration:
-        return Registration(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))), R.digest(record),
-                            order, salted_at, received_at)
+                      received_at: float | None = None) -> WindowCommitmentRecord:
+        return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
+                                      R.digest(record), order, salted_at, received_at)
 
-    def _append(self, reg: Registration) -> None:
+    def _append(self, reg: WindowCommitmentRecord) -> None:
         at = len(self._log)
         self._log.append(logged := dict(reg.record))
         key = _window_key(logged.get("window"))
@@ -1490,14 +1493,14 @@ class Stream:
             at.add(len(self._log) - 1)
         return [self._log[i] for i in sorted(at)]
 
-    def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
+    def select(self, registration: WindowCommitmentRecord, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
         """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
-        the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). `closure` is the challenger's closure map
-        (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work sampling design only: the draw carries the
-        drawn proof blocks' closure (`coins.closure_of`), which `draw.proved` and `draw.check_proved` count. The draw of
-        record is the verifier's (`verifier.select`: the Lean's `Select.select` on the bytes of the coins this
-        draw read), unless a `sampler` draws. Raises `Refused` for a registration drawn before (nothing redraws), a
-        closure map on another sampling design or outside [0, N) (before any coin is read), the two verifiers drawing differently
+        the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). A `closure`,
+        the challenger's closure map, is refused before any coin is read (`closure`, as the Lean's `Run.run` refuses it): a
+        work sample it widens proves a set whose size varies with the sample, which the sampled audit's soundness
+        statement doesn't cover. The draw of record is the verifier's (`verifier.select`: the Lean's `Select.select` on the
+        bytes of the coins this draw read), unless a `sampler` draws. Raises `Refused` for a registration drawn before
+        (nothing redraws), a closure map (before any coin is read), the two verifiers drawing differently
         (`disagree`), and a draw that isn't well formed under the sampling design (`draw.check_draw`, by `verifier.check_draw`)."""
         op: dict[str, Any] = {"op": "select", "order": _order(registration),
                               "registration": _registration_token(registration)}
@@ -1512,6 +1515,9 @@ class Stream:
                 read.extend(b)
                 return b
             try:
+                if closure is not None:
+                    raise _refuse("closure", "a closure map widens a work sample, which the sampled audit's soundness "
+                                             "statement doesn't cover")
                 obj = select_draw(self.spec.selection, e.law, registration.record["population"], coins, closure=closure,
                                   sampler=self._sampler)
                 if self._sampler is None:
@@ -1711,6 +1717,6 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
 
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
-           "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "Registration", "SCHEME", "SOURCES", "Selection",
-           "Sequential", "Session", "Spec", "Stream", "Terms", "Value", "check_public", "check_verdicts",
+           "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES", "Selection",
+           "Sequential", "Session", "Spec", "Stream", "Terms", "Value", "WindowCommitmentRecord", "check_public", "check_verdicts",
            "select_draw", "selection_law"]

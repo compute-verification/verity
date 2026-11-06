@@ -4,8 +4,8 @@ evaluator's own fully specified arithmetic, for programs derived from ordinary `
     Gate -> exactly one Value<w>.  Every evaluator is total on encodings.  Nothing in `prims.py`/`b1.py` changes.
 
 **What a reference kind is.**  A composite whose body is explicit dataflow over IEEE primitives (`F32Add/Sub/Mul/Fma/
-Div/Sqrt`, the aten conversions `Bf16ToF32_v1` / `F32ToBf16Rn_v1`) plus the three correctly-rounded transcendental
-primitives below.  Every reduction is **sequential, ascending index, from +0** (stated per kind).  The body *is* the
+Div/Sqrt`, the aten conversions `Bf16ToF32_v1` / `F32ToBf16Rn_v1`) plus the correctly-rounded transcendental primitives
+below.  Every reduction is **sequential, ascending index, from +0** (stated per kind).  The body *is* the
 definition; torch CPU is only the conformance oracle over a tested domain (`tests/program/test_ref_prims.py`,
 records under `docs/data/ref-prims/`): torch's reductions are vectorised/blocked (`RowwiseMoments`, oneDNN/MKL GEMM,
 `vec::reduce_all`) and its transcendentals are not correctly rounded (MKL VML for `torch.exp/erf/tanh`, ATen vectorised
@@ -20,10 +20,11 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
 **New primitives** (all `Name_v1`, total, NaN outputs canonical `0x7FC00000`):
   `F32Sub`      RN(a - b)                       `F32Sqrt`    RN(sqrt x) (IEEE; negative -> NaN, -0 -> -0)
   `F32MaxRef`   NaN-propagating max             `F32GtStrict` a > b on f32 values (NaN false) -> bit
-  `F32ExpRn`, `F32ErfRn`, `F32TanhRn`  RN32 of the value computed by the stated `decimal` algorithm at 100 digits
-      (`_DEC_PREC`); this coincides with correct rounding unless the exact value lies within 10^-90 relative of a
+  `F32ExpRn`, `F32LogRn`, `F32ErfRn`, `F32TanhRn`  RN32 of the value computed by the stated `decimal` algorithm at 100
+      digits (`_DEC_PREC`); this coincides with correct rounding unless the exact value lies within 10^-90 relative of a
       rounding boundary — no binary32 argument is known to (Lefèvre/Muller worst cases for exp are ~2^-60), and the
-      evaluator, not the mathematical function, is the registered definition.
+      evaluator, not the mathematical function, is the registered definition.  `F32LogRn`'s is MPFR's correctly rounded
+      log on all 2^32 words (`benchmarks/f32_exhaustive/run.py log`, which takes `exp` too).
   `GatherF32x{V}` the f32 twin of `prims.gather_bf16` (out-of-range token -> 0x7FC00000, documented extension).
   `I64ToI32`    range-checked int64 -> int32 (out of range -> 0x80000000 sentinel, torch wraps).
 
@@ -145,6 +146,20 @@ def f32_exp_rn_bits(u: int) -> int:
 
 
 @lru_cache(maxsize=1 << 22)
+def f32_log_rn_bits(u: int) -> int:
+    """`F32LogRn_v1`: RN32(ln(x)). NaN and x < 0 (-inf included) -> 0x7FC00000; ±0 -> -inf; +inf -> +inf; 1 -> +0;
+    otherwise the 100-digit `decimal` ln rounded RN-even, a normal word (2^-24 < |ln x| < 104)."""
+    c, v = _frac_of_f32(u)
+    if c == 2 or c == -1 or (c == 0 and v < 0):
+        return F32_NAN
+    if c == 1:
+        return 0x7F800000
+    if v == 0:
+        return 0xFF800000
+    return _f32_of_dec(_CTX.ln(_dec_of_frac(v)))
+
+
+@lru_cache(maxsize=1 << 22)
 def f32_erf_rn_bits(u: int) -> int:
     """`F32ErfRn_v1`: RN32(erf(x)). NaN -> 0x7FC00000; ±0 -> ±0; ±inf and |x| >= 4.2 -> ±1.0 (1 - erf(4.2) < 2^-25, so
     RN32 is exactly 1); otherwise the 100-digit Taylor series rounded."""
@@ -230,6 +245,12 @@ def F32ExpRn(x: int) -> int:
     return f32_exp_rn_bits(x & 0xFFFFFFFF)
 
 
+@primitive("F32LogRn", 1, [("x", F32)], F32, conformance=_REF_CONF)
+def F32LogRn(x: int) -> int:
+    """Correctly-rounded natural log: see `f32_log_rn_bits`."""
+    return f32_log_rn_bits(x & 0xFFFFFFFF)
+
+
 @primitive("F32ErfRn", 1, [("x", F32)], F32, conformance=_REF_CONF)
 def F32ErfRn(x: int) -> int:
     """Correctly-rounded erf: see `f32_erf_rn_bits`."""
@@ -268,7 +289,7 @@ def gather_f32(vocab: int) -> PrimitiveDefinition:
 
 register_lazy_family(r"^GatherF32x(\d+)_v1$", lambda m: gather_f32(int(m[1])))   # decodable where the program was not built
 
-REF_PRIMITIVES = [F32Sub, F32Sqrt, F32MaxRef, F32GtStrict, F32ExpRn, F32ErfRn, F32TanhRn]
+REF_PRIMITIVES = [F32Sub, F32Sqrt, F32MaxRef, F32GtStrict, F32ExpRn, F32LogRn, F32ErfRn, F32TanhRn]
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -800,7 +821,8 @@ def ref_vocab_digest() -> str:
 
 
 __all__ = ["REF_VOCAB_VERSION", "DTYPES", "REF_PRIMITIVES", "REF_COMPOSITES", "SHARED_PRIMITIVES", "ref_vocab_manifest",
-           "ref_vocab_digest", "gather_f32", "F32Sub", "F32Sqrt", "F32MaxRef", "F32GtStrict", "F32ExpRn", "F32ErfRn", "F32TanhRn",
+           "ref_vocab_digest", "gather_f32", "F32Sub", "F32Sqrt", "F32MaxRef", "F32GtStrict", "F32ExpRn", "F32LogRn", "F32ErfRn",
+           "F32TanhRn",
            "DotRef", "LinearRef", "RMSNormRef", "LayerNormRef", "GeluRefElem", "GeluRef", "SiluRefElem", "SiluRef", "SoftmaxRef",
            "RoPERef", "RoPEHeadsRef", "EagerAttentionHeadRef", "EagerAttentionRef", "EmbeddingRef", "AddRef", "MulRef",
-           "ArgmaxStepF32", "ArgmaxRef", "f32_exp_rn_bits", "f32_erf_rn_bits", "f32_tanh_rn_bits"]
+           "ArgmaxStepF32", "ArgmaxRef", "f32_exp_rn_bits", "f32_log_rn_bits", "f32_erf_rn_bits", "f32_tanh_rn_bits"]

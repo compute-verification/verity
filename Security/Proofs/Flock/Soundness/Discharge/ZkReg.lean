@@ -13,6 +13,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJSt
 public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.NonVacuousHJ
