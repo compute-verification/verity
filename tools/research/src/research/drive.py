@@ -131,7 +131,8 @@ nothing red explains it.  A run with no readable state `LOST_AFTER_S` after its 
 
 Alarms (`_alarms`) ring the owner of what is past its bound, once per subject and bound and again every `ALARM_EVERY_S` while
 it stays past it (`drive["alarms"]`): a step of drive's after-landing run or of its Lean checks running past
-`SLOW_STEP_FACTOR` times its median rings its ci.toml job's owner (`_slow_steps`; the medians are of drive's own runs'
+`SLOW_STEP_FACTOR` times its median and `STEP_FLOOR_S` rings its ci.toml job's owner (`_slow_steps`, a shard's open step
+spans: `running_steps`; the medians are of drive's own runs'
 uncached passes, from their steps.jsonl: `_timed`, lean-audit's of the same machine's when it has enough: `_median_of`), and a member of `next` marked ready `STUCK_S` ago and not landed rings the
 owner of what holds it (`_stuck`): the member below it where the reviewed prefix stops, the reviewer (`CI`) for a missing land
 verdict, or a Lean check still running.
@@ -283,9 +284,10 @@ POSTLAND_RUN_S = 5 * 3600
 TAIL = ("circuit-check", "flock-rust-tests")
 #: who the alarm on a `main` long unverified rings beside `CI` while nothing red explains it (`Driver._behind`)
 TOP = "@top"
-#: a step of a check of drive's still running this many times its median rings the step's owner (`Driver._slow_steps`); the
-#: median is of its newest `STEP_PASSES` uncached passes in drive's own runs of that kind, and needs `STEP_MIN_PASSES` of them
-SLOW_STEP_FACTOR, STEP_PASSES, STEP_MIN_PASSES = 1.5, 10, 3
+#: a step of a check of drive's still running this many times its median, and `STEP_FLOOR_S` at least, rings the step's owner
+#: (`Driver._slow_steps`); the median is of its newest `STEP_PASSES` uncached passes in drive's own runs of that kind, and
+#: needs `STEP_MIN_PASSES` of them.  The floor keeps a step whose passes take seconds from ringing within its first minutes.
+SLOW_STEP_FACTOR, STEP_PASSES, STEP_MIN_PASSES, STEP_FLOOR_S = 1.5, 10, 3, 600
 #: how long a member of `next` marked ready may go unlanded before drive rings the owner of what holds it (`Driver._stuck`)
 STUCK_S = 2 * 3600
 #: how often an alarm rings again while its subject stays past its bound (`Driver._due`)
@@ -557,54 +559,30 @@ def _machine(state: tuple | None) -> str | None:
     return state[4] if state and len(state) > 4 else None
 
 
-def started_at(run_dir: Path) -> float | None:
-    """When a check started its steps: its root span's start (`SPANS`), or None while it has none."""
-    try:
-        lines = (run_dir / SPANS).read_text().splitlines()
-    except OSError:
-        return None
-    for line in lines:
-        with contextlib.suppress(ValueError):
-            if isinstance(span := json.loads(line), dict) and span.get("parent_span_id") is None:
-                return _epoch(span.get("start_utc"))
-    return None
-
-
-def running_steps(recs: list[dict], steps: list[str], jobs: list[dict], start: float) -> dict[str, float]:
-    """{step: when it started} of each of ``steps`` a check started at ``start`` still runs, from the records of the steps
-    that ended (``recs``, its steps.jsonl) and ci.toml's job tables (``jobs``, `merge.declared`): the preflights run one after
-    another (`PREFLIGHT`), then every group at once, each group's steps one after another in ci.toml's order.  A group's
-    first step not ended runs since the step before it ended, or the preflights did, and with an `after` waits until that
-    one ended; a group stops at a step that failed or was stopped, and no group starts after a preflight that didn't pass."""
-    ended = {r.get("step"): (r.get("status"), _epoch(r.get("ended_utc"))) for r in recs}
-
-    def first(names: list[str], since: float) -> tuple[str | None, float | None]:
-        for s in names:
-            if s not in ended:
-                return s, since
-            status, at = ended[s]
-            if status in ("failed", "stopped") or at is None:
-                return None, None
-            since = max(since, at)
-        return None, since
-
-    pre, since = first(list(PREFLIGHT), start)
-    if pre or since is None or any(ended.get(s, ("",))[0] != "passed" for s in PREFLIGHT):
-        return {pre: since} if pre and since is not None else {}
-    groups: dict[object, list[dict]] = {}
-    for t in jobs:
-        if t["name"] in steps:
-            groups.setdefault(t.get("group"), []).append(t)
-    out = {}
-    for g in groups.values():
-        step, at = first([t["name"] for t in g], since)
-        if step is None or at is None:
-            continue
-        if after := next((t.get("after") for t in g if t["name"] == step), None):
-            if after in steps and after not in ended:
-                continue
-            at = max(at, ended.get(after, (None, None))[1] or at)
-        out[step] = at
+def running_steps(run_dir: Path) -> dict[str, float]:
+    """{step: when it started} of each step a check still runs: its step spans (`SPANS`, check.py's `spans.py`) that opened
+    as the step started and that no later line has completed.  A shard opens only its own steps, so a step another shard
+    runs, or one still waiting on another, is not running here."""
+    opened: dict[str, tuple[str, float]] = {}
+    done: set[str] = set()
+    with contextlib.suppress(OSError):
+        for line in (run_dir / SPANS).read_text().splitlines():
+            with contextlib.suppress(ValueError):
+                span = json.loads(line)
+                if not isinstance(span, dict) or span.get("parent_span_id") is None:
+                    continue
+                attrs, sid = span.get("attributes"), span.get("span_id")
+                step = attrs.get("step") if isinstance(attrs, dict) else None
+                if not isinstance(step, str) or not sid:
+                    continue
+                if span.get("end_utc"):
+                    done.add(sid)
+                elif (at := _epoch(span.get("start_utc"))) is not None:
+                    opened.setdefault(sid, (step, at))
+    out: dict[str, float] = {}
+    for sid, (step, at) in opened.items():
+        if sid not in done:
+            out[step] = min(at, out.get(step, at))
     return out
 
 
@@ -3052,8 +3030,8 @@ class Driver:
 
     def _slow_steps(self, drive: dict) -> None:
         """Ring the owner of each step that a check of drive's still running (its after-landing run, its Lean checks) has run
-        past `SLOW_STEP_FACTOR` times its median (`_timed`, once it has `STEP_MIN_PASSES`): which step runs and since when is
-        read from what the run's steps.jsonl says ended and its spans' start (`running_steps`, `started_at`), and its owner is
+        past both `SLOW_STEP_FACTOR` times its median (`_timed`, once it has `STEP_MIN_PASSES`) and `STEP_FLOOR_S`: which steps
+        run and since when are the run's open step spans (`running_steps`), a shard's own steps only, and a step's owner is
         its ci.toml job's at the commit checked (`CI` for a preflight).  Its alarm stands while its run does.  The run of
         `SLIM_STEPS` beside the executor's check (`_start_slim`) is one too, its steps those and the jobs they need."""
         pl = drive.get("postland") or {}
@@ -3077,11 +3055,13 @@ class Driver:
             if not (live := [rid for rid, (st, *_) in states.items() if st == "running"]):
                 continue
             for d in self._evidence(Verdict("running", " ".join(live))):
-                if d.name not in live or (start := started_at(d)) is None:
+                if d.name not in live:
                     continue
-                for step, since in running_steps(step_records(d), steps, self._jobs(commit), start).items():
+                for step, since in running_steps(d).items():
+                    if step not in steps and step not in PREFLIGHT:
+                        continue
                     med = self._median_of(step, times.get(f"{kind} {step}") or [], _machine(states.get(d.name)))
-                    if med is None or (took := self.now() - since) <= SLOW_STEP_FACTOR * med[0]:
+                    if med is None or (took := self.now() - since) <= max(SLOW_STEP_FACTOR * med[0], STEP_FLOOR_S):
                         continue
                     if self._due(drive, key := f"slow:{d.name}:{step}"):
                         self._ring_alarm(drive, [key], f"step {step} of {what} (run {d.name}) has run {took / 60:.0f} min, past "
