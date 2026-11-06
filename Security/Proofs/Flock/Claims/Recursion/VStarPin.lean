@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VStarFit
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarFit
 
 /-!
 # The deployed assigner fits the port inputs to the circuit (`fitPin`, `A0`)
@@ -10,6 +12,8 @@ port's rows to the port's words (16 bits a word, `fitRow`) and each salt to 192 
 `TraceOk.rows` holds at `fitPin c pin` for every `pin` (`rows_fitPin`), and at inputs of the deployed sizes `fitPin`
 changes nothing (`fitPortRow_of`), which is what the difftest against the deployed stager checks.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

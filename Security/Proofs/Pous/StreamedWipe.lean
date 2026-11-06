@@ -1,11 +1,13 @@
-import Proofs.Pous.StreamedWipe.Count
-import Proofs.Pous.StreamedWipe.Bound
-import Proofs.Pous.StreamedWipe.Deployed
-import Proofs.Pous.StreamedWipe.Disk
-import Proofs.Pous.StreamedWipe.Family
-import Proofs.Pous.StreamedWipe.Honest
-import Proofs.Pous.StreamedWipe.Server
-import Proofs.Pous.StreamedWipe.Witnesses
+module
+
+public import Proofs.Pous.StreamedWipe.Count
+public import Proofs.Pous.StreamedWipe.Bound
+public import Proofs.Pous.StreamedWipe.Deployed
+public import Proofs.Pous.StreamedWipe.Disk
+public import Proofs.Pous.StreamedWipe.Family
+public import Proofs.Pous.StreamedWipe.Honest
+public import Proofs.Pous.StreamedWipe.Server
+public import Proofs.Pous.StreamedWipe.Witnesses
 
 /-!
 # The streamed-label wipe
@@ -30,7 +32,7 @@ import Proofs.Pous.StreamedWipe.Witnesses
   `StreamedWipeMeetsServer8H200HBMRAM`, `StreamedWipeMeetsServer8H200`).
 * `StreamedWipe/Disk.lean`: `StreamedWipeMeetsDisk`, `StreamedWipeMeetsServer` on one session over a server's tiers
   and its disks, with the disks' bytes outside the fill in `R` (`PousStreamedWipe.streamed_wipe_meets_disk`), and its
-  honest and nontrivial lemmas at vy-dc-h200-2's card and disks.
+  honest and nontrivial lemmas at the deployed H200's card and disks.
 * `StreamedWipe/Honest.lean`: the honest server, which keeps every label, is accepted on every run
   (`PousStreamedWipe.honest_accepts`).
 * `StreamedWipe/Witnesses.lean`: the honest and nontrivial lemmas of `StreamedWipeMeetsReadsTight`,
@@ -41,3 +43,5 @@ import Proofs.Pous.StreamedWipe.Witnesses
 
 None of them uses a named assumption.
 -/
+
+@[expose] public section

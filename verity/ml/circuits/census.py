@@ -118,7 +118,7 @@ from .layout import resolve
 from .liveness import _MEMBER_LIMIT
 from .program import input_id, is_input
 from .refs import Affine, Concat, Explicit, Refs, Strided, concat
-from .types import Array, Record, Tuple as TupleT, Type, Value
+from .types import Array, RecordType, Tuple as TupleT, Type, Value
 
 SCHEMA = "verity/census/v1"
 
@@ -135,11 +135,12 @@ PRODUCTS: dict[str, int] = {
     "HopperE4m3QgmmaDot32_v1": 32, "HopperE4m3MmaV2Dot32_v1": 32, "BlackwellE4m3QmmaDot32_v1": 32,
     "BlackwellE5m2QmmaDot32_v1": 32, "BlackwellNvf4OmmaDot64_v1": 64, "BlackwellMxf4OmmaDot64_v1": 64,
     "PouwDot16U8S8_v1": 16, "NcpDot16I7_v1": 16,
-    "AmpereBF16TcDot16_v3": 16, "HopperBF16WgmmaDot16_v2": 16, "HopperE4m3QgmmaDot32_v2": 32, "HopperE4m3MmaV2Dot32_v2": 32,
+    "AmpereBF16TcDot16_v3": 16, "HopperBF16WgmmaDot16_v2": 16, "HopperBF16WgmmaDot16_v3": 16, "HopperE4m3QgmmaDot32_v2": 32, "HopperE4m3MmaV2Dot32_v2": 32,
     "BlackwellE4m3QmmaDot32_v2": 32, "BlackwellE5m2QmmaDot32_v2": 32, "BlackwellNvf4OmmaDot64_v2": 64,
     "BlackwellMxf4OmmaDot64_v2": 64,
     "BlackwellS8ImmaDot32_v1": 32, "BlackwellU8S8ImmaDot32_v1": 32, "BlackwellS8ImmaDot32_v2": 32, "BlackwellU8S8ImmaDot32_v2": 32,
     "HopperBf16Dot16StepFirst_v1": 16, "HopperBf16Dot16Step_v1": 16, "HopperBf16Dot16StepFirstX_v1": 0, "HopperBf16Dot16StepX_v1": 0,
+    "HopperBf16Dot16StepFirst_v2": 16, "HopperBf16Dot16Step_v2": 16, "HopperBf16Dot16StepFirstX_v2": 0, "HopperBf16Dot16StepX_v2": 0,
     "PouwSegDot_v2": 32, "PouwSegDot0_v2": 32,
 }
 
@@ -148,8 +149,9 @@ PRODUCTS: dict[str, int] = {
 #: NCP's i7 step
 PRECISION: dict[str, str] = {
     **dict.fromkeys(("AmpereBF16TcDot16_v1", "AmpereBF16TcDot16_v2", "AmpereBF16TcDot16_v3", "HopperBF16WgmmaDot16_v1",
-                     "HopperBF16WgmmaDot16_v2", "HopperBf16Dot16StepFirst_v1", "HopperBf16Dot16Step_v1",
-                     "HopperBf16Dot16StepFirstX_v1", "HopperBf16Dot16StepX_v1"), "bf16"),
+                     "HopperBF16WgmmaDot16_v2", "HopperBF16WgmmaDot16_v3", "HopperBf16Dot16StepFirst_v1", "HopperBf16Dot16Step_v1",
+                     "HopperBf16Dot16StepFirstX_v1", "HopperBf16Dot16StepX_v1", "HopperBf16Dot16StepFirst_v2",
+                     "HopperBf16Dot16Step_v2", "HopperBf16Dot16StepFirstX_v2", "HopperBf16Dot16StepX_v2"), "bf16"),
     "HopperTf32WgmmaDot8_v1": "tf32", "HopperTf32WgmmaDot8_v2": "tf32",
     **dict.fromkeys(("HopperE4m3QgmmaDot32_v1", "HopperE4m3QgmmaDot32_v2", "HopperE4m3MmaV2Dot32_v1", "HopperE4m3MmaV2Dot32_v2",
                      "BlackwellE4m3QmmaDot32_v1", "BlackwellE4m3QmmaDot32_v2", "BlackwellE5m2QmmaDot32_v1",
@@ -188,7 +190,7 @@ RULED: dict[str, str] = {"S8Dot_v1": "verity.ml.circuits.ops.s8", "S8Matmul_v1":
 
 def serves_none(bindings: dict) -> dict[str, int]:
     """The rule of an s8-family Definition whose products are no served product's main chain (Lean's `roleOf` at
-    `Site.other`): it performs them, and serves none."""
+    `Place.other`): it performs them, and serves none."""
     return {"served_macs": 0}
 
 
@@ -912,7 +914,7 @@ def _bits(t: Type, lo: int, hi: int) -> int:
         if a == b:
             return _bits(t.elem, lo - a * L, hi - a * L)
         return _bits(t.elem, lo - a * L, L) + (b - a - 1) * _all_bits(t.elem) + _bits(t.elem, 0, hi - b * L)
-    fields = t.fields if isinstance(t, TupleT) else [ft for _, ft in t.fields] if isinstance(t, Record) else None
+    fields = t.fields if isinstance(t, TupleT) else [ft for _, ft in t.fields] if isinstance(t, RecordType) else None
     if fields is None:
         raise TypeError(t)
     out, pos = 0, 0

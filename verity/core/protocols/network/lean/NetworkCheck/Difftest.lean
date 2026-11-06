@@ -1,5 +1,7 @@
-import NetworkCheck.Certificate
-import Lean.Data.Json
+module
+
+public import NetworkCheck.Certificate
+public import Lean.Data.Json
 
 /-!
 # The difftest: the network certificate's encodings against `certificate.py`, on generated instances
@@ -22,6 +24,8 @@ to open, `verify_frame` queries, record heads given field by field, signed diges
 * `messages`, each `certificate_message`, sessions of 31 and 33 bytes among them, which both refuse; `nodes`, each
   `node`.
 -/
+
+@[expose] public section
 
 namespace NetworkCheck.Difftest
 
@@ -107,7 +111,7 @@ def evaluate (j : Json) : Except String Json := do
     ("root", orNull hexJson (framesRoot frames p)),
     ("opens", .arr (opens.map fun k => orNull (.arr ∘ Array.map hexJson) (openFrame frames p k))),
     ("verifies", .arr (verifies.map fun (r, k, f, path) => toJson (verifyFrame r p k f path))),
-    ("manifest", orNull Json.str (canon (parametersManifest p ss))),
+    ("manifest", orNull Json.str (canonUtf8 (parametersManifest p ss))),
     ("parameters", orNull hexJson parameters),
     ("record_head", headJson do recordHead link direction window grid status p (← parameters) deadline),
     ("heads", .arr (heads.map (headJson ∘ pure))),

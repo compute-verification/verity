@@ -1,4 +1,6 @@
-import Definitions.Nci.Info
+module
+
+public import Definitions.Nci.Info
 
 /-!
 # NCI over threads, each thread charged by the work done on it: the vocabulary
@@ -14,6 +16,8 @@ work done on it.
   `min(d, #threadMults R t / e)`. At `e > 0` it meets the threading inequality itself, and every count `ρ` of thread
   `t`'s values that meets it (`ρ < d → #threadMults R t ≤ e ρ`) is at least `work`.
 -/
+
+@[expose] public section
 
 namespace Nci.Threading
 

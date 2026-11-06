@@ -1,6 +1,8 @@
-import Definitions.Core.Prims
-import Proofs.Core.Fp32.Round
-import Proofs.Core.TC.Proofs.Norm
+module
+
+public import Definitions.Core.Prims
+public import Proofs.Core.Fp32.Round
+public import Proofs.Core.TC.Proofs.Norm
 
 /-!
 # `f32ToE4m3Sat` is the nearest E4M3 code, ties to even, saturating
@@ -19,6 +21,8 @@ import Proofs.Core.TC.Proofs.Norm
 Every code's value is `codeSig c · 2^codeExp c` units, `codeSig c < 16` and `codeExp c ≥ 140`, at most `448 · 2^149`, and
 only `0x7F` and `0xFF` are NaN: the kernel checks all 256 codes (`codeChk_all`).
 -/
+
+@[expose] public section
 
 namespace Verity.Prims.Round
 

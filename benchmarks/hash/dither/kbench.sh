@@ -9,7 +9,8 @@ set -uo pipefail
 export O=${OUT:?}
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 export PATH=$CUDA/bin:$PATH
-PY=${PY:-/workspace/jobs/venv312/bin/python3}
+[ -x /workspace/jobs/venv312/bin/python3 ] && PY=${PY:-/workspace/jobs/venv312/bin/python3}
+PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
 REF=${KB_REF_PYTHON:-"uv run --no-project --with numpy --with python-sat --with-editable benchmarks/pouw/exact_kit python3"}
 S=$(mktemp -d /tmp/kbench.XXXXXX); trap 'rm -rf "$S"' EXIT
 git rev-parse HEAD > "$O/commit.txt"

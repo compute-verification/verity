@@ -1017,6 +1017,47 @@ def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_
     assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000003-0003"), "r20261020-000003-0003", elsewhere) is None  # it checked main
 
 
+def test_a_rekeyed_checks_lock_commit_is_vouched_for_only_across_trees_that_differ_in_low_risk_files(tmp_path):
+    """Drive moved a running Lean check of ``tip`` to another commit (`Driver._rekey_lean`, the low-risk lane's `_move_lean`), and
+    lands its regenerated records there: with ``rekeyed_from`` naming the commit the check ran on, the gate vouches when that
+    commit's tree and the lock commit's parent's differ only in files the low-risk rule allows, and refuses a difference in a
+    file `lowrisk_excludes` names, in what a Lean check reads whatever the excludes say, with no excludes, or a check that ran
+    elsewhere."""
+    from research.merge import regenerated_parent
+    from research.store.local import LocalStore
+    from test_queue_drive import _live_run
+
+    main, feat, tip = _repos(tmp_path)
+    rid, store, lock = "r20261020-000001-0001", LocalStore(), "pkg/lean-audit.json"
+    _, fetch, _ = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
+    excludes = ("*.lean", "lean-audit.json", "lakefile.*", "verity/core/")
+
+    def moved(files: dict[str, str]) -> str:
+        """``tip`` with ``files`` changed: the commit drive moved the check to."""
+        _git(feat, "reset", "-q", "--hard", tip)
+        for rel, text in files.items():
+            (feat / rel).parent.mkdir(parents=True, exist_ok=True)
+            (feat / rel).write_text(text)
+            _git(feat, "add", rel)
+        _git(feat, "commit", "-q", "--allow-empty", "-m", "Queue: #2 change 2")
+        return _git(feat, "rev-parse", "HEAD")
+
+    def vouched(files: dict[str, str], ran: str | None = tip, ex=excludes) -> str | None:
+        commit = _deferred_lock(feat, moved(files), {lock: '{"records": 2}\n'}, rid)
+        return regenerated_parent(feat, commit, store, tool="check", kinds=frozenset({"check/v1"}), command=CHECKED,
+                                  deferred=rid, fetch=fetch, rekeyed_from=ran, excludes=ex)
+
+    assert vouched({"docs/x.md": "x\n"}) == rid
+    assert vouched({}, ex=()) == rid                                             # the same tree
+    assert vouched({"docs/x.md": "x\n"}, ran=None) is None                       # it didn't run on the parent
+    assert vouched({"docs/x.md": "x\n"}, ran=_git(main, "rev-parse", "HEAD")) is None   # nor on the commit named
+    assert vouched({"verity/core/v.py": "v\n"}) is None                          # a file `lowrisk_excludes` names
+    assert vouched({"pkg/lean-audit.json": '{"records": 7}\n', "docs/x.md": "x\n"}) is None    # a lock
+    assert vouched({"pkg/B.lean": "b\n"}, ex=("verity/core/",)) is None          # Lean, whatever the excludes say
+    assert vouched({"tools/verity/lean/check.py": "c\n"}, ex=("verity/core/",)) is None
+    assert vouched({"docs/x.md": "x\n"}, ex=()) is None                          # no excludes: nothing is low-risk
+
+
 def test_a_report_naming_a_regenerated_record_the_stores_files_lack_is_unreadable_not_none(tmp_path, monkeypatch):
     """`regenerated_records` returning {} both for a check that regenerated nothing and for one whose records it couldn't
     read would land the train without them; a record the report names and the run's files lack raises."""

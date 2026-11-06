@@ -33,10 +33,11 @@ $R "$S --fresh"                 # ignore the cache
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
 
-To record a check of your clean commit as an Attempt, the whole check or some of its steps (`--deferred lean-agreement`),
-launch `uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research [--deferred STEP,...]` from
-your checkout. It starts its own `research run` in a slot of that lane pool (the CPU nodes' check slots take train checks only),
-so inside a `research run` it is refused, naming this command.
+To record a check of your clean commit as an Attempt, the whole check (every job on the merge gate: circuit-check and
+ratchet-gate, off it, only with `--deferred circuit-check,ratchet-gate`) or some of its steps (`--deferred lean-agreement`),
+launch `uv run python tools/verity/check/check.py --record --on auto --pool research [--deferred STEP,...]` from your
+checkout. It starts its own `research run` in a slot of the research pool `research run --on auto` would spill to (the CPU
+nodes' check slots take train checks only), so inside a `research run` it is refused, naming this command.
 
 Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
 `cd verity/ml/flock && uv run pytest tests/test_layouts.py -k typed`. It doesn't cache and doesn't load the read guard. The shell
@@ -48,6 +49,10 @@ under its module's key, which leaves out the test modules it can't reach (`suite
 test depends on another test module only by importing or naming it, never through what that module does at import. The
 nightly `audit-main` job (`check.py --no-cache`) names any cached pass a fresh run contradicts. `suites.py --explain
 SUITE` says why a suite would run, and `lean_audit.py --explain PKG` the same for a Lean package.
+
+A failed test is reported failed, whoever is fixing it: no runner tolerates a red. To let one stand while its fix lands, add
+an allowance to `tools/verity/check/policy.toml` (`suite NAME::TEST`, the owner's handle, a UTC expiry and a reason) in a
+reviewed change: drive and the quick tier take that failure as not red until it expires, then ring its owner.
 
 ## Where a test goes
 
@@ -70,11 +75,16 @@ reused only while everything its tests read is unchanged. When it fails:
   `[tool.verity.tests] inputs` in the suite's pyproject.toml, with a comment saying why, as narrowly as a directory or
   file allows. A listed workspace package is its directory alone, not its dependencies, and every listed path adds the
   suite to the quick tier of each change under it.
+- **One test file reads what its source doesn't name** (a tree it walks, a module it loads by a computed name, what a
+  program it starts reads): the graph's test-file family keys each file on its own inputs, so add a
+  `[[tool.verity.tests.reads]]` entry with `tests` (the files, from the suite's directory) and `paths` (what they read,
+  Python included). An entry naming no test file or no file of the tree is refused.
 
 A Python a test starts is guarded like the test: declare the file its failure names, or give the test a stand-in.
 Programs the guard can't trace (bash, git, a Python run with `-I`, `-E` or `-S` or off the suite's PYTHONPATH) fail
 nothing, so list what they read, and list a path a test only checks the existence of (the guard sees opens, not
-`stat()`). A test that builds or runs a Lake package lists its lakefile, and its suite goes in `AFTER_LEAN`
+`stat()`). The graph's test-file runner fails a file that starts one unless its suite lists it under `[tool.verity.tests]
+untraced`, which keys it on the suite's whole tree. A test that builds or runs a Lake package lists its lakefile, and its suite goes in `AFTER_LEAN`
 (`tools/verity/check/suites.py`), after `check`'s lean-build step. Locate files from `__file__` (`Path(__file__).parent /
 "fixtures"`), never the working directory, and never lean on another suite's side effects: every suite runs alone.
 
@@ -87,8 +97,8 @@ nothing, so list what they read, and list a path a test only checks the existenc
   `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL`, `VERITY_REGRESSION`). Name it `VERITY_{PACKAGE}_...`, and say in the skip reason
   how long it takes.
 - **A check far past ten minutes cold** stays out of `check` and runs as a recorded run on the change that needs it:
-  integrations/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a CPU pod (vy-nebius-cpu-2;
-  `integrations/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `integrations/vllm/verity_vllm/program/`,
+  integrations/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a 256-CPU node (`research
+  pods list`; `integrations/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `integrations/vllm/verity_vllm/program/`,
   `integrations/vllm/verity_vllm/engine/` or its `pipeline/build.py` meant to leave the circuits alone.
 - **GPU, pod and vLLM tests skip themselves** without the hardware or runtime; their real runs are recorded runs on a pod.
 - **Skip on a third-party package, never on a module of this checkout** (the guard fails that skip):
@@ -96,7 +106,7 @@ nothing, so list what they read, and list a path a test only checks the existenc
 - **A test that needs the evidence store** skips where it can't reach it with a reason containing `the evidence store is
   not reachable` (a recorded `check`, `VERITY_STORE_REQUIRED=1`, fails that skip). Inside `check` and `research run --on`
   the store is reachable only through the run's custody key, so fetch through a helper that hands it to the store CLI
-  (integrations/vllm's `store_io`, C-Flock's `verifier/ci.py` `fetch`).
+  (integrations/vllm's `store_io`, Flock's `verifier/ci.py` `fetch`).
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`, once it passes `suites.py SUITE
   --fresh` a few times, and its tests then spread over pytest-xdist workers: they must run in any order and process, and
   session and module fixtures are built once per worker, so keep them cheap. A suite whose workers are big declares
@@ -116,7 +126,7 @@ nothing, so list what they read, and list a path a test only checks the existenc
   `monkeypatch`; the runner fails a run whose tests changed a repository file, naming it.
 - **Exact:** compare bit-exact code's words, digests and pinned vectors, not approximations; a negative checks that the
   code rejects by name, not merely that it raises.
-- **Statistical floors from a sweep:** a bound on a sampled quantity (a rate, a spread, a count over random draws) comes
+- **Statistical floors from a sweep:** a bound on a sampled quantity (a rate, a spread, a count over random samples) comes
   from a sweep over many seeds, with margin past the worst seed's value; its docstring names the sweep (seeds and worst
   value).
 - **Fixtures:** small ones sit in the suite's own `fixtures/`, shared ones under the root `fixtures/`, registered in
@@ -124,7 +134,9 @@ nothing, so list what they read, and list a path a test only checks the existenc
   --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`.
   The control pod exports `next`'s registry every 5 minutes, so the fixture needs no ask. `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before
   `cargo test`), checks every byte against its id, and keys the suite on the id. A verifier's fixtures are the prover's
-  bytes, never regenerated in its test; when a test can recompute an expected output, pin its digest, not the file.
+  bytes, never regenerated in its test; when a test can recompute an expected output, pin its digest, not the file. A
+  fixture its test module rewrites from the tree (``python MODULE --write``) is a `Writer` in `tools/verity/check/pins.py`,
+  rewritten by `uv run python tools/verity/check/pins.py --write PATH`, which the test's failure names (`tests/test_pins.py`).
 
 ## Dummy credentials
 

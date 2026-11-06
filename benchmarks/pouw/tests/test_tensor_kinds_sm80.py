@@ -1,6 +1,6 @@
 """tensor_kinds/sm80.py: kernel names decode, the gate's counts match sm80.cu's templates (the loop counter an IADD3 or a
 UIADD3), the issue coefficient is the least bound over every gated program, a slow lane withholds every joint line, the
-joint row takes decision 76's margin, and the census is in the machine model's schema."""
+joint row takes a convergence margin, and the census is in the machine model's schema."""
 
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ def _mixu_listing(name: str, iadd3: int) -> str:
 
 
 def test_a_uniform_loop_counter_passes_the_gate_and_a_merged_lane_op_does_not():
-    # r20261017-072600-1397 refused 9 HMMA kernels at 8 warps a SMSP: ptxas made their counter a UIADD3
+    # the gate once refused 9 HMMA kernels at 8 warps a SMSP: ptxas made their counter a UIADD3
     name = SM.mangle("k_mixu", "ImmaS8k16", [32, LANE_MIX, 8])
     for iadd3, ok in ((64, True), (63, False)):
         (f,) = [G.H.Function(x) for x in G.H.parse_nvdisasm(_mixu_listing(name, iadd3))]
@@ -132,7 +132,7 @@ def _run(out: Path, mix_rate: float, a_mix: float = 5.125, a_iadd3: float | None
 
 
 def test_the_coefficient_holds_on_every_program(tmp_path: Path):
-    # r20261017-075541-3c04: IMMA.8816's IADD3 programs bound a at 2.207, below its IADD3+FFMA programs' 2.374
+    # measured: IMMA.8816's IADD3 programs bound a at 2.207, below its IADD3+FFMA programs' 2.374
     f = json.loads((_run(tmp_path, 0.973, a_iadd3=4.9) / "sm80.json").read_text())["summary"]["forms"]["ImmaS8k32"]
     assert abs(f["a"] - 4.9) < 1e-9 and abs(f["a_mix"] - 5.125) < 1e-9 and abs(f["a_iadd3"] - 4.9) < 1e-9
 
@@ -180,7 +180,7 @@ def test_the_joint_row_waits_for_the_search_to_converge(tmp_path: Path):
 
 
 def test_a_lane_below_issue_withholds_every_joint_line(tmp_path: Path):
-    # IADD3 with three register reads beside FFMA: 0.671 a SMSP-cycle (r20261017-072121-3924), so the mixed points
+    # IADD3 with three register reads beside FFMA: 0.671 a SMSP-cycle, so the mixed points
     # would sit on register reads, not on the issue facet
     out = _run(tmp_path, 0.671)
     fails = json.loads((out / "sm80.json").read_text())["gate_failures"]

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Prob
+module
+
+public import Proofs.Flock.Claims.Prob
 
 /-!
 # The collision finder `B`
@@ -6,6 +8,8 @@ import Proofs.Flock.Claims.Prob
 Every `H` call a run logs is a true evaluation of `H`, so `B` outputs only true collisions, and each of its two inputs
 is one the verifier hashed in one of `B`'s two runs: the break is tied to the runs. `B`'s cost is at most twice a run's.
 -/
+
+@[expose] public section
 
 namespace Claims
 

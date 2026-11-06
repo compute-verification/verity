@@ -1,5 +1,7 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Definitions.Accounting.Device
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Definitions.Accounting.Device
 
 /-!
 # A declared circuit's requirement (trusted)
@@ -65,6 +67,8 @@ never a device tick. The ticks a step spans on each device are the placement's (
 Bits, as `Device.lean` counts them: a value's bytes are its bits / 8, and the deployed store's block is `b = 32768` bits
 (4,096 bytes).
 -/
+
+@[expose] public section
 
 namespace Accounting
 

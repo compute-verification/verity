@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkFork0
-import Proofs.Flock.Claims.KS.ZkPadsLog
+module
+
+public import Proofs.Flock.Claims.KS.ZkFork0
+public import Proofs.Flock.Claims.KS.ZkPadsLog
 
 /-!
 # The masked view's pads clash
@@ -18,6 +20,8 @@ with different pairs collide in the run's log (`tiedColl_of_verifyInner`). The r
 * `zk_KS_of_forks`, `zk_tableBoundJOnAccR_of_forks`, `zk_KSFlock_of_forks`: masked KS and the recursion's chain rest on
   the cap/`τ` and pads fork bounds alone.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

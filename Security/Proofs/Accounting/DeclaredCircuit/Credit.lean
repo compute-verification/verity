@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Carrier
-import Proofs.Accounting.Requirement
+module
+
+public import Mathlib
+public import Definitions.Accounting.Carrier
+public import Proofs.Accounting.Requirement
 
 /-!
 # A pass's credit against its tiles of the declared circuit
@@ -12,6 +14,8 @@ block's bits each; its moved credit is the bits it reads from appended blocks, t
 bits each and the rest in one block a group. So the credit is at most a tile's bits for each of its tiles of `W`, and
 those are appended tiles (`tiles_subset_appended`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Requirement
 

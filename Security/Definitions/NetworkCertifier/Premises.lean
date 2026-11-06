@@ -1,3 +1,5 @@
+module
+
 /-!
 # The network certifier's premises
 
@@ -6,6 +8,8 @@ physical premise, `DeviceIntact`. It is the listed `trusted-host` (`Verity.Assum
 for the certifier device: the device runs its code as built. Nothing is assumed of SHA-512 or LMS: a property that relies
 on the device's hashes or signatures concludes its claim or a break the run itself carries.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

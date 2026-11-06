@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The reference replay on the window's two verify passes, CPU only, after the window: verify_run.py on each manifest under
 # $WORK/passes/<window run id>, J processes each; the verdicts (verify.json) are copied into this run's directory.
-#   research run --on vy-nebius-2 --project verity --campaign pouw --source <run tree> --cwd source \
+#   research run --on MACHINE --project verity --source <run tree> --cwd source \
 #     --env GPU_LEASE_WHO=<you> -- bash benchmarks/pouw/pearl_c_vllm/verify.sh <window run id> [J]
 # FAST=1 replays on fast_tile's batch forms (verify_run.py --fast), every CROSS-th tile id (default 256) on the scalar
 # reference too.

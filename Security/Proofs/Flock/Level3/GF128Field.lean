@@ -7,9 +7,13 @@ checked by the kernel on the executable's own multiplication:
   factor of degree dividing 64 divides `G`.
 The only divisor of 128 that does not divide 64 is 128 itself.
 -/
-import Proofs.Flock.Level3.GF128Ring
-import Mathlib.FieldTheory.Finite.Extension
-import Mathlib.Algebra.Field.TransferInstance
+module
+
+public import Proofs.Flock.Level3.GF128Ring
+public import Mathlib.FieldTheory.Finite.Extension
+public import Mathlib.Algebra.Field.TransferInstance
+
+@[expose] public section
 
 open Polynomial Flock
 

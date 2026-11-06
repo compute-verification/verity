@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
 
 /-!
 # Ring switching's claim is the packed table's
@@ -10,6 +12,8 @@ Both sides are `Σ_k γ_k Σ_u eq(r''_k, u) Σ_v x^v Σ_y z[128y + v]·bit_u(eq(
 `t_k[u] = Σ_v bit_u(s_k[v])·x^v` with `s_k[v] = Σ_y z[128y + v]·eq(z_k, y)`, and a bit of a sum is the sum of the
 bits (`Lg.bF_bit_sumF`: bits are the packing basis's coordinates, `unpack`, which is additive).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

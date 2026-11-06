@@ -43,30 +43,50 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
 ## Landing
 
-PRs land on an eyeball review, and the full check runs after landing. ci's `research queue drive` lands them
+`main` holds only fully checked commits: reviewed PRs land on `checked`, drive runs the full check on its tip, and
+`main` moves only to a commit whose check passed every step on the merge gate. ci's `research queue drive` lands them
 (`research.drive`'s docstring has the rules; `tools/verity/check/drive.toml` the settings):
 
-- The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F --by
-  LANE` with `Lane LANE` in the body, and marks it ready at its head, `research queue ready N --mark --by LANE`. A push
-  makes a new head, which needs a new mark and a new review. `research queue status` says what each PR waits for. A
-  `hold` label, a conflict on `next` or a Markdown file over its cap keeps a PR out.
+- The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F
+  --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY` and
+  linked through the Linear app, since Linear's GitHub integration is off here; a failed link prints its retry, `research
+  queue link N --issue KEY`), or `none:REASON`. The issue carries the label of the goal it serves (its id on the Goals
+  page), which `open` writes as `Goal <id>`, refusing an issue whose labels name no live goal. It marks it ready at its
+  head, `research queue ready N --mark --by LANE`, which refuses a body with neither a `Goal <id>` line naming a live goal
+  nor `Issue: none: REASON` (fix it with `research queue edit N --body-file F`). A push makes a new head, which needs a
+  new mark and a new review. `research queue status` says what each PR waits for and
+  lists the PRs naming no issue. A `hold` label, a conflict on `next` or a Markdown file over its cap keeps a PR out, and a
+  PR from a fork, or by an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at
+  admission.
 - Before marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on
   auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
   --changed $(git rev-parse origin/main) --quick"`, plus a suite's slow tier when you changed its core. Prefer small PRs.
   You hear back only if yours is held, ejected or reverted.
 - Drive stacks admitted PRs on `next`, non-Lean changes first. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
-  fast-forwards `main` to the longest reviewed prefix whose merges are clean and whose `.py` files compile; while no Lean
-  check runs, it moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself (a
-  hold still keeps what is above it). A change to a
-  `lean-audit.json` lock or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that
-  passed at or above it; Lean proofs alone land on the verdict.
-- One run checks `main`'s tip after each landing. A red suite's culprit is rung and reverted 60 min later unless a fix is
-  marked. Citations and tables read only commits whose after-landing run passed.
-- A pure move that `verity check move BASE HEAD` certifies lands alone, ahead of the queue, through the lander. Only
-  drive's App pushes `main` and `next`.
-- `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit in M's NAME
-  pool.
+  fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync
+  moves reviewed members below those awaiting a verdict (above any Lean check's prefix), so a PR waiting for review holds only itself; a
+  held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
+  `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, `Security/Models.lean` and `Security/`'s Lake
+  files) or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that passed at or above
+  it, whatever its title says ("two demos" included); `Security/` proofs alone land on the verdict. A PR whose merge onto `checked` changes nothing drive.toml's
+  `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
+  with no verdict (the low-risk lane: up to `lowrisk_per_tick` a tick, the Lean checks of `next` moved to its rebuild).
+- One run checks `checked`'s tip after each landing; when it passes every step on the merge gate (not circuit-check), drive fast-forwards `main` there. A red
+  suite's culprit is rung and reverted on `checked` 60 min later unless a fix is marked, and `main` doesn't move. A marked
+  low-risk fix of a red lands even while a Lean check of `next` runs, and the next run waits for it up to 45 min after its mark. A red
+  circuit-check's culprit is reverted at once, and until circuit-check passes on `checked` no PR touching its inputs lands
+  (a PR whose body says `fixes step circuit-check` does).
+  Citations and tables read only commits whose after-landing run passed: `main`'s.
+- A layout move lands from `next` with no pause in landing: its PR's body says `Move: tools/move/MAP.toml`, and it needs a
+  mark and a land verdict like any PR. Where the sync puts it, drive regenerates it on the tip below it (`rename.py --map
+  MAP`, one commit) and leaves it out, telling its owner, unless `move_check.py` certifies it; both scripts, and the
+  restack, are `checked`'s, as the landing gates are, and a member below the move that changes `tools/move/`'s scripts holds
+  it back until that member lands. Members above it are restacked across it, and only a conflict of their own refuses them.
+  Drive closes the PR once `main` reaches it. Only drive's App pushes `main`, `checked` and `next`: on a `checked` tip drive
+  didn't write, drive holds and rings @ci and @top until it is reset or ci accepts it (`drive.sh queue accept-checked SHA`).
+- `check.py --record --on auto --pool research`, from a checkout, records `check` as an Attempt of the clean commit in the
+  research pool `research run --on auto` would spill to (`--on M --pool NAME`: M's NAME pool).
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
 - Anyone may do whatever it takes to cut check time: a change to how `check` runs lands without its file owner's review,
   and the owner is told. infra owns check time and its spend, and ci owns landing: no agent acts between a ready mark
@@ -74,9 +94,10 @@ PRs land on an eyeball review, and the full check runs after landing. ci's `rese
 
 ## Outside the tree
 
-- **Work and its status** are Linear issues in the owner's team, each in a project and milestone; the projects, grouped
-  by Goal, are the campaign map. Slack carries rings and conversation, never the brief or status (the coordinating
-  skill).
+- **The plan is the Goals page**, Daniel's interface and the record of what is being done: every lead keeps its goals
+  there as current as the work (the writing-goals skill). Work is Linear issues in the owner's team, each labelled
+  with the goal it serves, and a PR names its issue. Slack carries rings and conversation, never the brief or status
+  (the coordinating skill).
 - **Notes** (lane reports, checkpoints, findings, drafts, friction notes) are Markdown under
   `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`,
   `kind`, `status`, `repo`, `origin`), cited as `note:<id>` and published with `research notes sync --path lanes/<lane>`.
@@ -107,6 +128,10 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there, and names an inbox branch it reads hourly
   (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
   its branch and SHA for its launcher to.
+- **Pick a subagent's effort by how conceptually heavy its task is**, and pass it as `Task`'s `model`
+  (`claude-opus-5-5-<effort>`; `inherit` runs it at your own effort), a standing request for every agent here: `max` for
+  the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for slightly heavy work, `medium` for routine
+  execution, `low` for trivial lookups.
 - **Reach a running subagent** on your VM through its next shell command, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'`. Agents on other VMs: through their coordinator on Slack.
 - **Stay reachable.** Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a run, end
@@ -143,5 +168,9 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   in its body what it deletes or unifies, or why nothing can go.
 - **Parked work gets done.** A lead starts each Backlog or Todo issue worth doing on its own worker and closes the rest
   with a reason. Being busy is no reason to park one. Set more goals, not fewer.
+- **An issue tracks an ask; only its outcome answers it.** Daniel's asks carry `asker:daniel`, have a worker within the
+  hour, and only he parks them (the coordinating skill); the Linear audit rings each that breaks this, hourly, with @top.
+  A hand operation done twice, and each incident, gets a class-fix issue filed `--asker daniel` (his standing ask) with
+  a worker that hour: the lead builds or staffs the fix rather than repeating the operation.
 - **A ruling rolls out in the change that records it**, as AGENTS.md says; when code must change first, the ruling's
   relay names the owner and the PR that changes the docs with it.

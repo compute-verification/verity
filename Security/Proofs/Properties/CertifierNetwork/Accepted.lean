@@ -1,9 +1,13 @@
-import Proofs.Properties.CertifierNetwork.Records
-import Proofs.Properties.CertifierNetwork.Frames
-import Proofs.Properties.CertifierNetwork.Certify
-import Proofs.Properties.CertifierDevice.Complete
-import Proofs.Properties.CertifierDevice.Lms
-import Proofs.Properties.NetworkCertifier.Outcomes
+module
+
+public import Proofs.Properties.CertifierNetwork.Records
+public import Proofs.Properties.CertifierNetwork.Frames
+public import Proofs.Properties.CertifierNetwork.Certify
+public import Proofs.Properties.CertifierDevice.Complete
+public import Proofs.Properties.CertifierDevice.Lms
+public import Proofs.Properties.NetworkCertifier.Outcomes
+
+@[expose] public section
 
 set_option maxRecDepth 20000
 

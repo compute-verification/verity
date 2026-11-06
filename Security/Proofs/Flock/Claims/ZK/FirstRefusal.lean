@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Refusals
-import Proofs.Flock.Claims.Complete.ZkTables.Refuse
-import Proofs.Flock.Claims.Complete.ZkTables.Pass
+module
+
+public import Proofs.Flock.Claims.ZK.Refusals
+public import Proofs.Flock.Claims.Complete.ZkTables.Refuse
+public import Proofs.Flock.Claims.Complete.ZkTables.Pass
 
 /-!
 # The masked session's `β`, pair-coin and rank refusals, as its first refusal
@@ -24,6 +26,8 @@ one).
   `Flock.zk_deployZk_masked_exe_refusals_gap`: without `hrank` too, at a plan that also reads the claim points
   (`PointReads`). Left: the plan's `Causal`, its round `0`, the rounds after the first and the last round.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

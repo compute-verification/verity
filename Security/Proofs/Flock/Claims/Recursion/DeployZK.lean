@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Claims.DeployOC
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployScope
+public import Proofs.Flock.Claims.DeployOC
 
 /-!
 # What the recursion's zero knowledge rests on at `deployRec`
@@ -32,6 +34,8 @@ and `ZKBound` is stated at the tape map `tapeOf`.
 `ZKPriv` at `deployRec` holds outright (`zkPriv_deployRec`): the shipped verifier has no private-circuit form, so
 `parse` reads no circuit commitment (`parse_circ`) and no statement is in `RPriv`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -115,7 +119,7 @@ theorem nums_εzk (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b
 /-! ## The private variant -/
 
 /-- **`parse` reads no circuit commitment** (`RecScope.toStmt`). -/
-theorem parse_circ {x : Claims.Msg} {s : Claims.Recursion.Stmt} (h : parse x = some s) : s.circ = none := by
+theorem parse_circ {x : Claims.Msg} {s : Claims.Recursion.CompiledStatement} (h : parse x = some s) : s.circ = none := by
   simp only [parse, RecScope.parseOf, Option.map_eq_some_iff] at h
   obtain ⟨r, -, rfl⟩ := h
   rfl

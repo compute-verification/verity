@@ -1,6 +1,8 @@
-import Mathlib
-import Proofs.Accounting.DeclaredCircuit.Credit
-import Proofs.Accounting.DeclaredCircuit.Session
+module
+
+public import Mathlib
+public import Proofs.Accounting.DeclaredCircuit.Credit
+public import Proofs.Accounting.DeclaredCircuit.Session
 
 /-!
 # A declared circuit's space and bandwidth from an accepted audit
@@ -18,13 +20,15 @@ tile's bits for each of its tiles of `W` (`Requirement.credit_le_tiles`), so the
 shortfall against the store (`Requirement.sum_lt_of_credit`, `Requirement.lt_of_credit`).
 -/
 
+@[expose] public section
+
 namespace Accounting.RateSketch.Carrier
 
 /-- **A carrier of a declared circuit's over at most `L` of the audit's windows carries at most `C` bits**: its inputs
 at most `8·R_L` and its encodes at most `⌈1024·L·c·P·N·4096/E⌉`, the nonlinear units of each of its windows within the
 caps' `c = caps.total` units a byte of the window's certified reads, at most `P·N·4096` bytes, under the encode bound
 at 1024-bit words and `E` nonlinear units a word. -/
-theorem card_le_census {N m P L B εnum εden E : ℕ} {ι : Type} {Wc : Gates.Dag ι} {caps : Gates.Caps}
+theorem card_le_census {N m P L B εnum εden E : ℕ} {ι : Type} {Wc : Gates.IntDag ι} {caps : Gates.Caps}
     {Aud : Gates.Audit} (hE : Gates.EncodeBound Gates.p1024 3 B E εnum εden)
     (hE0 : 0 < E) (hprop : Gates.Property caps Aud Wc)
     (hreads : ∀ v < Aud.windows, Aud.reads v ≤ P * N * 4096)

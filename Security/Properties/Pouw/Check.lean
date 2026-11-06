@@ -1,4 +1,6 @@
-import PouwCheck
+module
+
+public import PouwCheck
 
 /-!
 # PoUW's window check: what its Lean code (`PouwCheck.protocol`) does
@@ -16,6 +18,8 @@ checks first, and what the other verdicts mean. That the check accepts every suc
 What the window's draw guarantees (`Properties.Pouw.Window.DrawMisses`) is the window's property, not the check's: the
 check establishes that the service drew exactly `K′ = kPrime ε δ` distinct units of the registered `N`, all passed.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Check
 
@@ -115,9 +119,10 @@ def UndecidedOnlyFromService : Prop :=
 
 /-! ## The commitment -/
 
-/-- The digest is one-stage's registration digest, SHA-512 of the format, a zero byte and the canonical record. -/
+/-- The digest is one-stage's window record digest (`Flock.WindowRecord.digestOf`), SHA-512 of the format, a zero byte
+and the canonical record. -/
 def DigestIsOneStage's : Prop :=
-  ∀ c : Registration, protocol.digest c = Flock.Sha512.hash (c.format.toUTF8 ++ ByteArray.mk #[0] ++ c.bytes)
+  ∀ c : Registration, protocol.digest c = Flock.WindowRecord.digestOf c.format c.bytes
 
 /-- A decoded registration keeps the bytes it was read from, so its digest is of exactly those bytes. -/
 def CommitmentKeepsBytes : Prop := ∀ (b : ByteArray) (c : Registration), protocol.commitment b = .ok c → c.bytes = b

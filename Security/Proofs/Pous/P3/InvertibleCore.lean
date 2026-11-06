@@ -1,22 +1,25 @@
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # N10's two core lemmas, on the trusted definitions of `Pous.Invertible`
 
-From `lean/submissions/pebbling/InvertibleExPostFactoDraft.lean`: the proofs of `transpose_mixing` and
-`reverse_needs_all_children`, graded PASS against `Pous.Guarantees.TransposeMixing` and
-`Pous.Guarantees.ReverseNeedsAllChildren`. The draft's copies of the trusted definitions and its N10 target (refuted,
-`Pous.SecurityProofs.P3.Refutation`) are left out.
+The proofs of `transpose_mixing` and `reverse_needs_all_children`, which are `Pous.Guarantees.TransposeMixing` and
+`Pous.Guarantees.ReverseNeedsAllChildren`. The N10 target is refuted (`Pous.SecurityProofs.P3.Refutation`) and is
+not here.
 
 * `transpose_mixing`: with the `K_{n,n}` connector, recovering **one** lower-layer label needs **all** `n` top
   labels.
 * `reverse_needs_all_children`: unfolding the trusted reverse rule, a reverse (decode) move on a lower node needs a
   pebble on every green child.
 -/
+
+@[expose] public section
 
 namespace PousInvertible
 

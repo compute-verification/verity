@@ -1,5 +1,7 @@
-import Proofs.Nci.FitSlotsWitness
-import Proofs.Nci.Threads
+module
+
+public import Proofs.Nci.FitSlotsWitness
+public import Proofs.Nci.Threads
 
 /-!
 # A subcircuit across an optimizer step: `WeightsIncompressibleSlots` holds where `WeightsIncompressible` fails
@@ -14,6 +16,8 @@ At `b_w = 4`, `b_a = 1`, `WeightsIncompressible` charges it `2 · 4 + 2 = 10 > 6
 over all 64 subsets of the computed gates (`weightsIncompressibleSlots`). The circuit is `(1, 0)`-threaded (`threaded`),
 so `ThreadedReadsSlots` applies here (`reads`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.WeightsSlotsWitness
 

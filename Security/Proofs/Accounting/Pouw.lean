@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.Pouw
-import Proofs.Accounting.Device
-import Proofs.Pouw.Game
+module
+
+public import Definitions.Accounting.Guarantees.Pouw
+public import Proofs.Accounting.Device
+public import Proofs.Pouw.Game
 
 /-!
 # Proof that PoUW's guarantee is a joint run's compute guarantee
@@ -10,6 +12,8 @@ adversary `adv o` within `(T, q)` (`q` the device's oracle queries over the comp
 salt is at most the compute account's work at those and any tickets, and its oracle calls at most the compute account's
 oracle queries, which the device's limits bound. PoUW's EndToEnd then bounds its audit, which is the compute audit.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Pouw.Guarantees.RelativeSecurity
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Mathlib
+public import Definitions.Pouw.Guarantees.RelativeSecurity
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # Relative security's guarantees for the staged window: the proofs
@@ -18,6 +20,8 @@ adversary and one value of its coins at a time (`roundsSlice_of_staged`, `rounds
 `roundsSlice_of_stagedP`, `roundsSlice_of_overlapP`), each slice's breaks read at its own finders through
 `ecr/sha-512` and the slices averaged with each capped at 1 (`serviceFloorPerProver_of_slices`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.RelativeSecurity
 

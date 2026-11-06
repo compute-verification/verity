@@ -1,5 +1,5 @@
 """The GPU's no-fold call (v31lib's Prover over libv31.so) checked against the reference itself,
-`verity/core/protocols/pouw/circuit/dither.py`, rather than v31.py's mirror of it, on filler calls (the pad,
+`verity/core/protocols/pouw/circuit/dither.py`, rather than v31.py's numpy forms of it, on filler calls (the pad,
 `dither.Shape` with `o` False: T_1 .. T_S a tile) and served calls (an operand A, `o` True: T_1 .. T_{S-1} and then O a
 tile). On each case: the call's seeds (`dither.fill_seeds` for a filler, `dither.seeds` for a served call) as the device's
 seed buffer holds them (v31's `fill_seeds_bytes`), read back stream by stream against dither's byte for byte, the
@@ -44,6 +44,12 @@ s-qkv-L4096-row16k 256 6144 4096 512 4096 16384 served none 0
 s-o-L1024-row16k 256 4096 4096 128 1024 16384 served none 0
 s-down-L4096 128 384 14336 512 4096 1024 served none 0
 s-up-L8192 128 28672 4096 512 8192 1024 served none 0
+f-qkv-L4096-row8k 256 6144 4096 512 4096 8192 fill none 0
+s-down-L4096-row8k 128 384 14336 512 4096 8192 served none 0
+f-small-row32k 128 256 1024 256 512 32768 fill none 1
+s-small-row32k 256 128 1024 128 512 32768 served none 1
+f-o-L4096-row32k 128 512 4096 512 4096 32768 fill none 0
+s-down-L4096-row32k 128 384 14336 512 4096 32768 served none 0
 c-skip 128 256 2048 256 512 1024 fill skip:3 1
 c-forge 256 256 4096 256 1024 1024 served forge:2:0.5 0
 c-forgeO 256 256 4096 256 1024 1024 served forgeO:0.5 0

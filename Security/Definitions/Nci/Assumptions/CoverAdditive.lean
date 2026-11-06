@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions.CoveringTwoCosts
-import Mathlib.Data.Finset.Union
+module
+
+public import Definitions.Nci.Assumptions.CoveringTwoCosts
+public import Mathlib.Data.Finset.Union
 
 /-!
 # The additive covering bound's premise: parameter-hardness outside the token computations
@@ -14,6 +16,8 @@ It is the cover theorem's `ConditionalUpdateHardness` (`Definitions.Nci.Assumpti
 vocabulary (`Nci.Covering`), with the token computations as its regions: on a declaration's gates it implies it
 (`Proofs.Nci.Cover.Gates`).
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Assumptions
 

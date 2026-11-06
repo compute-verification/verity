@@ -93,7 +93,6 @@ def test_every_registered_kernel_is_self_checked_here() -> None:
 def test_kernel_matches_the_reference(target, n: int) -> None:
     r = E.self_check(target, n=n, seed=20260925)
     assert r.ok, str(r)
-    assert r.declined == r.outside, str(r)  # declines exactly what the reference rejects, nothing more
 
 
 # ---- the reference ------------------------------------------------------------------------------------------------------
@@ -186,6 +185,25 @@ def test_partial_decline_goes_to_the_reference() -> None:
     r = E.self_check(ref, inputs=[x])
     assert not r.ok and r.declined == 128 and len(r.mismatches) == 127  # every nonzero even word is a mismatch
     del _KERNELS[ref.id]
+
+
+def test_self_check_is_ok_only_when_it_compared_and_declined_only_outside_the_domain() -> None:
+    """A kernel that declines every input compared nothing; one that declines inputs the reference accepts passes only
+    when it is registered partial, and still not when it declines them all."""
+    ref = E.ScalarReference("test.quarter", lambda x: x >> 2, lambda: ((Value(8),), Value(8)))
+    x = np.arange(256, dtype=np.uint8)
+    odd = lambda x: (x >> 2, x % 2 == 1)  # noqa: E731  (right on the evens, declines the odds)
+    every = lambda x: (np.zeros_like(x), np.ones(x.shape, dtype=bool))  # noqa: E731
+    try:
+        for name, fn, partial, fault in [("odd", odd, False, "declined-in-domain"), ("odd-partial", odd, True, None),
+                                         ("every", every, False, "compared-nothing"),
+                                         ("every-partial", every, True, "compared-nothing")]:
+            E.register_kernel(ref, fn, kernel=name, partial=partial)
+            r = E.self_check(ref, kernel=name, inputs=[x])
+            assert (r.fault, r.ok, r.compared) == (fault, fault is None, 0 if fn is every else 128), str(r)
+            assert not r.mismatches and r.outside == 0
+    finally:
+        del _KERNELS[ref.id]
 
 
 def test_self_check_catches_a_wrong_adder() -> None:

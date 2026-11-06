@@ -38,7 +38,7 @@ from verity.ml.circuits.codec import canonical_json, encode_program, program_dig
 from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
-from verity.ml.circuits.types import Array, Record, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.program.prune import dead_free as dead_free_form
 
 from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, launch_batch, launch_rows, launch_seqlen_q,
@@ -713,7 +713,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                             f"(the cached greedy request on one rank of the dense or fused-MoE decoder only)")
     if C and not 0 < C < int(LP):
         raise Unexpressible(f"vocabulary cannot express: a cached prefix of {C} rows for a prompt of {LP} (0 < C < LP)")
-    wrec = Record(*net.leaves())
+    wrec = RecordType(*net.leaves())
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
     passes = [n] + [1] * (events - 1)
@@ -775,7 +775,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                   "config_sha256": hashlib.sha256(canonical_json({})).hexdigest()[:16]}
     from verity.ml.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
-                               doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="predicted: a switched row's, checked by its trace (predict.aot)",
+                               doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="derived: predicted, a switched row's, checked by its trace (predict.aot)",
                                register=False)
     sd = bind(defn, SRC=src_static)
     sd.set_body(body)

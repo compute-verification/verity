@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Tables.Sim
-import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+module
+
+public import Proofs.Flock.Soundness.Discharge.Tables.Sim
+public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 
 /-!
 # R11 for sessions of `J` tables: the live audit simulated in the salted audit
@@ -18,6 +20,8 @@ session is `batchedSessionL` on the plan.
   table; at one table it is `DecodesOn`'s.
 * `simAuditJ`, `execRefines_tables`: the audit strategy built from a live one, and R11 at it with `bad = ⊥`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Tables
 

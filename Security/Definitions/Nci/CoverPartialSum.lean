@@ -1,5 +1,7 @@
-import Definitions.Nci.CoverFanOut
-import Mathlib.Data.Finset.Union
+module
+
+public import Definitions.Nci.CoverFanOut
+public import Mathlib.Data.Finset.Union
 
 /-!
 # The cover theorem's partial-sum tightening: the vocabulary
@@ -18,6 +20,8 @@ computation, checkable on a named circuit, as `Keyed` is for the fan-out bounds.
 * `Cube.entry`, `Cube.accGates`, `Cube.crossings`, `Cube.Wide`: a product's entry, the accumulations' gates, the
   entries a block contributes whole products to at tokens it reads little of, and the entries' width.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover
 

@@ -1,7 +1,9 @@
-import Properties.NciDesc.Cover
-import Proofs.Properties.Nci.Agrees
-import Proofs.Properties.Nci.DescVerdict
-import Proofs.Nci.Cover.Training
+module
+
+public import Properties.NciDesc.Cover
+public import Proofs.Properties.Nci.Agrees
+public import Proofs.Properties.Nci.DescVerdict
+public import Proofs.Nci.Cover.Training
 
 /-!
 # A verdict of compliance carries the cover theorem's factor
@@ -15,6 +17,8 @@ Its verdict is `Desc.evaluate`'s (`baseline_desc`), and `Properties.DescAgrees` 
 expansion of the instance, gate by gate, so `checkedCoverTraining_of_descAgrees` proves `CheckedCoverTraining` from it,
 and `SecurityProofs.CheckedCoverTraining` from `SecurityProofs.DescAgrees`.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs
 

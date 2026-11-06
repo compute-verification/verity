@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.SplitInner
-import Proofs.Flock.Claims.ZK.SentE
+module
+
+public import Proofs.Flock.Claims.ZK.SplitInner
+public import Proofs.Flock.Claims.ZK.SentE
 
 /-!
 # The cut's `Y` is the session's (`Masked.InnerY`)
@@ -15,6 +17,8 @@ source sends `Y` (`repSrcCut`'s `y`) as the session's `InZ.y` at the honest pads
   `h ‖ pad_h` and `μ ‖ pad_μ` entry by entry (`pads_exe`, as `SimCommit`'s `exeOf_pads` reads the pads columns), so
   `Y` is `InZ.y`'s array, entry `i` being `(h ‖ pad_h)[i] + β·(μ ‖ pad_μ)[i]`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.Masked
 

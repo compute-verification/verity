@@ -3,7 +3,11 @@ The verifier's SHA-512 (`Flock.Sha512.hash`) as the chain of its compressions: t
 chaining value after each block (`chain`), and the digest's bytes, big-endian per word (`digestOf`), whose bit `t` is bit
 `wordBit t` of the chaining value in word order.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Exec
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Exec
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

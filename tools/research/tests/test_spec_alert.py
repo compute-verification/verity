@@ -304,7 +304,7 @@ def test_a_push_to_main_alerts_on_what_it_moved_main_across(tmp_path, monkeypatc
     new = _commit(repo, "lean-audit.json", _doc({"P.t": _g("P.t : C", H3)}), "Merge #9 (abc)")
     seen = []
     monkeypatch.setattr(spec, "alert", lambda repo, was, now, **kw: seen.append((was, now)) or True)
-    monkeypatch.setattr(merge, "_sweep_after", lambda *a: None)
+    monkeypatch.setattr(merge, "_sweep_after", lambda *a, **k: None)
     monkeypatch.setattr(merge, "report_landings", lambda *a, **kw: True)     # it asks GitHub (`gh pr list`) and posts to Slack
     assert merge._push_and_sweep(repo, "main", "origin", True) == 0
     assert seen == [(mid, new)]

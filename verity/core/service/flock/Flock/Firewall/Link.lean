@@ -23,10 +23,14 @@ and `flock-firewall finish`'s `table` request (`Flock.Firewall.Finish.commit0`, 
 leaves is one of these, and the finish keeps the table's tree for its reps' openings (`Finish.openLive`): Rust commits
 nothing of level 0 under the firewall.
 -/
-import Flock.Firewall.Coins
-import Flock.Ligerito
-import Flock.Merkle
-import Flock.Zk
+module
+
+public import Flock.Firewall.Coins
+public import Flock.Ligerito
+public import Flock.Merkle
+public import Flock.Zk
+
+@[expose] public section
 
 namespace Flock.Firewall.Link
 

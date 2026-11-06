@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Congr
-import Proofs.Flock.Claims.DeployOC
+module
+
+public import Proofs.Flock.Claims.ZK.Congr
+public import Proofs.Flock.Claims.DeployOC
 
 /-!
 # `ZKmalR` is not vacuous
@@ -20,6 +22,8 @@ every verifier, so for it the claim is the plain bound, at every `γ`:
   (`not_flockZK_collSim_toy`), and no simulator meets it for the witness-sending prover (`not_flockZK_leak_toy`).
   `not_flockZK_collSim` and `not_flockZK_leak` are the same at any record whose relation holds where they need it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -147,15 +151,13 @@ theorem not_flockZK_leak {Coin Col T N Ω : Type} [Fintype Coin] [Nonempty Coin]
 def toyStmt : Flock.Stmt where
   m := 0
   kLog := 0
-  C := ⟨0, [], []⟩
-  inp _ := []
-  out _ := []
+  C := ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩
+  inp _ _ := .pub 0
+  out _ _ := .pub 0
   pub := []
-  form := ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false⟩
+  form := ⟨false, false, false, "", 0, false, false, false, false, 0, false, 0, false, false, false, false, false⟩
 
-theorem toy_relS (w : Flock.Wit) : Flock.RelS toyStmt w := by
-  intro b _
-  rfl
+theorem toy_relS (w : Flock.Wit) : Flock.RelS toyStmt w := fun _ _ o => o.elim0
 
 /-- **A masked record whose relation holds at every statement and witness.** -/
 def toyD : Flock.Deploy Unit Unit Unit where

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishSwFrame
-import Proofs.Flock.Claims.ZK.SimLig
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwFrame
+public import Proofs.Flock.Claims.ZK.SimLig
 
 /-!
 # Level 0's opening at the switched source
@@ -16,6 +18,8 @@ are the firewall's (`valsFw`), with level 0's opening's clear values `l0Clear` f
 * **`Masked.swSrcE_ligHyp_frame`**: so at the switched source at the firewall's clear values, with `B = l0Clear` and
   the firewall's request's pads (`swSrcE_l0_frame`), `LigHyp` holds at its `y₁'`, `ȳ` and salts.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -183,7 +187,7 @@ theorem swSrcE_ligHyp_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (
       (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val k)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (hk0 : 1 ≤ sch.k0) (hn0 : sch.n ≠ 0) (hlv : 2 ≤ sch.levels.size) (hlk : (zkTab x j).sch.k0 = sch.k0)
     (hy1 : p0 + 3 + sch.k0 < n → _root_.Flock.Zk.rhoIndependent (FlockComplete.LigLock.rhoS coin p0 sch.k0) = true →
       ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).y1 =

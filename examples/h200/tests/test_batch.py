@@ -2,7 +2,7 @@
 micro-batches and dropped tables change no root, the forward stays at most `LAG` groups ahead of a slow commit, rows at
 their own positions are the lockstep rows, a drawn slot opens by replaying its request alone, the network engine serves what
 lockstep serves, the torch softmax is the Definitions', the map is circuits' FAMILIES table at the frozen shape and each
-unit's commit unit is its output rows, and a subcircuit joins the registration and the draw."""
+unit's commit unit is its output rows, and a subcircuit joins the registration and the sample."""
 from __future__ import annotations
 
 import shutil
@@ -141,7 +141,7 @@ def test_rows_at_their_own_positions_are_the_lockstep_rows(params, kept):
 
 @pytest.mark.parametrize("shape", [TINY, MINI], ids=lambda s: s.name)
 def test_a_drawn_slot_opens_by_replaying_its_request(params, shape):
-    """A unit of every family, drawn from a slot replayed alone, opens against the step's root as its one commit unit."""
+    """A unit of every family, sampled from a slot replayed alone, opens against the step's root as its one commit unit."""
     params = params if shape is TINY else Params(shape, GeneratorStore(Weights(shape)))
     c = committer(shape)
     d = Driver(shape, params, 3, c, keep=False, tamper=None)

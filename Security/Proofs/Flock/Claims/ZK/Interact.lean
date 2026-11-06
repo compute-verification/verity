@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.GK
+module
+
+public import Proofs.Flock.Claims.ZK.GK
 
 /-!
 # Runs as transcripts
@@ -11,6 +13,8 @@ import Proofs.Flock.Claims.ZK.GK
   (`runStar_pLog_calls`), so a collision `findColl` finds among two runs' calls is `Fork`'s (`Fork_pr_ge`).
 * The evaluation of composed programs (`ocBind`, `spBind`, `ocSP`): results and calls.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

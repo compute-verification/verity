@@ -4,8 +4,12 @@
 (`MerkleScheme.Named`). `returns_walk` (`Flock.With.ReturnsWalk`) walks a do block with them; `Flock.With.Deployed` uses it
 on the verifier's setups.
 -/
-import Flock.Verify
-import Flock.With.Hashes
+module
+
+public import Flock.Verify
+public import Flock.With.Hashes
+
+@[expose] public section
 
 namespace Flock.With
 

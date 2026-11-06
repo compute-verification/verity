@@ -1,4 +1,4 @@
-"""A decoded root body as the comparator reads it (`Prog`): its instance sequence, segmented into engine steps at the sampling
+"""A decoded root body as the comparator reads it (`RootView`): its instance sequence, segmented into engine steps at the sampling
 events, and the canonical source of every operand run (the forms are `program_compare`'s, its docstring states them)."""
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ PAD_SPECS = ("Const", "I32Eq_v1", "BitNot_v1", "BitAnd_v1", "SelectI32_v1", "Sel
 # (index 5) of the top-p select, the one sampling event with a 6th operand (patterns.TokenSelectGumbelTopP._stage3); the request Program
 # takes it as the request-owned INPUT `splits` (int32 [T+1], after the seed) and event s reads `splits[s:s+1]` (vllm_meta.StochasticRequest).
 # compare BINDS the two: the fold's constant at the request's event s IS the value of the Program's input entry s -- canonicalised
-# ("SPLITS", s, s+1) on both sides; the constant's VALUE is kept (`Prog.splits_values`, by select node) for GM-01's per-engine-step
+# ("SPLITS", s, s+1) on both sides; the constant's VALUE is kept (`RootView.splits_values`, by select node) for GM-01's per-engine-step
 # relation check (`global_match.sampler_geometry_check`: S_t == SplitsFor_v1(|live(t)|, num_SMs)).  Nothing about S is a static of the
 # Definition.
 _CONST_RE = re.compile(r"^Const(\d+)\[0x([0-9a-fA-F]+)\]_v1$")
@@ -44,7 +44,7 @@ def _registry():
     return reg
 
 
-class Prog(PeerReads, PX.PrefixInput):
+class RootView(PeerReads, PX.PrefixInput):
     """A decoded root body as an instance sequence."""
 
     compact = False   # operand representation: runs (record) | run progressions (cb_a.compact); set per instance in __init__
@@ -56,13 +56,14 @@ class Prog(PeerReads, PX.PrefixInput):
         self.label = label
         self.compact = bool(compact)
         self.digest = desc.get("digest") or program_digest(desc)
+        registry = _registry()
         self.inputs: dict[int, tuple[str, int]] = {}
         self.inst: list[dict] = []  # k, spec, form, args=[runs | progressions], out
         if self.compact:
             # the root body read straight from the descriptor JSON into run progressions: no Node / Coll / Refs objects for
             # the root, no per-row expansion of a Strided (compact.lean_root; the non-root Definitions are decoded as decode_program does)
             from verity_vllm.program.compact import lean_root
-            lr = lean_root(desc, _registry())
+            lr = lean_root(desc, registry)
             for k, fid, form, args6, out, n in lr["nodes"]:
                 if form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n)
@@ -74,12 +75,12 @@ class Prog(PeerReads, PX.PrefixInput):
             del lr
         else:
             from verity.ml.circuits.codec import decode_program
-            _spec_id, runs = self._node_functions()
-            dec = decode_program(desc, _registry())
+            descriptor_id, runs = self._node_functions()
+            dec = decode_program(desc, registry)
             root = dec.root
             body = root.body if hasattr(root, "body") else root.defn.body
             for k, n in enumerate(body.nodes):
-                fid = _spec_id(n.fn)
+                fid = descriptor_id(n.fn)
                 if n.form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n.n)
                     continue

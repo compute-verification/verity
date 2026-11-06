@@ -1,4 +1,4 @@
-"""The proof service's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
+"""The proof system's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
 
 The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
 prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session of the auditor host,
@@ -14,14 +14,32 @@ before it.  When the session ends, however it ends, the challenger signs its rel
 ~~~text
 frame       u32be len(head) ‖ u32be len(body) ‖ head ‖ body: head a JSON object with its "type", body empty
 client      {"type": "hello"} (with "secret" when the session has one), then {"type": "open", "label", "index", "after"}
-            per coin, then {"type": "close"}
-challenger  {"type": "commitment", "commitment"}, {"type": "opening", "opening"} and {"type": "closed"}, each answering
-            the client's frame, or {"type": "refused", "reason"}, which ends the session
+            per coin, {"type": "tree", "nonce", "spec"} per coin tree and {"type": "tree-open", "after", "n", "round",
+            "stream", "tree"} per round of one, then {"type": "close"}
+challenger  {"type": "commitment", "commitment"}, {"type": "opening", "opening"}, {"type": "tree", "tree"},
+            {"type": "tree-coins", "tree-coins"} and {"type": "closed"}, each answering the client's frame, or
+            {"type": "refused", "reason"}, which ends the session
+withheld    {"type": "layout", "layout"}, {"type": "coin", "coin"} and {"type": "released", "released"}: a withheld
+            session's answers (`open_session(..., withhold=True)`)
 ~~~
+
+**A ``--zk`` session's coin tree** (`challenger`, "A --zk session's coins") is sampled and opened in the window's
+session, withheld or not.  `tree` samples one of spec `spec` under `nonce` (the prover's ``Hello`` nonce, or null for
+the challenger to sample it; `LiveChallenger.sample_tree`) and answers ``{key, nonce, root}``, ``Hello``'s answer;
+`tree-open` opens round `round` of stream `stream` of the tree whose root is `tree`, its first `n` coins after `after`,
+and answers the round's opening words (`coin_tree.CoinTree.open`, its coins first), each 32 lowercase hex digits, high
+word first.  Each writes its release log line, fsynced, before it answers, and the client checks each round against its
+tree (`coin_tree.check`).
+
+**A withheld session** keeps the challenger's commitment on its host until the session closes (`challenger`, "A
+withheld session"): it answers the hello with the layout alone (`{epoch, families, scheme}`), each open with the coin's
+raw bytes alone (`{after, coin, epoch, index, label}`: no salt and no path), and the client's close, once its signed close
+is written, with `{commitment, openings}`, the commitment and every coin it opened, in order, with its salt and path.  The
+client checks those openings then (`RemoteChallenger.close`), each against the coin it was given.
 
 Every message is fail-closed.  The challenger refuses a frame that isn't the next of that sequence in exactly that form,
 a coin other than its family's next (coin i after the family's i-th root, once: `LiveRecord`) and a root that isn't 64
-bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never redraws).  It appends each
+bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never resamples).  It appends each
 release to `releases.jsonl` (`LiveRecord.log`'s two events, a line each in canonical JSON, integer nanoseconds on its
 monotonic clock), fsynced, before the opening leaves its host, and answers the client's close only once its signed close
 is written.  A session served with a `secret` (the auditor host's gate gives one to the window's opener, RT4-INT-29)
@@ -62,6 +80,7 @@ from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerClose, ChallengerKey, CoinError, LiveChallenger,
                                                              LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,
                                                              write_record)
+from verity.ml.commitments import coin_tree as CT
 from verity.ml.commitments.identity import canonical_json_text
 
 RECORD, KEY, RELEASES, CLOSE, HELLOS = Ch.RECORD_FILE, "key.json", Ch.LOG_FILE, Ch.CLOSE_FILE, Ch.HELLOS_FILE
@@ -71,8 +90,12 @@ MAX_HEAD = 1 << 20
 MAX_BATCH = 64
 """The most coins `RemoteChallenger.open_many` asks for at once: its frames (about 200 bytes each) are written before
 any reply is read, so they must fit the stream's send buffer while the challenger writes its replies back."""
-SEQUENCE = "a client's frames are hello, then open {label, index, after} per coin, then close"
+SEQUENCE = ("a client's frames are hello, then open {label, index, after} per coin, tree {nonce, spec} per coin tree and "
+            "tree-open {after, n, round, stream, tree} per round of one, then close")
 SESSION_ID = f"a session id is at most {Ch.MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'"
+#: an open's label past ASCII is refused in these words alone, since the refusal is how the session ended, which its close
+#: signs and writes
+LABEL = "an open's label is an ASCII string, one of the layout's family labels"
 
 
 def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -145,17 +168,18 @@ class Session:
     wrote them, which its close signs."""
 
     def __init__(self, challenger: LiveChallenger, key: ChallengerKey, host: str, sign: Callable[[bytes], bytes],
-                 directory: Path, session: str, head: str) -> None:
+                 directory: Path, session: str, head: str, withhold: bool = False) -> None:
         self.challenger, self.key, self.host, self._sign = challenger, key, host, sign
-        self.directory, self.id, self.lines = directory, session, [head]
+        self.directory, self.id, self.lines, self.withhold = directory, session, [head], withhold
         self.close: ChallengerClose | None = None
 
 
 def open_session(challenger: LiveChallenger, key: ChallengerKey, host: str, sign: Callable[[bytes], bytes],
-                 directory: str | os.PathLike, session: str) -> Session:
+                 directory: str | os.PathLike, session: str, withhold: bool = False) -> Session:
     """On the challenger's host `host`, before any coin opens, for session `session` (the id the auditor launched it
     under): sign its record with `sign` (LMS at `key`'s parameters, `LiveChallenger.sign_record`, which signs its close
-    too, at its next leaf) and write the record, `key` and the release log's head to `directory`, each once."""
+    too, at its next leaf) and write the record, `key` and the release log's head to `directory`, each once.  With
+    `withhold`, `serve` releases the commitment, salts and paths only once the session closes (module docstring)."""
     if not Ch._session_id(session):
         raise CoinError(SESSION_ID)
     d = Path(directory)
@@ -164,7 +188,17 @@ def open_session(challenger: LiveChallenger, key: ChallengerKey, host: str, sign
     write_record(d / RECORD, record)
     head = {"event": "commitment", "root": challenger.commitment.root.hex()}
     _write_new(d / RELEASES, head)
-    return Session(challenger, key, host, sign, d, session, _line(head))
+    return Session(challenger, key, host, sign, d, session, _line(head), withhold)
+
+
+def layout_json(c: LiveCommitment) -> dict:
+    """What a withheld session's hello answers: the commitment's layout, without its root."""
+    return {"epoch": c.epoch, "families": [[label, n] for label, n in c.families], "scheme": c.scheme}
+
+
+def coin_json(o: LiveOpening) -> dict:
+    """What a withheld session's open answers: the coin's raw bytes, without its salt and path."""
+    return {"after": o.after.hex(), "coin": o.coin.hex(), "epoch": o.epoch, "index": o.index, "label": o.label}
 
 
 def close_session(session: Session, ended: str | None) -> ChallengerClose:
@@ -184,12 +218,15 @@ def close_session(session: Session, ended: str | None) -> ChallengerClose:
 def _release(head: dict, records: dict[str, LiveRecord], log: Any, lines: list[str]) -> LiveOpening:
     if head.get("type") != "open" or sorted(head) != ["after", "index", "label", "type"]:
         raise CoinError(SEQUENCE)
-    label, index, after = head["label"], head["index"], _root(head["after"])
-    record = records.get(label) if type(label) is str else None
+    label, index = head["label"], head["index"]
+    if type(label) is not str or not label.isascii():
+        raise CoinError(LABEL)
+    after = _root(head["after"])
+    record = records.get(label)
     if record is None:
         raise CoinError(f"the epoch's coins have no {label!r} family")
     if type(index) is not int or index != len(record.roots):
-        raise CoinError(f"the next {label} coin is {len(record.roots)}, not {index!r}")
+        raise CoinError(f"the next {label} coin is {len(record.roots)}, not {ascii(index)}")
     n = len(record.log)
     opening = record.record(after)
     try:
@@ -197,14 +234,41 @@ def _release(head: dict, records: dict[str, LiveRecord], log: Any, lines: list[s
     except TypeError as e:
         raise CoinError(f"the release log's clock reads other than integers, so {label} coin {index} stays on the host "
                         f"({e})") from e
+    _append(log, lines, new, f"{label} coin {index}")
+    return opening
+
+
+def _append(log: Any, lines: list[str], new: list[str], what: str) -> None:
+    """Write `new` to the release log, fsynced, before `what` leaves the host."""
     try:
         log.write("".join(line + "\n" for line in new))
         log.flush()
         os.fsync(log.fileno())
     except OSError as e:
-        raise CoinError(f"the release log is unwritable, so {label} coin {index} stays on the host ({e})") from e
+        raise CoinError(f"the release log is unwritable, so {what} stays on the host ({e})") from e
     lines.extend(new)
-    return opening
+
+
+def _drawn(head: dict, challenger: LiveChallenger, log: Any, lines: list[str]) -> dict:
+    """A `tree` frame's answer: the coin tree the challenger samples (`LiveChallenger.sample_tree`), its line logged
+    first."""
+    if sorted(head) != ["nonce", "spec", "type"]:
+        raise CoinError(SEQUENCE)
+    nonce = None if head["nonce"] is None else Ch._hex(head["nonce"])
+    if head["nonce"] is not None and (nonce is None or len(nonce) != CT.NONCE_BYTES):
+        raise CoinError(f"a coin tree's nonce is {CT.NONCE_BYTES} bytes in lowercase hex, or null")
+    tree, line = challenger.sample_tree(head["spec"], nonce)
+    _append(log, lines, [line], "the coin tree")
+    return {"key": tree.key.hex(), "nonce": tree.nonce.hex(), "root": tree.root().hex()}
+
+
+def _tree_coins(head: dict, challenger: LiveChallenger, log: Any, lines: list[str]) -> list[str]:
+    """A `tree-open` frame's answer: the round's opening words (`LiveChallenger.open_tree`), its line logged first."""
+    if sorted(head) != ["after", "n", "round", "stream", "tree", "type"]:
+        raise CoinError(SEQUENCE)
+    _, ws, line = challenger.open_tree(head["tree"], head["stream"], head["round"], head["n"], _root(head["after"]))
+    _append(log, lines, [line], f"the coin tree's {head['stream']} round {head['round']}")
+    return [f"{w:032x}" for w in ws]
 
 
 def _hang_up(sock: socket.socket) -> None:
@@ -239,7 +303,7 @@ def _hello_reason(head: dict, secret: bytes | None) -> str | None:
 def greet(sock: socket.socket, secret: bytes | None = None) -> str | None:
     """Read the client's hello on `sock`: None when it is the session's (`serve(..., greeted=True)` then serves the
     stream), else why it is refused, which is sent before the stream is hung up.  It releases nothing, so a server may
-    take another connection after a refused hello without redrawing anything."""
+    take another connection after a refused hello without resampling anything."""
     try:
         why = _hello_reason(_Wire(sock).recv(), secret)
     except CoinError as e:
@@ -269,22 +333,41 @@ def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = time
         raise CoinError("the challenger serves a session once, after its record is signed and written (open_session)")
     wire = _Wire(sock)
     records = {label: LiveRecord(challenger, label, clock) for label, _ in challenger.commitment.families}
+    opened: list[LiveOpening] = []
     try:
         with open(d / RELEASES, "a", encoding="utf-8") as log:
             why = None if greeted else _hello_reason(wire.recv(), secret)
             if why is not None:
                 raise CoinError(why)
-            wire.send({"type": "commitment", "commitment": challenger.commitment.to_json()})
+            if session.withhold:
+                wire.send({"type": "layout", "layout": layout_json(challenger.commitment)})
+            else:
+                wire.send({"type": "commitment", "commitment": challenger.commitment.to_json()})
             while True:
                 head = wire.recv()
                 if head == {"type": "close"}:
                     reason = _closed(session, None)
                     if reason is not None:
                         break
-                    wire.send({"type": "closed"})
+                    if session.withhold:
+                        wire.send({"type": "released", "released": {"commitment": challenger.commitment.to_json(),
+                                                                    "openings": [o.to_json() for o in opened]}})
+                    else:
+                        wire.send({"type": "closed"})
                     _hang_up(sock)
                     return None
-                wire.send({"type": "opening", "opening": _release(head, records, log, session.lines).to_json()})
+                if head.get("type") == "tree":
+                    wire.send({"type": "tree", "tree": _drawn(head, challenger, log, session.lines)})
+                    continue
+                if head.get("type") == "tree-open":
+                    wire.send({"type": "tree-coins", "tree-coins": _tree_coins(head, challenger, log, session.lines)})
+                    continue
+                opening = _release(head, records, log, session.lines)
+                opened.append(opening)
+                if session.withhold:
+                    wire.send({"type": "coin", "coin": coin_json(opening)})
+                else:
+                    wire.send({"type": "opening", "opening": opening.to_json()})
     except CoinError as e:
         reason = _closed(session, str(e))
     except OSError as e:
@@ -297,14 +380,71 @@ def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = time
     return reason
 
 
+def _layout_of(doc: Any) -> tuple[str, int, tuple[tuple[str, int], ...]]:
+    if not isinstance(doc, dict) or sorted(doc) != ["epoch", "families", "scheme"] or type(doc["families"]) is not list:
+        raise CoinError("a withheld session's layout is {epoch, families, scheme}")
+    families = tuple(tuple(f) if type(f) is list else f for f in doc["families"])
+    why = Ch.layout_problem(doc["scheme"], doc["epoch"], families)
+    if why is not None:
+        raise CoinError(why)
+    return doc["scheme"], doc["epoch"], families
+
+
+def _coin_of(doc: Any) -> LiveOpening:
+    if not isinstance(doc, dict) or sorted(doc) != ["after", "coin", "epoch", "index", "label"]:
+        raise CoinError("a withheld session's coin is {after, coin, epoch, index, label}")
+    after, coin = Ch._hex(doc["after"]), Ch._hex(doc["coin"])
+    if (after is None or coin is None or len(coin) != Ch.COIN_BYTES or type(doc["epoch"]) is not int
+            or type(doc["index"]) is not int or type(doc["label"]) is not str):
+        raise CoinError("a withheld session's coin is {after, coin, epoch, index, label}")
+    return LiveOpening(doc["epoch"], doc["label"], doc["index"], after, coin, b"", ())
+
+
+def _released_of(doc: Any) -> tuple[LiveCommitment, list[LiveOpening]]:
+    if not isinstance(doc, dict) or sorted(doc) != ["commitment", "openings"] or type(doc["openings"]) is not list:
+        raise CoinError("a withheld session's release is {commitment, openings}")
+    return LiveCommitment.from_json(doc["commitment"]), [LiveOpening.from_json(o) for o in doc["openings"]]
+
+
+TREE_FORM = (f"a coin tree's answer is {{key, nonce, root}}: {CT.KEY_BYTES}, {CT.NONCE_BYTES} and 64 bytes in lowercase "
+             "hex, the key's bit 2047 clear")
+
+
+def _tree_of(doc: Any) -> tuple[bytes, bytes, bytes]:
+    if not isinstance(doc, dict) or sorted(doc) != ["key", "nonce", "root"]:
+        raise CoinError(TREE_FORM)
+    key, nonce, root = Ch._hex(doc["key"]), Ch._hex(doc["nonce"]), Ch._hex(doc["root"])
+    if (key is None or len(key) != CT.KEY_BYTES or key[-1] & 0x80 or nonce is None or len(nonce) != CT.NONCE_BYTES
+            or root is None or len(root) != 64):
+        raise CoinError(TREE_FORM)
+    return nonce, root, key
+
+
+def _words_of(doc: Any) -> list[int]:
+    if type(doc) is not list or not all(type(w) is str and len(w) == 32 and Ch._hex(w) is not None for w in doc):
+        raise CoinError("a coin tree's round is its opening words, each 32 lowercase hex digits")
+    return [int(w, 16) for w in doc]
+
+
 class RemoteChallenger:
     """The client of a challenger on its own host over the connected stream `sock`: `LiveChallenger`'s `commitment` (the
-    challenger's answer to hello) and `open`.  After a refusal, a broken stream or a bad opening it refuses every coin."""
+    challenger's answer to hello) and `open`.  After a refusal, a broken stream or a bad opening it refuses every coin.
+
+    On a withheld session (`withheld`) the hello answers the layout alone (`families`), `commitment` is None and each
+    opening is the coin's raw bytes, with no salt and no path, until `close`: the challenger then releases its commitment
+    and every coin's full opening, which `close` checks against the coins it was given and keeps (`opened`)."""
 
     def __init__(self, sock: socket.socket, secret: bytes | None = None) -> None:
         self._wire, self._ended = _Wire(sock), None
         hello = {"type": "hello"} if secret is None else {"type": "hello", "secret": bytes(secret).hex()}
-        self.commitment = self._ask(hello, "commitment", LiveCommitment.from_json)
+        got = self._ask(hello, "commitment", LiveCommitment.from_json)
+        self.withheld = not isinstance(got, LiveCommitment)
+        self.commitment: LiveCommitment | None = None if self.withheld else got
+        self._layout = got if self.withheld else (got.scheme, got.epoch, got.families)
+        self._epoch, self.families = self._layout[1], self._layout[2]
+        self._given: list[tuple[str, int, bytes, bytes]] = []
+        self.opened: dict[tuple[str, int], LiveOpening] = {}
+        self._trees: dict[bytes, tuple[CT.Spec, CT.Rules]] = {}
 
     @classmethod
     def connect(cls, address: str, secret: bytes | None = None) -> RemoteChallenger:
@@ -329,6 +469,10 @@ class RemoteChallenger:
             raise self._end(f"the stream broke ({e})") from e
 
     def _reply(self, kind: str, read: Callable[[Any], Any]) -> Any:
+        """The reply of `kind`, read with `read`; a hello's (`commitment`) may be a withheld session's `layout` instead."""
+        return self._answer({kind: read, **({"layout": _layout_of} if kind == "commitment" else {})})[1]
+
+    def _answer(self, reads: dict[str, Callable[[Any], Any]]) -> tuple[str, Any]:
         try:
             reply = self._wire.recv()
         except CoinError as e:
@@ -337,12 +481,13 @@ class RemoteChallenger:
             raise self._end(f"the stream broke ({e})") from e
         if reply.get("type") == "refused" and sorted(reply) == ["reason", "type"] and type(reply["reason"]) is str:
             raise self._end(f"the challenger refused: {reply['reason']}")
-        if reply.get("type") != kind or sorted(reply) != (["type"] if kind == "closed" else sorted(["type", kind])):
-            raise self._end(f"the challenger did not answer with {kind!r}")
+        kind = reply.get("type")
+        if kind not in reads or sorted(reply) != (["type"] if kind == "closed" else sorted(["type", kind])):
+            raise self._end(f"the challenger did not answer with {' or '.join(map(repr, reads))}")
         if kind == "closed":
-            return None
+            return kind, None
         try:
-            return read(reply[kind])
+            return kind, reads[kind](reply[kind])
         except CoinError as e:
             raise self._end(f"the challenger's {kind} is malformed: {e}") from e
 
@@ -357,7 +502,7 @@ class RemoteChallenger:
         """`open` of each (label, index, after) of `requests` in one round trip: every open frame written back to back,
         then the replies read in order, each checked as `open` checks its own (`live_reason` against its request).  A
         refusal, a reply of another form, or a coin that isn't its request's, opened after its `after`, ends the session
-        and raises: none of the batch's openings is returned, and a retry never redraws.  The challenger answers frames
+        and raises: none of the batch's openings is returned, and a retry never resamples.  The challenger answers frames
         in order (`serve`), so its release log is the one the same coins opened one at a time would have written.  At
         most `MAX_BATCH` coins: their frames are written before any reply is read."""
         asked = [(label, index, bytes(after)) for label, index, after in requests]
@@ -367,20 +512,72 @@ class RemoteChallenger:
                      for label, index, after in asked))
         openings = []
         for label, index, after in asked:
-            opening = self._reply("opening", LiveOpening.from_json)
-            try:
-                why = live_reason(self.commitment, opening, label, index, after)
-            except CoinError as e:
-                why = str(e)
+            if self.withheld:
+                opening = self._reply("coin", _coin_of)
+                why = None if (opening.epoch, opening.label, opening.index, opening.after) == (self._epoch, label, index,
+                                                                                            after) else \
+                    "coin is not the one asked for, opened after what the verifier recorded"
+            else:
+                opening = self._reply("opening", LiveOpening.from_json)
+                try:
+                    why = live_reason(self.commitment, opening, label, index, after)
+                except CoinError as e:
+                    why = str(e)
             if why is not None:
                 raise self._end(f"the challenger's {label} coin {index}: {why}")
             openings.append(opening)
+        self._given += [(o.label, o.index, o.after, o.coin) for o in openings]
         return openings
 
+    def tree(self, spec: dict, nonce: bytes | None = None) -> tuple[bytes, bytes, bytes]:
+        """A ``--zk`` session's coin tree, sampled by the challenger (`LiveChallenger.sample_tree`) of spec `spec` (its
+        JSON) under `nonce` (the prover's ``Hello`` nonce; None: the challenger samples it): its nonce, root and key,
+        ``Hello``'s answer.  The tree is kept, so `tree_open` checks each round against it."""
+        try:
+            s = CT.Spec.of_json(spec)
+        except ValueError as e:
+            raise CoinError(str(e)) from e
+        asked = {"type": "tree", "nonce": None if nonce is None else bytes(nonce).hex(), "spec": spec}
+        got_nonce, root, key = self._ask(asked, "tree", _tree_of)
+        if nonce is not None and got_nonce != nonce:
+            raise self._end("the challenger's coin tree is not under the nonce asked for")
+        self._trees[root] = (s, CT.Rules(got_nonce, key))
+        return got_nonce, root, key
+
+    def tree_open(self, root: bytes, stream: str, rnd: int, n: int, after: bytes) -> tuple[list[int], list[int]]:
+        """Round `rnd` of stream `stream` of the coin tree `tree` returned under `root`, its first `n` coins, opened by the
+        challenger after `after` (64 bytes; `LiveChallenger.open_tree`): the coins and their opening words, each checked
+        against the tree (`coin_tree.check`).  An opening that doesn't open the tree ends the session and raises."""
+        s, rules = self._trees.get(bytes(root), (None, None))
+        if s is None or stream not in s.streams:
+            raise CoinError(f"no coin tree this session sampled under that root has a stream {stream!r}")
+        ws = self._ask({"type": "tree-open", "after": bytes(after).hex(), "n": n, "round": rnd, "stream": stream,
+                        "tree": bytes(root).hex()}, "tree-coins", _words_of)
+        try:
+            coins = CT.check(s, rules, bytes(root), s.streams.index(stream), rnd, n, ws)
+        except ValueError as e:
+            raise self._end(f"the challenger's coin tree round: {e}") from e
+        return coins, ws
+
     def close(self) -> None:
-        """End the session: the challenger closes it, and the stream closes."""
-        self._ask({"type": "close"}, "closed", lambda _: None)
+        """End the session: the challenger closes it, and the stream closes.  On a withheld session the challenger then
+        releases its commitment and the coins' full openings: each must be the coin it gave, in order, opening against
+        that commitment after the root it followed, else `close` raises."""
+        if not self.withheld:
+            self._ask({"type": "close"}, "closed", lambda _: None)
+            self._end("the client closed the session")
+            return
+        commitment, openings = self._ask({"type": "close"}, "released", _released_of)
         self._end("the client closed the session")
+        if (commitment.scheme, commitment.epoch, commitment.families) != self._layout:
+            raise CoinError("the challenger's released commitment is not the layout its hello answered")
+        if [(o.label, o.index, o.after, o.coin) for o in openings] != self._given:
+            raise CoinError("the challenger's released openings are not the coins it gave, in order")
+        for o in openings:
+            why = live_reason(commitment, o, o.label, o.index, o.after)
+            if why is not None:
+                raise CoinError(f"the challenger's {o.label} coin {o.index}: {why}")
+        self.commitment, self.opened = commitment, {(o.label, o.index): o for o in openings}
 
     def __enter__(self) -> RemoteChallenger:
         return self

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.Run
-import Proofs.Flock.Claims.Complete.Sim
-import Flock.With.SimZk
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Run
+public import Proofs.Flock.Claims.Complete.Sim
+public import Flock.With.SimZk
 
 /-!
 # The honest masked run as a pure session
@@ -9,6 +11,8 @@ The plain prover's simulation (`simS`, `Complete/Sim.lean`) on the masked prover
 related to its pure run (`zerocheckPZk_sim`, …, `sessionPZk_sim`), and the honest masked run's sends are the pure
 masked session's bodies (`sessionSZk`, `honestRunZk_eq`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.SaltFinder
-import Proofs.Flock.VBridge.Decode
-import Flock.RecCoins
+module
+
+public import Proofs.Flock.Recursive.SaltFinder
+public import Proofs.Flock.VBridge.Decode
+public import Flock.RecCoins
 
 /-!
 # The value tie's extractor and its finder, as the guarantee reads them
@@ -22,6 +24,8 @@ that plays the recursive audit once and outputs its pair (`valueFinder`, `Recurs
   `files`): `coef` and `dirs` at `rec-open`, `v` at `rec-residuals` and `rec-sparse` (their ties:
   `Recursive/ValueInner.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 
@@ -134,21 +138,21 @@ noncomputable def valueFinder (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg
   oneRun _ σ (valuePick zs vsrc)
 
 /-- Level `l`'s `coef` rows at R's opening `o`: opening `j`'s `coefAt (κ[l]) LANES eq(α_l)[j]` in words. -/
-def stackedCoefRows (o : Flock.RecCoins.Opening) (l LANES : ℕ) : Array (Array ℕ) :=
+def stackedCoefRows (o : Flock.RecCoins.RegisteredOpening) (l LANES : ℕ) : Array (Array ℕ) :=
   (Array.range (o.sh.sched.levels[l]!).q).map fun j =>
     Flock.RecCoins.words (Flock.RecCoins.coefAt (o.kappa[l]!) LANES (Flock.eqTable (o.lg.conss[l]!).alpha)[j]!)
 
 /-- Level `l`'s `dirs` rows at R's opening `o`: opening `j`'s position's low `H` bits. -/
-def stackedDirsRows (o : Flock.RecCoins.Opening) (l H : ℕ) : Array (Array ℕ) :=
+def stackedDirsRows (o : Flock.RecCoins.RegisteredOpening) (l H : ℕ) : Array (Array ℕ) :=
   (Array.range (o.sh.sched.levels[l]!).q).map fun j => Flock.RecCoins.dirsRow (o.lg.conss[l]!).pos[j]! H
 
 /-- The levels of R's schedule with `LANES` lanes and `H` siblings below their cap. -/
-def stackedLevels (o : Flock.RecCoins.Opening) (LANES H : ℕ) : List ℕ :=
+def stackedLevels (o : Flock.RecCoins.RegisteredOpening) (LANES H : ℕ) : List ℕ :=
   (List.range o.sh.sched.levels.size).filter fun l =>
     2 ^ (o.sh.sched.levels[l]!).lanes == LANES && (o.sh.sched.levels[l]!).d - (o.sh.sched.levels[l]!).cap == H
 
 /-- Part `j`'s `v` row of R's opening `o`. -/
-def openingVRows (o : Flock.RecCoins.Opening) (j : ℕ) : Option (Array (Array ℕ)) :=
+def openingVRows (o : Flock.RecCoins.RegisteredOpening) (j : ℕ) : Option (Array (Array ℕ)) :=
   match (do Flock.RecResiduals.groups (← Flock.RecOpening.structureOf o.sh) (Flock.RecOpening.portSizes o.sh)) with
   | .ok gs => match gs[j]? with
     | some (_, _, vs) => some #[Flock.RecCoins.padTo (Flock.RecCoins.words (vs.map (o.v[·]!))) (Flock.RecResiduals.portWordsOf vs.size)]

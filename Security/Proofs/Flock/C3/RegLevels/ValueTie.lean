@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.VBridge.Family.Registrants
-import Proofs.Flock.Recursive.ValueSrc
+module
+
+public import Proofs.Flock.C3.RegLevels.OpensRegs
+public import Proofs.Flock.VBridge.Family.Registrants
+public import Proofs.Flock.Recursive.ValueSrc
 
 /-!
 # The value tie: a registrant's row at a value the verifier registers itself is the verifier's, or SHA-512 collides
@@ -34,6 +36,8 @@ verifier's tree once (`4n` for the leaves, row digest, salt digest, `treeLeaf` a
 `2^D - 1` nodes), the two hm96 leaves (3 each), the two frame-v3 leaves (2) and the climb (2 a level, `2D`). A row of
 `w` words hashes `128 · (1 + ⌈w/64⌉)` bytes; every other input is at most 3 blocks.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 
@@ -529,7 +533,7 @@ theorem value_tie {salt : String → ℕ → ByteArray} {port value : String} {r
 (without segments), the read is of opening `u`, and the registrant's bit `b < H` is bit `b` of the verifier's
 position (`dirsRow pos H`'s), at every valid `H` (`H ≤ 32`), or `valueColl` collides. -/
 theorem dirs_tie {c3 : RecCoins.C3} {LANES H : ℕ} (h : RecCoins.checkStackedLevel c3 c zo.pub zo.own LANES H = .ok ())
-    {o : RecCoins.Opening} (hop : RecCoins.opening c3 c.unit.name = .ok o) {ℓ : ℕ} (hℓ : ℓ < o.sh.sched.levels.size)
+    {o : RecCoins.RegisteredOpening} (hop : RecCoins.opening c3 c.unit.name = .ok o) {ℓ : ℕ} (hℓ : ℓ < o.sh.sched.levels.size)
     (hL : 2 ^ (o.sh.sched.levels[ℓ]!).lanes = LANES)
     (hH : (o.sh.sched.levels[ℓ]!).d - (o.sh.sched.levels[ℓ]!).cap = H) (h32 : H ≤ 32) {prog : String}
     (hprog : c.metaJ.getObjValAs? String "program_sha512" = .ok prog) {u : Fin nv} {q : Fin c.ports.size}

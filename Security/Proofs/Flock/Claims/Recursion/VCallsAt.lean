@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.KSLin
-import Proofs.Flock.Claims.Recursion.VStarBound
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin
+public import Proofs.Flock.Claims.Recursion.VStarBound
 
 /-!
 # Route 2C's escapes with the compiled verifier's own evaluations
@@ -20,6 +22,8 @@ records those evaluations, so the facts route 2C reads of V*'s parts escape to a
 * `Pr_innerRejects_le_PrBinnerV_at`: a rejecting judged draw costs at most `Pr[B_I]` over the draws' evaluations
   (`PrBinnerV`), which is at least `Pr[B_I]` (`PrBI_le_PrBinnerV`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -82,7 +86,7 @@ evaluations**: `VStarAccepts`, its escape a collision among the witnesses' recor
 own evaluations at the run's V\* statements (`setupCalls`). -/
 def VStarAcceptsV (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (shape : Form → Prop) : Prop :=
-  ∀ (x : Msg) (s : Stmt), D.parse x = some s → shape s.form →
+  ∀ (x : Msg) (s : CompiledStatement), D.parse x = some s → shape s.form →
     ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin), (run H P D.V x ω r).out = .acc →
       ∀ ws, OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws → (∀ e ∈ D.calls x ws, H e.1 = e.2) →
         (D.innerView H x r ws).out = .acc ∨

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.GKExp
-import Proofs.Flock.Soundness.ZK.GK.Link
+module
+
+public import Proofs.Flock.Claims.ZK.GKExp
+public import Proofs.Flock.Soundness.ZK.GK.Link
 
 /-!
 # The extraction run hides the witness: `PrefixHides` from Lemma C
@@ -22,6 +24,8 @@ responder is `PrefixHides`. `Proto.runs_close_hm96`: Lemma C gives that bound at
 witness and on the dummy, is the session's prover on its randomness read through a map with fibers of one size
 (`hlink`, `hlink₀`); `Flock.zkR_gkE_hm96` takes that bound at each statement, witness and nonce.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

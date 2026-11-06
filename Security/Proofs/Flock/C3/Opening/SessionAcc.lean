@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Opening.Rows
-import Proofs.Flock.VBridge.AccUnits
+module
+
+public import Proofs.Flock.C3.Opening.Rows
+public import Proofs.Flock.VBridge.AccUnits
 
 /-!
 # n4's session (c): the running sums from the `rec-open-stacked` units
@@ -14,6 +16,8 @@ telescopes: in characteristic 2 the sums before and after add to the levels' con
 * `consO`: the levels' consistency sums of the opened rows (`consAt`).
 * `hacc_of_units`: `hacc` at `consO`, from `UnitSums`, the registered `coef` and the chain's ends.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

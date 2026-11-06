@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.FinPiopRet
-import Proofs.Flock.SessionLoop.FinHmkFw
-import Proofs.Flock.SessionLoop.FinRepRows
-import Proofs.Flock.SessionLoop.FinRepTau
+module
+
+public import Proofs.Flock.SessionLoop.FinPiopRet
+public import Proofs.Flock.SessionLoop.FinHmkFw
+public import Proofs.Flock.SessionLoop.FinRepRows
+public import Proofs.Flock.SessionLoop.FinRepTau
 
 /-!
 # `FinishIs` from the rows' consumed facts and level 0's openings
@@ -19,6 +21,8 @@ import Proofs.Flock.SessionLoop.FinRepTau
 * **`Loop.finishIs_of_consumed`**: at SessionLoopZKDeployed's premises, `FinRepMsgs`, `FinRepLanes`, `FinRepTarget`,
   `FinRepRestart` and `FinRepL0` give `FinishIs`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

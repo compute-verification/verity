@@ -13,7 +13,7 @@ compiler emits, where no gate may be one no output depends on.  Rows of record k
   are).  Flat, v1 and v3 lower to circuits quadratic in V; this one is linear.
 * `TokenSelectGroups_v1{C,G}`: `TokenSelectChunk_v2{G}` over each group of G of its C logits, the groups' bests as one array
   and their indices as another, for `TokenSelectCombine_v2{V,G}`.  A unit's output rows then hold a word or two per group, so
-  they pass the 111 bytes C-Flock needs in some row of every unit, where a chunk's partial alone is 2 and 4 bytes.
+  they pass the 111 bytes Flock needs in some row of every unit, where a chunk's partial alone is 2 and 4 bytes.
 * `TopPKeepWord_v2{V,S}`: `topp_words.TopPKeepWord_v1{V,S}`'s word gates that its keep bits depend on (`live_replay`).  The keep
   word's builder applies each operation to whole vectors of lanes, and some lanes of a vector are read by nothing after it.
 * `TopPMask_v4{V,S}` and `GumbelTopPTokenSelect_v3{V,S}`: `TopPMask_v2{V,S}` and `GumbelTopPTokenSelect_v2{V,S}` over
@@ -23,7 +23,7 @@ compiler emits, where no gate may be one no output depends on.  Rows of record k
   visited block's zero padding only where it is read.  v5 pads that block's K and V rows to BN with a zero row and fills P's
   k-steps with a zero word; when its key count is a multiple of 16 below BN neither is read, 2 dead gates a head.
 * `AttentionHead_v19` and `Attention_v19`: v18 with every step a Call, so a head's key blocks can be units of their own (each
-  `AttnBlock_v5` is about 9.2M ANDs at Llama's geometry, a head of 32 blocks past C-Flock's 2^27 block).  v18 writes its first
+  `AttnBlock_v5` is about 9.2M ANDs at Llama's geometry, a head of 32 blocks past Flock's 2^27 block).  v18 writes its first
   visited block and its epilogue in its body; v19 Calls `AttnBlockFirst_v1` (that block's steps and padding, with no running
   state in, which an `AttnBlock_v5{FIRST=True}` Call would be passed and ignore) and `AttnHeadEnd_v1`.
 * `AttnBlockFirst_v2{D, NVIS, BN, DOT, VS}`: `AttnBlockFirst_v1` with each key's value as D / VS slices of VS columns, so

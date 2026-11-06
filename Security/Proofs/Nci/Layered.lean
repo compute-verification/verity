@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.Layered
-import Proofs.Nci.Threads
+module
+
+public import Definitions.Nci.Guarantees.Layered
+public import Proofs.Nci.Threads
 
 /-!
 # Proofs that keyed circuits are threaded
@@ -12,6 +14,8 @@ them when it reads less than `(E + 1) · b` bits (`lookupsIn_bits`). A subcircui
 `t` thus holds no root of `t`, and each of `t`'s counted multiplications in `R` is charged to a read (at most `e` each)
 or to a lookup (at most `eLk` each), with a lookup costing a read of its token (`threaded_of_layered`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 
@@ -263,13 +267,5 @@ theorem ReferenceThreaded : Guarantees.ReferenceThreaded := by
   unfold Assumptions.ReferenceLayered at hL
   obtain ⟨L⟩ := hL
   exact threaded_of_layered L Γ S 7 (hS.trans_lt (by norm_num))
-
-/-- **Training is slowed, at Kimi K2's shapes.** -/
-theorem ReferenceTraining : Guarantees.ReferenceTraining := by
-  intro Γ α b_w b_a κ c dcl T M hL hα hbw hba hd hB hS hW hκ
-  unfold Assumptions.ReferenceLayered at hL
-  obtain ⟨L⟩ := hL
-  exact LayeredTraining Γ α b_w b_a κ c dcl T _ _ _ _ 7 M L hα hbw hba (by norm_num) hd hB
-    (hS.trans_lt (by norm_num)) hW hκ
 
 end Nci.SecurityProofs

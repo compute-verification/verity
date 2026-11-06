@@ -2,7 +2,7 @@
 `match_stoch.json` -- every sampled row of the record recomputed with the Program's own sampler Definition (`GumbelTopPTokenSelect_v1{V,S}`,
 the registry interpreter walking the V lanes) from the Match record's snapshots of the device sampler chain, under the DECLARED seed /
 temperature / top-p.  Lifted: its verdict and reasons, the summary (engine steps in the record, sampled rows, rows checked, the row tally,
-completeness, device-tied facts, masked rows, the Program's S agreement, the draw ledger), the declared facts, the per-request S the Build
+completeness, device-tied facts, masked rows, the Program's S agreement, the sample ledger), the declared facts, the per-request S the Build
 derived, and per sampled row (step, row, request, event, pos, served token, recomputed token, V, S, chain, declared / device facts,
 status) as a sha256; plus the snapshot steps the stochastic Match took (`match/run.json` `snapshot_steps`: EVERY engine step -- the value
 check is complete only when every sampled row is snapshotted).
@@ -12,7 +12,7 @@ log.jsonl.gz` + `snapshots.json` + the value files the sampler chain reads -- fi
 snapshot), the in-repo workload manifest and the row's Build documents (`build_request*/result.json`: the Program's S;
 `build_workload/workload_program.json`: the stop rule); the snapshot steps are the steps the capture's `snapshots.json` dumped.  In
 candidate mode the candidate's own `match_stoch.json` + `match/run.json` are lifted the same way.  STRONG: a sampler Definition that moves
-a lane, a draw read at another counter, an S derived differently, an unsnapshotted step -- each moves a status, a count or the verdict.
+a lane, a sample read at another counter, an S derived differently, an unsnapshotted step -- each moves a status, a count or the verdict.
 
 Applies to stochastic rows only (a greedy row has no match_stoch.json: row_pod's rcs = -1).
 """

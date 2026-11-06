@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Composed.NonVacuousJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJJson
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.NonVacuousJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJJson
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
 
 /-!
 # The hidden-output `J`-table statements' draw hypotheses hold together
@@ -25,6 +27,8 @@ What none of this covers: that a session `verify --zk` accepts exists at a draw 
 (`avoidsMask`, which no check implies), and `zk_session_composedHJ`'s `hKey` (a named assumption); `zk_session_viewHJ`'s
 `hT1` holds at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

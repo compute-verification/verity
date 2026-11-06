@@ -14,7 +14,7 @@ device premise). The **physical layer** interprets those claims with registered 
 devices: `physical` (devices, blocks, links, certifier ports, the certifiers' cadence and trusted clock, datacenters and
 fleets, every number an `Assumption`), `memory` (registered stores, challenges, read audits, memory wipes and the times
 to serve them) and `account` (credit in ANDs, with the MACs beside it, attribution, where each store was, what could be
-carried in, the covert budget, the export, the `Ledger` across epochs with its custody check, and `double_credit`, the
+carried in, the covert budget, the export, `Accounts` across epochs with its custody check, and `double_credit`, the
 joint rule for credit from several audits). `binding` places a Program's root nodes on a datacenter (where an input
 enters says where its bits come from), derives its crossings and publishes its `Profile`, the only part of the placement
 the physical layer reads. `plan` is the verifier's public plan for an epoch, and `observe.run` is the world: it executes
@@ -28,11 +28,11 @@ switch-to-switch link, an outside host's link to a switch), is empty; until then
 those links named. With the certifiers' pair links sealed (`Datacenter(sealed=True)`, off by default; the certifier's
 `PROTOCOL.md`, "Sealed pair links"), a crossing from one block to another is ciphertext between the two blocks'
 certifiers, so the export counts only the crossings to a reader off every block, the facility boundary
-(`Placement._exported`). The registration commits the occupancy profiles the developer may choose from
+(`Placed._exported`). The registration commits the occupancy profiles the developer may choose from
 (`register(..., profiles=...)`), the plan reads their number from it (`Plan(..., profiles=registration)`), so the
 choice is public advice of log2 of that number, and the audit refuses a declared occupancy that isn't one of them; with
-none registered the one profile is the placement's own. `Ledger.custody(registered_bits)` is the share of the
-registered weights that the ledger's epochs could have carried out: their covert budgets, their exports where charged,
+none registered the one profile is the placement's own. `Accounts.custody(registered_bits)` is the share of the
+registered weights that its epochs could have carried out: their covert budgets, their exports where charged,
 and a side channel of σ a server over each epoch (`DEDICATED_RACKS`, 1 kbit/s, on the premise that no untrusted
 machine shares a block's rack). Weight custody over a monitoring period needs that share well below 1.
 
@@ -40,7 +40,7 @@ A result here is about a monitoring period: the stretch of time it covers, not o
 for a week, a month and a year, over all compute, the adversary resource model (`world-inference-2027` in
 `benchmarks/census/adversary.json`), with the datacenter's figure beside it, even though the demo checks two nodes. Lead with
 the pooled total over the period and its share of the compute it covers, at δ = 1% and 10⁻⁶, with the per-epoch figure
-beside it, never alone. Each epoch draws its own live coins, so the pooled total stays about the same as the period
+beside it, never alone. Each epoch flips its own live coins, so the pooled total stays about the same as the period
 grows. The datacenter's size and the epoch's length are stated parameters (from `benchmarks/census`), and a figure
 scaled up from the demo's machines says which parts are proved and which are scaled.
 
@@ -67,11 +67,12 @@ print(account(audit(run(p, {"x": X}, plan), profile), profile))
 ~~~
 
 `python -m datacenter.demo` runs a night on a two-node rack, honestly and then with an adversary, and
-`python tests/test_walkthrough.py` prints the walkthrough (the Notion page "Accounting for a datacenter, from a circuit
-up") section by section. `benchmarks/network_sim/workload/accounting.py` accounts for the network simulator's MLP and
+`python tests/test_walkthrough.py` prints the walkthrough ("Accounting for a datacenter, from a circuit up") section by
+section. `benchmarks/network_sim/workload/accounting.py` accounts for the network simulator's MLP and
 verity_vllm's serving Program the same way.
 
-The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, a `Device` is `Accounting.Device`
-(the node's constants are its one Python mirror's, `verity.core.protocols.remote_bandwidth.timing`), `Block` is
-`Hardware.SpatialUnit` with `Covered`, `Placement` is `Accounting.Placed` (and `Accounting.Requirement.Placement`) at
-the census's grain, a `Store` is `Accounting.Requirement.Store`, and an `Interval` is `Accounting.Window`.
+The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, a `DeviceEntry` is
+`Accounting.Device` (the node's constants are its one Python mirror's, `verity.core.protocols.remote_bandwidth.timing`),
+`Zone` is `Hardware.SpatialUnit` with `Covered`, `Placed` is `Accounting.Placed` (and
+`Accounting.Requirement.Placement`) at the census's grain, a `StoreEntry` is `Accounting.Requirement.Store`, and an
+`Interval` is `Accounting.Window`.

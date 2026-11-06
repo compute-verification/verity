@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.Device
+module
+
+public import Definitions.Pouw.PearlC.Device
 
 /-!
 # The RTX PRO 6000's W1 prices in the measured loop (definitions only, staged)
@@ -16,6 +18,8 @@ locked 2,100 MHz, the runs `DevicePrices` cites):
 and not the credit, so it raises γ at every shape: γ here is above γ at the measured 1.047 (0.37349% against 0.36218%
 for v2 at the cap 1/1,000, 8192³). The add is exact.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

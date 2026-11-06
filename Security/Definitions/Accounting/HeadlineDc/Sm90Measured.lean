@@ -1,4 +1,6 @@
-import Definitions.Accounting.HeadlineDc.Sm90
+module
+
+public import Definitions.Accounting.HeadlineDc.Sm90
 
 /-!
 # H200 (sm_90)'s measured headline instance: DC-90-ri and `dither-2s-licpw-redux-p1-l32` (trusted; generated)
@@ -25,6 +27,8 @@ this file. `Accounting.Guarantees.TS.Sm90MeasuredHeadline` reads it.
 * `lamStar`: π*, the certificate minimising the bound over this menu (issue 0.003598 + JI90_0 0.966699 + JI90_1
   0.029703).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Headline.Sm90Measured
 

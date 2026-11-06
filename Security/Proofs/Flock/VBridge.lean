@@ -1,93 +1,95 @@
-import Proofs.Flock.VBridge.Sha
-import Proofs.Flock.VBridge.Karatsuba
-import Proofs.Flock.VBridge.Residuals
-import Proofs.Flock.VBridge.Climb
-import Proofs.Flock.VBridge.Open
-import Proofs.Flock.VBridge.RecOpen
-import Proofs.Flock.VBridge.Net
-import Proofs.Flock.VBridge.Unit
-import Proofs.Flock.VBridge.Keyed
-import Proofs.Flock.VBridge.Inputs
-import Proofs.Flock.VBridge.Verifier
-import Proofs.Flock.VBridge.OfVStar
-import Proofs.Flock.VBridge.InnerUnit
-import Proofs.Flock.VBridge.Pinned
-import Proofs.Flock.VBridge.Renumber
-import Proofs.Flock.VBridge.PartS
-import Proofs.Flock.VBridge.PartsCover
-import Proofs.Flock.VBridge.Algebra.Sim
-import Proofs.Flock.VBridge.Algebra.Build
-import Proofs.Flock.VBridge.Algebra.Eval
-import Proofs.Flock.VBridge.Algebra.Zerocheck
-import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
-import Proofs.Flock.VBridge.Algebra.Lincheck
-import Proofs.Flock.VBridge.Algebra.Holo
-import Proofs.Flock.VBridge.Algebra.RingSwitch
-import Proofs.Flock.VBridge.Algebra.Ligerito
-import Proofs.Flock.VBridge.Algebra.LigeritoConverse
-import Proofs.Flock.VBridge.Algebra.ToVStar
-import Proofs.Flock.VBridge.Algebra.BitsOk
-import Proofs.Flock.VBridge.Algebra.Rows
-import Proofs.Flock.VBridge.Algebra.RunSkel
-import Proofs.Flock.VBridge.Algebra.Sizes
-import Proofs.Flock.VBridge.Algebra.Schedule
-import Proofs.Flock.VBridge.Compiled
-import Proofs.Flock.VBridge.AccChain
-import Proofs.Flock.VBridge.AccUnits
-import Proofs.Flock.VBridge.Decode
-import Proofs.Flock.VBridge.Full
-import Proofs.Flock.VBridge.InnerAccepts
-import Proofs.Flock.VBridge.ResUnit
-import Proofs.Flock.VBridge.AlgHolds
-import Proofs.Flock.VBridge.AlgResZero
-import Proofs.Flock.VBridge.ResLayer
-import Proofs.Flock.VBridge.Stages
-import Proofs.Flock.VBridge.Runs.ZcLc
-import Proofs.Flock.VBridge.Runs.Rs
-import Proofs.Flock.VBridge.Runs.Prog
-import Proofs.Flock.VBridge.Runs.Lg
-import Proofs.Flock.VBridge.Runs.Rep
-import Proofs.Flock.VBridge.Top
-import Proofs.Flock.VBridge.Family
-import Proofs.Flock.VBridge.Family.Commits
-import Proofs.Flock.VBridge.Family.ReadTransfer
-import Proofs.Flock.VBridge.Family.Rep
-import Proofs.Flock.VBridge.Family.Openings
-import Proofs.Flock.VBridge.Family.Files
-import Proofs.Flock.VBridge.Family.Runs
-import Proofs.Flock.VBridge.Family.Tape
-import Proofs.Flock.VBridge.Family.Join
-import Proofs.Flock.VBridge.Family.Transcript
-import Proofs.Flock.VBridge.Family.Assembly
-import Proofs.Flock.VBridge.Family.Registered
-import Proofs.Flock.VBridge.Family.Encode
-import Proofs.Flock.VBridge.Family.Structure
-import Proofs.Flock.VBridge.Family.Rounds
-import Proofs.Flock.VBridge.Family.Lig
-import Proofs.Flock.VBridge.Family.Setup
-import Proofs.Flock.VBridge.Family.Names
-import Proofs.Flock.VBridge.Family.Opened
-import Proofs.Flock.VBridge.Family.Pub
-import Proofs.Flock.VBridge.Family.Registrants
-import Proofs.Flock.VBridge.Family.PartReads
-import Proofs.Flock.VBridge.Family.OutCols
-import Proofs.Flock.VBridge.Family.VCoins
-import Proofs.Flock.VBridge.Family.PartKeys
-import Proofs.Flock.VBridge.Family.Ends
-import Proofs.Flock.VBridge.Family.MsgsRead
-import Proofs.Flock.VBridge.Family.AccRows
-import Proofs.Flock.VBridge.Family.RegistrantFinder
-import Proofs.Flock.VBridge.Sparse.Defs
-import Proofs.Flock.VBridge.Sparse.Residuals
-import Proofs.Flock.VBridge.Sparse.Plays
-import Proofs.Flock.VBridge.Sparse.Refine
-import Proofs.Flock.VBridge.Sparse.Unit
-import Proofs.Flock.VBridge.Sparse.Gadgets
-import Proofs.Flock.VBridge.Sparse.Values
-import Proofs.Flock.VBridge.Sparse.Steps
-import Proofs.Flock.VBridge.Sparse.Builder
-import Proofs.Flock.VBridge.Sparse.Laid
-import Proofs.Flock.VBridge.OpeningUnit
+module
+
+public import Proofs.Flock.VBridge.Sha
+public import Proofs.Flock.VBridge.Karatsuba
+public import Proofs.Flock.VBridge.Residuals
+public import Proofs.Flock.VBridge.Climb
+public import Proofs.Flock.VBridge.Open
+public import Proofs.Flock.VBridge.RecOpen
+public import Proofs.Flock.VBridge.RecLink
+public import Proofs.Flock.VBridge.Net
+public import Proofs.Flock.VBridge.Unit
+public import Proofs.Flock.VBridge.Keyed
+public import Proofs.Flock.VBridge.Inputs
+public import Proofs.Flock.VBridge.Verifier
+public import Proofs.Flock.VBridge.OfVStar
+public import Proofs.Flock.VBridge.InnerUnit
+public import Proofs.Flock.VBridge.Pinned
+public import Proofs.Flock.VBridge.Renumber
+public import Proofs.Flock.VBridge.PartS
+public import Proofs.Flock.VBridge.PartsCover
+public import Proofs.Flock.VBridge.Algebra.Sim
+public import Proofs.Flock.VBridge.Algebra.Build
+public import Proofs.Flock.VBridge.Algebra.Eval
+public import Proofs.Flock.VBridge.Algebra.Zerocheck
+public import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
+public import Proofs.Flock.VBridge.Algebra.Lincheck
+public import Proofs.Flock.VBridge.Algebra.Holo
+public import Proofs.Flock.VBridge.Algebra.RingSwitch
+public import Proofs.Flock.VBridge.Algebra.Ligerito
+public import Proofs.Flock.VBridge.Algebra.LigeritoConverse
+public import Proofs.Flock.VBridge.Algebra.ToVStar
+public import Proofs.Flock.VBridge.Algebra.BitsOk
+public import Proofs.Flock.VBridge.Algebra.Rows
+public import Proofs.Flock.VBridge.Algebra.RunSkel
+public import Proofs.Flock.VBridge.Algebra.Sizes
+public import Proofs.Flock.VBridge.Algebra.Schedule
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.VBridge.AccChain
+public import Proofs.Flock.VBridge.AccUnits
+public import Proofs.Flock.VBridge.Decode
+public import Proofs.Flock.VBridge.Full
+public import Proofs.Flock.VBridge.InnerAccepts
+public import Proofs.Flock.VBridge.ResUnit
+public import Proofs.Flock.VBridge.AlgHolds
+public import Proofs.Flock.VBridge.AlgResZero
+public import Proofs.Flock.VBridge.ResLayer
+public import Proofs.Flock.VBridge.Stages
+public import Proofs.Flock.VBridge.Runs.ZcLc
+public import Proofs.Flock.VBridge.Runs.Rs
+public import Proofs.Flock.VBridge.Runs.Prog
+public import Proofs.Flock.VBridge.Runs.Lg
+public import Proofs.Flock.VBridge.Runs.Rep
+public import Proofs.Flock.VBridge.Top
+public import Proofs.Flock.VBridge.Family
+public import Proofs.Flock.VBridge.Family.Commits
+public import Proofs.Flock.VBridge.Family.ReadTransfer
+public import Proofs.Flock.VBridge.Family.Rep
+public import Proofs.Flock.VBridge.Family.Openings
+public import Proofs.Flock.VBridge.Family.Files
+public import Proofs.Flock.VBridge.Family.Runs
+public import Proofs.Flock.VBridge.Family.Tape
+public import Proofs.Flock.VBridge.Family.Join
+public import Proofs.Flock.VBridge.Family.Transcript
+public import Proofs.Flock.VBridge.Family.Assembly
+public import Proofs.Flock.VBridge.Family.Registered
+public import Proofs.Flock.VBridge.Family.Encode
+public import Proofs.Flock.VBridge.Family.Structure
+public import Proofs.Flock.VBridge.Family.Rounds
+public import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.VBridge.Family.Setup
+public import Proofs.Flock.VBridge.Family.Names
+public import Proofs.Flock.VBridge.Family.Opened
+public import Proofs.Flock.VBridge.Family.Pub
+public import Proofs.Flock.VBridge.Family.Registrants
+public import Proofs.Flock.VBridge.Family.PartReads
+public import Proofs.Flock.VBridge.Family.OutCols
+public import Proofs.Flock.VBridge.Family.PartKeys
+public import Proofs.Flock.VBridge.Family.Ends
+public import Proofs.Flock.VBridge.Family.AccRows
+public import Proofs.Flock.VBridge.Sparse.Defs
+public import Proofs.Flock.VBridge.Sparse.Residuals
+public import Proofs.Flock.VBridge.Sparse.Plays
+public import Proofs.Flock.VBridge.Sparse.Refine
+public import Proofs.Flock.VBridge.Sparse.Unit
+public import Proofs.Flock.VBridge.Sparse.Gadgets
+public import Proofs.Flock.VBridge.Sparse.Values
+public import Proofs.Flock.VBridge.Sparse.Steps
+public import Proofs.Flock.VBridge.Sparse.Builder
+public import Proofs.Flock.VBridge.Sparse.Laid
+public import Proofs.Flock.VBridge.OpeningUnit
 
 /-! The bridge from V*, the C-Flock verifier as a circuit, to C-Flock's verifier of record: V*'s gadgets compute what the
 verifier of record computes. -/
+
+@[expose] public section
