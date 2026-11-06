@@ -30,6 +30,7 @@ public import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAcce
 public import Definitions.Accounting.Guarantees.Localization
 public import Definitions.Accounting.Guarantees.Memory
 public import Definitions.Accounting.Guarantees.PerRun
+public import Definitions.Accounting.Guarantees.PeriodBinding
 public import Definitions.Accounting.Guarantees.Pouw
 public import Definitions.Accounting.Guarantees.PouwWork
 public import Definitions.Accounting.Guarantees.RateAudit

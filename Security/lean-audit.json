@@ -3059,6 +3059,10 @@
    "honest": ["Nci.SecurityProofs.UpdatedMatMulReads_honest"],
    "nontrivial": "Nci.SecurityProofs.UpdatedMatMulReads_nontrivial",
    "kind": "exclusion"
+  },
+  "Pouw.SecurityProofs.PeriodBindingPerProver": {
+   "honest": ["Pouw.SecurityProofs.PeriodBindingPerProver_honest"],
+   "nontrivial": "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial"
   }
  },
  "unwitnessed": {
@@ -3431,6 +3435,9 @@
   "Nci.SecurityProofs.ThreadedReadsInfoFmt2": "29c58e0f89f3a259fa223ae3cba558d3829f38a5cc2fd1fa78d08e6b7c10df0b",
   "Nci.SecurityProofs.ThreadedReadsSlots": "43deeb35d80d7cf5ccf1ac1d3146368ec5775d06dbb0f5769b2bef1c092e7112",
   "Verity.SecurityProofs.CreditSizeLe": "1d82216e931154c5b736226230471bd9983409d8bd95d9d21ef3b787124dcb6c"
+ },
+ "witnesses_assumed": {
+  "Claims.ExpectedCR": "ecr/sha-512 at one collision finder is a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands."
  },
  "layers": {
   "Definitions.Core": {
@@ -13081,6 +13088,15 @@
    "assumptions": [],
    "type_hash": "6db2b5f14eaa50ef363440f397e8532266bf9830364718fb5fd44faa6e14a9c2"
   },
+  "Pouw.SecurityProofs.PeriodBindingPerProver": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.PeriodBindingPerProver_honest": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Receipt.DuoCheckpointNoKernel : Pouw.Guarantees.Receipt.DuoCheckpointNoKernel"],
@@ -15436,7 +15452,10 @@
    "Nci.SecurityProofs.UpdatedMatMulReads_honest": "completeness: UpdatedMatMulReads's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMulReads' premises hold together at the toy's one proof block, with c = 2, k = 1, b_w = b_a = 1/2 and the chain ch1, all proved, so UpdatedMatMulReads is not vacuous.",
    "Nci.SecurityProofs.UpdatedMatMulReads_nontrivial": "completeness: UpdatedMatMulReads's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMulReads without incompressible activations: UpdatedMatMul_nontrivial's charges, at which the read factor is at least 3/2, above the one bit the toy's proof block reads, all proved, so UpdatedMatMulReads's conclusion is not a tautology and needs the premise it drops.",
    "Nci.SecurityProofs.UpdatedMatMul_honest": "completeness: UpdatedMatMul's honest witness (its witnesses entry): at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMul's premises hold together at the toy, with c = 2, k = 1, b_w = b_a = 1/2 and the one-product chain ch1 of inner dimension d = 1: an inference block holding the product reads the token, one fresh bit, and is charged half a bit for its weight entry and half for its input entry, all proved, so UpdatedMatMul is not vacuous.",
-   "Nci.SecurityProofs.UpdatedMatMul_nontrivial": "completeness: UpdatedMatMul's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMul without incompressible activations: charging b_w = 1 and b_a = 2, more than the one bit an inference block holding the product reads, F ≥ 3/2 and the bound F · 2G ≤ size(D) fails, G = 1 and size(D) = 2, all proved, so UpdatedMatMul's conclusion is not a tautology and needs the premise it drops."
+   "Nci.SecurityProofs.UpdatedMatMul_nontrivial": "completeness: UpdatedMatMul's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy instances of Nci.Capability.Toy and Nci.Witness (Security/Definitions/Nci/Witness.lean), UpdatedMatMul without incompressible activations: charging b_w = 1 and b_a = 2, more than the one bit an inference block holding the product reads, F ≥ 3/2 and the bound F · 2G ≤ size(D) fails, G = 1 and size(D) = 2, all proved, so UpdatedMatMul's conclusion is not a tautology and needs the premise it drops.",
+   "Pouw.SecurityProofs.PeriodBindingPerProver": "frozen (no-function): a bound on a period's binding (DrawnLayer.BindingAt at Declared.periodLayer, which J10-R's tileLayer is) for every circuit, outcomes and openings, not a property of a Lean function's acceptance; it takes ecr/sha-512 at the prover's own fork finder (Claims.ExpectedCR, applied to that finder alone) and states kappa, the unverified-opening and split terms, in full, since no premise bounds them yet (CMP-33).",
+   "Pouw.SecurityProofs.PeriodBindingPerProver_honest": "completeness: PeriodBindingPerProver's honest witness (LEAN-66): at onePeriod with every proof accepted and every slot opened to false by a verified path, the proofs are accepted on every coin, kappa is 0 and binding never fails (CMP-33).",
+   "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial": "lemma: PeriodBindingPerProver's nontrivial witness (LEAN-66): at onePeriod with every proof accepted, opening every slot to the coin bit by a verified path, kappa is 0 and the bound at q = 0, which is 0, fails, since the opened bit moves with every fresh sample; a counterexample about no protocol function (CMP-33)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
