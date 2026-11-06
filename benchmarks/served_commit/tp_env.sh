@@ -1,12 +1,17 @@
 # The node side of the TP drivers (tp_decode.sh, tp_replay.sh, tp_rerun.sh), sourced from the source tree's root on an 8-GPU H200 node:
-# GLM-5.3's checkpoint bind-mounted from the node's verified local copy where the checkpoint manifest reads it, the Hub offline,
-# a scratch TMPDIR removed on exit, the venv (VENV, default /workspace/cp/venv312) and PYTHONPATH over the tree, and the working
-# directory integrations/vllm. Sets TREE, the tree's root.
+# CASE's checkpoint (GLM53 by default, or DSV4_PRO) bound from the node's verified local copy (LOCAL_CK, a directory holding
+# `.verified`; by default /workspace/cp/<model>-ckpt/<rev>) over the path the checkpoint manifest reads, the Hub offline, a scratch
+# TMPDIR removed on exit, the venv (VENV, default /workspace/cp/venv312) and PYTHONPATH over the tree, and the working directory
+# integrations/vllm. Sets TREE, the tree's root.
 TREE=$PWD
-REV=aca966e4e02791568aa6a4ced368624b3d897f42
-FS_CK=/workspace/fs/glm53/$REV
-LOCAL_CK=/workspace/cp/glm53-ckpt/$REV
-if [ -e "$LOCAL_CK/.verified" ] && ! mountpoint -q "$FS_CK"; then sudo -n mount --bind "$LOCAL_CK" "$FS_CK"; fi
+case ${CASE:-GLM53} in
+  DSV4_PRO) CK=dsv4 REV=b5968e9190ef611bbf34a7229255be88a0e937c1 ;;
+  *) CK=glm53 REV=aca966e4e02791568aa6a4ced368624b3d897f42 ;;
+esac
+FS_CK=/workspace/fs/$CK/$REV
+LOCAL_CK=${LOCAL_CK:-/workspace/cp/$CK-ckpt/$REV}
+if [ -e "$LOCAL_CK/.verified" ] && ! mountpoint -q "$FS_CK"; then mkdir -p "$FS_CK" && sudo -n mount --bind "$LOCAL_CK" "$FS_CK"; fi
+test -s "$FS_CK/config.json" || { echo "no checkpoint at $FS_CK (and no verified local copy at $LOCAL_CK)" >&2; exit 2; }
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 export HF_HOME=/workspace/cp/hf HF_HUB_OFFLINE=1
 TMPDIR=$(mktemp -d /tmp/tp-driver.XXXXXX)

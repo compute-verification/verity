@@ -4,7 +4,7 @@
 #   RESEARCH_RUN_DIR=DIR bash benchmarks/served_commit/tp_rerun.sh
 # `run` in RUNS (default 3) engine processes one after another, then `compare` of each with the first. ARMS (default
 # served,served-2; `all` for every arm of tp_replay); ROW, CASE, TP, LONG, GPU_UTIL, MAX_MODEL_LEN, MAX_BATCHED and VENV as in
-# tp_replay.sh. The fingerprints (about 100 MB a rank and arm for GLM-5.3's window) go to DUMP, by default a new directory under
+# tp_replay.sh, LOCAL_CK as in tp_env.sh. The fingerprints (about 100 MB a rank and arm for GLM-5.3's window) go to DUMP, by default a new directory under
 # /workspace outside the run dir, removed after the comparison unless KEEP_DUMP=1.
 # Out: $RESEARCH_RUN_DIR/out/rerun/run<i> (versions.json, arms.jsonl, run.json) and cross.json.
 set -euo pipefail
