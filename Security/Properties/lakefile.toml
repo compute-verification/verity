@@ -107,4 +107,4 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Pous.WipeSigned", "Properties.Challenger",
   "Properties.Firewall", "Properties.Core.Site", "Properties.Flock.Circuit", "Properties.Nci.Protocol",
   "Properties.Verity.Soundness", "Properties.Verity.Game", "Properties.Verity.Idle", "Properties.Remote",
-  "Properties.Verity.Subprotocols"]
+  "Properties.Verity.Subprotocols", "Properties.Verity.Coupling"]

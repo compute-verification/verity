@@ -73,7 +73,8 @@
   "Properties.Challenger",
   "Properties.Firewall",
   "Properties.Core.Site",
-  "Properties.Verity.Subprotocols"
+  "Properties.Verity.Subprotocols",
+  "Properties.Verity.Coupling"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -341,6 +342,10 @@
    "owner": "@network-accounting",
    "digest": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e"
   },
+  "Verity.Vocab.PeriodsCouple": {
+   "owner": "@soundness",
+   "digest": "9b9104bef15bbb693a89d823254efc6ca9911c36423d3d5b98375234d0f2e089"
+  },
   "Verity.Vocab.PousSound": {
    "owner": "@memory-accounting",
    "digest": "2d0ee7043be3fa3a99503039cef1756e3c3558dd814faa5970bcbd738e037e69"
@@ -353,13 +358,29 @@
    "owner": "@proofs",
    "digest": "c0c0fd13ed91538fbbb0bd8b231e1e0b28c9b1657924dc4272f4739c9c9a55f6"
   },
+  "Verity.Vocab.SubprotocolBound": {
+   "owner": "@soundness",
+   "digest": "1a4d2b3ea246dfa056c0ec2b3edc53f3eadc1d1f43645954fdb4b8a1aaa9b5ba"
+  },
   "Verity.Vocab.Target": {
    "owner": "@soundness",
    "digest": "548f5118cb15c0be50546298ea855af1004bbfd85138c2afe31efcaeb602b1cd"
   },
+  "Verity.Vocab.UpFrontFor": {
+   "owner": "@soundness",
+   "digest": "28dd9f723c811dcf0725b2d0bcb064f66c0eb969d4544047538b20753c43b475"
+  },
+  "Verity.Vocab.WipeCoupling": {
+   "owner": "@soundness",
+   "digest": "76c34c31267421ba984076a5c46a5aeeb05af58bd6ec37763fc9c1e4d88e9a0e"
+  },
   "Verity.Vocab.WipeSound": {
    "owner": "@memory-accounting",
    "digest": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937"
+  },
+  "Verity.Wipe.SurvivorBound": {
+   "owner": "@soundness",
+   "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
   }
  },
  "meaning": [
@@ -562,6 +583,22 @@
   "Verity.soundness_at_of_componentBounds": {
    "honest": ["Verity.soundness_at_of_componentBounds_honest"],
    "nontrivial": "Verity.soundness_at_of_componentBounds_nontrivial"
+  },
+  "Verity.coins_couple": {
+   "honest": ["Verity.coins_couple_honest"],
+   "nontrivial": "Verity.coins_couple_nontrivial"
+  },
+  "Verity.target_of_periods": {
+   "honest": ["Verity.target_of_periods_honest"],
+   "nontrivial": "Verity.target_of_periods_nontrivial"
+  },
+  "Verity.wipe_target": {
+   "honest": ["Verity.wipe_target_honest"],
+   "nontrivial": "Verity.wipe_target_nontrivial"
+  },
+  "Verity.soundness_of_upFront": {
+   "honest": ["Verity.soundness_of_upFront_honest"],
+   "nontrivial": "Verity.soundness_of_upFront_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1084,7 +1121,12 @@
     "Definitions.Hash.Assumptions",
     "Lms.Verify",
     "Flock.CoinTree",
-    "Flock.Hm96"
+    "Flock.Hm96",
+    "Properties.Verity.Subprotocols",
+    "Properties.Verity.Coupling",
+    "Definitions.Accounting.JointPeriod",
+    "Properties.Pouw.PearlPlus",
+    "Properties.Pouw.PearlPlusDraw"
    ],
    "except": [],
    "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
@@ -3962,6 +4004,32 @@
    "assumptions": [],
    "type_hash": "18aa0be157689c21712bf3aeb5199fb4b9b22378baf5efaf9efb9df44d38cb47"
   },
+  "Verity.coins_couple": {
+   "owner": "@soundness",
+   "signature": ["Verity.coins_couple : Verity.CoinsCouple"],
+   "assumptions": [],
+   "type_hash": "e11a9e40a8666e28598f3e1dd1b9e61a9b0435718454fe4bfd17509cd6f9de36"
+  },
+  "Verity.coins_couple_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.coins_couple_honest :",
+    "  Verity.Idle.unbounded.UpFrontFor",
+    "    (fun o => Verity.ComponentAccepts Verity.Registration.Composite.remote Verity.Subprotocol.pouw o.sent)",
+    "    Verity.Registration.Composite.remote Verity.Subprotocol.pouw"
+   ],
+   "assumptions": [],
+   "type_hash": "5090b998392f9af8511a0417df50be11768d9f519a2cb68ca682cdcc14ec7c11"
+  },
+  "Verity.coins_couple_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.coins_couple_nontrivial :",
+    "  Not (Verity.Idle.exact.TargetFor (fun x => True) Verity.Registration.Composite.remote Verity.Subprotocol.pouw)"
+   ],
+   "assumptions": [],
+   "type_hash": "685ffcdcfb618322cb616fc939e27ae7afb06436848dacb078fe8270820cab89"
+  },
   "Verity.remote_soundness_of_subprotocols": {
    "owner": "@soundness",
    "signature": ["Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness"],
@@ -4077,6 +4145,85 @@
    ],
    "assumptions": [],
    "type_hash": "5331eb5f08954cebb0c4dda27e710eeab5c3ec3baba428f68d214b1f2d74f91d"
+  },
+  "Verity.soundness_of_upFront": {
+   "owner": "@soundness",
+   "signature": ["Verity.soundness_of_upFront : Verity.SoundnessOfUpFront"],
+   "assumptions": [],
+   "type_hash": "2494f8e3e16e9e95ff2d41d571d5975aa4edb5159e9ab0eb29fd3fd41be59832"
+  },
+  "Verity.soundness_of_upFront_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.soundness_of_upFront_honest :",
+    "  And (Verity.Idle.unbounded.SubprotocolBound Verity.Registration.Composite.remote Verity.Subprotocol.sampled)",
+    "    (And (Verity.Idle.unbounded.SubprotocolBound Verity.Registration.Composite.remote Verity.Subprotocol.pouw)",
+    "      (Verity.Idle.unbounded.SubprotocolBound Verity.Registration.Composite.remote Verity.Subprotocol.inferenceOnly))"
+   ],
+   "assumptions": [],
+   "type_hash": "2729ed813926036839570ce2505354f024804b1b8a49140e865983608d82361a"
+  },
+  "Verity.soundness_of_upFront_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.soundness_of_upFront_nontrivial :",
+    "  Not (Verity.Idle.exact.SoundnessFor Verity.Registration.Composite.remote fun x => True)"
+   ],
+   "assumptions": [],
+   "type_hash": "6b58eb505a9bce5f3e3068ff276b0f6b7f22c5aa2702a1d43cf7b62ffbd757e6"
+  },
+  "Verity.target_of_periods": {
+   "owner": "@soundness",
+   "signature": ["Verity.target_of_periods : Verity.TargetOfPeriods"],
+   "assumptions": [],
+   "type_hash": "d181e7720c0d275fb70fe100c65ea105f93c383c5dae726079f6f9869a2f1412"
+  },
+  "Verity.target_of_periods_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.target_of_periods_honest :",
+    "  (Verity.Idle.vocab ENNReal.instTop.top 1).PeriodsCouple",
+    "    (fun o => Verity.ComponentAccepts Verity.Registration.Composite.remote Verity.Subprotocol.pouw o.sent)",
+    "    Verity.Registration.Composite.remote Accounting.Audit.pouw"
+   ],
+   "assumptions": [],
+   "type_hash": "8c6221a6838648bc6c1a0376c4ea61892ed3441bf05e1faeba09bf0cce0807d0"
+  },
+  "Verity.target_of_periods_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.target_of_periods_nontrivial :",
+    "  Not (Verity.Idle.exact.TargetFor (fun x => True) Verity.Registration.Composite.remote Verity.Subprotocol.pouw)"
+   ],
+   "assumptions": [],
+   "type_hash": "685ffcdcfb618322cb616fc939e27ae7afb06436848dacb078fe8270820cab89"
+  },
+  "Verity.wipe_target": {
+   "owner": "@soundness",
+   "signature": ["Verity.wipe_target : Verity.WipeTarget"],
+   "assumptions": [],
+   "type_hash": "8a7cd3dbe22e55ea70b7eeb6a96fe2c7a1828d90e42a45a4b3d7240773ed3222"
+  },
+  "Verity.wipe_target_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.wipe_target_honest :",
+    "  And",
+    "    (∀ (θ : ByteArray) (F : Array ByteArray),",
+    "      (Verity.Idle.unbounded.wipe θ F).SurvivorBound (Verity.Idle.unbounded.foreignBits θ) fun x x_1 x_2 => 0)",
+    "    (Verity.Idle.unbounded.WipeCoupling (fun x => False) fun x x_1 x_2 x_3 x_4 => 0)"
+   ],
+   "assumptions": [],
+   "type_hash": "3bfa901574ada0546ff7e2a7ed3e38b786a9307b5abcce18cdceda555de66441"
+  },
+  "Verity.wipe_target_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.wipe_target_nontrivial :",
+    "  Not (Verity.Idle.exact.TargetFor (fun x => True) Verity.Registration.Composite.onsite Verity.Subprotocol.wipe)"
+   ],
+   "assumptions": [],
+   "type_hash": "7be5722effd046f635964f023dca25c90e739fb055dc677bb81837a5fcb7709d"
   }
  },
  "shape": {
@@ -5422,7 +5569,11 @@
    "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial": "lemma: AcceptInferenceOnly's nontrivial lemma: InferenceOnlyHeld fails at no cases, ev = [], which a verifier that accepts everything accepts",
    "Properties.Remote.SecurityProofs.acceptComplies_nontrivial": "lemma: AcceptComplies' nontrivial lemma: CompliesHeld fails at no cases, ev = [], which a verifier that accepts everything accepts",
    "Verity.soundness_at_of_componentBounds": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfComponents: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component (Verity.Vocab.ComponentBound: the component's acceptance of its own case in what the prover sent while the claim fails, at most the subprotocol's error) in place of its target; each bound gives its target by monotonicity (Verity.Vocab.sound_of, one family over every composite and subprotocol, at remote's three Vocab.sampledProofsSound_of, pouwSound_of and inferenceOnlySound_of), so a composite with one more subprotocol takes one more bound under the same statement; each bound is a hypothesis until its subprotocol's piece proves it of its compiled component, with the same claims, errors and Vocab",
-   "NciCheck.Properties.DescCountsCK": "unstated: a published complies of the count of (c, k)-inference blocks (NciCheck.Count.check, the judgment against n alone) means the Boolean declaration the Program lowers to by the gate table complies with Nci.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and NciCheck.Desc's summaries to cover the parameter leaves a Definition's gates read"
+   "NciCheck.Properties.DescCountsCK": "unstated: a published complies of the count of (c, k)-inference blocks (NciCheck.Count.check, the judgment against n alone) means the Boolean declaration the Program lowers to by the gate table complies with Nci.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and NciCheck.Desc's summaries to cover the parameter leaves a Definition's gates read",
+   "Verity.coins_couple": "frozen (premise): a subprotocol's target at a verdict in the causal game (Verity.CoinsCouple: Verity.Vocab.TargetFor) from its bound over the coins drawn up front at every resolution of the coin trees' coins (Verity.Vocab.UpFrontFor), the play's probability of the event being at most its probability over those coins at some resolution; at the component's acceptance it is Verity.Vocab.ComponentBound; the bound is a hypothesis until each subprotocol's piece proves it in the coins model",
+   "Verity.target_of_periods": "frozen (premise): an audit's target at a verdict in the causal game (Verity.TargetOfPeriods: Verity.Vocab.TargetFor) from a period run of the coins model coupled to the play (Verity.Vocab.PeriodsCouple: its coins in bijection with the coins drawn up front, its verdict and claim refining the play's, Accounting.PeriodRun.Sound within the published delta, and the rest of the event, a log out of place or the coupling's break, within the forger's and the finder's terms); the coupling is a hypothesis until each audit's piece builds it",
+   "Verity.wipe_target": "frozen (premise): the wipe's target at a verdict in the causal game (Verity.WipeTarget: Verity.Vocab.TargetFor) from the wipe's survivor bound over its own draw (Verity.Wipe.SurvivorBound) and its coupling to the play (Verity.Vocab.WipeCoupling: Verity.Wipe.OfRun.Preserves, which reads the foreign content as uniform on the play, the wipe's verdict refining the verdict, and the survivor error within the wipe's); both are hypotheses until the wipe's piece proves them",
+   "Verity.soundness_of_upFront": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfUpFront: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component, over the coins drawn up front, or as its target (Verity.Vocab.SubprotocolBound: Verity.Vocab.ComponentBound, Verity.Vocab.UpFrontBound or Verity.Vocab.Target); each bound is a hypothesis until its subprotocol's piece proves it"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -7620,7 +7771,7 @@
    }
   },
   "Definitions.Core.Blocks": {
-   "digest": "98d6250ba3acb370db6b676b7efb7de960171f5bd7cb27db236711910ec97726",
+   "digest": "465e192609bec1196ae288b2049358038f609a01f64317c0335f874c8d83af42",
    "definitions": {
     "Verity.Block": "ac647c1b42deae35468cb0531bc2925fe228eb55c6a306078eaf695ede59f223",
     "Verity.Block.gates": "69e3f9952544c184ee133a01985437ca45d8beb2c9ced5ee4cda402f0cc3e544",
@@ -7637,7 +7788,9 @@
     "Verity.Wipe": "cb9fe1d306caeda4371e7748356746baa950d3d298fcecea07855c145b674168",
     "Verity.Wipe.OfRun": "0329033188b44ad722cf035e5ddeb2ba6b96a4249bda4d8ac0bfcbe4a50385b1",
     "Verity.Wipe.OfRun.Kept": "6c33f78861c6009ef90fed6f5ddb80163f5f50bf82925ee4cc6c2ef56063157f",
+    "Verity.Wipe.OfRun.Preserves": "45c5ad1164100f090cc482a072e452e87b010ff9b680568679d026d17389be3a",
     "Verity.Wipe.OfRun.S_φ": "639d252a4985507eda5bd4db6bc81cf7cae2ec84c2d22a027939631906b8f505",
+    "Verity.Wipe.OfRun.accepts": "6f771ac0c2268af43331e1aec48b917f0a5a2612845143fa6d2d5667bca9947c",
     "Verity.Wipe.OfRun.hold": "ddad2881a737a58a6cf4a3da4e83ba4aa3ed69499d3a08da338956ee0483dfb1",
     "Verity.Wipe.OfRun.keep": "c0088120a9b89a5eb24703d75014eea9078ad0e536a1a9d833efa6d77ae3fc4f",
     "Verity.Wipe.OfRun.view": "a46b7734283f0d3f253addcf8797eed1db018f03c52aff93fbc05b279e49bc19",
@@ -7844,10 +7997,11 @@
    }
   },
   "Definitions.Core.Game": {
-   "digest": "5f3bb1fc1894b0d83138dbdc825a23271ce150ab7ea25b658e9a7f62c25c4cd9",
+   "digest": "619046c584c1c1d58eaa34f24d449433a3e4dbef892c7c5291db55815db3a30d",
    "definitions": {
     "Verity.Game": "dbf3d91129d029b645b41c73b9f2a122f0c318d56e8a77991cca09d48a3fe45b",
     "Verity.Game.Strategy": "8ad135dabc1972b9e00f04d97f8f2753cffa4a02917c50de4e175caf71a98f1c",
+    "Verity.Game.avg": "85d0489029a4598bb09633f852638fbc1f3fa216bfcd37252a2d105949fcd4c3",
     "Verity.Game.below": "b69be1f43330c2b3f20caf271a83fd61dd7e3fb4b75025e13a728dc61c1fa9b3",
     "Verity.Game.bind": "8789551c8239003c7170514b58b53d02da8f6f6253d9b47652f26f9e0365ee6d",
     "Verity.Game.brecOn": "213ab974ac514d2ce97dd72d54b09b17eaba49ec501736308a264f30943df0e5",
@@ -7856,6 +8010,7 @@
     "Verity.Game.coin": "4540142afd525a891bba84d91a6d1f5f4bc0b78456e7cb7e5220db9c18febdaa",
     "Verity.Game.draw": "2c73f92b3862e836756fb55a8f32bff15bf37734e51c53db599f1fb6a7671628",
     "Verity.Game.map": "6cd5468a1f484fdc57f7e452b1201fa4960f461c800d5cf222c0ccf5b1b9580a",
+    "Verity.Game.prCoin": "d5911f753d6cc91033c6140b087bb94227ab24706dccc248b744345ab76bc564",
     "Verity.Game.prob": "fea48fe14d6a7bb993feaac2934e9c5f2bbf12d1b6f480b134f61c6e716d2afd",
     "Verity.Game.rec": "0cb221ec988a54d4397bcfb92c3aaf689be66166dcdadd9bc4d5801dca0d7365",
     "Verity.Game.ret": "36d51e203dc27816f87118662a944dfd4726229a8d44c08551ba14dd7fc69649",
@@ -16410,8 +16565,47 @@
     "Properties.SampledProofs.secondOf": "f3edb5e3e0b1b05240d63f3b7e0d2e8baec5a3f684879c7a0e60806ba4215b49"
    }
   },
+  "Properties.Verity.Coupling": {
+   "digest": "d01131217597d5deb3d474150771cad2c84d21a6713beacbc88472e3a27b3b71",
+   "definitions": {
+    "Verity.CoinsCouple": "536d9f0ac02f50934cafb502d8462c1d3c09725fe1a63ccb95049af88b9f697b",
+    "Verity.Game.Strategy.assocMap": "df22362beed05390155b04070af603efd9bf3aabb5539db33af4eb032d27f699",
+    "Verity.Game.Strategy.ifNeg": "46af33f5b1c09b56e8b1930a9dc02a4e11455c5b336b32b63f91f52e5121e02f",
+    "Verity.Game.Strategy.ifPos": "51748a95ecfa175b472db5ef86b0d2c86bf707bdbfc105ac21e53809633a9c9a",
+    "Verity.SoundnessOfUpFront": "908cdf6ccc7ecff0d9270e9cee452ff5ca3ee362631b3212d0a8597c9b6d6928",
+    "Verity.TargetOfPeriods": "8cf6bf9716d9dc0330fceec565996f659b489709e5a2623418c99b8086c3aa06",
+    "Verity.TreeCoins": "30deaf59e5616a20448071f2ece82204d1568f449c1378446fbcb03d58bda872",
+    "Verity.TreeCoins.hello": "cefb565e4978ecbee16e83176767d7903bef6c2a101b35f040d25445631d172e",
+    "Verity.TreeCoins.opening": "75d27f417809c30aa473ff4b8613c10301052fc6b7ba7dc48c9134cb194e0784",
+    "Verity.UpFront": "556aaf0fcf50b556c385862ad3ab8ea9c54496ebdb6bfa73fef1ed8b55fb9349",
+    "Verity.UpFront.instFintype": "412965ca94cb21e0d7cdc7d2c63615c2627beabf75450deb5ec602ab5b78c495",
+    "Verity.UpFront.read": "c7066c4bb6bd08e686f38c64a118801a8b641059b8b2ac81093cfd020275bf5b",
+    "Verity.UpFrontAll": "1de061acff70cb7d149449e0290f2a3a8884319d985e93981194fe36c70aaf33",
+    "Verity.Vocab.PeriodCoupling": "adcad2308b20cc55c2ab0b268a3626d58bb29ed16c916e53f8f2642609de5b49",
+    "Verity.Vocab.PeriodCoupling.BreakBound": "a17fb2f239f4d92e77c0bb1580a25f741a778659ce59e95e9e3db76a9164b678",
+    "Verity.Vocab.PeriodCoupling.C": "b2d3860ce63c85d43490abb535ead2b04844b53acc7c8c55bf451b5bfe2429bf",
+    "Verity.Vocab.PeriodCoupling.I": "eeae991f708145dff58803339a9fd08aaf8afb35acb69fd24dec25398f474e2e",
+    "Verity.Vocab.PeriodCoupling.brk": "7766fe6ec4951df7a9df13cf79c9719d4f65ddc46810799a46d37e52a02013e1",
+    "Verity.Vocab.PeriodCoupling.coins": "0ad86ffdfee4f5149fdfb02e05a72e585e614d07cd643eb7ace5c3a2e232c892",
+    "Verity.Vocab.PeriodCoupling.decEqI": "4517fab6185a3465d47940cc3822dcb46c8d98a93c22bb8aa1da51a2278a5038",
+    "Verity.Vocab.PeriodCoupling.fintypeI": "8fdba363f9c64f44b292a40ced8eb87eacab7555fa4809a9be4f2b6e18db52ad",
+    "Verity.Vocab.PeriodCoupling.fintypeΩ": "9e66c6bf23cd3dc73db5be37a69da4aa030eee444743e2b5fe1df8d0ed724a3b",
+    "Verity.Vocab.PeriodCoupling.price": "e53dc17797fae5392ccf6cc6f3380826921250151d9920bb4225f2c79cc353fc",
+    "Verity.Vocab.PeriodCoupling.run": "e304bd08f654d14d4f38829e51ba2c5524f1507f4da2c73787f620b0ef1b54d3",
+    "Verity.Vocab.PeriodCoupling.Ω": "5fa78dee672c3671e9c199383fcbaa1f56cff21cae6e2c04157535fe3caa4e05",
+    "Verity.Vocab.PeriodsCouple": "9b9104bef15bbb693a89d823254efc6ca9911c36423d3d5b98375234d0f2e089",
+    "Verity.Vocab.SubprotocolBound": "1a4d2b3ea246dfa056c0ec2b3edc53f3eadc1d1f43645954fdb4b8a1aaa9b5ba",
+    "Verity.Vocab.UpFrontBound": "1d4732ebf0487b94ec8bd393542cb610a2b3667d261740e009bcf8711996cae4",
+    "Verity.Vocab.UpFrontFor": "28dd9f723c811dcf0725b2d0bcb064f66c0eb969d4544047538b20753c43b475",
+    "Verity.Vocab.WipeCoupling": "76c34c31267421ba984076a5c46a5aeeb05af58bd6ec37763fc9c1e4d88e9a0e",
+    "Verity.WipeTarget": "b392a75a4bfb7269eed830f9c68e0db224d18f6fae2d5909887c8c048e0659ce",
+    "Verity.coinsLeft": "70c94bd00e2b94f771a8285c5d9d4e5942f5e5cec9b2a2555b191e64a7bbbbda",
+    "Verity.outK": "c4587d8b5147a75352ac1eaef00af907dad4a92fd3ecc29d2cb2585256f5e901",
+    "Verity.outUp": "decd1ed31fd8815227f5c0d079d161e33da63b5cc945243b367c5242f0c80456"
+   }
+  },
   "Properties.Verity.Game": {
-   "digest": "36926df22f784ed20d04372b95e15c4094dd0c75577a39748ccfbb72fcd216c4",
+   "digest": "3d083c360ab73dbe57460f8573a74e44e17949158b4a05268fd33b83a39f0fff",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -16422,6 +16616,7 @@
     "Verity.Exchange.commitment": "979bd27b365dbba67eb161ba9a9708405678e2b1c8815fb207516ca4c1822059",
     "Verity.Exchange.evidence": "665a2824ba1ed4ee5e4babd29d4355c36ea36eddcb1e1b1f2663a868cbb40b6b",
     "Verity.Exchange.files": "bb668a0548351b35f5513bb943c1223f6a939df99cd779f58490cec71393d8e8",
+    "Verity.Exchange.log": "ddf039edb5e59bd5188e12dba894f4152b1711070b5e5db19f2655ab48000c6b",
     "Verity.Exchange.params": "31a09ecd596cb99922e6832d23628f4463fea3d1887de0caa1abc31fc5835c27",
     "Verity.Exchange.sent": "c1463d7fce952959b902e35344cff52570788e6d6972bd6e696decd7080944c3",
     "Verity.FileRead": "56a4bbb515335c65c172815638716e16871624c97cc304ff7cd239cf75afafa2",
@@ -16494,6 +16689,7 @@
     "Verity.Vocab.FinderCR": "ac9a385f70101635417ebdbe596771e472e1860e4bd509cdea565732da998e91",
     "Verity.Vocab.Holds": "4d3122b84d73fce763002a7789f07051de1e31d9c17e2739703ebb25cc8f884e",
     "Verity.Vocab.InferenceOnlySound": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
+    "Verity.Vocab.Logged": "e17d736e0f3016e0383e66eba5b8b455bcd85f47e2d3c3dfde28546c9ad33c53",
     "Verity.Vocab.NetworkCertifierSound": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e",
     "Verity.Vocab.Opens": "dc9e98de8f4dd3c8d8e67112689b4467fc5ce5da8864de1d8fef43a123d101bf",
     "Verity.Vocab.PousSound": "2d0ee7043be3fa3a99503039cef1756e3c3558dd814faa5970bcbd738e037e69",
@@ -16513,6 +16709,7 @@
     "Verity.Vocab.callsMul": "626d7b3ea455cda365e793440bc647beb9738b751f8838aac23a229b96f0a26e",
     "Verity.Vocab.certOf": "135abb195a1664a95285f2fa9af03ac578f46c779f5b832b0ab491f251ff33b9",
     "Verity.Vocab.circuitOf": "158f7fd0ddf1bf28e46f83d8237544fd9bef08fcf78cf37d0b7934f2009cca22",
+    "Verity.Vocab.coinsRead": "4685228eafa3be069cda8671b29cbb04b681563fc26521a450a0d4f8ca8a93d4",
     "Verity.Vocab.computed": "9ef4e592b84b4f2c90140b00185eac91673904a65fc712357d84adc010dc3f5e",
     "Verity.Vocab.cost": "2b3a9189ceef4cbfba41bd1d075d240edc8535646e1695ef0db59ac2183a89a0",
     "Verity.Vocab.crBound": "74aa58ee95cf7fc690e6f74bd055cb09bd0e7dc8421f89d2a66ed18a70a75302",
@@ -16584,7 +16781,7 @@
    }
   },
   "Properties.Verity.Idle": {
-   "digest": "ddb4ed97957c2b0ec5ec68ffcc767901980f7a5c2fa366abef982002378ac1b8",
+   "digest": "634b4343d4f26af659f78e69a7913e2d7c6bc4b36ddf5b82b29895f9d4e41b8c",
    "definitions": {
     "Verity.Idle.blocks": "ebe95418157ad28d48d4083579d9136b28c17e127cab37e3ebeaae215a85d361",
     "Verity.Idle.device": "1a01ab3a6064792afb1b2d5d70af0e09f5deea7bd52dd6afbb39e1b3e0d9dd67",
@@ -16592,6 +16789,8 @@
     "Verity.Idle.fileRead": "3e615103357f49df08373be0f91324d1d63713918b1670d93d9dd723c4b7261f",
     "Verity.Idle.finder": "738d28450d1abd4b00959201be8a07d8273e197750cdb5ccc35762b39e186b87",
     "Verity.Idle.forger": "044b67ada7dfd4eead69c77dc674ce2b28cbe22a3d28c306c55b5e28acd142f3",
+    "Verity.Idle.instFintypeSeedUnbounded": "9329f8f6c22530afa0f9da19e2b9ad840ae93e86a03fcd2a5da50f3258308fb2",
+    "Verity.Idle.instFintypeSpotsUnbounded": "b91b051abc2836d29929910aa8e4f3c8c4512125a9ab3a98574c3492a7184a64",
     "Verity.Idle.ofRun": "8ff1e5a4834a540b7c8f6b313c861e5ff83544401209812c89ad6df358d6af0d",
     "Verity.Idle.signer": "a824eca6c17fecbad2c40282c4c889c335f4fc96dd8eedfb48ed8c267ab4273a",
     "Verity.Idle.step": "736cbc3dbe0dc77af7dadee980cf76b3e0cb9fb0397e9fe292f1d333b2a8471a",
@@ -16610,10 +16809,11 @@
    }
   },
   "Properties.Verity.Subprotocols": {
-   "digest": "5c272113d5d24a8113c1774fe24dc39c975cb03776ba5f2de640feedf5961599",
+   "digest": "effdc140e7ff37927dcd556c9c4f6381f3300bc72c09995ff439a2a721f36946",
    "definitions": {
     "Verity.SoundnessOfComponents": "4870232ad88c5c4e3835bd07ecd25ac481ed4904101c7ab0886c432da132f99c",
-    "Verity.Vocab.ComponentBound": "6f08422ff25bd88205b76fb28cc64d58c5a1d3cfb9be719b2ad8a2e1793896d5"
+    "Verity.Vocab.ComponentBound": "6f08422ff25bd88205b76fb28cc64d58c5a1d3cfb9be719b2ad8a2e1793896d5",
+    "Verity.Vocab.TargetFor": "ec976ae835f1bb2898c5985076e7c8f9428af657386b02d0da93ae886e1ed1a7"
    }
   },
   "RemoteAudit.Basic": {
