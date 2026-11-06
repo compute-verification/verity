@@ -40,8 +40,9 @@ public import Proofs.Flock.RecGeneric.AtFlockCompiled
 public import Proofs.Flock.RecGeneric.AtFlockCompiledSessions
 public import Proofs.Flock.RecGeneric.AtFlockCompiledContract
 public import Proofs.Flock.RecGeneric.AtFlockCompiledKS
-public import Proofs.Flock.RecGeneric.AtFlockCompiledNontrivial
 public import Proofs.Flock.RecGeneric.CompiledCost
+public import Proofs.Flock.RecGeneric.AtFlockCompiledNontrivial
+public import Proofs.Flock.RecGeneric.CompiledBits
 
 /-! The recursion as a compiler, generic in the outer argument and the server, over inner protocols with repetition
 extractors: its statements (`Proofs.Flock.RecGeneric.Statement`), the Flock instance's
@@ -60,7 +61,8 @@ reruns read as `Claims.Recursion`'s samples (`Proofs.Flock.RecGeneric.AtFlockRer
 the link's at two runs (`Proofs.Flock.RecGeneric.AtFlockBits`), with a rerun's extra calls at the deployment within
 route 2C's `n` and a bound on the witnesses' recorded calls (`Proofs.Flock.RecGeneric.AtFlockCounts`), that bound at
 most `2^32` wherever a run of the compiled verifier accepts (`Proofs.Flock.RecGeneric.AtFlockRecorded`), and the bridge
-to the sampled compiler (`Proofs.Flock.RecGeneric.Sampled`, B1), with B1's proof and the recursive audit from L1 (`Proofs.Flock.RecGeneric.SampledProof`), and a toy outer argument
+to the sampled compiler (`Proofs.Flock.RecGeneric.Sampled`, B1), with B1's proof and the recursive audit from L1
+(`Proofs.Flock.RecGeneric.SampledProof`), and a toy outer argument
 and compiler at which L2's hypotheses are stated to hold together (`Proofs.Flock.RecGeneric.Toy`), proved to hold
 (`Proofs.Flock.RecGeneric.ToyProof`). L1's proof: the
 compiled verifier's runs at any server (`Proofs.Flock.RecGeneric.ServerRun`) and the plurality prover on the
@@ -88,8 +90,10 @@ today's compiled record as a compiler over Flock as the outer
 argument, with its targets and bound (`Proofs.Flock.RecGeneric.AtFlockCompiled`), the compiler's contract for `E_O`
 at the deployment (`Proofs.Flock.RecGeneric.AtFlockCompiledSessions`), the compiler's contract at the deployment's
 dense statements (`Proofs.Flock.RecGeneric.AtFlockCompiledContract`, A1d), the bound at every statement from it, with
-no hypothesis (`Proofs.Flock.RecGeneric.AtFlockCompiledKS`), the bound false at the verifier that accepts everything
-(`Proofs.Flock.RecGeneric.AtFlockCompiledNontrivial`, the lock's `nontrivial`), and `Compiled.EO`'s expected
-reruns at most `1 + Σ_s (1 + m′_s·k_s)` (`Proofs.Flock.RecGeneric.CompiledCost`). -/
+no hypothesis (`Proofs.Flock.RecGeneric.AtFlockCompiledKS`), with `Compiled.EO`'s expected reruns at most
+`1 + Σ_s (1 + m′_s·k_s)` (`Proofs.Flock.RecGeneric.CompiledCost`), the bound false at the verifier that accepts
+everything (`Proofs.Flock.RecGeneric.AtFlockCompiledNontrivial`, the lock's `nontrivial`), and its bits at the loop
+bounds `(·, 2^256, 2^257)` and the link's `M = 2^256`: at most `κ + t·ε`, `κ` route 2C's and `ε` five per-call terms
+(`Proofs.Flock.RecGeneric.CompiledBits`). -/
 
 @[expose] public section
