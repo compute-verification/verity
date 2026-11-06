@@ -16,14 +16,16 @@ A primitive is taken as the descriptor declares it, as Flock's decoder takes it,
 `check_desc` refuses as `NciCheck.Desc` does, in its order, and otherwise is `check` on the instance expanded gate by gate
 (`expand`), so the two checks are held to one reference.
 
-    check_count(instance) -> {"blocks", "total", "complies", "failure"} | {"error": code}
+    check_count(instance) -> {"complies"} | {"error": code}
+    check_count_detail(instance) -> {"blocks", "total", "complies", "failure"} | {"error": code}
 
-`check_count` is `NciCheck.Count`'s count of `(c, k)`-inference blocks, with its refusals in its order, activation by
-activation where `NciCheck.Count` reads one summary per Definition: from the root down through the Definitions outside
-every block, each activation of a block Definition is a block (`walk_blocks`), and a block Definition's Boolean gates
-and fresh bits are read off one activation of it on its own, gate by gate (`block_row`): the table's gates of each of
-its primitive gates, and the widths of the parameter leaves its gates read (each reference resolved up to the
-activation's parameters, `source`) over the parameters that are not θ at every one of its blocks.
+`check_count_detail` is `NciCheck.Count`'s count of `(c, k)`-inference blocks, with its refusals in its order,
+activation by activation where `NciCheck.Count` reads one summary per Definition: from the root down through the
+Definitions outside every block, each activation of a block Definition is a block (`walk_blocks`), and a block
+Definition's Boolean gates and fresh bits are read off one activation of it on its own, gate by gate (`block_row`): the
+table's gates of each of its primitive gates, and the widths of the parameter leaves its gates read (each reference
+resolved up to the activation's parameters, `source`) over the parameters that are not θ at every one of its blocks. It
+is the private record's, never published; `check_count` is what the count publishes, the judgment against n alone.
 
     check_baseline(instance, trusted) -> the same, then θ's provenance (`NciCheck.Baseline`)
 
@@ -467,11 +469,18 @@ def evaluate_count(inst) -> dict:
     return {"blocks": rows, "total": total, "complies": failure is None, "failure": failure}
 
 
-def check_count(inst) -> dict:
+def check_count_detail(inst) -> dict:
+    """`NciCheck.Count.checkDetail`: the whole verdict, or the refusal, for the private record only, never published."""
     try:
         return evaluate_count(inst)
     except Malformed as e:
         return {"error": e.code}
+
+
+def check_count(inst) -> dict:
+    """`NciCheck.Count.check`, what the count publishes: the judgment against n, or the refusal."""
+    res = check_count_detail(inst)
+    return res if "error" in res else {"complies": res["complies"]}
 
 
 # θ's provenance (`NciCheck.Baseline`): after the policy check, each θ entry against the trusted input

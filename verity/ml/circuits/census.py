@@ -771,6 +771,18 @@ def _work_json(work: Work | dict[str, list[int]]) -> dict[str, dict[str, int]]:
     return {f: {"gates": g, "and": a} for f, (g, a) in sorted(work.items()) if g}
 
 
+def boolean_gates(fns: Iterable[Any]) -> list[int | str]:
+    """Each of ``fns``' two-input Boolean gates per instance, over every facet, as `census` with ``boolean`` counts a class's
+    work, in order; for one that isn't counted, the id of the first primitive it reaches that is no Boolean gate, constant
+    bit or input. A Definition shared by several is counted once."""
+    w = _Work()
+    out: list[int | str] = []
+    for fn in fns:
+        got = w.of(fn)
+        out.append(got if isinstance(got, str) else sum(g for g, _ in got.values()))
+    return out
+
+
 def _calls_work(post: list, ids: dict[int, str], calls: Iterable[Any], boolean: Any) -> tuple[dict[str, Work], dict[str, str]]:
     """The Boolean work of each class it counts and the Boolean version each root Call class counted through, by descriptor id;
     refused (`NoBooleanWork`) for every root Call it cannot count."""
@@ -1181,4 +1193,4 @@ def step_of(doc: dict) -> Callable[[int], int]:
 
 
 __all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "NoBooleanWork",
-           "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
+           "boolean_gates", "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]

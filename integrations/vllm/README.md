@@ -35,6 +35,10 @@ through every subprotocol (`examples/vllm/README.md`).
   with `--seal`, seals each closed window for a later audit.
 - **Records.** The circuit database (`pipeline/circuit_db.py`, `verity-vllm records`) keeps, per workload of record
   (`manifests/records.json`), the exact circuit it served and the evidence that it is faithful, never committed values.
+  `verity-vllm block-counts` (`program/predict/block_counts.py`) reads a day's window circuit records and judges its
+  (c, k)-inference blocks against the day's declared c, k and n: its public output is the judgment alone (accept or refuse,
+  each rule's outcome, c, k, n, the declaration's digest and each class's gates and fresh bits a block), never a count of
+  blocks or windows, which go only to a private file (0600).
 
 ## Layout
 
