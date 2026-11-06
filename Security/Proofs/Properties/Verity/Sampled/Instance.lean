@@ -447,7 +447,6 @@ theorem setsUp_congr {V V' : Vocab d α} {θ : ByteArray} {F : Array ByteArray} 
   publicFile := h.publicFile.trans hp.symm
   read := hr.trans h.read
   share := he.trans h.share
-  nowork := h.nowork
 
 open Classical in
 /-- **The extractor at the deployment's sessions**: at a session, the session's at the projected strategy
@@ -695,15 +694,14 @@ def StopsWithin (k : Verity.Registration.Composite) (reg : (A : Live) → Option
 /-- **The coupling at each of the deployment's sessions** (`couplingTargetAt`, at the stage): at the constructions
 `constructionsAt` assembles, the deployed device's signer is the vocabulary's (`Instance.signer`), the session is one
 v2 sets up (`sessions_some`) and v2's parameters name the vocabulary's digests (`digestsAt_of`), so what is left is the
-stops' term (`StopsWithin`), the session's sample at `MAX_COINS` frames (`hL`), v2's hold of the record's draw (`hH`),
-its order refusal (`hord`) and the device's log opening only the record's rounds (`hO`). -/
+stops' term (`StopsWithin`), the session's sample at `MAX_COINS` frames (`hL`), its order refusal (`hord`) and the
+device's log opening only the record's rounds (`hO`). -/
 theorem couplingTarget_at (K₀ : Constructions I.base) (k : Verity.Registration.Composite)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hε : I.StopsWithin k reg record recordDigest)
     (hL : ∀ θ F A, I.sessions θ F = some A → A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
-    (hH : DrawHeld k)
     (hord : ∀ θ F c (σ : Verity.Game.Strategy (I.base.game θ F c)) (x : Verity.Game.CoinTape (I.base.game θ F c) σ),
       I.base.Verdict k .sampled (Verity.Game.CoinTape.run (I.base.game θ F c) σ x) →
       OrderHeld (Verity.Game.CoinTape.run (I.base.game θ F c) σ x).sent)
@@ -720,7 +718,7 @@ theorem couplingTarget_at (K₀ : Constructions I.base) (k : Verity.Registration
     (I.stageOf (I.constructionsAt K₀ k reg record recordDigest) K₀) I.deployment reg record recordDigest
     (I.signer θ) (hε θ F A h) (setsUp_congr (V := I.base) rfl rfl rfl rfl rfl (I.sessions_some h).2)
     (digestsAt_of (I.stage (I.constructionsAt K₀ k reg record recordDigest)) I.programDigest I.publicDigest I.read θ)
-    (hL θ F A h) hH (hord θ F) (hO θ F)
+    (hL θ F A h) (hord θ F) (hO θ F)
 
 end Instance
 
@@ -757,15 +755,14 @@ theorem remote_soundness_deployed_withBinding (I : Instance d α) (K₀ : Constr
 
 /-- **`remote_soundness_deployed` at the deployment's constructions** (`Instance.constructionsAt`): the coupling at
 each session is `couplingTarget_at`'s, so of it what is left is the stops' term (`StopsWithin`), the session's sample
-at `MAX_COINS` frames (`hL`), v2's hold of the record's draw (`hH`), its order refusal (`hord`) and the device's log
-opening only the record's rounds (`hOR`). -/
+at `MAX_COINS` frames (`hL`), its order refusal (`hord`) and the device's log opening only the record's rounds
+(`hOR`). -/
 theorem remote_soundness_deployedAt (I : Instance d α) (K₀ : Constructions I.base)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg) (hO : I.OpensAt)
     (hRg : I.RegisteredFiles) (hSa : I.SessionAt .remote) (hε : I.StopsWithin .remote reg record recordDigest)
     (hL : ∀ θ F A, I.sessions θ F = some A → A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
-    (hH : DrawHeld .remote)
     (hord : ∀ θ F c (σ : Verity.Game.Strategy (I.base.game θ F c)) (x : Verity.Game.CoinTape (I.base.game θ F c) σ),
       I.base.Verdict .remote .sampled (Verity.Game.CoinTape.run (I.base.game θ F c) σ x) →
       OrderHeld (Verity.Game.CoinTape.run (I.base.game θ F c) σ x).sent)
@@ -779,7 +776,7 @@ theorem remote_soundness_deployedAt (I : Instance d α) (K₀ : Constructions I.
     (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
   remote_soundness_deployed I _ (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl) hO hRg hSa
-    (I.couplingTarget_at K₀ .remote reg record recordDigest hε hL hH hord hOR) hB hR hW hI
+    (I.couplingTarget_at K₀ .remote reg record recordDigest hε hL hord hOR) hB hR hW hI
 
 /-! ## An instance: v2's reading on the idle device -/
 
