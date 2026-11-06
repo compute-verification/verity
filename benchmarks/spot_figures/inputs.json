@@ -1,0 +1,15 @@
+{
+ "delta": {"value": 0.01, "unit": "", "status": "modeled",
+           "source": "the figure's evasion threshold: a bound holds unless the adversary evades detection with probability above 1%"},
+ "budgets": {"value": [0.001, 0.01, 0.1], "unit": "share of compute", "status": "modeled",
+             "source": "the figure's curves: the share of the scope's GPU-seconds spent on replays, interior commitments and proofs"},
+ "overheads": {"value": [1.0, 1e14], "unit": "x", "status": "modeled",
+               "source": "the figure's x-axis: proof overhead, proving time over the proved computation's time at the GPU's dense peak"},
+ "proof_overhead": {"value": 1.5e8, "unit": "x", "status": "measured", "provisional": true,
+                    "source": "C-Flock --zk on an H200, s8 K=4096 proof blocks in statements of 1,024 and 2,048, warm, against the H200's dense peak (runs r20261105-042916-546a, r20261105-044913-6ff9, r20261105-050310-c09e); provisional until the proof-overhead card is defined"},
+ "hash_rate": {"value": 3.98e11, "unit": "B/s", "status": "modeled",
+               "source": "SHA-512 hm96 rows on the whole H200 at 4 KiB rows: 5.21e11 B/s measured at 16 KiB rows (r20261027-042422-85b2) at 91.5 B a compression"},
+ "token_bytes": {"value": 4, "unit": "B", "status": "modeled", "source": "a token id as a u32, as a request's boundary commits it"},
+ "weights_bytes": {"value": 7.557e11, "unit": "B", "status": "measured",
+                   "source": "GLM-5.3's block-FP8 checkpoint at aca966e4 (integrations/vllm/manifests/checkpoints.json, role GLM53: 755.7 GB)"}
+}
