@@ -4389,6 +4389,48 @@ def test_a_remote_quick_tier_on_auto_runs_on_the_machine_placed_and_without_one_
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h2) is False
 
 
+def test_a_remote_quick_tier_placed_in_a_research_pool_runs_through_that_pools_slots(world, monkeypatch, capsys):
+    """With node 2 stopped, `--on auto` found no machine and the tier never started, while `research run --on auto` spilled to a
+    CPU node's research pool. `place` gives such a pool as `MACHINE:POOL`, and the tier's slot.py takes that pool's slots."""
+    from research import queue as Q
+
+    machine = Machine(world.tmp, outcome=_reports())
+    tier, _ = _remote_tier(world, monkeypatch, machine, place=lambda spec, repo: ("vy-test:research", "a free slot"))
+    tier.on = "auto"
+    world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
+    assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0
+    argv = machine.launched[-1]
+    assert argv[argv.index("--on") + 1] == "vy-test"
+    cmd = argv[argv.index("--", argv.index("--declared-output")) + 1:]
+    assert cmd[:4] == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py"]
+    assert "in a slot of its research pool" in capsys.readouterr().out
+
+
+def test_place_on_auto_spills_to_a_research_pool_only_when_no_auto_machine_can_be_read(tmp_path):
+    from research import queue as Q
+
+    repo = tmp_path / "repo"
+    (repo / "tools/verity/check").mkdir(parents=True)
+    (repo / "tools/verity/check/check.py").write_text(
+        'AUTO = ("vy-nebius-2",)\n'
+        "def read_slots(names):\n    return {}\n"
+        "def choose(names, docs, priority=False):\n"
+        '    return None, "no machine\'s slots could be read", [f"{n}: {d}" for n, d in docs.items()]\n')
+    spilled = []
+
+    def spill(r):
+        spilled.append(r)
+        return ("vy-nebius-cpu-1", "research"), "vy-nebius-cpu-1's research pool has a free slot"
+    got, why = Q.place("auto", repo, read=lambda names: {n: "ssh: connect timed out" for n in names}, spill=spill)
+    assert got == "vy-nebius-cpu-1:research" and spilled == [repo]
+    assert why.startswith("vy-nebius-cpu-1's research pool has a free slot, as none of vy-nebius-2 could be read")
+    got, why = Q.place("auto", repo, read=lambda names: {n: "ssh: connect timed out" for n in names},
+                       spill=lambda r: (None, "no pool fits"))
+    assert got is None and why.endswith("; no research pool either: no pool fits")
+    got, _ = Q.place("vy-a,vy-b", repo, read=lambda names: {n: "down" for n in names}, spill=spill)
+    assert got is None and len(spilled) == 1, "a named list never spills"
+
+
 def test_a_runner_seen_gone_just_after_it_recorded_its_end_is_not_lost(tmp_path):
     """A tier that passed with rc 0 mustn't be reported lost. A fetch copies
     status.json, then probes the runner's pid; a runner that records its end and exits in between reads as gone with a status
