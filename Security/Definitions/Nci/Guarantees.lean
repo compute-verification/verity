@@ -1,8 +1,10 @@
-import Definitions.Nci.Assumptions
-import Definitions.Core.Circuit
-import Definitions.Core.Declaration
-import Definitions.Core.Partition
-import Definitions.Nci
+module
+
+public import Definitions.Nci.Assumptions
+public import Definitions.Core.Circuit
+public import Definitions.Core.Declaration
+public import Definitions.Core.Partition
+public import Definitions.Nci
 
 /-!
 # NCI's guarantees
@@ -10,6 +12,8 @@ import Definitions.Nci
 Each is a `def G : Prop` over `Protocol`'s definitions and the assumptions, proved as
 `Nci.SecurityProofs.G : Nci.Guarantees.G`.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

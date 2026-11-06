@@ -1,5 +1,7 @@
-import Definitions.Core.Formalism
-import Properties.Pouw.PeriodJ10R
+module
+
+public import Definitions.Core.Formalism
+public import Properties.Pouw.PeriodJ10R
 
 /-!
 # The served PoUW's values in AND gates (`PouwCheck.Credit.window`, J10-R)
@@ -47,6 +49,8 @@ the play's `folded` words): it reads the right blocks themselves, not the play's
 Its `δ_s` is δ_coin and its `n·(δ_bind + δ_ks)` is δ_crypto. `BlockMap` is a named map from words to gates of the
 registered circuit, the unit the PoUW component's `Holds` is restated in.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.ServedValues
 

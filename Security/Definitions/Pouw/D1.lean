@@ -1,4 +1,6 @@
-import Definitions.Pouw.Game.Defs
+module
+
+public import Definitions.Pouw.Game.Defs
 
 /-!
 # Protocol D1: the [KW] transcript with low-rank integer noise (trusted; §3.2, §4.4, §6 D1)
@@ -18,6 +20,8 @@ Noise `E = E_L·E_R` (`m × k`, rank `≤ r`), `F = F_L·F_R` (`k × n`); noised
 Checked values: the running partial sums of `A'·B'` at inner depths `d, 2d, …`, the last block capped at `k`.
 `H_ref` computes them with an int32 accumulator, and decodes `C = C' − (A·F_L)·F_R − E_L·(E_R·B')` in int32.
 -/
+
+@[expose] public section
 
 namespace Pouw.D1
 

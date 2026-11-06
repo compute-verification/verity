@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Complete.Replay.Steps
-import Proofs.Flock.VBridge.Algebra.Ligerito
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Proofs.Flock.VBridge.Algebra.Ligerito
 
 /-!
 # The verifier's Ligerito steps on the model's rounds
 
-PROTOCOL.md §13–§14 from the verifier's side. The verifier's Ligerito (`ligeritoWith`) reads every value the prover sends
+`Flock.Ligerito`, `Flock.Merkle` from the verifier's side. The verifier's Ligerito (`ligeritoWith`) reads every value the prover sends
 from the proof `p` and every coin from the rounds. The model runs it over `p` and the coins `cf k` of the squeeze at
 transcript position `k`: its state, and a transcript whose rounds are what the prover records at each squeeze
 (`afterSq`), so that the verifier, on rounds carrying those, reads back each squeeze's coins.
@@ -17,6 +19,8 @@ transcript position `k`: its state, and a transcript whose rounds are what the p
   read has the entry; a challenge (`chal`, `Runs.challenge`), `n` of them (`chals`, `Runs.challenges`), an out-of-domain
   intro (`ood`, `Runs.oodIntro`), and a level's query (`query`, `Runs.queryLevel`) when its Merkle check passes.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

@@ -1,4 +1,6 @@
-import Definitions.Accounting.Bandwidth
+module
+
+public import Definitions.Accounting.Bandwidth
 
 /-!
 # The bandwidth audit v0: what an accepted device read
@@ -9,6 +11,8 @@ No named assumption: the device's bounds (on-chip state `S`, side-source bits `c
 the measurement that falsifies each (`bandwidth-s-chip`, `bandwidth-side-cap`, `bandwidth-regen-time`) and what the
 model takes on trust (`random-oracle` for the tag, `bandwidth-instantiation` for the stored blocks).
 -/
+
+@[expose] public section
 
 namespace Bandwidth.Guarantees
 

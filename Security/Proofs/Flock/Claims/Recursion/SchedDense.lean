@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.SchedCount
-import Proofs.Flock.Claims.Recursion.InnerAccepts
-import Proofs.Flock.Claims.Recursion.InnerForm
-import Proofs.Flock.C3.VStarList.Shape
+module
+
+public import Proofs.Flock.Claims.Recursion.SchedCount
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
+public import Proofs.Flock.Claims.Recursion.InnerForm
+public import Proofs.Flock.C3.VStarList.Shape
 
 /-!
 # `SchedMatches` at the dense form, and at the sparse form vacuously
@@ -18,6 +20,8 @@ import Proofs.Flock.C3.VStarList.Shape
   numbers (`innerSetup_files`), its rounds are `2 + 2R` at the plain schedule (`k_plain`), and `SchedMatches` holds at
   the dense form (`schedMatches_dense`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

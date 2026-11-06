@@ -1,4 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousV2
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousV2
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Lean.Data.Json.Basic
+
+@[expose] public section
 
 set_option Elab.async false
 

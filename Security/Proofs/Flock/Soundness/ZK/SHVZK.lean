@@ -1,6 +1,8 @@
-import Definitions.Flock.ZK.SHVZK
-import Proofs.Flock.Soundness.ZK.Blocks
-import Proofs.Flock.Soundness.ZK.Dist
+module
+
+public import Definitions.Flock.ZK.SHVZK
+public import Proofs.Flock.Soundness.ZK.Blocks
+public import Proofs.Flock.Soundness.ZK.Dist
 
 /-!
 # Zero knowledge of one masked table: Lemmas A and B, and `table_shvzk`
@@ -28,6 +30,8 @@ tables: the product over tables (no claim or message reads two tables' witnesses
 cases where the coins make the prover refuse (a failing rank check, dependent `ρ^r`, `β = 0`), with the schedule, are
 `Refusal`'s; and Lemma C, which T5 builds from them, is `AdaptivePrefinal`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 
@@ -236,7 +240,8 @@ block, each amount reads only earlier blocks:
 1. the mask slot, `u' := u + Δ` with `Φ(Δ) = ν(w) − ν(w')`, which the rank check makes solvable (step 2);
 2. the extra lanes, `R' := R + (W^r)⁻¹(y₁^r(w, u) − y₁^r(w', u'))`, so `y₁'^r` agrees (step 3); the paddings are unchanged
    (step 1);
-3. the pads, `h'_i := h_i + v_i(w, u, R) − v_i(w', u', R')`, and `h'_tx`, `h'_ty` so that `ρ_in`, `σ_in` agree (step 4);
+3. the pads, `h'_i := h_i + v_i(w, u, V) − v_i(w', u', V')`, at level 0's hiding `V` (`Vis`) and `V'`, `V` with `R'`,
+   and `h'_tx`, `h'_ty` so that `ρ_in`, `σ_in` agree (step 4);
 4. the inner mask, `μ' := μ + (h − h')/β` over the full pad vectors, so `Y₁` agrees (step 5); `pad_h`, `pad_μ` and every
    salt and seed are unchanged (step 1). -/
 theorem table_prefinal_translate (hrank : T.Rank)
@@ -253,7 +258,7 @@ theorem table_prefinal_translate (hrank : T.Rank)
     ![(T.Winv r (T.y1 w u r c - T.y1 w' (u + Δ) r c)).1, (T.Winv r (T.y1 w u r c - T.y1 w' (u + Δ) r c)).2] i
   let d₁ : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad := fun u => (0, dR u, 0)
   let dv : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad → Fin 2 → Fin T.nE → F := fun u b r =>
-    T.vals r w u b.2.1 - T.vals r w' (u + Δ) (b.2.1 + dR u)
+    T.vals r w u b - T.vals r w' (u + Δ) (b + d₁ u)
   let d₂ : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad → Fin 2 → (Fin T.nE → F) × F × F :=
     fun u b r => (dv u b r, -(T.ζ r * dv u b r T.ia), -(dv u b r T.ib))
   let d₃ : T.Mask → (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad → (Fin 2 → (Fin T.nE → F) × F × F) →
@@ -303,7 +308,7 @@ theorem card_realCore (hrank : T.Rank) (hpad : T.PadOnto)
   card_seq_masked4 T.maskHom T.mask1 T.mask2 T.mask3 (T.maskHom_surjective hrank) (T.mask1_surjective hpad hW)
     T.mask2_surjective (T.mask3_surjective hpads hβ) (T.nu w)
     (fun u => (fun q l => ∑ c, T.lanes w u l c * T.E q c, fun r => T.y1 w u r, 0))
-    (fun u b => fun r => (T.vals r w u b.2.1, 0, 0))
+    (fun u b => fun r => (T.vals r w u b, 0, 0))
     (fun _ _ h => (fun r k => ∑ i, T.Ch r k i * T.hFull (h r) i, 0, fun r => T.hFull (h r), 0)) v
 
 omit [CharP F 2] [Fintype K] in

@@ -48,7 +48,7 @@ negatives.
   its rows under the Program's value, two units swapped: `--made-for`), are refused by Lean's registered reads. Its warden run
   is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `warden_replay.py`'s: a served window's requests through the
   warden, each answered with the tokens the server streamed it.
-- `a5_tp_gates.py` (`a5_tp.sh` with `A5_COINS=verifier` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
+- `a5_tp_gates.py` (`a5_tp.sh` with `A5_CHALLENGER=local` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
   `tp-gates:other-collective`, `tp-gates:other-request` or `tp-gates:own`): A5 on both ranks of a synthetic Llama TP2 step
   of two requests whose cross-rank transfers hold transfer gates, which no served TP2 window has yet. Each rank's partial of
   each reduction (layer 0's embedding, o_proj and down_proj, H = 2048) for each request is a registered value its
@@ -84,7 +84,8 @@ negatives.
   (`benchmarks/pous/served_piece.py`), and `BANDWIDTH_CMD` collects its answer (`served_bandwidth.py collect`).
   Finally the all-protocols window report and the block record, which accepts only when every subprotocol accepted on this
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
-  run, credits nothing). An accept's clause says when its weights were held and their share of the checkpoint, where its
+  run, credits nothing). `PRODUCT=remote` composes sampled proofs and PoUW alone: the onsite pieces are dropped, not run
+  and not composed, and the preflight refuses any onsite piece's command. An accept's clause says when its weights were held and their share of the checkpoint, where its
   profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it, and writes its audit as the network
   certifier's period reads it (`period.json`). With the certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and
   `CERTIFIER_PERIOD_CMD`), V3c runs before the pieces instead: the chain after its window commit, beside its audit
@@ -97,6 +98,17 @@ negatives.
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
   share proved under `--zk` across its template's statements and held by the Lean verifier with the units it derives itself.
+- `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--cases DIR`
+  is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
+  paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
+  directory of such directories); for onsite, NCI's case is the registration. The composed params, commitment and
+  evidence (the composition's formats, `verity/core/protocols/composition/README.md`) and every answer go to
+  `--private-out` (0700, files 0600), since a case's evidence and params are witness, and so are an answer's query,
+  digests and profile. `--public-out` gets only the verdict lines (each piece's and Lean's id, verdict and refusal's
+  name), the composite's commitment, and each case's params digest and commitment, and is refused when it shares a
+  byte run with any case's evidence. With `--exe`, it runs `onsite check` or `remote check` and exits with
+  Lean's code. It decides nothing: a subprotocol with no case is left out, Lean's verdict on what remains stands (a
+  rejection naming the missing case), and the run is labelled `NOT_ESTABLISHED` with what is missing.
 - `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
   a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
   Lean, honest and with a tampered block, a scan of everything the verifier received for the sampled proof blocks' bytes, and the
@@ -121,7 +133,7 @@ negatives.
   staged unit: the cost of c sampled proof blocks in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
 - `prove_bundle.sh`: a sampled-proof-block replay bundle (`examples/h200/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
-  `prove_bundle.py`: `PB_BUNDLE` of the window `PB_WINDOW`, else the store's `BUNDLE_WINDOW` (a W8A8 MLP's window under a
+  `prove_bundle.py`: `PB_BUNDLE` of the window `PB_WINDOW`, else `BUNDLE_WINDOW`, the registered fixture `tests/fixtures/bundle-window` (a W8A8 MLP's window under a
   test key, its tampered twin and the interfaces' bundle of four sampled proof blocks under the window's registered `subset:4`).
   `tests/test_prove_bundle.py` holds that bundle to the window's public part (`tests/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's sample to be live. The bundle is held to the prover's window: its own check (the sample's
   law the registered one among it), its run, registration and partition, each sampled member's public body and a live
@@ -181,6 +193,9 @@ negatives.
   `served_util.py` takes Tensor Active's mean over the longest run of full steps, each step from the previous step's end
   to its own on the step trace's clock, and splits the rest into losses by what the GPU was running at each sample.
   With `PYSPY=1`, `pyspy_steps.py` splits the same steps' host time by Python function and thread, from py-spy's trace.
+- `served_shares.py SERVE_DIR [--credit ANSWER.json]`: a served run's declared utilization (the work its step trace's
+  steps declare, the linears at θ and attention and the LM head at θ/2, over the loads' busy wall) and its accounted share
+  (the period credit's work at J10-R's 9/64 floor at θ, over the same wall), at the tensor and boost clock readings.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

@@ -1,4 +1,6 @@
-import Proofs.Core.NaiveStrassen.Size
+module
+
+public import Proofs.Core.NaiveStrassen.Size
 
 /-!
 # The kernel evaluation (NaiveStrassen)
@@ -7,6 +9,8 @@ import Proofs.Core.NaiveStrassen.Size
 with GMP arithmetic on the packed rows. No compiled code, `native_decide` or `#eval` is involved, and no axiom beyond
 the kernel's own. At depth 13 it takes about 80 s and 25 GiB.
 -/
+
+@[expose] public section
 
 namespace Verity.Accel.NaiveStrassen.Packed
 

@@ -1,6 +1,8 @@
-import Mathlib
-import Proofs.Accounting.DeclaredCircuit.Credit
-import Proofs.Accounting.DeclaredCircuit.Session
+module
+
+public import Mathlib
+public import Proofs.Accounting.DeclaredCircuit.Credit
+public import Proofs.Accounting.DeclaredCircuit.Session
 
 /-!
 # A declared circuit's space and bandwidth from an accepted audit
@@ -17,6 +19,8 @@ session's reads so counted (`SketchDeployedSession.pr_deployed_of_unpaid_causal`
 tile's bits for each of its tiles of `W` (`Requirement.credit_le_tiles`), so the shortfall against the credit is the
 shortfall against the store (`Requirement.sum_lt_of_credit`, `Requirement.lt_of_credit`).
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch.Carrier
 

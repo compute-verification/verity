@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.CallsBridge
-import Proofs.Flock.Claims.Recursion.ConflictTiedE
-import Proofs.Flock.Claims.Recursion.RepErase
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsBridge
+public import Proofs.Flock.Claims.Recursion.ConflictTiedE
+public import Proofs.Flock.Claims.Recursion.RepErase
 
 /-!
 # The calls half where a proof file differs, at the element-level verifier
@@ -15,6 +17,8 @@ collide among the calls.
 Here first: what the element-level decoder reads of the record (`decodeWithK_ok`, `decode_ok`'s without the digests),
 and the plain verdict's round counts at any `keep` (`rounds_ns_plainK`, from `streams_ns_plainK`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -31,7 +35,7 @@ def DecStreamK (x : Lean.Json) (y : StreamRec) : Prop :=
 /-- **What `Record.decodeWithK` reads**, whatever the hashes and `keep`: `decode_ok`'s fields, without S12's digests. -/
 theorem decodeWithK_ok (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
-    ∃ j l recs, Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
+    ∃ j l recs, Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
       List.Forall₂ (RootField l) spec.tables.toList sess.rootB.toList ∧
       (∃ ps, Record.arr l "points" = .ok ps ∧ List.Forall₂ PointField ps.toList sess.points.toList) ∧
       List.Forall₂ DecStreamK recs.toList sess.streams.toList := by

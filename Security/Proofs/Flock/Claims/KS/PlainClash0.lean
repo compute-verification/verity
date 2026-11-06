@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainParts
-import Proofs.Flock.Claims.KS.PlainDrawDecK
+module
+
+public import Proofs.Flock.Claims.KS.PlainParts
+public import Proofs.Flock.Claims.KS.PlainDrawDecK
 
 /-!
 # The live self-clash at level 0
@@ -33,6 +35,8 @@ The entries are `plainRepColsOf` at the decoded rep streams' rounds, which reads
 * `plainClashQ_or`, `PlainSimLaterClashAt`, `plainSimClashAt_of_later`: so `PlainSimClashAt` needs only its case
   past level 0.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 

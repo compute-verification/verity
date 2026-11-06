@@ -5,8 +5,9 @@
 schema = "policy/v0"
 
 # The ci.toml jobs off the merge gate. A recorded check, whole or a shard, leaves them out (`check.py`'s
-# OFF_GATE), `research merge` requires them of no check, and drive moves `main` without them: they run in drive's
-# after-landing run (`--deferred`, every job), where a red reverts its culprit on `checked`. circuit-check returns to the gate
+# OFF_GATE, from `declaration.load`), `research merge` requires them of no check, and drive moves `main` without them: they run in drive's
+# after-landing run (`--deferred`, every job), where a red reverts its culprit on `checked`. Under drive.toml's `executor = "on"`
+# ratchet-gate runs in a train.sh run beside the executor's check instead, and `main` waits for that run. circuit-check returns to the gate
 # once `circuit-check --all` fits inside the rest of the check (under 30 minutes); ratchet-gate judges the merges above the
 # run's base, and no plan holds it. A job here has no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
 off_gate = ["circuit-check", "ratchet-gate"]

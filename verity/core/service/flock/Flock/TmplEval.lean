@@ -8,7 +8,11 @@ circuit is the composition of its pieces as the template places them. No verifie
 The proof is an induction over the copies `place` writes: each copy's rows are written once (`write` refuses a written
 column) and so are the unit's at the end (`Keeps`), and `canon` keeps a row's XOR (`xorL_canon`).
 -/
-import Flock.TmplOrder
+module
+
+public import Flock.TmplOrder
+
+@[expose] public section
 
 namespace Flock.TmplEval
 

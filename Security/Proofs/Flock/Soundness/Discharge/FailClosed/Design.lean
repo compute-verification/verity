@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.General
-import Proofs.Flock.Soundness.Discharge.Tables.Headline
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.General
+public import Proofs.Flock.Soundness.Discharge.Tables.Headline
+
+@[expose] public section
 
 set_option Elab.async false
 

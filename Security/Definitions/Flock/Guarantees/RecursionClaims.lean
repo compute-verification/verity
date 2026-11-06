@@ -1,4 +1,6 @@
-import Definitions.Claims.Recursion
+module
+
+public import Definitions.Claims.Recursion
 
 /-!
 # The recursion's claims are stated (trusted)
@@ -19,6 +21,8 @@ weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the de
 `PartChecksBV`, `PartOpensB` and `DecompB`. Holo statements have a model of their own, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

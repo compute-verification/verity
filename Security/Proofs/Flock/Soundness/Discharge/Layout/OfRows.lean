@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Pins
-import Proofs.Flock.Soundness.Audit.FlockPublic
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.Pins
+public import Proofs.Flock.Soundness.Audit.FlockPublic
 
 /-!
 # Readers of rows and single gates
@@ -15,6 +17,8 @@ holds the gate (`gateAt`: the address of a column of the place on it). So:
 * `ofRows_valPinned`: each single gate holds the registration's bit (`regGate`). On the constant's gates it is 1
   (`gateAt_one`, from `ConstCols`) and on the zero's 0 (`gateAt_zero`, from `ZeroCols`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 

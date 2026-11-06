@@ -1,11 +1,11 @@
 /-
-V*'s verifier-registered values against the verifier's own coins (lane rec-v0). V* registers three values itself, under
+V*'s verifier-registered values against the verifier's own coins. V* registers three values itself, under
 public salts (`rec_residuals.verifier_value`, rec_residuals.py:393): each Ligerito level's opening coefficients `rec-coef`
 and position bits `rec-dirs` (`rec_outer.stage`, rec_outer.py:216–217), and each algebra part's coefficients `rec-v`
 (`rec_residuals.write`, rec_residuals.py:450). A statement whose unit is `rec-open/…` or `rec-residuals/…` is accepted only
 when those values are the ones the verifier computes here, from the inner session alone:
 
-* the inner statement (its circuit, public file and partition, under `verity/flock-circuit+plain-leaves` on OS coins) and
+* the inner statement (its circuit, public file and partition, under `verity/flock-circuit+plain-leaves` on the challenger's coin tree) and
   the inner session's record, decoded as `verify` decodes it (`Record.decode`): each rep's rounds' coins (stream
   `<table>/rep<r>`) and the link points, which give the extra claims (`Setup.extra`) as `verifyRep` takes them
   (Verify.lean:41);
@@ -34,14 +34,19 @@ reads the level's tops `rec-top-L<l>` at row `i` in instance `i`, every node of 
 `rec-cap-zero` (`checkCap`); its rows are held to the coin server's `root_B`, or to both reps' level-`l` tops
 (`checkLink`, `RecVStar.checkTopRows`).
 -/
-import Flock.Registered
-import Flock.Firewall
-import Flock.RecOpening
-import Flock.RecSparse
-import Flock.RecVStar
-import Flock.Verify
-import Flock.Zk
-import Flock.Norm
+module
+
+public import Flock.Registered
+public import Flock.Firewall
+public import Flock.RecOpening
+public import Flock.RecSparse
+public import Flock.RecVStar
+public import Flock.Verify
+public import Flock.Zk
+public import Flock.Norm
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock
 namespace RecCoins
@@ -99,12 +104,10 @@ def commitRow (row : Array Nat) (salt : ByteArray) : ByteArray :=
   Hm96.Default512.commitString (Firewall.rowDigest (padTo row (Registered.rowWords row.size 16))) salt
 
 /-- How Flock's plain verifier is told to set the inner statement up, as the verifier holds it
-(`--rec-inner-statement`, `--rec-inner-statement-coins`, `--rec-inner-tables`, `--rec-inner-draw`): the statement id,
-whether its coins are the coin server's (`os`), its lookup tables, and its draw's bytes. `RecSetup.checkForm` holds
-them to the setup the inner statement's files give it. -/
+(`--rec-inner-statement`, `--rec-inner-tables`, `--rec-inner-draw`): the statement id, its lookup tables, and its draw's
+bytes. `RecSetup.checkForm` holds them to the setup the inner statement's files give it. -/
 structure InnerForm where
   statement : String
-  os : Bool
   tables : List (String × ByteArray)
   draw : Option ByteArray
 
@@ -136,8 +139,8 @@ structure Inner where
   /-- the inner circuit's unit range (META's `ranges`, the unit net's), whose slots the sparse phase's layout factors weigh -/
   unitRange : V Range := .error "the verifier's inner coins hold no unit range"
 
-/-- A recursive session's inner statement (PROTOCOL.md §16.16), on the coins the coin server draws. -/
-def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
+/-- A recursive session's inner statement (`Tags.withPlainLeaves`), on the challenger's coin tree (`RecVStar.innerTree`). -/
+def innerTags : Tags := RecVStar.innerTags
 
 /-- The inner circuit's unit range: META's one range of its unit net, whose slots the sparse phase's layout factors weigh. -/
 def unitRangeOf (st : Stmt) : V Range :=
@@ -145,10 +148,10 @@ def unitRangeOf (st : Stmt) : V Range :=
   | #[r] => .ok r
   | rs => .error s!"the inner circuit has {rs.size} ranges of its unit net, not one"
 
-/-- The inner statement, set up from its circuit and public files on the coin server's coins under the verifier's own
+/-- The inner statement, set up from its circuit and public files on the challenger's coin tree under the verifier's own
 program of it, and its session's spec. -/
 def Files.stmt (unit : String) (f : Files) : V (SessionSpec × Stmt) := do
-  let (spec, sts) ← match Stmt.setupTables innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition)
+  let (spec, sts) ← match Stmt.setupTables innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := some f.partition)
       (program := f.program) with
     | .ok x => pure x
     | .error e => throw s!"rec-coins: {unit}: the inner statement: {e}"
@@ -158,7 +161,7 @@ def Files.stmt (unit : String) (f : Files) : V (SessionSpec × Stmt) := do
 /-- A session record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`), as `verify` reads it
 (`Main.recordDraw`). -/
 def recordDraw (record : String) : Option Json :=
-  match Json.parse record with
+  match JsonParse.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some (Flock.norm d)
@@ -181,7 +184,7 @@ def drawnSpec (setupAt : Json → V Stmt) (spec : SessionSpec) (st : Stmt) (reco
 
 /-- `drawnSpec` at the inner files: the inner statement set up at the record's draw as `Files.stmt` sets it up without one. -/
 def Files.drawnSpec (f : Files) (spec : SessionSpec) (st : Stmt) : V SessionSpec :=
-  RecCoins.drawnSpec (fun d => Stmt.setupHidden innerTags f.circuit f.pub Coins.os [] (some d) (some f.partition)
+  RecCoins.drawnSpec (fun d => Stmt.setupHidden innerTags f.circuit f.pub RecVStar.innerTree [] (some d) (some f.partition)
     f.program) spec st f.record
 
 /-- The inner statement as the recursive audit's event reads it (`AcceptsStmt`): set up from its circuit and public files
@@ -777,24 +780,19 @@ def tablesIn (dir : String) : IO (List (String × ByteArray)) := do
     if (← p.pathExists) then out := out ++ [(t.name, (← IO.FS.readBinFile p))]
   return out
 
-/-- `--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]`:
-how Flock's plain verifier is told to set the inner statement up (`InnerForm`; coins `seed` unless given), or none. -/
+/-- `--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]`: how Flock's plain verifier is told to set
+the inner statement up (`InnerForm`), or none. -/
 def formInput (args : List String) : IO (Except String (Option InnerForm)) := do
   let some s := argOf args "--rec-inner-statement"
-    | return if (argOf args "--rec-inner-statement-coins").isSome || (argOf args "--rec-inner-tables").isSome ||
-          (argOf args "--rec-inner-draw").isSome then
-        .error "--rec-inner-statement-coins, --rec-inner-tables and --rec-inner-draw go with --rec-inner-statement"
+    | return if (argOf args "--rec-inner-tables").isSome || (argOf args "--rec-inner-draw").isSome then
+        .error "--rec-inner-tables and --rec-inner-draw go with --rec-inner-statement"
       else .ok none
-  let os ← match argOf args "--rec-inner-statement-coins" with
-    | none | some "seed" => pure false
-    | some "os" => pure true
-    | some c => return .error s!"--rec-inner-statement-coins {c}: not os or seed"
   try
     let tables ← match argOf args "--rec-inner-tables" with
       | some d => tablesIn d
       | none => pure []
     let draw ← (argOf args "--rec-inner-draw").mapM IO.FS.readBinFile
-    return .ok (some ⟨s, os, tables, draw⟩)
+    return .ok (some ⟨s, tables, draw⟩)
   catch e => return .error s!"rec inner statement: {e}"
 
 /-- `--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR [--rec-inner-program F]`:
@@ -812,7 +810,7 @@ def filesOnly (args : List String) : IO (Except String (Option Files)) := do
       | .ok f => pure f
       | .error e => return .error e
     try
-      let partition ← match Json.parse (← IO.FS.readFile q) with
+      let partition ← match JsonParse.parse (← IO.FS.readFile q) with
         | .ok j => pure j
         | .error e => return .error s!"--rec-inner-partition {q}: not JSON: {e}"
       let program ← (argOf args "--rec-inner-program").mapM IO.FS.readBinFile

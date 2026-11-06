@@ -1,4 +1,6 @@
-import Definitions.Pouw.Window
+module
+
+public import Definitions.Pouw.Window
 
 /-!
 # A window's ε from its calls' (M2), with a draw that depends on the registration (C1) (trusted)
@@ -106,6 +108,8 @@ Two things are outside this statement by design:
 * **Fiat–Shamir grinding** of the per-matmul seeds (decision 103) enters PoUW's `δ` through the seeded pair
   (`Accounting.Guarantees.Compose.CircuitWorkSeeded`, `CircuitCreditSeeded`: GRIND's premium), not here.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Window
 

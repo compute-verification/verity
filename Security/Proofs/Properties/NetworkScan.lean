@@ -1,5 +1,7 @@
-import Properties.NetworkScan
-import Proofs.Properties.NetworkScan.Fits
+module
+
+public import Properties.NetworkScan
+public import Proofs.Properties.NetworkScan.Fits
 
 /-!
 # An accepted scan's statements are in the sampled audit's scope, from its layout fitting
@@ -10,6 +12,8 @@ at the statement's descriptor, the scan's canonical bytes, flattened (`StmtFlatt
 `scanFits_nontrivial` and `scanScopeAcc_nontrivial_of`: neither conclusion is trivial, at the empty Program and its
 empty flattening (`empty_not_fits`).
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkScan
 

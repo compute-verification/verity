@@ -1,8 +1,10 @@
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Fintype.Fin
-import Mathlib.Logic.Equiv.Fin.Basic
-import Mathlib.Tactic.NormNum
-import Definitions.Pous.Guarantees
+module
+
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Fintype.Fin
+public import Mathlib.Logic.Equiv.Fin.Basic
+public import Mathlib.Tactic.NormNum
+public import Definitions.Pous.Guarantees
 
 /-!
 # Sanity theorems: the definitions are not vacuous
@@ -15,6 +17,8 @@ import Definitions.Pous.Guarantees
 * `plain_short_coins_insecure`: in the plain model, if the coins fit in the state then an adversary is accepted
   with probability 1. `W` and `pp` really are free, and security is not automatic.
 -/
+
+@[expose] public section
 
 namespace Pous
 

@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.ResFrameRounds
-import Proofs.Flock.Claims.Recursion.LayoutBDeployed
-import Proofs.Flock.Claims.Recursion.NextRFits
-import Proofs.Flock.Claims.Recursion.DecodeTies
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.C3.Reps.RoundLinks
+module
+
+public import Proofs.Flock.Claims.Recursion.ResFrameRounds
+public import Proofs.Flock.Claims.Recursion.LayoutBDeployed
+public import Proofs.Flock.Claims.Recursion.NextRFits
+public import Proofs.Flock.Claims.Recursion.DecodeTies
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
+public import Proofs.Flock.C3.Reps.RoundLinks
 
 /-!
 # A frame port's element, at a decision
@@ -19,6 +21,8 @@ The pieces `framePorts_D` (`ResFramePorts`) puts together, at a dense decision `
 * `ResLower.mem_heldRows_of`: a part's port `m<k>` at index `i` holds row `rep · R + t` of its circuit's port `i`, `t`
   the `k`-th committing round.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResFrames
 

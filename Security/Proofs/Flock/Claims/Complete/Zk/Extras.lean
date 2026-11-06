@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.RingSwitch
-import Proofs.Flock.Claims.Complete.Zk.Discharge
-import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.Discharge
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 
 /-!
 # The extra claims' ring-switch algebra at the deployed relation (`RsExtrasZk`)
@@ -10,6 +12,8 @@ vector of the honest trace, as at the plain record (`claims_switch`): the masked
 soundness proof plays, satisfied by the witness's bits (`CaseZk.model`, as `Case.model`), and the record's link points
 have `m_pts` coordinates (`RunZk.sess_points`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

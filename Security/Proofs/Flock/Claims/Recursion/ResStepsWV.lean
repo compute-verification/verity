@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.ResStepsW
-import Proofs.Flock.Claims.Recursion.AccTies
-import Proofs.Flock.Claims.Recursion.OpenLevW
+module
+
+public import Proofs.Flock.Claims.Recursion.ResStepsW
+public import Proofs.Flock.Claims.Recursion.AccTies
+public import Proofs.Flock.Claims.Recursion.OpenLevW
 
 /-!
 # `StepsW` at the part statements' side condition (`XsW` at `AccV`)
@@ -10,6 +12,8 @@ import Proofs.Flock.Claims.Recursion.OpenLevW
 closed. What is left is the copy's coefficients (`CoefW`, `copyCoefTieRP_deployed`) and the next rows' owners
 (`NextHeldW`). `accPorts_of_G` (`ResEndsW`) takes the result to P3.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

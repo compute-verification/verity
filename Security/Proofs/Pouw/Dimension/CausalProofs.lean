@@ -1,5 +1,7 @@
-import Definitions.Pouw.Dimension.Causal
-import Proofs.Pouw.Dimension.Proofs
+module
+
+public import Definitions.Pouw.Dimension.Causal
+public import Proofs.Pouw.Dimension.Proofs
 
 /-!
 # Theorem D with causal inputs: proofs
@@ -9,6 +11,8 @@ import Proofs.Pouw.Dimension.Proofs
 * `indep_modC`: the words are independent modulo `V₀`, by induction from the last unit.
 * `algBoundCausal`, `causalWitness`, `algWitnessCausal`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

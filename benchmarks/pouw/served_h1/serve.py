@@ -739,7 +739,9 @@ def run(a: argparse.Namespace) -> dict:
                       for r, root, o in zip(round_log, roots, openings)]
         coins.update(scheme=Wd.LIVE_SCHEME, commitment=cs.commitment.to_json(), salt_coin=live_salt.to_json(),
                      draw_coin=draw.to_json(), draw_after=draw_after.hex(),
-                     draw_reason=Ch.live_reason(commitment, draw, Wd.DRAW, 0, draw_after),
+                     draw_session=cs.draw_session and cs.draw_session.id, draw_commitment=cs.draw_commitment.to_json(),
+                     draw_reason=Wd.draw_epoch_reason(cs.draw_commitment)
+                     or Ch.live_reason(cs.draw_commitment, draw, Wd.DRAW, 0, draw_after),
                      rounds=round_log, rounds_reason=Wd.rounds_reason(commitment, roots, openings),
                      rounds_cover_steps=[r["round"] for r in round_log] == list(range(s_max)),
                      roots_and_keys_recomputed=all(recomputed), coin_bytes=len(openings[0].coin) if openings else None,
@@ -757,7 +759,7 @@ def run(a: argparse.Namespace) -> dict:
         coins["verify"] = ("the verifier's check: coins.py check --challenger-out <the session as the gate publishes it> "
                            "--ledger <each head of the auditor's ledger infra published> --pins <the host's pins log "
                            "infra published> --main <the verifier's git rev-list --first-parent origin/main> "
-                           "--manifest manifest.json "
+                           "--manifest manifest.json --draw-out <the draw session as the gate publishes it> "
                            "--key-record <the challenger's "
                            "challenger-key/v1 record> --period <the window's period> --root <the window's root>, from the "
                            "challenger's own record, never this one" if cs.source == "off-node"

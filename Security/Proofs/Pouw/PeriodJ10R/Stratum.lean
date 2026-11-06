@@ -1,7 +1,9 @@
-import Properties.Pouw.PeriodJ10R
-import Proofs.Accounting.Served
-import Proofs.Accounting.ComposePeriod.Honest
-import Proofs.Flock.Soundness.Audit.StratifiedProj
+module
+
+public import Properties.Pouw.PeriodJ10R
+public import Proofs.Accounting.Served
+public import Proofs.Accounting.ComposePeriod.Honest
+public import Proofs.Flock.Soundness.Audit.StratifiedProj
 
 /-!
 # The tile coordinate is the sampling block's stratified draw at the tile stratum
@@ -20,6 +22,8 @@ import Proofs.Flock.Soundness.Audit.StratifiedProj
   `tileStratumEscape_eq_exp`: with `m_s + k_s ≤ n_s`, it misses `B` with `exp(−stratumRisk σ k s_T m_s)`, stratum
   `s_T`'s exact risk (`Law.stratified_proj_escape_eq_exp`).
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lincheck
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lincheck
 
 /-!
 # `Zk.replay`'s lincheck terms are `Lincheck`'s at the transcript's coins
@@ -16,6 +18,8 @@ zerocheck's `rSkip`, `rOuter`, `z` at `0, 1, 2`, its residual coins `ρ_j` at `3
 coins, is entry `i` of the witness evaluated at the `ab` claim's point beyond the skip bits, `Σ_u eq(x, u)·w[64u + i]`
 (the ring switch's `zPartialOf (claimOf m (lcAbClaim …)) w i`, written out).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed.Lincheck
 

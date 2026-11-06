@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
-import Proofs.Flock.Soundness.Discharge.HiddenExec.TablesP
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.TablesP
 
 /-!
 # What a hidden-output setup at public inputs establishes
@@ -16,6 +18,8 @@ read off `Hidden.SpecP` (`Hidden.setupHidden_specP`) and the walk of `setupTable
   outputs;
 * `drawSetupHP_of_setupHiddenI`: `drawSetupH_of_setupHiddenI`.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

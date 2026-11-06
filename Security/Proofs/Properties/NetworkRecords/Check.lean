@@ -1,6 +1,8 @@
-import Proofs.Properties.NetworkRecords.Commit
-import NetworkCheck.RecordsBytes
-import Proofs.Properties.NetworkCertifier
+module
+
+public import Proofs.Properties.NetworkRecords.Commit
+public import NetworkCheck.RecordsBytes
+public import Proofs.Properties.NetworkCertifier
 
 /-!
 # What the records check decides, link-window by link-window
@@ -10,6 +12,8 @@ record, an admitted sync, and a record that is the Program's (`egress_none`); an
 and a certified one's head is of the ingress grid (`ingress_none`). Conversely each such link-window has no violation
 (`egress_none_of`, `ingress_none_of`).
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check (Params Certified Link Evidence Grid Profile LinkWindow screen verifies expectedGrid noSync

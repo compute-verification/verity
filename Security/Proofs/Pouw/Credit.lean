@@ -1,13 +1,16 @@
-import Properties.Pouw.Credit
-import Proofs.Properties.Pouw
-import Proofs.Properties.Pouw.Strata
-import Proofs.Flock.Soundness.ExecStratified
-import Proofs.Flock.Soundness.Audit.Work
-import Proofs.Flock.VBridge.Full
-import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Claims.Sampling.Select.Misses
-import Proofs.Accounting.Served
-import Proofs.Pouw.Period.Accept
+module
+
+public import Properties.Pouw.Credit
+public import Proofs.Properties.Pouw
+public import Proofs.Properties.Pouw.Strata
+public import Proofs.Flock.Soundness.ExecStratified
+public import Proofs.Flock.Soundness.Audit.Work
+public import Proofs.Flock.VBridge.Full
+public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Claims.Sampling.Select.Misses
+public import Proofs.Accounting.Served
+public import Proofs.Pouw.Period.Accept
+public import Proofs.Pouw.Credit.Lanes
 
 /-!
 # Proofs: the ε a served window's credit reports (`WorkDrawMisses`, `EpsAtSound`, `EstablishedSound`)
@@ -21,6 +24,8 @@ that may be zero), and `B`'s work (`unitWork`) is at most `Σ_s w_s m_s` (`unitW
 escapes with at most `(1 − εC/W)^K ≤ (1 − εC/W)^K′ ≤ δ` (`kPrimeLeast`) when `K′ < W`; at `K′ = W ≤ K` every stratum
 doing work draws all its units, and a set of positive work escapes never.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Credit.SecurityProofs
 
@@ -356,6 +361,78 @@ theorem establishedSound_of (htile : Properties.Pouw.Strata.StrataTile) : Establ
 (`Properties.Pouw.Strata.strataTile`), so the total work `established` passes `epsAt` is the strata's. -/
 theorem establishedSound : EstablishedSound := establishedSound_of Properties.Pouw.Strata.strataTile
 
+/-! ## The draw coin's session is withheld (`DrawWithheld`) -/
+
+section Withheld
+
+open SampledProofs.Challenger (ChallengerKey trustedSessionOf withheldOn)
+
+theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {v : β} (h : (x >>= f) = .ok v) :
+    ∃ a, x = .ok a ∧ f a = .ok v := by
+  cases x with
+  | error e => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
+theorem drawSession_withheld {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
+    (h : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x) : withheldOn ledger root = true := by
+  unfold PouwCheck.Credit.drawSession at h
+  obtain ⟨_, -, h⟩ := bind_eq_ok h
+  by_cases hw : withheldOn ledger root = true
+  · exact hw
+  · simp [hw] at h
+    cases h
+
+theorem creditedDraw_withheld {ledger : Json} {k : ChallengerKey} {pins main draw : Json} {root : ByteArray}
+    (h : PouwCheck.Credit.Internal.creditedDraw ledger k pins main draw root = .ok ()) :
+    ∃ r, PouwCheck.get draw "root" = .str r ∧ withheldOn ledger r = true := by
+  unfold PouwCheck.Credit.Internal.creditedDraw at h
+  dsimp only at h
+  split at h
+  · next hr =>
+    obtain ⟨_, hx, -⟩ := bind_eq_ok h
+    refine ⟨Flock.hexOf root, ?_, drawSession_withheld hx⟩
+    revert hr; cases PouwCheck.get draw "root" <;> simp [PouwCheck.str?]
+  · cases h
+
+theorem drawWithheld : DrawWithheld := by
+  intro key ledger pins main salt calls served commit rounds draw got h
+  unfold PouwCheck.Credit.Internal.credited at h
+  obtain ⟨⟨k, out, root⟩, -, h⟩ := bind_eq_ok h
+  obtain ⟨u, hu, -⟩ := bind_eq_ok h
+  cases u
+  exact creditedDraw_withheld hu
+
+/-- The draw session's step (`drawSession`) accepts every session the ledger opens withheld on the draw root and
+`trustedSessionOf` trusts, as a withheld deployment's is. -/
+theorem drawSession_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
+    (ht : trustedSessionOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
+    (hw : withheldOn ledger root = true) : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x := by
+  simp [PouwCheck.Credit.drawSession, ht, hw, Except.mapError]
+
+/-- **`DrawWithheld`'s nontrivial lemma**: its conclusion fails at the empty ledger, which opens no session, and the draw
+`{root: ""}`, for every root `r`: the empty ledger withholds no draw root. -/
+theorem drawWithheld_nontrivial :
+    ∀ r : String, ¬ (PouwCheck.get (Json.mkObj [("root", Json.str "")]) "root" = .str r ∧
+      withheldOn (.arr #[]) r = true) := by
+  rintro r ⟨-, hw⟩
+  simp [withheldOn] at hw
+
+/-- **`DrawWithheld` fails at a verifier that accepts everything**: such a verifier credits the empty ledger and the draw
+`{root: ""}`, where the conclusion fails (`drawWithheld_nontrivial`). -/
+theorem drawWithheld_acceptAll
+    (f : Json → Json → Json → Json → Json → Json → Json → Json → Json → Json → Except (String × String) (List Nat))
+    (hall : ∀ key ledger pins main salt calls served commit rounds draw,
+      ∃ got, f key ledger pins main salt calls served commit rounds draw = .ok got) :
+    ¬ ∀ key ledger pins main salt calls served commit rounds draw got,
+      f key ledger pins main salt calls served commit rounds draw = .ok got →
+        ∃ r, PouwCheck.get draw "root" = .str r ∧ withheldOn ledger r = true := by
+  intro h
+  obtain ⟨got, hf⟩ := hall .null (.arr #[]) .null .null .null .null .null .null .null (Json.mkObj [("root", Json.str "")])
+  obtain ⟨r, hr, hw⟩ := h _ _ _ _ _ _ _ _ _ _ _ hf
+  exact drawWithheld_nontrivial r ⟨hr, hw⟩
+
+end Withheld
+
 /-- **The grouped draw misses a set of blocks of work `ε·C` with probability at most `δ`** (`GroupedDrawMisses`): the
 blocks of `Bb` miss every drawn group exactly when their leaves `Bb.image leafOf` are all missed, and those leaves do at
 least the blocks' work, so `workDrawMisses` at `B = Bb.image leafOf`. -/
@@ -376,27 +453,8 @@ theorem groupedDrawMisses : GroupedDrawMisses := by
 
 /-! ## `GroupedDrawMisses`'s witnesses
 
-The compiled `strata` and `law` run on the lanes window in the kernel (`decide +kernel`, through the `DecidableEq` the
-draw's structures derive here), past `strata`'s key sort, which the kernel doesn't reduce (`keys_lanes`, as
-`Proofs.Pouw.Period.Accept` reads H1's items); `kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
-
-deriving instance DecidableEq for Flock.Draw.Stratum
-deriving instance DecidableEq for Flock.Draw.WorkStratum
-
-theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
-  cases x <;> simp_all [Except.toOption]
-
-theorem keys_lanes : PouwCheck.keys lanesLayout = some PouwCheck.Credit.LAYOUT_KEYS :=
-  Properties.Pouw.Period.SecurityProofs.Accept.keys_of (by decide) (by decide +kernel)
-
-theorem strata_lanes : PouwCheck.Credit.strata lanesLayout = .ok lanesStrata := by
-  apply ok_of_toOption
-  unfold PouwCheck.Credit.strata
-  rw [keys_lanes]
-  decide +kernel
-
-theorem law_lanes : PouwCheck.Credit.law lanesStrata (toJson lanesK) = .ok lanesLaw :=
-  ok_of_toOption (by decide +kernel)
+The compiled `strata` and `law` on the lanes window are `Proofs.Pouw.Credit.Lanes`'s (`strata_lanes`, `law_lanes`);
+`kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
 
 /-- **`K′ ≤ 8` at ε = 1/2 and δ = 1/256 over the whole window's work**: `q = 1/2`, and `q^8 = δ`. -/
 theorem kPrime_lanes : ∃ k', PouwWindow.kPrime (1 / 2) (1 / 256) (Flock.Draw.totalWork lanesStrata)

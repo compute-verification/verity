@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundDeploy
-import Proofs.Flock.Claims.DeployEfficient
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
+public import Proofs.Flock.Claims.DeployEfficient
 
 /-!
 # (P1) `Bound.PlainKSAbort` fails at an element-level verifier `KSBoundRouteCols` quantifies over
@@ -25,6 +27,8 @@ the deployed numbers. That is why (P1) stays a hypothesis of `KSBoundRouteCols`;
 it is `RecDeploy.plainKSAbort_bd`'s statement, and at the deployed relation it holds with no premise
 (`RecDeploy.plainKSAbort_deployed`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

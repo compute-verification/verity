@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.ResLowJD
-import Proofs.Flock.Claims.Recursion.ResLowJP
-import Proofs.Flock.Claims.Recursion.ResAccOff
-import Proofs.Flock.Claims.Recursion.ResTieVV
-import Proofs.Flock.Claims.Recursion.ElemRead
-import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowJD
+public import Proofs.Flock.Claims.Recursion.ResLowJP
+public import Proofs.Flock.Claims.Recursion.ResAccOff
+public import Proofs.Flock.Claims.Recursion.ResTieVV
+public import Proofs.Flock.Claims.Recursion.ElemRead
+public import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
 
 /-!
 # The port facts `ResLowered` reads at the deployed constants
@@ -35,6 +37,8 @@ staged statement) at the deployed constants from P2 and P3.
 Nothing downstream of `ResLoweredP` reads `accRC`'s values themselves: it concludes `resHolds`, the vanishing of each
 piece's residuals (`ResZero`), and that is all `ResLowJP` and KS's row R take from it.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.RemoteSketch
+module
+
+public import Definitions.Accounting.Guarantees.RemoteSketch
 
 /-!
 # The receipts' sketch bound over PoUS's P2 store (trusted; drafted)
@@ -35,6 +37,8 @@ counts it), and what rebuilding costs, in part or whole, is the codec's, the mem
 **Drafted, not decided**: the claims await a ruling; `audit.ledger` refuses a P2 record
 until a line takes this.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Remote
 

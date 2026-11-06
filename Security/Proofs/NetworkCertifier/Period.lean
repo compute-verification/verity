@@ -1,8 +1,10 @@
-import Definitions.NetworkCertifier.Guarantees.Period
-import Proofs.NetworkCertifier.SampledLeak
-import Proofs.NetworkCertifier.SampledAuditAccepted
-import Proofs.NetworkCertifier.Tap
-import Proofs.NetworkCertifier.TapRows
+module
+
+public import Definitions.NetworkCertifier.Guarantees.Period
+public import Proofs.NetworkCertifier.SampledLeak
+public import Proofs.NetworkCertifier.SampledAuditAccepted
+public import Proofs.NetworkCertifier.Tap
+public import Proofs.NetworkCertifier.TapRows
 
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits
@@ -17,6 +19,8 @@ holds the fail cells and the padding too, so the count needs no separate charge 
 `∏_c (cap_c + 1)`, one fail choice per connection, is room here. `periodLeak` adds the per-window bound at
 the network certifier's rows (`sampledLeak_tap`).
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

@@ -1,7 +1,9 @@
-import Definitions.Accounting.Joint
-import Mathlib.Algebra.BigOperators.Group.Finset.Sigma
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
+module
+
+public import Definitions.Accounting.Joint
+public import Mathlib.Algebra.BigOperators.Group.Finset.Sigma
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # The device's limits over a window
@@ -11,6 +13,8 @@ to all accounts together. So the accounts of any set of distinct accounts are, t
 counting, `Schedule.sum_work_le_of_subset`), and an account's charge plus every other account's is
 (`Run.work_add_othersWork` and the two beside it).
 -/
+
+@[expose] public section
 
 namespace Accounting
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainDrawDecJK
-import Proofs.Flock.Claims.KS.PlainLeafDecK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawDecJK
+public import Proofs.Flock.Claims.KS.PlainLeafDecK
 
 /-!
 # The plain-leaf decoders at the draw, at the parsed record
@@ -7,6 +9,8 @@ import Proofs.Flock.Claims.KS.PlainLeafDecK
 `PlainLeafDecK` at `wrPDJK` and `plainVerdictAtJK` (`plain_hdecHUAtJK`). `TagsOkHU` and `plain_setupHiddenU` are
 `PlainLeafDecK`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.AtDraw
 

@@ -21,8 +21,9 @@ this circuit from the advice and charges the registered length. A circuit with n
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the sample on live coins read after
 the receipt, Flock ``--zk`` behind the Lean ZK server on the drawn members, Lean's verdicts and the audit record. Then the
 advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
-Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) are
-proved whole beside the sample, under a work law: every sample's closure (a5's `output_closure`).
+Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) would be
+proved whole beside the sample only on a closure map, which the stream refuses, so a5 refuses such a window before the
+sample (a5's `output_refusal`).
 The summary reports the leak bound's count beside the advice's charge, ``vacuous`` while the circuit's other inputs exceed
 it (`leak_count`; a record that declares its inputs, `declared_count`): the run figure, and for a record that declares
 its window's ingress the window figure beside it, with the premise it rests on named. An integration's labels are never read.
@@ -105,7 +106,7 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 * it prints ``{"bits": N}`` as its last stdout line: the advice's length in bits it charges;
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
 
-``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), not the verifier's own, as `prove_path.py audit`
+``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on, as `prove_path.py audit`
 takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session on the challenger
 party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor host through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
@@ -556,26 +557,24 @@ def negatives(w: Mapping[str, Any], held: Mapping[str, Any], circuit: Mapping[st
     return {name: {"refused": not v["ok"], "codes": v["codes"]} for name, v in out.items()}
 
 
-def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any] | None,
-                      coins: str = "verifier") -> dict[str, Any]:
+def fixed_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any] | None) -> dict[str, Any]:
     """That the circuit, its compiler and its advice were fixed before the coins, checked rather than assumed: the digest of the
     registration (which covers the window's ``circuit``, ``compiler`` and ``advice``) is the one the sample's receipt names, the
-    receipt the stream wrote when it received the registration and before its select read any coin (on the challenger's
-    coins, ``coins="challenger"``, the coins also commit to that digest before any is read: a5_coins); and that registration
+    receipt the stream wrote when it received the registration and before its select read any coin (the challenger's
+    coins also commit to that digest before any is read: a5_coins); and that registration
     binds the compiler and advice the compile check verified (``bound``, None for a circuit with none). -> {ok, codes, detail}:
     ``after-the-draw`` where the sample followed another registration or another stream's, ``compiler`` or ``advice`` where the
     registration binds another."""
     import a5 as A5
 
     w, b = rec.get("window") or {}, bound or {}
-    drew = {"verifier": A5.VERIFIER, "challenger": A5.CHALLENGER}[coins]
-    ok = {"after-the-draw": receipt.get("registration") == R.digest(rec) and receipt.get("verifier") == drew,
+    ok = {"after-the-draw": receipt.get("registration") == R.digest(rec) and receipt.get("verifier") == A5.CHALLENGER,
           "compiler": w.get("compiler") == b.get("compiler"), "advice": w.get("advice") == b.get("advice")}
     return _verdict(ok, {"drawn_after": receipt.get("registration"), "registration": R.digest(rec),
                          "received": receipt.get("received")})
 
 
-def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping[str, Any], coins: str = "verifier") -> dict:
+def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping[str, Any]) -> dict:
     """The negative: once the coins are read, the prover commits the same advice again (fresh salts, so a fresh root) and hands
     in a registration binding that root, with its opening. Every check before the sample passes on it (the new opening opens
     the new root, the same advice compiles to the same circuit, `source` holds), and `fixed_before_draw` refuses it
@@ -587,7 +586,7 @@ def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping
     advice = {**rec["window"]["advice"], "root": late.root.hex()}
     late_rec = {**rec, "window": {**rec["window"], "advice": advice}}
     src = source(late_rec["window"], {**held, "advice": advice})
-    v = fixed_before_draw(receipt, late_rec, {"compiler": held["compiler"], "advice": advice}, coins)
+    v = fixed_before_draw(receipt, late_rec, {"compiler": held["compiler"], "advice": advice})
     return {"refused": not v["ok"], "codes": v["codes"], "before_draw_checks_pass": opens and src["ok"]}
 
 
@@ -661,7 +660,7 @@ def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Pat
 
 
 def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = (), own: Iterable[str] = ()) -> list[list[int]]:
-    """The units the verifier proves whole (a5's output class), as ascending ``[lo, hi)`` ranges: the ``given`` ranges (the
+    """The units whose outputs are served out (a5's output class, which it refuses), as ascending ``[lo, hi)`` ranges: the ``given`` ranges (the
     verifier's own, from the circuit's shape) and every unit an uncut registered read of an output port (``o<j>``)
     covers in the circuit record (``registered``'s ``reads``: units ``[at, at + prod(radix))`` of its reader template,
     the population's indices from the templates' order), unless it reads one of the window's ``own`` values
@@ -777,19 +776,17 @@ def audit(a: argparse.Namespace) -> int:
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (), own=set(ties) | set(untied))
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
-    if a.challenger:
-        manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
-                                              peer=a.peer, key_record=a.challenger_key)
+    manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
+                                          peer=a.peer, key_record=a.challenger_key)
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
                          more, rank=0, registered=reads or None, ports=a.ports)
     finally:
-        if a.coins is not None:
-            a.coins.skip(0)
-            finisher.join()
-            published = a.coins.evidence()
-            manager.shutdown()
+        a.coins.skip(0)
+        finisher.join()
+        published = a.coins.evidence()
+        manager.shutdown()
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
@@ -806,16 +803,14 @@ def audit(a: argparse.Namespace) -> int:
         row["activations"] = acts
     row["definitions"] = {t: _code(fn) for t, (_c, fn) in sets.items() if t in {m.template for m in mine.members}}
     row["loaded"] = sorted({m.split(".")[0] for m in sys.modules if m.startswith("verity")})
-    if a.challenger:
-        row["coins_session"] = {"trusted": published.get("trusted"), "error": published.get("error")}
+    row["coins_session"] = {"trusted": published.get("trusted"), "error": published.get("error")}
     if s.get("draw") is not None:
-        coins = "challenger" if a.challenger else "verifier"
         rec, receipt = (json.loads((out / "window" / f).read_text()) for f in ("registration.json", "receipt.json"))
         bound = {"compiler": held["compiler"], "advice": held["advice"]} if held["compiler"] is not None else None
-        row["fixed_before_draw"] = fixed_before_draw(receipt, rec, bound, coins)
+        row["fixed_before_draw"] = fixed_before_draw(receipt, rec, bound)
         ordered = row["fixed_before_draw"]["ok"]
         if bound is not None:
-            row["after_draw"] = after_draw(receipt, rec, held, coins)
+            row["after_draw"] = after_draw(receipt, rec, held)
             row["negatives"] = {**(row["negatives"] or {}), "advice-root-after-the-draw": row["after_draw"]["refused"]}
             ordered = ordered and row["after_draw"]["refused"]
     else:
@@ -833,8 +828,7 @@ def audit(a: argparse.Namespace) -> int:
             pe = row["proof_edits"] = proof_edits(a.lean, out / "window", mine.members, out / "proof-edits", a.flip_proofs)
             row["ok"] = row["ok"] and pe["edits"] > 0 and pe["refused"] == pe["edits"]
             print("PROOF-EDITS " + json.dumps({x: pe.get(x) for x in ("edits", "refused", "member", "session")}))
-    if a.challenger:
-        row["ok"] = row["ok"] and not row["coins_session"]["error"]
+    row["ok"] = row["ok"] and not row["coins_session"]["error"]
     row["ok"] = row["ok"] and (acts is None or acts["ok"])
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
     print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
@@ -883,8 +877,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--circuit", help="instead: the SHA-512 of the circuit record the verifier registered, a circuit with no compiler")
     p.add_argument("--run", required=True, help="the run root the verifier holds the window to, the one the run published")
     p.add_argument("--template-sets", help="the verifier's own input sets, for templates whose units are not bit rows")
-    p.add_argument("--outputs", help="JSON: the verifier's own [lo, hi) ranges of the units whose outputs are served out, proved "
-                   "whole beside the sample (`output_class`; a work law)")
+    p.add_argument("--outputs", help="JSON: the verifier's own [lo, hi) ranges of the units whose outputs are served out "
+                   "(`output_class`), which a5 refuses before the sample (`output_refusal`)")
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
@@ -901,7 +895,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
-    p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, loopback:HOST:PORT or "
+    p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins): local, loopback:HOST:PORT or "
                    "gate:USER@HOST (the auditor host through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
@@ -971,6 +965,8 @@ def main(argv: list[str] | None = None) -> int:
         return warm(a)
     if bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
         ap.error("a compiled circuit: --opening FILE --compilers FILE; a circuit with no compiler: --circuit SHA512")
+    if not a.challenger:
+        ap.error("audit draws on the auditor's challenger's coins, never the verifier's own: give --challenger local --main FILE")
     if a.challenger:
         if a.challenger != "local" and not a.challenger.startswith(("gate:", "loopback:")):
             ap.error(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST, not {a.challenger!r}")

@@ -84,11 +84,12 @@ def test_a_measured_run_without_a_root_fails_the_gate():
     assert got["failed"][0]["run"] == "measure:B32" and "not a declared warm-up" in got["failed"][0]["errors"][0]
 
 
-def test_an_arm_installs_under_rows_sha512_by_default(monkeypatch):
+def test_an_arm_commits_rows_sha512_and_installs(monkeypatch):
+    mod = _arm_module()
     source = ModuleType("verity_vllm.acquire.sources.served_compiled_source")
     source.ServedCompiledSource = lambda into, batch_copies: SimpleNamespace(install_hooks=lambda: None)
     monkeypatch.setitem(sys.modules, source.__name__, source)
-    rows = _arm_module().ServedCommitArm("served-commit-rows", retain="none")
+    rows = mod.ServedCommitArm("served-commit-rows", retain="none")
     assert rows.commit_scheme == "rows-sha512"
     assert rows.install(SimpleNamespace(hooks=None)) is rows and rows.source is not None
 

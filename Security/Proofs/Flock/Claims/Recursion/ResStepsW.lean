@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.ResChainW
-import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
-import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.CapLowerPin
-import Proofs.Flock.Claims.Recursion.ResPiecesD
-import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+module
+
+public import Proofs.Flock.Claims.Recursion.ResChainW
+public import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
+public import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.CapLowerPin
+public import Proofs.Flock.Claims.Recursion.ResPiecesD
+public import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 
 /-!
 # The steps half of P3 (`StepsW`): the outer witnesses' chain carries row D's running sums
@@ -21,6 +23,8 @@ the copy's part to `acc` at row `pin` (`RecVStar.accReads`) and registers `acc_o
 * `accHolds_chainW`: a piece holds its running sum at `chainW`, from its copy's facts (`accHolds_of_copy`'s) and one
   commit string between each of the copy's two rows and its row's owner's holding.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

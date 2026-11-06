@@ -20,14 +20,21 @@ The inner shape is the verifier's own (`rec-inner`): `Stmt.setupTables` on the i
 up for V*'s native side, read once, since the inner circuit can be tens of GB; `verify --rec-inner F` reads the line it
 printed.
 -/
-import Flock.HmRow
-import Flock.ProvedScope
-import Flock.RecOpening
-import Flock.Registered
-import Flock.WindowRecord
-import VStar.Cli
-import VStar.Compose
-import VStar.Stage
+module
+
+public import Flock.HmRow
+public import Flock.ProvedScope
+public import Flock.RecOpening
+public import Flock.Registered
+public import Flock.WindowRecord
+public import VStar.Cli
+public import VStar.Compose
+public import VStar.Stage
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 namespace RecVStar
@@ -78,8 +85,18 @@ structure Inner where
   links : Option LinkShape := none
   deriving Repr, BEq, Inhabited
 
-/-- A recursive session's inner statement (§16.16) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
-def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
+/-- The inner session's keyed coin tree: the session's stream (the link points), the circuit table's two reps, each rep's
+sparse phase and candidate 3's stacked table R (`rec_live.INNER_COIN_STREAMS`), 512 rounds of at most 512 coins each, as
+`Zk.coinSpec` has them. A session that opens fewer streams leaves the rest unopened. -/
+def innerCoinSpec : CoinTree.Spec :=
+  ⟨#["session", "circuit/rep0", "circuit/rep1", "sparse/rep0", "sparse/rep1", "stacked/rep0"], 9, 512⟩
+
+/-- A recursive session's inner statement's coins: the challenger's keyed coin tree (`innerCoinSpec`). -/
+def innerTree : Coins := .tree innerCoinSpec
+
+/-- A recursive session's inner statement (`Tags.withPlainLeaves`), on the challenger's coin tree (`innerTree`), under the statement's own
+tags. -/
+def innerTags : Tags := Tags.circuitPlainLeaves
 
 /-- The fewest bits that number `n` things: `0` for at most one. -/
 def bitsFor (n : Nat) : Nat := if n ≤ 1 then 0 else Nat.log2 (n - 1) + 1
@@ -94,7 +111,7 @@ def linkShapeOf (st : Stmt) (rows : Nat) : LinkShape :=
 with `links`, the row count of the link table the statement carries, that table's shape (`linkShapeOf`). -/
 def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) (holo : Bool := false)
     (links : Option Nat := none) : V Inner := do
-  let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB Coins.os 1 (partition := partition) (program := program)
+  let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB innerTree 1 (partition := partition) (program := program)
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
   pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo,
          links := links.map (linkShapeOf st) }
@@ -560,7 +577,7 @@ def vstarRows (sub : VStar.Sub) (u : VStar.UnitC) : List (String × Nat × Nat) 
 unit's input leaves its input words in order, V*'s row ports (`vstarRows`), each a `sha512/row/v1` row as V*'s META writes
 them (`row_schema`, no `row_schemas`), and the unit's output leaves its output words in order (`UnitC.leaves`' `out`),
 with no template (V*'s circuits are flat). `checkFile` holds the bytes to V*'s;
-this holds what the verifier parsed from them, which no proof reads through `Lean.Json.parse`, to what V* wrote. -/
+this holds what the verifier parsed from them, which no proof yet reads through `JsonParse.parse`, to what V* wrote. -/
 def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
   if c.tmpl.isSome then
     throw s!"{s.name}: the parsed circuit is templated, and V*'s circuits are flat"
@@ -745,8 +762,8 @@ def partHolo (s : VStar.Stmt) (holo : Bool) : Bool := holo && s matches .inner .
 
 /-- **The parsed circuit's META `holo` is V*'s file's**: `RecResiduals.holoOf c` is `true` exactly at a part's statement
 over a holo inner session, where `circuitFile` writes META `holo` (`VStar.emitCircuitHolo`), and `false` elsewhere, where
-it writes none. `checkFile` holds the bytes to V*'s; this holds what `checkPart` reads of the parsed circuit, which no
-proof reads through `Lean.Json.parse`, to what V* wrote. -/
+it writes none. `checkFile` holds the bytes to V*'s; this holds what `checkPart` reads of the parsed circuit, which no proof
+yet reads through `JsonParse.parse`, to what V* wrote. -/
 def checkHolo (s : VStar.Stmt) (c : Circuit) (holo : Bool) : V Unit := do
   if (← RecResiduals.holoOf c) != partHolo s holo then
     throw s!"{s.name}: the circuit's META holo is not V*'s file's ({partHolo s holo}) at the inner session's holo flag {holo}"
@@ -1344,7 +1361,7 @@ def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (boun
   checkFinished tr
   let held ← registration reg bound
   let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw "rec inner transcript: rounds is not a list"
-  let rec_ ← match Json.parse record with
+  let rec_ ← match JsonParse.parse record with
     | .ok j => pure j
     | .error e => throw s!"rec inner transcript: the inner session's record is not JSON: {e}"
   let .ok streams := rec_.getObjValAs? (Array Json) "streams" | throw "rec inner transcript: the inner session's record has no streams"
@@ -1680,7 +1697,7 @@ def innerLink (tr : Json) (record : String) : V InnerLink := do
   if flat.size != np * m then throw s!"rec inner transcript: {flat.size} link coins for {np} points of {m}"
   let coins ← f128sOfHex "link.points" flat
   let points := (Array.range np).map fun i => coins.extract (i * m) (i * m + m)
-  let rec_ ← match Json.parse record with
+  let rec_ ← match JsonParse.parse record with
     | .ok j => pure j
     | .error e => throw s!"rec inner transcript: the inner session's record is not JSON: {e}"
   let .ok rp := (rec_.getObjVal? "link" >>= (·.getObjValAs? (Array (Array String)) "points"))

@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Layout
-import Proofs.Flock.Soundness.Refine.StmtOf
-import Proofs.Flock.Soundness.Discharge.PinnedSat
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+public import Proofs.Flock.Soundness.Refine.StmtOf
+public import Proofs.Flock.Soundness.Discharge.PinnedSat
 
 /-!
 # A hidden-output statement without Δ's pinned copies (`unpin`)
@@ -16,6 +18,8 @@ pinned outputs.
 accepted statement satisfies `unpin`'s, and carries 0 on every pinned bit (`sat_unpin`). Nothing here reads a row size,
 a `G` or a producer family.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Lean (Json)

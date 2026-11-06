@@ -5,7 +5,8 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
 * **The session.** ``local``: a development session on this machine, run by the auditor host's own service
   (`benchmarks/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
-  writes, and its key is this run's alone, so its draws show the path, not an auditor's coins. Its pins log pins main's
+  writes, and its key is this run's alone, so its draws show the path, not an auditor's coins; and since that key is
+  not at `Lms.deployed`, sampled proofs' v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Its pins log pins main's
   first-parent commit this tree is built on (`on_main`), as pin.sh pins the challenger host only to such a commit; its code is this
   tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
   (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: the challenger host through infra's gate with the lane's gate key: `reserve` with this machine as its
@@ -404,14 +405,13 @@ def lean_side(audit: dict | None) -> dict | None:
 
 
 def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
-                       register: Callable[[S.Stream], S.Registration], honest: S.Stream, coins: VerifierCoins,
+                       register: Callable[[S.Stream], S.WindowCommitmentRecord], honest: S.Stream, coins: VerifierCoins,
                        draw: S.Draw, outcome: Callable[[S.Stream, S.Draw, dict | None], tuple[S.Outcome, dict | None]],
-                       window: str, closure: dict[int, list[int]] | None = None) -> dict[str, dict]:
+                       window: str) -> dict[str, dict]:
     """The refusals that apply to a sample `draw` from the verifier's own `coins` on stream `honest`, once its outcome is
     final. `stream_of(coins)` is a fresh stream of the same Spec on `coins`, `register(stream)` receives the honest
     registration on it, and `outcome(stream, draw, coins)` delivers the honest sessions and decides (the outcome, its
-    audit record); `window` is the registration's window root, and `closure` the closure map the honest draw was selected
-    under (`Stream.select`), which every select here passes too.
+    audit record); `window` is the registration's window root.
 
     * ``verifier-coins-claimed-as-challenger``: the honest draw's bytes passed off as the auditor's challenger's coins
       (`Replay`) with no evidence: `coins.coins_reason` refuses, and the Lean's run refuses at its select (`coins`).
@@ -431,7 +431,7 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
                                    ("verifier-coins-with-evidence", OwnReplay(read), FOREIGN_EVIDENCE)):
         s = stream_of(replay)
         try:
-            d = s.select(register(s), closure=closure)
+            d = s.select(register(s))
             if d.draw != draw.draw:
                 raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
             got, audit = outcome(s, d, evidence)
@@ -443,11 +443,10 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
         if isinstance(replay, Replay):
             row["python"] = CC.coins_reason(evidence, window, after, read, lms_verify)
         neg[name] = {"refused": accepted is False and at == SELECT_COINS and row.get("python", "") is not None, **row}
-    neg["verifier-coins-redraw"] = stream_refusal(lambda: honest.select(draw.registration, closure=closure), "drawn",
-                                                  lambda: len(coins.read))
+    neg["verifier-coins-redraw"] = stream_refusal(lambda: honest.select(draw.registration), "drawn", lambda: len(coins.read))
     fresh = OwnReplay(read)
     neg["verifier-coins-before-the-registration"] = stream_refusal(
-        lambda: stream_of(fresh).select(draw.registration, closure=closure), "unknown", lambda: fresh.at)
+        lambda: stream_of(fresh).select(draw.registration), "unknown", lambda: fresh.at)
     return neg
 
 

@@ -1,5 +1,7 @@
-import Proofs.Pouw.ServedFreed
-import Proofs.Pouw.ServedWork.Honest
+module
+
+public import Proofs.Pouw.ServedFreed
+public import Proofs.Pouw.ServedWork.Honest
 
 /-!
 # `ServedFreed` is honest and nontrivial
@@ -21,6 +23,8 @@ windows' inputs (`hacc`, `hsalt`, `hdraw`).
   the other job: worth `2H` against an honest strategy's `H`, past `H + ε(x) H` since its credit is positive
   (`creditPrefix_pos`) and so `ε(x) < 1`. The event has probability 1, past the bound `e^{−1}`.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Served.SecurityProofs.Honest
 

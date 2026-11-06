@@ -1,7 +1,9 @@
-import Definitions.Accounting.JointBridge.CreditedWords
-import Definitions.Accounting.JointBridge.H200
-import Definitions.Accounting.Assumptions.CreditedWords
-import Properties.Pouw.Period
+module
+
+public import Definitions.Accounting.JointBridge.CreditedWords
+public import Definitions.Accounting.JointBridge.H200
+public import Definitions.Accounting.Assumptions.CreditedWords
+public import Properties.Pouw.Period
 
 /-!
 # The joint period's PoUW guarantee from H1's checked credit over the torch loop
@@ -27,6 +29,8 @@ The bridge adds two: each right word of a unit the device didn't outsource cost 
 priced work on it (`Accounting.Assumptions.WordCostsMacs`, at `n` times the run's fixed words), and it outsourced at
 most `K / b_unit` units (`Accounting.Assumptions.HelpWithinCertifier`).
 -/
+
+@[expose] public section
 
 namespace Properties.Accounting.JointBridge
 
