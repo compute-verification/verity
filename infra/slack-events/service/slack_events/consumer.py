@@ -4,7 +4,8 @@ It keeps no state of its own.  The queue's lease keeps a message invisible while
 `event_id` idempotency key drops Slack's retries, and Slack is the record:
 
 - A person's post that names no one gets a routing line in its thread, posted by `router` before any doorbell, naming the
-  lanes picked and carrying the post's ts and those names in its metadata (ROUTING_LINE).  A redelivery reads the thread
+  lanes picked and carrying the post's ts and those names in its metadata (ROUTING_LINE).  With no model, a chat's person
+  with a usual lane (people.d's `lane`) has it picked; anyone else's goes to the admin.  A redelivery reads the thread
   first: finding the line, it rings the names the line gives, with no second pick; `deliver`'s once-per-post check skips
   the lanes already rung.  Where the bot can't read the channel, a redelivery picks again and may post a second line.
 - A post routed by the names it starts with needs no line: its doorbells are its record.
@@ -26,6 +27,7 @@ ASK_CHANNELS = ("ask-the-team", "resource-accounting")          # a registry cha
 ROUTING_LINE = "verity_routing_line"                             # the routing line's metadata event_type
 START_HERE = "https://app.notion.com/p/3fe399515d9e812bab1ee1a74d901d7d"   # the newcomers' onboarding page
 NO_MODEL = "sent to @top: no lane named; routing by model is off"
+USUAL_LANE = "sent to @{lane}: no lane named; {person}'s usual lane"   # no model, and the chat's person has a lane (people.d)
 MODEL_DOWN = "router: model unavailable, sent to @top"
 NO_VALID = "router: no valid name, sent to @top"
 FAILED = f"router: routing this post failed after {MAX_DELIVERIES} tries; sent to @top"
@@ -164,7 +166,7 @@ def post_line(deps: Deps, ch: str, thread: str, ts: str, text: str, names: list[
 def route(deps: Deps, eid: str, ev: dict) -> str:
     """A person's post in a chat or ask channel: `deliver`, as `research msg deliver --channel KEY --event` does.  An
     unaddressed one rings the names of its routing line: the one already in its thread, else a new one naming the
-    model's picks, which in no-model mode is the admin."""
+    model's picks, which in no-model mode is the chat person's usual lane, else the admin."""
     rs, api, ch = deps.rs, deps.slack, ev["channel"]
     reg = registry_for(deps, ch)
     key = rs.key_of(reg, ch)
@@ -200,7 +202,7 @@ def route(deps: Deps, eid: str, ev: dict) -> str:
         if found:
             names, how = line_names(found, reg), "its routing line"
         else:
-            names, line = pick(deps, msg, replies, reg)
+            names, line = pick(deps, msg, replies, reg, key)
             post_line(deps, ch, thread or msg["ts"], msg["ts"], line, names)
             how = "picked"
         deps.log("unaddressed", event_id=eid, names=names, how=how)
@@ -211,17 +213,21 @@ def route(deps: Deps, eid: str, ev: dict) -> str:
     return "unaddressed: " + " ".join("@" + n for n in names) if names else "rule"
 
 
-def pick(deps: Deps, msg: dict, thread: list[dict], reg: dict) -> tuple[list[str], str]:
-    """The names an unaddressed post rings and the routing line that says so: the model's valid handles (never the admin's),
-    else the admin's."""
+def pick(deps: Deps, msg: dict, thread: list[dict], reg: dict, key: str | None = None) -> tuple[list[str], str]:
+    """The names an unaddressed post in the channel `key` rings and the routing line that says so: the model's valid
+    handles (never the admin's), else the admin's.  With no model, a post by the person of the chat `key` goes to their
+    usual lane (`usual_lane`) when they have one."""
+    rs = deps.rs
     try:
         got = router.route_unaddressed(msg, thread, reg)
     except Exception as e:  # noqa: BLE001 - a model failure sends the post to the admin, never drops it
         deps.log("router-error", error=error(e))
         return ["top"], MODEL_DOWN
     if got is None:
+        if lane := rs.usual_lane(msg, reg, key):
+            return [lane], USUAL_LANE.format(lane=lane, person=rs.poster(msg, reg))
         return ["top"], NO_MODEL
-    handles = {h["handle"] for h in reg["handles"]} - {deps.rs.CHAT_WATCHER}
+    handles = {h["handle"] for h in reg["handles"]} - {rs.CHAT_WATCHER}
     names = [n for n in dict.fromkeys(got) if isinstance(n, str) and n in handles][:3]
     if not names:
         return ["top"], NO_VALID
