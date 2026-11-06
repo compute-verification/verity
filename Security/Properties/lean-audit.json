@@ -6814,7 +6814,7 @@
    }
   },
   "Flock.Registered": {
-   "digest": "b3e7de4ad8c72ac66740254b82184a966ef0c74108f0ca8fb0de1334cc7350ed",
+   "digest": "349dd394396e679ffaf0ffa3df55b24b50d8be7bb1f30c0739eda8b7f3b5e702",
    "definitions": {
     "Flock.Registered.check": "7162a8acbadc2767a68007ef25e8b2153a74504c2f71773f3314e408a982b989",
     "Flock.Registered.checkCover": "01777fd9528912124420be9ec4d5c912bd515a4ac556e6c79d4d69ffb12c4747",
@@ -6823,12 +6823,16 @@
     "Flock.Registered.checkProgram": "beb94a850d6191ae045bc149f79d3eac53236cd936f119f35b5eeca32f061316",
     "Flock.Registered.coversParam": "f31605d3b6f8c97fb3a79b75d4f449d7252b9e7edb88c642f2f7f48b7f3bbf3b",
     "Flock.Registered.drawsInFull": "b8e548db4153a2651ad903ade42bea470730b5f3e9ebc69d902250ae0a77d0c8",
+    "Flock.Registered.dupName?": "6f430d04a0e160d9fbd053928a22d09ff14c30d5c4ddc64f0ee1f656881a2e34",
     "Flock.Registered.entry": "e43a2d348b7e817abc010477d839be3ed13ed031198fc525cb35b043e5c8cf28",
     "Flock.Registered.keysIn": "83a023adacff7f3f65ee842e0a9648f2b747493daf0223348e8b1e535e10be6c",
     "Flock.Registered.namesOnce": "f84d876d3f3e91c140381286ed5dfdd48b5841a389d4dd9863bef76bc4de100a",
     "Flock.Registered.ofJson": "e1517d52dc290e7c27117d1d665b4ae6157950ff89fd28b3f60691563b650d4f",
     "Flock.Registered.paramsOf": "f5145ded452ef2cac350a3c07ff1402a923af8492d182f64ae14be03c2f7f0f8",
     "Flock.Registered.partNodes": "eeaaf418643fb55a9926dd0d03761de125d144645a7247ec264a2dcae4f5c860",
+    "Flock.Registered.portsOf": "ad62ebb08a4dff78609a25459d59ba9fc598404046558bfeef2b848c493da1f4",
+    "Flock.Registered.portsOf._sparseCasesOn_1": "51a5b93b3a9a4aaa7ab562dc5a6fb724e6431cc4af28cd69c4d035dfde0b69e9",
+    "Flock.Registered.portsOf._sparseCasesOn_4": "8cb3e8dee685dc56bb2fa1b2d807641bc0e4c98861167556d815746727e2bc65",
     "Flock.Registered.regDef": "14632bf44e504fac3fa96bf82284456681c81a823d0fe3c100710d0422ced640",
     "Flock.Registered.templatePartition": "9d8b6545f0cffcd2c030ed7ff9907168635a31092fee18b550320c3513f7763c",
     "Flock.checkRegistered": "880b8d116634b20ae1e02bf6948e26dfd6e0f1c18f69323a3624f9fa52917ba5"
