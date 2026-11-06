@@ -1382,13 +1382,12 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- The deployed record's last round is one past the `Finish`, which is one past the protocol's last coin. -/
-theorem deployZk_last_eq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (x : Msg) :
+/-- At a statement in the relation, the deployed record's last round is one past the `Finish`, which is one past the
+protocol's last coin. -/
+theorem deployZk_last_eq {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation} {x : Msg}
+    {w : Flock.Wit} (hR : Flock.R (FlockDeploy.deployZk rel).parse x w) :
     (FlockDeploy.deployZk rel).V.k x + 1 = refK x + 2 := by
-  show (FlockDeploy.V true).k x + 1 = (FlockDeploy.V true).k x - 1 + 2
-  have : 1 ≤ (FlockDeploy.V true).k x := by
-    simp only [FlockDeploy.V]
-    split <;> omega
+  have := V_k_of_R hR
   omega
 
 /-- **`Flock.zk_server_lean` at the session with the frame's stops**: at a session `S` and a stop rule `Rf` that reads
@@ -1435,13 +1434,13 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
   Flock.zk_server_lean_of H rel (S.withStops Rf L.stop) vs t δ₁
     (Flock.zk_deployZk_sw_stops H rel S Rf L.stop vs Ok t ht hT1 hδ₁ hS hV hD hc hRf hsc hOk hT) L wk x w hR
     ⟨L.helloRefine_withStops S Rf vs H x w hH,
-      L.ownRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w (deployZk_last_eq rel x)
+      L.ownRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w (deployZk_last_eq hR)
         hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hLk hF,
       L.liveRefine_withStops S Rf vs H wk x w hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hE,
       L.fillRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w
-        (deployZk_last_eq rel x).le hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hEf,
+        (deployZk_last_eq hR).le hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hEf,
       L.stopRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w
-        (deployZk_last_eq rel x).le hst⟩ Vs θ hk Ev
+        (deployZk_last_eq hR).le hst⟩ Vs θ hk Ev
 
 /-- **`Flock.zk_server_lean_stops` at the deployed coin layer** (`CoinLayer.session nr T`), at SHA-512
 (`CoinOpen.shaH`), from the transport's trusts alone. `Hello`, the opening check (the keyed coin-tree walk at the round's place under

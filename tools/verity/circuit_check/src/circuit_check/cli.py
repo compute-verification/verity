@@ -10,6 +10,9 @@
     circuit-check --combine s1 s2 s3 s4                             the four shards' records as the unsharded run's report
     circuit-check --all --records-only --cache DIR -j 64            every catalog binding's record, no target (`records`)
     circuit-check --all --catalog-units --cache DIR --binding NAME  only catalog binding NAME's targets, from the records
+    circuit-check --all --records-only --cache DIR --slices S       and each binding's slice in S (`units.slices`)
+    circuit-check --all --catalog-units --cache DIR --binding NAME --slice S/X.json S/shared.json
+                                                                    NAME's targets from its slice alone (`units.sliced`)
     circuit-check --all --cache DIR --bindings                      each catalog binding's targets, none checked (`bindings`)
     circuit-check --all --catalog-units --cache DIR --update-reads  what every catalog binding read, added to reads/ (`READS`)
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
@@ -27,8 +30,9 @@ unpinned or untyped lowering, and a Definition over the partition's budget are w
 under ``unchecked`` by check, with counts, and the last line counts them.  A shard fails on its own targets' failures alone
 (a by-calls root's callees' verdicts only ``--combine`` sees), and ``--combine``
 exits 2 when it refuses the shards it was given (`shard.read`).  ``--binding`` fails as a shard does, and exits 2 when the
-bindings' records give no task list or the catalog has no binding of that name; its report holds the binding's read set and
-what it read beyond what `READS` declares (``reads``, ``undeclared``: `run`), which ``--update-reads`` adds there.
+bindings' records give no task list, its ``--slice`` is not of this tree or the catalog has no binding of that name; its
+report holds the binding's read set and what it read beyond what `READS` declares (``reads``, ``undeclared``: `run`), which
+``--update-reads`` adds there.
 
 Named targets run in parallel, one worker per core (`default_jobs`), and a target whose every input is unchanged is reused
 from check's own cache (`default_cache`; ``--no-cache`` checks it now).  Each target's line, and the run's last, say where
@@ -62,8 +66,9 @@ REPO = Path(__file__).resolve().parents[5]
 #: (`_read_sets`).  ``registries.json`` holds ``registries``; ``loaded.json``, ``loaded``; ``bindings.json``
 #: holds each path once, in the one of its ``groups`` that exactly the bindings whose sets hold it share, and ``bindings``, by
 #: name, each one's other fields and the places of its groups as ranges (``"groups": "0-3,7"``; `grouped`, `expanded`).
-#: What its run reads of the catalog, every binding's record and the roots record (`units.plan`), comes from the records it is
-#: given, each holding the reads it is held to, so none of it is declared here.  Outside this package, so no target's key
+#: What its run reads of the catalog, every binding's record and the roots record (`units.plan`), or its slice and the shared
+#: part (`units.sliced`), comes from what it is given, each record holding the reads it is held to, so none of it is declared
+#: here.  Outside this package, so no target's key
 #: (`cache.version`) holds it
 READS = Path(__file__).resolve().parents[2] / "reads"
 READS_SCHEMA = "circuit-check-reads/v1"
@@ -689,7 +694,7 @@ def _binding_of(plan: UN.Plan, kind: str, label: str) -> set[str]:
 def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print, jobs: int = 1,
         cache: Path | None = None, mem_gb: int | None = None, progress: Path | None = None, isolate: bool | None = None,
         fork: bool = False, mem_file: Path | None = None, units: bool = False, shard: tuple[int, int] | None = None,
-        binding: str | None = None, read_sets: bool = False) -> dict:
+        binding: str | None = None, read_sets: bool = False, sliced: tuple[dict, dict] | None = None) -> dict:
     """Every target's checks, in target order.  Isolated (``isolate``; by default when ``jobs`` > 1), each target is checked in a
     process of its own (a `CONSTRUCTED` family's members in batches, `_batched`), up to ``jobs`` at once (`parallel`): forked
     from a process that holds the task list, each check with its own memo, so a target's check never reuses what another's
@@ -744,7 +749,10 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     (`units.plan`'s ``binding``):
     `units.Stale` when they give no task list, where ``--all`` would build the whole catalog here, or the catalog has no
     binding of that name (`NO_BINDING`), which would check nothing.  The report is of those targets alone, unjoined, as a
-    shard's, and so is the task-list entry, under a key that names the binding.
+    shard's, and so is the task-list entry, under a key that names the binding.  With ``sliced`` too (`units.read_slice`'s:
+    that binding's slice and the part every binding's shares), the plan is made from those alone (`units.sliced`), and the
+    owners handed down are the shared part's: no other binding's record is read, and `units.Stale` (refused) where the slice
+    is not of this tree.
 
     With ``binding``, or ``read_sets`` and the bindings' records (``--update-reads``: every binding's), the report's ``reads``
     holds each catalog binding checked with its read set (`_read_sets`), and ``undeclared`` what each read beyond what `READS`
@@ -783,7 +791,12 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     units = units and listed is not None and (fork or not isolated)
     apart = (jobs, budget_gb(mem_gb), heavy()) if units and isolated and fork and jobs > 1 else None
     plan, planned, why = None, None, None
-    if units:
+    if units and sliced is not None:
+        plan = UN.sliced(*sliced, REPO, log)
+        SC.HANDED.update(sliced[1]["owners"])
+        keep = lambda kind, label, plan=plan: binding in _binding_of(plan, kind, label)  # noqa: E731
+        planned = _planned(plan, opts, cache, forked=apart is not None, keep=keep, drop=True)
+    elif units:
         try:
             plan = UN.plan(cache, REPO, log, apart,
                            None if binding is None else lambda units: SH.binding(units) == binding)
@@ -1023,7 +1036,7 @@ def update_reads(rep: dict, every: bool) -> list[str]:
     return incomplete
 
 
-def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None) -> dict:
+def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None, slices: Path | None = None) -> dict:
     """``--records-only``: every catalog binding's record in ``cache`` (`circuit_check.units`), and no target keyed or checked.
     Each binding whose record doesn't count is built in a process of its own, up to ``jobs`` at once within `budget_gb`
     (`units.plan`'s ``apart``), and its record stored as `run` stores it after its checks; one that counts is left as it is.
@@ -1034,7 +1047,9 @@ def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None)
     catalog's roots record (`units.store_roots`), from which a ``--binding`` run makes only its binding's roots.  The report: the
     bindings reused and built (`units.Plan.stats`), the most bytes their builds' results held on disk at once
     (``scratch_bytes``, `units.built_apart`), the records stored and the bytes every binding's records and the roots record
-    take in ``cache`` (``bytes``), and why none were stored."""
+    take in ``cache`` (``bytes``), and why none were stored.  With ``slices`` (``--slices DIR``), each binding's slice and the
+    part they share there too (`units.slices`, `units.write_slices`), from which a ``--binding --slice`` run reads no other
+    binding's record, and the report's ``slices`` counts them; why there are none is why the run failed."""
     if not CC.tracing():
         raise RuntimeError("records: the tracer is off (`cache.trace`), so a record would hold no read")
     try:
@@ -1046,7 +1061,13 @@ def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None)
         return {**out, "stored": 0, "why": f"the tracer could not see what it did ({'; '.join(why[:3])})"}
     stored = UN.store(cache, REPO, plan.entries, only_rebuilt=True)
     UN.store_roots(cache, REPO, plan)
-    return {**out, "stored": stored, "bytes": UN.held(cache, plan.entries)}
+    out.update(stored=stored, bytes=UN.held(cache, plan.entries))
+    if slices is not None:
+        try:
+            out["slices"] = UN.write_slices(slices, *UN.slices(plan, UN.owners(plan), SH.binding, REPO))
+        except UN.Stale as e:
+            out["why"] = f"no slices: {e}"
+    return out
 
 
 def bindings(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None) -> dict:
@@ -1068,8 +1089,8 @@ def bindings(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None
 def _owners(plan: UN.Plan, tasks: list[tuple], n: int) -> dict[str, int]:
     """Which of ``n`` zygotes makes the targets ``tasks`` leave to be made where they are checked (`_prepare`), by the binding
     that they are made through: each binding to the zygote whose bindings took the least CPU to build so far (``seconds``:
-    `units.built_apart`'s, or its record's; a second for a record a full build stored), the longest first, so the bodies those
-    targets share are built by one zygote."""
+    `units.built_apart`'s, or the ones kept beside its record; a second for a record a full build stored), the longest first,
+    so the bodies those targets share are built by one zygote."""
     vias = {_info(t)["via"] for t in tasks if "make" in _info(t)}
     load, out = [0.0] * n, {}
     cost = {e.name: e.seconds if e.seconds is not None else 1.0 for e in plan.entries if e.name in vias}
@@ -1473,6 +1494,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --all --cache DIR: build each catalog binding whose record misses, each in a process of its own "
                          "up to --jobs at once, store its record and check no target (`records`); a --catalog-units run from a "
                          "copy of DIR, each shard's on its own machine, then builds no binding")
+    ap.add_argument("--slices", type=Path, metavar="DIR",
+                    help="with --records-only: also each catalog binding's slice and the part they share in DIR "
+                         "(`units.slices`), from which --binding --slice reads no other binding's record")
     ap.add_argument("--shard", metavar="K/N",
                     help="key and check only the targets whose id hashes to shard K of N (circuit_check.shard), no other, and write "
                          "their records and a manifest to --shard-dir; exit 1 on their own new failures")
@@ -1482,6 +1506,9 @@ def main(argv: list[str] | None = None) -> int:
                          "(`shard.binding`, such as verity.ml.circuits.ops.boolean.gf2k.circuit-check#_gf2k_roots): the list's "
                          "Definitions its roots reach first and the templates it binds, from the bindings' records; exit 1 on "
                          "their own new failures, 2 when the records give no task list")
+    ap.add_argument("--slice", type=Path, nargs=2, metavar=("SLICE", "SHARED"),
+                    help="with --binding: plan from that binding's slice and the shared part --slices wrote (`units.sliced`), "
+                         "reading no other binding's record; exit 2 when they are not of this tree")
     ap.add_argument("--bindings", action="store_true",
                     help="with --all --cache DIR: every catalog binding's name with the targets --binding checks under it, "
                          "from the bindings' records, and no target checked (`bindings`)")
@@ -1520,6 +1547,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.records_only and (a.targets or not a.all or a.cache is None or a.no_cache or a.update_pins or a.shard or a.shard_dir):
         ap.error("--records-only stores every catalog binding's record in --cache DIR and checks no target: give --all and "
                  "--cache, and no target, --no-cache, --update-pins, --shard or --shard-dir")
+    if a.slices is not None and not a.records_only:
+        ap.error("--slices writes the slices of the records --records-only stores: give --records-only")
+    if a.slice is not None and a.binding is None:
+        ap.error("--slice plans one binding's run from its slice: give --binding NAME")
     if a.bindings and (a.targets or not a.all or a.cache is None or a.no_cache or a.update_pins or a.shard or a.shard_dir
                        or a.binding):
         ap.error("--bindings names every catalog binding's targets from the records in --cache DIR and checks none: give --all "
@@ -1568,10 +1599,11 @@ def main(argv: list[str] | None = None) -> int:
     opts = _options(a)
     t0 = time.time()
     try:
+        sliced = UN.read_slice(*a.slice, a.binding) if a.slice is not None else None
         rep = run(a.targets, opts, everything=a.all, as_call=a.as_call,
                   log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=cache,
                   mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=progress,
-                  units=a.catalog_units, shard=shard, binding=a.binding, read_sets=a.update_reads)
+                  units=a.catalog_units, shard=shard, binding=a.binding, read_sets=a.update_reads, sliced=sliced)
     except UN.Stale as e:
         if a.binding is None:
             raise
@@ -1627,7 +1659,7 @@ def _bindings_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
 def _records_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
     """``--records-only`` (`records`): exit 1 unless every binding it built had its record stored."""
     t0 = time.time()
-    rep = records(cache, log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, mem_gb=a.mem_gb)
+    rep = records(cache, log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, mem_gb=a.mem_gb, slices=a.slices)
     rep["seconds"] = round(time.time() - t0, 1)
     if "why" not in rep and rep["stored"] < len(rep["rebuilt"]):
         rep["why"] = f"{len(rep['rebuilt']) - rep['stored']} not stored: the tree changed while they were built"
@@ -1637,7 +1669,9 @@ def _records_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
           + (f"{len(rep['rebuilt'])} catalog binding(s) built, {rep['reused']} reused, " if "rebuilt" in rep else "")
           + f"{rep['stored']} record(s) stored in {cache} in {rep['seconds']}s"
           + (f" ({rep['bytes']} bytes of records; the builds' results at most {rep['scratch_bytes']} bytes at once)"
-             if "bytes" in rep else "") + (f"; {rep['why']}" if "why" in rep else ""))
+             if "bytes" in rep else "")
+          + (f"; {rep['slices']['bindings']} bindings' slices in {a.slices} ({rep['slices']['bytes']} bytes, the shared part "
+             f"{rep['slices']['shared_bytes']})" if "slices" in rep else "") + (f"; {rep['why']}" if "why" in rep else ""))
     return 1 if "why" in rep else 0
 
 

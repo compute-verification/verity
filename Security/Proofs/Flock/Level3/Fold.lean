@@ -1,5 +1,5 @@
 /-
-Level 3, L3-A (PROTOCOL.md §17.4 stage 1d): the lincheck fold's factorization. The in-block tensor is
+Level 3, L3-A (`verity/ml/flock/verifier/README.md` stage 1d): the lincheck fold's factorization. The in-block tensor is
 `e(i) = lw[i mod 64] · eq(ρ, ⌊i/64⌋)`. A slot of `2^sl` bits at position `q` sees `e(q·2^sl + c) = e_lo(c) · eq(ρ_hi, q)`,
 with `e_lo = lw ⊗ eq(ρ_lo)`, `ρ_lo` the first `sl − 6` coordinates and `ρ_hi` the rest. That is why `Stmt.fold` folds
 each slot type once on `e_lo` and scales it per slot by `eqTable ρ_hi`.

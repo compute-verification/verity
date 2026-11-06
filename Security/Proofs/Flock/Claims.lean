@@ -352,6 +352,7 @@ public import Proofs.Flock.Claims.Recursion.ResStepsWD
 public import Proofs.Flock.Claims.Recursion.ResNextW
 public import Proofs.Flock.Claims.Recursion.ResAccEnd
 public import Proofs.Flock.Claims.Recursion.OpenCoefTie
+public import Proofs.Flock.Claims.ZKOut
 public import Proofs.Flock.Claims.Recursion.BaseParses
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its

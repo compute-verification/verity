@@ -40,7 +40,7 @@ def HOOKS : String := String.join [
 def bytesOf (j : Json) : ByteArray := (identityBytes j).toOption.getD .empty
 
 def identity : Json :=
-  (Zk.tags (Tags.circuit.withCoins (.tree (Zk.coinSpec (Tags.circuit.tableNames 1)))) 14 1).identity
+  (Zk.tags Tags.circuit 14 1).identity
 
 #guard HOOKS.toUTF8.size == 1720
 #guard "§".toUTF8.data == #[0xc2, 0xa7] && (HOOKS.splitOn "2026/683 §4.1").length == 2
