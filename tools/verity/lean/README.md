@@ -17,6 +17,8 @@ the same way, a `module`'s from the private part holding its proofs. The only pa
 after the facts and the replay, the tests' under `runs` (each deciding only its own pass), in a sandbox where the machine
 allows one; a test's data generator is the repository's code and runs outside it.
 
+A run keeps the facts only gzipped (`facts.json.gz`; `stored_facts` reads an older `facts.json` too).
+
 ~~~text
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
                                                   Mathlib is a dependency, and main's cached build of PKG (below)

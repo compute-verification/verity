@@ -8,9 +8,10 @@ record the tree's data files name. Stdlib only; it reads the tree at one commit 
 - `packages`: every lock git tracks at REV (default HEAD) outside a `tests/` directory, by the package's path.
 - A guarantee's `assumptions` are those its lock record takes as hypotheses and, with `--facts`, the premises its statement
   takes through its definitions, by the Lean audit's own rule (`premised`). DIR is a Lean audit's output directory
-  (`lean-audit/` of a `check` or records run): `audit-<package path, each run of other characters as _>/facts.json`, and
-  `proved-in-*/facts.json` beside it for the packages its `proved_in` names. A guarantee has `premises_read` when one of
-  those holds it as a theorem whose signature is its lock record's.
+  (`lean-audit/` of a `check` or records run): `audit-<package path, each run of other characters as _>/facts.json.gz`, and
+  `proved-in-*/facts.json.gz` beside it for the packages its `proved_in` names (an older audit's `facts.json` where it
+  holds no `.gz`). A guarantee has `premises_read` when one of those holds it as a theorem whose signature is its lock
+  record's.
 - `status`: `assumes` with an assumption, `proved` with none and its premises read, `unknown` with none and its premises
   not read.
 - `results`: each `art:` id a table's runs of record name (`RENDERERS`, read as literals, never imported) and each demo's
@@ -23,6 +24,7 @@ from __future__ import annotations
 import argparse
 import ast
 import fnmatch
+import gzip
 import hashlib
 import json
 import os
@@ -67,10 +69,12 @@ def package_of(lock: str) -> str:
 
 
 def facts_sources(facts: Path, package: str) -> list[dict]:
-    """The facts documents a Lean audit wrote for ``package`` under ``facts``: its own, then each `proved_in` package's."""
+    """The facts documents a Lean audit wrote for ``package`` under ``facts``: its own, then each `proved_in` package's,
+    each its `facts.json.gz`, else an older audit's `facts.json`."""
     work = facts / f"audit-{re.sub(r'[^A-Za-z0-9]+', '_', package)}"
-    paths = [work / "facts.json", *sorted(work.glob("proved-in-*/facts.json"))]
-    return [json.loads(p.read_text()) for p in paths if p.is_file()]
+    found = [next((p for p in (d / "facts.json.gz", d / "facts.json") if p.is_file()), None)
+             for d in [work, *sorted(work.glob("proved-in-*"))]]
+    return [json.loads(gzip.decompress(p.read_bytes()) if p.suffix == ".gz" else p.read_bytes()) for p in found if p]
 
 
 def own_modules(f: dict) -> set[str]:
@@ -219,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--root", type=Path, required=True, help="the repository")
     ap.add_argument("--rev", default="HEAD", help="the commit whose tree is read (default HEAD)")
-    ap.add_argument("--facts", type=Path, help="a Lean audit's output directory, its audit-*/facts.json")
+    ap.add_argument("--facts", type=Path, help="a Lean audit's output directory, its audit-*/facts.json.gz")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if a.facts and not a.facts.is_dir():
