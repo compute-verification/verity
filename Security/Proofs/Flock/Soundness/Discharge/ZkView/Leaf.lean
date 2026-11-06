@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkView.Statements
-import Proofs.Flock.Soundness.Discharge.Hm.Commit
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkView.Statements
+public import Proofs.Flock.Soundness.Discharge.Hm.Commit
 
 /-!
 # The executable's hm96-sha512 leaf splits, and the honest prover's leaves are the executable's
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.Hm.Commit
 `Hm.bitL_mask` gives as `⊕_{j < 1536} key_{t+j} · y_j`, the Hankel product `My y` at `t` over `ZMod 2`. The other half is
 `c(y)` itself.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 
@@ -112,12 +116,5 @@ theorem leafSplit : LeafSplit := by
 theorem Coined.content_size {K W Hi VL : Type} [Field K] {z : Sizes} (T : Coined K W Hi VL z) (w : W) (b : Base z Hi)
     (p : LeafPos z) : (T.content w b p).size = 64 := by
   rcases p with p | ⟨r, p⟩ | r <;> exact Sha512.hash_size _
-
-theorem honest_msg : HonestMsg := by
-  intro K W Hi VL _ J n Cn zs T out hc w x c
-  dsimp only [honest, ZK.Strategy.comap, pairProver]
-  refine congrArg (msgsAt T out w x.1 c) (funext fun l => ?_)
-  rw [Coined.exeLeaf, leafSplit _ _ ((T c l.1).content_size _ _ _)]
-  rfl
 
 end FlockSoundness.Discharge.ZkView

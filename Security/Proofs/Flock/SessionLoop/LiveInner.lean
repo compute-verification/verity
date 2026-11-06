@@ -1,5 +1,8 @@
-import Proofs.Flock.SessionLoop.TakenVals
-import Proofs.Flock.SessionLoop.Inner
+module
+
+public import Proofs.Flock.SessionLoop.TakenVals
+public import Proofs.Flock.SessionLoop.Inner
+import all Init.Data.String.Defs
 
 /-!
 # The session loop's frame past the inner proof's label
@@ -28,6 +31,8 @@ no word of the round and releases it as it came:
   rounds (`Loop.InnerAt`) `withInner`'s session loop releases the inner proof's round `Loop.innerOf` schedules, as it
   came, after a live run's device round.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -814,9 +819,7 @@ theorem release_innerAt
         (fin x w (ν, t) ((m₀, ρ₀) :: ops)) x (ops.map fun p => CoinLayer.rd p.2) = some r ∧
       (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
         0 :: r.data.toList ∧ v = r.data.toList := by
-  have hk : 0 < refK x := by omega
-  have hc : 0 < (ops.map fun p => CoinLayer.rd p.2).length := by rw [List.length_map]; exact h0
-  have hsch := (schedOf_eq_none_iff (real := real x w (ν, t)) hk hc).mpr hI
+  have hsch := schedOf_none_of_innerAt hI
   obtain ⟨s0, spec, sts, q, k, i, tr, hr, rsched, hx, hq, hloc, hreal, hrs, hle⟩ := hI
   have hq1 : ops.length = q + 1 := by rw [← hq, List.length_map]
   have hne : ((m₀, ρ₀) :: ops).length ≠ lastOf x := by rw [lastOf_eq, List.length_cons]; omega

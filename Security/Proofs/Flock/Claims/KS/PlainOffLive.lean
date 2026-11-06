@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainLeafFork
-import Proofs.Flock.Claims.KS.PlainOff
-import Proofs.Flock.Claims.KS.OffSim
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafFork
+public import Proofs.Flock.Claims.KS.PlainOff
+public import Proofs.Flock.Claims.KS.OffSim
 
 /-!
 # The plain slot's off mass, on the deployed coins
@@ -21,6 +23,8 @@ carries that mass to the deployed coins as one run's, never as a fork:
 * `plainOffU_le`: averaged over the tape, at most the chance over the deployed coins of opening off a table that reads
   their first `j`, at any deployed openings `opD` that every decoded opening is (`Pr_plainΦ`).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge
 
@@ -115,7 +119,7 @@ theorem offC_simAt_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Non
     (hdec : ∀ j, DecodesTable (fun _ cap pend os => tableOutL Hc E Lf cap pend os) (fun _ o => ok o) pL
       opn dec one fin capOf (fun j => repsOf (D := D) A ([t].get j)) j)
     (rootB₀ : Array ByteArray) (Pr : Strategy (liveSession dg [t].length mPts N)) (hP : Pr.1 = rootB₀)
-    (sch : Accounting.Schedule) (r ℓ j : ℕ) :
+    (sch : FlockSoundness.Accounting.Schedule) (r ℓ j : ℕ) :
     offC (opCapL Hc E Lf sch r ℓ) j
         (sessAfterL A Hc E Lf t.S t.sch t.hm t.ptLocal mPts [] [] (capOf rootB₀ ⟨0, Nat.one_pos⟩))
         (simAt A Hc E Lf t ok pL opn dg dec one fin capOf N hdec rootB₀ Pr hP) ≤

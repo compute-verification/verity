@@ -1,4 +1,6 @@
-import Properties.Flock.Circuit.Keyed
+module
+
+public import Properties.Flock.Circuit.Keyed
 
 /-!
 # The program's own wiring of each unit, and the returned outputs' bits
@@ -8,6 +10,8 @@ units put on returned outputs' columns (`OutColAt`), the outputs of the circuit 
 Moved unchanged from `Proofs.Flock.Soundness.Discharge.Const.Inst` and
 `Proofs.Flock.Soundness.Discharge.Layout.{KeyProg,OutPin,Outs}`; the lemmas about them stay there.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Const.Prog
 

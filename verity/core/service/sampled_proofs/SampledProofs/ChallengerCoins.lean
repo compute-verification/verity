@@ -22,10 +22,24 @@ must be a withheld one (`withheldOn`: every ledger open of the window says `with
 no root, salt or path before it closed, as `drawCoins` requires. `Run.run` refuses a draw from the challenger whose evidence is missing or gives a
 reason (`select`, code `coins`), its `after` the registration's digest.
 
+`withinAt` is `coins_within`: the sizes of what the evidence holds, each within its `Limits` (`LIMITS`, which v2 reads
+before anything else of the evidence, `OneStageZk.evidenceOf`): the session's release log lines (`MAX_LOG_LINES`, as
+its close counts them) and refused hellos (`MAX_HELLOS`), the ledger's lines (`MAX_LEDGER_LINES`, each signed at its
+own leaf of a key at the deployed parameters), the pins log's lines (`MAX_PINS`), the segment's openings (`MAX_COINS`,
+each a coin of one layout) and each opening's path (`MAX_PATH`, a layout's depth). A value absent or not a list counts
+as none: what reads it refuses it.
+
 The difftest's pieces (`Pieces.table`): `challenger_read` (`read_reason`) and `challenger_draw_coins`
-(`coins_reason`), each `{"reason"}`, or `{"refused": why}` where Python raises.
+(`coins_reason`), each `{"reason"}`, or `{"refused": why}` where Python raises; `challenger_within` (`coins_within`),
+`{"limits", "reason"}`.
 -/
-import SampledProofs.ChallengerSession
+module
+
+public import SampledProofs.ChallengerSession
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 
@@ -76,13 +90,14 @@ def WITHHELD : String :=
 
 /-- `withheld_on`: the ledger opens `window` (its open root), and every open of it marks its session withheld
 (`withheld: true` in its body), a session whose challenger released only its coins' raw bytes while it ran, and its
-commitment, salts and paths once it closed. -/
+commitment, salts and paths once it closed. The root and `withheld` are compared by a match, not by `BEq Json`, a
+`partial def` proofs can't see through. -/
 def withheldOn (ledger : Json) (window : String) : Bool :=
   let opens : List LedgerEntry := match ledger with
     | .arr ls => ls.toList.filterMap fun l => (ledgerEntry? l).filter fun e =>
-        e.kind == "open" && getD (getD e.body "window") "root" == Json.str window
+        e.kind == "open" && (match getD (getD e.body "window") "root" with | .str r => r == window | _ => false)
     | _ => []
-  !opens.isEmpty && opens.all fun e => getD e.body "withheld" == Json.bool true
+  !opens.isEmpty && opens.all fun e => match getD e.body "withheld" with | .bool true => true | _ => false
 
 /-- `coins_reason` (module docstring): why `coins`, the evidence of a draw's coins, does not show `read` to be the coins
 the session the auditor's ledger opens for window `window` (its open root) released after `after`; `none` when it
@@ -101,6 +116,52 @@ def coinsReason (coins : Json) (window : String) (after read : ByteArray) : Opti
       | .str l => ((roots.find? (·.1 == l)).map (·.2)).getD []
       | _ => []
     readReason c segment after read (some rs)
+
+/-- The most refused hellos a session's evidence holds. -/
+def MAX_HELLOS : Nat := 2 ^ 20
+/-- The most lines an auditor's ledger holds: each is signed at its own leaf of the challenger's key, of which a key at
+the deployed parameters (`Lms.deployed`) has `2 ^ 20`. -/
+def MAX_LEDGER_LINES : Nat := 2 ^ 20
+/-- The most lines a host's pins log holds. -/
+def MAX_PINS : Nat := 2 ^ 20
+/-- The longest path a coin opening holds: the depth of a layout of `MAX_COINS` coins. -/
+def MAX_PATH : Nat := 20
+
+/-- Bounds on the sizes of a draw's coin evidence (module docstring, `withinAt`). -/
+structure Limits where
+  log : Nat
+  hellos : Nat
+  ledger : Nat
+  pins : Nat
+  openings : Nat
+  path : Nat
+
+def LIMITS : Limits := ⟨MAX_LOG_LINES, MAX_HELLOS, MAX_LEDGER_LINES, MAX_PINS, MAX_COINS, MAX_PATH⟩
+
+def Limits.toJson (l : Limits) : Json :=
+  Json.mkObj [("hellos", Lean.toJson l.hellos), ("ledger", Lean.toJson l.ledger), ("log", Lean.toJson l.log),
+    ("openings", Lean.toJson l.openings), ("path", Lean.toJson l.path), ("pins", Lean.toJson l.pins)]
+
+/-- The refusal of evidence past `l`. -/
+def Limits.form (l : Limits) : String :=
+  s!"a draw's coin evidence holds at most {l.log} release log lines, {l.hellos} refused hellos, {l.ledger} ledger " ++
+    s!"lines, {l.pins} pins log lines and {l.openings} openings, each opening's path at most {l.path} digests"
+
+/-- A JSON list's length; 0 for anything else. -/
+def arrSize : Json → Nat
+  | .arr a => a.size
+  | _ => 0
+
+/-- `coins_within` (module docstring): every size `coins` holds within `l`. -/
+def withinAt (l : Limits) (coins : Json) : Bool :=
+  let session := getD coins "session"
+  let openings := getD (getD coins "segment") "openings"
+  arrSize (getD session "log") ≤ l.log && arrSize (getD session "hellos") ≤ l.hellos &&
+    arrSize (getD coins "ledger") ≤ l.ledger && arrSize (getD coins "pins") ≤ l.pins &&
+    arrSize openings ≤ l.openings &&
+    match openings with
+    | .arr os => os.all fun o => arrSize (getD o "path") ≤ l.path
+    | _ => true
 
 /-! The difftest's pieces. -/
 
@@ -137,5 +198,20 @@ def drawCoinsPiece (j : Json) : V Json := do
   let read ← lowerHex (getD j "read") "read"
   let .str window := getD j "window" | throw "window is not a string"
   return reasonJson (coinsReason (getD j "coins") window after read)
+
+/-- `{"coins", "limits"}` to `coins_within`'s, `limits` `{hellos, ledger, log, openings, path, pins}` or null for
+`LIMITS`: the limits read and the refusal past them. -/
+def withinPiece (j : Json) : V Json := do
+  request j #["coins", "limits"]
+  let l ← match getD j "limits" with
+    | .null => pure LIMITS
+    | ls => do
+      request ls #["hellos", "ledger", "log", "openings", "path", "pins"]
+      let n (k : String) : V Nat := match nat? (getD ls k) with
+        | some v => pure v
+        | none => throw s!"limits: {k} is not a natural number"
+      pure ⟨← n "log", ← n "hellos", ← n "ledger", ← n "pins", ← n "openings", ← n "path"⟩
+  return Json.mkObj [("limits", l.toJson),
+    ("reason", if withinAt l (getD j "coins") then Json.null else Json.str l.form)]
 
 end SampledProofs.Challenger

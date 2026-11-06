@@ -187,7 +187,6 @@ VLLM_PEARL_C_RUN_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
 # Not yet read from here: the commitments' own (`verity.ml.commitments`)
 BLAKE3_KEYED_ROW_NVFP4 = "blake3-keyed/row-nvfp4/v1"
 BLAKE3_KEYED_ROW = "blake3-keyed/row/v2"
-POSEIDON2_BABYBEAR_W24_ROW = "poseidon2-babybear-w24/row/v2h"
 SHA256_ROW_NVFP4_DIGEST = "sha256/row-nvfp4/v1"
 SHA256_ROW_DIGEST = "sha256/row/v1"
 VLLM_EMPTY = "verity-vllm/empty/v1"
@@ -231,8 +230,8 @@ CHALLENGER_COMMITMENT = "verity/challenger/commitment/v1"
 CHALLENGER_RELEASE_LOG = "verity/challenger/release-log/v1"
 INTEGRITY_PROFILE = "verity/integrity-profile/v1"
 ONE_STAGE_AUDIT = "verity/one-stage/audit/v0"
-ONE_STAGE_REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v0"
-ONE_STAGE_SUPPLIED_SALT = "verity/one-stage/supplied-salt/v0"
+ONE_STAGE_REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v1"
+ONE_STAGE_SUPPLIED_SALT = "verity/one-stage/supplied-salt/v1"
 ONE_STAGE_PERIOD_SALT = "verity/one-stage/window-salt/v1"
 PROOF_SERVICE_OUTCOME = "verity/proof-service/outcome/v0"
 PROOF_SERVICE_STREAM = "verity/proof-service/stream/v0"
@@ -263,6 +262,8 @@ FLOCK_ZK_TAU = "verity/flock-zk/tau/v1"
 LAYOUT = "verity/layout/v1"
 REC_COINS = "verity/rec-coins/v1"
 REC_INNER = "verity/rec-inner/v1"
+REC_V1_VERIFIER_SALT = "verity/rec-v1/verifier-salt/v1"
+REC_V1_ZERO_RESIDUAL_SALT = "verity/rec-v1/zero-residual-salt/v1"
 
 # Not yet read from here: PoUS, the wipe and the memory challenger
 CHAIN_DENSE_H = "chain-dense-H/v1"
@@ -390,9 +391,8 @@ NETWORK_CERTIFICATE = "verity/network-certificate/v4"
 NETWORK_RECORDS = "verity/network-records/v3"
 PERIOD_CIRCUIT = "verity/window-circuit/v1"
 
-# Not yet read from here: composition (onsite, remote, product)
+# Not yet read from here: composition (onsite, remote)
 ONSITE_PROTOCOL = "verity/onsite/v0"
-PRODUCT_PROTOCOL = "verity/product/v0"
 REMOTE_PROTOCOL = "verity/remote/v0"
 
 # Not yet read from here: served periods (`verity.ml.windows`, the bytes say window)

@@ -4,8 +4,9 @@
 # demo's workload names (placement.toml's `row`, the integration's file integrations/vllm/workloads/<row>.json, fetched by
 # its art id and checked against that directory's SHA256SUMS: `model`, `case` and `engine.revision`):
 #   window   the default: one sampling block of the served execution blocks through every subprotocol,
-#            benchmarks/one_stage/served_verdicts.sh: the endpoint committing under the workload dir placement.toml's
-#            COMMIT_RUN names, its requests (serve_load.py --varied), every closed sampling block sealed, the sampling
+#            benchmarks/one_stage/served_verdicts.sh: the endpoint committing under the workload's Build of record
+#            (`predict row`, held to the traced workload dir placement.toml's COMMIT_RUN names), its requests
+#            (serve_load.py --varied), every closed sampling block sealed, the sampling
 #            block's sampled proofs (C-Flock --zk behind the Lean firewall, and the Lean verifier's verdict), PoUW, the
 #            bandwidth audit, PoUS and the network certifier where each has its piece, and one record of every verdict
 #   commit   once per workload: its Build, Match and Commit with its sealed replay bundle (commit.sh), a workload dir under

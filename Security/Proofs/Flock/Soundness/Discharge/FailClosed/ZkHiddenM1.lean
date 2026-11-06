@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
-import Proofs.Flock.Soundness.Discharge.ZkLink.M1
-import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
-import Proofs.Flock.Soundness.Discharge.ZkLink.Link
-import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
-import Proofs.Flock.Soundness.Instance
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
+public import Proofs.Flock.Soundness.Discharge.ZkLink.M1
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Link
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
+public import Proofs.Flock.Soundness.Instance
 
 /-!
 # The hidden-output `--zk` tables are at C-Flock ZK's parameters, and `ε_ks` in closed form
@@ -38,6 +40,8 @@ A refused hidden-output table carries the reference setup's regions and `contra`
 The file sits under `FailClosed/` because it reads `Stmt.InRangeWide` and `piopNumMaxWide` (`FailClosed/Numeric.lean`),
 which import the `ZkHidden` headlines.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 
@@ -205,10 +209,6 @@ variable {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ}
 def TabZK.M1W (T : TabZK F mPts) : Prop :=
   ∃ m, 25 ≤ m ∧ m ≤ 35 ∧ T.sch = m1Schedule m ∧ T.t = m1Pad m ∧ T.e = 2 ∧ (T.S.shape mPts).InRangeWide ∧
     T.N ≤ 2 ^ 13 ∧ T.q = 168 ∧ 7 / 16 ≤ T.δ
-
-theorem TabZK.M1.toW {T : TabZK F mPts} (hT : T.M1) : T.M1W := by
-  obtain ⟨m, h1, h2, hsch, ht, he, ⟨hk, hR, hp⟩, hN, hq, hδ⟩ := hT
-  exact ⟨m, h1, h2, hsch, ht, he, ⟨hk, by omega, hp⟩, hN, hq, hδ⟩
 
 /-- **A `--zk` table's bound at `M1W`** is at most `2^-203` (`TabZK.bound_le_m1` at 1026 regions, from
 `padTableError_le_m1_wide`'s `3/2^206`). -/

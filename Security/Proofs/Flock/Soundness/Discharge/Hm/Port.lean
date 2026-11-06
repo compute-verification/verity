@@ -5,9 +5,13 @@ output (`bcCol`, the address `HmRow.regions` pins). When the slots' nets hold on
 holds Δ's copies (the first `cv` the midstate, each next `cv` the previous output, the hm96 `cv` the last output, its `pad`
 the padding block), the bytes at `bcCol` are the commit string of the row and salt (`port_commit`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Row
-import Proofs.Flock.Soundness.ExecTyped
-import Proofs.Flock.Soundness.Binding.Layout
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Row
+public import Proofs.Flock.Soundness.ExecTyped
+public import Proofs.Flock.Soundness.Binding.Layout
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 
@@ -61,11 +65,6 @@ theorem bitL_bytesOf (w : ℕ → Bool) {N : ℕ} (a : ℕ → ℕ → ℕ) {q :
     bitL (bytesOf w N a) q = w (a (q / 8) (q % 8)) := by
   rw [bitL, bytesOf, List.getD_eq_getElem?_getD, List.getElem?_ofFn, dite_eq_left (by omega), Option.getD_some,
     testBit_byteOf (fun t => w (a (q / 8) t)) ⟨q % 8, Nat.mod_lt _ (by norm_num)⟩]
-
-/-- `Binding.bytesAt` at addresses `A (a j t)` reads `bytesOf` of the witness's bits. -/
-theorem bytesAt_eq_bytesOf {m N : ℕ} (z : Model.Witness m) (A : ℕ → Fin (2 ^ m)) (a : ℕ → ℕ → ℕ) :
-    Binding.bytesAt z (fun (j : Fin N) (t : Fin 8) => A (a j t)) =
-      bytesOf (fun x => FlockSoundness.bit (z (A x))) N a := rfl
 
 /-! ## The row's columns -/
 

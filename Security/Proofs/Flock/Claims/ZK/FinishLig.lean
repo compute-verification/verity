@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishPiop
+module
+
+public import Proofs.Flock.Claims.ZK.FinishPiop
 
 /-!
 # The firewall's Ligerito is the masked prover's
@@ -17,6 +19,8 @@ reads the port's state as the analysis's and writes it back:
   the analysis's; at SHA-512 and `hm96-sha512/v1` with `commitFw` (`ligeritoPZk_fw`), as `flock-firewall finish` runs
   it.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 
@@ -100,14 +104,6 @@ theorem ligConj_ite {α : Type} (c : Prop) [Decidable c] (x y : StateT FlockComp
 
 theorem ligConj_throw {α : Type} [MonadExceptOf String N] (e : String) :
     ligConj (throw e : StateT FlockComplete.LigState N α) = throw e := ligConj_lift _
-
-theorem ligConj_map {α β : Type} (f : α → β) (x : StateT FlockComplete.LigState N α) :
-    ligConj (f <$> x) = f <$> ligConj x := by
-  funext s
-  show (fun p => (p.1, ligOfC p.2)) <$> (f <$> x).run s.toC = (f <$> ligConj x).run s
-  rw [StateT.run_map, StateT.run_map]
-  show _ = (fun p => (f p.1, p.2)) <$> ((fun p => (p.1, ligOfC p.2)) <$> x.run s.toC)
-  rw [Functor.map_map, Functor.map_map]
 
 theorem run_toC {α : Type} (x : StateT FlockComplete.LigState N α) (s : LigState) :
     x.run s.toC = (fun p => (p.1, p.2.toC)) <$> (ligConj x).run s := by

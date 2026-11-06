@@ -1,14 +1,16 @@
-import Properties.NciDesc.Cover
-import Proofs.Properties.Nci.Agrees
-import Proofs.Properties.Nci.DescVerdict
-import Proofs.Nci.Cover.Training
+module
+
+public import Properties.NciDesc.Cover
+public import Proofs.Properties.Nci.Agrees
+public import Proofs.Properties.Nci.DescVerdict
+public import Proofs.Nci.Cover.Training
 
 /-!
 # A verdict of compliance carries the cover theorem's factor
 
 `CoverTrained` and `CheckedCoverTraining` are stated in `Properties.NciDesc.Cover`. `coverTrained` proves `CoverTrained`
-of every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's compliance (`Witnesses`) and
-`CoverTraining`.
+of every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's compliance at its rate (`Witnesses`)
+and `CoverTraining_rate`, multiplied out by `c`.
 
 The check of record is `NciCheck.Baseline.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's provenance.
 Its verdict is `Desc.evaluate`'s (`baseline_desc`), and `Properties.DescAgrees` makes that the gate-level check's on every
@@ -16,16 +18,21 @@ expansion of the instance, gate by gate, so `checkedCoverTraining_of_descAgrees`
 and `SecurityProofs.CheckedCoverTraining` from `SecurityProofs.DescAgrees`.
 -/
 
+@[expose] public section
+
 namespace NciCheck.Properties.SecurityProofs
 
 open Lean (Json)
 
 /-- **A verdict of compliance of the gate-level check carries the cover theorem's factor.** -/
 theorem coverTrained {j out : Json} (hev : evaluate j = .ok out) : Properties.CoverTrained j out :=
-  fun i P d hpar hdec hL hθ hc b α₀ c M _ _ _ _ Mb A s D w₀ hb hB hH hU hk hw hs hα₀ =>
-    Nci.Cover.SecurityProofs.CoverTraining i.gamma _ b α₀ c d M Mb A s D w₀ hb
+  fun i P d hpar hdec hL hθ hc b α₀ r M _ _ _ _ Mb A s D w₀ hb hB hH hU hk hw hs hα₀ => by
+    have h := Nci.Cover.SecurityProofs.CoverTraining_rate i.gamma _ b α₀ r d M Mb A s D w₀ hb
       (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
-      (Witnesses j out hev i P d hpar hdec hL hθ hc) hB hH hU hk hw hs hα₀
+      (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hH hU hk hw hs hα₀
+    calc _ = α₀ * b * r.D.size r.D.computed * i.gamma := by ring
+      _ ≤ _ := mul_le_mul_of_nonneg_right h (Nat.cast_nonneg _)
+      _ = _ := by ring
 
 /-- `Baseline.evaluate`'s verdict is `Desc.evaluate`'s: θ's provenance is checked after it, and the verdict returned
 unchanged. -/

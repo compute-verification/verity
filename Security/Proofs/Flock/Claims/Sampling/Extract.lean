@@ -1,5 +1,7 @@
-import Definitions.Claims.Sampling
-import Proofs.Flock.Claims.ERepCost
+module
+
+public import Definitions.Claims.Sampling
+public import Proofs.Flock.Claims.ERepCost
 
 /-!
 # Coins fresh on a set of rounds, and the extractor's waits
@@ -16,6 +18,8 @@ The sampled extractor (`Claims.Sampling.E`) reruns the judged run fresh on some 
   most `m·K` times.
 * `NoHash`, `calls_le_of_noHash`: a program without SHA-512 calls of its own calls at most `t` times per rerun.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 
@@ -113,12 +117,6 @@ theorem sum_map_eq_count {ι : Type} [Fintype ι] [DecidableEq ι] (l : List ι)
   · simp only [nsmul_eq_mul]
   · intro i _ hi
     rw [List.count_eq_zero.2 (fun h => hi (List.mem_toFinset.2 h)), Nat.cast_zero, zero_mul]
-
-theorem sum_count_eq_length {ι : Type} [Fintype ι] [DecidableEq ι] (l : List ι) :
-    ∑ i, (l.count i : ℝ) = l.length := by
-  have := sum_map_eq_count l fun _ => 1
-  simp only [mul_one, List.map_const', List.sum_replicate, nsmul_eq_mul, mul_one] at this
-  exact this.symm
 
 
 /-! ## Flock's waits -/

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bridge.Committed
-import Proofs.Flock.Verifier.Encode
+module
+
+public import Proofs.Flock.Claims.Bridge.Committed
+public import Proofs.Flock.Verifier.Encode
 
 /-!
 # The coin tree's hiding from `Hm96Hiding`
@@ -25,6 +27,8 @@ This file derives it from the claims' hiding assumption `Hm96Hiding` (one hm96 l
   (`coin_bytes_injective`).
 -/
 
+@[expose] public section
+
 namespace Claims.Bridge
 
 open FlockSoundness.Game (ind)
@@ -49,12 +53,6 @@ theorem Pr_prod {α β : Type} [Fintype α] [Fintype β] (P : α → β → Prop
   rw [Pr_eq_Ex, Ex_prod]
   simp only [Pr_eq_Ex]
   rfl
-
-theorem Pr_le_of_forall {α β : Type} [Fintype α] [Nonempty α] [Fintype β] (P : α → β → Prop) {ε : ℝ}
-    (h : ∀ a, Pr (P a) ≤ ε) : Pr (fun p : α × β => P p.1 p.2) ≤ ε := by
-  rw [Pr_prod]
-  calc _ ≤ Ex fun _ : α => ε := Ex_mono h
-    _ = ε := Ex_const (α := α) ε
 
 theorem Pr_not {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) : Pr (fun a => ¬ p a) = 1 - Pr p := by
   have := Classical.decPred p
@@ -137,8 +135,6 @@ variable {α β : Type} [Fintype α] [DecidableEq β] (g h : α → β)
 /-- `α` as each value's fiber under `g`, indexed. -/
 noncomputable def fibers : α ≃ Σ b, Fin (Fintype.card {a // g a = b}) :=
   (Equiv.sigmaFiberEquiv g).symm.trans (Equiv.sigmaCongrRight fun _ => Fintype.equivFin _)
-
-theorem fibers_fst (a : α) : (fibers g a).1 = g a := rfl
 
 theorem fibers_symm (x : Σ b, Fin (Fintype.card {a // g a = b})) : g ((fibers g).symm x) = x.1 :=
   ((Fintype.equivFin {a // g a = x.1}).symm x.2).2

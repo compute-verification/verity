@@ -1,6 +1,8 @@
-import Definitions.Claims
-import Flock.ProvedScope
-import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+module
+
+public import Definitions.Claims
+public import Flock.ProvedScope
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 
 /-!
 # The verifier's statement, read as `Claims.Flock.Stmt`
@@ -22,12 +24,14 @@ relation's fields, and the `Form` the scope check reads, each field the value `P
   parsed statement; the scope reads none of them. The deployed one is `relation` (`Scope.Tables`).
 -/
 
+@[expose] public section
+
 namespace Flock.Readable
 
 open FlockSoundness.Discharge
 
 /-- What `flock-verify verify` reads of a statement besides the session directory: its flags' values (`I`, as
-`Exec.Inputs` holds them: `--statement`'s tags after `withCoins` and `--coins`, which `verify --zk` replaces by
+`Exec.Inputs` holds them: `--statement`'s tags and `--coins`, which `verify --zk` replaces by
 `zkTags I` and `zkCoins I`), whether it is the masked verifier (`--zk`), the record's draw (`Main.recordDraw`, none
 without one), its own public input words (`--public-inputs`) and whether it holds its own registered reads
 (`--registered`). -/

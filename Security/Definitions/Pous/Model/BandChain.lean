@@ -1,5 +1,7 @@
-import Definitions.Pous.Model.P3Chain
-import Definitions.Pous.Model.Dense
+module
+
+public import Definitions.Pous.Model.P3Chain
+public import Definitions.Pous.Model.Dense
 
 /-!
 # The band scheme and the dense chain scheme over the overwrite chain on `Π₂`
@@ -29,6 +31,8 @@ there are no coins. Decoding recomputes each block's key from its parents in the
 
 The definitions are total; the side conditions the proofs need are hypotheses of their theorems.
 -/
+
+@[expose] public section
 
 namespace Pous.Sponge
 

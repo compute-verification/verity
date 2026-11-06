@@ -1,17 +1,20 @@
-import Proofs.Accounting.TS.FanIn
-import Proofs.Accounting.TS.FoldFanIn
-import Proofs.Accounting.TS.LowBit
-import Proofs.Accounting.TS.Price
-import Proofs.Accounting.TS.Rounds
-import Proofs.Accounting.TS.Facets
-import Proofs.Accounting.TS.Receipt
-import Proofs.Accounting.TS.Tensor
-import Proofs.Accounting.TS.Sheet
-import Proofs.Accounting.TS.ProofsSound
-import Proofs.Accounting.TS.Fork
-import Proofs.Accounting.TS.Drawn
-import Proofs.Accounting.TS.Keyed
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Proofs.Accounting.TS.FanIn
+public import Proofs.Accounting.TS.FoldFanIn
+public import Proofs.Accounting.TS.LowBit
+public import Proofs.Accounting.TS.Price
+public import Proofs.Accounting.TS.Rounds
+public import Proofs.Accounting.TS.Facets
+public import Proofs.Accounting.TS.Receipt
+public import Proofs.Accounting.TS.Tensor
+public import Proofs.Accounting.TS.Sheet
+public import Proofs.Accounting.TS.ProofsSound
+public import Proofs.Accounting.TS.Fork
+public import Proofs.Accounting.TS.Drawn
+public import Proofs.Accounting.TS.Keyed
+public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The tensor–scalar model's proofs
@@ -29,6 +32,8 @@ All five run one chain: a price lower bound `Φ(π) ≤ π·n(M)` (from (RD), `p
 `d̄ = ln(1/δ′)/(ln(1/p)·S)`, off `luck_rounds`' event at `K = ⌈ln(1/δ′)/ln(1/p)⌉` (`p^K ≤ δ′`, `pow_ceil_le`); Lemma C's
 is `ε_luck` at `d̄ = Λ·ln(1/δ′)/S`, off `budget_tail`'s event at `t = ln(1/δ′)`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

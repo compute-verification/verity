@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.TableBound
+module
+
+public import Proofs.Flock.Claims.KS.TableBound
 
 /-!
 # The old fixed-table bound's terms, refit to `TableBoundθ`
@@ -29,6 +31,8 @@ terms one by one, at one table.
   term when the mean `Adv`s are at most the fork events' probabilities, since a mean of roots is at most the root of
   the mean (`mean_sqrt_le`; `mean_epsSL_le`, `mean_epsSZ_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 
@@ -357,22 +361,6 @@ theorem weightNat_cast (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) :
       2 * (sch.levels.map fun l => (2 : ℝ) ^ l.logLen * l.queries).sum + 2 * (Np : ℝ) ^ 2 + 2 := by
   unfold Claims.Flock.Numbers.weightNat
   simp [Nat.cast_list_sum, List.map_map, Function.comp_def]
-
-/-- A table's weight is at most the session's, at table 0. -/
-theorem tableWeight_le_weight {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
-    (h0 : (tables zk x).head? = some (spec, st)) : tableWeight zk st ≤ weight zk x := by
-  unfold weight
-  cases ht : tables zk x with
-  | nil => rw [ht] at h0; cases h0
-  | cons p rest =>
-    rw [ht, List.head?_cons, Option.some.injEq] at h0
-    subst h0
-    simp only [List.map_cons, List.sum_cons]
-    have : 0 ≤ (rest.map fun p => tableWeight zk p.2).sum :=
-      List.sum_nonneg fun a ha => by
-        obtain ⟨q, -, rfl⟩ := List.mem_map.1 ha
-        exact tableWeight_nonneg zk q.2
-    linarith
 
 /-- **Table 0's weight and the other tables' share of `k`** fit in the weight (`lens_le_weights`). -/
 theorem weight_split {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}

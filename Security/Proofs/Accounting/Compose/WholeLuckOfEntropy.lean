@@ -1,4 +1,7 @@
-import Definitions.Accounting.Guarantees.Compose
+module
+
+public import Definitions.Accounting.Guarantees.Compose
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # A whole-tile luck per query from its tiles' entropy: proof
@@ -12,6 +15,8 @@ expands to `Σ_{S ⊆ W} [S ⊆ Lk]·Π_{v ∈ S} c_v·Π_{v ∈ W \ S} e^{−κ
 each `Σ_b [S ⊆ Lk]` by `|B|·e^{−Σ_S h}`, and the sum folds back to `|B|·Π_v (c_v·e^{−h_v} + e^{−κ₀x_v})`, each factor
 `e^{−h_v}·e^{x_v} + (1 − e^{−h_v})·e^{−κ₀x_v}`, in `[0, 1]`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose.Whole
 

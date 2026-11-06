@@ -1,4 +1,7 @@
-import Proofs.Accounting.TS
+module
+
+public import Proofs.Accounting.TS
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # Theorem D-ideal with fold skippers charged
@@ -19,6 +22,8 @@ PoUW's exponential round bound (`prob_accepts_le`, `c = 1`) on the log-luck game
   the unfolded branch's floor `(N_w w* + (1 − μ_f)N_w φ*)/B_♭ · (1 − 41/48000)` at `p₀ = ½`, `S = 48,000` and
   `δ′ ≥ 2^-41`, and the headline's last step, a bound below both branches' floors.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.Whole
 

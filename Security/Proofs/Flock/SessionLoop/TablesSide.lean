@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.Statement
-import Proofs.Flock.Claims.ZK.CausalExe
+module
+
+public import Proofs.Flock.SessionLoop.Statement
+public import Proofs.Flock.Claims.ZK.CausalExe
 
 /-!
 # The tables' side of `SessionLoopZKDeployed` at the deployed tables
@@ -20,6 +22,8 @@ strict prefix pads to, and `SwCausalOn` reads it at every coin vector with no ou
 the honest values (`swCausalOn_honestVals_dataE`, from `swCausal_honestVals_dataE`, `RefSession.swCausal_vals`), so the
 statement applies to an honest worker.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

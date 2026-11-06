@@ -1,5 +1,7 @@
-import Properties.RemoteAudit.Shared
-import Proofs.Properties.RemoteAudit.Order
+module
+
+public import Properties.RemoteAudit.Shared
+public import Proofs.Properties.RemoteAudit.Order
 
 /-!
 # One openings coin per draw: the properties at `g` windows a draw
@@ -28,6 +30,8 @@ plus its number there (`flatMap_split`, `sum_take_mid`).
 `*_one`: at `g = 1` the session statements are today's (`Shared.run 1` is `Session.run`, `RemoteAudit.Shared.run_one`),
 and a draw of one window is `verifyWindow`'s (`acceptDrawsOpenable_one`).
 -/
+
+@[expose] public section
 
 open RemoteAudit RemoteAudit.Session
 
@@ -516,21 +520,6 @@ theorem samePasses_of (P : Params) (ws ws' : Array Win) (hs : ws'.size = ws.size
   rw [getElem!_pos ws v hv, getElem!_pos ws' v hv'] at this
   exact this
 
-theorem keeps_trans' {P : Params} {a b c : Win} (h₁ : Keeps P a b) (h₂ : Keeps P b c) : Keeps P a c := by
-  obtain ⟨r1, p1, s1, h1, d1, k1, v1⟩ := h₁
-  obtain ⟨r2, p2, s2, h2, d2, k2, v2⟩ := h₂
-  refine ⟨r2.trans r1, p2.trans p1, s2.trans s1, h2.trans h1, fun hd => ?_, fun hd => k2 (k1 hd), fun hv => ?_⟩
-  · rcases d2 hd with hb | hb
-    · rcases d1 hb with ha | ha
-      · exact Or.inl ha
-      · exact Or.inr ha
-    · rw [r1] at hb; exact Or.inr hb
-  · rcases v2 hv with hb | hb
-    · rcases v1 hb with ha | ha
-      · exact Or.inl ha
-      · exact Or.inr (k2 ha)
-    · exact Or.inr hb
-
 theorem sclose_inv {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : State} (h : Inv s)
     (he : Shared.close g s t now = .ok (r, s₁)) : Inv s₁ ∧ Frame s s₁ := by
   have hF : ∀ (m first : Nat), Inv { s with windows := finalize ((List.range m).map (first + ·)) s.windows } := by
@@ -900,15 +889,6 @@ theorem drawLengths_one {s : State} {c : Nat} (h : c < s.params.windows) :
   unfold drawLengths
   rw [drawWindows_one h]
   simp
-
-theorem openingsUnreadUntilDrawn_one (h : OpeningsUnreadUntilDrawn) :
-    Properties.RemoteAudit.OpeningsUnreadUntilDrawn :=
-  fun params reg coins appendCoins notBeforeNs events rs s hrun t coins' hW hnd hag =>
-    h 1 params reg coins appendCoins notBeforeNs events rs s hrun t coins' hW (by rw [Nat.mul_one]; exact hnd) hag
-
-theorem recordKeptAfterDraw_one (h : RecordKeptAfterDraw) : Properties.RemoteAudit.RecordKeptAfterDraw :=
-  fun params reg coins appendCoins notBeforeNs events events' rs rs' s s' h₁ h₂ =>
-    h 1 params reg coins appendCoins notBeforeNs events events' rs rs' s s' h₁ h₂
 
 theorem releaseOrder_one (params : Params) (reg : Registration) (appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (D : Array ByteArray → Array Event) :

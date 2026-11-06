@@ -1,9 +1,11 @@
-import Proofs.Flock.SessionLoop.FinRepFinal
-import Proofs.Flock.SessionLoop.FinRepXs
-import Proofs.Flock.SessionLoop.Tables
-import Proofs.Flock.Claims.ZK.FinishRank
-import Proofs.Flock.Claims.ZK.FinishSwPts
-import Proofs.Flock.Claims.ZK.LinkFft
+module
+
+public import Proofs.Flock.SessionLoop.FinRepFinal
+public import Proofs.Flock.SessionLoop.FinRepXs
+public import Proofs.Flock.SessionLoop.Tables
+public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.FinishSwPts
+public import Proofs.Flock.Claims.ZK.LinkFft
 
 /-!
 # (c.3)'s `FinRepL0`: level 0's opened rows and salts
@@ -25,6 +27,8 @@ names: at `q0At`'s positions. Each of those is opened (`FinRep.q0At_opened`), an
 **`Loop.finRepL0`**: at a statement in the masked scope with a witness, where the loop draws the tape's level 0
 (`Loop.Level0Src`), `FinRepL0` holds. It reads no worker's values.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.RankAt
 
@@ -609,8 +613,8 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
     refine ⟨?_, ?_⟩
     · rw [hcr, FlockSoundness.Refine.getElem!_range_map _ hpd', hf1, hrow, hcm0]
       show _ = l0.rows[p]!
-      rw [hrows0, hlv0, htp0, _root_.Flock.Firewall.Link.rows_eq, hin0, hgk, FlockComplete.tablesP,
-        FlockSoundness.Refine.getElem!_range_map _ hjT]
+      rw [hrows0, hlv0, htp0, hin0, Masked.rows_linkIn x w t ⟨k / 2, hj⟩, _root_.Flock.Firewall.Link.rows_eq, hgk,
+        FlockComplete.tablesP, FlockSoundness.Refine.getElem!_range_map _ hjT]
       all_goals rfl
     · rw [hcs, FlockSoundness.Refine.getElem!_range_map _ hpd', hf2, hsalt, hcm0]
       show _ = ((Array.range (2 ^ l0.lv.d)).map fun q =>
@@ -618,7 +622,7 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
       rw [hlv0, FlockSoundness.Refine.getElem!_range_map _ hpd]
       have hsl : l0.salt p = (Masked.linkIn x w t ⟨k / 2, hj⟩).salt p :=
         congrFun (congrArg _root_.Flock.Firewall.Link.In.salt hin0) p
-      rw [hsl]
+      rw [hsl, Masked.salt_linkIn x w t ⟨k / 2, hj⟩ hpd']
       all_goals rfl
   rw [hP, hQ]
   unfold FlockComplete.openP

@@ -30,13 +30,13 @@ Commit window and writes ``summary.json``.
   ``engine.engine_kwargs.max_model_len``, the address, the run id), ``advice_trace.jsonl`` (`verity_vllm.engine.step_trace`'s
   schema: the scheduler's configuration, each request's arrival, each step's rows, emitted tokens and finishes, each
   Commit window's open and close, with unix clock readings), ``requests.jsonl`` (one line a finished request: its
-  engine id, ``user``, the warden's release headers on it when it has them, prompt and streamed ids, finish, and the
-  clock at its arrival, first token and finish) and ``windows.jsonl`` (one line a closed Commit window: its run id
-  and run root). A Commit window opens at the first step after the engine was idle and closes when it is idle again or
-  after ``--window-steps`` steps, so a request may run in two windows (the carry `window_chain.join` binds). Its run root
-  is a hiding commitment (`verity.ml.commitments.advice` rows under fresh salts, kept in ``served_rows/w<k>.json``) of
-  the tokens it served, one row a sampled token: (step, request, position, token). It stands in for the serving loop's
-  own Commit (its per-slot trees), which network accounting doesn't read.
+  engine id, ``user``, the network certifier's release headers on it when it has them, prompt and streamed ids, finish,
+  and the clock at its arrival, first token and finish) and ``windows.jsonl`` (one line a closed Commit window: its run
+  id and run root). A Commit window opens at the first step after the engine was idle and closes when it is idle again
+  or after ``--window-steps`` steps, so a request may run in two windows (the carry `window_chain.join` binds). Its run
+  root is a hiding commitment (`verity.ml.commitments.advice` rows under fresh salts, kept in ``served_rows/w<k>.json``)
+  of the tokens it served, one row a sampled token: (step, request, position, token). It stands in for the serving
+  loop's own Commit (its per-slot trees), which network accounting doesn't read.
 """
 from __future__ import annotations
 
@@ -170,7 +170,7 @@ class Request:
     finish: dict | None = None
     windows: set = field(default_factory=set)
     queue: asyncio.Queue | None = None
-    release: list | None = None                 # the warden's release headers on it (N, run hex), when it has them
+    release: list | None = None                 # the network certifier's release headers on it (N, run hex), when it has them
     times: dict = field(default_factory=dict)   # the clock's readings at its arrive record, first token and finish
 
     @property
@@ -306,7 +306,7 @@ class Scheduler:
         w, rows = self.window, self.window_rows
         data = [struct.pack(">IIII", *r) for r in rows] or [bytes(ROW_BITS // 8)]
         run_id = f"{self.run_id}/w{w}"
-        reg = AC.register(data, ROW_BITS, hashlib.sha512(BINDING + b"\0" + run_id.encode()).digest())
+        reg = AC.commit(data, ROW_BITS, hashlib.sha512(BINDING + b"\0" + run_id.encode()).digest())
         d = self.out / "served_rows"
         d.mkdir(exist_ok=True)
         (d / f"w{w}.json").write_text(json.dumps({"window": w, "rows": [list(r) for r in rows],

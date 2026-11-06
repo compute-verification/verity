@@ -1,6 +1,8 @@
-import Flock.Firewall.Skeleton
-import Flock.Firewall.SessionPlan
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+module
+
+public import Flock.Firewall.Skeleton
+public import Flock.Firewall.SessionPlan
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 /-!
 # The algebraic phase's coin counts
@@ -17,6 +19,8 @@ lincheck squeeze `replayCoins`' counts in order.
 * `tally_squeezeP`, `zerocheckFw_tally`, `lincheckFw_tally`, `repPiop_tally`: the squeezes' counts, the zerocheck's
   and lincheck's, and the PIOP's.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 
@@ -63,10 +67,6 @@ theorem tally_eq {α : Type} {ns ns' : List ℕ} {Q : α → Prop} {p : TMW RecM
     Tally ns' Q p :=
   e ▸ h
 
-theorem tally_mono {α : Type} {ns : List ℕ} {Q Q' : α → Prop} {p : TMW RecM α} (h : Tally ns Q p)
-    (hQ : ∀ a, Q a → Q' a) : Tally ns Q' p :=
-  fun t s a t' s' e => let ⟨hq, hc⟩ := h t s a t' s' e; ⟨hQ a hq, hc⟩
-
 theorem tally_throw {α : Type} {ns : List ℕ} {Q : α → Prop} (e : String) :
     Tally ns Q (throw e : TMW RecM α) := by
   intro t s a t' s' h
@@ -112,13 +112,13 @@ theorem tally_forIn_bind {σ β : Type} {n : ℕ} {ms ms' : List ℕ} {R : β �
 /-! ## The squeezes -/
 
 /-- A squeeze's framed bytes end with its count. -/
-theorem framed_count (t : Transcript) (kind : UInt8) {n : ℕ} (hn : n < 2 ^ 64) :
-    (_root_.Flock.u64OfLE (Transcript.framed t kind n) ((Transcript.framed t kind n).size - 8)).toNat = n := by
-  have e : Transcript.framed t kind n =
+theorem framed_count (t : Flock.Transcript) (kind : UInt8) {n : ℕ} (hn : n < 2 ^ 64) :
+    (_root_.Flock.u64OfLE (Flock.Transcript.framed t kind n) ((Flock.Transcript.framed t kind n).size - 8)).toNat = n := by
+  have e : Flock.Transcript.framed t kind n =
       (t.pending ++ ByteArray.mk #[4, kind, 0, 0, 0, 0, 0, 0]) ++ _root_.Flock.le64 n.toUInt64 ++ ByteArray.empty := by
     rw [ByteArray.append_empty, ByteArray.append_assoc]
     rfl
-  have hs : (Transcript.framed t kind n).size - 8 = (t.pending ++ ByteArray.mk #[4, kind, 0, 0, 0, 0, 0, 0]).size := by
+  have hs : (Flock.Transcript.framed t kind n).size - 8 = (t.pending ++ ByteArray.mk #[4, kind, 0, 0, 0, 0, 0, 0]).size := by
     rw [e, ByteArray.append_empty, ByteArray.size_append, FlockSoundness.Discharge.ZkView.le64_size]
     omega
   rw [hs, e, FlockSoundness.Discharge.ZkView.u64OfLE_mid]
@@ -132,7 +132,7 @@ theorem tally_squeezeP (kind : UInt8) (n : ℕ) (hn : n < 2 ^ 64) :
   by_cases h0 : n = 0
   · subst h0
     have e : ((squeezeP recAsks kind 0).run t).run (rs, k) =
-        .ok ((#[], { t with pending := Transcript.framed t kind 0 }), (rs, k)) := rfl
+        .ok ((#[], { t with pending := Flock.Transcript.framed t kind 0 }), (rs, k)) := rfl
     rw [e] at h
     cases h
     exact ⟨trivial, by simp [sq]⟩
@@ -141,10 +141,10 @@ theorem tally_squeezeP (kind : UInt8) (n : ℕ) (hn : n < 2 ^ 64) :
           { t with pending := ByteArray.empty, k := t.k + 1,
                    rounds := t.rounds.push ⟨n, ByteArray.empty,
                      (Array.range n).map fun i => _root_.Flock.Firewall.Skeleton.coin (k + i + 1),
-                     some (Transcript.framed t kind n)⟩ }),
-          (rs.push (Transcript.framed t kind n,
-            (_root_.Flock.u64OfLE (Transcript.framed t kind n) ((Transcript.framed t kind n).size - 8)).toNat),
-           k + (_root_.Flock.u64OfLE (Transcript.framed t kind n) ((Transcript.framed t kind n).size - 8)).toNat)) := by
+                     some (Flock.Transcript.framed t kind n)⟩ }),
+          (rs.push (Flock.Transcript.framed t kind n,
+            (_root_.Flock.u64OfLE (Flock.Transcript.framed t kind n) ((Flock.Transcript.framed t kind n).size - 8)).toNat),
+           k + (_root_.Flock.u64OfLE (Flock.Transcript.framed t kind n) ((Flock.Transcript.framed t kind n).size - 8)).toNat)) := by
       simp only [squeezeP, StateT.run, h0, if_false]
       rfl
     rw [e, framed_count t kind hn] at h
@@ -242,7 +242,7 @@ theorem repPiop_tally (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout
     exact tally_pure trivial
   · simp
 
-theorem tally_run' {α : Type} {ns : List ℕ} {Q : α → Prop} {p : TMW RecM α} (hp : Tally ns Q p) {t : Transcript}
+theorem tally_run' {α : Type} {ns : List ℕ} {Q : α → Prop} {p : TMW RecM α} (hp : Tally ns Q p) {t : Flock.Transcript}
     {s : Array (ByteArray × ℕ) × ℕ} {a : α} {s' : Array (ByteArray × ℕ) × ℕ}
     (h : (p.run' t).run s = .ok (a, s')) : Q a ∧ cnts s' = cnts s ++ ns := by
   rw [StateT.run'_eq, StateT.run_map] at h

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Coins
+module
+
+public import Proofs.Flock.Claims.ZK.Coins
 
 /-!
 # The real run and the forced run
@@ -15,6 +17,8 @@ does (`agree`). So against one verifier:
 * `resp_zero_eq`: every committed-coin prover sends `Hello` first, so every run's commitment is the verifier's answer to
   it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -207,8 +211,6 @@ theorem resp_zero_eq (pm₁ pm₂ : List (Msg × Msg) → Msg) (n : ℕ) (h : pm
     resp (interact ask pm₁ (n + 1) []) 0 = resp (interact ask pm₂ (n + 1) []) 0 := by
   unfold resp
   rw [interact_head, interact_head, h]
-
-theorem pmD_nil : G.pmD H x ν r [] = G.hello x ν := by simp [pmD, dprover, strat_eval_nil]
 
 theorem pmR_nil : G.pmR H x w ν r [] = G.hello x ν := by simp [pmR, prover, strat_eval_nil]
 

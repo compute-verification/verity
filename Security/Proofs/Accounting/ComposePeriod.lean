@@ -1,7 +1,12 @@
-import Definitions.Accounting.Guarantees.ComposePeriod
-import Proofs.Accounting.TS.Rounds
-import Proofs.Accounting.Compose.CircuitWork
-import Proofs.Accounting.ComposePeriod.Covers
+module
+
+public import Definitions.Accounting.Guarantees.ComposePeriod
+public import Proofs.Accounting.TS.Rounds
+public import Proofs.Accounting.Compose.CircuitWork
+public import Proofs.Accounting.ComposePeriod.Covers
+public import Proofs.Accounting.Lemmas.TS.Receipt
+public import Proofs.Accounting.Lemmas.ComposePeriod
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # PoUW's work over a monitoring period: proofs
@@ -33,6 +38,8 @@ prefix's live tiles:
   words, at most `zeroCone` a window (`zeroS_le`: a dead tile with words reaches no live words); summed over the
   prefix (`deficiencyUpTo_periodGame`), the shares in the cheaper of the two (`liveWork_of`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.ComposePeriod
 

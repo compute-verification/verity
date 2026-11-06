@@ -1,5 +1,7 @@
-import Definitions.Accounting.ComposePeriod
-import Definitions.Accounting.Assumptions.Compose
+module
+
+public import Definitions.Accounting.ComposePeriod
+public import Definitions.Accounting.Assumptions.Compose
 
 /-!
 # PoUW's work over a monitoring period of `n` windows (trusted)
@@ -26,15 +28,6 @@ An honest period of 82,403 windows completes with probability `(1 − f)^n`, 44%
 is credited up to its first window with a refused proof (`Outcomes.Credited`), a stopping time, and the tail is taken
 at it (`PeriodTailMax`).
 
-* `PeriodBudget`: the composition lemma. If every window's `serviceGame` has its saving per unit of detection bounded by
-  `Λ` (`RoundGame.BudgetAt`, which `ServiceBudget` gives per window), whatever the earlier windows did, so does the
-  period's game (`periodGame`). Proved (`Proofs.Accounting.ComposePeriod`): a window's game is one round, and
-  `BudgetAt` over rounds is that condition at each round given the past.
-* `PeriodTailMax`: `budget_tail` at every prefix at once (Ville's inequality, finite form): when `Λ` bounds the play,
-  some prefix of its rounds is accepted with share at least `Λ·t` with probability at most `e^{−t}`. So a prefix
-  that ends at a stopping time the cheater steers pays `ln(1/δ_s)` once, as a fixed one does. Proved
-  (`Proofs.Accounting.ComposePeriod`): by induction on the game, conditioning on the first round's coins as
-  `expect_weight_le` does, with the bound for every threshold `D` in the induction.
 * `CircuitWorkPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
   (`Proofs.Accounting.ComposePeriod`) from `CircuitWork`'s lemmas, not from its conclusion (a per-window tail at `δ`
   can't be averaged into `ε/n`): `ServiceBudget` per window at the window's detected live weights, `PeriodBudget`,
@@ -46,31 +39,11 @@ at it (`PeriodTailMax`).
   assembly at `a, b > 0`. Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives.
 -/
 
+@[expose] public section
+
 namespace Accounting.Guarantees.ComposePeriod
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-
-/-- **The period's budget from its windows'.** For a period of `n` windows of one circuit of `M` rounds over `N` tiles,
-any play (`WindowPlay`: each window's live tiles and split stages chosen after the earlier windows' coins), share
-weights `w live` at each window's live tiles `live`, costs `a, b` and `K` draws a window: if every window's one round
-(`serviceGame`) has its saving per unit of detection bounded by `Λ` (`RoundGame.BudgetAt`), whatever the past, then so
-has the period's game (`periodGame`). With `budget_tail` at `n` rounds, an accepted period's total share is below
-`Λ·ln(1/δ_s)` except with probability `δ_s`. -/
-def PeriodBudget : Prop :=
-  ∀ {C Ξ : Type} [Fintype C] [Fintype Ξ] {N M n : ℕ} (stg : Fin N → ℕ) (w : (Fin N → Bool) → Fin N → ℝ) (a b : ℝ)
-    (K : ℕ) (Λ : ℝ) (Wp : WindowPlay C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n),
-    Wp.EveryWindow (fun live W => RoundGame.BudgetAt Λ (serviceGame (Ξ := Ξ) stg W (w live) a b K)) →
-    RoundGame.BudgetAt Λ (periodGame stg w a b K Wp)
-
-/-- **The budget's tail at every prefix at once** (Ville's inequality, finite form): for any play of `n` rounds on
-coins `Ω` with its saving per unit of detection bounded by `Λ > 0` (`RoundGame.BudgetAt`), the probability that some
-prefix of its rounds passes (`RoundGame.acceptsUpTo`) with share at least `Λ·t` (`RoundGame.deficiencyUpTo`) is at most
-`e^{−t}`. Its last prefix is `budget_tail`. A period credited up to its first failed window, a stopping time the
-cheater may steer, reads it at that window, so it pays `ln(1/δ_s)` once, and neither a fixed `n` nor a rule against
-dropping windows is needed for the tail. -/
-def PeriodTailMax : Prop :=
-  ∀ {Ω : Type} [Fintype Ω] {n : ℕ} (g : RoundGame Ω n) (Λ : ℝ), 0 < Λ → RoundGame.BudgetAt Λ g → ∀ t : ℝ,
-    prob (fun x => ∃ j : ℕ, RoundGame.acceptsUpTo g j x ∧ Λ * t ≤ RoundGame.deficiencyUpTo g j x) ≤ Real.exp (-t)
 
 /-- **(L) The circuit's work on its live tiles over a monitoring period's accepted prefix, live coins.** For every
 declared circuit `Cd` and scheme `Sc`, run as a period of at most `n ≥ 1` windows in order, each window
@@ -137,7 +110,7 @@ round, each round's set fixed before its coin.
 
 *The period's order and its record.* `WindowPlay` makes the order the model's. The statement needs a period record from
 which the credit is read: two signed entries in the auditor's ledger, a `period-open` and a `period-close`, cited by
-their `seq` within a published ledger head (the record is the proof service's). A period is never a label a requester
+their `seq` within a published ledger head (the record is the proof system's). A period is never a label a requester
 names (one Commit could then open sessions under two labels and keep the one whose coins it likes), nor a range
 written afterwards, whose writer could choose its boundaries and leave a failed window off the edge. Its windows are
 exactly its lane's reserves between the two entries, in ledger order, at most `n`, and every one counts: no window

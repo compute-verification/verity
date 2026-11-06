@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Round1Enc
-import Proofs.Flock.Claims.Complete.ZkTables.Round2
+module
+
+public import Proofs.Flock.Claims.ZK.Round1Enc
+public import Proofs.Flock.Claims.Complete.ZkTables.Round2
 
 /-!
 # Round `2` of the masked session
@@ -18,6 +20,8 @@ commitment and no coin of the session beyond round `0`'s (which decides whether 
 * `Flock.zk_deployZk_masked_exe_round2_gap`: so `Flock.zk_deployZk_masked_exe_round1_gap` at a plan whose round `2` is
   `enc2` asks `hstep` after the third round only.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

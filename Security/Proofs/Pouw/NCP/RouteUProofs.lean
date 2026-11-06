@@ -1,8 +1,11 @@
-import Definitions.Pouw.Assumptions.NCP.RouteUGame
-import Proofs.Pouw.NCP.GameProofs
-import Proofs.Pouw.Sanity
-import Proofs.Pouw.NCP.ChainProofs
-import Definitions.Pouw.Guarantees.NCP
+module
+
+public import Definitions.Pouw.Assumptions.NCP.RouteUGame
+public import Proofs.Pouw.NCP.GameProofs
+public import Proofs.Pouw.Sanity
+public import Proofs.Pouw.NCP.ChainProofs
+public import Definitions.Pouw.Guarantees.NCP
+public import Proofs.Pouw.Lemmas.NCP
 
 /-!
 # NCP's checked values on route U: proofs
@@ -11,6 +14,8 @@ import Definitions.Pouw.Guarantees.NCP
   `mmWU_eq` and `wrapU` (the int32 reading), `int7Int32U` (signed `R`, `k ≤ 2^15`), `int7Int32UUnsigned`
   (permutation matrix, `k ≤ 2^16`: `runU_cells`, `cell_bound`), `mmWUExact`, `leadCompleteU` and `yuChecked`.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.RouteUProofs
 

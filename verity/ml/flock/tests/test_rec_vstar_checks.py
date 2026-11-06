@@ -1,8 +1,8 @@
 """The Lean verifier's checks of V*'s statement family (`Flock.RecVStar`): V*'s statements at an inner session's shape, as
 the verifier restates them, are the ones `rec_vstage.stage` writes (each level's `rec-open/l<LANES>-h<H>` over `2 q`
 openings, each of the algebra's parts `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` over two reps, `rec_shape.outer`'s, and
-then RecCap at each later level `l`, `rec-cap/n<N>-l<l>` over both reps' tops, and last RecCap, `rec-cap/n<N>` over
-level 0's cap of `N` nodes), and a
+then RecCap at each later level `l`, `rec-cap/n<N>-l<l>` over both reps' tops, RecLink over the link table's rows when the
+inner shape names one, `rec-link/u<UB>-p<PB>`, and last RecCap, `rec-cap/n<N>` over level 0's cap of `N` nodes), and a
 unit whose name or population is not one of them is refused by the value it differs in: an instance count, a part's shape
 against the inner session's, a name V* has no statement under. `verify` refuses one of V*'s statements without the
 verifier's own inner shape (`--rec-inner`) or its own partition object and program, and a circuit file that is not byte for
@@ -39,14 +39,17 @@ pytestmark = [pytest.mark.slow,
 SHAPES = [(25, 22, 8), (27, 22, 8)]
 
 
-def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None, holo=None, sparse=None, stacked=None) -> Path:
+def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None, holo=None, sparse=None, stacked=None,
+           links=None) -> Path:
     """`rec-inner`'s line at a shape, of `(c - 2) / 2` regions unless given: an extra claim per region at two link points;
     ``holo``, when given, its `holo` key (`rec-inner --hide`); ``sparse``, the bucket's RecSparse shape (`rec-inner
-    --sparse`), and ``stacked``, R's `(m, claims)` (the inner circuit's META's), candidate 3's."""
+    --sparse`), and ``stacked``, R's `(m, claims)` (the inner circuit's META's), candidate 3's; ``links``, the link table's
+    shape `{"UB", "PB", "rows"}` (`rec-inner --rec-links`)."""
     path.write_text(json.dumps({"format": "verity/rec-inner/v2", "m": m, "k_log": k, "claims": c,
                                 "regions": (c - 2) // 2 if regions is None else regions, **({"holo": holo} if holo is not None else {}),
                                 **({"sparse": list(sparse)} if sparse is not None else {}),
-                                **({"stacked": {"m": stacked[0], "claims": stacked[1]}} if stacked is not None else {})}))
+                                **({"stacked": {"m": stacked[0], "claims": stacked[1]}} if stacked is not None else {}),
+                                **({"links": links} if links is not None else {})}))
     return path
 
 
@@ -93,13 +96,40 @@ def _listed(m: int, k: int, c: int, holo: bool = False) -> list[list]:
 @pytest.mark.parametrize("shape", SHAPES)
 def test_the_verifiers_statements_are_the_ones_v_star_stages(tmp_path, shape):
     """The verifier's statements at the shape are V*'s, in order, then RecCap over each later level's tops and over level 0's
-    128 nodes, and each passes the check under its own name and count."""
+    128 nodes, each passes the check under its own name and count, and the hm96 calls they record at most are the
+    stager's count (`rec_budget.recorded_calls`)."""
     inner = _inner(tmp_path / "inner.json", *shape)
     rc, line = _statements(inner)
     assert rc == 0 and line["statements"] == _listed(*shape) and _caps(*shape)[-1] == ["rec-cap/n128", 128], line
+    assert line["recorded"] == RBG.recorded_calls(A.Shape(*shape)), line
     for name, n in (line["statements"][0], line["statements"][-2], line["statements"][-1]):
         rc, line = _statements(inner, "--unit", name, "--instances", str(n))
         assert rc == 0 and line["checked"] == [name, n], line
+
+
+def test_the_link_tables_part_comes_just_before_the_level_0_cap(tmp_path):
+    """An inner shape naming the link table (`links`) adds RecLink over its rows, `rec-link/u<UB>-p<PB>` over `rows`
+    instances, after the later levels' caps and before the level-0 cap, which stays last, and the part passes under its
+    own name and count. Another count, the part's name at an inner shape naming no table, and a row count that is no
+    table's grid(L) are each refused."""
+    shape = SHAPES[0]
+    links = {"UB": 6, "PB": 6, "rows": 18}
+    inner = _inner(tmp_path / "inner.json", *shape, links=links)
+    caps = _caps(*shape)
+    rc, line = _statements(inner)
+    assert rc == 0 and line["statements"] == _v_star(*shape) + caps[:-1] + [["rec-link/u6-p6", 18]] + caps[-1:], line
+    rc, line = _statements(inner, "--unit", "rec-link/u6-p6", "--instances", "18")
+    assert rc == 0 and line["checked"] == ["rec-link/u6-p6", 18], line
+    cases = [
+        (inner, "17", "rec-link/u6-p6: instances 17, statement says 18"),
+        (_inner(tmp_path / "bare.json", *shape), "18",
+         "rec-link/u6-p6: the link table's part, and the verifier's inner shape names no link table (links)"),
+    ]
+    for f, n, why in cases:
+        rc, line = _statements(f, "--unit", "rec-link/u6-p6", "--instances", n)
+        assert rc == 1 and line["error"] == why, (n, line)
+    rc, line = _statements(_inner(tmp_path / "odd.json", *shape, links={**links, "rows": 17}))
+    assert rc == 1 and line["error"] == "V*'s list: the link table's 17 rows are no table's grid(L)", line
 
 
 def test_a_unit_off_v_stars_statements_is_refused_by_the_value(tmp_path):
@@ -228,6 +258,39 @@ def test_a_v_star_sessions_registration_past_the_call_bound_is_refused_by_both(s
                            capture_output=True, text=True)
         [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
         assert p.returncode == 1 and v["why"] == "setup: " + why, v
+
+
+def test_a_v_star_list_past_the_soundness_bounds_parts_is_refused_by_both(staged, tmp_path):
+    """The verifier's list at (35, 24, 10), four regions, holds 17 statements: `statement` and `verify` under that inner
+    shape refuse `rec_outer`'s staged level at setup with `RecBudget.count`'s message, which `rec_budget.count` returns
+    for 17. At (35, 24, 8), three regions, the list holds 16 (the cap, 85-rec-reprice's K = 4096 shape): both pass it,
+    and `statement` refuses the level only as none of V*'s statements there."""
+    d = staged[0]
+    files = ["--statement", "verity/flock-circuit", "--circuit", str(d / "circuit.txt"), "--public", str(d / "pub.bin"),
+             "--partition", str(d / "partition.json"), "--program", str(d / "program.json"),
+             "--registered", str(d / "registered.json"), "--rec-part", "0",
+             "--rec-bindings", str(_bindings(d, tmp_path / "bindings.json"))]
+    sess = tmp_path / "session"
+    sess.mkdir()
+    (sess / "session.json").write_text("{}")
+    refused = ("refused: V*'s list at the verifier's inner shape holds 17 statements, more than 16: the recursion's "
+               "soundness bound covers at most 16 V* parts")
+    for c, n in ((10, 17), (8, 16)):
+        inner = _inner(tmp_path / f"inner-c{c}.json", 35, 24, c)
+        rc, line = _statements(inner)
+        assert rc == 0 and len(line["statements"]) == n == len(_listed(35, 24, c)), line
+        p = subprocess.run([str(BIN), "statement", *files, "--rec-inner", str(inner)], capture_output=True, text=True)
+        if n > RBG.MAX_STATEMENTS:
+            assert RBG.count(n) == refused
+            assert p.returncode == 1 and p.stdout.strip() == "setup: " + refused, p.stdout
+            p = subprocess.run([str(BIN), "verify", *files, "--rec-inner", str(inner), "--session", str(sess)],
+                               capture_output=True, text=True)
+            [v] = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+            assert p.returncode == 1 and v["why"] == "setup: " + refused, v
+        else:
+            assert RBG.count(n) is None
+            assert p.returncode == 1 and p.stdout.startswith(
+                "setup: rec-open/l8-h1: not one of V*'s statements at the inner session's shape (m 35, k_log 24, claims 8)"), p.stdout
 
 
 def _reads(path: Path, ports: list[list]) -> Path:

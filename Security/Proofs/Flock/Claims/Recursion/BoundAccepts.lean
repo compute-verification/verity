@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.BoundRun
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundRun
 
 /-!
 # The inner view accepts, at V*'s bound layout (option (d))
@@ -18,13 +20,12 @@ So `VStarB.PartChecksB` gives each part's check on the readers' messages, and `V
 acceptance. With `Refuses` and `ReadersTrue`, the three shapes give `InnerAcceptsColl` (`RecDeploy.innerAcceptsColl_bound`).
 -/
 
+@[expose] public section
+
 namespace Claims.Recursion.VStarB
 
 open Claims
 open Claims.Recursion.VStar (readAt)
-
-theorem readAt_length (w : Flock.Wit) (ps : List ℕ) : (readAt w ps).length = (ps.length + 7) / 8 := by
-  simp [readAt, VStar.bytesOf]
 
 theorem readForms_length (w : Flock.Wit) (fs : List _root_.Flock.HmNets.Lin) :
     (readForms w fs).length = (fs.length + 7) / 8 := by

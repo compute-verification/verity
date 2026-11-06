@@ -1,6 +1,8 @@
 """The runtime: it runs parties over channels and keeps their transcripts, and knows no protocol.
 
-`run(config, parties_here, mode, state_dir, protocols=...)` is what `verity run CONFIG` calls. `config` is the deployment
+`run(config, parties_here, mode, state_dir, protocols=...)` runs the parties ``parties_here`` of a deployment: the
+lifecycle examples (`examples/lifecycle/`) call it, and so does a `verity run` table whose ``live`` runs a protocol's
+parties (the CLI's test table, `tools/verity/cli/tests/step0.py`). `config` is the deployment
 configuration as data; the runtime reads its protocol (`protocol`, or the one entry of `protocols`), `params`, its
 parties (`party`: `name`, `machine`, and `key`, the public key a handshake checks), its site when it describes one
 (`machine`: `name`, `owner`, `provides`; `link`: `ends`, `latency_ms`, `via`) and its hash (`hash`, else SHA-512 of its
@@ -49,7 +51,7 @@ from verity.core.wire.handshake import NONCE_BYTES, Handshake, Key, Verify
 from . import sources as S
 from .channels import Adversary, MemoryPipe, Pipe, Playback, TcpListen, dial
 from .manifest import SOURCES, Manifest, PlaceResult, place, site_of
-from .party import Action, Finish, Identity, Party, Received, Record, Send, Timer
+from .party import Action, Finish, Identity, Party, Received, LogEntry, Send, Timer
 from .transcript import Entry, PartyLog, record
 
 MODES = ("live", "simulated", "mixed", "replay")
@@ -214,7 +216,7 @@ class Host:
                 return
             self.transcript.append("out", a.channel, ep.sends.kind(m.type, m.version), f)
             self.transmit(ep, f)
-        elif isinstance(a, Record):
+        elif isinstance(a, LogEntry):
             self.transcript.append("record", "", a.kind, canonical(a.entry))
         elif isinstance(a, Finish):
             self._end(a)

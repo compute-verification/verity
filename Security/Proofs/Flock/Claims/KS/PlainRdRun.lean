@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainRawL
-import Proofs.Flock.Claims.KS.PlainCapsDep
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainRawL
+public import Proofs.Flock.Claims.KS.PlainCapsDep
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain table bound at one tape, each slot at the run's own level columns
@@ -20,6 +22,8 @@ read sets need only hold what the run itself opens:
   (`plain_laterEntriesAt`, `plain_laterEntriesHAt`, `plain_laterEntriesHUAt`), each slot's term at the run's own
   level columns.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -79,7 +83,7 @@ theorem plainRel_of {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false R
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (T : TabSpec spec.mPts)
-    (sch : Accounting.Schedule) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
+    (sch : FlockSoundness.Accounting.Schedule) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,
         (∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith T o.pts r)

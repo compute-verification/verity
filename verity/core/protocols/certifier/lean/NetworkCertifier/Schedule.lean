@@ -1,4 +1,6 @@
-import NetworkCertifier.Run
+module
+
+public import NetworkCertifier.Run
 
 /-!
 # The certifier program: the logical schedule, the clock-sync advice and the constant-rate Program
@@ -7,6 +9,8 @@ The executable forms of `Security/Definitions/NetworkCertifier/Schedule.lean` th
 in `NetworkCertifier`. They mirror `schedule.py` one for one, with each Python name in its docstring. Lean core only:
 `Σ_sync` is two duplicate-free lists, as in Python, where the reference has two `Finset`s.
 -/
+
+@[expose] public section
 
 namespace NetworkCertifier
 
@@ -78,11 +82,11 @@ across windows) applied to the enqueue counts, with the frames leaving in canoni
 def expectedRow (S T W : Nat) (syncs : Fin W → ClockSync) (frames : List LogicalFrame) (t : Nat) : Row S (List Bool) :=
   fifoGrid (t + 1) S (payloads frames) (enqueued T W syncs frames) (Fin.last t)
 
-/-- **The constant-rate Program.** Windows of `T` buckets, `W` of them with advice, the sync set `ss`, and the Program's
-frames `frames ins c ℓ` on each egress link `ℓ`; with advice `(c, σ)`, link `ℓ`'s row at step `t` is `expectedRow` of
-those frames under the declared syncs `σ`, the same on every link. -/
+/-- **The constant-rate Program's egress prediction.** Windows of `T` buckets, `W` of them with advice, the sync set `ss`,
+and the Program's frames `frames ins c ℓ` on each egress link `ℓ`; with advice `(c, σ)`, link `ℓ`'s row at step `t` is
+`expectedRow` of those frames under the declared syncs `σ`, the same on every link. -/
 def constantRate {L S : Nat} {In Ac : Type} (T W : Nat) (ss : SyncSet)
-    (frames : List In → Ac → Fin L → List LogicalFrame) : Program L S In (Ac × (Fin W → ss.Elem)) where
+    (frames : List In → Ac → Fin L → List LogicalFrame) : EgressPrediction L S In (Ac × (Fin W → ss.Elem)) where
   rows t ins a ℓ := expectedRow S T W (fun w => ss.sync (a.2 w)) (frames ins a.1 ℓ) t
 
 end NetworkCertifier

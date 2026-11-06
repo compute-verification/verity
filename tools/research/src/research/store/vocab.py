@@ -213,6 +213,11 @@ READY = "ready"
 #: (on `checked`; `main` follows only to commits whose after-landing run passed).
 REVIEWED = "reviewed"
 REVIEW_VERDICTS = ("land", "hold")
+#: Beside a ready mark or land verdict on `pr:<n>@<head>`, by its author: the Cursor identity token that authenticates it
+#: (`research.labelauth`), which drive.toml's `signed_verdicts` requires.
+LABEL_AUTH = "label_auth"
+#: On an agent's `research.labelauth.delegation_target`, by a handle: that handle's holder lets the agent sign as it until a time.
+LABEL_DELEGATION = "label_delegation"
 #: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
 #: as. No merge needs a statement reviewer; the DM of a changed record is the check.
 LEAN_REVIEW = "lean_review"
@@ -226,6 +231,11 @@ EXECUTOR_SHADOW = "executor_shadow"
 #: On `commit:<sha>`, by the executor: the art: id of the after-landing task graph it listed for that commit on a worker
 #: (`tasks-graph/v1`), whose keys drive reads verdicts under.
 TASKS_GRAPH = "tasks_graph"
+#: On `commit:<sha>`, by the executor: the art: id of the graph/v2 it listed for that commit on a worker (`verity-graph/v2`),
+#: whose keys drive reads results under.
+VERITY_GRAPH = "verity_graph"
+#: On `task:<key>`, by the executor's worker that ran a graph/v2 task (`verity graph run`): its result/v1 document.
+TASK_RESULT = "result"
 
 
 def canonical_key(name: str) -> str:
@@ -397,6 +407,12 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(REVIEWED, GROUP_VERIFICATION, ENUM, "a reviewer's verdict on pr:<n>@<head> (`research queue review`): land, or hold with the "
        "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner",
        REVIEW_VERDICTS),
+    _k(LABEL_AUTH, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>, beside a `ready = true` or `reviewed = land` by the same author: "
+       "{for, token, delegation?}, a Cursor OIDC token whose nonce is the label's (`research.labelauth`); drive.toml's "
+       "`signed_verdicts` counts such a label only with one"),
+    _k(LABEL_DELEGATION, GROUP_VERIFICATION, TEXT, "on an agent's delegation target (task:<sha512>), by a handle: {schema, lane, "
+       "agent, until, token}, the handle's holder letting that agent authenticate labels as it until then (`research queue "
+       "delegate`)"),
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
        "needs a statement reviewer"),
@@ -407,8 +423,13 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(TASKS_GRAPH, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: the art: id of the after-landing task graph "
        "(`tasks-graph/v1`) it listed for that commit on a worker; drive reads verdicts under its tasks' keys",
        pattern=r"art:[0-9a-f]{64}"),
+    _k(VERITY_GRAPH, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: the art: id of the graph/v2 (`verity-graph/v2`) it "
+       "listed for that commit on a worker; drive with `executor = \"on\"` reads results under its tasks' keys",
+       pattern=r"art:[0-9a-f]{64}"),
+    _k(TASK_RESULT, GROUP_VERIFICATION, TEXT, "on task:<key>, by the executor's worker that ran a graph/v2 task (`verity graph run`): "
+       "its result/v1 document, pass or fail (an error is never one); a key with any fail is failed (`research.executor.fold_results`)"),
     _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by drive with `executor = \"shadow\"`: a JSON object comparing "
-       "the after-landing run's verdicts with the executor's ({check, run, units, agree, disagree: [{unit, old, executor}], "
+       "the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: [{unit, old, executor}], "
        "pending, missing, executor_only, error, incomplete}); `research queue shadow-report` reads it"),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),

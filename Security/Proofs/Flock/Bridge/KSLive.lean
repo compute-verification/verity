@@ -1,10 +1,12 @@
-import Proofs.Flock.Bridge.Assembly
-import Proofs.Flock.Bridge.Count
-import Proofs.Flock.Bridge.FaultyRightC
-import Proofs.Flock.Bridge.EndToEndHiddenC
-import Proofs.Flock.Bridge.OpeningsCanon
-import Proofs.Flock.Bridge.Refused
-import Proofs.Flock.Bridge.Transports
+module
+
+public import Proofs.Flock.Bridge.Assembly
+public import Proofs.Flock.Bridge.Count
+public import Proofs.Flock.Bridge.FaultyRightC
+public import Proofs.Flock.Bridge.EndToEndHiddenC
+public import Proofs.Flock.Bridge.OpeningsCanon
+public import Proofs.Flock.Bridge.Refused
+public import Proofs.Flock.Bridge.Transports
 
 /-!
 # `SampledKSLiveV2` and `SampledKSLiveV3`, proved
@@ -15,6 +17,8 @@ canonical transport (`transportsLiveC`), M1's core (`faultyRightTargetC`), the s
 `Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`: V2 with its file preconditions read off the
 verifiers' acceptance (`sampledKSLiveV3_of`).
 -/
+
+@[expose] public section
 
 /-- **The sampled audit's knowledge soundness, live, at the circuit files the verifier of record reads** (`Flock.Guarantees.SampledKSLiveV2`). -/
 theorem Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2 :=

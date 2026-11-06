@@ -1,6 +1,8 @@
-import Proofs.Pouw.Fp8Atom.H1TSliceProofs
-import Proofs.Pouw.PearlC.AccumProofs
-import Proofs.Pouw.PearlC.FreezeP
+module
+
+public import Proofs.Pouw.Fp8Atom.H1TSliceProofs
+public import Proofs.Pouw.PearlC.AccumProofs
+public import Proofs.Pouw.PearlC.FreezeP
 
 /-!
 # `pearl-c-sm120-v2`: the pure chain's lone skips and its identities (staging)
@@ -26,6 +28,8 @@ Without promotion (`G = 0`) the chain is `Accum.pureChain p`, one fold of `p`'s 
   identity: an atom whose products cancel is one on any word (`sm120_cancel_identity`, products `±1` on `1.0`).
 -/
 
+@[expose] public section
+
 namespace Pouw.PearlC.FreezePPure
 
 open Pouw.Fp8Atom Pouw.Fp8Atom.Proofs Pouw.Fp8Atom.H1T Pouw.Fp8Atom.H1T.Proofs Pouw.PearlC Pouw.PearlC.Skip
@@ -42,10 +46,6 @@ theorem unitFlagsAt_hopper {m n k : ℕ} : @unitFlagsAt hopperE4m3K32 m n k 4 = 
 section Pure
 
 variable (p : Pipeline)
-
-theorem flagsAt_zero : flagsAt p 0 = pureFlagsP p := rfl
-
-theorem flagsAt_of_ne_zero {G : Nat} (hG : G ≠ 0) : flagsAt p G = wordFlagsP p G := ite_eq_right hG
 
 theorem length_rowAtoms {k : ℕ} (a b : Fin k → Code) : (rowAtoms a b).length = k / 32 := List.length_ofFn
 

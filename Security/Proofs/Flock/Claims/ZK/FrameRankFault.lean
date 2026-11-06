@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FrameRanked
-import Proofs.Flock.Claims.ZK.FrameBeta
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRanked
+public import Proofs.Flock.Claims.ZK.FrameBeta
 
 /-!
 # The frames refuse a rank-deficient mask slot (`FrameUnrefused`'s rank fault)
@@ -24,6 +26,8 @@ held (`Ranked.ownReqs_rank`); what it read is the session's:
   round is inside the inner proof or owes coins.
 * **`LeanRelease.rank_unrefused`**: the fault.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -74,13 +78,6 @@ theorem alg_cnt {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg 
   · have hk2 : k < st.m + st.fold.kLog - 8 := by omega
     simp [cnt, hk2] at e2 ⊢
     exact e2
-
-theorem flatR_length (cs : ℕ → Array F128) : ∀ d, (flatR cs d).length = ((List.range d).map fun i => (cs i).size).sum
-  | 0 => rfl
-  | d + 1 => by
-    rw [flatR_succ, List.length_append, flatR_length cs d, List.range_succ, List.map_append, List.sum_append,
-      Array.length_toList]
-    simp
 
 theorem flatR_mono (cs : ℕ → Array F128) {k : ℕ} : ∀ {d : ℕ}, k ≤ d → (flatR cs k).length ≤ (flatR cs d).length
   | 0, h => by rw [Nat.le_zero.1 h]

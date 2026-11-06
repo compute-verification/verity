@@ -1,9 +1,11 @@
-import Proofs.Flock.Recursive.Compile
-import Proofs.Flock.Recursive.Raw
-import Proofs.Flock.Soundness.Assumptions.Recursive
-import Proofs.Flock.Soundness.Assumptions.Zk
-import Proofs.Flock.Soundness.Assumptions.Inner
-import Proofs.Flock.Soundness.Assumptions.Registrant
+module
+
+public import Proofs.Flock.Recursive.Compile
+public import Proofs.Flock.Recursive.Raw
+public import Proofs.Flock.Soundness.Assumptions.Recursive
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Assumptions.Inner
+public import Proofs.Flock.Soundness.Assumptions.Registrant
 
 /-!
 # The premises the recursive audit's property takes
@@ -38,9 +40,11 @@ abbreviates, unchanged.
   and session record the coin server writes at each history hold that history's commitments and coins where a map of
   the rounds says they go (one premise over the writer `wr`, as the verifier holds what it writes).
 
-The list belongs in `Security/Definitions/` (the same ruling), whose modules import only Mathlib and the spec; C-Flock's
+The list belongs in `Security/Definitions/`, whose modules import only Mathlib and the spec; C-Flock's
 definitions, which these read, are still in the proofs package, so the list is here until they are extracted.
 -/
+
+@[expose] public section
 
 namespace Flock.Premises
 

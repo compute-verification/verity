@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Drawn
-import Definitions.Accounting.Guarantees.TS.Fixed
+module
+
+public import Proofs.Accounting.TS.Drawn
+public import Proofs.Accounting.Lemmas.TS.Fixed
 
 /-!
 # An honest run meets option A's hypotheses (non-vacuity)
@@ -33,6 +35,8 @@ This witness tests no skip. No unit is skipped, so it shows the hypotheses can a
 skipped, priced writer's cone is charged at its draw probability: every unit is good, nothing here charges a unit that
 isn't (`DrawnLayer.Covers`), and `Priced` holds of `glue` without a run in which `glue` is skipped.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.FixedMeets
 

@@ -1,4 +1,6 @@
-import Definitions.Nci.Layered
+module
+
+public import Definitions.Nci.Layered
 
 /-!
 # NCI over threads: the reference circuit is keyed
@@ -9,6 +11,8 @@ a transformer block at Kimi K2's shapes, not in Lean: no Lean reference circuit 
 `Layered` on. Until one does, it is a named conjecture, stated over a reference circuit `c` and its threading `T` as
 `WeightsIncompressible` is.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 
@@ -36,7 +40,12 @@ fan-out), at a larger capacity factor (`e = 280 + 256 · ⌈8 · cf⌉`), with F
 `163840 · 8` bits, and wherever a gather reads a computed embedding table, as every training step after a run's first
 does when it trains the table: that gather is no lookup, so its thread's first chains key back to the token, where the
 legs of each chain's first root meet (`d₀ = 1`). -/
-def ReferenceLayered (c : Declaration) (T : Threading c) : Prop :=
+def ReferenceLayered (c : RegisteredCircuit) (T : Threading c) : Prop :=
   Nonempty (Layered T 17 2328 0 (163840 * 16))
+
+/-- **The read cap is below `E + 1` lookup columns**: `k < (E + 1) b` for lookup columns `b` bits wide, so that an
+inference block reading at most `k` bits holds at most `E` of a thread's lookups (`ThreadedOfLayered` at `S = k`). -/
+def CapBelowColumns (k E b : ℕ) : Prop :=
+  (k : ℝ) < ((E + 1) * b : ℕ)
 
 end Nci.Assumptions

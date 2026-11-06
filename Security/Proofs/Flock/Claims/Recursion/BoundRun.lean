@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.BoundDeploy
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
 
 /-!
 # `IVStar`'s runs
@@ -13,6 +15,8 @@ coin, then the last message answered by the decision on all of them, whose oracl
 * the last message's representative (`Bound.rep`, one message per reading of `final`) keeps the decision
   (`Bound.final_rep`), and two last messages `final` reads alike have one representative (`Bound.rep_eq`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -75,10 +79,6 @@ def Bound.decAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List M
     (r : Fin (Bd.IVStar.k x) → Coin) : Out × List (Msg × Msg) :=
   (Bd.IVStar.next x ((List.range (Bd.DE.V.k x)).map fun i => ms.getD i [])
     ((List.range (Bd.DE.V.k x)).map (coinSeq r))).eval H
-
-theorem Bound.decAt_ne_msg (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
-    (r : Fin (Bd.IVStar.k x) → Coin) (m : Msg) : (Bd.decAt H x ms r).1 ≠ .msg m :=
-  Bd.ivstar_eval_ne_msg H x _ _ (by simp) m
 
 theorem Bound.stepWith_ivstar (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) :

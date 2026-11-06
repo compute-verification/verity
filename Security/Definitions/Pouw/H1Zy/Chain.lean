@@ -1,6 +1,8 @@
-import Definitions.Pouw.H1Zy.LaneChunk
-import Definitions.Pouw.H1Zy.Tile
-import Definitions.Pouw.PearlC.Sha512
+module
+
+public import Definitions.Pouw.H1Zy.LaneChunk
+public import Definitions.Pouw.H1Zy.Tile
+public import Definitions.Pouw.PearlC.Sha512
 
 /-!
 # A lane's fx1 chain on words: `h1tile._chain` at a 32 × 32 leaf (trusted)
@@ -29,6 +31,8 @@ chunk's carry is its state. On the primitives' word views:
   `D_d = PouwSegDot(0, U, A_d)` for `d = 1 .. m - 1`, each absorbed as a set. The partial's word `w` is the chain's word
   `w`, `0` past its `2 (KS + m)` words.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

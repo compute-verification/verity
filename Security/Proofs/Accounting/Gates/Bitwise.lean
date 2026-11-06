@@ -1,12 +1,14 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.List
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.List.GetD
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.NormNum.Basic
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
-import Definitions.Accounting.Guarantees.GatesBitwise
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.BigOperators.Group.List
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.List.GetD
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.NormNum.Basic
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
+public import Proofs.Accounting.Lemmas.GatesBitwise
 
 /-!
 # Bits for free, proved
@@ -19,6 +21,8 @@ the u8 s8-family step `0 + u·v`, each derived `[0, 1]`. An output byte is its 8
 (`buildSum`, derived `[0, 2^t − 1]` after `t` bits). Every function of the draw's bits has a formula (`shannon`), so
 every target byte of every word does, and the circuit's only units are its table reads' (`ubG`, at most `9` a bit).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.GatesBitwise
 

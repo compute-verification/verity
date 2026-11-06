@@ -1,5 +1,7 @@
-import Properties.CertifierNetwork
-import Proofs.Properties.CertifierDevice.Issuer
+module
+
+public import Properties.CertifierNetwork
+public import Proofs.Properties.CertifierDevice.Issuer
 
 /-!
 # The certifier device's own output is accepted by the network certificate check: completeness
@@ -38,6 +40,8 @@ Python (`certificate.CertifiedRecord`); `certified` copies the Lean device's int
   record). Honest timing (`HonestTiming`: each frame handed at the bucket the Program hands it) follows from `Closed`
   and `NoFault`, since a frame handed late faults its window.
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierNetwork
 

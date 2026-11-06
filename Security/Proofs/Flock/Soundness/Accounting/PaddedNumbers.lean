@@ -1,5 +1,7 @@
-import Definitions.Flock.Accounting.Padded
-import Proofs.Flock.Soundness.Accounting.Numbers
+module
+
+public import Definitions.Flock.Accounting.Padded
+public import Proofs.Flock.Soundness.Accounting.Numbers
 
 /-!
 # The numbers with C-Flock ZK's padded level 0
@@ -14,6 +16,8 @@ query counts `q₀ = 277, 242, 229` at `m = 25, 26, 27`, 219 at `m = 28..31` and
 shape in range, at every `m` the verifier serves (`padTableError_le_m1`). The rational checks run in Lean's
 kernel (`decide +kernel`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 
@@ -217,7 +221,7 @@ theorem padTableError_le_up (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
 
 /-! ## C-Flock ZK's values -/
 
-/-- C-Flock ZK's level-0 query count at `m` (`PROTOCOL.md` §7 item 6, `Zk.queries0`), where it differs from
+/-- C-Flock ZK's level-0 query count at `m` (live `PROTOCOL.md` §7 item 6, `Zk.queries0`), where it differs from
 `fast100`'s 218. -/
 def m1Queries₀ : ℕ → ℕ
   | 25 => 277

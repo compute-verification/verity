@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegShape
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegShape
 
 /-!
 # Δ at a segmented row, and Δ for rows of every kind
@@ -10,6 +12,8 @@ the outer message's for `j = s`, and every message bit that is not a row bit (`H
 the forced-zero row, or a copy of a segment's last output. `delta_flat_any` is `delta_flat_all` for rows of every kind,
 each row's pairs `rowPairsAny`: `rowPairsOf`'s for an unsegmented row, `segPairsOf`'s for a segmented one.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -71,13 +75,6 @@ def rowPairsAnyAll (c : Circuit) (pin : ℕ) : List (ℕ × ℕ) :=
 /-- Δ's pairs, without a typed template, for rows of every kind. -/
 def flatPairsAny (c : Circuit) (pin : ℕ) : List (ℕ × ℕ) :=
   constPairs c pin ++ rowPairsAnyAll c pin ++ Flat.leafPairs c ++ Flat.cutPairs c ++ Flat.wirePairs c
-
-theorem rowPairsAnyAll_unseg {c : Circuit} (pin : ℕ) (hs : ∀ p ∈ c.ports.toList, p.segs = none) :
-    rowPairsAnyAll c pin = rowPairsAll c pin := by
-  unfold rowPairsAnyAll rowPairsAll
-  refine flatMap_congr' fun g _ => flatMap_congr' fun p hp => ?_
-  have hS : (HmRow.rowSlots c.ports).2.size = c.ports.size := rowSlots_size' c.ports
-  rw [rowPairsAny, show c.ports[p]!.segs = none from hs _ (getElem_mem_toList' (hS ▸ List.mem_range.1 hp))]
 
 /-- **Δ without a typed template, pair by pair, for rows of every kind.** -/
 theorem delta_flat_any (c : Circuit) (pin : ℕ) (ht : c.typed = none) :

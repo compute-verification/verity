@@ -1,7 +1,10 @@
-import Proofs.Accounting.Headline.Encoding
-import Proofs.Accounting.Headline.Luck
-import Proofs.Accounting.Headline.Whole
-import Definitions.Accounting.Guarantees.Headline
+module
+
+public import Proofs.Accounting.Headline.Encoding
+public import Proofs.Accounting.Headline.Luck
+public import Proofs.Accounting.Headline.Whole
+public import Definitions.Accounting.Guarantees.Headline
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # sm_120's headline at the data sheet
@@ -24,6 +27,8 @@ data's hypotheses discharged and the terms bounded:
   (`Whole.unfolded_floor`), below `5860/100000` by `decide` (`sm120_unfolded`), and it binds;
 * (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.Headline
 

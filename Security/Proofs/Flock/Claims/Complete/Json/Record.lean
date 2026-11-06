@@ -1,6 +1,10 @@
-import Proofs.Flock.Claims.Complete.Json.Spec
-import Proofs.Flock.Claims.Complete.Json.Hex
-import Proofs.Flock.Claims.Complete.Verdict
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Spec
+public import Proofs.Flock.Claims.Complete.Json.Hex
+public import Proofs.Flock.Claims.Complete.Verdict
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The honest session record as a JSON value
@@ -17,6 +21,8 @@ object, written as a pure value of the record's parts with every digest `dgOf sp
   key (`get?_mkObj_none`); through `Same`, a parsed object's `Record.fld`, `str`, `nat`, `arr` and `isNull` read the
   printed object's values (`fld_same`, …), and a value with no object in it parses back to itself (`Plain.same_eq`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -294,8 +300,5 @@ theorem isNull_none {l : List (String × Json)} {j' : Json} (h : Same (Json.mkOb
 theorem bytes_beq_self (b : ByteArray) : (b == b) = true := by
   show (b.data == b.data) = true
   simp
-
-theorem bytes_bne_self (b : ByteArray) : (b != b) = false := by
-  simp [bne, bytes_beq_self]
 
 end FlockComplete.JsonRT

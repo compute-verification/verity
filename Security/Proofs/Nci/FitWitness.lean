@@ -1,4 +1,6 @@
-import Proofs.Nci.Fit
+module
+
+public import Proofs.Nci.Fit
 
 /-!
 # The fit bound's hypotheses hold together
@@ -12,6 +14,8 @@ Each window reads 3 bits (a weight and the activation), so `S = 3 < N* b_w = 2 �
 (`Reach` at `N* = 2`). Window 0 uses one weight (`2 ≤ 3`) and window 1 one weight and one entered thread
 (`2 + 1 ≤ 3`, `Fits` at `b_w = 2`, `w_e = 1`, tight). `FitBound` then gives `4 · 1 · (4 − 3) · 2 ≤ 2 · 1 · 2 · 9`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.FitWitness
 
@@ -29,10 +33,7 @@ abbrev circuit : Circuit where
   op_congr _ _ _ _ := rfl
   outputs := {3, 4}
 
-abbrev decl : Declaration where
-  D := circuit
-  θ := ∅
-  θ_input := by decide +kernel
+abbrev decl : RegisteredCircuit := .ofCircuit circuit ∅ (by decide +kernel)
 
 /-- One thread, of the activation 2; the counted multiplications 3 and 4 each use a weight once. -/
 abbrev threading : Threading decl where
@@ -75,13 +76,6 @@ theorem fits : Assumptions.Fits decl threading windows start 2 1 := by
   have h : ∀ j, 2 * (threading.weightsUsed (windows.gates j)).card + 1 * (threading.entered windows start j).card ≤
       novelReads decl (windows.gates j) := by decide +kernel
   exact fun j => by exact_mod_cast h j
-
-/-- **The fit bound's hypotheses are consistent**: with two counted multiplications, every window reads at most
-`S = 3 < N* b_w`, and `Reach` and `Fits` hold. -/
-theorem nonvacuous : threading.M.Nonempty ∧ (3 : ℝ) < ((2 : ℕ) : ℝ) * 2 ∧
-    (∀ j, (novelReads decl (windows.gates j) : ℝ) ≤ 3) ∧ Assumptions.Reach decl threading 2 ∧
-    Assumptions.Fits decl threading windows start 2 1 :=
-  ⟨M_nonempty, gap, reads_le, reach, fits⟩
 
 /-- `FitBound` at the witness. -/
 theorem bound : 4 * (1 : ℝ) * ((2 : ℕ) * 2 - 3) * threading.M.card ≤ (2 : ℕ) * threading.reuse * (2 : ℕ) * (3 : ℝ) ^ 2 :=

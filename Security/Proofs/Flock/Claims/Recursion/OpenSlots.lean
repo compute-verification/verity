@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.SaltRowsSlots
-import Proofs.Flock.Claims.Recursion.CutOpens
-import Proofs.Flock.Claims.Recursion.RestFinal
+module
+
+public import Proofs.Flock.Claims.Recursion.SaltRowsSlots
+public import Proofs.Flock.Claims.Recursion.CutOpens
+public import Proofs.Flock.Claims.Recursion.RestFinal
 
 /-!
 # The openings and commit strings of the rounds before the last are hm96 slots' (`OpensSlots` at `layR`)
@@ -17,6 +19,8 @@ top's instances at its cap's part (`topPiece`, `capOpenAt`), then the row the ro
   slot's two hm96 calls are among its part's recorded calls, and its port's row prefix is the one `rowInDeployed` lays
   at the row's length.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenSlots
 

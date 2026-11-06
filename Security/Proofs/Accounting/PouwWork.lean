@@ -1,5 +1,8 @@
-import Definitions.Accounting.Guarantees.PouwWork
-import Definitions.Pouw.Guarantees.Game
+module
+
+public import Definitions.Accounting.Guarantees.PouwWork
+public import Definitions.Pouw.Guarantees.Game
+public import Proofs.Pouw.Lemmas.Game
 
 /-!
 # PoUW's work lower bound on an isolated node (proof)
@@ -9,6 +12,8 @@ import Definitions.Pouw.Guarantees.Game
 the union bound sums the first three. `PouwWork.detection_of_sampling` derives A2 from
 `Pouw.Guarantees.WorkWeightedSampling` when the drawn blocks are the coins' last part.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

@@ -1,10 +1,12 @@
-import Proofs.Flock.SessionLoop.Statement
-import Proofs.Flock.Claims.ZK.FinishSwMkAny
-import Proofs.Flock.Claims.ZK.FinishSwFrame
-import Proofs.Flock.Claims.ZK.FrameFree
-import Proofs.Flock.Claims.ZK.L0PinLive
-import Proofs.Flock.Claims.ZK.PadsRoot
-import Proofs.Flock.Claims.ZK.FrameLive
+module
+
+public import Proofs.Flock.SessionLoop.Statement
+public import Proofs.Flock.Claims.ZK.FinishSwMkAny
+public import Proofs.Flock.Claims.ZK.FinishSwFrame
+public import Proofs.Flock.Claims.ZK.FrameFree
+public import Proofs.Flock.Claims.ZK.L0PinLive
+public import Proofs.Flock.Claims.ZK.PadsRoot
+public import Proofs.Flock.Claims.ZK.FrameLive
 
 /-!
 # The values the frame took, as the switched session's values
@@ -37,10 +39,12 @@ its own and where it doesn't:
   (`Loop.schedOf`) on the rep's table and salts `real`, and `L₀`'s where the loop schedules none.
 * `Loop.InnerAt`: where it schedules none at a session's history: the round is rep stream `k`'s round `i`
   (`CoinLayer.locate`) at or past the end of the rounds `Loop.schedSoFar` schedules on the stream's table at the coins
-  it answered, the inner proof's (`Frame.INNER_ROUNDS` of them, round `i - sched.size`). `Loop.schedOf_eq_none_iff`: at
-  a statement that sets up a session (`0 < refK x`) and a history past the link, `schedOf` is none exactly there.
+  it answered, the inner proof's (`Frame.INNER_ROUNDS` of them, round `i - sched.size`). `Loop.schedOf_none_of_innerAt`:
+  `schedOf` is none there. `Loop.schedOf_eq_none_iff`: at a statement that sets up a session (`0 < refK x`), no V\*
+  part's, and a history past the link, `schedOf` is none exactly there.
 * `LeanRelease.LiveSched`, `LeanRelease.LiveInner`: `LiveRoundEq`'s equation at the rounds the loop schedules and at
-  the inner proof's. `LeanRelease.liveRoundEq_ofLoopLink`: the two give `LiveRoundEq`.
+  the inner proof's. `LeanRelease.liveRoundEq_ofLoopLink`: the two give `LiveRoundEq` at a statement that is no V\*
+  part's.
 * `LeanRelease.outer_ne_one_ofLoopLink`: on a live history whose last coins the frame takes, the coins the openings
   open meet `RowsOK`'s outer-coin condition, so `RowsOK` gives the rows there.
 
@@ -55,6 +59,8 @@ its own and where it doesn't:
   at the honest values at the session loop. That the deployed device's rounds are `valsWk honestVals`'s is the device's
   completeness, checked empirically.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.Table
 
@@ -221,10 +227,10 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, 
 
 namespace Loop
 
-/-- Where `x` sets up no session there is no round past the link. -/
-theorem refK_of_none {x : Msg} (hs : FlockDeploy.setupOf true x = none) : refK x = 0 := by
-  unfold refK
-  simp only [FlockDeploy.V, hs]
+/-- Where `x` sets up no session, Flock's or a V\* part's, there is no round past the link. -/
+theorem refK_of_none {x : Msg} (hs : FlockDeploy.setupOf true x = none) (hd : RecDeploy.decodeRec x = none) :
+    refK x = 0 :=
+  refK_none (sessOf_none hs (RecDeploy.setupO_none hd))
 
 /-- **The inner proof's rounds** after the decoded coins `cs` at `x`, on the rep streams' tables and salts `real`: `x`
 sets up a session, the round is rep stream `k`'s round `i` (`CoinLayer.locate` of rep round `cs.length - 1`), the
@@ -261,40 +267,39 @@ theorem schedOf_at {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} {cs : L
   simp only [schedOf, hs, hq, hl]
   rfl
 
-/-- **Exactly the inner proof's rounds have no scheduled round**: at a statement that sets up a session and a history
-past the link, `schedOf` is none exactly at `InnerAt`. -/
+/-- **At the inner proof's rounds the loop schedules no round.** -/
+theorem schedOf_none_of_innerAt {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} {cs : List FlockDeploy.Coin}
+    (hI : Loop.InnerAt real x cs) : schedOf real x cs = none := by
+  obtain ⟨s0, spec, sts, q, k, i, t, hi, sched, hs, hq, hl, hr, hss, hle⟩ := hI
+  rw [schedOf_at hs hq hl, hr]
+  dsimp only
+  rw [hss]
+  simp [hle]
+
+/-- **Exactly the inner proof's rounds have no scheduled round**: at a statement that sets up a session, no V\* part's
+(whose session the loop doesn't frame), and a history past the link, `schedOf` is none exactly at `InnerAt`. -/
 theorem schedOf_eq_none_iff {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} {cs : List FlockDeploy.Coin}
-    (hk : 0 < refK x) (hc : 0 < cs.length) : schedOf real x cs = none ↔ Loop.InnerAt real x cs := by
+    (hd : RecDeploy.decodeRec x = none) (hk : 0 < refK x) (hc : 0 < cs.length) :
+    schedOf real x cs = none ↔ Loop.InnerAt real x cs := by
+  refine ⟨fun hn => ?_, schedOf_none_of_innerAt⟩
   obtain ⟨q, hq⟩ : ∃ q, cs.length = q + 1 := ⟨cs.length - 1, by omega⟩
   rcases hs : FlockDeploy.setupOf true x with _ | ⟨s0, spec, sts⟩
-  · exact absurd (refK_of_none hs) (by omega)
+  · exact absurd (refK_of_none hs hd) (by omega)
   rcases hl : CoinLayer.locate (roundsOf spec sts) 0 q with ⟨k, i⟩
-  rw [schedOf_at hs hq hl]
-  constructor
-  · intro hn
-    rcases hr : real k with e | ⟨t, hi⟩
-    · rw [hr] at hn
+  rw [schedOf_at hs hq hl] at hn
+  rcases hr : real k with e | ⟨t, hi⟩
+  · rw [hr] at hn
+    simp at hn
+  · rw [hr] at hn
+    dsimp only at hn
+    rcases hss : schedSoFar t (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
+        (_root_.Flock.Firewall.Drive.extras sts[k / 2]!
+          (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
+        hi ((Array.range i).map fun j => wordsAt x cs (q - i + j + 1)) with e | sched
+    · rw [hss] at hn
       simp at hn
-    · rw [hr] at hn
-      dsimp only at hn
-      rcases hss : schedSoFar t (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-          (_root_.Flock.Firewall.Drive.extras sts[k / 2]!
-            (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]! (wordsAt x cs 0)))
-          hi ((Array.range i).map fun j => wordsAt x cs (q - i + j + 1)) with e | sched
-      · rw [hss] at hn
-        simp at hn
-      · rw [hss] at hn
-        exact ⟨s0, spec, sts, q, k, i, t, hi, sched, hs, hq, hl, hr, hss, by simpa using hn⟩
-  · rintro ⟨s0', spec', sts', q', k', i', t, hi, sched, hs', hq', hl', hr, hss, hle⟩
-    obtain ⟨rfl, rfl, rfl⟩ : s0' = s0 ∧ spec' = spec ∧ sts' = sts := by
-      simpa only [Option.some.injEq, Prod.mk.injEq] using hs'.symm.trans hs
-    obtain rfl : q' = q := by omega
-    obtain ⟨rfl, rfl⟩ : k' = k ∧ i' = i := by
-      simpa only [Prod.mk.injEq] using hl'.symm.trans hl
-    rw [hr]
-    dsimp only
-    rw [hss]
-    simp [hle]
+    · rw [hss] at hn
+      exact ⟨s0, spec, sts, q, k, i, t, hi, sched, hs, hq, hl, hr, hss, by simpa using hn⟩
 
 end Loop
 
@@ -373,7 +378,8 @@ def LiveInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
         (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2))
 
 /-- **`LiveRoundEq` from the scheduled rounds and the inner proof's**: at `SessionLoopZKDeployed`'s release, where the
-loop schedules its own round (`LiveSched`) and at the inner proof's rounds (`LiveInner`). -/
+loop schedules its own round (`LiveSched`) and at the inner proof's rounds (`LiveInner`), at a statement that is no V\*
+part's. -/
 theorem liveRoundEq_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -383,13 +389,13 @@ theorem liveRoundEq_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (real : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Tab × Array ByteArray))
-    (wk : (ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
+    (wk : (ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hd : RecDeploy.decodeRec x = none)
     (hS : LiveSched vs L₀ src real wk x w) (hI : LiveInner vs L₀ src real wk x w) :
     LiveRoundEq (CoinLayer.session Loop.loopNr Masked.dataE) vs (ofLoopLink L₀ src real) CoinOpen.shaH wk x w := by
   intro ν t κ m₀ ρ₀ ops v hpos hlt hl hok href hv
   rcases hsc : Loop.schedOf (real x w (ν, t)) x (ops.map fun p => CoinLayer.rd p.2) with _ | r
   · exact hI ν t κ m₀ ρ₀ ops v hpos hlt hl hok href hv
-      ((Loop.schedOf_eq_none_iff (by omega) (by simpa using hpos)).mp hsc)
+      ((Loop.schedOf_eq_none_iff hd (by omega) (by simpa using hpos)).mp hsc)
   · exact hS ν t κ m₀ ρ₀ ops v r hpos hlt hl hok href hv hsc
 
 /-- **The opened coins meet `RowsOK`'s outer-coin condition**: at a statement the loop serves, on a live history of at

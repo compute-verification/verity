@@ -1,4 +1,6 @@
-import Definitions.Claims.IndexedTapes
+module
+
+public import Definitions.Claims
 
 /-!
 # Claims: the ZK-recursion compiler (a draft, before it freezes)
@@ -79,6 +81,8 @@ eight items:
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
 binding them to the compiled verifier is the code side's, as Flock's is.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

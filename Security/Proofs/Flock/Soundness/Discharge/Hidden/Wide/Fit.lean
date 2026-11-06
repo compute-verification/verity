@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
 
 /-!
 # Output rows whose last bytes share the `hm96` pad block
@@ -12,6 +14,8 @@ row's bits, `constBit_msg`), so the flat twin's row there is a self row (`flat_s
 (`outPairs_countF`), and a satisfying witness of the hidden statement satisfies its flat twin (`sat_flatF`) and holds
 each output row's message bit's copy (`msg_copyF`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -51,10 +55,6 @@ theorem bound {j k t : ℕ} (hj : j < c.outPorts.size) (hk : k < (c.ports.getD (
   exact ⟨h.2.2 j hj, by omega, by omega⟩
 
 end OutRowsF
-
-/-- `OutRowsW`'s rows fit. -/
-theorem OutRowsW.outRowsF {c : Circuit} (h : OutRowsW c) (hfit : ∀ p ∈ c.ports.toList, FitRow p) : OutRowsF c :=
-  ⟨hfit, h.1.2.1, fun j hj => (h.1.2.2 j hj).1⟩
 
 /-- **A row's constant bits past its bits**: at a data byte `b < 2 · words` of a row of `16 · words` bits, block
 `b / 128`'s message column of byte `b`'s bit `t` holds no constant. -/

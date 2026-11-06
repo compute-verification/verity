@@ -1,4 +1,7 @@
-import Proofs.Accounting.HeadlineDc.Sm90Measured
+module
+
+public import Proofs.Accounting.HeadlineDc.Sm90Measured
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The H200's headline on its measured vector under (I3) at 3/5
@@ -20,6 +23,8 @@ import Proofs.Accounting.HeadlineDc.Sm90Measured
 * the unfolded branch (`unfolded_of_lower`): below `1086/100000` by `decide` (`sm90i_unfolded_q`);
 * (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.HeadlineDc
 
