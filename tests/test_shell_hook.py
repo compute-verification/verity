@@ -336,11 +336,14 @@ def test_the_inbox_list_says_since_when_a_message_is_pending(tmp_path):
 
 def test_send_refuses_an_id_the_hook_would_never_deliver_to(tmp_path):
     """The hook reads the whole conversation id, so a message queued under an id prefix was never delivered."""
+    inbox, repo = tmp_path / "inbox", tmp_path / "not-a-checkout"
+    repo.mkdir()
     for agent in ("bc-prefix", "bc-worker", "../etc/passwd", ""):
-        p = subprocess.run([sys.executable, INBOX_TOOL, "send", agent, "--text", "x"], capture_output=True, text=True,
-                           env={**os.environ, "AGENT_INBOX": str(tmp_path)})
-        assert p.returncode != 0 and "full agent id" in p.stderr, agent
-    assert not any(tmp_path.iterdir())
+        for where in (["--local"], ["--repo", str(repo)]):
+            p = subprocess.run([sys.executable, INBOX_TOOL, "send", agent, "--text", "x", *where], capture_output=True,
+                               text=True, env={**os.environ, "AGENT_INBOX": str(inbox)})
+            assert p.returncode != 0 and "full agent id" in p.stderr, (agent, where)
+    assert not inbox.exists() and not any(repo.iterdir())
 
 
 def test_an_unreadable_inbox_or_a_path_as_an_id_never_blocks_a_command(tmp_path):

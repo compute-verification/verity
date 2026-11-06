@@ -98,6 +98,7 @@ def commit(repo: Path, agent: str, text: str, parent: str | None, message: str) 
 
 def push(agent: str, text: str, repo: Path) -> str:
     """Append `text` to origin's `inbox/agent`, retrying while another push moves the branch; the new tip."""
+    full_id(agent)
     item, err = entry(text, secrets.token_hex(6)), None
     for _ in range(PUSH_TRIES):
         try:
