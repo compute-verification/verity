@@ -13,11 +13,11 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   served ones: a served window registers a population program under one), `Q_word` v1 at `X = 16` and `Q_call` v1 at
   `X <= 16` are the ones applied here. A template query reads the root body only; `Q_word` and `Q_call` lay out one
   activation of each distinct Call's Definition gate by gate, so they cost its unrolled size
-  (`benchmarks/verifier_cost/`'s `partition`). Every proof block's committed bits fit a public size class (`UNIT_CLASSES`,
-  powers of two from 16 to `UNIT_CLASS_MAX` bits; provisional), its class the least
-  that holds them (`unit_class`), a public property of its Definition: a program with a proof block wider than the widest class
-  is refused (a template instance's bits are its distinct returned gates', `_template_bits`; a `Q_call` proof block's count
-  the constants and Input gates of its Definition's activation, `_committed_bits`, which `Q_call`'s width rule leaves
+  (`benchmarks/verifier_cost/`'s `partition`). Every proof block's committed bits fit a public size class
+  (`verity.ml.circuits.partition_v2`'s `UNIT_CLASSES`, powers of two from 16 to `UNIT_CLASS_MAX` bits; provisional), its
+  class the least that holds them (`unit_class`), a public property of its Definition: a program with a proof block wider
+  than the widest class is refused (a template instance's bits are its distinct returned gates', `_template_bits`; a
+  `Q_call` proof block's count the constants and Input gates of its Definition's activation, `_committed_bits`, which `Q_call`'s width rule leaves
   out; a `Q_word` proof block's are its cut's), as is one with a template of no gate. `ranges`, `units` and `strata` read their
   proof blocks in canonical order (node order, then member, for a template query; Call order, then the Call's own, for
   `Q_word` and `Q_call`), and `unit_gates` gives
@@ -42,6 +42,7 @@ from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.partition_object import (FORMAT, QueryRefused, program_sha512, template_id,
                                         template_instance_query, template_instances_query)
+from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
 from verity.ml.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.types import Value
@@ -50,17 +51,6 @@ _PRE_CANONICAL = {"program", "query"}
 Q_WORD = ("Q_word", 1)
 #: `Q_word` v1's `X`, and the most `Q_call` v1's `X` may be: the width rule of the queries applied here.
 QUERY_X = 16
-#: The widest public size class of a proof block's committed bits (the claims' `Claims.Sampling.unitClassMax`). 16 sets the
-#: classes back to the former literal limit alone.
-UNIT_CLASS_MAX = 262_144
-#: The public size classes, ascending: the powers of two from 16 to `UNIT_CLASS_MAX` (the claims' `unitClasses`).
-UNIT_CLASSES = tuple(16 << i for i in range((UNIT_CLASS_MAX // 16).bit_length()))
-
-
-def unit_class(bits: int) -> int | None:
-    """The size class of a proof block that commits `bits` bits: the least of `UNIT_CLASSES` that holds them, None when none
-    does."""
-    return next((w for w in UNIT_CLASSES if bits <= w), None)
 
 
 def partition(program: Program, query: Mapping[str, Any]) -> dict[str, Any]:
@@ -248,5 +238,4 @@ def in_order(program: Program, query: Mapping[str, Any], n: int) -> bool:
 
 __all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "in_order", "mixed_population_program", "partition",
            "POPULATION_VERSIONS", "population_program", "program_digest", "program_sha512", "ranges", "strata", "template_instance_query",
-           "template_instances_query", "unit_class", "UNIT_CLASS_MAX", "UNIT_CLASSES", "unit_gates", "units",
-           "QUERY_X"]
+           "template_instances_query", "unit_gates", "units", "QUERY_X"]

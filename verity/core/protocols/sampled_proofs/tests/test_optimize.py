@@ -18,7 +18,6 @@ import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
-from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
 from verity.core.protocols.sampled_proofs.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS, SHA512_ROWS, Candidate,
                                                            Commitment, CostModel, Grain, Objective, ReplayGrain,
                                                            TemplateCost, _hit, _miss, certify, density_bound, density_exact,
@@ -28,6 +27,7 @@ from verity.core.protocols.sampled_proofs.optimize import (HM96_ANDS, PROVING_ON
                                                            needs_benchmark, overlaps, perturb, pinned_ands, replay_cost,
                                                            row_ands, sensitivity, sqrt_grain, template_cost, touched,
                                                            two_stage, two_stage_rate, weigh, work_draws, work_law)
+from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
 
