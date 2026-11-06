@@ -9422,13 +9422,14 @@
    }
   },
   "Flock.Desc": {
-   "digest": "bc3d36a50736ece4927e8f525fe600f633fb0583b643cd322b2a24a467f3cdc4",
+   "digest": "341d837cd94d3ad35a5fa988f95fdd8b740b89f200a44c401678a8dd3806ec9c",
    "definitions": {
     "Flock.Desc": "a20c8468278e1a6c76f3f6e82314b3e5ec14f1d8eb0ad6b15a3c9226225a0582",
-    "Flock.Desc.casesOn": "22909e61743f61418b2d107f4978f1c7477f23b69ed359b48b33a400a54a2499",
+    "Flock.Desc.casesOn": "cad2839f4b4fe46a8124a9c254a1a9e2f1593e36b3437c902273ab4cff3ffec8",
     "Flock.Desc.parse": "4739f22d86537c37d145b809be2940eff900d71bb637f8a10a84b199e5e738e6",
-    "Flock.Desc.rec": "6e7e950835699fd5e32efdecad39d758a52659bd09336448c14a7d7be09a17e0",
+    "Flock.Desc.rec": "f443ca064670c7792163bb8a8f301fae72affc1bdad7641f47bcde1acde38bba",
     "Flock.Desc.single": "f3e788b80661c16aa5cd8e524b6f4fb66ccfd20aa67b005aba596b0f2f5da23c",
+    "Flock.Desc.tmpl": "10fecaada8a4ed07056e78b927ad55aa65af5e97af80f78f5b3ee235abc5c53c",
     "Flock.Desc.unroll": "683c0b77d2863b5dfbc1408fee2adbe18d53ef6bb8af898a889d6f4be9549338"
    }
   },
@@ -9787,7 +9788,7 @@
    }
   },
   "Flock.HmRow": {
-   "digest": "732ca3d8eeb57b34891410ce413c23bb22cf94a627dfce90c4a7afda9240f879",
+   "digest": "dcc66b26c4c725d8edf5e255a5a9194b7c2163efa5780f08f164032e97f6742b",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -9839,6 +9840,7 @@
     "Flock.HmOut.recUnit": "63a46ce694ab518b79807f25cc9c6bf6e1c2be778dbd9a34ffe3fd44589894a2",
     "Flock.HmOut.regions": "902c1b4c948e677b19bd356e7d83bbbc53abc012e62495535b17728ad2a1d12c",
     "Flock.HmOut.rowBcZeroSalt": "9eb517d60399480826c731075c1a261204d24284ffff5c3ed36980f53ee72a10",
+    "Flock.HmOut.unrolled": "ddc00e7d1d7970d8084e855b155d92dcd4398ede5496957a2da04ed086ad1efa",
     "Flock.HmRow.BC_BYTES": "d2aef41d3a4bf2c7d1feda3da2d9a0c8e9d694113b357a5570f877075000658c",
     "Flock.HmRow.BINDING_KEYS": "d8d4eff04ba53d498624492de5deaaaf7649d06c92165576e490834534dd3d4c",
     "Flock.HmRow.EVALUABLE": "330c9f10310fe11080b8816408e976c202262b5b86d2a0ec6f92150fccd0c27c",
@@ -12127,7 +12129,7 @@
    }
   },
   "Flock.Tmpl": {
-   "digest": "7435b6952cfd53c4541a2f6bfce1b898d6ea5f28ee3265e50362316fa6c192c1",
+   "digest": "b1168f0ca36f6b41ce517d2220ca23f62e7a7c3a6b236c3daf926547f30527ac",
    "definitions": {
     "Flock.Tmpl.Acc": "977dadb7026ef0ee9fecd23490ee0ab6dfcf4eff4aa0d4b49c4de239f97821f2",
     "Flock.Tmpl.Acc.empty": "f5793cac95dca49d796fcccae6a8a9edb614b41112b0485384b68ae4894f3be2",
@@ -12181,6 +12183,7 @@
     "Flock.Tmpl.instInhabitedDef.default": "84e124c853e700ce2f14ab9e6c883253d524c47090e963532fa988f4fc25d50a",
     "Flock.Tmpl.parse": "e2181ee539e4884be995c3200c83cc2018356f7bf9a44f0f263828819adc1445",
     "Flock.Tmpl.place": "6335e2e0bab07a8355acc9a1acb8dca475a252c81d86d9a2a63eb582279ee8e9",
+    "Flock.Tmpl.unroll": "b5e60733061ccc0a0a99ba4b28fec528e52516d67a7b5a37c6fd6f61570d0982",
     "Flock.Tmpl.write": "6ad4a2e8427d885d98219bc3b97309c3de7a16479eb856f09aab5f1aec37f1fd",
     "_private.Flock.Tmpl.0.Flock.Tmpl.groups": "a90818430562fa9223d6227f8c0aaa808df646f6fbe9ba08acef9ce792e51b33",
     "_private.Flock.Tmpl.0.Flock.Tmpl.num": "a18dd0bb63621300e1bd74f3a3550517d1b6898976d2673dce2274385862f95f"
