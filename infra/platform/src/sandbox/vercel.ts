@@ -43,12 +43,19 @@ export async function openVercelSandbox(name: string, o: VercelSandboxOptions): 
     tags: { platform: "verity", sandbox: name.slice(0, 60) },
     resume: true,
   });
+  return brokeredSession(sandbox, o);
+}
+
+// The policy is one value that the harness extends with its model credential
+// rule, and it refuses to extend rules it can't attribute, so the GitHub rules
+// go through the same session. Replacing them on every open drops the previous
+// turn's (expired) tokens, the model rule included; the harness adds a fresh
+// one when it starts.
+export async function brokeredSession(
+  sandbox: Parameters<typeof createVercelNetworkSandboxSessionFromNativeSandbox>[0],
+  o: Pick<VercelSandboxOptions, "allowHosts" | "inject">,
+): Promise<HarnessV1NetworkSandboxSession> {
   const session = createVercelNetworkSandboxSessionFromNativeSandbox(sandbox);
-  // The policy is one value that the harness extends with its model
-  // credential rule, and it refuses to extend rules it can't attribute, so the
-  // GitHub rules go through the same session. Replacing them on every open
-  // drops the previous turn's (expired) tokens, the model rule included; the
-  // harness adds a fresh one when it starts.
   await session.setRequestTransformations!(
     (o.inject ?? []).map((r) =>
       createCredentialRequestTransformation({ matchUrl: `https://${r.host}`, matchHeaders: { authorization: r.sent }, transformHeaders: { authorization: r.real } }),
