@@ -1344,7 +1344,7 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
    - `handoff()` also copies, at their paths, the files `pearlplus_of_record` reads: `ledger.jsonl`, `coin.json`, `pearlplus-answer.json`, `pearlplus-lean.json` and each `session/*/out/key.json`.
    - `served_verdicts.sh handoff [HOST]` on a deferral's serve dir writes the hand-off from its pieces, at `deferred.env`'s settings, with HOST as AUDITED_ON. It refuses an environment that sets another value, and a serve dir that holds V3c's audit but names no HOST.
    - **The new test** composes a handed-off Pearl+ piece of record: accept, with PoUW's W_cert the Lean's work. From a piece's files alone, the compose is pending and names the challenger key it can't read. Both new tests fail against the old script.
-   - **The suite:** r20261106-091311-fed1 (`benchmarks/one_stage` at `09de1beae0`), queued on cpu-3's research pool, one check ahead at 09:26Z. Locally, `test_served_verdicts.py` passes except the five tests that fail at the base too.
+   - **The suite:** r20261106-091311-fed1 (`benchmarks/one_stage` at `09de1beae0`) has had cpu-3's pool slot b11 since 09:29Z. At 09:41Z it was still in `suites.py`'s first step, the flock `lake build`. Its time limit ends at about 10:29Z. Locally, `test_served_verdicts.py` passes except the five tests that fail at the base too.
 5. **Every added file is verifier-side and already published.**
    - All six are in the run's published `out/pieces/pouw`, and `witness` refuses none of them. Its rules are unchanged, and the test holds the hand-off's list to it.
    - `pearlplus-answer.json` and both `key.json` are byte-identical to the published files.
