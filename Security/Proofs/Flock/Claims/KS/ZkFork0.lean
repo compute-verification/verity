@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkClashL
-import Proofs.Flock.Claims.KS.ForkSim
+module
+
+public import Proofs.Flock.Claims.KS.ZkClashL
+public import Proofs.Flock.Claims.KS.ForkSim
 
 /-!
 # The masked simulator's fork bound at level 0
@@ -20,6 +22,8 @@ pads events (`IsPadsEvZ`) and level 0 (`zkSimForkLe_of_kinds`), so masked KS, th
 on the cap/`τ` and pads fork bounds and the pads clash (`zk_KS_of_kinds`, `zk_tableBoundJOnAccR_of_kinds`,
 `zk_KSFlock_of_kinds`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

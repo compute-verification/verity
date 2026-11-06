@@ -1,7 +1,9 @@
-import Definitions.Accounting.JointPeriod
-import Definitions.NetworkCertifier.Period
-import Definitions.NetworkCertifier.Tap
-import Definitions.Core.Assumptions
+module
+
+public import Definitions.Accounting.JointPeriod
+public import Definitions.NetworkCertifier.Period
+public import Definitions.NetworkCertifier.Tap
+public import Definitions.Core.Assumptions
 
 /-!
 # A period whose communication audit is the network certifier's period of sampled audits (trusted)
@@ -16,6 +18,8 @@ window, are a run of the sampled verifier against a prover whose tape is the res
 deployed network certifier in `PeriodLeakAccepted`'s form, and its trust, `trusted-host`
 (`Verity.Assumptions.TrustedHost`), is a field: the per-window bound (`window_le`) is what its records give.
 -/
+
+@[expose] public section
 
 namespace Accounting.JointBridge
 

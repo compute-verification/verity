@@ -1,7 +1,9 @@
-import Proofs.Flock.C3.Sparse.Src
-import Proofs.Flock.VBridge.Sparse.Laid
-import Proofs.Flock.VBridge.Sparse.Unit
-import Proofs.Flock.VBridge.AccUnits
+module
+
+public import Proofs.Flock.C3.Sparse.Src
+public import Proofs.Flock.VBridge.Sparse.Laid
+public import Proofs.Flock.VBridge.Sparse.Unit
+public import Proofs.Flock.VBridge.AccUnits
 
 /-!
 # The source's sparse phases from V*'s RecSparse units
@@ -15,6 +17,8 @@ states the rows as `LaidRows` of `RecSparse.unitLaid`; `SrcLayer` reads them off
 `check_sparse` bounds `T_LOG`, and `laid_sparse` reads the zero columns as the unit's residuals being zero, so the unit
 accepts and plays its phase on its steps (`playsT_of_unit`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

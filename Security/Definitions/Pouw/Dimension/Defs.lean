@@ -1,5 +1,7 @@
-import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
-import Definitions.Pouw.NCP.Relation
+module
+
+public import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
+public import Definitions.Pouw.NCP.Relation
 
 /-!
 # Theorem D: the dimension bound in AlgM_16 (trusted statements)
@@ -28,6 +30,8 @@ instruction.
 The targets are the non-final checked words (depth `16·(τ + 1)` for `τ < 3k/16 − 1`) of a set `U` of the `N` units
 that share one `F₁`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

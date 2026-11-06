@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ExecDelta
-import Proofs.Flock.Level3.Placed
+module
+
+public import Proofs.Flock.Soundness.ExecDelta
+public import Proofs.Flock.Level3.Placed
 
 /-!
 # An instance's rows, placed by the statement the verifier accepted
@@ -21,6 +23,8 @@ Then at each unit copy's computed rows the matrices are the logical net's rows, 
 each copy's constant row they read the pin; and so does the pin's row. `ExecSetup.lean` derives `Layout` from
 `Stmt.setupH`.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

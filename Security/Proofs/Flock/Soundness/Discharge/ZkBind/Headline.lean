@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.Place
-import Proofs.Flock.Soundness.Discharge.ZkBind.Bind
-import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Place
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Bind
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 
 /-!
 # The compiled `--zk` count curve on the circuit's program
@@ -10,6 +12,8 @@ drawn unit placed at its site in its `--zk` table's accepted statement (`place :
 committed transcript the plurality value layer of the rows' binding (`vb := rs.bindingZ hHm`). Its `place` and `vb`
 hypotheses become the sites (`si`), the parse (`hparse`), the layout (`lay`, `rs`) and `HmRowComputes` (`hHm`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 

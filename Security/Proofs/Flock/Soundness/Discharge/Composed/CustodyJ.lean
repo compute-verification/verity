@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
-import Proofs.Flock.Soundness.Assumptions.Zk
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
+public import Proofs.Flock.Soundness.Assumptions.Zk
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # `zk_session_soundJ` at the coin server's custody
@@ -20,6 +24,8 @@ flock-verify's own arithmetic. This file splits them:
   at `mPtsOf c.g (kd / nTab I)` link points, and `nTab I ∣ kd` (flock-verify accepts a session of `count > 1` tables
   only at a draw that splits into `count` equal parts, `accepts_tables`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

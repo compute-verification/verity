@@ -1,5 +1,7 @@
-import Definitions.Pouw.FpG1
-import Proofs.Pouw.Exact
+module
+
+public import Definitions.Pouw.FpG1
+public import Proofs.Pouw.Exact
 
 /-!
 # FP8-g1 and W4A8-g1: ranges, the coin's rank-one terms and the epilogue's exactness
@@ -41,6 +43,8 @@ A3 sums the types' MACs as "the types sharing the pipe's time", and on sm_120 QM
 together, `QMMA.16832` E4M3 and `IMMA.16832` give `t + s = 1.0002` and `0.9994`, so a run that splits its words
 between them is charged in full, for g1 as for the record.
 -/
+
+@[expose] public section
 
 namespace Pouw.FpG1
 

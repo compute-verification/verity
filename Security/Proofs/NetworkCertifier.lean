@@ -1,31 +1,33 @@
-import Definitions.NetworkCertifier.Guarantees
-import Definitions.NetworkCertifier.Guarantees.Pooled
-import Definitions.NetworkCertifier.Guarantees.Period
-import Definitions.NetworkCertifier.Guarantees.PooledLeak
-import Proofs.NetworkCertifier.Lemmas
-import Proofs.NetworkCertifier.Occupancy
-import Proofs.NetworkCertifier.Counting
-import Proofs.NetworkCertifier.Advice
-import Proofs.NetworkCertifier.Ingress
-import Proofs.NetworkCertifier.SampledAuditAccepted
-import Proofs.NetworkCertifier.SampledAuditInstance
-import Proofs.NetworkCertifier.SampledCharge
-import Proofs.NetworkCertifier.SampledLeak
-import Proofs.NetworkCertifier.SampledLeakReg
-import Proofs.NetworkCertifier.SampledLeakRegPlain
-import Proofs.NetworkCertifier.PeriodSum
-import Proofs.NetworkCertifier.Pooled
-import Proofs.NetworkCertifier.TapRows
-import Proofs.NetworkCertifier.Period
-import Proofs.NetworkCertifier.PooledLeak
-import Proofs.NetworkCertifier.Schedule
-import Proofs.NetworkCertifier.PerWindow
-import Proofs.NetworkCertifier.Sanity
-import Proofs.NetworkCertifier.Code
-import Proofs.NetworkCertifier.Accepted
-import Proofs.NetworkCertifier.Tap
-import Proofs.NetworkCertifier.RecordRows
-import Proofs.NetworkCertifier.Witnesses
+module
+
+public import Definitions.NetworkCertifier.Guarantees
+public import Definitions.NetworkCertifier.Guarantees.Pooled
+public import Definitions.NetworkCertifier.Guarantees.Period
+public import Definitions.NetworkCertifier.Guarantees.PooledLeak
+public import Proofs.NetworkCertifier.Lemmas
+public import Proofs.NetworkCertifier.Occupancy
+public import Proofs.NetworkCertifier.Counting
+public import Proofs.NetworkCertifier.Advice
+public import Proofs.NetworkCertifier.Ingress
+public import Proofs.NetworkCertifier.SampledAuditAccepted
+public import Proofs.NetworkCertifier.SampledAuditInstance
+public import Proofs.NetworkCertifier.SampledCharge
+public import Proofs.NetworkCertifier.SampledLeak
+public import Proofs.NetworkCertifier.SampledLeakReg
+public import Proofs.NetworkCertifier.SampledLeakRegPlain
+public import Proofs.NetworkCertifier.PeriodSum
+public import Proofs.NetworkCertifier.Pooled
+public import Proofs.NetworkCertifier.TapRows
+public import Proofs.NetworkCertifier.Period
+public import Proofs.NetworkCertifier.PooledLeak
+public import Proofs.NetworkCertifier.Schedule
+public import Proofs.NetworkCertifier.PerWindow
+public import Proofs.NetworkCertifier.Sanity
+public import Proofs.NetworkCertifier.Code
+public import Proofs.NetworkCertifier.Accepted
+public import Proofs.NetworkCertifier.Tap
+public import Proofs.NetworkCertifier.RecordRows
+public import Proofs.NetworkCertifier.Witnesses
 
 /-!
 # Proofs of the network certifier's guarantees
@@ -49,6 +51,8 @@ check accepts is a run of the constant-rate Program under the declared advice, s
 trace carries the network certifier's registered rows outside the faulty units, unless its openings collide with the
 network certifier's; `Period` counts with it.
 -/
+
+@[expose] public section
 
 namespace NetTiming.SecurityProofs
 

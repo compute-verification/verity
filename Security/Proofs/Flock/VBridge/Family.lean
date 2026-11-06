@@ -1,7 +1,9 @@
-import Proofs.Flock.VBridge.Top
-import VStar.Stage
-import VStar.Compose
-import Flock.RecVStar
+module
+
+public import Proofs.Flock.VBridge.Top
+public import VStar.Stage
+public import VStar.Compose
+public import Flock.RecVStar
 
 /-!
 # VBridge G at V*'s statement family
@@ -35,6 +37,8 @@ registered reads (`RegOut`). At the family the parts' and openings' outputs are 
 `vbridge_of_family` (`Openings.lean`) composes the same per-rep lemmas at `HResL` (`Rep.lean`) and `HUL`:
 `Flock.Assumptions.VBridge` from one named `Prop` per remaining hypothesis.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

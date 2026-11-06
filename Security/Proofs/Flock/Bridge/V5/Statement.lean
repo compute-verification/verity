@@ -1,6 +1,8 @@
-import Proofs.Flock.Bridge.LeafMap
-import Proofs.Flock.Bridge.Draw
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
+module
+
+public import Proofs.Flock.Bridge.LeafMap
+public import Proofs.Flock.Bridge.Draw
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
 
 /-!
 # `SampledKSLiveV5`: the sampled audit's knowledge soundness at the verifier's public inputs (stated)
@@ -29,6 +31,8 @@ The targets V5's assembly takes (`Bridge.AssemblyTargetV5`): `TransportsLiveV5` 
 draw), `EndToEndHiddenV5` (`EndToEndHiddenC` at these, from `OpeningsCanonTargetV5`, bounding the event that a set `W`
 of proof blocks is wrong by the law's `P_a` of `W`), and `FaultyRightTargetC` as V2 takes it.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -194,7 +198,8 @@ of drawing no proof block of a set `B`, `P_a(B)` of its design on `partOf P κ n
 registration's layout (`nsOf`). At `subset kd` and the first `K₀` proof blocks it is `C(n − K₀, kd)/C(n, kd)`
 (`Bridge.pa_subset_range`), and under `All`, whose law is `subset n`, it is `0` at any `B` holding a proof block
 (`Bridge.pa_all`). Its named assumptions are V2's, with `live-verifier` at `own` and the law (`RecordCustodyZKJPLaw`), and
-the registration's law is on its layout's strata (`Bridge.LawOn`). -/
+the registration's law is on its layout's strata (`Bridge.LawOn`). The link finders are charged `t'` per run (`cTZC`),
+one run's SHA-512 evaluations, the prover's and the verifier's: V2's `t' + v`. -/
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)

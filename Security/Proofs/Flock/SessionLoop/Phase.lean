@@ -1,4 +1,6 @@
-import Proofs.Flock.SessionLoop.Statement
+module
+
+public import Proofs.Flock.SessionLoop.Statement
 
 /-!
 # The worker's view by phase
@@ -26,6 +28,8 @@ such a worker where they hold at the pad-blind worker of its algebraic phase.
 * **`Loop.liveRoundEq_phased`, `Loop.fillRoundEq_phased`**: the premises at `phased bx post` are the premises at the
   pad-blind `blind (bwOf bx)`, whatever `post` reads.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.ZkServer
 

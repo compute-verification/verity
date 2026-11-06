@@ -1,8 +1,10 @@
-import Definitions.Accounting.Guarantees.TS.Receipt
-import Proofs.Accounting.TS.Rounds
-import Proofs.Accounting.TS.ReceiptLi
-import Proofs.Accounting.TS.ReceiptDuoCP
-import Proofs.Pouw.Receipt.Fx1
+module
+
+public import Definitions.Accounting.Guarantees.TS.Receipt
+public import Proofs.Accounting.TS.Rounds
+public import Proofs.Accounting.TS.ReceiptLi
+public import Proofs.Accounting.TS.ReceiptDuoCP
+public import Proofs.Pouw.Receipt.Fx1
 
 /-!
 # (I7) from the receipt: proofs
@@ -24,6 +26,8 @@ The keyed rounds (`operandLuck_wrongWords`): a share positive only where a defic
 The operand luck at ¾ for degree-2 operands (`operandLuck_cube`): conditioned on the coins before the bits, a deficient
 round's error is a nonzero degree-2 function, which vanishes at uniform bits with probability at most ¾ (`luck_quad`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

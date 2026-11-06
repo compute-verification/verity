@@ -1,13 +1,15 @@
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
-import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Statements
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Weights
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Lazy
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Leaf
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Hybrid
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Erase
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Reads
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Session
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Weights
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Lazy
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Leaf
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Hybrid
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Erase
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Reads
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Session
 
 /-!
 # The coin step in the `--zk` session (live/PROTOCOL.md §9, C-Flock ZK)
@@ -20,3 +22,5 @@ The step is a hybrid over committed rounds (`committed_le`), not over the sessio
 success probability is at most the optimal prover's against live coins (`value`), plus each round's hiding gap. So the
 square in the table bound, which `value_interleave_le` proves of two reps on independent live coins, is untouched.
 -/
+
+@[expose] public section

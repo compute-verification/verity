@@ -1,5 +1,7 @@
-import Definitions.Accounting.TS.Fixed
-import Definitions.Accounting.TS.Play
+module
+
+public import Definitions.Accounting.TS.Fixed
+public import Definitions.Accounting.TS.Play
 
 /-!
 # The two premises `UnitFixed` rests on under option A (trusted)
@@ -19,6 +21,8 @@ modes.
   premise has to tie them to the values. This is that premise, at unit
   grain. It is `conjectured`, and retires once it is proved or the labelling is computed in a checked program.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

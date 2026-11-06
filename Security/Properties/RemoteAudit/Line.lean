@@ -1,9 +1,11 @@
-import Definitions.Pouw.Basic.Prob
-import Definitions.Accounting.Assumptions.RemoteHeld
-import Definitions.Accounting.Assumptions.RemoteOutside
-import Definitions.Accounting.Assumptions.RemoteDraw
-import Properties.RemoteAudit.Line.Record
-import Properties.RemoteAudit.Line.Premises
+module
+
+public import Definitions.Pouw.Basic.Prob
+public import Definitions.Accounting.Assumptions.RemoteHeld
+public import Definitions.Accounting.Assumptions.RemoteOutside
+public import Definitions.Accounting.Assumptions.RemoteDraw
+public import Properties.RemoteAudit.Line.Record
+public import Properties.RemoteAudit.Line.Premises
 
 /-!
 # The memory line of record, over what the Lean verifier accepts (`RemoteAudit.Line.lineOfRecordAt`)
@@ -71,6 +73,8 @@ A stretch after the first starts at its first group's coin `s_lo`, earlier than 
 the guarantee as stated (`[e_0, s_C)`) does not reach it: the model's argument bounds absence over `[s_0, s_C)` and
 holds from any start in `[s_0, e_0]`, which the proof of `LineHeld` uses.
 -/
+
+@[expose] public section
 
 namespace Properties.RemoteAudit.Line
 

@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.DeclaredCircuit.Tiles
+module
+
+public import Mathlib
+public import Proofs.Accounting.DeclaredCircuit.Tiles
 
 /-!
 # The slack's price: `k + 1` unobtained positions behind correct digests
@@ -11,6 +13,8 @@ position to the digest's fiber, at most `fib` values, and a stream position to o
 budget of `qtot` queries pays `(fib·qtot/|X|)^K` (`Device.card_badK_family_le`), which on the sketch at rank `r` is
 `(qtot/2^(8r))^K` (`Device.pr_badK_family_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 

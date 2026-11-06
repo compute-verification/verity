@@ -1,4 +1,6 @@
-import Properties.SampledProofs.Halt
+module
+
+public import Properties.SampledProofs.Halt
 
 /-! # Proofs of the proof system's halt (`Properties.SampledProofs.Halt`)
 
@@ -8,6 +10,8 @@ op's decision and state are read off the lemma. `Fleet.run` keeps the state on a
 `runs` takes one op at a time (`Halt.runs_cons`), so a halted stream's later decisions are its refusals by induction
 (`Halt.runs_halted`).
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open SampledProofs

@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Fork.OracleClose
-import Proofs.Flock.C3.Fork.OracleRep
+module
+
+public import Proofs.Flock.C3.Fork.OracleClose
+public import Proofs.Flock.C3.Fork.OracleRep
 
 /-!
 # Piece (a), the oracle count: candidate 3's table with its oracles sent whole
@@ -21,6 +23,8 @@ table, with probability at most `holoError`. a1s and a1r are used here:
 * each rep with its sparse phase plays on its own coins (the sparse phase reads only its rep's outputs), so the two
   multiply as `value_interleave_le` multiplies the reps: `(repError + sparseError)^2`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

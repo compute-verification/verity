@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Session
-import Proofs.Flock.Claims.ZK.MaskedTables
+module
+
+public import Proofs.Flock.Claims.ZK.Session
+public import Proofs.Flock.Claims.ZK.MaskedTables
 
 /-!
 # The deployed masked session's zero knowledge
@@ -40,6 +42,8 @@ tables' `zWith` at the base's first component) in `TapeZk.mask`, which `MaskTape
 (`zOf_maskOf`), and a round plan whose coins and encodings are `sessionPZk`'s. The round plan is a parameter here, so
 the three rounds are premises.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

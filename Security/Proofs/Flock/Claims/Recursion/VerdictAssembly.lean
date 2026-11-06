@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.Claims.Recursion.RecordCanon
-import Proofs.Flock.Claims.Recursion.DecodeTies
-import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
-import Proofs.Flock.Claims.Recursion.VerdictRowR
-import Proofs.Flock.Claims.Recursion.VerdictRowE
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
+public import Proofs.Flock.Claims.Recursion.RecordCanon
+public import Proofs.Flock.Claims.Recursion.DecodeTies
+public import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
+public import Proofs.Flock.Claims.Recursion.VerdictRowR
+public import Proofs.Flock.Claims.Recursion.VerdictRowE
 
 /-!
 # The verdict's rows, assembled at a table
@@ -22,6 +24,8 @@ the reader reads at the dense form, from the rows as their owners proved them:
 * **E** from G and, at each rep, the units' sums (`UnitSums`) and the algebra's reading of their ends (`ReadsEnds`)
   (`rowE_of_units`), where `verifierRows` returns by R's sizes (`verifierRows_rep`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

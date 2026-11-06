@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.Mixing
-import Proofs.Pouw.NCP.RelationWitness
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Mixing
+public import Proofs.Pouw.NCP.RelationWitness
 
 /-!
 # MinRank ≥ 2 for the shift by 24
@@ -10,6 +12,8 @@ import Proofs.Pouw.NCP.RelationWitness
 `y(b₀) ≠ 0`, the column `b` with `b / 8 = b₀ / 8` would all carry `y(b) ≠ 0`, while row `a₀` meets at most one of
 any 8 consecutive columns.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

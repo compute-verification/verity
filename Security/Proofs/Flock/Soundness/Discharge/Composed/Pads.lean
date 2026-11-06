@@ -1,4 +1,6 @@
-import Mathlib.LinearAlgebra.Vandermonde
+module
+
+public import Mathlib.LinearAlgebra.Vandermonde
 
 /-!
 # The pads code reaches every value at its opened positions
@@ -8,6 +10,8 @@ padding symbol `j` contributes `x^(len + j)` at an opened point `x`. `padsOnto_p
 opened points, the padding reaches every vector of values there (a scaled Vandermonde matrix), as `Table.PadsOnto`
 states for each rep.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

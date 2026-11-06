@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishRep
+module
+
+public import Proofs.Flock.Claims.ZK.FinishRep
 
 /-!
 # The firewall's rounds as the session's
@@ -21,6 +23,8 @@ round `j`, counted over the whole session, with `coin j` (`FlockComplete.asksCut
 The coins are the port's own (`coinsFrom`); that they are the opened coins at the rep's rounds is the transport's, as
 is each round's coin count, which the port reads back from the round's header.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

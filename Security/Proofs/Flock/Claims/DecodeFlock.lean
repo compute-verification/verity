@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Decode
-import Proofs.Flock.Soundness.ListSize
-import Proofs.Flock.Soundness.Instance
+module
+
+public import Proofs.Flock.Claims.Decode
+public import Proofs.Flock.Soundness.ListSize
+public import Proofs.Flock.Soundness.Instance
 
 /-!
 # Flock's level-0 code as an `IRS`, and its decoder
@@ -25,6 +27,8 @@ is reached only by `E^rep`'s columns, gathered over its accepted reruns.
 
 `Deploy`'s `T`, `Col` and `enc` are not fixed yet: these are the ones this decoder fits.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

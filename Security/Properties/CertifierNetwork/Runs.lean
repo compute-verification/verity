@@ -1,6 +1,8 @@
-import Properties.CertifierNetwork
-import Definitions.NetworkCertifier
-import Mathlib.Data.Set.Card
+module
+
+public import Properties.CertifierNetwork
+public import Definitions.NetworkCertifier
+public import Mathlib.Data.Set.Card
 
 /-!
 # What an accepted run of the certifier device is
@@ -37,6 +39,8 @@ runs.
 `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) proves `AcceptedRunsAreProgramRuns` and the
 count it gives, `EncardAcceptedObservationsLe`.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.Run
-import Proofs.Flock.Claims.Complete.Zk.Layout
-import Proofs.Flock.Claims.Complete.Coins
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Run
+public import Proofs.Flock.Claims.Complete.Zk.Layout
+public import Proofs.Flock.Claims.Complete.Coins
 
 /-!
 # δcZk: where the honest masked prover can fail
@@ -29,6 +31,8 @@ points, as Deploy's `repRounds true`, and the
 `--zk` schedule's `k_0` and levels; rep `q` is table `q / 2`'s rep `q % 2`, its first coin after the link's and every
 earlier rep's rounds (`repStartZk`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

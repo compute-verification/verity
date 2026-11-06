@@ -1,7 +1,9 @@
-import Proofs.Flock.Bridge.Defs
-import Proofs.Flock.Claims.Bridge.WrongSet
-import Proofs.Flock.SamplingBoundary
-import Proofs.Flock.Soundness.Audit.Circuit
+module
+
+public import Proofs.Flock.Bridge.Defs
+public import Proofs.Flock.Claims.Bridge.WrongSet
+public import Proofs.Flock.SamplingBoundary
+public import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # The lowering is correct, unit by unit
@@ -25,6 +27,8 @@ alone (`ref_blockOf`), and it is correct exactly when the unit's gates are and e
   reading from outside the unit only positions of wires, whose committed values `Lowers` gives, or constants
   (`const_pos`), which `Prog.read` reads with no committed value.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

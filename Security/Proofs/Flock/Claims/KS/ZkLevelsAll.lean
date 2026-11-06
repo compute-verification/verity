@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.LevelsAll
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
+module
+
+public import Proofs.Flock.Claims.KS.LevelsAll
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
 
 /-!
 # Every level's request in an accepted masked rep
@@ -13,6 +15,8 @@ level two rounds after the plain one.
 * `qbOut_reqs_laterA`: `qbOut_reqs_later` after any requests.
 * `zk_ligerito_reqsL`, `zk_rep_reqsL`: `zk_ligerito_reqs` and `zk_rep_reqs`, with the later requests `LaterAt`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

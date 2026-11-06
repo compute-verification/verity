@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Zk.Skeleton
-import Proofs.Flock.Claims.DeployRoundsZk
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Skeleton
+public import Proofs.Flock.Claims.DeployRoundsZk
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
 
 /-!
 # Level 0's lane phase gives its constraints wherever the masked Ligerito returns (`LaneConstraints`)
@@ -15,6 +17,8 @@ value, `k0` lane challenges, at least `k0` sumcheck messages), and otherwise fol
 * `ligeritoConstraints_ok`: on such a record, and `k0` messages, the lane phase returns.
 * The messages: a decoded masked proof has `k0 + 8 + 7 (R − 1)` (`zk_decode_sizes`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

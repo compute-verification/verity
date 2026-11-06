@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Fork.Sparse
-import Proofs.Flock.C3.Fork.RegOpen
+module
+
+public import Proofs.Flock.C3.Fork.Sparse
+public import Proofs.Flock.C3.Fork.RegOpen
 
 /-!
 # Piece (a), the oracle count: R's table near the registered word, and R's opening
@@ -10,6 +12,8 @@ A level-0 message packs a registered table in its witness's cells (`tableOf`), s
 registered claim reads only the cells (`holds_congr_cells`). `openTail` is R's opening as `regPhase` runs it after both
 sparse phases, and `openTail_le` its count: `regOpen_sound`, or nothing where R's schedule has no levels.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

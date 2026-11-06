@@ -1,10 +1,12 @@
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
-import Definitions.Pouw.Fp8Atom.Pinned
-import Proofs.Pouw.Fp8Atom.Checks
+module
+
+public import Mathlib.Algebra.Order.Floor.Semifield
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+public import Definitions.Pouw.Fp8Atom.Pinned
+public import Proofs.Pouw.Fp8Atom.Checks
 
 /-!
 # Proofs of `Pouw.Fp8Atom`'s pinned statements
@@ -12,6 +14,8 @@ import Proofs.Pouw.Fp8Atom.Checks
 `Conformance` and `AdaCaptures` assemble the kernel-evaluated chunks of `Pouw.Fp8Atom.Checks`. `CodeClasses` and the
 integer form of `DecodeInjective` are decided over the 256 codes. `ProductExact` and `AlignedMono` are proved.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.Proofs
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Reps.RoundReads
-import Proofs.Flock.C3.Compose.HoloStreamSizes
+module
+
+public import Proofs.Flock.C3.Reps.RoundReads
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
 
 /-!
 # `holoSel_parts` at the verifier's streams
@@ -9,6 +11,8 @@ and its `c₀` as the reps' held rounds (`hc₀`). At any list `holoStreams` bui
 `holoSel_parts_streams` is `holoSel_parts` at `holoStreams`' own list, the one `RoundReads`' `hsel` leaves open being
 `hm`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps.RoundReads
 

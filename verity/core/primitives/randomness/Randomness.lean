@@ -1,5 +1,7 @@
-import Flock.Hash
-import Flock.Draw
+module
+
+public import Flock.Hash
+public import Flock.Draw
 
 /-!
 # `verity.ml.randomness` v2, as a Lean spec
@@ -23,6 +25,8 @@ FIPS 180-4 SHA-512 (`Flock.Sha512.hash`). The Python is tied to them by vectors:
 * `uniform`, `subset` and `bernoulli` read each stream to a fixed length `L`; `uniformExact` and `subsetExact` are
   `Key.uniform` and `Key.subset` exactly, the read doubling until it lands, as the Python's unbounded stream does.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Randomness
 

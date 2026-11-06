@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bridge.Transport
-import Proofs.Flock.Claims.Deploy
+module
+
+public import Proofs.Flock.Claims.Bridge.Transport
+public import Proofs.Flock.Claims.Deploy
 
 /-!
 # Committed coins: the `--zk` Hello round
@@ -30,6 +32,8 @@ file bounds the difference by the tree's hiding distance `δ_hide`.
   the message it answers. `Pr_runC_le` is the bound a KS proof charges in `κ`; `Pr_runC_le_of_treeHides` the same from
   `TreeHides`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge
 

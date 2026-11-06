@@ -1,4 +1,6 @@
-import Proofs.Flock.SessionLoop.SkelPiop
+module
+
+public import Proofs.Flock.SessionLoop.SkelPiop
 
 /-!
 # The frame's state through the PIOP's scheduled rounds
@@ -9,6 +11,8 @@ is in the algebraic phase from the binding on, outside the inner proof and level
 values the rounds before carry, owing the round's coins (`Loop.run_piop`). The algebraic phase's schedule is such a
 schedule (`Sched.rounds_piop`), so the loop's state at a rep's PIOP round is that (`Loop.repState_piop`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Loop
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Stmt
-import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
-import Proofs.Flock.Claims.Complete.ZkTables.Trace
-import Proofs.Flock.Claims.Complete.Zk.Extras
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+public import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
+public import Proofs.Flock.Claims.Complete.ZkTables.Trace
+public import Proofs.Flock.Claims.Complete.Zk.Extras
 
 /-!
 # The masked ring switch at several tables
@@ -20,6 +22,8 @@ import Proofs.Flock.Claims.Complete.Zk.Extras
   `completeJRel`: the same from `complete_zk_relation`'s premises at one table, the ring switch there from
   `ringSwitchZk_goal` and `rsExtrasZk`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

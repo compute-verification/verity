@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.InnerTauLig
+module
+
+public import Proofs.Flock.Claims.ZK.InnerTauLig
 
 /-!
 # `FinishLane`: level 0's two lane rows on a view's masked values, constants included
@@ -13,6 +15,8 @@ opening's `T` (`openT`) and its restart is `T'`, the two rows are `rowsOf`'s row
 * `LaneAt`: level 0's proof read at the view, `lanesR`'s premises; `LaneCoins`: its record's coins the model's, all
   `TauLig.lanesA` reads for the rows' coefficients.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK

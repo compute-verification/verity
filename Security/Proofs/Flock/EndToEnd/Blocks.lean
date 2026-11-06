@@ -1,5 +1,7 @@
-import Proofs.Flock.EndToEnd.Blocks.Statement
-import Proofs.Flock.EndToEnd.Period
+module
+
+public import Proofs.Flock.EndToEnd.Blocks.Statement
+public import Proofs.Flock.EndToEnd.Period
 
 /-!
 # Proof of the integrity audit per server-time block, and pooled over a monitoring period's blocks
@@ -15,6 +17,8 @@ import Proofs.Flock.EndToEnd.Period
 * `IntegrityHorizonBlocks`: `IntegrityHorizon` over the monitoring period's `start B` sessions, whose terms regroup by
   block (`sum_range_start`).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

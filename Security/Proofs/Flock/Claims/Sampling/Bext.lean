@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Binding
-import Proofs.Flock.Claims.Sampling.Cost
+module
+
+public import Proofs.Flock.Claims.Sampling.Binding
+public import Proofs.Flock.Claims.Sampling.Cost
 
 /-!
 # `B_ext` at the claims block's finder, and the block's bits from its KS
@@ -24,6 +26,8 @@ and derives the block's `Bits` from its `KS`.
 * `Bits_of_KS`: **the block's bits from its KS**, given the extractor's expected reruns and own calls (`Efficient`'s)
   and a nonnegative table error.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

@@ -15,9 +15,13 @@ text of the entry.
 schemas, kinds and bodies, which key signs, its sessions) is its own check; the auditor's ledger
 (`SampledProofs.Challenger.ledgerEntry?`) reads its entries through this. `verity/core/protocols/record.py` mirrors it.
 -/
-import Lean.Data.Json
-import Flock.Bytes
-import Flock.Hash
+module
+
+public import Lean.Data.Json
+public import Flock.Bytes
+public import Flock.Hash
+
+@[expose] public section
 
 namespace Core
 

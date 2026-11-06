@@ -1,5 +1,7 @@
-import Proofs.Flock.SoundAtBridge.Union
-import Proofs.Flock.SoundAtBridge.Session
+module
+
+public import Proofs.Flock.SoundAtBridge.Union
+public import Proofs.Flock.SoundAtBridge.Session
 
 /-!
 # PoUW's proof premise from C-Flock's rows link (trusted)
@@ -27,6 +29,8 @@ module whose declarations bind `X` can't import it. `RowsSession` reads C-Flock'
 `ZkSession.Compose`; the edge leaves this closure only when C-Flock's definitions leave its proof modules. The
 composition over any family of sessions, `Proofs.Flock.SoundAtBridge.Union`, imports no ArkLib module.
 -/
+
+@[expose] public section
 
 namespace Flock.SoundAtBridge
 

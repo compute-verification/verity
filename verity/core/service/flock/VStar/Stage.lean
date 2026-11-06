@@ -1,6 +1,8 @@
-import VStar.Cap
-import VStar.Link
-import VStar.Parts
+module
+
+public import VStar.Cap
+public import VStar.Link
+public import VStar.Parts
 
 /-!
 # V*'s statements over an inner session (`verity_flock.rec_vstage.stage`)
@@ -23,6 +25,8 @@ Every session ends with a `RecCap` per later Ligerito level `l`, over both reps'
 coins draw. A session whose statement carries the inner population's link table has, just before that last cap, the
 table's `RecLink{UB, PB}` over its `N = grid(L)` rows, instance `i` checking row `i` (`rec-link/u<UB>-p<PB>`: `links`).
 -/
+
+@[expose] public section
 
 namespace VStar
 

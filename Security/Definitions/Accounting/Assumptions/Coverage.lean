@@ -1,5 +1,7 @@
-import Definitions.Accounting.Slowdown
-import Mathlib.Basic.ENNReal.Real
+module
+
+public import Definitions.Accounting.Slowdown
+public import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Coverage of efficient methods
@@ -9,6 +11,8 @@ sufficiently cheap way to reach the target contains enough computation that some
 task-level hypothesis, separate from every local premise, and stated over the tasks and runs of
 `Definitions.Accounting.Slowdown`.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

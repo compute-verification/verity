@@ -1,4 +1,6 @@
-import Definitions.NetworkCertifier.SampledAudit
+module
+
+public import Definitions.NetworkCertifier.SampledAudit
 
 /-!
 # The sampled audit's guarantee: it implies `Accepted`, at `ε` at `δ` over the selection
@@ -11,6 +13,8 @@ one hypothesis is `KS` at the same deployment, the sampling claim it rests on; e
 verifier refusal (the scope, `ScopeAcc`) or a condition, inside the conclusion, that picks out which observations the
 conclusion is about (`Carries`, `Covered`).
 -/
+
+@[expose] public section
 
 namespace NetTiming.Guarantees
 

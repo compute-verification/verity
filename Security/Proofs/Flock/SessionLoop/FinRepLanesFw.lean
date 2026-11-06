@@ -1,8 +1,10 @@
-import Proofs.Flock.SessionLoop.FinRepMsgsFw
-import Proofs.Flock.SessionLoop.FinPiopRet
-import Proofs.Flock.SessionLoop.FinL0Vals
-import Proofs.Flock.Claims.ZK.FinishFwL0
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictForms
+module
+
+public import Proofs.Flock.SessionLoop.FinRepMsgsFw
+public import Proofs.Flock.SessionLoop.FinPiopRet
+public import Proofs.Flock.SessionLoop.FinL0Vals
+public import Proofs.Flock.Claims.ZK.FinishFwL0
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictForms
 
 /-!
 # `FinRepLanes` with no rows
@@ -20,6 +22,8 @@ outright, reading no table's rows:
 
 **`Loop.finRepLanes_ret`** states it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

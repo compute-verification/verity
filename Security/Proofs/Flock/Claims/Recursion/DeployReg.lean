@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DeployPremises
-import Proofs.Flock.Claims.Recursion.VStarKS
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployPremises
+public import Proofs.Flock.Claims.Recursion.VStarKS
 
 /-!
 # The recursion's premises at `deployRec`, with registered ties
@@ -24,6 +26,8 @@ registered ties:
   `ksFlock_deployed` at `VStar.KS_of_flockKS_played`, whose bound charges the forks' registered ties to `Br`.
   `ksA_deployed_parts` is the same from V*'s parts at a layout the readers are (`VStar.codeFacts_of_parts`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

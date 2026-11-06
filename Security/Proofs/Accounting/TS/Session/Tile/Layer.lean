@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Held.Layer
+module
+
+public import Proofs.Accounting.TS.Session.Held.Layer
 
 /-!
 # A tile unit's proof layer with its Definition's checks, through its C-Flock sessions
@@ -24,6 +26,8 @@ What ties the circuit to the Definition is the premise `Accounting.TS.Tile.TileC
 These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
 `Proofs.Accounting.TS.Session`, as `Accounting.TS.Held`'s do.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Tile
 

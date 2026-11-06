@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.Loop
-import Proofs.Flock.Recursive.StopLeak
+module
+
+public import Proofs.Flock.Recursive.Loop
+public import Proofs.Flock.Recursive.StopLeak
 
 /-!
 # `RecursiveZK` at the session loop, released at a stop
@@ -20,6 +22,8 @@ family, the stop any function of everything.
   their bytes (`ZkView.saltsEquiv`, `FirewallZK.firewallStrings_os`).
 * `Flock.SecurityProofs.RecursiveZKLoop`: `prCoin_cut_le` over `loopSent_le`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
