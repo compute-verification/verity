@@ -9,7 +9,7 @@ packages whose passes can't be reused, with dependencies kept warm.
     python tools/verity/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/verity/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/verity/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
-    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT`, `REPLAYS_KEPT`, `RECORDS_KEPT` or one per `build` slot, artifacts, `UNREAD_KEPT`)
+    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT` and `BUILDS_MAX_GB`, `REPLAYS_KEPT`, `RECORDS_KEPT` or one per `build` slot, artifacts, `UNREAD_KEPT`)
 
 A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
 each file under its path relative to its package (a module's is its name), never the package's own path:
@@ -640,6 +640,9 @@ def prune(pkg: Path) -> int:
 #: (dozens of them fill a 200 GB disk). Each package's newest stays past it (`WarmBuilds.evict`): a cap below the ~30
 #: packages would have every check evict some and rebuild them cold
 BUILDS_KEPT = 48
+#: the GB the kept builds may take on a node before its least recently used go, whatever their number: a Security/Proofs
+#: build is about 17 GB, so `BUILDS_KEPT` of them alone would fill a node's root disk. Each package's newest stays past it too
+BUILDS_MAX_GB = float(os.environ.get("VERITY_LEAN_BUILDS_MAX_GB", "120"))
 #: the kept dependency trees (one per manifest and toolchain, `deps_key`) a node holds before its least recently used go:
 #: Security/Proofs' is about 35k files, so two dozen of them take some 800k inodes
 DEPS_KEPT = 8
@@ -656,8 +659,8 @@ class WarmBuilds:
     never comes back. The audit still checks every statement against these `.olean` files and replays every declaration
     through the kernel. The newest `kept` by use stay (`evict`)."""
 
-    def __init__(self, store: Path, kept: int = BUILDS_KEPT):
-        self.store, self.kept = store, kept
+    def __init__(self, store: Path, kept: int = BUILDS_KEPT, max_gb: float | None = BUILDS_MAX_GB):
+        self.store, self.kept, self.max_gb = store, kept, max_gb
 
     def _lock(self, k: str):
         self.store.mkdir(parents=True, exist_ok=True)
@@ -709,15 +712,30 @@ class WarmBuilds:
         return {name for _, name in newest.values()}
 
     def evict(self) -> int:
-        """Remove all but the `kept` builds last given back or copied from, never a package's newest (`evict_lru`); the number
-        removed."""
-        return evict_lru(self.store, self.kept, keep=self.newest_per_package())
+        """Remove all but the `kept` builds last given back or copied from, and then the least recently used until they take at
+        most `max_gb`, never a package's newest (`evict_lru`); the number removed."""
+        max_bytes = None if self.max_gb is None else int(self.max_gb * 1e9)
+        return evict_lru(self.store, self.kept, keep=self.newest_per_package(), max_bytes=max_bytes)
 
 
-def evict_lru(store: Path, kept: int, keep: set[str] = frozenset()) -> int:
+def tree_bytes(path: Path) -> int:
+    """The bytes ``path``'s files take on disk (their allocated blocks, as `du` counts them), not following links: one `lstat`
+    per entry, some seconds for a build of tens of thousands of files."""
+    total = 0
+    for root, dirs, files in os.walk(path):
+        for name in (*dirs, *files):
+            try:
+                total += os.lstat(os.path.join(root, name)).st_blocks * 512
+            except OSError:                            # removed while walked
+                pass
+    return total
+
+
+def evict_lru(store: Path, kept: int, keep: set[str] = frozenset(), max_bytes: int | None = None) -> int:
     """Remove all but the ``kept`` directories of ``store`` last used (a rename keeps a directory's mtime, so each use sets
-    it), and never one named in ``keep``, each only when its lock (`NAME.lock` beside it) is free: a run holding it is taking
-    it or giving it back. The number removed."""
+    it), and with ``max_bytes`` then the least recently used until the rest take at most that (`tree_bytes`); never one named
+    in ``keep``, and each only when its lock (`NAME.lock` beside it) is free: a run holding it is taking it or giving it back.
+    The number removed."""
     held = []
     for home in store.iterdir() if store.is_dir() else ():
         try:
@@ -725,18 +743,31 @@ def evict_lru(store: Path, kept: int, keep: set[str] = frozenset()) -> int:
                 held.append((home.stat().st_mtime, home))
         except OSError:                                # taken while listed
             pass
-    n = 0
-    for _, home in sorted(held, reverse=True)[kept:]:
-        if home.name in keep:
-            continue
+    def remove(home: Path) -> bool:
         with open(store / f"{home.name}.lock", "w") as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                continue
-            if home.is_dir():
-                shutil.rmtree(home, ignore_errors=True)
-                (store / f"{home.name}.pkg").unlink(missing_ok=True)
+                return False
+            if not home.is_dir():
+                return False
+            shutil.rmtree(home, ignore_errors=True)
+            (store / f"{home.name}.pkg").unlink(missing_ok=True)
+            return True
+
+    newest = sorted(held, reverse=True)
+    n = 0
+    for _, home in newest[kept:]:
+        if home.name not in keep and remove(home):
+            n += 1
+    if max_bytes is not None:
+        rest = [(home, tree_bytes(home)) for _, home in newest[:kept] if home.is_dir()]
+        total = sum(b for _, b in rest)
+        for home, b in reversed(rest):                 # the least recently used first
+            if total <= max_bytes:
+                break
+            if home.name not in keep and remove(home):
+                total -= b
                 n += 1
     return n
 
