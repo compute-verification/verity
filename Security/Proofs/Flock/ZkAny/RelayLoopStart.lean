@@ -64,7 +64,10 @@ theorem loopP_start {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sessi
       sess := fun h => by cases h
       links := linksOk_empty spec
       link := fun h => absurd h (by omega)
-      sizes := fun h => by cases h }
+      sizes := fun h => by cases h
+      took := fun _ => by
+        rw [hc]
+        exact LoopModel.TookAt.zero M rfl }
   exact ⟨σ, by rw [hc, List.drop_zero], hF, hJ, hR, hes⟩
 
 /-- **Each request that reaches a slot reads the relay's setup**: it is one the relay read (`out_sched`). -/
@@ -168,7 +171,7 @@ theorem envPre_run
     rw [hn]
     exact hD.head_hello hOwn hne
   have hwk := hlk (M.hist 1) (by rw [LoopModel.hist, length_histOf_take]; omega)
-  exact envPre_withInner hD hsrc hfin hS hlive hT hcp hOwn h0 hwk _ [] {} {} M.msgs
+  exact envPre_withInner hD hsrc hfin hS hlive hT hcp hOwn hn h0 hwk _ [] {} {} M.msgs
     (loopP_start hc hnew hR (pick_setup hs hb))
 
 /-- **The relay's model frames are the model's messages, encoded, at the model's run**: `envPre_run`'s premises give

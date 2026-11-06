@@ -25,15 +25,15 @@ frame is kept; so `LoopJ` is kept there given `RoundFacts` and `RepJ` of the rou
   (`ofLoop_answered_snd`). `frameAnswerR_snd`, `answeredR_snd`, `ofLoop_answeredR_snd`: so does its answer before
   the rank stop, and `SameInv` with it (`sameInv_hist`, `sameInv_snd`).
 * `stopped_roundRun`: the session's stop one frame round on.
-* **`loopKept_round`**: `LoopJ` is kept at a frame round, given `RoundFacts` there and the round's rep's `RepJ` at the
-  session's next request.
+* **`loopKept_round`**: `LoopJ` is kept at a frame round, given `RoundFacts` there, the round's rep's `RepJ` at the
+  session's next request, and the model's coin step taking the coins after each of the run's histories.
 -/
 
 @[expose] public section
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session (State Placed byte?)
+open _root_.Flock.Firewall.Session (State Placed byte? reqAt)
 open _root_.Flock (SessionSpec Stmt)
 open _root_.Flock.Firewall.Frames (Sessions Rep)
 
@@ -477,15 +477,22 @@ theorem stopped_roundRun {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : 
 /-- **`LoopJ` is kept at a frame round**, where the rep streams' names are distinct, `RoundFacts` holds at each
 request at the slot as the loop answers it (`slotCase_round`'s premise), and the round's rep has `RepJ` at the
 session's next request: the session's stop one round on is `stopped_roundRun`'s; every other seen rep stream is before
-the round's, on another rep, so its frame and `RepJ` are kept; and the round's stream is seen. -/
+the round's, on another rep, so its frame and `RepJ` are kept; the round's stream is seen; and, where the model's
+release requests the loop's openings (`hrq`) and its coin step takes the coins after each of the run's histories
+(`hfed`), the session's coin tree past it is the one its tree before opens the model's answer to at the schedule's
+next opening (`LoopModel.TookAt.succ`), the frame having taken the coins before (`RoundFacts.place`). -/
 theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {stream : String} {n : Nat} (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup)
+    {s0 : FlockDeploy.Ins} (hx : FlockDeploy.setupOf true M.x = some (s0, spec, sts))
+    (hrq : ∀ j, M.L.req M.x j = Loop.reqOf M.x j)
+    (hfed : ∀ j, j < M.τ.length → M.L.fed M.x M.ρ (M.hist j) = true)
     (hA : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
       (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
       LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
-      InnerSrc M sid i r σ → (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ)
+      InnerSrc M sid i r σ → StartOk sts sid i r σ → (∃ o, e.round = .ok o) →
+      RoundFacts M sid spec seen stream n i r dom v σ)
     (hcur : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat)
       (dom : ByteArray) (v : Claims.Msg), slot st pl = some (.round stream n) → e.setup = .ok (spec, sts) →
       LoopFacts sid spec seen st pl σ → LoopJ M sid spec sts seen st σ → M.Ans σ.c e →
@@ -497,12 +504,12 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
       RepJ M sid spec sts i r σ') :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) (.round stream n) := by
   intro seen st pl e σ σ' hsl he hF hJ hra hgo
-  obtain ⟨hans, ⟨i, r, dom, v, hv, hr, hpc, hin⟩, hcc, hst, hsal⟩ := hra
+  obtain ⟨hans, ⟨i, r, dom, v, hv, hr, hpc, hin, hsk⟩, hcc, hst, hsal⟩ := hra
   have hlt := hans.1
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
   have hreq := request_round_slot hF.reach hF.live hsl
   obtain ⟨⟨o, hro⟩, a, hae, hb, hsa, hco⟩ := stepK_round_go hF.reach hF.live hsl hgo
-  have hRA := hA seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal hin ⟨o, hro⟩
+  have hRA := hA seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal hin hsk ⟨o, hro⟩
   have hk : (Except.ok (.round stream n) : Except String _root_.Flock.Firewall.Session.Kind) ≠ .ok .hello := by
     intro h
     cases h
@@ -526,7 +533,7 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
     seenAt_round hnd hmem hkr hl hl' hJ.seenAt, fun h => absurd h (by rw [hcc, hF.count hsent]; omega),
     fun _ => builtAt_stays hst (hJ.built (by rw [hF.count hsent]; omega)), fun _ => hsess, stepK_links he hJ.links,
     fun _ => linkOn_stays (hJ.sess hsent) hst (by rw [hF.count hsent]; omega) (by omega)
-      (hJ.link (by rw [hF.count hsent]; omega)), fun _ => hJ.sizes hsent⟩
+      (hJ.link (by rw [hF.count hsent]; omega)), fun _ => hJ.sizes hsent, ?_⟩
   · rw [hsent', hsent, hcc, he', Bool.true_and]
     exact stopped_roundRun hRA hv hr hreq hro hae hb hsa hco e'
   · rw [hsent', hsent] at h
@@ -553,5 +560,18 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
         (((((h01.1 i' r').step (.put _ _ (key_ne (roundStep_key hput) hne))).trans (h12.1 i' r')).trans
           (h22.1 i' r')).step (.put _ _ (key_ne (coinsStep_key hcs) hne))).trans (h23.1 i' r')
       exact repJ_old hK hst hold hl hl' (hJ.reps i' r' s' hmem' hseen')
+  · intro hlt'
+    obtain ⟨hj, hAn⟩ := hans
+    obtain ⟨C, hC⟩ := Option.isSome_iff_exists.mp (hF.reach.sess hsent)
+    obtain ⟨a', C', c, hae', hb', ho, hs'⟩ := stepK_coin_open hF.live (.inr ⟨stream, n, rfl⟩) hC hgo
+    have hm := hAn a' hae' hb'
+    have hc := hF.count hsent
+    rw [opened_of hC] at hc
+    have hq : reqAt st.plan C.hello.links C.opened.length = M.L.req M.x (σ.c - 1) := by
+      rw [hrq, Loop.reqOf_eq hx, hJ.plan hsent, hJ.links.2 C hC, show C.opened.length = σ.c - 1 by omega]
+    obtain ⟨m, -, -, -, hAm, -⟩ := hRA.place
+    rw [hcc] at hlt' ⊢
+    refine LoopModel.TookAt.succ hj (hJ.took hj) (by omega) hC (by rw [← hq, hm]; exact ho) hs' ?_ (hfed _ hlt')
+    rw [LeanRelease.frameAnswer_of_answered hAm] <;> rfl
 
 end Claims.ZKServer.Relay
