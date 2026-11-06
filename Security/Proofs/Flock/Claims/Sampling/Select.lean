@@ -22,7 +22,7 @@ verifier's partition as the claims' slots (`Select.Layout`); `Select.select`'s s
 `Properties.SampledProofs.DrawMisses` (`Select.Misses`); `DrawLaw` at a deployment whose draw is `Slots.select`'s
 (`Select.DrawLaw`); `designWellFormed`, which proves `Properties.SampledProofs.DesignWellFormed` (`Select.Design`); and
 `ScopeMatches` and `Refuses` from it, where the scope check is the readable scope's program part (`Select.Scope`); and that
-program part as five refusals of the verifier's evaluation, each needed (`Select.Refusals`); and `secondMisses`, which
-proves `Properties.SampledProofs.SecondMisses`, the two-stage rule's second stage (`Select.Second`). -/
+program part as five refusals of the verifier's evaluation, each needed (`Select.Refusals`); and `secondMisses`, what the
+two-stage rule's second stage misses (`Select.Second`). -/
 
 @[expose] public section

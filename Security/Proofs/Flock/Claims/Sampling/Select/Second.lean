@@ -3,20 +3,27 @@ module
 public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Proofs.Flock.Claims.Sampling.Count
 public import Proofs.Flock.Soundness.ExecDraw
-public import Properties.SampledProofs.Second
+public import Definitions.Claims.SamplingTwo
+public import Properties.SampledProofs.Draw
 import all SampledProofs.Draw
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
 /-!
-# The second stage misses a set of proof blocks no more often than the replay blocks' escapes (`Properties.SampledProofs.SecondMisses`)
+# The second stage misses a set of proof blocks no more often than the replay blocks' escapes
+
+What `Select.selectSecond`, a two-stage rule's second stage, misses on `L` uniform bytes (`bytesOf`), as the claims'
+`CompiledTwo.Sessions` reads it (`secondDraws`). It is a lemma of the deploy instance (`SamplingDeploy.secondDraws_code`),
+not a guarantee: a guarantee of the Properties lock would carry an honest witness that `selectSecond` accepts at a built
+instance.
 
 * `flockLaw_second`: `secondLaw`'s C-Flock law is stratified, its `i`-th stratum exactly `[i·n, (i+1)·n)` drawing `k`.
 * `selectSecond_ok`: an accepted second stage has `1 ≤ k < n`, drew its units from the coins under that law, and proves
   each of them.
 * `strataPa_replicate`: `strataPa` of `S` strata of `n` drawing `k` is the product of their windows' escapes.
 * `secondMisses`: the second stage is accepted and proves no proof block of `X` with probability at most
-  `∏_i escCell n k |X ∩ [i·n, (i+1)·n)|`.
+  `∏_i escCell n k |X ∩ [i·n, (i+1)·n)|`. It takes no premise: the draw is a function of its inputs and its bytes, and a
+  draw that would read past the `L` bytes is refused, so it misses nothing.
 -/
 
 @[expose] public section
@@ -29,6 +36,11 @@ namespace Properties.SampledProofs.SecurityProofs
 
 open Lean (Json)
 open Claims.Sampling Finset
+
+/-- The proof blocks the second stage's draw proves (`Draw.proved`), none where it is refused. -/
+def secondOf : Flock.V (Json × ℕ) → Array Int
+  | .ok (draw, _) => Draw.proved draw
+  | .error _ => #[]
 
 /-- The `i`-th stratum object of `secondLaw`, replay block `r` of the sample. -/
 def secondObj (n k i r : ℕ) : Json :=
@@ -225,10 +237,16 @@ theorem strataPa_replicate (n k : ℕ) (W : Finset ℕ) : ∀ (S o : ℕ),
       rw [show o + n + i * n = o + (i + 1) * n by ring]
     · simp
 
-/-- **The second stage misses `X` no more often than the replay blocks' escapes**
-(`Properties.SampledProofs.SecondMisses`). -/
-theorem secondMisses : SecondMisses := by
-  intro sample n k L X
+/-- **The second stage misses `X` no more often than the replay blocks' escapes**: for every replay sample, replay block
+size `n`, draw `k`, number `L` of uniform bytes and set `X` of proof blocks, the draw `Select.selectSecond` makes from the
+bytes is accepted and proves no proof block of `X` with probability at most `∏_i C(n − |X ∩ [i·n, (i+1)·n)|, k)/C(n, k)`
+(`escCell`), the `i`-th replay block of the sample holding `[i·n, (i+1)·n)`. -/
+theorem secondMisses (sample : Array ℕ) (n k L : ℕ) (X : Finset ℕ) :
+    Claims.Pr (fun src : Fin L → Fin 256 =>
+      (Select.selectSecond sample n k (bytesOf src)).isOk = true ∧
+        ∀ j ∈ X, (j : Int) ∉ secondOf (Select.selectSecond sample n k (bytesOf src))) ≤
+      ∏ i ∈ Finset.range sample.size,
+        Claims.Sampling.escCell n k (X.filter fun j => i * n ≤ j ∧ j < (i + 1) * n).card := by
   have hev : ∀ src : Fin L → Fin 256, ((Select.selectSecond sample n k (bytesOf src)).isOk = true ∧
         ∀ j ∈ X, (j : Int) ∉ secondOf (Select.selectSecond sample n k (bytesOf src))) →
       ∃ draw read, Select.selectSecond sample n k (bytesOf src) = .ok (draw, read) ∧
