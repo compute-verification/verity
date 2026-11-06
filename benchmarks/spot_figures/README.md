@@ -93,4 +93,5 @@ Limits of the model:
 - The one-stage certificate counts location bits over every proof block of the scope.
 - The uncapped two-stage bound charges a wholly incorrect request every bit it commits, its interior included, not
   only what it serves; the capped ones charge at most what it serves, on a lemma in progress or none yet.
-- The served bits count every token of a request as served.
+- The served bits count every token of a request as served, as its id alone: a circuit that returns more (logits,
+  state) serves more, and the cap is then too low.
