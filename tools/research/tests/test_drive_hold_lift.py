@@ -128,10 +128,22 @@ def test_a_member_that_gains_its_verdict_goes_after_those_already_moved(world, m
     assert [m.pr for m in chain] == [4, 2, 1, 3, 5] and chain[0].commit == four
 
 
-def test_first_goes_below_the_reviewed_members_the_lift_moves(world, monkeypatch):
+def test_the_priority_list_goes_below_the_reviewed_members_the_lift_moves(world, monkeypatch):
     h = _waiting(world, monkeypatch)
     h.review(4)
     h.review(5)
-    h.q.first = (5,)
+    world.prioritize(h.q, 5)
     h.tick()
     assert [m.pr for m in h.q.chain()] == [5, 4, 1, 2, 3]
+
+
+def test_drive_lands_the_priority_files_prs_in_its_order(world, monkeypatch):
+    """The priority file's order is the landing order: #9 and #7, listed in that order, go below #5 (reviewed too, not
+    listed), and land in the file's order."""
+    h = Review(world, monkeypatch)
+    for n in (5, 7, 9):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+        h.review(n)
+    world.prioritize(h.q, 9, 7)
+    assert h.tick().startswith("landed #5"), world.logs
+    assert _landed(world, 3) == [5, 7, 9] and h.q.chain() == [], world.logs

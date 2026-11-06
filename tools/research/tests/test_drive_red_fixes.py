@@ -23,7 +23,7 @@ FIX_BODY = "Lane `lane-{n}`. Fixes suite `pkg`."
 
 
 def _red(h: Review, key: str = "suite pkg") -> None:
-    """``key`` red on `checked` with no culprit named, so nothing reverts it (`Driver._red_clock`)."""
+    """``key`` red on `checked` with no culprit named, so nothing reverts it (`Driver._revert_reds`)."""
     state = h.q.load_state()
     pl = state["drive"]["postland"]
     pl["red"] = {key: {"tip": pl["verified"], "ids": ["r-red"], "first": "x", "culprit": None}}
@@ -32,7 +32,8 @@ def _red(h: Review, key: str = "suite pkg") -> None:
 
 def test_the_after_landing_run_waits_for_a_fresh_low_risk_fix_of_a_red_and_launches_fix_wait_s_after_its_mark(world, monkeypatch):
     """#4, a fix of red `suite pkg` marked just now, is on `next` above #2 and #3, low-risk too, and the lane lands one member a
-    tick: the after-landing run of #2's landing waits for #4, and launches `FIX_WAIT_S` after #4's mark without it."""
+    tick: the after-landing run of #2's landing waits for #4, and launches `FIX_WAIT_S` after #4's mark without it, at the top
+    of that tick, before its landing of #3."""
     h = _lane(world, monkeypatch, per_tick=1)
     h.d.lowrisk_lane = False
     world.gh.put(2, world.change({"x.txt": "2\n"}))
@@ -51,6 +52,5 @@ def test_the_after_landing_run_waits_for_a_fresh_low_risk_fix_of_a_red_and_launc
            "mark" in world.logs, world.logs
     h.clock += FIX_WAIT_S
     assert h.tick().endswith("landed #3 on the low-risk lane"), world.logs
-    tip = _checked(world)
-    assert [c for c, *_ in h.posted] == [tip], world.logs
+    assert [c for c, *_ in h.posted] == [tip] and _git(world.origin, "rev-parse", "checked^1") == tip, world.logs
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", tip)

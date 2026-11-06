@@ -11,10 +11,10 @@ from pathlib import Path
 import pytest
 
 from research import merge
-from research.drive import FIX_WINDOW_S, LAUNCH_RING_EVERY_S, LEAN_STEP, LOST_AFTER_S
+from research.drive import LAUNCH_RING_EVERY_S, LEAN_STEP, LOST_AFTER_S
 from research.queue import PR
 from test_drive_checked import _checked, _pass
-from test_drive_review import FLOCK_LOCK, Review, _detached, _main, _move_main, _subject
+from test_drive_review import FLOCK_LOCK, Review, _detached, _main, _move_main, _rings, _subject
 from test_queue import World, _git
 from test_queue_drive import _failed_run, _live_run, _steps_run
 
@@ -164,8 +164,8 @@ def test_a_lean_landing_during_a_lock_run_gets_the_next_lock_run_and_main_may_mo
 
 def test_a_lock_run_that_fails_to_build_a_landings_lean_names_it_and_reverts_it_on_checked(world, monkeypatch, tmp_path):
     """A Lean failure is a red like any other: the lock run's lean-audit names the landing whose Lean doesn't build, `main`
-    stays, and the culprit is reverted on `checked` `FIX_WINDOW_S` later.  The revert leaves no Lean change for a lock run, so
-    the after-landing run checks it, and `main` moves to it."""
+    stays, and the culprit is reverted on `checked` at once.  The revert leaves no Lean change for a lock run, so the
+    after-landing run checks it, and `main` moves to it."""
     h = _locks(world, monkeypatch)
     main = _main(world)
     tip = _lands(h, {1: LEAN, 2: {"b.txt": "2\n"}})
@@ -173,17 +173,13 @@ def test_a_lock_run_that_fails_to_build_a_landings_lean_names_it_and_reverts_it_
     h.evidence = [_failed_audit(tmp_path, rid, BUILD_FAILED)]
     h.run_state[rid] = ("done", 1, None)
     h.tick()
-    (ring,) = [p for p in h.posts if "is red on" in p]
+    (ring,) = _rings(h)
     assert f"step {LEAN_STEP} is red on `checked` {tip[:12]} (run {rid})" in ring and "Culprit: #1" in ring, ring
-    assert h.postland()["locks"]["state"] == "failed" and h.posted == [] and _main(world) == main
-    h.tick()
-    assert len(h.launched) == 1 and _checked(world) == tip                  # not again on its tip, and no revert yet
-    h.clock += FIX_WINDOW_S + 1
-    h.tick()
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", "checked^") == tip and _subject(world, "checked").startswith("Revert")
     assert "pkg/A.lean" not in _git(world.origin, "ls-tree", "-r", "--name-only", "checked").split()
     assert any("#1 reverted on `checked`" in p for p in h.posts), h.posts
+    assert h.postland()["locks"]["state"] == "failed" and _main(world) == main
     assert len(h.launched) == 1 and [c for c, *_ in h.posted] == [reverted], world.logs
     _pass(h)
     h.tick()
@@ -204,10 +200,8 @@ def test_a_culprit_whose_records_a_lock_run_committed_is_reverted_with_its_lock_
     h.run_state["r-post-0"] = ("done", 1, None)
     h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
     h.tick()
-    (ring,) = [p for p in h.posts if "is red on" in p]
+    (ring,) = _rings(h)
     assert f"suite pkg is red on `checked` {lock[:12]}" in ring and "Culprit: #1" in ring, ring
-    h.clock += FIX_WINDOW_S + 1
-    h.tick()
     (told,) = [p for p in h.posts if "reverted on `checked`" in p]
     assert f"#1 reverted on `checked`, with the lock commit {lock[:12]} regenerated for it" in told, told
     assert _git(world.origin, "show", "checked:pkg/lean-audit.json") == _git(world.origin, "show", f"{main}:pkg/lean-audit.json")
@@ -219,7 +213,8 @@ def test_a_culprit_whose_records_a_lock_run_committed_is_reverted_with_its_lock_
 def test_a_lock_run_failed_by_its_machine_runs_again_once_on_the_other_machines(world, monkeypatch, tmp_path, fault):
     """A lock run whose step ran out of disk, or that failed after its lean-audit passed, says nothing of what landed: it runs
     again once, on the machines it didn't run on.  Failed by its machine again, it is red as any failure is: named when its
-    step names a culprit, else told to `CI`, since nothing then reverts and the Lean landings wait."""
+    step names a culprit, which is reverted at once, else told to `CI`, since nothing then reverts and the Lean landings
+    wait."""
     h = _locks(world, monkeypatch)
     h.d.on = "vy-a,vy-b,vy-c"
     tip = _lands(h, {1: {"pkg/lean-audit.json": "{}"}})
@@ -232,13 +227,15 @@ def test_a_lock_run_failed_by_its_machine_runs_again_once_on_the_other_machines(
     assert any("a machine's fault: again, once, on vy-a,vy-c" in x for x in world.logs), world.logs
     h.run_state[h.lock_ids()[1]] = ("done", 1, None, None, "vy-a")
     h.tick()
-    assert len(h.launched) == 2 and h.postland()["locks"]["state"] == "failed" and h.posted == []
+    assert len(h.launched) == 2 and h.postland()["locks"]["state"] == "failed"
     if fault == "enospc":
-        (ring,) = [p for p in h.posts if "is red on" in p]
+        (ring,) = _rings(h)
         assert f"step {LEAN_STEP} is red on `checked` {tip[:12]}" in ring and "Culprit: #1" in ring, ring
+        assert _subject(world, "checked").startswith("Revert") and [c for c, *_ in h.posted] == [_checked(world)], world.logs
     else:
         (post,) = [p for p in h.posts if "named nothing red" in p]
         assert post.startswith("@ci queue: the lock run") and "rc=1" in post, post
+        assert h.posted == [] and _checked(world) == tip, world.logs
 
 
 def test_a_killed_lock_run_runs_again_once_and_one_lost_past_the_bound_too(world, monkeypatch):
@@ -329,9 +326,12 @@ def test_a_launched_lock_run_survives_a_tick_that_fails_after_it(world, monkeypa
     h = _locks(world, monkeypatch)
     world.gh.put(1, world.change(LEAN))
     h.review(1)
+    real = h.d.start_postland
 
     def dies(drive):
-        raise RuntimeError("the after-landing launch died")
+        if (drive.get("postland") or {}).get("locks"):
+            raise RuntimeError("the after-landing launch died")
+        real(drive)
 
     h.d.start_postland = dies
     with pytest.raises(RuntimeError):
