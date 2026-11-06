@@ -17,8 +17,8 @@ pinned by
 checks are the specification of what each zero-knowledge proof block proves on the deployed path (§8). The verifier's
 definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
 `RemoteAudit.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
-`lean/tests/`' difftest, comparing every event's result, the outcome and the record. The Lean is the verifier of
-record, and `audit.py` is the reference that runs beside it (`README.md`). Both refuse a registration that binds PoUW's
+`lean/tests/`' difftest, comparing every event's result, the outcome and the record. The Lean is the
+verifier, and `audit.py` is the reference that runs beside it (`README.md`). Both refuse a registration that binds PoUW's
 tiles.
 
 ## 1. What an accepted session certifies
