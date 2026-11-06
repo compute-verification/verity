@@ -1539,3 +1539,24 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 6. **INF-518:** told infra at 15:40Z that no follow-on starts now, and asked them to lift the b-slot hold until I post a new time.
 
 **I wait on:** your choice of (a) or (b), and your word on item 5.
+
+## 15:53Z Fri (vllm-pearlplus): **Step 1 and the withdrawal ask are done. I haven't launched attempt 3: no owner has confirmed the quiet window, and h2n2 is still running. A second network-accounting run opened a lane-vllm period at 15:40Z.**
+
+1. **Withdrawals (INF-559, 15:44:59Z).** I asked infra to withdraw these, giving the art ids and paths:
+   - 3e9e's four stall dumps and c564's two;
+   - the two probes' stdouts;
+   - their h200-3 copies and local blobs.
+
+   I also asked for the fix. `dump` in `tools/research/src/research/telemetry/pyspy.py` keeps py-spy's `Process PID: <cmdline>` header. `_StallWatch` (`telemetry/run.py`) writes it to `logs/stall-*.txt`, and custody uploads that file (`RUN_FILE_GLOBS`, `store/custody.py`).
+2. **Room on h200-3 (r20261106-154537-cc63).** After a dry run, `retention rm --approved-by @vllm` deleted 3e9e's window commit (3.9 GiB, 386,196 inodes). That leaves 965,296 inodes free against 772,388 needed. c564's window and serve dir are kept.
+3. **cpu-3's copy of 3e9e (r20261106-154537-f77b).** Its serve-dir copy holds 503 GB and 883,855 inodes, and 0bb4's run dir holds 79 MB.
+   - Nothing needs the copy: its V3c root is spent, and 0bb4's outcome is recorded.
+   - It is in attempt 3's way, though. A follow-on needs about 1.28 TB and 1.0M inodes on cpu-3, and cpu-3 has 1.3 TB and 8.06M inodes free.
+   - **Ask:** may I `retention rm --approved-by @vllm` that copy before attempt 3's follow-on? It frees 503 GB, to about 1.8 TB.
+4. **The gate (r20261106-154849-598e, 15:48:52Z, entries up to seq 1797).** Lane vllm has no period open. It has 31 reserves that never ended, all stale (the newest is 5 Nov 20:33Z) and all before any close that matters.
+   - **New:** r20261106-152723-4a4c on h200-2 has run `remote_run.sh` from `60efaa2649` since 15:27:29Z. At about 15:40Z it opened period `served-r20261106-152723-4a4c` under lane vllm (seq 1790-1797, a salt and a draw session), closed by 15:43Z.
+   - h2n2 is still running (since 13:42:42Z). Both runs are network-accounting's: a 15:33Z run on h200-2 marks h2n2's run dir with lane network-accounting.
+   - So each of their onsite runs opens a lane-vllm period about 13 min after it starts. A run starting in attempt 3's close-to-draw stretch (launch+15 to launch+55 min) gets our draw refused again.
+5. **The thread (1791963509.708489):** no reply since your 15:42Z ask.
+
+**I wait on** an owner's confirmation of the quiet window, or infra's separate lane, in that thread; or h2n2's end with the ledger clear. Then I check the ledger, run the preflight (about 9 s) and serve. I also need your word on item 3.
