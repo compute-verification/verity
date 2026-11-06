@@ -15379,6 +15379,10 @@
     "∀ (u : Fin n), instLENat.le (D.D.size (P.gates u)) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin n), Real.instLE.le (Nci.novelReads D (P.gates u)).cast K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
+    "∀ (u : Fin B), SetLike.instMembership.mem S u → And (instLENat.le (P.gates u).card (cS u)) (instLENat.le (d.unregistered (P.gates u)).card (kS u))": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
+    "∀ (v : Fin d.D.N), SetLike.instMembership.mem J.V v → Real.instLE.le (J.ω v) ωmax": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
+   },
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_honest": {
     "SetLike.instMembership.mem Accounting.ServingBlocks.Honest.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
    },
@@ -15392,10 +15396,6 @@
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": {
     "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
     "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
-    "∀ (u : Fin B), SetLike.instMembership.mem S u → And (instLENat.le (P.gates u).card (cS u)) (instLENat.le (d.unregistered (P.gates u)).card (kS u))": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
-    "∀ (v : Fin d.D.N), SetLike.instMembership.mem J.V v → Real.instLE.le (J.ω v) ωmax": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
    }
   }
  },
@@ -22846,7 +22846,7 @@
    }
   },
   "NetworkCheck.Period": {
-   "digest": "d368bc6298ffbe76f79cd592ad66d958c36127092d83df61af5407648cb1b9a7",
+   "digest": "4b9c87e030536e60bf2c9b40d7b9b7b8d3ddffc684c39344201298a18b89081c",
    "definitions": {
     "NetworkCheck.Period.Public.eps": "b17a83bc3210f820272c25a0eeadf70b75964ad71b22473f894e31abe11de17d",
     "NetworkCheck.Period.Window.clockDigest?": "caa6c899c077659811ed08fdfbf54a5b1321539e555685bc2c6e895ce70a1928",
@@ -22854,11 +22854,17 @@
     "NetworkCheck.Period.auditCheck": "49a5add6075b56213d317b125ea0d99100422b09b24333db9e5944a9badfa641",
     "NetworkCheck.Period.auditChecks": "52014dcfea3476d3f9ac2c6c3863094a72309a9edbd4173f1adb6a50e41ff7c5",
     "NetworkCheck.Period.auditOf": "194e926b95af5c85f331db0b0d679116bbaab64832878d1c94a387f5bf1da878",
+    "NetworkCheck.Period.canonicalEntry": "55730d85eca94545a2b1e19f53b73c7e026c866f3f0781e3a1bc7ff72b378cbb",
+    "NetworkCheck.Period.canonicalEntry._sparseCasesOn_1": "797959fa9fd1d98df973df4e1d62eef8df2ec94975bf7443d6ca1303233bbaf0",
     "NetworkCheck.Period.check": "db55c676a6d2b03eba819f70dae93f4b87cf8f7e2409bfcc2e920dd3486c895a",
     "NetworkCheck.Period.clearClocks": "f3d5c8cc2493a8bbfa1d7bf161c066530730dbc6f6c6bf9575f1dfb6de5fcb34",
     "NetworkCheck.Period.factsOf": "5f445bdfec9198a00a1f2319913c154384e4304ecabaad26a017b50efc1b067a",
     "NetworkCheck.Period.findingOf": "b741c494b5aedde523cd8907f6c15b935bf1458c0ae0cc94e0f28d70dc8d1b73",
     "NetworkCheck.Period.firstFinding": "12d99101ffb4b62140ec080cb2befe2fb893fec15201d5a7aa9f89a1da98e6ab",
+    "NetworkCheck.Period.flatParts": "2746c62367d6e7e6a81dc9f964df6679ba00616fac7a4de4bccdc2d3b274f365",
+    "NetworkCheck.Period.flatParts._sparseCasesOn_1": "be1f1eae95ba51ff7f85642719afe6089ae8f9581b7c2f34fec7dd4a9537e0b7",
+    "NetworkCheck.Period.flatParts._sparseCasesOn_13": "a3dac698e43b9d104f57b5bfee355f38124a87f1a139d3187bba3794a95a4f06",
+    "NetworkCheck.Period.flatParts._sparseCasesOn_4": "50c9a652e8ddc0cff337b1a5495197c23bc2dd2061c9bef72ae394e4034243de",
     "NetworkCheck.Period.holds": "fa08d19be245e09652cf1792365f351a89cba4417ede184e8efdf81c04cb4ebc",
     "NetworkCheck.Period.ingressTemplates": "ca9f303075ececb803e17dc27d55a4afa8c3bdc0137d750717533af5ff91e9e8",
     "NetworkCheck.Period.inputArg": "847fbb8b6f56ca7b3222df9afbf3d0bf508d8e27949f0b8ee1a8773d4948e8f0",
@@ -22886,6 +22892,7 @@
     "NetworkCheck.Period.windowCheck": "499fab8b39873a4e3d109fd9a1418eca3f6ba546168cfbe22552e9e4be900804",
     "NetworkCheck.Period.wired": "9b78f6671b42638b3ac1c07c1d03a79acaee0b510ac6b95145d63615df0109b6",
     "NetworkCheck.Period.wiredChecks": "59f78b132c6d397f4e3dcc5fc85397caac15284d723cc4e5c15753df95305d80",
+    "NetworkCheck.Period.written": "73814d9436c41b2e42c7fee2b116b065957a6a6ae07998877a40d56754fbff24",
     "_private.NetworkCheck.Period.0.NetworkCheck.Period.exactly": "1260ca0c995e11c44a5d65b092b00ab9a2538cf4233a028ce4278d38bb9a33fc",
     "_private.NetworkCheck.Period.0.NetworkCheck.Period.keysOf": "6f138893cbf4b7a07d587f9f2b61f614decc9411f9988368103c8533d13da6a9"
    }
