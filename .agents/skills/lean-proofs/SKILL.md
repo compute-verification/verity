@@ -51,8 +51,10 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 ## Build, iterate, check
 
 - **The edit loop is `verity lean try FILE`**: `lake env lean FILE` in the Lake package that holds FILE, against its
-  built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. It
-  never writes a record. After editing a file others import, `lake build` its module, then try an importer. It also runs
+  built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. Its
+  last line is the axiom probe's, since lean's exit 0 isn't proved: each theorem of FILE whose axioms go beyond `propext`,
+  `Classical.choice` and `Quot.sound` (`sorryAx` too), or none. It never writes a record. After editing a file others
+  import, `lake build` its module, then try an importer. It also runs
   on a project machine with `--on` (the README).
 - **Build on a CPU machine.** Never `lake update`, and never change a `require`, a revision or `lean-toolchain` in a
   feature PR. The full check, `python tools/verity/lean/check.py PKG`, is the train's; run it by hand only on a machine
