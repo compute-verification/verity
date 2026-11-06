@@ -3213,6 +3213,10 @@ SLOT_NOT_STARTED = 75
 SLOT = ("python3", "tools/verity/check/slot.py")
 #: `research queue ready`'s exit when the tier never started: nothing failed, and nothing is marked
 READY_NOT_STARTED = 3
+#: what `place` asks a research pool for when node 2 is down: any slot of the pool fits, and the tier takes the slot's cores
+SPILL_CPUS, SPILL_MEM_GB = 4, 16
+#: the slot list of a pool on a CPU node, which slot.py takes when its run names one (`MACHINE:POOL` from `place`)
+POOL_SLOTS = "/workspace/research/locks/{pool}/slots"
 #: a lane's own test run, which no landing needs (a PR lands on `checked` on a review; the full check after decides `main`)
 LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
@@ -3227,10 +3231,12 @@ class StillGoing(str):
     cancelled, and `research queue judge RUN` marks the PR once the run has ended."""
 
 
-def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None) -> tuple[str | None, str]:
+def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None,
+          spill: Callable[[Path], tuple[tuple[str, str] | None, str]] | None = None) -> tuple[str | None, str]:
     """`--on auto` (check.py's AUTO) or `--on M1,M2`: the machine `check.py --on` would take for a lane check now (`choose` over
-    each machine's `read_slots`, from the caller's checkout), with the Lean audit slots left out, since the quick tier takes none;
-    None when no machine's slots could be read. And why, with each machine skipped."""
+    each machine's `read_slots`, from the caller's checkout), with the Lean audit slots left out, since the quick tier takes none.
+    With `--on auto` and none of AUTO readable (node 2 stopped), a CPU node's research pool as `research run --on auto` spills to
+    (``spill``, research.auto), as `MACHINE:POOL`. None when nothing could be placed. And why, with each machine skipped."""
     from .store import tools_registry
 
     path = tools_registry.resolve("tools/verity/check/check.py", lambda p: (repo / p).is_file()) or "tools/verity/check/check.py"
@@ -3241,7 +3247,24 @@ def place(spec: str, repo: Path, read: Callable[[list[str]], dict] | None = None
     names = list(check.AUTO) if spec == "auto" else [n for n in spec.split(",") if n]
     docs = {n: ({**d, "lean": {"pools": None}} if isinstance(d, dict) else d) for n, d in (read or check.read_slots)(names).items()}
     got, why, skipped = check.choose(names, docs)
-    return got, why + "".join(f"; skipped {s}" for s in skipped)
+    why += "".join(f"; skipped {s}" for s in skipped)
+    if got is None and spec == "auto":
+        target, how = (spill or _spill)(repo)
+        if target is not None:
+            return f"{target[0]}:{target[1]}", f"{how}, as none of {', '.join(names)} could be read ({why})"
+        why += f"; no research pool either: {how}"
+    return got, why
+
+
+def _spill(repo: Path) -> tuple[tuple[str, str] | None, str]:
+    """The research pool `research run --on auto` would send a small job to now (research.auto), or None and why not."""
+    from . import auto
+
+    try:
+        target, why = auto.choose(auto.read(repo, SPILL_CPUS), SPILL_CPUS, SPILL_MEM_GB)
+    except auto.Unplaceable as e:
+        return None, str(e)
+    return (target, why) if target is not None else (None, why)
 
 
 def _launch(argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -3276,13 +3299,14 @@ class RemoteQuickTier(QuickTier):
     def __call__(self, pr: PR) -> str | None:
         from . import runs as R
 
-        on = self.on
+        on, pool = self.on, ""
         if on == "auto" or "," in on:
             got, why = self.place(on, self.repo)
             if got is None:
                 return NotStarted(f"--on {on}: {why}")
             print(f"research queue: --on {on}: {got}: {why}", flush=True)
-            on = got
+            on, _, pool = got.partition(":")
+        slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
         job = Path(quick_tier.__file__)
         rid = R.new_run_id()
         with self._checkout(pr) as (wt, base):
@@ -3293,11 +3317,11 @@ class RemoteQuickTier(QuickTier):
             r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", self.project,
                              "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
                              "--timeout", f"{self.wait_s + self.timeout_s:g}", "--custody-ttl", str(math.ceil(self.wait_s + self.timeout_s + REMOTE_GRACE_S)),
-                             "--declared-output", "out/*", "--", *SLOT, *opts,
+                             "--declared-output", "out/*", "--", *slot, *opts,
                              "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}'], wt)
         if r.returncode:
             return f"`research run --on {on}` failed (exit {r.returncode}): {(r.stderr or r.stdout or '').strip()[-400:]}"
-        print(f"research queue: the quick tier runs as {rid} on {on}, in a check slot; waiting for it to end "
+        print(f"research queue: the quick tier runs as {rid} on {on}, in {'a slot of its ' + pool + ' pool' if pool else 'a check slot'}; waiting for it to end "
               f"(`research inspect {rid}`)", flush=True)
         d = R.runs_root() / rid
         status, why = self._wait(d, on)
