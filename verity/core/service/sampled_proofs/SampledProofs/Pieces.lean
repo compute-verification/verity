@@ -67,7 +67,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   wired row's public string its writer's) and on the reference's entries whose unit is drawn.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
-`select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
+`select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `select_second` (a
+two-stage rule's second stage, on the coins after the interior registration), `check_draw`,
 `check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it), `hello`,
 `stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
 -/
@@ -635,22 +636,9 @@ def table : List (String × (Json → V Json)) :=
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]
 
-/-- Whether a piece's input names a two-stage rule: its `rule` is `{"rule": "two-stage", …}`, or its stream's `params`
-carry `two_stage`. -/
-def namesTwoStage (j : Json) : Bool :=
-  jeq (getD (getD j "rule") "rule") (.str "two-stage") || jeq (getD (getD j "params") "two_stage") (.bool true)
-
-/-- `f`, refusing an input that names a two-stage rule (`Select.uncertifiedRule`). -/
-def certified (f : Json → V Json) (j : Json) : V Json :=
-  if namesTwoStage j then throw Select.uncertifiedRule else f j
-
-/-- The verifier of record's pieces. It refuses a two-stage rule (`certified`) until the proof that this code meets the
-two-stage certificate lands; `table`, the difftest's, runs one. -/
+/-- The verifier of record's pieces: `table`'s, by name. -/
 def verifier : List (String × (Json → V Json)) :=
-  [("registration", registration), ("matches_public", matchesPublic), ("select", certified select),
-   ("select_second", fun _ => throw Select.uncertifiedRule), ("check_draw", checkDraw),
-   ("check_proved", checkProved), ("record", record), ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", certified run), ("hello", Hello.check), ("stream", certified stream),
-   ("fleet", fleet)]
+  table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
+    "record", "check_public", "check_verdicts", "run", "hello", "stream", "fleet"].contains p.1
 
 end SampledProofs.Pieces
