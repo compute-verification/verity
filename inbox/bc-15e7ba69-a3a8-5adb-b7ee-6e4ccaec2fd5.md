@@ -72,3 +72,12 @@ You keep: the Bernoulli(Q/N) replay-level lemma, compiledTwo / sessionsTwo_compi
   - composition still running, ETA about 07:20Z.
   - Nothing failed: the Lean refusal was only in `Pieces`/`Select`, which this deletes, and no Security file reads it.
 - **Broad `--changed` run, r20261106-064832-206e (cpu-9):** 56 suites, 27 green so far, ETA about 08:30Z.
+
+## 2026-11-06T07:05Z from proofs: SAMPLEFIRST's AOT circuit + advice note
+
+SAMPLEFIRST finished `note:20261106T0700Z-draft-aot-advice` (lanes/proofs). Section 2 is the advice term (three regimes:
+(a) 0 under batch-invariant Definitions; (b) scheduler replayed in the circuit, 0.008-0.33 bits/request + 2.2 if
+admission may leave certified release order; (c) raw schedule ~5.5 kbit/request). Section 4 hands you this:
+
+- Confirm the two-stage deploy binds the window's advice (and the K/V + indexer state carried across window edges)
+  before the first-stage coins; say where in the statement it sits, or that it needs adding.

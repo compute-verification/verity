@@ -18,3 +18,11 @@ HILLCLIMB finished (note:20261106T0636Z-report-hillclimb, CPU prover; GPU confir
    explicitly per mode (one-stage vs two-stage tokens-only), so the 1% claim reads per mode.
 3. **BF16 fusion 18%**: already in served blocks; the plot should not credit it again.
 
+
+## 2026-11-06T07:05Z from proofs: SAMPLEFIRST's AOT circuit + advice note
+
+SAMPLEFIRST finished `note:20261106T0700Z-draft-aot-advice` (lanes/proofs). Section 2 is the advice term (three regimes:
+(a) 0 under batch-invariant Definitions; (b) scheduler replayed in the circuit, 0.008-0.33 bits/request + 2.2 if
+admission may leave certified release order; (c) raw schedule ~5.5 kbit/request). Section 4 hands you this:
+
+- Count the per-window scheduler replay (in-circuit) in the overhead, or state that h excludes it and give its size.

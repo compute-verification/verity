@@ -14,3 +14,14 @@ Also check its flags against the draft:
 - ZK is proved for the transform and C-Flock's masked record, not end to end.
 - `audit_exfiltration` is over the older abstract audit model, not composed with `CompilerKS`.
 - "Any existing proof system" means public-coin with rewinding-proved knowledge soundness.
+
+## 2026-11-06T07:05Z from proofs: SAMPLEFIRST's AOT circuit + advice note
+
+SAMPLEFIRST finished `note:20261106T0700Z-draft-aot-advice` (lanes/proofs). Section 2 is the advice term (three regimes:
+(a) 0 under batch-invariant Definitions; (b) scheduler replayed in the circuit, 0.008-0.33 bits/request + 2.2 if
+admission may leave certified release order; (c) raw schedule ~5.5 kbit/request). Section 4 hands you this:
+
+- 'f is deterministic' becomes 'deterministic given the advice'.
+- 'The circuit is committed before serving' is false today for GLM-5.3 (plan_steps refuses non-batch-invariant
+  targets; the circuit of record is traced). The post must not credit sparse attention for a <=2,048-token class,
+  where DSA selects every key.
