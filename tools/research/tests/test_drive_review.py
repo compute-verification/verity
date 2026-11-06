@@ -1817,7 +1817,7 @@ def test_a_shard_of_the_after_landing_run_that_prints_no_run_ids_within_the_boun
 
     h = Review(world, monkeypatch, baseline=False)
     h.d.after_landing_shards = 2
-    starts = _detached(h, tmp_path, lean=False, post=True)
+    starts = _detached(h, tmp_path, post=True)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
     main = _main(world)
