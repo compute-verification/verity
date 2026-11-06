@@ -73,6 +73,66 @@ def ThreadedTrainingOn_nontrivial : Prop :=
         2 * (1 / 2) * M1.dark.card +
           2 * (1 / 2 : ℝ) * (T0 D).bound 1 (1 / 2) 1 0 * D.D.size D.D.computed)
 
+/-- **`ThreadedThrottled`'s, `ThreadedThrottledOn`'s and `ThreadedThrottledDark`'s premises hold together**:
+`ThreadedTraining_honest`'s instance, which needs no coverage. -/
+def ThreadedThrottled_honest : Prop :=
+  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
+    T1.Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressible D T1 2 1 (1 / 2) (1 / 2)
+
+/-- **`ThreadedThrottled` without `ThetaRegistered`**: `Dθ` complies at `α = 0`, so at read cap `α Γ = 0`, and the bound
+`b_a #M ≤ α Λ size(d)` fails, its right side `0` and gate `2` the counted multiplication of `T1`. -/
+def ThreadedThrottled_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressible D T1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) * T1.M.card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
+
+/-- **`ThreadedThrottledOn` without `ThetaRegistered`**: `ThreadedThrottled_nontrivial`'s instance, where `Dθ` computes
+gate `2`, so that it is in `M ∩ S`. -/
+def ThreadedThrottledOn_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressible D T1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) * (T1.M ∩ Mθ.S).card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
+
+/-- **`ThreadedThrottledDark` without `ThetaRegistered`**: `ThreadedThrottled_nontrivial`'s instance, with no dark gate:
+`#M = 1` exceeds `#dark + α Λ size(d) / b_a = 0`. -/
+def ThreadedThrottledDark_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressible D T1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((T1.M.card : ℝ) ≤ Mθ.dark.card + 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed / (1 / 2))
+
+/-- **`ThreadedThrottledSlots`', `ThreadedThrottledOnSlots`' and `ThreadedThrottledDarkSlots`' premises hold
+together**: `ThreadedThrottled_honest`'s instance, the weight in its own parameter slot (`σ1`). -/
+def ThreadedThrottledSlots_honest : Prop :=
+  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
+    T1.Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 1 (1 / 2) (1 / 2)
+
+/-- **`ThreadedThrottledSlots` without `ThetaRegistered`**: `ThreadedThrottled_nontrivial`'s instance, the weight in its
+own parameter slot (`σ1`). -/
+def ThreadedThrottledSlots_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) * T1.M.card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
+
+/-- **`ThreadedThrottledOnSlots` without `ThetaRegistered`**: `ThreadedThrottledOn_nontrivial`'s instance, the weight
+in its own parameter slot (`σ1`). -/
+def ThreadedThrottledOnSlots_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) * (T1.M ∩ Mθ.S).card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
+
+/-- **`ThreadedThrottledDarkSlots` without `ThetaRegistered`**: `ThreadedThrottledDark_nontrivial`'s instance, the
+weight in its own parameter slot (`σ1`). -/
+def ThreadedThrottledDarkSlots_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((T1.M.card : ℝ) ≤ Mθ.dark.card + 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed / (1 / 2))
+
 /-- **`ActivationsBoundOn`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `K = 1`, `b_w = b_a = 1/2`,
 `r = d = Toy.D`, the threading `T1` with no links, `dd = 1` and `e = 1`: the token enters one counted multiplication. -/
 def ActivationsBoundOn_honest : Prop :=
@@ -235,6 +295,45 @@ def IncompressibleContainedTrainingOn_nontrivial : Prop :=
         (1 * D.D.size D.D.computed - 2 * Mθ.dark.card) ≤
       2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ)))
 
+/-- **`IncompressibleThreadedThrottled`'s and `IncompressibleThreadedThrottledOn`'s premises hold together**:
+`ThreadedThrottled_honest`'s instance under `TrainingIncompressible` at the chain `ch1`. -/
+def IncompressibleThreadedThrottled_honest : Prop :=
+  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
+    T1.Threaded 2 1 1 0 ∧ Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2)
+
+/-- **`IncompressibleThreadedThrottled` without `ThetaRegistered`**: `ThreadedThrottled_nontrivial`'s instance under
+`TrainingIncompressible` at the chain `ch1`. -/
+def IncompressibleThreadedThrottled_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.TrainingIncompressible D ch1 T1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) * T1.M.card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
+
+/-- **`IncompressibleThreadedThrottledOn` without `ThetaRegistered`**: `ThreadedThrottledOn_nontrivial`'s instance
+under `TrainingIncompressible` at the chain `ch1`. -/
+def IncompressibleThreadedThrottledOn_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    T1.Threaded 2 0 1 0 ∧ Assumptions.TrainingIncompressible D ch1 T1 2 0 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) * (T1.M ∩ Mθ.S).card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
+
+/-- **`ContainedFanOutOn`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `K = 1`, `b_w = b_a = 1/2`
+and the chain `ch1` at `dd = emax = 1`. -/
+def ContainedFanOutOn_honest : Prop :=
+  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
+    Assumptions.ActivationsIncompressible D ch1 2 1 (1 / 2) (1 / 2)
+
+/-- **`ContainedFanOutOn` without `ThetaRegistered`**: `Dθ` complies at `α = 0`, and the bound fails, its right side `0`
+and the product at gate `2`, which `Dθ` computes, charged `b_a / max(emax, K/(4 b_w dd)) = 1/2`. -/
+def ContainedFanOutOn_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ (0 : ℝ) * 2 ≤ 1 ∧
+    (∀ ℓ, 1 ≤ ch1.d ℓ) ∧ (∀ ℓ, ch1.e ℓ ≤ 1) ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧ Assumptions.ActivationsIncompressible D ch1 2 1 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1)) *
+        (univ.filter fun p : (ℓ : Fin ch1.L) × Fin ch1.N × Fin (ch1.e ℓ) × Fin (ch1.d ℓ) =>
+          ch1.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ Mθ.S).card ≤
+      0 * Dθ.D.size Dθ.D.computed)
+
 /-- **`PackedIncompressibleContainedMatMulOn`'s premises hold together**: `IncompressibleContainedMatMulOn_honest`'s
 instance, `ch1` as a packed chain of one product to a gate. -/
 def PackedIncompressibleContainedMatMulOn_honest : Prop :=
@@ -273,6 +372,23 @@ def PackedIncompressibleContainedTrainingOn_nontrivial : Prop :=
           (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) *
         (1 * D.D.size D.D.computed - 2 * (1 * Mθ.dark.card)) ≤
       2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ)))
+
+/-- **`PackedContainedFanOutOn`'s premises hold together**: `ContainedFanOutOn_honest`'s instance, `ch1` as a packed
+chain of one product to a gate. -/
+def PackedContainedFanOutOn_honest : Prop :=
+  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
+    Assumptions.PackedActivationsIncompressible D ch1.toPacked 2 1 (1 / 2) (1 / 2)
+
+/-- **`PackedContainedFanOutOn` without `ThetaRegistered`**: `ContainedFanOutOn_nontrivial`'s instance, `ch1` packed. -/
+def PackedContainedFanOutOn_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ (0 : ℝ) * 2 ≤ 1 ∧
+    (∀ ℓ, 1 ≤ ch1.toPacked.d ℓ) ∧ (∀ ℓ, ch1.toPacked.e ℓ ≤ 1) ∧ CompliesRate 2 0 Dθ ∧
+    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
+    Assumptions.PackedActivationsIncompressible D ch1.toPacked 2 1 (1 / 2) (1 / 2) ∧
+    ¬ ((1 / 2 : ℝ) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1)) *
+        (univ.filter fun p : (ℓ : Fin ch1.toPacked.L) × Fin ch1.toPacked.N × Fin (ch1.toPacked.e ℓ) ×
+            Fin (ch1.toPacked.d ℓ) => ch1.toPacked.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ Mθ.S).card ≤
+      0 * Dθ.D.size Dθ.D.computed)
 
 /-- **`DampenerRemote`'s premises hold together** at `DampenerThreaded_honest`'s declaration, threading and charges,
 over the outcomes `Bool` drawn uniformly: one PoUW window of capacity `C = 2`, its certificate never wrong (`p = 0`), all
