@@ -1323,3 +1323,42 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 7. **Not done yet,** pending your word: the verdict lines on VLLM-182, the preservation of W, R and the coin, the copy to cpu-3, the follow-on and the ring on CMP-331. None of these depends on the fix. The window and the serve dir stay on h200-3.
 
 **I wait on:** your word on the fix and the VLLM-182 line. I then do the post-seal steps, with the follow-on on `44b0c741c930`.
+
+## 09:35Z Fri (vllm-pearlplus): **Your 08:15Z steps are done except one: the follow-on r20261106-084839-0bb4 is still not admitted on cpu-3. cpu-3's research pool takes every freed GB ahead of research.mem's line, and infra's 320 GB hold never appeared. Unless infra holds that pool, the follow-on gives up waiting at about 12:48Z without running. The hand-off fix is pushed at `09de1beae0`; its one_stage suite is queued on that same pool.**
+
+1. **Posted at 09:01Z:**
+   - On VLLM-182: the run of record's verdict lines, then the PoUW line verbatim, with the preservation and coin note.
+   - On VLLM-217: the follow-on's id.
+   - On CMP-331: the ring, with W, R and the coin in the store, the window kept on h200-3 for `served_shares.py`, and the follow-on's id.
+2. **Preserved, each checked on the remote:**
+   - the coin, in its published form, `art:09716c72…` (the node's id `art:3b91c0ae…` is given up, as noted on VLLM-182);
+   - W, `art:39d3265e…`;
+   - R, in its public form, `art:226463a8…`.
+3. **The follow-on, r20261106-084839-0bb4,** runs on cpu-3 from `44b0c741c930` with `V3C_AUDIT_TIMEOUT=72h`, `--mem-gb 320` and `--mem-wait` 4 h. It is research.mem's only waiter, at the head of the line since 08:48:47Z.
+   - **The reading at 09:20Z:** −16.8 GB available = 497.1 GB limit − 106.1 GB in use − 407.9 GB reserved by eight live pool reservations (`check-b0`…`b4`, `b8`, `b9`, `p8`), with seven pool checks queued.
+   - **Why it waits:** `tools/verity/check/slot.py`'s `blocked()` starts a pool check whenever free memory less reservations covers the slot. It never reads research.mem's `.waiting` line, so 320 GB is never free at once. Infra's 320 GB hold for Fri 07:00Z was not in `/workspace/ramlock` at 08:29Z or at 09:20Z.
+   - **The ask, for infra:** keep cpu-3's pool slots from starting checks until the follow-on is admitted, then lift the hold. For example, give the b slots (and any check slot there) a `windows=FILE` with a window from now. Most of the live pool checks started within the last hour. The lasting fix is for `slot.py` to count research.mem's older live waiters as reserved.
+   - **If it gives up at 12:48Z,** nothing is lost: the workload never starts, so the gate's V3c audit is still unopened. I relaunch it the same way once the pool is held.
+   - **ETA:** about 48 h after admission, 54–60 h if the big members run slower, and 72 h at most.
+4. **The fix:** `cursor/vllm-handoff-pp-3a37` at `09de1beae02f0b8a8cae0fcb9385ecc683483477`, two commits on `remote` `b72f5a8fb7d`.
+   - `handoff()` also copies, at their paths, the files `pearlplus_of_record` reads: `ledger.jsonl`, `coin.json`, `pearlplus-answer.json`, `pearlplus-lean.json` and each `session/*/out/key.json`.
+   - `served_verdicts.sh handoff [HOST]` on a deferral's serve dir writes the hand-off from its pieces, at `deferred.env`'s settings, with HOST as AUDITED_ON. It refuses an environment that sets another value, and a serve dir that holds V3c's audit but names no HOST.
+   - **The new test** composes a handed-off Pearl+ piece of record: accept, with PoUW's W_cert the Lean's work. From a piece's files alone, the compose is pending and names the challenger key it can't read. Both new tests fail against the old script.
+   - **The suite:** r20261106-091311-fed1 (`benchmarks/one_stage` at `09de1beae0`), queued on cpu-3's research pool, one check ahead at 09:26Z. Locally, `test_served_verdicts.py` passes except the five tests that fail at the base too.
+5. **Every added file is verifier-side and already published.**
+   - All six are in the run's published `out/pieces/pouw`, and `witness` refuses none of them. Its rules are unchanged, and the test holds the hand-off's list to it.
+   - `pearlplus-answer.json` and both `key.json` are byte-identical to the published files.
+   - `ledger.jsonl`, `coin.json` and `pearlplus-lean.json` go in the served node's full form. Their `public_doc` equals the published file exactly, so the only extra is publication's window fields. The hand-off already names the window (compose.env's K, the `pearlplus/w7` paths) and goes only to COMPOSE_NODE.
+6. **On the record's tree `44b0c741c930`, the fix conflicts with pprecord's hand-off changes,** in two hunks that change no logic:
+   - pprecord's `sampled_of_record`/SAMPLED_AUDIT comment;
+   - its `served-compare` and `copy HOST[:DIR]` dispatch lines.
+   - I resolved both, keeping both sides. The tests also need SAMPLED_AUDIT and the `{sampled}` field. With that, 358 pass, and the same five fail as on the untouched tree.
+   - The pair is saved as patches in my store, `sc/handoff-on-pprecord/`, and not pushed. Whoever builds pprecord + fix + lift can take them, or I push them as a branch on your word.
+7. **Part 3, planned and not run:**
+   1. **The tree:** pprecord + the fix + proofs' lift. Infra repins vy-auditor-2's compose gate to it (INF-464), because the gate composes at its pin.
+   2. **After the follow-on ends,** on cpu-3 from that tree (`--cwd clone`): `D=<the serve dir> bash benchmarks/one_stage/served_verdicts.sh handoff computeinstance-e05hfxe8cv9nhcdb3x`. The HOST is cpu-3's `hostname -s`, which the follow-on records as V3c's host. Nothing in FOLLOWS is set otherwise. This rewrites `private/compose` from the deferral's pieces, with COMPOSE_TREE set to that tree.
+   3. **Then `gate-compose` from cpu-3** (its `vllm_gate` key) to vy-auditor-2. But `gate_compose` rewrites the hand-off itself at the environment's settings, not `deferred.env`'s. So either export those settings and V3C_AUDITED, or I give `gate-compose` the FOLLOW branch that `handoff` has (small, with a test). I recommend the second; it's your call.
+   4. **The label:** it is the composite of record only with the lift in; before that, it is development.
+8. **h200-3 untouched.** The window and the serve dir stay for `served_shares.py`.
+
+**I wait on:** infra holding cpu-3's pool for the follow-on, and the suite r20261106-091311-fed1.
