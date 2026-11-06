@@ -44,7 +44,10 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
 - **crashed** when the agent's latest run ended in ERROR: the watch starts a new run, at most once every `RESTART_S` and
   `MAX_RESTARTS` times in a row (vllm's runs errored within a minute, run after run, on 18 Oct), then records it as
   **erroring**, for a person. Only a latest run that FINISHED ends the row: a restarted run reads RUNNING for a while before
-  it errors again.
+  it errors again;
+- **dropped** when an IDLE agent's `updatedAt` is `DROPPED_S` past the end of its latest run, which FINISHED, and no newer
+  run exists: a message reached it and never became a run. Cursor shows such an agent in ERROR while the API's latest run
+  reads FINISHED, so the restart above never sees it. Recorded once per `updatedAt`, rung to its owner.
 
 A run among an agent's newest left in CREATING for 10 min by the API's own `updatedAt` with no newer run started (only ones
 cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h while its agent's `updatedAt` moves, is recorded once as **stuck**: on 18 Oct proofs' and circuits' runs sat in CREATING behind a
@@ -202,6 +205,7 @@ REFUSED_S = 5 * 60          # a run whose cancel got 409 still read as going thi
 MAX_RESTARTS = 3            # ERROR runs in a row the watch restarts before leaving the agent for a person
 UNREADABLE_S = 3600         # a latest run the API won't read this long is recorded again, for a person
 IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
+DROPPED_S = 5 * 60          # an IDLE agent changed this long after its latest run ended, with none newer, was dropped
 RUNS_PAGE = 50              # an ACTIVE agent's runs are read a page at a time, back to the newest that started
 RUNS_PAGES = 10             # (memory-accounting had 52 runs cancelled on arrival in 50 min, 18 Oct), at most this many pages
 FOLLOW = {"RUNNING": HELD_S, "WAITING_FOR_BACKGROUND_WORK": HELD_BG_S}
@@ -265,7 +269,7 @@ AGENT_STATUSES = ("ACTIVE", "IDLE", "ARCHIVED", "unknown")
 RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED", "ERROR", "CANCELLED", "EXPIRED", "unreadable",
                 "unknown")
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
-                "crashed", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
+                "crashed", "dropped", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
                 "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
@@ -1253,6 +1257,15 @@ class Watch:
                 self.record("continued", r, new_run=new)
             self.save()
 
+    def dropped(self, a: dict, last: dict | None, t: float, **detail) -> None:
+        """Record `a` **dropped**, once per `updatedAt`, when it is IDLE and moved `DROPPED_S` past the end of its latest run
+        ``last``, which FINISHED: a message reached it and never became a run."""
+        if (a.get("status") == "IDLE" and last and last.get("status") == "FINISHED"
+                and (moved := epoch(a.get("updatedAt"))) is not None and (ended := epoch(last.get("updatedAt"))) is not None
+                and moved - ended >= DROPPED_S and self.once(f"dropped:{a['id']}:{a.get('updatedAt')}", t)):
+            self.record("dropped", Run(a["id"], str(last.get("id") or ""), a.get("name") or ""), status="IDLE",
+                        since=iso(moved), ended=iso(ended), **detail, **self.owned(a["id"]))
+
     def read(self, a: dict, run: str) -> dict | None:
         """The run's record (a terminal one is read once); None, and recorded once, when the API won't read it."""
         if run in self.final:
@@ -1377,6 +1390,8 @@ class Watch:
                     self.hold("worker_idle", r, t, w, at=iso(updated), since=iso(updated), **detail)
             elif status == "ARCHIVED":
                 w["gone"] = True
+            if status == "IDLE" and (latest := info.get("latestRunId")):
+                self.dropped({**info, "id": agent}, self.read({**info, "id": agent}, latest), t, **detail)
         for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
                       and t - max(w.get("updated", t), w["heard"]) >= WORKER_KEEP_S]:
             self.workers.pop(agent)
@@ -1886,6 +1901,7 @@ class Watch:
                     self.save()
             elif last and last.get("status") == "ERROR":
                 self.restart(a, latest, t)
+            self.dropped(a, last, t)
         self.retry(current, t)
         bells, fresh = doorbells(self.log.with_name("doorbells.json"), t)
         every = timers(self.timers)
