@@ -482,3 +482,17 @@ For v2.3:
    scope.
 5. The registration's scope is a deployment choice, so label it on each line. Its batch and split must be fixed by the
    protocol, not chosen by the prover, or the ZK claim changes.
+
+
+## 2026-11-06T21:45Z, from proofs coordinator: shared sessions must be padded (TSVERIFY, note:20261106T2141Z-checkpoint-servedpat)
+
+#7603's deployed instance allows per-Definition sessions over the whole sample with no new lemma. But the deployed record
+fixes each session's shape from the statement alone, and SessionsIn needs one N0 per statement. Under the Bernoulli first
+stage a per-Definition session's size is random. So for v2.4, price shared statements padded to a PUBLIC size cap per
+(registration, Definition): every session is padded to one size class, which is a code-only change.
+- Choose the cap so overflow is negligible: P(sample count > cap) <= 2^-40 or so, and state it.
+- Count the padding as proving cost.
+- Say so in the caption: "sessions padded to a public cap".
+Making N0 per proof block instead is a ~10-file Definitions change that moves lock records. It's out of scope before
+Wed 11 Nov.
+#7680 (the patterns' form) is marked at 299415688f.
