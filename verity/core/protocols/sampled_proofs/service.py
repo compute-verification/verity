@@ -58,9 +58,7 @@ samples `k` proof blocks in each sampled replay block on fresh coins (`second_la
 and its sample is proved. The outcome holds both audit records and accepts when both do; its profile counts incorrect
 proof blocks at each replay block's footprint, which the boundary commitment fixes before any coin
 (`IntegrityProfile`'s two levels). One-stage is `Law`: a two-stage design whose replay blocks are single proof blocks is
-refused, so each design has one form. Until a proof that the verifier's code meets the two-stage certificate lands, a
-spec refuses a two-stage rule (`UNCERTIFIED_RULE`), as the verifier of record does, and this code runs only under
-`verifier.UNCERTIFIED_RULES`, a test hook.
+refused, so each design has one form.
 
 **The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
 coins, and reads its release on the challenger's clock (`salted_at`). `Stream.salt_released` instead records a salt
@@ -342,12 +340,6 @@ class TwoStage:
 
 Selection = All | Law | Sequential | TwoStage
 
-UNCERTIFIED_RULE = ("a two-stage selection rule is refused until the proof that this verifier meets the two-stage "
-                    "certificate lands")
-"""The refusal of a two-stage rule, here and in the verifier of record (`Select.uncertifiedRule`), until a proof that
-the verifier's code meets the two-stage certificate (`CompiledTwo.Sessions`) lands. The code behind it runs only under
-`verifier.UNCERTIFIED_RULES`, a test hook."""
-
 
 def boundary_values(values: Sequence[Value]) -> tuple[Value, ...]:
     """The values a registration commits: under a two-stage design, the boundary commitment's, every phase but
@@ -427,8 +419,6 @@ class Spec:
             raise ValueError("a spec's values have distinct names")
         if not isinstance(self.selection, (All, Law, Sequential, TwoStage)):
             raise ValueError(f"a selection rule is All, Law, Sequential or TwoStage, not {self.selection!r}")
-        if isinstance(self.selection, TwoStage) and not V.UNCERTIFIED_RULES:
-            raise ValueError(UNCERTIFIED_RULE)
         interior = [v.name for v in self.values if v.phase == "interior"]
         if isinstance(self.selection, TwoStage):
             if not interior or not any(v.phase == "serve" and not v.registered for v in self.values):
@@ -2136,6 +2126,6 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
            "PHASES", "Pending", "Public", "REJECT", "REPLAY", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES",
-           "Selection", "Sequential", "Session", "Spec", "Stream", "Terms", "TwoStage", "UNCERTIFIED_RULE", "Value",
+           "Selection", "Sequential", "Session", "Spec", "Stream", "Terms", "TwoStage", "Value",
            "WindowCommitmentRecord", "boundary_values", "check_public", "check_verdicts", "interior_values",
            "second_law", "select_draw", "select_second", "selection_law"]

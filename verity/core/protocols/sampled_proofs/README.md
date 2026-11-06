@@ -78,8 +78,7 @@ than one, so every subcircuit is exercised in every audit. `work:K` keeps those 
 but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` draws
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
 Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
-soundness statement doesn't cover: `bernoulli` at `0 < p < 1` (`shapes`), a closure map (`closure`) and, until a proof
-that this verifier meets its Lean certificate lands, a two-stage design (`UNCERTIFIED_RULE`).
+soundness statement doesn't cover: `bernoulli` at `0 < p < 1` (`shapes`) and a closure map (`closure`).
 
 **What an accepted audit establishes.** Under a stratified draw, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, `m_s` being its proof blocks in
@@ -90,8 +89,8 @@ has at most `2^-40`. The proof system adds, per proof block, its knowledge-sound
 **Two-stage designs** (`TwoStage`). Those above are one-stage. A two-stage design commits only replay-block boundaries
 while serving and samples `k` proof blocks in each sampled replay block once its interior is committed
 (`Stream.register_interiors`; `GLOSSARY.md`, "Two-stage design"): one of `n` proof blocks and footprint `w` is
-missed with probability at most `C(n − w, k) / C(n, k)`, `1 ≤ k < n`. Its code, the Lean pieces it reads (the
-difftest's executable) and its tests run under the test hook `verifier.UNCERTIFIED_RULES`, off in every deployment.
+missed with probability at most `C(n − w, k) / C(n, k)`, `1 ≤ k < n`. Both verifiers run each of its steps, and the verifier
+of record's code (`sampled-proofs-verifier`) meets the two-stage certificate (`Claims.SamplingTwo`'s `CompiledTwo.Sessions`).
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).

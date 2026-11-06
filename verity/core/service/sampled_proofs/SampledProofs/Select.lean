@@ -78,11 +78,6 @@ inductive Rule where
   | law (text : String)
   | twoStage (grain : Json) (replay : String) (k : Nat)
 
-/-- The verifier of record's refusal of a two-stage rule (`Pieces.verifier`, `service.UNCERTIFIED_RULE`), until a proof
-that this code meets the two-stage certificate (`Claims.SamplingTwo`'s `CompiledTwo.Sessions`) lands. -/
-def uncertifiedRule : String :=
-  "a two-stage selection rule is refused until the proof that this verifier meets the two-stage certificate lands"
-
 /-- A replay grain as `partition_object.template_instance_query` writes it: exactly `{name, version, params}`,
 `Q_template_instance` v0 over one template's descriptor id. -/
 def grain? (g : Json) : Bool :=
