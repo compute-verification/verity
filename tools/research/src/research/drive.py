@@ -167,7 +167,7 @@ from typing import Callable, Iterable
 from . import policy
 from .executor import (AFTER_LANDING_PRIORITY, FAIL, PASS, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, compare,
                        old_verdicts)
-from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
+from .queue import (IDENTITY, PR, PREFLIGHT_WAIT, Entry, Member, Queue, QueueError, StoreLabels,
                     _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, move_of, unreviewed)
 from .queue_stats import ts
 from .store import vocab
@@ -3188,7 +3188,8 @@ class Driver:
         because it contains the root, directly or through another such PR: `Queue.entries`, `Queue.sync`), and the fix.  A
         root is a PR that didn't merge (the sync's `conflicts`: told with dependants or without), one that isn't admitted
         (unmarked, held, ejected, ownerless, or waiting itself) that a marked PR contains, or a PR that waits on a contained
-        PR none of which is such a root.  An unmarked root is asked for its mark (or to withdraw it, and its dependants carry
+        PR none of which is such a root; one waiting for its preflight's verdict (`PREFLIGHT_WAIT`) is told nothing, as a later
+        sync admits or refuses it by that verdict.  An unmarked root is asked for its mark (or to withdraw it, and its dependants carry
         it); another is named with what admits it, or its commits dropped from them, or it closed.  A root is told again only
         when its head, its set of dependants or its reason changes (`drive["out"]`: {PR: [head, dependants, reason]}, a closed
         PR's record dropped), so one PR that many contain is one post a change, not one per PR and head; `research queue
@@ -3220,6 +3221,8 @@ class Driver:
         hold = q.rules().hold_label
         for m, deps in sorted(out.items()):
             b = entries[m]
+            if b.state == "waiting" and b.why.startswith(PREFLIGHT_WAIT):
+                continue
             h, why = b.pr.head, conflicts.get(m, b.why)
             own = m in conflicts or waits(b)
             said = [h, sorted(deps), why]
@@ -3388,6 +3391,7 @@ class Driver:
         self._alarms(drive, why or "the landing stops below it (drive's log says why)")
         if not dry_run:
             state["ejected"] = {**state.get("ejected", {}), **q.load_state().get("ejected", {})}
+            q._keep_merges(state)                   # the low-risk lane's merges, made after the sync saved its own
             q.save_state(state)
         q.log(f"research queue drive: {'; '.join(what)}")
         return "; ".join(what)
@@ -3899,28 +3903,18 @@ class Driver:
         return parents[2] if len(parents) > 2 else None
 
     def _clean_merge(self, tip: str, head: str) -> tuple[str | None, str]:
-        """(the tree of ``head`` merged onto ``tip``, "") when it merges as `Queue._merge` merges, with ``tip``'s merge drivers
-        and a merge whose every conflict is in a pin or in Lean one side deletes that the other only ported kept, each pin
-        rebuilt from the merged tree (`repinned`) and each such file deleted (`port_deletions`), and the merged tree's Lean
-        on the Lean module system once the tree has it (`ported`), else (None, why).  A git without
-        `--attr-source` merges without the drivers, which conflicts more."""
-        from .queue import port_deletions, ported, repinned
-
-        args = ("merge-tree", "--write-tree", "--name-only", "--no-messages", tip, head)
-        r = _git(self.repo, f"--attr-source={tip}", *args, check=False)
-        if r.returncode == 129 and "attr-source" in r.stderr:
-            r = _git(self.repo, *args, check=False)
-        if r.returncode == 1:
-            files = list(dict.fromkeys(r.stdout.splitlines()[1:]))
-            tree, rest = port_deletions(self.repo, r.stdout.split()[0], tip, head, files)
-            if rest and not (tree := repinned(self.repo, tree, tip, head, rest)):
-                return None, f"conflict in {', '.join(rest) or 'a file'}"
-        elif r.returncode:
-            return None, f"doesn't merge: {(r.stderr or r.stdout).strip()[-200:]}"
-        else:
-            tree = r.stdout.split()[0]
-        tree, _, _, why = ported(self.repo, tree, base=tip)
-        return tree, why
+        """(the tree of ``head`` merged onto ``tip``, "") when it merges, else (None, why): the sync's merge (`Queue._recorded`,
+        as `Queue._merge` makes it), with ``tip``'s merge drivers, each conflicted pin rebuilt and each `.lean` file one side
+        deletes that the other only ported deleted, and the merged tree's Lean on the module system once the tree has it, taken
+        from its record when the sync or an earlier tick made it onto ``tip``'s tree."""
+        rec = self.q._recorded(tip, head)
+        if "conflict" in rec:
+            return None, f"conflict in {', '.join(rec['conflict']) or 'a file'}"
+        if "err" in rec:
+            return None, f"doesn't merge: {rec['err']}"
+        if "why" in rec:
+            return None, rec["why"]
+        return (_out(self.repo, "rev-parse", f"{tip}^{{tree}}") if rec.get("merged") else rec["tree"]), ""
 
     def _reviewed(self, chain: list[Member]) -> tuple[int, str | None]:
         """(how many members at the bottom of ``chain`` land on their verdicts, why the next one doesn't): each has its ready mark

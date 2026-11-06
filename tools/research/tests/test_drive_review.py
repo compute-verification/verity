@@ -23,7 +23,7 @@ from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP, SIGTERM_RC
 from research.queue import PR, QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
-from test_queue import World, _git
+from test_queue import World, _git, _pool
 from test_queue_drive import Harness, _failed_run, _killed_run, _live_run, _steps_run, _tip
 
 EVERY = {s: "passed" for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL}
@@ -161,16 +161,27 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
 
 
 def test_a_pr_whose_preflight_onto_next_refuses_it_is_told_and_stays_out_while_the_members_above_it_land(world, monkeypatch):
+    """A PR waiting for its pool run's verdict, and one that contains it, are told nothing (`tell_out`) while the members around
+    it land; once a verdict at the base it merges onto refuses it, its owner is told, with what it takes out."""
     _registry(world, "lane-2")
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
         h.review(n)
-    h.q.preflight = lambda pr, base, commit, members: "a.py: SyntaxError" if pr.number == 2 else None
+    world.gh.put(4, world.change({"d.txt": "4\n"}, base=world.gh.prs[2].head))
+    h.review(4)
+    pool = _pool(h.q, refuse={2: "a.py: SyntaxError"})
+    h.tick()
+    assert not [p for p in h.posts if "#2 at" in p or "#4 at" in p], h.posts
+    pool.end()
     assert h.tick().startswith("landed #3"), world.logs
     assert [_subject(world, r)[:9] for r in ("main", "main^1")] == ["Queue: #3", "Queue: #1"]
+    assert not [p for p in h.posts if "#2 at" in p or "#4 at" in p], h.posts
+    pool.end()
+    h.tick()
     (post,) = [p for p in h.posts if "out of `next`" in p]
     assert f"#2 at {world.gh.prs[2].head[:8]} is out of `next`: a.py: SyntaxError" in post and "@lane-2" in post, post
+    assert "It takes out #4, which contains it" in post, post
 
 
 def test_a_sharded_after_landing_run_verifies_main_only_once_every_shard_passed(world, monkeypatch):
@@ -552,6 +563,30 @@ def test_no_verdict_counts_by_the_owner_its_handle_or_its_ready_marks_author_wha
         Q.review(h.q, world.store, StoreLabels(world.store, log=lambda s: None), 1, "land", None, "MARKER")
     h.review(1, by="@lane-7")
     assert h.tick().startswith("landed #1")
+
+
+def test_with_signed_verdicts_drive_lands_only_on_an_authenticated_land_verdict(world, monkeypatch):
+    """drive.toml's `signed_verdicts`: drive reads the store's labels through a verifier (`StoreLabels`, `research.labelauth`),
+    so a land verdict written as another lane counts only once its holder's token authenticates it."""
+    from research import labelauth
+    from test_labelauth import OTHER, TS, _mint, _verifier
+
+    world.with_store_remote()
+    h = Review(world, monkeypatch)
+    labels = StoreLabels(world.store, log=lambda s: None, verify=_verifier())
+    h.d.reviews, h.d.ready_by = labels.reviews, labels.ready_by
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1, by="proofs")
+    out = h.tick()
+    assert "no land verdict" in out and not out.startswith("landed #1"), out
+
+    def down(nonce: str) -> str:
+        raise labelauth.AuthError("the Cursor identity socket is unavailable")
+
+    with pytest.raises(QueueError, match="isn't written: drive.toml's `signed_verdicts` is on at `main`, and it can't be signed"):
+        Q.review(h.q, labelauth.Signer(world.store, down, required=True, now=lambda: TS), labels, 1, "land", None, "proofs")
+    assert Q.review(h.q, labelauth.Signer(world.store, _mint(OTHER), now=lambda: TS), labels, 1, "land", None, "proofs") == 0
+    assert h.tick().startswith("landed #1"), world.logs
 
 
 def test_the_lowest_member_waiting_for_a_land_verdict_rings_the_reviewers_and_top_every_30_min_at_its_head(world, monkeypatch):
@@ -3151,3 +3186,27 @@ def test_lean_check_again_replaces_a_passed_record_with_a_pending_hand_check(wor
     (again,) = [r for r in h.lean_ids() if r != rid]
     assert h.d.q.load_state()["drive"]["lean"][top] == rec and "run" not in rec
     assert (rec["ids"], rec["state"], rec["hand"], rec["by"]) == ([again], None, True, "ci")
+
+
+def test_the_low_risk_lanes_rebuild_merges_with_each_tips_drivers_not_its_checkouts(world):
+    """The low-risk lane rebuilds `next` on the landing branch with `Driver._clean_merge`, which ran `git merge-tree` with the
+    drivers of the clone's checkout: once that checkout held another `merge.py` than the tip it merged onto, every lock it
+    merged came out in that driver's format.  It is the sync's merge (`Queue._recorded`), which runs the tip's own drivers;
+    any record the sync made of it is dropped, so the merge is made again under the checkout's broken `merge.py`."""
+    import types
+
+    caps = "tests/test_lean_packages.py"
+
+    def counts(sec: int, props: int) -> str:
+        return f'UNWITNESSED = {{"Security": {sec}, "Security/Properties": {props}}}\n'
+
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    _move_main(world, {caps: counts(354, 184), ".gitattributes": f"{caps} merge=lean-caps\n",
+                       **{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}})
+    two, three = world.change({caps: counts(355, 184)}), world.change({caps: counts(354, 185)})
+    q = world.queue()
+    q.sync()
+    (q.workdir / "tools/verity/lean/merge.py").write_text("import sys\nsys.exit('merge.py: error: unrecognized arguments: --caps')\n")
+    q._merge_records = {}
+    tree, why = D.Driver._clean_merge(types.SimpleNamespace(repo=q.workdir, q=q), two, three)
+    assert tree is not None and _git(q.workdir, "show", f"{tree}:{caps}") == counts(355, 185).strip(), why

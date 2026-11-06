@@ -199,6 +199,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
     ap.add_argument("--send", action="append", default=[], metavar="FILE", help="with --on: ship this file to $RESEARCH_RUN_DIR/inputs/")
+    ap.add_argument("--tool-from", choices=("source", "launcher"), default="source",
+                    help="with --on: the research package that runs the run on the machine, its runner and the workload's `research`: "
+                         "`source`, the --source tree's own (tools/research/src/research) when it carries one, else this launcher's "
+                         "(the default); `launcher`, this launcher's whatever the tree carries, for a run whose code must be the "
+                         "launcher's while the tree is only what it works on (drive's pool preflights)")
     ap.add_argument("--env", action="append", default=[], metavar="K=V", help="environment for the workload (local or, with --on, on the machine), recorded as "
                                                                                  "the attempt's params.env (values of secret-named keys redacted)")
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
@@ -321,7 +326,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         print("research run: --run-record is for a local run; --on MACHINE and --queue keep every run file through their custody "
               "(--custody-r2, the default there)", file=sys.stderr)
         return 2
-    if (ns.on or ns.queue) and (why := remote.pss_bound_problem(harness_opts, Path(ns.source).expanduser() if ns.source else None)):
+    if (ns.on or ns.queue) and (why := remote.pss_bound_problem(harness_opts, Path(ns.source).expanduser() if ns.source else None,
+                                                                 ns.tool_from)):
         print(f"research run: refused: {why}", file=sys.stderr)
         return 3
     if ns.pool:
@@ -1153,11 +1159,13 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         harness_args.append("--require-result")
     # the store flags travel as `research run` flags: the machine-side runner computes derivation/reuse_key in the shipped source tree
     if ns.tool:
-        # the machine runs the shipped tree's research package when --source carries one, else THIS launcher's: that one must know the tool
+        # the machine runs the shipped tree's research package when --source carries one (and no --tool-from launcher), else THIS
+        # launcher's: that one must know the tool
         from .store import tools_registry
-        if remote.source_tool_package(Path(ns.source).expanduser() if ns.source else None) is None and ":" not in ns.tool \
+        if remote.source_tool_package(Path(ns.source).expanduser() if ns.source else None, ns.tool_from) is None and ":" not in ns.tool \
                 and ns.tool not in tools_registry.REGISTRY:
-            print(f"research run --on {ns.on}: launcher research package does not know tool {ns.tool!r}; pass --source with tools/research "
+            fix = "drop --tool-from launcher" if ns.tool_from == "launcher" else "pass --source with tools/research"
+            print(f"research run --on {ns.on}: launcher research package does not know tool {ns.tool!r}; {fix} "
                   f"(registered here: {', '.join(sorted(tools_registry.REGISTRY))})", file=sys.stderr)
             return 3
         harness_args += ["--tool", ns.tool]
@@ -1174,7 +1182,7 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
                             custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue,
-                            job_user=ns.job_user, gpus=None if queue else ns.gpus, store_read=ns.store_read)
+                            job_user=ns.job_user, gpus=None if queue else ns.gpus, store_read=ns.store_read, tool_from=ns.tool_from)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3

@@ -501,6 +501,25 @@ def test_the_launcher_refuses_a_shipped_research_package_that_predates_clone(tmp
     assert remote.workload_cwd(["--cwd", "source"], None) == "--cwd source"
 
 
+def test_tool_from_launcher_runs_the_launchers_research_package_whatever_the_tree_carries(tmp_path, repo, machine):
+    """`--tool-from launcher`: the machine runs this launcher's research package, not the one the tree carries (here one that
+    predates `--cwd clone`, which would refuse the run), and remote.json says so."""
+    old = repo / "tools" / "research" / "src" / "research"
+    old.mkdir(parents=True)
+    (old / "__init__.py").write_text("")
+    (old / "remote.py").write_text("# before --cwd clone\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "an old research package")
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--source", str(repo), "--tool-from",
+                 "launcher", "--no-custody-r2", "--no-sampler", "--cwd", "clone", "--", PY, "-c", PROBE]) == 0
+    [rid] = [p.name for p in (tmp_path / "runs").iterdir()]
+    wait_runner(machine / "runs" / rid)
+    assert _seen(machine / "runs" / rid)["head"] == _git(repo, "rev-parse", "HEAD")
+    sent = json.loads((tmp_path / "runs" / rid / "remote.json").read_text())
+    assert (sent["tool_from"], sent["tool_identity"]) == ("launcher", remote.tool_identity())
+    assert remote.source_tool_package(repo) == old and remote.source_tool_package(repo, "launcher") is None
+
+
 def _request(root: Path, src: Path, sha: str, run_id: str, *, custody: bool = False) -> Path:
     """A launch request for a `--cwd clone` run of `src`; `custody`: with a staged (dummy) --custody-r2 key."""
     (src / remote.READY_FILE).write_text(json.dumps({"schema": remote.READY_SCHEMA, "identity": sha, "commit": sha}))

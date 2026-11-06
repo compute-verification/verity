@@ -213,6 +213,14 @@ READY = "ready"
 #: (on `checked`; `main` follows only to commits whose after-landing run passed).
 REVIEWED = "reviewed"
 REVIEW_VERDICTS = ("land", "hold")
+#: A preflight's verdict on a pull request at one head (`pr:<n>@<sha>`), one per base tree: `ready --mark`'s, or a pool run's that
+#: drive's sync launched (`research queue preflight`); the sync admits by it and never runs a preflight itself.
+PREFLIGHT = "preflight"
+#: Beside a ready mark or land verdict on `pr:<n>@<head>`, by its author: the Cursor identity token that authenticates it
+#: (`research.labelauth`), which drive.toml's `signed_verdicts` requires.
+LABEL_AUTH = "label_auth"
+#: On an agent's `research.labelauth.delegation_target`, by a handle: that handle's holder lets the agent sign as it until a time.
+LABEL_DELEGATION = "label_delegation"
 #: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
 #: as. No merge needs a statement reviewer; the DM of a changed record is the check.
 LEAN_REVIEW = "lean_review"
@@ -402,6 +410,16 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(REVIEWED, GROUP_VERIFICATION, ENUM, "a reviewer's verdict on pr:<n>@<head> (`research queue review`): land, or hold with the "
        "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner",
        REVIEW_VERDICTS),
+    _k(PREFLIGHT, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: a JSON object, a preflight's verdict on its merge onto a base "
+       "({base: the base's tree, tree: the merged tree or null, why: the refusal or null, onto: the base commit, of: pool or "
+       "ready}); by drive from a pool run (`research queue preflight`, its run id as the ref) or by `ready --mark`'s marker; "
+       "drive's sync reads them into `preflights`, and takes no refusal of ready's"),
+    _k(LABEL_AUTH, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>, beside a `ready = true` or `reviewed = land` by the same author: "
+       "{for, token, delegation?}, a Cursor OIDC token whose nonce is the label's (`research.labelauth`); drive.toml's "
+       "`signed_verdicts` counts such a label only with one"),
+    _k(LABEL_DELEGATION, GROUP_VERIFICATION, TEXT, "on an agent's delegation target (task:<sha512>), by a handle: {schema, lane, "
+       "agent, until, token}, the handle's holder letting that agent authenticate labels as it until then (`research queue "
+       "delegate`)"),
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
        "needs a statement reviewer"),
