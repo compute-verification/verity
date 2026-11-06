@@ -129,6 +129,7 @@
         "benchmarks/proof_throughput/",
         "benchmarks/flock_s8_block/",
         "benchmarks/sampling_plan/",
+        "benchmarks/spot_figures/",
         "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
         "Security/Definitions/Hash/",
         "Security/Proofs/Hash/",

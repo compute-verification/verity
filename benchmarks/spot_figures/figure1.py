@@ -61,7 +61,7 @@ REFERENCES = {"ref_sparseloco": ("exfil", "sparseloco-1000", "bits"), "ref_rollo
 
 
 @dataclass(frozen=True)
-class Card:
+class InputCard:
     value: object
     unit: str
     status: str
@@ -81,9 +81,9 @@ def _toml(path: str) -> dict:
     return tomllib.loads((ROOT / path).read_text())
 
 
-def cards() -> dict[str, Card]:
+def cards() -> dict[str, InputCard]:
     """Every input: `inputs.json`'s, and those read from the census, rho's reference and the partition card."""
-    out = {k: Card(**v) for k, v in json.loads((HERE / "inputs.json").read_text()).items()}
+    out = {k: InputCard(**v) for k, v in json.loads((HERE / "inputs.json").read_text()).items()}
     census, dc = _entry(ADVERSARY, CENSUS_WORLD), _entry(DEPLOYMENTS, DATACENTER)
     peak = _entry(HARDWARE, PEAK)
     rho = _toml(RHO)
@@ -91,16 +91,16 @@ def cards() -> dict[str, Card]:
     devices = _toml(RHO_HARDWARE)["location"][fleet["location"]]["devices"]["value"]
 
     def from_rho(name: str, value, unit: str, where: str, entry: dict) -> None:
-        out[name] = Card(value, unit, "modeled", f"{RHO} {where}: {entry['source']}")
+        out[name] = InputCard(value, unit, "modeled", f"{RHO} {where}: {entry['source']}")
 
     out |= {
-        "tokens_per_request": Card(census["tokens_per_request"], "token", "modeled",
+        "tokens_per_request": InputCard(census["tokens_per_request"], "token", "modeled",
                                    f"{ADVERSARY} {CENSUS_WORLD}: tokens a request"),
-        "datacenter_gpus": Card(dc["machines"] * dc["gpus_per_machine"], "GPU", "modeled",
+        "datacenter_gpus": InputCard(dc["machines"] * dc["gpus_per_machine"], "GPU", "modeled",
                                 f"{DEPLOYMENTS} {DATACENTER}"),
-        "peak_flops": Card(peak["flop_per_second"], "FLOP/s", "modeled",
+        "peak_flops": InputCard(peak["flop_per_second"], "FLOP/s", "modeled",
                            f"{HARDWARE} {PEAK}, the H200's dense FP8 peak: {peak['sources'][0]['label']}"),
-        "h100_hour_flop": Card(census["h100_hour_flop"], "FLOP", "modeled",
+        "h100_hour_flop": InputCard(census["h100_hour_flop"], "FLOP", "modeled",
                                f"{ADVERSARY} {CENSUS_WORLD}: an H100-hour at the dense FP8 peak"),
     }
     session = rho["policy"]["v4-pro-session"]["k"]
@@ -112,12 +112,13 @@ def cards() -> dict[str, Card]:
         entry = rho[table][key][field]
         from_rho(name, entry["value"], entry["unit"], f"{table}.{key}", entry)
     part = json.loads((HERE / "glm53_partition.json").read_text())
-    out["partition"] = Card({k: part[k] for k in ("ranks", "tokens", "strata")}, "", part["status"], part["source"])
+    out["partition"] = InputCard({k: part[k] for k in ("ranks", "tokens", "strata")}, "", part["status"],
+                                 part["source"])
     return out
 
 
 @dataclass(frozen=True)
-class Partition:
+class TokenBlocks:
     """GLM-5.3's proof blocks a token: their count, MACs and committed bytes, and the mean MACs a proof block weighted
     by count, by MACs (the work target's samples) and by output bits (the leak target's)."""
 
@@ -130,7 +131,7 @@ class Partition:
     bits: float
 
     @classmethod
-    def of(cls, strata: list[dict]) -> Partition:
+    def of(cls, strata: list[dict]) -> TokenBlocks:
         n = sum(s["per_token"] for s in strata)
         macs = sum(s["per_token"] * s["macs"] for s in strata)
         bits = sum(s["per_token"] * s["out_bits"] for s in strata)
@@ -153,7 +154,7 @@ class Scope:
         return f"{self.who} {self.period}"
 
 
-def scopes(c: dict[str, Card], part: Partition) -> list[Scope]:
+def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:
     flop_request = c["tokens_per_request"].value * 2 * part.macs
     out = []
     for who in ("world", "datacenter"):
@@ -177,7 +178,7 @@ class Model:
     delta: float
 
 
-def model(c: dict[str, Card], part: Partition, s: Scope, overhead: float) -> Model:
+def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float) -> Model:
     peak, mfu = c["peak_flops"].value, c["mfu_serve"].value
     tokens = c["tokens_per_request"].value
     n = round(s.requests * tokens * part.blocks)
@@ -246,13 +247,13 @@ def point(m: Model, design: str, target: str, budget: float, rel: float = 1e-4) 
     return {"bound": bound, "capped": bound >= top, "row": best}
 
 
-def overheads(c: dict[str, Card], points: int) -> list[float]:
+def overheads(c: dict[str, InputCard], points: int) -> list[float]:
     lo, hi = c["overheads"].value
     grid = [lo * (hi / lo) ** (i / (points - 1)) for i in range(points)]
     return sorted(set(grid) | {float(c["proof_overhead"].value)})
 
 
-def references(c: dict[str, Card]) -> dict[str, list[dict]]:
+def references(c: dict[str, InputCard]) -> dict[str, list[dict]]:
     """The panels' horizontal lines, in the panel's unit: rho's reference objects, and the served model's weights."""
     def ref(label: str, name: str, scale: float = 1.0) -> dict:
         return {"label": label, "value": c[name].value * scale, "input": name}
@@ -280,7 +281,7 @@ def captions(serve_hash_share: float) -> dict[str, str]:
 
 def run(points: int = 57, scope_names: tuple[str, ...] | None = None) -> dict:
     c = cards()
-    part = Partition.of(c["partition"].value["strata"])
+    part = TokenBlocks.of(c["partition"].value["strata"])
     xs = overheads(c, points)
     budgets = c["budgets"].value
     out_scopes, series = {}, {"exfiltration": [], "skipped_work": []}

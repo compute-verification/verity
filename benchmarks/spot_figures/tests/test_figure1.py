@@ -1,5 +1,5 @@
-"""Figure 1's pipeline: its input cards, its world against the census's, the curves' bisection, their shape, and the JSON
-and renders the console and the post read."""
+"""Figure 1's pipeline: its input cards, its world against the census's, the curves' bisection, their shape, and the
+JSON and renders the console and the post read."""
 import json
 
 import figure1 as f
@@ -17,7 +17,7 @@ def out() -> dict:
 @pytest.fixture(scope="module")
 def world():
     c = f.cards()
-    part = f.Partition.of(c["partition"].value["strata"])
+    part = f.TokenBlocks.of(c["partition"].value["strata"])
     return c, part, next(s for s in f.scopes(c, part) if s.name == "world year")
 
 
@@ -28,7 +28,7 @@ def test_every_input_is_a_card_with_its_source(out):
     assert ("provisional" in out["vertical"]["label"]) == out["inputs"]["proof_overhead"]["provisional"]
     for status, source in (("assumed", "a source"), ("measured", "")):
         with pytest.raises(ValueError, match="measured or modeled, with its source"):
-            f.Card(1, "", status, source)
+            f.InputCard(1, "", status, source)
 
 
 def test_the_world_fleet_computes_the_census_world(world):
