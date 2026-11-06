@@ -165,7 +165,9 @@ docs-only change reruns nothing; a nightly uncached check must agree, and a disa
 only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, and its low-risk members (no Lean, lock or
 soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alone, runs the full check on its tip itself,
 and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate; a red step's culprit is
-reverted on `checked` (how a PR lands: the team skill).
+reverted on `checked` (how a PR lands: the team skill). A Lean, lock or spec change lands on its verdict like any other: drive
+then runs lean-audit alone on `checked`'s tip (its lock run), commits the lock records it regenerated there, and checks that
+commit, so `main` moves only to a commit whose records are the regenerated ones and whose gated steps all passed on it.
 
 ## Lean
 
