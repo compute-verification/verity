@@ -98,18 +98,20 @@ def perplexity(model, ids: np.ndarray, seq: int, bs: int = 4, max_windows: int |
         n = min(n, max_windows)
     was = model.training
     model.eval()
-    nll, cnt = 0.0, 0
+    nll, cnt, windows = 0.0, 0, []
     dev = model.get_input_embeddings().weight.device
     for i in range(0, n, bs):
         x = torch.from_numpy(ids[i * seq:min(i + bs, n) * seq].astype(np.int64).reshape(-1, seq)).to(dev)
         with torch.autocast(dev.type, dtype=torch.bfloat16):
             logits = model(x).logits
-        nll += F.cross_entropy(logits[:, :-1].float().reshape(-1, logits.shape[-1]),
-                               x[:, 1:].reshape(-1).to(logits.device), reduction="sum").item()
+        w = F.cross_entropy(logits[:, :-1].float().reshape(-1, logits.shape[-1]),
+                            x[:, 1:].reshape(-1).to(logits.device), reduction="none").view(len(x), -1).sum(1)
+        windows += (w / (seq - 1)).tolist()
+        nll += w.sum().item()
         cnt += x[:, 1:].numel()
         del logits
     model.train(was)
-    return {"ppl": math.exp(nll / cnt), "nll": nll / cnt, "tokens": cnt}
+    return {"ppl": math.exp(nll / cnt), "nll": nll / cnt, "tokens": cnt, "window_nll": windows}
 
 
 def zeroshot(model, tok, tasks: list[str], bs: int, limit: int | None) -> dict:
