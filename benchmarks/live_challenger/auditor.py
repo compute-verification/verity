@@ -82,8 +82,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   exempts only the coin openings that open against the session's committed coin root, counts everything else, and
   writes `coin-link.json`, which the `end` entry's `files` seals. The hop from the certifier to the server crosses the
   prover's NIC, so it is the certifier's counted ingress, not a path this side trusts. The challenger side rests on the
-  premises `CoinsConfidential` (the stream reaches the certifier only on auditor hosts, here this one) and `OneClock`
-  (one clock for both, this host's), stated in `verity/core/protocols/sampled_proofs/README.md`.
+  premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`; here the stream reaches the certifier only on
+  this auditor host) and `OneClock` (one clock for both, this host's), named in
+  `verity/core/protocols/sampled_proofs/README.md`.
 
   `serve.py --peer`, its own `ssh -R` to the peer, which the prover's sshd decrypts, is the development path alone
   (`run.sh`), and it refuses a window's session (`--root`).

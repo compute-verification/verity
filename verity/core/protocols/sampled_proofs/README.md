@@ -169,15 +169,14 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     None mentions a network certifier.
 
   Onsite, the challenger rests on two more premises about where it runs, which the network certifier's spec and
-  ACCEL's cite by name; both are prose only:
-  - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor hosts
-    (`trusted-host`), or the challenger and the certifier are one device at the boundary. So no machine outside the
-    boundary reads a coin before the certifier admits it, and a path across a host the prover controls is not
-    allowed: it would need an encrypted, authenticated channel, which the challenger doesn't have. Deployed, one
-    auditor host runs both, and a window's coins leave it only on the peer's certifier coin link,
-    which the gate refuses to open without (`auditor.coin_ports`). It is not in Lean: no `.lean` file defines it.
-    ACCEL's pooled guarantee `Pouw.Guarantees.Dither.FleetSound` builds a form of it into its statement instead (each
-    unit's prover is a function of the other units' coins).
+  ACCEL's cite by name:
+  - `CoinsConfidential` is `Pouw.Assumptions.CoinsConfidential` (`Security/Definitions/Pouw/Assumptions/Dither.lean`,
+    in the lock), whose docstring is its statement: a replica's coins reach no machine outside its certifier's boundary
+    before it has them, so the strategy run on a replica reads none of its own coins, and ACCEL's pooled guarantee
+    `Pouw.Guarantees.Dither.FleetSound` takes it. A path across a host the prover controls would need an encrypted,
+    authenticated channel, which the challenger doesn't have. Deployed, one auditor host runs the challenger and the
+    certifier, and a window's coins leave it only on the peer's certifier coin link, which the gate refuses to open
+    without (`auditor.coin_ports`).
   - `OneClock`, a named premise under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
     ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
