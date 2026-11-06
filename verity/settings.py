@@ -30,12 +30,15 @@ it on.
 
 A registry's prefixes are its own: `Registry.validate_environ` refuses a variable under one that it neither declares nor
 names as read elsewhere, naming it, so a misspelt or retired setting fails the run that carries it instead of being ignored.
-``verity``'s registry owns ``VERITY_ML_``, and since a library has no startup to check at, every read of it here (`get`,
-``settings.NAME``) and its `record` refuse such a variable.  An area adds its prefix once every variable under it is declared.
+A program checks its registry at startup with `Registry.check`, which also refuses a declared value that doesn't parse and,
+on a run of record, a debug setting that is set.  ``verity``'s registry owns ``VERITY_ML_``, and since a library has no
+startup to check at, every read of it here (`get`, ``settings.NAME``) and its `record` refuse such a variable.  An area adds
+its prefix once every variable under it is declared.
 
 An area reads its variables through its registry, never ``os.environ`` itself: ``tests/lint/test_repo_env_reads.py`` holds
-the direct reads not yet moved to one, by file, to a list that only shrinks.  Stdlib only and nothing from ``verity``, so
-every unit may import it, those on the soundness path included (``tests/test_boundaries.py``).
+the direct reads not yet moved to one, by file, to a list that only shrinks, and a suite's own ratchet counts its area's
+uses with `direct_uses`.  Stdlib only and nothing from ``verity``, so every unit may import it, those on the soundness path
+included (``tests/test_boundaries.py``).
 """
 from __future__ import annotations
 
@@ -321,6 +324,16 @@ class Registry:
                                  f"unset {them}, fix the name, or declare {them} in {self.path} (as read elsewhere, when "
                                  f"another part of the tree reads {them})")
 
+    def check(self, environ: Mapping[str, str] | None = None, *, of_record: bool) -> None:
+        """Refuse a variable under this registry's prefixes that nothing reads, a declared value that doesn't parse, and, on
+        a run of record, a debug setting that is set; each by name.  A program runs it at startup, so a misspelt or retired
+        setting fails the run instead of being ignored."""
+        self.validate_environ(environ)
+        for name in self.settings:
+            self.get(name, environ)
+        if of_record:
+            self.of_record(environ)
+
     # ------------------------------------------------------------------------------------------------------------ standalone
 
     def standalone_problems(self) -> list[str]:
@@ -368,6 +381,29 @@ def direct_reads(source: str) -> list[tuple[int, str, str | None]]:
                 and any(environ(c) for c in n.comparators):
             if (name := lit(n.left)) is not None:
                 out.append((n.lineno, name, None))
+    return sorted(out)
+
+
+ENV_NAMES = frozenset({"os.environ", "os.environb", "os.getenv", "os.getenvb", "os.putenv", "os.unsetenv"})
+
+
+def direct_uses(source: str) -> list[tuple[int, str]]:
+    """(line, name) of each use of the process environment in ``source``, through ``os`` or a name imported from it: reads
+    and writes alike, which only a registry makes.  A suite's shrink-only ratchet on its area's direct uses counts them."""
+    tree = ast.parse(source)
+    alias: dict[str, str] = {}
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            alias |= {a.asname or "os": "os" for a in n.names if a.name == "os"}
+        elif isinstance(n, ast.ImportFrom) and n.module == "os":
+            alias |= {a.asname or a.name: f"os.{a.name}" for a in n.names}
+    out = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and alias.get(n.value.id) == "os" \
+                and f"os.{n.attr}" in ENV_NAMES:
+            out.append((n.lineno, f"os.{n.attr}"))
+        elif isinstance(n, ast.Name) and alias.get(n.id) in ENV_NAMES:
+            out.append((n.lineno, alias[n.id]))
     return sorted(out)
 
 

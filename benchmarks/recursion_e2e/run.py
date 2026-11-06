@@ -8,8 +8,11 @@
     result --dir OUT [--out FILE] [--md FILE]
                                    the result from a job's out/ (the job runs it last, into out/recursion_e2e.json)
     table  RESULT... [--merge] [--json]
-                                   the table from results: a recursion_e2e.json or a run id (its records fetched and read)
-    store  RESULT... [--merge]     the results and their table as one art in the evidence store; prints its art: id
+                                   the table from results: a recursion_e2e.json or a run id (its records, which
+                                   `research fetch --all RUN` puts under RESEARCH_RUNS_DIR, read)
+    store  RESULT... [--merge] --dir DIR
+                                   the results and their table as one art's tree in DIR; prints the `research data put`
+                                   command that stores it in the evidence store
 
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes ZK server --oprove-runs 1 --lease-min M --neg challenge,query
        --forge KINDS (85's forgeries; with coef, dirs or message the forge-after step too, unless --no-forge-after)
@@ -22,9 +25,9 @@ import argparse
 import json
 import math
 import re
+import shlex
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -272,14 +275,14 @@ def load(ref: str) -> dict:
     if p.is_file():
         return json.loads(p.read_text())
     if RUN_ID.fullmatch(ref):
-        subprocess.run(["research", "fetch", "--all", ref], check=False, capture_output=True)
         out = Path(RS.RESEARCH_RUNS_DIR or Path.home() / ".research" / "runs") / ref / "out"
         # the records themselves, read by this reader (a job's own result is its commit's reader's, and a job stopped
         # before its end wrote none); the job's result only where the records weren't fetched
         res = next((out / f for f in ("recursion_e2e.json", "profile.json") if (out / f).is_file()), None)
         doc = RP.read(out) if (out / "steps").is_dir() else json.loads(res.read_text()) if res else None
         if doc is None:
-            raise SystemExit(f"{ref}: neither out/recursion_e2e.json nor out/steps (research fetch --all {ref} found neither)")
+            raise SystemExit(f"{ref}: {out} holds neither recursion_e2e.json nor steps/: fetch the run's records first "
+                             f"(`research fetch --all {ref}`; RESEARCH_RUNS_DIR, if set, is where they go)")
         doc.setdefault("run", ref)
         return doc
     raise SystemExit(f"{ref}: neither a result file nor a run id")
@@ -308,24 +311,22 @@ def cmd_table(a) -> int:
 
 
 def cmd_store(a) -> int:
+    t = Path(a.dir)
+    if t.exists() and any(t.iterdir()):
+        raise SystemExit(f"{t}: not empty; store writes the art's tree into a directory of its own")
     docs = docs_of(a.results)
     merged, md = render(docs, a.merge)
-    with tempfile.TemporaryDirectory() as t:
-        for d in docs:
-            (Path(t) / f"{Path(d['ref']).stem if Path(d['ref']).is_file() else d['ref']}.json").write_text(json.dumps(d, indent=1))
-        if merged:
-            (Path(t) / "merged.json").write_text(json.dumps(merged, indent=1))
-        (Path(t) / "table.md").write_text(md)
-        top = merged or docs[-1]
-        meta = json.dumps({"benchmark": "recursion_e2e", "schema": RP.SCHEMA, "results": [d["ref"] for d in docs],
-                           "commits": sorted({str(d.get("params", {}).get("commit")) for d in docs}),
-                           "ok": (top.get("headline") or {}).get("ok"), "complete": (top.get("headline") or {}).get("complete")})
-        p = subprocess.run(["research", "data", "put", "--kind", KIND, "--tree", t, "--preserve", "--json", "--meta", meta],
-                           capture_output=True, text=True, check=False)
-    if p.returncode:
-        print(f"research data put: {(p.stderr or p.stdout).strip()[-600:]}", file=sys.stderr)
-        return 1
-    print(json.loads(p.stdout).get("id"))
+    t.mkdir(parents=True, exist_ok=True)
+    for d in docs:
+        (t / f"{Path(d['ref']).stem if Path(d['ref']).is_file() else d['ref']}.json").write_text(json.dumps(d, indent=1))
+    if merged:
+        (t / "merged.json").write_text(json.dumps(merged, indent=1))
+    (t / "table.md").write_text(md)
+    top = merged or docs[-1]
+    meta = json.dumps({"benchmark": "recursion_e2e", "schema": RP.SCHEMA, "results": [d["ref"] for d in docs],
+                       "commits": sorted({str(d.get("params", {}).get("commit")) for d in docs}),
+                       "ok": (top.get("headline") or {}).get("ok"), "complete": (top.get("headline") or {}).get("complete")})
+    print(shlex.join(["research", "data", "put", "--kind", KIND, "--tree", str(t), "--preserve", "--meta", meta]))
     return 0
 
 
@@ -387,6 +388,8 @@ def main(argv: list[str] | None = None) -> int:
                        "(same step, stage and mode), each row naming its run")
         if name == "table":
             p.add_argument("--json", action="store_true")
+        else:
+            p.add_argument("--dir", required=True, help="a new or empty directory the art's tree is written in")
     a = ap.parse_args(argv)
     return {"plan": cmd_plan, "run": cmd_run, "result": cmd_result, "table": cmd_table, "store": cmd_store}[a.cmd](a)
 

@@ -48,8 +48,8 @@ from verity import settings
 from verity.settings import WHERE, Setting, paths
 from verity.settings import (DEBUG as DEBUG, REDACTED as REDACTED, ROLES as ROLES, SECRET_WORDS as SECRET_WORDS, VALUE as VALUE,
                              DebugOnRecord as DebugOnRecord, UnknownSetting as UnknownSetting, choice as choice, csv as csv,
-                             direct_reads as direct_reads, flag as flag, ints as ints, not_zero as not_zero, one as one,
-                             present as present, stripped as stripped, words as words)
+                             direct_reads as direct_reads, direct_uses as direct_uses, flag as flag, ints as ints,
+                             not_zero as not_zero, one as one, present as present, stripped as stripped, words as words)
 
 RECORD_SCHEMA = "verity-config/settings/v1"
 #: a distribution's registry, beside its pyproject.toml
