@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.TreeMask
+import Proofs.Flock.Soundness.Discharge.Hm.Commit
 
 /-!
 # A coin tree's hiding gap, averaged over its key
