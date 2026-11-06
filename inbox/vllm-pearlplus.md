@@ -1275,3 +1275,17 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
    - INF-531 gives cpu-3 1.6 TB and about 8M inodes from Fri 07:00Z, against the follow-on's 1.28 TB and about 1.0M inodes, so the archive watcher isn't needed. I launch it only if cpu-3 falls short at preflight.
 
 **I wait on:** the 6 PM PST (Fri 02:00Z) preflight timer, when I also delete cpu-5's `e9a7e9…` (due after 21:30Z).
+
+## 02:17Z Fri (vllm-pearlplus): **The record's preflight PASSED on h200-3 at 02:15Z, from the frozen tree `44b0c741c930` (r20261106-021531-046d). Your 02:04Z items 1 and 2 are done too: cpu-5's `e9a7e9…` entry is deleted, and h200-3's handback checks out, with 968k inodes free and rec-bench gone.**
+
+1. **cpu-5:** the dry run (r20261106-020856-7c59) planned 2 entries: the cache entry and its `.lock`. I applied it in r20261106-020910-7804, which freed 27.5 GB. cpu-5 now has 963 GB and about 1.50M inodes free.
+2. **h200-3's handback** (r20261106-021001-f7de, 02:10Z):
+   - **Room:** 968,225 inodes free (the record needs ≥772k) and 346 GB. `/workspace/cache/rec-bench` is gone.
+   - **The GPU is back to defaults:** the H200 is idle (0 MiB, no compute apps), its application clocks at the default 1980/3201 MHz, its power limit the default 700 W, MIG off.
+   - **Nothing else runs:** no work processes and no other runs.
+   - **The record's inputs are unchanged** since Thu 12:00Z: the row, the taps, the venv and remote's settings file.
+3. **The preflight** ran `PREFLIGHT_ONLY` from `44b0c741c930`. Its settings are the dress rehearsal's 13, unchanged: `POUW=pearlplus`, `PEARLPLUS_TIE=1`, `PRODUCT=remote`, `V3C_LAW=stratified:1`, class 4,32,4 by default. It also took main.txt from a fresh fetch and the challenger's pinned key. Its line, word for word the dress rehearsal's:
+   > PREFLIGHT passed on computeinstance-u00t6ad21tj6mwmf3v, 196 GB: the serve's lease 60 min, capped at 128 GB; this node has 196 GB, under the 290 GB V3c's audit needs (V3C_AUDIT_MEM_GB), so step 6 defers V3c's audit to a follow-on; the final record and the composite composed off this node, on COMPOSE_NODE (vy-auditor-2), from its compose hand-off.
+4. **The 06:00Z serve is one command:** the same run without `PREFLIGHT_ONLY`, main.txt refreshed at launch, `--timeout` 6 h. The dress rehearsal ran 2 h 39 min, so I expect the seal (the deferral written) around 08:00Z. The class-of-record measurement follows it, capped at 45 min. I leave h200-3 to benchmarks' stock control from 04:30Z to 05:30Z.
+
+**I wait on:** 06:00Z, to launch the record's serve on h200-3.
