@@ -4,7 +4,7 @@ import type { HarnessV1, HarnessV1NetworkSandboxSession } from "@ai-sdk/harness"
 import type { Experimental_SandboxSession } from "@ai-sdk/provider-utils";
 import { type Credentials, type ModelAuth, localCredentials, vercelCredentials } from "./credentials.ts";
 import { openDb } from "./db.ts";
-import { fakeHarness } from "./harness/fake.ts";
+import { harnessFor } from "./harness/providers.ts";
 import { type JobRunner, jobsApi, memoryJobs } from "./jobs.ts";
 import { localSandboxSession } from "./sandbox/local.ts";
 import { type SlackClient, memorySlack, webSlack } from "./slack.ts";
@@ -68,21 +68,10 @@ export function localSandboxes(root: string): SandboxProvider {
   };
 }
 
-const DEFAULT_ALLOW = [
-  "ai-gateway.vercel.sh",
-  "github.com",
-  "api.github.com",
-  "codeload.github.com",
-  "objects.githubusercontent.com",
-  "registry.npmjs.org",
-  "pypi.org",
-  "files.pythonhosted.org",
-];
-
 export const GITHUB_PLACEHOLDER = "platform-github-placeholder";
 
 export async function vercelSandboxes(o: { vcpus: number; timeoutMs: number }): Promise<SandboxProvider> {
-  const { openVercelSandbox } = await import("./sandbox/vercel.ts");
+  const { DEFAULT_ALLOW, openVercelSandbox } = await import("./sandbox/vercel.ts");
   const { Sandbox } = await import("@vercel/sandbox");
   return {
     async open(name, { subject, credentials }) {
@@ -103,16 +92,6 @@ export async function vercelSandboxes(o: { vcpus: number; timeoutMs: number }): 
       await s?.stop().catch(() => {});
     },
   };
-}
-
-export async function harnessFor(name: HarnessName, o: { auth: ModelAuth }): Promise<HarnessV1> {
-  if (name === "fake") return fakeHarness();
-  if (name === "codex") {
-    const { createCodex } = await import("@ai-sdk/harness-codex");
-    return createCodex({ auth: o.auth }) as unknown as HarnessV1;
-  }
-  const { createClaudeCode } = await import("@ai-sdk/harness-claude-code");
-  return createClaudeCode({ auth: o.auth, effort: "high" }) as unknown as HarnessV1;
 }
 
 export async function fromEnv(env: NodeJS.ProcessEnv): Promise<Runtime> {
