@@ -15,7 +15,9 @@
                     A machine not in the file, or bound to another project, is refused before anything is touched.
     tool snapshot   the research package source is shipped to <root>/tool/<content-sha>/ and run via PYTHONPATH; the run records
                     which snapshot ran.  No pip, no editable install, no credentials on the machine.  The workload's PATH starts
-                    with <root>/cache/bin/<content-sha>/, whose `research` runs that snapshot, and ends with ~/.elan/bin.
+                    with <root>/cache/bin/<content-sha>/, whose `research` runs that snapshot, and ends with ~/.elan/bin.  It is
+                    the --source tree's own package when the tree carries one (`source_tool_package`), else the launcher's;
+                    `--tool-from launcher` ships the launcher's whatever the tree carries (remote.json tool_from).
     version check   PYTHONPATH does not guarantee which `research` answers (a wrapper python, a `research/` earlier on sys.path, an
                     altered snapshot).  The launcher sends tool_identity() of the package it shipped: `launch-request --expect-tool ID`
                     refuses before the claim, and the runner again before the workload, with ResearchVersionMismatch naming the
@@ -498,10 +500,12 @@ def node_slot_only() -> Any:
     return slot_only
 
 
-def source_tool_package(source: Path | None) -> Path | None:
+def source_tool_package(source: Path | None, tool_from: str = "source") -> Path | None:
     """The `research` package a shipped source tree carries (tools/research/src/research), or None.  When present it is the tool the
-    machine runs: the launcher's own install may be older (a venv elsewhere) and know neither the tree's tools nor its CLI verbs."""
-    if source is None:
+    machine runs: the launcher's own install may be older (a venv elsewhere) and know neither the tree's tools nor its CLI verbs.
+    ``tool_from`` `launcher` (`research run --tool-from launcher`): None whatever the tree carries, so this launcher's package runs
+    the run, for one whose code must be the launcher's while the tree is only what it works on (drive's pool preflights)."""
+    if source is None or tool_from == "launcher":
         return None
     cand = Path(source).expanduser() / "tools" / "research" / "src" / "research"
     return cand if (cand / "__init__.py").is_file() else None
@@ -676,10 +680,10 @@ def knows_pss_bound(pkg: Path | None) -> bool:
         return False
 
 
-def pss_bound_problem(harness_args: list[str], source: Path | None) -> str | None:
+def pss_bound_problem(harness_args: list[str], source: Path | None, tool_from: str = "source") -> str | None:
     """Why the machine must not get these sampler flags, or None: `--pss-every` <= 0 or `--pss-max-rss-gb` for a --source tree whose
-    research package predates them. On that package `--pss-every 0` reads every process's smaps_rollup every round, and an unknown
-    `--pss-max-rss-gb` fails the run on the machine."""
+    research package predates them and runs the run (``tool_from``, `source_tool_package`). On that package `--pss-every 0` reads
+    every process's smaps_rollup every round, and an unknown `--pss-max-rss-gb` fails the run on the machine."""
     asked = []
     every = flag_value(harness_args, "--pss-every")
     try:
@@ -689,7 +693,7 @@ def pss_bound_problem(harness_args: list[str], source: Path | None) -> str | Non
         pass                                    # the harness's own parser rejects it by name
     if (bound := flag_value(harness_args, "--pss-max-rss-gb")) is not None:
         asked.append(f"--pss-max-rss-gb {bound}")
-    if not asked or knows_pss_bound(pkg := source_tool_package(source)):
+    if not asked or knows_pss_bound(pkg := source_tool_package(source, tool_from)):
         return None
     return (f"{' and '.join(asked)}: the research package in {source} predates them ({pkg}/telemetry/sample.py has no "
             f"--pss-max-rss-gb), and it is what the machine runs: there --pss-every 0 means a PSS round (smaps_rollup of every process, "
@@ -1948,18 +1952,20 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
-           gpus: int | None = None, store_read: bool = False) -> dict[str, Any]:
+           gpus: int | None = None, store_read: bool = False, tool_from: str = "source") -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
     `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
     is held until the runner, custody included, exits.  `job_user` (--job-user): the machine runs the workload as that user
-    (research.jobuser), and refuses the run when it can't."""
+    (research.jobuser), and refuses the run when it can't.  `tool_from` (--tool-from): `launcher` ships this launcher's research
+    package as the tool whatever ``source`` carries (`source_tool_package`)."""
     local_dir.mkdir(parents=True, exist_ok=False)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
                            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args,
                            **({"queue": queue} if queue else {})}
     write_json_atomic(local_dir / "remote.json", rec)
+    tool_pkg = source_tool_package(source, tool_from)      # a --source tree's own package runs the run, unless --tool-from launcher
     try:
         m = resolve_machine(machine_name, project)
         if m.get("auditor"):
@@ -1969,7 +1975,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         custody_pub: dict[str, Any] | None = None
         custody_files: list[tuple[str, bytes]] = []
         if custody_ttl:
-            if not knows_custody(source_tool_package(source)):
+            if not knows_custody(tool_pkg):
                 raise Refused(f"--custody-r2: the research package in {source} predates run custody (no research/store/custody.py); "
                               f"the machine would not publish it.  Commit a tree that has it, or pass --no-custody-r2")
             from .store import credentials as C
@@ -1988,7 +1994,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
             if not custody_ttl:
                 raise Refused("--store-read needs run custody (the default with --on): without it the runner's own publish would try "
                               "the workload's read-only key")
-            if not hasattr(CU, "mint_reader") or "store_read" not in (Path(source_tool_package(source)) / "remote.py").read_text():
+            if not hasattr(CU, "mint_reader") or (tool_pkg is not None and "store_read" not in (tool_pkg / "remote.py").read_text()):
                 raise Refused(f"--store-read: the research package in {source} predates it; the machine would not pass the key on")
             try:
                 read_pub, read_files = CU.mint_reader(custody_ttl or CU.DEFAULT_TTL)
@@ -2004,7 +2010,6 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if woke := wake(m, ssh):
             rec["woke"] = woke
         write_json_atomic(local_dir / "remote.json", rec)
-        tool_pkg = source_tool_package(source)      # --source <tree> with tools/research: the tree's own package runs the run
         if mem_gb and tool_pkg is not None and not (tool_pkg / "mem.py").exists():
             raise Refused(f"--mem-gb: the research package in {source} predates memory admission (no research/mem.py); the machine would "
                           f"ignore the reservation.  Commit a tree that has it, or drop --mem-gb")
