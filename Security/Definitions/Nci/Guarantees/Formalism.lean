@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Nci.Assumptions.Formalism
+public import Definitions.Assumptions
 
 /-!
 # The training formalism v2: its theorems

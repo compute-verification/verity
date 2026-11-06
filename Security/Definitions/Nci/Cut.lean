@@ -35,7 +35,7 @@ distinct words; `val` names the value each word carries, the casts of one value 
 matmul's `w`-words and on its `x`-words (`ValuesInjective`), and `val = id` counts words. When no two matmuls share
 both a `w`- and an `x`-value (`NoSharedPair`), or when the matmuls read shared arrays, matmul `a` the pair `e a`, an
 edge of a graph with no clique of `ω + 1` (`Arrays`), at least `q` a pair of values (`CostsAtLeast`), two cut
-conjectures bound the work: (H) and (E) (`Definitions.Nci.Assumptions.Cut`). The guarantees are
+conjectures bound the work: (H) and (E) (`Definitions.Assumptions`). The guarantees are
 `Definitions.Nci.Guarantees.Cut`'s.
 -/
 

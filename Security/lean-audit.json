@@ -3,10 +3,6 @@
  "proved_in": ["Proofs"],
  "assumptions_module": "Definitions.Assumptions",
  "assumptions": {
-  "Nci.Cut.Arrays": {
-   "owner": "@training",
-   "digest": "111c92d12e00ac259139b85416c77ad9033a63a45e5f4a7a197c6cce64836ef1"
-  },
   "Nci.Cut.Assumptions.Exports": {
    "owner": "@training",
    "digest": "45a66575def5bbb4d3ab2a6da56b3ea9c3cddd5d096fbf156665d789e887c161"
@@ -14,30 +10,6 @@
   "Nci.Cut.Assumptions.Hardness": {
    "owner": "@training",
    "digest": "f09fae736063873c46856fdfc4975fbee382c2a39f5fe5fab0a90ce3ef2927f6"
-  },
-  "Nci.Cut.CostsAtLeast": {
-   "owner": "@training",
-   "digest": "833c86670586107ebd1803a89f8cdfe1e8f2d927cb74028c4d42e0067709a1bc"
-  },
-  "Nci.Cut.NoSharedPair": {
-   "owner": "@training",
-   "digest": "edf10dcc2cffac840222ebbf36dbd8337aee14933243ad99695e0ab6f31214b1"
-  },
-  "Nci.Cut.ReadsAtMost": {
-   "owner": "@training",
-   "digest": "cbd09eb6c29f2035f8f306634a0e4bc34f1a33c731cb6697a11cd8f972d2cf06"
-  },
-  "Nci.Cut.ValuesInjective": {
-   "owner": "@training",
-   "digest": "379541f687acf8cc5048159a958e0b31a92a647beb56237022b8aec67cefa275"
-  },
-  "Nci.Formalism.Annotation.Valid": {
-   "owner": "@training",
-   "digest": "cb976b329589b2866775b70a459f1333ed2df278cfc0413164a7d6865955151d"
-  },
-  "Nci.Formalism.Annotation.WorkPerBit": {
-   "owner": "@training",
-   "digest": "7bdd11c2cba1213609919fd49575d0c00d26f086f9a078736adc80886b5ffde8"
   },
   "Nci.Formalism.Assumptions.CutCost": {
    "owner": "@training",
@@ -50,58 +22,6 @@
   "Nci.Formalism.Assumptions.TokenWork": {
    "owner": "@training",
    "digest": "d17288db09108dcb49f4caaf63f493763bd14c3f660dbe809178307fec2a498a"
-  },
-  "Nci.Formalism.Caps": {
-   "owner": "@training",
-   "digest": "341559f3ef65736d8b2f54aba57f2fa4b9b92c503e50d7fd19f28720f35c58c7"
-  },
-  "Nci.Formalism.GateSet": {
-   "owner": "@training",
-   "digest": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e"
-  },
-  "Nci.Formalism.InPeriods": {
-   "owner": "@training",
-   "digest": "2e9c8f7af1c83a77da3bc7a6cb8c309403d4e72509733fdede069044836a1e79"
-  },
-  "Nci.Formalism.InferenceBlock": {
-   "owner": "@training",
-   "digest": "051d470c6f69d6fa95188b5511f234920621994dbf94255920a2c59f483e776f"
-  },
-  "Nci.Formalism.PartitionBound": {
-   "owner": "@training",
-   "digest": "0efdf3fb0d8f5335cb985e182b6c341fd479b1ed34be23cac225dc95def769f6"
-  },
-  "Nci.Formalism.PeakAtMost": {
-   "owner": "@training",
-   "digest": "d846aaf90484906bcd76942d72dc6be57f5601ddaff436fd6e475ca537f48dce"
-  },
-  "Nci.Formalism.Run.Among": {
-   "owner": "@training",
-   "digest": "d5db13c72b34859a9308ac0ded9b0203e2d3efd37c51faa2a22e3b994542e247"
-  },
-  "Nci.Formalism.Run.Reaches": {
-   "owner": "@training",
-   "digest": "adc282a207f99fc85220964a134b1487df52085b85deba8bdf0de92dcf2377ef"
-  },
-  "Nci.Formalism.Run.Within": {
-   "owner": "@training",
-   "digest": "95f913d00b89c636477a1bf3d9c0a83455b5f5f0489aa40c336c351abe977792"
-  },
-  "Nci.Formalism.ServingFits": {
-   "owner": "@training",
-   "digest": "9362c658fc805110812ff7fed480889858ba419e8ac09d892301fc1e6440a7b4"
-  },
-  "Nci.Formalism.SessionBlocks": {
-   "owner": "@training",
-   "digest": "7a5b062f583e6adef87ad44a6639c7d7e68defa02bca99207acfe26349d472d8"
-  },
-  "Nci.Formalism.TrainingBlocks": {
-   "owner": "@training",
-   "digest": "e3c33e2b849c3b792833dc2980a0ffe283dd178a0ff9737b5430b7e6fac31936"
-  },
-  "Nci.Formalism.TrainingFits": {
-   "owner": "@training",
-   "digest": "b708a3fe8eb9aecf99d6e6ee46afc57aee936c361957b2e2c85ad49e028467a7"
   }
  },
  "domain": {
@@ -219,6 +139,106 @@
    "owner": "@proofs",
    "digest": "55db410ca03b42f0bcbc44ddb6f42663d04a21375939217812faf046819f1401",
    "why": "The read's verdict, the event `EmbeddingReadBinding` bounds."
+  },
+  "Nci.Cut.Arrays": {
+   "owner": "@training",
+   "digest": "111c92d12e00ac259139b85416c77ad9033a63a45e5f4a7a197c6cce64836ef1",
+   "why": "The shared arrays HEShared is stated for: each matmul reads an edge of a graph with no clique of ω + 1."
+  },
+  "Nci.Cut.CostsAtLeast": {
+   "owner": "@training",
+   "digest": "833c86670586107ebd1803a89f8cdfe1e8f2d927cb74028c4d42e0067709a1bc",
+   "why": "What q is: at most the cost β_r β_s of each matmul's pair of arrays."
+  },
+  "Nci.Cut.NoSharedPair": {
+   "owner": "@training",
+   "digest": "edf10dcc2cffac840222ebbf36dbd8337aee14933243ad99695e0ab6f31214b1",
+   "why": "The work HE is stated for: no two matmuls share both a w- and an x-value."
+  },
+  "Nci.Cut.ReadsAtMost": {
+   "owner": "@training",
+   "digest": "cbd09eb6c29f2035f8f306634a0e4bc34f1a33c731cb6697a11cd8f972d2cf06",
+   "why": "The partition the bound counts: every block reads at most k gates outside θ."
+  },
+  "Nci.Cut.ValuesInjective": {
+   "owner": "@training",
+   "digest": "379541f687acf8cc5048159a958e0b31a92a647beb56237022b8aec67cefa275",
+   "why": "What `val` is: it names the value each word carries, one-to-one on each matmul's w-words and on its x-words."
+  },
+  "Nci.Formalism.Annotation.Valid": {
+   "owner": "@training",
+   "digest": "cb976b329589b2866775b70a459f1333ed2df278cfc0413164a7d6865955151d",
+   "why": "What a valid annotation is: θ' and the token blocks are gates, and the token blocks are pairwise disjoint."
+  },
+  "Nci.Formalism.Annotation.WorkPerBit": {
+   "owner": "@training",
+   "digest": "7bdd11c2cba1213609919fd49575d0c00d26f086f9a078736adc80886b5ffde8",
+   "why": "What r is in the token cap's clean form: X is token gates, and the token work from each entry is at most r(ν) a bit of state; the clean form concludes from it the token-work bound (TokenWork), the assumption the guarantees take."
+  },
+  "Nci.Formalism.Caps": {
+   "owner": "@training",
+   "digest": "341559f3ef65736d8b2f54aba57f2fa4b9b92c503e50d7fd19f28720f35c58c7",
+   "why": "What the kinds' caps are: each kind's work is a set of gates, of which every inference block holds at most its cap, as TokenCap concludes for the token kind."
+  },
+  "Nci.Formalism.GateSet": {
+   "owner": "@training",
+   "digest": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e",
+   "why": "A set of gates: it holds no input."
+  },
+  "Nci.Formalism.InPeriods": {
+   "owner": "@training",
+   "digest": "2e9c8f7af1c83a77da3bc7a6cb8c309403d4e72509733fdede069044836a1e79",
+   "why": "The periods the run's partition fits in: B ≤ N n."
+  },
+  "Nci.Formalism.InferenceBlock": {
+   "owner": "@training",
+   "digest": "051d470c6f69d6fa95188b5511f234920621994dbf94255920a2c59f483e776f",
+   "why": "What an inference block is: a set of at most c gates reading at most k values outside θ."
+  },
+  "Nci.Formalism.PartitionBound": {
+   "owner": "@training",
+   "digest": "0efdf3fb0d8f5335cb985e182b6c341fd479b1ed34be23cac225dc95def769f6",
+   "why": "What a partition-level bound is: Λ ≤ |𝓘| c / |C| for every partition into inference blocks, the form an amortized kind's bound takes."
+  },
+  "Nci.Formalism.PeakAtMost": {
+   "owner": "@training",
+   "digest": "d846aaf90484906bcd76942d72dc6be57f5601ddaff436fd6e475ca537f48dce",
+   "why": "What M is in the token cap's clean form: at least (k − ν) r(ν) at every ν, arithmetic on r and k."
+  },
+  "Nci.Formalism.Run.Among": {
+   "owner": "@training",
+   "digest": "d5db13c72b34859a9308ac0ded9b0203e2d3efd37c51faa2a22e3b994542e247",
+   "why": "The scope: a run of the methods considered, the class A2 is stated over."
+  },
+  "Nci.Formalism.Run.Reaches": {
+   "owner": "@training",
+   "digest": "adc282a207f99fc85220964a134b1487df52085b85deba8bdf0de92dcf2377ef",
+   "why": "The event the bound conditions on: the run reaches the target loss ℓ*."
+  },
+  "Nci.Formalism.Run.Within": {
+   "owner": "@training",
+   "digest": "95f913d00b89c636477a1bf3d9c0a83455b5f5f0489aa40c336c351abe977792",
+   "why": "The bin of Δ the bound is stated for: the run's total update is at most D bits."
+  },
+  "Nci.Formalism.ServingFits": {
+   "owner": "@training",
+   "digest": "9362c658fc805110812ff7fed480889858ba419e8ac09d892301fc1e6440a7b4",
+   "why": "Fit's condition on a session block's reads: Δ + s τ ≤ k."
+  },
+  "Nci.Formalism.SessionBlocks": {
+   "owner": "@training",
+   "digest": "7a5b062f583e6adef87ad44a6639c7d7e68defa02bca99207acfe26349d472d8",
+   "why": "Fit's partition for serving: compute blocks of between c − d and c gates."
+  },
+  "Nci.Formalism.TrainingBlocks": {
+   "owner": "@training",
+   "digest": "e3c33e2b849c3b792833dc2980a0ffe283dd178a0ff9737b5430b7e6fac31936",
+   "why": "Fit's partition for training: compute, reduction and update application blocks of between c − d and c gates."
+  },
+  "Nci.Formalism.TrainingFits": {
+   "owner": "@training",
+   "digest": "b708a3fe8eb9aecf99d6e6ee46afc57aee936c361957b2e2c85ad49e028467a7",
+   "why": "Fit's conditions on each training block's reads: Δ + s τ ≤ k, 2 Δ_grad ≤ k and Δ_t + Δ_grad ≤ k."
   },
   "NetTiming.Guarantees.SampledAuditAccepted": {
    "owner": "@proofs",
@@ -5227,6 +5247,7 @@
     "Definitions.Core.Guarantees",
     "Definitions.Nci",
     "Definitions.Nci.Assumptions",
+    "Definitions.Assumptions",
     "Definitions.Nci.Guarantees"
    ],
    "except": ["Definitions.Nci.Guarantees.FitRate"],
@@ -5492,9 +5513,16 @@
    "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the network certifier's window good event (Definitions.NetworkCertifier.Period), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
   },
   "Definitions.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Hash", "Definitions.Core", "Definitions.Accounting", "Definitions.Assumptions"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Hash",
+    "Definitions.Core",
+    "Definitions.Accounting",
+    "Definitions.Nci",
+    "Definitions.Assumptions"
+   ],
    "except": [],
-   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, never a guarantee or a proof",
+   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions and the training formalism's (Definitions.Nci.Cut, Definitions.Nci.Formalism), never a guarantee or a proof",
    "sealed": true
   }
  },
@@ -23731,13 +23759,13 @@
    "Flock.SecurityProofs.JointShareV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with more than an eps share of the window's proof blocks incorrect by the law's largest miss of such a set plus the members' eps_ks and eps_bind, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointShareV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Flock.SecurityProofs.JointHorizonV5": "frozen (no-function): JointSampledV5's window audit (JointAuditV5) over a monitoring period of T windows played as one causal game against one adaptive prover (periodG): the probability that every window accepts and the windows' incorrect proof blocks lie outside the period's confidence set at delta (the windows' laws miss them together with probability at least delta, and their ANDs and output bits in all are at most the most any choice in that set holds) is at most delta plus the sum of the windows' eps, under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays); a Verity.Game.value event over the period's run rather than a run of a Lean function; it reads JointHorizonV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Nci.Formalism.SecurityProofs.Counting": "frozen (no-function): The counting lemma over kinds: it is about an arbitrary declaration, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, Security/Definitions/Nci/Formalism/Inference.lean), kinds that each give a bound for the whole partition (Nci.Formalism.PartitionBound, Security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.TokenCap": "frozen (no-function): The token kind's cap from A1 and the token-work bound: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, Security/Definitions/Nci/Formalism/Training.lean) and a set of its token gates, at every inference block, under the named CutCost and TokenWork (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.TokenCapClean": "frozen (no-function): The token cap's clean form, beside it, which gives the named TokenWork (Security/Definitions/Nci/Assumptions/Formalism.lean) from a bound on the token work per bit of state: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, Security/Definitions/Nci/Formalism/Training.lean) and a set of its token gates, reading no partition, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.Slowdown": "frozen (no-function): Slowdown, the one bound: the counting lemma over kinds with the token kind's cap from the token-work bound: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, Security/Definitions/Nci/Formalism/Training.lean), a set of its token gates, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, Security/Definitions/Nci/Formalism/Inference.lean), kinds that each give a bound for the whole partition (Nci.Formalism.PartitionBound, Security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost and TokenWork (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.TokenCap": "frozen (no-function): The token kind's cap from A1 and the token-work bound: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, Security/Definitions/Nci/Formalism/Training.lean) and a set of its token gates, at every inference block, under the named CutCost and TokenWork (Security/Definitions/Assumptions.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.TokenCapClean": "frozen (no-function): The token cap's clean form, beside it, which gives the named TokenWork (Security/Definitions/Assumptions.lean) from a bound on the token work per bit of state: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, Security/Definitions/Nci/Formalism/Training.lean) and a set of its token gates, reading no partition, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.Slowdown": "frozen (no-function): Slowdown, the one bound: the counting lemma over kinds with the token kind's cap from the token-work bound: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, Security/Definitions/Nci/Formalism/Training.lean), a set of its token gates, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, Security/Definitions/Nci/Formalism/Inference.lean), kinds that each give a bound for the whole partition (Nci.Formalism.PartitionBound, Security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost and TokenWork (Security/Definitions/Assumptions.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.FitServing": "frozen (no-function): Fit's construction for running θ': it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.FitHonestServing": "frozen (no-function): FitServing at Δ = 0 with no decoder, beside it: it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.FitTraining": "frozen (no-function): Fit's construction for training: it is about an arbitrary Boolean declaration and a Verity.Partition of it into training blocks (Nci.Formalism.TrainingBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.Security": "frozen (no-function): Security: it is about an arbitrary run of a class of methods (Nci.Formalism.Run, Security/Definitions/Nci/Formalism/Runs.lean) and a partition of its declaration into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost, TokenWork and EfficiencyFloor (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.Security": "frozen (no-function): Security: it is about an arbitrary run of a class of methods (Nci.Formalism.Run, Security/Definitions/Nci/Formalism/Runs.lean) and a partition of its declaration into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost, TokenWork and EfficiencyFloor (Security/Definitions/Assumptions.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.Counting_honest": "completeness: The counting lemma's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), the kind of the token's gates {3, 4} has the cap 1, every inference block at (c, k) = (1, 1) holding at most one of its gates, the partition-level bound 1, which every partition into blocks of one gate meets with its |C| = 4 blocks, and its four gates, each a block of its own, are a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
    "Nci.Formalism.SecurityProofs.Counting_nontrivial": "lemma: The counting lemma's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the kind {3, 4} with the cap 1, the partition-level bound 1 and (c, k) = (1, 1), whole, one block of its four gates, is no partition into inference blocks, and the bound max(1/2, 1) = 1, the kind's (|B_K| / |C|) / (cap_K / c) = 1/2 beside the partition-level 1, is above whole's price 1/4. A counterexample at an instance, not a property of a Lean function.",
    "Nci.Formalism.SecurityProofs.TokenCap_honest": "completeness: The token cap's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its premises hold together at (c, k) = (1, 1): A1 at the witness block of the token's three gates, which reads the new weight alone, one shared bit and none of the token's state, the token-work bound at the cap 1 on the token gates {3, 4}, and the block of gate 3, an inference block. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation and A1's checked witness blocks, which no check reads yet, would supply the deployed premises.",
@@ -23754,8 +23782,8 @@
    "Verity.SecurityProofs.CKSize_nontrivial": "lemma: CKSize's nontrivial lemma: at Counter (Verity.Formalism.Counter, Security/Definitions/Core/Formalism/Instances.lean), the same chain's three operation gates in one proof block, its premise fails at (c, k) = (2, 1), and so does the bound, |C| = 3 > 2 * 1. A counterexample at an instance, not a property of a Lean function.",
    "Nci.Cut.SecurityProofs.Bound": "frozen (no-function): It is about an arbitrary registered circuit, its charged work (Nci.Cut.Work, Security/Definitions/Nci/Cut.lean) and any partition into blocks that each read at most k gates outside θ (ReadsAtMost), with no named assumption, not about the NCI check's code; nothing joins it to a verdict yet, and stating that join among the properties is what would give it an acceptance.",
    "Nci.Cut.SecurityProofs.Slowdown": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work and any partition into blocks that each read at most k gates outside θ (ReadsAtMost), each priced at c, with no named assumption, not about the NCI check's code; nothing joins it to a verdict yet.",
-   "Nci.Cut.SecurityProofs.HE": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work, the values its words carry (ValuesInjective, NoSharedPair) and any partition into blocks that each read at most k gates outside θ, under the named (H) and (E) (Nci.Cut.Assumptions.Hardness and Exports, Security/Definitions/Nci/Assumptions/Cut.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
-   "Nci.Cut.SecurityProofs.HEShared": "frozen (no-function): Like HE, with the matmuls reading shared arrays, each an edge of a graph with no clique of ω + 1 (Arrays) at a cost of at least q (CostsAtLeast), under the named (H) and (E) (Security/Definitions/Nci/Assumptions/Cut.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
+   "Nci.Cut.SecurityProofs.HE": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work, the values its words carry (ValuesInjective, NoSharedPair) and any partition into blocks that each read at most k gates outside θ, under the named (H) and (E) (Nci.Cut.Assumptions.Hardness and Exports, Security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
+   "Nci.Cut.SecurityProofs.HEShared": "frozen (no-function): Like HE, with the matmuls reading shared arrays, each an edge of a graph with no clique of ω + 1 (Arrays) at a cost of at least q (CostsAtLeast), under the named (H) and (E) (Security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
    "Nci.Cut.SecurityProofs.Cut_honest": "completeness: Bound's, Slowdown's, HE's and HEShared's honest witness (their witnesses entries): at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), one matmul y = w x with two MACs, their premises hold together: a block for each MAC reading two inputs (k = 2), each word its own value, the arrays W and X on the edge of the complete graph on two vertices (ω = 2) at unit costs (q = 1), (H) at those costs and k = 2, and (E) at b = 1, all proved, so none of them is vacuous.",
    "Nci.Cut.SecurityProofs.Bound_nontrivial": "completeness: Bound's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), Bound without the block cap: one block holding both MACs reads three inputs, more than k = 0, and N = 2 exceeds m (k + α) + √(Π(0) m O) = 0, all proved, so Bound's conclusion is not a tautology and needs the premise it drops.",
    "Nci.Cut.SecurityProofs.Slowdown_nontrivial": "completeness: Slowdown's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy Nci.Cut.Toy (Security/Definitions/Nci/Cut/Toy.lean), Slowdown without the block cap: one block holding both MACs reads three inputs, more than k = 1, and at c = 1 the bound (c / |C|) (N / (k + α) - √(Π(1) O N) / (k + α)^{3/2}) = 1 exceeds m c / |C| = 1/2, all proved, so Slowdown's conclusion is not a tautology and needs the premise it drops.",

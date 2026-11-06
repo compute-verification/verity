@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Nci.Assumptions.Cut
+public import Definitions.Assumptions
 public import Definitions.Nci.Cut.Toy
 
 /-!
@@ -8,7 +8,7 @@ public import Definitions.Nci.Cut.Toy
 
 The training bound of record, over the vocabulary of `Definitions.Nci.Cut`. `Bound` holds for every circuit, every
 charged work and every partition into blocks that each read at most `k` gates outside `θ`; `Slowdown` is its form for
-`ρ = m c / |C|`. `HE` and `HEShared` put (H) and (E) (`Definitions.Nci.Assumptions.Cut`) into both, with two arrays
+`ρ = m c / |C|`. `HE` and `HEShared` put (H) and (E) (`Definitions.Assumptions`) into both, with two arrays
 `W` and `X` whose matmuls share no pair of values, and with shared arrays. No statement reads a fan-in bound, a width
 or a padding: `W` and `X` may share values, outputs may repeat, and each slowdown holds for every `c`, as it must for a
 partition into blocks of at most `c` gates, each priced at `c`.

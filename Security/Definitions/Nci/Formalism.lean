@@ -21,7 +21,7 @@ The training formalism v2, the one statement of the training slowdown, in Lean:
 * runs, losses and the honest cost (`Definitions.Nci.Formalism.Runs`), which A2 and Security read.
 
 The assumptions A1, the token-work bound and A2 are `Nci.Formalism.Assumptions`
-(`Definitions.Nci.Assumptions.Formalism`), the theorems of §5 are `Nci.Formalism.Guarantees`
+(`Definitions.Assumptions`), the theorems of §5 are `Nci.Formalism.Guarantees`
 (`Definitions.Nci.Guarantees.Formalism`), and their proofs `Nci.Formalism.SecurityProofs`; the reconstruction lemma and
 the split of a block's inputs are proved beside them (`Nci.Formalism.reconstruction`,
 `Nci.Formalism.reads_split`). Units: `|C|`, `c`, `d`, `|B_K|` and `cap_K` count gates; `k`, `τ`, `a`, `u`, `Δ`, `Δ_t`
