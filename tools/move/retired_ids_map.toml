@@ -6,7 +6,7 @@
 # - The binding error: the premise `LinkSound`, with `LinkSoundIn` and `zk_rowsLinkSoundC`, is ε_bind's, `BindSound`,
 #   and its module moves with it.
 # - The acceptance probability: `effEscape` is P̄_a, `effAcceptProb`, and its lemmas follow.
-# - The trace: `ExecutionTranscript`, one run's value for every gate, is `ExecutionTrace`.
+# - The trace: `ExecutionTranscript`, one run's value for every gate, is `Trace`, as `terms_map.toml` has it.
 # - The monitoring period: `ComposePeriod`, its namespace and its modules, and `CircuitWorkPeriod`.
 # - Unregistered hardware: `Nci.Dampener.unmonitoredShare` is ε_unreg's, `unregisteredShare`, and `benchmarks/rho`'s
 #   `eps_dark` is `eps_unreg`.
@@ -29,7 +29,7 @@
 [words]
 "LinkSound" = "BindSound"
 "effEscape" = "effAcceptProb"
-"ExecutionTranscript" = "ExecutionTrace"
+"ExecutionTranscript" = "Trace"
 "ComposePeriod" = "ComposeMonitoringPeriod"
 "CircuitWorkPeriod" = "CircuitWorkMonitoringPeriod"
 "circuitWorkPeriod" = "circuitWorkMonitoringPeriod"
