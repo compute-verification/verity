@@ -112,8 +112,6 @@ ALLOWED: dict[str, str] = {
     "Production is `verity-slack-events`": "infra's Vercel deployment, another sense",
     "the coin server keeps each round's bytes": "a row of Flock's Soundness README beside one a queued PR on next "
                                                 "rewrites; renamed after it lands",
-    "block-scaled FP4, NVFP4 only": "a line of PoUW's README beside one a queued PR on next rewrites; renamed after it "
-                                    "lands",
     "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
                                                                              "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
@@ -208,6 +206,8 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/pous/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/pous/p2/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/remote/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "verity/core/protocols/pouw/README.md": "main and queued PRs on next rewrite its lines naming verity example, the honest "
+                                            "prover's GPU effort and block-scaled FP4, or lines beside them; the renames follow",
     "verity/core/protocols/sampled_proofs/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/commitments/hm96/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/live/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
