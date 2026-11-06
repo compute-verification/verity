@@ -344,8 +344,7 @@ def lean(s: Sheet, data: Path) -> str:
            f"# The {s.name}'s data sheet (generated)", ""]
     out += _wrap(f"The data-sheet machine (`Accounting.TS.Sheet.machine`) at the {s.gpu}'s vendor values: each constant "
                  "with the axiom that reads it, its value, its grade and its source, and the census of the machine "
-                 f"model's `{s.vector}` vector (`{_rel(s).rsplit('/', 1)[0]}/census/{epoch}.csv`), which "
-                 "`machine_eq_census` proves the machine is, line for line. Each "
+                 f"model's `{s.vector}` vector, which `machine_eq_census` proves the machine is, line for line. Each "
                  "tensor peak has a lemma that the per-clock peak reproduces the document's per-second figure at the "
                  "clock that figure is quoted at. A3 reads `Run.n` as device totals over the SMSPs, so a warpgroup's "
                  "`wgmma` or a single-thread `tcgen05.mma` counts its MACs once, spread over the SM's four SMSPs.", "")
@@ -435,12 +434,12 @@ def lean(s: Sheet, data: Path) -> str:
             ""]
     # Every class has an arm and none is a wildcard, whose equation lemmas carry side conditions `simp` must discharge.
     line = lambda r, k: _num(census.get(k, {}).get(row(r), Fraction(0)))
-    out += [*_doc(f"`{epoch}.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction; 0 for a class with "
+    out += [*_doc(f"`census/{epoch}.csv`'s `DS_tensor` lines, SMSP-cycles a warp instruction; 0 for a class with "
                   "none."), "def tensorLine : Kind → ℝ", *(f"  | .{k} => {line('tensor', k)}" for k in kinds), ""]
     for q in pipes:
-        out += [*_doc(f"`{epoch}.csv`'s `DS_{q}` lines, SMSP-cycles a warp instruction; 0 for a class with "
+        out += [*_doc(f"`census/{epoch}.csv`'s `DS_{q}` lines, SMSP-cycles a warp instruction; 0 for a class with "
                       "none."), f"def {q}Line : Kind → ℝ", *(f"  | .{k} => {line(q, k)}" for k in kinds), ""]
-    out += [*_doc(f"**`{s.vector}`'s census** (`{epoch}.csv`): SMSP-cycles a warp instruction of each class "
+    out += [*_doc(f"**`{s.vector}`'s census** (`census/{epoch}.csv`): SMSP-cycles a warp instruction of each class "
                   "holds each row; every class holds issue for 1, and a class with no line on a row holds it not at "
                   "all."),
             "def census : SheetRow Pipe → Kind → ℝ",
