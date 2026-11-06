@@ -112,7 +112,7 @@ DOC_TERMS = {
     "KV block": "KV page",
     "the accelerator model, the machine model": "the ACCEL model (`benchmarks/pouw/machine_model/` and its `machine-model` "
                                                 "command keep the name)",
-    "coverage premise, coverage table": "the card premise, the opcode table",
+    "coverage premise, coverage table": "the card assumption, the opcode table",
     "envelope ISA, envelope op": "the ACCEL ops",
     "server-time block, serving block, server-window": "server block",
     "overhead lower bound, exclusion bound": "the slowdown lower bound",
