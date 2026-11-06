@@ -2,23 +2,6 @@ module
 
 public import Definitions.Pouw.Assumptions.Dimension.Mixing
 public import Proofs.Pouw.NCP.RelationWitness
-import Definitions.Pouw.Assumptions.NCP.Chain
-import Mathlib.Data.Set.Finite.List
-import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Exact
-import Proofs.Pouw.Milestone
-import Proofs.Pouw.NCP.GameProofs
-import Proofs.Pouw.NCP.Proofs
-import Proofs.Pouw.NCP.RelationProofs
-import Proofs.Pouw.NCP.WordProofs
-import Proofs.Pouw.Prob
-import Proofs.Pouw.Reduction
-import Proofs.Pouw.Sampling
-import Proofs.Pouw.Sanity
-import Proofs.Pouw.Theorem1
-import Proofs.Pouw.Witness
 
 /-!
 # MinRank ≥ 2 for the shift by 24

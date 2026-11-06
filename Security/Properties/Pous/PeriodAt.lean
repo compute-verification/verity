@@ -1,9 +1,7 @@
 module
 
-public import Properties.Pous.EndToEndAt
 public import Properties.Pous.Period
-import Mathlib.Basic.ENNReal.Real
-import Mathlib.Tactic.ContinuousFunctionalCalculus
+public import Properties.Pous.EndToEndAt
 
 /-!
 # PoUS over one period at any point and block count

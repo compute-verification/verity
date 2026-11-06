@@ -1,8 +1,8 @@
 module
 
+public import Definitions.Accounting.Actual
 public import Definitions.Accounting.Physical
 public import Definitions.Nci.Assumptions.Fit
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI over windows: the fit bound on a physical run

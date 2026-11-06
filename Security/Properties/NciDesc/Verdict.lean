@@ -2,7 +2,6 @@ module
 
 public import Properties.NciDesc
 public import Properties.Nci.Threads
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # What a verdict of the description-sized check carries

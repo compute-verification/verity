@@ -1,13 +1,6 @@
 module
 
-public import Flock.Registered
-public import Proofs.Flock.Soundness.Discharge.Exec.Event
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.CategoryTheory.Category.Init
-import Mathlib.Combinatorics.Matroid.Init
-import Mathlib.MeasureTheory.Integral.Bochner.Basic
-import Mathlib.Tactic.Positivity.Finset
-import VCVio.Prelude.Core
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
 
 /-!
 # `verify --registered F` without `--zk`, as an event of the audit

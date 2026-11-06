@@ -1,6 +1,10 @@
 module
 
 public import Definitions.Pouw.Assumptions.Pinned
+public import Definitions.Pouw.Basic.Prob
+public import Definitions.Pouw.Game.Defs
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.Assumptions.Game
 
 /-!
 # The game's guarantees (trusted)

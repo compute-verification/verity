@@ -1,13 +1,8 @@
 module
 
 public import Definitions.Core.Guarantees.ValueSalts
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.Module.Field
-import Mathlib.Basic.ENNReal.Inv
-import Mathlib.Data.Fintype.BigOperators
-import Proofs.Core.Challenger
-import Proofs.Core.Game.Basic
-import Proofs.Core.Game.Prob
+public import Proofs.Core.Game.Basic
+public import Proofs.Core.Challenger
 
 /-!
 # What a registration leaks: proof

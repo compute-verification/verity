@@ -1,13 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.Binding.RowsX
-public import Proofs.Flock.Soundness.Discharge.Exec.Event
-public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
-public import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
-public import Proofs.Flock.Soundness.Headline
-import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
-import Proofs.Flock.Soundness.Discharge.Exec.Headline
+public import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
+public import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
 /-!
 # The headline over the salted session, and at the executable

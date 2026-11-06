@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pous.Model.StreamedWipe
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe at 2152 reads: what `verity/wipe/v0` publishes

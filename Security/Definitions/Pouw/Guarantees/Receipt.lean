@@ -1,9 +1,8 @@
 module
 
+public import Definitions.Pouw.Receipt.Duo
 public import Definitions.Pouw.Receipt.Li
 public import Definitions.Pouw.Receipt.Fx1
-import Mathlib.Data.Finset.Attr
-import Mathlib.Tactic.SetLike
 
 /-!
 # The receipt folds duo's, fx1's and li's binding (trusted)

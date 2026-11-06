@@ -1,10 +1,9 @@
 module
 
 public import Definitions.Nci.BitView
+public import Definitions.Nci.Dark
 public import Definitions.Nci.Assumptions.Baseline
 public import Definitions.Nci.Assumptions.Cover
-public import Definitions.Nci
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # The cover theorem on a declaration that complies with the NCI policy

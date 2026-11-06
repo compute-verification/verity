@@ -1,14 +1,7 @@
 module
 
+public import Proofs.Pouw.Fp8Atom.H1TRunningProofs
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions
-public import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Data.List.GetD
-import Mathlib.Data.Sym.Sym2.Init
-import Mathlib.Tactic.NormNum.GCD
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Fp8Atom.H1TGammaProofs
-import Proofs.Pouw.Fp8Atom.H1TRunningProofs
 
 /-!
 # `TTH1T`'s two form checks

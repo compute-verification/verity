@@ -1,15 +1,11 @@
 module
 
-public import Definitions.Pouw.Assumptions.NCP.Assumptions
-public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
-public import Definitions.Pouw.Assumptions.NCP.RouteUGame
-public import Definitions.Pouw.Assumptions.NCP.RouteUWord
-public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.NCP.Pinned
 public import Definitions.Pouw.NCP.Protocol
 public import Definitions.Pouw.NCP.Relation
 public import Definitions.Pouw.NCP.RouteU
-public import Definitions.Pouw.NCP.Witness
+public import Definitions.Pouw.Assumptions.NCP.RouteUGame
+public import Definitions.Pouw.Assumptions.NCP.RouteUWord
 
 /-!
 # NCP's guarantees (trusted)

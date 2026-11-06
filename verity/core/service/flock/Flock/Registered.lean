@@ -6,6 +6,7 @@ the verifier's own registered roots at the positions its own program reads.
 -/
 module
 
+public import Flock.Canon
 public import Flock.HmRow
 
 @[expose] public section

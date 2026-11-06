@@ -1,30 +1,7 @@
 module
 
-public import Definitions.Nci.Assumptions.Baseline
-public import Definitions.Nci.Assumptions.CoveringTwoCosts
-public import Definitions.Nci.BitDecl
-public import NciCheck.Baseline
-public import Properties.NciDesc
-import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
-import Mathlib.Data.NNRat.Floor
-import Mathlib.Tactic.Echelon.Zsqrtd
-import Mathlib.Tactic.Measurability.Init
-import Mathlib.Tactic.NormNum.Irrational
-import Mathlib.Tactic.NormNum.IsCoprime
-import Mathlib.Tactic.NormNum.IsSquare
-import Mathlib.Tactic.NormNum.LegendreSymbol
-import Mathlib.Tactic.NormNum.ModEq
-import Mathlib.Tactic.NormNum.NatFib
-import Mathlib.Tactic.NormNum.NatLog
-import Mathlib.Tactic.NormNum.NatSqrt
-import Mathlib.Tactic.NormNum.Ordinal
-import Mathlib.Tactic.NormNum.Parity
-import Mathlib.Tactic.NormNum.Prime
-import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Nci.Cover.Chained
-import Proofs.Nci.Cover.Checked
-import Proofs.Properties.Nci
-import Proofs.Properties.Nci.Agrees
+public import Proofs.Nci.Cover.Checked
+public import Proofs.Nci.Cover.Chained
 
 /-!
 # A verdict of compliance carries the covering bound's factor on the chained multiplication blocks

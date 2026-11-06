@@ -86,9 +86,12 @@ module
 
 public import Flock.Firewall.SessionPlan
 public import Flock.Firewall.Frames
+public import Flock.Firewall.Level0
+public import Flock.Firewall.Finish
 public import Flock.Firewall.Salts
 public import Std.Async.TCP
 public import Std.Async.DNS
+public import Flock.JsonParse
 
 @[expose] public section
 

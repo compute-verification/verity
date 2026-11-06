@@ -1,8 +1,6 @@
 module
 
 public import Definitions.Nci
-import Mathlib.Analysis.Real.Sqrt
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # Partial containment: a reference circuit computed partly off the books

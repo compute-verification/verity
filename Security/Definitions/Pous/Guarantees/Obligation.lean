@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pous.P2.Mutable
 public import Definitions.Pous.Assumptions.P2
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS as an obligation: the mutable store's audit window reduces to P2's audit of its snapshot (trusted)

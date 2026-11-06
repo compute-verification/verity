@@ -1,17 +1,10 @@
 module
 
+public import Proofs.Nci.CoveringTwoCosts
+public import Proofs.Nci.CoveringWitness
 public import Mathlib.Data.Fin.VecNotation
 public import Mathlib.Data.Fintype.Prod
-public import Definitions.Nci.Assumptions.CoveringTwoCosts
-import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-import Mathlib.Data.Rat.Cast.Order
-import Mathlib.Tactic.Linarith.Frontend
-import Mathlib.Tactic.NormNum.Abs
-import Mathlib.Tactic.NormNum.DivMod
-import Mathlib.Tactic.NormNum.OfScientific
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Nci.CoveringTwoCosts
-import Proofs.Nci.CoveringWitness
+public import Mathlib.Tactic.NormNum
 
 /-!
 # The two-cost covering bound is not vacuous, at `c_w ≠ c_a`

@@ -1,11 +1,11 @@
 module
 
+public import Definitions.Pouw.PearlC.Device
 public import Definitions.Pouw.PearlC.DeviceKernelWref
 public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.PearlC.Instance
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Proofs.Pouw.PearlC.FlockTile.Audit
-import Mathlib.Algebra.Order.Module.Field
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Pearl-C's γ under C-Flock's hidden audit (trusted)

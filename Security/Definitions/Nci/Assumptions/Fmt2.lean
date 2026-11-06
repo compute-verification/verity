@@ -1,9 +1,7 @@
 module
 
 public import Definitions.Nci.Sources
-public import Definitions.Nci.Info
-public import Definitions.Nci.Work
-import Mathlib.Data.NNRat.Floor
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # NCI over threads, each value charged once over its copies: the named assumption

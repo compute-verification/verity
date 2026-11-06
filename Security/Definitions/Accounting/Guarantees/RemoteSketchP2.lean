@@ -1,9 +1,6 @@
 module
 
-public import Definitions.Accounting.Assumptions.RateAuditDeployed
-public import Definitions.Accounting.Assumptions.RemoteHeld
-public import Definitions.Accounting.Assumptions.RemoteSketch
-import Mathlib.Basic.ENNReal.Real
+public import Definitions.Accounting.Guarantees.RemoteSketch
 
 /-!
 # The receipts' sketch bound over PoUS's P2 store (trusted; drafted)

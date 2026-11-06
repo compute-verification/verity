@@ -1,10 +1,6 @@
 module
 
-public import Definitions.Pouw.Receipt.Duo
-import Mathlib.Data.BitVec
-import Mathlib.Tactic.NormNum.Ineq
-import Mathlib.Tactic.NormNum.Pow
-import Proofs.Pouw.Receipt.Duo
+public import Proofs.Pouw.Receipt.Duo
 
 /-!
 # duo's served receipt `y ⊕ rotl(z, h)` binds one word up to no XOR constant

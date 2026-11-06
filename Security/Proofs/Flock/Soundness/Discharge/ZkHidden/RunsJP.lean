@@ -1,31 +1,6 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
-public import Proofs.Flock.Soundness.Discharge.Composed.DefsJA
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
-import Mathlib.Tactic.Echelon.Zsqrtd
-import Mathlib.Tactic.NormNum.Irrational
-import Mathlib.Tactic.NormNum.IsCoprime
-import Mathlib.Tactic.NormNum.IsSquare
-import Mathlib.Tactic.NormNum.LegendreSymbol
-import Mathlib.Tactic.NormNum.ModEq
-import Mathlib.Tactic.NormNum.NatFib
-import Mathlib.Tactic.NormNum.NatLog
-import Mathlib.Tactic.NormNum.NatSqrt
-import Mathlib.Tactic.NormNum.Ordinal
-import Mathlib.Tactic.NormNum.Parity
-import Mathlib.Tactic.NormNum.Prime
-import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-import Proofs.Flock.Soundness.Discharge.Exec.Retained
-import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
 @[expose] public section
 

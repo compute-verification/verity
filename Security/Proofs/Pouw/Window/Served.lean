@@ -1,9 +1,6 @@
 module
 
 public import Definitions.Pouw.Window
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Algebra.Order.Module.Field
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUW's reading of the window: its bound plus the tie to what's served, and its collision term at counted queries

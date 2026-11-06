@@ -1,8 +1,21 @@
 module
 
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Fintype.Option
+public import Mathlib.Data.Fintype.Sum
+public import Mathlib.Data.List.Chain
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
 public import Proofs.Pous.Statements
-import Proofs.Pous.B5.ExPostFacto
-import Proofs.Pous.Pebbling.FischClaims1314
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
+public import Proofs.Pous.Pebbling.FischClaims1314
+public import Proofs.Pous.B5.ExPostFacto
 
 /-!
 # The one-way bound for Fisch's stacked graph: `PousBridge.b2ToB5` and `PousBridge.b5_stacked`

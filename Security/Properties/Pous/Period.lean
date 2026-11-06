@@ -3,7 +3,6 @@ module
 public import Properties.Pous.EndToEnd
 public import Definitions.Accounting.PerRun
 public import Definitions.Pous.P2.Clip
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS over one period: the deployed check's acceptance certifies the capacity account's space

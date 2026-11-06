@@ -2,9 +2,6 @@ module
 
 public import Definitions.Pous.Model.Labelling
 public import Definitions.Pous.Model.M1
-public import Mathlib.Data.Fintype.Option
-public import Mathlib.Data.Fintype.Prod
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The dense single-layer scheme (S1)

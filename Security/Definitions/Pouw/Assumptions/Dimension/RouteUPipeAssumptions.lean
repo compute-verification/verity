@@ -1,8 +1,7 @@
 module
 
+public import Definitions.Pouw.Assumptions.Dimension.PipeAssumptions
 public import Definitions.Pouw.Assumptions.Dimension.RouteU
-public import Definitions.Pouw.Assumptions.Dimension.PipeModel
-public import Definitions.Pouw.Dimension.Lift
 
 /-!
 # The closed pipe's named assumptions on route U

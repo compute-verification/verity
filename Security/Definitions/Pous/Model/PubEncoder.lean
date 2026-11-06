@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pous.Model.Audit
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The public-encoder setup check and audit game

@@ -1,13 +1,8 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.H100Cite
-import Mathlib.Data.Sym.Sym2.Init
-import Mathlib.Tactic.NormNum.GCD
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Dimension.H100DenseProofs
-import Proofs.Pouw.Dimension.H100FragProofs
-import Proofs.Pouw.Dimension.H100MeasuredProofs
-import Proofs.Pouw.Dimension.H100WProofs
+public import Proofs.Pouw.Dimension.H100FragProofs
+public import Proofs.Pouw.Dimension.H100MeasuredProofs
 
 /-!
 # How the H100 pins are cited: proofs

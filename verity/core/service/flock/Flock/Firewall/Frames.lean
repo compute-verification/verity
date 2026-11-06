@@ -37,7 +37,6 @@ is the loop's own, a function of the statement, the table's level 0, the rep's s
 module
 
 public import Flock.Firewall.Drive
-public import Flock.Firewall.Skeleton
 
 @[expose] public section
 

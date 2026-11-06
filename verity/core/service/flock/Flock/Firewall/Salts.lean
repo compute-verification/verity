@@ -37,7 +37,11 @@ runs reads the key or the epoch. The tags, the record tags and the count `m` mea
 -/
 module
 
+public import Flock.Hm96
+public import Flock.FV3
 public import Flock.Registered
+public import Flock.Comp
+public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true

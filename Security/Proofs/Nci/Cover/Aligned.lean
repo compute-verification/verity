@@ -1,11 +1,6 @@
 module
 
-public import Definitions.Nci.Guarantees.CoverTraining
-public import Proofs.Nci.Cover.Bits
-import Mathlib.Data.NNRat.Floor
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Nci.Cover.Charge
-import Proofs.Nci.Cover.Training
+public import Proofs.Nci.Cover.Training
 
 /-!
 # The width variant on whole-word activations, proved

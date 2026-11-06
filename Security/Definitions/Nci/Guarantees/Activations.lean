@@ -2,7 +2,7 @@ module
 
 public import Definitions.Nci.Assumptions.Activations
 public import Definitions.Nci.Assumptions
-import Mathlib.Data.NNRat.Floor
+public import Definitions.Nci.Dark
 
 /-!
 # NCI's activations bound over all of training ([ACTIVATIONS-BOUND])

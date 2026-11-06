@@ -1,7 +1,8 @@
 module
 
 public import Mathlib.Basic.Real.Basic
-public import Mathlib.Data.Finset.Card
+public import Mathlib.Data.Fintype.Card
+public import Mathlib.Data.List.Chain
 
 /-!
 # Stacked depth-robust graphs, pebbles and the white/green game (B2, Fisch Claims 13–14)

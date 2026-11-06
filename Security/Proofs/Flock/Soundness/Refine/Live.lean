@@ -1,13 +1,6 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Tapes
-public import Mathlib.RingTheory.Henselian
-public import Mathlib.RingTheory.RegularLocalRing.Defs
-public import Mathlib.RingTheory.SimpleRing.Principal
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Combinatorics.Matroid.Init
-import Mathlib.MeasureTheory.Integral.Bochner.Basic
-import VCVio.Prelude.Core
 
 /-!
 # The live session, and simulating it in the model

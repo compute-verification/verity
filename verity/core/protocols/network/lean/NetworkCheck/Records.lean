@@ -1,6 +1,7 @@
 module
 
 public import NetworkCheck.Check
+public import Difftest
 
 /-!
 # The audit over every published record, a core protocol: `verity/network-records/v3`

@@ -1,11 +1,8 @@
 module
 
-public import Definitions.Pouw.Assumptions.Pinned
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Exact
-import Proofs.Pouw.M1
-import Proofs.Pouw.Reduction
-import Proofs.Pouw.Theorem1
+public import Proofs.Pouw.Theorem1
+public import Proofs.Pouw.Exact
+public import Proofs.Pouw.M1
 
 /-!
 # (d′) §3.3's requirement at the milestone, in budget form

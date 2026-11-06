@@ -2,7 +2,7 @@ module
 
 public import Definitions.Nci.Assumptions
 public import Definitions.Nci.Assumptions.Training
-import Mathlib.Data.NNRat.Floor
+public import Definitions.Nci.Dark
 
 /-!
 # NCI's guarantees on a reference training circuit, under one assumption

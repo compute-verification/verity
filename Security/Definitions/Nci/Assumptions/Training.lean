@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci.Threads
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI's one assumption about training

@@ -1,7 +1,7 @@
 module
 
+public import Mathlib.Probability.Distributions.Uniform
 public import Definitions.Accounting.Tag.PolyHash
-public import Definitions.Accounting.Tag.Prob
 
 /-!
 # The block tags' statements (trusted)

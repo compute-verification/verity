@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci.Assumptions.Ldl
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # Local description length on a `(c,k)`-partition: the guarantees

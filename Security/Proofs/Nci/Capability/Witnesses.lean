@@ -1,7 +1,10 @@
 module
 
 public import Definitions.Nci.Guarantees.Capability.Witnesses
-import Proofs.Core.Circuit
+public import Proofs.Nci.Capability.Items
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Probability.Distributions.Uniform
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Local bounds: proofs of their witnesses

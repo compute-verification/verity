@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci.Assumptions.Fit
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI over windows: the fit bound

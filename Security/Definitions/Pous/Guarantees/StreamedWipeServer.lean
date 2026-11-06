@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pous.Claims.StreamedWipeServer
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe per server, against its assumed memory capacity, and the 5 GB point

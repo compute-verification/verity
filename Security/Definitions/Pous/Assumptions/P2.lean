@@ -1,8 +1,7 @@
 module
 
+public import Definitions.Pous.P2.Cost
 public import Definitions.Pous.P2.Rounds
-public import Mathlib.Data.Nat.Prime.Defs
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # P2's open steps in the ring model (named assumptions)

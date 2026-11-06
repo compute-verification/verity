@@ -1,8 +1,6 @@
 module
 
-public import Mathlib.Basic.ENNReal.Basic
-import Mathlib.Algebra.Order.Algebra
-import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+public import Mathlib.Analysis.MeanInequalities
 
 /-!
 # C-Flock's one-stage audit: its guarantees (trusted)

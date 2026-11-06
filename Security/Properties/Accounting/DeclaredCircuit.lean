@@ -1,10 +1,7 @@
 module
 
+public import Definitions.Accounting.Guarantees.DeclaredCircuit
 public import Properties.RemoteAudit.Schedule
-public import Definitions.Accounting.Assumptions.RateAuditDeployed
-public import Definitions.Accounting.Assumptions.SquaringChain
-public import Definitions.Accounting.Assumptions.Stacking
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap

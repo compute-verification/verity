@@ -1,47 +1,8 @@
 module
 
-public import ArkLib.Data.CodingTheory.JohnsonBound.Family
-public import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Probability
-public import Definitions.Flock.Compiled
-public import Definitions.Flock.Game.Lock
-public import Mathlib.Algebra.CharP.Defs
-public import Mathlib.Algebra.MvPolynomial.SchwartzZippel
-public import Mathlib.Algebra.Order.Chebyshev
-public import Mathlib.Algebra.Polynomial.Roots
-public import Mathlib.Analysis.MeanInequalities
-public import Mathlib.Analysis.SpecialFunctions.Sqrt
-public import Mathlib.Combinatorics.Enumerative.DoubleCounting
-public import Mathlib.Data.List.Basic
-public import Mathlib.Data.Nat.Size
-public import Mathlib.Logic.Function.Basic
-public import Mathlib.Order.ConditionallyCompleteLattice.Finset
-public import Mathlib.RingTheory.Henselian
-public import Mathlib.RingTheory.RegularLocalRing.Defs
-public import Mathlib.RingTheory.SimpleRing.Principal
-public import Mathlib.Tactic.DeriveFintype
-public import Mathlib.Tactic.GCongr
-public import Mathlib.Tactic.IntervalCases
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Positivity
-public import Proofs.Flock.Soundness.Accounting.Fast100
-public import Proofs.Flock.Soundness.Accounting.Numbers
-public import Proofs.Flock.Soundness.Defs
-public import Proofs.Flock.Soundness.Game.Expect
-public import Proofs.Flock.Soundness.Game.Lock
-public import Proofs.Flock.Soundness.Game.Poly
-public import Proofs.Flock.Soundness.Game.Union
-public import Proofs.Flock.Soundness.LigeritoCoins
-public import Proofs.Flock.Soundness.LigeritoMid
-public import Proofs.Flock.Soundness.LigeritoQueries
-public import Proofs.Flock.Soundness.LigeritoWeights
-public import Proofs.Flock.Soundness.LincheckPhase
-public import Proofs.Flock.Soundness.Merkle
 public import Proofs.Flock.Soundness.Model.Compiled
-public import Proofs.Flock.Soundness.OpeningPhase
-public import Proofs.Flock.Soundness.Rewinding
-public import Proofs.Flock.Soundness.Rounds
-import Proofs.Flock.Soundness.Game.Basic
+public import Proofs.Flock.Soundness.Game.Lock
+public import Proofs.Flock.Soundness.LigeritoMid
 
 /-!
 # The compiled Flock verifier runs in lockstep with the oracle verifier

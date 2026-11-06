@@ -3,12 +3,6 @@ module
 public import Definitions.Pouw.PearlC.FormingPDefs
 public import Proofs.Pouw.PearlC.AtomErr
 public import Definitions.Pouw.PearlC.Sm120
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Fp8Atom.Fp32Proofs
-import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 
 /-!
 # P3 over a `Pipeline`: the step's error at any width, and sm_120's atom-mix

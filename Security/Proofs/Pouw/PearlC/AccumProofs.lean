@@ -2,12 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.Accum
 public import Definitions.Pouw.PearlC.PeelExactP
-import Mathlib.Algebra.Order.Floor.Semifield
-import Mathlib.Data.Nat.Bitwise
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Fp8Atom.Fp32Proofs
-import Proofs.Pouw.Fp8Atom.H1TAtomProofs
-import Proofs.Pouw.PearlC.PeelExactProofs
+public import Proofs.Pouw.PearlC.PeelExactProofs
 
 @[expose] public section
 

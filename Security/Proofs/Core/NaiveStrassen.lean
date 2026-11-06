@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Core.NaiveStrassen
 public import Definitions.Core.Guarantees.NaiveStrassen
 public import Proofs.Core.NaiveStrassen.Eval
 

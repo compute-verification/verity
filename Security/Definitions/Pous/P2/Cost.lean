@@ -1,10 +1,8 @@
 module
 
+public import Mathlib.Data.ZMod.Basic
 public import Definitions.Pous.Accounting.Params
 public import Definitions.Pous.Model.M1p
-public import Mathlib.Data.ZMod.Basic
-public import Mathlib.Data.ZMod.Defs
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # P2's cost model: a generic ring over `Z/p` with random odd labels (trusted)

@@ -42,8 +42,9 @@ module
 
 public import Flock.WindowRecord
 public import SampledProofs.Draw
+public import SampledProofs.Registered
 public import SampledProofs.Supplied
-import Std.Data.HashMap.Lemmas
+public import Std.Data.HashMap
 
 @[expose] public section
 set_option backward.privateInPublic true

@@ -1,10 +1,11 @@
 module
 
+public import Mathlib.Data.Fintype.Perm
 public import Mathlib.Data.Finset.Sort
+public import Definitions.Pous.Model.Scheme
 public import Definitions.Pous.Model.M1
+public import Definitions.Pous.Model.Labelling
 public import Definitions.Pous.Model.Invertible
-import Mathlib.Basic.ENNReal.Real
-import Mathlib.Basic.Finite.Prod
 
 /-!
 # P3 with a concrete `H`: the overwrite chain on `Π₂`

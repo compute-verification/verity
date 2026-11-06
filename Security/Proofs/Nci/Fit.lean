@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci.Guarantees.Fit
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # Proof of the fit bound

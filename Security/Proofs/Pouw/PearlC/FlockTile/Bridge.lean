@@ -1,10 +1,7 @@
 module
 
 public import Definitions.Core.Game
-public import Definitions.Flock.Game
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.Module.Field
-import Mathlib.Basic.ENNReal.Real
+public import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # C-Flock's games as core's games

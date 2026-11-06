@@ -2,10 +2,7 @@ module
 
 public import Definitions.Nci.Reads
 public import Proofs.Nci.Pull
-public import Definitions.Nci.Threads
-import Mathlib.Data.NNRat.Floor
-import Proofs.Core.Circuit
-import Proofs.Nci.Threads
+public import Proofs.Nci.Threads
 
 /-!
 # Reads in a set of gates, the pull into the contained circuit, and Theorem 1 over a read measure

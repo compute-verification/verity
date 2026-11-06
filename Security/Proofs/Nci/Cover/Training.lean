@@ -2,12 +2,9 @@ module
 
 public import Definitions.Nci.Guarantees.CoverTraining
 public import Proofs.Nci.Pull
+public import Proofs.Nci.Cover.Area
 public import Proofs.Nci.Cover.Bits
-import Mathlib.Data.NNRat.Floor
-import Mathlib.Tactic.Positivity.Finset
-import Proofs.Core.Circuit
-import Proofs.Nci.Cover.Area
-import Proofs.Nci.Cover.Sum
+public import Proofs.Nci.Cover.Sum
 
 /-!
 # The cover theorem on a declaration that complies with the NCI policy, proved

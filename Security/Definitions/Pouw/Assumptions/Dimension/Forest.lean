@@ -1,7 +1,6 @@
 module
 
-public import Definitions.Pouw.Assumptions.Dimension.PipeAssumptions
-public import Mathlib.LinearAlgebra.FiniteDimensional.Defs
+public import Definitions.Pouw.Assumptions.Dimension.Pipe
 
 /-!
 # Theorem 1 of `a1-cost.md` (the forest argument): statements (trusted)

@@ -1,9 +1,7 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.Fp8Mma
-import Mathlib.Data.Sym.Sym2.Init
-import Mathlib.Tactic.NormNum.GCD
-import Mathlib.Tactic.Positivity.Finset
+public import Proofs.Pouw.Dimension.EmbedProofs
 
 /-!
 # The RTX 4090's tensor-core shapes in `M4090`: proofs

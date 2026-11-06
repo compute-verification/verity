@@ -1,10 +1,9 @@
 module
 
 public import Definitions.Nci.Guarantees.Threads
-import Mathlib.Data.NNRat.Floor
-import Proofs.Core.Circuit
-import Proofs.Nci.Fit
-import Proofs.Nci.Pull
+public import Proofs.Core.Circuit
+public import Proofs.Nci.Pull
+public import Proofs.Nci.Fit
 
 /-!
 # Proofs of NCI's guarantees over threads

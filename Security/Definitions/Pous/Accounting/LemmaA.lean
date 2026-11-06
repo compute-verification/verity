@@ -1,6 +1,10 @@
 module
 
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Mathlib.Analysis.SpecialFunctions.Log.Base
+public import Mathlib.Data.Nat.Choose.Basic
+public import Mathlib.Data.Nat.Factorial.Basic
+public import Definitions.Pous.Game.Prob
 
 /-!
 # Lemma A's bound, the history union, and the A7′ certificate (sms5 ideal-model review, Track A)

@@ -2,6 +2,7 @@ module
 
 public import Difftest
 public import RemoteAudit.Line
+public import RemoteAudit.P2
 public import RemoteAudit.P2Session
 public import RemoteAudit.Registry
 public import RemoteAudit.Schedule

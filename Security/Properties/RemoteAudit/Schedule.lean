@@ -1,7 +1,7 @@
 module
 
-public import RemoteAudit.Schedule
 public import Definitions.Accounting.Schedule
+public import RemoteAudit.Schedule
 
 /-!
 # The schedule check fixes each credited pass's plan (`RemoteAudit.Schedule`)

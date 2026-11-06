@@ -1,7 +1,6 @@
 module
 
-public import Definitions.Pous.P2.Cost
-import Mathlib.Basic.ENNReal.Real
+public import Definitions.Pous.P2.Rounds
 
 /-!
 # The mutable store: versioned, coin-keyed blocks and the snapshot an audit window reads (trusted)

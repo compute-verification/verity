@@ -1,8 +1,6 @@
 module
 
 public import Definitions.Pous.Model.Scheme
-public import Mathlib.Data.Fintype.Prod
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The timed audit game, perfect isolation

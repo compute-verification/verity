@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Nci.Info
-import Mathlib.Data.NNRat.Floor
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # NCI over threads, reads counted by information: the named assumption

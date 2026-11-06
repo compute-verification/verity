@@ -2,13 +2,6 @@ module
 
 public import Definitions.Pous.Accounting.GradedMeets
 public import Proofs.Pous.Graded.Tail
-public import Definitions.Pous.Model.Inc
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Combinatorics.SimpleGraph.Init
-import Mathlib.Data.Sym.Sym2.Init
-import Proofs.Pous.Sanity
-import Proofs.Pous.Thm1.Theorem1iTimed
-import Proofs.Pous.Thm1.Theorem1iiSeq
 
 /-!
 # Theorem 1(ii) for the graded audit

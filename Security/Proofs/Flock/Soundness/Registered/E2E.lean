@@ -1,12 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.E2E
-public import Proofs.Flock.Soundness.Registered.Defs
-public import Proofs.Flock.Soundness.StrictCR
-import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Binding.E2E
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Registered.Binding
+public import Proofs.Flock.Soundness.Binding.E2E
+public import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # The end-to-end theorem with registered reads

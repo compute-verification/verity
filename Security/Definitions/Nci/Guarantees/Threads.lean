@@ -2,7 +2,7 @@ module
 
 public import Definitions.Nci.Assumptions.Threads
 public import Definitions.Nci.Assumptions.Baseline
-import Mathlib.Data.NNRat.Floor
+public import Definitions.Nci.Dark
 
 /-!
 # NCI over threads: the guarantees

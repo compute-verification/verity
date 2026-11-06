@@ -1,10 +1,9 @@
 module
 
+public import Definitions.Accounting.RateAuditDeployed
 public import Definitions.Accounting.Remote.Deployed
 public import Definitions.Accounting.Assumptions.RateAudit
 public import Definitions.Accounting.Assumptions.RateAuditDeployed
-public import Definitions.Accounting.RateAuditSketchDeployed
-import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The remote bandwidth audit as deployed: conservation over a session (trusted)

@@ -1,7 +1,6 @@
 module
 
-public import Mathlib.Data.Fintype.Pi
-import Mathlib.Basic.ENNReal.Real
+public import Definitions.Pous.Game.Prob
 
 /-!
 # The idealized computational model

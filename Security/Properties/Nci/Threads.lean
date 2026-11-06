@@ -3,7 +3,6 @@ module
 public import Properties.Nci
 public import Definitions.Nci.Assumptions.Baseline
 public import Definitions.Nci.Assumptions.Threads
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # A verdict of compliance carries the thread bound

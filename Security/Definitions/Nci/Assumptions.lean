@@ -3,7 +3,6 @@ module
 public import Definitions.Nci.Support
 public import Definitions.Nci.Assumptions.Baseline
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI's named assumptions

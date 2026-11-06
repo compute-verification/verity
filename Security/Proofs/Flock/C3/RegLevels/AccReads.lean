@@ -1,22 +1,10 @@
 module
 
+public import Proofs.Flock.C3.RegLevels.OpensRegs
 public import Proofs.Flock.C3.PubRows.Shape
 public import Proofs.Flock.VBridge.Family.AccRows
-import Mathlib.Tactic.Echelon.Zsqrtd
-import Mathlib.Tactic.NormNum.Irrational
-import Mathlib.Tactic.NormNum.IsCoprime
-import Mathlib.Tactic.NormNum.IsSquare
-import Mathlib.Tactic.NormNum.LegendreSymbol
-import Mathlib.Tactic.NormNum.ModEq
-import Mathlib.Tactic.NormNum.NatFib
-import Mathlib.Tactic.NormNum.NatLog
-import Mathlib.Tactic.NormNum.NatSqrt
-import Mathlib.Tactic.NormNum.Ordinal
-import Mathlib.Tactic.NormNum.Parity
-import Mathlib.Tactic.NormNum.Prime
-import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+public import Proofs.Flock.Recursive.Raw
+public import Proofs.Flock.Recursive.Stage
 
 /-!
 # n11: `OpenKeysS`' reads-file conjuncts at a level's `acc` and `acc_out`, from `checkAcc` and `checkAccReads`
