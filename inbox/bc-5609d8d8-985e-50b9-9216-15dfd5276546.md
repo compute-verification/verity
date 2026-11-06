@@ -56,3 +56,15 @@ GLMCENSUS finished (note:20261106T0844Z-report-glmcensus; PR #7602 marked): cens
 Figure 1 partition card art:0d1ade29f8e671aa606136cebf7e2011719f9c1eb058af3aeab69e47f4bc813a. 7.5e7 proof blocks/token (prefill and decode),
 98.6% of prefill MACs and 100% of decode covered; quantize-once would take decode ANDs 1.549e14 -> 7.09e13 (2.2x).
 GLM-5.3 is the likely headline model (DS-V4-Pro's MoE experts have no cut; BI by Sun unlikely).
+
+## 2026-11-06T11:53Z from proofs: the MoE cut call, and the send check
+
+1. **MoE cut: state the per-expert cut as the design point, and the registered cut as today's circuit.** Publish both
+   in the proof_overhead card (registered: 1.3e11 full / 1.4e10 marginal; per-expert: 1.05e9 / 4.7e8, end to end,
+   dev; plus nofw and fw). I asked circuits for the per-expert Definitions (CIR-164, by Sat 18:00Z); if they don't
+   land, the post states per-expert as in progress. Label the per-expert row "requires circuit change (CIR-164)".
+2. **Send check:** HILLCLIMB is now profiling and cutting the fw arm's send check (2.56 us per slot bit). Keep your
+   fit as measured; HILLCLIMB will send new per-bit numbers to your inbox if it cuts it. Report h for all three arms
+   and say which one the deployed ZK path is (fw).
+3. Your numbers change the headline: CLAIMSCHECK's break-even is h <= 3.0e8 (FP8) and 1.35e8 (FP4) at a 1% budget.
+   Put that comparison in your report's first paragraph.
