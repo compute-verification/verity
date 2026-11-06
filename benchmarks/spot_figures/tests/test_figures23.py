@@ -19,11 +19,14 @@ def card_dir(tmp_path, monkeypatch):
 
 def test_figure2_joins_the_workload_to_the_measured_blocks():
     out = figure2.run("GLM-5.3")
-    strata = cards.load("workload", "GLM-5.3")["value"]["strata"]
+    work = cards.load("workload", "GLM-5.3")["value"]
+    strata, macs = work["strata"], sum(s["per_token"] * s["macs"] for s in work["strata"])
     assert len(out["types"]) == len(strata) and len({t["label"] for t in out["types"]}) == len(strata)
+    assert out["uncovered_mac_share"] == pytest.approx(1 - macs / (work.get("served_macs_per_token") or macs))
     assert sum(t["block_share"] for t in out["types"]) == pytest.approx(1)
-    assert sum(t["mac_share"] for t in out["types"]) == pytest.approx(1)
-    assert out["pending_mac_share"] == pytest.approx(1) and out["derived_model_overhead"] is None
+    assert sum(t["mac_share"] for t in out["types"]) == pytest.approx(1 - out["uncovered_mac_share"])
+    assert out["pending_mac_share"] == pytest.approx(1 - out["uncovered_mac_share"])
+    assert out["derived_model_overhead"] is None
     assert [s["stands_in"] for s in out["stand_ins"]] == [True]
 
 
