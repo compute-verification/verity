@@ -1,5 +1,10 @@
-import Proofs.Properties.NetworkCertifier.Outcomes
-import Proofs.Properties.CertifierNetwork.Certify
+module
+
+public import Proofs.Properties.NetworkCertifier.Outcomes
+public import Proofs.Properties.CertifierNetwork.Certify
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.String.Defs
 
 /-!
 # The completeness theorems' honest cases, instantiated
@@ -14,6 +19,8 @@ Two hypotheses stay hypotheses, each of a function no proof can evaluate: the pa
 since `parametersDigest` reads `Flock.canonUtf8`, well-founded recursion the kernel does not evaluate; and, for `answer`,
 that the bytes decode to the unit, since the parameters' and evidence's decoders read canonical JSON through it too.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check
@@ -102,7 +109,7 @@ def params : NetworkCheck.Check.Params where
   session := session
 
 /-- The egress link opens no frames and declares `sync`. -/
-def link : NetworkCheck.Check.Link := ⟨[], #[sync]⟩
+def link : NetworkCheck.Check.LinkOpening := ⟨[], #[sync]⟩
 
 def evidence : Evidence := ⟨#[link]⟩
 
@@ -117,7 +124,7 @@ theorem declares : Declares (W := params.windows) link fun _ => sync := by
 theorem programGrid_eq : programGrid params (fun _ => sync) link.frames 0 = #[#[none]] := by decide +kernel
 
 /-- An empty one-bucket record: its one slot is padding. -/
-def record (l : String) : Record := ⟨l, 0, #[#[none]], .complete⟩
+def record (l : String) : BlockGrid := ⟨l, 0, #[#[none]], .complete⟩
 
 /-- What a record's head copies of its grid. -/
 theorem recordHead_grid {l : String} {d : Direction} {w : Int} {gr : Array (Array (Option ByteArray))}

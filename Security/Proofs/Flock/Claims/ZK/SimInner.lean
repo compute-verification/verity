@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Split
-import Proofs.Flock.Claims.Complete.Zk.Exact
+module
+
+public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.Complete.Zk.Exact
 
 /-!
 # Hybrid 2 against hybrid 3: a rep's inner proof from the cut (`SimInner`)
@@ -25,6 +27,8 @@ round's coin.
 * **`innerYE`**: wherever the cut sent `Y₁`, its `Y` read in `yAt`'s order is the session's `h ‖ pad_h + β·(μ ‖ pad_μ)`
   at the honest pads, `β` the coin two rounds after `ε`'s.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.SimInner
 
@@ -105,7 +109,7 @@ theorem sampleCut_go (coin : ℕ → ℕ → F128) (n : ℕ) (t : Transcript) (l
 /-! ## The inner proof from the source against the session's -/
 
 /-- The inner proof's coins at `asksCut`'s rounds `L` to `L + 3`. -/
-def cutCoins (coin : ℕ → ℕ → F128) (L : ℕ) : InZ.Coins := ⟨coin L, coin (L + 1), coin (L + 2), coin (L + 3)⟩
+def cutCoins (coin : ℕ → ℕ → F128) (L : ℕ) : InZ.Challenges := ⟨coin L, coin (L + 1), coin (L + 2), coin (L + 3)⟩
 
 /-- **What the source carries for an inner proof begun after `L` bodies**, against the honest pads `p` and the
 constraints `cons`, at the coins `asksCut coin n` answers (round `k < n`). Each holds where its round is answered:

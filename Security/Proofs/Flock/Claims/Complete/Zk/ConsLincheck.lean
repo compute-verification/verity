@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
-import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
+public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
 
 /-!
 # The lincheck's constraint vanishes at the masked prover's pads
@@ -22,6 +24,8 @@ For the lincheck (`Zk.replay`'s "lincheck final", restated by `Lincheck.lcFinal`
   returns, for a trace of a witness (`Lc.lcAlgebra_of`'s hypotheses).
 -/
 
+@[expose] public section
+
 namespace FlockComplete.Replay
 
 open Flock FlockLevel3 FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge.Composed
@@ -36,7 +40,7 @@ structure LcMasks (lay : Zk.PadLayout) (h : Array F128) (lc lc' : LincheckProof)
 
 /-- **The masked lincheck proof is the plain one masked by the pads**, on all `k_log − 6` rounds and `z_partial`. -/
 theorem lcZ_masks (lay : Zk.PadLayout) (h : Array F128) (c : CircuitFold) (m : ℕ) (tr : Trace) (zc : ZcOut)
-    (full : Array F128) (cs : Lc.Coins) :
+    (full : Array F128) (cs : Lc.Challenges) :
     LcMasks lay h (Lc.proof c m tr zc full cs) (LcZ.proof lay h c m tr zc full cs) (c.kLog - 6) where
   rounds j hj := by
     simp only [LcZ.proof, Lc.proof]
@@ -139,7 +143,7 @@ theorem lcFinal_zero (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes 
     (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽))
     (ha : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.az a.val = ((aVec S w a).val : 𝔽))
     (hb : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.bz a.val = ((bVec S w a).val : 𝔽))
-    (zcs : Zc.Coins) (cs : Lc.Coins) (full : Array F128)
+    (zcs : Zc.Challenges) (cs : Lc.Challenges) (full : Array F128)
     (hfold : c.fold (cs.ca 0) (skipWeights (Zc.out m zcs tr).z) ((Zc.out m zcs tr).rho.extract 0 (c.kLog - 6)) =
       .ok full)
     (lay : Zk.PadLayout) (h : Array F128) (hn : c.kLog - 6 ≤ lay.nLc) :

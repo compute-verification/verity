@@ -1,5 +1,8 @@
-import Proofs.Flock.Claims.Recursion.Finders
-import Proofs.Flock.Claims.Recursion.Hybrid
+module
+
+public import Proofs.Flock.Claims.Recursion.Hybrid
+public import Proofs.Flock.Claims.Recursion.Cost
+public import Proofs.Flock.Claims.Recursion.Transport
 
 /-!
 # The recursion: KS
@@ -39,6 +42,8 @@ the instance with Flock as the inner protocol. The draft's `γ` is `γ_A` with a
 * Code facts, which bind `D`'s readers to the compiled verifier: `Refuses` (the compiled verifier accepts only a
   statement that parses with no circuit commitment) and `InnerRounds` (its first rounds are the inner session's).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

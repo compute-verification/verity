@@ -1,6 +1,8 @@
-import PouwCommit.Coins
-import PouwCommit.Draws
-import PouwCommit.Rows
+module
+
+public import PouwCommit.Coins
+public import PouwCommit.Draws
+public import PouwCommit.Rows
 
 /-!
 # PoUW's commitments: properties of the port (`PouwCommit`)
@@ -12,6 +14,8 @@ disjunct is a collision among the messages actually hashed: two different ones, 
 framed messages), with one digest. That is collision resistance's content, taken as a disjunct rather than assumed away, and
 bounded to the inputs, since some collision of SHA-512 exists outright.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Commit
 
@@ -127,8 +131,8 @@ def DrawShape : Prop :=
 def pathFrames (d : Domain) (rank : Nat) (leaf : ByteArray) (path : List ByteArray) : List ByteArray :=
   (path.zipIdx.foldl (fun (acc : List ByteArray × ByteArray × Nat) (sib, lv) =>
     let (ms, dg, cur) := acc
-    let m := if cur % 2 == 0 then frameBytes "node" [d.id, natBytes lv, natBytes (cur / 2), dg, sib]
-      else frameBytes "node" [d.id, natBytes lv, natBytes (cur / 2), sib, dg]
+    let m := if cur % 2 == 0 then frameBytes "node" [d.id, FV3.uint lv, FV3.uint (cur / 2), dg, sib]
+      else frameBytes "node" [d.id, FV3.uint lv, FV3.uint (cur / 2), sib, dg]
     (ms ++ [m], d.hash.run m, cur / 2)) ([], leaf, rank)).1
 
 /-- What SHA-512 hashes when `coin_reason` checks the opening `o` of epoch `epoch`'s coin at `rank`, from the coin up: the
@@ -139,7 +143,7 @@ def coinHashed (epoch rank : Nat) (o : CoinOpening) : List ByteArray :=
   let value := leafValue o.coin o.salt
   [COIN_TAG ++ o.coin, Hm96.Default512.saltPrefix ++ o.salt,
     Hm96.Default512.leafPrefix ++ Hm96.Default512.commitString (Sha512.hash (COIN_TAG ++ o.coin)) o.salt,
-    frameBytes "leaf" [d.id, natBytes rank, natBytes rank, SCHEME.toUTF8, value]] ++
+    frameBytes "leaf" [d.id, FV3.uint rank, FV3.uint rank, SCHEME.toUTF8, value]] ++
     pathFrames d rank (d.leaf rank SCHEME value) o.path
 
 /-- A commitment opens to one coin per label: two openings of the same label accepted against one commitment carry the

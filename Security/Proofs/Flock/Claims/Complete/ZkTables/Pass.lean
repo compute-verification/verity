@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Files
-import Proofs.Flock.Claims.Complete.ZkTables.Table
-import Proofs.Flock.Claims.Complete.Zk.Exact
-import Proofs.Flock.Claims.Complete.Zk.Stops
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Files
+public import Proofs.Flock.Claims.Complete.ZkTables.Table
+public import Proofs.Flock.Claims.Complete.Zk.Exact
+public import Proofs.Flock.Claims.Complete.Zk.Stops
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 
 /-!
 # A masked session that returns passed every refusal at its slot
@@ -23,6 +25,8 @@ session stops within `repStartZk q + n` (an earlier rep that stops ends by rep `
 `sessionPZk_rho_stop`, `sessionPZk_beta_stop` and `sessionPZk_rank_stop` give `n` at each refusal: right after the
 send whose reply it refused (`repPZk_rho_stop`, `repPZk_beta_stop`, `repPZk_rank_stop`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 
@@ -46,8 +50,8 @@ theorem claimPoints_congr_lt {m kLog : ℕ} (hm : 6 ≤ m) (hk : 6 ≤ kLog) {f 
 
 /-- **Round `1` after a masked rep's lincheck is the zerocheck's `m − 13` outer coins.** -/
 theorem lcZ_round1 {lay lay' : Zk.PadLayout} {hz hz' : Array F128} {c : CircuitFold} {m m' : ℕ}
-    {digest cap root : ByteArray} {cs : Zc.Coins} {tr tr' : Trace} {zc : ZcOut} {full : Array F128}
-    {cs' : Lc.Coins} (dom : ByteArray) :
+    {digest cap root : ByteArray} {cs : Zc.Challenges} {tr tr' : Trace} {zc : ZcOut} {full : Array F128}
+    {cs' : Lc.Challenges} (dom : ByteArray) :
     (LcZ.tEnd lay' hz' c m' tr' zc full cs'
       (ZcZ.tEnd lay hz m digest cap root cs tr (Transcript.init #[] dom))).rounds[1]!.n = m - 13 := by
   have hp : Prefix ((ZcZ.t₂ digest cap root cs (Transcript.init #[] dom)).rounds.push

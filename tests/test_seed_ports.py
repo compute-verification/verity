@@ -83,6 +83,11 @@ TESTS = {
     "verity/ml/circuits/tests/test_ports_one_use.py::Seed": "the seed those Programs batch, to hold E_COIN_REUSE's position rule",
     "verity/ml/circuits/tests/test_population_ports.py::Seed":
         "a seed whose population declares no ports and is refused (E_PORT_KIND): a population never mints a seed",
+    "verity/ml/circuits/tests/test_population_values.py::Unit":
+        "a unit of a population with values: its position beside its receipt sink, so the ports see the members alone",
+    "integrations/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInSeed":
+        "the drawn J10-R test's stand-in tile reads its coin and position through a seed, so credit's real Lean check "
+        "accepts the stand-in statement (every input bit read)",
 }
 ALLOWED = SEEDS | UNITS | KEY_COUNTS | WINDOWS | TESTS
 

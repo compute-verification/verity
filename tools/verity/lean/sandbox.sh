@@ -9,11 +9,14 @@ set -euo pipefail
 rw=()
 ro=()
 while [ "$1" != "--" ]; do
-  if [ "$1" = "--ro" ]; then ro+=("$2"); shift 2; else rw+=("$1"); shift; fi
+  if [ "$1" = "--ro" ]; then ro+=("$(realpath -m "$2")"); shift 2; else mkdir -p "$1"; rw+=("$(realpath "$1")"); shift; fi
 done
 shift
+# a bind mount and /proc/self/mountinfo name a directory by its resolved path, so keep and seen hold the resolved ones
+for i in "${!rw[@]}"; do mkdir -p "${rw[i]}"; rw[i]=$(realpath "${rw[i]}"); done
+for i in "${!ro[@]}"; do ro[i]=$(realpath -m "${ro[i]}"); done
 mount --make-rprivate /
-for d in "${rw[@]}"; do mkdir -p "$d"; mount --bind "$d" "$d"; done
+for d in "${rw[@]}"; do mount --bind "$d" "$d"; done
 keep=" ${rw[*]} "
 seen=" ${rw[*]} ${ro[*]} "
 awk '{print $5}' /proc/self/mountinfo | sort -u | while read -r m; do

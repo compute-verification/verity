@@ -1,4 +1,6 @@
-import NetworkCheck.Records
+module
+
+public import NetworkCheck.Records
 
 /-!
 # `Records.expectedGrids` is `Check.expectedGrid`, window by window
@@ -8,6 +10,8 @@ pass, linear in the frames and the buckets, where `Check.expectedGrid` (and `Net
 `Security` reads) recomputes the hand times, the queue and the offsets for every bucket. `expectedGrids_eq`: for each
 window `w < W`, the two are equal, so every egress verdict of the records check reads the Program `Security` reasons about.
 -/
+
+@[expose] public section
 
 namespace NetworkCheck.RecordsGrid
 
@@ -110,7 +114,7 @@ theorem expectedRow_eq (S T W : Nat) (syncs : Fin W → ClockSync) (frames : Lis
   split <;> rfl
 
 /-- Window `w`'s grid of `expectedGrids` is `Check.expectedGrid`'s, slot for slot. -/
-theorem expectedGrids_eq (g : Check.Grid) (W : Nat) (l : Check.Link) (w : Fin W) :
+theorem expectedGrids_eq (g : Check.Grid) (W : Nat) (l : Check.LinkOpening) (w : Fin W) :
     (expectedGrids g W l)[w.val]? = some (Check.expectedGrid g W l w.val) := by
   obtain ⟨w, hw⟩ := w
   dsimp only

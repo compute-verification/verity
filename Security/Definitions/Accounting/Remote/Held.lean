@@ -1,7 +1,9 @@
-import Definitions.Pouw.Basic.Prob
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.Archimedean.Real.Basic
-import Mathlib.Order.Interval.Finset.Nat
+module
+
+public import Definitions.Pouw.Basic.Prob
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.Archimedean.Real.Basic
+public import Mathlib.Order.Interval.Finset.Nat
 
 /-!
 # What a remote audit shows held: the node's memory as a trace (trusted)
@@ -24,11 +26,19 @@ A paced session (`Pace`) groups the passes: group `g`'s passes are `[first ω g,
 `released ω g` (`s_g`) and `ended ω g` is `e_g = max(its last root's arrival, s_(g + 1))`. Groups `g < C` are credited
 and group `C` closes them.
 
+What the session shows read, at an outcome, the bandwidth audit's claim (`Accounting.PeriodRun.Holds` at `.poub`):
+
+* `read ω p`: the registered blocks pass `p` read on the node, those of its plan whose receipts are correct, each in
+  node memory or on a chip at a tick of the pass;
+* `reads ω P`: `Σ_{p < P} |read ω p|`, those of the first `P` passes.
+
 What the session shows held, at an outcome:
 
 * `held ω`, the snapshot: `Σ_p |mem ω (tick ω p)|`, the registered blocks in node memory at each credited pass's start;
 * `heldOver ω u v`, held over time: `Σ_{t ∈ [u, v)} |mem ω t|`, the registered blocks in node memory at each tick.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Held
 
@@ -88,6 +98,14 @@ def planned (ω : Ω) : ℕ := ∑ p ∈ range T.passes, (T.plan ω p).card
 
 /-- The credited passes' wrong receipts of registered blocks. -/
 def wrong (ω : Ω) : ℕ := ∑ p ∈ range T.passes, (T.plan ω p \ T.correct ω p).card
+
+/-- The registered blocks pass `p` read on the node: those of its plan whose receipts are correct, each in node memory
+or on a chip at a tick of the pass. -/
+def read (ω : Ω) (p : ℕ) : Finset (Fin T.blocks) :=
+  T.plan ω p ∩ T.correct ω p ∩ (Ico (T.tick ω p) (T.tick ω (p + 1))).biUnion (T.present ω)
+
+/-- The registered blocks the first `P` passes read on the node, summed over the passes. -/
+def reads (ω : Ω) (P : ℕ) : ℕ := ∑ p ∈ range P, (T.read ω p).card
 
 /-- The snapshot: the registered blocks in node memory at each credited pass's start, summed over the passes. -/
 def held (ω : Ω) : ℕ := ∑ p ∈ range T.passes, (T.mem ω (T.tick ω p)).card

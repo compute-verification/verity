@@ -1,4 +1,5 @@
-"""``ncp-v1``: noise-cancelling polarization under TT_NCP(0.5%) (``PROTOCOL.md`` §NCP; Lean `Pouw.NCP`).
+"""``ncp-v1``: noise-cancelling polarization under TT_NCP(0.5%) (Lean `Pouw.NCP`, its γ
+`Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1`).
 
 For int7 activations ``A`` (m x k) and weights ``B`` (committed as its n rows along k, so the product is ``A·Bᵀ``):
 

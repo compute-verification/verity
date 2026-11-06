@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Replay.Satisfies
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lincheck
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Satisfies
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lincheck
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
 
 /-!
 # The lincheck's algebra at the deployed relation
@@ -20,6 +22,8 @@ passes the verifier's checks (§10).
 * `lcAlgebra`: at a good case the trace is the witness's bits (`traceOf_z`), its A and B sides are the statement's
   (`toZ_mulBlocks`, through `Case.model`'s `placedA = matA`), and `lcAlgebra_of` applies.
 -/
+
+@[expose] public section
 
 namespace FlockLevel3
 
@@ -100,7 +104,7 @@ namespace Lc
 
 section Rounds
 
-variable {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Coins}
+variable {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Challenges}
 
 theorem combT_size (hf : full.size = 2 ^ c.kLog) : ∀ j, (combT c full cs j).size = 2 ^ c.kLog / 2 ^ j
   | 0 => by simp [combT, hf]
@@ -211,7 +215,7 @@ theorem lcAlgebra_of (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes 
     (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽))
     (ha : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.az a.val = ((aVec S w a).val : 𝔽))
     (hb : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.bz a.val = ((bVec S w a).val : 𝔽))
-    (zcs : Zc.Coins) (cs : Coins) (full : Array F128)
+    (zcs : Zc.Challenges) (cs : Challenges) (full : Array F128)
     (hfold : c.fold (cs.ca 0) (skipWeights (Zc.out m zcs tr).z) ((Zc.out m zcs tr).rho.extract 0 (c.kLog - 6)) =
       .ok full) :
     ∃ comb, c.folded (cs.ca 0) (cs.cb 0) (skipWeights (Zc.out m zcs tr).z)

@@ -1,7 +1,9 @@
-import Definitions.Nci.Guarantees.Covering
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Tactic.NormNum
+module
+
+public import Definitions.Nci.Guarantees.Covering
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Tactic.NormNum
 
 /-!
 # The covering bound is not vacuous
@@ -13,6 +15,8 @@ input `x` (gate 4) are unregistered inputs (`θ = ∅`). The products `pᵢ = w�
 that completes a product holds its weight as an input, so the circuit is parameter-hard at every `s`, and six blocks of
 three gates, each with two inputs, cover it.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.Covering
 
@@ -35,7 +39,7 @@ abbrev exCircuit : Circuit where
   outputs := {10}
 
 /-- The witness declaration: nothing registered. -/
-abbrev exDecl : Declaration := ⟨exCircuit, ∅, by simp⟩
+abbrev exDecl : RegisteredCircuit := .ofCircuit exCircuit ∅ (by simp)
 
 /-- The product gate of weight `i`. -/
 def exProd : Fin 4 → Fin 11 := ![5, 6, 7, 10]
@@ -126,7 +130,7 @@ theorem ex_mem : ((3, 0) : Fin 4 × Fin 1) ∈ Assumptions.chainedBlocks exDecl 
 /-- **The covering bound is not vacuous**: one declaration, its multiplication blocks and a covering satisfy every
 hypothesis of `CoveringBound`, with a chained multiplication block. -/
 theorem coveringBound_nonvacuous :
-    ∃ (d : Declaration) (B : MulBlocks d) (s k D : ℕ) (r b : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
+    ∃ (d : RegisteredCircuit) (B : MulBlocks d) (s k D : ℕ) (r b : ℝ) (n : ℕ) (I : Fin n → Subcircuit d.D),
       (k : ℝ) < r * b * D ∧ Assumptions.ParameterHard d B s r b ∧ Covers d s k I ∧
       (Assumptions.chainedBlocks d B D r b).Nonempty :=
   ⟨exDecl, exBlocks, 3, 2, 3, 1, 1, 6, exCover, by norm_num, ex_parameterHard, ex_covers,

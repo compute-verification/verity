@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.Responder
-import Proofs.Accounting.Actual.Confidence
-import Proofs.Accounting.Memory
+module
+
+public import Definitions.Accounting.Guarantees.Responder
+public import Proofs.Accounting.Actual.Confidence
+public import Proofs.Accounting.Memory
 
 /-!
 # B2, proved
@@ -26,6 +28,8 @@ from a fixed first tick (`ticksIn_of_start`: on time, challenge `j`'s tick is in
 `B2Determines` reads `z` back with a left inverse of the length code (`decodeLen`). `B2_fixed` and `B2Audit_fixed`
 check that the fixed-schedule statements are the case `t x = t`, `τ = 0`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 
@@ -208,7 +212,7 @@ theorem exists_code {β α : Type*} [Finite β] (help : β → α) {H : ℕ}
 
 
 theorem seqAnswers_eq {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.Ans)
-    (step : ℕ → Pous.Bits N → Fin B → Pous.Prog I (Pous.Bits ℓ × Pous.Bits N)) (k : ℕ) (σ : ℕ → Pous.Bits N)
+    (step : ℕ → Pous.Bits N → Fin B → Pous.OracleAlgorithm I (Pous.Bits ℓ × Pous.Bits N)) (k : ℕ) (σ : ℕ → Pous.Bits N)
     (a : ℕ → Pous.Bits ℓ) (is : ℕ → Fin B)
     (h : ∀ j < k, ((step j (σ j) (is j)).run f).1 = a j ∧
       (j + 1 < k → ((step j (σ j) (is j)).run f).2 = σ (j + 1))) :
@@ -235,7 +239,7 @@ theorem seqAnswers_eq {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.Ans
       exact ih (m + 1) (by omega)
 
 theorem seqState_append {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.Ans)
-    (step : ℕ → Pous.Bits N → Fin B → Pous.Prog I (Pous.Bits ℓ × Pous.Bits N)) (i : Fin B) :
+    (step : ℕ → Pous.Bits N → Fin B → Pous.OracleAlgorithm I (Pous.Bits ℓ × Pous.Bits N)) (i : Fin B) :
     ∀ (l : List (Fin B)) (m : ℕ) (σ : Pous.Bits N), Pous.Sampled.seqState f step m (l ++ [i]) σ =
       ((step (m + l.length) (Pous.Sampled.seqState f step m l σ) i).run f).2 := by
   intro l
@@ -247,7 +251,7 @@ theorem seqState_append {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.A
     rw [ih, show m + 1 + l.length = m + (l.length + 1) by omega]
 
 theorem seqState_eq {I : Pous.IdealModel} {ℓ N B : ℕ} (f : I.Qry → I.Ans)
-    (step : ℕ → Pous.Bits N → Fin B → Pous.Prog I (Pous.Bits ℓ × Pous.Bits N)) (k : ℕ) (σ : ℕ → Pous.Bits N)
+    (step : ℕ → Pous.Bits N → Fin B → Pous.OracleAlgorithm I (Pous.Bits ℓ × Pous.Bits N)) (k : ℕ) (σ : ℕ → Pous.Bits N)
     (idx : Fin k → Fin B)
     (h : ∀ j (hj : j + 1 < k), ((step j (σ j) (idx ⟨j, by omega⟩)).run f).2 = σ (j + 1)) :
     ∀ j < k, Pous.Sampled.seqState f step 0 ((List.ofFn idx).take j) (σ 0) = σ j := by
@@ -295,7 +299,7 @@ noncomputable def out (j : ℕ) (σ : Pous.Bits N) (i : Fin sch.B) : Pous.Bits s
 /-- The responder: `out`, with no query. -/
 noncomputable def resp : Pous.SeqResponderOn sch N 0 0 0 where
   step _ _ j σ i := .ret (out sch S X t ans help span M τ H N c ct j σ i)
-  bounded _ _ _ _ _ := fun _ => by simp [Pous.Prog.mulDepth, Pous.Prog.keyWork, Pous.Prog.ringWork]
+  bounded _ _ _ _ _ := fun _ => by simp [Pous.OracleAlgorithm.mulDepth, Pous.OracleAlgorithm.keyWork, Pous.OracleAlgorithm.ringWork]
 
 variable {sch W S X t ans help span M τ H N c ct}
 
@@ -372,7 +376,7 @@ theorem seqAnswers_resp (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k
     (sch.enc W x.1 x.2.1).1) k (stateOf sch S X t help M τ H N c ct x)
     (fun j => ans j ((S x).acts X (window (t x) j))) is
     (fun j hj => by
-      simp only [resp, Pous.Prog.run, is, dite_eq_left hj]
+      simp only [resp, Pous.OracleAlgorithm.run, is, dite_eq_left hj]
       exact out_spec hc hinc hin har hct hcode hN x hx j hj (hl j hj)) k 0 (by omega)
   rw [pre_spec hset x]
   simp only [Nat.zero_add] at key
@@ -391,7 +395,7 @@ theorem seqState_resp (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k) 
       stateOf sch S X t help M τ H N c ct x j := by
   rw [pre_spec hset x]
   refine seqState_eq _ _ k (stateOf sch S X t help M τ H N c ct x) x.2.2 (fun j hj => ?_) j hj
-  simp only [resp, Pous.Prog.run]
+  simp only [resp, Pous.OracleAlgorithm.run]
   exact (out_spec hc hinc hin har hct hcode hN x hx j (by omega)
     ((Actual.content_length_le _ _ _).trans (hm ⟨j, by omega⟩))).2 hj
 
@@ -420,7 +424,7 @@ theorem B2Audit : Guarantees.B2Audit := by
     exact congrArg List.ofFn (funext hp)
   · let A₂ : Pous.SeqResponderOn sch N 0 0 0 :=
       { step := fun _ _ _ σ _ => .ret (fun _ => false, σ)
-        bounded := fun _ _ _ _ _ _ => by simp [Pous.Prog.mulDepth, Pous.Prog.keyWork, Pous.Prog.ringWork] }
+        bounded := fun _ _ _ _ _ _ => by simp [Pous.OracleAlgorithm.mulDepth, Pous.OracleAlgorithm.keyWork, Pous.OracleAlgorithm.ringWork] }
     refine (pr_mono fun x hx => ?_).trans (hsec W (fun _ _ _ _ _ => false) A₂)
     rcases Nat.eq_zero_or_pos k with hk | hk
     · subst hk

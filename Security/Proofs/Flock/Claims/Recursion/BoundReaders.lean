@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundBridge
-import Proofs.Flock.Claims.Recursion.VCallsAt
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundBridge
+public import Proofs.Flock.Claims.Recursion.VCallsAt
 
 /-!
 # V*'s readers at the bound layout without `ReadersRunPlayed` (option (d))
@@ -29,6 +31,8 @@ needed either.
 `ReadersTrue` and `ReadersLogColl` stay premises: each is a fact about V*'s circuits (the SHA-512 evaluations the parts
 record are true ones, and they are `IVStar`'s calls), which no layout here pins.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 

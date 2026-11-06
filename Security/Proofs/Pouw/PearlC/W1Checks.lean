@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.W1
-import Definitions.Pouw.PearlC.NoiseSha512
+module
+
+public import Definitions.Pouw.PearlC.W1
+public import Definitions.Pouw.PearlC.NoiseSha512
 
 /-!
 # Checks of W1's cost model and SHA-512's noise
@@ -17,6 +19,8 @@ import Definitions.Pouw.PearlC.NoiseSha512
   workload, activations, state and salt.
 - `w1_queries`: `w1` meets `CostModel.Queries` (it makes no oracle call).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1Checks
 
@@ -137,7 +141,7 @@ theorem price_e4m3_sm120_taint :
 
 /-- One E4M3 `m16n8k32` on scratch words: `D` at 0, `A` at 100, `B` at 200, `C` at 300. Its text is two nodes and no
 constant, within W1's bound. -/
-def oneMma : Prog := ⟨fun _ => [], fun _ => .op (.mma ⟨.e4m3, 16, 8⟩ (0, 0) (0, 100) (0, 200) (0, 300) (0, 0) (0, 0)) .done,
+def oneMma : CodeImage := ⟨fun _ => [], fun _ => .op (.mma ⟨.e4m3, 16, 8⟩ (0, 0) (0, 100) (0, 200) (0, 300) (0, 0) (0, 0)) .done,
   fun _ => by norm_num [W1.Code.size]⟩
 
 variable {Q R S : Type}

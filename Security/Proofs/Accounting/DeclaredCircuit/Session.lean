@@ -1,6 +1,8 @@
-import Mathlib
-import Proofs.Accounting.DeclaredCircuit
-import Proofs.Accounting.DeclaredCircuit.Slack
+module
+
+public import Mathlib
+public import Proofs.Accounting.DeclaredCircuit
+public import Proofs.Accounting.DeclaredCircuit.Slack
 
 /-!
 # The session's passes, each priced at its prefix
@@ -14,6 +16,8 @@ made `k + 1` correct digest queries behind unobtained positions with probability
 uniform blocks (`pr_badK_pass_le`). With the rank tail once a window, a session in which some window has rank-poor signs
 or some pass one of the two events costs `n·ε + n·P·G·N/2^512 + n·P·(2^a·(q_tot/2^96)^(k+1) + δ)` (`pr_session_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 
@@ -258,7 +262,7 @@ theorem pr_badK_pass_le [Fintype Ω] [Fintype Ca] {k qtot : ℕ} {δ : ℝ≥0�
     · calc _ ≤ pr (fun _ : (Fin N → Fin 128 → Sector) × SketchPassCoins N ρ 512 16 G => False) :=
             pr_mono fun _ hy => hr hy.1
         _ ≤ _ := by
-          rw [Rate.Horizon.pr_false]
+          rw [Rate.Pooled.pr_false]
           exact bot_le
 
 /-- **The session's passes priced.** Some window has signs of rank below 12, or some pass a guessed tag or `k + 1`

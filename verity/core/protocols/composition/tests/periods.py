@@ -5,10 +5,11 @@
 honest, under a prover that answers every other round with zeros, the honest audit's case committed to a setup with
 another salt (refused by the setup tie), and an honest run on another store (`OTHER_STORE`, accepted, which onsite's
 store tie refuses beside PoUB-P2's case); PoUB-P2's (`p2_case`, its sessions over a socket pair against
-`remote-audit-verifier`, as `remote_bandwidth/lean/tests/test_p2_party.py` runs them) honest, under a prover whose
-receipts skip a unit's reads, and the honest session's log stopped before its last window is verified; and of each, its
-honest case with params or evidence that don't decode. A P2 case is recorded as the composition hands it, without its
-`store_root`: onsite reads the store off its commitment's registration."""
+`remote-audit-verifier`, as `remote_bandwidth/lean/tests/test_p2_party.py` runs them, held to the auditor's session
+`p2_party.SESSION`, the only one whose case the replay takes) honest, under a prover whose receipts skip a unit's reads,
+and the honest session's log stopped before its last window is verified; and of each, its honest case with params or
+evidence that don't decode. A P2 case is recorded as the composition hands it, without its `store_root`: onsite reads
+the store off its commitment's registration."""
 
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ from verity.core.protocols.pous import period as pous
 from verity.core.protocols.pous import run as RUN
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes import p2 as P2
-from verity.core.protocols.remote_bandwidth import p2, p2_case, p2_lean
+from verity.core.protocols.remote_bandwidth import p2, p2_case, p2_lean, p2_party
 from verity.ml.commitments.identity import canonical_json_bytes
 
 ROOT = Path(__file__).resolve().parents[5]
@@ -51,15 +52,16 @@ def _committed(T) -> p2.Store:
     return p2.Store(p2.register(T.SOURCE, T.NODE, commitment, vk), blocks)
 
 
-def _held(store: p2.Store) -> pous.Store:
+def _held(store: p2.Store) -> pous.EncodedStore:
     """PoUS's store for the `C*` that P2's `store` registers: its setup published at that `C*`'s commitment, salt and
     root."""
     reg, q = store.registration, store.registration.params
     n = q.blocks_per_segment
-    return pous.Store(RUN.Point(q, POUS_K, pous.LIMIT_NS), RUN.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
-                      store.blocks, b"".join(mc.block_digest(b) for b in store.blocks),
-                      pous.setup_case(q, reg.commitment, reg.salt,
-                                      [list(store.blocks[n * s:n * (s + 1)]) for s in range(q.segments)]))
+    return pous.EncodedStore(RUN.Point(q, POUS_K, pous.LIMIT_NS),
+                             RUN.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
+                             store.blocks, b"".join(mc.block_digest(b) for b in store.blocks),
+                             pous.setup_case(q, reg.commitment, reg.salt,
+                                             [list(store.blocks[n * s:n * (s + 1)]) for s in range(q.segments)]))
 
 
 def _with_setup(case: dict, setup_of: dict, trusted: tuple[bytes, ...]) -> tuple[dict, dict]:
@@ -71,7 +73,7 @@ def _with_setup(case: dict, setup_of: dict, trusted: tuple[bytes, ...]) -> tuple
     point = RUN.Point(P2.P2Params(q["w"], q["c0"], q["blocks_per_segment"], q["segments"]),
                       p["point"]["k"], p["point"]["limit_ns"])
     answer = pous.answer(point, mc.SCHEMES, trusted, RUN.Setup.from_json(json.loads(bytes.fromhex(case["commitment"]))),
-                         bytes.fromhex(ev["digests"]), RUN.Session.from_json(ev["session"]),
+                         bytes.fromhex(ev["digests"]), RUN.ChallengerRecord.from_json(ev["session"]),
                          bytes.fromhex(p["session_id"]), setup_inputs=pous.setup_inputs(setup_of))
     return case | {"evidence": canonical_json_bytes(ev).hex()}, answer
 
@@ -134,7 +136,8 @@ def build(tmp: Path) -> None:
             def case(self, doc) -> None:
                 kept.append(doc)
 
-        proved, answer = T.run(exe, store, lambda c: Keeping(store, c, **kw), T.request(store))
+        proved, answer = T.run(exe, store, lambda c: Keeping(store, c, **kw), T.request(store, p2_party.SESSION),
+                               auditor=p2_party.SESSION)
         assert proved == answer and len(kept) == 1, answer
         assert p2_case.same_store(kept[0], honest.case) is None
         return _served(kept[0]), p2_case.answer(kept[0], answer)

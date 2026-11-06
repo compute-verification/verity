@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.BandwidthAudit
-import Proofs.Accounting.Prob
-import Proofs.Accounting.Bandwidth.AuditRO
+module
+
+public import Definitions.Accounting.Guarantees.BandwidthAudit
+public import Proofs.Accounting.Prob
+public import Proofs.Accounting.Bandwidth.AuditRO
 
 /-!
 # Proof that the bandwidth audit's guarantee is a joint run's bandwidth guarantee
@@ -11,6 +13,8 @@ the game's device is accepted with its ingress, plus `S_chip + c + G·b + λ`, s
 event in `ℝ≥0∞`, and with `N > 0` its bound is finite and is the certificate's error as a real number
 (`pr_short_le_error`). The sure bound gives `BandwidthOfAudit`, the reads at the coins drawn `BandwidthOfAuditPerRun`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 
@@ -34,7 +38,8 @@ theorem pr_short_le_error {N b h s G k lam : ℕ} {ι α ΩW ΩS : Type} [Fintyp
   calc _ = (Pous.pr (fun y : BandwidthCoins N b h s => Bandwidth.Accepts (real.dev (x, s')) y.1 y.2.1 y.2.2 ∧
           (real.dev (x, s')).ingress y.1 y.2.1 + d.chip + c + G * b + lam < k * b)).toReal := pr_eq_toReal _
     _ ≤ ((((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam).toReal :=
-        ENNReal.toReal_mono hfin (Bandwidth.SecurityProofs.AuditRO N b h d.chip c G q s k lam (real.dev (x, s')))
+        ENNReal.toReal_mono hfin
+          (Accounting.SecurityProofs.Remote.AuditRO N b h d.chip c G q s k lam (real.dev (x, s')))
     _ = _ := by
         rw [ENNReal.toReal_add (ENNReal.add_ne_top.1 hfin).1 (ENNReal.add_ne_top.1 hfin).2,
           ENNReal.toReal_add (ENNReal.add_ne_top.1 (ENNReal.add_ne_top.1 hfin).1).1

@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.TileCircuit
-import Definitions.Pouw.PearlC.DeviceFp4
+module
+
+public import Definitions.Pouw.PearlC.TileCircuit
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # Pearl-C4's tile unit as a core circuit (definitions only)
@@ -24,6 +26,8 @@ templates' descriptor digests pinned, by `tests/test_circuit_tile_lean.py`. The 
 order of a gate's reads and each primitive's semantics, here `nvf4Word` for the FP4 step (the primitive's three rules,
 with `Fp4Atom.step sm120Nvf4` on a finite accumulator and valid scale bytes).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TileCircuit
 
@@ -54,7 +58,7 @@ def atom4F (first : Bool) (l : List ℕ) : ℕ :=
 /-- One gate of an entry's block, at position `r` of the block and gate `g`: the chain's `K/64` firings over `A′_i`'s
 codes from gate `a` and scale bytes from `sa` and `B̃_j`'s from `b` and `sb`, then U's four K16 steps over the 64 BF16
 words of `P_A,i` from gate `pa` and of `P_B,j` from gate `pb`. -/
-def entry4Gate (K a b sa sb pa pb g r : ℕ) : Gate :=
+def entry4Gate (K a b sa sb pa pb g r : ℕ) : GateRow :=
   if r < K / 64 then
     ⟨32, false, (if r = 0 then [] else [g - 1]) ++ (List.range 64).map (a + 64 * r + ·) ++
         (List.range 64).map (b + 64 * r + ·) ++ (List.range 4).map (sa + 4 * r + ·) ++
@@ -78,7 +82,7 @@ def entry4Base (K TM TN i j : ℕ) : ℕ := tile4In K TM TN + (i * TN + j) * blo
 
 /-- `Pc4Tile_v1{K, TM, TN}`'s gates: the inputs (see the module docstring), then entry `(i, j)`'s block (`entry4Gate`)
 for each entry in row-major order. -/
-def tile4Gate (K TM TN g : ℕ) : Gate :=
+def tile4Gate (K TM TN g : ℕ) : GateRow :=
   if g < TM * K then ⟨4, true, [], fun _ => 0⟩
   else if g < TM * row4 K then ⟨8, true, [], fun _ => 0⟩
   else if g < TM * row4 K + TN * K then ⟨4, true, [], fun _ => 0⟩

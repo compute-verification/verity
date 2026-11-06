@@ -1,5 +1,7 @@
-import Definitions.Flock.HoloCompiled
-import Proofs.Flock.C3.Fork.CouplingPull
+module
+
+public import Definitions.Flock.HoloCompiled
+public import Proofs.Flock.C3.Fork.CouplingPull
 
 /-!
 # a1l, step 3: the holographic table in lockstep
@@ -11,6 +13,8 @@ registered opening as the same games (`lockRegPhase`), and R's Ligerito on the r
 pulled from `2` (`lockLigR`). R's tables sit beside the reps' (`liftL`, `liftR`): the reps' at even slots, R's at
 odd ones. The leaf relation (`TopRelH`) is `TopRelL`'s with R's stream as a third rep.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 
@@ -152,14 +156,6 @@ def holoTableCmpL {Sl : Type} (A : Arith F K) (H : List UInt8 → D) (E : Merkle
       ⟨reps.1.2.verdict os.1 && reps.2.2.verdict os.1 && pendR.verdict os.1 &&
         decide (OpensOKL H E Lf cap₀ 0 reps.1.2 os.1 os.2 ∧ OpensOKL H E Lf cap₀ 1 reps.2.2 os.1 os.2 ∧
           OpensOKL H E Lf capReg 2 pendR os.1 os.2), cap₀, (reps.1.2, reps.2.2), pendR, os.1, os.2⟩
-
-theorem holoTableCL_send {Sl : Type} (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
-    (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)
-    (capReg : Cap D) :
-    holoTableCL A H E Lf S sch hm ptLocal mPts sh units τ rsch capReg =
-      Game.send (Cap D) (holoTableCmpL A H E Lf S sch hm ptLocal mPts sh units τ rsch capReg) :=
-  rfl
 
 /-- **The holographic table's leaf relation** below the level-0 cap `cap₀`: `TopRelL`'s, with R's stream a third
 rep whose level 0 is the registered word `w` under the registered cap `capReg`, and its tables `i.2`. -/

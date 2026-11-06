@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.CutSession
-import Proofs.Flock.Claims.Complete.Zk.PiopGo
+module
+
+public import Proofs.Flock.Claims.ZK.CutSession
+public import Proofs.Flock.Claims.Complete.Zk.PiopGo
 
 /-!
 # A rep's zerocheck from the cut, against the session's (`SimPiop`'s first phase)
@@ -19,6 +21,8 @@ same transcript and bodies, values related by `R`.
   sends and returns the session's proof, both at the `z`, `ρ` and `r` of those coins (`ZcOutAt`; the cut's `v_A`,
   `v_B`, `v_C` are zeros).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -181,11 +185,11 @@ theorem liftTM_inv {α : Type} {x : TM α} {t t' : Transcript} {l l' : Array Cla
 
 /-- **The zerocheck's coins at the cut's coins** from round `L` on: `r_skip`'s at `L`, `r_outer`'s at `L + 1`, `z`'s at
 `L + 2`, residual round `i`'s at `L + 3 + i`. -/
-def zcCoins (coin : ℕ → ℕ → F128) (L : ℕ) : Zc.Coins :=
+def zcCoins (coin : ℕ → ℕ → F128) (L : ℕ) : Zc.Challenges :=
   ⟨coin L, coin (L + 1), coin (L + 2), fun i => coin (L + 3 + i)⟩
 
 /-- **A zerocheck's `z`, `ρ` and `r` at the coins `cs`**, those `Zc.out` returns. -/
-abbrev ZcOutAt (m : ℕ) (cs : Zc.Coins) (o : ZcOut) : Prop :=
+abbrev ZcOutAt (m : ℕ) (cs : Zc.Challenges) (o : ZcOut) : Prop :=
   o.z = cs.z ∧ o.rho = pushes cs.ρ (m - 6) ∧ o.rRest = cs.r m
 
 /-- **The cut's zerocheck in lockstep with the session's**: answered by `asksCut` from `l`, where the masked values `mk`

@@ -1,7 +1,9 @@
-import Definitions.Pouw.PearlC.RowPrims
-import Definitions.Core.Fp32
-import Definitions.Core.Prims
-import Definitions.Core.Scalar
+module
+
+public import Definitions.Pouw.PearlC.RowPrims
+public import Definitions.Core.Fp32
+public import Definitions.Core.Prims
+public import Definitions.Core.Scalar
 
 /-!
 # The row units as core circuits (definitions only)
@@ -28,6 +30,8 @@ in which order and through which wiring, the constants, the widths and the outpu
 own gates and their `CallGraph`, with descriptor digests pinned, by `tests/test_circuit_row_lean.py`; each primitive's
 semantics is the trusted part.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 
@@ -228,8 +232,8 @@ def fill (ops : RowOps) : List Arg → List ℕ → List ℕ
   | .c v :: as, l => v :: fill ops as l
   | .g _ w :: as, l => w.eval ops (l.headD 0) :: fill ops as l.tail
 
-/-- A computed gate as a `TileCircuit.Gate`. -/
-def RGate.toGate (ops : RowOps) (G : RGate) : Gate :=
+/-- A computed gate as a `TileCircuit.GateRow`. -/
+def RGate.toGate (ops : RowOps) (G : RGate) : GateRow :=
   ⟨G.prim.w, false, G.reads, fun l => G.prim.eval ops (fill ops G.args l)⟩
 
 /-! ## Tables of runs -/
@@ -451,7 +455,7 @@ structure Rows where
 def Rows.N (T : Rows) : ℕ := T.nIn + runsLen T.runs
 
 /-- Gate `g` of the table, with `ops` for core's primitives. -/
-def Rows.gate (ops : RowOps) (T : Rows) (g : ℕ) : Gate :=
+def Rows.gate (ops : RowOps) (T : Rows) (g : ℕ) : GateRow :=
   if g < T.nIn then ⟨T.inW g, true, [], fun _ => 0⟩
   else match runsAt T.runs T.nIn g with
     | some G => G.toGate ops

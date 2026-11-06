@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Exec.SessionL
-import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
-import Proofs.Flock.Recursive.Schedule
-import Proofs.Flock.Soundness.Refine.Run
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
+public import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
+public import Proofs.Flock.Recursive.Schedule
+public import Proofs.Flock.Soundness.Refine.Run
 
 /-!
 # Recursion: V*'s target relation
@@ -34,6 +36,8 @@ block statement on the inner messages and the inner coins.
   exactly when the transcript's steps are a cap, the link points, and a run of `tableAfterL` (what `InnerAccepts` plays)
   to an accepted outcome.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

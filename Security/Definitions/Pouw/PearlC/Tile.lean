@@ -1,5 +1,7 @@
-import Definitions.Pouw.Game.Defs
-import Definitions.Pouw.PearlC.Instance
+module
+
+public import Definitions.Pouw.Game.Defs
+public import Definitions.Pouw.PearlC.Instance
 
 /-!
 # The per-tile cap and the sampled audit (trusted)
@@ -31,6 +33,8 @@ file states both; `TileGamma` proves γ from them.
   layout's, exceeds `T/(1 − γ)` is at most `(1 − ε_s)^t + η(q, N)`. The draw is independent of the oracle and the salt,
   so its source must be fixed only after the transcript's commitment.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 
@@ -95,26 +99,6 @@ noncomputable def goodTiles (P : Protocol Q R S) (TR : TileRules Q R S) (U : Wor
   (range (TR.tiling U.layout).NT).filter fun g =>
     ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ TileGood P TR U H s g c
 
-/-- A good tile under U-only binding (the `-h1` format's U-only messages): `TileGood` without its ticket conjunct. Its
-replayed debit is within the cap, each of its weight rows passes the rules and each useful word of its credited rows has
-the reference FP32 value; its ticket words are not read. -/
-def TileGoodU (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (g : ℕ) (c : Commit) :
-    Prop :=
-  TR.capOK H s U g c.act ∧
-    (∀ j ∈ (TR.tiling U.layout).cols g,
-      P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g))
-        (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j) ∧
-    ∀ i ∈ (TR.tiling U.layout).rows g, TR.rowOK (U.layout.shape ((TR.tiling U.layout).unit g)) c.act i →
-      ∀ j ∈ (TR.tiling U.layout).cols g,
-        wordQ (c.useful i j) = P.useful H s U ((TR.tiling U.layout).unit g) c.act i j
-
-open Classical in
-/-- The good tiles of `τ` under U-only binding. -/
-noncomputable def goodTilesU (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S)
-    (τ : Transcript) : Finset ℕ :=
-  (range (TR.tiling U.layout).NT).filter fun g =>
-    ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ TileGoodU P TR U H s g c
-
 open Classical in
 /-- The tiles of the units `τ` leaves blank (declared uncredited): the audit never checks them, and they earn nothing. -/
 noncomputable def blankTiles (TR : TileRules Q R S) (U : Workload) (τ : Transcript) : Finset ℕ :=
@@ -152,18 +136,29 @@ def GγSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMod
           T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + η q U.layout.N
 
-/-- **The γ-gap property under the sampled audit with U-only binding**: `GγSampled` with the audit accepting a drawn tile
-when it is good under U-only binding (`goodTilesU`) or of a blank unit. -/
-def GγSampledU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
+open Classical in
+/-- The tiles of the units `τ` commits whose replayed debit exceeds the cap: the tolerant audit accepts a sampled one and
+credits it nothing. -/
+noncomputable def overCapTiles (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) : Finset ℕ :=
+  (range (TR.tiling U.layout).NT).filter fun g =>
+    ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ ¬ TR.capOK H s U g c.act
+
+/-- **The γ-gap property under the tolerant sampled audit.** As `GγSampled`, for every miss-bound table `u` at `δ`
+(`MissBound`): the audit accepts (every sampled tile is good, of a blank unit, or over its cap) while `T` is below
+`1 − γ` of the claimed work less `u(X_O)` of the layout's, where `X_O` is the number of samples on tiles over their
+cap, with probability at most `δ + η(q, N)`. `GγSampled` is its case `u 0 = ε_s`, `u x = 1` otherwise. -/
+def GγSampledTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
-    ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
+    ∀ (t : ℕ) (u : ℕ → ℝ) (δ : ℝ), MissBound t u δ →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AuditAccepts (goodTilesU P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + η q U.layout.N
+          AuditAcceptsTol (goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
+              blankTiles TR U (A.transcript U x.1 x.2.1))
+            (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) -
+            u (drawsIn (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2) * tileWrefTotal TR U.layout))
+        ≤ δ + η q U.layout.N
 
 /-! ## Pearl-C's tiles -/
 

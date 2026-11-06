@@ -1,7 +1,9 @@
-import Definitions.Pouw.PearlC.W1Stop
-import Proofs.Pouw.PearlC.W1BudgetAbort
-import Proofs.Pouw.PearlC.W1Priced
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Pouw.PearlC.W1Stop
+public import Proofs.Pouw.PearlC.W1BudgetAbort
+public import Proofs.Pouw.PearlC.W1Priced
+public import Proofs.Pouw.Prob
 
 /-!
 # The stopping machine truncates
@@ -20,6 +22,8 @@ machine that stops a run at its budget (`CostModel.withStop`, by ruling) it hold
 So the stop does not make the per-run bound free. `GγPerCoin` is stronger than `Gγ`, whose budget holds on every coin, and
 it is the conjecture a per-run bound over W1 rests on.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1Stop
 
@@ -59,7 +63,7 @@ theorem withStop_budgetAbort (CM : CostModel Q R S)
         · rw [if_neg h, if_neg fun h' => h (h'.trans (min_le_right _ _))]
 
 /-- The priced W1 charges nothing negative at positive prices. -/
-theorem w1Priced_nonneg (dv : W1Device) (hdv : Positive dv) (salt : S → List ℕ) (p : Prog) (H : Q → R)
+theorem w1Priced_nonneg (dv : W1Device) (hdv : Positive dv) (salt : S → List ℕ) (p : CodeImage) (H : Q → R)
     (U : Workload) (act : ℕ → Codes) (σ : State) (s : S) : 0 ≤ (w1Priced dv salt).cost p H U act σ s := by
   have h0 : (0 : ℚ) ≤ (final dv (salt s) p U act σ).cost := (exec_mono dv hdv _ false _).1
   simp only [w1Priced]

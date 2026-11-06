@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import bisect
 import math
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Sequence
 
@@ -28,7 +29,7 @@ from .types import Array, RecordType, Tuple as TupleT, Type, Value, field_at, fi
 StaticValue = Any  # int | str | tuple[int, ...] | FunctionDefinition
 
 
-class Registry:
+class DefinitionTable:
     """Registered function definitions by id `Name_vN`."""
 
     def __init__(self) -> None:
@@ -48,7 +49,7 @@ class Registry:
         return fid in self.defs
 
 
-REGISTRY = Registry()
+REGISTRY = DefinitionTable()
 
 
 class FunctionDefinition:
@@ -64,6 +65,37 @@ class FunctionDefinition:
 #: ``registered`` input of the program, which the primitive still holds while it declares it
 TABLE_KINDS = ("library", "registered")
 
+#: a Definition's conformance label, the word its ``conformance`` text starts with (`conformance_label`), and what it says: how
+#: far the Definition is known to compute what the model computes (completeness, checked empirically and never proved). The
+#: rest of the text qualifies it (the capture, the tested domain, the replacement) and starts with a character that isn't a
+#: lower-case letter or a hyphen, as in ``"exact-model-tested: ..."``.
+CONFORMANCE = {
+    "exact-model-tested": "gives the model's outputs exactly on every input its tests compare (captures of the served kernel, "
+                          "or the model run), which the text names",
+    "model-untested": "read from the model's sources (its kernels, their PTX, a spec) and not yet held to a capture; the text "
+                      "names the check that would",
+    "not-yet-established": "nothing established either way (the default)",
+    "reference-defined": "its evaluator is its definition (a reference operation, an index into its operand), held to another "
+                         "implementation only on the domain the text names",
+    "protocol-defined": "a protocol's own function, with no model to match: the Definition is the specification",
+    "quarantine": "held only to op-level evidence (a difftest against one operation), not to a capture of the served kernel",
+    "superseded": "a later version replaces it, which the text names, with why",
+    "derived": "built from other Definitions by a tool (a difftest, the derive frontend, a prediction, a capture fold): what is "
+               "established is its callees' labels",
+}
+_LABEL = re.compile(r"[a-z][a-z-]*")
+
+
+def conformance_label(text: str, of: str = "a Definition") -> str:
+    """The label of `CONFORMANCE` that the conformance ``text`` starts with; a ValueError, naming ``of`` and the fix, for any
+    other text."""
+    m = _LABEL.match(text) if isinstance(text, str) else None
+    if m is None or m.group(0) not in CONFORMANCE:
+        raise ValueError(f"{of}: conformance {str(text)[:80]!r} doesn't start with a label of "
+                         f"verity.ml.circuits.defs.CONFORMANCE ({', '.join(CONFORMANCE)}): start it with the label that "
+                         "holds, then ': ' and the qualification, or add a new label to CONFORMANCE with what it says")
+    return m.group(0)
+
 
 @dataclass(eq=False)
 class PrimitiveDefinition(FunctionDefinition):
@@ -77,7 +109,7 @@ class PrimitiveDefinition(FunctionDefinition):
     ret: Value
     evaluate: Callable[..., int] = field(repr=False)
     doc: str = ""
-    conformance: str = "not-yet-established"  # exact-model-tested | model-untested | not-yet-established
+    conformance: str = "not-yet-established"  # starts with a label of `CONFORMANCE`
     register: bool = True
     tables: tuple[tuple[str, str], ...] = ()
     ports: Any = None
@@ -85,6 +117,7 @@ class PrimitiveDefinition(FunctionDefinition):
     def __post_init__(self) -> None:
         if not isinstance(self.ret, Value):
             raise TypeError(f"a primitive returns exactly one Value<w>; {self.id} declares {self.ret!r}")
+        conformance_label(self.conformance, self.id)
         self.params = tuple((n, t) for n, t in self.params)
         self.tables = tuple((n, k) for n, k in self.tables)
         bad = [k for _n, k in self.tables if k not in TABLE_KINDS]
@@ -130,12 +163,13 @@ class CompositeDefinition(FunctionDefinition):
     signature: Callable[[Any], tuple[Sequence[tuple[str, Type]], Type]] = field(repr=False)
     body: Callable[..., Coll] = field(repr=False)
     doc: str = ""
-    conformance: str = "not-yet-established"
+    conformance: str = "not-yet-established"  # starts with a label of `CONFORMANCE`
     register: bool = True
     refuse: Callable[[dict], str | None] | None = field(default=None, repr=False)
     ports: Any = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
+        conformance_label(self.conformance, self.id)
         self.statics = tuple(self.statics)
         self._cache: dict[tuple, "SpecializedDefinition"] = {}
         if self.register:
@@ -224,7 +258,9 @@ def _consistent_statics(a, b) -> bool:
 
 def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) -> "SpecializedDefinition":
     """Explicit binding record. Partial binds compose; all statics must be bound before the body is built. A record
-    the composite's `refuse` names a reason for is refused (`ValueError`) before it is cached.
+    the composite's `refuse` names a reason for is refused (`ValueError`) before it is cached, and before the cache is
+    read: the key holds a list and a tuple of equal items alike (`_static_key`), so a record refused for its type is
+    refused after an equal-keyed one binds.
 
     Specializations are shared through a per-definition cache keyed by the binding record. Function-valued
     statics are keyed by id, so a cache hit whose function references are *different* definitions under the
@@ -239,11 +275,11 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
         if k not in F.statics:
             raise TypeError(f"{F.id} has no static parameter {k!r}")
     key = tuple((k, _static_key(merged[k])) for k in F.statics if k in merged)
+    why = F.refuse(merged) if F.refuse is not None else None
+    if why:
+        raise ValueError(f"{F.id} refuses this binding: {why}")
     sp = F._cache.get(key)
     if sp is None:
-        why = F.refuse(merged) if F.refuse is not None else None
-        if why:
-            raise ValueError(f"{F.id} refuses this binding: {why}")
         sp = SpecializedDefinition(F, merged, key)
         F._cache[key] = sp
     elif not _consistent_statics(sp.bindings, merged):
@@ -253,7 +289,7 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
 
 
 @dataclass(eq=False)
-class Node:
+class BodyNode:
     """One body node: a primitive call, a composite call, a `batch`, or a `scan`. Each node denotes one
     interval of gates in the canonical layout."""
 
@@ -283,7 +319,7 @@ class Node:
 class Body:
     params: tuple[tuple[str, Type], ...]
     ret_type: Type
-    nodes: list[Node]
+    nodes: list[BodyNode]
     ret: Refs
     offsets: list[int]  # gate offset of node k within this function; len == len(nodes) + 1
 
@@ -509,7 +545,7 @@ class _Widths:
     node `below`'s arguments cannot read in dataflow order: such a descriptor decodes, and the checkers name the defect
     (PROTOCOL.md §4.4)."""
 
-    def __init__(self, params: tuple[tuple[str, Type], ...], nodes: list["Node"]) -> None:
+    def __init__(self, params: tuple[tuple[str, Type], ...], nodes: list["BodyNode"]) -> None:
         self.params, self.nodes = params, nodes
         self.below = len(nodes)
         self.forward = False  # a reference to node `below` or later was passed over: the `PartLog` memo is off from then on
@@ -680,11 +716,11 @@ class Builder:
     def __init__(self, params: tuple[tuple[str, Type], ...], ret_type: Type) -> None:
         self.params = params
         self.ret_type = ret_type
-        self.nodes: list[Node] = []
+        self.nodes: list[BodyNode] = []
         self.offsets: list[int] = [0]
 
     # -- helpers --------------------------------------------------------------------
-    def _emit(self, node: Node) -> Coll:
+    def _emit(self, node: BodyNode) -> Coll:
         k = len(self.nodes)
         self.nodes.append(node)
         self.offsets.append(self.offsets[-1] + node.gates)
@@ -708,7 +744,7 @@ class Builder:
             fn = bind(fn)
         _, ret = self._check_args(fn, args, "call")
         form = "primitive" if isinstance(fn, PrimitiveDefinition) else "call"
-        return self._emit(Node(form, fn, tuple(args), ret, name=name))
+        return self._emit(BodyNode(form, fn, tuple(args), ret, name=name))
 
     def batch(self, fn, *args: Coll, axes: Sequence[int | None], n: int | None = None, name: str | None = None) -> Coll:
         """`batch(F, args, axes)`: `n` independent calls of `F` (dataflow-independent). `axes[i]` is the
@@ -739,7 +775,7 @@ class Builder:
             n = next(iter(lengths))
         if n is None:
             raise TypeError("batch: n is required when no argument is mapped")
-        return self._emit(Node("batch", fn, tuple(args), Array(n, ret), axes=axes, n=n, name=name))
+        return self._emit(BodyNode("batch", fn, tuple(args), Array(n, ret), axes=axes, n=n, name=name))
 
     def scan(self, step, init: Coll, xs: Sequence[Coll] = (), shared: Sequence[Coll] = (), n: int | None = None,
              name: str | None = None) -> Coll:
@@ -777,7 +813,7 @@ class Builder:
         if n is None:
             raise TypeError("scan: n is required when there are no xs")
         out_t = TupleT(carry_t, Array(n, y_t))
-        return self._emit(Node("scan", step, (init,) + xs + shared, out_t, n=n, n_xs=len(xs), name=name))
+        return self._emit(BodyNode("scan", step, (init,) + xs + shared, out_t, n=n, n_xs=len(xs), name=name))
 
     def finish(self, out: Coll) -> Body:
         if not isinstance(out, Coll):
@@ -822,4 +858,4 @@ def composite(name: str, version: int, statics: Sequence[str], signature, doc: s
 
 
 __all__ = ["Registry", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "Node",
-           "Body", "Builder", "TABLE_KINDS", "primitive", "composite", "Explicit", "concat"]
+           "Body", "Builder", "TABLE_KINDS", "CONFORMANCE", "conformance_label", "primitive", "composite", "Explicit", "concat"]

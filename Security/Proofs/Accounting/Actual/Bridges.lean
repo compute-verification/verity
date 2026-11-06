@@ -1,8 +1,10 @@
-import Definitions.Accounting.Guarantees.Bridges
-import Proofs.Accounting.Actual.Physical
-import Proofs.Accounting.Actual.Localization
-import Definitions.Pouw.Assumptions.Deadline
-import Proofs.Pouw.Deadline
+module
+
+public import Definitions.Accounting.Guarantees.Bridges
+public import Proofs.Accounting.Actual.Physical
+public import Proofs.Accounting.Actual.Localization
+public import Definitions.Pouw.Assumptions.Deadline
+public import Proofs.Pouw.Deadline
 
 /-!
 # B4 and PoUW's row, proved, and the honest clock at `CM_A`
@@ -27,6 +29,8 @@ the record placed during `[a, b)`, of the certifiers' jitter words on those buck
 signals during `[a, b)`, which take at most (the number of records placed in `[a, b)`) × `χ^{buckets · #cert}` ×
 `2^{β°_X (b − a)}` values (`Alphabet`, `encard_range_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 
@@ -255,7 +259,8 @@ theorem honestClock {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 
     {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ}
     (U : Pouw.Workload) (A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π)) {td : ℝ}
     (htd : (t_d : ℝ) ≤ td) :
-    Pouw.Assumptions.HonestClock (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π) U A (Actual.timedRun A U) td :=
+    Pouw.Assumptions.HonestClock ((Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π).adversaries U) A
+      (Actual.timedRun A U) td :=
   ⟨A, rfl, fun H s => ⟨fun _ => rfl, (timedRun_spentIn U A H s htd).ge, le_rfl⟩⟩
 
 end Actual

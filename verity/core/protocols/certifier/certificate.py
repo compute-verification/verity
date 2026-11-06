@@ -90,7 +90,7 @@ from typing import Protocol
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier.grid import Grid, GridParams, Reason, Record, Status, row_left_packed
+from verity.core.protocols.certifier.grid import Grid, GridParams, Reason, BlockGrid, Status, row_left_packed
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
 RECORD_TAG = "verity-network-certifier/record/v2"
@@ -620,7 +620,7 @@ class Issuer:
     coins: Callable[[int], bytes] = field(default=secrets.token_bytes, repr=False)
     clock_salts: set[bytes] = field(default_factory=set, repr=False)
 
-    def certify(self, record: Record, direction: Direction, params: GridParams, parameters: bytes, *,
+    def certify(self, record: BlockGrid, direction: Direction, params: GridParams, parameters: bytes, *,
                 deadline: bool = True) -> CertifiedRecord | None:
         salt = self.coins(SALT_BYTES)
         if len(salt) != SALT_BYTES:
@@ -657,7 +657,8 @@ class Issuer:
     def sign(self, link: str, direction: Direction, window: int, digest: bytes) -> Certificate | None:
         """A certificate of the 64-byte `digest` for the execution phase in this session, or None when the signer
         refuses (the execution phase is then listed in `refused`). `certify` signs a record's salted digest with it,
-        `salted_clock` a window's salted sync, and the warden's cell rows their head's digest (`warden_rows`)."""
+        `salted_clock` a window's salted sync, and the network certifier's cell rows their head's digest
+        (`warden_rows`)."""
         key_id = self.signer.key_id
         message = certificate_message(key_id, self.session, link, direction, window, digest)
         try:

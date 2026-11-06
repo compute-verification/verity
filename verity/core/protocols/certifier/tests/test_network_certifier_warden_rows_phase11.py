@@ -1,11 +1,11 @@
-"""The warden's bucket rows with reads tied to the layout (`warden_rows`), held as regressions: a proof block reads only
-its connection's own cells, and a PAD cell is no content channel.
+"""The network certifier's bucket rows with reads tied to the layout (`warden_rows`), held as regressions: a proof block
+reads only its connection's own cells, and a PAD cell is no content channel.
 
 With the reads (the proof blocks' wiring) unconstrained, a proof block could open any of the N = T·S rows of the correct
 execution phase — a foreign connection's cell, a cell twice, or an empty/padding slot — an ≈ log2(N) bits a read
-channel. The warden signs the wiring in its head, and `Wiring.place`/`port` confine every read to a connection's own
-cells, refusing a foreign connection, a cell past the connection's, a read twice, an empty slot and a wiring the head
-didn't sign. Here each is run against the v2 layout, with ordinals from 1, and shown refused.
+channel. The network certifier signs the wiring in its head, and `Wiring.place`/`port` confine every read to a
+connection's own cells, refusing a foreign connection, a cell past the connection's, a read twice, an empty slot and a
+wiring the head didn't sign. Here each is run against the v2 layout, with ordinals from 1, and shown refused.
 
 A PAD cell carries its connection's ordinal (`cell(PAD, q, b"")`) and sits in the connection's own slots, so it counts
 toward the connection's cells and `place` will open it. These cases show it is not a *content* channel — a pad's bytes
@@ -22,7 +22,7 @@ import pytest
 from verity.core.protocols.certifier import warden_rows as W
 from verity.core.protocols.certifier.active import DATA, PAD
 from verity.core.protocols.certifier.certificate import Direction
-from verity.core.protocols.certifier.grid import COMPLETE, Record
+from verity.core.protocols.certifier.grid import COMPLETE, BlockGrid
 from verity.core.protocols.certifier.warden import cell
 from verity.core.protocols.certifier.tests.test_network_certifier_warden import PARAMS
 
@@ -37,7 +37,7 @@ def _record():
     connection 2 holds two DATA cells. Later buckets are idle (empty slots, B zero bytes)."""
     bucket0 = (cell(DATA, 1, bytes(P), B), cell(PAD, 1, b"", B), cell(DATA, 2, bytes(P), B), cell(DATA, 2, bytes(P), B))
     grid = (bucket0,) + ((None,) * S,) * (T - 1)
-    return Record(LINK, 0, grid, COMPLETE)
+    return BlockGrid(LINK, 0, grid, COMPLETE)
 
 
 def _cells():

@@ -1,4 +1,9 @@
-import Proofs.Properties.NetworkRecords.Accept
+module
+
+public import Proofs.Properties.NetworkRecords.Accept
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.Repr
 
 /-!
 # An instance: a unit whose records are the Program's, which the check accepts
@@ -10,8 +15,10 @@ parameters' digests: `parametersDigest` reads `Flock.canonUtf8`, well-founded re
 they are taken as given.
 -/
 
+@[expose] public section
+
 open NetworkCheck hiding Params
-open NetworkCheck.Check (Params Link Evidence)
+open NetworkCheck.Check (Params LinkOpening Evidence)
 open NetworkCertifier (ClockSync)
 open Properties.NetworkCertifier (ParamsDigests Declares programGrid)
 open Properties.NetworkCertifier.CheckProofs (declares_unique declares_declared)
@@ -32,7 +39,7 @@ def p₀ : Params where
   key := .empty
   session := ⟨Array.replicate 32 0⟩
 
-def link₀ : Link := ⟨[], #[sync₀]⟩
+def link₀ : LinkOpening := ⟨[], #[sync₀]⟩
 
 def ev₀ : Evidence := ⟨#[link₀]⟩
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Select.Design
-import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Design
+public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
 
 /-!
 # The sampling scope check from the deployed design (`Claims.Sampling.ScopeMatches`, `Refuses`)
@@ -15,6 +17,8 @@ and draws on (`designWellFormed`), so the scope check need check only the progra
   program part.
 * `refuses_of`: `Refuses` from `ScopeMatches` where the verifier runs its scope check.
 -/
+
+@[expose] public section
 
 open SampledProofs
 
@@ -35,14 +39,6 @@ def ProgramScope (D : Deploy Coin Col T) : Prop :=
 /-- **The verifier runs its scope check**: a run it accepts is of a statement its scope check takes. -/
 def ChecksScope [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P D.V x ω r).out = .acc → D.scopeCheck x = true
-
-/-- **`ChecksScope` from the verifier's decision**: where the verifier answers `acc` only at statements its scope check
-takes, every run it accepts is of one (`run_acc_next`). -/
-theorem checksScope_of_next [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin Col T)
-    (h : ∀ x as cs, ((D.V.next x as cs).eval H).1 = .acc → D.scopeCheck x = true) : ChecksScope H D := by
-  intro x Ω P ω r hacc
-  obtain ⟨as, cs, has⟩ := run_acc_next H P D.V x ω r hacc
-  exact h x as cs has
 
 /-- **The readable scope is the verifier's**: where its statements are its own layout and design (`DrawSlots`) and its
 scope check is the program part (`ProgramScope`), the design is well formed on the partition (`designWellFormed`), so

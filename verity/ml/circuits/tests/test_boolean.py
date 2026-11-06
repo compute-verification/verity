@@ -1,7 +1,7 @@
 """The Boolean profile (`verity/ml/circuits/PROTOCOL.md` §9): the three gates and the constant bits, the word view, and a small Boolean
 program pinned byte for byte with its gate table and truth table (`boolean_vectors.json`).
 
-`python verity/ml/circuits/tests/test_boolean.py --write` rewrites the vectors from the reference implementation."""
+Its `--write` rewrites the vectors from the reference implementation; `REWRITE` names the command that runs it."""
 from __future__ import annotations
 
 import itertools
@@ -13,7 +13,7 @@ import pytest
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.program import Program
@@ -21,6 +21,8 @@ from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Tuple, Value, type_from_json
 
 PATH = Path(__file__).parent / "boolean_vectors.json"
+REWRITE = ("the vectors differ from the reference implementation's; a change meant to move them rewrites them with "
+           "`uv run python tools/verity/check/pins.py --write verity/ml/circuits/tests/boolean_vectors.json`")
 BIT = BL.BIT
 
 
@@ -131,7 +133,7 @@ def pinned() -> dict:
 
 
 def test_vectors_are_current(pinned):
-    assert build() == pinned
+    assert build() == pinned, REWRITE
 
 
 def test_gates_are_registered_and_reserved():
@@ -159,10 +161,10 @@ def test_an_n_input_gate_decodes_by_id():
                                 lambda B, S, x: B.call(BL.and_gate(5), x), register=False)
     outer = CompositeDefinition("ExampleAnd5Program", 1, (), inner.signature, lambda B, S, x: B.call(inner, x), register=False)
     text = codec.canonical_json(codec.encode_program(Program(bind(outer)))).decode()
-    D = codec.decode_program(json.loads(text), Registry())
+    D = codec.decode_program(json.loads(text), DefinitionTable())
     assert [g.prim for g in map(D.circuit.gate, range(D.circuit.size)) if g.prim.id != "Input1_v1"] == [BL.and_gate(5)]
     with pytest.raises(KeyError):
-        codec.decode_program(json.loads(text.replace("And5_v1", "And05_v1")), Registry())
+        codec.decode_program(json.loads(text.replace("And5_v1", "And05_v1")), DefinitionTable())
 
 
 def test_a_family_member_has_one_spelling(pinned):

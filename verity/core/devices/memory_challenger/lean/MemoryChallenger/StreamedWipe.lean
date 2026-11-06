@@ -1,4 +1,6 @@
-import MemoryChallenger.Verdict
+module
+
+public import MemoryChallenger.Verdict
 
 /-!
 # The streamed-label wipe's verdict
@@ -13,6 +15,10 @@ record (`to_bytes`'s `OverflowError`) leaves the session with no message, so its
 check reads it as it is. The verdict refuses a reveal of more than one index a batch (`Params.covered`), which the
 guarantee (`Pous.Guarantees.StreamedWipe`) doesn't cover.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger.StreamedWipe
 
@@ -104,7 +110,7 @@ def Batch.value (r : Batch) : E ByteArray := do
 def recordsRoot (session : ByteArray) (batches : Array Batch) : E ByteArray := do
   let d := domain RECORD_BINDING session batches.size
   let values ← batches.mapM Batch.value
-  pure (FrameV3Sha512.root d ((Array.range values.size).map fun r => d.leaf r r RECORD_SCHEMA values[r]!))
+  pure (d.root ((Array.range values.size).map fun r => d.leaf r r RECORD_SCHEMA values[r]!))
 
 /-- The signed header: the commitment's header with how the session ended, the fill's times, the number of batches and
 the egress, as `json.dumps(sort_keys=True, separators=(",", ":"))`. -/

@@ -1,10 +1,18 @@
-import Flock.Draw
-import PouwCommit.Draws
-import PouwWindow.Rounds
-import PouwCheck.Inputs
-import SampledProofs.ChallengerRecord
-import SampledProofs.ChallengerSession
-import Identity.Domains
+module
+
+public import Flock.Draw
+public import PouwCommit.Bindings
+public import PouwCommit.Draws
+public import PouwWindow.Rounds
+public import PouwCheck.Inputs
+public import SampledProofs.ChallengerRecord
+public import SampledProofs.ChallengerSession
+public import Identity.Domains
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.String.Defs
 
 /-!
 # The pass's epoch and the window's draw (`core_check.py`, "the pass's epoch and the window's draw")
@@ -37,6 +45,8 @@ SHA-512, and, only in a replay of a recorded pass, the e2e-service passes', whic
 recorded draw also reads the e2e-service's first coin commitments, named as the current one but on SHA-256 as core was
 then: bound by `taggedSha256`, after the current binding, and drawn by `deriveV1` and `streamV1`.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 
@@ -87,9 +97,7 @@ def hex? : Json → Option ByteArray
 
 def at? (j : Json) (k : String) : Json := (PouwWindow.field? j k).getD .null
 
-/-- `j == .str s`, by a match the kernel reduces: `BEq Json` is a `partial def`, opaque to the kernel, so a property of a
-check that compares with it can't be proved. -/
-def jsonStrIs (j : Json) (s : String) : Bool := match j with | .str t => t == s | _ => false
+export SampledProofs (jsonStrIs)
 
 /-- `j == .bool true`, by a match the kernel reduces (`jsonStrIs`). -/
 def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false
@@ -164,12 +172,11 @@ def coinVersionAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteAr
 def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) : Except String (Option String) :=
   (·.1) <$> coinVersionAt c o label after false
 
-/-- `tagged` of `tag` and each `(id, root)` by ascending id, its first `keep` bytes: `core_check.weights_root`
+/-- `PouwCommit.foldRoots` at `tag`, its first `keep` bytes: `core_check.weights_root`
 (`audit.weights_root`, an epoch's, under a scheme's version) and `Credit.weightsRoot` (`weights.weights_root`, the
 weights' root a live H1 window's open root binds). -/
 def weightsRootAt (keep : Nat) (tag : String) (roots : List (Nat × ByteArray)) : ByteArray :=
-  let sorted := roots.mergeSort fun a b => a.1 ≤ b.1
-  (tagged tag (sorted.flatMap fun (w, r) => [.int w, .bytes r])).extract 0 keep
+  (PouwCommit.foldRoots tag roots).extract 0 keep
 
 /-- A refusal: its code (`coin` or `manifest`) and why. -/
 abbrev R := Except (String × String)

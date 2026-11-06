@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
-import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 
 /-!
 # The verifier's basis is the batched basis's extension
@@ -13,6 +15,8 @@ import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 * **The rep's claims** (`claims_xsize`): every claim a rep opens has `m − 6` coordinates, so its switched claim's
   suffix point has `m − 7`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 
@@ -50,7 +54,7 @@ theorem fOf_basisTerm (sw : Switched) (l : ℕ) (hrpp : sw.rpp.size = 7) (hz : s
   rw [unpack_fOf, ← eqTable_vecOf sw.rpp 7 hrpp u.val (by simp)]
   split_ifs <;> simp [fOf_zero]
 
-/-- **The batched basis on the cube** (§12.4) is the model's: `basisVals sws` at `w < 2^ℓ` is
+/-- **The batched basis on the cube** (`Flock.Opening`) is the model's: `basisVals sws` at `w < 2^ℓ` is
 `Σ_k γ_k·Φ_k(eq(z_k, w))`. -/
 theorem fOf_basisVals (sws : Array Switched) (l : ℕ) (hrpp : ∀ k < sws.size, (sws[k]!).rpp.size = 7)
     (hz : ∀ k < sws.size, (sws[k]!).z.size = l) (w : ℕ) (hw : w < 2 ^ l) :
@@ -81,7 +85,7 @@ theorem basis_bHat (sws : Array Switched) (m : ℕ) (hrpp : ∀ k < sws.size, (s
 
 /-- **At a rep's switched claims**: each has seven ring-switch coins, and `m − 7` suffix coordinates when its claim
 has `m − 6`. -/
-theorem basis_sws (claims : Array Claim) (cs : Rs.Coins) (m : ℕ) (hx : ∀ c ∈ claims, c.x.size = m - 6)
+theorem basis_sws (claims : Array Claim) (cs : Rs.Challenges) (m : ℕ) (hx : ∀ c ∈ claims, c.x.size = m - 6)
     (q : Array F256) (e y : ℕ) (hqe : q.size + e = m - 7) (hy : y < 2 ^ e) :
     gOf (basis (Rs.sws claims cs) q e)[y]! = Model.bHat execArith (m - 7)
       (fun w => fOf (basisVals (Rs.sws claims cs) (m - 7))[w]!) (q.toList.map gOf ++ Model.bitsK e y) := by
@@ -93,7 +97,7 @@ theorem basis_sws (claims : Array Claim) (cs : Rs.Coins) (m : ℕ) (hx : ∀ c �
     rw [Rs.sws, FlockSoundness.Refine.getElem!_range_map _ hk', Rs.perClaim, pushes_get _ _ k hk']
   refine basis_bHat _ m (fun k hk => ?_) (fun k hk => ?_) q e y hqe hy
   · rw [hsw k hk]
-    simp [Rs.Coins.rpp]
+    simp [Rs.Challenges.rpp]
   · rw [hsw k hk]
     have hk' : k < claims.size := by simpa [Rs.sws] using hk
     have := hx _ (Array.getElem_mem hk')
@@ -106,7 +110,7 @@ end Lg
 /-- **Every claim a rep opens has `m − 6` coordinates**, for a statement's table, at link points of `m_pts`
 coordinates. -/
 theorem claims_xsize (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22 ≤ st.m) (tr : Trace)
-    (zcs : Zc.Coins) (cs : Lc.Coins) (points : Array (Array F128)) (hpts : ∀ p ∈ points.toList, p.size = st.mPts) :
+    (zcs : Zc.Challenges) (cs : Lc.Challenges) (points : Array (Array F128)) (hpts : ∀ p ∈ points.toList, p.size = st.mPts) :
     ∀ c ∈ abcClaims st.m st.c.kLog (Zc.out st.m zcs tr) (Lc.out st.circuitFold st.m tr (Zc.out st.m zcs tr) cs) ++
         val (st.extraClaims points), c.x.size = st.m - 6 := by
   have hk := hwf.hk

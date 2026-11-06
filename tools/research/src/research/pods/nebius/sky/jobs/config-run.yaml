@@ -199,8 +199,9 @@ run: |
   # the replay task reads this run id back to cite the Commit, as this task cites the Build
   run_id=r$(date -u +%Y%m%d-%H%M%S)-$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
   echo "$run_id" > "$SWEEP_DIR/$ROW/pipeline-commit-run"
-  if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (PR B registers vllm.replay)
-    grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
+  if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (an older tree's research_tools.py may lack vllm.replay)
+    old_tools="$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py"
+    { [ ! -e "$old_tools" ] || grep -q VLLM_REPLAY "$old_tools"; } && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
   fi
   research=(/workspace/jobs/bin/uv run --no-project --python 3.12 python -m research)
   # >>> commit watchdog: stop a Commit whose commit.log hasn't changed for COMMIT_STALL_S (default 15 min), so a hung Commit frees
@@ -311,8 +312,9 @@ secrets:
 
 setup: |
   set -euo pipefail
-  if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (PR B registers vllm.replay)
-    grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
+  if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (an older tree's research_tools.py may lack vllm.replay)
+    old_tools="$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py"
+    { [ ! -e "$old_tools" ] || grep -q VLLM_REPLAY "$old_tools"; } && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
   fi
   [ "$REPLAY_DEFERRED" = 1 ] || exit 0          # nothing deferred: no tree copy, no bootstrap
   # the job runs from the one copy of $SRC per tree content (job_tree.sh): uid 1000 can write it, a later sync can't change it, and
@@ -327,8 +329,9 @@ setup: |
 
 run: |
   set -euo pipefail
-  if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (PR B registers vllm.replay)
-    grep -q VLLM_REPLAY "$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py" 2> /dev/null && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
+  if [ "${REPLAY_DEFERRED:-auto}" = auto ]; then   # defer exactly when the tree has the CPU replay (an older tree's research_tools.py may lack vllm.replay)
+    old_tools="$SRC/integrations/vllm/verity_vllm/pipeline/research_tools.py"
+    { [ ! -e "$old_tools" ] || grep -q VLLM_REPLAY "$old_tools"; } && REPLAY_DEFERRED=1 || REPLAY_DEFERRED=0
   fi
   if [ "$REPLAY_DEFERRED" != 1 ]; then echo "replay: not deferred (REPLAY_DEFERRED=0), the Commit replayed on its GPU"; exit 0; fi
   # a Commit dispatched on an older template replayed on its GPU, and its verdict has no replay_deferred (a deferred one always does)

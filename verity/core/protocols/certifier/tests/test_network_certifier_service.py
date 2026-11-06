@@ -18,7 +18,7 @@ from verity.ml.circuits.program import Program
 from verity.core.protocols.certifier import head_check as HC, service as SVC
 from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsSigner,
                                                                           RecordHead, parameters_digest)
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Record, occupancy
+from verity.core.protocols.certifier.grid import Certifier, GridParams, BlockGrid, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet, run_shaper
 from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.frame_v3 import root_ref
@@ -85,16 +85,16 @@ class Run:
                                      clock=self.clock)
         self.previous = None
 
-    def egress(self, record: Record, **kw) -> CertifiedRecord:
+    def egress(self, record: BlockGrid, **kw) -> CertifiedRecord:
         return self.issuer.certify(record, EGRESS, PARAMS, parameters_digest(PARAMS, SYNC_SET), **kw)
 
-    def ingress(self, record: Record, **kw) -> CertifiedRecord:
+    def ingress(self, record: BlockGrid, **kw) -> CertifiedRecord:
         return self.issuer.certify(record, INGRESS, PARAMS, parameters_digest(PARAMS), **kw)
 
     def honest(self, w: int):
         return self.lw.commit(w, self.egress(egress_records()[w]), self.ingress(ingress_records()[w]), SALTS[w])
 
-    def register(self, opening) -> S.Registration:
+    def register(self, opening) -> S.WindowCommitmentRecord:
         reg = self.lw.register(self.stream, self.lw.registration(opening, self.previous))
         self.previous = reg.digest
         return reg
@@ -686,11 +686,11 @@ WARDEN_DIGEST = bytes(range(64))
 
 
 def test_a_warden_link_holds_both_heads_to_the_wardens_digest_and_reads_no_sync(tmp_path):
-    """A warden link (`WardenProfile`) is the plain proof block on the warden's records: its public items are
-    `PUBLIC_WARDEN` and its charge 0, a window whose two records the warden certified under its parameters digest is
-    accepted with no sync declared, by the Lean's verdict of record, the Python beside it and the in-the-clear check
-    alike, and a window whose egress record was certified under the certifier's digest instead is a reject. It takes no
-    occupancy profile, and its two ends are one grid."""
+    """A network certifier link (`WardenProfile`) is the plain proof block on the network certifier's records: its
+    public items are `PUBLIC_WARDEN` and its charge 0, a window whose two records the network certifier certified under
+    its parameters digest is accepted with no sync declared, by the Lean's verdict of record, the Python beside it and
+    the in-the-clear check alike, and a window whose egress record was certified under the certifier's digest instead is
+    a reject. It takes no occupancy profile, and its two ends are one grid."""
     run = Run(tmp_path)
     run.lw = lw = replace(run.lw, occupancy=(None, None), warden=SVC.WardenProfile(3, WARDEN_DIGEST))
     run.stream = lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,

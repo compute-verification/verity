@@ -1,6 +1,6 @@
 """a5's case for the audit on the proofs themselves, `SampledProofs.OneStageZk`'s: v1's case with the evidence's verdicts
-replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit digest, and blobs the paths of
-those files and the pinned tables; and the audits v2 can't verify say why."""
+replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit and public files' digests, and
+blobs the paths of those files and the pinned tables; and the audits v2 can't verify say why."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -48,17 +49,37 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
     evidence = {"draw": {"units": [1]}, "sessions": [sha(s / "session.json")], "verdicts": {"m0": {"accepted": True}}}
     case = {"commitment": "ab", "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {"delta": "1/100"}}
     got = a5.case_v2(case, evidence["sessions"], proof=PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)),
-                     circuit="cc" * 64, registered=None, tables=[table])
+                     circuit="cc" * 64, public=sha(tmp_path / "pub-4.bin"), registered=None, tables=[table])
     assert got["commitment"] == "ab"
-    assert got["params"] == {"delta": "1/100", "proofs": {"circuit": "cc" * 64, "registered": None}}
+    assert got["params"] == {"delta": "1/100", "proofs": {"circuit": "cc" * 64, "public": sha(tmp_path / "pub-4.bin"),
+                                                          "registered": None}}
     e = json.loads(bytes.fromhex(got["evidence"]))
     assert "verdicts" not in e and e["draw"] == evidence["draw"] and e["sessions"] == evidence["sessions"]
-    assert e["proofs"] == {"public": sha(tmp_path / "pub-4.bin"),
-                           "sessions": [{"name": evidence["sessions"][0], "record": sha(s / "session.json"),
+    assert e["proofs"] == {"sessions": [{"name": evidence["sessions"][0], "record": sha(s / "session.json"),
                                          "reps": {"rep-0.bin": sha(s / "rep-0.bin")}}]}
     assert got["evidence"] == RP.DT.canonical(e).encode().hex()
     assert got["blobs"] == [str(p) for p in (tmp_path / "circuit.txt", tmp_path / "pub-4.bin", s / "session.json",
                                              s / "rep-0.bin", table)]
+    iface = tmp_path / "circuit.json"
+    iface.write_bytes(b'{"format": "verity/window-circuit/v1"}')
+    held = a5.case_v2(case, evidence["sessions"], proof=PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)),
+                      circuit="cc" * 64, public=sha(tmp_path / "pub-4.bin"), registered={"ports": {}},
+                      tables=[table], interface=iface)
+    assert held["params"]["proofs"] == {"circuit": "cc" * 64, "public": sha(tmp_path / "pub-4.bin"),
+                                        "registered": {"ports": {}}, "interface": sha(iface)}
+    assert held["blobs"] == [*got["blobs"], str(iface)]
+
+
+def test_v2_names_the_public_file_as_it_was_staged_before_the_draw(tmp_path):
+    """The case's public digest is the one a5 took when it staged the member, before the draw, never the file's digest
+    read after it: a public file changed since names another file, which v2 finds in no blob."""
+    (tmp_path / "pub-4.bin").write_bytes(b"public, changed after the draw")
+    s = tmp_path / "sessions" / "a"
+    s.mkdir(parents=True)
+    (s / "session.json").write_bytes(b"{}")
+    mm = {"st": {"dir": tmp_path, "public": "ee" * 64}, "m": types.SimpleNamespace(n=4), "pin": "cc" * 64}
+    got = a5.v2_proof([{"mm": mm, "sdir": tmp_path}], zk=True)
+    assert got["public"] == "ee" * 64 and got["proof"].public == tmp_path / "pub-4.bin" and got["proof"].sessions == (s,)
 
 
 def test_v2_says_why_an_audit_has_no_case():
@@ -95,6 +116,25 @@ def test_a_v2_refusal_is_written_beside_the_v1_case_and_leaves_sampled_proofs_no
     assert (tmp_path / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
 
 
+def test_a_tied_case_names_its_values_parameters_and_row_formats_as_the_lean_reads_them(tmp_path, monkeypatch, RP):
+    """`OneStage.paramsOfJson` takes exactly its keys: a case tied to W (a5's ``tie``) names the program function's
+    ``parameters`` beside its registered values and their row formats as ``row_schemas``."""
+    class T:
+        def to_json(self):
+            return {"bits": 32}
+
+    program = type("Program", (), {"fn": type("Fn", (), {"signature": staticmethod(lambda: ([("v", T())], None))})})()
+    monkeypatch.setattr(RP, "descriptor", lambda program: {"program": "p"})
+    monkeypatch.setattr(RP, "evidence", lambda *a, **k: {})
+    monkeypatch.setattr(RP, "python", lambda c: {"verdict": "accept"})
+    tied = {"log": [{"previous": None}], "registered": {"v": 4}, "outputs": {"v": {"record": "dd" * 64, "value": "v"}},
+            "schemas": {"v": "row-seg/v1"}}
+    a5.write_case(tmp_path, program, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
+                  session_roots={}, served=[], tied=tied)
+    p = json.loads((tmp_path / "case.json").read_text())["params"]
+    assert sorted(p) == ["anchors", "delta", "law", "leaf_layer", "log", "outputs", "parameters", "partition", "ports",
+                         "program", "query", "registered", "row_schemas", "scheme", "work_table"]
+    assert (p["parameters"], p["row_schemas"]) == ([["v", {"bits": 32}]], {"v": "row-seg/v1"})
 def test_sampled_proofs_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
     """Sampled proofs refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
     zk = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),

@@ -1,6 +1,9 @@
-import Flock.Hm96
-import RemoteAudit.Codec
-import RemoteAudit.Plan
+module
+
+public import Flock.FV3
+public import Flock.Hm96
+public import RemoteAudit.Codec
+public import RemoteAudit.Plan
 
 /-!
 # Receipts, seeds and the receipt tree: `receipts.py`, and `audit.py`'s chain over appends
@@ -22,6 +25,10 @@ root_(t,i)    frame-v3-sha512: CommitmentDomain(SHA512(TREE_DOMAIN ‖ seed ‖ 
 Receipts here are of a block alone: a registration that binds PoUW's tile outputs (`bind`) is refused before any
 receipt is computed (`Registration.make?`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit
 
@@ -128,12 +135,13 @@ def hiddenDigest (x salt : ByteArray) : ByteArray := Flock.Hm96.Default512.leaf 
 def hidden (row salt : ByteArray) : ByteArray := hiddenDigest (Codec.rowDigest row) salt
 
 /-- `receipts.domain(seed, plan)`. -/
-def treeDomain (seed : ByteArray) (plan : Plan) : FrameV3.Domain :=
-  FrameV3.Domain.make (sha512 (TREE_DOMAIN ++ seed ++ plan.digest)) 0 0 (leaves plan.length)
+def treeDomain (seed : ByteArray) (plan : Plan) : Flock.FV3.Sha512.Domain :=
+  .make (sha512 (TREE_DOMAIN ++ seed ++ plan.digest)) 0 0 (leaves plan.length)
 
 /-- `verify_leaf(seed, plan, root, p, leaf, salt, path)`. -/
 def verifyLeaf (seed : ByteArray) (plan : Plan) (root : ByteArray) (p : Nat) (leaf salt : ByteArray)
     (path : Array ByteArray) : Bool :=
-  FrameV3.verifyOpening (treeDomain seed plan) root (p / PER_LEAF) (hidden leaf salt) SCHEMA path
+  let d := treeDomain seed plan
+  d.verifyOpening root d.count (p / PER_LEAF) (hidden leaf salt) SCHEMA path
 
 end RemoteAudit

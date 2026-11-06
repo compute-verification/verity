@@ -1,5 +1,7 @@
-import Definitions.NetworkCertifier.Grid
-import Mathlib.Data.List.Basic
+module
+
+public import Definitions.NetworkCertifier.Grid
+public import Mathlib.Data.List.Basic
 
 /-!
 # The interaction, the Program, and acceptance
@@ -18,6 +20,8 @@ happens. The verifier's `Accepted` is a predicate on an observation prefix and a
 only the rows and the statuses (W5's record). No violation policy is modelled: every theorem is about runs accepted up to
 the horizon.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 
@@ -94,24 +98,24 @@ def ingressUpTo {L K S : ℕ} {In : Type} (op : ℕ → List (Obs L K S) → In)
 
 /-- A committed Program's prediction of every egress row at step `t`, from the ingress it reads and the declared
 advice. -/
-structure Program (L S : ℕ) (In Adv : Type) where
+structure EgressPrediction (L S : ℕ) (In Adv : Type) where
   rows : ℕ → List In → Adv → Fin L → Row S (List Bool)
 
 /-- **Acceptance** of the first `k` steps with declared advice `a` (the exact binding): at every step `t < k` the
 recorded egress rows are the Program's, given the ingress up to `t`, and every boundary link's status is complete.
 It reads only rows and statuses. -/
-def Accepted {L K S : ℕ} {In Adv : Type} (P : Program L S In Adv) (op : ℕ → List (Obs L K S) → In) (k : ℕ)
+def Accepted {L K S : ℕ} {In Adv : Type} (P : EgressPrediction L S In Adv) (op : ℕ → List (Obs L K S) → In) (k : ℕ)
     (o : List (Obs L K S)) (a : Adv) : Prop :=
   ∀ t (ht : t < k), ∃ h : t < o.length,
     o[t].rows = P.rows t (ingressUpTo op o t) a ∧ ∀ κ, o[t].status κ = Status.complete
 
 /-- Accepted up to step `k` for some declared advice (acceptance by prefix). -/
-def AcceptedUpTo {L K S : ℕ} {In Adv : Type} (P : Program L S In Adv) (op : ℕ → List (Obs L K S) → In) (k : ℕ)
+def AcceptedUpTo {L K S : ℕ} {In Adv : Type} (P : EgressPrediction L S In Adv) (op : ℕ → List (Obs L K S) → In) (k : ℕ)
     (o : List (Obs L K S)) : Prop :=
   ∃ a, Accepted P op k o a
 
 /-- The accepted observation sequences of length `n` whose jitter classes are below `D`: what T3 counts. -/
-def AccSeqs {L K S : ℕ} {In Adv : Type} (P : Program L S In Adv) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
+def AccSeqs {L K S : ℕ} {In Adv : Type} (P : EgressPrediction L S In Adv) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
     Set (List (Obs L K S)) :=
   {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ AcceptedUpTo P op n o}
 

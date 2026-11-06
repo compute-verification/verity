@@ -1,9 +1,11 @@
-import Flock.Canon
-import PousCheck.Merkle
-import PousCheck.Challenge
-import PousCheck.Wire
-import PousCheck.Certificate
-import PousCheck.Audit
+module
+
+public import Flock.Canon
+public import PousCheck.Merkle
+public import PousCheck.Challenge
+public import PousCheck.Wire
+public import PousCheck.Certificate
+public import PousCheck.Audit
 
 /-!
 # The difftest: the PoUS check against the Python verifier, on generated instances
@@ -28,6 +30,8 @@ a test, not a proof.
 `transcript` is not a kind of the run: `pous-audit-difftest serve` answers it for `interop.py`, which holds it to
 `wire.py` on the spec's transcripts.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Difftest
 
@@ -205,7 +209,7 @@ def storage (inst : Json) : V Json := do
   let n k := J.nat inst k "storage"
   let q : Wire.Params := ⟨← n "w", ← n "c0", ← n "blocks_per_segment", ← n "segments", "", 0⟩
   let (k, delta, rtt) := (← n "k", ← n "delta", ← n "rtt")
-  pure <| match Certificate.Store.ofParams q with
+  pure <| match Certificate.params q with
     | none => .null
     | some s => Json.mkObj [("covered", .bool (Certificate.gate s k delta rtt).2.1.isEmpty),
       ("profile", Certificate.profileJson s k delta rtt)]

@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Core.Hash
+module
+
+public import Mathlib
+public import Definitions.Core.Hash
 
 /-!
 # Interaction: the live-coin model every proof system's claims are stated in
@@ -32,6 +34,8 @@ Core's, and keeps the namespace `Claims` its records were written under. Its for
 Mathlib and Core's hash vocabulary only (`Definitions/Core/Hash.lean`), as Core's layer is. The named assumptions here
 are `StrictBirthday` and `ExpectedCR`; what the claims rest on and no Lean statement can say is `trustedBase`.
 -/
+
+@[expose] public section
 
 namespace Claims
 
@@ -173,6 +177,12 @@ def RP.bind {R α β : Type} : RP R α → (α → RP R β) → RP R β
   | .ret a, f => f a
   | .hash q k, f => .hash q fun a => (k a).bind f
   | .rerun r k, f => .rerun r fun v => (k v).bind f
+
+/-- The draws a program reruns at, in order, against `H` and the runs `run`. -/
+def RP.rerunsAt {R α : Type} (H : Msg → Msg) (run : R → Trace) : RP R α → List R
+  | .ret _ => []
+  | .hash q k => RP.rerunsAt H run (k (H q))
+  | .rerun r k => r :: RP.rerunsAt H run (k (run r).seen)
 
 /-! ## Extractors -/
 

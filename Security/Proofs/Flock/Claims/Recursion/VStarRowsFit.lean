@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.HpEarlyStaged
-import Proofs.Flock.Claims.Recursion.VStarFitRow
-import Proofs.Flock.Claims.Recursion.VStarTopsOk
-import Proofs.Flock.Claims.Recursion.RoundWords
-import Proofs.Flock.Claims.Recursion.SchedDense
+module
+
+public import Proofs.Flock.Claims.Recursion.HpEarlyStaged
+public import Proofs.Flock.Claims.Recursion.VStarFitRow
+public import Proofs.Flock.Claims.Recursion.VStarTopsOk
+public import Proofs.Flock.Claims.Recursion.RoundWords
+public import Proofs.Flock.Claims.Recursion.SchedDense
 
 /-!
 # The fitted rows at every round with pieces (`rowsFit_tops`), and hp before the last round from them (`hpEarly_tops`)
@@ -23,8 +25,10 @@ held whole, `msgAt`). There `piecesOf` is empty too, so hp is vacuous, and `hpEa
 * **The absorbed row's segment** is its holder's port's slot, which reads the round's last row (`fit_rowPiece`).
 
 `rowsFit_tops` holds at every history holding both reps' stream rounds (`hH`), with every part staged and accepted by
-the stager (`hS`, `hok`), which the honest run has (`honest_half`'s `hH`, `stagedPart_run`, `hok_honest`).
+the stager (`hS`, `hok`), which the honest run has (`honest_half_tops`' `hH`, `stagedPart_run`, `hok_honest`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

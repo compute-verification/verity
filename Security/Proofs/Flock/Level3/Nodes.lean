@@ -4,8 +4,12 @@
 polynomial of degree below 128 that vanishes on `S` from its values on `Λ`. φ8 is additive, so each node set is a
 subspace or a coset, and the barycentric denominator `Π_{j ≠ i} (x_i − x_j)` is the executable's `den`.
 -/
-import Proofs.Flock.Level3.ArithFacts
-import Mathlib.LinearAlgebra.Lagrange
+module
+
+public import Proofs.Flock.Level3.ArithFacts
+public import Mathlib.LinearAlgebra.Lagrange
+
+@[expose] public section
 
 open Polynomial Flock
 
@@ -73,8 +77,6 @@ theorem phi8_injOn (a b : ℕ) (ha : a < 256) (hb : b < 256) (h : GF128.of (phi8
 
 noncomputable def nodeS (s : Fin 64) : GF128 := GF128.of (phi8 s.val)
 noncomputable def nodeΛ (i : Fin 64) : GF128 := GF128.of (phi8 (64 + i.val))
-/-- All 128 nodes, `S` then `Λ`. -/
-noncomputable def node128 (t : Fin 128) : GF128 := GF128.of (phi8 t.val)
 
 theorem nodeS_injective : Function.Injective nodeS :=
   fun a b h => Fin.ext (phi8_injOn _ _ (by omega) (by omega) h)
@@ -84,9 +86,6 @@ theorem nodeΛ_injective : Function.Injective nodeΛ :=
 
 theorem nodeS_ne_nodeΛ (s i : Fin 64) : nodeS s ≠ nodeΛ i :=
   fun h => by have := phi8_injOn _ _ (by omega) (by omega) h; omega
-
-theorem node128_injective : Function.Injective node128 :=
-  fun a b h => Fin.ext (phi8_injOn _ _ (by omega) (by omega) h)
 
 /-! ### Translation: `Π_{j ≠ i} (x_i + x_j)` is `den d` -/
 

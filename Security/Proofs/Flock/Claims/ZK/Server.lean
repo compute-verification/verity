@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Reference
-import Proofs.Flock.Claims.ZK.Cut
-import Proofs.Flock.Claims.ZK.Rewind
+module
+
+public import Proofs.Flock.Claims.ZK.Reference
+public import Proofs.Flock.Claims.ZK.Cut
+public import Proofs.Flock.Claims.ZK.Rewind
 
 /-!
 # The ZK server: untrusted workers compute, the server releases
@@ -58,6 +60,8 @@ filled with the commit strings of fixed digests under its own salts, kinds `fixe
   `2` of `leaky1`, the simulator that guesses whether the session stops (`zk_deferred`): one bit a session, and over a
   stream of `m` sessions with at most `b` stops, one stop form, `log₂ ∑_{i ≤ b} C(m, i)` bits (`stream_leak_deferred`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -148,11 +152,6 @@ theorem slots_of_pass {W R : Type} {S : ZkServer W R} {wk : S.Worker} {x : Msg} 
     (List.range (S.nS x h.length)).all
       (fun s => S.check x h.length s w ρ h (S.copy wk x w ρ h) κ (wk x w ρ h s)) = true :=
   (Bool.and_eq_true _ _).mp hp |>.2
-
-/-- A round the server refuses fails. -/
-theorem pass_of_refuses {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
-    (h : List (Msg × Msg)) (hr : S.refuses x w ρ h = true) : S.pass wk x w ρ κ h = false := by
-  simp [pass, hr]
 
 /-- Every round so far, the current one's included, passed. -/
 def live {W R : Type} (S : ZkServer W R) (wk : S.Worker) (x : Msg) (w : W) (ρ : R) (κ : S.Chk)
@@ -675,10 +674,6 @@ def Blind {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) 
   ∀ x w (ρ ρ' : R) (h h' : List (Msg × Msg)) s, π ρ = π ρ' → h.map (fun m => rd m.2) = h'.map (fun m => rd m.2) →
     wk x w ρ h s = wk x w ρ' h' s
 
-theorem lift_blind {W R Rw C : Type} (S : ZkServer W R) (π : R → Rw) (rd : Msg → C) (bw : S.BWorker Rw C) :
-    S.Blind π rd (S.lift π rd bw) :=
-  fun _ _ _ _ _ _ _ hρ hh => by simp only [lift, hρ, hh]
-
 /-- **Every pad-blind worker is one the server runs**, at any tapes `σ r` with part `r` and answers `ε a` read as `a`. -/
 theorem Blind.eq_lift {W R Rw C : Type} {S : ZkServer W R} {π : R → Rw} {rd : Msg → C} {wk : S.Worker}
     (hb : S.Blind π rd wk) (σ : Rw → R) (hσ : ∀ r, π (σ r) = r) (ε : C → Msg) (hε : ∀ a, rd (ε a) = a) :
@@ -826,17 +821,6 @@ theorem RefD.own {W R : Type} {S : ZkServer W R} {H : Msg → Msg} {P : W → Pr
     {fill : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val} {n : Msg → ℕ} {wk : S.Worker} {x : Msg} {w : W}
     (hRef : S.RefD H P fill n wk x w) : S.RefDOwn H P fill n wk x w :=
   fun ρ κ h _ hc => hRef ρ κ h hc
-
-/-- The deferred frame at `(x, w)` reads the stand-in only at `(x, w)`. -/
-theorem frameD_congr {W R : Type} (S : ZkServer W R) {fill fill' : Msg → ℕ → ℕ → W → R → List (Msg × Msg) → S.Val}
-    (wk : S.Worker) (x : Msg) (w : W) (hf : ∀ j s ρ h, fill x j s w ρ h = fill' x j s w ρ h) (ρ : R) (κ : S.Chk)
-    (h : List (Msg × Msg)) : S.frameD fill wk x w ρ κ h = S.frameD fill' wk x w ρ κ h := by
-  have e : ∀ ρ h s, S.wkD fill wk κ x w ρ h s = S.wkD fill' wk κ x w ρ h s := fun ρ h s => by
-    simp only [wkD, hf]
-  have ec : S.copy (S.wkD fill wk κ) x w ρ h = S.copy (S.wkD fill' wk κ) x w ρ h := by
-    funext i s
-    simp only [copy, e]
-  simp only [frameD, ec, e]
 
 /-- **The deferred split**: for every worker, check coins and tape, the deferred server releases `P`'s run, or that
 run with its last message replaced by the stop (cut at `n x - c`, `c : Fin 2`). -/

@@ -6,7 +6,11 @@ filters); the constant bits read the pin (`pin_bitT`) and the root's first slot'
 because `HmRow.checkTyped` refuses a root that fills its slot). The rows are `sha512/row/v1`'s because `HmRow.rowPorts`
 refuses a typed statement's bit rows (`ParseFactsT.v1`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Copy
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Copy
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -16,7 +20,7 @@ open Compose Flock.DeriveAll Types.Dag
 
 section Typed
 
-variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
+variable {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D} {st : Stmt} {tb : TypedBlock}
 
 set_option hygiene false in

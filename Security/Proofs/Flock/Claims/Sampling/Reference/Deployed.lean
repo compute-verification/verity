@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Deployed
-import Proofs.Flock.Claims.Sampling.Reference.Complete
+module
+
+public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Claims.Sampling.Reference.Complete
 
 /-!
 # Sampling completeness at the deployed record
@@ -35,6 +37,8 @@ What is proved here: the reference prover's session messages are `ZkTables.hones
 committed value (`found_opens`, `found_val`, `found_covers`), and Flock's masked error is nonnegative
 (`δcZkT_nonneg`).
 -/
+
+@[expose] public section
 
 namespace SamplingDeploy
 
@@ -130,8 +134,6 @@ theorem acceptsSessions_deploy (H : Msg → Msg) (haccept : AcceptsFramed c H) :
   rintro x w hx - ω r hsess
   exact haccept x (Reference.refP FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit w) ω r hx
     (fun hist m h => refP_say H FlockComplete.ZkTables.honestPR c.step c.parse c.reads (commit c) c.wit w h ω) hsess
-
-theorem nPU_deploy (x : Msg) : nPU (deploy rel c) x = units c x := rfl
 
 /-- **At one session per unit, the proof units' count bounds the slots**: the draw checks at most them (`DrawSlots`). -/
 theorem sessionSlots_units (H : Msg → Msg) (hslots : DrawSlots (deploy rel c)) (hn : ∀ x, units c x ≤ c.sessions x) :

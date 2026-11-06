@@ -1,5 +1,7 @@
-import Properties.CertifierDevice
-import Properties.NetworkCertifier
+module
+
+public import Properties.CertifierDevice
+public import Properties.NetworkCertifier
 
 /-!
 # The certifier device's output as the network certificate check reads it
@@ -14,6 +16,8 @@ copy of a certified record, and the check's parameters of the device's configura
 and `service.LinkWindows` is "network accounting's protocol on one link".
 -/
 
+@[expose] public section
+
 namespace Properties.CertifierNetwork
 
 open _root_.CertifierDevice
@@ -21,20 +25,20 @@ open _root_.NetworkCertifier (SyncSet)
 open Properties.CertifierDevice (outputs)
 
 /-- The records an event publishes, in order. -/
-def publishes (acts : List Action) : List Record :=
+def publishes (acts : List Action) : List BlockGrid :=
   acts.filterMap fun | .publish r _ => some r | _ => none
 
 /-- Every record the device publishes over the trace, in order. -/
-def published (c : Config) (tr : List Event) : List Record := (outputs (init c) tr).flatMap publishes
+def published (c : Config) (tr : List Event) : List BlockGrid := (outputs (init c) tr).flatMap publishes
 
 /-- The direction a record is certified in: egress on the egress link, ingress otherwise. -/
-def directionOf (c : Config) (r : Record) : NetworkCheck.Direction := if r.link = c.egressLink then .egress else .ingress
+def directionOf (c : Config) (r : BlockGrid) : NetworkCheck.Direction := if r.link = c.egressLink then .egress else .ingress
 
 /-- The grid a record is certified under. -/
-def gridOf (c : Config) (r : Record) : Params := if r.link = c.egressLink then c.egress else c.ingress
+def gridOf (c : Config) (r : BlockGrid) : Params := if r.link = c.egressLink then c.egress else c.ingress
 
 /-- Σ_sync where a clock applies: on egress. -/
-def syncSetOf (c : Config) (r : Record) : Option SyncSet := if r.link = c.egressLink then some c.syncSet else none
+def syncSetOf (c : Config) (r : BlockGrid) : Option SyncSet := if r.link = c.egressLink then some c.syncSet else none
 
 /-- The signer's reservation at its next unused leaf `next`: refused once every one of the `2^H` leaves is used. -/
 def reserve (i : Issuer) (next : Nat) : Except String Nat :=

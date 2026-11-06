@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.RestLens
-import Proofs.Flock.Claims.Recursion.DeployedR
+module
+
+public import Proofs.Flock.Claims.Recursion.RestLens
+public import Proofs.Flock.Claims.Recursion.DeployedR
 
 /-!
 # `final` reads the last message at every witnesses (`FinalReads`), at the deployed `finalR` and `restR elem`
@@ -19,6 +21,8 @@ hypothesis:
   round `i` each top's `n` instances (`capsOpen_count`) and the row it absorbs where it absorbs one (`rowOpen_count`,
   `rowsCoverAll`), which `nAtSched_succ` counts.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestRead
 
@@ -101,9 +105,6 @@ theorem cutRounds_rest : ∀ (lens : List (List ℕ)) (m : Msg) {os : List (List
     rw [← (Prod.mk.inj he).2, cutRounds_rest ls _ h2, cutRound_rest l m h1, List.drop_drop, hs]
 
 /-! ## The openings' bytes and rows -/
-
-theorem pieceLen_append (a b : List (Msg × List HmNets.Lin)) : pieceLen (a ++ b) = pieceLen a + pieceLen b := by
-  simp only [pieceLen, List.map_append, List.sum_append]
 
 theorem pieceLen_salt (c : Circuit) (q n : ℕ) :
     pieceLen [(([] : Msg), hmSalt c q n)] = Hm96.sha512.saltBytes := by

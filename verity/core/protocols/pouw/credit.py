@@ -74,8 +74,10 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   the tile's R and C. Each K of its ``TILES`` is one the tile's proof covers, a multiple of 32 below 2^17
   (`TILE_K_STEP`, `TILE_K_LIMIT`: the K its ``GemmAccumulatorS8`` binds), else the window is refused (``tile-k``,
   `tile_k`, its fix the K to pad to). Its root's nodes other than inputs must be, in order, each call's (M/R)·(n/C)
-  instances of K's template, so the record names the units the circuit has. The cost is the descriptor's nodes and the
-  record's calls, never the gates they unroll to.
+  instances of K's template, so the record names the units the circuit has. No composite C-Flock's decoder reads of it
+  names a word at another width than it was committed with (`_reinterprets`, the codec's ``E_REINTERPRET``), else it
+  is refused as no descriptor (`DESCRIPTOR_FORM`), as `Flock.Program.decode` refuses it. The cost is the descriptor's
+  nodes and the record's calls, never the gates they unroll to.
 * **K is committed, and ε is what it established** (`committed_k`, `established`): K is the proof system's selection,
   committed in the period-open (`K_FIELD`, in the auditor's signed ledger beside the period's circuit and cap) before
   any window's draw. A period whose open commits none is refused, and so is a window with fewer than K units, whose
@@ -196,6 +198,7 @@ import json
 import re
 from fractions import Fraction
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable
 
 from verity.core.protocols.pouw import coins as Co
@@ -207,12 +210,16 @@ from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import live_reads as LR
 from verity.core.protocols.pouw.circuit.h1zy import LEAST_K
 from verity.core.protocols.pouw.protocol import CALL_RANGE, tagged
-from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, weights_root
+from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, theta_root, weights_root
 from verity.core.protocols.profile import WINDOW_DELTA
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.ml.circuits.codec import _checked_refs
+from verity.ml.circuits.defs import _Widths
+from verity.ml.circuits.refs import Coll, Concat, refs_from_json
+from verity.ml.circuits.types import type_from_json
 from verity.ml.commitments import domains
 
 #: the verifier of record over a statement's proof files (`proofs.verify`)
@@ -504,6 +511,19 @@ def commit_ids(s: int) -> str:
     """The Commit's name for its step's input token ids at the window's round `s`: what it registers as round s's
     input-ids table ``<prefix>ids@<s>``."""
     return f"input-ids/{s}"
+
+
+_COMMIT_NAME = re.compile(r"row-table/(0|[1-9][0-9]*)/k([1-9][0-9]*)|input-ids/(0|[1-9][0-9]*)")
+
+
+def window_table(name: str, prefix: str) -> str:
+    """The window's table under `prefix` (the descriptor's ``PREFIX``) that the Commit's value `name` is (ROOTS1): round
+    s's A table of K ``<prefix>a/<K>@<s>`` for `commit_rows` of (s, K), its input-ids table ``<prefix>ids@<s>`` for
+    `commit_ids` of s. ValueError for any other name."""
+    m = _COMMIT_NAME.fullmatch(name) if isinstance(name, str) else None
+    if m is None:
+        raise ValueError(f"{name!r} is no Commit name of a window's table: row-table/<round>/k<K> or input-ids/<round>")
+    return f"{prefix}a/{m[2]}@{m[1]}" if m[1] is not None else f"{prefix}ids@{m[3]}"
 
 
 def _digest(x: Any) -> bytes | None:
@@ -848,6 +868,106 @@ def _runs(xs: Any) -> list[list]:
     return out
 
 
+def _static_fns(v: Any) -> list:
+    """The functions a binding's static value names, as the decoder follows them (`Flock.Program.staticFns`): an
+    object's ``fn``, none in an ``f64``, a ``dict``'s values', a list's items', at any depth."""
+    out, todo = [], [v]
+    while todo:
+        x = todo.pop()
+        if isinstance(x, list):
+            todo += x
+        elif isinstance(x, dict) and "fn" in x:
+            out.append(x["fn"])
+        elif isinstance(x, dict) and "f64" not in x and isinstance(x.get("dict"), dict):
+            todo += x["dict"].values()
+    return out
+
+
+def _record_fns(v: Any) -> list:
+    """Every ``{"fn": id}`` in a record value (`codec._record_function_ids`, `Flock.Program.recordFunctionIds`), at
+    any depth."""
+    out, todo = [], [v]
+    while todo:
+        x = todo.pop()
+        if isinstance(x, dict) and list(x) == ["fn"]:
+            out.append(x["fn"])
+        elif isinstance(x, dict | list):
+            todo += x.values() if isinstance(x, dict) else x
+    return out
+
+
+def _misreads(body: Any, types: list) -> bool:
+    """Whether a composite's `body` names, in a node's argument or its return, a leaf of another width than the
+    argument's or return's type gives that position: `defs.Builder.finish`'s check (`_Widths`), over the body's
+    references as the codec decodes them (`types` the descriptor's table). False for a body whose types or references
+    don't decode, which this check leaves to the rest."""
+    def entry(i: Any) -> Any:
+        if not (_nat(i) and i < len(types)):
+            raise IndexError(i)
+        return types[i]
+
+    def refs(j: Any, args: list[list]) -> Any:
+        if isinstance(j, dict) and "alias" in j:
+            k, a = j["alias"]
+            if not (_nat(k) and _nat(a) and k < len(args) and a < len(args[k])):
+                raise IndexError(k)
+            return args[k][a]
+        if isinstance(j, dict) and "concat" in j:
+            return Concat([refs(x, args) for x in j["concat"]])
+        return refs_from_json(j)
+
+    try:
+        params = tuple((p[0], type_from_json(p[1])) for p in body["params"])
+        ret_type, nds = type_from_json(body["ret_type"]), body["nodes"]
+        nodes = [SimpleNamespace(out=entry(nd["out"])) for nd in nds]
+
+        def leaves(s: str, i: int) -> int | None:
+            t = params[i][1] if s == "p" and i < len(params) else nodes[i].out if s == "n" and i < len(nodes) else None
+            return None if t is None else t.leaves
+
+        W, args = _Widths(params, nodes), []
+        for k, nd in enumerate(nds):
+            W.below = k
+            got = [Coll(entry(a["type"]), _checked_refs(refs(a["refs"], args), leaves)) for a in nd["args"]]
+            if any(W.first(c) is not None for c in got):
+                return True
+            args.append([c.refs for c in got])
+        W.below = len(nodes)
+        return W.first(Coll(ret_type, _checked_refs(refs(body["ret"], args), leaves))) is not None
+    except (TypeError, ValueError, IndexError, KeyError, AttributeError, RecursionError):
+        return False
+
+
+def _reinterprets(d: dict) -> bool:
+    """Whether a composite C-Flock's decoder reads of the descriptor `d` (one `_parsed` accepted) reads a word at
+    another width than it was committed with (`_misreads`, the codec's ``E_REINTERPRET``), which
+    `Flock.Program.decode` refuses.
+    Its composites are the root and the definitions its program function's record names, then each one's binding
+    statics' functions and its nodes' callees, as the decoder follows them."""
+    defs, callees, seen = d["definitions"], d["callees"], set()
+    todo = [d["root"]]
+    for _k, v in _record(d["program_fn"]):
+        todo += _record_fns(_loads(v)[1])
+    try:
+        types = [type_from_json(t) for t in d.get("types", [])]
+    except (TypeError, ValueError, IndexError, KeyError, AttributeError, RecursionError):
+        return False
+    while todo:
+        fid = todo.pop()
+        x = defs.get(fid) if type(fid) is str and fid not in seen else None
+        if not (isinstance(x, dict) and x.get("form") == "composite"):
+            continue
+        seen.add(fid)
+        body = x.get("body")
+        nds = body.get("nodes") if isinstance(body, dict) else None
+        todo += _static_fns(x.get("bindings"))
+        todo += [callees[nd["fn"]] for nd in nds if isinstance(nd, dict) and _nat(nd.get("fn"))
+                 and nd["fn"] < len(callees)] if type(nds) is list else []
+        if _misreads(body, types):
+            return True
+    return False
+
+
 def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     """The layout (``{calls, linears, m, tile}``, `strata`'s) of the H1 window whose circuit's descriptor is
     `descriptor` (its bytes, canonical JSON without annotations, the bytes the period's ``circuit`` is the SHA-512 of),
@@ -858,12 +978,13 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     are each call's (M/R)·(n/C) instances of its K's template, in the calls' order: a call one instance and a batch its
     members, as the template query counts units (`Q_template_instances`). Its cost is the descriptor's bytes, never the
     gates its nodes unroll to. The Lean reads the descriptor through C-Flock's decoder (`Credit.programOf`), so it also
-    refuses (`DESCRIPTOR_FORM`) a descriptor that decoder refuses; this checks only its form (`_parsed`)."""
+    refuses (`DESCRIPTOR_FORM`) a descriptor that decoder refuses; this checks its form (`_parsed`) and that no
+    composite the decoder reads names a word at another width (`_reinterprets`)."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
         return None, ("layout", why)
 
     d = _parsed(descriptor)
-    if d is None:
+    if d is None or _reinterprets(d):
         return no(DESCRIPTOR_FORM)
     callees, defs, fn = d["callees"], d["definitions"], d["program_fn"]
     rec = _record(fn) if fn.startswith(WINDOW_FN + "{") else []
@@ -1423,9 +1544,10 @@ def _arow(rounds: list, entries: list, registered: list, layout: dict, prefix: s
     for e in registered:
         if type(e.get("value")) is str:
             theirs.setdefault(e["value"], []).append(e)
-    pairs = [(f"{prefix}a/{k}@{s}", commit_rows(s, k), f"round {s}'s A table of K = {k}",
+    pairs = [(window_table(commit_rows(s, k), prefix), commit_rows(s, k), f"round {s}'s A table of K = {k}",
               chunks(k) * layout["m"] * len(cs)) for s, k, cs in step_tables(layout, steps)]
-    pairs += [(f"{prefix}ids@{s}", commit_ids(s), f"round {s}'s input-ids table", None) for s in range(steps)]
+    pairs += [(window_table(commit_ids(s), prefix), commit_ids(s), f"round {s}'s input-ids table", None)
+              for s in range(steps)]
     for v, name, whose, rows in pairs:
         if v not in ours:
             return "arow", (f"the window registers no {whose} {v}, so nothing ties it to the Commit's {name}: the "
@@ -3356,6 +3478,7 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     if not (isinstance(entries, list) and all(isinstance(e, dict) for e in entries)):
         return no(ENTRIES_FORM)
     roots: dict[int, bytes] = {}
+    held: list[dict] = []
     for e in entries:
         v = e.get("value")
         if not is_held(v):
@@ -3374,11 +3497,12 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
                 and e["domain"] == G.domain(program, v, w, x * n).domain_id.hex()):
             return no(other_weights_entry(v, k, n))
         roots[k] = h
+        held.append(e)
     for k in sorted(rows):
         if k not in roots:
             return no(f"the window registers no weights {prefix}b/{k} of K = {k}: each K's B rows, their codes and s_w, "
                       "are registered under the weights' root its open root binds, before its salt")
-    w = weights_root(roots)
+    w = theta_root(held, prefix)
     if PS.window_open_root(w, t, session) != r:
         return no(OTHER_WEIGHTS)
     return w, None
@@ -3393,4 +3517,4 @@ __all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "CO
            "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "law", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
            "merkle_depth", "partition_of", "passes_distinct", "pearl_c_period_credit", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
-           "window"]
+           "weights_root", "window"]

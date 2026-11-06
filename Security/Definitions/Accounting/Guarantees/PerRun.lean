@@ -1,8 +1,10 @@
-import Definitions.Accounting.PerRun
-import Definitions.Accounting.Pouw
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.PearlC.W1Stop
-import Definitions.Pouw.Assumptions.Game
+module
+
+public import Definitions.Accounting.PerRun
+public import Definitions.Accounting.Pouw
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.PearlC.W1Stop
+public import Definitions.Pouw.Assumptions.Game
 
 /-!
 # The per-run guarantees (trusted)
@@ -16,10 +18,10 @@ from each audit's per-run guarantee (`Accounting.Run.ComputeSoundPerRun` and the
 
 The compute audit's per-run guarantee comes from PoUW by truncation (`PouwEndToEndPerRun`, `ComputeOfPouwPerRun`),
 under one more hypothesis on PoUW's cost model, that it truncates (`Accounting.BudgetAbort`); without it the per-run
-form does not follow from `Pouw.Assumptions.TT` (`Accounting.PerRunNecessity.tt_not_perRun`). The bandwidth audit's guarantee, `Bandwidth.Guarantees.AuditRO`, is
-already per-run: its event reads the ingress of the run itself. PoUS's `EndToEndRing` bounds a server's state by its
-type, not a charge that varies with the coins, so its per-run form is a matter of how a run's device memory maps to a
-server's state, in the capacity embedding.
+form does not follow from `Pouw.Assumptions.TT` (`Accounting.PerRunNecessity.tt_not_perRun`). The bandwidth audit's
+guarantee, `Accounting.Guarantees.Remote.AuditRO`, is already per-run: its event reads the ingress of the run itself.
+PoUS's `EndToEndRing` bounds a server's state by its type, not a charge that varies with the coins, so its per-run form
+is a matter of how a run's device memory maps to a server's state, in the capacity embedding.
 
 **Priced.** The machine charges a PoUW run's arithmetic, at W1's instruction prices with no fetch charge and no refund,
 to the compute account, and its first fetches of pre-salt or supplied bytes, deduplicated within the run, to the
@@ -44,6 +46,8 @@ Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guara
 (`Proofs.Accounting.PerRunPouw`, `Proofs.Accounting.PerRunJoint`, `Proofs.Accounting.PerRunPriced` and
 `Proofs.Accounting.PerRunStop`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

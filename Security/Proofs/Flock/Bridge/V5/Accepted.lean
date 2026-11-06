@@ -1,10 +1,12 @@
-import Proofs.Flock.Bridge.V5.KSLive
-import Proofs.Flock.Bridge.V5.Refused
-import Proofs.Flock.Bridge.Refused
-import Proofs.Flock.Claims.Recursion.SetupValues
-import Proofs.Flock.Soundness.Discharge.Hidden.Public
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SharedP
-import Flock.With.SetupEq
+module
+
+public import Proofs.Flock.Bridge.V5.KSLive
+public import Proofs.Flock.Bridge.V5.Refused
+public import Proofs.Flock.Bridge.Refused
+public import Proofs.Flock.Claims.Recursion.SetupValues
+public import Proofs.Flock.Soundness.Discharge.Hidden.Public
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SharedP
+public import Flock.With.SetupEq
 
 /-!
 # `SampledKSLiveV5`'s file preconditions, read off acceptance (`SampledKSLiveV5Accepted`)
@@ -27,9 +29,12 @@ checks are V5's.
 * `SampledKSLiveV5Accepted`: `SampledKSLiveV5` with its event `LiveAcceptsKSP ∧ RunPopOk` in place of `LiveAcceptsZKP`
   and without the four hypotheses, under the registration's law on its layout's strata (`Bridge.LawOn` at `nsOf`) and
   at `δ` the law's own miss of `B`, as V5 has them; `sampledKSLiveV5Accepted_of` derives it from `SampledKSLiveV5` as
-  `sampledKSLiveV3_of` derives V3 from V2, and `sampledKSLiveV5Accepted` proves it. The session's simulator is V5's:
-  its draw files decode to `kd` units whatever the population (`Bridge.lawOn_size`), so it reads no population check.
+  `sampledKSLiveV3_of` derives V3 from V2, and `sampledKSLiveV5Accepted` proves it. The session's simulator is V5's,
+  under the draw file's law, on strata of sizes `nsF`: its draw files decode to `kd` units whatever the population
+  (`Bridge.lawOn_size`), so it reads no population check.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -247,7 +252,7 @@ population (`pub.n = n`). `SampledKSLiveV5` implies it (`sampledKSLiveV5Accepted
 def SampledKSLiveV5Accepted : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
@@ -256,7 +261,7 @@ def SampledKSLiveV5Accepted : Prop :=
     -- the statement's descriptor, and the registration's query
     (desc : Claims.Msg) (qr : Lean.Json)
     -- the registration's law over the query's strata, drawing kd proof blocks
-    (law : Flock.Draw.Law) (kd : ℕ) (hlaw : Bridge.LawOn law (Bridge.nsOf desc qr) kd) (hdiv : kd % nTab I = 0)
+    (law : Flock.Draw.Law) (kd : ℕ) (_hlaw : Bridge.LawOn law (Bridge.nsOf desc qr) kd) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -265,9 +270,10 @@ def SampledKSLiveV5Accepted : Prop :=
     -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, and live-verifier at `own` and the law
-    (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    -- the verify command's tags, live-verifier at `own` and the draw file's law, a law over strata of sizes `nsF`
+    -- drawing `kd` proof blocks
+    (hTags : TagsOkZHJ I) (lawF : Flock.Draw.Law) (nsF : List ℕ) (hlawF : Bridge.LawOn lawF nsF kd)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr lawF)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
     -- the proof blocks whose miss is `δ`
@@ -278,12 +284,12 @@ def SampledKSLiveV5Accepted : Prop :=
     (q : Claims.Sampling.Query),
     let L := Bridge.execSel (n := n) src law n
     let P := (keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)
-    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub).bindingZ
-      (rsZHJP_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub)
+    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub).bindingZ
+      (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesZCJH_custodyP I own ht (Flock.Desc.parse_flat hD) law kd hdiv dj y₀ wr _ hTags hCust
-        (Bridge.lawOn_size hlaw hCust.2)) τ
+      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) lawF kd hdiv dj y₀ wr _ hTags hCust
+        (Bridge.lawOn_size hlawF hCust.2)) τ
     let Xr := XplurZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw
     -- the deployed commitment's layout: the game's rows, read off the circuit file, at the public file's leaf map
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
@@ -319,16 +325,25 @@ they give V5's hypotheses (`rowsOk_of_scopeOkH`, `v5Files_of_checks` at `pub.n =
 accepted event is inside V5's; at files that fail, it is empty. -/
 theorem sampledKSLiveV5Accepted_of (h : Flock.Guarantees.SampledKSLiveV5) : SampledKSLiveV5Accepted := by
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope hn desc qr law kd hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3
-    hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows roots Cd κ r ns δ hT hL
+    hTags lawF nsF hlawF hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows roots Cd κ r ns δ hT hL
   by_cases hc : (Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
       ∃ count draw, Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables count draw = .ok ()) ∧
       Bridge.RunPopOk desc qr n
   · obtain ⟨⟨hck, _, _, hks⟩, p, hp, hpo⟩ := hc
-    obtain ⟨hdup, hroots⟩ := v5Files_of_checks (Flock.Desc.parse_flat hD) hpi hpub hn hck hks
+    have hflat : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok D.unroll := by
+      obtain ⟨c', hc'⟩ : ∃ c', HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c' := by
+        unfold Flock.PortRoots.check Flock.PortRoots.checkOf Flock.PortRoots.checkWith at hck
+        cases hp : HmOut.parse (zkTags I) I.circuitFile I.tables with
+        | ok c' => exact ⟨c', rfl⟩
+        | error e => rw [hp] at hck; cases hck
+      have hs := Flock.Desc.parseStmt_stmt hD
+      simp only [HmOut.parseStmt, HmOut.parse_isTmpl hc', Bool.false_eq_true, ↓reduceIte] at hs
+      exact hs
+    obtain ⟨hdup, hroots⟩ := v5Files_of_checks hflat hpi hpub hn hck hks
     exact (prob_mono (fun o ho => ⟨ho.1.1.1, ho.2⟩) _ τ).trans
       (h n Reg I own ht D hD hU pi hpi pub hpub hscope (Bridge.rowsOk_of_scopeOkH hscope) hdup hroots desc qr
-        (Bridge.popMatches_of_popOk hp hpo) law kd hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw
-        hM ρ hρ hr t' ht' B τ qF qS q hT hL)
+        (Bridge.popMatches_of_popOk hp hpo) law kd hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags lawF nsF hlawF hCust k
+        Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q hT hL)
   · exact (prob_mono (q := fun _ => False) (fun o ho => hc ⟨⟨ho.1.1.2.1, ho.1.1.2.2⟩, ho.1.2⟩) _ τ).trans
       ((prob_false _ τ).le.trans zero_le)
 

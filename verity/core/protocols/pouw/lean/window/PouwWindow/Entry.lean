@@ -1,13 +1,15 @@
-import PouwWindow.Grid
-import Flock.Hash
-import Flock.Hm96
-import Flock.HmRow
-import PouwCommit.Frame
+module
+
+public import PouwWindow.Grid
+public import Flock.Hash
+public import Flock.Hm96
+public import Flock.HmRow
+public import PouwCommit.Frame
 
 /-!
 # The entry row (`window.py`, "The entry row")
 
-One entry of the window root as its committed 336-byte row holds it (PoUW's PROTOCOL.md, "The served audit window"):
+One entry of the window root as its committed 336-byte row holds it:
 six u64s little-endian (kind, lo, hi, n_a, n_b, a zero pad), the side roots A and B and the pass's -h3 root (64 bytes
 each), tile0, cols, m and a zero u64, then the call's record's SHA-512. An `Entry` here holds what a row can hold: u64s
 and 64-byte digests (`Entry.fromRow?`); Python's dataclass holds any values, and `Entry.row` refuses the rest, so the
@@ -15,6 +17,10 @@ functions of an entry agree on the entries that encode. `layoutProblem` holds an
 and `tileRead?` map a drawn index to its rows and its word in the pass's -h3 leaf; `entryDigest`, `entryBc` and `entryLeaf`
 commit the row as an `hm96-sha512/row/v2` row.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwWindow
 

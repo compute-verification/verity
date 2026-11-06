@@ -1,4 +1,4 @@
-"""A `verity_vllm.query.units.Program` view of a derived Program.
+"""A `verity_vllm.query.units.CallGraph` view of a derived Program.
 
 Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Program, in body order):
 
@@ -528,18 +528,6 @@ def ports_of_type(t) -> tuple[Port, ...]:
     return (one("out", 0, t),)
 
 
-def _registry():
-    """(REGISTRY, import errors) of the integration's registry, every module loaded (`verity.ml.definitions.registry.catalog.load`); a module that
-    fails to import is reported with the lookup that needed it, never treated as "not registered"."""
-    try:
-        from verity.ml.circuits.defs import REGISTRY  # noqa: F401
-    except Exception as e:  # the core package missing is an ENVIRONMENT fault, named (never a "not registered" answer)
-        from verity_vllm.query.manifest.format import RegistryUnavailable
-        raise RegistryUnavailable(e) from e
-    from verity.ml.definitions.registry.catalog import load
-    return load()
-
-
 _PORTS_CACHE: dict[str, tuple[Port, ...]] = {}
 
 
@@ -550,7 +538,8 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
     if hit is not None:
         return hit
     from verity.ml.circuits.codec import lookup_primitive
-    reg, errors = _registry()
+    from verity.ml.definitions.registry.catalog import load
+    reg, errors = load()
     base = spec_base(spec)
     d = reg.defs.get(base)
     if d is None:
@@ -716,7 +705,8 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
     from verity.ml.circuits.codec import decode_program, descriptor_id
     from verity.ml.circuits.refs import runs
     if registry is None:
-        registry, _errors = _registry()
+        from verity.ml.definitions.registry.catalog import load
+        registry, _errors = load()
     from verity.ml.circuits.program import is_input
     decoded = decode_program(desc, registry)
     hints = {int(k): str(v) for k, v in decoded.annotations.get("node_hints", {}).items()}

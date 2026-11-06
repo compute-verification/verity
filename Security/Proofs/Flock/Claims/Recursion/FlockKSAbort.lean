@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.Joint
-import Proofs.Flock.Claims.KS.Flock
-import Proofs.Flock.Claims.Recursion.AbortWait
-import Proofs.Flock.Claims.Recursion.AbortFork
-import Proofs.Flock.Claims.Recursion.InnerAbort
+module
+
+public import Proofs.Flock.Claims.KS.Joint
+public import Proofs.Flock.Claims.KS.Flock
+public import Proofs.Flock.Claims.Recursion.AbortWait
+public import Proofs.Flock.Claims.Recursion.AbortFork
+public import Proofs.Flock.Claims.Recursion.InnerAbort
 
 /-!
 # Flock meets `Inner.KSAbort` from the fixed-table bound at the abort law
@@ -29,6 +31,8 @@ they abort:
   `γ`; so `Inner.KSAbort` at `Inner.ofFlock` rests on `TableBoundθKept`, `ColsOk` and `ConflictTied` at the inner
   deployment (`KSAbort_of_tableBoundKept`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -315,11 +319,6 @@ def TableBoundθKept (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg �
           D.εtable x + e.term ω +
             Pr fun d : (Fin (D.V.k x) → Coin) × A => keep ω d.1 d.2 = true ∧ (run H P D.V x ω d.1).out = .acc ∧
               ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H P D.V x ω d.1).seen 0) p.val = some u ∧ u ≠ C p
-
-omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
-theorem EscapesD.fitsFork_toAbort {H : Msg → Msg} {Ω A : Type} {V : Verifier Coin} {P : Prover Ω} {x : Msg}
-    {keep : Ω → (Fin (V.k x) → Coin) → A → Bool} (e : EscapesD H (V.k x) fun ω d => run H P V x ω d.1)
-    (hk : e.Kept keep) (C c : ℝ) : (e.toAbort hk).FitsFork C c ↔ e.FitsFork C c := Iff.rfl
 
 omit [Nonempty Coin] in
 /-- **The tie**: the fixed-table bound at every thinning of acceptance, with escapes on kept runs, is the bound at the

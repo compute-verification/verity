@@ -1,5 +1,7 @@
-import Definitions.Accounting.Remote.Held
-import Definitions.Accounting.Remote.Sketch
+module
+
+public import Definitions.Accounting.Remote.Held
+public import Definitions.Accounting.Remote.Sketch
 
 /-!
 # What deriving the receipts' sketch bound assumes (trusted)
@@ -23,6 +25,8 @@ and these premises, each a named `Prop` taken as a hypothesis:
 The signs' rank tail is `Accounting.Assumptions.SketchRank`, evaluated outside Lean.
 -/
 
+@[expose] public section
+
 namespace Accounting.Assumptions
 
 open Accounting.Remote.Sketch
@@ -37,7 +41,7 @@ keys' law is within statistical distance `ε` of uniform:
 $$\Pr_x\big[E(\mathrm{keys}(b, D, x))\big] \le \Pr_\kappa\big[E(\kappa)\big] + \varepsilon.$$
 
 It is the one random-oracle step `SketchBoundSession` takes: the bound is derived over the model's coins
-(`Accounting.Remote.Sketch.Coins`, each candidate's key uniform and independent of the prover's coins, the store and
+(`Accounting.Remote.Sketch.ModelCoins`, each candidate's key uniform and independent of the prover's coins, the store and
 the other keys), and this premise carries it to the trace's outcomes, whose keys are SHA-512's, at a cost of `ε`. The
 signs are `S_i`, which `remote_bandwidth.receipts` expands from the seed by SHA-512, and the receipt hash is SHA-512
 keyed by the seed (`SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)`) read as a function of the block's index and sketch words.

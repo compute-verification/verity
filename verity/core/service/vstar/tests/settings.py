@@ -8,7 +8,8 @@ from pathlib import Path
 
 def recursive_data() -> str:
     """``VERITY_VSTAR_RECURSIVE_DATA``: a recursion_e2e run's kept data/TAG (KEEP_DATA=1, after STEP=lean), which the
-    whole-session recursive tests read and skip without; else empty."""
+    whole-session recursive tests read and skip without, or ``fetch``: the kept run `recursive_data.json` names, fetched
+    from the evidence store when they run (about 2 GB); else empty."""
     return os.environ.get("VERITY_VSTAR_RECURSIVE_DATA", "")
 
 
@@ -24,3 +25,13 @@ def flock_trace() -> Path | None:
     if os.environ.get("FLOCK_CIRCUIT"):
         return Path(os.environ["FLOCK_CIRCUIT"]).with_name("flock-trace")
     return None
+
+
+def irdep_tree() -> Path | None:
+    """``VERITY_IRDEP_TREE``, a deployed recursive run's tree (`stage/`, `inner/s0/`, `v/`)."""
+    return Path(os.environ["VERITY_IRDEP_TREE"]) if os.environ.get("VERITY_IRDEP_TREE") else None
+
+
+def irdep_lean() -> Path | None:
+    """``VERITY_IRDEP_LEAN``, the output of `IrDepSession.lean` at that tree."""
+    return Path(os.environ["VERITY_IRDEP_LEAN"]) if os.environ.get("VERITY_IRDEP_LEAN") else None

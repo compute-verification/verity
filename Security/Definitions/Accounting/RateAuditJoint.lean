@@ -1,5 +1,7 @@
-import Definitions.Accounting.Joint
-import Definitions.Accounting.RateAudit
+module
+
+public import Definitions.Accounting.Joint
+public import Definitions.Accounting.RateAudit
 
 /-!
 # The rate audit's game as the bandwidth audit of a joint run (trusted)
@@ -20,6 +22,8 @@ theirs together are within the device's priced work over the window: what the co
 available to rebuild.
 -/
 
+@[expose] public section
+
 namespace Accounting
 
 /-- The rate audit's coins in its game with a store of `N` words of `b` bits, a `ρ`-bit certified stream, `h`-bit tags
@@ -36,10 +40,10 @@ structure RealizesRate (p : Price) (cTag cEnc : ℕ) {N b h ρ s : ℕ} {ι : Ty
   dev : ΩW × ΩS → Rate.Device N b h ρ d.chip (∑ i, d.cap i * (r.win .bandwidth).len)
     (d.rate .oracle * (r.win .bandwidth).len)
   /-- the bandwidth audit's verdict is the game's -/
-  accepts_iff : ∀ x y s', r.accepts .bandwidth (x, y, s') ↔ (dev (x, s')).Accepts y.1 y.2.1 y.2.2.1 y.2.2.2
+  accepts_iff : ∀ x y s', r.accepts .bandwidth (x, y, s') ↔ (dev (x, s')).Accepts y.1 y.2.1.1 y.2.1.2 y.2.2
   /-- the bandwidth account's reads from device memory cover the game's ingress -/
-  ingress_le : ∀ x y s', (dev (x, s')).ingress y.1 y.2.1 y.2.2.1 ≤ r.read (x, y, s')
+  ingress_le : ∀ x y s', (dev (x, s')).ingress y.1 y.2.1.1 y.2.1.2 ≤ r.read (x, y, s')
   /-- the work of the accounts other than the compute account covers the game's tags and rebuilds -/
-  compute_le : ∀ x y s', (dev (x, s')).compute cTag cEnc y.1 y.2.1 y.2.2.1 ≤ r.othersWork p (x, y, s')
+  compute_le : ∀ x y s', (dev (x, s')).compute cTag cEnc y.1 y.2.1.1 y.2.1.2 ≤ r.othersWork p (x, y, s')
 
 end Accounting

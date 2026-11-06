@@ -1,7 +1,9 @@
-import Batteries.Tactic.OpenPrivate
-import Properties.RemoteAudit.Live
-import Proofs.Properties.RemoteAudit.Order
-import Proofs.Properties.RemoteAudit.SharedLink
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Properties.RemoteAudit.Live
+public import Proofs.Properties.RemoteAudit.Order
+public import Proofs.Properties.RemoteAudit.SharedLink
 
 /-!
 # The verifier's process accepts what `Shared.run g` accepts (`liveIsRun`)
@@ -22,6 +24,10 @@ The recorded run is taken at `W c a s`, the process's session `s` with the coins
 
 `run_sim` puts them together by induction on the requests, from the end (`snoc_induction`), over `Shared.srunL g`.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open RemoteAudit RemoteAudit.Session
 
@@ -50,14 +56,14 @@ theorem verify_W (s : State) (c a : Array ByteArray) (t : Int) (o : Array Openin
   unfold verify State.fail
   simp only [Id.run, live_W, record_W]
   repeat' (split <;> try dsimp only)
-  all_goals try rfl
+  all_goals first | rfl | (simp only [*, ↓reduceIte]; rfl)
 
 theorem verifyBy_W (s : State) (c a : Array ByteArray) (t : Int) (f : Array (Nat × Nat) → Verdict) :
     verifyBy (W c a s) t f = ((verifyBy s t f).1, W c a (verifyBy s t f).2) := by
   unfold verifyBy State.fail
   simp only [Id.run, live_W]
   repeat' (split <;> try dsimp only)
-  all_goals try rfl
+  all_goals first | rfl | (simp only [*, ↓reduceIte]; rfl)
 
 theorem release_W (s : State) (c a : Array ByteArray) (runs withdrawn : Array (Int × Int)) :
     release (W c a s) runs withdrawn = ((release s runs withdrawn).1, W c a (release s runs withdrawn).2) := by

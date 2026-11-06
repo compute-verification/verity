@@ -1,10 +1,12 @@
-import Proofs.Flock.SessionLoop.Statement
-import Proofs.Flock.Claims.ZK.FinishSwMkAny
-import Proofs.Flock.Claims.ZK.FinishSwFrame
-import Proofs.Flock.Claims.ZK.FrameFree
-import Proofs.Flock.Claims.ZK.L0PinLive
-import Proofs.Flock.Claims.ZK.PadsRoot
-import Proofs.Flock.Claims.ZK.FrameLive
+module
+
+public import Proofs.Flock.SessionLoop.Statement
+public import Proofs.Flock.Claims.ZK.FinishSwMkAny
+public import Proofs.Flock.Claims.ZK.FinishSwFrame
+public import Proofs.Flock.Claims.ZK.FrameFree
+public import Proofs.Flock.Claims.ZK.L0PinLive
+public import Proofs.Flock.Claims.ZK.PadsRoot
+public import Proofs.Flock.Claims.ZK.FrameLive
 
 /-!
 # The values the frame took, as the switched session's values
@@ -55,6 +57,8 @@ its own and where it doesn't:
   at the honest values at the session loop. That the deployed device's rounds are `valsWk honestVals`'s is the device's
   completeness, checked empirically.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.Table
 

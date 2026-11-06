@@ -1,11 +1,15 @@
-import NciCheck.Desc
-import Std.Data.HashSet
+module
+
+public import NciCheck.Desc
+public import Std.Data.HashSet
 
 /-!
 # The desc fuzzer: the statements behind `DescAgrees`, decided on generated Programs
 
-`NciCheck.Properties.DescAgrees` (`Desc.check` agrees with the unrolled `NciCheck.evaluate`) follows from three open
-statements in `Security/Properties/Proofs/Nci/` (`Novel.descAgrees_of_open`). Each is a `∀` over Programs that pass
+`NciCheck.Properties.DescAgrees` (`Desc.check` agrees with the unrolled `NciCheck.evaluate`) follows from three
+statements (`Novel.descAgrees_of_open`), each proved in `Security/Proofs/Properties/Nci/` (`Resolve.bodiesOk`,
+`OperandsResolve.operandsResolve_of`, `Novel.readsExact`), so `DescAgrees` is proved (`SecurityProofs.DescAgrees`), and
+the fuzzer decides the statements as a cross-check of those proofs. Each is a `∀` over Programs that pass
 `Desc.evaluate`'s refusals: `decode`, `orderViolation = none`, `Desc.rootLaidOut`, `Desc.inputsAtRoot`,
 `Desc.walkable` and `Desc.analyze`. On one such Program each conclusion is decidable, and `check` decides it:
 
@@ -33,6 +37,8 @@ Each `∀` over members, leaves or references enumerates all of them up to `Caps
 sample). `scripts/desc_fuzz_programs.py` writes the Programs and `NciCheck/DescFuzzMain.lean` fails unless no statement
 fails on any of them. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
+
+@[expose] public section
 
 namespace NciCheck.DescFuzz
 

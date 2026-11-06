@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.Fork
-import Proofs.Flock.Claims.Recursion.Abort
+module
+
+public import Proofs.Flock.Claims.KS.Fork
+public import Proofs.Flock.Claims.Recursion.Abort
 
 /-!
 # The finders' events at runs that may abort, covered by `BAbort`
@@ -17,6 +19,8 @@ import Proofs.Flock.Claims.Recursion.Abort
   round guess of the forks' collision probabilities (`PrBAbort_eq_avg`), each fork event is covered by its round's
   (`Pr_fork_le_abort`) and each one-run event by `BAbort` (`Pr_one_le_PrBAbort`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -107,9 +111,6 @@ def EscapesD.toAbort (e : EscapesD H (V.k x) fun ω d => run H P V x ω d.1) (hk
 
 theorem EscapesD.term_toAbort [Fintype Coin] [Fintype A] (e : EscapesD H (V.k x) fun ω d => run H P V x ω d.1)
     (hk : e.Kept keep) : (e.toAbort hk).term = e.term := rfl
-
-theorem EscapesD.fits_toAbort (e : EscapesD H (V.k x) fun ω d => run H P V x ω d.1) (hk : e.Kept keep) (C : ℝ) :
-    (e.toAbort hk).Fits C ↔ e.Fits C := Iff.rfl
 
 end Tie
 

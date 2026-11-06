@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
-import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.Composed.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The drawn units of one `--zk --registered` session
@@ -19,6 +22,8 @@ simulation keeps both (`simAuditZKOn`):
 * `zk_session_drawnR`: `hwrong` for `flock-verify verify --zk --registered F` sessions: no drawn unit is wrong in the
   committed values `zk_session_soundR` reads, except with probability `ε_ks + δ_link`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

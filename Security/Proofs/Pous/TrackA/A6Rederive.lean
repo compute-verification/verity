@@ -1,15 +1,17 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Thm1.Theorem1iTimed
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
+public import Proofs.Pous.Thm1.Theorem1iTimed
 
 /-!
 # A6, cheap re-derivation: `PousProofs.a6_rederive_untimed` and `a6_rederive_timed`, as drafted
@@ -22,6 +24,8 @@ consistent, and `R` rebuilds `(enc W ω r').2 = C` from them.
 * Timed: `A₁` stores that advice, and each sequential round runs `R` on the challenged index and keeps the state
   (`progMap`, `seqAnswers_keep`), so every challenge sequence is answered correctly.
 -/
+
+@[expose] public section
 
 namespace PousThm1
 
@@ -68,7 +72,7 @@ theorem a6_rederive_untimed {M : IdealModel} (sch : Scheme M) (κ : ℕ) (π : �
 passes every sequential audit with probability 1 (the timed form of `redesign.md` Proposition 1). -/
 theorem a6_rederive_timed {M : IdealModel} (sch : Scheme M) (κ D Q k : ℕ)
     (z : Bits sch.n → M.Ω → sch.Coins → Bits κ)
-    (R : Bits sch.n → Bits sch.t → Bits κ → Fin sch.B → Prog M (Bits sch.ℓ))
+    (R : Bits sch.n → Bits sch.t → Bits κ → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ))
     (hRb : ∀ W pp s i, (R W pp s i).Bounded D Q)
     (hR : ∀ W ω r i, (R W (sch.enc W ω r).1 (z W ω r) i).run (M.answer ω) = (sch.enc W ω r).2 i) :
     ∃ (A₁ : Preprocessor sch κ) (A₂ : SeqResponder sch κ D Q), ∀ W, pr (seqAccepts sch k W A₁ A₂) = 1 := by

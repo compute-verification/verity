@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ExecTemplateSetup
+module
+
+public import Proofs.Flock.Soundness.ExecTemplateSetup
 
 /-!
 # A typed flat class's unit, placed (1e for flat classes)
@@ -14,6 +16,8 @@ a flat class: `parseTyped` parses the file with the unit's net first (`HmRow.par
 - `setupH_flatRealizes`, `setupH_flatPlacement`: so at each unit slot, the accepted statement realizes the unit's composed
   rows (`Layout.realizes`) and places them (`Realizes.placement`), the table class's `placed` there.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -58,7 +62,7 @@ theorem read_flat' {tags : Tags} {bytes : ByteArray} {tables : List (String × B
 
 section unit
 
-variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
+variable {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
 
 /-- **A flat unit's composed rows are its net's rows** (`NetRows`): its order's columns are at most the net's constant; a

@@ -37,9 +37,9 @@ Writes ``<out>/<label>.tiles.jsonl`` (a line a tile, as each finishes; the label
 the measurement is of the committed pass.
 
 **On a served pass.** `window.sh` keeps each served window's verify pass outside its run directory, under
-``$WORK/passes/<run id>/{prefill,decode}/manifest.json`` on node 2 (``WORK=/workspace/pouw/mvp-e2e``, about 45 GB a run,
-so a pass lasts only until it is cleaned).  Run on the machine that holds it, through the queue's CPU cores, with one BLAS
-thread a worker (``--jobs`` defaults to the CPUs this process may use)::
+``$WORK/passes/<run id>/{prefill,decode}/manifest.json`` on window.sh's node (``WORK=/workspace/pouw/mvp-e2e``, about 45
+GB a run, so a pass lasts only until it is cleaned).  Run on the machine that holds it, through the queue's CPU cores,
+with one BLAS thread a worker (``--jobs`` defaults to the CPUs this process may use)::
 
   research run --on MACHINE --queue --phase cpu --cpus 44 --mem-gb 64 --preemptible --custody-r2 --custody-ttl 8h \\
       --project verity --campaign pouw --question Q --declared-output 'out/*' -- bash -c \\
@@ -49,7 +49,7 @@ thread a worker (``--jobs`` defaults to the CPUs this process may use)::
        exec nice -n 19 /workspace/pouw/mvp-e2e/venv312/bin/python -u benchmarks/pouw/pearl_c_vllm/served_debit.py \\
          $P/decode/manifest.json $P/prefill/manifest.json --tiles 64 128 --out $RESEARCH_RUN_DIR/out'
 
-A tile takes about 100 s at k = 4,096 and up to 11 min at k = 14,336 on one of node 2's queue cores (Llama-3.1-8B's
+A tile takes about 100 s at k = 4,096 and up to 11 min at k = 14,336 on one of that node's queue cores (Llama-3.1-8B's
 1,023 sampled tiles: 98 min on 44).  Add no ``taskset`` of your own: the queue pins the job's cores.
 """
 from __future__ import annotations
@@ -164,8 +164,7 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
     scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
     matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
     epoch, _ = PD.manifest_epoch(man, coins, recorded=True)
-    records = [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]),
-                             tuple(man["weights"][str(mm.weight)]["excluded_b"])) for mm, u in zip(matmuls, man["matmuls"])]
+    records = VR.records_of(man, matmuls)
     splits = {w: PW.Split(man["weights"][str(w)]["k"]) for w in epoch.workload.weights()}
     reason = CW.check_records(epoch, splits, records)
     if reason is None and PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex() != man["records_root"]:
@@ -190,8 +189,8 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
 
 
 def credited_macs(record: PW.UnitRecord) -> int:
-    real = record.real_rows - sum(1 for i in set(record.excluded_a) if i < record.real_rows)
-    return real * (record.matmul.shape.n - len(set(record.excluded_b))) * record.k_kept
+    real = record.real_rows - sum(1 for i in set(record.excluded_a) | set(record.voluntary_a) if i < record.real_rows)
+    return real * (record.matmul.shape.n - len(set(record.excluded_b) | set(record.voluntary_b))) * record.k_kept
 
 
 def sample(job: dict, per_stratum: int, seed: int) -> tuple[dict, list[int]]:

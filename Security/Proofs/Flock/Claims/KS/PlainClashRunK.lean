@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainClash0K
-import Proofs.Flock.Claims.KS.PlainClashLaterK
-import Proofs.Flock.Claims.KS.PlainPartsK
+module
+
+public import Proofs.Flock.Claims.KS.PlainClash0K
+public import Proofs.Flock.Claims.KS.PlainClashLaterK
+public import Proofs.Flock.Claims.KS.PlainPartsK
 
 /-!
 # The clashes' run-level half, at `VK keep`
@@ -12,6 +14,8 @@ the run (`plainClashQ₀K`, `plainClashQLK`), and the live self-clash's clash ho
 (`plainSimLaterClashAtK`, `plainSimClashAt_of_laterK`). Each is its original's proof at `plainSimK keep`, with the
 rep streams' rounds read up to their digests (`coins_getElem?_of_erase`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -62,7 +66,7 @@ theorem rawCols_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {seen : Clai
 theorem plainClashQ₀K (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtDK keep ins.read.I (some d) (wrPDK keep ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,
@@ -186,7 +190,7 @@ theorem rawLevelCols_plainK (keep : Bool → Bool) (hs : Hashes Flock.V) {seen :
 theorem plainClashQLK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtDK keep ins.read.I (some d) (wrPDK keep ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,

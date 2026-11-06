@@ -2,8 +2,8 @@
 
 On finite operands the total step is the finite model (`silicon.tc_dot` on the same pipeline); the special encodings follow
 the rules of the BF16 total step restricted to what E4M3 encodes (NaN bytes, no infinities).  The pinned pipeline parameters
-are the ones measured on the H100 (replicated as
-`verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json`): one group of 32, 14-bit adder, floor -139.
+are the ones measured on the H100 (veritor's FP8 wgmma record, replicated in `verity/ml/circuits/silicon/captures/`): one
+group of 32, 14-bit adder, floor -139.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import struct
 import pytest
 
 from verity.ml.circuits.silicon.errors import InvalidArtifact
-from verity.ml.circuits.silicon.silicon import HOPPER_E4M3_K32, tc_dot
+from verity.ml.circuits.silicon.models import HOPPER_E4M3_K32, tc_dot
 from verity.ml.circuits.silicon.total import FP32_CANONICAL_NAN, HOPPER_BF16_WGMMA_K16
 from verity.ml.circuits.silicon.total_fp8 import (
     HOPPER_E4M3_FAMILY_VERSION,

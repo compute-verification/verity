@@ -1,4 +1,6 @@
-import Definitions.Core.Accel.Card
+module
+
+public import Definitions.Core.Accel.Card
 
 /-!
 # The machine 𝓜 (trusted)
@@ -21,6 +23,8 @@ A run of `T` seconds meets the model (`Fits`) if
 The model has no latency, no per-clock limit and no SM boundaries (each resource and store is pooled over the card, and
 any thread names any location), and a resource with no stated rate is free: each lets a program do more than the card.
 -/
+
+@[expose] public section
 
 open scoped NNRat
 
@@ -59,7 +63,7 @@ only when the bit is set), or a branch, taken when its predicate bit is set (alw
 `target` names (a fixed index, a register's value plus an offset, or an immediate), writing the next instruction's index
 to register `link` if it names one (a call; a return is a branch to that register). -/
 inductive Instr
-  | op (o : Op m.sem) (src : Fin o.nIn → Operand) (dst : Fin o.nOut → Operand) (pred : Option (ℕ × ℕ))
+  | op (o : Opcode m.sem) (src : Fin o.nIn → Operand) (dst : Fin o.nOut → Operand) (pred : Option (ℕ × ℕ))
   | bra (pred : Option (ℕ × ℕ)) (target : Operand) (link : Option ℕ)
 
 /-- A program: each thread's text. -/
@@ -103,7 +107,7 @@ def Operand.writeIn (s : Store) (x : Operand) (M₀ M : m.Mem) (w : Word) : m.Me
   | none => M
 
 /-- An opcode's effect on `M`: every input read, then the outputs written in order, unless its predicate bit is clear. -/
-def execOp (o : Op m.sem) (src : Fin o.nIn → Operand) (dst : Fin o.nOut → Operand) (pred : Option (ℕ × ℕ))
+def execOp (o : Opcode m.sem) (src : Fin o.nIn → Operand) (dst : Fin o.nOut → Operand) (pred : Option (ℕ × ℕ))
     (M : m.Mem) : m.Mem :=
   let v := o.eval fun i => (src i).readIn (o.inStore i) M
   if pred.any fun p => !bit M p then M

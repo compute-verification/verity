@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
 
 /-!
 # The masked replay's rows vanish wherever the plain checks pass at its coins
@@ -21,6 +23,8 @@ sends, so each row is a plain check on the clear proof at the replay's coins, mo
 It is `replay_zerocheck` and `replay_lincheck` (the rows' shapes) composed with the transfer's evaluation lemmas
 (`c_eval_eval`, `final_eval`, `lcFinal_eval`, `lcAbValue_eval`); no row needs its own walk of the masked run.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 
@@ -104,7 +108,7 @@ proof is the plain one masked by the pads (`ZcZ.proof`, `LcZ.proof`); the plain 
 carry the prover's coins at plain's sends, which live coins give (the coin at a send is the send's reply). -/
 theorem replay_rows_zero_honest (st : Setup) (lay : Zk.PadLayout) (h : Array F128) (p : Proof) (root : ByteArray)
     (hm : 14 ≤ st.m) {t t' : Transcript} {rp : Zk.Replayed} (hrun : Zk.replay st lay p root t = .ok (rp, t'))
-    (c : CircuitFold) (tr : Trace) (zcs : Zc.Coins) (cs : Lc.Coins) (full : Array F128)
+    (c : CircuitFold) (tr : Trace) (zcs : Zc.Challenges) (cs : Lc.Challenges) (full : Array F128)
     (hfd : st.fold = c) (hk : st.kLog = c.kLog)
     (hpz : p.zerocheck = ZcZ.proof lay h st.m zcs tr)
     (hpl : p.lincheck = LcZ.proof lay h c st.m tr (Zc.out st.m zcs tr) full cs)

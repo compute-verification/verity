@@ -1,5 +1,7 @@
-import Proofs.Properties.NetworkCertifier.Outcomes
-import Proofs.Properties.NetworkCertifier.Extract
+module
+
+public import Proofs.Properties.NetworkCertifier.Outcomes
+public import Proofs.Properties.NetworkCertifier.Extract
 
 /-!
 # What a certificate's digest and message pin down
@@ -10,6 +12,8 @@ certificate message's input names one certifier session, link-window and digest 
 `link_short` for the link's length). `Proofs.Properties.CertifierNetwork.Runs` uses them to match each record an
 accepted unit holds to the one the certifier device issued.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check
@@ -71,7 +75,7 @@ theorem link_short {h : RecordHead} {dg : ByteArray} (e : h.digest = .ok dg) : h
   obtain ⟨enc, -, he, -⟩ := digest_ok e
   exact encode_link he
 
-theorem zip_index {p : Params} {e : Evidence} (hfit : EvidenceFits p e) (ℓ : Fin p.egress.size) {link : Link}
+theorem zip_index {p : Params} {e : Evidence} (hfit : EvidenceFits p e) (ℓ : Fin p.egress.size) {link : LinkOpening}
     (hl : e.links[ℓ.1]? = some link) : (p.egress[ℓ], link) ∈ p.egress.toList.zip e.links.toList := by
   have h1 : ℓ.1 < e.links.size := by rw [hfit.1]; exact ℓ.2
   have hz : ℓ.1 < (p.egress.toList.zip e.links.toList).length := by

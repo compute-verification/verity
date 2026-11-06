@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Compose.LastRead
-import Proofs.Flock.C3.Opening.SrcLayer
+module
+
+public import Proofs.Flock.C3.Compose.LastRead
+public import Proofs.Flock.C3.Opening.SrcLayer
 
 /-!
 # n9: the parts' committed rounds from their stages
@@ -12,6 +14,8 @@ past the sparse phases' (`partEnds_open`). R's opening holds the ring switches V
 its first two rounds and nothing at its third, so `OpenMsgsRead` is that the ring switches are read at their rounds
 (`RsRead`, `openMsgsRead_of_layer`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 
@@ -67,9 +71,6 @@ theorem sparsePart_split (u : C3Run e) : sparsePart u = repPart u ++ (u.sp 0 ++ 
 
 theorem openPart_split (u : C3Run e) : openPart u = sparsePart u ++ u.op := by
   simp only [openPart, sparsePart, List.append_assoc]
-
-theorem ligPart_split (u : C3Run e) : ligPart u = openPart u ++ u.lg := by
-  simp only [ligPart, openPart, FlockC3.PubRows.stagesOf, List.append_assoc]
 
 theorem coins_openSteps (s : Fin 2 → Fin 128 → GF128) (ρ : Fin 2 → Fin 7 → GF128) (γ : Fin 2 → GF128) :
     ((openSteps s ρ γ).filterMap Sum.getRight?).length = 3 := rfl
@@ -176,14 +177,6 @@ theorem openMsgsRead_of_stage
     (he : PartEnds sparsePart zs dg N k Rw src c₀)
     (h : StageMsgsRead c₀ C3Run.op zs dg N k Rw src own sel) : OpenMsgsRead zs dg N k Rw src own sel :=
   partMsgsRead_of_stage openPart_split he h
-
-theorem ligMsgsRead_of_stage
-    {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
-    {N k Rw : ℕ} {src : Reg → L.Ω → List (Cm × (ℐ).Coin) → ((j : Fin S) → (Vs j).Bits) → C3Run (holoAt st hp)}
-    {own : Fin S → Array Flock.Registered.Port} {sel : ℕ → String → ℕ → Prop} {c₀ : ℕ}
-    (he : PartEnds openPart zs dg N k Rw src c₀)
-    (h : StageMsgsRead c₀ C3Run.lg zs dg N k Rw src own sel) : LigMsgsRead zs dg N k Rw src own sel :=
-  partMsgsRead_of_stage ligPart_split he h
 
 /-- **R's opening's part ends in a coin at the source**, three coins past the sparse phases'. -/
 theorem partEnds_open

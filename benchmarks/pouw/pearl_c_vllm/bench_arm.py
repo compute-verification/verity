@@ -9,10 +9,11 @@ One pass per engine step: ``llm_engine.step`` is wrapped to open `Stack.pass_` a
 tiles by the step's scheduled tokens, so the full sweep's long prefills fit the pass buffers that one generate's pass
 would overflow.
 
-Its tokens are Pearl-C's own y (Pearl's FP8 quantization), so no stock arm is a bit-exact control (``control=None``); the
-arm's gate is Pearl-C's own, `e2e.gate`'s call check: at every distinct (n, k), served y against x·Wᵀ within `ERR` rel
-RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative control changing the
-transcript root.
+Its tokens are Pearl-C's own y (Pearl's FP8 quantization), so no stock arm is a bit-exact control (``control=None``), and
+each call's noise is seeded by its index across the epoch, so no two of the engine's passes need agree either (the gate's
+`runner.PER_PASS_TOKENS`); the arm's gate is Pearl-C's own, `e2e.gate`'s call check: at every distinct (n, k), served y
+against x·Wᵀ within `ERR` rel RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative
+control changing the transcript root.
 
 Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's
 build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule),
@@ -77,11 +78,11 @@ class _LiveSession:
     #: the arm's salt epoch over its weights' root: one install, under a fresh hm96 key
     k = 0
 
-    def __init__(self, gate: str, peer: str, epoch: int, lane: str) -> None:
+    def __init__(self, gate: str, peer: str, epoch: int, lane: str, run: Any = None) -> None:
         from verity_vllm.pipeline.commit_coins import ChallengerGate
         from verity_vllm.protocols.pouw.h1 import window as PHW
 
-        self.gate = ChallengerGate(gate)
+        self.gate = ChallengerGate(gate, run)
         self.reserved, self.period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, peer, epoch)
         self.client = self.commitment = None
         self.carried: dict[str, Any] = {}
@@ -97,6 +98,80 @@ class _LiveSession:
         if self.client is not None:
             client, self.client = self.client, None
             client.close()
+
+
+def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: int, lane: str,
+               run: Any = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """A protocols config's PoUW settings `pouw` with the salt coin a live session's on the auditor host when `gate` (infra's
+    gate as an ssh command) and `peer` (this node in the challenger host's peers) are given: a salt-only session reserved
+    now under lane `lane` (`_LiveSession`, `run` its gate's subprocess in tests), which the install opens on its salt
+    epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number) and draws its salt coin from
+    (`pouw_h1_window.salt_session`), through the settings ``challenger`` (this node's 127.0.0.1, at the port the gate's open
+    answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the reserve joined), its
+    in-process ``coins`` dropped. Returns the settings and the reserve answer: `pouw` itself and None when neither is
+    given, the coins then in-process. ValueError when one is given without the other, or the reserve is refused."""
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    if (gate, peer) == (None, None):
+        return pouw, None
+    if gate is None or peer is None:
+        raise ValueError("live coins take PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER (this "
+                         "node's name in the challenger host's peers) together")
+    session = _LiveSession(gate, peer, epoch, lane, run)
+    return ({**{k: v for k, v in pouw.items() if k != "coins"}, "challenger": "127.0.0.1:0", "session": session.reserved,
+             "gate": PHW.gate_of(session.gate.call), "period": session.period}, session.reserved)
+
+
+class LiveDraw:
+    """`verify_run.verify_passes`' ``draw`` from a draw session of its own on the auditor host's challenger, through
+    infra's gate (``gate``, ``peer`` and ``lane`` as `_LiveSession`'s; `run` its gate's subprocess in tests): called on
+    the run's commitment C, it reserves a session withheld with the draw coin alone (``reserve --withhold``,
+    `window.DRAW_FAMILIES`, as `serve_h1_gate.ServedGate.reserve_draw`), opens it on C and takes its ``pouw/draw`` coin
+    after C (`pouw_h1_window.DrawSession`), whose full opening and commitment the session releases at its close.
+    Refused (`CoinError`) before reserving while ``lane`` has a period open in the auditor's ledger, and before its open
+    when the reserve joined one, so the draw counts toward no period's sessions; and when the gate reserves it plain.
+    Returns (the coin's 64 bytes, the coin record's ``draw``: `verify_run`'s module docstring, "The coin record")."""
+
+    def __init__(self, gate: str, peer: str, lane: str, run: Any = None, at: str = "127.0.0.1:0") -> None:
+        from verity_vllm.pipeline.commit_coins import ChallengerGate
+
+        self.gate, self.peer, self.lane, self.at = ChallengerGate(gate, run), peer, lane, at
+
+    def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
+        from verity.core.protocols.pouw import window as Wd
+        from verity.core.protocols.sampled_proofs.challenger import CoinError
+        from verity_vllm.protocols.pouw.h1 import challenger as PHC
+        from verity_vllm.protocols.pouw.h1 import window as PHW
+
+        period = PHW.open_period(self.gate.ledger(), self.lane)
+        if period is not None:
+            raise CoinError(f"refused before reserving the run's draw session: lane {self.lane}'s period "
+                            f"{period['period']} is open, and the draw joins no period (close it first)")
+        answer = self.gate.call("reserve", "--peer", self.peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(),
+                                "--withhold")
+        if answer.get("withheld") is not True:
+            raise CoinError(f"the gate reserved draw session {answer.get('session')} plain, not withheld")
+        reserved = PHW.reserved_of({k: v for k, v in answer.items() if k in ("session", *PHW.RESERVE_FIELDS)},
+                                   "draw_session")
+        if reserved.get("period") is not None:
+            raise CoinError(f"draw session {reserved['session']} joined period {reserved['period']}: refused before its "
+                            "open, since the draw joins no period")
+        asking({"reserved": reserved})
+        session = PHW.DrawSession("pearl-plus verify", self.at, reserved, PHW.gate_of(self.gate.call))
+        opening = session.record(root)
+        return opening.coin, {"from": "challenger", "label": Wd.DRAW, "index": 0, "reserved": reserved,
+                              "session": session.session, "commitment": session.commitment.to_json(),
+                              "opening": opening.to_json()}
+
+
+def live_draw(gate: str | None, peer: str | None, lane: str, run: Any = None) -> LiveDraw | None:
+    """`LiveDraw` under ``gate`` and ``peer``, None when neither is given (the node's draw); ValueError for one alone."""
+    if (gate, peer) == (None, None):
+        return None
+    if gate is None or peer is None:
+        raise ValueError("the live draw takes PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER "
+                         "(this node's name in the challenger host's peers) together")
+    return LiveDraw(gate, peer, lane, run)
 
 
 class PearlCArm:
@@ -242,9 +317,11 @@ class PearlCArm:
                 control = commits[2]["transcript_root"] != commits[0]["transcript_root"]
                 checks.append({"n": W.shape[0], "k": W.shape[1], "m": m, "rel_rms": err, "commitment_repeats": same,
                                "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
+        from verity_bench.vllm.runner import PER_PASS_TOKENS
+
         run.details["passes"].clear()
         return {"passed": all(c["ok"] for c in checks), "scheme": run.scheme.name, "schedule": self.schedule,
-                "coins": self.coins, "checks": checks}
+                "coins": self.coins, "checks": checks, PER_PASS_TOKENS: True}
 
     def spans(self, target: Any) -> dict[str, Any]:
         return {} if self.stack is None else {"passes": float(len(self.stack.passes))}

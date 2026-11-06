@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Compose
-import Proofs.Flock.Soundness.Types.Dag
+module
+
+public import Proofs.Flock.Soundness.Compose
+public import Proofs.Flock.Soundness.Types.Dag
 
 /-!
 # A unit's rows in logical order, over the type DAG (verified-lowering phase 1, 1d step 2)
@@ -15,6 +17,8 @@ For every statement `deriveChecked` accepts:
 - `Rows.compose_eval_unit`: satisfied composed rows, with `one` at 1, carry on each output's logical column the unit
   type's output (`evalT`) on the input columns' values. This is `Types.Dag.unit_sound` read through the order.
 -/
+
+@[expose] public section
 
 open Flock Flock.DeriveAll
 
@@ -85,7 +89,7 @@ open Compose
 
 section unit
 
-variable {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+variable {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
 
 /-- **The unit's composed rows read only earlier columns**, or `one`. -/

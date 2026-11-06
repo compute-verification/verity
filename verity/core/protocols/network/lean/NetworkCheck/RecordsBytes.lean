@@ -1,4 +1,6 @@
-import NetworkCheck.RecordsGrid
+module
+
+public import NetworkCheck.RecordsGrid
 
 /-!
 # The records check's byte payloads are v4's bits
@@ -15,6 +17,8 @@ of the evidence agree, and so do the grids, the clock and the frame-size check t
   (through `expectedGrids` and `RecordsGrid.expectedGrids_eq`);
 - `unitSync_toEvidence` and `frameBytes_toEvidence`: the unit's clock and the frame-size refusal are v4's.
 -/
+
+@[expose] public section
 
 namespace NetworkCheck.RecordsBytes
 
@@ -114,7 +118,7 @@ theorem frameOf_toLogical (j : Lean.Json) : Check.frameOf j = ByteFrame.toLogica
       rfl
 
 /-- `Check.evidenceOf`'s link, its do block written out. -/
-private def linkOfL (l : Lean.Json) : Flock.V Check.Link :=
+private def linkOfL (l : Lean.Json) : Flock.V Check.LinkOpening :=
   Except.bind (Flock.J.arr l "frames" "a link") fun fs => Except.bind (fs.mapM Check.frameOf) fun fr =>
     Except.bind (Flock.J.arr l "syncs" "a link") fun ss => Except.bind (ss.mapM Check.syncOf) fun sy =>
     Except.pure { frames := fr.toList, syncs := sy }

@@ -11,14 +11,18 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.population import mixed_population_program, population_program as template_population
 
 
-def population_program(templates: Sequence[tuple[Any, int]], several: bool = False) -> tuple[Any, dict[str, Any]]:
+def population_program(templates: Sequence[tuple[Any, int]], several: bool = False,
+                       values: Sequence[tuple[str, int, int]] = ()) -> tuple[Any, dict[str, Any]]:
     """The verifier's population program and query over ``(template Definition, instances)`` in order: ``TemplateInstances`` and
     ``Q_template_instance`` for one template, ``TemplatePopulations`` and ``Q_template_instances`` for several (or, ``several``,
-    for one)."""
-    if len(templates) == 1 and not several:
+    for one). ``values``, the values the window registers that no unit reads but through its registered reads (``(name,
+    leaves, width)`` each), are parameters of a ``TemplatePopulations`` alone (`mixed_population_program`), so a window with
+    values has one for one template too."""
+    if len(templates) == 1 and not several and not values:
         (t, n), = templates
         return template_population(t, n), PO.template_instance_query(t)
-    return mixed_population_program(list(templates)), PO.template_instances_query([t for t, _ in templates])
+    return (mixed_population_program(list(templates), values=values),
+            PO.template_instances_query([t for t, _ in templates]))
 
 
 def template_partition(program: Any, query: Mapping[str, Any]) -> PO.TemplatePartition:

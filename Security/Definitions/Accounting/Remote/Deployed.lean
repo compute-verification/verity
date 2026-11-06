@@ -1,5 +1,7 @@
-import Definitions.Accounting.Remote.Run
-import Definitions.Accounting.RateAuditDeployed
+module
+
+public import Definitions.Accounting.Remote.Run
+public import Definitions.Accounting.RateAuditDeployed
 
 /-!
 # The deployed game's session as a run of the remote audit (trusted)
@@ -28,6 +30,8 @@ every window's draw passes.
 The game does not model the rest (the node's priced work, the signals over its boundary, the bound `z`, the outside's
 work, Mbw's independent data): each is `0`, and no route proved for this run reads one.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote
 

@@ -1,4 +1,6 @@
-import PouwCheck
+module
+
+public import PouwCheck
 
 /-!
 # PoUW's window check: what its Lean code (`PouwCheck.protocol`) does
@@ -16,6 +18,8 @@ checks first, and what the other verdicts mean. That the check accepts every suc
 What the window's draw guarantees (`Properties.Pouw.Window.DrawMisses`) is the window's property, not the check's: the
 check establishes that the service drew exactly `K′ = kPrime ε δ` distinct units of the registered `N`, all passed.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Check
 
@@ -48,7 +52,7 @@ def RegistrationKeeps (p : Params) (c : Registration) (f : Fixed) : Prop :=
 of the registered Program over one level, the registered partition's `N` units drawn `subset:K′`, at the window's δ,
 with `K′` units drawn; and a draw `subset:K′` over `N` of `K′` distinct units below `N`, ascending. -/
 def ServiceAccepted (p : Params) (c : Registration) (f : Fixed) (e : Evidence) (prof : Core.Integrity)
-    (draw : UnitDraw) : Prop :=
+    (draw : Flock.Draw.UnitDraw) : Prop :=
   e.protocol = oneStage ∧ e.commitment = some (Flock.hexOf c.digest) ∧ e.said = .accept prof draw ∧
   prof.programs = #[c.program] ∧
   prof.levels = #[{ name := unitLevel, query := some c.partition, size := f.work.n, draw := some (.subset f.sampling.k) }] ∧

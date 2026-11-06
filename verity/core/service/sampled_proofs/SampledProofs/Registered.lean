@@ -14,17 +14,21 @@ gates are then its own nodes' gates.
   value's row format when the verifier names one), as many of its leaves as `words` leaves of `width` bits hold
   (`row_leaves`; H1's A, K int8 codes in K/2 u16 words);
 * `width`: its leaf width rounded up to whole u16 words, one width of at most 32 bits;
-* `domain`: `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512").domain_id`, `B` the bytes of
-  `identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words", "leaves"})` with
+* `domain`: `CommitmentDomain(B, -2, RangeIndexedDomain(0, rows), hash="sha512").domain_id`, `B` the 64 bytes of
+  `identity_digest_sha512("verity/one-stage/registered-domain/v1", {"program", "value", "schema", "words", "leaves"})` with
   `"word_bits"` beside them when it is not 16: SHA-512 of the frame-v3 `domain` message over `B`, `uint(-2 + 2)`, the range's
   identity `identity_digest_sha512("veritor/indexed-domain/range/v1", {"start": 0, "step": 1, "stop": rows})` and
   `uint(rows)`; a per-window value's binding adds `"window": R`, the window's open root (`domainAt`), so a root
   registered in one window opens under no other window's domain, and a value held across windows leaves it out.
 -/
-import Flock.Program
-import Flock.Public
-import Flock.Registered
-import SampledProofs.Partition
+module
+
+public import Flock.Program
+public import Flock.Public
+public import Flock.Registered
+public import SampledProofs.Partition
+
+@[expose] public section
 
 namespace SampledProofs.Registered
 
@@ -98,6 +102,22 @@ def inputNodes (d : Desc) : Array (Nat × Nat × Nat) := Id.run do
     if let some w := Flock.Program.inputWidth? id then out := out.push (w, x.n, at_)
     at_ := at_ + x.members * d.gates id
   return out
+
+/-- `inputNodes` with each root callee's gates read off `Partition.gTable`, computed once. -/
+def inputNodesFast (d : Desc) : Array (Nat × Nat × Nat) := Id.run do
+  let some root := d.def? d.root | return #[]
+  let G := Partition.gTable d
+  let mut out := #[]
+  let mut at_ := 0
+  for x in root.nodes do
+    let id := d.callees.getD x.fn ""
+    if let some w := Flock.Program.inputWidth? id then out := out.push (w, x.n, at_)
+    at_ := at_ + x.members * Partition.look d G id
+  return out
+
+@[csimp] theorem inputNodes_eq_inputNodesFast : @inputNodes = @inputNodesFast := by
+  funext d
+  simp only [inputNodes, inputNodesFast, Partition.look_gTable]
 
 /-- The verifier's program function's parameters (`[[name, type], ...]`), distinct names whose types lower to exactly the
 root body's input nodes, with each one's Input gates. -/

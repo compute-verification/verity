@@ -1,8 +1,12 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
-import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
-import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
-import Proofs.Flock.Soundness.Discharge.ZkBind.At
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
+public import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
+public import Proofs.Flock.Soundness.Discharge.ZkBind.At
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -81,7 +85,8 @@ variable (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTa
 noncomputable def sitesShH : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y₀) where
   A S _ _ _ := (tableShH dj y₀ S).twinA
   B S _ _ _ := (tableShH dj y₀ S).twinB
-  sat S _ _ _ := (tableShH dj y₀ S).sat (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)
+  sat S _ _ _ := (tableShH dj y₀ S).sat (zkTyped ht) hc
+  pin S _ _ _ := (tableShH dj y₀ S).pin (zkTyped ht) hc
   acc S _ _ _ := (tableShH dj y₀ S).acc (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h

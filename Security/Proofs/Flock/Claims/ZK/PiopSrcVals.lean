@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.ZK.SimPiopOf
-import Proofs.Flock.Claims.ZK.Round3Vals
-import Proofs.Flock.Claims.ZK.OneTape
-import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
-import Proofs.Flock.Claims.Complete.ZkTables.Trace
-import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
-import Proofs.Flock.Level3.ArithFacts
+module
+
+public import Proofs.Flock.Claims.ZK.SimPiopOf
+public import Proofs.Flock.Claims.ZK.Round3Vals
+public import Proofs.Flock.Claims.ZK.OneTape
+public import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
+public import Proofs.Flock.Claims.Complete.ZkTables.Trace
+public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+public import Proofs.Flock.Level3.ArithFacts
 
 /-!
 # The deployed source's zerocheck values at the opened coins
@@ -23,6 +25,8 @@ indices the plain prover's messages at `zcCoins` from the rep's first round, plu
 * `Masked.src_r1ab`, `src_r1c`, `src_ml0`, `src_ml1`, `src_fa`, `src_fb`, `src_fc`: `PiopSrc`'s zerocheck fields at the
   deployed source.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay.Zc
 
@@ -96,7 +100,7 @@ noncomputable abbrev zwE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fi
 
 /-- Table `j`'s rep `r` zerocheck coins at the opened coins, from the rep's first round. -/
 abbrev zcE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) :
-    FlockComplete.Replay.Zc.Coins :=
+    FlockComplete.Replay.Zc.Challenges :=
   FlockComplete.zcCoins (fun k i => slotAt c k i) (repBase x (2 * j.val + r.val))
 
 /-- The session's setup of table `j` is its statement's. -/

@@ -1,6 +1,8 @@
-import Mathlib.Tactic.FinCases
-import Proofs.Pouw.Fp8Atom.H1TSliceProofs
-import Proofs.Pouw.Fp8Atom.H1TProofs
+module
+
+public import Mathlib.Tactic.FinCases
+public import Proofs.Pouw.Fp8Atom.H1TSliceProofs
+public import Proofs.Pouw.Fp8Atom.H1TProofs
 
 /-!
 # The one-flip clauses (`H1TOneFlip`, M4a and M4b)
@@ -31,6 +33,8 @@ By column (M4b), a flip of lane `k` of slice `q`:
   other column's `I_q` strictly the other (`sep_opp_fresh`). So does its `R_q` if its value in lane `k` is at least
   36 in magnitude: `I_q` then moves by more than 512 and `R_(q−1)` stays (`sep_opp_run`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Proofs
 
@@ -146,11 +150,6 @@ def fl (x : ℕ → Code) (τ : ℕ) : ℚ := floorF (sliceMax (realLanes x τ))
 
 /-- Tag lane `k`'s value in slice `τ`. -/
 def tv (x : ℕ → Code) (σ : ℕ → SliceSalt) (τ : ℕ) (k : Fin 3) : ℚ := tagVal (fl x τ) ((σ τ).neg k) ((σ τ).man k)
-
-theorem bsum_flip_ne {T : ℕ} {x b : ℕ → Code} (j : ℕ) (σ : ℕ → SliceSalt) {τ p : ℕ} (k : Fin 3)
-    (h : slc T p ≠ τ) : bsum T x b j (flipS τ k σ) p = bsum T x b j σ p := by
-  unfold bsum slc at *
-  split_ifs at * with hp <;> rw [flipS_ne _ _ h]
 
 theorem fresh_fixed {T : ℕ} {x b : ℕ → Code} (j : ℕ) (σ : ℕ → SliceSalt) {τ p : ℕ} (k : Fin 3)
     (h : slc T p ≠ τ) : freshVal T x b j (flipS τ k σ) p = freshVal T x b j σ p := by

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.PiopSrcVals
-import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+module
+
+public import Proofs.Flock.Claims.ZK.PiopSrcVals
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 
 /-!
 # The deployed source's lincheck values at the opened coins
@@ -16,6 +18,8 @@ session's pads.
 * `Masked.src_lc0`, `src_lc1`, `src_zp`: `PiopSrc`'s lincheck fields at the deployed source.
 -/
 
+@[expose] public section
+
 namespace FlockComplete.Replay.Lc
 
 open Flock FlockLevel3 FlockSoundness FlockSoundness.Refine
@@ -24,7 +28,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **The prover's halved circuit after `j` rounds is the model's `lcU`** folded at the first `j` round coins. -/
 theorem combT_lcU (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S) (zc : ZcOut)
-    (hrho : zc.rho.size = S.m - 6) (cs : Coins) (full : Array F128) (hf : full.size = 2 ^ S.kLog)
+    (hrho : zc.rho.size = S.m - 6) (cs : Challenges) (full : Array F128) (hf : full.size = 2 ^ S.kLog)
     (hfold : c.fold (cs.ca 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok full) (j : ℕ) {k : ℕ}
     (hk : k < 2 ^ S.kLog / 2 ^ j) :
     GF128.of (combT c full cs j)[k]! = Model.foldAll ((pushes cs.τ j).toList.map fOf) (2 ^ S.kLog)
@@ -68,7 +72,7 @@ theorem combT_lcU (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S
 coins. -/
 theorem zrT_lcV (S : Model.Statement) (c : CircuitFold) (hK : c.kLog = S.kLog) (tr : Trace) (zc : ZcOut)
     (hrho : zc.rho.size = S.m - 6) (w : Model.Witness S.m)
-    (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (cs : Coins) (j : ℕ) {k : ℕ}
+    (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (cs : Challenges) (j : ℕ) {k : ℕ}
     (hk : k < 2 ^ S.kLog / 2 ^ j) :
     GF128.of (zrT c S.m tr zc cs j)[k]! = Model.foldAll ((pushes cs.τ j).toList.map fOf) (2 ^ S.kLog)
       (Discharge.Composed.Lincheck.lcV S zc.rho w) k := by
@@ -83,7 +87,7 @@ theorem zrT_lcV (S : Model.Statement) (c : CircuitFold) (hK : c.kLog = S.kLog) (
 /-- **The prover's round-`j` lincheck message is the model's** (`lcMsg`) on `lcU`, `lcV` at its round coins. -/
 theorem msg_lcMsg (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S) (tr : Trace) (zc : ZcOut)
     (hrho : zc.rho.size = S.m - 6) (w : Model.Witness S.m)
-    (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (cs : Coins) (full : Array F128)
+    (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (cs : Challenges) (full : Array F128)
     (hf : full.size = 2 ^ S.kLog)
     (hfold : c.fold (cs.ca 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok full) {j : ℕ}
     (hj : j < S.kLog - 6) :
@@ -142,7 +146,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- Table `j`'s rep `r` lincheck coins at the opened coins, after the zerocheck's `3 + (m − 6)`. -/
 noncomputable abbrev lcE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) :
-    FlockComplete.Replay.Lc.Coins :=
+    FlockComplete.Replay.Lc.Challenges :=
   FlockComplete.lcCoins (fun k i => slotAt c k i)
     (repBase x (2 * j.val + r.val) + 3 + ((zkTab x j).table.S.m - 6)) ((zkTab x j).table.S.kLog - 6)
 

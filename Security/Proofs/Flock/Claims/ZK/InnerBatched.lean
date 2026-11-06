@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.ZK.SplitInner
-import Proofs.Flock.Claims.ZK.SimSession
-import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
-import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
-import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+module
+
+public import Proofs.Flock.Claims.ZK.SplitInner
+public import Proofs.Flock.Claims.ZK.SimSession
+public import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
+public import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
+public import Proofs.Flock.Claims.Complete.Zk.Level0Premises
 
 /-!
 # `InnerBatched`: the batched constraint at the honest pads
@@ -22,6 +24,8 @@ the triple's vanishes there at every coin (`innerP_batched`).
 * `tableM_mask`: each table and its trace at the mask witness have `TableM` (`maskFree_relation`, `relS_only`).
 * `outer_ne_one`: no refusal seen up to a stop past the rep's `ε` slot means its outer coins are not `1`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 
@@ -179,7 +183,7 @@ theorem TableM.model {st : Flock.Stmt} {tr : Trace} (hT : TableM st tr) :
 /-- `replay_holds` at `TableM`. -/
 theorem replay_holdsM {st : Flock.Stmt} {tr : Trace} (hT : TableM st tr) (lay : Zk.PadLayout) (h : Array F128)
     (hsz : h.size = lay.len) (hab : h[lay.hab]! = h[lay.fa]! * h[lay.fb]!) (hn : st.m - 6 ≤ lay.nMlv)
-    (hn' : st.c.kLog - 6 ≤ lay.nLc) (zcs : Zc.Coins) (lcs : Lc.Coins) (full : Array F128)
+    (hn' : st.c.kLog - 6 ≤ lay.nLc) (zcs : Zc.Challenges) (lcs : Lc.Challenges) (full : Array F128)
     (hc1 : ∀ j < st.m - 13, zcs.c1 j ≠ 1)
     (hfold : st.circuitFold.fold (lcs.ca 0) (skipWeights (Zc.out st.m zcs tr).z)
       ((Zc.out st.m zcs tr).rho.extract 0 (st.c.kLog - 6)) = .ok full)

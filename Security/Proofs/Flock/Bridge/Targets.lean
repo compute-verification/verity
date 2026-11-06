@@ -1,4 +1,6 @@
-import Proofs.Flock.Bridge.Statement
+module
+
+public import Proofs.Flock.Bridge.Statement
 
 /-!
 # The bridge's lemmas, as statements (targets, not proved)
@@ -21,6 +23,8 @@ Each is a `def … : Prop` over `Bridge.Defs` and `Bridge.Deployed`, so a proof 
   whose layout is `commitDep`'s (`LayoutIs`) and which parses the statement's bytes to `stmtOf` and partitions it to
   `partOf`, a `witDep` outside `RelS` at SHA-512 and `commitDep` is outside the record's `R`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -75,8 +79,10 @@ def AssemblyTarget : Prop :=
 
 /-- **rel_deploy**: at the deployed sampling record of a verifier's code whose layout is `commitDep`'s, and which
 parses `x` to `stmtOf` and partitions it to `partOf`, a `witDep` outside `RelS` at SHA-512 and `commitDep` is outside
-the record's `R`. Nothing discharges the partition hypothesis yet; a verifier check that computes `partOf` from the
-circuit file and refuses a registration whose slots differ from it in count, strata, order or owned inputs would. -/
+the record's `R`. At the key program of a circuit in scope, the partition hypothesis holds where the deployed partition
+is `SampledProofs.FilePart.ofCircuit`'s blocks in the registration's strata (`Bridge.relDeploy_ofCircuit`, from
+`FilePartTarget` and the scope check's `unitLog ≤ 32`), which the v2 audit's population check
+(`SampledProofs.FilePart.check`, `Bridge.check_ok`) holds to the circuit file's units in order. -/
 def RelDeployTarget : Prop :=
   ∀ {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (cd : SamplingDeploy.Code)
     {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)

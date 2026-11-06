@@ -1,3 +1,7 @@
-import VStarRecursive.Protocol
+module
 
-def main (args : List String) : IO UInt32 := VStar.Recursive.main args
+public import VStarRecursive.Sampled
+
+@[expose] public section
+
+def main (args : List String) : IO UInt32 := VStar.Recursive.Sampled.main args

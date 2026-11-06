@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.DeployE
+module
+
+public import Proofs.Flock.Claims.DeployE
 
 /-!
 # The deployed plain verifier and the element-level one as one verifier over `keep` (`FlockDeploy.VK`)
@@ -14,6 +16,8 @@ So a statement proved at `VK keep` for every `keep` holds at both. `Flock.verify
 `keep := id` and `verifyWithE h` at `keep := fun _ => true`, both by `rfl`.
 -/
 
+@[expose] public section
+
 namespace Flock
 
 /-- **The verdict over `V` with SHA-512 replaced by `h`, its digest comparisons read through `keep`**: `verifyWith h`
@@ -21,15 +25,6 @@ at `keep := id`, `verifyWithE h` at `keep := fun _ => true`. -/
 def verifyWithK (keep : Bool → Bool) (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup)
     (record : String) (proofs : Array ByteArray) : V Unit :=
   verifyWithMK (M := V) keep (Hashes.ofSha512 h) spec tabs record proofs
-
-theorem verifyWithK_id (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
-    (proofs : Array ByteArray) : verifyWithK id h spec tabs record proofs = verifyWith h spec tabs record proofs :=
-  rfl
-
-theorem verifyWithK_true (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
-    (proofs : Array ByteArray) :
-    verifyWithK (fun _ => true) h spec tabs record proofs = verifyWithE h spec tabs record proofs :=
-  rfl
 
 end Flock
 

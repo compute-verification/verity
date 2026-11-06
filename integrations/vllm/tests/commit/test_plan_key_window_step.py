@@ -8,8 +8,8 @@ from), and the plan it relearned failed the first window's step when its schedul
 the step-keyed sources commit at the step (`NativeCollectCommitter.step_targets`).
 
 The committer runs on the CPU as in `test_native_collect_plan_cache`, one commitment run per window, with the real int8 source
-quantizing one linear's rows each step. A step whose key has a plan must stage that plan's bytes, compared as the bounded worker
-compares them (padded to the chunk).
+quantizing one linear's rows each step; unbounded, so a step that leaves its plan is re-hashed from host and the next windows run.
+A step whose key has a plan must stage that plan's bytes, compared as the bounded worker compares them (padded to the row).
 """
 from __future__ import annotations
 
@@ -18,13 +18,13 @@ from types import SimpleNamespace
 import torch
 
 from verity_vllm.acquire.sources import int8_source as I8
-from verity_vllm.commit.committer import native_host as nh
+from verity_vllm.commit import step_rows as R
 from verity_vllm.engine import int8_ops
 
 from tests.commit import test_native_collect_plan_cache as PC
 
 LIN = "model.layers.0.mlp.down_proj"
-K = 512                                         # a lone request's x_q outgrows the chunk padding the worker compares at
+K = 4608                                        # a lone request's x_q outgrows the row padding the worker compares at
 SITES = 4                                       # the manifest's engine steps with an Int8RowQuant_v1 site: 0..3
 
 #: per window, per step, the scheduled requests (id, KV length, new tokens). The first window's pair prefills at step 0 and b
@@ -84,7 +84,7 @@ def _sched(reqs: list[tuple[str, int, int]]) -> SimpleNamespace:
 
 def _committer(monkeypatch):
     monkeypatch.setattr(PC, "DTYPES", (*PC.DTYPES, torch.int8))
-    com = PC.committer(monkeypatch)
+    com = PC.committer(monkeypatch, bounded=False)
     com.runner = _Runner(_model())
     com.runner.committer = com
     I8.attach(com, True, _manifest(), (), model=com.runner.model)
@@ -102,7 +102,7 @@ def _probe(com) -> list[list[int]]:
 
     def end_step():
         r = end()
-        out[-1].append(nc.byte_cursor)
+        out[-1].append(r[0])
         return r
 
     nc.begin_step, nc.end_step = begin_step, end_step
@@ -124,7 +124,7 @@ def _serve(com, windows) -> list[tuple[int, int, int, int]]:
         com.finalize()
         com.uninstall()
         com.reset()
-    pad = nh.GPU_CHUNK_BYTES
+    pad = R.ROW_BYTES
     return [(w, s, plan, used) for (w, s), (plan, used) in zip(at, steps) if plan >= 0 and -(-plan // pad) != -(-used // pad)]
 
 

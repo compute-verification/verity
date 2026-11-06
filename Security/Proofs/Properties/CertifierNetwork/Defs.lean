@@ -1,5 +1,7 @@
-import Properties.CertifierNetwork
-import Proofs.Properties.CertifierDevice.Issuer
+module
+
+public import Properties.CertifierNetwork
+public import Proofs.Properties.CertifierDevice.Issuer
 
 /-!
 # The certifier device's own output is accepted by the network certificate check: completeness
@@ -39,6 +41,8 @@ Python (`certificate.CertifiedRecord`); `certified` copies the Lean device's int
   and `NoFault`, since a frame handed late faults its window.
 -/
 
+@[expose] public section
+
 namespace Properties.CertifierNetwork
 
 open _root_.CertifierDevice
@@ -60,7 +64,7 @@ def declaredSyncs (c : Config) (tr : List Event) : Array NetworkCertifier.ClockS
 /-- **The host's assembly**: each record, in order, certified by `Issuer.certify` under the next salt of the certifier's
 coins `salts`, at the reserved leaf, under its link's direction, grid and parameters digest; the certificates issued, in
 order. -/
-def certifyAll (c : Config) : Issuer → Nat → (Nat → ByteArray) → List Record →
+def certifyAll (c : Config) : Issuer → Nat → (Nat → ByteArray) → List BlockGrid →
     Except String (Issuer × List CertifiedRecord)
   | i, _, _, [] => pure (i, [])
   | i, next, salts, r :: rs => do

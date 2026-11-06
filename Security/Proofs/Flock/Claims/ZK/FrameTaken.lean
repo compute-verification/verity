@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishRound
+module
+
+public import Proofs.Flock.Claims.ZK.FinishRound
 
 /-!
 # The frames took every round's coins on a live history
@@ -17,6 +19,8 @@ frame that read them took without refusal.
   coins (prefixes of one and two rounds) go to the session, not to a frame (`takeAt`), so nothing here is said of them.
 -/
 
+@[expose] public section
+
 namespace Claims.ZKServer
 
 open Claims
@@ -24,9 +28,6 @@ open Claims
 namespace LeanRelease
 
 open _root_.Flock.Firewall.Frame (Masker)
-
-theorem cfg_eq_cfgAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) :
-    L.cfg x ρ h = L.cfgAt x ρ h.length := rfl
 
 /-- **A live history's prefixes are live.** -/
 theorem live_take {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)

@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegV2
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegV2
 
 /-!
 # Unsegmented output rows, beside input rows of any kind
@@ -14,6 +16,8 @@ bit of its compression's `sha512x3` slot or of its `hm96` slot's `pad` (`Any.msg
 (`Any.outPairs_countF`), and a satisfying witness of the hidden statement satisfies its flat twin (`Any.sat_flatF`) and
 holds each output row's message bit's copy (`Any.msg_copyF`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -69,6 +73,9 @@ def OutRowsP (c : Circuit) : Prop :=
 
 theorem OutRowsS.toP {c : Circuit} (h : OutRowsS c) : OutRowsP c :=
   ⟨by rw [h.size]; exact h.1, fun j hj => h.2 j (by rw [← h.size]; exact hj)⟩
+
+/-- An `OutRowsS` proof where an `OutRowsP` one is asked for (`OutRowsS.toP`). -/
+instance instCoeOutRowsSOutRowsP {c : Circuit} : Coe (OutRowsS c) (OutRowsP c) := ⟨OutRowsS.toP⟩
 
 theorem OutRowsP.toS {c : Circuit} (h : OutRowsP c) (hs : c.outRowPorts.size = c.outPorts.size) : OutRowsS c :=
   ⟨by rw [← hs]; exact h.1, fun j hj => h.2 j (by rw [hs]; exact hj)⟩

@@ -109,7 +109,7 @@ def honest(prover, t, i, challenges, previous, plan):
 
 def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_tiles=None, run=honest, plan=None,
           sent=None, label=b"coins", coins_=None):
-    """Replay `schedule` against a session: `σ_0` released at 0 and each boundary message on time, each pass computed
+    """Replay `schedule` against a session: `chal_0` released at 0 and each boundary message on time, each pass computed
     as its root arrives, chained from the pass before.  `plan(t, i)` is pass (t, i)'s plan (None: the whole store);
     `run(prover, t, i, challenges, previous, plan)` replaces the honest pass and `sent(ps)` the runs sent with its
     root.  `tiles` is the stub of PoUW's tiles under a registration that binds z, and None under one that does not.
@@ -304,8 +304,8 @@ def test_receipts_committed_under_another_plan_reject(store) -> None:
 
 
 def test_the_ledger_counts_every_gamma_term(store) -> None:
-    """A chained session's span is its passes, a gap g after each, and its two ends: `σ_0`'s trip down before the first
-    pass, and after the last boundary the pass in flight's slack and its root's trip up."""
+    """A chained session's span is its passes, a gap g after each, and its two ends: `chal_0`'s trip down before the
+    first pass, and after the last boundary the pass in flight's slack and its root's trip up."""
     s, prover, passes, clock = drive(store, params(samples=1000), SCHEDULE)
     finish(s, prover, passes, clock)
     r = s.record()
@@ -1082,7 +1082,7 @@ def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
 
 
 def test_the_ledgers_count_bounds_auditros_binomial() -> None:
-    """`named_bits`, λ's count a pass (`PROTOCOL.md` §10), against `Bandwidth.Guarantees.AuditRO`'s last term
+    """`named_bits`, λ's count a pass (`PROTOCOL.md` §10), against `Accounting.Guarantees.Remote.AuditRO`'s last term
     C(q, k)/2^λ, λ a natural number: charged `named_bits(k) + SLACK_LOG2`, a pass's term is at most 2^-SLACK_LOG2,
     checked in exact integers against `math.comb`.  It is within 2 bits of log2(q^k/k!) (exact factorials up to 10^5),
     never above k·log2 q, and at q = 2^40 at most the 40·k AuditRO's docstring reads.  At 94 GB of 4 KiB receipts and

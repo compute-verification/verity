@@ -1,5 +1,9 @@
-import Properties.Pous.TimedAudit
-import Proofs.Properties.NetworkCertifier.Bytes
+module
+
+public import Properties.Pous.TimedAudit
+public import Proofs.Properties.NetworkCertifier.Bytes
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The timed audit's property, proved
@@ -9,6 +13,8 @@ import Proofs.Properties.NetworkCertifier.Bytes
 audit (`verdictOf_accepted`, `audit_ok`). Two trees over leaves of 64 bytes with one root have the same leaves unless
 two of their inner nodes' inputs collide (`mth_binds`), which ties each answer's leaf to `C*`'s.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Properties.SecurityProofs
 
@@ -210,7 +216,7 @@ theorem forIn_push {α β ε : Type} (P : α → β → Prop) (f : α → Array 
 /-! ## One audit -/
 
 /-- Answer `j` of an audit keyed by `source`, as `audit` judged it `x`. -/
-def AnswerFacts (s : Certificate.Store) (salt root : ByteArray) (leaves : Array ByteArray) (limit : Nat)
+def AnswerFacts (s : P2.Params) (salt root : ByteArray) (leaves : Array ByteArray) (limit : Nat)
     (source : ByteArray) (answers : Array Json) (j : Nat) (x : Bool × Bool) : Prop :=
   ∃ (hj : j < answers.size) (block : ByteArray) (elapsed : Nat),
     NatAt answers[j] "index" (challenged s salt root source j) ∧ NatAt answers[j] "elapsed_ns" elapsed ∧
@@ -219,7 +225,7 @@ def AnswerFacts (s : Certificate.Store) (salt root : ByteArray) (leaves : Array 
       (challenged s salt root source j % s.blocksPerSegment) block == leaves[challenged s salt root source j]!,
       decide (elapsed ≤ limit))
 
-theorem audit_ok {s : Certificate.Store} {salt root : ByteArray} {leaves : Array ByteArray} {k limit : Nat} {rec : Json}
+theorem audit_ok {s : P2.Params} {salt root : ByteArray} {leaves : Array ByteArray} {k limit : Nat} {rec : Json}
     {out : Array (Bool × Bool)} (h : TimedAudit.audit s salt root leaves k limit rec = .ok out) :
     ∃ (source : ByteArray) (answers : Array Json), HexAt rec "source" source ∧ 0 < source.size ∧
       rec.getObjVal? "answers" = .ok (.arr answers) ∧ answers.size = k ∧
@@ -256,34 +262,36 @@ theorem audit_ok {s : Certificate.Store} {salt root : ByteArray} {leaves : Array
 
 /-- A store and deadlines the gate refuses nothing of: the certificate's point, `k` and deadlines within it, and no gap
 exactly when `W` has the certificate's 8 segments. -/
-theorem gate_refused_nil {s : Certificate.Store} {k delta rtt : Nat} (h : (Certificate.gate s k delta rtt).2.1 = []) :
+theorem gate_refused_nil {s : P2.Params} {k delta rtt : Nat} (h : (Certificate.gate s k delta rtt).2.1 = []) :
     (s.w, s.c0, s.blocksPerSegment) = Certificate.POINT ∧ Certificate.CERT_K ≤ k ∧
       delta = Certificate.DELTA_NS ∧ rtt ≤ Certificate.RTT_ALLOWANCE_CAP_NS ∧
       ((Certificate.gate s k delta rtt).2.1 ++ (Certificate.gate s k delta rtt).2.2 = [] ↔ s.segments = 8) := by
   unfold Certificate.gate Certificate.p2 at *
   by_cases hp : (s.w, s.c0, s.blocksPerSegment) = Certificate.POINT
   · simp only [hp, beq_self_eq_true, ite_true] at h ⊢
-    simp only [Certificate.Certificate.refusals, Certificate.deadlineRefusals, Certificate.Certificate.effectiveRounds,
-      List.append_eq_nil_iff, ite_eq_right_iff, reduceCtorEq, imp_false, not_lt] at h
+    simp only [Certificate.CapacityBound.refusals, Certificate.deadlineRefusals,
+      Certificate.CapacityBound.effectiveRounds, List.append_eq_nil_iff, ite_eq_right_iff, reduceCtorEq, imp_false,
+      not_lt] at h
     obtain ⟨⟨hk, hd⟩, hδ, hr⟩ := h
     have hd' : ¬ (delta + rtt) / Certificate.ROOT_CALL_NS > 0 := fun hc => by simp [hc] at hd
     have hδ' : delta = Certificate.DELTA_NS := by simpa using hδ
     have hlt : Certificate.DELTA_NS + rtt < Certificate.ROOT_CALL_NS := by
       unfold Certificate.ROOT_CALL_NS at hd'; rw [← hδ']; unfold Certificate.ROOT_CALL_NS; omega
     refine ⟨trivial, hk, hδ', hr, ?_⟩
-    simp [Certificate.Certificate.refusals, Certificate.deadlineRefusals, Certificate.Certificate.effectiveRounds,
-      Certificate.CERT_BLOCKS, Certificate.POINT, hlt, hδ', Nat.not_lt.2 hk, Nat.not_lt.2 hr]
+    simp [Certificate.CapacityBound.refusals, Certificate.deadlineRefusals,
+      Certificate.CapacityBound.effectiveRounds, Certificate.CERT_BLOCKS, Certificate.POINT, hlt, hδ',
+      Nat.not_lt.2 hk, Nat.not_lt.2 hr]
   · simp [hp] at h
 
 /-! ## The verdict -/
 
-theorem fault_null (t : String) : (Json.mkObj [("fault", .str t)]).getObjValD "accepted" = .null := rfl
+theorem fault_null (t : String) : (Json.mkObj [("fault", .str t)]).getObjValD "accepted" = .null := (rfl)
 
-theorem refused_null (t : String) : (Json.mkObj [("refused", .str t)]).getObjValD "accepted" = .null := rfl
+theorem refused_null (t : String) : (Json.mkObj [("refused", .str t)]).getObjValD "accepted" = .null := (rfl)
 
 theorem verdict_accepted (a b c d e f g : Json) :
     (Json.mkObj [("k", a), ("limit_ns", b), ("gaps", c), ("audits", d), ("audits_accepted", e), ("accepted", f),
-      ("profile", g)]).getObjValD "accepted" = f := rfl
+      ("profile", g)]).getObjValD "accepted" = f := (rfl)
 
 theorem verdict_ok {ready : Json} {leafBytes : ByteArray} {doc : Json} (h : TimedAuditAccepted ready leafBytes doc) :
     ∃ v, TimedAudit.verdictOf ready leafBytes doc = .ok v ∧ v.getObjValD "accepted" = .bool true := by
@@ -295,7 +303,7 @@ theorem verdict_ok {ready : Json} {leafBytes : ByteArray} {doc : Json} (h : Time
 /-- What an accepted `verdictOf` read and judged. -/
 theorem verdictOf_accepted {ready : Json} {leafBytes : ByteArray} {doc v : Json}
     (h : TimedAudit.verdictOf ready leafBytes doc = .ok v) (hv : v.getObjValD "accepted" = .bool true) :
-    ∃ (s : Certificate.Store) (salt root : ByteArray) (delta rtt k : Nat) (strict : Bool) (records : Array Json)
+    ∃ (s : P2.Params) (salt root : ByteArray) (delta rtt k : Nat) (strict : Bool) (records : Array Json)
       (audits : Array (Array (Bool × Bool))),
       TimedAudit.store ready = .ok (s, salt) ∧ leafBytes.size = s.blocks * Merkle.DIGEST ∧
       HexAt doc "root" root ∧ NatAt doc "deadline_ns" delta ∧ NatAt doc "rtt_allowance_ns" rtt ∧

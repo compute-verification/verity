@@ -1,7 +1,8 @@
 {
  "roots": ["CoreRemote"],
  "exempt": {
-  "RemoteMain": "the remote executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
+  "RemoteMain": "the remote executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "RemoteV1Main": "the remote-v1 executable's entry point, one line; its command is Core.BlobProtocol.main, audited under CoreProtocol"
  },
  "layers": {
   "CoreRemote": {
@@ -11,12 +12,13 @@
     "CoreComposition.Tie",
     "NciCheck.Protocol",
     "PouwCheck.Period",
+    "PouwPearlPlus.Protocol",
     "SampledProofs.OneStage",
     "SampledProofs.OneStageZk",
     "VStarRecursive.Sampled"
    ],
    "except": [],
-   "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security"
   }
  },
  "dependencies": {

@@ -1,7 +1,9 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Data.ZMod.Defs
-import Mathlib.Probability.Distributions.Uniform
-import Definitions.Accounting.Tag.Prob
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Data.ZMod.Defs
+public import Mathlib.Probability.Distributions.Uniform
+public import Definitions.Accounting.Tag.Prob
 
 /-!
 # The keyed polynomial hash over `GF(2^31 − 1)` (trusted)
@@ -9,8 +11,8 @@ import Definitions.Accounting.Tag.Prob
 The tag of the bandwidth audit's uncertified fast check: `benchmarks/pous/hbm_audit/digest.py`, `gf31-poly/v1`. No
 statement about it certifies bandwidth. A device with memory to spare can keep a structure computed from each block
 (a Kedlaya–Umans evaluation table) and answer the hash without reading the block's words, so the certified tag is a
-random oracle's (`Bandwidth.Guarantees.AuditRO`). The statements about this hash are inputs to a possible version in
-the joint model, under a capacity bound.
+random oracle's (`Accounting.Guarantees.Remote.AuditRO`). The statements about this hash are inputs to a possible
+version in the joint model, under a capacity bound.
 
 A chunk of the store (`digest.py`'s block) is `W` little-endian `uint32` words (`WORDS = 16384` for 64 KiB). Its
 hash at a key point `g` is Horner's rule over the words' residues mod `p = 2^31 − 1` (`reference_block_hash`), and the
@@ -20,6 +22,8 @@ A word enters the field as its residue: `int(w) % MOD` in the reference, one Mer
 GPU, which agrees mod `p`. Since `2^32 > 2p`, every word has another word with its residue (`w` and `w ± p`), so the
 hash binds residues, not words: two blocks whose words agree mod `p` hash alike at every key.
 -/
+
+@[expose] public section
 
 namespace Accounting.Tag
 

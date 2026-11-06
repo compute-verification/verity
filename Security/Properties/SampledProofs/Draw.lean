@@ -1,5 +1,7 @@
-import Definitions.Claims.Sampling
-import SampledProofs.Slots
+module
+
+public import Definitions.Claims.Sampling
+public import SampledProofs.Slots
 
 /-!
 # Sampled proofs' draw in the claims' slots: it misses proof units no more often than `P_a` (`SampledProofs.Slots.select`)
@@ -21,6 +23,8 @@ and its bytes, and every input is in it, the `L` bytes included, however few.
 probability, wherever both are given; the draw's own refusals make it so, and it takes no premise either.
 -/
 
+@[expose] public section
+
 open Lean (Json)
 open SampledProofs
 
@@ -33,7 +37,7 @@ def bytesOf {L : ℕ} (src : Fin L → Fin 256) : ByteArray := ⟨Array.ofFn fun
 def puGates (b : Slots.ProofBlock) : List ℕ := List.range' b.gates.1 (b.gates.2 - b.gates.1)
 
 /-- The claims' partition of a layout: its classes, each its strata, each its proof blocks' gates. -/
-def slotPartition (l : Slots.Layout) : Claims.Sampling.Partition :=
+def slotPartition (l : Slots.SlotOrder) : Claims.Sampling.Partition :=
   ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map puGates⟩
 
 /-- The claims' one-stage design of a C-Flock law. -/
@@ -65,7 +69,7 @@ noncomputable def missBound (rule : Select.Rule) (d : Program) (query : Json) (t
   | _, _ => 0
 
 /-- The slots a draw checks, none where it is refused. -/
-def checkedOf : Flock.V (Slots.Layout × Array ℕ) → Array ℕ
+def checkedOf : Flock.V (Slots.SlotOrder × Array ℕ) → Array ℕ
   | .ok (_, c) => c
   | .error _ => #[]
 
@@ -89,7 +93,7 @@ the first stage `subset K` with `1 ≤ K ≤ N`, Bernoulli at `NUM/DEN` with `0 
 `1 ≤ K ≤ N` over strata of at least one unit each, or `work K` over such strata with one work and one floor of at least
 one per stratum, and some work. -/
 def DesignWellFormed : Prop :=
-  ∀ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (l : Slots.Layout)
+  ∀ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (l : Slots.SlotOrder)
     (D : Claims.Sampling.Design),
     Slots.layout d query = .ok l → slotDesign rule d query table = .ok D → D.WellFormed (slotPartition l)
 

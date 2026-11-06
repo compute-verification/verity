@@ -1,6 +1,6 @@
 """The block record: the fixture records (built by `from-runs` from two all-protocols runs and a wipe run) fit their schema
-and check clean, every derived field is refused when it is not its legs', and a period whose six legs all accept on one
-server composes to accept."""
+and check clean, every derived field is refused when it is not its legs', a period whose six legs all accept on one
+server composes to accept, and remote's product composes sampled proofs and PoUW alone."""
 from __future__ import annotations
 
 import copy
@@ -127,6 +127,35 @@ def test_six_accepting_legs_on_one_server_compose_to_accept() -> None:
     assert week["blocks"] == 12500 * 1008 and week["per_block_error_for"]["1/100"] == str(Fraction(1, 100 * 12500 * 1008))
 
 
+def test_remote_composes_sampled_proofs_and_pouw_alone_its_other_legs_dropped() -> None:
+    """Remote's product: sampled proofs and PoUW accepted on the block's server, no onsite leg run, compose to accept,
+    the onsite legs named dropped, neither missing nor in the error sum; as onsite's the same legs are pending. A record
+    of remote's that ran a leg remote drops, that names no product, or that names an unknown one is refused."""
+    report, _ = _accepting_report()
+    keep = {R.RUNNER_KEYS[leg] for leg in R.PRODUCTS["remote"]}
+    report["protocols"] = {k: v for k, v in report["protocols"].items() if k in keep}
+    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, product="remote")
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert R.check(rec) == {}
+    c = rec["composed"]
+    assert (c["verdict"], c["product"], c["missing"], c["dropped"]) == (
+        "accept", "remote", [], ["bandwidth", "certifier", "pous", "wipe"])
+    assert c["legs"] == {"integrity": "accept", "pouw": "accept"} and sorted(c["joint_horizon"]["terms"]) == ["integrity", "pouw"]
+    assert R.from_period(report, steps=(4, 6), deployment=R.REFERENCE)["composed"]["verdict"] == "pending"
+    full, wipe = _accepting_report()
+    with pytest.raises(ValueError, match="legs the remote product drops"):
+        R.from_period(full, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe}, product="remote")
+    ran = copy.deepcopy(rec)
+    ran["legs"]["pous"] = R.from_period(full, steps=(4, 6), deployment=R.REFERENCE)["legs"]["pous"]
+    assert R.check(ran) == {"legs": "pous: legs the remote product drops, which the block ran"}
+    unnamed = copy.deepcopy(rec)
+    del unnamed["composed"]["product"], unnamed["composed"]["dropped"]
+    assert set(R.check(unnamed)) == {"composed:verdict", "composed:missing"}
+    unknown = copy.deepcopy(rec)
+    unknown["composed"]["product"] = "offsite"
+    assert R.check(unknown) == {"composed:product": "not one of ['onsite', 'remote']"}
+
+
 def test_a_leg_carries_its_answers_placement_and_no_other_profile() -> None:
     """The certifier's answer names which host ran each party (``profile.placement``): its leg carries that and the
     record still fits its schema and checks clean; a leg whose profile names no placement carries no profile."""
@@ -145,3 +174,10 @@ def test_a_report_of_another_format_is_refused() -> None:
     report, _ = _accepting_report()
     with pytest.raises(ValueError, match="not one of"):
         R.from_period({**report, "format": "verity/all-protocols-window/v0"}, steps=(0, 2), deployment=R.REFERENCE)
+
+
+def test_the_reference_deployment_is_the_census_entry_the_fixtures_carry() -> None:
+    census = [d for d in json.loads(R.CENSUS.read_text()) if d["role"] == "reference"]
+    assert len(census) == 1 and R.REFERENCE == {k: v for k, v in census[0].items() if k != "sources"}
+    for name in (*NAMES, "block-record-b71a-w30"):
+        assert _load(name)["monitoring_period"]["deployment"] == R.REFERENCE

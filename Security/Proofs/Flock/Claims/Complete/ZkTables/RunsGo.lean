@@ -1,13 +1,17 @@
-import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
-import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
-import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
-import Proofs.Flock.Claims.Complete.ZkTables.Parts
-import Proofs.Flock.Claims.Complete.ZkTables.Trace
-import Proofs.Flock.Claims.Complete.Zk.ConsCoins
-import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
-import Proofs.Flock.Claims.Complete.Zk.InnerGo
-import Proofs.Flock.Claims.Complete.Zk.Lanes
-import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
+public import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
+public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
+public import Proofs.Flock.Claims.Complete.ZkTables.Parts
+public import Proofs.Flock.Claims.Complete.ZkTables.Trace
+public import Proofs.Flock.Claims.Complete.Zk.ConsCoins
+public import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.InnerGo
+public import Proofs.Flock.Claims.Complete.Zk.Lanes
+public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The masked prover's rep returns
@@ -24,6 +28,8 @@ its coins are good, and records `repRoundsT` rounds (`runsRest`).
 * `lcRounds_points`: the rounds the rank check reads give the rep's claim points at the coins (`MaskRank.claimsAt`).
 * `repT_go`: a masked rep returns at good coins where its rank check passes (`MaskRankT`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 
@@ -155,7 +161,7 @@ returned, the replay's rows and the two ring-switch rows on the prover's switche
 (`Lc.lcAlgebra_of`), and each claim met by its switched vector (`claims_switch`). -/
 theorem replay_holds {st : Flock.Stmt} {tr : Trace} (hT : TableT st tr) (lay : Zk.PadLayout) (h : Array F128)
     (hsz : h.size = lay.len) (hab : h[lay.hab]! = h[lay.fa]! * h[lay.fb]!) (hn : st.m - 6 ≤ lay.nMlv)
-    (hn' : st.c.kLog - 6 ≤ lay.nLc) (zcs : Zc.Coins) (lcs : Lc.Coins) (full : Array F128)
+    (hn' : st.c.kLog - 6 ≤ lay.nLc) (zcs : Zc.Challenges) (lcs : Lc.Challenges) (full : Array F128)
     (hc1 : ∀ j < st.m - 13, zcs.c1 j ≠ 1)
     (hfold : st.circuitFold.fold (lcs.ca 0) (skipWeights (Zc.out st.m zcs tr).z)
       ((Zc.out st.m zcs tr).rho.extract 0 (st.c.kLog - 6)) = .ok full)
@@ -196,7 +202,7 @@ theorem replay_holds {st : Flock.Stmt} {tr : Trace} (hT : TableT st tr) (lay : Z
 and lincheck from the empty transcript, with a fold that returned (`replayWith_ok` at the deployed hash, the
 lincheck's fold from `Lc.lcAlgebra_of`). -/
 theorem replay_ok {st : Flock.Stmt} {tr : Trace} (hT : TableT st tr) (lay : Zk.PadLayout) (h : Array F128)
-    (zcs : Zc.Coins) (lcs : Lc.Coins) (full : Array F128)
+    (zcs : Zc.Challenges) (lcs : Lc.Challenges) (full : Array F128)
     (hfold : st.circuitFold.fold (lcs.ca 0) (skipWeights (Zc.out st.m zcs tr).z)
       ((Zc.out st.m zcs tr).rho.extract 0 (st.c.kLog - 6)) = .ok full)
     (p : Proof) (root : ByteArray) (hpz : p.zerocheck = ZcZ.proof lay h st.m zcs tr)

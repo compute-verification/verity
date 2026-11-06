@@ -336,6 +336,15 @@ def test_a_checked_below_a_moved_main_fast_forwards_to_it(world, monkeypatch):
     assert _checked(world) == _main(world)
 
 
+def test_the_branch_sweep_deletes_what_is_on_checked(world, monkeypatch):
+    """`main` lags `checked` by hours, so a sweep measured against `main` leaves landed branches to pile up."""
+    from research import merge
+
+    h = Review(world, monkeypatch, land_into="checked")
+    calls = []
+    monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: calls.append(k["into"]) or (2, 0))
+    h.tick()
+    assert calls == ["checked"] and any("branch sweep: 2 deleted (on checked)" in x for x in world.logs), world.logs
 def _push_outside(world: World, files: dict[str, str], name: str) -> str:
     """A commit onto `checked` by ``name``, pushed to it by someone other than drive; its sha."""
     import os

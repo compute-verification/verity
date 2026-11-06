@@ -1,8 +1,10 @@
-import Definitions.Pouw.PearlC.Instance
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Pouw.PearlC.Device
-import Definitions.Pouw.PearlC.DeviceRev1
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Pouw.PearlC.Instance
+public import Definitions.Pouw.PearlC.Tile
+public import Definitions.Pouw.PearlC.Device
+public import Definitions.Pouw.PearlC.DeviceRev1
+public import Definitions.Pouw.PearlC.W1
 
 /-!
 # TT_OUT at W1 (trusted; named assumptions, `Prop`s taken as hypotheses, never `axiom`s)
@@ -42,7 +44,7 @@ separately. It speaks at the deployment when `sem := NoiseSha512.sha512Sem base 
 model reads: one salt, which the program reads as its salt bytes (`W1.init`'s region 1) and the protocol reads as the
 noise's. At any other pair it is still proved, but about a game the deployment doesn't play.
 
-**The program's text is bounded** (`W1.Prog.bounded`: at every layout `2^64` code nodes and `2^64` constants).
+**The program's text is bounded** (`W1.CodeImage.bounded`: at every layout `2^64` code nodes and `2^64` constants).
 W1 charges only the path a run takes, so a strategy with unbounded text could hold the reference at
 `sha512Sem` as a table of one leaf per salt in its code. A W1 program can't
 (`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`).
@@ -52,6 +54,8 @@ fails at decode. No reader of these assumptions takes `AdmitsRef`: it is complet
 
 The rest (the credit, debit and cap, the second hole carried, the falsifiers) is `TTOut`'s and `TTOutPearlCDevRev1`'s.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

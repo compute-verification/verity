@@ -1,7 +1,10 @@
-import Proofs.Properties.CertifierNetwork.Defs
-import Proofs.Properties.CertifierDevice.Issuer
-import Proofs.Properties.CertifierDevice.Basic
-import Proofs.Properties.NetworkCertifier.Grid
+module
+
+public import Proofs.Properties.CertifierNetwork.Defs
+public import Proofs.Properties.CertifierDevice.Issuer
+public import Proofs.Properties.CertifierDevice.Basic
+public import Proofs.Properties.NetworkCertifier.Grid
+import all Init.Data.String.Defs
 
 /-!
 # A device's record has an encoding
@@ -10,6 +13,8 @@ import Proofs.Properties.NetworkCertifier.Grid
 publishes fits them: its grid is `T` packed rows of `r` slots (`Packed`), each frame `B` bytes, and its integers, link and
 key identifier are within their widths (`prepare_of`).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierNetwork.Proofs
 
@@ -301,7 +306,7 @@ theorem certificateDigest_size (salt record : ByteArray) : (certificateDigest sa
   unfold certificateDigest
   exact hash_size _
 
-theorem prepare_eq {i : Issuer} {salt : ByteArray} (hsalt : salt.size = saltBytes) {r : Record} {d : Direction}
+theorem prepare_eq {i : Issuer} {salt : ByteArray} (hsalt : salt.size = saltBytes) {r : BlockGrid} {d : Direction}
     {g : Params} {pd : ByteArray} {dl : Bool} {head : RecordHead} {dg m : ByteArray}
     (hh : recordHead r.link d r.window r.grid ((Status.reason? r.status).map reasonValue) g pd dl = .ok head)
     (hdg : head.digest = .ok dg)
@@ -318,7 +323,7 @@ theorem prepare_eq {i : Issuer} {salt : ByteArray} (hsalt : salt.size = saltByte
 parameters digest, has a head, digest and message under `prepare` (with a 64-byte salt, a 16-byte key identifier and
 a 32-byte session id): the head `record_head` makes of its grid. -/
 theorem prepare_of {i : Issuer} (hk : i.key.I.size = 16) (hss : i.session.size = 32) {salt : ByteArray}
-    (hsalt : salt.size = saltBytes) {r : Record} {d : Direction} {g : Params} {pd : ByteArray}
+    (hsalt : salt.size = saltBytes) {r : BlockGrid} {d : Direction} {g : Params} {pd : ByteArray}
     (hs : r.grid.size = g.buckets) (hp : ∀ row ∈ r.grid, Packed g row) (hpd : pd.size = 64)
     (hl : r.link.toUTF8.size < 2 ^ 16) (hw : r.window < 2 ^ 64) (hT : g.buckets < 2 ^ 32) (hr : g.allocation < 2 ^ 32)
     (hB : g.frameBytes < 2 ^ 32) (hτ : g.bucketMs < 2 ^ 32) (hst : r.status = .complete) :

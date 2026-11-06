@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkRows
-import Proofs.Flock.Claims.KS.ZkStep
+module
+
+public import Proofs.Flock.Claims.KS.ZkRows
+public import Proofs.Flock.Claims.KS.ZkStep
 
 /-!
 # The masked view's self-clash at level 0
@@ -22,6 +24,8 @@ reps' extra lanes, so where the reader's columns cut the rows, it is a collision
 * `zk_KS_of_later`, `zk_tableBoundJOnAccR_of_later`, `zk_KSFlock_of_later`: so masked KS and the recursion's chain
   rest on the fork bounds and the view's clashes past level 0 and at the pads.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

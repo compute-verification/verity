@@ -1,11 +1,13 @@
-import CoreProtocol.Protocol
-import MemoryChallenger.Records
-import MemoryChallenger.SignedMessage
+module
+
+public import CoreProtocol.Protocol
+public import MemoryChallenger.Records
+public import MemoryChallenger.SignedMessage
 
 /-!
 # The verdict on a signed session
 
-`memory_challenger.verdict`: the check of a signed session against the commitment published before it. It checks the
+`memory_challenger.verdict`: the check of a signed session against its commitment, released with it. It checks the
 signature under a trusted key and an accepted scheme, the header against the commitment, every revealed index against
 its coin opening, every `H(block)` against the expected digest of that block of `C`, and every round on time within
 `Δ + RTT`. It fails closed: an unknown scheme, an untrusted key or a bad signature rejects, whatever the rounds. The
@@ -14,6 +16,8 @@ reasons are the Python's, word for word.
 A scheme is an LMS parameter set under its id (`SCHEMES`: S1's, `LMS` at `Lms.deployed`, and nothing else). The test
 signers' schemes (`TEST_SCHEMES`, `pous_test_signer.SCHEMES`) are accepted only where a caller passes them.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger
 

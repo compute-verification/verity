@@ -1,8 +1,10 @@
-import Batteries.Tactic.OpenPrivate
-import Properties.RemoteAudit.Coins
-import Proofs.Properties.RemoteAudit.Draw
-import Proofs.Properties.RemoteAudit.Session
-import Proofs.Properties.RemoteAudit.Window
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Properties.RemoteAudit.Coins
+public import Proofs.Properties.RemoteAudit.Draw
+public import Proofs.Properties.RemoteAudit.Session
+public import Proofs.Properties.RemoteAudit.Window
 
 /-!
 # When the verifier reads a window's openings coin (`AcceptDrawsOpenable`, `OpeningsUnreadUntilDrawn`)
@@ -17,6 +19,10 @@ the coins (`step_coins_eq`). Each event keeps every window's draw, and only `clo
 every window before it drawn (`Adv`, `adv_step`): so the windows drawn are a prefix (`Prefix`), and a run that ends
 with window `t` undrawn never drew a window from `t` on, so it read only coins below `W + t` (`fold_coins`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open RemoteAudit RemoteAudit.Session
 
@@ -75,7 +81,7 @@ theorem verify_coins (s : State) (c : Array ByteArray) (t : Int) (o : Array Open
   unfold verify State.fail
   simp only [Id.run, live_C, record_C]
   repeat' (split <;> try dsimp only)
-  all_goals try rfl
+  all_goals first | rfl | (simp only [*, ↓reduceIte]; rfl)
 
 theorem release_coins (s : State) (c : Array ByteArray) (runs withdrawn : Array (Int × Int)) :
     release (C c s) runs withdrawn = ((release s runs withdrawn).1, C c (release s runs withdrawn).2) := by

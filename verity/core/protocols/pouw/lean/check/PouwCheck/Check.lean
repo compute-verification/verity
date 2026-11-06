@@ -1,11 +1,13 @@
-import CoreProtocol.Protocol
-import PouwWindow.Grid
-import PouwWindow.Draw
-import PouwWindow.Public
-import PouwWindow.Length
-import PouwCheck.Inputs
-import PouwCheck.WindowSalt
-import Identity.Domains
+module
+
+public import CoreProtocol.Protocol
+public import PouwWindow.Grid
+public import PouwWindow.Draw
+public import PouwWindow.Public
+public import PouwWindow.Length
+public import PouwCheck.Inputs
+public import PouwCheck.WindowSalt
+public import Identity.Domains
 
 /-!
 # PoUW's rule (`core_check.py`, "the check")
@@ -23,6 +25,8 @@ this order, with `core_check.py`'s reason.
 The service's reject is a reject and its undecided is undecided. On acceptance PoUW publishes `window.PUBLIC` and the
 profile is the service's `Core.Integrity`, passed through.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 
@@ -164,7 +168,7 @@ def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Ou
     else if prof.drawn ≠ #[(unitLevel, k)] then
       .reject s!"profile: drawn {cs (drawnJson prof.drawn)}, not {k} units"
     else if draw.law ≠ .subset k ∨ draw.population ≠ n then
-      .reject s!"draw: {draw.law.name} over {draw.population}, not subset:{k} over {n}"
+      .reject s!"draw: {lawName draw.law} over {draw.population}, not subset:{k} over {n}"
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
     else

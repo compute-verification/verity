@@ -1,12 +1,16 @@
-import Definitions.Pouw.Assumptions.Pinned
-import Proofs.Pouw.Prob
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.NormNum
+module
+
+public import Definitions.Pouw.Assumptions.GameStatements
+public import Proofs.Pouw.Prob
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Ring
+public import Mathlib.Tactic.NormNum
 
 /-!
 # (a) `G_γ` from TT, and the overhead budget
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 
@@ -54,14 +58,14 @@ theorem wins_imp_tt (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (�
   exact lt_of_mul_lt_mul_left h4 hΩ.le
 
 /-- **(a)** `G_γ` from TT, with `γ = 1 − (1 − γ₀)/Ω_max` and `η = ε_TT(q)`. -/
-theorem gammaFromTT : Pinned.GammaFromTT := by
+theorem gammaFromTT : GameStatements.GammaFromTT := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ₀ hΩ hW hTT U hU T hT q hq A hA
   refine le_trans (pr_mono ?_) (hTT.2 U hU T hT q hq A hA)
   rintro ⟨H, s⟩ hwin
   exact wins_imp_tt P U H s _ hΩ (hW U hU) hwin
 
 /-- **The overhead budget**: `γ ≤ 1%` under TT(0.5%) iff `Ω_max ≤ 199/198`. -/
-theorem gammaBudget : Pinned.GammaBudget := by
+theorem gammaBudget : GameStatements.GammaBudget := by
   intro Ωmax hΩ
   unfold reductionGamma Params.γ0
   rw [show (1 : ℝ) - 1 / 200 = 199 / 200 by norm_num]

@@ -1,4 +1,6 @@
-import Proofs.Pouw.Dither
+module
+
+public import Proofs.Pouw.Dither
 
 /-!
 # Pooling a fleet's replicas by convexity (tier A)
@@ -24,6 +26,8 @@ paid `ln(N/δ_coin)` of luck a replica; convexity pays `ln(N/(s δ_coin))` on `s
   form `SAKMatmul` gives, yet all pass together with probability 1/2. A product over replicas would need moments
   pointwise in the other replicas' dithers.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Pool
 

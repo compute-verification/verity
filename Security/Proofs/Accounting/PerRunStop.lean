@@ -1,6 +1,8 @@
-import Proofs.Accounting.PerRunPriced
-import Proofs.Pouw.PearlC.W1Priced
-import Proofs.Pouw.PearlC.W1Stop
+module
+
+public import Proofs.Accounting.PerRunPriced
+public import Proofs.Pouw.PearlC.W1Priced
+public import Proofs.Pouw.PearlC.W1Stop
 
 /-!
 # Proof of the per-run guarantees from the γ-gap property per coin
@@ -18,6 +20,8 @@ split (`Pouw.PearlC.W1Priced.w1Priced_cost`: its arithmetic within the compute c
 bandwidth charge); `w1Stop_cost_le` is the same split for a device that does stop a run, whose budget must then be
 within the two.
 -/
+
+@[expose] public section
 
 namespace Accounting
 
@@ -37,7 +41,7 @@ def RealizesPearlCPriced.withStop {CM : PearlC.CostModel Q R S} {P : PearlC.Prot
 the machine doesn't stop it, its arithmetic (`final`'s `cost`) is within the compute charge `work` and `fetch` per word
 it first fetches (`w1Read`) within the bandwidth charge `pRead·bits`, and, if the machine stops it at budget `b`, `b` is
 within the two. -/
-theorem w1Stop_cost_le (dv : PearlC.W1.W1Device) (salt : S → List ℕ) (prog : PearlC.W1.Prog × Option ℝ) (H : Q → R)
+theorem w1Stop_cost_le (dv : PearlC.W1.W1Device) (salt : S → List ℕ) (prog : PearlC.W1.CodeImage × Option ℝ) (H : Q → R)
     (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S) {work bits pRead : ℝ}
     (hrun : (∀ b, prog.2 = some b → (PearlC.W1.w1Priced dv salt : PearlC.CostModel Q R S).cost prog.1 H U act σ s ≤ b) →
       ((PearlC.W1.final dv (salt s) prog.1 U act σ).cost : ℝ) ≤ work ∧

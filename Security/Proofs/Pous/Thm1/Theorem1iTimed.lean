@@ -1,14 +1,16 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # Report Theorem 1(i), timed: `PousProofs.theorem1_i_timed`, as drafted
@@ -19,6 +21,8 @@ state. `A₁` is the compressor, and each round runs the expander on the challen
 every challenge sequence is answered correctly (`seqAnswers_keep`), so
 `Pr_setup[rebuild] ≤ Pr[audit accepts] ≤ δ + ε` (`pr_le_outcome`).
 -/
+
+@[expose] public section
 
 namespace PousThm1
 
@@ -53,7 +57,7 @@ theorem pr_le_outcome {α β γ : Type} [Fintype α] [Fintype β] [Fintype γ] [
 /-! ### Programs -/
 
 /-- Post-process a program's output; the queries are unchanged. -/
-def progMap {M : IdealModel} {α β : Type} (g : α → β) : Prog M α → Prog M β
+def progMap {M : IdealModel} {α β : Type} (g : α → β) : OracleAlgorithm M α → OracleAlgorithm M β
   | .ret a => .ret (g a)
   | .round qs k => .round qs fun as => progMap g (k as)
 
@@ -61,22 +65,22 @@ section progMap
 
 variable {M : IdealModel} {α β : Type} (g : α → β) (f : M.Qry → M.Ans)
 
-theorem run_progMap (p : Prog M α) : (progMap g p).run f = g (p.run f) := by
+theorem run_progMap (p : OracleAlgorithm M α) : (progMap g p).run f = g (p.run f) := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact ih _
 
-theorem depth_progMap (p : Prog M α) : (progMap g p).depth f = p.depth f := by
+theorem depth_progMap (p : OracleAlgorithm M α) : (progMap g p).depth f = p.depth f := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact congrArg (· + 1) (ih _)
 
-theorem work_progMap (p : Prog M α) : (progMap g p).work f = p.work f := by
+theorem work_progMap (p : OracleAlgorithm M α) : (progMap g p).work f = p.work f := by
   induction p with
   | ret a => rfl
   | round qs k ih => exact congrArg (qs.length + ·) (ih _)
 
-theorem bounded_progMap {D Q : ℕ} {p : Prog M α} (h : p.Bounded D Q) : (progMap g p).Bounded D Q :=
+theorem bounded_progMap {D Q : ℕ} {p : OracleAlgorithm M α} (h : p.Bounded D Q) : (progMap g p).Bounded D Q :=
   fun ω => by rw [depth_progMap, work_progMap]; exact h ω
 
 end progMap
@@ -84,7 +88,7 @@ end progMap
 /-! ### Sequential responders -/
 
 /-- A responder that keeps its state answers `is` by running `p σ` on each index. -/
-theorem seqAnswers_keep {M : IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans) (p : Bits S → Fin B → Prog M (Bits ℓ)) :
+theorem seqAnswers_keep {M : IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans) (p : Bits S → Fin B → OracleAlgorithm M (Bits ℓ)) :
     ∀ (j : ℕ) (is : List (Fin B)) (σ : Bits S),
       seqAnswers f (fun _ σ i => progMap (fun b => (b, σ)) (p σ i)) j is σ = is.map fun i => (p σ i).run f
   | _, [], _ => rfl

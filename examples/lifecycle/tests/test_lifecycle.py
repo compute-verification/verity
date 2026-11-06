@@ -164,8 +164,9 @@ def test_rejected(protocol: str, cheat: str) -> None:
     o = outcome(protocol, cheat)
     assert o["status"] == "completed" and o["period"]["verdict"] == "reject"
     line = o["lines"][k - 1]
-    assert line["answers"][IDS[component]]["verdict"] == "reject"
-    assert line["composite"]["verdict"] == "reject" and IDS[component] in line["composite"]["reason"]
+    id = L.SAMPLED[protocol] if component == "sampled-proofs" else IDS[component]
+    assert line["answers"][id]["verdict"] == "reject"
+    assert line["composite"]["verdict"] == "reject" and id in line["composite"]["reason"]
     assert o["period"]["credited_ands"] == 0
 
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Level3.ArithFacts
-import Proofs.Flock.Level3.GF256
-import Proofs.Flock.Soundness.Discharge.Composed.Base
-import Proofs.Flock.Claims.Deploy
+module
+
+public import Proofs.Flock.Level3.ArithFacts
+public import Proofs.Flock.Level3.GF256
+public import Proofs.Flock.Soundness.Discharge.Composed.Base
+public import Proofs.Flock.Claims.Deploy
 
 /-!
 # The mask slot's rank
@@ -24,6 +26,8 @@ is full when it is `⊤` (`RankFull`).
   `GF(2^128)^k`; `maskRankOk_append_left`: rep 1's check at all four points covers rep 0's.
 * `maskWords_ge`: a statement the `--zk` setup admits has `N = 2^D` mask words with `D ≥ 10`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.MaskRank
 
@@ -54,14 +58,6 @@ theorem range_eqProd_cons {D : ℕ} (c₀ : A) (c : Fin D → A) :
   · rintro (⟨v, ⟨x, rfl⟩, rfl⟩ | ⟨v, ⟨x, rfl⟩, rfl⟩)
     · exact ⟨Fin.cons false x, by rw [eqProd_cons]; simp⟩
     · exact ⟨Fin.cons true x, by rw [eqProd_cons]; simp⟩
-
-/-- With no coordinate the span is GF(2)·1. -/
-theorem span_zero (c : Fin 0 → A) : span c = AddSubgroup.closure {1} := by
-  have : Set.range (eqProd c) = {1} := by
-    ext y
-    simp only [Set.mem_range, Set.mem_singleton_iff, eqProd, Finset.univ_eq_empty, Finset.prod_empty]
-    exact ⟨fun ⟨_, h⟩ => h.symm, fun h => ⟨finZeroElim, h.symm⟩⟩
-  rw [span, this]
 
 /-- **The span recursion**: one more coordinate `c₀` takes the span `U` to `U + c₀·U`, since
 `(1 + c₀)·v + c₀·v = v` in characteristic 2. -/

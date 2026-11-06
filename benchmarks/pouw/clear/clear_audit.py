@@ -99,12 +99,15 @@ class Prover:
 
     def __init__(self, scheme: PoUWScheme, weights: Mapping[int, Sequence[bytes]],
                  kernel: Callable[..., list[tuple[bytes, list[list]]]] = reference_kernel, salt_key: bytes | None = None):
-        """`salt_key` is the prover's key of its hm96 salts under `HM96` (fresh by default)."""
+        """`salt_key` is the prover's key of its hm96 salts under `HM96` (fresh by default).  A scheme of a plain format (h0, or
+        no ``commitment_hash``) has trees that are not hiding, which this reference tool replays as `audit.commit_rows`'
+        ``public`` trees; a served commitment is never one."""
         self.scheme, self.kernel = scheme, kernel
         self.weights = {w: list(rows) for w, rows in weights.items()}
         self.hash = commitment_hash(scheme)
         self.salt_key = (salt_key or os.urandom(32)) if self.hash == HM96 else None
-        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows, self.hash, self.salt_key, HM96_WEIGHTS + w)
+        self.plain = plain = self.hash != HM96
+        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows, self.hash, self.salt_key, HM96_WEIGHTS + w, public=plain)
                              for w, rows in self.weights.items()}
         self._act_trees: list[MerkleTree] = []
         self._refs: list[TileRef] = []
@@ -125,7 +128,8 @@ class Prover:
             rows = list(activations[u.index])
             if len(rows) != u.shape.m:
                 raise DomainError(f"matmul {u.index} has {u.shape.m} activation rows")
-            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash, self.salt_key, u.index)
+            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash, self.salt_key, u.index,
+                               public=self.plain)
             self._act_trees.append(tree)
             ctx = Context(epoch.salt, u, tree.commitment.root, epoch.weight_roots[u.weight])
             tiles = scheme.tiles(u.shape)
@@ -222,9 +226,13 @@ class WorkProfile:
 
 @dataclass(frozen=True, slots=True)
 class Verdict:
+    """A tile's verdict; an accepted tile carries the operands and checked words its check computed (``ops``, ``checked``)."""
+
     tile: int
     ok: bool
     reason: str = ""
+    ops: object = field(default=None, compare=False, repr=False)
+    checked: object = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,9 +286,10 @@ class Verifier:
                             ref.tile)
         if ops is None or not scheme.admissible(ctx, ops):
             return Verdict(ref.id, False, "inadmissible inputs")
-        if scheme.digest(ctx, noise, scheme.checked(ctx, ops)) != opened_value(h, opening.leaf.value):
+        checked = scheme.checked(ctx, ops)
+        if scheme.digest(ctx, noise, checked) != opened_value(h, opening.leaf.value):
             return Verdict(ref.id, False, "checked values")
-        return Verdict(ref.id, True)
+        return Verdict(ref.id, True, ops=ops, checked=checked)
 
     def audit(self, prover: Prover, transcript: Transcript, selection: Sampled | Lottery, source: bytes | Challenger
               ) -> Audit:
@@ -294,7 +303,8 @@ class Verifier:
             if reason is not None:
                 return Audit(False, (), (Verdict(-1, False, reason),), None)
         selected = selection.select(self.scheme, self.epoch, transcript, source, self.refs, prover.digest)
-        verdicts = tuple(self.check_tile(transcript, prover.open(self.epoch, tid)) for tid in selected)
+        verdicts = tuple(Verdict(v.tile, v.ok, v.reason)
+                         for v in (self.check_tile(transcript, prover.open(self.epoch, tid)) for tid in selected))
         ok = all(v.ok for v in verdicts)
         profile = (WorkProfile(self.scheme.name, self.work, len(selected), isinstance(selection, Sampled), self.scheme.certificate)
                    if ok else None)

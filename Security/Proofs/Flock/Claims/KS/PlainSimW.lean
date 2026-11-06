@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainThird
-import Proofs.Flock.Claims.KS.ForkSlack
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainThird
+public import Proofs.Flock.Claims.KS.ForkSlack
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The deployed events a simulator's bounds read
@@ -17,6 +19,8 @@ live coins (`PlainDrawSim`'s `PlainSimWrPAtD`). Its bounds read these events of 
 * `PlainRawClashRun`, `plainClashRun_of_raw`: where the self-clash is at level 0, the collision in `PlainClashRun`
   follows from two different columns the run's reps open at one position.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

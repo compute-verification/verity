@@ -1,5 +1,9 @@
-import Properties.SampledProofs
-import Proofs.Properties.Challenger
+module
+
+public import Properties.SampledProofs
+public import Proofs.Properties.Challenger
+public import Proofs.Properties.SampledProofs.FilePart
+import all Init.Data.Array.QSort.Basic
 
 /-! # Proofs of sampled proofs' one-stage property (`Properties.SampledProofs`)
 
@@ -9,6 +13,8 @@ the join point it calls (`jp_ite`, `jp_ite'`), unfolds the join points one at a 
 the pipeline one check at a time (`ite_addCode_nil`, `ite_push_nil`). `acceptMeans_iff` says what the check accepts and
 that it accepts all of it; `acceptMeans` is its first half and `acceptMeans_complete` the converse.
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open SampledProofs
@@ -1261,7 +1267,7 @@ theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c 
 /-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R7, with a draw of the agreed law over the
 registered population, its units proved and served as drawn, and verdicts that accept, is accepted, publishing
 `publicOf` and the profile `profileOf`. -/
-theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat)
+theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat)
     (hr : Registered p.verifier c.record law) (hd : Drawn e.draw (getD c.record "population") law)
     (hu : UnitsProved c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
     (hn : nat? (getD c.record "population") = some n) :

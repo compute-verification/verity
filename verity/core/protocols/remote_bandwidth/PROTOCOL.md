@@ -24,10 +24,10 @@ tiles.
 ## 1. What an accepted session certifies
 
 Let \(N\) be the store's blocks, \(b = 4096\) bytes each. A session has \(W\) windows. Window \(t\)'s challenge
-\(\sigma_t\) left the verifier at \(b_{t-1}\) (\(b_{-1}\) is the session's start). Its boundary message left at
-\(b_t\), and its roots arrived by \(D_t = b_t + A\). Window \(t\) is \(P_t\) chained passes. Pass \((t, i)\) is a plan
-of \(L_{t,i}\) distinct blocks and their receipts. Every receipt was made after the root before it existed and before
-its own root left the node. So every read serves at most one receipt of the session (§5). Except with probability
+\(\text{chal}_t\) left the verifier at \(b_{t-1}\) (\(b_{-1}\) is the session's start). Its boundary message left
+at \(b_t\), and its roots arrived by \(D_t = b_t + A\). Window \(t\) is \(P_t\) chained passes. Pass \((t, i)\) is a
+plan of \(L_{t,i}\) distinct blocks and their receipts. Every receipt was made after the root before it existed and
+before its own root left the node. So every read serves at most one receipt of the session (§5). Except with probability
 \(\delta\) per window, at most \(m^*_t\) of window \(t\)'s \(U_t = \sum_i L_{t,i}\) receipts are wrong
 (`IntegrityProfile.bound`). Pooled over the session's windows instead, the openings bound the wrong receipts of all
 of them at once, and each window's share, except with \(\delta\) for the session (§10).
@@ -50,7 +50,7 @@ opened like any other, but not credited.
 | \(\mu_{\text{timing}}\) | \(1 - \sum_t U^{c}_t b / (R\Sigma)\), \(U^{c}_t\) window \(t\)'s credited receipts: the span the credited receipts don't fill (the gap \(g\) after each pass, the session's two ends, blocks a plan leaves out, post-seed blocks without a verdict) | the record |
 | \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`GammaTerms.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`GammaTerms.horizon`, §10) | the record's profiles, at δ |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
-| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2` (`SLACK_LOG2`, 67: the failure probability's \(2^{-\text{slack}}\) a pass, below, adds at most \(2^{-50}\) up to \(2^{17}\) passes, more than an hour of the node's 41.2 ms passes over gate runs 8 and 9's 532.6 GB store); 0.116% at the node's 192.6M 4 KiB blocks a pass over every tier (37.9 bits a block), more than \(\mu_{\text{sample}}\) | proved (`Bandwidth.Guarantees.AuditRO`, applied per pass) |
+| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2` (`SLACK_LOG2`, 67: the failure probability's \(2^{-\text{slack}}\) a pass, below, adds at most \(2^{-50}\) up to \(2^{17}\) passes, more than an hour of the node's 41.2 ms passes over gate runs 8 and 9's 532.6 GB store); 0.116% at the node's 192.6M 4 KiB blocks a pass over every tier (37.9 bits a block), more than \(\mu_{\text{sample}}\) | proved (`Accounting.Guarantees.Remote.AuditRO`, applied per pass) |
 | \(\mu_{\text{rebuild}}\) | \(C_{\text{sq}} b / (E_{\text{sq}} R)\): blocks re-encoded from their payloads in place of reads, each at least the record's codec's \(E_{\text{sq}}\) squarings (`Codec.encode_squarings`: 98,016 at p1024/k3/masked, 65,344 at k = 2, 65,152 at p512/k2) at the node's stated ceiling of \(C_{\text{sq}}\) squarings a second at that width (`Rebuild`) | the record's codec, and assumption 5 stated per width (`WorkHardness(p, k)`) |
 | \(\mu_{\text{host}}\) | the host tier's own shortfall, and host DRAM bandwidth PCIe can't carry | a model, measured capacities |
 | \(\mu_{\text{link}}\) | under a registration that binds \(z\) only (0 otherwise): relays that meet \(z\) and a copy of the block over a link (§4) | a model |
@@ -94,14 +94,14 @@ to γ.
 **Each window alone.** The same terms over window \(t\)'s own span \(\Sigma_t = D_t - b_{t-1}\) (`WindowRecord.span_ns`),
 with its \(U_t\), \(P_t\) and \(m^*_t\) (or the pooled bound's \(f_t U_t\)) in place of the session's sums, give
 \(\gamma_t\): window \(t\)'s reads are at least \((1 - \gamma_t) R \Sigma_t\) (`GammaTerms.windows`, a `WindowLedger`
-each). Every read behind window \(t\)'s receipts falls in \(\Sigma_t\): its chain starts from \(\sigma_t\), which left
-at \(b_{t-1}\), and its roots arrived by \(D_t\). Consecutive spans overlap by \(A\), but no read serves two windows'
-receipts (§5). The every-window claim is \(\max_t \gamma_t\) (`GammaTerms.worst`, and `GammaTerms.worst_horizon` read
-over the horizon), which the ledger reports beside the session's γ. A window the prover leaves idle is its own
-\(\gamma_t\) there, where the session's γ sees about \(1/W\) of it. Read per window, the failure probability is the
-same \(W\delta\); read over the horizon, every window's \(f_t\) holds on the session's one event (§10). A window is
-charged \(A\) and the rest of the pass in flight at its challenge, where the session is charged them once, so its
-\(\mu_{\text{timing}}\) is up to about \((A + t_{\text{pass}})/(T + A)\) (§10).
+each). Every read behind window \(t\)'s receipts falls in \(\Sigma_t\): its chain starts from \(\text{chal}_t\), which
+left at \(b_{t-1}\), and its roots arrived by \(D_t\). Consecutive spans overlap by \(A\), but no read serves two
+windows' receipts (§5). The every-window claim is \(\max_t \gamma_t\) (`GammaTerms.worst`, and
+`GammaTerms.worst_horizon` read over the horizon), which the ledger reports beside the session's γ. A window the prover
+leaves idle is its own \(\gamma_t\) there, where the session's γ sees about \(1/W\) of it. Read per window, the failure
+probability is the same \(W\delta\); read over the horizon, every window's \(f_t\) holds on the session's one event
+(§10). A window is charged \(A\) and the rest of the pass in flight at its challenge, where the session is charged them
+once, so its \(\mu_{\text{timing}}\) is up to about \((A + t_{\text{pass}})/(T + A)\) (§10).
 
 The window is stated: \(T\) = 60 s (`Params.window_ns`, §2), with 33,273 openings a window (`Params.samples`), 555 a
 second. There, on one node whose store spans every tier (94 GB of each GPU's HBM and host DRAM's share, 789 GB,
@@ -359,10 +359,11 @@ layout      scheme verity/remote-bandwidth/coins/v1, epoch k (the session's inde
             a session that takes none: a session reserves exactly the coins it will use)
 c           64 bytes a coin from the challenger's generator, committed whole (`challenger.live_leaf`, hm96-sha512 under
             a fresh salt, frame-v3-sha512 over the layout); the audit's coin is its first 32 bytes (`coins.coin`):
-            window t's challenge σ_t is challenge coin t, its openings coin openings coin t, append i's c_a append coin i
+            window t's challenge chal_t is challenge coin t, its openings coin openings coin t,
+            append i's c_a append coin i
 R           SHA512("verity/remote-bandwidth/window/v1\0" ‖ registration digest ‖ u64be k): the session's window
-after       σ_0 after R; σ_t (t ≥ 1) after the last root received when it leaves; window t's openings coin after window
-            t's last root; append i's coin after append i's root
+after       chal_0 after R; chal_t (t ≥ 1) after the last root received when it leaves; window t's openings coin after
+            window t's last root; append i's coin after append i's root
 released    (epoch, label, index, after, coin): what the prover is sent when a coin leaves (`coins.Released`), no salt
             or path
 opening     (epoch, label, index, after, coin, salt, path): every released coin's, sent to the prover with the
@@ -370,7 +371,7 @@ opening     (epoch, label, index, after, coin, salt, path): every released coin'
             (`coins.received_reason`)
 ~~~
 
-The messages run: registration; then each window's challenge σ_t as it is released, the window's roots, and its
+The messages run: registration; then each window's challenge chal_t as it is released, the window's roots, and its
 openings coin, draws and openings; then the outcome; then the commitment and every released coin's opening, which the
 prover checks (the remote session's `end`, `ended`, `coins`). The challenger can't choose a coin after seeing a root,
 and the prover holds nothing of a coin before it is released: not its leaf, and not the commitment's root, a function
@@ -379,10 +380,10 @@ guarantee takes a hiding premise on the root. This is the construction of PoUW's
 the same challenger. Each coin leaves once, after the root the verifier
 recorded for it, and the challenger logs both before the coin leaves its host and signs the log when the session ends.
 The verifier holds that log to its own record (`AuditRun.released_reason`): the commitment it used, the same roots in
-the same order, σ_0 after \(R\), and each window's openings coin after that window's last root, so a coin opened before
-its window's root is refused. On the auditor's host the session is the one window \(\{R\}\) of the auditor's signed
-ledger (`remote.trusted_session`), which opens one challenger session a root, ever, and the window one of the audit's
-period's (`coins.trusted`'s `period`): a session whose coins came from a second challenger session for the same
+the same order, chal_0 after \(R\), and each window's openings coin after that window's last root, so a coin opened
+before its window's root is refused. On the auditor's host the session is the one window \(\{R\}\) of the auditor's
+signed ledger (`remote.trusted_session`), which opens one challenger session a root, ever, and the window one of the
+audit's period's (`coins.trusted`'s `period`): a session whose coins came from a second challenger session for the same
 (period, registration), or whose window the ledger holds in another period, is refused, so a prover can't run two and
 keep the coins it likes. `coins.trusted` reads that session only through `challenger.pinned_session`: the
 host's pins log (`pins`, as its gate serves it) is the one the session's open sealed and records the open's pin, and
@@ -390,13 +391,13 @@ that commit is on the verifier's own `git rev-list --first-parent origin/main` (
 main's check passed. A session with no pins log or no copy of main, an open that sealed none, or a pin off main's
 first-parent line is refused.
 
-The verifier releases \(\sigma_0\) at the session's start (`AuditRun.start`). At window \(t\)'s end it sends the
-boundary message, which is \(\sigma_{t+1}\), or the close after the last window (`AuditRun.boundary`). Each is one-way:
-no round trip waits on it. The prover refuses an openings coin as a challenge (`Prover.run`). Pass \(i\) of window \(t\)
-(`receipts.py`):
+The verifier releases \(\text{chal}_0\) at the session's start (`AuditRun.start`). At window \(t\)'s end it sends the
+boundary message, which is \(\text{chal}_{t+1}\), or the close after the last window (`AuditRun.boundary`). Each is
+one-way: no round trip waits on it. The prover refuses an openings coin as a challenge (`Prover.run`). Pass \(i\) of
+window \(t\) (`receipts.py`):
 
 ~~~text
-seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ σ_t ‖ u32be i ‖ prev_(t,i)),
+seed_(t,i)  SHA512("verity/remote-bandwidth/seed/v0\0" ‖ chal_t ‖ u32be i ‖ prev_(t,i)),
             root_(t,−1) = root_(t−1,last) in a session, and the registration's digest before its first window
 prev_(t,i)  root_(t,i−1) while no append has been received before root_(t,i); otherwise
             SHA512("verity/remote-bandwidth/chained/v0\0" ‖ root_(t,i−1) ‖ a_(t,i)) (`audit.chained`)
@@ -488,7 +489,7 @@ its runs or held by a plan, with `release`. Appends are a session's: the next se
 **No block appended after a pass's seed is in that pass's plan.** A pass's seed binds every append received before
 its root (`prev_(t,i)` above), so every block its plan can hold, which must be appended before its root, was
 committed before its seed. A block appended after the seed is in no plan of the pass, and its receipts are credited
-in no pass whose seed came before its append. Without this the seed would depend only on \(\sigma_t\) and the root
+in no pass whose seed came before its append. Without this the seed would depend only on \(\text{chal}_t\) and the root
 before, which the prover knows before it sends that root, so a page appended mid-window could hold the pass's
 sketches of other blocks (64 bytes a block at 16 rows, 64 blocks a page), and their receipts would follow from the
 page's bytes without reading them, a red-team finding whose
@@ -568,8 +569,8 @@ default, and a registration names 64 to use it.
 
 What each kind rests on:
 
-- **block-sha512** needs only the random oracle. A correct receipt is a query at the block's bytes after the seed,
-  so it bounds the reads by AuditRO (`Bandwidth.Guarantees.AuditRO`, applied per pass), with λ's slack. It assumes
+- **block-sha512** needs only the random oracle. A correct receipt is a query at the block's bytes after the seed, so it
+  bounds the reads by AuditRO (`Accounting.Guarantees.Remote.AuditRO`, applied per pass), with λ's slack. It assumes
   nothing about the device: the prover may hold any function of the store.
 - **sketch-sha512** also rests on `RateAuditSketch` (proved). The random oracle takes a
   correct receipt to a correct \(\sigma_j\). `RateAuditSketch` takes a correct \(\sigma_j\) to the block's 128
@@ -779,8 +780,8 @@ all-gather of the GPUs' subtree roots, the send), the next seed and its broadcas
 trip, not half. The boundary message's one-way trip comes before the prover knows the window has ended, the pass it
 has just started must finish, and its root's trip comes after. The honest prover runs passes back to back,
 \(t_{\text{pass}} + g\) apart. On the boundary message it finishes the pass in flight, which is its window's last, and
-starts the next window's chain under \(\sigma_{t+1}\) from that pass's root. It is never late: in integer nanoseconds
-its last root arrives at most \(A - 1\) after the boundary, which happens when the pass in flight starts the
+starts the next window's chain under \(\text{chal}_{t+1}\) from that pass's root. It is never late: in integer
+nanoseconds its last root arrives at most \(A - 1\) after the boundary, which happens when the pass in flight starts the
 nanosecond before the message arrives (`timing.honest`, replayed against `AuditRun` in the tests).
 
 The deadlines don't make the chain sound. What they do is place window \(t\)'s reads in
@@ -790,8 +791,8 @@ fix the window's roots before its openings are drawn.
 **The cost.** Only \(g\) goes uncovered between passes, so in steady state
 \(\mu_{\text{timing}} = g/(t_{\text{pass}} + g)\) (`timing.chained`): 0.25% at 20 ms passes and 0.10% at 50 ms, whatever
 the RTT. A window's end costs nothing, because the chain runs on through the boundary. The round trip appears only at
-the session's two ends: \(\sigma_0\)'s trip down before the first pass, and after the last boundary the slack of the
-pass in flight and its root's trip up, together at most \(A + J\). So
+the session's two ends: \(\text{chal}_0\)'s trip down before the first pass, and after the last boundary the slack of
+the pass in flight and its root's trip up, together at most \(A + J\). So
 \(g/(t_{\text{pass}} + g) \le \mu_{\text{timing}} \le g/(t_{\text{pass}} + g) + (A + J)/\Sigma\). §10 has the grid.
 
 **Between sessions.** Sessions over one store are not chained to each other: each session's chain starts from the
@@ -849,7 +850,7 @@ openings that aren't one a draw:
 
 1. the indices are the draw's and every field has its size, the tile evidence empty unless the registration binds
    \(z\), and the digest 64 bytes for an appended block (\(j \ge N\)) and empty for a registered one (`malformed`);
-2. the leaf, under \(\text{seed}_{(t,i)}\) (from \(\sigma_t\), \(i\) and the root received before
+2. the leaf, under \(\text{seed}_{(t,i)}\) (from \(\text{chal}_t\), \(i\) and the root received before
    \(\text{root}_{(t,i)}\)), the plan received with the root and the leaf's salt, has its path to
    \(\text{root}_{(t,i)}\) (`receipt-path`);
 3. the block, read as the registered codec's words, has every word below \(p\) (`codec`), and its decoding's leaf under
@@ -1006,20 +1007,24 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   windows' PRF advantages, \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no numeric value: the ledger names
   them by their claim (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
 
-  Every form, the link-charged one included, is conditional on `NoOutsideCompute`, statement C in full: no device
-  outside the node computes on a registered block or a receipt during the session. Identity is only its links clause:
-  a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the receipts, sends no
-  block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
-  takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
-  computed, which `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
-  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is
-  conditional on it (`auditor_line.json`'s `conditional_on`, `credit.md`; the `memory-line-of-record` label names the
-  field's names, and `research data label` holds it to the file) until certifiers cover the gate node's boundary
-  (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the credited span.
-  `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records of the boundary
-  links over its span show other ingress. `auditor_line.py --lockdown`, infra's record of the provider's lockdown of
-  the gate node, grounds C for a session whose signed span lies inside an applied interval: the line is then
-  conditional on `ProviderLockdown` (`trusted-host`), which names what the lockdown doesn't close, in C's place.
+  Statement C in full is that no device outside the node computes for it during the session. Identity is only its
+  links clause: a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the
+  receipts, sends no block over the links, so neither Identity nor the links' charge sees it, and only C excludes it.
+  The line's statement (`LineHeld`) assumes nothing of the prover here: it reads C from what the network certifiers
+  observe. Its event is that the certifiers counted no ingress into the node over the credited passes and yet the
+  passes read fewer bits than the line credits, and its error carries δ_net, the certifiers' miscount
+  (`IngressCounted`, `trusted-host`), beside `SketchBoundAt` (the receipts' sketch wherever computed, which
+  `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
+  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins). `Covered` (`certifier-coverage`) is
+  the deployment's half: every uplink of the prover's server passes through an active certifier, so an outside device
+  computing for the node sends its result over a counted link. Memory held follows from the bits read under the
+  device model (`heldAt_of_read`). `auditor_line.py --boundary`, off by default, refuses a session's credit when the
+  certifiers' records of the boundary links over its span show other ingress; without it the line of record says it
+  is conditional on C, under the label vocabulary's name `NoOutsideCompute` (`auditor_line.json`'s `conditional_on`,
+  `credit.md`; the `memory-line-of-record` label names the field's names, and `research data label` holds it to the
+  file). `auditor_line.py --lockdown`, infra's record of the provider's lockdown of the gate node, grounds C for a
+  session whose signed span lies inside an applied interval: the line is then conditional on `ProviderLockdown`
+  (`trusted-host`), that label's name for what the lockdown doesn't close, in C's place.
 
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).
@@ -1041,7 +1046,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   - *Public*, each of the four kinds the rules allow (protocol structure, outputs, the verifier's coins and draws,
     hiding commitments): the registration (its digest, \(N\), \(b\), the codec and the receipt kind); the draw
     (window \(t\), pass \(i\), the position in the pass, and \(L_{t,i}\)); the pass's root \(\text{root}_{(t,i)}\)
-    and the root received before it; the pass's seed \(\text{seed}_{(t,i)}\), from \(\sigma_t\), \(i\) and that
+    and the root received before it; the pass's seed \(\text{seed}_{(t,i)}\), from \(\text{chal}_t\), \(i\) and that
     root; the plan's commitment (v0's plan digest); the payload root; for an appended block, its append's root and
     coin \(c_a\); and the roots of the circuit's value commitments.
   - *Witness*: the block \(E_j\), its payload \(\text{payload}_j\) and digest \(d_j\), the index \(j\), the receipt
@@ -1152,9 +1157,11 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   (`AuditRun.scheduled`, a `Scheduled` verdict carrying the cap; `GammaTerms.steering` is the cap). `ledger` credits
   nothing after the seed without a `Scheduled` of the same session. So a credited plan is the verifier's own function
   of a schedule of at most \(a\) bits, and a plan that follows a coin at that schedule is refused: the `a` of the
-  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.RemoteAudit.steered_of_checked`, under
-  `Properties.RemoteAudit.ScheduleLayoutGap`), never the coins' bits for free. The cap, not the published schedule's
-  own bits, is what is credited: `SteeredLayout` takes one \(a\) at every coin, and a schedule's length can follow
+  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.RemoteAudit.steered_of_checked`, at the
+  verifier's own layout, `Properties.RemoteAudit.sessionLayout`: the positions of the plan the pass sent, where it
+  checks each opened block, `CodeLayoutTiles` and `OpensAtPosition`), never the coins' bits for free. The cap, not
+  the published schedule's own bits, is what is credited: `SteeredLayout` takes one \(a\) at every coin, and a
+  schedule's length can follow
   the coins. A prover that publishes a 200-bit schedule on most coins and a 300-bit one where it steers takes up to
   \(2^{200} + 2^{300}\) layouts, so only \(a = 301\) holds of it, and its 200-bit sessions credited at 200 would
   understate `DeclaredCircuitRequirement`'s \(\delta\), which grows as \(2^a\), by \(2^{100}\) (red team).
@@ -1329,9 +1336,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   each with a `Relay` form): `Accounting.SecurityProofs.Remote.Conservation` at the per-pass routes proved for
   it. The openings are
   `Accounting.Guarantees.RateWindowDraw`, a window's pooled draw over its passes' receipts, and `RateSessionDraw`,
-  the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of
-  one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ in \(U_t\), and its draws are
-  distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
+  the monitoring period and every window at once, both from `PooledSampling`, the causal bound over the monitoring
+  period. They take windows of one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ
+  in \(U_t\), and its draws are distinct, which only lowers the chance that they all pass. `pooled` applies the same
+  argument at each window's own
   size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed draw (`Accounting.Remote.Draw`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each draw's first
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
@@ -1569,7 +1577,7 @@ commitment, the salt, `vk`'s root and \(k_s\); its digest is `p2.py`'s table, an
 Per pass \(i\), after root \(i-1\):
 
 ~~~text
-seed_i     the audit's (receipts.seed): SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ root_(t,i−1)), 64 bytes
+seed_i     the audit's (receipts.seed): SHA512(SEED_DOMAIN ‖ chal_t ‖ u32be i ‖ root_(t,i−1)), 64 bytes
 S_i        k_s rows (16) of 1,028 bytes, from seed_i on the host: K = derive(seed_i,
            "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 8224}), row c =
            K.stream(("row", c), 1028) (verity.ml.randomness); bit x of a row (byte x // 8, bit x % 8, LSB first) is
@@ -1600,8 +1608,8 @@ squarings. The fixture kernels build against comes from the serving loop over th
 pinned there by its SHA-512):
 a pinned seed, the sign rows, every block's \(\pi\), every unit's \(\sigma\) and \(y\).
 
-**Openings** (`p2.Opening`, `p2.Session.verify`). An opening of unit \(g\) is its four blocks, each with its path to
-`vk`'s root, and the receipt leaf with its salt and path. The verifier checks the leaf on the pass's root, each block on
+**Openings** (`p2.Opening`, `audit.AuditRun.verify` over the P2 codec). An opening of unit \(g\) is its four
+blocks, each with its path to `vk`'s root, and the receipt leaf with its salt and path. The verifier checks the leaf on the pass's root, each block on
 `vk` under PoUS's leaf (`pous.verifier.leaf_hash`, `payload-path` if one fails; in the Lean, PoUS's own leaf and
 path check, `PousCheck.Merkle`), and \(y_g\) recomputed from the four blocks (`p2.check`). It decodes nothing: `vk`'s leaves are of the `C*` the verifier decoded to the committed `W`, so a block on its
 path is `C*`'s block, by SHA-512's collision resistance. A P2 store is fixed at setup, so a session over it appends
@@ -1611,10 +1619,13 @@ nothing (`append`).
 it holds the registration file's bytes (its digest recomputed from its fields, a stated `digest` refused unless it is
 theirs) and reads the prover's request and each root and openings line as sent, a line out of form rejecting the
 session `malformed` at the window filling. Its bookkeeping is §4–§6's over the U units, and its openings are checked
-as above, on the registered vk root. `p2.Session` runs beside it as a veto: where the two differ the session is
-rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
+as above, on the registered vk root. `audit.AuditRun` over the P2 codec runs beside it as a veto: where the two
+differ the session is rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
 (`p2_party.SESSION`), never the prover's: the request restates them, and the veto refuses one that carries other
-values, by name, before the first coin; the Lean reads them from the request.
+values, by name, before the first coin, and so does the Lean, naming each in `p2_party.params_of`'s words
+(`P2Session.heldTo`). The process holds its pinned `P2Session.SESSION` unless the auditor's party names a toy's
+(`p2_hold`'s `session`), and the session's core case (`p2_case.py`), whose request no digest binds, is replayed under
+`SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there.
 
 **What it rests on, and what is open.**
 
@@ -1628,7 +1639,7 @@ values, by name, before the first coin; the Lean reads them from the request.
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
 - No property in `Security/Properties/RemoteAudit` states yet what the Lean accepts of a P2 session; the difftest
-  (`lean/tests/test_p2.py`'s `p2_session`) holds `p2.Session` to it.
+  (`lean/tests/test_p2.py`'s `p2_session`) holds `audit.AuditRun` over the P2 codec to it.
 - Not yet built: the registry's one live registration a node for P2, and the zero-knowledge opening unit of a P2 unit
   (§8).
 

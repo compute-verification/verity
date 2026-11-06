@@ -132,7 +132,7 @@ class _Session:
         self.secrets.append(secret)
         return self.client if at == self.at else None
 
-    def _serve(self, sock: socket.socket, session: R.Session) -> None:
+    def _serve(self, sock: socket.socket, session: R.ChallengePhase) -> None:
         with sock:
             self.reason = R.serve(sock, session, iter(range(1 << 20)).__next__)
 
@@ -375,7 +375,7 @@ def test_a_session_whose_tree_the_hosts_pins_log_doesnt_record_is_refused(tmp_pa
     assert PHC.session_reason(first, two.ledger(), fetch) is None
     assert PHC.session_reason(first, two.ledger(CH.PINS), fetch) == (
         f"session {SA} is not trusted: the host's pins log has 1 lines, fewer than the 2 the open of session {SA} "
-        "sealed: take infra's newest published pins log")
+        "sealed: take the auditor host's operator's newest published pins log")
     assert PHC.session_reason(first, two.ledger([second, second]), fetch) == (
         f"session {SA} is not trusted: the host's pins log is not the one the open of session {SA} sealed: its first 2 "
         "lines were edited or rewritten")

@@ -1,5 +1,7 @@
-import Definitions.Accounting.Remote.Draw
-import RemoteAudit.Line
+module
+
+public import Definitions.Accounting.Remote.Draw
+public import RemoteAudit.Line
 
 /-!
 # The verifier's pooled bound covers the draw's (`RemoteAudit.Pooled`)
@@ -22,6 +24,8 @@ They take no premise. That the windows the line reads are the session's (each wi
 verifier's record holds them, `audit.Record`) is the record's, outside this statement.
 -/
 
+@[expose] public section
+
 open RemoteAudit
 
 namespace Properties.RemoteAudit
@@ -38,7 +42,7 @@ def PooledCovers : Prop :=
 (`Draw.Session.pooled`). -/
 def PooledCoversSession : Prop :=
   ∀ (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) (D : Accounting.Remote.Draw.Session n m s κ X)
-    (ω : Accounting.Remote.Draw.Coins n κ X) (δ : ℚ) (b : Pooled.Bound),
+    (ω : Accounting.Remote.Draw.DrawCoins n κ X) (δ : ℚ) (b : Pooled.Bound),
     Pooled.pooled (Array.ofFn fun t => ((D.size t ω : ℕ), D.draws t ω)) δ = .ok b →
       D.pooled δ ω ≤ b.wrong
 
@@ -46,7 +50,7 @@ def PooledCoversSession : Prop :=
 wrong receipts it reads are at least the session's pooled bound at `δ` (`Draw.Session.pooled`). -/
 def LineCoversSession : Prop :=
   ∀ (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) (D : Accounting.Remote.Draw.Session n m s κ X)
-    (ω : Accounting.Remote.Draw.Coins n κ X) (δ : ℚ) (gs : Array Line.Group)
+    (ω : Accounting.Remote.Draw.DrawCoins n κ X) (δ : ℚ) (gs : Array Line.Group)
     (per blocks blockBytes chipBytes nodeBytes : ℕ) (rates : Line.Rates) (l : Line.Line),
     Line.line gs per blocks blockBytes chipBytes nodeBytes (Array.ofFn fun t => ((D.size t ω : ℕ), D.draws t ω)) δ
       rates = .ok l →

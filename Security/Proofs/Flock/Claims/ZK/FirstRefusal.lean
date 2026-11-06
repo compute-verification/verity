@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Refusals
-import Proofs.Flock.Claims.Complete.ZkTables.Refuse
-import Proofs.Flock.Claims.Complete.ZkTables.Pass
+module
+
+public import Proofs.Flock.Claims.ZK.Refusals
+public import Proofs.Flock.Claims.Complete.ZkTables.Refuse
+public import Proofs.Flock.Claims.Complete.ZkTables.Pass
 
 /-!
 # The masked session's `β`, pair-coin and rank refusals, as its first refusal
@@ -24,6 +26,8 @@ one).
   `Flock.zk_deployZk_masked_exe_refusals_gap`: without `hrank` too, at a plan that also reads the claim points
   (`PointReads`). Left: the plan's `Causal`, its round `0`, the rounds after the first and the last round.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -72,16 +76,6 @@ noncomputable def withCoins {P : Composed.LigProver}
     (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) :
     (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest :=
   fun x c j => { withOuter cz x c j with beta := fun r => betaAt c j.val r.val, rho := fun r => rhoAt c j.val r.val }
-
-theorem coinReads_withCoins {P : Composed.LigProver}
-    (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) :
-    CoinReads (withCoins cz) :=
-  fun _ _ _ _ => ⟨rfl, rfl⟩
-
-theorem outerReads_withCoins {P : Composed.LigProver}
-    (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) :
-    OuterReads (withCoins cz) :=
-  outerReads_withOuter cz
 
 theorem repSlot_eq {x : Msg} {s spec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) {q : ℕ}
     {sch : _root_.Flock.Schedule} {tPad : ℕ} (hz : _root_.Flock.Zk.schedule (stsOf x)[q / 2]!.m = .ok (sch, tPad))

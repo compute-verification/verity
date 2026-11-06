@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.Final
-import Flock.With.Verify
+module
+
+public import Proofs.Flock.Soundness.Refine.Final
+public import Flock.With.Verify
 
 /-!
 # The rounds the shipped verifier reads
@@ -8,6 +10,8 @@ import Flock.With.Verify
 consume (S15). Its squeezes are the oracle's (`squeezeWith`), but which round each one reads does not depend on the
 hash: a squeeze of `n ≠ 0` coins reads round `t.k` and moves to `t.k + 1`, whatever `hs` is.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -82,16 +86,6 @@ theorem sampleWith_ok (hs : Hashes V) {t t₁ : Transcript} {c : F128} (h : samp
   obtain ⟨-, hn', -, hr, hk⟩ := squeezeWith_ok hs Nat.one_ne_zero h₃
   obtain ⟨rfl, rfl⟩ := pure_ok h₄
   exact ⟨hn', hr, hk⟩
-
-/-- `sampleKWith` then `f`: round `t.k` issued two coins. -/
-theorem sampleKWith_bind (hs : Hashes V) {f : F256 → TM β} {t t' : Transcript} {b : β}
-    (h : (sampleKWith hs >>= f) t = .ok (b, t')) :
-    t.k < t.rounds.size ∧ (t.rounds[t.k]!).n = 2 ∧ ∃ c t₁, t₁.rounds = t.rounds ∧ t₁.k = t.k + 1 ∧ f c t₁ = .ok (b, t') := by
-  obtain ⟨c, t₁, h₁, h₂⟩ := bind_ok h
-  obtain ⟨cs, t₂, h₃, h₄⟩ := bind_ok h₁
-  obtain ⟨hlt, hn', -, hr, hk⟩ := squeezeWith_ok hs (by decide) h₃
-  obtain ⟨rfl, rfl⟩ := pure_ok h₄
-  exact ⟨hlt, hn', _, _, hr, hk, h₂⟩
 
 theorem sampleKWith_ok (hs : Hashes V) {t t₁ : Transcript} {c : F256} (h : sampleKWith hs t = .ok (c, t₁)) :
     (t.rounds[t.k]!).n = 2 ∧ t₁.rounds = t.rounds ∧ t₁.k = t.k + 1 := by

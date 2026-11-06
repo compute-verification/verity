@@ -1,9 +1,8 @@
-"""Theorems 1(b) and 3 on small grids. By name, the tests mirror eight of their statements (`NetTiming.SecurityProofs`,
-proved in its `Counting`, `Advice` and `Schedule`): `SecurityProofs.EncardLeProdOfBranching`,
-`SecurityProofs.EncardObsDecodableLe`, `SecurityProofs.EncardAccSeqsLeSync`, `SecurityProofs.EncardAccSeqsLeFixedClock`,
-and for the constant-rate Program `SecurityProofs.EncardAccSeqsLeConstantRate`,
-`SecurityProofs.EncardAccSeqsLeConstantRateFixedClock`, `SecurityProofs.EncardAccSeqsLeConstantRateWindows` and
-`SecurityProofs.ExpectedRowCausal`.
+"""Theorems 1(b) and 3 on small grids. By name, the tests mirror three of their statements:
+`SecurityProofs.EncardLeProdOfBranching` and `SecurityProofs.EncardObsDecodableLe` (`NetTiming.SecurityProofs`, proved
+in its `Counting`), and the check's count of accepted runs, `Properties.NetworkCertifier.EncardAcceptedObservationsLe`
+(`#Ac · #Σ_sync^W · D^(W·T)`). The rest check what the program's syncs give, which Lean's reference Program, over send
+ticks and execution blocks, doesn't state: the per-window prefixes and that a window's grid reads only earlier syncs.
 
 The accepted observation sequences are the grids an accepted run can show. The tests enumerate every sender behaviour
 on a small horizon: every hand-time schedule, and every declared clock sync. They count what an accepted run can
@@ -76,8 +75,8 @@ def test_tree_lemma():
 
 
 def test_accepted_count_le_sync_advice():
-    """SecurityProofs.EncardAccSeqsLeSync, for the constant-rate Program SecurityProofs.EncardAccSeqsLeConstantRate:
-    accepted sequences ≤ #Sync^W (content fixed, J so D = 1)."""
+    """Properties.NetworkCertifier.EncardAcceptedObservationsLe: the check's accepted sequences ≤ #Σ_sync^W (content
+    fixed, J so D = 1)."""
     sync_set = SyncSet((0, 1), (1, 2))
     windows = 2
     seen = accepted_observations(sync_set, windows)
@@ -97,8 +96,8 @@ def test_fractional_rate_count_le_sync_advice():
 
 
 def test_accepted_count_le_sync_per_window_opened():
-    """SecurityProofs.EncardAccSeqsLeConstantRateWindows: runs accepted on their first m windows show at most
-    #Σ_sync^m grid prefixes, however many windows the advice covers."""
+    """Runs accepted on their first m windows show at most #Σ_sync^m grid prefixes, however many windows the advice
+    covers."""
     sync_set = SyncSet((0, 1), (1, 2))
     windows = 2
     for m in range(windows + 1):
@@ -113,8 +112,8 @@ def test_accepted_count_le_sync_per_window_opened():
 
 
 def test_window_grid_reads_only_earlier_syncs():
-    """SecurityProofs.ExpectedRowCausal: window w's grid is the same whatever later windows declare, in Σ_sync or not,
-    with fractional rates and frames anchored past the horizon."""
+    """Window w's grid is the same whatever later windows declare, in Σ_sync or not, with fractional rates and frames
+    anchored past the horizon."""
     rng = random.Random(11)
     rhos = (Fraction(1), Fraction(2), Fraction(1, 2), Fraction(2, 3))
     for _ in range(300):
@@ -130,9 +129,9 @@ def test_window_grid_reads_only_earlier_syncs():
 
 
 def test_a_negative_logical_index_is_rejected():
-    """Lean's index is a ℕ, and SecurityProofs.ExpectedRowCausal needs it. A frame anchored in window 1 with λ = −2 is
-    eligible at T + δ − 2 at ρ = 1, so window 0's grid would read window 1's sync: here it holds the frame under δ = 0
-    and not under δ = 2. `LogicalFrame` rejects that index."""
+    """Lean's index is a ℕ, and a window's grid reading only earlier syncs needs it. A frame anchored in window 1 with
+    λ = −2 is eligible at T + δ − 2 at ρ = 1, so window 0's grid would read window 1's sync: here it holds the frame
+    under δ = 0 and not under δ = 2. `LogicalFrame` rejects that index."""
     with pytest.raises(ValueError, match="logical index is non-negative"):
         LogicalFrame(b"x", P.buckets, -2)
     unchecked = SimpleNamespace(payload=b"x", anchor=P.buckets, index=-2)
@@ -143,8 +142,8 @@ def test_a_negative_logical_index_is_rejected():
 
 
 def test_fixed_clock_zero_capacity():
-    """SecurityProofs.EncardAccSeqsLeFixedClock, for the constant-rate Program
-    SecurityProofs.EncardAccSeqsLeConstantRateFixedClock: with a fixed clock, every accepted run shows the same grids."""
+    """Properties.NetworkCertifier.EncardAcceptedObservationsLe at one sync value, under J: with a fixed clock, every
+    accepted run shows the same grids."""
     sync_set = SyncSet((1,), (1,))
     seen = accepted_observations(sync_set, 2)
     assert len(seen) == 1

@@ -1,5 +1,7 @@
-import Properties.RemoteAudit
-import Proofs.Properties.RemoteAudit.Plan
+module
+
+public import Properties.RemoteAudit
+public import Proofs.Properties.RemoteAudit.Plan
 
 /-!
 # The session's bookkeeping (`AcceptedMinPasses`, `PassesStepped`, `PassesReadDistinct`, `ReceiptsBelowLimit`,
@@ -13,6 +15,8 @@ next indices, each with the next append coin; and the session's head, and each p
 appends, past which the pass's plan reads nothing. A rejection only marks its window's verdict, so it keeps the
 invariant too.
 -/
+
+@[expose] public section
 
 open RemoteAudit RemoteAudit.Session
 
@@ -579,10 +583,8 @@ theorem inv_run {params : Params} {reg : Registration} {coins appendCoins : Arra
 /-! ## The statements -/
 
 theorem verdict_beq {v : Option Verdict} (h : (v == some .accept) = true) : v = some .accept := by
-  rcases v with _ | _ | ⟨f, a⟩
-  · cases h
-  · rfl
-  · cases h
+  rcases v with _ | ⟨_ | r, _ | _ | _⟩
+  all_goals first | rfl | cases h
 
 theorem acceptedMinPasses : AcceptedMinPasses := by
   intro params reg coins appendCoins notBeforeNs events rs s hrun hout

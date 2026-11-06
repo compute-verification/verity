@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Deployed
-import Proofs.Flock.Claims.ZK.CoinBind
+module
+
+public import Proofs.Flock.Claims.ZK.Deployed
+public import Proofs.Flock.Claims.ZK.CoinBind
 
 /-!
 # The reference prover of `flock-circuit --zk`'s outer layer
@@ -29,6 +31,8 @@ encoding reads the coins before `i` only; `TapeOK`: the tape read with fibers of
 messages are `ZkTables.honestPR`'s (`RefSession.HonestMsgs`, a named Prop until it is proved). `Flock.zk_deployZk_ref` is its case
 at the deployed coin layer (`ZK.CoinLayer`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -474,19 +478,6 @@ theorem Flock.zkAt_deployZk_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.P
   Flock.zk_deployZk_of_tables_bind H rel S.refP t ht (fun _ => rfl) hT1 hδ₁ (fun x ν => S.preModel H x ν)
     (fun x _ c => S.coinModel x c) S.nLeaves S.nLeaves (fun _ _ => le_rfl) (fun x _ c => S.coinModel_size x c)
     (S.msgLink H _ hV hD hc hT) (S.tablesOK H hS) (S.binding H)
-
-/-- **The same at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`), with `Claims.Hm96Hiding` discharged. -/
-theorem Flock.zkAt_deployZk_ref_gap (H : Msg → Msg)
-    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession) (t : ℕ) (ht : 0 < t)
-    (hS : S.Tables) (hV : S.Complete (Flock.R (FlockDeploy.deployZk rel).parse)) (hD : S.DummyReg) (hc : S.Causal)
-    (hT : S.TapeOK) :
-    Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) S.refP.prover
-      ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
-      (fun x => 8 * S.nLeaves x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
-        8 * t * S.nLeaves x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
-        2 * (1 / 3) ^ t) fun _ => 4 * t * 3 ^ t :=
-  Flock.zkAt_deployZk_ref H rel S t ht (FlockSoundness.CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash)
-    ENNReal.ofReal_ne_top hS hV hD hc hT
 
 /-! ## At the masked record -/
 

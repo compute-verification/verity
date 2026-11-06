@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.E2E
-import Proofs.Flock.Soundness.ComposeDag
-import Proofs.Flock.Soundness.Types.Flatten
+module
+
+public import Proofs.Flock.Soundness.E2E
+public import Proofs.Flock.Soundness.ComposeDag
+public import Proofs.Flock.Soundness.Types.Flatten
 
 /-!
 # A partition's units: correct on its rows, correct on its gates (verified-lowering phase 1, S4)
@@ -18,6 +20,8 @@ A unit's local evaluation satisfies its rows (`IsRowsUnit.sat_localEval`), so it
 (`IsGatesUnit.localEval_eq`), so its outputs' copies carry the same `evalT` (`IsGatesUnit.localEval_type`, from
 `flatten_eval`). The partition enters only through the pairs, so the theorem holds whatever chose the units.
 -/
+
+@[expose] public section
 
 open Flock Flock.DeriveAll
 
@@ -55,8 +59,7 @@ theorem unitGates_lt {j : ℕ} (hj : j < (flatten types words loOf F t).1.size) 
 theorem unitGates_copy {o : ℕ} (ho : o < t.outputs.size) :
     (unitGates types words loOf F t)[(flatten types words loOf F t).1.size + o]'(by rw [unitGates_size]; omega) =
       .and ((flatten types words loOf F t).2.getD o 0) ((flatten types words loOf F t).2.getD o 0) := by
-  unfold unitGates
-  rw [Array.getElem_append_right (by omega)]
+  refine (Array.getElem_append_right (Nat.le_add_right _ _)).trans ?_
   simp
 
 theorem unitGates_topo : Topo (unitGates types words loOf F t) := by
@@ -200,7 +203,7 @@ theorem sat_localEval (Xv : Fin C.N → Bool) : R.Sat fun c => P.localEval Xv u 
   rw [P.localEval_of_mem Xv (I.mem i), I.op i]
   simp only [Op.apply, xorSum_map, Function.comp_def]
 
-variable {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+variable {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
 
 /-- **The unit computes its type through its composed rows.** With its constant at 1, the local evaluation of an instance
@@ -233,7 +236,7 @@ output's copy, read off that output's row: a gate of the unit, committed in `C`.
 structure UnitPair {C CB : Audit.Circuit} {n : ℕ} (P : Partition C n) (PB : Partition CB n) (m : Fin CB.N → Fin C.N)
     (u : Fin n) where
   types : String → Option CircuitType
-  ls : Array Layout
+  ls : Array BlockLayout
   info : String → Option TableInfo
   words : String → Option (Array ℕ)
   idx : ℕ

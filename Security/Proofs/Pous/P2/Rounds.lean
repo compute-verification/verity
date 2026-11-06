@@ -1,5 +1,7 @@
-import Definitions.Pous.Assumptions.P2
-import Proofs.Pous.Sanity
+module
+
+public import Definitions.Pous.Assumptions.P2
+public import Proofs.Pous.Sanity
 
 /-!
 # From the per-round conjecture to the graded bound and to today's whole-audit form
@@ -12,6 +14,8 @@ all its answers are correct (`varPassesOn_ofSeq_iff`), so at `2^19` blocks and `
 `P2RingAuditSecure`'s once `(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130` (`auditSecure_of_roundSecure`), which
 `p = 0.043` and `ε₀ = 2^-137` meet (`floor_043_eps`).
 -/
+
+@[expose] public section
 
 namespace PousP2Rounds
 
@@ -82,14 +86,14 @@ def ofSeq {sch : Scheme (ringRO B w p)} {S D Q L : ℕ} (A₂ : SeqResponderOn s
   ⟨A₂.step, A₂.bounded⟩
 
 theorem varAnswers_const {M : IdealModel} {ℓ S B' : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B' → Prog M (Bits ℓ × Bits S)) :
+    (step : ℕ → Bits S → Fin B' → OracleAlgorithm M (Bits ℓ × Bits S)) :
     ∀ (j : ℕ) (is : List (Fin B')) (σ : Bits S),
       varAnswers (Sz := fun _ => S) f step j is σ = seqAnswers f step j is σ
   | _, [], _ => rfl
   | j, i :: is, σ => by simp only [varAnswers, seqAnswers, varAnswers_const f step (j + 1) is]
 
 theorem length_seqAnswers {M : IdealModel} {ℓ S B' : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B' → Prog M (Bits ℓ × Bits S)) :
+    (step : ℕ → Bits S → Fin B' → OracleAlgorithm M (Bits ℓ × Bits S)) :
     ∀ (j : ℕ) (is : List (Fin B')) (σ : Bits S), (seqAnswers f step j is σ).length = is.length
   | _, [], _ => rfl
   | j, i :: is, σ => by simp only [seqAnswers, List.length_cons, length_seqAnswers f step (j + 1) is]

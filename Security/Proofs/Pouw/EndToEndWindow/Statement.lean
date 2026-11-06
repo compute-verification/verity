@@ -1,9 +1,11 @@
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.Assumptions.Game
-import Definitions.Pouw.Assumptions.NCP.Assumptions
-import Proofs.Flock.Soundness.Audit.Extraction
-import Proofs.Flock.Soundness.Audit.RegDraw
-import Proofs.Flock.Soundness.Audit.Window
+module
+
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.Assumptions.NCP.Assumptions
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Audit.RegDraw
+public import Proofs.Flock.Soundness.Audit.Window
 
 /-!
 # PoUW's work bound at the window audit (trusted)
@@ -60,8 +62,9 @@ lands.
 **The window's law** is the service's (decision 102, `window.py`): one uniform `K′`-subset of the `n` padded units
 (`subset:K′`, `Law.subset`), the `N_real` real tiles padded with fillers to `pad(N_real + 1)`, drawn after the receipt,
 each drawn unit proved alone (no closures). `WindowWork.WindowBoundOfService` discharges `WindowBound` there, its first
-term the subset law's own escape, which is 0 where `K′ = N`. PoUW's PROTOCOL.md (Lifecycle, step 5) describes
-`Sampled(t)`, `t` independent work-weighted draws with replacement, not the code's draw.
+term the subset law's own escape, which is 0 where `K′ = N`. The clear audit's
+`Sampled(t)` (`benchmarks/pouw/clear/clear_audit.py`) is `t` independent work-weighted draws with replacement, not the
+code's draw.
 
 Gap (6)'s `Pouw.Guarantees.Window.WindowEps` (branch `cursor/pouw-window-eps-stmt2-c7a9`) bounds the same event in
 gap (6)'s copy of the game (`Pouw.Window`), with the window's knowledge and link terms composed from its calls'. The
@@ -74,6 +77,8 @@ C-Flock's audit definitions are still in the proofs package, so this module impo
 statement does C-Flock's; `Models.lean`, which the `security` package builds without `security_proofs`, does not import
 it. `TileWork` and `StraightLineExtraction` are named premises awaiting their card.
 -/
+
+@[expose] public section
 
 namespace Pouw.WindowWork
 

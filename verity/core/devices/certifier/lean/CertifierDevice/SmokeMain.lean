@@ -1,4 +1,6 @@
-import CertifierDevice.Issuer
+module
+
+public import CertifierDevice.Issuer
 
 /-! A smoke run of `CertifierDevice.run` in a `Core.World` on the operating system's clock and timer, with an in-memory
 loopback link and server: a peer that has written two requests on the link, and a server that answers each request
@@ -8,6 +10,8 @@ certifies the four records with a toy key of four leaves, reserved from the worl
 starts once, and fails unless each certificate verifies in that session and not in another, a fifth reservation is
 refused and listed, and a second issuer in the same session is refused at its start. Run by hand
 (`lake exe certifier-device-smoke`); it reads the wall clock, so no test runs it. -/
+
+@[expose] public section
 
 open CertifierDevice NetworkCertifier
 
@@ -41,7 +45,7 @@ def main : IO UInt32 := do
       ingressParams.frameBytes).getD ByteArray.empty
     link.send frame
   let wrote ← IO.mkRef ByteArray.empty
-  let records ← IO.mkRef (#[] : Array Record)
+  let records ← IO.mkRef (#[] : Array BlockGrid)
   let next ← IO.mkRef 0
   let started ← IO.mkRef (#[] : Array ByteArray)
   let now ← IO.monoNanosNow

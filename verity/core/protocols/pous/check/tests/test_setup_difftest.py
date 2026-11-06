@@ -9,7 +9,7 @@ parameters that aren't the manifest, and malformed cases. Verdict, digest, publi
 must agree.
 
 The functions, `pous-setup-difftest` (`PousCheck.SetupDifftest.table`): the maps d, σ and D (`_Field`), the keys
-(`expand_prefix`, `sha512_keys`, and which candidate t is), `decode_segment` with its refusals by kind, the commitment with
+(`expand_prefix`, `sha512_keys_indexed`: K, t and which candidate t is), `decode_segment` with its refusals by kind, the commitment with
 its manifest (the identity hash itself is `core_identity`'s, difftested there). The spec's vectors file is held to its pinned SHA-512, and each of its vectors and
 σ rejection cases to what Lean computes from the vector's inputs.
 
@@ -110,17 +110,6 @@ def maps(i) -> dict:
     return {"d": _hex(f.sq(z), n), "sigma": _hex(f.sigma(r, k), n), "decode": _hex((f.sq(f.sigma(f.sq(z), k)) - t) % p, n)}
 
 
-def _t_index(q: P2.P2Params, prefix: bytes, s: int, j: int, t: int) -> int:
-    """Which candidate of `stream_t` t is (the spec's `t_rejection_index`), which `sha512_keys` doesn't return."""
-    nb, base = q.block_bytes, prefix + s.to_bytes(8, "big") + j.to_bytes(8, "big")
-    a = 0
-    while (x := int.from_bytes(P2.stream(base, b"t", (a + 1) * nb)[a * nb:], "big")) >= q.p:
-        a += 1
-    if x != t:
-        raise AssertionError("sha512_keys's t is not the first candidate below p")
-    return a
-
-
 def keys(i) -> dict:
     q = _p2(P.nat(i, "w"), P.nat(i, "c0"), 1 << 16, 1 << 20)
     salt = _bytes(i, "salt")
@@ -129,8 +118,8 @@ def keys(i) -> dict:
     except ValueError:
         return {"error": "salt"}
     s, j = P.nat(i, "s"), P.nat(i, "j")
-    k, t = P2.sha512_keys(q, prefix, s, j)
-    return {"K": _hex(k, q.block_bytes), "t": _hex(t, q.block_bytes), "t_index": _t_index(q, prefix, s, j, t)}
+    k, t, index = P2.sha512_keys_indexed(q, prefix, s, j)
+    return {"K": _hex(k, q.block_bytes), "t": _hex(t, q.block_bytes), "t_index": index}
 
 
 def _blocks(i) -> list[bytes]:

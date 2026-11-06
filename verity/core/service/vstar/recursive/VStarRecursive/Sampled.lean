@@ -12,7 +12,14 @@ v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's 
   refused;
 * **check**: that form's check on the blobs; evidence of the other form rejects.
 -/
-import VStarRecursive.Protocol
+module
+
+public import VStarRecursive.Protocol
+meta import VStarRecursive.Protocol
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace VStar.Recursive.Sampled
 
@@ -77,6 +84,12 @@ def protocol : Core.BlobProtocol where
   publicJson := OneStage.publicJson
   profileJson := Core.Integrity.toJson
   checkBlobs := checkBlobs
+
+/-- `vstar-recursive`'s command line: `sampled ...` this protocol's (`Core.BlobProtocol.main`), anything else the
+recursive audit's (`Recursive.main`). -/
+def main : List String → IO UInt32
+  | "sampled" :: args => protocol.main args
+  | args => Recursive.main args
 
 #guard (paramsOfJson (Json.mkObj [("form", "two-stage")])).toOption.isNone
 #guard (evidenceOf "{\"form\":\"recursive\"}".toUTF8).toOption.isNone

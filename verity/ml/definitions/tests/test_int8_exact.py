@@ -1,7 +1,10 @@
 """`registry.int8_exact`'s `Int8RowQuant_v3{K,R}` is `Int8RowQuant_v1{K}` with x as R rows of K/R values: word for word at K = 2048
 with R = 1 and R = 32 on spread rows, a zero row (the floored scale) and a row of edge words, the same body as v1's, and `bind`
 refuses an R that does not divide K.  Its Boolean version is `boolean_int8`'s `Int8RowQuant_v4{K,R}`, σ of v3, which is v3 on
-bits."""
+bits.  `Int8RowQuant_v5{K,R,ROUND}` is v3 and its row as one leaf, K/4 + 1 32-bit words whose bytes are the codes and then the
+scale's little-endian (an A table row, 1,026 u16 words at K = 2048), at every ROUND the same body under another id; its Boolean
+version `Int8RowQuant_v6{K,R,ROUND}` is v5 on bits, and `bind` refuses a K that isn't whole words of codes and a ROUND that
+isn't a natural number."""
 from __future__ import annotations
 
 import numpy as np
@@ -17,6 +20,7 @@ from verity.ml.definitions.boolean import boolean_version
 from verity.ml.definitions.registry import boolean_int8 as BX
 from verity.ml.definitions.registry import int8_exact as X
 from verity.ml.definitions.registry.prims import BF16
+from verity.ml.windows import interface as IF
 
 K = 2048
 
@@ -77,6 +81,51 @@ def test_v3s_boolean_version_is_v4_its_sigma(R):
 @pytest.mark.parametrize("k, R", [(4, 2), (64, 32)])
 def test_v4_is_v3_on_bits(k, R):
     word, bits = bind(X.Int8RowQuantV3, K=k, R=R), bind(BX.Int8RowQuantV4, K=k, R=R)
+    x = np.array([r[:k] for r in ROWS], dtype=np.uint64).reshape(len(ROWS), R, k // R)
+    want = np.asarray(evaluate_batch(word, x, kernel="reference"), dtype=np.uint64).reshape(len(ROWS), -1)
+    assert BS.evaluate_words(bits, x).reshape(len(ROWS), -1).tolist() == want.tolist()
+
+
+@pytest.mark.parametrize("R", [1, 32])
+def test_v5_is_v3_and_its_row_as_one_leaf(R):
+    v3, v5 = bind(X.Int8RowQuantV3, K=K, R=R), bind(X.Int8RowQuantV5, K=K, R=R, ROUND=0)
+    assert IF.layout(v5).outs == (("o0", K // 2), ("o1", 2), ("o2", K // 2 + 2))
+    for i, x in enumerate(ROWS):
+        q, got = evaluate(v3, x), evaluate(v5, x)
+        assert got[:K + 1] == q, i
+        leaf = b"".join(int(w).to_bytes(4, "little") for w in got[K + 1:])
+        assert leaf == bytes(c & 0xFF for c in q[:K]) + int(q[K]).to_bytes(4, "little"), i
+
+
+@pytest.mark.parametrize("statics", [dict(K=6, R=2), dict(K=2048, R=3)])
+@pytest.mark.parametrize("defn", [X.Int8RowQuantV5, BX.Int8RowQuantV6], ids=["v5", "v6"])
+def test_bind_refuses_a_leaf_that_is_not_whole_words_of_codes(defn, statics):
+    with pytest.raises(ValueError, match="refuses this binding"):
+        bind(defn, **statics)
+
+
+@pytest.mark.parametrize("defn", [X.Int8RowQuantV5, BX.Int8RowQuantV6], ids=["v5", "v6"])
+def test_a_round_is_no_gate_but_another_template(defn):
+    def shape(d):
+        b = d.body
+        return [(n.form, n.fn.id, [a.refs.to_json() for a in n.args], n.out) for n in b.nodes], b.ret.to_json()
+
+    at = [bind(defn, K=64, R=32, ROUND=r) for r in (0, 3)]
+    assert at[0].id != at[1].id and at[1].id.endswith("ROUND=3}")
+    assert shape(at[0]) == shape(at[1]) and IF.layout(at[0]) == IF.layout(at[1])
+
+
+@pytest.mark.parametrize("r", [-1, True, 1.0, "0"])
+@pytest.mark.parametrize("defn", [X.Int8RowQuantV5, BX.Int8RowQuantV6], ids=["v5", "v6"])
+def test_bind_refuses_a_round_that_is_not_a_natural_number(defn, r):
+    with pytest.raises(ValueError, match="refuses this binding"):
+        bind(defn, K=64, R=32, ROUND=r)
+
+
+@pytest.mark.parametrize("k, R, r", [(4, 2, 0), (64, 32, 3)])
+def test_v6_is_v5_on_bits_and_its_boolean_version(k, R, r):
+    word, bits = bind(X.Int8RowQuantV5, K=k, R=R, ROUND=r), bind(BX.Int8RowQuantV6, K=k, R=R, ROUND=r)
+    assert boolean_version(word).id == bits.id and TR.word_of(bits).id == word.id
     x = np.array([r[:k] for r in ROWS], dtype=np.uint64).reshape(len(ROWS), R, k // R)
     want = np.asarray(evaluate_batch(word, x, kernel="reference"), dtype=np.uint64).reshape(len(ROWS), -1)
     assert BS.evaluate_words(bits, x).reshape(len(ROWS), -1).tolist() == want.tolist()

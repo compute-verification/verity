@@ -1,4 +1,6 @@
-import RemoteAudit.Window
+module
+
+public import RemoteAudit.Window
 
 /-!
 # A session's bookkeeping: `audit.py`'s `Session`
@@ -25,6 +27,10 @@ its openings coin at W + t, and the append coins in the order drawn). Each event
 A call `Session` refuses with `SessionError` (out of turn, after the session ended, before a window's roots are final)
 is `refused`. After a rejection every later call but `start` is refused, as `_live` raises.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Session
 
@@ -284,9 +290,9 @@ def verify (s : State) (t : Int) (openings : Array Opening) : Result × State :=
   let some drawn := w.drawn | return (.refused "the window has no draws awaiting openings", s)
   if w.verdict.isSome then return (.refused "the window has no draws awaiting openings", s)
   if drawn.isEmpty then return s.fail t .malformed
-  match checkWindow s.reg s.digest s.appends (s.record t) drawn openings with
-  | .accept => return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
-  | .reject f at? => return s.fail t f at?
+  let v := checkWindow s.reg s.digest s.appends (s.record t) drawn openings
+  if v = .accept then return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
+  return s.fail t v.rejection.failure v.rejection.at?
 
 /-- What window t's openings are checked against, once its draws are out and it has no verdict: the registration, its
 digest, the appends, the window's record and its draws (`none` where `verify` refuses). -/
@@ -307,9 +313,9 @@ def verifyBy (s : State) (t : Int) (check : Array (Nat × Nat) → Verdict) : Re
   let some drawn := w.drawn | return (.refused "the window has no draws awaiting openings", s)
   if w.verdict.isSome then return (.refused "the window has no draws awaiting openings", s)
   if drawn.isEmpty then return s.fail t .malformed
-  match check drawn with
-  | .accept => return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
-  | .reject f at? => return s.fail t f at?
+  let v := check drawn
+  if v = .accept then return (.accepted t, { s with windows := s.windows.modify t ({· with verdict := some .accept}) })
+  return s.fail t v.rejection.failure v.rejection.at?
 
 theorem verify_eq_verifyBy (s : State) (t : Int) (openings : Array Opening) :
     verify s t openings = verifyBy s t (checkWindow s.reg s.digest s.appends (s.record t.toNat) · openings) := rfl

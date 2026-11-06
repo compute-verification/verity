@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Replay.Zerocheck
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Zerocheck
-import Proofs.Flock.Soundness.Refine.Regions
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Zerocheck
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Zerocheck
+public import Proofs.Flock.Soundness.Refine.Regions
 
 /-!
 # The honest prover's zerocheck passes its final check
@@ -14,6 +16,8 @@ analysis's honest messages (`Zerocheck.honest`, in the field's sums, `eqR`, `ski
 (`bitF`), the zerocheck vector and the residual coins; the fold is that analysis's replayed claim (`zcFold_fst`), and
 `Zerocheck.final_ab` closes it.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay.Zc
 
@@ -158,8 +162,8 @@ theorem claim_congr {p q : ZerocheckProof} (r rho : Array F128) (z : F128) (n : 
 
 /-! ## The final check -/
 
-theorem r_size (m : ℕ) (hm : 13 ≤ m) (cs : Coins) : (cs.r m).size = m - 6 := by
-  simp only [Coins.r, Array.size_append, pinned_size, Array.size_map, Array.size_range]
+theorem r_size (m : ℕ) (hm : 13 ≤ m) (cs : Challenges) : (cs.r m).size = m - 6 := by
+  simp only [Challenges.r, Array.size_append, pinned_size, Array.size_map, Array.size_range]
   omega
 
 theorem r1c_eq (tr : Trace) (n : ℕ) (r : Array F128) (hrs : r.size = n) (a b : ℕ → 𝔽) (rho : Array F128)
@@ -176,7 +180,7 @@ theorem r1c_eq (tr : Trace) (n : ℕ) (r : Array F128) (hrs : r.size = n) (a b :
 
 /-- **The prover's zerocheck passes the final check** (Piop.lean:98): for a trace satisfying the block R1CS bitwise and
 `r_outer` coins other than `1`, the residual fold ends at `final_a · final_b`. -/
-theorem fold_final {m : ℕ} (hm : 14 ≤ m) (cs : Coins) (tr : Trace)
+theorem fold_final {m : ℕ} (hm : 14 ≤ m) (cs : Challenges) (tr : Trace)
     (hR1CS : ∀ i < 2 ^ m, (tr.az[i]! && tr.bz[i]!) = tr.z[i]!) (hc1 : ∀ k < m - 13, cs.c1 k ≠ 1) :
     (Flock.RecAlgebra.zcFold (cs.r m) (proof m cs tr) (fun i => #[cs.ρ i]) (m - 6)
       (Flock.RecAlgebra.zcStart (proof m cs tr) cs.z)).1 = (proof m cs tr).finalA * (proof m cs tr).finalB := by

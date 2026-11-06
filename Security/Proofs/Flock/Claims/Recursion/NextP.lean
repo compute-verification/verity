@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.NextJ
+module
+
+public import Proofs.Flock.Claims.Recursion.NextJ
 
 /-!
 # The last message with its proofs decoded (`FinalP`)
@@ -17,6 +19,8 @@ carries once `coinSubJ` substitutes the live coins.
   encoding at every proof of the shape (`FlockVBridge.Family.decodeProof_encodeProof`), where `shapeAt` is the verdict's
   shape; the reps' proofs are `RepsRead`'s, read from their step messages.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -58,12 +62,6 @@ def decisionAtP (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Ms
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : FinalP) :
     Claims.OCV Unit :=
   decisionAtJ s spec sts x link c₁ mids ⟨f.stmt, f.j, filesAt (tabsOf sts) (pointsOf spec c₁) f.ps⟩
-
-/-- The decision with the proofs decoded: the statement's setup over `OC`, then `decisionAtP`. -/
-def decisionPF (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : FinalP) : Claims.OCV Unit := do
-  let (spec, sts) ← setupM Claims.Hashes.oc s.read
-  decisionAtP s spec sts x link c₁ mids f
 
 /-- **The decoded proofs' decision at a session is `decisionAtJ`'s** at proof files that decode to them, file by file,
 at `shapeAt`. -/

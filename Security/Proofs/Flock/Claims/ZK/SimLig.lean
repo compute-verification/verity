@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.Split
-import Proofs.Flock.Claims.ZK.SentE
-import Proofs.Flock.Claims.ZK.PiopSrcSv
-import Proofs.Flock.Claims.ZK.HiSalts
+module
+
+public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.ZK.SentE
+public import Proofs.Flock.Claims.ZK.PiopSrcSv
+public import Proofs.Flock.Claims.ZK.HiSalts
 
 /-!
 # A rep's Ligerito opening from the cut (`SimLig`)
@@ -24,6 +26,8 @@ import Proofs.Flock.Claims.ZK.HiSalts
   the tape's salts (HiSalts' `hiSalt_exe`), and the lane rounds' tables, whose basis is the PIOP's switched vectors'
   (`openB_basis`); so `simLig`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.Masked
 
@@ -1813,7 +1817,7 @@ theorem openB_basisOf {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Ta
   have hrpp : ∀ k < (swsE x c w τ j r extras).size, ((swsE x c w τ j r extras)[k]!).rpp.size = 7 := by
     intro k hk
     rw [hsw k hk]
-    simp [FlockComplete.Replay.Rs.Coins.rpp]
+    simp [FlockComplete.Replay.Rs.Challenges.rpp]
   have hz : ∀ k < (swsE x c w τ j r extras).size, ((swsE x c w τ j r extras)[k]!).z.size = (ligSt x j).m - 7 := by
     intro k hk
     have hk' : k < (A ++ extras).size := by rw [hcl, hesz]; rw [hsize] at hk; omega
@@ -1849,7 +1853,7 @@ theorem openB_basisOf {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Ta
   · funext i
     show FlockSoundness.Refine.fOf (cs.rpp k.val)[i.val]! = FlockSoundness.Refine.fOf (slotAt c
       (repBase x (2 * j.val + r.val) + (6 + ((stAt x j).m - 6) + ((stAt x j).c.kLog - 6) + k.val)) i.val)
-    unfold FlockComplete.Replay.Rs.Coins.rpp
+    unfold FlockComplete.Replay.Rs.Challenges.rpp
     rw [FlockSoundness.Refine.getElem!_range_map _ i.isLt, hcs]
     show FlockSoundness.Refine.fOf (FlockComplete.coinOf (ligRespE c (L + k.val)) i.val) = _
     rw [coinOf_ligRespE, hL]

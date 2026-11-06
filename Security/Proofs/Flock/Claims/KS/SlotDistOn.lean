@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.SlotPost
-import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
+module
+
+public import Proofs.Flock.Claims.KS.SlotPost
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
 
 /-!
 # A slot's distance on the paths that can end well
@@ -17,6 +19,8 @@ every outcome past such a point is `Bad`, the distance can stop asking there:
 * `SlotAtD.lead_fst_on`, `SlotAtD.lead_snd_on`: `SlotAtD.lead_fst` and `SlotAtD.lead_snd` at such a distance, a `Bad`
   part's outcomes `Dead` after the continuation.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 
@@ -190,13 +194,6 @@ theorem DistOn.bind_on {α₂ β₂ : Type} {R₂ : I → α₂ → β₂ → Pr
         simp only [coinsK]
         exact .other s hne fun t d => ih t d σ' (ht d)
       · exact hbad _ _ (hnot hσ fun ts b hp e => by cases hp; simp [kindOf] at e)
-
-theorem DistOn.bind_on_eq {α₂ β₂ : Type} {R₂ : I → α₂ → β₂ → Prop} {f : α → Game α₂} {f' : β → Game β₂}
-    {Bad₂ : β₂ → Prop} {P : β → Prop} {j j' : ℕ} {h : ∀ i a b, R i a b → Lock T D get R₂ i (f a) (f' b)}
-    (hK : ∀ i a b (hr : R i a b), DistOn slot Bad₂ j (h i a b hr)) (hB : ∀ b y, ¬ P b → Out (f' b) y → Bad₂ y)
-    {i : I} {g : Game α} {g' : Game β} {L : Lock T D get R i g g'} (hL : NoSlot slot L) {σ : List Kind}
-    (hσ : ExactOn g' σ P) (hj : j' = j + coinsK σ) : DistOn slot Bad₂ j' (Lock.bind h L) :=
-  hj ▸ DistOn.bind_on hK hB hL σ hσ
 
 end On
 

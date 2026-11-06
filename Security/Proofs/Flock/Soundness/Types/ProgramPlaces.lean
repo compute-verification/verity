@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Types.Program
+module
+
+public import Proofs.Flock.Soundness.Types.Program
 
 /-!
 # Each drawn unit's place, for a program of units (verified-lowering phase 1, S4d)
@@ -18,6 +20,8 @@ class's rows placed at each slot, each slot input's copy position and the forced
   (`TableClass.Copies`), the place is aliased (`aliased_of_copies`). A unit's instance wires each input to its source's
   gate (`instOf_wire`), and inputs on one gate read one source (`srcGate_inj`).
 -/
+
+@[expose] public section
 
 open Flock Flock.DeriveAll
 
@@ -53,7 +57,7 @@ witness carries, at each slot input, what it carries at the input's copy positio
 forced-zero row (`zeros`, whose `A₀` and `B₀` rows are 0). -/
 structure TableClass (St : Statement) where
   types : String → Option CircuitType
-  ls : Array Layout
+  ls : Array BlockLayout
   info : String → Option TableInfo
   words : String → Option (Array ℕ)
   unit : ℕ

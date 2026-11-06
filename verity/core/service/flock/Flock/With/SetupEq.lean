@@ -2,8 +2,12 @@
 Setup's oracle copies under the deployed hashes: run in `V` with `Hashes.ofSha512 Sha512.hash`, each `…With` of
 `Flock.With.Setup` is the compiled verifier's function it copies, so `Stmt.setupTablesWith` at SHA-512 is `Stmt.setupTables`.
 -/
-import Flock.With.Setup
-import Flock.With.Eq
+module
+
+public import Flock.With.Setup
+public import Flock.With.Eq
+
+@[expose] public section
 
 namespace Flock
 
@@ -17,14 +21,14 @@ theorem hmClassOfWith_std (bytes : ByteArray) (head : String) (mj : Json) :
 
 theorem typeDigestWith_std (t : CircuitType) : t.digestWith std = t.digest := rfl
 
-theorem layoutDigestWith_std (l : Layout) : l.digestWith std = l.digest := rfl
+theorem layoutDigestWith_std (l : BlockLayout) : l.digestWith std = l.digest := rfl
 
 set_option maxRecDepth 20000 in
 theorem classOfWith_std (mj : Json) (tables : List (String × ByteArray)) :
     Typed.classOfWith std mj tables = Typed.classOf mj tables := rfl
 
 set_option maxRecDepth 20000 in
-theorem templateOfWith_std (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (unit : Nat)
+theorem templateOfWith_std (name : String) (done : Array DeriveAll.D) (ls : Array BlockLayout) (unit : Nat)
     (t : CircuitType) (held : Array Typed.Held) :
     Typed.templateOfWith std name done ls unit t held = Typed.templateOf name done ls unit t held := by
   unfold Typed.templateOfWith Typed.templateOf

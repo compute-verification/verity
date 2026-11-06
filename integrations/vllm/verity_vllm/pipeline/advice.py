@@ -65,8 +65,9 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols import registration as REG
 from verity.core.protocols.certifier import advice as I1
-from verity.ml.circuits.codec import canonical_json
+from verity.ml.windows import interface as IF
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 
@@ -81,7 +82,6 @@ COMPILER = "verity_vllm.program.predict.steps.compile_steps"
 PENDING = 3
 
 
-#: ℓ when the registration names none (`advice_windows.CAP_BITS`, `predict.steps.CAP_BITS`: 1 MiB of advice)
 CAP_BITS = AW.CAP_BITS
 
 
@@ -92,20 +92,20 @@ class Compiler:
     digest: str
 
 
-def compiler_digest(name: str, code: str) -> str:
-    """The inner compiler's digest: SHA-512 of its name and its code identity."""
-    return hashlib.sha512(canonical_json({"name": name, "code": code})).hexdigest()
-
-
 def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bits: int = CAP_BITS) -> AW.Capped:
-    """The compiler the advice is bound to: `advice_windows.Capped` (PROVE-PATH's, whose digest names the inner compiler's and ℓ =
-    ``cap_bits``) over ``name``, whose digest is ``digest``, else `compiler_digest` over `name` and the tree's code identity
-    (`source_identity.code_identity`)."""
+    """The compiler the advice is bound to: `advice_windows.Capped` (whose digest names the inner compiler's and ℓ =
+    ``cap_bits``) over ``name``, whose digest is ``digest``, else the verifier's `interface.compiler_digest` of ``name`` over
+    the integration's import closure (`source_identity.closure()`) in this git work tree."""
     if digest is None:
-        # TODO: COMPILER's own registered digest once compile_steps lands with one
         from verity_vllm.pipeline import source_identity as SI
-        digest = compiler_digest(name, SI.code_identity(SI.TREE)["sha256"])
+        digest = IF.compiler_digest(name, SI.TREE, [g.removesuffix("/**") for g in SI.closure()])
     return AW.Capped(Compiler(name, digest), cap_bits)
+
+
+def builder_item(compiler: AW.Capped) -> dict[str, Any]:
+    """B's item in the deployment's registration log (`verity.core.protocols.registration`, kind ``builder``): the inner
+    compiler's digest, the format of the advice it reads (`certifier.advice.SCHEMA`) and ℓ, as the log decodes it."""
+    return REG.item_of({"kind": "builder", "digest": compiler.inner.digest, "advice": I1.SCHEMA, "cap": compiler.cap_bits})
 
 
 def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
@@ -492,7 +492,8 @@ def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path |
 def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, io: str | Path | None, *, T: int, tau: float,
                  compiler: Any, window: int | None = None, registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
     """A server's advice, one a closed Commit window (`windows_of`; only ``window`` when given): each under ``out/w<k>/`` as
-    `write_one` writes it, its registration naming the window's Commit (its run id and run root, from windows.jsonl).  The
+    `write_one` writes it, its registration naming the window's Commit (its run id and run root, from windows.jsonl, or
+    from seals.jsonl while the window's line waits for its PoUW H1 release, which reads this advice: `serve_tie`).  The
     windows are read in order, each opening with what the last one left (`from_trace`'s ``carry``), so ``window`` reads the
     ones before it too.  A window whose advice is refused (a finish the advice can't say, a trace the Commit record contradicts)
     is named in ``refused``, and the others are written; the window after a refused one opens on nothing carried.  Until the
@@ -502,9 +503,11 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
         raise ValueError("a served run's advice needs its Commit record, requests.jsonl")
     io_all = io_record(io)
     final = stopped(run)
-    lines = (run / "windows.jsonl").read_text().splitlines() if (run / "windows.jsonl").exists() else []
-    commits = {int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
-               for d in (json.loads(line) for line in lines if line.strip())}
+    commits: dict[int, dict[str, Any]] = {}
+    for name in ("seals.jsonl", "windows.jsonl"):       # a window's line waits for its H1 release; its seal's comes first
+        lines = (run / name).read_text().splitlines() if (run / name).exists() else []
+        commits.update({int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
+                        for d in (json.loads(line) for line in lines if line.strip())})
     per, still_open = windows_of(recs)
     if window is not None and window not in per:
         raise ValueError(f"window {window} is not a closed window with steps (closed: {sorted(per)}; open: {still_open})")
@@ -616,7 +619,8 @@ class Options:
     window: int | None = option("--window", type=int, default=None, help="a server's run: only this Commit window (default every closed one)")
     compiler_name: str = option("--compiler-name", default=COMPILER, help="the registered compiler the advice is bound to")
     compiler_digest: str | None = option("--compiler-digest", default=None,
-                                         help="its digest, 128 hex digits (default: SHA-512 of the name and the tree's code identity)")
+                                         help="its digest, 128 hex digits (default: interface.compiler_digest of the name over "
+                                              "the integration's import closure in this git work tree)")
     cap: int = option("--cap", type=int, default=CAP_BITS,
                       help="ℓ, the cap on the advice's length in bits the compiler is total up to: the registered compiler is "
                            "advice_windows.Capped over the one named, whose digest covers ℓ (default 2^23, 1 MiB)")

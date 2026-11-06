@@ -1,6 +1,8 @@
-import Definitions.Accounting.Served
-import Properties.Accounting.Compose
-import SampledProofs.Draw
+module
+
+public import Definitions.Accounting.Served
+public import Properties.Accounting.Compose
+public import SampledProofs.Draw
 
 /-!
 # The served window's units and draw are the service's, per call (`SampledProofs.Slots.layout`, `Draw.drawUnits`)
@@ -33,6 +35,8 @@ once by evaluation; the forms' Programs differ in each unit's spans, never in th
 all three. The draw conjunct is a property of `drawUnits`, with no premise.
 -/
 
+@[expose] public section
+
 open Lean (Json)
 open Pouw.RelativeSecurity (prob)
 
@@ -44,7 +48,7 @@ open Accounting.Compose Accounting.Served
 non-input gates `i` (its gates are `[start c, start (c + 1))`) lies in the gate span of a proof block of `l`, read as
 the Program's root gate `i − start c`, and its declared unit is `base (stepOf c) (linearOf c)` plus that proof block's
 number; each input slot's gate is an input of the call; and every proof block's number is below the call's units. -/
-def CallUnits {ι : Type} (L : Shape) (Cd : Declared ι) (start : ℕ → ℕ) (c : ℕ) (l : SampledProofs.Slots.Layout) :
+def CallUnits {ι : Type} (L : Shape) (Cd : Declared ι) (start : ℕ → ℕ) (c : ℕ) (l : SampledProofs.Slots.SlotOrder) :
     Prop :=
   (∀ i, start c ≤ i → i < start (c + 1) → i < Cd.dag.length → Cd.binding i = none →
     ∃ b ∈ l.blocks.toList, ∃ u, b.unit = some u ∧ Cd.unit i = L.base (L.stepOf c) (L.linearOf c) + u ∧
@@ -81,7 +85,7 @@ its first reader's round, which is a round of the window. So no circuit with an 
 statements can't take `UnitsOfLayout` as written. -/
 def SeededScheduleNotLive : Prop :=
   ∀ (ι : Type) (Cd : Declared ι) (Np Kd : ℕ) (p : SampledProofs.Program) (query : Json)
-    (l : SampledProofs.Slots.Layout),
+    (l : SampledProofs.Slots.SlotOrder),
     SampledProofs.Slots.layout p query = .ok l → Properties.Compose.UnitsOfLayout Cd Np Kd p query → Cd.Wf →
       (∃ ℓ j, Cd.binding ℓ = some .run ∧ j < Cd.dag.length ∧ Cd.Reads j ℓ) → ¬ LayerCommitted Cd
 

@@ -1,15 +1,17 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Thm1.Theorem1ii
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
+public import Proofs.Pous.Thm1.Theorem1ii
 
 /-!
 # Report Theorem 1(ii), timed: a proof of `Pous.Guarantees.Theorem1iiTimed`
@@ -27,6 +29,8 @@ block `i` is *good* if `A₂.prog(W, pp, σ, i)` run against `ω` returns `C i`,
    `ret (C i)` or `A₂.prog(W, pp, σ, i)`: `(D, Q)`-bounded. On `E` every block is rebuilt, so `Pr[E] ≤ π` by
    `TimedINC D Q β π`.
 -/
+
+@[expose] public section
 
 namespace PousThm1ii
 
@@ -56,8 +60,8 @@ theorem PousProofs.theorem1_ii_timed : Pous.Guarantees.Theorem1iiTimed := by
   refine (pr_all_good_le sch.B sch.ℓ β S k sch.B_pos good).trans (add_le_add ?_ le_rfl)
   let cmp : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits β :=
     fun W pp C ω => c (A₁ W pp C ω, patch (fun i => (A₂.prog W pp (A₁ W pp C ω) i).run (M.answer ω)) C)
-  let exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → Prog M (Bits sch.ℓ) :=
-    fun W pp w i => ((d w).2 i).elim (A₂.prog W pp (d w).1 i) Prog.ret
+  let exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ) :=
+    fun W pp w i => ((d w).2 i).elim (A₂.prog W pp (d w).1 i) OracleAlgorithm.ret
   have hexp : ∀ W pp w i, (exp W pp w i).Bounded D Q := by
     intro W pp w i
     cases h : (d w).2 i with

@@ -23,6 +23,8 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
 * `weights_registration` -- the committer's weights registration (`verity-vllm/weights-registration/v1`): each weight
   parameter's hiding root, as the verifier's pins and a window's registration read it; its `of` refuses an unknown field
   and `dump` writes it back.
+* `source_identity` -- the source-identity record's schema id (`research-infra/source-identity/v1`) and nothing else: the
+  runner's telemetry embeds the record and no stage reads it back.
 * `inference_blocks` -- the inference-block table's public statement (`verity-vllm/inference-blocks/v1`): its budgets, padded
   counts and hiding root, as B emits it beside the window circuit (`program.predict.inference_blocks.commit`); its `of` refuses an
   unknown field and `dump` writes it.

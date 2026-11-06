@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.KSCoinTreeStatement
-import Proofs.Flock.Recursive.KSNontrivial
-import Proofs.Flock.Claims.Recursion.HonestHalfFixture
-import Proofs.Flock.Soundness.CROnly.Hiding
-import Proofs.Flock.Soundness.Discharge.ZkView.Defs
+module
+
+public import Proofs.Flock.Recursive.KSCoinTreeStatement
+public import Proofs.Flock.Recursive.KSNontrivial
+public import Proofs.Flock.Claims.Recursion.HonestHalfFixture
+public import Proofs.Flock.Soundness.CROnly.Hiding
+public import Proofs.Flock.Soundness.Discharge.ZkView.Defs
 
 /-!
 # `RecursiveKSDeployed`'s witnesses (the Lean check's `honest` and `nontrivial`)
@@ -24,6 +26,8 @@ the tree's root and openings.
   and openings, recovers nothing (`Pr_E_none`); and the rest of the bound is `not_ksLin2On_acceptAll`'s, below `1`
   (`not_ksLin2OnC_acceptAll`).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge
 
@@ -172,9 +176,9 @@ theorem recursiveKSDeployed_honest (h : HonestFixture) :
           FlockSoundness.Discharge.ZkView.saltHash)) ∧
       ENNReal.ofReal (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My
         FlockSoundness.Discharge.ZkView.saltHash) ≠ ⊤ := by
-  obtain ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, st, ω, r, hR, hW, hN, hI, hT⟩ := h
-  refine ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, ω, r,
-    HonestHalfTops.honest_half_tops mask Ir b0 x aux nOf hd recRest decI ω r hR hW hN hI hT, fun s hs => ?_,
+  obtain ⟨mask, b0, x, aux, nOf, hd, recRest, decI, w, st, ω, r, hR, hW, hN, hT⟩ := h
+  refine ⟨mask, IrDep x, b0, x, aux, nOf, hd, recRest, decI, w, ω, r,
+    HonestHalfTops.honest_half_tops mask b0 x aux nOf hd recRest decI ω r hR hW hN hT, fun s hs => ?_,
     fun _ C τ => ?_, FlockDeploy.listWithin_plainTrim _root_.Flock.Readable.relation,
     Claims.GS.listWithin_zkDecodeRD id fun _ _ => rfl, FlockSoundness.CROnly.hm96Hiding_gap _ _,
     ENNReal.ofReal_ne_top⟩

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.LinkRecheck
-import Flock.Firewall.Finish
+module
+
+public import Proofs.Flock.Claims.ZK.LinkRecheck
+public import Flock.Firewall.Finish
 
 /-!
 # The firewall's commitments are the masked prover's
@@ -19,13 +21,13 @@ tasks and its tree a pure loop (`commitRows`). Here each is the analysis's, in a
 * `openP_eq`: the port's opening of a commitment is the analysis's of its `toC`.
 -/
 
+@[expose] public section
+
 namespace Flock.Firewall.Finish
 
 open FlockSoundness.Refine
 
 /-! ## A level's codeword -/
-
-theorem encodeRows_eq : encodeRows = FlockComplete.encodeRows := rfl
 
 theorem rowsFft_size (lv : Level) (g : Array F128) : (rowsFft lv g).size = 2 ^ lv.d := by
   simp [rowsFft]

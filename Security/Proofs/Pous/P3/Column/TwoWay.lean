@@ -1,8 +1,10 @@
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # The two-directional column game: from a winning holding to a schedule
@@ -23,6 +25,8 @@ Counting each lower label's held columns:
 * a held label pays `n − |U|`.
 -/
 
+@[expose] public section
+
 namespace PousP3Column
 
 open Pous Pous.ColumnGame
@@ -39,12 +43,6 @@ theorem cr_succ (r : ℕ) : colReach G c0 (r + 1) = colRound G (colReach G c0 r)
 
 theorem low_mono {r r' : ℕ} (h : r ≤ r') :
     (colReach G c0 r).lowerWhole ⊆ (colReach G c0 r').lowerWhole := by
-  induction h with
-  | refl => exact Finset.Subset.refl _
-  | step _ ih => exact ih.trans (by rw [cr_succ]; exact Finset.subset_union_left)
-
-theorem top_mono {r r' : ℕ} (h : r ≤ r') :
-    (colReach G c0 r).topWhole ⊆ (colReach G c0 r').topWhole := by
   induction h with
   | refl => exact Finset.Subset.refl _
   | step _ ih => exact ih.trans (by rw [cr_succ]; exact Finset.subset_union_left)
@@ -134,9 +132,6 @@ theorem flow_mem {w : Fin n} {s : ℕ} (hs : w ∈ (colReach G c0 s).lowerWhole)
   have hex : ∃ r, w ∈ (colReach G c0 r).lowerWhole := ⟨s, hs⟩
   have he : flow G c0 w = Nat.find hex := by unfold flow; simp only [hex, ↓reduceDIte]
   rw [he]; exact Nat.find_spec hex
-
-theorem flow_zero {w : Fin n} (h : w ∈ c0.lowerWhole) : flow G c0 w = 0 :=
-  Nat.le_zero.1 (flow_min G c0 (s := 0) h)
 
 /-- A lower label not held but whole by round `r` became whole at `flow ≥ 1`, by its parents or by promotion. -/
 theorem flow_rule {w : Fin n} {r : ℕ} (hr : w ∈ (colReach G c0 r).lowerWhole) (h0 : w ∉ c0.lowerWhole) :

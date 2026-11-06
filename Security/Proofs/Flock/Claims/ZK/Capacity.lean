@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.CoinLayer
+module
+
+public import Proofs.Flock.Claims.ZK.CoinLayer
 
 /-!
 # Zero knowledge at the reference session on a class of statements
@@ -28,6 +30,8 @@ probabilities meets:
   same at the deployed masked record `zkDeployed`, with `TapeOKOn A` from the tables' tape read with fibers of one size
   on `A`, where `Flock.zk_deployZk_ref` asks `TapeOK`, which no tables with statements of every table count meet.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -441,23 +445,5 @@ theorem Flock.zk_deployZk_ref_on (H : Msg → Msg)
       fun _ => 4 * t * 3 ^ t :=
   Flock.zk_zkD_ref_on H rel (CoinLayer.session nr T) A t ht hT1 hδ₁ hS hV hD hc
     ((CoinLayer.session nr T).tapeOKOn_of_tape A hT) CoinLayer.coinOfD _ hH
-
-/-- **The same at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`), with `Claims.Hm96Hiding` discharged. -/
-theorem Flock.zk_deployZk_ref_on_gap (H : Msg → Msg)
-    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
-    (A : Msg → Prop) [DecidablePred A] (t : ℕ) (ht : 0 < t) (hS : (CoinLayer.session nr T).Tables)
-    (hV : (CoinLayer.session nr T).Complete fun x w => A x ∧ Flock.R (FlockDeploy.deployZk rel).parse x w)
-    (hD : (CoinLayer.session nr T).DummyReg) (hc : (CoinLayer.session nr T).Causal)
-    (hT : ∀ x, A x → FibersEq (T.tape x))
-    (hH : (CoinLayer.session nr T).HonestMsgsOn A (Flock.R (FlockDeploy.deployZk rel).parse) H CoinLayer.coinOfD
-      fun ω => T.tapeZk ω.2) :
-    Claims.Flock.ZK H (zkDeployed rel nr T t)
-      (fun x => if A x then 8 * (CoinLayer.session nr T).nLeaves x *
-          (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
-        8 * t * (CoinLayer.session nr T).nLeaves x *
-          (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash)).toReal +
-        2 * (1 / 3) ^ t else 1) fun _ => 4 * t * 3 ^ t :=
-  Flock.zk_deployZk_ref_on H rel nr T A t ht (FlockSoundness.CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash)
-    ENNReal.ofReal_ne_top hS hV hD hc hT hH
 
 end Claims.ZKMal

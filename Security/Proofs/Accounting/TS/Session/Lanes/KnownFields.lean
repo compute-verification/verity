@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Lanes.KnownOf
-import Proofs.Accounting.TS.Session.Lanes.KnownBits
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.KnownOf
+public import Proofs.Accounting.TS.Session.Lanes.KnownBits
 
 /-!
 # A lane's known fields hold at the opened rows
@@ -20,6 +22,8 @@ at row 0, `known_readAt_zero`) and each of its bits as on a wire of the unit (`R
 check gives both (`Lanes.KnownRead`'s `laneKnownHolds_of_check`, `combKnownOk_of_check`).
 -/
 
+@[expose] public section
+
 namespace Accounting.TS.Lanes
 
 open PouwWindow.Lanes Flock.SoundAtBridge Accounting.TS.Checked FlockSoundness.Discharge
@@ -33,21 +37,6 @@ structure LaneKnownHolds (T : Tile) (rd : String → ℕ → Option Bool) (P : L
   roots : Holds (rd "pub") (fieldBit (lanePorts T 0) "roots") (2 * digestBits) P.roots
   lane : Holds (rd "pub") (fieldBit (lanePorts T 0) "lane") laneBits l.val
   ok : rd "o0" 0 = some true
-
-/-- **`LaneHolds` is its registered fields and its known ones**: the A and B rows and the record, with
-`LaneKnownHolds`. -/
-theorem LaneKnownHolds.laneHolds {K : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} {L : Leaf K} {P : LanePub}
-    {l : Fin 32} (hk : LaneKnownHolds T rd P l)
-    (ha : ∀ (s : Fin 4) (k : Fin K), Holds (rd s!"a{s.val}") (fieldBit (lanePorts T 0) s!"a[{s.val}].codes" + 8 * k.val) 8
-      (encS 8 ((laneA L l s).codes k)))
-    (haS : ∀ s : Fin 4, Holds (rd s!"a{s.val}") (fieldBit (lanePorts T 0) s!"a[{s.val}].scale") 32 (laneA L l s).scale.toNat)
-    (hb : ∀ (t : Fin 8) (k : Fin K), Holds (rd s!"b{t.val}") (fieldBit (lanePorts T 0) s!"b[{t.val}].codes" + 8 * k.val) 8
-      (encS 8 ((laneB L l t).codes k)))
-    (hbS : ∀ t : Fin 8, Holds (rd s!"b{t.val}") (fieldBit (lanePorts T 0) s!"b[{t.val}].scale") 32 (laneB L l t).scale.toNat)
-    (hz : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.z" + 32 * (i.val * T.c + j.val)) 32 (encS 32 (L.z i j)))
-    (hy : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.y" + 16 * (i.val * T.c + j.val)) 16 (L.y i j).toNat) :
-    LaneHolds K T rd L P l :=
-  ⟨ha, haS, hb, hbS, hz, hy, hk.admit, hk.salt, hk.position, hk.roots, hk.lane, hk.ok⟩
 
 theorem fieldBit_admit (T : Tile) : fieldBit (lanePorts T 0) "admit" = 0 := rfl
 theorem fieldBit_salt (T : Tile) : fieldBit (lanePorts T 0) "salt" = 0 := rfl

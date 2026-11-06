@@ -18,23 +18,22 @@ receipt the leaf's entry p mod 16. Proved, the verifier opens only the unit's pu
 domain ids, ranks and depths), and its verdict row; it holds the one witness row it doesn't open, the plan row, to the
 canonical plan row of step s by ``b || c`` (`plan_link`). No block, payload, receipt leaf or plan is opened.
 
-`Session` is `audit.AuditRun` with check 3's outcome in place of `verify`'s openings (`drawn`, `decide`), and `Store` is
-`audit.Store` keeping the payloads it appends (the prover's witness, `witness`). `check` decides one draw by the unit's
-reference on the prover's arguments and the plan link, and `reference` a session's windows by it."""
+A session takes check 3's outcome in place of `verify`'s openings by `audit.AuditRun.drawn` and `decide`, and the
+prover's witness is its `audit.Store`'s payloads (`audit.Store.payload`, `witness`). `check` decides one draw by the
+unit's reference on the prover's arguments and the plan link, and `reference` a session's windows by it."""
 from __future__ import annotations
 
-import bisect
 from collections.abc import Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from verity.ml.commitments import Commitment, CommitmentDomain, hm96
+from verity.ml.commitments import CommitmentDomain, hm96
 from verity.ml.commitments.gates import block_check as BC
 from verity.ml.commitments.merkle import merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf, sha512_row_v2_digest
 
 from . import audit, codec, receipts
-from .receipts import PER_LEAF, Plan
+from .receipts import PER_LEAF
 
 ROWS = receipts.SKETCH_ROWS
 
@@ -70,86 +69,7 @@ class Values:
         return tuple(out)
 
 
-@dataclass(frozen=True)
-class PositionSample:
-    """What the verifier knows of one draw: window t, pass i at step s, position p, block j = plan_i[p], the pass's seed,
-    plan and root, and the commitment block j's payload is a leaf of: the registration's payload tree (``coin`` None) or
-    its append's, under the append's coin."""
-
-    window: int
-    index: int
-    position: int
-    block: int
-    step: int
-    seed: bytes
-    plan: Plan
-    root: bytes
-    domain: CommitmentDomain
-    commitment: Commitment
-    coin: bytes | None
-
-    @property
-    def leaf(self) -> int:
-        return self.position // PER_LEAF
-
-    @property
-    def leaf_size(self) -> int:
-        return min(PER_LEAF, self.plan.length - PER_LEAF * self.leaf)
-
-
-class Session(audit.AuditRun):
-    """`audit.AuditRun` with check 3 decided by proofs: `drawn` is what the verifier knows of window t's draws, and
-    `decide` takes check 3's outcome on each in place of `verify`'s openings."""
-
-    def drawn(self, t: int) -> tuple[PositionSample, ...]:
-        w = self.windows[t] if 0 <= t < len(self.windows) else None
-        if w is None or w.draws is None:
-            raise audit.SessionError(f"window {t} has no draws")
-        N, out = self.params.blocks, []
-        for i, p in w.draws:
-            plan = w.plans[i]
-            j = plan.block(p)
-            if j < N:
-                domain, commitment, coin = self._payload_domain, Commitment(self.registration.payload_root, N), None
-            else:
-                _f, domain, commitment, coin = self._appends[bisect.bisect_right(self._appends, j, key=lambda a: a[0]) - 1]
-            out.append(PositionSample(t, i, p, j, w.steps[i], receipts.seed(w.challenge, i, self._previous(t, i)), plan,
-                                      w.roots[i], domain, commitment, coin))
-        return tuple(out)
-
-    def decide(self, t: int, failures: Sequence[str | None]) -> audit.Verdict:
-        """Window t's verdict from check 3's outcome on each of its draws, in the order drawn: the first failure (one of
-        `audit.FAILURES`) rejects it, and a window with no draws is `malformed`, as `verify` has it."""
-        self._live()
-        w = self.windows[t] if 0 <= t < len(self.windows) else None
-        if w is None or w.draws is None or w.verdict is not None:
-            raise audit.SessionError(f"window {t} has no draws awaiting check 3")
-        if not w.draws or len(failures) != len(w.draws):
-            return self._fail(t, "malformed")
-        for at, f in zip(w.draws, failures):
-            if f is not None:
-                return self._fail(t, f if f in audit.FAILURES else "malformed", at)
-        w.verdict = audit.Verdict(t, True)
-        return w.verdict
-
-
-class Store(audit.Store):
-    """`audit.Store` keeping each appended block's payload, which check 3's unit takes as its witness."""
-
-    def __init__(self, *args, **kw) -> None:
-        super().__init__(*args, **kw)
-        self.kept: dict[int, bytes] = {}
-
-    def append(self, payloads: Sequence[bytes], salts: Sequence[bytes]) -> audit.Append:
-        a = super().append(payloads, salts)
-        self.kept.update((a.first + u, m) for u, m in enumerate(payloads))
-        return a
-
-    def payload(self, j: int) -> bytes:
-        return self.payloads[j] if j < self.registration.blocks else self.kept[j]
-
-
-def public(d: PositionSample, codec_seed: bytes, S, values: Values) -> dict[str, list[int]]:
+def public(d: audit.PositionSample, codec_seed: bytes, S, values: Values) -> dict[str, list[int]]:
     """The verifier's own copy of draw ``d``'s public rows (`BC.opening_public`): block j's codec key, bound under its
     append's coin if appended; the pass's chaining value, sign rows and p; the pass's receipt root under its seed and plan
     (`receipts.domain`); the payload's tree, at rank j - first; and, appended, the canonical payload commitment at row
@@ -162,7 +82,7 @@ def public(d: PositionSample, codec_seed: bytes, S, values: Values) -> dict[str,
                              (d.commitment.root, d.domain.domain_id, d.block - first, merkle_depth(d.domain.count)), vals)
 
 
-def witness(d: PositionSample, ps: audit.Pass, store: Store, plan_row: Sequence[int], S,
+def witness(d: audit.PositionSample, ps: audit.Pass, store: audit.Store, plan_row: Sequence[int], S,
             values: Values) -> dict[str, list[int]]:
     """The honest prover's arguments for draw ``d`` of pass ``ps``: its block and payload from its store, the receipt leaf
     under its salt and path in the pass's tree, the payload under its salt and path in its append's tree (or the
@@ -190,7 +110,7 @@ def plan_link(plan_bc: bytes, certified_bc: bytes) -> str | None:
     return None if plan_bc == certified_bc else "plan"
 
 
-def check(d: PositionSample, args: dict, codec_seed: bytes, S, values: Values, plan_salt: bytes,
+def check(d: audit.PositionSample, args: dict, codec_seed: bytes, S, values: Values, plan_salt: bytes,
           certified_bc: bytes) -> str | None:
     """Check 3 on one draw by the unit's reference (`BC.opening_check`) on the prover's arguments, its public rows the
     verifier's own, then `plan_link` on the plan row's ``b || c`` under ``plan_salt``: None, or the failure (one of
@@ -203,7 +123,7 @@ def check(d: PositionSample, args: dict, codec_seed: bytes, S, values: Values, p
     return plan_link(commit(16 * S.P, args["plan"], plan_salt), certified_bc)
 
 
-def reference(session: Session, store: Store, passes: dict, c3) -> list[audit.Verdict]:
+def reference(session: audit.AuditRun, store: audit.Store, passes: dict, c3) -> list[audit.Verdict]:
     """Every window of a session whose draws are drawn, decided by `check` on the honest prover's witness: the stand-in
     for the units' proofs. Stops at the first rejected window. ``c3`` holds the codec, the plan row's P and the depths DR,
     DP and DV, each step's plan row (``plan_rows``), its salt (``plan_salts``) and certified ``b || c`` (``plan_bcs``), and

@@ -1,4 +1,6 @@
-import Properties.Identity
+module
+
+public import Properties.Identity
 
 /-!
 # Proofs that core's identity hash is C-Flock's SHA-512 (`Properties.Identity`)
@@ -11,6 +13,8 @@ blocks the state compresses out of its buffer and the new data are the message's
 (`Rep.finalize`). The kernel never unfolds a compression: the proofs rewrite with `compress_congr` and `chain`'s
 equations instead of comparing compressions by evaluation.
 -/
+
+@[expose] public section
 
 namespace Properties.Identity
 

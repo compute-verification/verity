@@ -1,5 +1,7 @@
-import Proofs.Nci.Cover.CoveringAdditive
-import Proofs.Nci.CoveringTwoCostsWitness
+module
+
+public import Proofs.Nci.Cover.CoveringAdditive
+public import Proofs.Nci.CoveringTwoCostsWitness
 
 /-!
 # The additive covering bound is not vacuous
@@ -10,6 +12,8 @@ multiplication block (`coveringBoundAdditive_nonvacuous`). The weight gates a bl
 its inputs and outside the token computation, which holds only computed gates, so it is conditionally parameter-hard at
 `c_w = 1/2` at every `s` (`tc_conditional`).
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs.CoveringAdditive
 
@@ -44,7 +48,7 @@ theorem tc_conditional (s : ℕ) : Assumptions.ConditionalParameterHardAt tcDecl
 /-- **The additive covering bound is not vacuous**: one declaration, its multiplication blocks and a covering satisfy
 every hypothesis of `CoveringBoundAdditive` at `c_w = 1/2`, `c_a = 1`, with a chained multiplication block. -/
 theorem coveringBoundAdditive_nonvacuous :
-    ∃ (d : Verity.Declaration) (B : Nci.Covering.MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ)
+    ∃ (d : Verity.RegisteredCircuit) (B : Nci.Covering.MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ)
       (I : Fin n → Nci.Covering.Subcircuit d.D),
       (k : ℝ) < cw * D ∧ 0 < ca ∧ Assumptions.ConditionalParameterHardAt d B s cw ∧ Nci.Covering.Covers d s k I ∧
       (Nci.Assumptions.chainedBlocksAt d B D ca).Nonempty :=

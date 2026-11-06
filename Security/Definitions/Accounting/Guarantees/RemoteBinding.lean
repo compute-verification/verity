@@ -1,4 +1,6 @@
-import Definitions.Accounting.Remote.Fork
+module
+
+public import Definitions.Accounting.Remote.Fork
 
 /-!
 # The receipts' binding bound (trusted)
@@ -27,6 +29,8 @@ charge. The deployed challenger sends the prover no commitment to window `t`'s c
 the roots then read only the cut is not stated here, so `split_t` is not bounded: the gap `binding-split`.
 -/
 
+@[expose] public section
+
 namespace Accounting.Guarantees.Remote
 
 open Accounting.Remote.Draw
@@ -38,7 +42,7 @@ coins hash a SHA-512 collision between the checks of one receipt's two openings 
 that their roots split (`Receipts.split`). -/
 def ReceiptsBindingOfFork : Prop :=
   ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X)
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ),
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ),
     (∀ t ω, D.opened prf rest t ω ⊆ L t) →
     (R.binding D prf rest).toReal ≤
       ∑ t, √((L t).card * s t * ((R.fork D prf rest t).toReal + (R.split D prf rest t).toReal))
@@ -48,7 +52,7 @@ def ReceiptsBindingOfFork : Prop :=
 `Σ_t √(|L_t|·s_t·(q_t²/2^513 + split_t))`. -/
 def ReceiptsBindingOfCR : Prop :=
   ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] [Nonempty X] (D : Session n m s κ X)
-    (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ)
+    (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ)
     (L : Fin n → Finset ℕ) (q : Fin n → ℕ),
     (∀ t ω, D.opened prf rest t ω ⊆ L t) →
     (∀ t, Claims.StrictBirthday (fun u => (R.hash u).bytes) (R.finder D prf rest t (q t))) →

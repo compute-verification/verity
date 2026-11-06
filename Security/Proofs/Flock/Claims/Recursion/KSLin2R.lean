@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.KSFlockLinR
-import Proofs.Flock.Claims.Recursion.LastCallsR
+module
+
+public import Proofs.Flock.Claims.Recursion.KSFlockLinR
+public import Proofs.Flock.Claims.Recursion.LastCallsR
 
 /-!
 # `KSLin2` and `BitsLin2` at the deployed reader's steps (`FlockDeploy.nextR`)
@@ -23,6 +25,8 @@ The inner verifier's calls need nothing of the steps: the finders search them at
 at `PartAccepts`. This bounds no number by itself: those premises are open.
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Flock
@@ -41,13 +45,6 @@ def StepsBaseC (nextE : Msg → List Msg → List Coin → Claims.OC Out)
       FlockDeploy.sha512 ∧
     (bdDeployed _root_.Flock.Readable.relation nextE colsE wE join rowInDeployed final w).LastCoinFree
       FlockDeploy.sha512
-
-/-- `StepsBase` is `StepsBaseC` at the deployed plain verifier's trimmed columns. -/
-theorem stepsBaseC_of_stepsBase {nextE : Msg → List Msg → List Coin → Claims.OC Out} {wE : Msg → ℝ}
-    {join : List Msg → Msg} {final : Msg → Option (List (List (Msg × Salt)) × Msg)} {w : Msg → ℝ}
-    (h : StepsBase nextE wE join final w) :
-    StepsBaseC nextE (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wE join final w :=
-  h
 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the coin server's record
 (`recTr`), and any steps and columns meeting `StepsBaseC`, from `DecompB`**: `ksLin2_route_staged` with `HeldB` from

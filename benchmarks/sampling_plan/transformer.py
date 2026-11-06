@@ -44,19 +44,19 @@ import json
 import sys
 from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
-from math import ceil, log, log2
+from math import ceil, log
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import I, KEY, observations  # noqa: E402
+from inputs import I, KEY, cap, observations  # noqa: E402
 
 from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, shape_of  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayDomain, certify, density_bound, for_target,
                                                            frontier, ln_upper, row_ands)
 from verity.ml.circuits.codec import descriptor_id  # noqa: E402
@@ -161,16 +161,11 @@ def requests_per_block(sequences: int, step_s: float, positions: int, block_s: f
     return round(block_s / step_s * sequences / positions)
 
 
-def _cap(ands: int) -> int:
-    """A statement's units under m = k_log + nbl <= 35 (`int8_llama.cap`)."""
-    return min(1 << max(0, 35 - (ceil(log2(max(ands, 2))) + 1)), 1 << 20)
-
-
 def _counted(s: Shape, memo: dict[str, Shape]) -> Shape:
-    """`s` credited its ANDs as work (unless it names its own), and its statement cap from its ANDs and rows."""
+    """`s` credited its ANDs as work (unless it names its own), and its statement cap from its ANDs and rows (`cap`)."""
     if s.id in memo:
         return memo[s.id]
-    out = replace(s, work=s.work or s.ands, cap=_cap(s.ands + sum(row_ands(r) for r in s.rows)),
+    out = replace(s, work=s.work or s.ands, cap=cap(s.ands, s.rows),
                   parts=tuple((_counted(c, memo), k) for c, k in s.parts),
                   ways=tuple((label, tuple((_counted(c, memo), k) for c, k in ps)) for label, ps in s.ways))
     memo[s.id] = out
@@ -188,7 +183,7 @@ def _group(name: str, child: Shape, count: int, rows: tuple[int, ...]) -> Shape:
                  parts=((child, count),))
 
 
-class Dag:
+class DefinitionGraph:
     """The block's Definition DAG: `ops` maps each op to its root shape and its instances a block, and `ids` each real
     Definition's shape id to its descriptor id (the circuit record's subcircuit id); a stub has none."""
 
@@ -351,7 +346,7 @@ class Serving:
     step_s: float | None = None
 
 
-def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
+def serve(m: Model, s: Serving) -> tuple[TensorCommit, ...]:
     """Every serve-time commitment of the block beside the units' own outputs (which `Candidate.commit_bits` carries):
     the requests' bytes in, the in-flight requests' KV cache at the close (the carried state; also the QKV units'
     outputs, so a copy `overlaps` would price), PoUW's CP-W receipts under h1 (2 (K/32 + m) u32 a 32 x 32 tile, the
@@ -366,7 +361,7 @@ def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
             ("carry", "KV cache of the in-flight requests at the close", m.inflight * m.context * m.kv_bytes),
             ("pouw:h1", "CP-W receipts", m.requests * (m.positions * per_token + m.generate * head)),
             ("bandwidth", "receipts over the audited store", s.audit_passes * s.audit_store / 4096 * 64)]
-    return tuple(Commitment(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
+    return tuple(TensorCommit(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
 
 
 def costs(m: Model, s: Serving) -> CostModel:
@@ -380,7 +375,7 @@ def costs(m: Model, s: Serving) -> CostModel:
                    replay={"request": ReplayDomain(m.requests, s.replay)})
 
 
-def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
+def candidates(dag: DefinitionGraph, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
     """`candidates.cuts` on each op, every subcircuit in the `request` replay domain: its alternatives, each its units
     by Definition."""
     out, alts = [], {}
@@ -394,7 +389,7 @@ def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) ->
 def plans(m: Model, s: Serving, delta: float = DELTAS[0], *, grid: int = 61, cut_grid: int = 21):
     """The block's DAG, its cost model, objective and candidates, and the frontier of expected cost against certified
     faulty proof blocks (screened by `density_bound`)."""
-    dag = Dag(m)
+    dag = DefinitionGraph(m)
     objective = Objective(delta)
     cm = costs(m, s)
     cands, alts = candidates(dag, cm, objective, cut_grid)
@@ -460,7 +455,7 @@ def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int =
     return rows
 
 
-def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
+def handoff(plan: Plan, cands: list[Candidate], dag: DefinitionGraph) -> dict:
     """The plan as a GPU loop registers it (a `circuit_record(..., law, cap)`), each subcircuit
     a Definition's descriptor id (a stub's id until its Definition lands) with its units:
 
@@ -500,7 +495,7 @@ def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
             "statement_units": statement, "stubs": sorted(t for t, _ in templates if t.startswith("stub:"))}
 
 
-def summary(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
+def summary(plan: Plan, cands: list[Candidate], dag: DefinitionGraph) -> dict:
     rows = [{"template": dag.template_id(c), "op": c.op, "units": c.units, "k": plan.sizes[c.template],
              "statement": plan.statement_size[c.template], "work": c.work,
              "ands": c.ands + sum(row_ands(r) for r in c.rows)} for c in cands if c.template in plan.sizes]

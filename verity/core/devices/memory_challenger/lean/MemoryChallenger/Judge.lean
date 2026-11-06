@@ -1,4 +1,6 @@
-import MemoryChallenger.Protocol
+module
+
+public import MemoryChallenger.Protocol
 
 /-!
 # The verdict on a record, as its caller holds it
@@ -8,7 +10,8 @@ the whole `Verdict` back. This is what `benchmarks/pous/memory_challenger/live.p
 replay of its records reads (`verdict.py` beside this package is the Python call). The input is one object:
 
 * `signed`: `SignedSession.to_json()`;
-* `commitment`: `SessionCommitment.to_json()`, the commitment published before the session;
+* `commitment`: `SessionCommitment.to_json()`, the commitment the device builds before the session and releases once
+  it is signed;
 * `openings`: `[CoinOpening.to_json(), …]`;
 * `expected`: `{"<i>": hex, …}`, `block_digest` of block `i` of `C` for the blocks the caller has it for (the blocks the
   rounds name are enough: `verdict` reads no other);
@@ -21,6 +24,8 @@ extra, a byte string not lowercase hex, a negative integer or a header constant 
 is a scheme id this port doesn't verify. The output is `{"accepted", "late", "reasons", "wrong"}`, the reasons the
 Python's word for word.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Judge
 

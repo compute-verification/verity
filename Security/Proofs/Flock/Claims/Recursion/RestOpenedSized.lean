@@ -1,20 +1,26 @@
-import Proofs.Flock.Claims.Recursion.RestElemR
-import Proofs.Flock.Claims.Recursion.SlotsPorted
-import Proofs.Flock.Claims.Recursion.OpenSlots
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.Claims.Recursion.RestLens
-import Proofs.Flock.Claims.Recursion.NextRFits
-import Proofs.Flock.Claims.Recursion.NextRSetup
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.Claims.Recursion.RestFitsLift
-import Proofs.Flock.Recursive.HPortTie
-import Proofs.Flock.C3.Reps.RoundLinks
-import Proofs.Flock.VBridge.Family.Structure
-import Proofs.Flock.SessionLoop.FinPoints
-import Proofs.Flock.C3.VStarList.Shape
-import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.Recursion.SchedCount
-import VStar.Stage
+module
+
+public import Proofs.Flock.Claims.Recursion.RestElemR
+public import Proofs.Flock.Claims.Recursion.SlotsPorted
+public import Proofs.Flock.Claims.Recursion.OpenSlots
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.Claims.Recursion.RestLens
+public import Proofs.Flock.Claims.Recursion.NextRFits
+public import Proofs.Flock.Claims.Recursion.NextRSetup
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.Claims.Recursion.RestFitsLift
+public import Proofs.Flock.Recursive.HPortTie
+public import Proofs.Flock.C3.Reps.RoundLinks
+public import Proofs.Flock.VBridge.Family.Structure
+public import Proofs.Flock.SessionLoop.FinPoints
+public import Proofs.Flock.C3.VStarList.Shape
+public import Proofs.Flock.Claims.DeployK
+public import Proofs.Flock.Claims.Recursion.SchedCount
+public import VStar.Stage
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
 
 /-!
 # `OpenedSized` at the deployed last message `elemR`
@@ -35,13 +41,13 @@ of an honest rep's rows. This file proves it, so the last step reads at the depl
   honest rep's (`roundSlots_sizes`, `openedSized_of`). Nothing reads a witness's values, only `elemR`'s layout.
 -/
 
+@[expose] public section
+
 namespace VStarSizes
 
 open VStar.Algebra
 
 theorem msgNames_size (n : Nat) : (msgNames n).size = 4 := rfl
-
-theorem oodMsg_size (o n : Nat) : (#[Name.ood o] ++ msgNames n).size = 5 := rfl
 
 theorem fp_sizes (g : Nat → Array Name) : ∀ (l : List Nat) (init : Array (Array Name)),
     (l.foldl (fun b a => b.push (g a)) init).toList.map Array.size =
@@ -58,14 +64,6 @@ theorem f1_fst : ∀ (l : List Nat) (init : Array (Array Name) × Nat),
   | a :: l, init => by
     rw [List.foldl_cons, f1_fst l]
     simp [msgNames_size, List.replicate_succ]
-
-theorem f1_snd : ∀ (l : List Nat) (init : Array (Array Name) × Nat),
-    (l.foldl (fun b _ => (b.fst.push (msgNames b.snd), b.snd + 1)) init).snd = init.snd + l.length
-  | [], init => by simp
-  | a :: l, init => by
-    rw [List.foldl_cons, f1_snd l]
-    simp
-    omega
 
 theorem f2_fst : ∀ (l : List Nat) (init : Array (Array Name) × Nat × Nat),
     (l.foldl (fun b _ => (b.fst.push (#[Name.ood b.snd.snd] ++ msgNames b.snd.fst), b.snd.fst + 1, b.snd.snd + 1))

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.SaltProver
+module
+
+public import Proofs.Flock.Claims.ZK.SaltProver
 
 /-!
 # Levels ≥ 1's salts at the executable's indices
@@ -15,6 +17,8 @@ tape's salts.
   schedule, empty off it; on the tape's salts once `Pc` reads only the schedule's levels ≥ 1 and their positions
   (`ofSalts_exe`, `SaltsOn`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -61,13 +65,6 @@ theorem le_sum_tail {ls : List FlockSoundness.Accounting.Level} {l p : ℕ} (h :
 noncomputable abbrev hiTape (P : Composed.LigProver) (x : Msg) (t : Fin Claims.Flock.zkTableCap → ExeCell)
     (j : Fin (jOf x)) (r : Fin 2) : Fin (Composed.hiCount (zkTab x j).table) → ZkView.Salt :=
   (((TapePlan.ofLayout (TapeLayout.exe P) exeTape).tape x t).1 j).2.2.2.2.2.2.2.2.2 r
-
-/-- `TapePlan.ofLayout`'s base of table `j` is the layout's reading of cell `j`. -/
-theorem ofLayout_tape_base {P : Composed.LigProver} (L : TapeLayout P)
-    (z : (Fin Claims.Flock.zkTableCap → L.Cell) → FlockComplete.TapeZk) (x : Msg)
-    (t : Fin Claims.Flock.zkTableCap → L.Cell) (j : Fin (jOf x)) :
-    ((TapePlan.ofLayout L z).tape x t).1 j = (L.read x j (t (Fin.castLE (jOf_le_cap x) j))).1 :=
-  rfl
 
 /-- `exeRead`'s levels ≥ 1 salts: the cell's, by level and position or at a leftover place, at `ιH`. -/
 theorem exeRead_hi {z : ZkView.Sizes} (hz : Fits z zMax) {h : ℕ}

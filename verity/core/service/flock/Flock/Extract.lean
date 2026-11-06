@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.7: `Q_word` v1 over the verifier's own copy of the program (`verity.ir.cut`, read through the descriptor
+`Flock.Partition`: `Q_word` v1 over the verifier's own copy of the program (`verity.ir.cut`, read through the descriptor
 format, `Flock.Program`): each Call's computing graph (`CallGraph` of `cut.CallGraph`), separability, and the Program's units
 by Call, which `Flock.Qword` cuts. `Q_word` v2 evaluates the same; only its cut check differs (`checkCalls`' `report`).
 
@@ -8,9 +8,13 @@ the Definition's own gates follow at `lo`. In a graph, an operand outside the Ca
 the graph is exported (`full`), or else named by its gate, which gives the same recompute tokens (equal exactly when the
 inputs are one) without a table of inputs.
 -/
-import Std.Data.HashMap
-import Flock.Program
-import Flock.Qword
+module
+
+public import Std.Data.HashMap
+public import Flock.Program
+public import Flock.Qword
+
+@[expose] public section
 
 namespace Flock.Extract
 

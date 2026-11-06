@@ -17,12 +17,24 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
   the exact δ given, which `PyJson` writes as Python's `repr` does. `wrong_units.bound` is exact under every law
   (`Bound.boundOf`).
 -/
-import SampledProofs.Bound
-import SampledProofs.Draw
-import SampledProofs.PyJson
-import Flock.WindowRecord
-import CoreProtocol.Profile
-import Std.Data.HashMap
+module
+
+public import SampledProofs.Bound
+public import SampledProofs.Draw
+public import SampledProofs.PyJson
+public import Flock.WindowRecord
+public import CoreProtocol.Profile
+public import Std.Data.HashMap
+meta import SampledProofs.Bound
+meta import SampledProofs.Draw
+meta import SampledProofs.PyJson
+meta import Flock.WindowRecord
+meta import CoreProtocol.Profile
+meta import Std.Data.HashMap
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Record
 
@@ -218,7 +230,7 @@ def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : 
   simp only [checks, checksFast, find?_byPort]
 
 /-- The profile's draw of the law a draw names (`audit.profile`): a work law is the stratified law at its sizes. -/
-def profileDraw (law : Json) : Option Core.Draw :=
+def profileDraw (law : Json) : Option Core.SamplingDesign :=
   match getD law "law" with
   | .str "subset" => (nat? (getD law "k")).map .subset
   | .str "bernoulli" => do
@@ -412,7 +424,7 @@ private def sameCanon (j : Json) : Bool :=
   pyCanonical j && (Flock.canon j).toOption == py && (Flock.WindowRecord.digestHex j).toOption ==
     py.map fun t => sha512Hex ((Flock.WindowRecord.tagOf j).toUTF8 ++ ByteArray.mk #[0] ++ t.toUTF8)
 
-private def parsed (s : String) : Json := (Json.parse s).toOption.getD .null
+private def parsed (s : String) : Json := (Flock.JsonParse.parse s).toOption.getD .null
 
 private def PRINTABLE : String := String.ofList ((List.range 0x7f).map Char.ofNat)
 

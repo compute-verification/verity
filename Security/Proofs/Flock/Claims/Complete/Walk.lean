@@ -1,11 +1,14 @@
-import Proofs.Flock.Claims.Complete.Count
-import Proofs.Flock.Claims.Complete.Custody
-import Proofs.Flock.Claims.Complete.Discharge
-import Proofs.Flock.Claims.Complete.Files
-import Proofs.Flock.Claims.Complete.Link
-import Proofs.Flock.Claims.Complete.Replay
-import Proofs.Flock.Claims.Complete.Runs
-import Proofs.Flock.Claims.Complete.Shape
+module
+
+public import Proofs.Flock.Claims.Complete.Count
+public import Proofs.Flock.Claims.Complete.Custody
+public import Proofs.Flock.Claims.Complete.Discharge
+public import Proofs.Flock.Claims.Complete.Files
+public import Proofs.Flock.Claims.Complete.Link
+public import Proofs.Flock.Claims.Complete.Runs
+public import Proofs.Flock.Claims.Complete.Shape
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
+public import Proofs.Flock.Claims.Complete.Replay.ProverOk
 
 /-!
 # The session walk
@@ -22,6 +25,8 @@ proved beside it, Flock's completeness at the deployed plain verifier and the de
 * `Run.walk`: at a run, rep `r` runs from `repStart`'s send on and returns the decoded proof, and the recorded stream is
   its rounds as the decoder reads them back (`roundRec`), which carry them, on the table's level-0 commitment.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -218,11 +223,11 @@ theorem repP_prefix (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (s
   obtain ⟨rs, -, hrs', -, -⟩ := JsonRT.Rec.go (JsonRT.ligeritoP_rec resp h st.merkle sch _ cm0 tbl _ salt nonce) h1
   exact ⟨rs.toArray, Array.toList_inj.1 (by simpa using hrs')⟩
 
-theorem Lc.prefix_tEnd {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Lc.Coins}
+theorem Lc.prefix_tEnd {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Lc.Challenges}
     (t : Transcript) : Prefix t.rounds (Lc.tEnd c m tr zc full cs t).rounds :=
   (Prefix.push _ _).trans (Lc.prefix_t₂ t)
 
-theorem Rs.prefix_tEnd {tr : Trace} {claims : Array Claim} {cs : Rs.Coins} (t : Transcript) :
+theorem Rs.prefix_tEnd {tr : Trace} {claims : Array Claim} {cs : Rs.Challenges} (t : Transcript) :
     Prefix t.rounds (Rs.tEnd tr claims cs t).rounds :=
   Rs.prefix_loop (i := 0) t (Nat.zero_le _)
 

@@ -1,6 +1,11 @@
-import CoreProtocol.Cli
-import CoreProtocol.Ratio
-import RemoteAudit.Verifier
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Ratio
+public import RemoteAudit.Verifier
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Ratio
+meta import RemoteAudit.Verifier
 
 /-!
 # A session over PoUS's P2 store as a core protocol
@@ -9,8 +14,10 @@ PoUB-P2's session (`P2Session`, as the verifier's process decides it live, `p2_p
 (`Core.Protocol`), so that onsite can take it as its bandwidth component: its registered store is PoUS's `C*`, so the
 store it audits is the one PoUS's setup published. Its bytes are canonical JSON (`p2_case.py` writes them):
 
-* params `{"not_before_ns": n, "request": R}`: the verifier's clock floor and the prover's request R, its session's
-  parameters (`P2Session.requestOf`), refused unless R is for the registration's node;
+* params `{"not_before_ns": n, "request": R}`: the verifier's clock floor and the prover's request R, refused unless
+  R is for the registration's node and restates the auditor's session, `P2Session.SESSION`, as it is
+  (`P2Session.requestOf`), naming each value that isn't: no digest binds R, so the session's parameters are that
+  constant's, never R's, and a toy party's case is refused;
 * the commitment: the auditor's registration file, its fields and its plan (`P2Session.heldOf`); its digest
   `Commitment.digest`, SHA-512 of `DIGEST_DOMAIN` and those bytes, so it binds the plan as well as the registration;
 * the evidence `{"log": [...]}`: every request the verifier's process answered of the session after it opened, in the
@@ -28,6 +35,10 @@ their span, and the error they hold at, ε = δ + S/2^64 for S the draws, `Remot
 the sketch's term at units, `SketchBoundP2`, which is drafted). The profile is the rest of the session's answer.
 No property states yet what this check accepts; `p2_case.py`'s tests hold it to the live process's answer.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.P2Protocol
 
@@ -123,9 +134,10 @@ def step (held : P2Session.Held) (s : Session.State) : Op → V Session.State
   | .openings t line => pure (P2Session.verify CHUNK held s t line).2
   | .fail => pure (P2Session.fail s).2
 
-/-- The session after the log, from its first state on the request's parameters with no coin yet released. -/
+/-- The session after the log, from its first state on `SESSION`'s parameters, which the request restates, with no coin
+yet released. -/
 def replay (p : Params) (c : Commitment) (e : Evidence) : V Session.State := do
-  let params ← match P2Session.requestOf c.held p.request with
+  let params ← match P2Session.requestOf c.held P2Session.SESSION p.request with
     | .ok x => pure x
     | .error why => throw s!"the request is refused: {why}"
   let mut s := P2Session.init c.held params (Array.replicate (2 * params.windows) ByteArray.empty) p.notBeforeNs

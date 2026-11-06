@@ -1,6 +1,8 @@
-import CertifierDevice.Device
-import World
-import Std.Sync.Channel
+module
+
+public import CertifierDevice.Device
+public import World
+public import Std.Sync.Channel
 
 /-!
 # The driver that runs the device in the world
@@ -20,12 +22,14 @@ and the link, as `Proxy.run` does, and returns. With the salt on, it draws every
 coins before its first tick; the device reads one only once its frame is released.
 -/
 
+@[expose] public section
+
 namespace CertifierDevice
 
 open Core (Conn)
 
 /-- What the device publishes: a closed window's record, with its grid's parameters. -/
-abbrev Out := Record × Params
+abbrev Out := BlockGrid × Params
 
 /-- An event from a task, with the connection it opened. -/
 abbrev Message := Event × Option Conn

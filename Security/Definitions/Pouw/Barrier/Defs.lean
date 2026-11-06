@@ -1,6 +1,8 @@
-import Definitions.Pouw.Game.Defs
-import Definitions.Pouw.NCP.Defs
-import Mathlib.Order.Interval.Finset.Nat
+module
+
+public import Definitions.Pouw.Game.Defs
+public import Definitions.Pouw.NCP.Defs
+public import Mathlib.Order.Interval.Finset.Nat
 
 /-!
 # The degenerate-input barrier: definitions (trusted)
@@ -16,6 +18,8 @@ import Mathlib.Order.Interval.Finset.Nat
   (class (b), several checked products whose final values give the useful output through a known linear relation)
   and `segProto` (class (c), the running sums of one product at depth `d`, the last of which is the useful output).
 -/
+
+@[expose] public section
 
 namespace Pouw.Barrier
 

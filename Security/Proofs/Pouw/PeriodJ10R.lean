@@ -1,7 +1,9 @@
-import Properties.Pouw.PeriodJ10R
-import Proofs.Accounting.ComposePeriod
-import Proofs.Accounting.Compose.SplitRateClosed
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Properties.Pouw.PeriodJ10R
+public import Proofs.Accounting.ComposePeriod
+public import Proofs.Accounting.Compose.SplitRateClosed
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # Proof of `H1J10RCheckedCreditPeriod`
@@ -14,6 +16,8 @@ monotonicity (`jointSound_tile`). The rate is `SplitRateClosed`'s at H1's lucks 
 `8(1 + Kρ)/(ρK)`), and `Pins` comes from the window's salt being its live coin (`pins_j10r`): the relation is
 `j10r_reference`'s at the unit's place, one description.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs
 
@@ -177,7 +181,7 @@ theorem nDigits_eq (k : ℕ) : PouwCheck.Credit.nDigits k = J10R.nDigits k := by
 reads, is `J10R.unitBlocks` at every slot, contraction, tile and place. -/
 theorem j10rBlocks_eq (M k R C I J : ℕ) :
     PouwCheck.Credit.j10rBlocks M k (R, C) I J = J10R.unitBlocks M k R C I J := by
-  simp only [PouwCheck.Credit.j10rBlocks, J10R.unitBlocks, J10R.Layout.row, J10R.Layout.col, J10R.rb, J10R.cb,
+  simp only [PouwCheck.Credit.j10rBlocks, J10R.unitBlocks, J10R.NoiseLayout.row, J10R.NoiseLayout.col, J10R.rb, J10R.cb,
     J10R.rowBits, J10R.colBits, nDigits_eq]
 
 end Properties.Pouw.PeriodJ10R.SecurityProofs

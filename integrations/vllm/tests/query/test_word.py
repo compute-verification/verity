@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.layout import GateSelection
+from verity.ml.circuits.query_ast import oracle_gateset, oracle_out
 from verity.ml.circuits.cut import call_scope
 from verity.ml.definitions import word as W
 
@@ -65,7 +65,7 @@ def test_widths_are_the_irs_out_where_no_wiring_sits_between_units(fam, statics)
     c, call = call_scope(fn)
     for u in range(len(R["kinds"])):
         gates = (G.keep[np.flatnonzero(R["owner"] == u)] + call.offset).tolist()
-        out = GateSelection(c, gates).out
+        out = oracle_out(c, oracle_gateset(c, gates))
         assert sum(c.gate(g).prim.ret.w for g in out) == R["out_bits"][u] and len(out) == R["out_gates"][u]
 
 
@@ -224,7 +224,7 @@ def test_a_dead_output_passes_the_check_only_as_unreturned_and_listed(tmp_path):
     assert attn["query"]["word_check"]["ok"] and dead and {r["spec"] for r in dead} == {"Gemm_v1"}
     assert {r["step"] for r in dead} == set(attn["steps"])
     assert not [r for r in attn["identities"] if "o_proj" in r["op_path"] and r["family"] != "weights"]
-    assert attn["populations"]["unreturned_calls"] == sum(r["rows"] for r in dead) and len(attn["unreturned_digest"]) == 64
+    assert attn["populations"]["unreturned_calls"] == sum(r["rows"] for r in dead) and len(attn["unreturned_digest"]) == 128
     with pytest.raises(W.QueryRuleViolation, match="RMSNormFusedCuda_v2.*output-not-committed"):
         M.build(_program_dir(tmp_path, attn=True), request_id="r0", word="16/32", return_slots=False)
 

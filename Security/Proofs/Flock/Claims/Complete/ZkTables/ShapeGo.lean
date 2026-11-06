@@ -1,7 +1,12 @@
-import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
-import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
-import Proofs.Flock.Claims.Complete.Zk.ProverOk
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
+public import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
+public import Proofs.Flock.Claims.Complete.Zk.ProverOk
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # The honest masked rep proof fits its shape
@@ -25,6 +30,8 @@ shape the masked verifier decodes it at.
 and `Zk.Level0Verifier`) and the mask-rank bound (`L0.complete_jsonT_closed`; with the bound proved,
 `L0.complete_jsonT_of_spec`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 
@@ -217,7 +224,7 @@ are at most `424 + 16·1024 + 168·(232 + 64·13)`. -/
 theorem inZ_shape {h : ByteArray → ByteArray} (h64 : ∀ b, (h b).size = 64) (lay : Zk.PadLayout) (tape : TapeZk)
     (i r : ℕ) {ic : InnerCommit}
     (hic : innerCommitP (Hashes.ofSha512 h : Hashes V) (padsOf tape i r lay) (tape.innerSalt i r) = .ok ic)
-    (cons : Array (String × Zk.Lin)) (cs : InZ.Coins) (hlen : lay.len + Zk.K_PAD ≤ 1024) :
+    (cons : Array (String × Zk.Lin)) (cs : InZ.Challenges) (hlen : lay.len + Zk.K_PAD ≤ 1024) :
     (∀ x ∈ (InZ.proof lay (padsOf tape i r lay) cons h ic cs).salts, x.size = 192) ∧
     (∀ q ∈ (InZ.proof lay (padsOf tape i r lay) cons h ic cs).paths, ∀ x ∈ q, x.size = 64) ∧
     (ZkView.wInner (InZ.proof lay (padsOf tape i r lay) cons h ic cs)).size ≤

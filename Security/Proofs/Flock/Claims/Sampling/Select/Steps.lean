@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.Sampling.Select.Layout
-import Properties.SampledProofs.Draw
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Layout
+public import Properties.SampledProofs.Draw
+
+@[expose] public section
 
 open SampledProofs
 
@@ -214,7 +218,7 @@ theorem deriveWork_ok (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (tab 
 
 /-- `Slots.select`'s steps: the layout, and the checked proof units of the units `Select.select` proves. -/
 theorem slots_select_ok (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
-    (cm : Option (Array (Int × Array Int))) (src : ByteArray) (l : Slots.Layout) (c : Array ℕ)
+    (cm : Option (Array (Int × Array Int))) (src : ByteArray) (l : Slots.SlotOrder) (c : Array ℕ)
     (h : Slots.select rule d query table cm src = .ok (l, c)) :
     Slots.layout d query = .ok l ∧ ∃ draw proved read, Select.select rule d query table cm src = .ok (draw, proved, read) ∧
       c = Slots.checked l proved := by

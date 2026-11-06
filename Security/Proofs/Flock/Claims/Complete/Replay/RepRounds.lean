@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
-import Proofs.Flock.Claims.Complete.Json.Goals
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
+public import Proofs.Flock.Claims.Complete.Json.Goals
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # A returning rep's rounds are few and small
@@ -13,6 +17,8 @@ a few coins: zerocheck's `6`, `m − 13` and `1`; lincheck's `1`; the ring switc
 * `Bnd B N t`: `t` holds at least `N` rounds, each of at most `B` coins; kept by every absorb (`Lg.ap`) and by a squeeze
   of at most `B` coins (`Bnd.afterSq`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 
@@ -51,7 +57,7 @@ end Bnd
 
 namespace Zc
 
-theorem bnd_loopT {B N m : ℕ} {cs : Coins} {tr : Trace} {t₀ : Transcript} (h : Bnd B N t₀) (h1 : 1 ≤ B) :
+theorem bnd_loopT {B N m : ℕ} {cs : Challenges} {tr : Trace} {t₀ : Transcript} (h : Bnd B N t₀) (h1 : 1 ≤ B) :
     ∀ i, Bnd B N (loopT m cs tr t₀ i)
   | 0 => h
   | i + 1 => by
@@ -59,7 +65,7 @@ theorem bnd_loopT {B N m : ℕ} {cs : Coins} {tr : Trace} {t₀ : Transcript} (h
     exact Bnd.sq (bnd_loopT h h1 i) h1 _ _ _ _
 
 /-- Zerocheck's squeezes are of `6`, `m − 13` and `1` coins. -/
-theorem bnd_tEnd {B N m : ℕ} {digest cap : ByteArray} {cs : Coins} {tr : Trace} {t : Transcript} (h : Bnd B N t)
+theorem bnd_tEnd {B N m : ℕ} {digest cap : ByteArray} {cs : Challenges} {tr : Trace} {t : Transcript} (h : Bnd B N t)
     (h6 : 6 ≤ B) (hm : m - 13 ≤ B) : Bnd B N (tEnd m digest cap cs tr t) := by
   have h₂ : Bnd B N (t₂ digest cap cs t) := Bnd.sq h h6 _ _ _ _
   have h₃ : Bnd B N (t₃ m digest cap cs t) := Bnd.afterSq h₂ hm _ _
@@ -70,7 +76,7 @@ end Zc
 
 namespace Lc
 
-theorem bnd_loopT {B N : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Coins}
+theorem bnd_loopT {B N : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Challenges}
     {t : Transcript} (h : Bnd B N t) (h1 : 1 ≤ B) : ∀ i, Bnd B N (loopT c m tr zc full cs t i)
   | 0 => by
     have h₂ : Bnd B N (t₂ cs t) := Bnd.sq h h1 _ _ _ _
@@ -80,7 +86,7 @@ theorem bnd_loopT {B N : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcO
     exact Bnd.sq (bnd_loopT h h1 i) h1 _ _ _ _
 
 /-- Lincheck's squeezes are of one coin. -/
-theorem bnd_tEnd {B N : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Coins}
+theorem bnd_tEnd {B N : ℕ} {c : CircuitFold} {m : ℕ} {tr : Trace} {zc : ZcOut} {full : Array F128} {cs : Challenges}
     {t : Transcript} (h : Bnd B N t) (h1 : 1 ≤ B) : Bnd B N (tEnd c m tr zc full cs t) :=
   Bnd.sq (bnd_loopT h h1 _) h1 _ _ _ _
 
@@ -88,13 +94,13 @@ end Lc
 
 namespace Rs
 
-theorem bnd_loopT {B N : ℕ} {tr : Trace} {claims : Array Claim} {cs : Coins} {t : Transcript} (h : Bnd B N t)
+theorem bnd_loopT {B N : ℕ} {tr : Trace} {claims : Array Claim} {cs : Challenges} {t : Transcript} (h : Bnd B N t)
     (h7 : 7 ≤ B) : ∀ k, Bnd B N (loopT tr claims cs t k)
   | 0 => Bnd.of_rounds h rfl
   | k + 1 => Bnd.sq (bnd_loopT h h7 k) h7 _ _ _ _
 
 /-- The ring switch's squeezes are of `7` coins and one per claim. -/
-theorem bnd_tEnd {B N : ℕ} {tr : Trace} {claims : Array Claim} {cs : Coins} {t : Transcript} (h : Bnd B N t)
+theorem bnd_tEnd {B N : ℕ} {tr : Trace} {claims : Array Claim} {cs : Challenges} {t : Transcript} (h : Bnd B N t)
     (h7 : 7 ≤ B) (hc : claims.size ≤ B) : Bnd B N (tEnd tr claims cs t) :=
   Bnd.afterSq (bnd_loopT h h7 _) hc _ _
 

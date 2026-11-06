@@ -39,12 +39,14 @@ untraced = ["tests/test_bench.py"]
 # names of the engine the runner builds, which a test checks on the runner's local-checkpoint engine; its profiling arms
 # write each run's records after its timed run, which a test checks with the same fakes; and its TP decode
 # driver's phases, batches and gate are tested on recorded shapes. A Pearl-C protocol arm's own gate is the
-# experimental Pearl-C arm's call check, which a test runs on a fake device run. The served table reads each result's
+# experimental Pearl-C arm's call check, which a test runs on a fake device run; `served_passes.py arm` writes a spec's
+# Pearl-C arm as serve-openai's --protocols-config, which a test runs on the H200 spec. The served table reads each result's
 # labels through from the store's remote (research's labels_sync, which research doesn't export), which a test checks on a
 # directory remote.
 inputs = [
     "tools/research/src/research/store/labels_sync.py",
     "benchmarks/pouw/pearl_c_vllm/bench_arm.py",
+    "benchmarks/pouw/pearl_c_vllm/served_passes.py",
     "benchmarks/pouw/settings.py",
     "benchmarks/harness/README.md",
     "benchmarks/served_commit/arm.py",
@@ -87,6 +89,7 @@ inputs = [
     "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
     "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
     "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
+    "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole_calls.py",
     "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
     "integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/kept.py",
@@ -102,6 +105,13 @@ inputs = [
     # a direct point's command must pass a slot-only node's launcher rule (research's slot_only.through_slot), which a
     # test checks
     "tools/research/src/research/pods/nebius/slot_only.py",
+    # the overhead table scales γ by the census's datacenter, world and datasheet rates and rho's FLOP-to-gates conversion,
+    # and `verity bench overhead` is the door's runner, which a test runs
+    "benchmarks/census/deployments.json",
+    "benchmarks/census/adversary.json",
+    "benchmarks/census/hardware.json",
+    "benchmarks/rho/data/hardware.toml",
+    "benchmarks/overhead/run.py",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

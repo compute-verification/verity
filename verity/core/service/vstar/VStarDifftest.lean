@@ -1,8 +1,10 @@
-import Difftest
-import VStar
-import Flock.RecResiduals
-import Flock.RecSetup
-import Flock.RecLinkRef
+module
+
+public import Difftest
+public import VStar
+public import Flock.RecResiduals
+public import Flock.RecSetup
+public import Flock.RecLinkRef
 
 /-!
 # V*'s difftest executable
@@ -20,6 +22,8 @@ holds `rec_live.inner_draw`, the prover's reading of the inner session's draw, t
 (`Flock.RecLinkTree`) to `rec_link.Tree`, and `link_ref` the unit's Lean reference (`Flock.RecLinkRef.linkRef`) to
 `rec_link.link_ref`.
 -/
+
+@[expose] public section
 
 namespace VStar.DT
 

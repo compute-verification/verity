@@ -105,7 +105,7 @@ WINDOW_EXPECT = {
     "not-window": ("layout", Cr.NOT_WINDOW), "template": ("layout", "is not h1window's"),
     "tile-ks": ("layout", "h1window binds one template per K"), "body": ("layout", Cr.BODY),
     "layout-form": ("layout", Cr.LAYOUT_FORM), "record-layout": ("layout", "which is no linear of the window"),
-    "alt-layout": ("layout", Cr.BODY), "tile-k": ("tile-k", TILE_K),
+    "alt-layout": ("layout", Cr.BODY), "reinterpret": ("layout", Cr.DESCRIPTOR_FORM), "tile-k": ("tile-k", TILE_K),
     "credit-changed": ("coin", NO_DRAW_SESSION), "credit-no-draw": ("draw", Cr.NO_DRAW),
     "credit-forged-ledger": ("coin", "the draw's session is not trusted"),
     "credit-branch-pin": ("coin", OFF_MAIN),
@@ -575,6 +575,18 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix, unit
                                                "weights once")
 
 
+def test_a_word_read_at_another_width_refuses():
+    """A descriptor whose template's A or B row of bits reads the root's 16-bit input words is one C-Flock's decoder
+    refuses (``E_REINTERPRET``), so `credit.layout_of` refuses it as no descriptor (`credit.DESCRIPTOR_FORM`), and
+    accepts the same window wired at each leaf's own width; the difftest's ``reinterpret`` cases hold the Lean to it."""
+    for seed in SEEDS:
+        rng = random.Random(f"reinterpret/{seed}")
+        lay = cases.layout(rng)
+        assert Cr.layout_of(bytes.fromhex(cases.descriptor(rng, lay)))[1] is None
+        assert Cr.layout_of(bytes.fromhex(cases._break_desc(rng, lay, "reinterpret"))) == (
+            None, ("layout", Cr.DESCRIPTOR_FORM))
+
+
 def test_an_alternative_layout_with_the_same_descriptor_refuses():
     """The layout is the committed circuit's, never the window's evidence: a window presenting a layout beside its
     descriptor is not a window's evidence; a compiled descriptor whose record names another layout (another slot,
@@ -677,6 +689,22 @@ def test_a_table_the_served_commit_did_not_commit_refuses(seed):
             assert got is None and refused[0] == "a-link" and "the window's layout gives it" in refused[1], refused
         else:
             assert got is None and refused[0] == "arow" and "(ROOTS1)" in refused[1], (name, refused)
+
+
+def test_each_commit_table_is_its_rounds_window_table():
+    """`window_table` is ROOTS1's one map from the Commit's names to the window's tables, the one the records audit ties
+    them by: round s's ``row-table/<s>/k<K>`` is the window's A table ``a/<K>@<s>`` (a table `table_rows` sizes) and
+    ``input-ids/<s>`` its ``ids@<s>``, under the descriptor's prefix. Any other name is refused."""
+    d = cases.window_instance(random.Random("honest/0"))
+    lay, steps = Cr.layout_of(bytes.fromhex(d["descriptor"]))[0], len(d["rounds"])
+    sized = Cr.table_rows(lay, steps, "h1/")
+    for s, k, _cs in Cr.step_tables(lay, steps):
+        assert Cr.window_table(Cr.commit_rows(s, k), "h1/") == f"h1/a/{k}@{s}"
+        assert f"h1/a/{k}@{s}" in sized
+    assert [Cr.window_table(Cr.commit_ids(s), "") for s in range(steps)] == [f"ids@{s}" for s in range(steps)]
+    for bad in ("row-table/0/k0", "row-table/01/k8", "row-table/0/k8/", "input-ids/-1", "a/8@0", "h1/ids@0", 7, None):
+        with pytest.raises(ValueError, match="no Commit name of a window's table"):
+            Cr.window_table(bad, "h1/")
 
 
 def _no_pads(*_args, **_kwargs):

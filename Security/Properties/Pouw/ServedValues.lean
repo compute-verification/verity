@@ -1,5 +1,7 @@
-import Definitions.Core.Formalism
-import Properties.Pouw.PeriodJ10R
+module
+
+public import Definitions.Core.Formalism
+public import Properties.Pouw.PeriodJ10R
 
 /-!
 # The served PoUW's values in AND gates (`PouwCheck.Credit.window`, J10-R)
@@ -48,6 +50,8 @@ Its `δ_s` is δ_coin and its `n·(δ_bind + δ_ks)` is δ_crypto. `BlockMap` is
 registered circuit, the unit the PoUW component's `Holds` is restated in.
 -/
 
+@[expose] public section
+
 namespace Properties.Pouw.ServedValues
 
 open Properties.Pouw.PeriodJ10R
@@ -60,8 +64,8 @@ circuit `Cd` lowered to `lower D`'s one-bit gates. The blocks are disjoint and h
 `t` (`unitWords Cd t`) is an output of the block: its bits are nonempty and among the block's exits
 (`Verity.Circuit.exits`: the block's gates that a gate outside it reads, or that are outputs of `lower D`). It is fixed
 at registration with `D`, `lower` and `Cd`, so each block's size is public. -/
-structure BlockMap {ι : Type} (Cd : Declared ι) (Np : ℕ) (lower : Verity.Declaration → Verity.Circuit)
-    (D : Verity.Declaration) where
+structure BlockMap {ι : Type} (Cd : Declared ι) (Np : ℕ) (lower : Verity.RegisteredCircuit → Verity.Circuit)
+    (D : Verity.RegisteredCircuit) where
   gates : Fin Np → Finset (Fin (lower D).N)
   bits : ℕ → Finset (Fin (lower D).N)
   disjoint : ∀ t t' : Fin Np, t ≠ t' → Disjoint (gates t) (gates t')
@@ -72,8 +76,8 @@ structure BlockMap {ι : Type} (Cd : Declared ι) (Np : ℕ) (lower : Verity.Dec
 /-- **Proof block `t`'s size**: the credit size of its gates that no other protocol credits, their AND count in
 `lower D` outside `ledger`. `ledger` is the gates of `lower D` another protocol's credit already counts, one ledger
 for every protocol, so that no gate is counted twice. -/
-noncomputable def BlockMap.size {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower : Verity.Declaration → Verity.Circuit}
-    {D : Verity.Declaration} (M : BlockMap Cd Np lower D) (ledger : Finset (Fin (lower D).N)) (t : Fin Np) : ℕ :=
+noncomputable def BlockMap.size {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower : Verity.RegisteredCircuit → Verity.Circuit}
+    {D : Verity.RegisteredCircuit} (M : BlockMap Cd Np lower D) (ledger : Finset (Fin (lower D).N)) (t : Fin Np) : ℕ :=
   (lower D).andSize (M.gates t \ ledger)
 
 /-- **A block's live size**: its size `sz t` when it carries live words (`liveWords`), and none when it is dead or of
@@ -136,7 +140,7 @@ def RightValues : Prop :=
     [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι) {n : ℕ} (_hn : 0 < n)
     (_hN : Cd.units ≤ tileCount σ sT) (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1) (_hKd : 1 ≤ k sT)
-    (D : Verity.Declaration) (lower : Verity.Declaration → Verity.Circuit) (M : BlockMap Cd (tileCount σ sT) lower D)
+    (D : Verity.RegisteredCircuit) (lower : Verity.RegisteredCircuit → Verity.Circuit) (M : BlockMap Cd (tileCount σ sT) lower D)
     (ledger : Finset (Fin (lower D).N)) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → Place)

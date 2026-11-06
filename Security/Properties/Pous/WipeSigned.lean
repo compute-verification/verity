@@ -1,6 +1,8 @@
-import MemoryChallenger.WipeProtocol
-import Properties.Pous.MemoryChallenger
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import MemoryChallenger.WipeProtocol
+public import Properties.Pous.MemoryChallenger
+public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # An accepted wipe is the memory challenger's own run, and that run is the streamed wipe's accepted session
@@ -42,6 +44,8 @@ under a key, each signed once, and the key signs PoUS's sessions too: `wipe_part
 `SignedWipeParty.Signed`, all the model's key signs, holds both. A key also used for another role is outside the model, and the forgery disjunct
 is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`Challengers`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties
 
@@ -134,14 +138,12 @@ def wipeMessage (s : StreamedWipe.Signed) : Option ByteArray :=
 
 /-- What SHA-512 hashes for a wipe's records tree over `values` under the domain `d`: each leaf, and each node of each
 level below the root (`treeStrings` at the wipe's record schema). -/
-def wipeTreeStrings (d : FrameV3Sha512.Domain) (values : Array ByteArray) : List ByteArray :=
-  let levels := FrameV3Sha512.levels d
-    ((Array.range values.size).map fun r => d.leaf r r StreamedWipe.RECORD_SCHEMA values[r]!)
+def wipeTreeStrings (d : FV3.Sha512.Domain) (values : Array ByteArray) : List ByteArray :=
+  let levels := d.levels ((Array.range values.size).map fun r => d.leaf r r StreamedWipe.RECORD_SCHEMA values[r]!)
   (List.range values.size).map (fun r =>
-      frameInput "leaf"
-        [d.id, FrameV3Sha512.uint r, FrameV3Sha512.uint r, StreamedWipe.RECORD_SCHEMA.toUTF8, values[r]!]) ++
+      FV3.input "leaf" [d.id, FV3.uint r, FV3.uint r, StreamedWipe.RECORD_SCHEMA.toUTF8, values[r]!]) ++
     (List.range (levels.size - 1)).flatMap fun l => (List.range (levels[l]!.size / 2)).map fun i =>
-      frameInput "node" [d.id, FrameV3Sha512.uint l, FrameV3Sha512.uint i, levels[l]![2 * i]!, levels[l]![2 * i + 1]!]
+      FV3.input "node" [d.id, FV3.uint l, FV3.uint i, levels[l]![2 * i]!, levels[l]![2 * i + 1]!]
 
 /-- What SHA-512 hashes for a wipe `(c, ended, the fill's readings, batches, egress)` signed under the key `pk`: its
 records tree, the input of its `message`, and that of `memoryChallengerMessage`. -/

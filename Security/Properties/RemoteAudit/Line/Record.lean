@@ -1,8 +1,10 @@
-import Definitions.Accounting.Remote.Held
-import Definitions.Accounting.Remote.Draw
-import RemoteAudit.Session
-import RemoteAudit.Shared
-import RemoteAudit.Line
+module
+
+public import Definitions.Accounting.Remote.Held
+public import Definitions.Accounting.Remote.Draw
+public import RemoteAudit.Session
+public import RemoteAudit.Shared
+public import RemoteAudit.Line
 
 /-!
 # The line of record's inputs, read as the memory model's (`Properties.RemoteAudit.Line`)
@@ -43,6 +45,8 @@ What a gate run's memory line (`RemoteAudit.Line.lineOfRecordAt`) reads of one s
   closing group `(m + 1)·per`; `spanStart` and `spanStop` its span `[u, v)` as `stretches` reads it, from group 0's end
   for the first stretch and from group `m·per`'s coin for the rest, to group `(m + 1)·per`'s coin.
 -/
+
+@[expose] public section
 
 namespace Properties.RemoteAudit.Line
 
@@ -183,8 +187,8 @@ def receiptMax : ℕ := RemoteAudit.Session.RECEIPT_LIMIT - 1
 /-- **The record's opening draw**: the session's draws, draw `c` of outcome `ω` with the receipts its windows have in
 the state the record's session reaches at `ω` (at most `receiptMax`), drawing `min(s, U_c)` at the session's
 `samples`, with the correct receipts `correct`. -/
-def recordDraw {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.Coins node.draws κ X → Record)
-    (correct : Fin node.draws → Accounting.Remote.Draw.Coins node.draws κ X → Finset ℕ) :
+def recordDraw {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.DrawCoins node.draws κ X → Record)
+    (correct : Fin node.draws → Accounting.Remote.Draw.DrawCoins node.draws κ X → Finset ℕ) :
     Accounting.Remote.Draw.Session node.draws receiptMax (fun _ => node.params.samples) κ X where
   size c ω := ⟨min ((rec ω).drawReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
   correct := correct
@@ -193,8 +197,8 @@ def recordDraw {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw
 `ω` is `recs c ω`, and the session it plays is that record's opening draw (`recordDraw`), with the correct receipts
 `correct c`. -/
 def recordCommitted {κ : ℕ} {X Cm : Type} (node : Node)
-    (recs : Cm → Accounting.Remote.Draw.Coins node.draws κ X → Record)
-    (correct : Cm → Fin node.draws → Accounting.Remote.Draw.Coins node.draws κ X → Finset ℕ) :
+    (recs : Cm → Accounting.Remote.Draw.DrawCoins node.draws κ X → Record)
+    (correct : Cm → Fin node.draws → Accounting.Remote.Draw.DrawCoins node.draws κ X → Finset ℕ) :
     Accounting.Remote.Draw.Committed node.draws receiptMax (fun _ => node.params.samples) κ X Cm where
   view c := recordDraw node (recs c) (correct c)
 

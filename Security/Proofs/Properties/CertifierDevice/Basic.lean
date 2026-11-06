@@ -1,5 +1,7 @@
-import Mathlib
-import Properties.CertifierDevice
+module
+
+public import Mathlib
+public import Properties.CertifierDevice
 
 /-!
 # The certifier device, proved: loops, the certifier's operations, packed rows
@@ -9,6 +11,8 @@ certifier's fault (`Certifier.doFault`) keeps the first reason, so a certifier a
 faulting (`CertRel`). A row the certifier releases is `Packed`, and what a packed row puts on the link (`wire`) is
 `r · B` bytes, the frames the code writes.
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice.Proofs
 
@@ -62,16 +66,9 @@ theorem doFault_window (c : Certifier) (r : Reason) : (c.doFault r).window = c.w
   unfold Certifier.doFault; split <;> rfl
 theorem doFault_rows (c : Certifier) (r : Reason) : (c.doFault r).rows = c.rows := by
   unfold Certifier.doFault; split <;> rfl
-theorem doFault_queue (c : Certifier) (r : Reason) :
-    (c.doFault r).queue = c.queue ∨ (c.doFault r).queue = #[] := by
-  unfold Certifier.doFault; split
-  · exact Or.inr rfl
-  · exact Or.inl rfl
 theorem doFault_of_fault {c : Certifier} {r : Reason} (h : c.fault = some r) (r' : Reason) : c.doFault r' = c := by
   unfold Certifier.doFault; simp [h]
 theorem doFault_fault_isSome (c : Certifier) (r : Reason) : (c.doFault r).fault.isSome := by
-  unfold Certifier.doFault; cases h : c.fault <;> simp [h]
-theorem doFault_fault (c : Certifier) (r : Reason) : (c.doFault r).fault = some (c.fault.getD r) := by
   unfold Certifier.doFault; cases h : c.fault <;> simp [h]
 
 /-- What a certifier's operations keep, apart from the rows and the window: its link and parameters, frames of `B` bytes
@@ -177,9 +174,6 @@ theorem packed_tick {c : Certifier} {link : String} {p : Params} (h : Shape c li
   · intro f hf
     exact h.sizes f (mem_of_mem_extract hf)
   · simp
-
-theorem empty_append' (b : ByteArray) : ByteArray.empty ++ b = b := by
-  apply ByteArray.ext; simp
 
 theorem wire_size {p : Params} {row : Slots} (h : Packed p row) : (wire p row).size = bucketBytes p := by
   obtain ⟨fs, hle, hsz, rfl⟩ := h

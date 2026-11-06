@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.SeqSim
-import Proofs.Flock.Claims.ZK.Deployed
+module
+
+public import Proofs.Flock.Claims.Recursion.SeqSim
+public import Proofs.Flock.Claims.ZK.Deployed
 
 /-!
 # The V\* sessions of the masked recursion, from Flock's zero knowledge
@@ -24,11 +26,13 @@ assembles the two: `ZKBoundM` at `DF = deployZkRec relO` from the first part, th
 setup, the leaf counts within the record's (`Brings.zl`), and the record's hiding bound giving the pinned key's.
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Flock
 open FlockDeploy (Coin)
-open Claims.ZKMal (Layout ZKmalAt SeqTape progOf progOf_of Proto)
+open Claims.ZKMal (RunParts ZKmalAt SeqTape progOf progOf_of Proto)
 open scoped NNReal
 
 variable (IV : Claims.Verifier Coin) (b : Brings)
@@ -146,7 +150,7 @@ namespace RecDeploy
 
 open Flock
 open FlockDeploy (Coin)
-open Claims.ZKMal (Layout ZKmalAt SeqTape progOf progOf_of Proto)
+open Claims.ZKMal (RunParts ZKmalAt SeqTape progOf progOf_of Proto)
 open FlockSoundness.Discharge
 open scoped NNReal
 

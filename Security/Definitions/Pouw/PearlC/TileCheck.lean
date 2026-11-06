@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Core.Partition
+module
+
+public import Definitions.Pouw.PearlC.Tile
+public import Definitions.Core.Partition
 
 /-!
 # The tile check as a circuit, and what it computes (trusted; L3's statement)
@@ -40,6 +42,8 @@ of its own (L7). `εPearlC` stays TT_OUT's, and a proof system's error stays in 
 A tile check says something only when it is the deployed Program: a circuit nobody tied to the Program meets L3 with
 any `op`s. The tie is the Program's descriptor digest and a test against `verity.ir`, beside the instance.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 
@@ -106,7 +110,7 @@ def TileCheck.Computes (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRul
         TC.Collides U ((TR.tiling U.layout).unit g) ((TR.tiling U.layout).rows g) ((TR.tiling U.layout).cols g) c X
 
 /-- **L3's cap**: an accepted tile's committed activations keep its replayed debit within the cap. The Program has no
-debit or cap yet (the replay shortcut, `PROTOCOL.md`), so its check leaves the activations' debit free: this holds of it
+debit or cap yet (the replay shortcut), so its check leaves the activations' debit free: this holds of it
 only once a cap unit returns the cap's verdict on a public wire, as under hiding it must, since the verifier never sees
 the activations. -/
 def TileCheck.ComputesCap (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) :

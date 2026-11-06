@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.View
-import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.View
+public import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The masked prover's rep: its round count
@@ -9,6 +13,8 @@ import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
   rounds. The verifier's masked Ligerito, on the prover's rounds, ends where the prover's did (`Level0.Verifier`),
   which is `k_0 + 7 + 11 R` rounds on (`zkLigeritoWith_pos`), and the inner proof adds four.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 
@@ -35,7 +41,7 @@ theorem Agrees.self (P : Array Round) (k₀ : ℕ) : Agrees P P k₀ :=
   fun j h _ => ⟨P[j], Array.getElem?_eq_getElem h, rfl, rfl, rfl⟩
 
 theorem InZ.tEnd_size (lay : Zk.PadLayout) (p : PadsZk) (finalC : F128) (cons : Array (String × Zk.Lin))
-    (h : ByteArray → ByteArray) (cs : InZ.Coins) (t : Transcript) :
+    (h : ByteArray → ByteArray) (cs : InZ.Challenges) (t : Transcript) :
     (InZ.tEnd lay p finalC cons h cs t).rounds.size = t.rounds.size + 4 := by
   simp [InZ.tEnd, InZ.t₇, InZ.t₆, InZ.t₅, InZ.t₄, InZ.t₃, InZ.t₂, InZ.t₁, afterSq]
 

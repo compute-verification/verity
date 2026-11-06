@@ -1,6 +1,7 @@
 # Lifecycle: the onsite and remote composites, stepped through
 
-A minimal worked example of the two composite protocols, `verity/onsite/v0` and `verity/remote/v0`, run through the
+A minimal worked example of the two composite protocols, `verity/onsite/v0` and remote's H1 development executable
+`verity/remote/v0` (H1's period as its work, which no configuration names), run through the
 whole lifecycle with the pieces that exist: from the hardware registration to the monitoring period's verdict. Its point
 is the interfaces it exposes, listed in (b) and (c); where an interface doesn't exist yet, the example writes the smallest
 version of it in `lifecycle.py`, and nothing under `verity/` or `Security/` changes.
@@ -16,8 +17,9 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 (developer, verifier); `onsite.py` adds the network certifier, the memory challenger and the onsite verifier's subprotocols;
 `remote.py` is the two-party deployment; `tests/test_lifecycle.py` runs both, honest and with every deviation.
 
-**The proofs are a stand-in**, answering under the id both composites run for integrity, the one-stage audit
-(`SampledProofs.OneStage`). `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
+**The proofs are a stand-in**, answering under the id each composite runs for integrity (`lifecycle.SAMPLED`): onsite's
+the one-stage audit (`SampledProofs.OneStage`), remote's sampled proofs (`VStar.Recursive.Sampled`,
+`verity/sampled-proofs/v1`). `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
 It is sound for the example and not zero-knowledge, though its answer carries the id both composites run for integrity,
 sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`); Flock's zero-knowledge proofs behind the ZK
@@ -170,13 +172,13 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 
 ## (c) What this exposes
 
-- **The registered circuit has no one digest, and Lean's `Declaration` holds one circuit.** Each execution block has its
+- **The registered circuit has no one digest, and Lean's `RegisteredCircuit` holds one circuit.** Each execution block has its
   own Program digest, and the record chain binds them in order; `codec.program_digest` of B(a_1 ‖ … ‖ a_k) as one Program
-  is not prefix-incremental. `Security/Definitions/Core/Declaration.lean`'s `Declaration` is the registered circuit so far,
-  and its file says one Program is the circuit of record: d.D, one `Circuit`, is here every execution block composed
-  along the state wire (block k's state input is block k − 1's state output, not an input gate), which the spec has no
-  operation for; d.θ, the registered information, is theta's and the initial state's input gates. `Baseline` is d before any block,
-  and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.
+  is not prefix-incremental. `Security/Definitions/Core/RegisteredCircuit.lean`'s `RegisteredCircuit` is the registration, whose builder
+  names the registered compiler, with the advice so far, and its d.D, one `Circuit`, is B.init θ ‖ B(a_1) ‖ … ‖ B(a_k) (`Circuit.append`): each execution block
+  appended after the ones before it, reading their gates along the state wire (block k's state input is block k − 1's
+  state output, not an input gate); d.θ, the registered information, is theta's and the initial state's input gates, the
+  gates of B.init θ. `Baseline` is d before any block, and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.
 - **State crosses execution blocks as a committed value.** A sampled proof block at the start of block k opens block k − 1's
   last row (or the registered initial state), so one unit's statement reads three commitments. `Core.Protocol`'s answer carries
   one commitment: the cross-block read and the chain live outside every subprotocol, in `check_declaration` and

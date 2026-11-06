@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.DecodeFlock
-import Proofs.Flock.Claims.ZkDecodeFlock
+module
+
+public import Proofs.Flock.Claims.DecodeFlock
+public import Proofs.Flock.Claims.ZkDecodeFlock
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The deployed plain verifier's level-0 code at each `m`
@@ -10,6 +14,8 @@ over every `m` (`IRS.famEnc`), it is the plain record's (`FlockDeploy.deployPlai
 trace's codeword length `2^d` and radius `1 − √ρ − 1/200` at its `m` (`plainLenD`, `plainThetaD`), and its read step
 (`plainReadD`). The radius decoder at it (`GS.plainDecodeRD`) reads only this file, so the record can name it.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 
@@ -91,8 +97,5 @@ theorem listComplete_plainDecodeD (agree : ℝ) (ha : 0 < agree) :
 /-- **The deployed plain read step**: the level-0 message's trace at the candidate's `m`, `2^m` hidden values. -/
 noncomputable def plainReadD (M : PlainTrace) : Wit :=
   readTrace execArith M.1.m (plainLanes M.1) (plainCols M.1) M.2
-
-theorem plainReadD_hid_length (M : PlainTrace) : (plainReadD M).hid.length = 2 ^ M.1.m :=
-  readTrace_hid_length _ _ _ _ _
 
 end Claims.Flock

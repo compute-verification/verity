@@ -22,7 +22,7 @@ from pathlib import Path
 import baselines as B
 import fill as F
 import numpy as np
-from arm import Buffer, Gate, Shape, Work
+from arm import Buffer, GateResult, Shape, Work
 
 MAX_D_BYTES = 1 << 29  # the gate reads D and its twin to the host
 
@@ -126,7 +126,7 @@ class ExampleFp8:
         (out / "manifest.json").write_text(json.dumps({"arm": self.name, "shape": shape.label,
                                                        "d_sha256": hashlib.sha256(dev.read(d.ptr, d.nbytes)).hexdigest()}))
 
-    def gate(self, dev, call: _Call, shape: Shape, flags: frozenset[str]) -> Gate:
+    def gate(self, dev, call: _Call, shape: Shape, flags: frozenset[str]) -> GateResult:
         call.twin.launch(dev.stream)
         dev.sync()
         d = np.frombuffer(dev.read(call.outputs["d"].ptr, call.outputs["d"].nbytes), np.uint16)
@@ -141,6 +141,6 @@ class ExampleFp8:
         got = F.decode(F.BF16, d.reshape(shape.m, shape.n)[np.ix_(rows, cols)].tobytes()).reshape(len(rows), len(cols))
         err = np.abs(got - exact)
         close = bool(np.all(err <= 2.0 ** -7 * np.abs(exact) + allowance))
-        return Gate(same and close, {"d": "all"},
-                    {"d_equals_relaunch": same, "sampled_within_tolerance": close,
-                     "worst_relative": float(np.max(err / (np.abs(exact) + allowance + 1e-30)))})
+        return GateResult(same and close, {"d": "all"},
+                          {"d_equals_relaunch": same, "sampled_within_tolerance": close,
+                           "worst_relative": float(np.max(err / (np.abs(exact) + allowance + 1e-30)))})

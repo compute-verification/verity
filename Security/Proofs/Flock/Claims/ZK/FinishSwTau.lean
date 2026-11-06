@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FinishSwInner
-import Proofs.Flock.Claims.ZK.InnerTauVal
-import Proofs.Flock.Claims.ZK.InnerLeaf
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwInner
+public import Proofs.Flock.Claims.ZK.InnerTauVal
+public import Proofs.Flock.Claims.ZK.InnerLeaf
 
 /-!
 # `τ`'s commitment at the switched source
@@ -18,6 +20,8 @@ against `μ` on the worker's view's rows, which is `InZ.tau` at any constraints 
 * **`swTau_of_rows`**: then `InZ.tau` over `cons` at the honest pads is the worker's view's `τ`.
 * **`swSrcE_tau_frame`**, **`swSrcE_innerSrc_rows`**: `swSrcE_innerSrc_frame`'s `τ` premise from `SwRows`.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
@@ -83,12 +87,6 @@ theorem swViewTau_eq (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Clai
     fOf (FlockLevel3.GF128.val ((swViewE x c w v τ j).tau r)) =
       ∑ i, ZkSession.batchCoef (Composed.innerGamma (zkTab x j).table (stAt x j) (czExe PE x c j) r)
         (rowsSwE x c w v τ j r) (Composed.padEquiv _ i) * muE x τ j r i :=
-  rfl
-
-/-- The worker's view's `ρ_in`, `σ_in` are the honest view's: they read the pads alone. -/
-theorem swViewE_inner (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
-    (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
-    (swViewE x c w v τ j).pre.2.2.2.2.1 r = (viewE x c w τ j).pre.2.2.2.2.1 r :=
   rfl
 
 /-- The inner proof's three triple rows are the worker's view's rows' last three. -/

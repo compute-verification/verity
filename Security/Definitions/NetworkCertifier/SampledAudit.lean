@@ -1,7 +1,9 @@
-import Definitions.Claims.Sampling
-import Definitions.NetworkCertifier.Run
-import Mathlib.Logic.Relation
-import Mathlib.Order.Interval.Finset.Nat
+module
+
+public import Definitions.Claims.Sampling
+public import Definitions.NetworkCertifier.Run
+public import Mathlib.Logic.Relation
+public import Mathlib.Order.Interval.Finset.Nat
 
 /-!
 # The sampled audit and acceptance: what an accepted audit says about the egress, at `δ`
@@ -9,7 +11,7 @@ import Mathlib.Order.Interval.Finset.Nat
 Definitions only. Network accounting writes the whole computation as one program `C` of the Boolean profile,
 each machine a subcircuit, and audits its committed trace with sampled proofs (`Claims.Sampling`). The transfer-gate
 units and N2's head checks are classes drawn `all`, and the internal step units are sampled. This module says what an
-accepted audit then establishes about the egress, in the network certifier's terms (`Program`, `Accepted`), on
+accepted audit then establishes about the egress, in the network certifier's terms (`EgressPrediction`, `Accepted`), on
 sampling's own vocabulary: its statement, partition, design, faulty set and `M_δ`.
 
 **The layout** (`BoundaryGates`, public, part of the statement) says which of `C`'s gates hold each step's egress rows
@@ -37,6 +39,8 @@ by the transfer-gate proof blocks and, beyond them, by the certifier's trust (`t
 `Carries` picks out, inside the conclusion. The statuses are the certifier's published record, which the network check
 reads (`Covered`).
 -/
+
+@[expose] public section
 
 namespace NetTiming
 
@@ -82,7 +86,7 @@ def BoundaryGates.inputOf {L S : ℕ} (lay : BoundaryGates L S) (k : ℕ) (ins :
 run on the ingress up to `t` and the declared advice `(a, free)`: the inputs other than the ingress (`a`), and the gates
 held at values (`free`). -/
 def circuitProgram {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) :
-    Program L S (List Bool) ((ℕ → Bool) × (ℕ → Option Bool)) where
+    EgressPrediction L S (List Bool) ((ℕ → Bool) × (ℕ → Option Bool)) where
   rows t ins adv ℓ := rowOf (valOver C (lay.inputOf k ins adv.1) adv.2) (lay.egress t ℓ)
 
 /-- Gate `g` of `C` depends on gate `i`: it is `i`, or it reads a gate that depends on `i`. -/

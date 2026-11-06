@@ -268,8 +268,8 @@ def write_links(tree: Path, links: dict[str, str]) -> None:
 
 def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
     """``argv`` in the sandbox, writable in the `.lake` of ``tree/pkg`` and the packages it requires by path but not in their
-    fetched dependencies."""
-    rw = [str(tree / p / ".lake") for p in closure(pkg)]
+    fetched dependencies. The paths are resolved, as mountinfo names them: a slot tree is a link into the node's cache root."""
+    rw = [str((tree / p / ".lake").resolve()) for p in closure(pkg)]
     ro = [str(Path(d) / "packages") for d in rw if (Path(d) / "packages").is_dir()]
     return [*UNSHARE, "--", "bash", str(SANDBOX), *rw, "--", "bash", "-c", READ_ONLY, "ro", *ro, "--", *argv]
 
@@ -351,8 +351,9 @@ def sandboxed() -> bool:
 RECORDS = "lean-records"
 AUDIT_PY = ROOT / "tools" / "verity" / "lean" / "check.py"
 LEAN_SLOT = _module(ROOT / "tools" / "verity" / "check" / "lean_slot.py", "lean_slot_for_lean_changed")
-#: the Lean slot pool `--records` takes, apart from the `audit` pool's hour-long audits and the `check` pool's merge checks
-FAST_POOL = "build"
+#: the Lean slot pool `--records` takes, apart from the `audit` pool's hour-long audits and the `check` pool's merge checks;
+#: $LEAN_RECORDS_POOL names another, such as a pool a node reserves for one lane, whose trees stay warm for that lane alone
+FAST_POOL = os.environ.get("LEAN_RECORDS_POOL") or "build"
 #: the kind of `--records`' result: an audit without the kernel replay or the tests, which no merge check accepts
 FAST_KIND = "lean-fast/v1"
 #: how long `--records` waits for another run's hold on its tree (a node with no SLOTS shares `local` among every run;

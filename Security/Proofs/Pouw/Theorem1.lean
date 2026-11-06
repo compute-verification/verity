@@ -1,10 +1,14 @@
-import Proofs.Pouw.Reduction
-import Proofs.Pouw.Sampling
-import Definitions.Pouw.Guarantees.Game
+module
+
+public import Proofs.Pouw.Reduction
+public import Proofs.Pouw.Sampling
+public import Definitions.Pouw.Guarantees.Game
 
 /-!
 # (b) Theorem 1, (d) end to end, (d″) at the milestone
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 
@@ -62,7 +66,7 @@ theorem endToEnd : Pouw.Guarantees.EndToEnd := by
 theorem γ0_lt_one : Params.γ0 < 1 := by unfold Params.γ0; norm_num
 
 /-- **(d″)** Milestone resource exhaustion for `D1.m1` at `γ = 1 − (1 − γ₀)/Ω_max`. -/
-theorem milestoneExhaustion : Pinned.MilestoneExhaustion := by
+theorem milestoneExhaustion : GameStatements.MilestoneExhaustion := by
   intro CM Wref Ωmax ε hΩ hW hTT U hU T hT q hq A hA t εs hεs
   exact endToEnd D1.M1Q D1.M1R Salt CM (D1.m1 Wref).toProtocol D1.m1Domain Params.γ0 Ωmax ε γ0_lt_one hΩ hW hTT
     U hU T hT q hq A hA t εs hεs

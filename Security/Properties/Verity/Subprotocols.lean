@@ -1,4 +1,6 @@
-import Properties.Verity.Game
+module
+
+public import Properties.Verity.Game
 
 /-!
 # Each subprotocol's bound at its compiled component, and soundness from those bounds
@@ -19,6 +21,8 @@ composite with one more subprotocol takes one more bound in that sum, under the 
 is `TargetFor (Verdict k a) k a`), so the nontrivial checks can state that the target fails for a verifier that accepts
 everything.
 -/
+
+@[expose] public section
 
 namespace Verity
 

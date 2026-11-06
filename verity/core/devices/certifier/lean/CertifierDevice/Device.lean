@@ -1,5 +1,7 @@
-import CertifierDevice.Frame
-import CertifierDevice.Shaper
+module
+
+public import CertifierDevice.Frame
+public import CertifierDevice.Shaper
 
 /-!
 # The active network certifier as a pure state machine
@@ -70,6 +72,8 @@ waiting, anything after both grids' last ticks) change nothing. Python's floats 
 boundaries; the difftest keeps every reading at least 10 µs from one.
 -/
 
+@[expose] public section
+
 namespace CertifierDevice
 
 open NetworkCertifier (ClockSync SyncSet Reason)
@@ -110,7 +114,7 @@ inductive Action where
   /-- Write to stream `s`'s server connection; with `drain`, the world answers `delivered` once it is written. -/
   | writeUpstream (s : Nat) (bytes : ByteArray) (drain : Bool)
   /-- A window's record closed, with its grid's parameters. -/
-  | publish (record : Record) (params : Params)
+  | publish (record : BlockGrid) (params : Params)
   /-- Open the salt connection to the server; the world answers `saltConnected` or `saltRefused`. -/
   | connectSalt
   /-- Write a salt frame on the salt connection; the world answers `saltDelivered` once it is written. -/

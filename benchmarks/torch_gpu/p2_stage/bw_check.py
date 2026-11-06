@@ -84,7 +84,7 @@ def fixture(args, dev: torch.device) -> dict:
         rec["root"] = root.hex() == p["root"]
         if lay is not None:
             D = K.Pass(seed, units, dev)
-            st = S.Store(lay, rows, 0, args.lib)
+            st = S.EncodedRows(lay, rows, 0, args.lib)
             st.sketch = D
             for layer, _, size, _ in doc["staging"]:
                 S.decode_layer(st, layer, torch.empty(size, dtype=torch.uint8, device=dev))

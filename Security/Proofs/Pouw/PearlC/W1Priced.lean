@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Pouw.PearlC.W1
 
 /-!
 # The γ-gap property over W1's priced sum
@@ -18,6 +20,8 @@ W1 itself at the same `γ` and `η`, with no new assumption:
 The honest reference's cost `Wref` has no fetch term, so `γ` keeps its meaning: the priced sum only adds to what every
 program, the reference included, is charged.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1Priced
 
@@ -47,7 +51,7 @@ theorem gγ_of_cost_le [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM�
 
 /-- **W1 charges at most the priced sum**: its refund only waives first fetches. -/
 theorem w1_cost_le_priced (dv : W1Device) (hf : 0 ≤ dv.prices.fetch) (P : Protocol Q R S) (salt : S → List ℕ)
-    (pr : Prog) (H : Q → R) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S) :
+    (pr : CodeImage) (H : Q → R) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S) :
     (w1 dv P salt).cost pr H U act σ s ≤ (w1Priced dv salt).cost pr H U act σ s := by
   simp only [w1, w1Priced, w1Read]
   rw [Rat.cast_le]
@@ -62,7 +66,7 @@ theorem gγ_w1Priced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W
     (fun _ _ _ _ _ _ => le_rfl) (w1_cost_le_priced dv hf P salt) P D γ η h
 
 /-- **The priced cost splits between the accounts**: compute, plus `fetch` per word read. -/
-theorem w1Priced_cost (dv : W1Device) (salt : S → List ℕ) (pr : Prog) (H : Q → R) (U : Workload)
+theorem w1Priced_cost (dv : W1Device) (salt : S → List ℕ) (pr : CodeImage) (H : Q → R) (U : Workload)
     (act : ℕ → Codes) (σ : State) (s : S) :
     (w1Priced dv salt).cost pr H U act σ s =
       ((final dv (salt s) pr U act σ).cost : ℝ) + (dv.prices.fetch : ℝ) * (w1Read dv (salt s) pr U act σ : ℝ) := by

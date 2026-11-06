@@ -18,7 +18,7 @@
       "issue": "NaN and infinity operands/accumulators; overflow saturation",
       "hawkeye_paper": "discusses hardware saturation qualitatively (sections 5-7); no bit-level rule for NaN payloads",
       "hawkeye_simulator": "multiply_bfloat16_to_gfloat has no NaN/infinity branch; Gfloat::operator float masks exponent bits rather than saturating",
-      "verity_reference": "verity.ml.circuits.silicon.silicon rejects any non-finite operand or accumulator (InvalidArtifact); verity.ml.circuits.silicon.total defines the total step (NaN -> 0x7FFFFFFF, +-inf, saturation to inf when a group leaves the FP32 range)",
+      "verity_reference": "verity.ml.circuits.silicon.models rejects any non-finite operand or accumulator (InvalidArtifact); verity.ml.circuits.silicon.total defines the total step (NaN -> 0x7FFFFFFF, +-inf, saturation to inf when a group leaves the FP32 range)",
       "hardware_evidence": "A100 (sm_80) and RTX 4090 (sm_89), mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32: 31,290 special-value cases x 3 reps per device, 0 nondeterministic, every case reproduced by verity.ml.circuits.silicon.total",
       "status": "excluded",
       "resolution": "FIRST is the finite-domain relation: a non-finite input is rejected, not computed. The measured total semantics exist (family veritor.tensor-core.ampere_bf16_m16n8k16@3, unbound) and declaring them is a later protocol decision.",
@@ -61,7 +61,7 @@
       "status": "resolved",
       "resolution": "The successive-shift normalisation -- hawkeye_close.group_sum, which is the simulator's group_sum statement for statement, and silicon.group_sum, the same statement sequence -- equals the closed form e' = max(E + l - 25, -126), M' = floor(v * 2^(E - e' - 1)) on the whole reachable domain E in [-132, 254], |S| < 2^30: an SMT proof over 32-bit bitvectors (z3; test_normalisation_d3.py::test_closed_form_equals_successive_shifts_over_the_whole_reachable_domain_by_smt, unsat in about one second, mutants of the floor or the rescale are sat), the three forms checked through the real group_sum functions exhaustively for every E in [-132, 254] x every |S| < 2^12 x both signs and for every (E, bit length 0..30) with four patterns (recorded run r20260921-230852-4f1e, step f, 0 mismatches), and the composition-of-shifts proof sketch in that test module's docstring.  The closed form is a separate function (hawkeye_close.normalise_closed_form); no reference implementation was changed. Status set by the coordinator 2026-09-21 on this evidence.",
       "evidence_refs": [
-        "verity/ml/circuits/silicon/silicon.py",
+        "verity/ml/circuits/silicon/models.py",
         "benchmarks/numerical/python/verity_numerical/reference/hawkeye_close.py",
         "benchmarks/numerical/tests/reference/test_normalisation_d3.py",
         "r20260921-230852-4f1e"
@@ -190,7 +190,7 @@
       "resolution": "Ada E4M3 mma.sync is GroupSum(groups=(16,16), width=14, floor=-139), Hopper wgmma E4M3 is GroupSum(groups=(32,), width=14, floor=-139): the same 14-bit truncating adder, a different grouping, and so different functions (36 of 48 K=1536 steps differ on shared operands, verity/ml/circuits/silicon/captures/vectors).  The 14-bit rescale of the incoming accumulator applies unconditionally -- through a group of zero products too -- and is a rule of the model (GroupSum.step) and a gadget of the checker (RescaleState), not a special case.  Hawkeye's Hopper FP8 simulator is the wrong model for sm_89 and is kept only as the source of the floor constant.  Recorded by lane silicon-p0 2026-09-22 from veritor's measurements; no new hardware.",
       "evidence_refs": [
         "verity/ml/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json",
-        "verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json",
+        "verity/ml/circuits/silicon/captures/veritor-tc-fp8.json",
         "verity/ml/circuits/silicon/models.py",
         "benchmarks/numerical/tests/checker/test_fp8.py"
       ],
@@ -286,7 +286,7 @@
       "resolution": "(a) settled by r20260922-183435-fd5d: the id's shape m64n8k32 is what was measured.  (b) The floor is provably unobservable in the finite domain: a floor f only acts when the alignment maximum of a group (the largest exponent among its products and the incoming accumulator) lies below f.  Every nonzero E4M3 product has exponent >= -18, and an FP32 accumulator's exponent is >= -126 (subnormals included: their alignment exponent is -126), so with any nonzero term the maximum is >= -126 >= f for every f <= -126, and with no nonzero term the group sum is zero for every f.  Hence all floors <= -126 yield identical words for all finite E4M3 operands and FP32 accumulators (test_no_adder_floor_in_the_h100_fit_range_is_observable_under_the_hopper_fp8_model proves it for the model over the whole fit range [-152, -126]); the H100 hardware reproduces the common words (r20260922-232403-fbd0, 0 mismatches), and the fit's lower bound -126 is exactly the point below which nothing can be observed.  -139 stays as the documented convention (Hawkeye's constant); the model is unchanged.  A floor > -126 is excluded by the H100 fit (r20260922-183435-fd5d bounds it to [-152, -126]).",
       "to_resolve": "",
       "evidence_refs": [
-        "verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json",
+        "verity/ml/circuits/silicon/captures/veritor-tc-fp8.json",
         "verity/ml/circuits/silicon/instructions.py",
         "r20260922-183435-fd5d",
         "r20260922-232403-fbd0",

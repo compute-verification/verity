@@ -1,4 +1,6 @@
-import Proofs.Properties.NetworkCertifier.Check
+module
+
+public import Proofs.Properties.NetworkCertifier.Check
 
 /-!
 # The strings the check hashes, listed
@@ -6,6 +8,8 @@ import Proofs.Properties.NetworkCertifier.Check
 `checkStrings` lists every string the check hashes (`mem_checkStrings`): what a run without a SHA-512 collision among
 the strings it hashes rules out (`Proofs.Properties.CertifierNetwork.Runs`).
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check
@@ -51,7 +55,7 @@ theorem mem_treeStrings {g : Grid} {grid : Array (Array (Option ByteArray))} {x 
   rw [hfr]
   exact mem_framesStrings hx
 
-theorem declared_eq {W : Nat} {link : Link} {syncs : Fin W → ClockSync} (h : Declares link syncs) :
+theorem declared_eq {W : Nat} {link : LinkOpening} {syncs : Fin W → ClockSync} (h : Declares link syncs) :
     syncs = declared W link :=
   funext fun v => by rw [declared, Array.getD_eq_getD_getElem?, h v]; rfl
 
