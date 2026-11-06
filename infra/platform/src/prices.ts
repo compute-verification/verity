@@ -9,9 +9,9 @@ export const PRICES: Record<string, Price> = {
   "anthropic/claude-opus-5.5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
   "anthropic/claude-sonnet-5.5": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
   "openai/gpt-5.5": { input: 5, output: 30, cacheRead: 0.5 },
-  "openai/gpt-6-sol": { input: 2, output: 10, cacheRead: 0.2 },
-  "openai/gpt-6.1-sol": { input: 2, output: 10, cacheRead: 0.2 },
-  "openai/gpt-6-astra": { input: 10, output: 50, cacheRead: 1 },
+  "openai/gpt-6-sol": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+  "openai/gpt-6.1-sol": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
+  "openai/gpt-6-astra": { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
   "openai/gpt-5.3-codex": { input: 1.75, output: 14, cacheRead: 0.175 },
   "fake/fake": { input: 0, output: 0 },
 };
