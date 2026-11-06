@@ -136,10 +136,11 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    only it ran among them), and whether the newest 3 agree fully, none
                                                    incomplete: the gate for `executor = "on"` (`research.executor`)
     research queue preflight N --head SHA --onto COMMIT [--bundle FILE]
-                                                   a pool run drive's sync launches (`PreflightPool`), in a clone of `next` at
-                                                   COMMIT: PR N's head SHA as the sync merged it onto COMMIT, fetched from FILE
-                                                   (default the run's input pr-N.bundle), judged by `Preflight.onto`; the verdict
-                                                   goes to the run's result.json, which the next sync reads (`pool_preflight`)
+                                                   a pool run drive's sync launches (`PreflightPool`) with drive's own research,
+                                                   in a clone of `next` at COMMIT: PR N's head SHA as the sync merged it onto
+                                                   COMMIT, fetched from FILE (default the run's input pr-N.bundle), judged by
+                                                   `Preflight.onto`; the verdict goes to the run's result.json, which the next
+                                                   sync reads (`pool_preflight`)
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
@@ -239,8 +240,9 @@ runs no preflight itself; it reads verdicts, each kept per (head, base tree): th
 and a pass stands onto a rebuilt base that changed nothing its change touches or the checks run and deleted no path, while its
 change deletes none (`Queue._preflighted`, `_standing`).  A merge no verdict stands for waits off `next`, untold
 (`Driver.tell_out`), with the PRs that contain it: once the sync has pushed `next`, it launches a pool run (`research run --on
-auto`, `PreflightPool`) of `research queue preflight` on the PR merged onto that tip, which the next sync merges it onto
-while nothing below changes, and the PR's reason names the run; a later sync reads its verdict (`Queue._read_runs`), records it
+auto`, `PreflightPool`) of drive's own `research queue preflight`, never the tree's, on the PR merged onto that tip, which
+the next sync merges it onto while nothing below changes, and the PR's reason names the run; a later sync reads its verdict
+(`Queue._read_runs`), records it
 in the store and admits or refuses by it.  A PR whose run is out isn't merged until a verdict may stand for it.  At most
 drive.toml's `preflight_pool` runs are out at once: the PRs of drive's priority list (`Queue.priority`) and those they contain
 launch first, then those the last sync left waiting (the state's `preflight_waited`), so every PR is reached in turn
@@ -4969,8 +4971,10 @@ class PreflightPool:
     `next` it pushed, it adds a worktree of drive's clone at ``onto`` (`POOL_PREFIX`) and, in the background (drive's
     `DETACH_JOB` under its `LAUNCHES`, `PREFLIGHT_LAUNCH_JOBS` at once), launches for each merge a `research run --on auto`
     (`PREFLIGHT_RUN`) of that worktree as a private clone, sent the merge as a bundle of `POOL_REF/<PR>` above ``onto``, of
-    `research queue preflight` (`pool_preflight`), whose result.json holds the verdict.  `read` reads each run's verdict once it
-    ended, `sweep` removes a launch's worktree once its launches ended and its directory once no run reads it, and `cancel`
+    `research queue preflight` (`pool_preflight`), whose result.json holds the verdict.  The run's research package, its runner's
+    and the preflight's, is drive's own, the one this module is (`--tool-from launcher`), never the tree's: the tree is only what
+    the preflight judges, so a PR on `next` doesn't decide how the PRs above it are judged.  `read` reads each run's verdict once
+    it ended, `sweep` removes a launch's worktree once its launches ended and its directory once no run reads it, and `cancel`
     cancels runs."""
 
     def __init__(self, repo: Path, root: Path | None = None, *, start: Callable[[list[str], Path], int] | None = None,
@@ -5011,7 +5015,7 @@ class PreflightPool:
                 finally:
                     _git(self.repo, "update-ref", "-d", ref, check=False)
                 argv = [sys.executable, "-m", "research", "run", "--id", rid, "--on", "auto", *PREFLIGHT_RUN, "--source", str(wt),
-                        "--cwd", "clone", "--send", str(bundle), "--require-result", "--",
+                        "--tool-from", "launcher", "--cwd", "clone", "--send", str(bundle), "--require-result", "--",
                         "research", "queue", "preflight", str(n), "--head", head, "--onto", onto]
                 out = shlex.quote(str(d / rid))
                 (script := d / f"{rid}.sh").write_text(f"{shlex.join(argv)} > {out}.log 2>&1\n"

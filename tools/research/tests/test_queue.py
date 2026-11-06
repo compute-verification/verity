@@ -1134,8 +1134,8 @@ def test_a_pool_launch_sends_each_merge_from_a_worktree_at_the_tip_and_the_verdi
     assert at == main and wt.name == "tree" and wt.parent.parent == world.tmp / "fast" and wt.parent.name.startswith(Q.POOL_PREFIX)
     assert sorted(argvs) == sorted(
         [sys.executable, "-m", "research", "run", "--id", runs[str(n)]["run"], "--on", "auto", *Q.PREFLIGHT_RUN, "--source",
-         str(wt), "--cwd", "clone", "--send", str(d / f"pr-{n}.bundle"), "--require-result", "--", "research", "queue",
-         "preflight", str(n), "--head", world.gh.prs[n].head, "--onto", main] for n in (1, 2))
+         str(wt), "--tool-from", "launcher", "--cwd", "clone", "--send", str(d / f"pr-{n}.bundle"), "--require-result", "--",
+         "research", "queue", "preflight", str(n), "--head", world.gh.prs[n].head, "--onto", main] for n in (1, 2))
     assert d.parent.parent == tmp and launch == {"dir": str(d), "pid": os.getpid(), "tree": None, "at": 1_000_000.0}
     assert [(d / f).read_text() for f in ("rc", f"{r1}.rc", f"{r2}.rc", f"{r2}.log")] == ["0\n", "0\n", "0\n", "launched\n"]
     assert not wt.parent.exists() and len(_git(q.workdir, "worktree", "list").splitlines()) == 1, "its launches ended"
@@ -1204,6 +1204,83 @@ def test_a_pool_runs_verdict_is_read_once_it_ended_and_each_way_it_ends_without_
     assert pool.read({1: rec}) == {1: verdict}
     shutil.rmtree(d)
     assert pool.read({1: rec}) == {1: "its launch ended without starting it"}
+
+
+# what the tree's own research says in place of a verdict, were its `research queue preflight` the one a pool run executes
+TREES_PREFLIGHT = """
+
+def pool_preflight(n, head, onto, bundle=None, repo=None, log=print, environ=None):
+    open({mark!r}, "a").write(f"{{n}} {{head}}\\n")
+    return 1
+"""
+
+
+def test_a_pool_run_executes_drives_own_preflight_never_the_one_of_the_tree_it_judges(tmp_path, monkeypatch):
+    """A pool run's research package, its runner's and `research queue preflight`'s, is the one drive runs (`--tool-from
+    launcher`), so a PR on `next` that changes the preflight changes nothing a pool run judges: here the tree's own
+    tools/research is a copy of drive's whose `pool_preflight` only leaves a mark.  The run `PreflightPool.launch` writes goes
+    to a machine that is a directory, with ssh `sh -c` (test_remote_preflight.py), in place of `--on auto`'s placement
+    (`PREFLIGHT_RUN`), and gives drive's verdict, read as the sync reads it; the same run without `--tool-from launcher` runs
+    the tree's."""
+    from research import remote
+    from research import runs as R
+    from waits import wait_runner
+
+    mark, repo, machine = tmp_path / "the-trees-preflight-ran", tmp_path / "q", tmp_path / "machine"
+    trees = repo / "tools" / "research" / "src" / "research"
+    shutil.copytree(Path(Q.__file__).parent, trees, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    (trees / "queue.py").write_text((trees / "queue.py").read_text() + TREES_PREFLIGHT.format(mark=str(mark)))
+    (repo / "tools" / "research" / "pyproject.toml").write_text('[project]\nname = "research"\nversion = "0"\n')
+    (repo / "pyproject.toml").write_text('[project]\nname = "root"\nversion = "0"\n[tool.uv.workspace]\nmembers = ["tools/research"]\n')
+    _git(tmp_path, "init", "-q", "-b", "main", str(repo))
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "base")
+    onto = _git(repo, "rev-parse", "HEAD")
+    (repo / "b.txt").write_text("b\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "the PR")
+    head = _git(repo, "rev-parse", "HEAD")
+    commit = _git(repo, "commit-tree", f"{head}^{{tree}}", "-p", onto, "-p", head, "-m", "Queue: #7")
+    (tmp_path / "machines.toml").write_text(f'[machines.m]\nprovider = "runpod"\npod_id = "p1"\nproject = "p"\nroot = "{machine}"\n'
+                                            f'python = "{sys.executable}"\n')
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
+    monkeypatch.setattr(remote, "pod_target", lambda m: {"host": "h", "port": 22, "pod_name": "m", "cost_per_hr": 0.1,
+                                                         "rate_observed_utc": "t0", "gpu": None})
+    monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **k: ["sh", "-c"])
+    (tmp_path / "tmp").mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "tmp"))
+
+    def ran(rid: str) -> tuple[str, int | None, str]:
+        run_dir = machine / "runs" / rid
+        wait_runner(run_dir)
+        s = R.summarize(run_dir)
+        return s["state"], s["rc"], str(run_dir)
+
+    scripts: list[Path] = []
+    pool = Q.PreflightPool(repo, root=tmp_path / "fast", start=lambda argv, cwd: scripts.extend(Path(argv[4]).glob("r*.sh")) or 1,
+                           status=ran)
+    rid = pool.new_id()
+    launch = pool.launch(onto, [(7, head, commit, rid)])
+    words = shlex.split(scripts[0].read_text().split("\n", 1)[0])[:-3]          # less `> LOG 2>&1`
+    at, placed = words.index("--on"), ["--on", "auto", *Q.PREFLIGHT_RUN]
+    assert words[:4] == [sys.executable, "-m", "research", "run"] and words[at:at + len(placed)] == placed
+    here = ["--on", "m", "--project", "p", "--runs-dir", str(tmp_path / "runs"), "--no-custody-r2", "--no-sampler"]
+    argv = ["run", *words[4:at], *here, *words[at + len(placed):]]
+    assert research_main(argv) == 0
+    (Path(launch["dir"]) / f"{rid}.rc").write_text("0\n")                       # what the launch's script writes once it returns
+    verdict = pool.read({7: {"run": rid, "launch": launch["dir"], "pid": 1}})[7]
+    assert isinstance(verdict, dict) and {f: verdict[f] for f in ("pr", "head", "onto", "commit", "why")} == {
+        "pr": 7, "head": head, "onto": onto, "commit": commit, "why": None}, verdict
+    assert not mark.exists(), "the tree's preflight never ran"
+    sent = json.loads((tmp_path / "runs" / rid / "remote.json").read_text())
+    assert (sent["tool_from"], sent["tool_identity"]) == ("launcher", remote.tool_identity()), "drive's own package ran the run"
+
+    of = argv.index("--tool-from")
+    theirs = [*argv[:of], *argv[of + 2:]]
+    theirs[theirs.index("--id") + 1] = again = pool.new_id()
+    assert research_main(theirs) == 0
+    assert ran(again)[:2] == ("failed", 1) and mark.read_text() == f"7 {head}\n", "without it, the tree's preflight answers"
+    assert json.loads((tmp_path / "runs" / again / "remote.json").read_text())["tool_from"].endswith("tools/research/src/research")
 
 
 def test_drives_priority_list_is_read_again_at_each_sync_and_one_it_cant_read_is_empty_its_error_logged_once(world):
