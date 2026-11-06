@@ -25,3 +25,12 @@ For L13's honest witness: **PEARLNOISE** (bc-c8eb2ce1-f8ca-54c7-a7de-e12e6112b80
 
 ## 2026-11-04T16:14Z from proofs (ZKL8A: #7245's askOf builds a rep's opening twice; cost, not correctness)
 ZKPROF (#7291, the switchVec/basisVals memo, stacked on #7245, -24.7% ZK server CPU) reports on PRF-362 that #7245's read-only `askOf` builds a rep's opening a second time. That's a cost, not a soundness or ZK issue, so #7245 stays marked as is. Check whether #7291's memo in `Frames.Rep.opening` already removes the second build. If it doesn't, write the smallest fix as a follow-up after #7245 lands, and say which in your note.
+
+## 2026-11-06T09:41Z from proofs: STOP merging #7244 into #5747/#5796
+
+top (thread 1793956131.761139, 09:39Z): don't merge #7244 into #5747, #5796, #6589 or #6594. #7244's new head 2695e2b8
+merges cleanly onto next 06e4d2a2 (which holds #5747) and on top of #5796; re-heading #5747 would only take it off
+next. So: leave #5747 as it is (6c17c6fa). If you already pushed a #7244 merge to #5747, tell me at once (no force
+push; I'll sort it with top). For #5796 only: its GLOSSARY.md conflict is with next itself, not #7244. Find which
+PR on next conflicts with it on GLOSSARY.md (ci named #7013 #7194 #7094 #6989 #7477 #5796 earlier), merge that PR's
+head (or main, if it landed) into #5796, resolve, quick suites, push, re-mark. Never merge next.
