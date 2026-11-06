@@ -530,13 +530,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "slot of the session's schedule, the loop's references (the rep frames, the level 0s, the link, the loop's "
           "own proofs, the inner proof's rounds and the salts the finish keeps) change as the IO function the relay "
           "calls there changes them, stated with the pure functions it calls, and each answer the relay reads on the "
-          "auditor's connection is the auditor's to everything the relay sent it. Accepted provisionally as a named "
-          "trust: https://app.notion.com/p/40f399515d9e81a19338f2ddbec3635e", "Relay serves", "standard"),
+          "auditor's connection is the auditor's to everything the relay sent it", "Relay serves", "standard"),
     Entry("flock-worker-deterministic", "assumption",
           "The prover's worker behind the ZK server gives each frame round's content as a function of its history: "
           "the content LiveChallenger::round sends in its Req::Round is the value the model's worker gives at the "
-          "coins the worker has received, from the statement, the witness and its tapes. Accepted provisionally as a "
-          "named trust: https://app.notion.com/p/40f399515d9e81a19338f2ddbec3635e", "Worker deterministic", "standard"),
+          "coins the worker has received, from the statement, the witness and its tapes", "Worker deterministic",
+          "standard"),
     # `Claims.ZKServer.Loop.Src` (Security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
     # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
     Entry("flock-firewall-os-src", "assumption",
