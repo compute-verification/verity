@@ -23,10 +23,10 @@ A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and 
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
 checks `checked`'s tip, and doesn't hold `main`; under drive.toml's `executor = "on"`, `ratchet-gate` runs with
 `lean-agreement` in a run of their own beside the executor's check of the tip, and `main` waits for that run's preflights and
-`lean-agreement`, not its `ratchet-gate`. A red `circuit-check` reverts its culprit at once and lands no PR touching its inputs
-until it passes; a red `ratchet-gate` reverts its culprit as any other after-landing red does. `circuit-check` goes back on
-the gate once `circuit-check --all` fits inside the rest of the check; `ratchet-gate` is in no shard plan, and reports without
-blocking a merge.
+`lean-agreement`, not its `ratchet-gate`. A red `circuit-check` or `ratchet-gate` reverts its culprit at once, as every
+after-landing red does, and while `circuit-check` is red no PR touching its inputs lands. `circuit-check` goes back on the gate
+once `circuit-check --all` fits inside the rest of the check; `ratchet-gate` is in no shard plan, and reports without blocking
+a merge.
 
 ## Suites and reuse
 
