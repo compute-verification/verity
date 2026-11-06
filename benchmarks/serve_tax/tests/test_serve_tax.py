@@ -36,15 +36,16 @@ def test_pct_interpolates_between_order_statistics():
     assert S.pct(list(range(101)), 0.99) == pytest.approx(99.0)
 
 
-def arm(name: str, parent: str | None, tputs: list[float]) -> dict:
+def arm(name: str, parent: str | None, tputs: list[float], ok: int = 100) -> dict:
     return {"arm": name, "parent": parent, "what": name, "run_id": f"r-{name}", "startup_s": 1.0, "error": None,
             "tick": None, "slo": {"ttft_s": 2.0, "tpot_s": 0.08},
-            "loads": {"saturated": [{"rep": i + 1, "rate": 10.0, "output_tok_per_s": t, "goodput_req_per_s": t / 100,
-                                     "req_per_s": t / 100, "slo_attained": 1.0} for i, t in enumerate(tputs)]}}
+            "loads": {"saturated": [{"rep": i + 1, "rate": 10.0, "sent": 100, "ok": ok, "output_tok_per_s": t,
+                                     "goodput_req_per_s": t / 100, "req_per_s": t / 100, "slo_attained": 1.0}
+                                    for i, t in enumerate(tputs)]}}
 
 
 def test_tax_is_compute_per_token_over_the_reference():
-    t = S.table([arm("compiled", None, [1000, 1000, 1000]), arm("eager", "compiled", [800, 800, 800]),
+    t = S.table([arm("compiled", None, [1000, 1000, 1000]), arm("eager", "compiled", [800, 800, 800], ok=99),
                  arm("record", "compiled", [990, 1000, 1010])])
     rows = {r["arm"]: r for r in t["rows"]}
     assert "tax_vs_compiled" not in rows["compiled"]
@@ -52,8 +53,9 @@ def test_tax_is_compute_per_token_over_the_reference():
     rec_tax = rows["record"]["tax_vs_compiled"]["throughput"]
     assert rec_tax["value"] == pytest.approx(0.0)
     assert rec_tax["ci95"][0] < 0 < rec_tax["ci95"][1]
+    assert (rows["eager"]["unserved"], rows["eager"]["sent"], rows["compiled"]["unserved"]) == (3, 300, 0)
     md = S.markdown(t)
-    assert "+25.0%" in md and "r-eager" in md
+    assert "+25.0%" in md and "r-eager" in md and "| 3 of 300 |" in md
 
 
 def test_busy_cycle_counts_only_cycles_with_a_request_in_the_engine():

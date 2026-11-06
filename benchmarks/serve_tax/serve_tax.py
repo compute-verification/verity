@@ -276,8 +276,21 @@ def drive_load(port: int, served: str, plan: list[dict], rate: float, span_s: fl
                               *([tick["bucket_us"] / 1e6] if tick else [])))
     meta = {"tag": tag, "rate": rate, "span_s": span_s, "requests": k, "arrivals_span_s": round(arr[-1], 3),
             "wall_s": round(time.monotonic() - t, 3), **got}
+    recs = [json.loads(x) for x in (d / "client.jsonl").read_text().splitlines() if x.strip()]
+    meta["unserved"] = len(recs) - len(served(recs))
     (d / "meta.json").write_text(json.dumps(meta, indent=1))
     return meta
+
+
+def open_files() -> int:
+    """Raise this process's open-file limit to its hard limit and return it: a saturated load holds a connection open for
+    each request in the server's queue, past the usual soft limit of 1,024."""
+    import resource
+
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if soft != hard:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+    return resource.getrlimit(resource.RLIMIT_NOFILE)[0]
 
 
 def versions() -> dict:
@@ -289,6 +302,7 @@ def versions() -> dict:
 
 def run(a: argparse.Namespace) -> int:
     signal.signal(signal.SIGTERM, lambda s, f: (_ for _ in ()).throw(SystemExit(128 + s)))
+    nofile = open_files()
     arm, model = ARMS[a.arm], MODELS[a.model_id]
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
     out = Path(a.out)
@@ -308,7 +322,7 @@ def run(a: argparse.Namespace) -> int:
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "plugin": list(arm.plugin), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
             "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "versions": versions(), "host": os.uname().nodename,
-            "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "loads": []}
+            "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "open_files": nofile, "loads": []}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     t = time.monotonic()
     with open(srv / "server.log", "wb") as log:
@@ -332,7 +346,7 @@ def run(a: argparse.Namespace) -> int:
                 meta["loads"].append({k: m[k] for k in ("load", "rep", "rate", "requests", "unfinished", "wall_s", "t0_unix")})
                 (out / "meta.json").write_text(json.dumps(meta, indent=1))
                 print(f"[serve-tax] {name} rep {rep}: {m['requests']} requests at {rate:g}/s, wall {m['wall_s']} s, "
-                      f"unfinished {m['unfinished']}", flush=True)
+                      f"unfinished {m['unfinished']}, unserved {m['unserved']}", flush=True)
     except Exception as e:  # noqa: BLE001 -- the record says why the arm stopped
         meta["error"] = f"{type(e).__name__}: {e}"
         print(f"[serve-tax] {a.arm}: FAILED {meta['error']}", flush=True)
@@ -420,9 +434,14 @@ def pct(xs: list[float], q: float) -> float | None:
     return s[lo] + (s[hi] - s[lo]) * (k - lo)
 
 
+def served(recs: list[dict]) -> list[dict]:
+    """The client records of requests served to their end."""
+    return [r for r in recs if r.get("status") == 200 and not r.get("error") and r.get("done_s") is not None]
+
+
 def load_metrics(recs: list[dict], slo: tuple[float, float]) -> dict:
     """One load's metrics from its client records (module docstring)."""
-    ok = [r for r in recs if r.get("status") == 200 and not r.get("error") and r.get("done_s") is not None]
+    ok = served(recs)
     if not ok:
         return {"sent": len(recs), "ok": 0}
     span = max(r["send_unix"] + r["done_s"] for r in ok) - min(r["send_unix"] for r in recs)
@@ -485,7 +504,8 @@ def table(arms: list[dict]) -> dict:
     for a in arms:
         for load, reps in a["loads"].items():
             row = {"arm": a["arm"], "load": load, "run_id": a["run_id"], "reps": len(reps),
-                   "rate": reps[0]["rate"] if reps else None, **{k: summary([r.get(k) for r in reps]) for k in KEYS}}
+                   "rate": reps[0]["rate"] if reps else None, "sent": sum(r["sent"] for r in reps),
+                   "unserved": sum(r["sent"] - r["ok"] for r in reps), **{k: summary([r.get(k) for r in reps]) for k in KEYS}}
             for ref_name, key in (("compiled", "tax_vs_compiled"), (a.get("parent"), "tax_vs_parent")):
                 ref = by.get(ref_name)
                 if ref is None or ref_name == a["arm"] or load not in ref["loads"]:
@@ -531,13 +551,15 @@ def _tax(t: dict | None) -> str:
 def markdown(t: dict) -> str:
     slo = t["slo"] or {}
     lines = [f"SLO: TTFT ≤ {slo.get('ttft_s')} s and time per output token ≤ {slo.get('tpot_s')} s. Tax: the arm's compute "
-             "per token over the reference's at the same load, less one, from output tokens a second (goodput's beside it).",
-             "", "| arm | load | rate (req/s) | out tok/s | req/s | goodput req/s | SLO met | TTFT p50 / p99 (ms) | "
+             "per token over the reference's at the same load, less one, from output tokens a second (goodput's beside it). "
+             "Unserved: requests sent and not served over the load's reps; a tax beside one isn't over the same requests.",
+             "", "| arm | load | rate (req/s) | unserved | out tok/s | req/s | goodput req/s | SLO met | TTFT p50 / p99 (ms) | "
              "ITL p50 / p99 (ms) | tax vs compiled (tok/s) | tax vs compiled (goodput) | tax vs parent (tok/s) | run |",
-             "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
+             "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
     for r in t["rows"]:
         vc, vp = r.get("tax_vs_compiled") or {}, r.get("tax_vs_parent") or {}
-        lines.append(f"| {r['arm']} | {r['load']} | {r['rate']:.3g} | {_f(r['output_tok_per_s'])} | {_f(r['req_per_s'])} | "
+        lines.append(f"| {r['arm']} | {r['load']} | {r['rate']:.3g} | {r['unserved']} of {r['sent']} | "
+                     f"{_f(r['output_tok_per_s'])} | {_f(r['req_per_s'])} | "
                      f"{_f(r['goodput_req_per_s'])} | {_f(r['slo_attained'], 100, 3)}% | "
                      f"{_f(r['ttft_p50_s'], 1e3)} / {_f(r['ttft_p99_s'], 1e3)} | {_f(r['itl_p50_s'], 1e3)} / "
                      f"{_f(r['itl_p99_s'], 1e3)} | {_tax(vc.get('throughput'))} | {_tax(vc.get('goodput'))} | "
