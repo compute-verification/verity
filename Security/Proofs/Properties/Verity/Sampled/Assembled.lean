@@ -223,8 +223,8 @@ noncomputable def Constructions.assembled (e : 𝔽 ≃ (Fin 128 → Bool)) {V :
     (dev : Exchange → Properties.Challenger.History) (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
-    (label : ByteArray → Array ByteArray → ByteArray → String)
-    (after : ByteArray → Array ByteArray → ByteArray → ByteArray) {m : ℕ}
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
+    (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) : Constructions V :=
   ((Binding.withBinding K dev).withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd
 
@@ -240,8 +240,8 @@ theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Prope
     (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
-    (label : ByteArray → Array ByteArray → ByteArray → String)
-    (after : ByteArray → Array ByteArray → ByteArray → ByteArray) {m : ℕ}
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
+    (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) (A : Live) (θ : ByteArray) (F : Array ByteArray)
     (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
@@ -264,9 +264,9 @@ theorem couplingTarget_assembled_src (K : Constructions V) (dev : Exchange → P
     (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
-    (label : ByteArray → Array ByteArray → ByteArray → String)
-    (after : ByteArray → Array ByteArray → ByteArray → ByteArray) (m : ℕ) (A : Live) (θ : ByteArray)
-    (F : Array ByteArray) (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
+    (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) (m : ℕ)
+    (A : Live) (θ : ByteArray) (F : Array ByteArray) (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
     (hL : A.Lb 0 = m * 64)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ)
       (sampleMaps e V rd label after (srcCoinsAt m) A θ F c σ)
