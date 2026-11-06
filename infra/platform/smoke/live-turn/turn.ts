@@ -21,8 +21,10 @@ const BUDGET_MS = 270_000;
 // that the model credential never entered the sandbox, then the sandbox deleted.
 export async function GET(req: Request): Promise<Response> {
   const q = new URL(req.url).searchParams;
-  const key = process.env.SMOKE_KEY;
-  if (!key || q.get("key") !== key) return new Response("not found", { status: 404 });
+  // The deployment holds only the key's digest, so the key never passes through
+  // whatever sets the project's environment.
+  const want = process.env.SMOKE_KEY_SHA256;
+  if (!want || createHash("sha256").update(q.get("key") ?? "").digest("hex") !== want) return new Response("not found", { status: 404 });
   const harness = (q.get("harness") ?? "claude-code") as HarnessName;
   const model = q.get("model") ?? (harness === "codex" ? "openai/gpt-5.3-codex" : "anthropic/claude-sonnet-5.5");
   const sliceSeconds = Number(q.get("slice") ?? 200);
