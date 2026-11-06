@@ -17,6 +17,7 @@ public import Proofs.Flock.ZkAny.RelayRoundTook
 public import Proofs.Flock.SessionLoop.Statement
 public import Proofs.Flock.Claims.Complete.ZkTables.Count
 public import Proofs.Flock.SessionLoop.Tables
+import Proofs.Flock.Claims.ZK.Reference
 
 /-!
 # What the loop's frames and the model hold at a frame round
@@ -1051,7 +1052,7 @@ theorem slot_masked {T : ZKMal.CoinLayer.TableData}
   have hlast : M.L.last M.x = (planOf spec sts).size + 2 := by
     rw [hD.rel]
     show Loop.lastOf M.x = _
-    rw [Loop.lastOf_eq, Loop.refK_of_setup hD.setup, Loop.rounds_eq hD.sizes, ← Loop.plan_size]
+    rw [Loop.lastOf_eq, Claims.ZKMal.refK_of_flock hD.setup, Loop.rounds_eq hD.sizes, ← Loop.plan_size]
     omega
   have hlt' : (M.hist σ.c).length < M.L.last M.x := by omega
   refine ⟨?_, hlt'⟩

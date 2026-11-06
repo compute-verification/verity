@@ -255,10 +255,11 @@ theorem repJ_old {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionS
   · rw [hs.1 name]
     exact hl0
 
+open Claims.ZKMal in
 /-- **The history one message on** is the history with one more round. -/
 theorem LoopModel.hist_succ {W Rr : Type} (M : LoopModel W Rr) {j : Nat} (hj : j < M.τ.length) :
     ∃ e', M.hist (j + 1) = M.hist j ++ [e'] := by
-  unfold LoopModel.hist ZKMal.histOf
+  unfold LoopModel.hist histOf
   rw [List.take_add_one, List.getElem?_eq_getElem hj, Option.toList_some, List.map_append, List.map_cons,
     List.map_nil]
   exact ⟨_, rfl⟩

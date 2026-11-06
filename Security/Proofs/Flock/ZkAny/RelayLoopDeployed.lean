@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelayLoopRep
 public import Proofs.Flock.ZkAny.RelayLoopL0
 public import Proofs.Flock.SessionLoop
+import Proofs.Flock.Claims.ZK.Reference
 
 /-!
 # `LoopJ` kept at a frame round of the deployed loop
@@ -39,7 +40,7 @@ theorem LoopModel.Deployed.helloChk {T : ZKMal.CoinLayer.TableData}
   rw [hD.rel]
   show Loop.helloChkAt M.x M.ρ.1 = .ok hl
   unfold Loop.helloChkAt
-  rw [hD.setup]
+  rw [Claims.ZKMal.sessOf_flock hD.setup]
   dsimp only
   rw [hh] <;> rfl
 
@@ -57,6 +58,7 @@ theorem LoopModel.Deployed.req {T : ZKMal.CoinLayer.TableData}
   rw [hD.rel]
   rfl
 
+open Claims.ZKMal in
 /-- **The deployed loop's frames take the coins after the `Hello`**: the round after it is rep 0's first, at the
 frame's start (`Loop.freshOf` of no coins). -/
 theorem LoopModel.Deployed.frameAnswer_one {T : ZKMal.CoinLayer.TableData}
@@ -69,7 +71,7 @@ theorem LoopModel.Deployed.frameAnswer_one {T : ZKMal.CoinLayer.TableData}
       Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     (hlt : 0 < M.τ.length) : (M.L.frameAnswer M.x M.ρ (M.hist 1)).isOk = true := by
-  have h1 : M.hist 1 = [((M.τ[0]'hlt).1, ZKMal.msgOf (M.τ[0]'hlt).2)] := M.hist_snoc hlt
+  have h1 : M.hist 1 = [((M.τ[0]'hlt).1, msgOf (M.τ[0]'hlt).2)] := M.hist_snoc hlt
   rw [h1, hD.rel]
   show (Loop.freshOf M.x []).isOk = true
   unfold Loop.freshOf

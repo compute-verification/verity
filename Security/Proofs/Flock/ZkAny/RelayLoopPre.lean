@@ -4,6 +4,7 @@ public import Proofs.Flock.ZkAny.RelayLoopDeployed
 public import Proofs.Flock.ZkAny.RelayLoopFinish
 public import Proofs.Flock.ZkAny.RelayLoopOwnAt
 public import Proofs.Flock.ZkAny.RelayFreshStart
+import Proofs.Flock.Claims.ZK.Reference
 
 /-!
 # `EnvPre` at the deployed loop
@@ -44,7 +45,7 @@ theorem LoopModel.Deployed.last_eq {T : ZKMal.CoinLayer.TableData}
     M.L.last M.x = (planOf spec sts).size + 2 := by
   rw [hD.rel]
   show Loop.lastOf M.x = _
-  rw [Loop.lastOf_eq, Loop.refK_of_setup hD.setup, Loop.rounds_eq hD.sizes, ← Loop.plan_size]
+  rw [Loop.lastOf_eq, Claims.ZKMal.refK_of_flock hD.setup, Loop.rounds_eq hD.sizes, ← Loop.plan_size]
   omega
 
 /-- **`EnvPre` at the deployed loop**: at the loop's own tables on `src` (`LoopModel.Deployed` at `Loop.realOf src`),

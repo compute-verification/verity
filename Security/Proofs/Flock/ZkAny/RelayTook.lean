@@ -138,10 +138,11 @@ namespace Relay
 
 open _root_.Flock.Firewall.Session (State)
 
+open Claims.ZKMal in
 /-- The run's history one message on: its `j`-th message and `V*`'s answer to it, read as the prover reads it. -/
 theorem LoopModel.hist_snoc {W Rr : Type} (M : LoopModel W Rr) {j : Nat} (hj : j < M.τ.length) :
-    M.hist (j + 1) = M.hist j ++ [((M.τ[j]'hj).1, ZKMal.msgOf (M.τ[j]'hj).2)] := by
-  unfold LoopModel.hist ZKMal.histOf
+    M.hist (j + 1) = M.hist j ++ [((M.τ[j]'hj).1, msgOf (M.τ[j]'hj).2)] := by
+  unfold LoopModel.hist histOf
   rw [List.take_add_one, List.getElem?_eq_getElem hj, Option.toList_some, List.map_append, List.map_cons,
     List.map_nil]
 
@@ -165,12 +166,13 @@ theorem LoopModel.TookAt.congr {W Rr : Type} {M : LoopModel W Rr} {st st' : Stat
     (hs : st'.session = st.session) (h : M.TookAt st c) : M.TookAt st' c :=
   ⟨fun C hC => h.1 C (hs.symm.trans hC), h.2⟩
 
+open Claims.ZKMal in
 /-- **Past the `Hello`**: where the transport reads the `Hello` as `hl` and the session's coin tree after it is the one
 the model's first answer begins there (`Release.start`), the loop took the coins so far. -/
 theorem LoopModel.TookAt.hello {W Rr : Type} {M : LoopModel W Rr} {st : State} (hlt : 0 < M.τ.length)
     {hl : _root_.Flock.Firewall.Coins.Hello} (hh : M.L.helloChk M.x M.ρ = .ok hl)
-    (hs : ∀ C, st.session = some C → Release.start hl (ZKMal.msgOf (M.τ[0]'hlt).2) = .ok C) : M.TookAt st 1 := by
-  have h1 : M.hist 1 = [((M.τ[0]'hlt).1, ZKMal.msgOf (M.τ[0]'hlt).2)] := M.hist_snoc hlt
+    (hs : ∀ C, st.session = some C → Release.start hl (msgOf (M.τ[0]'hlt).2) = .ok C) : M.TookAt st 1 := by
+  have h1 : M.hist 1 = [((M.τ[0]'hlt).1, msgOf (M.τ[0]'hlt).2)] := M.hist_snoc hlt
   refine ⟨fun C hC => ?_, ?_, ?_⟩
   · rw [h1]
     exact LeanRelease.verdictAt_start hh (hs C hC)
@@ -179,12 +181,13 @@ theorem LoopModel.TookAt.hello {W Rr : Type} {M : LoopModel W Rr} {st : State} (
   · rw [h1]
     exact M.L.fed_of_le M.x M.ρ (by simp)
 
+open Claims.ZKMal in
 /-- **One opening on**: past the `Hello`, where the session's coin tree `C` takes the model's next answer as the opening
 of the transport's request there and the session after holds only the tree after it, the frame took the last coins
 (`frameAnswer`), and it steps on the next, the loop took the coins one message on. -/
 theorem LoopModel.TookAt.succ {W Rr : Type} {M : LoopModel W Rr} {st st' : State} {j : Nat} (hlt : j < M.τ.length)
     (h : M.TookAt st j) (hj : j ≠ 0) {C C' : Release} {c : Claims.Msg} (hC : st.session = some C)
-    (ho : C.open (M.L.req M.x (j - 1)).1 (M.L.req M.x (j - 1)).2 (ZKMal.msgOf (M.τ[j]'hlt).2) = .ok (C', c))
+    (ho : C.open (M.L.req M.x (j - 1)).1 (M.L.req M.x (j - 1)).2 (msgOf (M.τ[j]'hlt).2) = .ok (C', c))
     (hs' : ∀ D, st'.session = some D → D = C') (hf : (M.L.frameAnswer M.x M.ρ (M.hist j)).isOk = true)
     (hfed : M.L.fed M.x M.ρ (M.hist (j + 1)) = true) : M.TookAt st' (j + 1) := by
   have hlj : (M.hist j).length = j := by
