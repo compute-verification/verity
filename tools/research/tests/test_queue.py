@@ -3629,6 +3629,53 @@ def test_under_land_into_checked_a_head_is_judged_against_checked_not_main(world
     assert f"#2 is not marked ready at {own[:12]}: it changes the Lean lock of pkg against `checked`" in capsys.readouterr().err
 
 
+def test_a_store_put_and_label_made_while_a_marks_preflight_runs_take_the_catalog_without_waiting_for_it(world):
+    """A mark refreshes the store's attempts from the remote (its records gate) and then runs its preflight (a merge, the Lean
+    gate, the suites' collection: minutes), while the machine's other lanes write the same catalog: `research data put`, its
+    write-through and `research data label`.  The mark holds the catalog only around its own short reads and writes, so theirs
+    take it at once while the preflight runs; their connection waits for no lock (busy timeout 0), so one held fails them here."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    _keyed(world, {LOCK: _lock()})
+    h = world.change({LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    passed = _published(world, h, passes={_key(world.dev, h): "pkg"})    # what the records gate refreshes, and passes on
+    world.gh.put(1, h, ready=False)
+    inside, release, preflighted, rc = threading.Event(), threading.Event(), [], []
+
+    def preflight(pr: PR, prs: list[PR]) -> str | None:
+        preflighted.append(pr.head)
+        inside.set()
+        release.wait()
+        return None
+
+    def mark() -> None:
+        try:
+            rc.append(ready(world.gh, world.store, 1, "lane-1", MarkOnly(), preflight=preflight, records=_gate(world)))
+        finally:
+            inside.set()
+
+    t = threading.Thread(target=mark)
+    try:
+        t.start()
+        inside.wait()
+        assert preflighted == [h], f"the mark ended before its preflight ran: {world.logs}"
+        other = LocalStore(world.tmp / "store", config_path=world.tmp / "store.toml")      # another lane's process on the machine
+        other.index.db.execute("PRAGMA busy_timeout = 0")
+        (world.tmp / "checkpoint.json").write_text('{"step": 1}\n')
+        art = other.put_artifact("evidence/v1", {"step": 1}, file=world.tmp / "checkpoint.json")
+        assert other.push(art)["preserved"] is True
+        other.add_label(art, vocab.NOTE, "kept", "lane-9")
+        assert not rc, "the preflight is still running"
+    finally:
+        release.set()
+        t.join()
+    assert rc == [0] and f"records gate: pkg: records run {passed} of {h[:12]} passed it" in world.logs[-1]
+    assert StoreLabels(world.store, log=world.logs.append).ready(1, h) is True
+    assert other.index.artifact(art)["remote"] is True
+    assert [x["value"] for x in other.index.labels(art, vocab.NOTE)] == ["kept"]
+
+
 def test_a_result_whose_attempt_cant_be_read_vouches_for_nothing_and_the_refusal_says_so(world, capsys):
     """The records gate reads the results of the attempts that may list passes, picked by the command in the index's manifest of
     each; a row that doesn't parse is skipped, which fails closed, and the refusal says how many were and which, rather than
