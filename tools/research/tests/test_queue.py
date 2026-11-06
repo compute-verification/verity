@@ -3261,6 +3261,27 @@ def test_a_head_that_changes_a_lock_is_vouched_for_only_by_a_records_run_of_it_t
     assert _mark(world, 2, plain, store=LocalStore(world.tmp / "bare", config_path=world.tmp / "none.toml")) is None
 
 
+def test_a_head_that_changes_a_lock_no_records_run_passed_is_marked_and_the_warning_names_each_package(world, capsys):
+    """The lock run after a landing regenerates the records of the locks it changed, so a head no records run vouches for is
+    marked all the same: `ready` exits 0, the mark is on the store's remote, and the warning names each package, the run that
+    would record it, and why it doesn't refuse."""
+    from research.queue import RECORDS_AFTER_LANDING, RECORDS_COMMAND, MarkOnly, StoreLabels, ready
+
+    world.with_store_remote()
+    h = world.change({LOCK: _lock(A="2"), "lib/lean-audit.json": _lock(B="2")})
+    world.gh.put(1, h, ready=False)
+    capsys.readouterr()
+    assert ready(world.gh, world.store, 1, "lane-1", MarkOnly(), records=_gate(world)) == 0
+    out, err = capsys.readouterr()
+    assert err.startswith(f"research queue ready: warning: #1 at {h[:12]}: it changes the Lean lock of lib, pkg against `main`, "
+                          f"and the store holds no records run of {h[:12]} in which each passed"), err
+    assert f": {RECORDS_AFTER_LANDING}:\n  - " in err
+    for pkg in ("lib", "pkg"):
+        assert f"to record {pkg} before it lands, start `{RECORDS_COMMAND.format(pkg=pkg)}`" in err
+    assert "is not marked" not in err and f"#1 at {h[:12]}: marked on lane-1's word, with no quick tier" in out
+    assert StoreLabels(world.store, log=world.logs.append).ready(1, h) is True
+
+
 def test_a_lock_of_the_auditors_fixtures_needs_no_records_run(world):
     """No records run reads a lock under `LEAN_FIXTURES` (`lean_changed.py --records` matches no package there, and the
     controls write its records), so a head that changes only such locks draws no warning, with nothing read, not even the store."""
@@ -4104,6 +4125,17 @@ def test_judge_warns_of_a_pr_whose_body_names_no_live_goal_and_marks_it_all_the_
                                        f"{GOAL_FIX.format(n=1)}\n")
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
 
+
+def test_judge_warns_of_a_lock_the_records_gate_doesnt_vouch_for_and_marks_it_all_the_same(world, monkeypatch, capsys):
+    """`judge` writes the mark `ready` would have, so `ready`'s records gate warns there too, and never refuses."""
+    from research import queue as Q
+
+    machine, rid, h1 = _orphaned(world, monkeypatch)
+    capsys.readouterr()
+    assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch,
+                   records=lambda pr: "it changes the Lean lock of pkg against `main`") == 0
+    assert capsys.readouterr().err == f"research queue judge: warning: #1 at {h1[:12]}: it changes the Lean lock of pkg against `main`\n"
+    assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is True
 
 
 def test_judge_marks_a_pr_whose_head_moved_to_the_same_tree_and_no_other(world, monkeypatch, capsys):
