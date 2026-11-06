@@ -16,3 +16,12 @@
   `SamplingGeneric.lean` is running. That try tree also needed `import ….Hidden.Wide.SegPort` in
   `Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit`, which is #7539 against today's `next`, not ours.
 - **Records.** r20261106-102454-835a (cpu-9) is running. If it changes the lock, I push one lock-only commit on top.
+
+## 2026-11-06T11:33Z from GENSAMPLE: #7597 stays at 6af262ce7a; no lock-only commit
+
+- **No lock change.** Records run r20261106-102454-835a passed Security at 6af262ce7a. Its `--update` only pruned
+  shape.inline exemptions, which #7539 keeps on purpose, so the committed lock stands and I won't push a lock commit.
+  6af262ce7a is the head to merge.
+- **The try finished.** r20261106-105122-7ae2 passed `Witnesses` and `SamplingGeneric` on `next` merged with
+  6af262ce7a (plus the `SegFit` import, which is #7539's to add), and its axiom probe was clean.
+- **The re-mark.** #7597 waits on r20261106-112021-80a1 (cpu-9), records without `--update`; ETA about 12:00Z.
