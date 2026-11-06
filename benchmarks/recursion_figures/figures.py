@@ -1,4 +1,10 @@
-"""The recursive session's figures from one run's result (``rec_profile.read``): its cost, its knowledge-soundness error
+"""The recursive session's figures from one recursion bench result (``benchmarks/recursion_e2e``'s
+``recursion_e2e.json``, ``rec_profile.read``'s, with its ``session_times``):
+
+    python benchmarks/recursion_figures/figures.py RESULT.json [--json]
+
+The bench is public and states what it measured; this side reads the census's fleets and the monitoring periods, which
+stay private, and scales the measurement over them: its cost, its knowledge-soundness error
 and its stop-leak bound, for one window and pooled over the monitoring periods (`wipe_monitoring.PERIODS`: a week, a month,
 a year), over one datacenter (``benchmarks/census/deployments.json``'s reference) and over the world's compute (the
 adversary resource model, ``adversary.json``'s reference). Every figure says its basis: ``measured`` (this run),
@@ -32,6 +38,7 @@ proves, not the window's.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import sys
@@ -40,14 +47,14 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
+sys.path.insert(0, str(HERE.parent / "recursion_e2e"))
 
+from rec_profile import SESSION_STEPS  # noqa: E402
 from verity.core.protocols.pous.wipe_monitoring import PERIODS  # noqa: E402
 
 FORMAT = "recursion-e2e/figures/v2"
 CENSUS = HERE.parent / "census"
 YEAR_S = dict(PERIODS)["year"]
-#: one recursive session's steps after its build: the inner session, V*'s staging, its outer proofs, Lean's verdicts
-SESSION_STEPS = ("inner", "vstage", "vcap", "oprove", "lean")
 #: κ, the per-session term, and ε, the per-SHA-512-call term, log₂ (``RecDeploy.recursiveBitsK_deployed``)
 KAPPA_LOG2 = -167.7
 EPS_LOG2 = -174.95
@@ -218,3 +225,25 @@ def markdown(fig: dict[str, Any]) -> str:
     lines.append(f"Scaled: {fig['basis']['scaled']}. KS: κ and ε proved, the union over sessions scaled; its share is the "
                  "pooled error over the period's sessions and over the ANDs they cover. A log₂ error at or above 0 is no bound.")
     return "\n".join(lines) + "\n"
+
+
+def of_result(doc: dict[str, Any], census: Path = CENSUS) -> dict[str, Any]:
+    """The figures of a result: its ``session_times`` and its release budget (``params``)."""
+    if "session_times" not in doc:
+        raise ValueError("the result has no session_times: reread its records with this tree's `run.py result --dir OUT`")
+    budget = (doc.get("params") or {}).get("release_budget")
+    return figures(doc, doc["session_times"], census, budget=int(budget) if budget else None)
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("result", type=Path, help="a recursion_e2e.json")
+    ap.add_argument("--json", action="store_true", help="the figures as JSON, not the table")
+    a = ap.parse_args(argv)
+    fig = of_result(json.loads(a.result.read_text()))
+    print(json.dumps(fig, indent=1) if a.json else markdown(fig), end="" if not a.json else "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
