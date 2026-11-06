@@ -6,7 +6,7 @@
 # datasets are cached in the lane's own HF_HOME: a node's shared cache can hold another lane's broken links. glibc
 # serves every allocation from its heap and keeps what is freed (MALLOC_MMAP_MAX_=0): otherwise each GB-sized
 # temporary is mmapped and faulted in afresh in 4 KB pages, which tripled a design-U layer's time.
-#   bash benchmarks/hardness_defence/cpu70b.sh NAME QAT_ARGS...
+#   bash benchmarks/hardness_defence/cpu70b.sh NAME QAT_ARGS...   (HD_FETCH_ONLY=1: fetch the weights and stop)
 set -euo pipefail
 name=$1
 shift
@@ -16,6 +16,7 @@ mkdir -p "$(dirname "$dir")"
 ( flock 9
   [ -f "$dir/.fetched" ] || { bash "$here/fetch.sh" unsloth/Meta-Llama-3.1-70B "$dir" && touch "$dir/.fetched"; }
 ) 9>"$(dirname "$dir")/fetch.lock"
+[ -z "${HD_FETCH_ONLY:-}" ] || exit 0
 export OMP_NUM_THREADS=${HD_THREADS:-96} HF_HOME=${HD_HF_HOME:-/workspace/research/lanes/compute-research/hf}
 export MALLOC_MMAP_MAX_=0 MALLOC_TRIM_THRESHOLD_=1000000000000 MALLOC_TOP_PAD_=1073741824
 bash "$here/../hardness_useful/run_arm.sh" "$name" --model "$dir" --device-map cpu --tokens 0 --tasks "" "$@" \
