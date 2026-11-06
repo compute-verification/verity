@@ -28,6 +28,40 @@ EOF
 # and at the default 10:30:100 ssh from runs and agents was refused at random. So both go first in the main file.
 sed -i -E '/^[[:space:]]*#?[[:space:]]*(MaxStartups|MaxSessions)[[:space:]]/d' /etc/ssh/sshd_config
 sed -i '1i MaxStartups 200:30:400\nMaxSessions 64' /etc/ssh/sshd_config
+# Inbound IPv4 TCP packets that carry IP options are dropped before anything sees them (normal traffic never carries them),
+# and MPTCP stays off; deploy.toml installs the same three files on running nodes.
+mkdir -p /etc/vy
+cat > /etc/vy/drop-ipv4-options.nft <<'EOF'
+add table ip vy_drop_ipv4_options
+delete table ip vy_drop_ipv4_options
+table ip vy_drop_ipv4_options {
+  chain prerouting {
+    type filter hook prerouting priority -300; policy accept;
+    meta l4proto tcp ip hdrlength > 5 counter drop
+  }
+}
+EOF
+cat > /etc/systemd/system/vy-drop-ipv4-options.service <<'EOF'
+[Unit]
+Description=Drop inbound IPv4 TCP packets that carry IP options
+DefaultDependencies=no
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/vy/drop-ipv4-options.nft
+
+[Install]
+WantedBy=multi-user.target
+EOF
+echo 'net.mptcp.enabled = 0' > /etc/sysctl.d/90-vy-mptcp-off.conf
+command -v nft > /dev/null || { apt-get update -q && apt-get install -y -q nftables; }
+systemctl daemon-reload
+systemctl enable vy-drop-ipv4-options.service
+systemctl restart vy-drop-ipv4-options.service
+sysctl -q -p /etc/sysctl.d/90-vy-mptcp-off.conf
 sshd -t && { systemctl reload ssh || systemctl reload sshd || true; }
 
 for _ in $(seq 60); do [ -e "$DEV" ] && break; sleep 2; done
