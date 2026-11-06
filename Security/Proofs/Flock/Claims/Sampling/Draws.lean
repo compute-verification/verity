@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Soundness.Audit.Work
+module
+
+public import Proofs.Flock.Claims.Prob
+public import Proofs.Flock.Soundness.Audit.Work
 
 /-!
 # The draw bounds, as the claims read probabilities
@@ -24,6 +26,8 @@ misses all of them with probability at most its law's bound. Each registered law
 
 `miss_le_of` turns each into its form at `δ`: a bound of at most `δ` at `t` is a miss probability of at most `δ`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

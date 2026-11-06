@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Level0
-import Proofs.Flock.Soundness.OpeningPhase
-import Proofs.Flock.Soundness.Game.Union
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Level0
+public import Proofs.Flock.Soundness.OpeningPhase
+public import Proofs.Flock.Soundness.Game.Union
 
 /-!
 # C-Flock ZK's masked algebraic phase (live/PROTOCOL.md §1, §2, §4)
@@ -24,6 +26,8 @@ clear rep's (`Model.repPad`) acceptance probability (`repMaskedZK_couple`). Unma
 strategy into a clear one; the forms evaluate at `h` to the clear values, and a row vanishing at `h` is the clear check it
 replaces (characteristic 2).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 

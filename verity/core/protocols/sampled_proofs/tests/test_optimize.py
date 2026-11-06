@@ -420,7 +420,7 @@ def test_sensitivity_and_benchmarks_flag_what_moves_the_plan():
 
 
 def test_miss_holds_its_digits_on_huge_populations():
-    """A week of served proof blocks is about 10^16: the acceptance probability against the product it denotes, summed exactly."""
+    """A week of served proof blocks is about 10^16: the miss probability against the product it denotes, summed exactly."""
     for n in (2 ** 25 - 3, 2 ** 25 + 3, 10 ** 12, 10 ** 16):
         for m, k in ((1, 1), (4096, 27_713), (10 ** 6, 100), (64, 10 ** 6)):
             t, s = min(m, k), max(m, k)
@@ -440,7 +440,7 @@ def test_shared_statements_hold_only_the_drawn_units():
 
 
 def test_sparse_draws_on_huge_populations_still_touch_statements_and_replay_units():
-    """At 10^17 proof blocks the acceptance probability of a single draw rounds to 1: what it touches is kept as 1 − P_a directly."""
+    """At 10^17 proof blocks the miss probability of a single draw rounds to 1: what it touches is kept as 1 - miss directly."""
     n = 10 ** 17
     assert touched(n, 4, 1) == pytest.approx(1.0, rel=1e-12)
     assert touched(n, 1024, 30_000) == pytest.approx(30_000, rel=1e-6)

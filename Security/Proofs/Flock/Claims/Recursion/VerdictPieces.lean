@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VerdictParts
-import Proofs.Flock.Claims.Recursion.FinalPiece
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictParts
+public import Proofs.Flock.Claims.Recursion.FinalPiece
 
 /-!
 # The verdict's pieces as the parts compute them
@@ -32,6 +34,8 @@ checks hold and every piece does, `verifyJPWith` accepts. The `rec-residuals` pi
 proof's framed bytes). VBridge's chain (`FlockVBridge.Family.runs_of_files`) assembles them at `sh.holo = false`, the
 only form the route covers (`SchedMatches`; `not_schedMatches_holo`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,8 +1,10 @@
-import Proofs.Flock.SessionLoop.FinishParts
-import Proofs.Flock.Claims.ZK.FrameRankFault
-import Proofs.Flock.Claims.ZK.FrameLinks
-import Proofs.Flock.VBridge.Family.Structure
-import Proofs.Flock.Claims.ZK.PrefixLive
+module
+
+public import Proofs.Flock.SessionLoop.FinishParts
+public import Proofs.Flock.Claims.ZK.FrameRankFault
+public import Proofs.Flock.Claims.ZK.FrameLinks
+public import Proofs.Flock.VBridge.Family.Structure
+public import Proofs.Flock.Claims.ZK.PrefixLive
 
 /-!
 # (b) `FinPoints`: the link points at the opened coins
@@ -19,6 +21,8 @@ import Proofs.Flock.Claims.ZK.PrefixLive
   `Stmt.setupHidden` refuse a region of any other size (`checkRegionBytes`, `setupH_regionBytes`,
   `setupHidden_regionBytes`). So **`Loop.finPoints`**: (b) at every statement in the masked scope with a witness.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.Masked
 
@@ -132,7 +136,7 @@ theorem viewPoints_eq (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     calc p * spec.mPts + j < p * spec.mPts + spec.mPts := by omega
       _ = (p + 1) * spec.mPts := by rw [Nat.succ_mul]
       _ ≤ spec.points * spec.mPts := Nat.mul_le_mul_right _ hp'
-  have hw := wordsAt_slot Masked.dataE x ops hl (s := ops.length) (p := 0) (e := p * spec.mPts + j) hpos le_rfl
+  have hw := wordsAt_slot Masked.dataE x ops hl.le (s := ops.length) (p := 0) (e := p * spec.mPts + j) hpos le_rfl
     (by rw [List.take_length]; exact hlt)
   rw [List.take_length] at hw
   have hge : (wordsAt x (ops.map fun e => CoinLayer.rd e.2) 0).getD (p * spec.mPts + j) 0 =

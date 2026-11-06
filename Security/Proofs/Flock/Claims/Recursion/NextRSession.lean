@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.NextRSetup
-import Proofs.Flock.Claims.Recursion.NextRRep
-import Proofs.Flock.Claims.Complete.Zk.Walk
-import Proofs.Flock.Claims.Complete.Sim
-import Proofs.Flock.Claims.Complete.Json.Goals
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRSetup
+public import Proofs.Flock.Claims.Recursion.NextRRep
+public import Proofs.Flock.Claims.Complete.Zk.Walk
+public import Proofs.Flock.Claims.Complete.Sim
+public import Proofs.Flock.Claims.Complete.Json.Goals
 
 /-!
 # The honest session's proofs are its reps'
@@ -27,6 +29,8 @@ import Proofs.Flock.Claims.Complete.Json.Goals
 The session's tables are taken to number the spec's (`sts.size = spec.tables.size`), as the masked scope proves
 (`ZkTables.tables_of_setup`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

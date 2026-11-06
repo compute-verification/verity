@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Sampling.EndToEndDraw
-import Proofs.Flock.Claims.Sampling.Escape
-import Proofs.Flock.Claims.Sampling.Select.Steps
-import Proofs.Flock.Claims.Sampling.Select.Take
-import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
+module
+
+public import Proofs.Flock.Claims.Sampling.EndToEndDraw
+public import Proofs.Flock.Claims.Sampling.Escape
+public import Proofs.Flock.Claims.Sampling.Select.Steps
+public import Proofs.Flock.Claims.Sampling.Select.Take
+public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 
 /-!
 # `EndToEndDraw`'s facts as equalities, and the deployed design's shape
@@ -26,6 +28,8 @@ stratum). So `SubsetDesign` and a one-class partition fail there (`deployOf_not_
 * `notMem_M_iff_subsetInputs`: outside `M_δ` at `δ = C(N − K₀, kd)/C(N, kd)` is: `B` meets the input class, or at
   least `min K₀ (N − kd + 1)` of its slots.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.EndToEndDraw
 

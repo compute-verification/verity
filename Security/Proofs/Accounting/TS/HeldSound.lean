@@ -1,6 +1,8 @@
-import Proofs.Accounting.TS.Session.Held.Guarantees
-import Proofs.Accounting.TS.CheckedSound
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Proofs.Accounting.TS.Session.Held.Guarantees
+public import Proofs.Accounting.TS.CheckedSound
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # A checked unit's proof layer with its served checks is sound through its C-Flock sessions (the proof)
@@ -16,6 +18,8 @@ meet `CheckedRel` meets `HeldRel` (`held_of_checked`):
 * (b) the checked relation's assignment is the opened rows at each such wire, so its `ok` wires carry the `ok` row,
   and `Accounting.Assumptions.TS.OkRealizes` gives each drawn unit's checks of `Cd`.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Held
 

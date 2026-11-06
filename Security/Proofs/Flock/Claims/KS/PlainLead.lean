@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.SimLead
-import Proofs.Flock.Claims.KS.PlainSched
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.SimLead
+public import Proofs.Flock.Claims.KS.PlainSched
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The simulated strategy after `Commit` leads with rep 0, from the live prover's schedule
@@ -13,6 +15,8 @@ and the rest on rep 1:
 * `leadsAfter_simAt`: `LeadsAfter` at `simAt`, from `SchedL` at every link point;
 * `leadsAfter_plainSimAt`: so at `plainSimAt`, from `SchedL` at the plain simulator's live strategy (`plainLive`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

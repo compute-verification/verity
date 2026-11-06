@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
-import Proofs.Flock.Claims.Recursion.RegSetupOpens
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
+public import Proofs.Flock.Claims.Recursion.RegSetupOpens
 
 /-!
 # Two staged parts' `rec-acc` slots at one chain position carry one commit string
@@ -11,6 +13,8 @@ Row E's cross-part tie (`held_rows_eq_layR`, `out_rows_eq_layR`) takes two parts
 position under one tree, and `bc_eq_of_setup` gives one commit string wherever the true calls and the setups'
 evaluations have no collision (`accCommit_eq`). The labels in order (`hidx`) are `labels_run`'s at an accepted run.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

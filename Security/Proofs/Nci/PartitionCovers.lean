@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.PartitionCovers
-import Proofs.Core.Circuit
+module
+
+public import Definitions.Nci.Guarantees.PartitionCovers
+public import Proofs.Core.Circuit
 
 /-!
 # Proof of Lemma A.1: a `(c, k)`-partition's completed proof blocks cover the circuit
@@ -8,6 +10,8 @@ Proof block `u`'s completion `I ∪ in(I)` with inputs `in(I)` is a subcircuit: 
 and a source in it is in `in(I)`, since every gate of `I` is an operation gate and so reads some gate (positive fan-in).
 It computes exactly `I`, so the completions compute every operation gate.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

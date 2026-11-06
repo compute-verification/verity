@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.RecOpen
-import Proofs.Flock.Soundness.Refine.Arith
+module
+
+public import Proofs.Flock.VBridge.RecOpen
+public import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # V*'s verifier-side words: the shape, the openings' coefficients and their running sums
@@ -19,6 +21,8 @@ coins:
 `rows[j]`, the running sum after the openings plus the one before is `Σ_l κ[k][l] · Σ_j eq(α)[j]·rows[j][l]`: the
 level's component `k` of the final check's consistency sums, the Algebra's `kapSum` term on `consAt rows q α`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

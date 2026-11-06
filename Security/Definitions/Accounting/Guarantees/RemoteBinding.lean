@@ -1,4 +1,6 @@
-import Definitions.Accounting.Remote.Fork
+module
+
+public import Definitions.Accounting.Remote.Fork
 
 /-!
 # The receipts' binding bound (trusted)
@@ -26,6 +28,8 @@ charge. The deployed challenger sends the prover no commitment to window `t`'s c
 (the coin commitment comes only with the outcome), the design note:20261025T0115Z-report-bind-close asks for; that
 the roots then read only the cut is not stated here, so `split_t` is not bounded: the gap `binding-split`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Remote
 

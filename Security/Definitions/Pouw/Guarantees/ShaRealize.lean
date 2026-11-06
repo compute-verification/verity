@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.ShaRealize
+module
+
+public import Definitions.Pouw.Assumptions.ShaRealize
 
 /-!
 # Commit-and-open as a theorem: `ExtractAdv` from SHA-512 as a random oracle and its realization (trusted)
@@ -12,6 +14,8 @@ import Definitions.Pouw.Assumptions.ShaRealize
   `Proofs.Pouw.MerkleExtract.extract_of_ro_roots` over the lazy-sampling form, carried to the uniform oracle and
   averaged over the verifier's coins.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.ShaRealize
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Round0
-import Proofs.Flock.Claims.Complete.Zk.Sim
-import Proofs.Flock.Claims.Complete.Zk.PiopGo
-import Proofs.Flock.Claims.Complete.Zk.Count
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Round0
+public import Proofs.Flock.Claims.Complete.Zk.Sim
+public import Proofs.Flock.Claims.Complete.Zk.PiopGo
+public import Proofs.Flock.Claims.Complete.Zk.Count
 
 /-!
 # The masked prover's second message: table `0` rep `0`'s first zerocheck coin
@@ -23,6 +25,8 @@ the link message.
 * `afterLinkPZk_pv_err`, `sessionPZk_pv_round1_err`, `sessionPZk_go_round1_err`: where table `0`'s extra claims throw,
   the session stops having sent the link message alone.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

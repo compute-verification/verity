@@ -1,7 +1,9 @@
-import Definitions.Nci.Guarantees.Threads
-import Proofs.Core.Circuit
-import Proofs.Nci.Pull
-import Proofs.Nci.Fit
+module
+
+public import Definitions.Nci.Guarantees.Threads
+public import Proofs.Core.Circuit
+public import Proofs.Nci.Pull
+public import Proofs.Nci.Fit
 
 /-!
 # Proofs of NCI's guarantees over threads
@@ -20,6 +22,8 @@ IU, and Theorem 1 bounds its counted multiplications. The pieces divide `S`, and
 computed` (`ThreadedThrottledSlots`). Each guarantee over weight gates is its `Slots` form at one slot per weight gate
 (`Fit.idSlots`), where `WeightsIncompressible` gives `WeightsIncompressibleSlots` (`weightsIncompressibleSlots_of`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

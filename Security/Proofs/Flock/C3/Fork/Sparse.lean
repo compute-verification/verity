@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.C3.Fork.SparseRounds
+module
+
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.C3.Fork.SparseRounds
 
 /-!
 # Piece (a), the sparse count: one rep's sparse phase is sound
@@ -15,6 +17,8 @@ with `q(t, k)` the planes of type `t` at entry `k` (`planeAt`, the bit `k + 2^ν
 hidden part of the lincheck's fold at `z = R.bits`, for a table `R` whose unit slots are in range, is the assembly's
 (`holo_runs_sound`, `C3/Fork/Runs.lean`), not this lemma's.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

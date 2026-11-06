@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Coins
-import Proofs.Flock.Claims.KS.Range
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Coins
+public import Proofs.Flock.Claims.KS.Range
 
 /-!
 # The rank bound at the verifier's coins
@@ -20,6 +22,8 @@ rounds from `k_log − 3` on, a `c` claim round `1`), and the pinned ones are th
 (`claimPoints_c`), so at uniform coins the ten are `DeployedRankBound`'s distribution (`Pr_coins_inj`):
 `4·(m − 17)·2^-128 + 2^-122 ≤ 4·m·2^-128` (`rankBoundAt_of_deployed`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.MaskRank
 
@@ -302,7 +306,7 @@ any words that hold the chosen ones. -/
 theorem maskRankOk_of_chosen {nbl pos0 : ℕ} (hK : pos0 * 2 ^ s + 2 ^ s ≤ 2 ^ K) (hsK : s ≤ K)
     (hD : 10 ≤ s + nbl) {P : Array (List F128)} (hP : ∀ i : Fin P.size, P[i].length = K + nbl) {words : List ℕ}
     (hw : ∀ y, word s K pos0 y ∈ words) (hγ : ∀ i, gammaOf (s := s) (K := K) nbl pos0 P i ≠ 0)
-    (hQ : RankFull fun i u => GF128.of P[i][pos s K u]!) : maskRankOk P words = true := by
+    (hQ : RankFull fun (i : Fin P.size) u => GF128.of P[i][pos s K u]!) : maskRankOk P words = true := by
   rw [maskRankOk_iff, eq_top_iff, ← (rankFull_scale_iff _ hγ _).2 hQ]
   refine AddSubgroup.closure_mono ?_
   rintro _ ⟨y, rfl⟩

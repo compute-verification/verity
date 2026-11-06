@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS
-import Proofs.Accounting.HMu
+module
+
+public import Proofs.Accounting.TS
+public import Proofs.Accounting.HMu
 
 /-!
 # The headlines' luck from the receipt
@@ -11,6 +13,8 @@ import Proofs.Accounting.HMu
   its operands at `¾` (`OperandHMu`) and its receipt luck at `½` (`ReceiptLuckAt`): `LuckOfReceipt` gives (I7) at
   `¾ + ¼·½`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.Headline
 

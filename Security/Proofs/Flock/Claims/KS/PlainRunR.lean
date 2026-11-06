@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainAccPrR
-import Proofs.Flock.Claims.KS.PlainLeafClashJK
+module
+
+public import Proofs.Flock.Claims.KS.PlainAccPrR
+public import Proofs.Flock.Claims.KS.PlainLeafClashJK
 
 /-!
 # The run-level half of `PlainRdInR`, at `VR rd`
@@ -21,6 +23,8 @@ and whose simulator's live outcome is that decision's view (`PlainSimRunR`).
   (`plainRawLevelColsRV`), from the J decoders' later entries (`LaterEntriesAtJK`).
 * `plainRdInR_of_sim`: `PlainRdInR rd x` from a simulator at every prover (`PlainSimAtR`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -133,7 +137,7 @@ theorem wrPDJK_viewR {I : Exec.Inputs} {d : Json} {mPts : ℕ} {spec : SessionSp
     (wrPDJK id I d (viewOfJ 1 mPts spec link c₁ (jAt sha512 spec sts c₁ mids f)
         (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps))).proofs =
       FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps ∧
-    ∀ (spec' : SessionSpec) (sts' : Array Stmt) (sess : Session), setupAtD I (some d) = .ok (spec', sts') →
+    ∀ (spec' : SessionSpec) (sts' : Array Stmt) (sess : RunRecord), setupAtD I (some d) = .ok (spec', sts') →
       Record.decodeJWithK id With.std spec' (wrPDJK id I d (viewOfJ 1 mPts spec link c₁
         (jAt sha512 spec sts c₁ mids f) (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps))).j = .ok sess →
       ∀ k < 2, ∀ y : StreamRec,

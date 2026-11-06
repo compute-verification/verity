@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 
 /-!
 # An output row's shape
@@ -9,6 +11,8 @@ A `sha512/row/v1` row is the first (`out_rows_v1`), so its output rows are one p
 `outGroup_single`) and whole blocks (`ParseFacts.portWords`). `HmRow.rowPorts` derives a bit row's words and compressions
 from its length in bits (`rowPorts_v2`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

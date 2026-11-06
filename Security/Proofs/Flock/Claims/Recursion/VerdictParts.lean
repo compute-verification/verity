@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.NextR
-import Proofs.Flock.Claims.Recursion.CoinPos
+module
+
+public import Proofs.Flock.Claims.Recursion.NextR
+public import Proofs.Flock.Claims.Recursion.CoinPos
 
 /-!
 # `lastSplitR`'s verdict, split into the parts' pieces
@@ -19,6 +21,8 @@ the pieces their owners, and `decompB_lastSplitP` is `decompB_nextR` at it: the 
 the rep that check 5 builds (`RecCoins.Inner.rep`, whose `verifierRows` give the `v` it pins) has, at each round `m`,
 the values the coin drew at the one inner round `g + 1` of its stream at round `sp m` (`staged_coinTie_drawn_unique`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

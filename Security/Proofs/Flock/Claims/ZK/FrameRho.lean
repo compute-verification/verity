@@ -1,4 +1,8 @@
-import Proofs.Flock.Claims.ZK.FrameRankFault
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRankFault
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The frames refuse dependent `ρ₀, ρ₁` (`FrameUnrefused`'s `ρ` fault)
@@ -19,9 +23,13 @@ switch's:
 * `rhoOk_lt`, `sched_rho`, `openList_rho`, `repPlan_rho`: every `--zk` schedule asks `z`'s coins (`1 ≤ n`), and its
   plan two coins at `ρ₀`'s and `ρ₁`'s rounds, by the kernel's evaluation.
 * **`Count.schedSoFar_rho`**: a rep's schedule so far, complete, ran its opening to its end, past independent answers.
-* **`LeanRelease.rho_unrefused`**: the fault. At the rep's inner round 2 (`betaSlot`) its schedule so far is complete,
-  so its coins at `rhoSlot` and the next, the opened ones (`wordsAt_slot`), are independent.
+* **`LeanRelease.rho_of_prog`**: wherever the loop's state at a rep's inner round is inside the inner proof or owes
+  coins, its schedule so far is complete, so its coins at `rhoSlot` and the next, the opened ones (`wordsAt_slot`),
+  are independent.
+* **`LeanRelease.rho_unrefused`**: the fault, at the rep's inner round 2 (`betaSlot`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 
@@ -307,13 +315,13 @@ theorem ow_run_bind {α β : Type} {A : Got → Hist → Prop} {B : α → Got �
     (hf : ∀ a, OW (B a.1) C (f a)) : OW A C (p.run st >>= f) :=
   ow_bind (hp st) hf
 
-theorem spw_run' {α : Type} {p : TMW OpenM α} {t : Transcript} {s : Got} {R : Hist → Prop} {hs : Hist}
+theorem spw_run' {α : Type} {p : TMW OpenM α} {t : Flock.Transcript} {s : Got} {R : Hist → Prop} {hs : Hist}
     (h : SPW (fun _ hs' => R hs') ((p.run t).run s) hs) : SPW (fun _ hs' => R hs') ((p.run' t).run' s) hs := by
   refine spw_bind (Q := fun _ hs' => R hs') (fun _ _ h => ?_) _ _
     (spw_bind (Q := fun _ hs' => R hs') (fun _ _ h => ?_) _ _ h) <;> exact h
 
-theorem spw_getThe_bind {β : Type} {R : β × Transcript × Got → Hist → Prop} {f : Got → TMW OpenM β}
-    {t : Transcript} {got : Got} {hs : Hist} (h : SPW (fun r => R (r.1.1, r.1.2, r.2)) (((f got).run t).run got) hs) :
+theorem spw_getThe_bind {β : Type} {R : β × Flock.Transcript × Got → Hist → Prop} {f : Got → TMW OpenM β}
+    {t : Flock.Transcript} {got : Got} {hs : Hist} (h : SPW (fun r => R (r.1.1, r.1.2, r.2)) (((f got).run t).run got) hs) :
     SPW (fun r => R (r.1.1, r.1.2, r.2)) (((getThe Got >>= f).run t).run got) hs := h
 
 open _root_.Flock.Firewall.Finish (sendMsg powP) in
@@ -560,23 +568,21 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec Transcript TMW)
 open Loop
 
-/-- **The frames refuse dependent `ρ₀, ρ₁`**: at a `Live` statement the loop serves, on a live history of `refK x`
-openings whose last coins the frame takes, table `j`'s rep `r`'s pair coins at the opened coins are independent. At
-the rep's inner round 2 (`betaSlot`) the rep's schedule so far is complete (`schedSoFar_size`'s bound), so it ended
-past independent answers at its `ρ₀, ρ₁` rounds (`schedSoFar_rho`), Ligerito's `k₀ + 2` and `k₀ + 3`, which ask two
-coins each (`repPlan_rho`), and those answers are the opened coins (`wordsAt_slot`). -/
-theorem rho_unrefused (T : ZKMal.CoinLayer.TableData)
-    (L₀ : LeanRelease Flock.Wit
-      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
-    (real : Msg → Flock.Wit →
-      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
-    (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
-    (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
-    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length = refK x)
-    (hlive : (ofLoop T L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
-    (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false)
-    {j r : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) :
+/-- **A rep's pair coins are independent where the loop is in its inner proof**: at a `Live` statement the loop serves,
+on at most `refK x` openings that reach table `j`'s rep `r`'s inner round `e`, where the loop's state on the coins
+before that round and any coins `d` there is inside the inner proof or owes coins, the rep's pair coins at the opened
+coins are independent. There the rep's schedule so far is complete (`schedSoFar_size`'s bound), so it ended past
+independent answers at its `ρ₀, ρ₁` rounds (`schedSoFar_rho`), Ligerito's `k₀ + 2` and `k₀ + 3`, which ask two coins
+each (`repPlan_rho`), and those answers are the opened coins (`wordsAt_slot`). -/
+theorem rho_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live x) (hSv : Serves x)
+    (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x) {j r e : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2)
+    (he : e < _root_.Flock.Firewall.Frame.INNER_ROUNDS)
+    (hsl : Masked.repSlot x (2 * j + r) (fun sch => sch.k0 + 7 + 11 * (sch.levels.size - 1) + e) ≤ ops.length)
+    (d : FlockDeploy.Coin)
+    (ho : (progOf x ((ops.take (Masked.repSlot x (2 * j + r) fun sch => sch.k0 + 7 + 11 * (sch.levels.size - 1) + e)).map
+          (fun p => ZKMal.CoinLayer.rd p.2) ++ [d])).inner.isSome = true ∨
+      (progOf x ((ops.take (Masked.repSlot x (2 * j + r) fun sch => sch.k0 + 7 + 11 * (sch.levels.size - 1) + e)).map
+          (fun p => ZKMal.CoinLayer.rd p.2) ++ [d])).owed ≠ none) :
     _root_.Flock.Zk.rhoIndependent (Masked.rhoAt (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
       (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r) = true := by
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
@@ -617,38 +623,34 @@ theorem rho_unrefused (T : ZKMal.CoinLayer.TableData)
   rw [hrR _ rfl] at hend
   have hs1 : 1 ≤ FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) := by
     unfold FlockComplete.repStartZk; omega
-  obtain ⟨s, hs⟩ : ∃ s, s = FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) + N + 2 := ⟨_, rfl⟩
-  have hb : s < refK x := by omega
-  have hlast : (ofLoop T L₀ real).last x = refK x + 1 := loop_last loopNr T (withFrames T L₀ real) x
-  obtain ⟨-, m, ha⟩ := coins_taken_of_live (ofLoop T L₀ real) wk x w ρ κ ((m₀, ρ₀) :: ops) hlive
-    (by rw [hlast]; simp [hl]) hr (i := s + 2) (by omega) (by simp only [List.length_cons]; omega)
-  obtain ⟨⟨dm, da⟩, hd⟩ : ∃ d, ops[s]? = some d := ⟨ops[s]'(by omega), List.getElem?_eq_getElem _⟩
-  have htk : ops.take (s + 1) = ops.take s ++ [(dm, da)] := by rw [List.take_add_one, hd]; rfl
-  have hh : ((m₀, ρ₀) :: ops).take (s + 2) = (m₀, ρ₀) :: (ops.take s ++ [(dm, da)]) := by
-    rw [List.take_succ_cons, htk]
+  have hI4 : _root_.Flock.Firewall.Frame.INNER_ROUNDS = 4 := rfl
+  obtain ⟨s, hsd⟩ : ∃ s, s = Masked.repSlot x (2 * j + r) fun sch => sch.k0 + 7 + 11 * (sch.levels.size - 1) + e :=
+    ⟨_, rfl⟩
+  rw [← hsd] at hsl ho
+  have hs : s = FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) + N + e := by
+    rw [hsd, Masked.repSlot_eq hsx hz, hN]
+    omega
   have hts : (ops.take s).length = s := by rw [List.length_take]; omega
-  rw [hh] at ha
-  change (progOf x ((ops.take s ++ [(dm, da)]).map fun p => ZKMal.CoinLayer.rd p.2)).answer _
-    (coinsAt x ((m₀, ρ₀) :: (ops.take s ++ [(dm, da)]))) = .ok m at ha
-  rw [List.map_append, List.map_cons, List.map_nil] at ha
-  have hloc : ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (s - 1) = (2 * j + r, N + 2) := by
-    have e := locate_take_sum (roundsOf spec (Masked.stsOf x)) 0 (2 * j + r) (N + 2) (by rw [hrsl]; exact hq2)
+  have hloc : ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (s - 1) = (2 * j + r, N + e) := by
+    have el := locate_take_sum (roundsOf spec (Masked.stsOf x)) 0 (2 * j + r) (N + e) (by rw [hrsl]; exact hq2)
       (by rw [hrq _ rfl hq2]; omega)
-    rw [Nat.zero_add] at e
-    rw [← e, hs, repStartZk_eq spec _ hq2.le]
+    rw [Nat.zero_add] at el
+    rw [← el, hs, repStartZk_eq spec _ hq2.le]
     congr 1
     omega
-  rw [progOf_snoc x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) (ZKMal.CoinLayer.rd da) hsx (q := s - 1)
-    (by rw [List.length_map, hts]; omega), hloc] at ha
-  dsimp only at ha
+  rw [progOf_snoc x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) d hsx (q := s - 1)
+    (by rw [List.length_map, hts]; omega), hloc] at ho
+  dsimp only at ho
   rcases hph : placeholder spec (Masked.stsOf x) (2 * j + r)
-      (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0) with e | ⟨c', t, dom, xs, hi⟩
-  · rw [hph] at ha
-    exact absurd ha (answer_owed_none _ rfl)
-  rw [hph] at ha
-  dsimp only at ha
-  obtain ⟨CR0, CR, hCR0, hCR, ha⟩ := repState_args ha
-  obtain ⟨alg, sched, hal, hsc⟩ := repState_ok ha
+      (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0) with err | ⟨c', t, dom, xs, hi⟩
+  · rw [hph] at ho
+    rcases ho with h | h
+    · exact (Bool.false_ne_true h).elim
+    · exact (h rfl).elim
+  rw [hph] at ho
+  dsimp only at ho
+  obtain ⟨CR0, CR, hCR0, hCR, ho⟩ := repState_named ho
+  obtain ⟨alg, sched, hal, hsc⟩ := repState_ok_of ho
   obtain ⟨hts', ⟨tp, htp⟩, hxs⟩ := Count.placeholder_tab hph
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
   obtain ⟨htsch, -⟩ := htp
@@ -684,9 +686,9 @@ theorem rho_unrefused (T : ZKMal.CoinLayer.TableData)
   have hmb : t.st.m < 2 ^ 64 := by rw [hts']; exact Nat.lt_trans hm36 (by decide)
   have hA : alg.size = ((_root_.Flock.Firewall.Session.replayCoins (Masked.stsOf x)[(2 * j + r) / 2]!.m
       (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog).toList.filter (· != 0)).length := by
-    have e := congrArg List.length (Count.rounds_counts hmb hal)
-    rw [Count.piop_counts, hts', List.length_map, Array.length_toList] at e
-    exact e
+    have eA := congrArg List.length (Count.rounds_counts hmb hal)
+    rw [Count.piop_counts, hts', List.length_map, Array.length_toList] at eA
+    exact eA
   have hplan := congrArg List.length (Count.repPlan_list (spec := spec) (htsch ▸ hz :
     _root_.Flock.Zk.schedule _ = .ok (t.sch, y.tPad)))
   rw [Array.length_toList, repPlan_size] at hplan
@@ -723,13 +725,13 @@ theorem rho_unrefused (T : ZKMal.CoinLayer.TableData)
   obtain ⟨Q, hQ⟩ : ∃ Q, Q = alg.size + (xs.size + 2 + 1 + 1 + 1 + t.sch.k0) := ⟨_, rfl⟩
   rw [← hQ] at hR
   obtain ⟨-, hRi⟩ := hR
-  have hW : ∀ i < N + 2, CR.pop.getD i #[] =
+  have hW : ∀ i < N + e, CR.pop.getD i #[] =
       wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2)
         (FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) + i) := by
     intro i hi'
     rw [hCR, Array.pop_push, crMap_getD _ _ hi']
     generalize hR0 : FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) = R0
-    rw [show s - 1 - (N + 2) + i + 1 = R0 + i by omega]
+    rw [show s - 1 - (N + e) + i + 1 = R0 + i by omega]
   have hplv : ∀ e < 2, loopNr x (FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) +
       (alg.size + ((2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size) + 1 +
         (t.sch.k0 + 2 + e)))) = 2 := by
@@ -767,5 +769,51 @@ theorem rho_unrefused (T : ZKMal.CoinLayer.TableData)
     show alg.size + ((2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size) + 1 +
       (t.sch.k0 + 2 + 1)) = Q + 1 by omega]
   exact hRi
+
+/-- **The frames refuse dependent `ρ₀, ρ₁`**: at a `Live` statement the loop serves, on a live history of at most
+`refK x` openings, past table `j`'s rep `r`'s `betaSlot`, whose last coins the frame takes, the rep's pair coins at the
+opened coins are independent. The opening at `betaSlot` is the rep's inner round 2, whose coins the frame takes, so
+the loop's state there owes them (`rho_of_prog`). -/
+theorem rho_unrefused (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
+    (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
+    (hlive : (ofLoop T L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
+    (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false)
+    {j r : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hb : Masked.betaSlot x j r < ops.length) :
+    _root_.Flock.Zk.rhoIndependent (Masked.rhoAt (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
+      (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r) = true := by
+  obtain ⟨s, hs⟩ : ∃ s, s = Masked.betaSlot x j r := ⟨_, rfl⟩
+  rw [← hs] at hb
+  have hs1 : 1 ≤ s := by
+    obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
+    obtain ⟨y⟩ := hx.2 j hj
+    have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+      rw [show (2 * j + r) / 2 = j by omega, getElem!_pos _ j hj]
+      exact y.hz
+    rw [hs]
+    unfold Masked.betaSlot
+    rw [Masked.repSlot_eq hsx hz]
+    omega
+  have hlast : (ofLoop T L₀ real).last x = refK x + 1 := loop_last loopNr T (withFrames T L₀ real) x
+  obtain ⟨-, m, ha⟩ := coins_taken_of_live (ofLoop T L₀ real) wk x w ρ κ ((m₀, ρ₀) :: ops) hlive
+    (by rw [hlast]; simp only [List.length_cons]; omega) hr (i := s + 2) (by omega)
+    (by simp only [List.length_cons]; omega)
+  obtain ⟨⟨dm, da⟩, hd⟩ : ∃ d, ops[s]? = some d := ⟨ops[s]'(by omega), List.getElem?_eq_getElem _⟩
+  have htk : ops.take (s + 1) = ops.take s ++ [(dm, da)] := by rw [List.take_add_one, hd]; rfl
+  have hh : ((m₀, ρ₀) :: ops).take (s + 2) = (m₀, ρ₀) :: (ops.take s ++ [(dm, da)]) := by
+    rw [List.take_succ_cons, htk]
+  rw [hh] at ha
+  change (progOf x ((ops.take s ++ [(dm, da)]).map fun p => ZKMal.CoinLayer.rd p.2)).answer _
+    (coinsAt x ((m₀, ρ₀) :: (ops.take s ++ [(dm, da)]))) = .ok m at ha
+  rw [List.map_append, List.map_cons, List.map_nil, hs] at ha
+  exact rho_of_prog T x hx hSv ops hl hj hr2 (e := 2) (by decide)
+    (show Masked.betaSlot x j r ≤ ops.length by rw [← hs]; exact hb.le) (ZKMal.CoinLayer.rd da)
+    (.inr fun h => answer_owed_none _ h ha)
 
 end Claims.ZKServer.LeanRelease

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Game.Union
-import Proofs.Flock.C3.Fork.CouplingLock
+module
+
+public import Proofs.Flock.Soundness.Game.Union
+public import Proofs.Flock.C3.Fork.CouplingLock
 
 /-!
 # a1l, step 4: the coupling's oracle game is no better than the oracle table
@@ -9,6 +11,8 @@ import Proofs.Flock.C3.Fork.CouplingLock
 (`holoRep_eq_map`), so where both reps' Ligerito accept, the two games are the same; elsewhere the oracle game
 rejects.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

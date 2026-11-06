@@ -36,6 +36,9 @@ ALLOWED: dict[str, str] = {
     "verity/core/protocols/network/nci/lean/NciCheck/Check.lean":
         "NciCheck.check, the gate-by-gate reference NciCheck.Desc is difftested against (runs NciCheck.DescDifftestMain); "
         "`nci-check` runs it only with --unrolled",
+    "verity/core/service/flock/Flock/AnnotExpand.lean":
+        "Annot.sets, expand and reference, an annotation laid out gate by gate: the reference Annot.check is held to "
+        "(Flock.Test.Annot, annot-difftest's annot.reference, Properties.Annot.CheckAgrees); no verifier runs it",
     "verity/core/service/flock/Flock/Extract.lean":
         "open (PRF-72): Q_word v1 owns every computing gate, so its CallGraph lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled; no served window names Q_word (they name "
@@ -145,7 +148,7 @@ def test_the_scan_sees_each_form():
     def k (node : Node) := for m in [0:node.members] do pure ()
     def l (body : Body) := (List.range (body.nodes[k]!).members).map id ++ List.range node.membersOf
     def n (f : Files) := do
-      let (_, sts) ← Stmt.setupTables innerTags f.circuit f.pub Coins.os 1
+      let (_, sts) ← Stmt.setupTables innerTags f.circuit f.pub RecVStar.innerTree 1
       (Setup.ofCircuit sts[0]!).fold.folded a b lw rho ts
     def o (s : VStar.Stmt) := VStar.emitCircuitOf holo put u l s.sub b
     def p (t : Tmpl) := Tmpl.foldUnit t lays sl a lw rho rr

@@ -1,4 +1,6 @@
-import Flock.HmNets
+module
+
+public import Flock.HmNets
 
 /-!
 # SHA-512 over GF(2) forms
@@ -8,6 +10,8 @@ constant chaining value `cv` and whose rest is `bits` (byte-string order, bit `t
 bits, each 1024-bit block placed in word order (`wordBit`) and compressed by `Flock.HmNets.compress`
 (`sha512.compress_gadget`); the digest's 512 forms in byte-string order.
 -/
+
+@[expose] public section
 
 namespace VStar
 

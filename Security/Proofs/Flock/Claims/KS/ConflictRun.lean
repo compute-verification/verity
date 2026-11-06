@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.ConflictWithin
-import Proofs.Flock.Claims.KS.PlainQueryRound
-import Proofs.Flock.Claims.KS.Width
-import Proofs.Flock.Claims.Scope.Check
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+module
+
+public import Proofs.Flock.Claims.KS.ConflictWithin
+public import Proofs.Flock.Claims.KS.PlainQueryRound
+public import Proofs.Flock.Claims.KS.Width
+public import Proofs.Flock.Claims.Scope.Check
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
 /-!
 # An accepted run, within its own log
@@ -18,6 +20,8 @@ What an accepted run of the deployed verifier (`Deploy.V`, plain or `--zk`) give
 * the scope check those checks run pins every table's Merkle scheme to `hm96Sha512` or, for a statement read
   without `--zk`, plain SHA-512 leaves (`checks_leaf`); under `--zk` it is `hm96Sha512` (`checks_hm96`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.JointJ
-import Proofs.Flock.Claims.KS.TableBound
+module
+
+public import Proofs.Flock.Claims.KS.JointJ
+public import Proofs.Flock.Claims.KS.TableBound
 
 /-!
 # Every table of the masked record
@@ -14,6 +16,8 @@ splits by table wherever some run accepts (`zk_parses`, `zk_splits`). So `Flock.
 every table's bound alone (`zk_KS_of_tableBoundJ`), and that bound at tables with unopened positions from the bound at
 full-width tables and `ExtendJ` (`zk_tableBoundJ_of_extend`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

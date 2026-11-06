@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Round1Pads
-import Proofs.Flock.Claims.ZK.ExeLayout
+module
+
+public import Proofs.Flock.Claims.ZK.Round1Pads
+public import Proofs.Flock.Claims.ZK.ExeLayout
 
 /-!
 # Round `1` of the masked session: the pads root at the executable's layout
@@ -19,6 +21,8 @@ of the tape's pads. Here that root is the model's:
 * `Masked.innerRoot_exe`: the root of the tape's pads is `layerOf`'s of the cut's pads leaves by tree position
   (`Masked.leafAtP`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

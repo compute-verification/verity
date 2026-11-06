@@ -276,7 +276,7 @@ def test_only_a_tied_audit_must_draw_every_unit(server, monkeypatch):
         c = json.loads(bytes.fromhex(case["commitment"]))
         out = reference(case)
         assert out["verdict"] == ACCEPT, (n, out)
-        audits, windows = ([PC.Registration(x, b"") for x in c[k]] for k in ("audits", "windows"))
+        audits, windows = c["audits"], c["windows"]
         for i, f in enumerate(out["public"]["audits"]):
             assert f["drawn"] == f["units"] or not PC._tied_in(audits, windows, i), (n, i, f)
         if any(f["drawn"] < f["units"] for f in out["public"]["audits"]):

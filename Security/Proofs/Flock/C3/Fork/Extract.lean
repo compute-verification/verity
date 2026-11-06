@@ -1,7 +1,9 @@
-import Proofs.Flock.Recursive.AuditC3
-import Proofs.Flock.Recursive.ForkInnerC
-import Proofs.Flock.Recursive.Multi
-import Proofs.Flock.C3.Fork.Sound
+module
+
+public import Proofs.Flock.Recursive.AuditC3
+public import Proofs.Flock.Recursive.ForkInnerC
+public import Proofs.Flock.Recursive.Multi
+public import Proofs.Flock.C3.Fork.Sound
 
 /-!
 # Recursion: the extraction at the word the prover's runs open
@@ -19,6 +21,8 @@ position (`RunOpensReg`): both are runs of `σ` at `ω`, so the two are an inner
 * `innerAtLeavesL_reg`: `innerAtLeavesL_of_forkOn`'s argument at each draw on `holo_runs_sound` at that draw's
   `regStmt`, its `RegClash` cases by `regClash_fork`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

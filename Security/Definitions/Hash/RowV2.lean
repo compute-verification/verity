@@ -1,4 +1,6 @@
-import Definitions.Hash.RowSeg
+module
+
+public import Definitions.Hash.RowSeg
 
 /-!
 # `sha512/row/v2` over a hash (trusted)
@@ -12,6 +14,8 @@ its bytes as `sha512/row-seg/v1` packs them (`RowSeg.packBits`), and
 
 so the one message the digest hashes (`RowV2.hashed`) binds the row's bit length `ℓ` and its bytes.
 -/
+
+@[expose] public section
 
 namespace Hash.RowV2
 

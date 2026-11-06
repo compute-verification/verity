@@ -1,8 +1,10 @@
-import Mathlib
-import Definitions.Accounting.Actual.Sampler
-import Definitions.Accounting.TS.Drawn
-import Definitions.Hash.RowLeaf
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Mathlib
+public import Definitions.Accounting.Actual.Sampler
+public import Definitions.Accounting.TS.Drawn
+public import Definitions.Hash.RowLeaf
+public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # The remote audit's opening draw (trusted)
@@ -93,6 +95,8 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
   greedily, the windows taken by `U_t/s'_t` falling (the fractional knapsack's optimum); that the greedy order reaches
   this supremum is not stated here.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Draw
 

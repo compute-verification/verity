@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Level0
-import Proofs.Flock.Claims.Complete.Zk.Level0Run
-import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
-import Proofs.Flock.Claims.Complete.Zk.Level0Shape
-import Proofs.Flock.Claims.Complete.Zk.Count
-import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+public import Proofs.Flock.Claims.Complete.Zk.Level0Run
+public import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
+public import Proofs.Flock.Claims.Complete.Zk.Level0Shape
+public import Proofs.Flock.Claims.Complete.Zk.Count
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
 
 /-!
 # Level 0's masked Ligerito: its premises, proved
@@ -18,6 +20,8 @@ here:
   masked commitment's shape (`commitPZk_shape`).
 * `lanes : Lanes`: its lane phase in closed form, from `ligeritoPZk_lanes`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.L0
 

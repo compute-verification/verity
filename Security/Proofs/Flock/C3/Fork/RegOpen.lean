@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.HoloExec
+module
+
+public import Proofs.Flock.Recursive.HoloExec
 
 /-!
 # Piece (a), R's opening count: the registered opening is sound at unique decoding
@@ -15,6 +17,8 @@ message within `udRadius` of `w` (`card_closeL_ud_le`), the folds' MCA events st
 queries catch a fold `udRadius`-far from it at a cost of `udQueryError` (`udQueryError_eq`). Every later level is
 `ligerito_sound`'s.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

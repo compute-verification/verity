@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Aliased.Copies
-import Properties.Flock.Circuit.Keys
+module
+
+public import Proofs.Flock.Soundness.Discharge.Aliased.Copies
+public import Properties.Flock.Circuit.Keys
 
 /-!
 # Δ's source as a key the same at every template instance
@@ -18,6 +20,8 @@ A typed flat class's slot is one unit copy, and its input `i` is the port bit `i
 `TableClass.Copies` at slot `g` holds for sources that only join inputs with one key at `g`'s copy index
 (`flatCopies_of_key`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

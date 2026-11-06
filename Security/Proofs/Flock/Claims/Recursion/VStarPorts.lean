@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VStarDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarDeployed
 
 /-!
 # Where the stager places the inner prover's rows (the port mapping)
@@ -12,6 +14,8 @@ prover committed there under its salt. Here, RecCap's port `top` (`capIn`, throu
 * both reps' level-0 tops are round 0's rows, one tree (`topsAt_same`); RecCap's `N` instances read them in order
   (`capIn_ok`, `portRow_ownRows`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictAssembly
-import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
-import Proofs.Flock.Verifier.Merkle
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictAssembly
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
+public import Proofs.Flock.Verifier.Merkle
 
 /-!
 # Row D's `rec-open` pieces at a decision: which pieces, their cover, and their holding
@@ -31,6 +33,8 @@ hypotheses. This file supplies the pieces and those two.
   the rows' run from row R's structure and sizes (`DecAt.rowsRun_of`). `DecAt.runs_openAt`: `runs_assembled` at them,
   with `hcover` and `hholds` discharged but for `hlev`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

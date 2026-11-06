@@ -1,6 +1,8 @@
-import Definitions.Pouw.TileBound.Defs
-import Mathlib.Tactic.IntervalCases
-import Definitions.Pouw.TileBound.Fp8Defs
+module
+
+public import Definitions.Pouw.TileBound.Defs
+public import Mathlib.Tactic.IntervalCases
+public import Definitions.Pouw.TileBound.Fp8Defs
 
 /-!
 # When a ⟨2,2,2⟩ recursion could pay at E4M3, and the output region it needs
@@ -23,6 +25,8 @@ smaller depths, over other regions and shorter windows. The region family that `
 computed over all of them (the restatements report §7). These theorems are arithmetic on the model's prices for
 ⟨2,2,2⟩ recursion, not lower bounds for general bilinear algorithms.
 -/
+
+@[expose] public section
 
 namespace Pouw.TileBound
 

@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Lanes.Decode
-import PouwWindow.KnownRows
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Decode
+public import PouwWindow.KnownRows
 
 /-!
 # The known content a leaf's sessions are handed
@@ -10,6 +12,8 @@ Python that writes them by its difftest): lane `l`'s `admit` row (`P.admit`), it
 combine's `o0`, each under its salt `salts`. `Accounting.Guarantees.TS.LeafLanesSound` hands each session this content,
 so its known-content check (`Flock.Registered.checkKnownAll`) binds the path's public inputs.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

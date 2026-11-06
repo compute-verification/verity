@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Family.Opened
-import Proofs.Flock.VBridge.Algebra.Holo
-import Proofs.Flock.Claims.Recursion.VStarParts
+module
+
+public import Proofs.Flock.VBridge.Family.Opened
+public import Proofs.Flock.VBridge.Algebra.Holo
+public import Proofs.Flock.Claims.Recursion.VStarParts
 
 /-!
 # A rep's Ligerito openings at V*'s scheme, query by query
@@ -24,6 +26,8 @@ what one query must give and assembles a level and a rep from it; nothing in it 
   (`Readable.OpenOuts`), so `QueryOpens` holds where those bytes are the cap's entry. `dirsRow_testBit`: the `dirs` row
   check 5 registers (`RecCoins.checkOpen`) spells the position's low `H` bits, 16 a word.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenedPlain
 

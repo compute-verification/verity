@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.Transfer
-import Proofs.Flock.Recursive.Multi
+module
+
+public import Proofs.Flock.Recursive.Transfer
+public import Proofs.Flock.Recursive.Multi
 
 /-!
 # Recursion: forks, the runs of the prover's own strategy that find a SHA-512 collision
@@ -22,6 +24,8 @@ strings.
   (`ksAvgStrictZ_zero`, `linkBoundZC_zero`, `regTermZC_zero`);
 * `ExAt`: a property at some leaf the recursive prover reaches; with none, its negation at every leaf (`allAt_of_not_exAt`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

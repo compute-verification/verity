@@ -1,4 +1,6 @@
-import Definitions.Pouw.Dither
+module
+
+public import Definitions.Pouw.Dither
 
 /-!
 # SAK at the served words: the work premise of `Properties.Pouw.Served.ServedWork` (trusted)
@@ -20,6 +22,8 @@ credited words `wt t`. At `pub = p · Σ_t wt t` the right fraction by tiles is 
 `SAKServed` is false there too. A guarantee that takes it says something only on a model where a register word that an
 atomic or a reduction writes costs an `alu` lane, L2 writes are priced, and an MMA pays at least one product an output.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 

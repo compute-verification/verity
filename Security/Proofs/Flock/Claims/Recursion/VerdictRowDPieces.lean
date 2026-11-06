@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowD
-import Proofs.Flock.Claims.Recursion.OpenPieces
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowD
+public import Proofs.Flock.Claims.Recursion.OpenPieces
 
 /-!
 # Row D of the verdict from the `rec-open` pieces
@@ -12,6 +14,8 @@ The `rec-open` pieces (`OpenPieces`) hold, each, where its query opens at the si
   cover every query of every level of the rep (`hcover`), read the rep's side off the messages (`hside`) and, at the
   verifier rows, the position the rows draw for their query off the coins (`hpos`, the coin tie).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

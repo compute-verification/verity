@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.Inner
-import Proofs.Flock.Claims.Recursion.Abort
-import Proofs.Flock.Claims.Recursion.Registered
+module
+
+public import Proofs.Flock.Claims.Recursion.Inner
+public import Proofs.Flock.Claims.Recursion.Abort
+public import Proofs.Flock.Claims.Recursion.Registered
 
 /-!
 # `InnerKS` does not follow from `Inner.KS` and the code facts; `Inner.KSAbort` excludes the deployment
@@ -18,6 +20,8 @@ inner prover makes the inner verifier reject on a coin it never reads, so `Inner
 fresh coin of its own does make `gI`'s one rerun rejected half the time, so `gI` fails `Inner.KSAbort`
 (`gI_not_KSAbort`), the one hypothesis of `KS_of_flockKS` the deployment lacks.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

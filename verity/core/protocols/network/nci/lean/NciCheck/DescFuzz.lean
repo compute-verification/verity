@@ -1,5 +1,7 @@
-import NciCheck.Desc
-import Std.Data.HashSet
+module
+
+public import NciCheck.Desc
+public import Std.Data.HashSet
 
 /-!
 # The desc fuzzer: the statements behind `DescAgrees`, decided on generated Programs
@@ -33,6 +35,8 @@ Each `∀` over members, leaves or references enumerates all of them up to `Caps
 sample). `scripts/desc_fuzz_programs.py` writes the Programs and `NciCheck/DescFuzzMain.lean` fails unless no statement
 fails on any of them. The Lean audit runs it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
+
+@[expose] public section
 
 namespace NciCheck.DescFuzz
 

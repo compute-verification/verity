@@ -1,6 +1,8 @@
-import Definitions.Claims.Sampling
-import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Claims.Sampling.Wait
+module
+
+public import Definitions.Claims.Sampling
+public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Claims.Sampling.Wait
 
 /-!
 # The designs' acceptance probabilities, as their draws' probabilities
@@ -24,6 +26,8 @@ Here each is the `Claims.Pr` that a model draw misses `B`:
 `Live.lean` proves these distributions of the executable draw on uniform bytes, and `Select` of the deployed sampled
 verifier's (`drawMisses`, and `DrawLaw` from it, `drawLaw_of_slots`).
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

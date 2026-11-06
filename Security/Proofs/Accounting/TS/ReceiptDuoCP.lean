@@ -1,5 +1,7 @@
-import Definitions.Accounting.TS.Receipt
-import Proofs.Accounting.TS.ReceiptLi
+module
+
+public import Definitions.Accounting.TS.Receipt
+public import Proofs.Accounting.TS.ReceiptLi
 
 /-!
 # duo and fx1 checkpoint units bind their words a checkpoint a segment
@@ -11,6 +13,8 @@ and ends the segment in the honest state, so the checkpoint's two XORs cancel th
 `Pouw.ReceiptProofs.duoRun_update_injective` (`DuoRunWordInjective`) gives the word right. fx1's units are duo's on the
 words times their odd IMAD multipliers, which `mul_odd_injective` undoes (`fx1_right_of_same`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.DuoCPLemmas
 

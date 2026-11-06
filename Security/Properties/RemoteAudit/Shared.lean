@@ -1,5 +1,7 @@
-import Properties.RemoteAudit.Coins
-import RemoteAudit.Shared
+module
+
+public import Properties.RemoteAudit.Coins
+public import RemoteAudit.Shared
 
 /-!
 # One openings coin per draw (`RemoteAudit.Shared`)
@@ -39,6 +41,8 @@ At `g = 1`, `Shared.run 1` is `Session.run` (`RemoteAudit.Shared.run_one`), `c` 
 (`Proofs.Properties.RemoteAudit.Shared`'s `*_one`). Today's `DrawIsSubset` is on `draws` alone, which knows no `g`;
 this one states it for `Shared.close`'s draw.
 -/
+
+@[expose] public section
 
 open RemoteAudit
 

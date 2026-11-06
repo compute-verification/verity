@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.Statement
-import Proofs.Flock.Claims.ZK.MaskedTables
+module
+
+public import Proofs.Flock.SessionLoop.Statement
+public import Proofs.Flock.Claims.ZK.MaskedTables
 
 /-!
 # The link at the session loop's own level 0
@@ -14,6 +16,8 @@ The loop's `Commit` carries each table's level-0 root that `Level0.ofDraws` drew
 * **`LeanRelease.linkRoundEq_ofLoopLink`**: that at `ofLoopLink`, whose link is the loop's by definition, at a statement
   in the masked scope with a witness (`Masked.live_of`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

@@ -1,5 +1,7 @@
-import Definitions.Accounting.Joint
-import Definitions.Accounting.Bandwidth.Game
+module
+
+public import Definitions.Accounting.Joint
+public import Definitions.Accounting.Bandwidth.Game
 
 /-!
 # The bandwidth audit's game as the bandwidth audit of a joint run (trusted)
@@ -15,6 +17,8 @@ The ingress field is where double counting is ruled out. Every bit the game coun
 charged to the bandwidth account, so a bit another account read (a PoUS decode's, a PoUW GEMM's) is not credited to the
 bandwidth audit, and the device's limits (`Step.Fits`) bound the accounts' reads together.
 -/
+
+@[expose] public section
 
 namespace Accounting
 
