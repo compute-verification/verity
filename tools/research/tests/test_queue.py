@@ -2083,10 +2083,11 @@ def test_a_ready_label_holds_for_one_head_and_research_queue_ready_writes_it(wor
 
 
 def test_a_merge_of_main_keeps_the_heads_mark_and_verdict_and_a_real_change_loses_them(world):
-    """A merge of `main` into a marked, verdicted head leaves its own change (`Queue.own_change`: the patch-id of its diff from
-    its merge base with the landing branch) as it was, so the new head takes the old one's mark and verdict, and the log names
-    the head they came from: no new mark and no new review.  A real change on top takes none; a head with a label of its own
-    reads only its own; a carried label is judged on its own head's companions; and a withdrawn mark carries as the mark did."""
+    """A merge of `main` into a marked, verdicted head leaves its own change (`Queue.own_change`: the whitespace-kept patch-id of
+    its diff from its merge base with the landing branch) as it was, so the new head takes the old one's mark and verdict, and
+    the log names the head they came from: no new mark and no new review.  A real change on top takes none; a head with a label
+    of its own reads only its own; a carried label is judged on its own head's companions; and a withdrawn mark carries as the
+    mark did."""
     from research.queue import StoreLabels
 
     world.with_store_remote()
@@ -2123,6 +2124,35 @@ def test_a_merge_of_main_keeps_the_heads_mark_and_verdict_and_a_real_change_lose
     assert [lab.value for lab in StoreLabels(world.store, change=q.own_change).reviews(1, b)] == ["hold"]
     world.store.add_label(label_target(1, a), vocab.READY, False, "ci", ref="breaks x", ts="2026-11-06T13:00:00Z")
     assert not StoreLabels(world.store, change=q.own_change).ready(1, b)
+
+
+def test_a_head_whose_own_diff_differs_only_in_indentation_takes_neither_mark_nor_verdict(world):
+    """A new head whose own diff differs from the marked, verdicted head's only in indentation takes neither its mark nor its
+    verdict: a `return True` moved under `if not ok:` makes `gate(True)` None rather than True, though the two diffs are one
+    with their whitespace stripped (`Queue.own_change` keeps it)."""
+    from research.queue import StoreLabels
+
+    world.with_store_remote()
+    gate = "def gate(ok):\n    if not ok:\n        print('no')\n"
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'gate.py': gate})}:refs/heads/main")
+    world.gh.put(1, a := world.change({"gate.py": gate + "    return True\n"}), ready=False)
+    world.store.add_label(label_target(1, a), vocab.READY, True, "lane-1", ts="2026-11-06T10:00:00Z")
+    world.store.add_label(label_target(1, a), vocab.REVIEWED, "land", "reviewer", ts="2026-11-06T11:00:00Z")
+    world.gh.put(1, b := world.change({"gate.py": gate + "        return True\n"}, base=a), ready=False)
+    q = world.queue()
+    q._clone()
+    q.fetch(world.gh.open_prs())
+
+    def stripped(head: str) -> list[str]:
+        diff = _git(q.workdir, "diff-tree", "-r", "-p", q.base, head).splitlines()
+        return [re.sub(r"\s", "", s) for s in diff if not s.startswith("index ")]
+
+    assert stripped(b) == stripped(a)
+    assert q.own_change(b) not in (None, q.own_change(a))
+    labels = StoreLabels(world.store, log=world.logs.append, change=q.own_change)
+    assert labels.ready(1, a) and [(lab.value, lab.by) for lab in labels.reviews(1, a)] == [("land", "reviewer")]
+    assert not labels.ready(1, b) and labels.reviews(1, b) == [] and labels.ready_by(1, b) is None
+    assert not [s for s in world.logs if "takes the" in s]
 
 
 def test_ready_mark_writes_the_mark_with_no_quick_tier(world, capsys):

@@ -167,9 +167,10 @@ on a `Lane {name}` line, else the Cursor agent id its body carries.  The rules f
 pulling the target's labels from the store's remote; when that pull can't happen (no remote here, one
 that's unusable, a failed pull) the command fails with `STALE`, never answering from this machine's labels alone.  A head with no
 ready mark (or land verdict) of its own that counts takes those of each other head of its PR whose own change is the same: the
-`git patch-id --stable` of its diff from its merge base with the landing branch (`Queue.own_change`, `StoreLabels`), and the log
-names the head they came from.  So a merge of `main`, or a restack that leaves the diff as it was, costs no new mark and no new
-review, a withdrawn mark holds there too, and a head whose own diff differs takes none.
+whitespace-kept patch-id (`git patch-id --verbatim`) of its diff from its merge base with the landing branch (`Queue.own_change`,
+`StoreLabels`), and the log names the head they came from.  So a merge of `main`, or a restack that leaves the diff as it was,
+costs no new mark and no new review, a withdrawn mark holds there too, and a head whose own diff differs, if only in whitespace
+(an indentation, the spaces in a string), takes none.
 
 Preflight.  What breaks or cancels a train is cheap to catch at mark time: a conflict with a PR already on `next`, a stale Lake
 pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry, a test that reads
@@ -3579,15 +3580,17 @@ OWN_KEEP = 4096
 
 
 def own_change(repo: Path, base: str, head: str) -> str | None:
-    """The `git patch-id --stable` of ``head``'s diff from ``base`` (its merge base with the landing branch: `Queue.own_change`),
-    with full blob ids, so a binary file's new content counts; None for an empty diff or a commit that isn't here.  A merge of
-    `main` that resolves no conflict leaves it as it was, as does a merge of `next` once the members it merged have landed; an
-    edit of the change, a conflict resolved into it, or a change of a line its diff shows as context changes it."""
+    """The whitespace-kept patch-id (`git patch-id --verbatim`: the stable algorithm without `--stable`'s stripping of every
+    whitespace) of ``head``'s diff from ``base`` (its merge base with the landing branch: `Queue.own_change`), with full blob
+    ids, so a binary file's new content counts; None for an empty diff, a commit that isn't here, or a git before 2.39, which
+    has no `--verbatim`.  A merge of `main` that resolves no conflict leaves it as it was, as does a merge of `next` once the
+    members it merged have landed; an edit of the change, if only of its whitespace (a line's indentation, the spaces in a
+    string), a conflict resolved into it, or a change of a line its diff shows as context changes it."""
     diff = subprocess.run(["git", "diff-tree", "-r", "-p", "--full-index", base, head], cwd=repo, capture_output=True,
                           env=git_env(GIT_TERMINAL_PROMPT="0"))
     if diff.returncode or not diff.stdout:
         return None
-    got = subprocess.run(["git", "patch-id", "--stable"], cwd=repo, input=diff.stdout, capture_output=True).stdout.split()
+    got = subprocess.run(["git", "patch-id", "--verbatim"], cwd=repo, input=diff.stdout, capture_output=True).stdout.split()
     return got[0].decode() if got else None
 
 
