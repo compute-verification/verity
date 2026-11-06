@@ -29,21 +29,31 @@ def location_bits(profile: IntegrityProfile) -> float:
     return min(float(n), nextafter(bits * (1 + MARGIN), inf))
 
 
+def infiltration_bound(profile: IntegrityProfile,
+                       output_bits: float | Mapping[str, float | Sequence[tuple[float, int]]]) -> float:
+    """Infiltration security, in bits: except with probability delta, the outputs of incorrect proof blocks, the committed
+    values the prover wrote in place of what the circuit computes, total at most this many bits (`harm_bound` weighted by
+    `output_bits`).  Every committed output counts, served or not, so no served output's size caps it; a value no committed
+    output holds is outside it.  What those values can encode, with which proof blocks hold them, is `exfiltration_bound`.
+    `output_bits` is a proof block's output bits: one number for every proof block, or per stratum a number or (bits, proof
+    blocks) pairs."""
+    return profile.harm_bound(output_bits)
+
+
 def exfiltration_bound(profile: IntegrityProfile,
                        output_bits: float | Mapping[str, float | Sequence[tuple[float, int]]]) -> float:
     """Exfiltration security, in bits: except with probability delta, what an accepted trace delivers is one of at
     most 2^b values, so a receiver recovers a uniform l-bit secret with probability at most 2^(b - l), plus delta and
-    the proof system's terms.  b is the output bits held by incorrect proof blocks, which the prover chose (`harm_bound` weighted by
-    `output_bits`), plus which proof blocks are incorrect (`location_bits`).  The soundness package's Lean states this bound as
-    `audit_exfiltration`.  `output_bits` is a proof block's output bits: one number for every proof block, or per stratum a number or
-    (bits, proof blocks) pairs."""
-    return profile.harm_bound(output_bits) + location_bits(profile)
+    the proof system's terms.  b is the output bits held by incorrect proof blocks, which the prover chose
+    (`infiltration_bound`), plus which proof blocks are incorrect (`location_bits`).  The soundness package's Lean states this
+    bound as `audit_exfiltration`.  `output_bits` is given as `infiltration_bound`'s is."""
+    return infiltration_bound(profile, output_bits) + location_bits(profile)
 
 
 def compute_bound(profile: IntegrityProfile, work: float | Mapping[str, float | Sequence[tuple[float, int]]]) -> float:
     """Compute security: except with probability delta, at most this much work lies in incorrect proof blocks, the work the prover
-    could have skipped.  `work` is a proof block's work, given as `exfiltration_bound`'s `output_bits` is."""
+    could have skipped.  `work` is a proof block's work, given as `infiltration_bound`'s `output_bits` is."""
     return profile.harm_bound(work)
 
 
-__all__ = ["compute_bound", "exfiltration_bound", "location_bits"]
+__all__ = ["compute_bound", "exfiltration_bound", "infiltration_bound", "location_bits"]
