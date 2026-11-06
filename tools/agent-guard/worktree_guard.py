@@ -79,6 +79,18 @@ def owner(gitdir: str, agent: str, directory: str) -> str:
     return agent
 
 
+def hand_reason(commands: list[list[str]], agent: str) -> str | None:
+    """A `worktree_guard.py hand BRANCH AGENT_ID` from an agent other than the one BRANCH is registered to: only its owner gives
+    a branch away, or any agent could take another's branch by handing it to itself."""
+    reg = registry()
+    for words in commands:
+        for i, w in enumerate(words[:-2]):
+            if w.endswith("worktree_guard.py") and words[i + 1] == "hand" and reg.get(b := words[i + 2], agent) != agent:
+                return (f"branch {b} belongs to agent {reg[b]}, so only that agent can hand it on: ask it to run `python3 "
+                        f"tools/agent-guard/worktree_guard.py hand {b} <agent-id>`. If it is gone, push a branch of your own.")
+    return None
+
+
 def invocations(commands: list[list[str]], cwd: str) -> list[tuple[str, list[str]]]:
     """(directory, git arguments after its global options) of each `git` among `commands` (unwrapped simple commands), tracking
     `cd DIR` and `git -C DIR`."""
@@ -204,6 +216,8 @@ def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] |
     found = [(d, args) for _, d, args in indexed]
     if not agent:
         return None
+    if why := hand_reason(commands, agent):
+        return why
     for d, args in found:
         gitdir = git(d, "rev-parse", "--absolute-git-dir")
         if gitdir is None:
