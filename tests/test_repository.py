@@ -99,6 +99,11 @@ def test_tracked_markdown_is_maintained_documentation() -> None:
     )
 
 
+def test_no_root_readme() -> None:
+    assert "README.md" not in _tracked(), (
+        "the root has no README: an agent starts at AGENTS.md and ARCHITECTURE.md; put what it says in one of them")
+
+
 def test_no_report_genre_basenames() -> None:
     offenders = [p for p in _tracked() if REPORT_GENRE.search(os.path.basename(p))
                  and os.path.splitext(p)[1] not in SOURCE_SUFFIXES]
