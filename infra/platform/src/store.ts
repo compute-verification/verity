@@ -17,6 +17,7 @@ export type Lead = {
   gatewayKeyId: string | null;
   status: "active" | "paused" | "retired";
   runId: string | null;
+  runStartedAt: string | null;
 };
 
 // Where a turn's reply goes: a Slack thread, another lead's inbox (an answer to
@@ -113,6 +114,7 @@ function toLead(r: Record<string, unknown>): Lead {
     gatewayKeyId: (r.gateway_key_id as string) ?? null,
     status: r.status as Lead["status"],
     runId: (r.run_id as string) ?? null,
+    runStartedAt: iso(r.run_started_at),
   };
 }
 
@@ -263,7 +265,12 @@ export function createStore(db: Db) {
     },
 
     async setRunId(lane: string, runId: string) {
-      await db.query(`update leads set run_id = $2, updated_at = now() where lane = $1`, [lane, runId]);
+      await db.query(
+        `update leads set run_id = $2,
+           run_started_at = case when run_id = $2 then run_started_at else now() end, updated_at = now()
+         where lane = $1`,
+        [lane, runId],
+      );
     },
 
     // Returns null when the event's dedupe key was already recorded (Slack retries,

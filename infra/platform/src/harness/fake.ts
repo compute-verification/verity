@@ -7,7 +7,9 @@ import { DOC_PATH } from "../prompt.ts";
 //   [[dispatch: <task>]]   -> dispatch_worker
 //   [[job: <command>]]     -> submit_job
 //   [[ask <lane>: <text>]] -> ask_lead
+//   [[fail: <reason>]]     -> the turn throws, as a crashed harness would
 const DIRECTIVE = /\[\[(dispatch|job|ask ([\w-]+)):\s*([^\]]+)\]\]/g;
+const FAIL = /\[\[fail:\s*([^\]]+)\]\]/;
 
 function promptText(prompt: unknown): string {
   if (typeof prompt === "string") return prompt;
@@ -48,6 +50,8 @@ export function fakeHarness(): HarnessV1 {
             },
             done: (async () => {
               emit({ type: "stream-start", modelId: "fake" });
+              const fail = FAIL.exec(text);
+              if (fail) throw new Error(fail[1]!.trim());
               const calls: { id: string; name: string; input: Record<string, string> }[] = [];
               for (const m of text.matchAll(DIRECTIVE)) {
                 const id = `call_${++counter}`;

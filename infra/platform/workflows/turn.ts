@@ -124,6 +124,20 @@ export async function beginWorkerTurn(w: WorkerInput, runId: string): Promise<Be
   return { ctx, state: createHarnessWorkflowState({ sessionId: turnId, prompt: w.task }) };
 }
 
+// The UI stream reports every error as "An error occurred." unless given an
+// onError; the transcript and the failure reply want the harness's own words.
+function unmasked<R extends object>(r: R): R {
+  const errorText = (e: unknown) => String((e as Error)?.message ?? e).slice(0, 500);
+  return new Proxy(r, {
+    get(target, prop) {
+      const v = Reflect.get(target, prop, target);
+      if (prop === "toUIMessageStream" && typeof v === "function")
+        return (o?: Record<string, unknown>) => v.call(target, { ...o, onError: errorText });
+      return typeof v === "function" ? v.bind(target) : v;
+    },
+  });
+}
+
 // One time-boxed slice of a harness turn. A turn longer than a function may
 // run is several slices, each its own step; the harness suspends and resumes
 // the runtime in the sandbox between them.
@@ -133,19 +147,15 @@ export async function sliceTurn(ctx: TurnCtx, state: HarnessWorkflowState): Prom
   const sandboxSession = await openSandbox(rt, ctx);
   const agent = await buildAgent(rt, ctx);
   const results: { totalUsage: PromiseLike<unknown> }[] = [];
+  const tap = <R extends { totalUsage: PromiseLike<unknown> }>(r: R): R => {
+    results.push(r);
+    return unmasked(r);
+  };
   const tapped: HarnessWorkflowAgent = {
     hasOutput: agent.hasOutput,
     createSession: (o) => agent.createSession(o as never),
-    stream: async (o) => {
-      const r = await agent.stream(o as never);
-      results.push(r);
-      return r as never;
-    },
-    continueStream: async (o) => {
-      const r = await agent.continueStream(o as never);
-      results.push(r);
-      return r as never;
-    },
+    stream: async (o) => tap(await agent.stream(o as never)) as never,
+    continueStream: async (o) => tap(await agent.continueStream(o as never)) as never,
   };
   const chunks: { type: string }[] = [];
   const writable = new WritableStream<{ type: string }>({
@@ -226,13 +236,15 @@ export async function endTurn(
   }
   const failed = outcome.status === "failed";
   const cost = costUsd(ctx.model, usage);
-  const reply = failed ? `This turn failed: ${outcome.error ?? "unknown error"}. Its transcript is ${ctx.turnId}.` : text;
+  const detail = failed ? (await rt.store.transcript(ctx.turnId)).filter((p) => p.type === "error").at(-1)?.text : undefined;
+  const error = failed ? [outcome.error ?? "unknown error", detail].filter(Boolean).join(": ") : undefined;
+  const reply = failed ? `This turn failed (${error}). Its transcript is ${ctx.turnId}.` : text;
   await rt.store.finishTurn(ctx.turnId, {
     status: failed ? "failed" : "finished",
     usage,
     costUsd: cost,
     finalText: reply,
-    error: outcome.error,
+    error,
     docRevAfter,
   });
   if (ctx.kind === "lead") {

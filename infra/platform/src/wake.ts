@@ -1,5 +1,5 @@
 import { resumeHook, start } from "workflow/api";
-import { HookNotFoundError } from "workflow/errors";
+import { HookNotFoundError, RunExpiredError, WorkflowRunNotFoundError } from "workflow/errors";
 import { leadWorkflow } from "../workflows/lead.ts";
 import { runtime } from "./runtime.ts";
 import type { NewEvent } from "./store.ts";
@@ -7,6 +7,9 @@ import type { NewEvent } from "./store.ts";
 export const leadToken = (lane: string) => `lead:${lane}`;
 
 export type Wake = { eventId: number | null };
+
+// No run will take the wake: nobody holds the hook, or its run is gone.
+const noLiveRun = (e: unknown) => HookNotFoundError.is(e) || WorkflowRunNotFoundError.is(e) || RunExpiredError.is(e);
 
 // Every trigger (Slack, cron, a job's callback, a worker's end, an MCP call)
 // goes through here: record the event, then ring the lead. The event row is
@@ -27,7 +30,7 @@ export async function wake(lane: string, event: NewEvent | null): Promise<{ even
     await resumeHook<Wake>(leadToken(lane), { eventId });
     return { eventId, duplicate: false, started: null };
   } catch (e) {
-    if (!HookNotFoundError.is(e)) throw e;
+    if (!noLiveRun(e)) throw e;
   }
   const run = await start(leadWorkflow, [{ lane, epoch: 0 }]);
   await rt.store.setRunId(lane, run.runId);

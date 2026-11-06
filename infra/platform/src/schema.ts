@@ -16,6 +16,7 @@ create table if not exists leads (
   gateway_key_sealed text,
   status text not null default 'active',
   run_id text,
+  run_started_at timestamptz,
   lease_turn text,
   lease_until timestamptz,
   created_at timestamptz not null default now(),
