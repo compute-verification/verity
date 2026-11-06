@@ -200,15 +200,11 @@ theorem PackedIncompressibleContainedTrainingOn_rate :
     (PackedIncompressibleContainedMatMulOn_rate k Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd
       he hP hB hX h) hκ (by exact_mod_cast card_products_le_dark_packed M ch)
 
-theorem PackedIncompressibleContainedMatMulOn : Guarantees.PackedIncompressibleContainedMatMulOn := by
-  intro p c k K b_w b_a μ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX h
-  exact PackedIncompressibleContainedMatMulOn_rate p c (k / c) K b_w b_a μ r d ch T dd emax M (by positivity) hK hw ha
-    hdd (by omega) (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h
+theorem PackedIncompressibleContainedMatMulOn : Guarantees.PackedIncompressibleContainedMatMulOn :=
+  PackedIncompressibleContainedMatMulOn_rate
 
-theorem PackedIncompressibleContainedTrainingOn : Guarantees.PackedIncompressibleContainedTrainingOn := by
-  intro p c k K b_w b_a μ κ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX h hκ
-  exact PackedIncompressibleContainedTrainingOn_rate p c (k / c) K b_w b_a μ κ r d ch T dd emax M (by positivity) hK
-    hw ha hdd (by omega) (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h hκ
+theorem PackedIncompressibleContainedTrainingOn : Guarantees.PackedIncompressibleContainedTrainingOn :=
+  PackedIncompressibleContainedTrainingOn_rate
 
 /-- At `k = 1` the packed training assumption is the per-product one. -/
 theorem packedTrainingIncompressible_toPacked {c : RegisteredCircuit} {ch : Chain c.D} {T : Threading c} {Γ : ℕ}
@@ -230,15 +226,15 @@ theorem packedTrainingIncompressible_toPacked {c : RegisteredCircuit} {ch : Chai
 /-- **The per-product partial-sum law with dark gates is the case `k = 1`.** -/
 theorem incompressibleContainedMatMulOn_of_packed (h : Guarantees.PackedIncompressibleContainedMatMulOn) :
     Guarantees.IncompressibleContainedMatMulOn :=
-  fun c k K b_w b_a μ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX hT =>
-    h 1 c k K b_w b_a μ r d ch.toPacked T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX
+  fun Γ α K b_w b_a μ r d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hT =>
+    h 1 Γ α K b_w b_a μ r d ch.toPacked T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX
       (packedTrainingIncompressible_toPacked.2 hT)
 
 /-- **The per-product training form with dark gates is the case `k = 1`**, where `2 k #dark` is `2 #dark`. -/
 theorem incompressibleContainedTrainingOn_of_packed (h : Guarantees.PackedIncompressibleContainedTrainingOn) :
     Guarantees.IncompressibleContainedTrainingOn := by
-  intro c k K b_w b_a μ κ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX hT hκ
-  have h₁ := h 1 c k K b_w b_a μ κ r d ch.toPacked T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX
+  intro Γ α K b_w b_a μ κ r d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hT hκ
+  have h₁ := h 1 Γ α K b_w b_a μ κ r d ch.toPacked T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX
     (packedTrainingIncompressible_toPacked.2 hT) hκ
   simpa only [Nat.cast_one, one_mul] using h₁
 

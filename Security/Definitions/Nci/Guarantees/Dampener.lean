@@ -74,43 +74,43 @@ def DampenerWindows : Prop :=
 
 /-- **The compute dampener over the inference-only policy's thread bound.** As `DampenerWindows`, with the declared
 computation's bound proved: the declared circuit `d` contains the reference training circuit `r` (`Mc`), threaded by `T`
-and with incompressible weights, and complies at `(c, k)`, with its registered information free of the reference
-circuit's fresh input (`ThetaRegistered`), so its counted multiplications `|T.M|` number at most `size(d)/ρ_T`
-(`Nci.Guarantees.ThreadedThrottled`), `ρ_T = c b_a/(k Λ(k))`, and `size(d) ≤ C`. The windows' bound is stated
-with `T`'s `Λ = T.bound`, as the memory cap over threads states it. Then `η ≤ s + min(r, μ (1 + L/H)) + ν_T + χ` with
-`ν_T = (1 − s) · 2/(κ ρ_T)` and `μ = 2 reuse · R α/(κ d b_w b_a)` at `T`'s reuse. -/
+and with incompressible weights, and complies at `(Γ, α)` (`CompliesRate`), with its registered information free of the
+reference circuit's fresh input (`ThetaRegistered`), so its counted multiplications `|T.M|` number at most
+`size(d)/ρ_T` (`Nci.Guarantees.ThreadedThrottled`), `ρ_T = b_a/(α Λ(α Γ))`, and `size(d) ≤ C`. The windows' bound is
+stated with `T`'s `Λ = T.bound`, as the memory cap over threads states it. Then `η ≤ s + min(r, μ (1 + L/H)) + ν_T + χ`
+with `ν_T = (1 − s) · 2/(κ ρ_T)` and `μ = 2 reuse · R α/(κ d b_w b_a)` at `T`'s reuse. -/
 def DampenerThreaded : Prop :=
-  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n c k : ℕ) (F H L R b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r) (dd e : ℕ)
-    (Mc : Containment r.D d.D),
-    0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 < c → 0 < b_w → 0 < b_a → 0 < dd →
-    Complies c k d → Assumptions.ThetaRegistered r d (PartialContainment.ofContainment Mc) →
-    T.Threaded c k dd e →
-    Assumptions.WeightsIncompressible r T c k b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
+  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r)
+    (dd e : ℕ) (Mc : Containment r.D d.D),
+    0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
+    CompliesRate Γ α d → Assumptions.ThetaRegistered r d (PartialContainment.ofContainment Mc) →
+    T.Threaded Γ (α * Γ) dd e →
+    Assumptions.WeightsIncompressible r T Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     M ≤ Mu + Mr + T.M.card + Mx →
     (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
-    n * F * H ≤ C → Assumptions.WindowLength c k F L R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
-    Assumptions.WindowsHold T c k Mr n F H L R b_w b_a dd e →
+    n * F * H ≤ C → Assumptions.WindowLength α F L R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
+    Assumptions.WindowsHold T Mr n α F H L R b_w b_a dd e →
       efficiency κ M C U ≤
-        unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R (k / c : ℝ) dd b_w b_a * (1 + L / H)) +
-          declaredShare κ (rhoT (k / c : ℝ) b_a (T.bound k b_w dd e)) C U + χ
+        unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
+          declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ
 
 /-- **The compute dampener over the inference-only policy's thread bound, per parameter slot**: `DampenerThreaded` with
 the reference circuit's weights incompressible per parameter slot of a slot map `σ`
 (`Assumptions.WeightsIncompressibleSlots`), its declared computation's bound from
 `Nci.Guarantees.ThreadedThrottledSlots`. -/
 def DampenerThreadedSlots : Prop :=
-  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n c k : ℕ) (F H L R b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r)
+  ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r)
     (σ : T.Slots) (dd e : ℕ) (Mc : Containment r.D d.D),
-    0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 < c → 0 < b_w → 0 < b_a → 0 < dd →
-    Complies c k d → Assumptions.ThetaRegistered r d (PartialContainment.ofContainment Mc) →
-    T.Threaded c k dd e →
-    Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
+    0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
+    CompliesRate Γ α d → Assumptions.ThetaRegistered r d (PartialContainment.ofContainment Mc) →
+    T.Threaded Γ (α * Γ) dd e →
+    Assumptions.WeightsIncompressibleSlots r T σ Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     M ≤ Mu + Mr + T.M.card + Mx →
     (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
-    n * F * H ≤ C → Assumptions.WindowLength c k F L R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
-    Assumptions.WindowsHold T c k Mr n F H L R b_w b_a dd e →
+    n * F * H ≤ C → Assumptions.WindowLength α F L R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
+    Assumptions.WindowsHold T Mr n α F H L R b_w b_a dd e →
       efficiency κ M C U ≤
-        unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R (k / c : ℝ) dd b_w b_a * (1 + L / H)) +
-          declaredShare κ (rhoT (k / c : ℝ) b_a (T.bound k b_w dd e)) C U + χ
+        unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
+          declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ
 
 end Nci.Guarantees

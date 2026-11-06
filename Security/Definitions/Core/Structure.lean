@@ -19,7 +19,7 @@ named below are proved in `Proofs.Core.Structure`.
   by another `E`, and a theorem names the class it covers by the `E` it takes.
 * **Decompositions.** Any `Partition` of the computed gates is a decomposition; an ordered (schedulable) one (`Ordered`)
   has an acyclic block-level dependency graph (`Dep`). Blocks have at most `c` gates (`AtScale`) or exactly `c`
-  (`ExactScale`, padded as `Pad` pads), and then `|C| = c · n` (`size_computed_of_exact`). A time-ordered partition
+  (`ExactScale`), and then `|C| = c · n` (`size_computed_of_exact`). A time-ordered partition
   (`TimeOrdered`) gives each block a location and a period, no block reading a later period; the blocks before each
   period form a prefix (`TimeOrdered.upto_isPrefix`), and distinct periods make it ordered
   (`TimeOrdered.ordered_of_injective`).
@@ -191,7 +191,7 @@ def producedFrom (C : Circuit) (B' B : Finset (Fin C.N)) : Finset (Fin C.N) := C
 /-- **Scale `c`**: every block of `P` has at most `c` gates. -/
 def AtScale {C : Circuit} {n : ℕ} (P : Partition C n) (c : ℕ) : Prop := ∀ u, C.size (P.gates u) ≤ c
 
-/-- **Exact scale `c`**: every block of `P` has exactly `c` gates, padded where it would have fewer (`Pad`). -/
+/-- **Exact scale `c`**: every block of `P` has exactly `c` gates. -/
 def ExactScale {C : Circuit} {n : ℕ} (P : Partition C n) (c : ℕ) : Prop := ∀ u, C.size (P.gates u) = c
 
 /-- **The total** of a per-block quantity `q` over the blocks of `P`. -/
