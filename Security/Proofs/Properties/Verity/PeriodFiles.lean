@@ -810,10 +810,10 @@ theorem zk_fold_bind (hB : BlobSup B1 B2) {I rd scope ksFiles programSha want} (
       (sessions.foldlM (SampledProofs.OneStageZk.step I rd B2 scope ksFiles programSha want) init >>= f) :=
   ExtP.bind_back (zk_fold_ext hB sessions init) (fun _ => ExtP.refl _ _) hf
 
-theorem zk_run_mono (hB : BlobSup B1 B2) (p : SampledProofs.OneStageZk.Own) (pub : String)
+theorem zk_run_mono (hB : BlobSup B1 B2) (p : SampledProofs.OneStageZk.Own)
     (sessions : Array RunFiles) (pu : Option (Array Nat)) :
-    ExtP (fun r : Run => r.all = true) (SampledProofs.OneStageZk.run p pub sessions pu B1)
-      (SampledProofs.OneStageZk.run p pub sessions pu B2) := by
+    ExtP (fun r : Run => r.all = true) (SampledProofs.OneStageZk.run p sessions pu B1)
+      (SampledProofs.OneStageZk.run p sessions pu B2) := by
   unfold SampledProofs.OneStageZk.run
   simp only [inputsOf_tab hB.tables]
   repeat' (first
@@ -832,23 +832,30 @@ theorem treesHeld_ext (hB : BlobSup B1 B2) (ts : Array SampledProofs.Challenger.
     | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn | apply ExtP.mapError
     | apply ExtP.map | apply ExtP.bind | intro _)
 
-/-- `checkBlobsAt`'s trees, sessions and run, on the blobs `bs`. -/
-def zkPre (p : SampledProofs.OneStageZk.Params) (e : SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs) : V Run :=
-  SampledProofs.OneStageZk.treesOf p e >>= (SampledProofs.OneStageZk.treesHeld · e bs) >>= fun () =>
-    SampledProofs.OneStageZk.run p.own e.pub e.sessions (some e.base.provedUnits) bs
+/-- `checkBlobsAt`'s checks before v1's (the one session, the trees, the population and the public file) and its run,
+on the blobs `bs`. -/
+def zkPre (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment)
+    (e : SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs) : V Run := do
+  SampledProofs.OneStageZk.oneSession e.sessions
+  SampledProofs.OneStageZk.treesHeld (← SampledProofs.OneStageZk.treesOf p e) e bs
+  SampledProofs.OneStageZk.popHeld p.base.verifier c.record
+  SampledProofs.OneStageZk.publicHeld c.record (← bs.get p.own.pub "public file")
+  SampledProofs.OneStageZk.run p.own e.sessions (some e.base.provedUnits) bs
 
-theorem zkPre_mono (hB : BlobSup B1 B2) (p : SampledProofs.OneStageZk.Params)
-    (e : SampledProofs.OneStageZk.Evidence) : ExtP (fun r : Run => r.all = true) (zkPre p e B1) (zkPre p e B2) := by
+theorem zkPre_mono (hB : BlobSup B1 B2) (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment)
+    (e : SampledProofs.OneStageZk.Evidence) :
+    ExtP (fun r : Run => r.all = true) (zkPre p c e B1) (zkPre p c e B2) := by
   unfold zkPre
-  exact ExtP.bind (ExtP.bind (ExtP.refl _ _) fun ts => treesHeld_ext hB ts e) fun u => by
-    cases u
-    exact zk_run_mono hB _ _ _ _
+  repeat' (first
+    | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _)
+    | exact treesHeld_ext hB _ _ | exact zk_run_mono hB _ _ _ | apply ExtP.bind | intro _)
 
 theorem zk_at_mono (hB : BlobSup B1 B2) {p : SampledProofs.OneStageZk.Params} {c ξ}
     {e : SampledProofs.OneStageZk.Evidence} {pub prof}
     (h : SampledProofs.OneStageZk.checkBlobsAt p c ξ e B1 = .accept pub prof) :
     SampledProofs.OneStageZk.checkBlobsAt p c ξ e B2 = .accept pub prof := by
   unfold SampledProofs.OneStageZk.checkBlobsAt at h ⊢
+  dsimp only at h ⊢
   split at h
   · cases h
   rename_i r hr
@@ -862,14 +869,14 @@ theorem zk_at_mono (hB : BlobSup B1 B2) {p : SampledProofs.OneStageZk.Params} {c
       · rfl
     | reject s => rw [hk] at h; cases h
     | undecided s => rw [hk] at h; cases h
-  have h2 : zkPre p e B2 = .ok r := (zkPre_mono hB p e).run r hr hall
+  have h2 : zkPre p c e B2 = .ok r := (zkPre_mono hB p c e).run r hr hall
   split
   · rename_i err herr
-    have h3 : zkPre p e B2 = .error err := herr
+    have h3 : zkPre p c e B2 = .error err := herr
     rw [h2] at h3
     cases h3
   · rename_i r' hr'
-    have h3 : zkPre p e B2 = .ok r' := hr'
+    have h3 : zkPre p c e B2 = .ok r' := hr'
     rw [h2] at h3
     cases h3
     exact h
