@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictRows
-import Proofs.Flock.Claims.Recursion.OpenedDecode
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+public import Proofs.Flock.Claims.Recursion.OpenedDecode
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
 # Row D of the verdict: the Ligerito openings
@@ -18,6 +20,8 @@ query at a time (`OpenedPlain.QueryOpens`), and the openings' and caps' shapes.
 * `DecAt.rowD_of_queries`: the same from row G's `merkle` and `fast` and row C's `decode`, which give the caps' and
   openings' shapes (`OpenedDecode`): only each query's opening is left.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Algebra.Zerocheck
-import Proofs.Flock.Soundness.Refine.Frames
+module
+
+public import Proofs.Flock.VBridge.Algebra.Zerocheck
+public import Proofs.Flock.Soundness.Refine.Frames
 
 /-!
 # The zerocheck stage returns when its checks pass
@@ -14,6 +16,8 @@ The steps run forward one at a time: `bind_of_ok`, each absorb's state (`label_e
 `absorbF_eq`), a passing `check` (`check_eq`), a squeeze whose round answers (`squeeze_of_answers`), and a loop whose
 every step does (`forIn_rounds_of`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

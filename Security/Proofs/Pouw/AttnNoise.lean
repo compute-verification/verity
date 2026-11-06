@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Mathlib
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # Attention's noise at every operand value
@@ -20,6 +22,8 @@ P·V (H1's `peel`: `P̃ = P_prob − 64 + U(·, κ mod 32)`, `X = V + b`) is thi
   every word is bit-affine and no chain bound holds, for any class of products and any factor: B3's collapse is
   exactly the one-sided case.
 -/
+
+@[expose] public section
 
 namespace Pouw.RelativeSecurity
 

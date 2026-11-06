@@ -1,7 +1,7 @@
 """Drive's alarms: whatever is past its bound rings its owner once, and again only every `ALARM_EVERY_S` while it stays past
-it.  A step of drive's after-landing run past `SLOW_STEP_FACTOR` times its median (lean-audit's of its machine's runs) rings
-its ci.toml job's owner; a member of `next` marked ready `STUCK_S` ago and not landed rings the owner of what holds it; a red
-on `checked` rings the culprit's lane and the owner of what failed, never ci and top beside them."""
+it.  A step of drive's after-landing run or lock run past `SLOW_STEP_FACTOR` times its median (lean-audit's of its machine's
+runs) rings its ci.toml job's owner; a member of `next` marked ready `STUCK_S` ago and not landed rings the owner of what holds
+it; a red on `checked` rings the culprit's lane and the owner of what failed, never ci and top beside them."""
 from __future__ import annotations
 
 import json
@@ -21,8 +21,10 @@ JOBS = {"pytest": ("suites", 1), "flock-circuit-build": ("proofs", 2), "circuit-
         "lean-suites": ("ci", 5), "ratchet-gate": ("vllm", 4)}
 CI_TOML = 'schema = "ci/v0"\n' + "".join(
     f'[[job]]\nname = "{s}"\nowner = "{JOBS[s][0]}"\ngroup = {JOBS[s][1]}\n'
-    + ('gate = false\n' if s in ("circuit-check", "ratchet-gate") else "")
     + ('after = "lean-build"\n' if s == "lean-suites" else "") for s in AFTER_LANDING)
+#: `CI_TOML` with drive's policy taking circuit-check and ratchet-gate off the merge gate, as in the tree
+TREE = {"tools/verity/check/ci.toml": CI_TOML,
+        "tools/verity/check/policy.toml": 'schema = "policy/v0"\noff_gate = ["circuit-check", "ratchet-gate"]\n'}
 
 
 @pytest.fixture
@@ -72,7 +74,7 @@ def test_running_steps_follow_the_preflights_then_each_group_in_order():
 
 def _landed(world: World, monkeypatch, **kw) -> Review:
     """#1 landed on `checked` under `CI_TOML`, its after-landing run `r-post-0` running."""
-    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
+    _move_main(world, TREE)
     h = Review(world, monkeypatch, land_into="checked", **kw)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
@@ -169,7 +171,7 @@ def test_a_ready_pr_unlanded_two_hours_for_its_land_verdict_rings_the_reviewer_o
 def test_a_held_member_below_rings_its_own_owner_for_the_ready_prs_above_it(world, monkeypatch):
     _owning(world, {"lane-1": [], "lane-2": [], "lane-3": []})
     marks: dict[int, str] = {}
-    h = Review(world, monkeypatch, land_into="checked", reviewed_first=False, marked_at=lambda n, head: marks.get(n))
+    h = Review(world, monkeypatch, land_into="checked", marked_at=lambda n, head: marks.get(n))
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
     marks.update({1: _utc(h.clock - 3 * 3600), 2: _utc(h.clock - 3 * 3600), 3: _utc(h.clock - 600)})
@@ -184,18 +186,29 @@ def test_a_held_member_below_rings_its_own_owner_for_the_ready_prs_above_it(worl
     assert len(_rings(h, "not landed")) == 1
 
 
-def test_a_reviewed_pr_waiting_on_its_running_lean_check_rings_the_lean_audits_owner(world, monkeypatch):
-    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
-    marks: dict[int, str] = {}
-    h = Review(world, monkeypatch, land_into="checked", marked_at=lambda n, head: marks.get(n))
-    lock = json.dumps({"guarantees": {"T": "2"}, "reads": {}, "dependencies": {"M": "1"}})
-    world.gh.put(1, world.change({"pkg/lean-audit.json": lock}))
-    marks[1] = _utc(h.clock - STUCK_S)
-    h.review(1)
+def test_a_lock_runs_lean_audit_past_one_and_a_half_times_its_median_rings_its_owner(world, monkeypatch, tmp_path):
+    """The lock run after a Lean landing is a check of drive's that the slow-step alarm watches: its lean-audit, past 1.5 times
+    the median of the lock runs' uncached passes of it, rings lean-audit's ci.toml owner."""
+    from test_drive_locks import LEAN, _lands, _locks
+
+    _move_main(world, TREE)
+    h = _locks(world, monkeypatch)
+    tip = _lands(h, {1: LEAN})
+    (rid,) = h.lock_ids()
+    state = h.q.load_state()
+    state["drive"]["step_s"] = {f"lean {LEAN_STEP}": [["r1", 600.0], ["r2", 600.0], ["r3", 600.0]]}
+    h.q.save_state(state)
+    start = h.clock
+    h.evidence = [_run_dir(tmp_path, rid, start, _preflights(start))]
+    h.clock = start + 60 + 890                                 # lean-audit has run 890 s, under 1.5 times its median of 600 s
     h.tick()
-    (rid,) = h.lean_ids()
-    (ring,) = _rings(h, "not landed")
-    assert ring.startswith(f"@{JOBS[LEAN_STEP][0]} queue: ") and f"held by the Lean check {rid} of " in ring, ring
+    assert not _rings(h, "has run"), h.posts
+    h.clock += 20
+    h.tick()
+    (ring,) = _rings(h, "has run")
+    assert ring.startswith(f"@{JOBS[LEAN_STEP][0]} queue: step {LEAN_STEP} of the lock run of `checked` {tip[:12]} "
+                           f"(run {rid}) has run 15 min"), ring
+    assert ring.endswith("past 1.5 times its median of 10 min over drive's uncached passes of it in runs r1, r2, r3"), ring
 
 
 def test_the_behind_alarm_names_an_older_commits_red_as_not_yet_run_at_the_tip_not_as_red(world, monkeypatch):

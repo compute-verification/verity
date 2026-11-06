@@ -154,7 +154,7 @@ def session(store, gate: challengers.ChallengerGate):
     """An honest session over `store` whose coins come from `gate`'s session for window 0: the session and verdicts."""
     p = params()
     client = gate.open(store.registration.digest, 0, p.windows, 8)
-    c = coins.Coins(client, store.registration.digest, 0, p.windows, clock=itertools.count().__next__)
+    c = coins.SessionCoins(client, store.registration.digest, 0, p.windows, clock=itertools.count().__next__)
     s, prover, passes, clock = drive(store, p, SCHEDULE, coins_=c)
     return s, finish(s, prover, passes, clock)
 
@@ -209,7 +209,7 @@ def test_a_gate_session_is_refused_as_coins_unless_the_hosts_pins_log_and_the_ve
                        f"{PIN}, which the host's pins log records but which is not on main's first-parent line in the "
                        "verifier's copy (`git rev-list --first-parent origin/main`): a branch commit merged into main "
                        "is in main's history but no tree main's check ran on; repin the challenger host to a commit "
-                       "on main's first-parent line (vy-challenger-pin) and rerun the window there"),
+                       "on main's first-parent line (with its pin command) and rerun the window there"),
         "no-pins": ("the auditor's session is not readable: the challenger gate answered pins with exit 3: "
                     '{"refused": "usage"}')}[case]
 
@@ -540,15 +540,15 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
                "window on a host whose gate seals its pins log in each open")
     elif sealed != PINS:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log doesn't record as a commit of main's "
-               "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
-               "window there")
+               "history: repin the challenger host to a commit origin/main contains (with its pin command) and "
+               "rerun the window there")
     elif main is None:
         why = NO_MAIN
     else:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log records but which is not on main's "
                "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
                "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
-               "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
+               "commit on main's first-parent line (with its pin command) and rerun the window there")
     assert s["credit"]["complete"]["ok"]
     assert s["credit"]["credited"]["ok"] is False and s["credit"]["credited"]["reason"] == why
     assert s["credit"]["pinned"] == {"commit": PIN, "seal": None if sealed is None else pins_seal(sealed), "ok": False,
@@ -794,7 +794,7 @@ def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no
 
 
 def test_the_boundary_check_needs_the_certifiers_windows_that_meet_the_span_to_cover_it():
-    """A credited span from σ_0's release at 100 ns to the last root's arrival at 250 ns is covered by windows
+    """A credited span from chal_0's release at 100 ns to the last root's arrival at 250 ns is covered by windows
     [0, 120) and [120, 251), whatever lies beyond it, and not with a gap at 120 or a last window ending at 250."""
     seen = [{"released_ns": 100, "arrivals_ns": [150]}, {"released_ns": 160, "arrivals_ns": [250]}]
 
@@ -808,7 +808,7 @@ def test_the_boundary_check_needs_the_certifiers_windows_that_meet_the_span_to_c
 
 
 def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip():
-    """Coins 110 ms apart on a challenger clock 30 ppm fast, σ_0 and σ_1 stamped a 100 ms round trip before the
+    """Coins 110 ms apart on a challenger clock 30 ppm fast, chal_0 and chal_1 stamped a 100 ms round trip before the
     challenger released them and every later coin 50 ms after: the cross-check's rate reads 30 ppm, where the ratio end
     to end reads the round trip over the session's span."""
     ms = 1_000_000

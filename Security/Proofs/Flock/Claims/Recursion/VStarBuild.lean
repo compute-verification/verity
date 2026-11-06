@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VStarWit
-import Proofs.Flock.Claims.Recursion.SlotsCommit
-import VStar.In
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarWit
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+public import VStar.In
 
 /-!
 # V\*'s outer witness builder, the deployed one (`vstarWit`), and the reference prover's pieces it gives (`refPartsAt`)
@@ -25,6 +27,8 @@ deployed builder `verity_flock.rec_vstage.stage` followed by `flock-circuit --zk
 statement and the rep streams' schedule off it. A deployed record over `refPartsAt x` is the deployed one at runs on
 `x`. The deployed `Brings` is `withReg` of it (`RegSetup`); `withReg` changes only `setup`, so `ref` is this.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

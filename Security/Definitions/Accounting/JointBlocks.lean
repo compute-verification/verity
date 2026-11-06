@@ -1,4 +1,6 @@
-import Definitions.Accounting.JointPeriod
+module
+
+public import Definitions.Accounting.JointPeriod
 
 /-!
 # Server-time blocks audited by every protocol (trusted)
@@ -24,6 +26,8 @@ uniform foreign content, the seed and the spot reads. The joint guarantee reads 
 into the wipe's game at each boundary (`Verity.Wipe.OfRun`), on a run whose coins there are the wipe's
 (`Accounting.Guarantees.JointHorizonBlocksLive`). The blocks are fields here, not read off that core vocabulary.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

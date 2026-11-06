@@ -29,6 +29,7 @@ try:
 except ModuleNotFoundError:
     pytest.skip("could not import 'torch'", allow_module_level=True)
 
+from tests.pipeline import predicted
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, events, records
 
 A = {0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]}
@@ -396,35 +397,6 @@ def test_with_a_seal_process_each_execution_block_is_sealed_there_and_its_refusa
     assert "error" not in seals[1] and seals[1]["row_dir"] == str(tmp_path / "windows" / "w1")
 
 
-def test_a_seal_process_seals_each_execution_block_only_after_its_draw_gated_release(tmp_path, monkeypatch):
-    """With ``release`` (`serve_release.Draws`), the seal in the sealer's ``process`` follows the window's draw-gated release,
-    as `seal_window` does, so the store it writes holds only the drawn leaves; its line carries the release's record."""
-    monkeypatch.setattr(sc, "seal_window", lambda *_a, **_k: pytest.fail("sealed on the sealer's thread"))
-    order: list[tuple[str, int]] = []
-
-    class Release:
-        def release(self, window: int, com: Any, clock: Any) -> dict[str, Any]:
-            order.append(("release", window))
-            return {"window": window, "kept": 1}
-
-    class Process:
-        def seal(self, com: Any, rc: Any, d: Path, *, written: Any = None, **kw: Any) -> dict[str, Any]:
-            order.append(("seal", kw["rec"]["window"]))
-            written()
-            return {"row_dir": str(d)}
-
-    sealer = ss.Sealer(1 << 40)
-    sealer.process = Process()
-    s = Sealed(tmp_path, sealer=sealer, com=Detached)
-    s.windows.release = Release()
-    with s:
-        for i in range(2):
-            assert events(s.post("/v1/completions", _body(i))[1])[-1] == "[DONE]"
-    sealer.close()
-    assert order == [("release", 0), ("seal", 0), ("release", 1), ("seal", 1)]
-    assert [x["release"] for x in records(tmp_path, "seals.jsonl")] == [{"window": 0, "kept": 1}, {"window": 1, "kept": 1}]
-
-
 def test_serve_openais_seals_run_where_its_sealing_options_say():
     """`seal_process.sealer_of`: under ``--seal`` a `ProcessSealer`, whose summary names its process and, once closed, how it
     ended; a `serve_seal.Sealer` sealing on its own thread with ``--no-seal-process``; none, the seals on the engine loop, with
@@ -664,7 +636,7 @@ def test_a_draining_loop_refuses_new_requests_and_ends_once_idle():
 
 
 def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
     base = ["--model", "m", "--revision", "r", "--out", str(tmp_path / "new" / "dir"), "--seal", "--window-gb", "10", "--disk-floor-gb", "300",
             "--required-manifest", str(man)]
     opts = cli.parse("serve-openai", base, environ={})

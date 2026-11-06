@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.Wait
-import Proofs.Flock.Claims.Recursion.Abort
+module
+
+public import Proofs.Flock.Claims.KS.Wait
+public import Proofs.Flock.Claims.Recursion.Abort
 
 /-!
 # One wait, truncated, at runs that may abort
@@ -15,6 +17,8 @@ they abort (`abortRun`):
   accepted runs (`waitFailD_le`, by `wait_couple`, which is over any draws), and `tape_bound`, `wait_short_le` and
   `short_le_exp` give `4·𝔼[a] + 2^{−m} + 2k/K + e^{−k/8}` as for `ERep_trunc`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

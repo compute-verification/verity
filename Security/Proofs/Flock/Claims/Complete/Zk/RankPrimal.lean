@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Zk.RankDual
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.RankDual
 
 /-!
 # The rank bound's primal side
@@ -13,6 +15,8 @@ the points of `V` that `a` keeps in `V` (`csz_sup_mul_Kc`).
 * `sum_row_le`, `sum_mul_rows`, `chain`: over two free rows, `E[1/(|π_i U_T|^α |π_j U_T|^β)] ≤ Bc(T, α)·Bc(T, β)`.
 * `csz_spanX_pre_le`: `|U_T| ≤ 2^(2^T)`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.MaskRank
 

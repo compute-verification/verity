@@ -1,4 +1,6 @@
-import Definitions.Accounting.JointBridge.CreditedWords
+module
+
+public import Definitions.Accounting.JointBridge.CreditedWords
 
 /-!
 # A credited word's named premises: its priced cost on the device, and the units the network certifier admits (trusted)
@@ -9,6 +11,8 @@ words (`Properties.Pouw.Period.H1CheckedCreditPeriod`), each a `Prop` taken as a
 * `WordCostsMacs`: a per-word work lower bound, priced, for the words of units the device didn't outsource;
 * `HelpWithinCertifier`: the units the device outsourced are within the network certifier's bits, at `b_unit` a unit.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions
 

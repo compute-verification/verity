@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # Steiner rigidity in the rank metric (PoUW work floor)
@@ -22,6 +24,8 @@ its edges of the rank of the difference of the endpoints' labels.
 * Also here: the rank metric's facts, and the merge-proof case (Corollary 6 of the note) for any connected labelled
   graph: targets whose column spaces (or row spaces) are independent cost at least the sum of their ranks.
 -/
+
+@[expose] public section
 
 namespace Pouw.SteinerRigidity
 

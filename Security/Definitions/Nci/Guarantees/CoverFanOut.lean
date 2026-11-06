@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions.Cover
-import Definitions.Nci.Assumptions.CoverFanOut
+module
+
+public import Definitions.Nci.Assumptions.Cover
+public import Definitions.Nci.Assumptions.CoverFanOut
 
 /-!
 # The cover theorem's fan-in/fan-out tightening: the guarantees
@@ -35,6 +37,8 @@ router-scaled or re-quantized versions of a value are gates of that value (no tw
 exactly its gather's cone from the column's entries, updated at that step, so a frozen embedding has no `Keyed`. Each
 counted product's output gate reads all `f` bits of its activation.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Guarantees
 

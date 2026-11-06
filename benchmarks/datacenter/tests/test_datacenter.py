@@ -7,6 +7,7 @@ import struct
 from dataclasses import replace
 
 import pytest
+from verity.core.protocols import registration
 from verity.core.protocols.sampled_proofs.one_stage import registration as one_stage
 from verity.ml.circuits import partition_object
 from verity.ml.circuits.census import census
@@ -15,6 +16,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean.gemm import GEMM_SM120_E4M3, GemmCoordinateE4m3
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple
+from verity.ml.commitments import advice
 
 from datacenter import (FLEET_CLOSED, SALT_CUSTODY, SERVED_PARTITION, Accounts, Assumption, Cadence, Carried, Challenge,
                         Computed, Credit, Datacenter, Deviation, DeviceEntry, Entered, Fleet, Held, Interval, LinkEntry,
@@ -269,6 +271,16 @@ def test_crossings_are_derived_from_the_placement_including_inputs_and_delivery(
     for x in crossings(p):
         assert any(dc.port(*h) for h in hops(x.path, x.src))
     assert set(traffic(p)) == {Port(c, d) for c in ("a.cert", "b.cert") for d in ("ingress", "egress")}
+
+
+def test_the_registered_inputs_are_a_theta_item_of_the_registration_log():
+    """`register`'s commitment is what the registration log registers: one θ item, which a log's information entry
+    takes and whose view reads back with the root, the rows and the domain the commitment's leaves are hashed under."""
+    log = registration.chain("onsite", [registration.Information((REG.theta(),))])
+    t = registration.check(registration.Auditor(), "onsite", log).view().value(",".join(REG.values))
+    assert t == REG.theta() and t["root"] == REG.root.hex() and t["leaves"] == len(REG.rows.rows)
+    assert t["domain"] == advice.domain(REG.rows.binding, len(REG.rows.rows)).domain_id.hex()
+    assert t["words"] * t.get("word_bits", 16) == REG.rows.n_bits
 
 
 def test_a_registered_value_has_a_copy_in_every_block_that_reads_it_unless_held_in_one():

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.HmsgRun
-import Proofs.Flock.Claims.Recursion.VStarPin
+module
+
+public import Proofs.Flock.Claims.Recursion.HmsgRun
+public import Proofs.Flock.Claims.Recursion.VStarPin
 
 /-!
 # hp before the last round at the deployed builder (`hpEarly`)
@@ -22,6 +24,8 @@ order (`InnerRec.P`, `commitThen`).
 * **`hpEarly`**: where the inner prover's round `i` message is its rows' commit strings, the round assembled off the
   outer witnesses is that message (`flatMap_fit`), so `hp_of_assembled` gives `hp` there.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.HpEarly
 

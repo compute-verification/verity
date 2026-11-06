@@ -1,7 +1,9 @@
-import Proofs.Flock.C3.RegLevels.Maps
-import Proofs.Flock.C3.RegLevels.ROpensPR
-import Proofs.Flock.C3.Opening.SrcLayer
-import Proofs.Flock.C3.Opening.ClaimTie
+module
+
+public import Proofs.Flock.C3.RegLevels.Maps
+public import Proofs.Flock.C3.RegLevels.ROpensPR
+public import Proofs.Flock.C3.Opening.SrcLayer
+public import Proofs.Flock.C3.Opening.ClaimTie
 
 /-!
 # n14: R's levels at the tied source, from V*'s sessions
@@ -19,6 +21,8 @@ import Proofs.Flock.C3.Opening.ClaimTie
   Ligerito steps' weave (`lgSteps_of_lig` makes it a play's tape) and the openings, the cap; and the claim tie, in
   `openingReadAt_src`'s form.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

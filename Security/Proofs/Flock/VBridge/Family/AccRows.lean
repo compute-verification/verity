@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Family.Ends
-import Proofs.Flock.VBridge.Family.Opened
-import Proofs.Flock.VBridge.Family.Registrants
+module
+
+public import Proofs.Flock.VBridge.Family.Ends
+public import Proofs.Flock.VBridge.Family.Opened
+public import Proofs.Flock.VBridge.Family.Registrants
 
 /-!
 # VBridge G at V*'s family: `rec-acc`'s rows keyed by their registration, and the openings' tops
@@ -28,6 +30,8 @@ all three hold where no read is segmented, `siteRowsShared` at `ReadsUnsegmented
 `hTopsL_of_out` gives `HTopsL` from `TopsOutL`, the openings' `out` columns registered bits of the cap's entry, as
 `AccOutL` gives `acc_out`.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -514,7 +518,7 @@ variable (cap : ((j : Fin F.stmts.size) → (F.Vs j).Bits) → Array ByteArray)
 /-- Obligation: to be discharged by acceptance, now that the layout keys a returned output gate to its output row
 (`HiddenExec.rowOfH`), with each level's `out` a read of the
 tops registration at the opening's cap index whose rows are the cap message's entries (rec_outer.py:226-228, 236: the
-prover checks `out_rows` against `R.expected(q.cap_node)`; the cap message, the transcript lane's `MsgsRead`).
+prover checks `out_rows` against `R.expected(q.cap_node)`; the cap message, `MsgsRead`'s).
 **The openings' `out` columns are registered bits of the cap's entry**: at every accepted outer proof, the cap entry
 `HTopsL` names is 64 bytes, and the first 512 output columns of rep `r`'s opening `j` of level `ℓ` are registered bits
 of it (`RegOut`). -/

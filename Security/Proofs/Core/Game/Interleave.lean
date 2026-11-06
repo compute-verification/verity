@@ -1,4 +1,6 @@
-import Proofs.Core.Game.Basic
+module
+
+public import Proofs.Core.Game.Basic
 
 /-!
 # Two interactions run concurrently
@@ -13,6 +15,8 @@ The verifier accepts only if both interactions accept.
 probability that both interactions accept is at most the product of the two values, whatever the
 schedule. With a sound single rep, two reps on independent live coins therefore square the error.
 -/
+
+@[expose] public section
 
 namespace Verity
 

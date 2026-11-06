@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
+module
+
+public import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
 
 /-!
 # v1 under rev1 at the served linears with FP32 at 8, at any batch (compute accounting's file)
@@ -8,6 +10,8 @@ in-loop 8.376, the honest cast still at 8.72, at the cap 1/1,000: Llama-3.1-8B's
 and per audit tile from TT_OUT at 1/1,000. Each γ is below the in-loop one at the same linear, so the in-loop γ is the
 one published: from 0.35521% (gate_up) to 0.38818% (down, and the layout).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

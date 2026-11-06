@@ -1,4 +1,6 @@
-import Definitions.Claims.Sampling
+module
+
+public import Definitions.Claims.Sampling
 
 /-!
 # The sampling claims are stated (trusted)
@@ -9,6 +11,8 @@ under `reads`: a changed claim is a changed record, which is reported when it la
 verifier. A claim leaves it when a guarantee states that claim at the deployed sampled verifier, and the guarantee's own
 record holds the text from then on.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

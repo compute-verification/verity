@@ -1,7 +1,9 @@
-import Proofs.Flock.VBridge.Stages
-import Proofs.Flock.VBridge.AlgHolds
-import Proofs.Flock.VBridge.AccUnits
-import Proofs.Flock.VBridge.Algebra.BitsOk
+module
+
+public import Proofs.Flock.VBridge.Stages
+public import Proofs.Flock.VBridge.AlgHolds
+public import Proofs.Flock.VBridge.AccUnits
+public import Proofs.Flock.VBridge.Algebra.BitsOk
 
 /-!
 # VBridge G from V*'s facts
@@ -12,6 +14,8 @@ units (`accChains_of_decode`), the inner verifier's acceptance from one table's 
 (`stagesAccept_of_runs`), and `VFullR`, which V*'s full draw gives (`vFullR_of_read`). Its hypotheses are the pieces
 still open, each a fact about V*'s statements, registrations or files.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Top
 

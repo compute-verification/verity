@@ -356,7 +356,7 @@ def test_git_merges_two_branches_that_add_guarantees_and_refuses_a_real_conflict
         monkeypatch.setenv(k, v)
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
-    for f in ("merge.py", "check.py"):
+    for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text("lean-audit.json merge=lean-audit\n")
     rec = repo / "pkg" / "lean-audit.json"
@@ -526,6 +526,67 @@ def test_an_inline_premise_one_side_dropped_stays_while_the_merged_record_lists_
     assert why == ["shape[inline][P.t][a]: removed on one side and changed on the other"]
 
 
+def test_a_checkout_whose_merge_rules_predate_origin_main_s_merges_by_origin_main_s_drivers(tmp_path, monkeypatch):
+    """Git runs the driver from the worktree of the side merged into.  A branch whose checkout has a `merge.py` without
+    `held` dropped premise `a` and merges `main`, whose driver has it: the driver defers to `origin/main`'s copy of its
+    directory (`deferred`), so `a` stays.  Without `origin/main`, the checkout's own driver merges and drops `a`, which the
+    merged tree still prints, so that tree's records would fail `guarantees.inline-hypothesis`.  A branch that committed a
+    `merge.py` of its own merges by it, and so does one that holds `origin/main`'s rules."""
+    for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():
+        monkeypatch.setenv(k, v)
+    repo, rec = tmp_path / "repo", {"owner": "@lean", "signature": ["P.t : P.T"], "assumptions": [], "type_hash": "a" * 64}
+    (lean := repo / "tools" / "verity" / "lean").mkdir(parents=True)
+    driver = (HERE.parent / "merge.py").read_text()
+    assert (stale := driver.replace("    held(base, ours, theirs, out, candidate)\n", "")) != driver
+    (lean / "merge.py").write_text(stale)
+    shutil.copy(HERE.parent / "check.py", lean / "check.py")
+    (repo / ".gitattributes").write_text("lean-audit.json merge=lean-audit\n")
+    t, path, deferring = {"a": "why a", "b": "why b"}, repo / "lean-audit.json", "merge.py: merging with origin/main's drivers"
+
+    def commit(msg: str, **inline: dict) -> None:
+        path.write_text(A.text({"guarantees": {"P.t": rec, "P.u": rec}, "shape": {"inline": {f"P.{g}": v for g, v in inline.items()}}}))
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", msg)
+
+    def inline() -> dict:
+        return json.loads(path.read_text())["shape"]["inline"]
+    git(repo, "init", "-q", "-b", "main")
+    commit("base", t=t, u={"c": "why c"})
+    subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
+    git(repo, "checkout", "-q", "-b", "pr")
+    commit("pr: --update on an older tree", t={"b": "why b"}, u={"c": "why c"})
+    git(repo, "checkout", "-q", "main")
+    (lean / "merge.py").write_text(driver)
+    commit("main: held", t=t, u={"c": "why c", "d": "why d"})
+    git(repo, "checkout", "-q", "pr")
+
+    off = git(repo, "merge", "--no-edit", "main")
+    assert deferring not in off.stderr and inline() == {"P.t": {"b": "why b"}, "P.u": {"c": "why c", "d": "why d"}}
+    git(repo, "reset", "-q", "--hard", "ORIG_HEAD")
+    git(repo, "update-ref", "refs/remotes/origin/main", "main")
+
+    git(repo, "checkout", "-q", "-b", "own")
+    (lean / "merge.py").write_text(stale + "# a rule of its own\n")
+    git(repo, "commit", "-q", "-am", "own: merge.py")
+    own = git(repo, "merge", "--no-edit", "main")
+    assert deferring not in own.stderr and inline()["P.t"] == {"b": "why b"}
+
+    git(repo, "checkout", "-q", "pr")
+    merged = git(repo, "merge", "--no-edit", "main")
+    assert deferring in merged.stderr and "shape[inline][P.t][a] (kept)" in merged.stderr
+    assert inline() == {"P.t": t, "P.u": {"c": "why c", "d": "why d"}}
+    assert (lean / "merge.py").read_text() == driver
+
+    git(repo, "checkout", "-q", "main")
+    commit("main: e", t=t, u={"c": "why c", "d": "why d", "e": "why e"})
+    git(repo, "update-ref", "refs/remotes/origin/main", "main")
+    git(repo, "checkout", "-q", "pr")
+    commit("pr: f", t=t | {"f": "why f"}, u={"c": "why c", "d": "why d"})
+    again = git(repo, "merge", "--no-edit", "main")
+    assert deferring not in again.stderr and inline() == {"P.t": t | {"f": "why f"}, "P.u": {"c": "why c", "d": "why d", "e": "why e"}}
+
+
 def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():
     """#1860 against #1842 (12 Oct): each side added imports to `Definitions.Accounting` and a clause to its `why`."""
     base = {"layers": {"D": {"imports": ["Mathlib", "D"], "except": [], "why": "trusted text; they import no proof"},
@@ -584,6 +645,20 @@ def test_an_import_one_side_removed_stays_removed_where_the_other_side_moved_it(
     assert left == 0 and text == imports("A", "C", "D", "E", "F")
 
 
+def test_a_module_system_file_s_imports_merge_in_every_form(tmp_path):
+    """On Lean's module system an import list is `public import` lines, among them `meta` and `all` ones (`headers.py`):
+    two sides that each add one merge, and one a side removed stays removed."""
+    def imports(*ls: str) -> str:
+        return "module\n\n" + "".join(f"{s}\n" for s in ls) + "\n@[expose] public section\n\ntheorem t : True := trivial\n"
+
+    text, left = _lean(tmp_path, imports("public import G.A", "public meta import G.B", "import all G.C"),
+                       imports("public import G.A", "public import G.X -- ours", "import all G.C"),
+                       imports("public import G.A", "public meta import G.B", "meta import G.Y", "import all G.C"))
+    assert left == 0 and text == imports("public import G.A", "meta import G.Y", "public import G.X -- ours", "import all G.C")
+    assert M._import_names(text) == {"public import G.A", "meta import G.Y", "public import G.X -- ours", "import all G.C"}
+    assert not M._import("public section") and not M._import("module") and not M._import("import A import B")
+
+
 def test_imports_both_sides_add_merge_and_one_both_sides_remove_stays_removed(tmp_path):
     def imports(*ms):
         return "".join(f"import G.{m}\n" for m in ms) + "\ntheorem t : True := trivial\n"
@@ -591,6 +666,43 @@ def test_imports_both_sides_add_merge_and_one_both_sides_remove_stays_removed(tm
     assert left == 0 and text == imports("A", "Y", "X", "C"), "both added: the union; both removed B: gone"
     text, left = _lean(tmp_path, imports("A", "B", "C"), imports("A", "X", "B", "C"), imports("A", "Y", "B", "C"))
     assert left == 0 and text == imports("A", "Y", "X", "B", "C")
+
+
+def test_a_module_s_import_lists_merge_in_each_form(tmp_path):
+    """A module's imports (`public import`, `meta import`, `public meta import`, `import all`) merge as a plain file's do."""
+    def imports(*ms):
+        return "module\n\n" + "".join(f"{m}\n" for m in ms) + "\n@[expose] public section\n\ntheorem t : True := trivial\n"
+    a, c = "public import G.A", "import all G.C"
+    text, left = _lean(tmp_path, imports(a, "public import G.B", c), imports(a, "meta import G.X", c),
+                       imports(a, "public meta import G.Y", "public import G.B", c))
+    assert left == 0 and text == imports(a, "public meta import G.Y", "meta import G.X", c), text
+
+
+def test_two_ports_of_a_plain_file_that_each_change_its_imports_merge(tmp_path):
+    """Both sides put the file on the module system (`modules.py`) and changed its imports: what merges is each side's change
+    beyond the port, so theirs' removal of an import ours kept applies, though the base spells it `import`."""
+    def ported(*ms):
+        return "module\n\n" + "".join(f"public import {m}\n" for m in ms) + "\n@[expose] public section\n\ndef x := 1\n"
+    base = "import G.A\nimport G.B\n\ndef x := 1\n"
+    text, left = _lean(tmp_path, base, ported("G.A", "G.B", "G.C"), ported("G.A", "G.D"))
+    assert left == 0 and text == ported("G.A", "G.D", "G.C"), text
+
+
+def test_a_branch_from_before_the_port_merges_as_its_codemod_rerun_would(tmp_path):
+    """Ours is the port with a hand fix (`import all` of a core module); theirs, a branch made before the port, adds an import
+    and changes a proof. Theirs is ported first, so its import comes in public, its proof applies, and nothing conflicts."""
+    def ported(*ms, proof="trivial"):
+        return ("module\n\n" + "".join(f"{m}\n" for m in ms) + "\n@[expose] public section\n\n"
+                f"theorem x : True := {proof}\n")
+    base = "import G.A\n\ntheorem x : True := trivial\n"
+    ours = ported("public import G.A", "import all Init.Data.Array.Basic")
+    theirs = "import G.A\nimport G.B\n\ntheorem x : True := by trivial\n"
+    text, left = _lean(tmp_path, base, ours, theirs)
+    assert left == 0 and text == ported("public import G.A", "public import G.B", "import all Init.Data.Array.Basic",
+                                        proof="by trivial"), text
+    text, left = _lean(tmp_path, base, theirs, ours)
+    assert left == 0 and text == ported("public import G.A", "import all Init.Data.Array.Basic", "public import G.B",
+                                        proof="by trivial"), text
 
 
 def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
@@ -650,7 +762,7 @@ def test_git_merges_two_branches_that_each_import_a_new_module_with_the_installe
         monkeypatch.setenv(k, v)
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
-    for f in ("merge.py", "check.py"):
+    for f in ("merge.py", "check.py", "headers.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"*.lean merge={M.LEAN}\n")
     g = repo / "G.lean"
@@ -733,7 +845,7 @@ def test_git_merges_two_branches_that_each_require_a_package_with_the_installed_
         monkeypatch.setenv(k, v)
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
-    for f in ("merge.py", "check.py"):
+    for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"lakefile.toml merge={M.LAKEFILE}\n")
     lf = repo / "lakefile.toml"
@@ -887,7 +999,7 @@ def test_git_merges_two_branches_that_each_move_a_cap_with_the_installed_driver(
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
     (repo / "tests").mkdir()
-    for f in ("merge.py", "check.py"):
+    for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.CAPS}\n")
     caps = repo / "tests" / "test_lean_packages.py"
@@ -920,7 +1032,7 @@ def test_git_merges_caps_and_comments_over_two_merge_bases_with_the_installed_dr
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
     (repo / "tests").mkdir()
-    for f in ("merge.py", "check.py"):
+    for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.CAPS}\n")
     caps = repo / "tests" / "test_lean_packages.py"

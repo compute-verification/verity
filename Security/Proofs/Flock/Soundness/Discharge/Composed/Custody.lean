@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Sound
-import Proofs.Flock.Soundness.Assumptions.Zk
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Sound
+public import Proofs.Flock.Soundness.Assumptions.Zk
 
 /-!
 # One `--zk` sampled session is sound, under the record's custody
@@ -10,6 +12,8 @@ import Proofs.Flock.Soundness.Assumptions.Zk
 (`drawOkZK_of_exec`). It rests on five: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`), A3 (`hA3`), A6 and
 `live-verifier` (`hCust`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

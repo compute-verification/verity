@@ -1,5 +1,7 @@
-import Flock.With.SimSetup
-import Proofs.Flock.Claims.Complete.CostWalk
+module
+
+public import Flock.With.SimSetup
+public import Proofs.Flock.Claims.Complete.CostWalk
 
 /-!
 # The setup's hash calls, counted function by function, in any hash
@@ -12,6 +14,8 @@ partition's checks and laws, and the links check. Each proof walks the definitio
 assigns each bound, and `omega` closes what it leaves. The walk is spelled out in each proof rather than kept as a
 macro, which only a `compile_time` module may hold.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.SetupCount
 

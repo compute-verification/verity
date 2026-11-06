@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.NonVacuousRows
-import Proofs.Flock.Claims.Recursion.RowDLevels
+module
+
+public import Proofs.Flock.Claims.Recursion.NonVacuousRows
+public import Proofs.Flock.Claims.Recursion.RowDLevels
 
 /-!
 # `TargetDMerkle` from the honest rep's equations
@@ -16,6 +18,8 @@ run of its verifier rows draws its positions. `targetDMerkle_of_repP` gives it a
 `MerkleOk` is `merkleOk_of_repP` at `Sha512.hash`, with the plain scheme's 64-byte widths (`Rows.plain_widths_std`,
 row G's `merkle`), carried to the recorded coins by `merkleOk_congr`; the positions are `DecAt.htie`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

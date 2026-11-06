@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.FinOpen
-import Proofs.Flock.Claims.Recursion.NextR
-import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
-import Proofs.Flock.Claims.Recursion.BindsDeployed
-import Proofs.Flock.Claims.Recursion.LayoutBAcc
-import Proofs.Flock.Claims.KS.PlainR
+module
+
+public import Proofs.Flock.Claims.Recursion.FinOpen
+public import Proofs.Flock.Claims.Recursion.NextR
+public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
+public import Proofs.Flock.Claims.Recursion.BindsDeployed
+public import Proofs.Flock.Claims.Recursion.LayoutBAcc
+public import Proofs.Flock.Claims.KS.PlainR
 
 /-!
 # The deployed parameters of the bound record at `nextR` (U8)
@@ -44,6 +46,8 @@ V\*'s bound layout `layR elem` (`layoutBTops (finOpen (restR elem))` with the ou
   and instance at which its statement reads a chain row), the port's hm96 calls (`hmCalls`), and at a level's `acc`
   its unit's `acc_out` row's at the output bits (`accOutCalls`, which is `outCalls`: `accOutCalls_eq_outCalls`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DeployedR
 

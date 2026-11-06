@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Capacity
+module
+
+public import Proofs.Flock.Claims.ZK.Capacity
 
 /-!
 # The session's premises at the deployed masked record, round by round
@@ -16,6 +18,8 @@ each equal to `honestPR`'s next message at the history with each opening read as
 `tapeOf (ν, t)`, at every witness in `R` (the relation, where zero knowledge reads the prover). `RefSession.honestMsgsOn_of` assembles them, and `Flock.zk_deployZk_ref_on_rounds` is
 `Flock.zk_deployZk_ref_on` with the three in place of `HonestMsgsOn A`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

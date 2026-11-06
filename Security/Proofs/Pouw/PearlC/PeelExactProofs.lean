@@ -1,6 +1,8 @@
-import Definitions.Pouw.PearlC.PeelExact
-import Proofs.Pouw.PearlC.Peel
-import Proofs.Pouw.PearlC.AtomErr
+module
+
+public import Definitions.Pouw.PearlC.PeelExact
+public import Proofs.Pouw.PearlC.Peel
+public import Proofs.Pouw.PearlC.AtomErr
 
 /-!
 # P2 on the served U (staging, nothing pinned)
@@ -41,6 +43,8 @@ other row's exact entry (`rowErr`, from `paEntry_err` and `pbEntry_err`).
 `0` and `10` (`served_live`, `served_salt_dependent`). For all inputs, (a) says what the entry is up to (b)'s rounding:
 `(A′ − N_A)·(B̃ − N_B)ᵀ`, a function of the salt through `N_A` and `N_B`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelExactProofs
 

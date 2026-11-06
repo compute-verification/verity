@@ -21,10 +21,17 @@ own-region size, the count `derive`'s v2 rule makes; `check_ok` says acceptance 
 - **A read's rows are `table/v2`'s,** with product rows for its low `k` value bits: a library table's up to its highest
   varying bit (the rest are constant, and wired), a program table's all, so no shape depends on a program table's values.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
-import Flock.CircuitType
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+public import Flock.Hash
+public import Flock.CircuitType
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 
@@ -434,7 +441,7 @@ def checkFile (j : Json) : V (Array String × Array Nat) := do
 def cmd (paths : List String) : IO UInt32 := do
   for path in paths do
     let text ← try IO.FS.readFile path catch _ => pure ""
-    let line := match Json.parse text >>= checkFile with
+    let line := match JsonParse.parse text >>= checkFile with
       | .ok (ds, sizes) => Json.mkObj [("file", Json.str path), ("ok", Json.bool true), ("digests", Lean.toJson ds),
                                        ("sizes", Lean.toJson sizes)]
       | .error e => Json.mkObj [("file", Json.str path), ("ok", Json.bool false), ("error", Json.str e)]

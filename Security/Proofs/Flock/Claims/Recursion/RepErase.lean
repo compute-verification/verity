@@ -1,5 +1,7 @@
-import Flock.With.SimVerify
-import Flock.With.Log
+module
+
+public import Flock.With.SimVerify
+public import Flock.With.Log
 
 /-!
 # A rep reads its rounds as replay does
@@ -16,6 +18,8 @@ The proof is a simulation (`Flock.With.Sim`) between two runs of one transcript 
 agree after erasure (`Sim.er`). The squeeze reads its round through what erasure keeps (`er_squeezeWith`), every other
 transcript action only frames bytes, and `sim_walk` carries the relation through each of the rep's `…With` functions.
 -/
+
+@[expose] public section
 
 namespace Flock
 
@@ -302,7 +306,7 @@ theorem er_bind {α β : Type} {x : TMW M α} (hx : (er M).R x x) {t t' : Transc
 
 /-- **A rep reads its session through its stream's rounds as replay reads them, the points and its table's
 `root_B`** (`verifyRep_congr`'s, with the rounds compared after `Round.erase`). -/
-theorem verifyRepWith_erase (spec : SessionSpec) (st : Setup) (sch : Schedule) {sess sess' : Session} {i r : Nat}
+theorem verifyRepWith_erase (spec : SessionSpec) (st : Setup) (sch : Schedule) {sess sess' : RunRecord} {i r : Nat}
     (bytes : ByteArray) {y y' : StreamRec}
     (hy : sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some y)
     (hy' : sess'.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some y')

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Prover.Transcript
-import Flock.Zk
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Transcript
+public import Flock.Zk
 
 /-!
 # The masked prover's tape and pads
@@ -13,6 +15,8 @@ level-0 lane's padding coefficients (lane `l < 2^lanes + 4`, `k < t_pad`) and th
 * **A rep's pads** (`padsOf`, upstream's `Pads::draw`): `h` from the tape with `h_ab = h_a·h_b` and `w = x·y` set, so
   the zerocheck's product and the triple hold at every tape.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

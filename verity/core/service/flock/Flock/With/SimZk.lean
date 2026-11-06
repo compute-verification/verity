@@ -3,8 +3,12 @@ The `--zk` verifier's `…With` functions (`Flock.With.Zk`) under a simulation (
 `S` relates hash by hash, each function's two runs are related by `S` (or by its lift to the transcript and the Ligerito
 state).
 -/
-import Flock.With.SimVerify
-import Flock.With.Zk
+module
+
+public import Flock.With.SimVerify
+public import Flock.With.Zk
+
+@[expose] public section
 
 namespace Flock.With
 
@@ -47,7 +51,7 @@ theorem zk_ligeritoWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Has
     challengeWith_sim S hh, oodIntroWith_sim S hh, queryLevelWith_sim S hh, zk_queryLevel0With_sim S hh]
 
 theorem zk_verifyRepWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs')
-    (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : Session) (i r : Nat) (bytes : ByteArray) :
+    (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : Nat) (sess : RunRecord) (i r : Nat) (bytes : ByteArray) :
     S.R (Zk.verifyRepWith hs spec st sch tPad sess i r bytes) (Zk.verifyRepWith hs' spec st sch tPad sess i r bytes) := by
   unfold Zk.verifyRepWith
   sim_walk [zk_replayWith_sim S hh, ringSwitchWith_sim S hh, zk_ligeritoWith_sim S hh, zk_verifyInnerWith_sim S hh]

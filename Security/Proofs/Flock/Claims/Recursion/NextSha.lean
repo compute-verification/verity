@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.NextP
-import Proofs.Flock.VBridge.Family.Encode
+module
+
+public import Proofs.Flock.Claims.Recursion.NextP
+public import Proofs.Flock.VBridge.Family.Encode
 
 /-!
 # The record's proof digests written from the proofs' files (`decisionAtS`)
@@ -11,7 +13,7 @@ the honest prover writes (`shaArr_honest`). The digests are the oracle's (`dgWit
 computes.
 
 Nothing else reads `proof_{dk}`. In the decision only the verdict's decoder does (`Record.decodeJWith`, into
-`Session.proofSha`, which S17 alone reads); custody (`liveOfJ`) reads the link and the streams, the draw check
+`RunRecord.proofSha`, which S17 alone reads); custody (`liveOfJ`) reads the link and the streams, the draw check
 `unit_draw`. Outside it, check 5 (`RecCoins.Inner.load`) and the inner transcript's checks (`RecVStar.innerCommits`,
 `RecVStar.innerLink`) read the inner record's streams, link points and draw. The rec-coins file's `record_sha512` binds
 the record's whole text, but only on `--rec-inner-coins`' path, which candidate 3's session refuses
@@ -24,6 +26,8 @@ the record's whole text, but only on `--rec-inner-coins`' path, which candidate 
   to the proof (`decode_filesAt`), so the verdict's decode of `filesAt`'s files refuses none.
 * **Oracle runs** (`EvOk`): a run against `H` that returns `a`; through binds, `mapM` and the record digest.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainLeafDecJK
-import Proofs.Flock.Claims.KS.PlainClash0K
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafDecJK
+public import Proofs.Flock.Claims.KS.PlainClash0K
 
 /-!
 # The level-0 clash's draw half at the parsed record
@@ -7,6 +9,8 @@ import Proofs.Flock.Claims.KS.PlainClash0K
 `PlainClash0`'s and `PlainClash0K`'s `keep` lemmas at `wrPDJK` (`EntriesClashJK`, `plain_clash₀AtJK`,
 `plain_clash₀HAtJK`), on `PlainDrawAccJK`'s acceptance lemmas.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 
@@ -19,7 +23,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **Two of the reps' entries at one position with different columns**, in `t` at the setup at `d`, the session the
 record decodes to through `keep` (`EntriesClash`). -/
 def EntriesClashJK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) (t : TranscriptJ) : Prop :=
-  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
+  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
     setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decodeJWithK keep With.std spec t.j = .ok sess ∧
     _root_.Flock.fast100 st.m = some sch ∧
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 0) = some s₀ ∧

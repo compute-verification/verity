@@ -1,26 +1,28 @@
-import Proofs.Nci.Cover.Paths
-import Proofs.Nci.Cover.Charge
-import Proofs.Nci.Cover.Area
-import Proofs.Nci.Cover.Additive
-import Proofs.Nci.Cover.Witness
-import Proofs.Nci.Cover.Gates
-import Proofs.Nci.Cover.CoveringAdditive
-import Proofs.Nci.Cover.CoveringAdditiveWitness
-import Proofs.Nci.Cover.FanOut
-import Proofs.Nci.Cover.FanOutWitness
-import Proofs.Nci.Cover.FanOutChain
-import Proofs.Nci.Cover.FanOutValue
-import Proofs.Nci.Cover.FanOutValueWitness
-import Proofs.Nci.Cover.PartialSum
-import Proofs.Nci.Cover.PartialSumWitness
-import Proofs.Nci.Cover.Bits
-import Proofs.Nci.Cover.Sum
-import Proofs.Nci.Cover.Training
-import Proofs.Nci.Cover.Aligned
-import Proofs.Nci.Cover.Checked
-import Proofs.Nci.Cover.Chained
-import Proofs.Nci.Cover.CheckedChained
-import Proofs.Nci.Cover.ChainedWitness
+module
+
+public import Proofs.Nci.Cover.Paths
+public import Proofs.Nci.Cover.Charge
+public import Proofs.Nci.Cover.Area
+public import Proofs.Nci.Cover.Additive
+public import Proofs.Nci.Cover.Witness
+public import Proofs.Nci.Cover.Gates
+public import Proofs.Nci.Cover.CoveringAdditive
+public import Proofs.Nci.Cover.CoveringAdditiveWitness
+public import Proofs.Nci.Cover.FanOut
+public import Proofs.Nci.Cover.FanOutWitness
+public import Proofs.Nci.Cover.FanOutChain
+public import Proofs.Nci.Cover.FanOutValue
+public import Proofs.Nci.Cover.FanOutValueWitness
+public import Proofs.Nci.Cover.PartialSum
+public import Proofs.Nci.Cover.PartialSumWitness
+public import Proofs.Nci.Cover.Bits
+public import Proofs.Nci.Cover.Sum
+public import Proofs.Nci.Cover.Training
+public import Proofs.Nci.Cover.Aligned
+public import Proofs.Nci.Cover.Checked
+public import Proofs.Nci.Cover.Chained
+public import Proofs.Nci.Cover.CheckedChained
+public import Proofs.Nci.Cover.ChainedWitness
 
 /-!
 # Proofs of the cover theorem
@@ -46,3 +48,5 @@ to a verdict of the NCI check: the gate-level check's, and the check of record's
 circuit's bits as a declaration (`Definitions.Nci.Guarantees.CoverChained`), with its witness (`ChainedWitness`), and
 `CheckedChained` carries it to a verdict as `Checked` does.
 -/
+
+@[expose] public section

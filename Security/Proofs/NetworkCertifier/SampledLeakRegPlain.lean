@@ -1,5 +1,7 @@
-import Proofs.NetworkCertifier.SampledLeakReg
-import Proofs.Flock.Claims.Sampling.DeployedSha512
+module
+
+public import Proofs.NetworkCertifier.SampledLeakReg
+public import Proofs.Flock.Claims.Sampling.DeployedSha512
 
 /-!
 # The leak bound at the registration's values, at the deployed plain record
@@ -12,6 +14,8 @@ record (`SamplingDeploy.deployPlain`) the bound takes only the record's `KS` (`s
 `SamplingDeploy.sampling_deployed_plain_sha512` gives at SHA-512 at the deployed relation
 (`sampledLeak_registered_plain_sha512`). `SampledAuditAccepted` is discharged by its proof.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

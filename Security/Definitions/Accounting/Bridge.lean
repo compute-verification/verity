@@ -1,6 +1,8 @@
-import Definitions.Accounting.Device
-import Definitions.Accounting.Physical
-import Definitions.Accounting.Confidence
+module
+
+public import Definitions.Accounting.Device
+public import Definitions.Accounting.Physical
+public import Definitions.Accounting.Confidence
 
 /-!
 # The device's schedule, induced by the actual circuit (trusted)
@@ -26,6 +28,8 @@ account is where additivity enters: what a guarantee says of one account's charg
 alone. The schedule also covers what the device's gates use when every wire into `chip` from outside runs on the
 memory link or a side channel, and the work's pricing is `p` on each class (`covers_ingress`, `covers_work`).
 -/
+
+@[expose] public section
 
 namespace Accounting
 

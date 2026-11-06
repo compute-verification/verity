@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.E2E
-import Proofs.Flock.Soundness.ComposeDag
-import Proofs.Flock.Soundness.Types.Flatten
+module
+
+public import Proofs.Flock.Soundness.E2E
+public import Proofs.Flock.Soundness.ComposeDag
+public import Proofs.Flock.Soundness.Types.Flatten
 
 /-!
 # A partition's units: correct on its rows, correct on its gates (verified-lowering phase 1, S4)
@@ -18,6 +20,8 @@ A unit's local evaluation satisfies its rows (`IsRowsUnit.sat_localEval`), so it
 (`IsGatesUnit.localEval_eq`), so its outputs' copies carry the same `evalT` (`IsGatesUnit.localEval_type`, from
 `flatten_eval`). The partition enters only through the pairs, so the theorem holds whatever chose the units.
 -/
+
+@[expose] public section
 
 open Flock Flock.DeriveAll
 
@@ -55,8 +59,7 @@ theorem unitGates_lt {j : ℕ} (hj : j < (flatten types words loOf F t).1.size) 
 theorem unitGates_copy {o : ℕ} (ho : o < t.outputs.size) :
     (unitGates types words loOf F t)[(flatten types words loOf F t).1.size + o]'(by rw [unitGates_size]; omega) =
       .and ((flatten types words loOf F t).2.getD o 0) ((flatten types words loOf F t).2.getD o 0) := by
-  unfold unitGates
-  rw [Array.getElem_append_right (by omega)]
+  refine (Array.getElem_append_right (Nat.le_add_right _ _)).trans ?_
   simp
 
 theorem unitGates_topo : Topo (unitGates types words loOf F t) := by

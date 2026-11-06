@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.FrameZK
-import Proofs.Flock.Claims.ZK.FinishRound
-import Proofs.Flock.Claims.ZK.AdmitsOf
-import Proofs.Flock.Claims.ZK.LinkRecheck
+module
+
+public import Proofs.Flock.Claims.ZK.FrameZK
+public import Proofs.Flock.Claims.ZK.FinishRound
+public import Proofs.Flock.Claims.ZK.AdmitsOf
+public import Proofs.Flock.Claims.ZK.LinkRecheck
 
 /-!
 # `FrameAdmits` at the session loop: the tables' side and the frame's
@@ -19,6 +21,8 @@ the coin faults some rep frame refuses at its round:
 * **`LeanRelease.frameAdmits_of_unrefused`**: `FrameAdmits` from the two, and **`LeanRelease.finalRoundEq_ofLoop`**:
   `FinalRoundEq` at `ofLoop` from them and `FinishIs` (`finalRoundEq_of_finishIs`, `loop_last`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

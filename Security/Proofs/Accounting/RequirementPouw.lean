@@ -1,5 +1,7 @@
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Definitions.Accounting.Guarantees.RequirementPouw
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Definitions.Accounting.Guarantees.RequirementPouw
 
 /-!
 # PoUW's credits and help when a node runs a declared circuit as placed
@@ -11,6 +13,8 @@ follows (`Placement.ingress_actual`). PoUW's credits and help are `Placed.work` 
 coin, so `RequirementCredits`, `RequirementHelp` and `RequirementHelpBound` follow. `RequirementStepsInner` and
 `RequirementStepsOuter` order a paced device's steps as their ticks.
 -/
+
+@[expose] public section
 
 namespace Accounting.Requirement
 

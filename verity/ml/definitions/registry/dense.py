@@ -3,19 +3,12 @@ profile that the fused b1 kernels do NOT cover: the operations a model runs UNFU
 (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as an ATen chain on an f32 copy), its activation is GeGLU (`_C.gelu_tanh_and_mul`),
 its attention has a logit soft cap (FA2 `Is_softcap`), or its logits are soft-capped (`LogitsProcessor(soft_cap)`).
 
-PROMOTED from `verity_vllm.program.quarantine.dense`: every
-Definition below is the quarantine module's body VERBATIM — same name, same version, same statics, same gates — so the
-specialization ids are those the accepted `GEMMA2_2B-cov_gemma2_2b_b1_c256.r8h` record and the eager Gemma-2 (`profiles.generic`, formerly `gen_dense2_gemma2_2b`)
-Match profile resolve to. The quarantine modules re-export these objects (their difftest adapters, `ALL_DEFINITIONS` and
-`SEMANTIC_ID`s are unchanged). Each section keeps the quarantine module's docstring: the ATen / Triton / CUDA source the body
-follows, the wave-1 exhaustive GPU tables and the pod difftests that are its correspondence evidence (see the `conformance=`
-strings).
+Every Definition below keeps the name, version, statics and gates it was first accepted under, so its specialization ids are
+the ones the accepted Gemma-2 records resolve to. Each section's notes give the ATen / Triton / CUDA source the
+body follows, the wave-1 exhaustive GPU tables and the pod difftests that are its correspondence evidence (see the
+`conformance=` strings). A frontend binds them by the operation each computes; nothing here names a model.
 
-Bound as kinds of the pinned `b1-eager-v3` vocabulary (`frontend/rules/vocab.py::_dense_kinds`) and asked for by the op-shaped
-rules of `frontend/rules/vllm_bindings.py` (`WidenBf16ToF32`, `Square`, `MeanDimBI`, `Rsqrt`, `AddScalar`, `AddWidened`, `MulF32`,
-`NarrowF32ToBf16`, `GeluTanhAndMul`, `Bf16ScalarChain`, the softcap role of `UnifiedAttentionWithOutput`). Nothing here names a model.
-
-Conventions (checked against wave-1's exhaustive GPU tables): every ATen CUDA kernel here converts f32 -> bf16 with the hardware
+Conventions (checked against the exhaustive GPU tables): every ATen CUDA kernel here converts f32 -> bf16 with the hardware
 `cvt.rn.bf16.f32` (`c10::BFloat16(float)` on sm_80+ is `__float2bfloat16`), so NaN words are 0x7FFF (`F2fpBf16`), not the
 software 0x7FC0. `MufuTanh` (the FA2 softcap's `tanh.approx.f32`) stays a primitive of `registry/prims.py` with its measured table.
 """
@@ -50,7 +43,7 @@ SEMANTIC_IDS = {
 # ========================================================================================================================
 #: `aten.pow.Tensor_Scalar(x32, 2)` where `x32 = x.to(float32)` is the exact widening of a bf16 tensor (GemmaRMSNorm without
 #: residual: `ir.ops.rms_norm`).  ATen's CUDA `pow_tensor_scalar_kernel` special-cases the exponent 2 as `base * base`
-#: (one FMUL, RN); the widening is a Transparent noop, so the definition reads the bf16 source (wave-1 probe `pow2_f32`:
+#: (one FMUL, RN); the widening is a Transparent noop, so the definition reads the bf16 source (GPU probe `pow2_f32`:
 #: `aten.pow(x, 2) == x * x` on 2^20 f32 samples).
 
 @composite("SquareBf16", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, F32)),
@@ -163,7 +156,7 @@ def MeanTriton(B, S, x):
 # ========================================================================================================================
 #: `aten.add.Tensor(v32, c)` — an f32 tensor plus a Python scalar (GemmaRMSNorm: `variance + variance_epsilon`, N = 1 per
 #: row, C = 1e-6).  ATen's CUDA `add_kernel` computes in opmath float: `a + alpha * b` with `alpha = 1` and the scalar
-#: narrowed once to f32 (`f32(1e-6)` = 0x358637BD); one FADD, RN (wave-1 probe `add_eps_f32`: `aten.add(v, 1e-6) ==
+#: narrowed once to f32 (`f32(1e-6)` = 0x358637BD); one FADD, RN (GPU probe `add_eps_f32`: `aten.add(v, 1e-6) ==
 #: f32(v + f32(1e-6))` on 2^20 samples).
 
 @composite("AddScalarF32", 1, ["N", "C"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)),
@@ -213,7 +206,7 @@ def AddWidenedBf16(B, S, x, r):
 #: `aten.rsqrt.default(v32)` on f32 (GemmaRMSNorm: `torch.rsqrt(variance + eps)`, N = 1 per row).  ATen's CUDA
 #: `rsqrt_kernel_cuda` calls `::rsqrt(float)` = libdevice `rsqrtf`, which ptxas emits as MUFU.RSQ with the subnormal range
 #: scaling of `rsqrt.approx.f32` — the registered `RsqrtApprox_v1` (the same instruction sequence vLLM's CUDA RMSNorm kernels
-#: use; wave-1 probe `rsqrt_f32`: equal to `RsqrtApprox` on 1,048,576 of 1,048,576 samples, and NOT the correctly rounded
+#: use; GPU probe `rsqrt_f32`: equal to `RsqrtApprox` on 1,048,576 of 1,048,576 samples, and NOT the correctly rounded
 #: 1/sqrt: 808,881 of them).
 
 @composite("RsqrtF32", 1, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, F32)),
@@ -272,7 +265,7 @@ def MulVecF32(B, S, x, w):
 #: `aten.to.dtype(y32, bfloat16)` — the f32 -> bf16 narrowing copy (GemmaRMSNorm: `x.to(orig_dtype)`; the fused variant's
 #: `residual = x.to(orig_dtype)`).  ATen's CUDA copy kernel converts with `c10::BFloat16(float)`, which on sm_80+ device code is
 #: `__float2bfloat16` = `cvt.rn.bf16.f32`: RNE, NaN -> 0x7FFF — the registered `F2fpBf16_v1` (the same word the b1 GEMM /
-#: RMSNorm stores use; wave-1's exhaustive tables of two other ATen bf16 kernels show the 0x7FFF NaN word).
+#: RMSNorm stores use; the exhaustive GPU tables of two other ATen bf16 kernels show the 0x7FFF NaN word).
 
 @composite("NarrowF32ToBf16", 1, ["N"], lambda S: ((("x", Array(S.N, F32)),), Array(S.N, BF16)),
            conformance="quarantine (op-level evidence only): difftest vs x.to(torch.bfloat16) on the pod")
@@ -288,7 +281,7 @@ def NarrowF32ToBf16(B, S, x):
 #: `logits / self.soft_cap`).  ATen's CUDA `div_true_kernel_cuda` takes the CPU-scalar fast path: `inv_b = opmath_t(1) / b`
 #: computed once on the host in f32 (correctly rounded: `f32(1)/f32(30)` = 0x3D088889) and then `f32(x) * inv_b` per element
 #: (`BUnaryFunctor<MulFunctor<float>>`), converted with `cvt.rn.bf16.f32` (NaN -> 0x7FFF).  On the bf16 domain this equals
-#: `bf16(f32(x) / 30)` at every one of the 65,536 words (checked offline; wave-1 probe `div30` compared the kernel with the
+#: `bf16(f32(x) / 30)` at every one of the 65,536 words (checked offline; the GPU probe `div30` compared the kernel with the
 #: true-division form and found all 65,282 non-NaN words equal), so the two readings are indistinguishable here; the body
 #: follows ATen's actual algorithm.
 
@@ -316,7 +309,7 @@ def Bf16DivScalar(B, S, x, inv=None):
 #: 
 #: Evidence that the stand-in is exact where it is used: both uses take a *bf16-valued* argument (`aten.tanh` on bf16;
 #: `gelu_tanh_kernel`'s `inner` is a function of one bf16 word), so the composed bf16 -> bf16 functions have a finite domain of
-#: 65,536 words, and wave-1's exhaustive GPU tables (`tanh_bf16_table.npy`, `gelu_tanh_bf16_table.npy`) agree with the
+#: 65,536 words, and the exhaustive GPU tables (`tanh_bf16_table.npy`, `gelu_tanh_bf16_table.npy`) agree with the
 #: stand-in-based bodies on every non-NaN word (65,282 / 65,282 and 65,282 / 65,282; NaN inputs give the kernels' 0x7FFF).  CUDA's
 #: `tanhf` (<= 2 ulp) is therefore not distinguishable from RN32(tanh) through either bf16 output on the whole input domain.
 
@@ -354,11 +347,11 @@ def TanhF32Rn(x: int) -> int:
 # ========================================================================================================================
 #: `aten.tanh.default(t [M,N] bf16)` (Gemma-2 `LogitsProcessor`: `torch.tanh(logits / soft_cap)`).  ATen's CUDA `tanh_kernel_cuda`
 #: computes `::tanh(float(x))` = libdevice `tanhf` in opmath float and converts once with `cvt.rn.bf16.f32` (NaN -> 0x7FFF).
-#: wave-1's exhaustive GPU table (`tanh_bf16_table.npy`) equals `bf16(RN32(tanh(f32(x))))` on all 65,282 non-NaN words and
+#: The exhaustive GPU table (`tanh_bf16_table.npy`) equals `bf16(RN32(tanh(f32(x))))` on all 65,282 non-NaN words and
 #: 0x7FFF on the 254 NaN words — the finite domain makes the `TanhF32Rn` stand-in exact here.
 
 @composite("Bf16Tanh", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, BF16)),
-           conformance="quarantine (op-level evidence only): exhaustive table match (wave-1) + difftest vs aten.tanh on the pod")
+           conformance="quarantine (op-level evidence only): exhaustive GPU table match + difftest vs aten.tanh on the pod")
 def Bf16Tanh(B, S, x):
     """`out_j = cvt.rn.bf16.f32(tanhf(f32(x_j)))`."""
     xf = B.batch(P.Bf16ToF32, x, axes=(0,))
@@ -370,7 +363,7 @@ def Bf16Tanh(B, S, x):
 # ========================================================================================================================
 #: `aten.mul.Tensor(t [M,N] bf16, c)` — a bf16 tensor times a Python scalar (Gemma-2 `LogitsProcessor`: `logits * self.soft_cap`
 #: after the tanh).  ATen's CUDA `mul_kernel` for bf16 computes `f32(x) * f32(c)` in opmath float and converts once with
-#: `cvt.rn.bf16.f32` (NaN -> 0x7FFF).  wave-1 probe `mul30`: `aten.mul(bf16, 30.0) == bf16(f32(x) * 30)` on all 65,282 non-NaN
+#: `cvt.rn.bf16.f32` (NaN -> 0x7FFF).  The GPU probe `mul30`: `aten.mul(bf16, 30.0) == bf16(f32(x) * 30)` on all 65,282 non-NaN
 #: words.
 
 @composite("Bf16MulScalar", 1, ["N", "C"], lambda S: ((("x", Array(S.N, BF16)),), Array(S.N, BF16)),
@@ -409,7 +402,7 @@ def Bf16MulScalar(B, S, x, c=None):
 #: 
 #: The `y + 0.0f` was found by the difftest's `zeros` edge kind (every `y = -0` word came back `+0`; 16/20 -> 20/20 cases).
 #: 
-#: Evidence (wave-1 exhaustive table `gelu_tanh_bf16_table.npy`, T[x] for all 65,536 bf16 words, and the factorisation check
+#: Evidence (the exhaustive GPU table `gelu_tanh_bf16_table.npy`, T[x] for all 65,536 bf16 words, and the factorisation check
 #: `out == bf16(f32(T[x]) * f32(y))` on 2^20 random pairs): the body above reproduces T on every non-NaN word (65,282/65,282) and
 #: gives the kernel's 0x7FFF for NaN, including x = -inf where `(0.5f * -inf) * 0` is NaN; the alternative association
 #: `0.5f * (f * (1 + t))` is wrong on 129 words (overflow at |f| > 1.7e38), and FFMA vs separate FMUL+FADD for `inner` is not
@@ -436,7 +429,7 @@ ZERO_BITS = 0x00000000
 
 
 @primitive("GeluTanhMulBf16", 1, [("g", BF16), ("u", BF16)], BF16,
-           conformance="quarantine (op-level evidence only): T[x] exact on 65,282/65,282 non-NaN bf16 words of wave-1's GPU table; "
+           conformance="quarantine (op-level evidence only): T[x] exact on 65,282/65,282 non-NaN bf16 words of the exhaustive GPU table; "
                        "difftest vs torch.ops._C.gelu_tanh_and_mul on the pod (20/20 incl. zeros/max/subnormal/alternating)",
            tables=(("gelu_tanh_bf16", "registered"),))
 def GeluTanhMulBf16(g: int, u: int) -> int:

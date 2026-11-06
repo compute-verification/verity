@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Scope.Fit
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+module
+
+public import Proofs.Flock.Claims.Scope.Fit
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
 # The tables' sizes: `ProvedScope.sizesOk`
@@ -12,6 +14,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
   tables (`fast100` refuses `m < 22`, `Zk.queries0` `m ≤ 24`). So `verdict_sizesOk`: `verifyCmd`'s verdict is the same
   with `sizesOk` as without it, for every session, refusal reasons included.
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

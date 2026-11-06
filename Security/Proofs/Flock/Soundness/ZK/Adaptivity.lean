@@ -1,9 +1,11 @@
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Basic.Finite.Prod
-import Mathlib.Data.Finset.Card
-import Mathlib.Logic.Function.Iterate
-import Mathlib.Algebra.Group.Basic
-import Mathlib.Tactic.Abel
+module
+
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Basic.Finite.Prod
+public import Mathlib.Data.Finset.Card
+public import Mathlib.Logic.Function.Iterate
+public import Mathlib.Algebra.Group.Basic
+public import Mathlib.Tactic.Abel
 
 /-!
 # Zero knowledge: the bijection lemma's backbone, and adaptivity
@@ -29,6 +31,8 @@ the proof uses them.
 Only exact equality lifts this way; a statistical gap at fixed coins does not, which is why the paper proof passes through
 ideal leaves first.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

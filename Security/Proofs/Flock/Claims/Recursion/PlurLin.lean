@@ -1,5 +1,7 @@
-import Definitions.Claims.RecursionLin
-import Proofs.Flock.Claims.Recursion.InnerAbort
+module
+
+public import Definitions.Claims.RecursionLin
+public import Proofs.Flock.Claims.Recursion.InnerAbort
 
 /-!
 # The plurality, linearly: a link finder in place of two forks
@@ -12,6 +14,8 @@ run: draw `u`; if `g u`, draw `u₁ … u_M` until the first where `g` holds, an
 finder's expected cost is at most twice one draw's (`Ex_linkCost_le`), so under `ExpectedCR` at it the miss is at most
 `2·E[c]/2^256 + 1/(M+1)` (`Pr_plur_ecr`): no root, and `M` is the finder's to choose.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

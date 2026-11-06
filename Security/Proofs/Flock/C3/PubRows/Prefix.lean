@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Compose.Family
+module
+
+public import Proofs.Flock.C3.Compose.Family
 
 /-!
 # Piece (g): the public rows per value prefix, and the tape
@@ -12,6 +14,8 @@ compared with `fixedRow`'s), so the obligation is its reading, as `pubCommits_of
 `holoSteps` of the decoded run: the stages in the chain's order, which is the recorded order the model plays
 (`holoTableCL`), so no reordering lemma sits between them.
 -/
+
+@[expose] public section
 
 namespace FlockC3.PubRows
 

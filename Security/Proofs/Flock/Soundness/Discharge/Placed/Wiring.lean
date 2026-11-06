@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Placed.Setup
-import Properties.Flock.Circuit.Keyed
+module
+
+public import Proofs.Flock.Soundness.Discharge.Placed.Setup
+public import Properties.Flock.Circuit.Keyed
 
 /-!
 # The input gates of a circuit's program
@@ -9,6 +11,8 @@ gate 1 the zero, and unit `u`'s `B` sources (its row's message bits) are gates `
 source `src x` (`none`: a forced zero). Two input columns of one unit share a gate exactly when they read one source, or
 both a zero (`insOf_eq_iff`); no two units share a source gate.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Placed
 

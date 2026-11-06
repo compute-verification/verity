@@ -13,8 +13,14 @@ short, is refused at the first unit it differs at.
 `RecVStar.checkAcc` refuses a reads file that names a port twice (`checkNames`): `checkAccReads` reads a name's first
 port, so a second `acc` reading level-major rows passes it unread.
 -/
-import Flock.RecOpen
-import Flock.RecVStar
+module
+
+public import Flock.RecOpen
+public import Flock.RecVStar
+meta import Flock.RecOpen
+meta import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock.Test.RecOpenLeaves
 

@@ -16,10 +16,13 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
   ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`), else not established.
   A leg whose ``server`` is not the block's is carried but not composed.
-* ``composed``: ``verdict`` (`compose`: reject when a composed leg rejects or errs, accept when every leg ran on the block's
-  server and accepted, else pending with what is ``missing``), the run's own composed answer (``onsite``) when it wrote
-  one, and ``joint_horizon``: `JOINT_HORIZON`'s error over this block, the composed legs' errors summed, and at each δ of
-  `DELTAS` that δ times the legs established at it. The statement names five audits; the wipe is ``outside_statement``.
+* ``composed``: ``verdict`` (`compose`: reject when a composed leg rejects or errs, accept when every leg of its product
+  ran on the block's server and accepted, else pending with what is ``missing``), the run's own composed answer
+  (``onsite``, a field name, not the product) when it wrote one, and ``joint_horizon``: `JOINT_HORIZON`'s error over this
+  block, the composed legs' errors summed, and at each δ of `DELTAS` that δ times the legs established at it. The
+  statement names five audits; the wipe is ``outside_statement``. The product (`PRODUCTS`) is onsite's, every leg, unless
+  ``product`` names another: remote's composes sampled proofs and PoUW, and its other legs are ``dropped``, not run and
+  not composed, so they leave its verdict neither pending nor missing.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
   core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
@@ -44,6 +47,8 @@ EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")
 LEGS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
 #: the runner's protocol keys, by leg
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
+#: the legs each product composes: onsite every leg, remote those that need no hardware of the auditor's at the site
+PRODUCTS = {"onsite": LEGS, "remote": ("integrity", "pouw")}
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizonLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}
@@ -108,24 +113,33 @@ def at_deltas(leg: str, quantity: Mapping[str, Any], error: Fraction) -> dict[st
 
 def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real") -> dict[str, Any] | None:
     """One leg of the record from its runner row (or, for the wipe, its leg document); None for a row the runner marks
-    ``missing``."""
+    ``missing``. Its answer is the row's verdict, reason, commitment and public outputs, and its profile's ``placement``
+    where the answer has one (which host ran each party)."""
     if row.get("verdict") == "missing":
         return None
     if source not in ("real", "fixture"):
         raise ValueError(f"source {source!r}: real or fixture")
     a = row["answer"]
     quantity, error, error_from = _quantity(name, row)
+    answer = {k: a.get(k) for k in ("verdict", "reason", "commitment", "public")}
+    placement = a["profile"].get("placement") if isinstance(a.get("profile"), Mapping) else None
+    if placement is not None:
+        answer["profile"] = {"placement": placement}
     return {"protocol": a["protocol"], "owner": row.get("owner"), "server": server, "source": source,
-            "answer": {k: a.get(k) for k in ("verdict", "reason", "commitment", "public")},
+            "answer": answer,
             "quantity": quantity, "error": str(error), "error_from": error_from, "at": at_deltas(name, quantity, error),
             "runs": list(runs)}
 
 
-def compose(server: str, legs: Mapping[str, Any]) -> dict[str, Any]:
-    """The composed verdict and the JointHorizonLive error over the block (module docstring)."""
-    here = {k: v for k, v in legs.items() if v is not None and v["server"] == server}
-    elsewhere = sorted(k for k, v in legs.items() if v is not None and v["server"] != server)
-    missing = sorted(k for k in LEGS if k not in here)
+def compose(server: str, legs: Mapping[str, Any], product: str = "onsite") -> dict[str, Any]:
+    """The composed verdict of ``product``'s legs and the JointHorizonLive error over the block (module docstring); a
+    product other than onsite's names itself and its ``dropped`` legs."""
+    if product not in PRODUCTS:
+        raise ValueError(f"product {product!r}: not one of {sorted(PRODUCTS)}")
+    composes = PRODUCTS[product]
+    here = {k: v for k, v in legs.items() if k in composes and v is not None and v["server"] == server}
+    elsewhere = sorted(k for k, v in legs.items() if k in composes and v is not None and v["server"] != server)
+    missing = sorted(k for k in composes if k not in here)
     verdicts = {k: v["answer"]["verdict"] for k, v in here.items()}
     if any(v in ("reject", "error") for v in verdicts.values()):
         verdict = "reject"
@@ -140,7 +154,13 @@ def compose(server: str, legs: Mapping[str, Any]) -> dict[str, Any]:
           "at": {str(d): {"error_sum": str(d * sum(1 for k in accepted if here[k]["at"][str(d)]["holds"])),
                           "not_established": sorted(k for k in accepted if not here[k]["at"][str(d)]["holds"])}
                  for d in DELTAS}}
-    return {"verdict": verdict, "legs": verdicts, "missing": missing, "elsewhere": elsewhere, "joint_horizon": jh}
+    named = {} if product == "onsite" else {"product": product, "dropped": sorted(k for k in LEGS if k not in composes)}
+    return {"verdict": verdict, "legs": verdicts, "missing": missing, "elsewhere": elsewhere, "joint_horizon": jh, **named}
+
+
+def dropped_ran(legs: Mapping[str, Any], product: str) -> list[str]:
+    """The legs ``product`` drops that ran nonetheless: a dropped leg is one the block didn't run."""
+    return sorted(k for k in LEGS if k not in PRODUCTS[product] and legs.get(k) is not None)
 
 
 def monitoring_period(deployment: Mapping[str, Any], error_sum: Fraction) -> dict[str, Any]:
@@ -157,10 +177,12 @@ def monitoring_period(deployment: Mapping[str, Any], error_sum: Fraction) -> dic
 
 
 def from_period(report: Mapping[str, Any], *, steps: tuple[int, int], deployment: Mapping[str, Any],
-                extra: Mapping[str, Mapping[str, Any]] | None = None, source: str = "real") -> dict[str, Any]:
+                extra: Mapping[str, Mapping[str, Any]] | None = None, source: str = "real",
+                product: str = "onsite") -> dict[str, Any]:
     """The record of one runner report (``verity/all-protocols-period/v1`` or ``-window/v1``) whose loop served ``steps``
-    ``[lo, hi)`` on its node. ``extra``: legs the runner doesn't run, by leg name, each ``{row, server, runs, source}`` with
-    ``row`` the leg's document (``{answer, ...}``)."""
+    ``[lo, hi)`` on its node, composed for ``product``. ``extra``: legs the runner doesn't run, by leg name, each
+    ``{row, server, runs, source}`` with ``row`` the leg's document (``{answer, ...}``). A leg the product drops that ran
+    is a ValueError."""
     if report.get("format") not in EXTENDS:
         raise ValueError(f"{report.get('format')}: not one of {EXTENDS}")
     lo, hi = steps
@@ -175,7 +197,9 @@ def from_period(report: Mapping[str, Any], *, steps: tuple[int, int], deployment
     legs["wipe"] = None
     for name, x in (extra or {}).items():
         legs[name] = leg(name, x["row"], server=x["server"], runs=x["runs"], source=x.get("source", "real"))
-    composed = compose(server, legs)
+    if ran := dropped_ran(legs, product):
+        raise ValueError(f"{', '.join(ran)}: legs the {product} product drops, which this block ran")
+    composed = compose(server, legs, product)
     onsite = report.get("composed") or {}
     composed["onsite"] = {k: onsite.get(k) for k in ("protocol", "verdict", "reason")} if onsite else None
     which = {"period": report["period"]} if "period" in report else {"window": report["window"]}
@@ -203,7 +227,13 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
             bad[f"leg:{name}"] = "its source is neither real nor fixture"
         if lg["at"] != at_deltas(name, lg["quantity"], frac(lg["error"])):
             bad[f"leg:{name}"] = "its certificates at the deltas are not its quantity's at its error"
-    want = compose(server, record["legs"])
+    product = record["composed"].get("product", "onsite")
+    if product not in PRODUCTS:
+        bad["composed:product"] = f"not one of {sorted(PRODUCTS)}"
+        return bad
+    if ran := dropped_ran(record["legs"], product):
+        bad["legs"] = f"{', '.join(ran)}: legs the {product} product drops, which the block ran"
+    want = compose(server, record["legs"], product)
     got = {k: v for k, v in record["composed"].items() if k != "onsite"}
     for k in want:
         if got.get(k) != want[k]:

@@ -1,6 +1,8 @@
-import Definitions.Core.Guarantees.Challenger
-import Proofs.Core.Game.Basic
-import Proofs.Core.Game.Prob
+module
+
+public import Definitions.Core.Guarantees.Challenger
+public import Proofs.Core.Game.Basic
+public import Proofs.Core.Game.Prob
 
 /-!
 # The sample from a challenger's coin: proof
@@ -14,6 +16,8 @@ Its witnesses: `SampleAfterRecorded_honest`, a log that releases coins around a 
 premise, where the bound holds; and `SampleAfterRecorded_nontrivial`, at a log that flips before it records and meets the
 other two premises (`SampleAfterRecorded_nontrivial_log`), where the bound fails.
 -/
+
+@[expose] public section
 
 namespace Verity
 

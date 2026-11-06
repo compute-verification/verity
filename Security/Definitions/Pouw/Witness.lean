@@ -1,4 +1,6 @@
-import Definitions.Pouw.Dither
+module
+
+public import Definitions.Pouw.Dither
 
 /-!
 # The witness machine, protocol and period that `WorkSound`'s witnesses are stated at (trusted)
@@ -32,6 +34,8 @@ over these definitions, and `Proofs.Pouw.DitherWitness` proves every premise of
 * The headline's bounds at the witness, prover by prover: `twε` (`ε_A = 1/7 + ln 2 / 2`) and `twκ` (`κ_A = 1/2`),
   with the advice size `twBadv` and no walk or log (`twξ`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Witness
 
