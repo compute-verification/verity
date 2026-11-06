@@ -165,7 +165,9 @@ docs-only change reruns nothing; a nightly uncached check must agree, and a disa
 only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, and its low-risk members (no Lean, lock or
 soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alone, runs the full check on its tip itself,
 and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate; a red step's culprit is
-reverted on `checked` (how a PR lands: the team skill).
+reverted on `checked` (how a PR lands: the team skill). A ready mark admits a PR: the sync's own merge onto `next` (a
+conflict, drive.toml's `landing_gates`) is the only check before it joins, and a body naming no live goal draws a warning,
+never a refusal.
 
 ## Lean
 

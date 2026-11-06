@@ -26,7 +26,7 @@ FIX_BODY = "Lane `lane-{n}`. Fixes suite `pkg`."
 
 
 def _red(h: Review, key: str = "suite pkg") -> None:
-    """``key`` red on `checked` with no culprit named, so nothing reverts it (`Driver._red_clock`)."""
+    """``key`` red on `checked` with no culprit named, so nothing reverts it (`Driver._revert_reds`)."""
     state = h.q.load_state()
     pl = state["drive"]["postland"]
     pl["red"] = {key: {"tip": pl["verified"], "ids": ["r-red"], "first": "x", "culprit": None}}
