@@ -429,7 +429,7 @@ def _flat(pieces: tuple) -> list:
 def unit_templates8(shape, side: str) -> list[SpecializedDefinition]:
     """The side's unit templates under the cut, in the order its root body first uses them (`pc8.query`)."""
     b, a = (_flat(pieces8(shape.k, shape.row_k, shape.dev, s)) for s in ("b", "a"))
-    tile = pc8.templates(shape.k, shape.tile, shape.dev, shape.hidden)["tile"]
+    tile = pc8.templates(shape.k, shape.tile, shape.dev, shape.hidden, "h0")["tile"]
     return {"weight": b, "call": a + [tile], "check": b + a + [tile]}[side]
 
 

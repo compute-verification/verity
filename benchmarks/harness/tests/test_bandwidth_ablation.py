@@ -65,7 +65,7 @@ def test_the_ablations_use_only_the_arms_supported_names(modules):
 
 def test_the_ablation_spec_runs_the_credited_spans_and_top_up_off_arms_against_plain_first(modules):
     bench_arm, ablation = modules
-    spec, bandwidth = resolve_spec(SPEC), resolve_spec("llama31-8b-fp8-1gpu-bandwidth")
+    spec, bandwidth = resolve_spec(SPEC), resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
     arms = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [a.id for a in arms] == ["bandwidth-plain", "bandwidth-audit", "bandwidth-plain-spans", "bandwidth-audit-spans",
                                     "bandwidth-plain-spans-no-topup", "bandwidth-audit-spans-no-topup"]
@@ -81,5 +81,6 @@ def test_the_ablation_spec_runs_the_credited_spans_and_top_up_off_arms_against_p
     assert not {"VERITY_VLLM_BENCH_TOPUP", "VERITY_VLLM_BENCH_SPANS"} & set(spec.env)
     assert spec.reps % 2 == 0
     assert replace(bandwidth.preset, id=spec.preset.id) == spec.preset
-    same = dict(id=spec.id, arms=spec.arms, arm_modules=spec.arm_modules, reps=spec.reps, preset=spec.preset)
+    same = dict(id=spec.id, arms=spec.arms, arm_modules=spec.arm_modules, arm_settings=spec.arm_settings, reps=spec.reps,
+                preset=spec.preset)
     assert replace(bandwidth, **same) == spec

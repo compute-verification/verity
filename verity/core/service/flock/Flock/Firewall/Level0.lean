@@ -67,6 +67,11 @@ def Level0.toIn (l : Level0) : Link.In where
 def up (below : Array ByteArray) : Array ByteArray :=
   (Array.range (below.size / 2)).map fun i => Sha512.hash (below[2 * i]! ++ below[2 * i + 1]!)
 
+/-- Compiled code runs `Link.nodesPar`; the kernel and every proof see `up`. `@[csimp]` rewrites only code compiled after
+it, so it stays above `tower`. -/
+@[csimp] theorem up_eq_nodesPar : @up = @Link.nodesPar :=
+  funext fun below => (Link.nodesPar_eq below).symm
+
 /-- A Merkle tree over the leaves `lf q` (`q < 2^d`), `k` layers up: its top layer, and its layers from the leaves to it,
 each hashed once (`tower_fst`, `tower_snd`). -/
 def tower (d : Nat) (lf : Nat → ByteArray) : Nat → Array ByteArray × Array (Array ByteArray)

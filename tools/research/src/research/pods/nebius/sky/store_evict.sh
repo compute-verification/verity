@@ -34,6 +34,8 @@ if [ -z "$TOOL" ] || [ ! -d "$TOOL/research" ]; then
   exit 1
 fi
 args=(--target-free-gb "$FREE" --runs --runs-dir "$RUNS")
+# a node's runs are collected from its custody upload, so its window stays 30 min (the tool's default is a day, for agent VMs)
+grep -q -- '"--quiet-min"' "$TOOL/research/store/cli.py" 2> /dev/null && args+=(--quiet-min 30)
 srcnote=
 if [ -n "$SRCDIR" ] && grep -q -- '"--src-dir"' "$TOOL/research/store/cli.py" 2> /dev/null; then
   args+=(--src-dir "$SRCDIR")

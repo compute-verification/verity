@@ -1,4 +1,4 @@
-"""D11 (PROTOCOL.md §17.1): `Net.ofRows` refuses an expanded circuit whose output group ends past its unit's slot,
+"""D11 (`verity/ml/flock/verifier/README.md`): `Net.ofRows` refuses an expanded circuit whose output group ends past its unit's slot,
 `col + words > 2^unitLog / 128`, so a region at an output group's column (`Circuit.outRegion`) stays inside the slot. The
 statement is `_bit_row_toy`'s: its unit has 1281 useful rows (a 2^11-row slot, 16 words) and one output group of one word,
 moved here with the public file rebound to the moved circuit. Without the refusal, setup accepts every one of them.

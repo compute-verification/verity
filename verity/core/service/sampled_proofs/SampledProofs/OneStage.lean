@@ -3,7 +3,7 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `program` (its descriptor), `query`, `law`
   (the agreed rule: `{"law": "subset", "k"}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, `{"law": "stratified" | "work",
-  "k"}`; the protocol refuses `bernoulli` at `0 < p < 1`, `paramsOfJson`, as the sampled audit's soundness statement
+  "k"}`; the protocol refuses `bernoulli` at every `p`, `paramsOfJson`, as the sampled audit's soundness statement
   doesn't cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`, what its layout derives),
   `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's `registered`, when truthy, a list of
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
@@ -133,7 +133,7 @@ private def logRecord (j : Json) : V Json := do
   return j
 
 /-- The parameters as parsed, before `paramsOfJson`'s refusal of the law: the stream's run reads them and refuses the law
-itself (`Run.run`, `shapes`). -/
+its rule names itself (`Run.run`, `bernoulli`). -/
 def paramsParsed (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let keys := if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS
@@ -255,12 +255,11 @@ def paramsParsed (j : Json) : V Params := do
       "windows is named in held (or pinned)")
   pure p
 
-/-- The parameters (`paramsParsed`), with a `bernoulli` law at `0 < p < 1` refused (`Draw.countVaries`): its drawn count
-varies, which the sampled audit's soundness statement doesn't cover. -/
+/-- The parameters (`paramsParsed`), with every `bernoulli` law refused, at any `p` (`Draw.bernoulli`): the sampled
+audit's soundness statement covers none. -/
 def paramsOfJson (j : Json) : V Params := do
   let p ← paramsParsed j
-  if Draw.countVaries p.verifier.law then
-    throw "the law is bernoulli at 0 < p < 1, which the sampled audit's soundness statement doesn't cover (its drawn count varies)"
+  if Draw.bernoulli p.verifier.law then throw Draw.BERNOULLI
   return p
 
 def commitmentOf (b : ByteArray) : V Commitment := do

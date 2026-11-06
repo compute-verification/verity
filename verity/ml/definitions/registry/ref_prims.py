@@ -334,14 +334,6 @@ def _retype(t, v: Value):
     raise TypeError(t)
 
 
-def _widen1(B, x: _Coll, DT: str) -> _Coll:
-    return x if DT == "f32" else B.call(P.Bf16ToF32, x)
-
-
-def _narrow1(B, y: _Coll, DT: str) -> _Coll:
-    return y if DT == "f32" else B.call(P.F32ToBf16Rn, y)
-
-
 def _seq_sum(B, terms: list[_Coll]) -> _Coll:
     """acc_0 = Const32[+0]; acc_{i+1} = F32Add(acc_i, terms[i]) — sequential, ascending index."""
     acc = B.call(b1.ZERO32)

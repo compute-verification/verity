@@ -27,6 +27,7 @@ import sys
 import time
 from pathlib import Path
 
+from . import challengers as CH
 from . import circuit as FC
 from . import typed_statement as TS
 from .bench import PER_PROOF_LOG2, PROFILES, _OURS, _guard, _lines, _probe, _quota, _sampler, _wait_serving, subbatches, tcp_rtt
@@ -107,16 +108,18 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
     tg = _guard()
     guard = tg.Guard(sampler=_sampler).start()
     t1 = time.time()
-    parts, rcs, rss = [], [], None
+    parts, rcs, rss, chs = [], [], None, []
     for i, _ in enumerate(subs):
-        srv, addr = None, a.verifier
+        srv, addr, ch = None, a.verifier, None
         if addr:
             _probe(addr)
         else:
             addr = "127.0.0.1:%d" % (7500 + total.bit_length())
             log = d / f"serve-s{i}.log"
+            ch = CH.start(d / f"challenger-s{i}") if CH.wanted(os.environ) else None
             srv = subprocess.Popen(["nice", "-n", "5", a.bin, "serve", "--listen", addr, "--out", str(d / f"sessions-s{i}"), "--pin", pin,
-                                    "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables],
+                                    "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables,
+                                    *(["--sessions", str(a.runs + 1), *ch[1]] if ch else [])],
                                    stdout=open(log, "w"), stderr=subprocess.STDOUT)
             _wait_serving(log, srv)
         try:
@@ -132,9 +135,9 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
                 _OURS.discard(pr.pid)
         finally:
             if srv is not None:
-                time.sleep(1)
-                srv.terminate()
-                srv.wait()
+                _close(srv, bounded=ch is not None)
+        if ch:
+            chs.append(CH.end(d / f"challenger-s{i}", ch[0], CH.records(d / f"sessions-s{i}")))
         live = _lines(d / f"prove-s{i}.txt", "LIVE") if (d / f"prove-s{i}.txt").exists() else []
         parts.append(live)
         if (d / f"prove-s{i}.time").exists():
@@ -146,22 +149,38 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
     wall = time.time() - t1
     contention = guard.stop()
     ok = (len(parts) == len(subs) and all(rc == 0 for rc in rcs) and all(len(x) == a.runs + 1 for x in parts)
-          and all(r.get("accepted") is True and "e2e_s" in r for x in parts for r in x))
+          and all(r.get("accepted") is True and "e2e_s" in r for x in parts for r in x) and all(c["ok"] for c in chs))
     live = _merge(parts) if ok else []
     timed = [r for r in live if not r.get("warm")]
     ok = ok and len(timed) == a.runs
     return {"total": total, "rc": max(rcs) if rcs else None, "ok": ok, "live": live, "timed": timed, "gen_s": gen_s, "wall_s": wall,
-            "contention": contention, "peak_rss": rss, "dir": d.name, "subbatches": subs}
+            "contention": contention, "peak_rss": rss, "dir": d.name, "subbatches": subs} | ({"challengers": chs} if chs else {})
+
+
+def _close(srv: subprocess.Popen, bounded: bool) -> None:
+    """A loopback server after its prover: a bounded one (on a challenger) exits after its last session's record; another is
+    stopped."""
+    if bounded:
+        try:
+            srv.wait(timeout=120)
+        except subprocess.TimeoutExpired:
+            print(f"loopback server {srv.pid} still open 120 s after its prover: stopped", file=sys.stderr, flush=True)
+    else:
+        time.sleep(1)
+    srv.terminate()
+    srv.wait()
 
 
 def loopback_probe(a, q: dict, out: Path, net: Path, pin: str) -> dict:
     d = out / q["dir"]
     stage_point(a, a.low, a.input_set, q["total"], d / "verifier", public=True)
-    per = []
+    per, chs = [], []
     for i, _ in enumerate(q["subbatches"]):
         log = d / f"loopback-serve-s{i}.log"
+        ch = CH.start(d / f"loopback-challenger-s{i}") if CH.wanted(os.environ) else None
         srv = subprocess.Popen([a.bin, "serve", "--listen", "127.0.0.1:7591", "--out", str(d / f"loopback-sessions-s{i}"), "--pin", pin,
-                                "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables],
+                                "--instances", str(d / "verifier" / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables,
+                                *(["--sessions", str(a.runs + 1), *ch[1]] if ch else [])],
                                stdout=open(log, "w"), stderr=subprocess.STDOUT)
         try:
             _wait_serving(log, srv)
@@ -169,14 +188,18 @@ def loopback_probe(a, q: dict, out: Path, net: Path, pin: str) -> dict:
                              "--instances", str(d / f"instances-s{i}.bin"), "--circuit", str(net), *a.tables],
                             stdout=open(d / f"loopback-prove-s{i}.txt", "w"), stderr=open(d / f"loopback-prove-s{i}.err", "w"))
         finally:
-            srv.terminate()
-            srv.wait()
+            _close(srv, bounded=ch is not None)
+        if ch:
+            chs.append(CH.end(d / f"loopback-challenger-s{i}", ch[0], CH.records(d / f"loopback-sessions-s{i}")))
+            if not chs[-1]["ok"]:
+                continue
         for r in _lines(d / f"loopback-prove-s{i}.txt", "LIVE"):
             if not r.get("warm") and r.get("accepted") and r.get("calls"):
                 per.append(r["wait_s"] / r["calls"])
     return {"seconds_per_round": statistics.median(per) if per else None, "sessions": len(per),
             "method": f"loopback probe in this run: {len(per)} timed sessions ({a.runs} per sub-batch) of the plateau point's instance "
-                      f"files with the same binary against `serve` on 127.0.0.1, median per-round coin wait (wait_s / calls)"}
+                      f"files with the same binary against `serve` on 127.0.0.1, median per-round coin wait (wait_s / calls)"} \
+        | ({"challengers": chs} if chs else {})
 
 
 def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
@@ -252,7 +275,8 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
     doc = {"schema": contract.RESULT_SCHEMA, "run_id": os.environ.get("RESEARCH_RUN_ID"), "workload_fingerprint": fp,
            "validation": {"status": "passed" if p["ok"] else "failed", "checker": f"{Path(a.bin).name} serve (live verifier, R1-R8 replay)",
                           "detail": f"{sum(1 for r in p['live'] if r.get('accepted'))}/{len(p['live'])} sessions accepted",
-                          "evidence": [f"{p['dir']}/sessions/index.jsonl"]},
+                          "evidence": [f"{p['dir']}/sessions/index.jsonl"],
+                          **({"challengers": p["challengers"]} if p.get("challengers") else {})},
            "measurements": ms, "measurement_files": [], "artifacts": [], "sweep": sweep, "contention": p["contention"],
            "interaction": {"rtt_method": ("net.rtt_ms = round trip of a 64-byte Ping request on the open session connection to the "
                                           "verifier (answered Ok by the verifier's server, no session state), 30 probes right after "
@@ -276,19 +300,25 @@ def result(a, input_set, low, p: dict, sweep: dict, pin: str) -> dict:
 
 def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: str) -> int:
     """The verifier pod's side: its own public files for every point and sub-batch (from its own input set, never the prover's),
-    then one ``serve --sessions`` per sub-batch in the prover's order (probe + warm + runs)."""
+    then one ``serve --sessions`` per sub-batch in the prover's order (probe + warm + runs), under FLOCK_CHALLENGER=1 each on its
+    own challenger (``challenger-s<j>``, audited after it closes); nonzero if any server or challenger failed."""
     jobs = []
     for i, total in enumerate(plan):
         d = out / f"p{i}-{total}"
         subs, _ = stage_point(a, low, input_set, total, d, public=True)
         jobs += [(d, j) for j in range(len(subs))]
     print(f"PLAN\t{json.dumps({'points': plan, 'servers': len(jobs)})}", flush=True)
+    bad = False
     for d, j in jobs:
+        ch = CH.start(d / f"challenger-s{j}") if CH.wanted(os.environ) else None
         rc = subprocess.call([a.bin, "serve", "--listen", a.listen, "--out", str(d / f"sessions-s{j}"), "--pin", pin,
                               "--instances", str(d / f"instances-s{j}.bin"), "--circuit", str(net), "--sessions", str(a.runs + 2),
-                              "--operator", a.operator, *a.tables], stdout=open(d / f"serve-s{j}.log", "w"), stderr=subprocess.STDOUT)
-        print(f"SERVED\t{d.name}/s{j} rc={rc}", flush=True)
-    return 0
+                              "--operator", a.operator, *a.tables, *(ch[1] if ch else [])],
+                             stdout=open(d / f"serve-s{j}.log", "w"), stderr=subprocess.STDOUT)
+        c = CH.end(d / f"challenger-s{j}", ch[0], CH.records(d / f"sessions-s{j}")) if ch else None
+        print(f"SERVED\t{d.name}/s{j} rc={rc}" + (f" challenger={json.dumps(c)}" if c else ""), flush=True)
+        bad = bad or rc != 0 or (c is not None and not c["ok"])
+    return 1 if bad else 0
 
 
 def main(argv=None) -> int:

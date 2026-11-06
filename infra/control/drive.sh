@@ -1,9 +1,11 @@
 #!/bin/sh
 # Drive (INF-129, ci's CI-78): `research queue drive` ticks, ci's landing automation, from the control pod. Each pass fetches
-# origin/main into /data/drive/verity and runs one tick from that tree's tools/research (main's code, no canary), in that
+# origin/main into /data/drive/verity and runs one tick from that tree's tools/research, checked out at the commit
+# /data/drive/deployed pins (`drive.sh deploy SHA`, a landed commit) or else at main's tip, in that
 # checkout, as lane ci (RESEARCH_LANE), with its flags from tools/verity/check/drive.toml at main (read fresh each tick, their one
 # source) plus whatever /data/drive/args holds (`#` lines skipped): only flags drive.toml's `command_line` lets override its keys
-# (`--on`, `--first`), and a `--config FILE` there is refused unless every key it sets has main's value; then sleeps 120 s.
+# (`--on`), and `--priority-file /data/drive/priority`, drive's priority list, whose order is the landing order (a `--first`
+# there refuses the tick); a `--config FILE` there is refused unless every key it sets has main's value; then sleeps 120 s.
 # The queue's state is root's ~/.research/queue/verity.state.json, on the volume. Both git clones, drive's checkout ($REPO) and
 # the queue's (~/.research/queue/verity, a symlink), live on the container disk under $FAST: on the volume's NFS git cost
 # about 4.3 min a tick (ci's tick profile, 26 Oct). `fast_clones` seeds each from its copy on the volume ($DIR/verity,
@@ -77,7 +79,9 @@ store_links() {
     rm -rf "$RESEARCH_STORE/$d.old"
   done
 }
-# origin's main in $REPO: `research merge` refuses any checkout but branch main (CI-169), the tick and `queue` take a detached one
+# origin's main in $REPO: `research merge` refuses any checkout but branch main (CI-169); the tick and `queue` take a detached one,
+# at the commit $DIR/deployed pins (`deploy`) when it names one, else at main's tip, so a landing of drive's own code changes what
+# drive runs only once it is deployed.  A pin $REPO can't find fails the tick rather than run another commit.
 checkout() {
   fast_clones || return 1
   store_links || return 1
@@ -86,8 +90,28 @@ checkout() {
       || git -C "$c" config credential.helper "$HELPER" || return 1
   done
   git -C "$REPO" fetch -q origin main || return 1
-  if [ "$1" = merge ]; then git -C "$REPO" checkout -q -f -B main FETCH_HEAD
-  else git -C "$REPO" checkout -q -f --detach FETCH_HEAD; fi
+  if [ "$1" = merge ]; then git -C "$REPO" checkout -q -f -B main FETCH_HEAD; return; fi
+  pin=FETCH_HEAD
+  if [ -e "$DIR/deployed" ]; then
+    pin=$(grep -m1 -xE '[0-9a-f]{40}' "$DIR/deployed") \
+      || { echo "drive: $DIR/deployed names no commit; \`drive.sh deploy SHA\` or \`drive.sh deploy main\`" >&2; return 1; }
+    git -C "$REPO" cat-file -e "$pin^{commit}" 2>/dev/null || git -C "$REPO" fetch -q origin checked || true
+  fi
+  git -C "$REPO" checkout -q -f --detach "$pin" \
+    || { echo "drive: can't check out $pin in $REPO; \`drive.sh deploy main\` runs main's tip" >&2; return 1; }
+}
+# `drive.sh deploy SHA`: drive runs SHA, a commit `checked` or `main` holds (landed, so reviewed), from the next tick on, whatever
+# lands after it, until the next deploy; `drive.sh deploy main` follows main's tip again.
+deploy() {
+  [ "$1" = main ] && { rm -f "$DIR/deployed"; echo "drive: runs main's tip from the next tick"; return 0; }
+  git -C "$REPO" fetch -q origin +refs/heads/main:refs/remotes/origin/main || return 1
+  git -C "$REPO" fetch -q origin +refs/heads/checked:refs/remotes/origin/checked 2>/dev/null || true
+  sha=$(git -C "$REPO" rev-parse -q --verify "$1^{commit}") \
+    || { echo "drive: $1 is no commit $REPO has after fetching main and checked" >&2; return 1; }
+  git -C "$REPO" merge-base --is-ancestor "$sha" refs/remotes/origin/main 2>/dev/null \
+    || git -C "$REPO" merge-base --is-ancestor "$sha" refs/remotes/origin/checked 2>/dev/null \
+    || { echo "drive: $sha is on neither checked nor main: deploy only landed code" >&2; return 1; }
+  echo "$sha" > "$DIR/deployed.new" && mv "$DIR/deployed.new" "$DIR/deployed" && echo "drive: runs $sha from the next tick"
 }
 # Under the tick lock: each train checkout in $TRAIN_TREES unchanged for an hour and no process's cwd, with its log, and the queue
 # clone's worktree records of what is gone
@@ -126,11 +150,13 @@ case ${1:-} in
         echo "drive: no tick running"; exit 0 ;;
   status) [ -f "$STOP" ] && echo "drive: stopped ($STOP)" || echo "drive: started"
           flock -n "$TICK" true && echo "drive: no tick running" || echo "drive: a tick is running"
+          echo "drive: runs $(cat "$DIR/deployed" 2>/dev/null || echo "main's tip")"
           tail -n 5 "$LOG" 2>/dev/null; exit 0 ;;
   once) shift; (tick "$@"); exit $? ;;
   queue|merge) (locked "$@"); exit $? ;;
+  deploy) deploy "${2:-}"; exit $? ;;
   '') ;;
-  *) echo "drive.sh [start|stop|status|once [FLAGS]|queue ARGS|merge ARGS]: with no argument, the loop" >&2; exit 2 ;;
+  *) echo "drive.sh [start|stop|status|once [FLAGS]|queue ARGS|merge ARGS|deploy SHA|main]: with no argument, the loop" >&2; exit 2 ;;
 esac
 mkdir -p "$DIR"
 exec 9> /root/drive.lock

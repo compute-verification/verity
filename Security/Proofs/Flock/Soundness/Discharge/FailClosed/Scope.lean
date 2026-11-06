@@ -32,7 +32,7 @@ check is `ProvedScope.checkP` (`ScopeP`, `VerifiesP`): it refuses hidden outputs
 
 `Checks` is `verifyCmd`'s call `ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome
 registered.isSome` argument for argument. `tags` is `Inputs.tags` without `--zk` and `zkTags` under it (`--statement`'s,
-after `withCoins`, then `Zk.tags` at `maskLogOf circuitB` and `count`, on the coin tree of `tableNames count`). The
+with `Zk.tags` at `maskLogOf circuitB` and `count`, on the coin tree of `tableNames count`). The
 circuit, public file and tables are the bytes `verifyCmd` sets the session up from, and `count` is `--session-tables`.
 The public-inputs flag is `false`: with `--public-inputs` the check refuses every session, and without it `buildSession`
 passes `setupTables` no public input words, the setup `Accepts` models. The registered flag `reg` is whether the verifier
