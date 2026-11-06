@@ -462,7 +462,8 @@ def embedFFast (g : Array F128) : Array F256 := parTab 4096 (fun i => F256.ofF g
 theorem parCat_eq {α : Type} (ch : Nat → Array α) (f : Nat → α) (b : Nat) :
     ∀ a, (∀ i, i < a → ch i = (Array.range b).map fun j => f (i * b + j)) →
       parCat ch a = (Array.range (a * b)).map f
-  | 0, _ => by simp [parCat]
+  | 0, _ => by
+    simp only [parCat, Nat.zero_mul, Array.range_eq_empty_iff.mpr rfl, Array.map_empty, Array.foldl_empty]
   | a + 1, h => by
     have ih := parCat_eq ch f b a fun i hi => h i (by omega)
     unfold parCat at ih ⊢
