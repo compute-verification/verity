@@ -21,6 +21,11 @@ pin, d9105ea80) decides those rows deterministically from:
 (`EngineCore.step`, `step_with_batch_queue`). It refuses what it doesn't model (priority policy, spec decode, KV
 connectors, multimodal, LoRA, structured output, aborts and stop strings) rather than guess.
 
+**The certified tick** (``--admit tick``, `verity_vllm.pipeline.serve_admit.TickGate`) removes the timing input: the engine
+adds a request when a logical clock T has passed the close of its network-certifier release bucket, and T is a function of
+the steps (`Tick`, registered with the engine class). `replay(tick=..., released=...)` runs that rule from the certified
+release buckets alone, so it asks nothing.
+
 **The residual advice** is the timing input, coded online inside the replay. A request's visibility matters only at an
 *open* step: one whose waiting loop reached the queue's end with room to admit it. At every other step it would be blocked
 whether it had arrived or not, and when the engine is quiet (nothing running or waiting) the next arrival is what starts
@@ -88,6 +93,27 @@ class Engine:
                    watermark=float(config.get("watermark", 0.0) or 0.0),
                    scheduler_reserve_full_isl=bool(config.get("scheduler_reserve_full_isl", True)),
                    policy=str(config.get("policy", "fcfs")))
+
+
+@dataclass(frozen=True)
+class Tick:
+    """The certified tick's registered constants, in microseconds: the network certifier's bucket τ_b, and the engine
+    class's step times τ_sat (a step after which the waiting queue is nonempty) and τ_free (one after which it is empty).
+    The serving side's is `verity_vllm.pipeline.serve_admit.Tick`; this stdlib copy keeps the replay loadable alone."""
+
+    bucket_us: int
+    sat_us: int
+    free_us: int
+
+    def __post_init__(self) -> None:
+        for name in ("bucket_us", "sat_us", "free_us"):
+            v = getattr(self, name)
+            if type(v) is not int or v <= 0:
+                raise ValueError(f"tick {name}: a positive integer of microseconds, not {v!r}")
+
+    def close(self, a: int) -> int:
+        """When bucket a closes: (a + 1)·τ_b."""
+        return (a + 1) * self.bucket_us
 
 
 @dataclass(frozen=True)
@@ -731,23 +757,37 @@ def _whatif(s: _Sched, queue: Queue, p: _Pass, i: int, now: bool, want: int) -> 
 
 
 def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int] | None = None,
-           decide: Decide | None = None, max_steps: int | None = None) -> Replay:
+           decide: Decide | None = None, tick: Tick | None = None, released: Sequence[int] | None = None,
+           max_steps: int | None = None) -> Replay:
     """Run the scheduler over `requests` (in the order they reached the engine) and return the executed steps.
 
     Exactly one of: `admit`, each request's `before_step` (it is added before the first `schedule` after `admit[i]`
-    executed steps, as the engine core adds it), or `decide(i, k, open)`, asked at each open step k whether the next
-    request i has arrived (an arrival into a quiet engine is added without asking)."""
+    executed steps, as the engine core adds it); `decide(i, k, open)`, asked at each open step k whether the next
+    request i has arrived (an arrival into a quiet engine is added without asking); or `tick` with `released`, each
+    request's certified release bucket (the requests in release order, so nondecreasing), added by the certified tick.
+    Under the tick, T starts at 0; before each iteration of the engine core's loop, when nothing is running or waiting T
+    jumps to the next request's bucket close, and every request whose bucket has closed by T ((a + 1)·τ_b ≤ T) is added,
+    except at an iteration that only frees finished requests (nothing running or waiting), which adds none; after each
+    step that schedules a token, T advances by τ_sat if the waiting queue is nonempty and by τ_free if it is empty."""
     n = len(requests)
-    if (admit is None) == (decide is None):
-        raise ValueError("give exactly one of admit and decide")
+    if (admit is not None) + (decide is not None) + (tick is not None) != 1:
+        raise ValueError("give exactly one of admit, decide and tick")
+    if (tick is None) != (released is None):
+        raise ValueError("give the release buckets with the tick, and only with it")
     if admit is not None:
         if len(admit) != n:
             raise ValueError(f"{len(admit)} admission steps for {n} requests")
         if any(admit[k] > admit[k + 1] for k in range(n - 1)):
             raise ValueError("admission steps must be nondecreasing in arrival order (FCFS)")
+    if released is not None:
+        if len(released) != n:
+            raise ValueError(f"{len(released)} release buckets for {n} requests")
+        if any(type(a) is not int or a < 0 for a in released) or any(released[k] > released[k + 1] for k in range(n - 1)):
+            raise ValueError("release buckets are ints ≥ 0, nondecreasing in release order")
     s = _Sched(engine, requests)
     out = Replay(steps=[], finish=[None] * n, admitted=[None] * n, forced=[False] * n, asked=[[] for _ in range(n)])
     nxt = 0
+    T = 0
     queue: Queue = deque()
     limit = max_steps if max_steps is not None else 4 * (sum(r.prompt_len + r.output_len for r in requests) + n) + 64
 
@@ -770,9 +810,16 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
         return True
 
     def top() -> bool:
+        nonlocal T
         if admit is not None:
             while nxt < n and admit[nxt] <= len(out.steps):
                 add(s.quiet())
+        elif tick is not None and released is not None:
+            if not (s.quiet() and s.finished_ids):
+                if s.quiet() and nxt < n:
+                    T = max(T, tick.close(released[nxt]))
+                while nxt < n and tick.close(released[nxt]) <= T:
+                    add(s.quiet())
         elif nxt < n and s.quiet():
             add(True)
         if not s.has_requests() and not queue:
@@ -785,9 +832,12 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
         return True
 
     def schedule() -> tuple[Step, dict[int, bool]]:
+        nonlocal T
         step, samples = s.schedule(on_open if decide is not None else None)
         if step.rows:
             out.steps.append(step)
+            if tick is not None:
+                T += tick.sat_us if (s.waiting or s.skipped) else tick.free_us
         return step, samples
 
     def executed(step: Step, samples: dict[int, bool]) -> None:
@@ -801,12 +851,24 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
 # --- traces ------------------------------------------------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class Releases:
+    """A tick-admitted run's certified releases, as the network certifier (or the trace corpus's stand-in for it) gave
+    them: the registered tick, the certifier run's origin (unix seconds; bucket a is [origin + a·τ_b, origin + (a + 1)·τ_b)),
+    and each request's release number N and bucket a, in the trace's engine order."""
+
+    tick: Tick
+    origin_unix: float
+    n: tuple[int, ...]
+    bucket: tuple[int, ...]
+
+
 @dataclass
 class Trace:
     """A served run's step trace (`verity-vllm/step-trace/v1`), its requests in the order they reached the engine, with
     the certifier's view of its timing when the trace has a clock: each request's ingress time and each step's release
     time (its output's tokens leaving through the egress certifier), or each kept output's own (`output_t`) where the
-    recorder saw them leave one by one."""
+    recorder saw them leave one by one; and `releases`, a run served under the certified tick's releases."""
 
     engine: Engine
     ids: list[str]
@@ -818,6 +880,7 @@ class Trace:
     release_t: list[float | None]
     header: dict[str, Any] = field(default_factory=dict)
     output_t: list[list[float]] | None = None
+    releases: Releases | None = None
 
     def first_scheduled(self) -> list[int]:
         first = [-1] * len(self.requests)
@@ -963,9 +1026,14 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
     or with `ingress="warden"` the server's own arrival stamp (`arrival`, its body read), the order vLLM schedules in.
     That is not what design v3's warden certifies: behind it the engine still follows the body read, and the warden's
     release order (a, ordinal) leaves order exceptions to charge (the corpus's `<trace>.released` traces carry it as
-    their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give."""
+    their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give.
+
+    A trace served under ``--admit tick`` (meta.json's ``tick``: τ and the certifier run's origin) has each request's
+    release number and bucket from the corpus's stand-in network certifier (`requests.jsonl`'s ``release`` and
+    ``bucket``), as `Trace.releases`."""
     d = Path(d)
-    argv = json.loads((d / "meta.json").read_text())["server_argv"]
+    meta = json.loads((d / "meta.json").read_text())
+    argv = meta["server_argv"]
 
     def opt(name: str) -> str | None:
         return argv[argv.index(name) + 1] if name in argv else None
@@ -1037,8 +1105,15 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
             output_t.append(ts)
     elif egress != "engine":
         raise ValueError(f"egress {egress!r}: engine or client")
+    releases = None
+    if (tk := meta.get("tick")) is not None:
+        if unnumbered := [rid for rid in order if reqs[rid].get("release") is None or reqs[rid].get("bucket") is None]:
+            raise ValueError(f"{len(unnumbered)} requests of a tick trace without a release number and bucket: "
+                             f"{unnumbered[:4]}")
+        releases = Releases(Tick(int(tk["bucket_us"]), int(tk["sat_us"]), int(tk["free_us"])), float(tk["origin_unix"]),
+                            tuple(int(reqs[rid]["release"]) for rid in order), tuple(int(reqs[rid]["bucket"]) for rid in order))
     return Trace(engine=engine, ids=order, requests=requests, before_step=first, steps=steps, emits=emits,
-                 ingress_t=ingress_t, release_t=release, output_t=output_t,
+                 ingress_t=ingress_t, release_t=release, output_t=output_t, releases=releases,
                  header={"kind": "header", "schema": "vllm-trace-corpus/v1", "config": dict(engine.__dict__), "source": str(d),
                          "egress": egress, "ingress": ingress})
 
