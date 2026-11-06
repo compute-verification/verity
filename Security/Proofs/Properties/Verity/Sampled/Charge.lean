@@ -1,6 +1,5 @@
 module
 
-public import Proofs.Properties.Verity.Sampled.Assembled
 public import Proofs.Properties.Verity.Sampled.LeafErr
 public import Proofs.Properties.Verity.Sampled.Stops
 public import Proofs.Properties.Verity.Sampled.Walk
@@ -25,7 +24,11 @@ the potential from no tree open, the hiding term:
   and an opening pays its round's class error out of it: the device opens each round at most once.
 * **The stops' term** (`couplesErr_le_of_charge`, `couplesErr_sampleMap_le`): where each stop's opening asks for the
   count of coins the stop releases (`RoundCounts`, `LinkCounts`), the stops' term at the sample-coupled coin map is
-  within the hiding term, and the coupling, assembled, needs no bound on it (`couplingTarget_assembled_counts`).
+  within the hiding term. A frame of another count leaves every class empty, so the empty class as the coupling
+  charges it (`openEmpty`) is then 1.
+* **The stops' term at the stops' counts** (`openEmptyAt`, `couplesErr_sampleMap_le_at`): with the empty class held
+  only where the frame asks for the stop's count, each stop's gap and empty class are within its node's class error
+  at every count, and the stops' term is within the hiding term at every strategy.
 -/
 
 @[expose] public section
@@ -102,6 +105,13 @@ theorem avg_pathCharge_ite_le (Γ : Game α → ℝ≥0∞) {c : Prop} {dc : Dec
   by_cases hc : c
   · exact avg_pathCharge_le_of_eq Γ (ite_eq_left hc) (ht hc)
   · exact avg_pathCharge_le_of_eq Γ (ite_eq_right hc) (hu hc)
+
+/-- **A written coin falls short of uniform by at most 1.** -/
+theorem shortfall_le_one {P C : Type} [Fintype P] [Fintype C] [Nonempty C] (w : P → C → C) : shortfall w ≤ 1 := by
+  unfold shortfall
+  refine (Finset.sum_le_sum (g := fun _ => (Fintype.card C : ℝ≥0∞)⁻¹) fun x _ => tsub_le_self).trans_eq ?_
+  rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul,
+    ENNReal.mul_inv_cancel (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)]
 
 namespace Pos
 
@@ -399,6 +409,82 @@ theorem avg_pathCharge_game_le (σ : Strategy (V.game θ F c)) :
       (fun log => avg_pathCharge_finish_le e (fun log' => goesOn_finish (V.signer θ) θ F c σ.1 log')
         (V.signer θ) θ F c σ.1 log) _ _ [] _ [] fun _ => rfl) σ.2
 
+/-! ## The empty class at a count -/
+
+/-- **An empty class at a count**: `g'` is an opening's coin node in a play that ends in `E`, its frame asks for `n`
+coins, and none of the rounds its canonical description flips among is released as `bits`. -/
+def EmptyAtCount (E : List Release → Game β) (g' : Game β) (n : ℕ) (bits : List Bool) : Prop :=
+  ∃ o, openingOf E g' = some o ∧ o.n = n ∧ ¬ (o.classOf bits).Nonempty
+
+/-- **The opening's empty class at a count**: the probability that the node's frame asks for `n` coins and no round of
+the node is released as `bits` of a uniform `P`. -/
+noncomputable def openEmptyAt {P : Type} [Fintype P] (E : List Release → Game β) (g' : Game β) (n : ℕ)
+    (bits : P → List Bool) : ℝ≥0∞ :=
+  prCoin fun c => EmptyAtCount E g' n (bits c)
+
+theorem openEmptyAt_le_openEmpty {P : Type} [Fintype P] {g' : Game β} (n : ℕ) (bits : P → List Bool) :
+    openEmptyAt E g' n bits ≤ openEmpty E g' bits := by
+  unfold openEmptyAt openEmpty
+  exact prCoin_mono fun _ hu => hu.elim fun o h => ⟨o, h.1, h.2.2⟩
+
+/-- **A gap and an empty class at a count within the node's class error**, from the bound at that count: where the
+frame asks for another count, the empty class at the count is none, and either the frame's count fits its block, every
+class is empty and the written round is the tape's own, or it doesn't and the class error is 1. -/
+theorem openGap_add_openEmptyAt_le {P : Type} [Fintype P] [Nonempty P] {g' : Game β} (n : ℕ) (bits : P → List Bool)
+    (hl : ∀ u, (bits u).length = 128 * n)
+    (h : (∀ o, openingOf E g' = some o → o.n = n) → openGap E g' bits + openEmpty E g' bits ≤ openErr e E g') :
+    openGap E g' bits + openEmptyAt E g' n bits ≤ openErr e E g' := by
+  by_cases hn : ∀ o, openingOf E g' = some o → o.n = n
+  · exact (add_le_add le_rfl (openEmptyAt_le_openEmpty n bits)).trans (h hn)
+  · push_neg at hn
+    obtain ⟨o, ho, hon⟩ := hn
+    have h0 : openEmptyAt E g' n bits = 0 := by
+      unfold openEmptyAt
+      refine le_antisymm ((prCoin_mono fun u hu => ?_).trans_eq prCoin_false) zero_le
+      obtain ⟨o', ho', hn', -⟩ := hu
+      obtain rfl := Option.some.inj (ho.symm.trans ho')
+      exact hon hn'
+    rw [h0, add_zero]
+    by_cases hb : o.n ≤ o.T.spec.block
+    · have hp : (fun u => pickIn (o.classOf (bits u))) = fun (_ : P) (d : o.Openable) => d := by
+        funext u d
+        unfold pickIn
+        refine dite_eq_right fun hne => ?_
+        obtain ⟨d', hd'⟩ := hne
+        rw [OpeningAt.classOf, Finset.mem_filter] at hd'
+        have h1 := congrArg List.length hd'.2
+        rw [length_opened, hl, min_eq_left hb] at h1
+        exact hon (by omega)
+      have hG : openGap E g' bits = 0 := by
+        unfold openGap
+        rw [ho]
+        show shortfall (fun u => pickIn (o.classOf (bits u))) = 0
+        rw [hp]
+        exact shortfall_id
+      rw [hG]
+      exact zero_le
+    · rw [openErr_eq_one e ho (by omega)]
+      unfold openGap
+      rw [ho]
+      show shortfall (fun u => pickIn (o.classOf (bits u))) ≤ 1
+      exact shortfall_le_one _
+
+/-- **A round's gap and empty class at its count within the node's class error**, at every count the frame asks
+for. -/
+theorem openGap_add_openEmptyAt_le_openErr {g' : Game β} (m : ℕ) :
+    openGap E g' (roundBits e : (Fin m → 𝔽) → List Bool) +
+      openEmptyAt E g' m (roundBits e : (Fin m → 𝔽) → List Bool) ≤ openErr e E g' :=
+  openGap_add_openEmptyAt_le e m _ (length_roundBits_enc e) (openGap_add_openEmpty_le_openErr e)
+
+/-- **A link's gap and empty class at its count within the node's class error**, at every count the frame asks
+for. -/
+theorem openGap_add_openEmptyAt_le_openErr_link {g' : Game β} (m : ℕ) :
+    openGap E g' (linkBits e : (Fin 2 → Fin m → 𝔽) → List Bool) +
+      openEmptyAt E g' (m + m) (linkBits e : (Fin 2 → Fin m → 𝔽) → List Bool) ≤ openErr e E g' :=
+  openGap_add_openEmptyAt_le e (m + m) _ (fun u => by
+    rw [linkBits, List.length_append, length_roundBits_enc, length_roundBits_enc]
+    ring) (openGap_add_openEmpty_le_openErr_link e)
+
 /-! ## The stops' term -/
 
 /-- **Each later stop's opening asks for its round's count**: at every stop the projection reaches and every
@@ -489,29 +575,26 @@ theorem couplesErr_sampleMap_le (A : Live) (rd : Reading A.rounds) (σ : Strateg
     (fun x _ => openGap_add_openEmpty_le_openErr_link e (hL x))
     ((avg_pathCharge_game_le e V θ F c σ).trans_eq (treePotential_nil e A))
 
-
-omit θ F c in
-/-- **The coupling, assembled, at the session's own coins, off the openings' counts**: `couplingTarget_assembled_src`
-with its stops' term within the hiding term by `couplesErr_sampleMap_le`, wherever at each commitment and strategy
-each stop's opening asks for the count of coins the stop releases (`RoundCounts`, `LinkCounts`). -/
-theorem couplingTarget_assembled_counts (k : Verity.Registration.Composite) (K : Constructions V)
-    (dev : Exchange → Properties.Challenger.History) (rd : Readings)
-    (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
-      Decoders A.rounds A.Reg)
-    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) (m : ℕ)
-    (A : Live) (θ : ByteArray) (F : Array ByteArray) (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
-    (hS : ∀ c, Binding.SignsPlay V dev θ F c) (hL : A.Lb 0 = m * 64)
-    (hRC : ∀ c σ, RoundCounts V θ F c A (rd A θ F c) σ (D A θ F c σ))
-    (hLC : ∀ c σ, LinkCounts V θ F c A (rd A θ F c) σ)
-    (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hW : WritesView A)
-    (hM : ∀ c σ, MovesReach V θ F c k
-      (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A (rd A θ F c) σ
-      (D A θ F c σ) (sampleMaps e V rd label (afterAt V k) (srcCoinsAt m) A θ F c σ)
-      (linkEmpty e (finish (V.signer θ) θ F c σ.1)) (roundEmpty e (finish (V.signer θ) θ F c σ.1))) :
-    CouplingTarget V k (K.assembled e dev k rd D label (afterAt V k) (srcCoinsAt m)) A θ F :=
-  couplingTarget_assembled_src e V k K dev rd D label m A θ F hP hS hL
-    (fun c σ => couplesErr_sampleMap_le e V θ F c A (rd A θ F c) σ (D A θ F c σ) (label θ F c σ)
-      (afterAt V k θ F c σ) (srcCoinsAt m A) (avg_srcCoinsAt hL) (hRC c σ) (hLC c σ))
-    hA hDg hW hM
+/-- **The stops' term at the sample-coupled coin map, with each stop's empty class at the count of coins the stop
+releases, is within the hiding term** at every strategy: each stop's gap and empty class at its count are within its
+node's class error at any count the frame asks for (`openGap_add_openEmptyAt_le_openErr`,
+`openGap_add_openEmptyAt_le_openErr_link`), and the class errors along a play are within the potential from no tree
+open. -/
+theorem couplesErr_sampleMap_le_at (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
+    (D : Decoders A.rounds A.Reg) (label : String) (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
+    (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ ω)) = avg H) :
+    couplesErr V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ)
+      (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+        openEmptyAt (finish (V.signer θ) θ F c σ.1) q.g' s.n (roundBits e : (Fin s.n → 𝔽) → List Bool))
+      (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
+        openEmptyAt (finish (V.signer θ) θ F c σ.1) q.g' (A.mP + A.mP)
+          (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
+      A.hidingTerm :=
+  couplesErr_le_of_charge V θ F c A rd σ D _ (openErr e (finish (V.signer θ) θ F c σ.1))
+    (fun _ => openErr_none e openingOf_ret) (sampleMap_fresh e V θ F c A rd σ label after κ)
+    (avg_sampleMap_start e V θ F c A rd σ label after κ hκ)
+    (fun _ _ _ s _ => openGap_add_openEmptyAt_le_openErr e s.n)
+    (fun _ _ => openGap_add_openEmptyAt_le_openErr_link e A.mP)
+    ((avg_pathCharge_game_le e V θ F c σ).trans_eq (treePotential_nil e A))
 
 end Verity.Sampled
