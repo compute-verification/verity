@@ -143,7 +143,7 @@ def ppls(model, wt_ids, val_ids, args, spec: str) -> dict:
     served(model, args, spec)
     out = {}
     if "wikitext2" in args.ppl_sets:
-        out["wikitext2"] = perplexity(model, wt_ids, args.seq, max_windows=args.wt_windows)
+        out["wikitext2"] = perplexity(model, wt_ids[args.wt_skip * args.seq:], args.seq, max_windows=args.wt_windows)
     if "fineweb_val" in args.ppl_sets:
         out["fineweb_val"] = perplexity(model, val_ids[args.val_skip * args.seq:], args.seq,
                                         max_windows=args.val_tokens // args.seq)
@@ -226,6 +226,7 @@ def main(argv=None) -> int:
     ap.add_argument("--val-tokens", type=int, default=1_048_576)
     ap.add_argument("--ppl-sets", default="wikitext2,fineweb_val", help="the perplexity sets to measure")
     ap.add_argument("--wt-windows", type=int, default=None, help="WikiText-2's first this many windows (default all)")
+    ap.add_argument("--wt-skip", type=int, default=0, help="WikiText-2 windows to skip first (as --val-skip)")
     ap.add_argument("--probe", type=int, default=0, help="WikiText-2 windows to run `quant.Probe` over, served as "
                     "--serve, before training")
     ap.add_argument("--val-skip", type=int, default=0, help="FineWeb-Edu val windows to skip first (a model too slow "
