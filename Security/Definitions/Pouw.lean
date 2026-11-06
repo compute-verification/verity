@@ -92,6 +92,7 @@ public import Definitions.Pouw.PearlC.TileCheck
 public import Definitions.Pouw.PearlC.TileCheck8
 public import Definitions.Pouw.PearlC.TileCheck4
 public import Definitions.Pouw.PearlC.TileCircuit
+public import Definitions.Pouw.PearlC.TileDraw
 public import Definitions.Pouw.PearlC.W1
 public import Definitions.Pouw.PearlC.W1Stop
 public import Definitions.Pouw.PearlC.WholeCircuit
