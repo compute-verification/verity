@@ -27,8 +27,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   is verified. v1's R2 holds only their count, and the session's knowledge soundness reads slot `u` as proof block `u`;
 * **public** (`publicHeld`): the public file's header held to the registration (`Record.matchesPublic`): its scheme,
   roots and their domains and its instance count the record's, and its `units.indices` the population's units in
-  order (`indicesHeld`), so no header written after the draw relabels an instance as another unit; else the check
-  refuses, before any session is verified;
+  order (`indicesHeld`, `indicesHeld_of_publicHeld`), so no header written after the draw relabels an instance as
+  another unit; else the check refuses, before any session is verified;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
@@ -239,6 +239,20 @@ def publicHeld (rec : Json) (pubB : ByteArray) : V Unit := do
   let c := Record.matchesPublic rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids") (getD h "instances")
   if !c.codes.isEmpty then throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
   if !indicesHeld rec h then throw INDICES_WHY
+
+/-- `publicHeld` passes only on a public file whose header's `units.indices` are the registration's population units in
+order (`indicesHeld`): the unit `provedUnits` credits for instance `i` is `i`, fixed by the registration before any coin. -/
+theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} (h : publicHeld rec pubB = .ok ()) :
+    ∃ hd, headerOf pubB = .ok hd ∧ indicesHeld rec hd = true := by
+  unfold publicHeld at h
+  cases hh : headerOf pubB with
+  | error e => simp [hh, bind, Except.bind] at h
+  | ok hd =>
+    refine ⟨hd, rfl, ?_⟩
+    cases hi : indicesHeld rec hd
+    · simp only [hh, hi, bind, Except.bind, Bool.not_false, ↓reduceIte, throw, throwThe, MonadExceptOf.throw] at h
+      split at h <;> simp_all
+    · rfl
 
 /-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`) of the instances the session's
 record drew (`unit_draw.units`), ascending. -/
