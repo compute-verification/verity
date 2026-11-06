@@ -124,7 +124,7 @@ another floor (0: none). Lake runs as many `lean` at once as `LEAN_NUM_THREADS`,
 or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, from the
 process's own cgroup, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
 replay runs at most one thread per `REPLAY_GIB_PER_THREAD` (4 GiB), one such replay at a time (`replay_threads`). An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
-is refused below `SPEC_FLOOR_GIB` (160 GiB; why: note:lean/20261106T1225Z-report-lean-audit-readme-history), and the
+is refused below `SPEC_FLOOR_GIB` (160 GiB; `check.py` says why), and the
 refusal names `--kind lean-audit`, a 280 GiB shape.
 
 **The replay cache and the import closure.** Without `--closure` the replay trusts the package's dependencies (the
@@ -304,9 +304,8 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   "rehashed" where the 32-bit hash still matches, which the landing DM (below) leaves out.
 
 **A changed guarantee is shown when it lands.** A weakened definition leaves every proof valid, so the axiom checks and
-the replay pass it: only the records see it, and only a person can judge it (a case:
-note:lean/20261106T1225Z-report-lean-audit-readme-history). `--update` records the change and prints it: each
-changed guarantee's signature before and after, and each changed definition a guarantee
+the replay pass it: only the records see it, and only a person can judge it. `--update` records the change and prints
+it: each changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
 An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions or
 type hash, a `reads` group, an assumption's digest: what a train's merge of two PRs, each recorded on its own side, can
