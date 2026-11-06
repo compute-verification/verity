@@ -77,6 +77,18 @@ def treeOf (leaves : Array ByteArray) (k : Nat) : Array (Array ByteArray) × Arr
     layers := layers.push cur
   return (layers, cur)
 
+/-- `treeOf` with each level `Level0.up` of the one below, which compiled code runs in tasks (`Level0.upPar`). -/
+def treeOfFast (leaves : Array ByteArray) (k : Nat) : Array (Array ByteArray) × Array ByteArray := Id.run do
+  let mut layers := #[leaves]
+  let mut cur := leaves
+  for _ in [0:k] do
+    cur := Level0.up cur
+    layers := layers.push cur
+  return (layers, cur)
+
+/-- Compiled code runs `treeOfFast`; proofs see `treeOf`. -/
+@[csimp] theorem treeOf_eq_treeOfFast : @treeOf = @treeOfFast := rfl
+
 /-- **A commitment of given rows** under the `hm96-sha512/v1` leaves, salt `q` fitted to 192 bytes, `2^CHUNK` rows to a
 task. -/
 def commitRows (lv : Level) (rows : Array (Array F128)) (salt : Nat → ByteArray) : Commit :=
