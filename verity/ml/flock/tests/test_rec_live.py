@@ -406,7 +406,9 @@ def test_the_challengers_release_log_holds_an_inner_session_on_its_tree_and_refu
     pub, tree = json.loads(RL.record_bytes(coins.record())), proxy.session_record()["coin_tree"]
     assert RL.tree_held_reason(src.log, [("s0", tree, pub)]) is None
     # the Rust server's form opens after root_F and the message, which rec_live's coin server doesn't answer
-    assert "link points are not the coins" in C.sessions_tree_reason(C.coin_trees_of(src.log), [("s0", proxy.session_record())])
+    rec = proxy.session_record()
+    assert "link points are not the coins" in C.sessions_tree_reason(C.coin_trees_of(src.log),
+                                                                      [("s0", dict.fromkeys(rec["link"]["root_b"]), rec)])
 
     def bent(f):
         p = json.loads(json.dumps(pub))
