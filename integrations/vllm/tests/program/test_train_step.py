@@ -5,8 +5,9 @@ bf16, its f32 operation on the widened operands rounded once), and where the ref
 Definitions it names, and to a tolerance against torch; the functional AdamW against `torch.optim.AdamW(foreach=False)`;
 `BoxPermute` against torch's permute; the tiny step in f32 and in bf16 (its linears' operands cast, as autocast casts them); the
 bf16 GEMMs on sm_120 (`training_rules(cc=(12, 0))`), each its captured route's Definition and, on stand-in routes at small
-shapes, bit for bit that route's model; and the lf model's s step derived in reference mode, which is refused at its one op with
-no Definition (`_log_softmax`: `F32LogRn`)."""
+shapes, bit for bit that route's model; the element-wise ops on sm_120 bit for bit against the GPU's arithmetic as torch CPU's
+f32 operations compute it on NaN-free words; and the lf model's s step derived in reference mode, which is refused at its one op
+with no Definition (`_log_softmax`: `F32LogRn`)."""
 from __future__ import annotations
 
 import bisect
@@ -75,14 +76,19 @@ class _IeeeSqrt(TorchDispatchMode):
         return func(*args, **(kwargs or {}))
 
 
-def _run(f, *xs) -> tuple[torch.Tensor, torch.Tensor]:
-    """(the Program's outputs, torch's with IEEE sqrt), each as one flat f32 tensor (bf16 words widened)."""
-    prog = _program(f, *xs)
+def _outputs(prog, *xs) -> torch.Tensor:
+    """The Program's outputs on `xs` as one flat f32 tensor (bf16 words widened)."""
     tab = materialize(prog, [_bits(x) for x in xs])
     got = np.array([tab[g] << 32 - gate_width(prog, g) for g in prog.circuit.root_outputs()], dtype=np.uint32).view(np.float32)
+    return torch.from_numpy(got.copy())
+
+
+def _run(f, *xs, rules=None) -> tuple[torch.Tensor, torch.Tensor]:
+    """(the Program's outputs, torch's with IEEE sqrt), each as one flat f32 tensor (bf16 words widened)."""
+    got = _outputs(_program(f, *xs, rules=rules), *xs)
     with _IeeeSqrt():
         want = torch.cat([t.detach().reshape(-1).float() for t in f(*xs)])
-    return torch.from_numpy(got.copy()), want
+    return got, want
 
 
 def _same_bits(got: torch.Tensor, want: torch.Tensor) -> None:
@@ -125,6 +131,11 @@ def _elementwise(x, y, pos, m, row, col) -> dict:
         "add_scalar": (lambda a: (a + 0.1,), (x,)),
         "mul_scalar": (lambda a: (a * 0.3,), (x,)),
         "div_scalar": (lambda a: (a / 3.0,), (x,)),
+        "add_alpha": (lambda a, b: (torch.add(a, b, alpha=0.95),), (x, y)),
+        "sub_alpha": (lambda a, b: (torch.sub(a, b, alpha=0.3),), (x, y)),
+        "add_scalar_alpha": (lambda a: (a.add(0.5, alpha=-0.01),), (x,)),
+        "mul_mask": (lambda a, k: (a * k,), (x, y > 0)),
+        "mul_mask_row": (lambda a, k: (a * k,), (m, row > 0)),
         "mul_row": (lambda a, r: (a * r,), (m, row)),
         "mul_col": (lambda a, c: (a * c,), (m, col)),
         "neg": (lambda a: (-a,), (x,)),
@@ -143,9 +154,15 @@ def _elementwise(x, y, pos, m, row, col) -> dict:
     }
 
 
+#: a number f32 holds as 1 + 2^-8, a bf16 tie: torch CPU's bf16 add rounds it to 1 (double -> f32 -> bf16; double -> bf16 would
+#: give 1 + 2^-7), and its bf16 mul keeps 1 + 2^-8
+TIE = 1 + 2 ** -8 + 2 ** -30
+
+
 def _elementwise_bf16(x, y, pos, m, row, col) -> dict:
     """The element-wise cases of bf16 values (the f32 inputs rounded) that torch's bf16 kernels compute as one f32 operation rounded
-    to bf16, numbers bf16 holds among them, and of a bf16 and an f32 value, which torch computes in f32."""
+    to bf16, with numbers bf16 holds and numbers it doesn't (which torch CPU rounds to bf16 for `add` and `sub` and keeps for `mul`
+    and `div`), and of a bf16 and an f32 value, which torch computes in f32."""
     xb, yb, pb, mb, rb, cb = (t.to(torch.bfloat16) for t in (x, y, pos, m, row, col))
     return {
         "add": (lambda a, b: (a + b,), (xb, yb)),
@@ -156,6 +173,14 @@ def _elementwise_bf16(x, y, pos, m, row, col) -> dict:
         "sub_scalar": (lambda a: (a - 1.5,), (xb,)),
         "mul_scalar": (lambda a: (a * 0.375,), (xb,)),
         "div_scalar": (lambda a: (a / 3.0,), (xb,)),
+        "add_number": (lambda a: (a + 0.1,), (xb,)),
+        "sub_number": (lambda a: (a - 0.1,), (xb,)),
+        "add_tie": (lambda a: (a + TIE,), (xb,)),
+        "mul_number": (lambda a: (a * 3.4445,), (xb,)),
+        "mul_neg_number": (lambda a: (a * -4.775,), (xb,)),
+        "mul_tie": (lambda a: (a * TIE,), (xb,)),
+        "div_number": (lambda a: (a / 0.1,), (xb,)),
+        "add_mask": (lambda a, k: (a + k,), (xb, y > 0)),
         "one_minus": (lambda a: (torch.empty_like(a).fill_(1.0) - a,), (xb,)),
         "mul_row": (lambda a, r: (a * r,), (mb, rb)),
         "mul_col": (lambda a, c: (a * c,), (mb, cb)),
@@ -398,14 +423,80 @@ def test_log_softmax_refused_with_the_definition_it_needs() -> None:
 
 @pytest.mark.parametrize("f, x, why", [
     (lambda a: (a ** 3,), XB, "rounds in between"), (lambda a: (a ** -2,), POSB, "rounds in between"),
-    (lambda a: (torch.rsqrt(a),), POSB, "rounds in between"), (lambda a: (a ** -0.5,), POSB, "rounds in between"),
-    (lambda a: (a + 0.1,), XB, "bf16 doesn't hold"), (lambda a: (a * 0.1,), XB, "bf16 doesn't hold")])
+    (lambda a: (torch.rsqrt(a),), POSB, "rounds in between"), (lambda a: (a ** -0.5,), POSB, "rounds in between")])
 def test_bf16_rounding_in_between_is_refused(f, x, why: str) -> None:
     """Where torch's bf16 kernel rounds otherwise than once after one f32 operation, the rules refuse: `pow` 3 and -2 round the
-    square to bf16, `rsqrt`'s scalar loop the square root, and `add` rounds a number to bf16 where `mul` keeps its f32 value."""
+    square to bf16, and `rsqrt`'s scalar loop the square root."""
     gm = make_fx(f, tracing_mode="fake")(x)
     u = derive_graph(gm, (x,), mode="reference", rules=training_rules(), name="T").unsupported
     assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered" and why in u.hint, u
+
+
+def _f32_of(s: float) -> torch.Tensor:
+    return torch.tensor(s, dtype=torch.float32)
+
+
+def _recip(s: float) -> torch.Tensor:
+    return torch.tensor(np.float32(1.0) / np.float32(s))
+
+
+#: the GPU's arithmetic (`training_rules(cc=...)`), each case with that arithmetic in torch CPU's f32 operations, which on NaN-free
+#: words are the GPU's (its NaN words are the `_v2` Definitions'): a number is its f32 word, which a bf16 add doesn't round first,
+#: and a division by a number is the product by its f32 reciprocal; an add with alpha is one fma, as on the CPU
+GPU = {
+    "add_number_bf16": (lambda a: (a + 0.1,), (XB,), lambda a: (a.float() + _f32_of(0.1)).bfloat16()),
+    "sub_tie_bf16": (lambda a: (a - TIE,), (X67B,), lambda a: (a.float() - _f32_of(TIE)).bfloat16()),
+    "mul_number_bf16": (lambda a: (a * 3.4445,), (XB,), lambda a: (a.float() * _f32_of(3.4445)).bfloat16()),
+    "div_number_bf16": (lambda a: (a / 0.1,), (X67B,), lambda a: (a.float() * _recip(0.1)).bfloat16()),
+    "div_number": (lambda a: (a / 3.0,), (X,), lambda a: a * _recip(3.0)),
+    "div_static_vector": (lambda a: (a / torch.full((16,), 3.0),), (X,), lambda a: a / 3.0),
+    "div_value_bf16": (lambda a, b: (a / b,), (XB, POSB[0, :1].reshape(())), lambda a, b: (a.float() / b.float()).bfloat16()),
+    "add_alpha": (lambda a, b: (torch.add(a, b, alpha=0.95),), (X67, Y67), lambda a, b: torch.add(a, b, alpha=0.95)),
+    "mul_mask": (lambda a, k: (a * k,), (M67, ROW67 > 0), lambda a, k: a * k),
+}
+
+
+@pytest.mark.parametrize("name", sorted(GPU))
+def test_gpu_binary_is_the_gpus_arithmetic(name: str) -> None:
+    f, xs, gpu = GPU[name]
+    got = _outputs(_program(f, *xs, rules=training_rules(cc=CB.TRAIN_CC)), *xs)
+    _same_bits(got, gpu(*xs).float().reshape(-1))
+
+
+def test_gpu_and_cpu_numbers_differ() -> None:
+    """The cases where the GPU's arithmetic is not the CPU's give different words on their data: a bf16 add of a number bf16
+    doesn't hold, and an f32 division by a number (a bf16 one rounds both to the same word)."""
+    for name in ("add_number_bf16", "sub_tie_bf16", "div_number"):
+        f, xs, _gpu = GPU[name]
+        cpu, gpu = (_outputs(_program(f, *xs, rules=r), *xs) for r in (None, training_rules(cc=CB.TRAIN_CC)))
+        assert not torch.equal(cpu.view(torch.int32), gpu.view(torch.int32)), name
+
+
+@pytest.mark.parametrize("n", [1, 7, 33, 1000])
+def test_add_alpha_is_one_fma_at_every_length(n: int) -> None:
+    """An f32 add with alpha is one fma at every element, torch CPU's vectorized body and its scalar tail alike (lengths below,
+    between and above its vector widths); on the GPU the kernel's `a + alpha * b` is one FFMA, which a capture checks."""
+    a, b = _data(n, seed=30), _data(n, seed=31)
+    for rules in (None, training_rules(cc=CB.TRAIN_CC)):
+        _same_bits(*_run(lambda x, y: (torch.add(x, y, alpha=-0.0123),), a, b, rules=rules))
+
+
+def test_gpu_binary_definitions_and_refusals() -> None:
+    """At `cc` every element-wise add, sub, mul and div is the GPU's Definition (`_v2`, NaN `F32_NAN_PTX`; a bf16 result
+    `F2fpBf16_v1`), a same-shape product included, which without `cc` the default rules' `MulRef_v1` computes; a division by a
+    0-d static tensor is refused at `cc`, and a bf16 add with alpha everywhere."""
+    def f(a, b, c, d):
+        return a * b, a * 2.0 + 1.0, torch.add(a, b, alpha=0.5), a - b, c / d
+
+    ids = [{nd.fn.id.split("{")[0] for nd in _program(f, X, Y, XB, POSB, rules=r).root.body.nodes}
+           for r in (None, training_rules(cc=CB.TRAIN_CC))]
+    assert {"MulRef_v1", "F32Mul_v1", "F32Add_v1", "F32Fma_v1", "F32Sub_v1", "F32Div_v1", "F32ToBf16Rn_v1"} <= ids[0], ids[0]
+    assert {"F32Mul_v2", "F32Add_v2", "F32Fma_v2", "F32Sub_v2", "F32Div_v2", "F2fpBf16_v1"} <= ids[1], ids[1]
+    assert not {"MulRef_v1", "F32Mul_v1", "F32Add_v1", "F32Fma_v1", "F32Sub_v1", "F32Div_v1", "F32ToBf16Rn_v1"} & ids[1], ids[1]
+    assert "0-d static" in _gpu_refusal(lambda a: (a / torch.full((), 3.0),), X).hint
+    gm = make_fx(lambda a, b: (torch.add(a, b, alpha=0.5),), tracing_mode="fake")(XB, XB)
+    u = derive_graph(gm, (XB, XB), mode="reference", rules=training_rules(), name="T").unsupported
+    assert isinstance(u, Unsupported) and "alpha != 1" in u.hint, u
 
 
 def _adamw_inputs(seed: int = 0, n: int = 64):

@@ -16,9 +16,10 @@ from dataclasses import dataclass
 import torch
 
 from verity.ml.circuits.refs import Affine, Coll, Concat, Strided, concat
-from verity_vllm.program.frontend.derive import StaticIndex, refuse
+from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant, refuse
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule
+from verity_vllm.program.frontend.rules.patterns import _constant_tensor
 from verity_vllm.program.frontend.strided_views import (_EXPLICIT_LIMIT, _constant_run, _expand, _permute, _row_major, _strided_refs,
                                                         _tensor_type)
 from verity_vllm.program.frontend.value_types import shape_of
@@ -281,18 +282,22 @@ _VIEWS = {aten.view.default, aten._unsafe_view.default, aten.reshape.default, at
           aten.alias.default}
 _MAKERS = {aten.scalar_tensor.default, aten.ones_like.default, aten.zeros_like.default, aten.full_like.default, aten.full.default,
            aten.ones.default, aten.zeros.default, aten.fill.Scalar, aten.where.self}
+_FLOATS = (torch.float32, torch.bfloat16, torch.float16)
 
 
 class StaticFloats(ViewRule):
     """A float tensor fixed without reading a value: `scalar_tensor`, `ones_like` / `zeros_like` / `full_like` / `fill.Scalar` (of
-    any tensor: only its shape is read), `full` / `ones` / `zeros`, `where.self` of a static condition and static values, and views
-    of these, computed by torch on the CPU (`StaticFloat`)."""
-    info = _info("StaticFloats", "aten float makers, fills, where.self of static operands, and views of static float tensors",
-                 "the result is float32 or bfloat16", "every operand read for its value is static",
-                 "no gates: constants are made where read", kind="view")
+    any tensor: only its shape is read), `full` / `ones` / `zeros`, `where.self` of a static condition and static values, a tensor
+    constant the graph holds (`lift_fresh_copy` of a table; an integral one is a `StaticIndex`), a static tensor converted to a
+    float dtype (`_to_copy`), and views of these, computed by torch on the CPU (`StaticFloat`). A conversion is torch CPU's, which
+    is the GPU's on every value but a NaN, so a static NaN converted is refused."""
+    info = _info("StaticFloats", "aten float makers, fills, where.self of static operands, tensor constants, conversions and views "
+                 "of static float tensors", "the result is float32, bfloat16 or float16", "every operand read for its value is "
+                 "static", "a conversion of no NaN", "no gates: constants are made where read", kind="view")
+    accepts_constants = True
 
     def targets(self):
-        return _MAKERS | _VIEWS
+        return _MAKERS | _VIEWS | {aten.lift_fresh_copy.default, aten._to_copy.default}
 
     def _static(self, ctx, a):
         if isinstance(a, torch.fx.Node):
@@ -305,19 +310,39 @@ class StaticFloats(ViewRule):
         return a
 
     def applies(self, node, ctx):
-        if ctx.dtype_of(node) not in (torch.float32, torch.bfloat16):
-            return "the result is not float32 or bfloat16"
         t = node.target
+        if t is aten.lift_fresh_copy.default:
+            c = ctx.val(node.args[0])
+            if not isinstance(c, _LiftedConstant) or _constant_tensor(ctx, c) is None:
+                return "not a tensor constant whose values the graph holds"
+            return True
+        if ctx.dtype_of(node) not in _FLOATS:
+            return "the result is not float32, bfloat16 or float16"
         if t in _VIEWS:
             return True if isinstance(ctx.val(node.args[0]), StaticFloat) else "the operand is not a static float tensor"
         if t is aten.where.self:
             if not all(isinstance(self._static(ctx, a), (torch.Tensor, int, float)) for a in node.args[:3]):
                 return "where.self of a value"
+        if t is aten._to_copy.default:
+            src = self._static(ctx, node.args[0])
+            if not isinstance(src, torch.Tensor):
+                return "the operand is not static"
+            if ctx.dtype_of(node.args[0]) != ctx.dtype_of(node) and src.is_floating_point() and bool(torch.isnan(src).any()):
+                return "numerics_unregistered: a static NaN converted (torch CPU's NaN word is not the GPU's)"
         return True
 
     def emit(self, node, ctx):
         t, S = node.target, ctx.shape_of_node(node)
-        if t in _VIEWS:
+        if t is aten.lift_fresh_copy.default:
+            c = _constant_tensor(ctx, ctx.val(node.args[0])).detach().cpu().clone()
+            if not c.is_floating_point():
+                ctx.define(node, StaticIndex(c))
+                ctx.record(self, node, {"shape": list(c.shape), "dtype": str(c.dtype)}, emitted="static")
+                return
+            out = c
+        elif t is aten._to_copy.default:
+            out = self._static(ctx, node.args[0])
+        elif t in _VIEWS:
             args = [self._static(ctx, a) if isinstance(a, torch.fx.Node) else a for a in node.args]
             out = t(*args, **{k: v for k, v in node.kwargs.items() if k != "memory_format"})
         elif t is aten.where.self:

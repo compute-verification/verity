@@ -1,6 +1,7 @@
 """`verity.ml.definitions.registry.cublas_bf16`'s training bindings: `train_route` is the route table the capture fitted
 (`TRAIN_CAPTURE`) and refuses what it did not capture, `route_gemm` binds each route's Definition on bits, which equals that
-route's numpy model (`bf16_gemm_check.cublas_route_rows`) on spread and cancelling words, `aligned_bounds` makes the B 8 x S 512
+route's numpy model (`bf16_gemm_check.cublas_route_rows`) on spread and cancelling words (an unsplit one at a K that is not a
+multiple of 16 on the operands padded with +0 words), `aligned_bounds` makes the B 8 x S 512
 dW's grid.z slices, and `attention_bmm` is `BatchedGemm_v2` at each bmm's reduction and output lengths.  Each model's agreement
 with sm_120's words is the capture's (`cublas_bf16.TRAIN_CAPTURE`); the grid.z dW's is also held here on words of a full-tensor
 dump of that step that tell its k-tile layouts apart (`fixtures/cublas_dw_grid_z_sm120.npz`), and the lf model's s step's routes
@@ -191,6 +192,22 @@ def test_route_gemm_on_bits_is_the_route_model(route) -> None:
         got = np.asarray(BS.evaluate_words(target, x, np.broadcast_to(w, (len(x), *w.shape)))).astype(np.uint16)
         assert np.array_equal(got, BC.cublas_route_rows(route, x, w)), route
     assert all((got != BC.cublas_route_rows(r, x, w)).all() for r in ROUTES if r != route), "the cancelling words tell routes apart"
+
+
+def test_an_unsplit_route_pads_k_to_whole_k16_steps() -> None:
+    """At a K that is not a multiple of 16 an unsplit route is `GemmPad_v2`: on bits, the route's model on x and W's rows padded
+    with +0 words at the back to the next multiple of 16.  A split route there is refused."""
+    from verity.ml.circuits.boolean.trace import word_of
+    from verity.ml.definitions.boolean import boolean_version
+
+    target = CB.route_gemm({"kernel": "nosplit"}, 40, 3)
+    assert target.id == f"GemmPad_v2{{T=40,K=48,N=3,{HOP}}}"
+    assert boolean_version(word_of(target)).id == target.id.replace("_v3}", "_v2}")
+    for x, w in BC.route_probe_rows(16, 40, 3, np.random.default_rng(117)):
+        got = np.asarray(BS.evaluate_words(target, x, np.broadcast_to(w, (len(x), *w.shape)))).astype(np.uint16)
+        assert np.array_equal(got, BC.cublas_route_rows({"kernel": "nosplit"}, *(np.pad(a, ((0, 0), (0, 8))) for a in (x, w))))
+    with pytest.raises(ValueError, match="K_positive_multiple_of_16"):
+        CB.route_gemm({"kernel": "serialk", "SPLIT_K": 2}, 40, 3)
 
 
 def test_aligned_route_on_bits_takes_each_residue_tile_first() -> None:
