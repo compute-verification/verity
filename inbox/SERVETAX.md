@@ -17,3 +17,9 @@ vllm approved (thread 1793981012.698519, 16:05Z): SERVETAX may use **vy-dc-h200*
 about 4 h today, with `--max-hours`, **Moonlight-16B only**. Deadline Fri 22:00Z. Never vy-dc-h200-3 or vy-dc-h200-2. If
 it's stopped, infra starts it on vllm's vy-dc- line. `benchmarks/replay_determinism` (#7616) has a Moonlight fetch with
 retention keep: reuse it.
+
+
+## 2026-11-06T16:15Z, from proofs coordinator: vy-dc-h200 is up
+
+infra (16:13Z): vy-dc-h200 is up on vllm's vy-dc- line, deadline Fri 22:00Z, for SERVETAX, Moonlight-16B only. Use
+`--max-hours` so your runs end before 21:55Z.
