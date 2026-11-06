@@ -25,11 +25,13 @@
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
                                     holds it, exiting with lean's status, and last the axiom probe: each theorem whose
                                     axioms go beyond the standard three (`sorryAx` too), or none (on a project machine with
-                                    --on NODE [--pool P])
+                                    --on NODE [--pool P]); --siblings: then fail on a name another module of its package
+                                    declares too
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
 import os
 import re
@@ -43,7 +45,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parents[2]
 ROOT = HERE.parents[1]
 LAKEFILES = ("lakefile.lean", "lakefile.toml")
-USAGE = "verity lean try FILE [--on NODE [--pool P] [--as LANE]]"
+USAGE = "verity lean try FILE [--siblings] [--on NODE [--pool P] [--as LANE]]"
 #: the node whose pool `verity lean try --on` takes when --pool names none, and that pool
 TRY_NODE, TRY_POOL = "vy-nebius-cpu-1", "research"
 #: `research run --on`'s line naming the run it started (or refused)
@@ -117,9 +119,18 @@ def _probe():
     return m
 
 
-def _lean_here(file: str) -> int:
+def _siblings():
+    """`tools/verity/lean/siblings.py`, which `lean_changed.py --try` runs too."""
+    spec = importlib.util.spec_from_file_location("lean_siblings_for_verity_cli", HERE / "lean" / "siblings.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _lean_here(file: str, siblings: bool = False) -> int:
     """`lake env lean` in the directory of the nearest lakefile above FILE, against that package's built imports, on a copy
-    of FILE with the axiom probe appended (`axiom_probe.py`), whose line is the last; lean's status on FILE's own lines."""
+    of FILE with the axiom probe appended (`axiom_probe.py`), whose line is the last; lean's status on FILE's own lines.
+    With ``siblings``, the copy's build then goes through the sibling check (`siblings.py`), whose status it takes."""
     path = (Path(file) if Path(file).is_file() else _tree(file) / file).resolve()
     pkg = next((d for d in path.parents if any((d / name).is_file() for name in LAKEFILES)), None)
     if not path.is_file() or path.suffix != ".lean" or pkg is None:
@@ -131,15 +142,28 @@ def _lean_here(file: str) -> int:
         raise SystemExit(f"verity lean try: no `lake` here: `bash tools/verity/lean/setup.sh {where}` installs elan, the "
                          "toolchain and the package's dependencies, then `lake build` there builds its imports")
     rel, probe = os.path.relpath(path, pkg), _probe()
-    print(f"verity lean try: lake env lean {probe.COPIES / rel}, {rel} with the axiom probe after its last line "
-          f"(in {where})", flush=True)
+    sib = _siblings() if siblings else None
+    plan = sib.plan(pkg, rel) if sib else None
+    if isinstance(plan, str):
+        print(f"verity lean try: {rel}: no sibling check: {plan}", flush=True)
+        plan = None
 
-    def lean(copy: str) -> tuple[int, str]:
-        p = subprocess.run([lake, "env", "lean", copy], cwd=pkg, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    def lean(copy: str, args: list[str]) -> tuple[int, str]:
+        p = subprocess.run([lake, "env", "lean", *args, copy], cwd=pkg, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           text=True)
         print(p.stdout, end="", flush=True)
         return p.returncode, p.stdout
 
-    rc, said, _ = probe.probe(pkg, rel, path.read_text(), lean)
+    with sib.scratch(pkg) if plan else contextlib.nullcontext() as work:
+        at = os.path.relpath(sib.source(plan, work), pkg / probe.COPIES) if plan else rel
+        args = sib.lean_args(pkg, plan, work) if plan else []
+        print(f"verity lean try: lake env lean {probe.COPIES / at}, {rel} with the axiom probe after its last line"
+              f"{', then the sibling check' if plan else ''} (in {where})", flush=True)
+        rc, said, _ = probe.probe(pkg, at, path.read_text(), lambda copy: lean(copy, args))
+        if rc == 0 and plan:
+            rc, output, line = sib.check(plan, work, lambda a: sib.run([lake, "env", "lean", *a], pkg))
+            print(output, end="")
+            print(f"verity lean try: {rel}: {line}", flush=True)
     if said:
         print(f"verity lean try: {rel}: {said}", flush=True)
     return rc
@@ -153,6 +177,9 @@ def _lean(args: list[str]) -> int:
                                  "Quot.sound (sorryAx too), or says none do.")
     ap.add_argument("file", metavar="FILE", help="the .lean file: a path from here, or from the root of "
                     "the checkout you're in, which is the tree it elaborates")
+    ap.add_argument("--siblings", action="store_true", help="once it elaborates, import its build beside every built module "
+                    "of its package that doesn't import it, which fails on a name two of them declare, as the package's "
+                    "root would")
     ap.add_argument("--on", metavar="NODE", help="elaborate it on a project machine instead")
     ap.add_argument("--pool", help="with --on: the machine's pool for it")
     ap.add_argument("--as", dest="lane", metavar="LANE", help="with --on: the lane the pool's slot names (default $RESEARCH_LANE)")
@@ -162,7 +189,7 @@ def _lean(args: list[str]) -> int:
     if a.on is None:
         if a.pool or a.lane:
             ap.error("--pool and --as go with --on")
-        return _lean_here(a.file)
+        return _lean_here(a.file, a.siblings)
     tree = _tree(a.file)
     file = a.file if not Path(a.file).is_file() else os.path.relpath(Path(a.file).resolve(), tree)
     if file.startswith(os.pardir + os.sep) or not (tree / file).is_file():
@@ -176,7 +203,8 @@ def _lean(args: list[str]) -> int:
             p = subprocess.Popen([*research, "run", "--on", a.on, *(["--pool", pool] if pool else []),
                                   *(["--as", a.lane] if a.lane else []), "--project", "verity",
                                   "--source", str(source), "--cwd", "clone", "--wait", "--wait-every", "5", "--",
-                                  "python3", "tools/verity/lean/lean_changed.py", "--try", file],
+                                  "python3", "tools/verity/lean/lean_changed.py", "--try", file,
+                                  *(["--siblings"] if a.siblings else [])],
                                  cwd=ROOT, stderr=subprocess.PIPE, text=True)
             said = []
             for line in p.stderr:

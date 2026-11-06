@@ -6,7 +6,7 @@ cleanly that Lean doesn't) fails the run in minutes rather than when the audit's
 
     python tools/verity/lean/lean_changed.py --cache DIR --deps DIR --tree DIR
     python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR] [--dev-cache] [--rebuild]   a lane's records
-    python tools/verity/lean/lean_changed.py --try FILE   a lane's edit loop on a node (`verity lean try FILE --on NODE`)
+    python tools/verity/lean/lean_changed.py --try FILE [--siblings]   a lane's edit loop on a node (`verity lean try FILE --on NODE`)
     python tools/verity/lean/lean_changed.py [--no-wait] --build FILE...   the ready mark's preflight's Lean step (`build_files`)
 
 `--try` elaborates one file (FILE: its path from the repository's root) on the slot tree `--records` builds on, under the same
@@ -14,7 +14,8 @@ cleanly that Lean doesn't) fails the run in minutes rather than when the audit's
 `lake build +MODULE:deps` (FILE's imports; Lake rebuilds only what changed since the slot's last build) and then
 `lake env lean` in that package's directory on a copy of FILE with the axiom probe appended (`axiom_probe.py`: its last line
 names each theorem whose axioms go beyond the standard three, `sorryAx` among them, or says none do), and exits with lean's
-status on FILE's own lines; when that status is an import clash (an
+status on FILE's own lines (with `--siblings`, that copy's build then goes through the sibling check, `siblings.py`, whose
+status it takes); when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
 them against the outputs in place. It never runs check.py, so it reads and writes
 no record; where the node grants no `build` slot it refuses, naming the nodes that do. Dependencies the slot tree holds that no
@@ -101,6 +102,7 @@ guarantees by name.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fcntl
 import glob
 import hashlib
@@ -128,6 +130,7 @@ def _module(path: Path, name: str):
 LA = _module(ROOT / "tools" / "verity" / "lean" / "lean_audit.py", "lean_audit_for_lean_changed")
 #: `tools/verity/lean/check.py`, this step's own copy: `records` runs its commands in the sandbox
 AUDIT = _module(ROOT / "tools" / "verity" / "lean" / "check.py", "lean_audit_tool_for_lean_changed")
+SIBLINGS = _module(ROOT / "tools" / "verity" / "lean" / "siblings.py", "lean_siblings_for_lean_changed")
 PROBE = _module(ROOT / "tools" / "verity" / "lean" / "axiom_probe.py", "axiom_probe_for_lean_changed")
 #: where `Facts.lean` writes a package's facts: inside its `.lake`, which the sandbox leaves writable and `sync` leaves alone
 FACTS = Path(".lake") / "lean-changed-facts"
@@ -968,12 +971,13 @@ def module_of(pkg: str, file: str) -> str:
     return rel.removesuffix(".lean").replace(os.sep, ".")
 
 
-def try_file(file: str, deps: Path, tree: Path | None = None, log=print) -> int:
+def try_file(file: str, deps: Path, tree: Path | None = None, log=print, siblings: bool = False) -> int:
     """`--try`: on the tree of the `build` slot it takes (as `--records` does), with the closure of the package that owns
     ``file`` synced from this checkout and its fetched dependencies taken, `lake build +MODULE:deps` (its imports, of which
     Lake rebuilds only what changed) then `lake env lean` on FILE's probed copy in that package's directory (`PROBE.probe`,
-    whose line is the last); lean's exit status on FILE's own lines, or 2 when ``file`` is in no package, no `build` slot is
-    granted, or the tree's dependencies can't be had. Never check.py."""
+    whose line is the last), and with ``siblings`` the sibling check (`siblings.py`) on that copy's build; lean's exit
+    status on FILE's own lines (the check's when it runs), or 2 when ``file`` is in no package, no `build` slot is granted,
+    or the tree's dependencies can't be had. Never check.py."""
     file = file.removeprefix("./")
     base = (LA.COMMON.cache_dir() / RECORDS).resolve()
     if tree is not None and base not in tree.resolve().parents:
@@ -1027,18 +1031,34 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print) -> int:
             mark(tree, package=pkg, phase="try")
             log(f"lean-try: {file} on {tree} ({n} files changed there, {time.monotonic() - t0:.0f} s; "
                 f"{'' if sandbox else 'no sandbox here, '}lake build +{mod}:deps, then lake env lean on "
-                f"{PROBE.COPIES / rel}, {rel} with the axiom probe after its last line)")
+                f"{PROBE.COPIES / rel}, {rel} with the axiom probe after its last line"
+                f"{', then the sibling check' if siblings else ''})")
             step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox)
-            said = ""
-            if rc == 0:
-                step, (rc, said, text) = "lean", PROBE.probe(
-                    tree / pkg, rel, (ROOT / file).read_text(),
-                    lambda copy: build(pkg, tree, lake, sandbox=sandbox, cmd=["env", "lean", copy]))
-            log(f"lean-try: {file}: {step} exit {rc} in {time.monotonic() - t0:.0f} s")
-            if rc and (healed := clashed(tree, closure(pkg), text)):
-                log(f"lean-try: {file}: an import clash between {' and '.join(healed)}, which this tree can leave when one "
-                    "was built against another version of a module both import: they lose their traces, so the next "
-                    "try rebuilds them; a clash that comes back is in the source")
+            plan = SIBLINGS.plan(tree / pkg, rel) if siblings and rc == 0 else None
+            if isinstance(plan, str):
+                log(f"lean-try: {file}: no sibling check: {plan}")
+            checked, said = isinstance(plan, SIBLINGS.Plan), ""
+            with SIBLINGS.scratch(tree / pkg) if checked else contextlib.nullcontext() as work:
+                args = SIBLINGS.lean_args(tree / pkg, plan, work) if checked else []
+                at = os.path.relpath(SIBLINGS.source(plan, work), tree / pkg / PROBE.COPIES) if checked else rel
+                if rc == 0:
+                    step, (rc, said, text) = "lean", PROBE.probe(
+                        tree / pkg, at, (ROOT / file).read_text(),
+                        lambda copy: build(pkg, tree, lake, sandbox=sandbox, cmd=["env", "lean", *args, copy]))
+                log(f"lean-try: {file}: {step} exit {rc} in {time.monotonic() - t0:.0f} s")
+                if rc and (healed := clashed(tree, closure(pkg), text)):
+                    log(f"lean-try: {file}: an import clash between {' and '.join(healed)}, which this tree can leave when "
+                        "one was built against another version of a module both import: they lose their traces, so the "
+                        "next try rebuilds them; a clash that comes back is in the source")
+                if rc == 0 and checked:
+                    def lean(a: list[str]) -> tuple[int, str, float, int]:
+                        argv = [lake, "env", "lean", *a]
+                        return SIBLINGS.run(in_sandbox(pkg, tree, argv) if sandbox else argv, tree / pkg)
+
+                    rc, output, line = SIBLINGS.check(plan, work, lean)
+                    if output:
+                        log(output.rstrip("\n"))
+                    log(f"lean-try: {file}: {line}")
             if said:
                 log(f"lean-try: {file}: {said}")
             (tree / DIRTY).unlink(missing_ok=True)
@@ -1316,6 +1336,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--try", dest="try_", metavar="FILE",
                     help=f"elaborate FILE (from the repository's root) on the tree of a Lean slot of pool {FAST_POOL}: "
                     "lake build of its imports, then lake env lean FILE; never check.py")
+    ap.add_argument("--siblings", action="store_true", help="with --try: then import FILE's build beside every built module "
+                    "of its package that doesn't import it, which refuses a name two of them declare (siblings.py)")
     ap.add_argument("--build", nargs="+", metavar="FILE",
                     help=f"lake build the modules of these files (from the repository's root) on the tree of a Lean slot of pool "
                     f"{FAST_POOL}, as --try does, with no dependency fetched cold; its last line is `{BUILD_LINE}` and JSON "
@@ -1327,8 +1349,12 @@ def main(argv: list[str]) -> int:
         if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or (a.try_ and a.build) or (a.try_ and a.no_wait):
             ap.error("--try and --build take only --deps and --tree (--build also --no-wait), and not each other")
         if a.build:
+            if a.siblings:
+                ap.error("--siblings goes with --try")
             return build_files(a.build, a.deps, a.tree, log=lambda s: print(s, flush=True), wait=not a.no_wait)
-        return try_file(a.try_, a.deps, a.tree, log=lambda s: print(s, flush=True))
+        return try_file(a.try_, a.deps, a.tree, log=lambda s: print(s, flush=True), siblings=a.siblings)
+    if a.siblings:
+        ap.error("--siblings goes with --try")
     if not a.records:
         if a.update or a.moved or a.out or a.dev_cache or a.rebuild:
             ap.error("--update, --moved, --out, --dev-cache and --rebuild go with --records")
