@@ -109,7 +109,7 @@ def test_the_executor_enqueues_a_graph_with_a_key_for_each_task_and_folds_each_k
                                                                       keys["flock-rust-tests"]: "pending"}
 
 
-def test_a_keys_verdict_is_its_newest_label_and_error_is_not_run(tmp_path):
+def test_error_is_not_run_and_clears_the_fail_before_it(tmp_path):
     """A false fail (a run that gave no result, labelled fail) written over as error reads as not run, and the key's rerun
     that passes is its verdict; error never reads as pass or fail."""
     from research.executor import ERROR
@@ -124,6 +124,20 @@ def test_a_keys_verdict_is_its_newest_label_and_error_is_not_run(tmp_path):
     fake.finish(K_LEAN, "fail")
     assert ex.verdicts([K_SUITE, K_LEAN]) == {K_SUITE: "pass", K_LEAN: "fail"}
     assert ERROR in vocab.TASK_VERDICTS, "the store takes the executor's error label"
+
+
+def test_a_fail_stands_when_a_rerun_passes():
+    """A flake must not go green on a rerun: a fail with no error label after it is the key's verdict whatever came later,
+    and only an error written after it (a false fail relabelled) lets a later pass count."""
+    from research.executor import ERROR, fold
+
+    assert fold(["fail", "pass"]) == "fail"
+    assert fold(["pass", "fail", "pass"]) == "fail"
+    assert fold(["fail", ERROR, "pass"]) == "pass"
+    assert fold(["fail", ERROR, "pass", "fail", "pass"]) == "fail"
+    assert fold(["pass", ERROR]) == "pending"
+    assert fold(["fail", "pass", ERROR]) == "pending"
+    assert fold([]) == "pending"
 
 
 def test_the_queue_transport_pulls_every_key_not_passed_here(monkeypatch):

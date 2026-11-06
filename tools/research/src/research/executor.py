@@ -16,10 +16,11 @@ A graph's keys hash the lister's environment and its suite splits come from the 
 the tasks run has the keys their verdicts come under: the executor lists a check enqueued with no graph on a worker, puts it
 in the store (`tasks-graph/v1`) and labels `commit:<sha> tasks_graph art:<id>` (`vocab.TASKS_GRAPH`), then queues its tasks.
 
-A task's verdict is the newest `verdict` label on `task:<key>`, written by the executor from its run of `verity tasks run ID`:
-pass or fail by that run's result, or `ERROR` when no run gave one, which is pending (not run), so a later graph runs the key
-again; a step that skipped gets no label and stays pending.  The newest wins, so a key rerun or relabelled (a false fail
-written over as error) reads as its latest.  A task with no key of its own (a build, a circuit-check slice, a job that keeps no
+A task's verdict comes from the `verdict` labels on `task:<key>`, written by the executor from its run of `verity tasks run
+ID`: pass or fail by that run's result, or `ERROR` when no run gave one, which is pending (not run), so a later graph runs the
+key again; a step that skipped gets no label and stays pending.  A fail stands until an error label is written after it (a
+false fail relabelled), so a rerun that passes never turns a fail green (a test that flakes is deleted, not rerun); past
+that, the newest of pass and error is the key's.  A task with no key of its own (a build, a circuit-check slice, a job that keeps no
 verdict: tasks/v1's `unkeyed`) gets one of its check alone (`keyed`), so it runs in every check and no verdict of it is reused
 across checks.
 
@@ -142,10 +143,12 @@ def keyed(graph: dict) -> dict:
 
 
 def fold(values: Iterable[str]) -> str:
-    """A key's verdict from its labels' values, oldest first: the newest when it is pass or fail, else pending (no label, or
-    `ERROR`)."""
+    """A key's verdict from its labels' values, oldest first: fail while a fail has no `ERROR` after it, else pass when the
+    newest is pass, else pending (no label, or `ERROR` newest)."""
     vs = list(values)
-    return vs[-1] if vs and vs[-1] in (PASS, FAIL) else PENDING
+    if FAIL in vs and ERROR not in vs[len(vs) - vs[::-1].index(FAIL):]:
+        return FAIL
+    return PASS if vs and vs[-1] == PASS else PENDING
 
 
 class Transport(Protocol):
@@ -327,7 +330,7 @@ class QueueTransport:
     graph/v2 with `--schema verity-graph/v2`, else tasks/v1.  The graph the executor listed for a check comes back as the
     artifact a label on `commit:<sha>` names (`LISTED`: `tasks_graph` a `tasks-graph/v1`, `verity_graph` a `verity-graph/v2`),
     verdicts as `verdict` labels on `task:<key>` and results as `result` labels there.  A key's verdicts are pulled from the
-    store's remote while it isn't passed here (the executor reruns a key that failed or errored, and never one that passed), its
+    store's remote while it isn't passed here (a fail here may since have been relabelled error there, and an error rerun), its
     results while it has none here yet."""
 
     def __init__(self, store, command: tuple[str, ...] = (), cwd: Path | None = None):

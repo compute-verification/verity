@@ -408,8 +408,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(LANDED, GROUP_VERIFICATION, TEXT, "on a run (a check, or a part of one), by research-merge: main's commit whose Check: or "
        "Checked: trailer names it (`research merge`; `--label-landed` for past landings)", pattern=r"[0-9a-f]{40}"),
     _k(TASK_VERDICT, GROUP_VERIFICATION, ENUM, "on task:<key>, by the executor from its run of `verity tasks run`: pass (passed) "
-       "or fail (failed), or error when no run gave a result, which reads as not run; a step that skipped gets none; the "
-       "newest is the key's verdict (`research.executor.fold`)", TASK_VERDICTS),
+       "or fail (failed), or error when no run gave a result, which reads as not run; a step that skipped gets none; a fail "
+       "stands until an error after it, else the newest is the key's verdict (`research.executor.fold`)", TASK_VERDICTS),
     _k(TASKS_GRAPH, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: the art: id of the after-landing task graph "
        "(`tasks-graph/v1`) it listed for that commit on a worker; drive reads verdicts under its tasks' keys",
        pattern=r"art:[0-9a-f]{64}"),
