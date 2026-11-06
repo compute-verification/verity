@@ -41,10 +41,12 @@ run wrote no answer, ``missing`` and ``why``:
 
 While `certifier-key` is open (`PREMISES`, `KEY_OPEN`), an accepted network certifier's verdict is ``not
 established``, its Lean answer's accept beside it (``answer``), and its bound conditional on it by name; so is it
-where `auditor-listing` doesn't hold (`LISTING_UNMET`, `FILES_UNMET`), with no bound, and where its registered-files
-condition doesn't, so is the accepted verdict of remote's composite and of the composite of record where it reads
-remote's sampled proofs case, sampled proofs' among them; where that case's params name no public file, so is
-sampled proofs' (`PUBLIC_UNBOUND`). Sampled proofs' ``credit`` (`CREDIT`) names the drawn members it credits, those
+where `auditor-listing` doesn't hold (`LISTING_UNMET`, `FILES_UNMET`) or `scan-state-pinned` doesn't
+(`STATE_UNPINNED`), with no bound. Where `scan-state-pinned` doesn't hold, so is the composite of record's accepted
+verdict, and where the registered-files condition doesn't, so is the accepted verdict of remote's composite and of the
+composite of record where it reads remote's sampled proofs case, sampled proofs' among them; where that case's params
+name no public file, so is sampled proofs' (`PUBLIC_UNBOUND`). A verdict withheld on two counts names both
+(``open``). Sampled proofs' ``credit`` (`CREDIT`) names the drawn members it credits, those
 whose --registered file the audit completed at the window's committed roots and whose Lean verdict accepted it
 reporting exactly its reads (the audit's published record, `AUDIT`), and lists every other drawn member as not
 credited, by name, with why; ``missing`` where the record states no completion, and where sampled proofs' verdict is
@@ -71,7 +73,11 @@ each file remote's sampled proofs case (``--sampled-proofs-case``) registers, th
 by SHA-512 the one its params θ name (proofs.circuit, proofs.public), θ held to the params each composite that reads the
 case states, the files hashed here and never read off the evidence, and the public file the one a5 pinned at staging,
 before the draw (``--public-pin``, `pinned`), the pin's bodies held to the registration the challenger's coins committed
-to by their leaf layer.
+to by their leaf layer. `scan-state-pinned` (`scan_state_pinned`): where an audit's window commits the scan's state in
+its activations (`SCAN_STATE`, the entry `NetworkCheck.Period` holds to the scan's), V3c's audit opened its registered
+reads of it at that entry's root and domain (`AUDIT_SUMMARY`'s registered.own), accepted, and reported exactly each
+sampled member's registered reads (`AUDIT`): one-stage's registration checks read nothing of the window, so the audit's
+driver pins it, and the record checks that it did.
 
 **Sampled proofs' guarantee** (``sampled_proofs``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
 its draw establishes, ε at δ, per window (``per_window``: its bound at its profile's δ over the window's n proof blocks) and
@@ -350,6 +356,12 @@ AUDIT = Path("v3c-audit") / "window" / "audit.json"
 #: V3c's audit as the network certifier's period reads it, as the run publishes it (`records_audit.py period`): its
 #: registration, and each root template's circuit file by the SHA-512 a5 held every session of its members to
 PERIOD = Path("v3c-audit") / "period.json"
+#: V3c's audit's summary as the run publishes it (`served_integrity.public_copy`): its verdict, and the entries its
+#: registered reads opened the window's own values at (``registered.own``)
+AUDIT_SUMMARY = Path("v3c-audit") / "summary.json"
+#: the value a compute audit's window registers the scan's state rows as, which the period ties to its scan's state
+#: (`NetworkCheck.Period.stateValue`, `records_audit.TIED`)
+SCAN_STATE = "verity/certifier/scan-state/v1"
 CREDIT = ("sampled proofs credits only the drawn members whose --registered file named every port of their circuit at "
           "the window's committed roots: the audit completed it from the auditor's record before any session "
           "(`a5.complete_drawn`, its record's checks_after_draw.registered_complete), and the member's Lean verdict of "
@@ -437,7 +449,7 @@ RESTATE_TIED = ("to be restated before any pin of it counts, and never a dischar
                 "the figure of record is the conservative one, which doesn't read it (`OPEN`)")
 #: PeriodLeakRegistered, a property of the period check's acceptance, by its name in `LOCKS`
 PERIOD_REGISTERED = "Properties.NetworkPeriodLeak.periodLeakRegistered"
-AUDITOR_RECORD, AUDITOR_LISTING = "auditor-record", "auditor-listing"
+AUDITOR_RECORD, AUDITOR_LISTING, SCAN_STATE_PINNED = "auditor-record", "auditor-listing", "scan-state-pinned"
 #: remote's sampled proofs case (`served_cases.SAMPLED`), whose params θ the remote theorem's registered-files condition
 #: reads (`registered_files`)
 SAMPLED_ID = "verity/sampled-proofs/v1"
@@ -494,6 +506,21 @@ CHECKED = {
                       "neither is the verdict of a composite that reads the case, nor sampled proofs', its leg there; "
                       "where θ names no proofs.public, the public file isn't bound, and sampled proofs' verdict is not "
                       "established (`PUBLIC_UNBOUND`)"),
+    SCAN_STATE_PINNED: (f"that V3c's audit opened its reads of the scan's state where the period ties them: for each "
+                        f"audit of the case's commitment whose window commits {SCAN_STATE} in its activations "
+                        "(window.activations.values, the entry NetworkCheck.Period's auditStateEntries reads and "
+                        "stateTied and stateHeldIn hold to the scan's state), the entry the audit's registered reads "
+                        "opened it at (`AUDIT_SUMMARY`'s registered.own: records_audit's window_pins pins it from the "
+                        "registration, and each --registered file takes every port's root and domain from that pin) is "
+                        "that activations entry by value, root and domain; the audit accepted; and its Lean verdicts of "
+                        "record reported exactly each sampled member's registered reads (`AUDIT`'s registered_reads). "
+                        "One-stage's registration checks read nothing of the window, so the audit's driver pins the state "
+                        "there, and this is the run's check that it did. The audit is the one the run published "
+                        "(`PERIOD`'s registration, the case's), its summary and record the auditor's own outputs in OUT, "
+                        f"as {AUDITOR_LISTING} reads them. It holds where no audit's window commits {SCAN_STATE} in its "
+                        "activations, and not where the run has no case to say. Where it doesn't hold, its evidence "
+                        "missing included, neither the network certifier's verdict nor the composite of record's is "
+                        "established, and there is no bound (`STATE_UNPINNED`)"),
 }
 #: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, at the values the
 #: registration opens at its registered inputs, is K's; PeriodLeakAccepted's is the same count at the trace's values
@@ -695,6 +722,10 @@ FILES_UNMET = (f"{AUDITOR_LISTING}'s {REGISTERED_FILES} condition doesn't hold (
                "at staging before the draw, or the run can't say, so a Lean "
                "accept (``answer``) establishes no verdict of the network certifier, of a composite that reads that "
                "case or of sampled proofs, its leg there, and the record states no bound")
+STATE_UNPINNED = (f"{SCAN_STATE_PINNED} doesn't hold (``checked``): the run doesn't show that V3c's audit opened its "
+                  "reads of the scan's state at the root and domain its window's activations entry commits, the one the "
+                  "period ties to the scan's state, so a Lean accept (``answer``) establishes no verdict of the network "
+                  "certifier or of the composite of record, and the record states no bound")
 PUBLIC_UNBOUND = ("the public file isn't bound on this form: remote's sampled proofs case's params θ name no "
                   "proofs.public, so the remote theorem's registered-files condition binds the circuit file alone, and "
                   "sampled proofs' accept (``answer``) establishes no verdict. The evidence's digest of the public file, "
@@ -1512,6 +1543,54 @@ def auditor_listing(out: Path, case: Any) -> dict[str, Any]:
     return res | {"holds": True}
 
 
+def scan_state_pinned(out: Path, case: Any) -> dict[str, Any]:
+    """`CHECKED`'s scan-state-pinned on the run: each audit of ``case``'s commitment whose window commits `SCAN_STATE`
+    in its activations as `NetworkCheck.Period.auditStateEntries` reads it (the entry at that value, naming it), held to
+    the run's published V3c audit (`PERIOD`'s registration): the entry its registered reads opened the value at
+    (`AUDIT_SUMMARY`'s registered.own) is that activations entry by value, root and domain, the audit accepted, and its
+    record reported exactly each sampled member's registered reads (`AUDIT`). ``holds``, ``audits``, those audits'
+    places in the commitment, and ``why`` where it doesn't hold, its evidence missing included."""
+    res: dict[str, Any] = {"is": CHECKED[SCAN_STATE_PINNED], "holds": False}
+    try:
+        regs = json.loads(bytes.fromhex(case["commitment"]))["audits"]
+        states = [(((r.get("window") or {}).get("activations") or {}).get("values") or {}).get(SCAN_STATE) for r in regs]
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
+        return res | {"why": f"{CASE}'s commitment doesn't list the period's audits: {type(e).__name__}"}
+    held = [(i, e) for i, e in enumerate(states) if isinstance(e, Mapping) and e.get("value") == SCAN_STATE]
+    res["audits"] = [i for i, _ in held]
+    if not held:
+        return res | {"holds": True}
+    docs = {}
+    for path in (PERIOD, AUDIT_SUMMARY, AUDIT):
+        try:
+            docs[path] = json.loads((out / path).read_text())
+        except (OSError, ValueError) as e:
+            return res | {"why": f"audit {held[0][0]}'s window commits {SCAN_STATE} in its activations, and the run's "
+                                 f"{path} can't be read: {type(e).__name__}"}
+        if not isinstance(docs[path], Mapping):
+            return res | {"why": f"the run's {path} isn't a JSON object"}
+    period, summary, rec = docs[PERIOD], docs[AUDIT_SUMMARY], docs[AUDIT]
+    own = (summary.get("registered") or {}).get("own") if isinstance(summary.get("registered"), Mapping) else None
+    pin = own.get(SCAN_STATE) if isinstance(own, Mapping) else None
+    for i, entry in held:
+        if regs[i] != period.get("registration"):
+            return res | {"why": f"audit {i}'s window commits {SCAN_STATE} in its activations, and the run's {PERIOD} "
+                                 "is another audit's"}
+        if not isinstance(pin, Mapping):
+            return res | {"why": f"audit {i}'s window commits {SCAN_STATE} in its activations, and the run's "
+                                 f"{AUDIT_SUMMARY} states no entry its registered reads opened it at (registered.own)"}
+        if differ := [k for k in ("value", "root", "domain")
+                      if not (isinstance(entry.get(k), str) and pin.get(k) == entry.get(k))]:
+            return res | {"why": f"the entry audit {i}'s registered reads opened {SCAN_STATE} at isn't, by its "
+                                 f"{' and '.join(differ)}, its window's activations entry"}
+    if (summary.get("audit") or {}).get("accepted") is not True:
+        return res | {"why": f"V3c's audit didn't accept ({AUDIT_SUMMARY}'s audit.accepted)"}
+    if not isinstance(reads := rec.get("registered_reads"), Mapping) or reads.get("ok") is not True:
+        return res | {"why": f"V3c's audit record doesn't report exactly each sampled member's registered reads "
+                             f"({AUDIT}'s registered_reads)"}
+    return res | {"holds": True}
+
+
 def pinned(pin: Path | None, commitment: Any, stated: set[Any], public: Path) -> str | None:
     """Why the public file remote's sampled proofs case registers, ``public``, isn't the one a5 pinned at staging,
     before the draw (``pin``, a5's ``public-pin.json``: by member key, each public file's SHA-512 and its body's, and
@@ -1731,12 +1810,14 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     case, no_case = period_case(out)
     composed = next((c.get("params_sha512") for c in found[composite][1].get("cases") or ()
                      if c.get("id") == NETWORK), None) if composite in found else None
-    listed = auditor_listing(out, case) if case is not None else {
-        "is": CHECKED[AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {no_case}"}
+    listed, state = ((auditor_listing(out, case), scan_state_pinned(out, case)) if case is not None else (
+        {"is": CHECKED[n], "holds": False, "why": f"no case lists the period's audits: {no_case}"}
+        for n in (AUDITOR_LISTING, SCAN_STATE_PINNED)))
     files = registered_files(found, sampled_case, public_pin)
     checked = {AUDITOR_RECORD: auditor_record((case or {}).get("params"), composed, certifier_key, site_registration),
                AUDITOR_LISTING: listed | {"holds": listed["holds"] and files["holds"], "registered_files": files}
-               | ({"why": files["why"]} if listed["holds"] and not files["holds"] else {})}
+               | ({"why": files["why"]} if listed["holds"] and not files["holds"] else {}),
+               SCAN_STATE_PINNED: state}
     prem = premises(LOCKS, checked=checked)
     drawn, draws = coins(out), chain_draws(out)
     cond = [COINS_OPEN] if drawn["open"] else []
@@ -1744,20 +1825,25 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         v["sampled proofs"]["conditional_on"] = cond
     unlisted = [LISTING_UNMET] * (not listed["holds"]) + [FILES_UNMET] * (not files["holds"])
     unmet = {n: why for n, why, x in ((CERTIFIER_KEY, KEY_OPEN, CERTIFIER_KEY in prem["open"]),
-                                      (AUDITOR_LISTING, "; ".join(unlisted), bool(unlisted))) if x}
+                                      (AUDITOR_LISTING, "; ".join(unlisted), bool(unlisted)),
+                                      (SCAN_STATE_PINNED, STATE_UNPINNED, not state["holds"])) if x}
     if nv["verdict"] == "accept" and unmet:
         v["the network certifier"] = nv | {"verdict": NOT_ESTABLISHED, "answer": nv["verdict"], "open": list(unmet),
                                            "why": "; ".join(unmet.values())}
-    withheld = [("sampled proofs", PUBLIC_UNBOUND)] * ("unbound" in files)
-    withheld += [(k, FILES_UNMET) for k, p in (("sampled proofs", composite), ("remote", REMOTE), ("onsite", composite))
+    withheld = [("sampled proofs", REGISTERED_FILES, PUBLIC_UNBOUND)] * ("unbound" in files)
+    withheld += [(k, REGISTERED_FILES, FILES_UNMET)
+                 for k, p in (("sampled proofs", composite), ("remote", REMOTE), ("onsite", composite))
                  if not files["holds"] and p in files["read_by"]]
-    for k, why in withheld:
+    withheld += [("onsite", SCAN_STATE_PINNED, STATE_UNPINNED)] * (not state["holds"])
+    for k, name, why in withheld:
         if v[k]["verdict"] == "accept":
-            v[k] = v[k] | {"verdict": NOT_ESTABLISHED, "answer": "accept", "open": [REGISTERED_FILES], "why": why}
+            v[k] = v[k] | {"verdict": NOT_ESTABLISHED, "answer": "accept", "open": [name], "why": why}
+        elif v[k]["verdict"] == NOT_ESTABLISHED and name not in v[k].get("open", (name,)):
+            v[k] = v[k] | {"open": [*v[k]["open"], name], "why": f"{v[k]['why']}; {why}"}
     paid = credit(out) if v["sampled proofs"]["verdict"] != NOT_ESTABLISHED else {
         "credited": [], "missing": UNESTABLISHED_CREDIT, "is": CREDIT}
     v["sampled proofs"]["credit"] = paid
-    accepted = nv["verdict"] == "accept" and AUDITOR_LISTING not in unmet
+    accepted = nv["verdict"] == "accept" and not {AUDITOR_LISTING, SCAN_STATE_PINNED} & set(unmet)
     open_draws = ["sampled proofs' draw"] * bool(cond) + (draws["open"] if accepted else [])
     drawn |= {"open": bool(open_draws), "open_draws": open_draws, "draws": draws}
     cond_net = [COINS_OPEN] * bool(open_draws) + [n for n in UNCHARGED if n in prem["open"]]
