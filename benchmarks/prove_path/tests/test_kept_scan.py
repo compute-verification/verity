@@ -13,7 +13,11 @@ is removed. Reading the run leaves ``sys.path`` and the module ``replay`` as the
 so a5's ``import replay`` still finds one_stage's where it did before. `prove_path.place_slots` places the window's
 slots off the scan's starts and rows without serving, and refuses by name a request started in two slots, a served
 request started in none, a started request that wasn't served, and a slot whose prompt or ``max_tokens`` isn't its
-served request's."""
+served request's. The network certifier the gate runs behind the certifier front, at its scan class w63k4 and the tick
+4000 ms (`certifier_piece.gate_params`), runs that schedule but for its tick: the front's group of 4, served through it
+together and kept, is a window of class 8,32,4,4,16, and class 4,32,4 is refused naming that one. ``prove_path.py
+window-class`` holds a class to it (to the class of record at w63) before any serve, refusing any other, a scan class
+the gate doesn't run and a class that isn't one by name."""
 from __future__ import annotations
 
 import hashlib
@@ -51,6 +55,10 @@ ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ST)
 
 CLASS = WindowClass(8, 32, 4, lanes=4, every=16)
+#: `CLASS`'s scan schedule, at the scan's tick of 100 ms
+SCHEDULE = W.WardenParams(cell_bytes=CLASS.scan.B, slots=CLASS.scan.r, bucket_ms=100, delay=CLASS.scan.D,
+                          lanes=CLASS.scan.lanes, queue=CLASS.scan.lanes, window=CLASS.buckets, ingress_cells=CLASS.scan.C,
+                          ingress_buckets=CLASS.scan.WITHIN, egress_cells=CLASS.scan.KO + 1, every=CLASS.scan.EVERY)
 PROMPTS = ((17, 3, 250, 9), (5, 77, 42), tuple(range(1000, 1032)), (9, 8, 7, 6, 5))
 ARRIVALS = (0, 0, 0, 5)
 RESPONSES = ((100, 101, 102, 103), (200,), (300, 301), (400, 401, 402))
@@ -58,16 +66,14 @@ USERS = [f"user-{i}" for i in range(len(PROMPTS))]
 SESSION = bytes(range(32))
 
 
-def _served(users: Sequence[str] = USERS) -> ST.Served:
-    """`PROMPTS`' id requests (of ``users``, `USERS` unless given) arriving at `ARRIVALS` and answered `RESPONSES`,
-    served through the network certifier over 2 link-windows at `CLASS`'s scan schedule."""
-    scan = CLASS.scan
-    params = W.WardenParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
-                            queue=scan.lanes, window=CLASS.buckets, ingress_cells=scan.C, ingress_buckets=scan.WITHIN,
-                            egress_cells=scan.KO + 1, every=scan.EVERY)
+def _served(users: Sequence[str] = USERS, params: W.WardenParams = SCHEDULE,
+            arrivals: Sequence[int] = ARRIVALS) -> ST.Served:
+    """`PROMPTS`' id requests (of ``users``, `USERS` unless given) arriving at ``arrivals`` and answered `RESPONSES`,
+    served through the network certifier over 2 link-windows at ``params``."""
     reqs = [id_request(model="org/m", user=u, prompt=list(p), max_tokens=4, seed=i, temperature=0.0, top_p=1.0,
-                       frame_bytes=scan.B, offset=0) for i, (u, p) in enumerate(zip(users, PROMPTS, strict=True))]
-    return ST.serve(params, reqs, ARRIVALS, [1 << 20] * len(reqs), RESPONSES, 2)
+                       frame_bytes=params.cell_bytes, offset=0)
+            for i, (u, p) in enumerate(zip(users, PROMPTS, strict=True))]
+    return ST.serve(params, reqs, arrivals, [1 << 20] * len(reqs), RESPONSES, 2)
 
 
 def _kept(d: Path, served: ST.Served, records: Callable[[str, Any], Any] = lambda kind, rec: rec,
@@ -168,6 +174,64 @@ def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_pat
     with pytest.raises(ValueError, match="refuses the network certifier's ingress rows"):
         PP.kept_scan(serve_dir, WindowClass(8, 4, 4, lanes=4, every=16), USERS[:3])
     assert PP.kept_scan(tmp_path, CLASS, USERS) is None
+
+
+def test_the_fronts_w63k4_run_is_a_window_of_class_8_32_4_4_16_and_not_of_4_32_4(tmp_path):
+    """The certifier front's pairing: the network certifier the gate runs a front's scan rehearsal at, at the front's
+    scan class w63k4 and the tick 4000 ms (`certifier_piece.gate_params`, `auditor.warden_command`'s flags as
+    warden_serve.py parses them), is `SCHEDULE` but for its tick, link-windows of 32 buckets. Its run of the front's
+    group, the scan's 4 lanes of requests admitted together, kept as the front keeps it, is a window of class
+    8,32,4,4,16 whose Programs 1, 3, 5 and 7 start the 4 requests (lanes 0 to 3 at bucket 16), each one's row at its
+    anchor its prompt; class 4,32,4, whose window is 16 buckets, is refused by name, naming 8,32,4,4,16."""
+    params = CP.gate_params(CP.V3C_SCAN_CLASS, 4000)
+    assert (params.bucket_ms, replace(params, bucket_ms=SCHEDULE.bucket_ms)) == (4000, SCHEDULE)
+    serve = _kept(tmp_path, _served(params=params, arrivals=(0, 0, 0, 0)))
+    rows, starts = PP.kept_scan(serve, CLASS, USERS)
+    assert starts == [None, "user-0", None, "user-1", None, "user-2", None, "user-3"]
+    for k, u in enumerate(starts):
+        p = PROMPTS[USERS.index(u)] if u else ()
+        want = (1, len(p), p) if u else (0, 0, ())
+        assert IS.token_row(CLASS.scan, IS.decode(CLASS.scan, rows[CLASS.anchor(k)]))[CLASS.lane(k)] == want
+    with pytest.raises(ValueError, match=r"link-windows are 32 buckets, not a window of class .*'s 16: serve at the "
+                       r"class's scan schedule, or take the class 8,32,4,4,16, whose window it is"):
+        PP.kept_scan(serve, WindowClass(4, 32, 4), USERS)
+
+
+@pytest.mark.parametrize("given, scan, held, fit", [
+    ("8,32,4,4,16", None, "8,32,4,4,16", None),
+    ("8,1024,64,4,16", "w63", "8,1024,64,4,16", None),
+    ("4,32,4", None, "4,32,4,4,16", "8,32,4,4,16"),
+    ("8,32,4", None, "8,32,4,8,16", "8,32,4,4,16"),
+    ("8,24,4,4,16", None, "8,24,4,4,16", "8,32,4,4,16"),
+    ("16,32,4,4,16", None, "16,32,4,4,16", "8,32,4,4,16"),
+    ("8,32,4,4,16", "w63", "8,32,4,4,16", "8,1024,64,4,16"),
+])
+def test_window_class_holds_a_class_to_the_one_whose_window_the_chains_scan_reads_behind_the_front(capsys, given, scan,
+                                                                                                   held, fit):
+    """``prove_path.py window-class``, `served_verdicts.sh`'s preflight of V3C_CLASS behind the certifier front, before
+    the serve that window-commit's scan and the chain's would refuse it after: at the front's scan class w63k4 the one
+    class is 8,32,4,4,16 (the scan's 4 lanes at each of its 2 boundaries, prompts of at most 32 ids, 4 outputs), and at
+    w63 the class of record; any other is refused by name, with the class to set."""
+    rc = PP.main(["window-class", "--class", given, *(["--scan-class", scan] if scan else [])])
+    out, err = capsys.readouterr()
+    scan = scan or "w63k4"
+    if fit is None:
+        assert (rc, json.loads(out)) == (0, {"class": held, "scan_class": scan, "window": 32})
+    else:
+        assert (rc, out, err.splitlines()[-1]) == (PP.REFUSED, "", (
+            f"prove_path.py window-class: the gate runs the network certifier at the scan class {scan} with link-windows "
+            f"of 32 buckets, each a window of the class {fit} alone, the one the chain's scan at {scan} reads, not of "
+            f"{held}: set the class {fit}"))
+
+
+@pytest.mark.parametrize("args, why", [
+    (["--class", "8,32,4,4,16", "--scan-class", "w64"], "--scan-class w64: the gate's scan classes are w63, w63k4"),
+    (["--class", "8,32"], "--class 8,32: SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]"),
+    (["--class", "8,32,4,3,16"], "a window class's slots, prompt, outputs, lanes and every are positive integers"),
+])
+def test_window_class_refuses_a_scan_class_the_gate_doesnt_run_or_a_class_that_isnt_one(capsys, args, why):
+    assert PP.main(["window-class", *args]) == PP.REFUSED
+    assert capsys.readouterr().err.splitlines()[-1].startswith(f"prove_path.py window-class: {why}")
 
 
 def test_a_kept_run_that_wont_read_or_whose_io_or_link_windows_arent_whole_is_refused_by_name(serve_dir, tmp_path):
