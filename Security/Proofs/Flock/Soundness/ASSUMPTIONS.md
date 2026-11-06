@@ -200,8 +200,9 @@ The four `flock_e2e_*_hm96` theorems (`Binding/E2E.lean`) add the four:
 enters through `tr : StrictCR.TreeRewind`, a rewinding at the serving roots (the prover after its registration, with the
 unit sample in place of the proof coins) whose `covers` says that the executable accepting while the model at the
 registered leaves rejects is no likelier than a run opening a serving root off its plurality. That cover is the link from
-the executable's openings to the model's (R11), still open, so `tr` is a named hypothesis; the skeleton's `hExec` (every
-executable accept is the model's) gives one with no positions, at `δ_tree = 0` (`TreeRewind.ofNever`, `ofNever_bound`).
+the executable's openings to the model's (the refinement `ExecRefines`), still open, so `tr` is a named hypothesis; the
+skeleton's `hExec` (every executable accept is the model's) gives one with no positions, at `δ_tree = 0`
+(`TreeRewind.ofNever`, `ofNever_bound`).
 
 `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` (`Registered/E2E.lean`) are the sampled-proof-block
 and count forms with registered reads (`Flock.HmRow`): they add `δ_reg`, the event that a registered read's leaf
@@ -209,7 +210,7 @@ under the prover's registration is not the registrant's, so that off it the bind
 is the registrant's leaf. They take the layout's registered reads (`rd : Reads`: the held roots, the positions the
 verifier's program reads, and the registrant's openings, intended to prove), `hchk` (on every outcome the executable
 accepts, the registered check held at the model's leaves: `Flock.Registered.check_ok` read at `Layout.regLeaf`, the
-same link R11 that `tr` names, intended to prove) and `hR` (hardness: `SHA512CRStrict` for the registered-path finder at
+same link that `tr` names, intended to prove) and `hR` (hardness: `SHA512CRStrict` for the registered-path finder at
 budget `qR`).
 
 ## The headline

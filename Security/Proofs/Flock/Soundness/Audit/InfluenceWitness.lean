@@ -8,9 +8,8 @@ public import Mathlib.Tactic.Positivity
 /-!
 # The influence theorems are not vacuous
 
-The witnesses (bc-89770364: Phase 19g, X-IC-1, and the two-stage and exfiltration instances of
-19i, X-IR-4): every hypothesis of the influence theorems can be met, together. `W.lemma47`'s conclusion is also not
-trivial; the others show only that the hypotheses can be met.
+The witnesses, the two-stage and exfiltration instances among them: every hypothesis of the influence theorems can be
+met, together. `W.lemma47`'s conclusion is also not trivial; the others show only that the hypotheses can be met.
 
 * `W.lemma47` (`outputs_eq_of_separates`): a four-gate circuit, input `0`, gates `1 = ¬0` and `3 = ¬0` in unit `0`, gate
   `2 = ¬1` in unit `1`, outputs `{2, 3}`, delivered wires `D = {2}`. `K = {1}` separates `B = {0}` from `D`, and is
