@@ -1,7 +1,9 @@
-import Definitions.Hash.Tree
-import Definitions.Hash.RowSeg
-import Definitions.Hash.RowV2
-import Definitions.Hash.Hm96
+module
+
+public import Definitions.Hash.Tree
+public import Definitions.Hash.RowSeg
+public import Definitions.Hash.RowV2
+public import Definitions.Hash.Hm96
 
 /-!
 # The hm96 bit-row leaf: `hm96-sha512/row-seg/v1` or `hm96-sha512/row/v2` in a frame-v3-sha512 tree (trusted)
@@ -25,6 +27,8 @@ What the verifier holds (`Verifier`): its domain, the hm96 key and the format, a
 frame leaf's digest opens at `rank`. What its check hashed: under `H` (`outerHashed`), the salt's and the hm96 leaf's
 messages, the frame leaf's message, and the path's node messages; under `G` (`innerHashed`), the row digest's messages.
 -/
+
+@[expose] public section
 
 namespace Hash.RowLeaf
 

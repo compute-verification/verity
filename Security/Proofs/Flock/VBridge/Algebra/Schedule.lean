@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Algebra.Sizes
+module
+
+public import Proofs.Flock.VBridge.Algebra.Sizes
 
 /-!
 # The rounds `verifierRows` asks for
@@ -9,6 +11,8 @@ it has drawn rounds of those sizes, and every round of the record (`run_z`, `run
 `verifierRows` returns, whenever `structureOf` does, exactly at the records whose rounds have the sizes `ns`, with the
 statement's number of extra claims (`verifierRows_schedule`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

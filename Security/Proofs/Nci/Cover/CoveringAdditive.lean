@@ -1,6 +1,8 @@
-import Definitions.Nci.Guarantees.CoverAdditive
-import Proofs.Nci.Covering
-import Proofs.Nci.Cover.Additive
+module
+
+public import Definitions.Nci.Guarantees.CoverAdditive
+public import Proofs.Nci.Covering
+public import Proofs.Nci.Cover.Additive
 
 /-!
 # The additive covering bound
@@ -12,12 +14,14 @@ in the two-cost proof. The two sets of inputs are disjoint parts of `in(S) \ θ`
 AM–GM (`four_mul_le_sq`) bounds `|θ'_S| |J_S|` by `(k / c_w)(k / c_a) / 4`.
 -/
 
+@[expose] public section
+
 namespace Nci.Cover.SecurityProofs
 
 open Finset Nci.SecurityProofs.Covering
 
 /-- Conditional parameter-hardness implies parameter-hardness at the same cost. -/
-theorem parameterHardAt_of_conditional {d : Verity.Declaration} {B : Nci.Covering.MulBlocks d} {s : ℕ} {cw : ℝ}
+theorem parameterHardAt_of_conditional {d : Verity.RegisteredCircuit} {B : Nci.Covering.MulBlocks d} {s : ℕ} {cw : ℝ}
     (h : Assumptions.ConditionalParameterHardAt d B s cw) : Nci.Assumptions.ParameterHardAt d B s cw :=
   fun S hS => (h S hS).trans (by exact_mod_cast card_le_card (sdiff_subset_sdiff subset_rfl subset_union_left))
 

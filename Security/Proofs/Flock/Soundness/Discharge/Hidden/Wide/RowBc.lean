@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowCommit
-import Proofs.Flock.Soundness.Discharge.Hm.Bc
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowCommit
+public import Proofs.Flock.Soundness.Discharge.Hm.Bc
 
 /-!
 # A row's `b ‖ c` under its own prefix, for `sha512/row/v1` and `sha512/row/v2` rows
@@ -12,6 +14,8 @@ its compressions' blocks and end, with their padding, in its `hm96` slot's block
 `pad_const_tgt`), with the row's own prefix `HmRow.prefixOf`. A row of no compression is hashed by its `hm96` slot
 alone, its `cv` the prefix's midstate (`row_copies_tgt0`, `port_commit_rows0`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

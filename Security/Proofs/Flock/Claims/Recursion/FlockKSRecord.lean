@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.FlockKSDeploy
-import Proofs.Flock.Claims.Recursion.KSStated
-import Proofs.Flock.Claims.KS.TableBound
-import Proofs.Flock.Claims.KS.Trim
-import Proofs.Flock.Claims.Bridge.Hm96Tree
+module
+
+public import Proofs.Flock.Claims.Recursion.FlockKSDeploy
+public import Proofs.Flock.Claims.Recursion.KSStated
+public import Proofs.Flock.Claims.KS.TableBound
+public import Proofs.Flock.Claims.KS.Trim
+public import Proofs.Flock.Claims.Bridge.Hm96Tree
 
 /-!
 # Flock meets `Inner.KSAbort` at the deployed records
@@ -26,6 +28,8 @@ So the recursion's KS over an inner deployed record (`plain_KSFlock`, `zk_KSFloc
 the one-table shape), Flock's KS at the outer deployment, and the recursion's own hypotheses, with `PublicCoin` met at
 `decCoin`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

@@ -1,4 +1,6 @@
-import Definitions.Pous.P2.Cost
+module
+
+public import Definitions.Pous.P2.Cost
 
 /-!
 # A location's window with the ring's oracle locations (trusted)
@@ -15,6 +17,8 @@ reach the location in the next window). `trace f n` is the queries asked at the 
 and the batches delivered at those ticks, when the oracle locations answer `f`; `result f` is what the window yields,
 and `keys f` and `ops f` the key and ring queries it asks.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.SessionLoop.FinRep
+module
+
+public import Proofs.Flock.SessionLoop.FinRep
 
 /-!
 # (c.3) `FinRepFwView`, in parts
@@ -19,6 +21,8 @@ each named here, none a premise of a guarantee:
 (`Masked.eq_of_eraseZ`), the table and schedule are the loop's (`Loop.finRepTab`), and the two encoders are one
 (`Finish.encZk_view`, `Finish.shapeZk_view`). **`Loop.finRepProofs_of_view`** then gives (c) with `Loop.finRepCut`.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

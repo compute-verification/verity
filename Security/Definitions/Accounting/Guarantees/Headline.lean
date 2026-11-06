@@ -1,5 +1,7 @@
-import Definitions.Accounting.Headline
-import Definitions.Accounting.Assumptions.Sheet
+module
+
+public import Definitions.Accounting.Headline
+public import Definitions.Accounting.Assumptions.Sheet
 
 /-!
 # The headline guarantees (trusted)
@@ -130,6 +132,8 @@ below 1.06% can hold; VF3s-16's `ROW_L2RD` loads fbw at 5.78 of ♭, so its real
 sm_80 has no headline: FOLD-OPT is false at its ALU-pipe certificate, which doesn't price duo's `IMAD.HI.U32` rotate
 route on the FMA pipe.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

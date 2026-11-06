@@ -1,5 +1,7 @@
-import Definitions.Accounting.Assumptions.TS
-import Definitions.Accounting.TS.Steer
+module
+
+public import Definitions.Accounting.Assumptions.TS
+public import Definitions.Accounting.TS.Steer
 
 /-!
 # Steering under one σ (trusted)
@@ -26,6 +28,8 @@ STEER-PROOF's route B, each `def G : Prop` proved as
   needs may depend on every other answer but not its own, and the chance that some query zeroes some `n` segments is at
   most `T·C(G, n)·μ^n`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

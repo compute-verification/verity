@@ -1,6 +1,8 @@
-import Proofs.Accounting.Headline.Sm120
-import Proofs.Pouw.FpG1.H1
-import Definitions.Accounting.Guarantees.FpG1
+module
+
+public import Proofs.Accounting.Headline.Sm120
+public import Proofs.Pouw.FpG1.H1
+public import Definitions.Accounting.Guarantees.FpG1
 
 /-!
 # FP8-g1's and W4A8-g1's headlines on sm_120, and an honest g1 window that meets every premise
@@ -36,6 +38,8 @@ The witness isn't a served window. Its relation checks H1's ranges; it is no mod
 Lean here models (`ProofsPin`'s docstring). Its receipt game is the honest one, so it doesn't exercise H1's coin-keyed
 receipt check, and its time is exactly the credit, so it shows only that every premise can hold at once.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.FpG1
 

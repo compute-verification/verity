@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.Claims.Recursion.RecordCanon
-import Proofs.Flock.Claims.Recursion.VerdictRun
-import Proofs.Flock.Claims.Complete.Verdict
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
+public import Proofs.Flock.Claims.Recursion.RecordCanon
+public import Proofs.Flock.Claims.Recursion.VerdictRun
+public import Proofs.Flock.Claims.Complete.Verdict
 
 /-!
 # Row A's step 3: the verdict on the decoded proofs, from every table's runs
@@ -19,6 +21,8 @@ around them.
   pinned parameters and committed cap, each rep accepts with the committed `root_B` (`verifyRepDWith_std_of_prog`),
   so both reps' caps agree, and the verdict accepts where the session's public words are empty.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

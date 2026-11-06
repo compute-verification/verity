@@ -4,9 +4,9 @@
 The session loop (`Session`) holds each firewalled rep's frame itself (`Frame.step` at the frame's `Cfg` and `State`) and
 issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prover sends names a frame's request:
 
-* `startRep`: a rep's frame starts at the loop's frames port (`rep NAME TABLE REP`), for a live session and one of its
-  tables' reps, at the statement's start (`Drive.start`: its pads layout and mask slot), its draws from the operating
-  system, which never leave the loop: the prover gets the pads' root alone.
+* `startRep`: a rep's frame starts at the loop's frames port (`rep NAME TABLE REP`), for a live session whose level 0 the
+  loop drew and one of its tables' reps, at the statement's start (`Drive.start`: its pads layout and mask slot), its
+  draws from the operating system, which never leave the loop: the prover gets the pads' root alone.
 * `round`: a session's `Round` of a rep stream carries the device's round. Its place is the statement's: the algebraic
   phase's scheduled round (`Skeleton.rounds`, on the table's level 0, the loop's own), then the opening's
   (`Drive.openStep`, the rep's opening a round at a time, on the extra claims at the session's `Commit` coins,
@@ -14,25 +14,35 @@ issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prov
   (`Frame.innerSched`) on the rounds the loop's finish computed for the rep before they went to the host
   (`Sessions.inner`, `Finish.serve`'s `inner`), so the host only relays them. At a round the finish has not computed,
   the frame takes no device round: whatever the host relays fails, the frame's own round on the finish's rounds so far
-  stands in, and the rep stops, so the session's `Finish` leaves without proofs. Rep 1's frame first takes
-  rep 0's algebraic-phase coins (`prior`). What leaves is the frame's release, at the stream's first round after its
-  domain frame (`domainFrame`, `Transcript.init`'s).
+  stands in, and the rep stops, so the session's `Finish` leaves without proofs. A stop is the session's: once any rep's
+  frame of it stopped (a failed round, a refused one, a failed worker's rounds; `Sessions.stopped`), the frame takes no
+  device round at any of its reps' rounds, and every rep of the session stops, its rounds leaving as the scheduled ones
+  of a stopped rep. Rep 1's frame first takes rep 0's algebraic-phase coins (`prior`). What leaves is the frame's
+  release, at the stream's first round after its domain frame (`domainFrame`, `Transcript.init`'s).
 * `coins`: once the coins answered that round open the committed tree (`State.answer`), the frame takes them
   (`feedOf` the answer), and the opening goes on with them where the round was its; the prover receives them only once the frame did.
-* `finish`: the session's `Finish` leaves only once every rep's frame answers `finish` at its end, not stopped.
+* `finish`: the session's `Finish` leaves only once every rep's frame answers `finish` at its end, not stopped
+  (`finishOf`).
 * `ask`: the prover learns each rep's next place (`place`), so that a rep whose device stopped goes on with the
   schedule's rounds, which the frame stands in for, and the values the frame took (`vals`), which its finish request
-  carries: the prover keeps no schedule and no check of its own.
+  carries: the prover keeps no schedule and no check of its own. Its answer only reads the loop's frames (`askOf`).
 
-A round and a round's coins are pure steps of the loop's frames (`roundStep`, `coinsStep`, on the `Sessions` as a
-value); `round` and `coins` only read the sessions, run the step, put the rep's frame back and log. So what a rep's frame
-takes is a function of the loop's frames and the request alone.
+A round, a round's coins and a `Finish` are pure steps of the loop's frames (`roundStep`, `coinsStep`, `finishOf`, on
+the `Sessions` as a value); `round`, `coins` and `finish` only read the sessions, run the step, put the rep's frame back
+and log. Between its start
+(`startRep`) and its session's end (`close`) a rep's frame is written by them alone, at its own session's requests, one
+at a time, so no other task puts back a frame from before one of them. So what a rep's frame takes is a function of the
+loop's frames and the request alone.
 
 So every coin a frame takes is the loop's own reading of the auditor's answer, and every round in a device round's place
 is the loop's own, a function of the statement, the table's level 0, the rep's salts and the coins: the opening's are
 `Drive.opening`'s, which feeds `Drive.openStep` the same coins (`Drive.Step.feed`).
 -/
-import Flock.Firewall.Drive
+module
+
+public import Flock.Firewall.Drive
+
+@[expose] public section
 
 namespace Flock.Firewall.Frames
 
@@ -125,6 +135,10 @@ def Sessions.find (R : Sessions) (sid i r : Nat) : Option (Nat × Rep) := do
 def Sessions.put (R : Sessions) (p : Rep) : Sessions :=
   { R with reps := R.reps.map fun q => if q.sid == p.sid && q.table == p.table && q.rep == p.rep then p else q }
 
+/-- **Whether session `sid` stopped** in the loop's frames `R`: a frame of one of its reps stopped (`Masker.stopped`: a
+round of the rep failed, or the frame refused one), from which on every rep of the session stops (`roundPlace`). -/
+def Sessions.stopped (R : Sessions) (sid : Nat) : Bool := R.reps.any fun p => p.sid == sid && p.st.m.stopped
+
 /-- **The live session named `name`** (`Level0.nameOf`) in the loop's frames `R` and level 0s `L0`, for a request `what`;
 else why not: a name no live session has, or a session before its `Hello`. -/
 def Sessions.named (R : Sessions) (L0 : Level0.Slots) (what name : String) : Except String Release := do
@@ -145,8 +159,9 @@ def Sessions.maskOf (R : Sessions) (L0 : Level0.Slots) (name : String) (j m : Na
 
 /-- **Table `i`'s rep `r` of the session named `name` starts**, for the request line `line` on `ch`: `rep NAME I R` is
 answered `ok 64` followed by the pads' root (`Frame.padsRoot`) over the rep's draws, drawn from the operating system at
-the statement's start (`Drive.start`) and kept in the rep's frame, never sent; a rep's frame starts once. Anything else is
-answered `err WHY`. -/
+the statement's start (`Drive.start`) and kept in the rep's frame, never sent; a rep's frame starts once, and only once
+the session's level 0 is drawn (`Level0.Slots.drawn`), so after every table's witness is in (`Session.level0`). Anything
+else is answered `err WHY`. -/
 def startRep (ch : Frame.Chan) (reg : IO.Ref Sessions) (l0s : IO.Ref Level0.Slots) (line : String) : IO Unit := do
   let say := fun (s : String) => ch.write (s ++ "\n").toUTF8
   let err := fun (why : String) => say s!"err {why.replace "\n" " "}"
@@ -159,6 +174,8 @@ def startRep (ch : Frame.Chan) (reg : IO.Ref Sessions) (l0s : IO.Ref Level0.Slot
       | .error e => return (← err e)
     let sid := s.sid
     let some st := s.sts[i]? | err s!"table {i} of the session's {s.sts.size}"
+    unless (← l0s.get).drawn sid do
+      return (← err s!"table {i} rep {r} before the session's level 0: a rep's frame starts once every table's witness is in")
     let (lay, mask) ← match Drive.start st with
       | .ok x => pure x
       | .error e => return (← err s!"the rep's start: {e}")
@@ -229,7 +246,9 @@ algebraic-phase coins), the round's place, whether it is the stream's first roun
 round in that place, if it takes none; or why the round has none. The place is `placeOf`'s, but past the opening: there
 the inner proof's round `j` is the frame's own (`Frame.innerSched`) on the rounds the loop's finish computed for the rep
 (`Sessions.innerOf`). At a round `j` the finish has not computed, the frame takes no device round: whatever the host
-relays, the frame fails it, and its own round on the finish's rounds so far stands in (`roundStep`). -/
+relays, the frame fails it, and its own round on the finish's rounds so far stands in (`roundStep`). Nor does it take
+one at any round of a session that stopped (`Sessions.stopped`): the session stops at its first failure, and every rep's
+round from there on leaves as the scheduled round of a stopped rep, whatever the device sent. -/
 def roundPlace (R : Sessions) (L0 : Level0.Slots) (sid i r : Nat) (dom content : ByteArray) (n : Nat) :
     Except String (Rep × Frame.Place × Bool × Option String) := do
   let some (_, p) := R.find sid i r | throw s!"a round of table {i} rep {r}, whose frame the loop has not started"
@@ -250,15 +269,16 @@ def roundPlace (R : Sessions) (L0 : Level0.Slots) (sid i r : Nat) (dom content :
       | (.ok, st') => p := { p with st := st' }
       | (a, _) => throw s!"rep 0's algebraic-phase coins: {replyWhy a}"
   let (place, _, p') ← placeOf R.salts l0 s p (s.spec.domain name r).toUTF8
+  let stopped := if R.stopped sid then some s!"session {sid} stopped at a rep's failure" else none
   match place with
   | .own =>
     let j := p'.st.m.inner.getD 0
     let fin := R.innerOf l0.root r
     if Frame.INNER_ROUNDS ≤ j then throw s!"a round after the inner proof's {Frame.INNER_ROUNDS}"
-    let noDevice := if j < fin.size then none
+    let noDevice := if j < fin.size then stopped
       else some s!"table {i} rep {r}'s inner round {j}, which the loop's finish has not computed"
     return (p', .sched (Frame.innerSched p'.cfg p'.st.m fin n j), first, noDevice)
-  | _ => return (p', place, first, none)
+  | _ => return (p', place, first, stopped)
 
 /-- A round's effect on the loop: what leaves (or why nothing does), the rep's frame after it, which the loop puts back,
 the rank check's result where the round made it, and the round and why the rep stopped where the round stopped it. -/
@@ -328,19 +348,21 @@ def coins (reg : IO.Ref Sessions) (sid i r : Nat) (cs : Array F128) : IO (Except
     return .ok ()
   | .error e => return .error e
 
-/-- **Whether session `sid`'s `Finish` may leave**: every rep of its `tables` tables has a frame, which answers `finish`
-at its end, not stopped; else why not. -/
-def finish (reg : IO.Ref Sessions) (sid tables : Nat) : IO (Except String Unit) := do
-  let R ← reg.get
+/-- **Whether session `sid`'s `Finish` may leave**, in the loop's frames `R`: every rep of its `tables` tables has a
+frame, which answers `finish` at its end, not stopped; else why not. -/
+def finishOf (R : Sessions) (sid tables : Nat) : Except String Unit := do
   for i in [0:tables] do
     for r in [0:2] do
-      let some (_, p) := R.find sid i r | return .error s!"a Finish where table {i} rep {r}'s frame never started"
+      let some (_, p) := R.find sid i r | throw s!"a Finish where table {i} rep {r}'s frame never started"
       match Frame.step p.cfg p.st .finish with
       | (.done false, _) => pure ()
-      | (.done true, _) => return .error s!"{Frame.STOP}the Lean frame stopped table {i} rep {r}"
-      | (.refuse why, _) | (.err why, _) | (.stop why, _) => return .error s!"table {i} rep {r}: {why}"
-      | _ => return .error s!"table {i} rep {r}: no answer to finish"
-  return .ok ()
+      | (.done true, _) => throw s!"{Frame.STOP}the Lean frame stopped table {i} rep {r}"
+      | (.refuse why, _) | (.err why, _) | (.stop why, _) => throw s!"table {i} rep {r}: {why}"
+      | _ => throw s!"table {i} rep {r}: no answer to finish"
+
+/-- `finishOf` on the loop's frames as they are. -/
+def finish (reg : IO.Ref Sessions) (sid tables : Nat) : IO (Except String Unit) :=
+  return finishOf (← reg.get) sid tables
 
 /-- **What the loop holds of table `i`'s rep `r`** on the level 0 of root `root`, in its frames `R` and level 0s `L0`
 (`Finish.Own`): the draws its frame took at its start, which the loop's finish proves the rep with (`Finish.drawsOf`), and
@@ -368,40 +390,37 @@ phase ended and the opening waits for the rep's salts for levels ≥ 1, which th
 whose rounds the host relays from the loop's finish (`roundPlace`); `vals NAME I R`
 by `ok N` followed by the `N` bytes of the values the frame took so far (`Rep.vals`). A prover whose device stops sends
 each place's round empty (its first, the domain frame alone): the frame fails it, and the scheduled round leaves in its
-place. Anything else is answered `err WHY`. -/
+place. Anything else is refused, with why. The answer is read off the loop's frames `R` and level 0s `L0` alone, as the
+line it sends and the bytes after it: no rep's frame is written, so what the prover asks while one of the rep's own
+requests runs (`round`, `coins`, which compute its place themselves, `roundPlace`) never puts back a frame from before
+it. -/
+def askOf (R : Sessions) (L0 : Level0.Slots) (line : String) : Except String (String × ByteArray) := do
+  let [what, name, i, r] := (line.replace "\n" "").splitOn " " | throw s!"a request `{line.trim}`"
+  let (some i, some r) := (i.toNat?, r.toNat?) | throw s!"a request `{line.trim}`"
+  unless what == "place" || what == "vals" do throw s!"a request `{line.trim}`"
+  let s ← R.named L0 what name
+  let some (_, p) := R.find s.sid i r | throw s!"a {what} of table {i} rep {r}, whose frame the loop has not started"
+  if what == "vals" then
+    let b := wordBytes p.vals
+    return (s!"ok {b.size}", b)
+  let some tname := s.spec.tables[i]? | throw s!"table {i} of the session's {s.spec.tables.size}"
+  let some l0 := Level0.ofSession L0 s.sid tname | throw s!"a place of {tname} before the session's Commit"
+  let p ← withAlg s l0 tname p
+  let alg := p.coins.size < p.alg.size
+  if !alg && !p.opened && p.opening.isNone && !R.salts.any (fun (x, q, _) => x == l0.root && q == r) then
+    return ("salts", .empty)
+  let (place, n, _) ← placeOf R.salts l0 s p (s.spec.domain tname r).toUTF8
+  match place with
+  | .sched _ => return (s!"{if alg then "alg" else "open"} {n}", .empty)
+  | _ => return ("own", .empty)
+
+/-- `askOf` on the loop's frames and level 0s as they are, its answer sent on `ch`, `err WHY` where it refuses. -/
 def ask (ch : Frame.Chan) (reg : IO.Ref Sessions) (l0s : IO.Ref Level0.Slots) (line : String) : IO Unit := do
-  let say := fun (s : String) => ch.write (s ++ "\n").toUTF8
-  let err := fun (why : String) => say s!"err {why.replace "\n" " "}"
-  match (line.replace "\n" "").splitOn " " with
-  | [what, name, i, r] =>
-    let (some i, some r) := (i.toNat?, r.toNat?) | err s!"a request `{line.trim}`"
-    unless what == "place" || what == "vals" do return (← err s!"a request `{line.trim}`")
-    let R ← reg.get
-    let s ← match R.named (← l0s.get) what name with
-      | .ok s => pure s
-      | .error e => return (← err e)
-    let sid := s.sid
-    let some (_, p) := R.find sid i r | err s!"a {what} of table {i} rep {r}, whose frame the loop has not started"
-    if what == "vals" then
-      let b := wordBytes p.vals
-      say s!"ok {b.size}"
-      return (← ch.write b)
-    let some tname := s.spec.tables[i]? | err s!"table {i} of the session's {s.spec.tables.size}"
-    let some l0 := Level0.ofSession (← l0s.get) sid tname | err s!"a place of {tname} before the session's Commit"
-    let p ← match withAlg s l0 tname p with
-      | .ok p => pure p
-      | .error e => return (← err e)
-    let alg := p.coins.size < p.alg.size
-    if !alg && !p.opened && p.opening.isNone && !R.salts.any (fun (x, q, _) => x == l0.root && q == r) then
-      return (← say "salts")
-    match placeOf R.salts l0 s p (s.spec.domain tname r).toUTF8 with
-    | .error e => err e
-    | .ok (place, n, p') =>
-      reg.modify (·.put p')
-      match place with
-      | .sched _ => say s!"{if alg then "alg" else "open"} {n}"
-      | _ => say "own"
-  | _ => err s!"a request `{line.trim}`"
+  match askOf (← reg.get) (← l0s.get) line with
+  | .ok (l, b) =>
+    ch.write (l ++ "\n").toUTF8
+    unless b.isEmpty do ch.write b
+  | .error why => ch.write s!"err {why.replace "\n" " "}\n".toUTF8
 
 /-- Session `sid` ended: its frames, their openings and the salts, inner proofs' rounds and proof files of its tables'
 level 0 (`roots`) are gone. -/

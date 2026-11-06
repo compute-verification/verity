@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Statements
-import Proofs.Flock.Soundness.Discharge.ZkExec.LiveStatements
-import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.LiveStatements
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 
 /-!
 # `RunsZC` at the hidden-output `--zk` tables (statement)
@@ -18,6 +20,8 @@ statement `Stmt.setupH` sets up, so the hidden case is a different `RunsZC` inst
 * `RunsZCLiveHSt`, `RunsZCLiveHISt`: `RunsZCLiveH` and `RunsZCLiveHI` at the statement circuit (`HmOut.parseStmt`, a
   templated file's template unrolled), from `TablesAtZKHLiveSt` and `TablesAtZKHLiveISt`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

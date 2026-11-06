@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishCommit
-import Proofs.Flock.Claims.Complete.ZkTables.Round0
+module
+
+public import Proofs.Flock.Claims.ZK.FinishCommit
+public import Proofs.Flock.Claims.Complete.ZkTables.Round0
 
 /-!
 # Level 0 as the session loop keeps it is `commit0`'s
@@ -16,6 +18,8 @@ two are one, wherever the loop drew that `Level0` (`Level0.ofDraws`):
 * **`commitOf_eq`**: a `Level0` that `ofDraws` returns commits as `commit0` at its own level, `t_pad` and table
   (`Level0.ofDraws_ok`: its rows and layers are `Link`'s of `toIn`).
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

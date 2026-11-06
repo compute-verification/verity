@@ -225,7 +225,6 @@ tests = [
     "tests/engine/test_env.py",
     "tests/observe/test_fold_build_versions.py",
     "tests/program/predict/test_predict.py",
-    "tests/program/test_device_pin.py",
     "tests/program/test_twins.py",
     "tests/test_no_by_name_rules.py",
 ]

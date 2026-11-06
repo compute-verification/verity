@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.CoveringTwoCosts
-import Proofs.Nci.Covering
+module
+
+public import Definitions.Nci.Guarantees.CoveringTwoCosts
+public import Proofs.Nci.Covering
 
 /-!
 # The covering bound at two costs
@@ -15,11 +17,13 @@ At `c_w = c_a = r · b` the assumptions are `ParameterHard` and `ActivationChain
 `CoveringBound`'s (`coveringBound_of_twoCosts`). `CoveringBound` keeps its own proof.
 -/
 
+@[expose] public section
+
 namespace Nci.SecurityProofs.CoveringTwoCosts
 
 open Verity Finset Nci.Covering
 
-variable {d : Declaration} (B : MulBlocks d)
+variable {d : RegisteredCircuit} (B : MulBlocks d)
 
 theorem parameterHard_iff (s : ℕ) (r b : ℝ) :
     Assumptions.ParameterHard d B s r b ↔ Assumptions.ParameterHardAt d B s (r * b) := Iff.rfl
@@ -49,7 +53,7 @@ open Verity Finset Nci.Covering Nci.SecurityProofs.Covering
 /-- **One block's chained count at two costs**: an `(s, k)`-inference block `S` of an `(s, c_w)`-parameter-hard `d`,
 with `c_w D > k` and `c_a > 0`, computes the output gates of at most `(k / c_w)(k / c_a) + k` multiplication blocks
 chained at `(D, c_a)`: at most `k` that it doesn't complete, and the completed ones in `θ'_S × J_S`. -/
-theorem CoveringTwoCosts.card_charged_le {d : Declaration} (B : MulBlocks d) {s k D : ℕ} {cw ca : ℝ}
+theorem CoveringTwoCosts.card_charged_le {d : RegisteredCircuit} (B : MulBlocks d) {s k D : ℕ} {cw ca : ℝ}
     (hkD : (k : ℝ) < cw * D) (hca : 0 < ca) (hhard : Assumptions.ParameterHardAt d B s cw) {S : Subcircuit d.D}
     (hS : InferenceBlock d s k S) :
     (((Assumptions.chainedBlocksAt d B D ca).filter fun p => B.o p ∈ S.inner).card : ℝ) ≤ k / cw * (k / ca) + k := by

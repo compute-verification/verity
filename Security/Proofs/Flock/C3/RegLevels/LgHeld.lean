@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Sparse.HeldStages
-import Proofs.Flock.C3.RegLevels.RRounds
+module
+
+public import Proofs.Flock.C3.Sparse.HeldStages
+public import Proofs.Flock.C3.RegLevels.RRounds
 
 /-!
 # `StageHeld` part 3 at R's stages: `laterCoins_of_held`'s `h4` and `h5`
@@ -18,6 +20,8 @@ weave R's Ligerito's coins are `rep0`'s rounds from `k₂`, as many as it takes.
 (`stackedStreams_of_covers`' `hx`, `hxs`); both end by `r` where the run's stages take at most `r - 1` rounds in all
 (`htot`, `Compose.coins_total_holo` at `holoCTs`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 
 /-!
 # The registered reads of a hidden-output `verify --zk --registered F` session
@@ -8,6 +10,8 @@ hidden outputs too (`Stmt.setupHidden`, the default `--statement`), as `AcceptsZ
 differs is the drawn statement: setupHidden's is `HmOut.drawn c pub d`, `HmRow.drawn` at the circuit without its output
 words. `OwnReadsH` and `regPathsH` are `OwnReads` and `regPaths` at that drawn statement.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

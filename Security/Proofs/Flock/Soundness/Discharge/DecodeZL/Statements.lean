@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Wire
-import Proofs.Flock.Soundness.Discharge.Exec.Rounds
-import Proofs.Flock.Soundness.Discharge.Exec.Verdict
-import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
-import Proofs.Flock.Soundness.Discharge.Integrate.Headline
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Wire
+public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 
 /-!
 # The message half of R11b, and the decoder at the headline: statements
@@ -24,6 +26,8 @@ verdict accepts. The statements here:
   `capOfRoot`.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.DecodeZL
 
 open Flock Refine Exec Game Model Accounting Audit
@@ -41,7 +45,7 @@ def ZLCarries : Prop :=
     Carries (wZL m kLog) (zcShape 𝔽 m ++ lcShape 𝔽 kLog) (.dom d :: (zcFrames m dig cap zp ++ lcFrames kLog lp))
       (zcMsgs m zp ++ lcMsgs kLog lp) []
 
-/-- **The lengths a decoded proof has** (`decodeProof`'s `vecExact` checks, PROTOCOL.md §8). -/
+/-- **The lengths a decoded proof has** (`decodeProof`'s `vecExact` checks, `Flock.Proof`). -/
 structure ProofSizes (sh : Shape) (p : Proof) : Prop where
   r1ab : p.zerocheck.round1ab.size = 64
   r1c : p.zerocheck.round1c.size = 64

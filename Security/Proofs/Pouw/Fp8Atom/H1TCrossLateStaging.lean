@@ -1,7 +1,9 @@
-import Definitions.Pouw.Fp8Atom.H1TCrossLate
-import Proofs.Pouw.Fp8Atom.H1TGapStaging
-import Proofs.Pouw.Fp8Atom.H1TSliceProofs
-import Proofs.Pouw.Fp8Atom.H1TFlipProofs
+module
+
+public import Definitions.Pouw.Fp8Atom.H1TCrossLate
+public import Proofs.Pouw.Fp8Atom.H1TGapStaging
+public import Proofs.Pouw.Fp8Atom.H1TSliceProofs
+public import Proofs.Pouw.Fp8Atom.H1TFlipProofs
 
 /-!
 # H-1T: `H1TCrossLate` in the exact-512 regime (proofs)
@@ -32,6 +34,8 @@ of `a`) for the two slices' block-1 words `32·q32 c σ` (tag values `32·c`, ta
 for `k ≤ 19,430`: there `|R_(T−3)| < 2^32 + 2^18`. The five theorems named above are granted, not pinned (pin when
 used); the rest is lemmas.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.CrossLate
 

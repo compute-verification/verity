@@ -1,4 +1,6 @@
-import Definitions.Pouw.H1Zy.Lane
+module
+
+public import Definitions.Pouw.H1Zy.Lane
 
 /-!
 # `PouwH1TileZy_v1{TILE}` on words, over `PouwH1Tile_v1` or `PouwH1Tile_v3` (trusted)
@@ -35,6 +37,8 @@ Every word view is its primitive's, with indices past `K` read as `0` (`codeAt`,
 tile doesn't bind at reach. `PouwOneStream` is stated at any digit count (`one_stream`), where the Definition has it
 only at `m = 2, 3`. Proved in `Proofs.Pouw.H1Zy` to give the exact dot in either form.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

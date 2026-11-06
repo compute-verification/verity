@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.ZkCols
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-import Flock.With.ZkEq
+module
+
+public import Proofs.Flock.Claims.ZkCols
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+public import Flock.With.ZkEq
 
 /-!
 # Level 0's query round in the masked verifier over the hash oracle
@@ -28,6 +30,8 @@ when every table's Merkle scheme is the registry's, `Zk.verify_eq_verifyWith`):
 Each table is checked on its own: its reps' streams, its schedule's level 0 and its own `root_B[i]`. A multi-table
 session commits one level-0 codeword per table, so `zkRunCols` reads one table's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZkQuery
 

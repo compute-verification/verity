@@ -1,5 +1,7 @@
-import Evaluate.Walk
-import Difftest
+module
+
+public import Evaluate.Walk
+public import Difftest
 
 /-!
 # The difftest function
@@ -11,6 +13,10 @@ or its bytes as a JSON string; `inputs` holds one argument per parameter of the 
 integer words in leaf order or `{"table": <name>}` for a registered table the evaluator computes (`Evaluate.Arg`), which keeps
 a table of 2^28 words out of the request (`Evaluate.evaluate`). An `input` not of this form is rejected too.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Evaluate
 

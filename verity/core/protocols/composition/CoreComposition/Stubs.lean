@@ -4,7 +4,11 @@ passed) under an id of its own, which says it is a stand-in. A port replaces its
 `Core.Remote.components` with its own `Core.Protocol` value, under its own id, and its stub goes. Every subprotocol of
 onsite and remote has been ported; `stub` stays for the composition's own guards.
 -/
-import CoreProtocol.Example
+module
+
+public import CoreProtocol.Example
+
+@[expose] public section
 
 namespace Core.Composition.Stub
 

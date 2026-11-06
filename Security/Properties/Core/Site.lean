@@ -1,5 +1,7 @@
-import Definitions.Core.Site
-import CoreProtocol.Site
+module
+
+public import Definitions.Core.Site
+public import CoreProtocol.Site
 
 /-!
 # The Site's code: its fold and its check are the spec's
@@ -20,6 +22,8 @@ the Site, log, digests and auditor a code value denotes (`site`, `log`, `digests
 The code's difftest (`site-difftest`) holds it to `verity.core.site`, so these carry the Python Site to the spec. A code
 figure (`Core.Site.Figure`, a nonnegative `Rat`) denotes the same rational in `ℚ≥0` (`figure`).
 -/
+
+@[expose] public section
 
 open scoped NNRat
 
@@ -135,8 +139,7 @@ def ofEntry (e : Verity.Site.Entry) : Core.Site.Entry :=
   ⟨e.sheets.map ofSheet, e.locs.map ofLoc, e.links.map ofLink⟩
 
 /-- The code's entry of the registration of a spec entry. -/
-def ofRegEntry : Verity.Registration.Entry → Core.Site.Registration.Entry
-  | .site p e => .site p (ofEntry e)
+def ofRegEntry (e : Verity.Registration.Entry) : Core.Site.Registration.Entry := .site e.previous (ofEntry e.added)
 
 /-- The spec's composite of a code composite. -/
 def composite : Core.Site.Registration.Composite → Verity.Registration.Composite

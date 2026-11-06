@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Audit.Work
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
+module
+
+public import Proofs.Flock.Soundness.Audit.Work
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # The cumulative harm budget over adaptive rounds
@@ -33,6 +35,8 @@ number of wrong steps reaches `K` with probability at most `(1 − q)^K + Σ err
 `k*(p) = ln(1/(1−p)) / (−ln(1−q))` wrong steps with at most `1 − p + Σ err`. It is tight: one round
 that accepts exactly when its draw misses `B` meets `(1 − q)^{|B|}` (`harm_count_tight`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

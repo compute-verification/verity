@@ -1,9 +1,11 @@
-import Proofs.Flock.C3.RegLevels.SrcTie
-import Proofs.Flock.C3.Compose.LastRead
-import Proofs.Flock.C3.RegLevels.Read
-import Proofs.Flock.Soundness.Refine.LigeritoRun
-import Proofs.Flock.Soundness.Refine.Final
-import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
+module
+
+public import Proofs.Flock.C3.RegLevels.SrcTie
+public import Proofs.Flock.C3.Compose.LastRead
+public import Proofs.Flock.C3.RegLevels.Read
+public import Proofs.Flock.Soundness.Refine.LigeritoRun
+public import Proofs.Flock.Soundness.Refine.Final
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
 
 /-!
 # n9: R's Ligerito ends in a coin (H's `LigWhole`) from the source's tie
@@ -15,6 +17,8 @@ schedule ends in a coin (`ligEndsInCoin`): such a schedule has two or more level
 Ligerito never stops early (`ligeritoC_exact`) and its shape ends in the last level's batching coin
 (`ligShape_coin`), so `u.lg` does (`ligWhole_of_tie`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

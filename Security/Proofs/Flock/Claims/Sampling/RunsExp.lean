@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Runs
-import Proofs.Flock.Claims.Sampling.Session
+module
+
+public import Proofs.Flock.Claims.Sampling.Runs
+public import Proofs.Flock.Claims.Sampling.Session
 
 /-!
 # The sampling extractor's expected reruns
@@ -17,6 +19,8 @@ acceptance probability it waits on (`waitRuns_exp`, `accExp_le`):
 
 `level_ex` is one wait and a body at each kept run, used at the outer and the inner wait.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

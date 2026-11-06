@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Sampling.Binding
-import Proofs.Flock.Verifier.Registered
-import Proofs.Properties.NetworkCertifier.Bytes
+module
+
+public import Proofs.Flock.Claims.Sampling.Binding
+public import Proofs.Flock.Verifier.Registered
+public import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # The registered path check binds (frame-v3-sha512)
@@ -24,6 +26,8 @@ is as an oracle program that queries the code's own frames in the code's order (
   (`PathBinds`). `Binding_of_regPath`: the claims' `Binding` for a commitment whose path check is the registered one,
   from its leaf's binding; at the hm96 leaf, `Sampling.Leaf`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

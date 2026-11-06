@@ -1,8 +1,10 @@
-import Mathlib.Data.List.GetD
-import Mathlib.Tactic.IntervalCases
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.NormNum.Basic
-import Properties.Accounting.Served
+module
+
+public import Mathlib.Data.List.GetD
+public import Mathlib.Tactic.IntervalCases
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.NormNum.Basic
+public import Properties.Accounting.Served
 
 /-!
 # Proofs of the served tie's statements (`Accounting.Served`, `Properties.Served`)
@@ -85,6 +87,8 @@ the call's scales: `witKWS_notValueChecked` (`dq(Σ, A_1, B_1)`, at `witXK 128 5
 `witKRaw_notValueChecked` (the raw product, at `witXK 128 128`) and `witKMix_notValueChecked`
 (`0·Σ + 1·dq(p)` of another product `p`, at `witXM`, where `p = 0` and `z = 1`).
 -/
+
+@[expose] public section
 
 namespace Properties.Served
 

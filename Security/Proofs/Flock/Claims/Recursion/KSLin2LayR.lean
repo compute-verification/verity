@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.KSLin2R
-import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Claims.Recursion.LamDeployed
-import Proofs.Flock.Claims.Recursion.PartAcceptsPin
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin2R
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.LamDeployed
+public import Proofs.Flock.Claims.Recursion.PartAcceptsPin
 
 /-!
 # `KSLin2` and `BitsLin2` at the layout of record (`DeployedR.layR`)
@@ -27,6 +29,8 @@ evaluated, by the finders. `lamLin2_layR_ge` charges the extra calls anyway, `e`
 holds at `layR` for every `v, e ≤ 2^54` (`lamLin2_deployed_ge_dep`, whose six terms are each at least `103` up to
 `c_S ≤ 2^59`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

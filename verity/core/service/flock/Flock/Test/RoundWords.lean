@@ -5,7 +5,12 @@ port of V*'s list under one `rec-c<k>` has the words of the round's first, read 
 512 words; a list whose holders of a round differ is refused, naming both. RecSparse's `claim` (`rec-claim`) and R's
 opening's ports (`rec-opening-c<k>`) are no `rec-c<k>`, so they are not compared.
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock.Test.RoundWords
 

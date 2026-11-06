@@ -1,5 +1,7 @@
-import Definitions.Accounting.RateAudit
-import Definitions.Accounting.RateAuditJoint
+module
+
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditJoint
 
 /-!
 # The rate audit with partial completion (trusted)
@@ -29,6 +31,8 @@ plays, without `RealizesRate`'s compute field: that the game's compute and the c
 the named assumption `Accounting.Assumptions.RateComputeAdditive` (the actual-circuit model's W), which the guarantees take
 as a hypothesis.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

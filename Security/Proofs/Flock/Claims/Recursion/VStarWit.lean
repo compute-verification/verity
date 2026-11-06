@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.HonestPartsLayR
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestPartsLayR
 
 /-!
 # V\*'s outer witnesses at the layout of record (`layR`): what `honest_partAccepts_layR` asks of them
@@ -10,6 +12,8 @@ import Proofs.Flock.Claims.Recursion.HonestPartsLayR
 * `hr` holds at every witness and messages (`rowsRead_layR`): `layoutBTops` places no shared row (`rowAt` is
   `LayoutB`'s default) and `layR` changes only the calls, so no part holds one.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

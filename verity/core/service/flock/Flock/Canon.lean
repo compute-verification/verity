@@ -5,9 +5,15 @@ character from `0x80` on are `\uXXXX` in lowercase hex (a UTF-16 surrogate pair 
 escapes `\b \f \n \r \t`. So a canonical text has no byte at or above `0x7f`, and each value has one. Only integers are
 accepted as numbers; anything else is refused rather than guessed.
 -/
-import Lean.Data.Json
-import Std.Data.TreeMap.Raw.Lemmas
-import Flock.Bytes
+module
+
+public import Lean.Data.Json
+public import Std.Data.TreeMap.Raw.Lemmas
+public import Flock.Bytes
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 

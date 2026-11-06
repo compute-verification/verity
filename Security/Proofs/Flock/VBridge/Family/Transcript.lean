@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Family.Join
+module
+
+public import Proofs.Flock.VBridge.Family.Join
 
 /-!
 # `TranscriptIs` after the runs
@@ -20,6 +22,8 @@ outer proof) and `HLeaf`. `decOf` is the decoder `wmsgOf` reads: round `i`'s mes
 the table's round `i` at any accepted outer proof that reads them, so `hmsg` is a theorem (`decOf_spec`) wherever the
 table's round `i` is read from stage `i`'s commit strings (`MsgsRead`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

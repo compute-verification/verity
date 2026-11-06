@@ -1,5 +1,7 @@
-import Proofs.NetworkCertifier.SampledAuditAccepted
-import Proofs.Flock.Claims.Sampling.Assembled
+module
+
+public import Proofs.NetworkCertifier.SampledAuditAccepted
+public import Proofs.Flock.Claims.Sampling.Assembled
 
 /-!
 # The sampled audit at the assembled sampling records
@@ -9,6 +11,8 @@ as a conjunct, at any deployment whose sessions are a Flock record with Flock's 
 `Accepted` at every such deployment (`sampledAuditAccepted_of`), and at the masked and plain records
 (`sampledAuditAccepted_zk`, `sampledAuditAccepted_plain`) as `sampling_assembled` and `sampling_assembled_plain` are.
 -/
+
+@[expose] public section
 
 namespace NetTiming.SampledAuditProof
 

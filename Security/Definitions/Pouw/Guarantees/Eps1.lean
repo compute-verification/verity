@@ -1,4 +1,6 @@
-import Definitions.Pouw.Eps1.M3
+module
+
+public import Definitions.Pouw.Eps1.M3
 
 /-!
 # Dither's CUDA-core lower bounds in model M3 (trusted)
@@ -18,6 +20,8 @@ Free words (functions of one side alone) cost nothing, and the fold is not count
 addressing and each instruction writes one 32-bit word from at most three, so these bound the gather-free `q*` in
 M3; whether the ISA's instructions are such is not these statements' business.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Eps1
 

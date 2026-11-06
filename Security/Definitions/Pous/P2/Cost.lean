@@ -1,6 +1,8 @@
-import Mathlib.Data.ZMod.Basic
-import Definitions.Pous.Accounting.Params
-import Definitions.Pous.Model.M1p
+module
+
+public import Mathlib.Data.ZMod.Basic
+public import Definitions.Pous.Accounting.Params
+public import Definitions.Pous.Model.M1p
 
 /-!
 # P2's cost model: a generic ring over `Z/p` with random odd labels (trusted)
@@ -37,6 +39,8 @@ The model itself is the claim `generic-ring`. Every statement over these is para
 and `Meets` with `RingBounded D Q L` in place of `Bounded D Q`. `Bounded`, `AuditSecure` and `Meets` are unchanged.
 `MeetsWithSlack` is `Meets` with `lam` more bits of adversary state per block, the requirement P2's margin pins read.
 -/
+
+@[expose] public section
 
 namespace Pous
 

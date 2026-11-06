@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.TrimBridge
-import Proofs.Flock.Claims.KS.ZkTauSlot
+module
+
+public import Proofs.Flock.Claims.KS.TrimBridge
+public import Proofs.Flock.Claims.KS.ZkTauSlot
 
 /-!
 # KS at the untrimmed masked instance from `ExtendJ` alone
@@ -14,6 +16,8 @@ The trimmed record's KS holds with no premise (`zk_KS`), and does not give the u
   untrimmed instance at SHA-512 at the deployed relation from `ExtendJ` alone, which `ZkExtend` proves
   (`zk_extendJ`, `zk_KS_untrim`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

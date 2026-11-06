@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
 
 /-!
 # The recursion's KS where the inner rounds' forks bind
@@ -13,6 +15,8 @@ last is bound by `IVStar`'s decision (`Bound.LastBindsEC`), with no `Opening` of
 This file is the chain with `ForksBind` in place of `CallsOpenPlayed` (`Pr_bad_le_fork_binds`, `Pr_bad_le_binds`,
 `bad_rej_le_binds`, `innerKS_of_KSAbort_binds`, `KS_of_flockKS_binds`), at the same bound.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

@@ -12,6 +12,7 @@ defaultTargets = ["Properties"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "security"

@@ -1,12 +1,14 @@
-import NciCheck.Check
-import NciCheck.Difftest
-import NciCheck.Desc
-import NciCheck.DescDifftest
-import NciCheck.DescLiveness
-import NciCheck.DescFuzz
-import NciCheck.Baseline
-import NciCheck.BaselineDifftest
-import NciCheck.Protocol
+module
+
+public import NciCheck.Check
+public import NciCheck.Difftest
+public import NciCheck.Desc
+public import NciCheck.DescDifftest
+public import NciCheck.DescLiveness
+public import NciCheck.DescFuzz
+public import NciCheck.Baseline
+public import NciCheck.BaselineDifftest
+public import NciCheck.Protocol
 
 /-!
 # The NCI policy's check
@@ -32,3 +34,5 @@ C-Flock's decoder doesn't check that a reference reads a leaf at the width it wa
 Python codec refuses as it decodes (`E_REINTERPRET`), so every Program the check reads goes through
 `NciCheck.decodeProgram`, which refuses one that doesn't, with a message.
 -/
+
+@[expose] public section

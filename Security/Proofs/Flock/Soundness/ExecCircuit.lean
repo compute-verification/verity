@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ExecParse
+module
+
+public import Proofs.Flock.Soundness.ExecParse
 
 /-!
 # What `HmRow.parse` accepted
@@ -10,6 +12,8 @@ whole SHA-512 blocks (`rowPorts_words`), the unit, `sha512x3` and `hm96` nets an
 (`wires_prefix`). The walk lifts each level's join points into local definitions (`extract_lets`), so a branch point is one
 goal: the branches meet at the join point.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

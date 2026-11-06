@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Assumptions
+module
+
+public import Proofs.Flock.Soundness.Assumptions
 
 /-!
 # hm96 hiding from the universal hash: the definitions
@@ -8,6 +10,8 @@ apart from `(U, c y)` with `U` uniform. Its least `δ₁` is the statistical dis
 hm96's `My` is the Hankel matrix of its key (`hankel`, `verity/commitments/hm96/PROTOCOL.md` §2), a universal family
 (`Universal`), and the leftover hash lemma bounds the gap's mean over a uniform key (§3).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

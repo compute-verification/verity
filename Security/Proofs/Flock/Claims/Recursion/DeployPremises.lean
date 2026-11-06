@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.DeployMargin
-import Proofs.Flock.Claims.Recursion.FlockKSRecord
-import Proofs.Flock.Claims.Recursion.DeployScopeRuns
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployMargin
+public import Proofs.Flock.Claims.Recursion.FlockKSRecord
+public import Proofs.Flock.Claims.Recursion.DeployScopeRuns
 
 /-!
 # The recursion's premises at `deployRec`
@@ -26,6 +28,8 @@ What the recursion's claims read of the compiled verifier, at `deployRec IV ivSc
   proved or reduced as above, `Inner.KSAbort` from `plain_KSAbort` (the table bound), `PublicCoin` from
   `coinsShown_V`, and Flock's KS at the outer record (`deployZkRec`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

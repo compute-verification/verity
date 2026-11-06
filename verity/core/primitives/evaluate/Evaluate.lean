@@ -1,13 +1,15 @@
-import Evaluate.Scalar
-import Evaluate.Fp32
-import Evaluate.Casts
-import Evaluate.TC.Spec
-import Evaluate.TC.Fp8Atom
-import Evaluate.TC.Fp4
-import Evaluate.TC.Dots
-import Evaluate.Prims
-import Evaluate.Walk
-import Evaluate.Serve
+module
+
+public import Evaluate.Scalar
+public import Evaluate.Fp32
+public import Evaluate.Casts
+public import Evaluate.TC.Spec
+public import Evaluate.TC.Fp8Atom
+public import Evaluate.TC.Fp4
+public import Evaluate.TC.Dots
+public import Evaluate.Prims
+public import Evaluate.Walk
+public import Evaluate.Serve
 
 /-!
 # `verity_evaluate`: the descriptor v1 evaluator in Lean
@@ -22,3 +24,5 @@ executable transcription of the Python that names the Security definition it mus
 `verity-evaluate` serves it through the difftest harness
 (`Evaluate.Serve`), and the suite beside this package holds it to the Python, output for output and refusal for refusal.
 -/
+
+@[expose] public section

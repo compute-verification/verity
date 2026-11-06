@@ -7,6 +7,7 @@ defaultTargets = ["Evaluate", "verity-evaluate"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"

@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Layout.OutPin
-import Properties.Flock.Circuit.Outs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.OutPin
+public import Properties.Flock.Circuit.Outs
+
+@[expose] public section
 
 set_option Elab.async false
 

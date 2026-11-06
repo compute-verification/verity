@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZkQueryRound
-import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Soundness.Refine.Seam
+module
+
+public import Proofs.Flock.Claims.ZkQueryRound
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # Level 0's query round in the plain verifier over the hash oracle
@@ -19,6 +21,8 @@ the plain verifier's own transcript, `verifyRepWith hs` run in `V` with any hash
   (`plainRepColsOf`) are those positions with those rows, for every rep of every table of an accepted session
   (`plainQueryRound_verifyWithM`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

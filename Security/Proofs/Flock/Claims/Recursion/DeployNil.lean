@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DeploySessions
-import Proofs.Flock.Claims.Bridge.CommittedNil
+module
+
+public import Proofs.Flock.Claims.Recursion.DeploySessions
+public import Proofs.Flock.Claims.Bridge.CommittedNil
 
 /-!
 # The compiled verifier answers each round with its coin or with nothing
@@ -9,6 +11,8 @@ coin's bytes (an inner or staging round's, `ract_coin`, or a V\* session's round
 `nextO_msg`), or `[]`, where a V\* session before the last one accepts (`sessOut`). So
 `Claims.Bridge.Pr_acc_runCM_le` bounds its run at Hello-committed coins.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

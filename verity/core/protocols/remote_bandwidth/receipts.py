@@ -3,9 +3,9 @@ commits them.
 
 ~~~text
 Z(x)          x zero-padded to whole 128-byte blocks (one SHA-512 block here)
-seed_(t,i)    SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ root_(t,i−1)),  SEED_DOMAIN = "verity/remote-bandwidth/seed/v0\0",
-              σ_t window t's challenge (its live coin, `coins.py`), root_(t,−1) = root_(t−1,last) in a session and the
-              registration's digest for its first window; in a session with appends, the root chained to them
+seed_(t,i)    SHA512(SEED_DOMAIN ‖ chal_t ‖ u32be i ‖ root_(t,i−1)),  SEED_DOMAIN = "verity/remote-bandwidth/seed/v0\0",
+              chal_t window t's challenge (its live coin, `coins.py`), root_(t,−1) = root_(t−1,last) in a session and
+              the registration's digest for its first window; in a session with appends, the root chained to them
               (`audit.chained`)
 plan_(t,i)    R runs (first, count) in read order: count ≥ 1, inside the store, pairwise disjoint, and no run starting
               where the one before it ends (it would be the same run).  Position p is the p-th block of the runs

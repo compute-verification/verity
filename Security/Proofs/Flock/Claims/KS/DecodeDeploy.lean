@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.DecodeSC
-import Proofs.Flock.Claims.KS.PlainAcc
+module
+
+public import Proofs.Flock.Claims.KS.DecodeSC
+public import Proofs.Flock.Claims.KS.PlainAcc
 
 /-!
 # The deployed plain decoders at the plain table
@@ -15,6 +17,8 @@ outputs whose draw is `d`, the two are one table:
 * `plain_hdec`: so at the draw `d` and no drawn unit, `decodesTable_wrP_sc` is the decoders' fact `PlainLiveAccAt`
   asks, at `plainTab`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -94,7 +98,7 @@ theorem tableAt_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) {n : ℕ}
   dsimp only at hy
   subst hy
   have hs := Option.some.inj (yhsch.symm.trans hsch)
-  simp only [Accounting.Schedule.mk.injEq, List.cons.injEq] at hs
+  simp only [FlockSoundness.Accounting.Schedule.mk.injEq, List.cons.injEq] at hs
   obtain ⟨rfl, rfl, ⟨rfl, rfl, rfl⟩, rfl⟩ := hs
   rfl
 

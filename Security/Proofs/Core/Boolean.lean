@@ -1,11 +1,15 @@
-import Definitions.Core.Boolean
-import Proofs.Core.Circuit
+module
+
+public import Definitions.Core.Boolean
+public import Proofs.Core.Circuit
 
 /-!
 # The Boolean profile evaluates gate by gate
 
 A Boolean circuit's evaluation, read as bits, applies each gate's Boolean operation to the bits of the gates it reads.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Inst.Place
-import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+module
+
+public import Proofs.Flock.Soundness.Discharge.Inst.Place
+public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
 
 /-!
 # The program of the whole template instance, and its `ProgPlaces`
@@ -17,6 +19,8 @@ At every drawn unit's site in an accepted untyped statement:
 
 So `Sites.progPlaces_instProg` is a `ProgPlaces` that takes only the sites and the parse.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Congr
-import Proofs.Flock.Claims.DeployOC
+module
+
+public import Proofs.Flock.Claims.ZK.Congr
+public import Proofs.Flock.Claims.DeployOC
 
 /-!
 # `ZKmalR` is not vacuous
@@ -20,6 +22,8 @@ every verifier, so for it the claim is the plain bound, at every `γ`:
   (`not_flockZK_collSim_toy`), and no simulator meets it for the witness-sending prover (`not_flockZK_leak_toy`).
   `not_flockZK_collSim` and `not_flockZK_leak` are the same at any record whose relation holds where they need it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

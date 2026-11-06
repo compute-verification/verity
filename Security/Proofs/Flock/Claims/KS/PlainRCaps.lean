@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainRLevels
-import Proofs.Flock.Claims.KS.PlainCapsDep
+module
+
+public import Proofs.Flock.Claims.KS.PlainRLevels
+public import Proofs.Flock.Claims.KS.PlainCapsDep
 
 /-!
 # A cap position's read sets at the deployed reader `VR rd`
@@ -25,6 +27,8 @@ At `VR rd` and its level columns `plainRawLevelColsRV rd`:
 * `capHitAt_R`, `plainR_tableBoundAbortLin_of_capPrefix`, `plainR_KSFlockLin_of_capPrefix`: the table bound and
   `KSFlockLin` at the deployed reader from `PlainRdInR` (`rdAllAt_R`) and `CapPrefixR`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

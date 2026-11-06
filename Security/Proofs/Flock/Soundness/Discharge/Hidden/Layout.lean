@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Rows
-import Proofs.Flock.Soundness.Discharge.Hidden.Delta
-import Proofs.Flock.Soundness.Discharge.Hm.Accept
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Rows
+public import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+public import Proofs.Flock.Soundness.Discharge.Hm.Accept
 
 /-!
 # A hidden-output statement's layout (`HiddenLayout`)
@@ -12,6 +14,8 @@ its `hm96` slot's `pad` (`deltaMsgCol_rowBit`). Either is an input bit of a net 
 `Layout.delta` asks of every pair past the constant pairs. `Hidden.Commit` proves `HiddenLayout` (`hidden_layout'`) for
 a flat or a templated session.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Lean (Json)

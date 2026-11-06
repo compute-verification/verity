@@ -1,8 +1,12 @@
-import Proofs.Flock.SessionLoop.FinRepErasedCut
-import Proofs.Flock.SessionLoop.FinRepXs
-import Proofs.Flock.SessionLoop.FinRepView
-import Proofs.Flock.Claims.ZK.PiopFree
-import Proofs.Flock.Claims.ZK.Round1Root
+module
+
+public import Proofs.Flock.SessionLoop.FinRepErasedCut
+public import Proofs.Flock.SessionLoop.FinRepXs
+public import Proofs.Flock.SessionLoop.FinRepView
+public import Proofs.Flock.Claims.ZK.PiopFree
+public import Proofs.Flock.Claims.ZK.Round1Root
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The views' cut PIOP returns where the firewall's rep did
@@ -19,6 +23,8 @@ domain it is `FinPiop`'s first conjunct and the `hpiop` that `swSrcE_hmk_cut` an
 the pads tree's size (`padsTreeCut_root_go`). **`Loop.finRepErased_of_fc`**: `finRepErased_of_cut` without it.
 **`Loop.swSrcE_l0_views`**: `swSrcE_l0_live` with no PIOP premise, which reads no rows.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

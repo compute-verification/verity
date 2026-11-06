@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Witnesses.Sampling
-import Proofs.Flock.Claims.ZK.Indexed
+module
+
+public import Proofs.Flock.Claims.Witnesses.Sampling
+public import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Each claim fails somewhere, stated over the spec
@@ -11,6 +13,8 @@ quantifies (`∃`) over the toy instance it fails at, and its proof is the toy w
 which the statement quantifies over too. `Complete`'s, Flock's and the sampling one's are `CompleteFails`'; the
 ZK-recursion compiler's are `Witnesses.Recursion`'s and `RecursionMeets`'.
 -/
+
+@[expose] public section
 
 namespace Claims
 

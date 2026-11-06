@@ -1,4 +1,6 @@
-import Definitions.Nci.Info
+module
+
+public import Definitions.Nci.Info
 
 /-!
 # NCI over threads, each thread charged by the work done on it: the vocabulary
@@ -15,11 +17,13 @@ work done on it.
   `t`'s values that meets it (`ρ < d → #threadMults R t ≤ e ρ`) is at least `work`.
 -/
 
+@[expose] public section
+
 namespace Nci.Threading
 
 open Verity
 
-variable {c : Declaration} (T : Threading c)
+variable {c : RegisteredCircuit} (T : Threading c)
 
 /-- **The work on a thread, in thread values**: `R`'s counted multiplications of thread `t` at `e` per value, capped at
 `d` values, `min(d, #threadMults R t / e)`: the fewest of thread `t`'s values that `(d, e)`-threading asks a subcircuit

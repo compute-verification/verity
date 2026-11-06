@@ -1,5 +1,7 @@
-import SampledProofs.Registration
-import Proofs.Flock.Claims.Sampling.Reference.Deployed
+module
+
+public import SampledProofs.Registration
+public import Proofs.Flock.Claims.Sampling.Reference.Deployed
 
 /-!
 # The sampled verifier's code from its Lean draw
@@ -43,6 +45,8 @@ At this code:
   when `ShapesFixed` holds at `sess`, and puts its sessions in `SessIn`.
 * `complete_code`: `Complete` at the code from Flock's masked completeness and those premises.
 -/
+
+@[expose] public section
 
 namespace SamplingDeploy
 
