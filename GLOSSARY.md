@@ -290,7 +290,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Transcript**: the messages of a proof or a session, what its verifier sees (Flock's, PoUS's transcript hash).
     The values of a run's gates are its trace; `evaluate_call`'s `transcript` argument and `ExecutionTranscript` keep
     the old word until they are renamed.
-  - **Stage**: to stage a statement is to fix and write it before any coin is flipped (the ZK server's staged
+  - **Stage**: to stage a statement is to fix and write it before any coins are flipped (the ZK server's staged
     statements).
     A step of a run is a phase (Older names); a stage of a Boolean lowering is a level; a pipeline stage keeps its
     sense (above).
