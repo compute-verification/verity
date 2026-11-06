@@ -58,7 +58,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.circuits.cut import DefinitionCut
 from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.units import Activation, PartitionUnits, UnitCircuit
+from verity.ml.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
 
 from . import challengers as CH
 from . import circuit as FC
@@ -148,7 +148,7 @@ class ClassDefinition:
         return params, Array(self.w_out, Value(16))
 
 
-def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[list[int]]:
+def sources(act: Activation, uc: ProofBlockCircuit, owner_of: dict[int, str]) -> list[list[int]]:
     """The unit's inputs grouped by source, in first-read order: one group per Call parameter it reads leaves of, and one per class
     (shape) of producing units whose committed outputs it reads (``owner_of``: computing gate -> its unit's shape in the flat cut),
     as serving commits a tensor once, not per element. Each group is one row, and every instance reading the same values opens
@@ -163,7 +163,7 @@ def sources(act: Activation, uc: UnitCircuit, owner_of: dict[int, str]) -> list[
     return list(groups.values())
 
 
-def element_rows(act: Activation, uc: UnitCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
+def element_rows(act: Activation, uc: ProofBlockCircuit, groups: list[list[int]]) -> tuple[list[list[int]], list[tuple[int, ...]], list[int]]:
     """FLOCK_CORE_ROWS's rows of an FP GEMM coordinate (`ELEMENT_ROWS`): x with its scales one row and the W column with its
     scales another, each core's bit row (``verity.ml.commitments.rowleaf.bit_row``: each element's bits low first, the codes, then
     the scales, nothing after). Returns the merged source groups, the `sources` groups each one joins, and each row's length in
@@ -253,7 +253,7 @@ def _whole_row(reads: Sequence[tuple[int, int] | None], n_out) -> int | None:
     return v
 
 
-def link_ports(uc: UnitCircuit, groups: list[list[int]], reads: list[list], n_out) -> tuple[list[list[int]], list[int], list]:
+def link_ports(uc: ProofBlockCircuit, groups: list[list[int]], reads: list[list], n_out) -> tuple[list[list[int]], list[int], list]:
     """Split every source group through which some unit reads another unit's outputs into segments, at each leaf where any unit's
     reads stop being one run (circuit inputs, or one writer's consecutive outputs). Each segment must then be, in every unit,
     circuit inputs only or exactly one writer's whole output row in order (``n_out(v)``: writer ``v``'s output count); a partial
@@ -320,7 +320,7 @@ def links_file(program: Any, query: dict, text: str, indices: Sequence[int]) -> 
             "ports": [x["port"] for x in meta.get("links") or []], "links": [list(x) for x in triples]}
 
 
-def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None,
+def class_lowering(act: Activation, uc: ProofBlockCircuit, name: str, groups: list[list[int]] | None = None,
                    packed: bool | Sequence[bool] = False, blocks: bool = True) -> IL.Lowering:
     """The class's unit on u16 ports: one row port per source group (``groups``: input positions; default one row for all), its
     words laid out by `_slots` (``packed``: narrow words share leaves; per group when a sequence), each padded to whole 64-word
@@ -353,7 +353,7 @@ def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[lis
     return IL.Lowering(name, ClassDefinition(name, port_words, w_out), units, C, lay)
 
 
-def pack(uc: UnitCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
+def pack(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]], w_in: int, w_out: int,
          groups: list[list[int]] | None = None, port_words: Sequence[int] | None = None, packed: bool | Sequence[bool] = False):
     """The lanes as each port's rows ``{p{i}: (n, words)}``, all ports side by side ``(n, w_in)``, and outputs ``(n, w_out)``, u16, in
     the layout `class_lowering` reads (``packed`` as there)."""
@@ -447,16 +447,17 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
                    exclude: re.Pattern | None = None) -> tuple[Any, dict[str, int], list[dict]]:
     """A served row's distinct Call Definitions, from its program graph (``vllm-program-graph/v1``): (a Program with one Call of
     each, the row's Call count of each by descriptor id, a provenance row per Definition). ``modules``: a module-path prefix
-    (``model.model.layers.0.``) to keep. Each Definition is bound from the registry and its v0 encoding's SHA-256 is checked
-    against the graph's ``definitions_index`` where the graph has it (every group's spec; attention's smallest and largest T).
+    (``model.model.layers.0.``) to keep. Each Definition is bound from the registry and its definition digest
+    (`codec.definition_digest`) is checked against the graph's ``definitions_index`` where the graph has it (every group's
+    spec; attention's smallest and largest T).
     A per-Call partition (``Q_word``, an owner function) cuts this Program's Calls exactly as the row's, so its classes are the
     row's and the row's unit counts are the per-Call counts times the Call counts. ``definitions`` ({descriptor id: Call count})
     adds Definitions without a graph (bound from the registry, no digest to check); ``exclude`` drops the ids it matches."""
     from circuit_check import targets as TG
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.codec import definition_digest, descriptor_id
     from verity.ml.circuits.defs import CompositeDefinition
     from verity.ml.circuits.program import Program
-    from verity.ml.definitions.encoding import encode_specialization, definition_digest
+    from verity.ml.definitions.encoding import encode_specialization
 
     TG.load_registries()
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
@@ -475,7 +476,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
         want = index.get(fid)
         got = definition_digest(encode_specialization(fn)[1][fid]) if want else None
         if want and got != want:
-            raise ValueError(f"{fid}: v0 digest {got} is not the row's {want}")
+            raise ValueError(f"{fid}: definition digest {got} is not the row's {want}")
         fns.append(fn)
         prov.append({"definition": fid, "calls": calls[fid], "digest_checked": bool(want)})
     params = [(f"c{i}_{n}", t) for i, fn in enumerate(fns) for n, t in fn.signature()[0]]
@@ -757,7 +758,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
         ({"links": links, "definition": definition} if wiring is not None else {})
 
 
-def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
+def _check_bit_rows(uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,
                     name: str, lanes: int = 8) -> None:
     """The first ``lanes`` staged rows of each port are core's bit row of the lane's elements (``rowleaf.bit_row``), then zero."""
     from verity.ml.commitments.rowleaf import bit_row
