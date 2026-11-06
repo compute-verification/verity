@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.RecGeneric.Server
+public import Definitions.Claims.RecursionGeneric.Server
 public import Proofs.Flock.Claims.Recursion.BoundBridge
 
 /-!
