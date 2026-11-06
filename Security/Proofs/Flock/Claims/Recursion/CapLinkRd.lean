@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.CapLink
+module
+
+public import Proofs.Flock.Claims.Recursion.CapLink
 
 /-!
 # A cap position's off mass at the abort law, at read sets
@@ -16,6 +18,8 @@ values at the position (`rd`), and the link finder's two-reading term (`LinkFind
   collision among their calls, a run reads anything but the plurality after `q`'s round alone with probability at most
   `FC`'s hit at `q` plus `1/(M+1)`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

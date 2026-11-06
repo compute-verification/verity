@@ -1,7 +1,7 @@
 """The review landing onto `checked` (drive.toml's `land_into`: `main` holds only tested commits).  A
 landing fast-forwards `checked`, never `main`; `main` is fast-forwarded only to a commit of `checked` whose after-landing run
 passed every step on the merge gate; a red run moves nothing on `main`, and its culprit is reverted on `checked`.  A job off
-the gate (ci.toml's `gate = false`: circuit-check) runs in that run and reverts its culprit, but holds no promotion."""
+the gate (drive's policy, policy.toml's `off_gate`: circuit-check) runs in that run and reverts its culprit, but holds no promotion."""
 from __future__ import annotations
 
 import json
@@ -10,11 +10,11 @@ import pytest
 
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, FIX_WINDOW_S, TAIL
 from research.queue import DriveFlags, QueueError
-from test_drive_review import CI_TOML, Review, _main, _move_main, _owning, _subject
+from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _subject
 from test_queue import World, _git
 from test_queue_drive import _failed_run, _steps_run
 
-#: the steps `main` waits for under `CI_TOML`
+#: the steps `main` waits for under `GATED_TREE`
 GATED = [s for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL and s != "circuit-check"]
 
 
@@ -128,8 +128,8 @@ def test_main_follows_no_baseline_that_passed_fewer_steps(world, monkeypatch):
 
 
 def _gated(world: World, monkeypatch) -> Review:
-    """A review landing onto `checked` in a tree whose ci.toml takes circuit-check off the merge gate."""
-    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
+    """A review landing onto `checked` in a tree whose drive policy takes circuit-check off the merge gate."""
+    _move_main(world, GATED_TREE)
     return Review(world, monkeypatch, land_into="checked")
 
 
@@ -255,9 +255,7 @@ def test_a_sharded_run_that_passes_moves_main_and_the_verified_record_together_a
     ring nor launch again."""
     from research.drive import BEHIND_EVERY_S, BEHIND_S
 
-    off = ("circuit-check", "ratchet-gate")
-    _move_main(world, {"tools/verity/check/ci.toml": 'schema = "ci/v0"\n' + "".join(
-        f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n' + ('gate = false\n' if s in off else "") for s in AFTER_LANDING)})
+    _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": 'schema = "policy/v0"\noff_gate = ["circuit-check", "ratchet-gate"]\n'})
     h = Review(world, monkeypatch, land_into="checked")
     h.d.after_landing_shards, h.d.after_landing_no_cache = 3, True
     h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}" if rid == "r-post-0" else None
@@ -336,6 +334,92 @@ def test_a_checked_below_a_moved_main_fast_forwards_to_it(world, monkeypatch):
     _move_main(world, {"c.txt": "moved\n"})
     h.tick()
     assert _checked(world) == _main(world)
+
+
+def _push_outside(world: World, files: dict[str, str], name: str) -> str:
+    """A commit onto `checked` by ``name``, pushed to it by someone other than drive; its sha."""
+    import os
+    import subprocess
+
+    c = world.change(files, base="origin/checked")
+    env = {**os.environ, **{f"GIT_{who}_{k}": v for who in ("AUTHOR", "COMMITTER")
+                            for k, v in (("NAME", name), ("EMAIL", f"{name}@example.invalid"))}}
+    sha = subprocess.run(["git", "commit-tree", f"{c}^{{tree}}", "-p", f"{c}^", "-m", "an outside commit"], cwd=world.dev, env=env,
+                         check=True, capture_output=True, text=True).stdout.strip()
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/heads/checked")
+    return sha
+
+
+def test_a_checked_drive_didnt_write_holds_landing_next_and_main_and_rings_ci_and_top_once_until_it_is_reset(world, monkeypatch):
+    h = Review(world, monkeypatch, land_into="checked")
+    main = _main(world)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    landed = _checked(world)
+    assert h.q.load_state()["drive"]["checked_tips"][-1] == landed
+    _pass(h)                                                    # #1's after-landing run passed: `main` would follow it
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.review(2)
+    queued = _git(world.origin, "rev-parse", "next")
+    outside = _push_outside(world, {"x.txt": "x\n"}, "mallory")
+    launched = len(h.posted)
+    for _ in range(2):
+        why = h.tick()
+        assert why.startswith(f"`checked` is at {outside[:12]} ('an outside commit', by mallory <mallory@example.invalid>), "
+                              "which drive didn't write: drive lands nothing, syncs no `next` and moves no `main`"), why
+        assert f"back at {landed[:12]}, the last tip drive wrote" in why and f"accept-checked {outside} --by ci" in why
+        assert _checked(world) == outside and _main(world) == main and _git(world.origin, "rev-parse", "next") == queued
+        assert len(h.posted) == launched
+    (ring,) = [p for p in h.posts if outside[:12] in p]
+    assert ring.startswith("@ci @top queue: `checked` is at"), ring
+    _git(world.dev, "push", "-q", "--force", "origin", f"{landed}:refs/heads/checked")
+    assert h.tick().startswith("landed #2"), world.logs
+    assert _main(world) == landed and _git(world.origin, "rev-parse", "checked^1") == landed
+
+
+def test_ci_accepting_a_checked_drive_didnt_write_lets_drive_go_on_from_it_and_no_one_else_can(world, monkeypatch):
+    from research import queue as Q
+
+    h = Review(world, monkeypatch, land_into="checked")
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    landed = _checked(world)
+    outside = _push_outside(world, {"x.txt": "x\n"}, "mallory")
+    assert h.tick().startswith(f"`checked` is at {outside[:12]}")
+    with pytest.raises(QueueError, match="only ci accepts"):
+        Q.accept_checked(h.q, outside, "lane-1")
+    with pytest.raises(QueueError, match=f"is not `checked`'s tip, {outside[:12]}"):
+        Q.accept_checked(h.q, landed, "ci")
+    assert Q.accept_checked(h.q, outside, "ci") == 0
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.review(2)
+    assert h.tick().startswith("landed #2"), world.logs
+    assert _git(world.origin, "rev-parse", "checked^1") == outside
+
+
+def test_drives_own_landings_and_merges_of_main_are_tips_it_takes_and_a_refused_push_records_none(world, monkeypatch):
+    """Each tip drive pushes to `checked` is recorded before its push (the revert's: the red tests above tick on after it); a
+    push `checked` refuses leaves no record, and a state from before drive kept them takes the tip it finds."""
+    h = Review(world, monkeypatch, land_into="checked")
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    landed = _checked(world)
+    _move_main(world, {"c.txt": "moved\n"})
+    h.tick()
+    merged = _checked(world)
+    assert merged != landed and h.q.load_state()["drive"]["checked_tips"][-2:] == [landed, merged]
+    drive = h.q.load_state()["drive"]
+    stale = _git(h.q.workdir, "commit-tree", f"{landed}^{{tree}}", "-p", f"{landed}^", "-m", "not a fast-forward")
+    assert h.d._push_into(drive, stale).returncode and stale not in drive["checked_tips"] and _checked(world) == merged
+    state = h.q.load_state()
+    del state["drive"]["checked_tips"]
+    h.q.save_state(state)
+    h.tick()
+    assert h.q.load_state()["drive"]["checked_tips"] == [merged]
+    assert not any("didn't write" in x for x in world.logs), world.logs
 
 
 def test_land_into_takes_checked_or_main_and_only_drive_pushes_checked(world, monkeypatch):

@@ -1,4 +1,6 @@
-import Flock.HmRow
+module
+
+public import Flock.HmRow
 
 /-!
 # A circuit's descriptor
@@ -10,6 +12,8 @@ file, so it is SHA-512 of `D`'s bytes, whatever form `D` takes.
 Every descriptor is a flat file for now, `single c`: `HmOut.parse` reads it, and it unrolls to `c` itself
 (`parse_flat`, `parse_single`).
 -/
+
+@[expose] public section
 
 namespace Flock
 

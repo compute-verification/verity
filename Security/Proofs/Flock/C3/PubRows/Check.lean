@@ -1,7 +1,10 @@
-import Proofs.Flock.C3.PubRows.Prefix
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.VBridge.Family.Pub
-import Proofs.Flock.C3.Compose.RowsReg
+module
+
+public import Proofs.Flock.C3.PubRows.Prefix
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.VBridge.Family.Pub
+public import Proofs.Flock.C3.Compose.RowsReg
+import all Init.Data.Array.Basic
 
 /-!
 # n1: what the verifier's check of the public rows gives
@@ -21,6 +24,8 @@ units, the first port of a name, and a rec-sparse unit's own shape. What closes 
 * `PortsNamed`: each circuit names each port once (G's `PortNamesUnique`);
 * `SparseAtShape`: a rec-sparse unit's shape is the verifier's own.
 -/
+
+@[expose] public section
 
 namespace FlockC3.PubRows
 

@@ -1,4 +1,6 @@
-import Definitions.Accounting.Bandwidth.Causal
+module
+
+public import Definitions.Accounting.Bandwidth.Causal
 
 /-!
 # B3 and Mbw on a strategy's runs (trusted)
@@ -21,6 +23,8 @@ The chip's state is charged `M + 1` bits, its length included, so at `e = 0` the
 `CausalJoint.lean`: the chip of such a run is the tick transducer `Ticked.Chip`, whose bounds are the game's
 `AuditInteractive`, `AuditInteractiveRO` and `AuditJoint`.
 -/
+
+@[expose] public section
 
 namespace Bandwidth.Guarantees
 

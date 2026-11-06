@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Extract
+module
+
+public import Proofs.Flock.Soundness.Extract
 
 /-!
 # Extraction from accepted reruns: the expected-time extractor's law
@@ -20,6 +22,8 @@ Against it, an accepted fresh run opens a position off the table in one of two w
 run at least `ε − ε_c` of that mass, then `ε · Pr[fails] ≤ ε_c + N·ε/(ek) + √(k·Pr₂)`. The conflict
 term's `1/ε` becomes a square root because the product is also at most `ε`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

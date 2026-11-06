@@ -2,7 +2,7 @@
 drawn inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
 and an append's coin), a plan (`receipts.Plan`: its length, digest and chunks) and its change (`Plan.changed`), a receipt
 (`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.ml.commitments.verify_opening`
-over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`Session.close`'s), a
+over a range domain), a leaf's receipt (`receipts.leaf_receipt`), a window's draws (`AuditRun.close`'s), a
 registration's digest (`audit.Registration.digest`), and the registration `audit.register` makes, its codec seed drawn
 from the verifier's secret and a nonce. `test_session.py` holds the whole verifier."""
 
@@ -314,7 +314,7 @@ def test_leaf_receipt(server) -> None:
 
 
 def draws(v) -> list:
-    """`Session.close`'s draw from window t's openings coin, on the passes' lengths."""
+    """`AuditRun.close`'s draw from window t's openings coin, on the passes' lengths."""
     coin, registration, t, samples = M.hex_(v, "coin"), M.hex_(v, "registration"), M.nat(v, "window"), M.nat(v, "samples")
     lengths = M._list(v, "lengths")
     if not lengths or any(not isinstance(n, int) or isinstance(n, bool) or n < 1 for n in lengths):

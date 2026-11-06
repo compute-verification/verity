@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Rep
+module
+
+public import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
 # Tactics that walk an executable computation
@@ -9,6 +11,8 @@ head: a bind is split into its halves (`ebind_ok`), an `if` or `dite` is split o
 rather than trying each and backtracking, keeps Lean from unfolding the executable to look for a bind that isn't there.
 The kernel checks every proof it builds, as it does every other proof in the package.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
@@ -85,7 +89,7 @@ theorem ret_let {α γ : Type} (e : α) (b : α → V γ) (Q : γ → Prop) (h :
 open Lean Elab Tactic Meta in
 /-- One step of `ret_walk` on the goal `Ret m Q`, by `m`'s head; `none` when the goal is not a `Ret`. A bind of a
 computation headed by a constant in `keep` keeps its equation `x = .ok a`; every other step forgets what it passed. -/
-def retStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId)) := g.withContext do
+meta def retStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId)) := g.withContext do
   let ty ← instantiateMVars (← g.getType)
   unless ty.isAppOfArity ``Ret 3 do return none
   let γ := ty.getArg! 0

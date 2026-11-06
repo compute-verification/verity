@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10: `verity/flock-circuit` from the circuit prover's `eb90718f`. Serving rows are `hm96-sha512/row/v1` leaves proved in
+The hm96 rows: `verity/flock-circuit` from the circuit prover's `eb90718f`. Serving rows are `hm96-sha512/row/v1` leaves proved in
 the circuit: per VU, each input port's row is hashed by SHA-512 compressions in `sha512x3` slots (three per slot, chained from
 the prefix's midstate) and closed by an `hm96` slot (the padding compression, then `b ‖ c` from the row's private salt). Both
 slot circuits are sections of the circuit file, which must be the nets the verifier generates (`Flock.HmNets`). Every identity and binding digest is SHA-512: the circuit pin, the public
@@ -15,19 +15,26 @@ its slot's forced-zero row.
 The verifier evaluates no part of the computation: it recomputes the rows' constants, the wiring and Δ from the pinned
 circuit, the frame-v3-sha512 roots from the public `b ‖ c` and outputs, and the pinned dummy `b ‖ c` from the zero row.
 -/
-import Flock.Statement
-import Flock.TemplateQuery
-import Flock.Typed
-import Flock.Extract
-import Flock.Qcall
-import Flock.HmNets
-import Flock.RecOpen
-import Flock.RecResiduals
-import Flock.RecSparse
-import Flock.RecOpening
-import Flock.SplitNL
-import Flock.Norm
-import Flock.LinkUnits
+module
+
+public import Flock.Statement
+public import Flock.TemplateQuery
+public import Flock.Typed
+public import Flock.Extract
+public import Flock.Qcall
+public import Flock.HmNets
+public import Flock.RecOpen
+public import Flock.RecResiduals
+public import Flock.RecSparse
+public import Flock.RecOpening
+public import Flock.SplitNL
+public import Flock.Norm
+public import Flock.JsonParse
+public import Flock.LinkUnits
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 
@@ -621,7 +628,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let name := (head.drop (tags.fileFormat.length + 1)).toString
   let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
   if !metaLine.startsWith "META " then throw "circuit: no META line"
-  let mj ← match Json.parse (metaLine.drop 5).toString with
+  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
     | .ok j => pure j
     | .error e => throw s!"META: {e}"
   if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
@@ -778,7 +785,7 @@ the branch that reads it, which here is the last. -/
   let name := (head.drop (tags.fileFormat.length + 1)).toString
   let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
   if !metaLine.startsWith "META " then throw "circuit: no META line"
-  let mj ← match Json.parse (metaLine.drop 5).toString with
+  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
     | .ok j => pure j
     | .error e => throw s!"META: {e}"
   if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
@@ -1331,7 +1338,7 @@ def loadPublic (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
   let text ← match String.fromUTF8? (file.extract 0 nl) with
     | some s => pure s
     | none => throw "public file: header is not UTF-8"
-  let header ← match Json.parse text with
+  let header ← match JsonParse.parse text with
     | .ok j => pure (Flock.norm j)
     | .error e => throw s!"public file: header: {e}"
   let pctx := "public file"
@@ -1431,9 +1438,9 @@ def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String 
 
 /-- The frame-v3-sha512 roots recomputed from the population's `b ‖ c` (a shared-row file: each input port's over its table)
 and output words against the header's; the pinned dummy `b ‖ c` against the zero row's (upstream's `check_public`). A
-statement with public outputs has no output row to link, so META `links` (§16.13) is refused. -/
+statement with public outputs has no output row to link, so META `links` (`HmOut`) is refused. -/
 def checkPublic (c : Circuit) (pub : Public) : V Unit := do
-  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are §16.13's)"
+  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are a hidden-output statement's: `HmOut`)"
   let fv ← pub.frameV3
   if (← J.str fv "frame" "public file") != "frame-v3-sha512"
       || (← J.str fv "row_key_sha512" "public file") != hexOf (Sha512.hash Hm96.Default512.key) then
@@ -1604,7 +1611,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
            hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 /-!
-PROTOCOL.md §16.13: hidden outputs (`Tags.hiddenOutputs`, the default `verity/flock-circuit` and `verity/flock-circuit/types`).
+`HmOut`: hidden outputs (`Tags.hiddenOutputs`, the default `verity/flock-circuit` and `verity/flock-circuit/types`).
 The rows are the input rows (META `input_ports` of them), then one output row per output port: its name, its words
 zero-padded to whole SHA-512 blocks, an `hm96-sha512/row/v1` row (in a statement of bit rows, a `v2` row of all their bits)
 hashed in the circuit like an input row; or, per run of output ports in META `out_row_ports`, one `hm96-sha512/row-seg/v1`
@@ -1770,7 +1777,7 @@ def metaOf (bytes : ByteArray) : V Json := do
   let some line := String.fromUTF8? (bytes.extract (n1 + 1) n2) | throw "circuit: not UTF-8"
   let line := line.trimAsciiEnd.toString
   if !line.startsWith "META " then throw "circuit: no META line"
-  match Json.parse (line.drop 5).toString with
+  match JsonParse.parse (line.drop 5).toString with
   | .ok j => pure j
   | .error e => throw s!"META: {e}"
 
@@ -1966,7 +1973,7 @@ def checkPublic (c : Circuit) (pub : Public) : V Unit := do
 end HmOut
 
 /-!
-### Public input ports (§16.10)
+### Public input ports
 
 A statement with hidden outputs may name public input ports (META `public_inputs`): unit inputs that are no row but public
 words the verifier recomputes from public data, each port naming its recomputation (its `seed` and `derivation`). The units
@@ -2170,7 +2177,7 @@ def checkOwn (pi : Ports) (pop : Public) (own : Option ByteArray) : V Unit := do
   | some f, false =>
     let some nl := findByte f 10 | throw "--public-inputs: no header line"
     let header ← match String.fromUTF8? (f.extract 0 nl) with
-      | some t => match Json.parse t with
+      | some t => match JsonParse.parse t with
         | .ok j => pure j
         | .error e => throw s!"--public-inputs: header: {e}"
       | none => throw "--public-inputs: header is not UTF-8"
@@ -2217,7 +2224,7 @@ def checkDerived (pi : Ports) (pop : Public) (gs : Array Nat) : V Unit := do
 
 end HmIn
 
-/-! PROTOCOL.md §16.13 Linking: under a template query, with the verifier's own program, every cut wire between two units of
+/-! `HmOut` Linking: under a template query, with the verifier's own program, every cut wire between two units of
 the statement is a check on the public file. A reader whose parameter leaves are another unit's outputs commits them in a link
 row (META `links`): an input row encoded as the one output row is, under the writer's salt, so that its `b ‖ c` is the
 writer's output row's. This binds a public topology; it does not hide the topology: the wiring is read from the verifier's own
@@ -2412,7 +2419,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
-/-- A session's statement in `count` tables (§16.12, upstream's `session_tables`): one table is `setupH`'s statement. For
+/-- A session's statement in `count` tables (`Stmt.setupTables`, upstream's `session_tables`): one table is `setupH`'s statement. For
 several, the session's units (the draw's, without one the population's) split into `count` equal consecutive parts, and
 table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
 `setupH` makes, it makes on each table. Several tables take one draw of fixed count (`Draw.tablesWhy`): a subset draw, or a

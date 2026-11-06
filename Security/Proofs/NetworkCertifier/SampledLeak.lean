@@ -1,6 +1,8 @@
-import Definitions.NetworkCertifier.Guarantees.SampledAudit
-import Proofs.NetworkCertifier.SampledCharge
-import Proofs.Flock.Claims.Prob
+module
+
+public import Definitions.NetworkCertifier.Guarantees.SampledAudit
+public import Proofs.NetworkCertifier.SampledCharge
+public import Proofs.Flock.Claims.Prob
 
 /-!
 # The leak bound under a sampled audit: `SampledAuditAccepted` composed with the count
@@ -19,6 +21,8 @@ set `R` and `false` off the free inputs (`adviceIn_asReg`), whose count is `2^#(
 (`encard_asReg_le`): `sampledLeak_reg` is the bound with `c = #(freeInputs \ R)` and no hypothesis on the inputs. With
 `R` the registered inputs, the registration's values are left out of `c`.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

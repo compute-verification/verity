@@ -1,6 +1,8 @@
-import Definitions.Pouw.Guarantees.ShaRealize
-import Proofs.Pouw.MerkleExtract
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Definitions.Pouw.Guarantees.ShaRealize
+public import Proofs.Pouw.MerkleExtract
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # Commit-and-open as a theorem: `ExtractAdv` from SHA-512 as a random oracle and its realization
@@ -18,6 +20,8 @@ import Proofs.Pouw.RelativeSecurity
   (its instance and the state its work starts from), read only the earlier blocks' coins, so they are advice in
   `ExtractAdvAt`'s sense.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.ShaRealize
 

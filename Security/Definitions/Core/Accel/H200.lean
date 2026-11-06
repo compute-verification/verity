@@ -1,7 +1,12 @@
-import Definitions.Core.Accel.Machine
+module
+
+public import Definitions.Core.Accel.Machine
 
 /-!
 # The H200 SXM's numbers (trusted)
+
+Each number is `verity/hardware/cards/h200-sxm-141gb.toml`'s, with its source and its mark (ceiling, measurement or
+placeholder) there; `verity/hardware/tests/test_lean.py` holds this table to that file number by number.
 
 A table is a SKU's, at its firmware's maximum. This one is the H200 SXM 141 GB (GH100, sm_90a; board
 692-2G520-0280-001, vBIOS 96.00.A5.00.03, 700 W): 132 SMs (H100 whitepaper V1.04 Table 3, H100 SXM5) at 1980 MHz SM
@@ -29,6 +34,8 @@ them.
 * HBM3e: 3201 MHz at two transfers a clock on 6144 bits (six stacks), 4.917 TB/s, above the data sheet's 4.8 TB/s;
   1.229184 · 10¹² words a second.
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

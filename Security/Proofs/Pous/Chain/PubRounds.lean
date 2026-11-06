@@ -1,4 +1,6 @@
-import Proofs.Pous.Chain.FamilyRounds
+module
+
+public import Proofs.Pous.Chain.FamilyRounds
 
 /-!
 # The band store with a public encoder at `D = 2` and `D = 1` rounds
@@ -8,6 +10,8 @@ import Proofs.Pous.Chain.FamilyRounds
 `FamilyRounds.lean` proves the latter at `D = 2`, `k = 97` and at `D = 1`, `k = 93`. `Pous.SecurityProofs` proves the
 guarantees `BandPubMeetsFamilyD2` and `BandPubMeetsFamilyD1` from them.
 -/
+
+@[expose] public section
 
 namespace PousPub
 

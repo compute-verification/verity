@@ -17,6 +17,8 @@ Query AST (frozen dataclasses; `evaluate(program, q)` is the only entry point; s
 JSON codec in `verity.ml.circuits.query_codec`):
     instances(path)               one set per activation / batch member / scan iteration of the matched nodes
     members(path, sel, k=1)       inside each matched activation: one set per k adjacent members of the nodes `sel` selects
+    members(path, sel, k=(r, c))  ... or one set per r x c rectangle: r members of a selected node by c members of the one
+                                  batch node of its callee's body (PoUW's tiles: A rows by B rows), row blocks outermost
     nodes(path, sel)              inside each matched activation: each selected node whole (all members) as one set
     zip(path, [sel...])           inside each matched activation: set m = union of member m of every selected node (equal n)
     each(F, G)                    refinement: G evaluated inside every activation F selects
@@ -25,7 +27,18 @@ JSON codec in `verity.ml.circuits.query_codec`):
     default(w)                    a node is one set per member iff its declared distinct return width <= w, else descended
     override(F, {path: G})        F, but nodes matching `path` (anywhere) are treated by G
     where(F, pred)                keep the sets whose node satisfies pred (spec pattern / form / width)
+    table(path, name, of)         inside each matched activation: one set per label of the private table `name`, which
+                                  labels the body's nodes (of="nodes") or the activation's gates (of="gates"); the rows are
+                                  `evaluate(..., tables=...)`'s, one per distinct Definition, never one per copy
+    group(F, key)                 F's sets in classes of a key of their node's Definition (`definition`, `name`, `base`,
+                                  `static:K`), one set per class in first-seen order
+    label(F, affine=(a, b, n))    F's sets through a label map, label l the union of the sets it receives: set i (its index
+    label(F, table=name)          within the activation) to (a*i + b) mod n, or to the label a nodes table gives its node
     union(F, G) | minus | inter   GateSet algebra lifted elementwise (or broadcast from a one-set family); root()
+
+A table, group, label or rectangle set may span nodes or activations: `each` and `where` refuse it, `rest` complements only
+a nodes table and rectangles, and a family holding one has no `tiling()`.  `PlanFamily.label_of(i)` is the label a table,
+group or label map gives set i.
 
 Paths: `/Name` (direct children), `//Name` (descendants; a match stops the descent), `Name` may be a definition name,
 `Name_vN`, a family, or `Name_vN{K=*,N=1536}` / `Name_vN{*}` (statics compared as `SpecializedDefinition.id` renders
@@ -36,12 +49,14 @@ from __future__ import annotations
 
 import bisect
 import itertools
+import math
 import re
 import weakref
 from dataclasses import dataclass
 from functools import cached_property
-from typing import TYPE_CHECKING, Iterator, Mapping, Protocol
+from typing import TYPE_CHECKING, Iterator, Mapping, Protocol, Sequence
 
+from .codec import _split_record, descriptor_id
 from .defs import PrimitiveDefinition, SpecializedDefinition, _fmt_static
 from .intervals import complement, norm, total
 from .layout import Scope
@@ -257,13 +272,15 @@ class SetClass:
     """All sets a structural family produces from one non-descend entry of one refined body are layout-identical up to
     the activation offset (and, for `atomic`/`zip`, the member index): one class.  `representative` is the first set of
     the class in family order; `per_activation` sets per activation of the body; `activations` activations of that
-    refined body in the Program; `total = per_activation * activations` sets in the class."""
+    refined body in the Program; `total = per_activation * activations` sets in the class.  A table's label or a group's
+    key is a class of its own (`per_activation` 1)."""
     body: str
     entry: int
     kind: str
     representative: GateSet
     per_activation: int
     activations: int
+    label: object = None  # a table's label or a group's key: each is a class of its own
 
     @property
     def total(self) -> int:
@@ -280,7 +297,7 @@ class Family(Protocol):
     `index_of(S)` is the inverse of `by_index` (None when S is not a set of the family); iteration yields the sets in
     index order; `tiling()` is the structural description for families built from structural constructors (`instances`,
     `members`, `nodes`, `zip`, `each`, `concat`, `rest`, `default`, `override`, `where`) and None otherwise (GateSet
-    algebra results, hand-made families)."""
+    algebra results, families holding `table` or `group` sets, hand-made families)."""
 
     def count(self) -> int: ...
     def by_index(self, i: int) -> GateSet: ...
@@ -526,9 +543,11 @@ class Instances(Query):
 
 @dataclass(frozen=True)
 class Members(Query):
+    """`k` adjacent members of each selected node per set, or with `k=(r, c)` the r x c rectangles over two axes: r
+    members of the selected node by c members of the one batch node of its callee's body."""
     path: Path
     sel: NodeSel
-    k: int = 1
+    k: int | tuple[int, int] = 1
 
 
 @dataclass(frozen=True)
@@ -607,6 +626,43 @@ class Root(Query):
     pass
 
 
+TABLE_OF = ("nodes", "gates")
+
+
+@dataclass(frozen=True)
+class Table(Query):
+    """Inside each activation `path` matches, the sets of the table `name` labels: label l's set is the body nodes (`of="nodes"`,
+    each node whole) or the gates of the activation (`of="gates"`, in layout order) the table gives label l.  The term names
+    the table; its rows are evaluation input (`evaluate(..., tables=...)`), one per distinct Definition, keyed by its
+    descriptor id (`codec.descriptor_id`)."""
+    path: Path
+    name: str
+    of: str = "nodes"
+
+
+_KEY_PARTS = ("definition", "name", "base")
+
+
+@dataclass(frozen=True)
+class Group(Query):
+    """The sets of `base` in classes of `key`, a tuple of parts of each set's node's Definition: `definition` (its descriptor
+    id, statics included), `name` (`Name`, every version and specialization), `base` (`Name_vN`), `static:K` (static K's
+    canonical JSON as the descriptor id writes it, "" when the Definition has none).  One set per class, in first-seen order
+    of `base`; the empty key is one class."""
+    base: Query
+    key: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Label(Query):
+    """The sets of `base` sent through a label map, label l holding the union of the sets it receives.  `affine=(a, b, n)`:
+    set i (its index in `base` within the enclosing activation) goes to (a*i + b) mod n, n labels; `table=name`: a set goes
+    to the label table `name` gives its node of the body the term is evaluated in (rows as `table`'s, of="nodes")."""
+    base: Query
+    affine: tuple[int, int, int] | None = None
+    table: str | None = None
+
+
 # -- lowercase constructors (accept strings) ---------------------------------------------------------------
 
 
@@ -614,7 +670,11 @@ def instances(path) -> Instances:
     return Instances(_path(path))
 
 
-def members(path, sel, k: int = 1) -> Members:
+def members(path, sel, k: int | tuple[int, int] = 1) -> Members:
+    if isinstance(k, (tuple, list)):
+        if len(k) != 2 or any(isinstance(x, bool) or not isinstance(x, int) or x <= 0 for x in k):
+            raise QueryError(f"members(..., k=(r, c)) needs two positive integers, got {k!r}")
+        return Members(_path(path), _nodesel(sel), (k[0], k[1]))
     if k <= 0:
         raise QueryError("members(...) needs a positive k")
     return Members(_path(path), _nodesel(sel), int(k))
@@ -675,6 +735,45 @@ def root() -> Root:
     return Root()
 
 
+def table(path, name: str, of: str = "nodes") -> Table:
+    if not isinstance(name, str) or not name:
+        raise QueryError(f"table(...) needs a table name, got {name!r}")
+    if of not in TABLE_OF:
+        raise QueryError(f"table(...): of must be one of {TABLE_OF}, got {of!r}")
+    return Table(_path(path), name, of)
+
+
+def _base_name(base_id: str) -> str:
+    """`Name` of `Name_vN`: the id without its last `_v<digits>`, or the id itself when it has none."""
+    head, sep, version = base_id.rpartition("_v")
+    return head if sep and all(c in "0123456789" for c in version) else base_id
+
+
+def _key(key) -> tuple[str, ...]:
+    parts = (key,) if isinstance(key, str) else tuple(key)
+    for p in parts:
+        if not isinstance(p, str) or not (p in _KEY_PARTS or (p.startswith("static:") and len(p) > 7)):
+            raise QueryError(f"group(...): a key part is one of {_KEY_PARTS} or 'static:K', got {p!r}")
+    return parts
+
+
+def group(base, key) -> Group:
+    return Group(_as_query(base), _key(key))
+
+
+def label(base, affine=None, table: str | None = None) -> Label:
+    if (affine is None) == (table is None):
+        raise QueryError("label(F, affine=[a, b, n]) or label(F, table=NAME): exactly one label map")
+    if table is not None:
+        if not isinstance(table, str) or not table:
+            raise QueryError(f"label(F, table=NAME) needs a table name, got {table!r}")
+        return Label(_as_query(base), None, table)
+    if (not isinstance(affine, (tuple, list)) or len(affine) != 3
+            or any(isinstance(x, bool) or not isinstance(x, int) or x < 0 for x in affine) or affine[2] == 0):
+        raise QueryError(f"label(F, affine=[a, b, n]): a, b >= 0 and n > 0, integers, got {affine!r}")
+    return Label(_as_query(base), (affine[0], affine[1], affine[2]), None)
+
+
 def _as_query(x) -> Query:
     """A Query, or a path string = `instances(path)` (so `each("//X", ...)` reads as in the design doc)."""
     if isinstance(x, Query):
@@ -689,22 +788,44 @@ def _as_query(x) -> Query:
 # ---------------------------------------------------------------------------------------------------------
 
 
+Chain = tuple[tuple[int, int], ...]
+"""(node, member) steps from an activation down to one of its nested activations; () is the activation itself."""
+
+
 class Entry:
     """One plan entry.  `atomic`: k adjacent members of node j per set; `whole`: node j (all members) as one set;
-    `zip`: member m of every node in `nodes` as one set; `descend`: each covered member of j is refined by `sub`."""
+    `zip`: member m of every node in `nodes` as one set; `descend`: each covered member of j is refined by `sub`;
+    `table`: set l is `sets[l]`, (chain, items) pairs relative to the activation, `nodes` the body nodes it reaches;
+    `group` / `label`: one set, the union of every set of `sub` (one activation's sets with the key or label `value`);
+    `affine`: `rule` = (a, b, n), set l the union of the sets i of `sub` with (a*i + b) mod n == l;
+    `grid`: `k` = (r, c), set (u, v) = members [u*r, u*r + r) of j by members [v*c, v*c + c) of node `inner` = (j', n')
+    of j's callee body, u-major."""
 
-    __slots__ = ("j", "kind", "members", "k", "nodes", "sub", "group", "count", "_groups")
+    __slots__ = ("j", "kind", "members", "k", "nodes", "sub", "group", "count", "_groups", "sets", "value", "of", "_sigs",
+                 "rule", "inner")
 
-    def __init__(self, j: int, kind: str, members: tuple[tuple[int, int], ...], *, k: int = 1,
-                 nodes: tuple[int, ...] = (), sub: "Plan | None" = None, group: int | None = None) -> None:
+    def __init__(self, j: int, kind: str, members: tuple[tuple[int, int], ...], *, k: int | tuple[int, int] = 1,
+                 nodes: tuple[int, ...] = (), sub: "Plan | None" = None, group: int | None = None,
+                 sets: tuple[tuple[tuple[Chain, frozenset[Item]], ...], ...] = (), value=None, of: str | None = None,
+                 rule: tuple[int, int, int] | None = None, inner: tuple[int, int] | None = None) -> None:
         self.j, self.kind, self.members, self.k, self.nodes, self.sub, self.group = j, kind, members, k, nodes, sub, group
+        self.sets, self.value, self.of, self._sigs, self.rule, self.inner = sets, value, of, None, rule, inner
         if kind == "atomic":
-            self._groups = tuple(-(-(hi - lo) // k) for lo, hi in members)
+            self._groups = tuple(-(-(hi - lo) // k) for lo, hi in members)  # type: ignore[operator]
             self.count = sum(self._groups)
         elif kind == "whole":
             self.count = 1 if total(members) else 0
         elif kind == "zip":
             self.count = total(members)
+        elif kind == "table":
+            self.count = len(sets)
+        elif kind in ("group", "label"):
+            self.count = 1
+        elif kind == "affine":
+            self.count = rule[2]  # type: ignore[index]
+        elif kind == "grid":
+            (r, c), n_in = k, inner[1]  # type: ignore[misc, index]
+            self.count = -(-total(members) // r) * -(-n_in // c)
         else:
             assert sub is not None
             self.count = total(members) * sub.total
@@ -757,10 +878,15 @@ class Entry:
         if self.kind == "zip":
             m = self.member_at(pos)
             return frozenset((j, m) for j in self.nodes)
-        raise TypeError("descend entries have no items")
+        raise TypeError(f"{self.kind} entries have no items of one activation")
 
     def all_nodes(self) -> tuple[int, ...]:
-        return self.nodes if self.kind == "zip" else (self.j,)
+        return self.nodes if self.kind in ("zip", "table", "group", "label", "affine") else (self.j,)
+
+    @property
+    def multi(self) -> bool:
+        """A table, group, label or grid set: it may span several nodes or several activations."""
+        return self.kind in ("table", "group", "label", "affine", "grid")
 
 
 class Plan:
@@ -798,12 +924,14 @@ def _full(node) -> tuple[tuple[int, int], ...]:
 class _Evaluator:
     """Builds plans for one Program; memoised by (spec id, query) and by (plan key, transformation)."""
 
-    def __init__(self, program: "Program") -> None:
+    def __init__(self, program: "Program", tables: Mapping[str, Mapping[str, Sequence[int | None]]] | None = None) -> None:
         self.root: SpecializedDefinition = program.root  # (no strong reference to the Program itself: see `evaluator`)
         self.root_scope: Scope = program.circuit.root_scope
+        self.tables = dict(tables or {})
         self._plans: dict[tuple, Plan] = {}
         self._widths: dict[int, int] = {}
         self._contains: dict[tuple, bool] = {}
+        self._group_keys: dict[tuple, tuple] = {}
         self._keys = itertools.count()
 
     def _new_plan(self, spec: SpecializedDefinition, entries: list[Entry]) -> Plan:
@@ -866,6 +994,14 @@ class _Evaluator:
         if isinstance(q, Zip):
             term = ("zip", q.sels)
             return self._sel_plan(spec, term) if q.path.is_self else self._path_plan(spec, q.path.steps, term)
+        if isinstance(q, Table):
+            term = ("table", q.name, q.of)
+            return self._sel_plan(spec, term) if q.path.is_self else self._path_plan(spec, q.path.steps, term)
+        if isinstance(q, Group):
+            return self._apply_group(self.plan(spec, q.base), q.key)
+        if isinstance(q, Label):
+            base = self.plan(spec, q.base)
+            return self._apply_affine(base, q.affine) if q.affine is not None else self._apply_label_table(base, q.table)
         if isinstance(q, Each):
             if isinstance(q.base, Instances) and len(q.base.path.steps) == 1 and self._root_match(spec, q.base.path.steps):
                 return self.plan(spec, q.inner)  # each(<the program's own function>, G) = G inside the root body
@@ -955,7 +1091,9 @@ class _Evaluator:
             sel, k = term[1], term[2]
             for j, node in enumerate(body.nodes):
                 if sel.matches(j, node):
-                    entries.append(Entry(j, "atomic", _full(node), k=k))
+                    e = self._grid(spec, j, node, k) if isinstance(k, tuple) else Entry(j, "atomic", _full(node), k=k)
+                    if e.count or not isinstance(k, tuple):
+                        entries.append(e)
         elif kind == "nodes":
             sel = term[1]
             for j, node in enumerate(body.nodes):
@@ -970,9 +1108,170 @@ class _Evaluator:
                     raise QueryError(f"zip in {spec.id}: selected nodes {js} have different member counts {sorted(ns)}")
                 n = ns.pop()
                 entries.append(Entry(js[0], "zip", ((0, n),) if n else (), nodes=tuple(js), group=0))
+        elif kind == "table":
+            entries.extend(self._table_entries(spec, term[1], term[2]))
         else:
             raise QueryError(kind)
         return self._new_plan(spec, entries)
+
+    @staticmethod
+    def _grid(spec: SpecializedDefinition, j: int, node, k: tuple[int, int]) -> Entry:
+        """Node j's members by the members of the one batch node of its callee's body, in r x c rectangles."""
+        if not _is_composite(node):
+            raise QueryError(f"members(..., k={k}) in {spec.id}: node {j} calls the primitive {node.fn.id}, whose members "
+                             f"are one axis; use members(..., k={k[0]})")
+        inner = [i for i, n in enumerate(node.fn.body.nodes) if n.form == "batch"]
+        if len(inner) != 1:
+            raise QueryError(f"members(..., k={k}) in {spec.id}: node {j}'s callee {node.fn.id} has {len(inner)} batch nodes; "
+                             f"the second axis is its one batch node")
+        return Entry(j, "grid", _full(node), k=k, inner=(inner[0], n_members(node.fn.body.nodes[inner[0]])))
+
+    # -- table -----------------------------------------------------------------------------------------------------
+
+    def _table_row(self, spec: SpecializedDefinition, name: str, of: str) -> tuple[Sequence[int | None], int]:
+        """The row of table `name` for `spec` and its label count L: labels are None (no set) or 0..L-1, each used."""
+        rows = self.tables.get(name)
+        key = descriptor_id(spec)
+        if rows is None:
+            raise QueryError(f"table {name!r} is not given: evaluate(program, query, tables={{{name!r}: {{descriptor id: labels}}}})")
+        if not isinstance(rows, Mapping):
+            raise QueryError(f"table {name!r}: rows are a mapping from a Definition's descriptor id to its labels, got {type(rows).__name__}")
+        row = rows.get(key)
+        if row is None:
+            raise QueryError(f"table {name!r} has no row for {key}")
+        n = len(spec.body.nodes) if of == "nodes" else spec.gates
+        if len(row) != n:
+            raise QueryError(f"table {name!r}: {key} has {n} {of}, its row {len(row)} labels")
+        for x in row:
+            if x is not None and (isinstance(x, bool) or not isinstance(x, int) or x < 0):
+                raise QueryError(f"table {name!r}: a label is an int >= 0, or None for none, got {x!r} in {key}'s row")
+        used = {x for x in row if x is not None}
+        n_labels = max(used, default=-1) + 1
+        if len(used) != n_labels:
+            raise QueryError(f"table {name!r}: {key}'s labels are not 0..{n_labels - 1}, each used: "
+                             f"{sorted(set(range(n_labels)) - used)[:4]} unused")
+        return row, n_labels
+
+    def _table_entries(self, spec: SpecializedDefinition, name: str, of: str) -> list[Entry]:
+        """One `table` entry with a set per label: a nodes row labels each body node whole; a gates row labels each gate
+        of the activation, resolved to the (chain, item) of the primitive member that is the gate."""
+        row, n_labels = self._table_row(spec, name, of)
+        if not n_labels:
+            return []
+        by_label: list[dict[Chain, set[Item]]] = [{} for _ in range(n_labels)]
+        if of == "nodes":
+            for j, node in enumerate(spec.body.nodes):
+                if row[j] is not None and n_members(node):
+                    by_label[row[j]].setdefault((), set()).update((j, m) for m in range(n_members(node)))
+        else:
+            def walk(s: SpecializedDefinition, base: int, chain: Chain) -> None:
+                body = s.body
+                for j, node in enumerate(body.nodes):
+                    w = node.fn.gates
+                    for m in range(n_members(node)):
+                        at = base + body.offsets[j] + m * w
+                        if isinstance(node.fn, PrimitiveDefinition):
+                            if row[at] is not None:
+                                by_label[row[at]].setdefault(chain, set()).add((j, m))
+                        else:
+                            walk(node.fn, at, chain + ((j, m),))
+            walk(spec, 0, ())
+        sets = tuple(tuple((c, frozenset(items)) for c, items in d.items()) for d in by_label)
+        top = sorted({(c[0][0] if c else j) for s in sets for c, items in s for j, _ in items})
+        return [Entry(top[0] if top else 0, "table", (), nodes=tuple(top), sets=sets, of=of)]
+
+    # -- group -----------------------------------------------------------------------------------------------------
+
+    @staticmethod
+    def _set_key(fn, key: tuple[str, ...]) -> tuple[str, ...]:
+        out: list[str] = []
+        did = descriptor_id(fn)
+        for part in key:
+            if part == "definition":
+                out.append(did)
+            elif part in ("name", "base"):
+                base = fn.id if isinstance(fn, PrimitiveDefinition) else fn.base_id
+                out.append(_base_name(base) if part == "name" else base)
+            else:
+                out.append(dict(_split_record(did)).get(part[7:], ""))
+        return tuple(out)
+
+    def _keys_of(self, plan: Plan, key: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
+        """The keys of `plan`'s sets in first-seen family order, memoised per plan."""
+        memo = (plan.key, key)
+        hit = self._group_keys.get(memo)
+        if hit is not None:
+            return hit
+        seen: dict[tuple[str, ...], None] = {}
+        body = plan.spec.body
+        for e in plan.entries:
+            if e.kind == "descend":
+                seen.update(dict.fromkeys(self._keys_of(e.sub, key)))
+            elif e.kind in ("atomic", "whole", "grid"):
+                if e.count:
+                    seen[self._set_key(body.nodes[e.j].fn, key)] = None
+            else:
+                raise QueryError(f"group(...) keys a set by its node's Definition; a {e.kind} set (node {e.j} of "
+                                 f"{plan.spec.id}) is not inside one node")
+        out = tuple(seen)
+        self._group_keys[memo] = out
+        return out
+
+    def _filter(self, plan: Plan, key: tuple[str, ...], value: tuple[str, ...]) -> Plan:
+        """`plan` restricted to the sets whose key is `value`."""
+        def make() -> Plan:
+            body = plan.spec.body
+            entries: list[Entry] = []
+            for e in plan.entries:
+                if e.kind == "descend":
+                    if value in self._keys_of(e.sub, key):
+                        entries.append(Entry(e.j, "descend", e.members, sub=self._filter(e.sub, key, value)))
+                elif e.count and self._set_key(body.nodes[e.j].fn, key) == value:
+                    entries.append(e)
+            return self._new_plan(plan.spec, entries)
+        return self._memo((plan.key, "filter", key, value), make)
+
+    def _apply_group(self, plan: Plan, key: tuple[str, ...]) -> Plan:
+        def make() -> Plan:
+            entries = []
+            for v in self._keys_of(plan, key):
+                sub = self._filter(plan, key, v)
+                top = tuple(sorted({j for e in sub.entries for j in e.all_nodes()}))
+                entries.append(Entry(top[0], "group", (), nodes=top, sub=sub, value=v))
+            return self._new_plan(plan.spec, entries)
+        return self._memo((plan.key, "group", key), make)
+
+    # -- label -----------------------------------------------------------------------------------------------------
+
+    def _apply_affine(self, plan: Plan, rule: tuple[int, int, int]) -> Plan:
+        def make() -> Plan:
+            top = tuple(sorted({j for e in plan.entries for j in e.all_nodes()}))
+            return self._new_plan(plan.spec, [Entry(top[0] if top else 0, "affine", (), nodes=top, sub=plan, rule=rule)])
+        return self._memo((plan.key, "affine", rule), make)
+
+    def _apply_label_table(self, plan: Plan, name: str) -> Plan:
+        """One `label` entry per label of the row: the entries of `plan` whose node the row gives that label."""
+        def make() -> Plan:
+            row, n_labels = self._table_row(plan.spec, name, "nodes")
+            by_label: list[list[Entry]] = [[] for _ in range(n_labels)]
+            for e in plan.entries:
+                js = e.all_nodes()
+                labels = {row[j] for j in js}
+                if len(labels) > 1:
+                    raise QueryError(f"label(..., table={name!r}) labels a set by its node; a {e.kind} set in {plan.spec.id} "
+                                     f"spans nodes {list(js)} of labels {sorted(map(str, labels))}")
+                if labels and (lab := labels.pop()) is not None:
+                    by_label[lab].append(e)
+            entries = []
+            for lab, es in enumerate(by_label):
+                top = tuple(sorted({j for e in es for j in e.all_nodes()}))
+                entries.append(Entry(top[0] if top else 0, "label", (), nodes=top, sub=self._new_plan(plan.spec, es), value=lab))
+            return self._new_plan(plan.spec, entries)
+        return self._memo((plan.key, "label", name), make)
+
+    def _inner_whole(self, fn: SpecializedDefinition, inner: tuple[int, int]) -> Plan:
+        """The plan of `fn`'s body whose one set is its batch node `inner` whole: what a grid covers of an activation."""
+        return self._memo((fn.id, "inner", inner), lambda: self._new_plan(fn, [Entry(inner[0], "whole", _full(fn.body.nodes[inner[0]]))]))
 
     # -- each ----------------------------------------------------------------------------------------------------
 
@@ -992,7 +1291,7 @@ class _Evaluator:
                 else:
                     entries.append(Entry(e.j, "atomic", e.members))  # a gate cannot be refined
             else:
-                raise QueryError(f"each(...) over zip sets (node {e.j} of {plan.spec.id}) is not a refinement of one activation")
+                raise QueryError(f"each(...) over {e.kind} sets (node {e.j} of {plan.spec.id}) is not a refinement of one activation")
         return self._new_plan(plan.spec, entries)
 
     # -- concat / rest -------------------------------------------------------------------------------------------
@@ -1017,6 +1316,18 @@ class _Evaluator:
         descends: dict[int, list[Entry]] = {}
         for p in plans:
             for e in p.entries:
+                if e.kind == "table" and e.of == "nodes":
+                    for j in e.nodes:
+                        covered.setdefault(j, []).extend(_full(body.nodes[j]))
+                    continue
+                if e.kind == "grid":  # the rectangles cover the inner batch node of every member
+                    covered.setdefault(e.j, []).extend(e.members)
+                    sub = self._inner_whole(body.nodes[e.j].fn, e.inner)  # type: ignore[arg-type]
+                    descends.setdefault(e.j, []).append(Entry(e.j, "descend", e.members, sub=sub))
+                    continue
+                if e.multi:
+                    raise QueryError(f"rest() beside a {e.kind} term in {spec.id}: only a nodes table and a grid have a structural "
+                                     f"complement")
                 for j in e.all_nodes():
                     covered.setdefault(j, []).extend(e.members)
                 if e.kind == "descend":
@@ -1096,7 +1407,7 @@ class _Evaluator:
         done: set[int] = set()
         for e in plan.entries:
             node = body.nodes[e.j]
-            g = self._case_for(node.fn, cases) if e.kind != "zip" else None
+            g = self._case_for(node.fn, cases) if e.kind != "zip" and not e.multi else None
             if g is not None:
                 if e.j in done:
                     continue
@@ -1139,6 +1450,8 @@ class _Evaluator:
         body = plan.spec.body
         entries: list[Entry] = []
         for e in plan.entries:
+            if e.multi:
+                raise QueryError(f"where(...) keeps a set by its node; a {e.kind} set (in {plan.spec.id}) spans nodes, so filter its base")
             if e.kind == "descend":
                 sub = self._apply_where(e.sub, pred)
                 if sub.total:
@@ -1152,9 +1465,9 @@ class _Evaluator:
 
 
 def _top_path_absolute(q: Query) -> bool:
-    while isinstance(q, (Each, Where, Override)):
+    while isinstance(q, (Each, Where, Override, Group, Label)):
         q = q.base
-    if isinstance(q, (Instances, Members, Nodes, Zip)):
+    if isinstance(q, (Instances, Members, Nodes, Zip, Table)):
         return q.path.is_absolute
     return False
 
@@ -1162,6 +1475,88 @@ def _top_path_absolute(q: Query) -> bool:
 # ---------------------------------------------------------------------------------------------------------
 # Families
 # ---------------------------------------------------------------------------------------------------------
+
+
+def _entry_at(scope: Scope, plan: Plan, rem: int) -> tuple[Scope, Entry, int]:
+    """(activation, entry, position in the entry) of set `rem` of `plan` applied to `scope`."""
+    while True:
+        t = bisect.bisect_right(plan.cum, rem) - 1
+        e = plan.entries[t]
+        rem -= plan.cum[t]
+        if e.kind != "descend":
+            return scope, e, rem
+        q, rem = divmod(rem, e.sub.total)
+        scope = scope.child(e.j, e.member_at(q))
+        plan = e.sub
+
+
+def _down(scope: Scope, chain: Chain) -> Scope:
+    for j, m in chain:
+        scope = scope.child(j, m)
+    return scope
+
+
+def _union_parts(scope: Scope, plan: Plan) -> list[Part]:
+    """Every set of `plan` applied to `scope`: one Part per activation and atomic or whole entry, the parts of the rest."""
+    out: list[Part] = []
+    for e in plan.entries:
+        if e.kind == "descend":
+            for lo, hi in e.members:
+                for m in range(lo, hi):
+                    out.extend(_union_parts(scope.child(e.j, m), e.sub))
+        elif e.kind in ("atomic", "whole"):
+            out.append(Part(scope, frozenset((e.j, m) for lo, hi in e.members for m in range(lo, hi))))
+        else:
+            for pos in range(e.count):
+                out.extend(_set_of(scope, e, pos).parts)
+    return out
+
+
+def _preimage(rule: tuple[int, int, int], label: int, n_sets: int) -> range:
+    """The indices i < n_sets with (a*i + b) mod n == label, ascending: one residue class mod n / gcd(a, n), or none."""
+    a, b, n = rule
+    g = math.gcd(a, n)
+    d = (label - b) % n
+    if d % g:
+        return range(0)
+    step = n // g
+    return range((d // g) * pow(a // g, -1, step) % step if step > 1 else 0, n_sets, step)
+
+
+def _grid_cols(e: Entry) -> int:
+    return -(-e.inner[1] // e.k[1])  # type: ignore[index]
+
+
+def _grid_pos(scope: Scope, e: Entry, g: int) -> int | None:
+    """The grid set of `e` holding root gate `g`, or None when `g` is outside the inner batch node."""
+    body = scope.spec.body
+    rel = g - scope.offset
+    if not body.offsets[e.j] <= rel < body.offsets[e.j + 1]:
+        return None
+    fn = body.nodes[e.j].fn
+    m, rel = divmod(rel - body.offsets[e.j], fn.gates)
+    j_in = e.inner[0]  # type: ignore[index]
+    inner = fn.body
+    if not inner.offsets[j_in] <= rel < inner.offsets[j_in + 1]:
+        return None
+    x = (rel - inner.offsets[j_in]) // inner.nodes[j_in].fn.gates
+    return (m // e.k[0]) * _grid_cols(e) + x // e.k[1]  # type: ignore[index]
+
+
+def _set_of(scope: Scope, e: Entry, pos: int) -> GateSet:
+    if e.kind == "table":
+        return GateSet(_merge_parts([Part(_down(scope, c), items) for c, items in e.sets[pos]]))
+    if e.kind in ("group", "label"):
+        return GateSet(_merge_parts(_union_parts(scope, e.sub)))
+    if e.kind == "affine":
+        sub = e.sub
+        return GateSet(_merge_parts([p for i in _preimage(e.rule, pos, sub.total) for p in _set_of(*_entry_at(scope, sub, i)).parts]))
+    if e.kind == "grid":
+        (r, c), (j_in, n_in) = e.k, e.inner  # type: ignore[misc]
+        u, v = divmod(pos, _grid_cols(e))
+        items = frozenset((j_in, x) for x in range(v * c, min(v * c + c, n_in)))
+        return GateSet(tuple(Part(scope.child(e.j, m), items) for m in range(u * r, min(u * r + r, total(e.members)))))
+    return GateSet((Part(scope, e.items_of(pos)),))
 
 
 class PlanFamily:
@@ -1182,15 +1577,14 @@ class PlanFamily:
         return self._locate(self.scope, self.plan, i)
 
     def _locate(self, scope: Scope, plan: Plan, rem: int) -> GateSet:
-        while True:
-            t = bisect.bisect_right(plan.cum, rem) - 1
-            e = plan.entries[t]
-            rem -= plan.cum[t]
-            if e.kind != "descend":
-                return GateSet((Part(scope, e.items_of(rem)),))
-            q, rem = divmod(rem, e.sub.total)
-            scope = scope.child(e.j, e.member_at(q))
-            plan = e.sub
+        return _set_of(*_entry_at(scope, plan, rem))
+
+    def label_of(self, i: int):
+        """The label a table, group or label map gives set i (a label, or a group's key), None for a set of another entry."""
+        if not (0 <= i < self.plan.total):
+            raise IndexError(f"index {i} outside the family of {self.plan.total}")
+        _, e, rem = _entry_at(self.scope, self.plan, i)
+        return rem if e.kind in ("table", "affine") else e.value if e.kind in ("group", "label") else None
 
     def __iter__(self) -> Iterator[GateSet]:
         yield from self._walk(self.scope, self.plan)
@@ -1205,17 +1599,53 @@ class PlanFamily:
                         yield from self._walk(scope.child(e.j, m), e.sub)
             else:
                 for pos in range(e.count):
-                    yield GateSet((Part(scope, e.items_of(pos)),))
+                    yield _set_of(scope, e, pos)
 
     def index_of(self, s: GateSet) -> int | None:
         parts = _merge_parts(list(s.parts))
-        if len(parts) != 1:
+        if not parts:
             return None
-        part = parts[0]
-        chain = _chain_between(self.scope, part.scope)
-        if chain is None or not part.items:
+        chains = [_chain_between(self.scope, p.scope) for p in parts]
+        if any(c is None for c in chains):
             return None
-        return self._index_in(self.plan, chain, part.items)
+        if len(parts) == 1 and parts[0].items:
+            r = self._index_in(self.plan, chains[0], parts[0].items)
+            if r is not None:
+                return r
+        common = chains[0]
+        for c in chains[1:]:
+            n = 0
+            while n < min(len(common), len(c)) and common[n] == c[n]:
+                n += 1
+            common = common[:n]
+        return self._index_multi(self.scope, self.plan, common, s.intervals())
+
+    def _index_multi(self, scope: Scope, plan: Plan, chain: list[tuple[int, int]], ivs: list[tuple[int, int]]) -> int | None:
+        """A set of several parts: its activation is the family's scope or a scope on `chain` (toward every part of it).  A
+        grid set is the one holding the set's first gate; another is matched on its intervals."""
+        rel = tuple((lo - scope.offset, hi - scope.offset) for lo, hi in ivs)
+        for t, e in enumerate(plan.entries):
+            if e.kind == "grid":
+                pos = _grid_pos(scope, e, ivs[0][0])
+                if pos is not None and _set_of(scope, e, pos).intervals() == list(ivs):
+                    return plan.cum[t] + pos
+            elif e.multi:
+                if e._sigs is None:
+                    e._sigs = {}
+                    for pos in range(e.count):
+                        e._sigs.setdefault(tuple((lo - scope.offset, hi - scope.offset) for lo, hi in _set_of(scope, e, pos).intervals()), pos)
+                pos = e._sigs.get(rel)
+                if pos is not None:
+                    return plan.cum[t] + pos
+        if not chain:
+            return None
+        j, m = chain[0]
+        for t, e in plan.by_node.get(j, []):
+            if e.kind == "descend" and e.covers(m) and e.sub.total:
+                r = self._index_multi(scope.child(j, m), e.sub, chain[1:], ivs)
+                if r is not None:
+                    return plan.cum[t] + e.member_pos(m) * e.sub.total + r
+        return None
 
     def _index_in(self, plan: Plan, chain: list[tuple[int, int]], items: frozenset[Item]) -> int | None:
         if chain:
@@ -1248,12 +1678,15 @@ class PlanFamily:
                         return plan.cum[t] + e.member_pos(m)
         return None
 
-    def tiling(self) -> Tiling:
+    def tiling(self) -> Tiling | None:
+        """The structural description, or None when a table or group set is reached (its sets are not one entry's)."""
         bodies: dict[str, BodyTiling] = {}
 
-        def visit(plan: Plan) -> None:
+        def visit(plan: Plan) -> bool:
             if plan.key in bodies:
-                return
+                return True
+            if any(e.multi for e in plan.entries):
+                return False
             ents: list[NodeTiling] = []
             for e in plan.entries:
                 if e.kind == "zip":
@@ -1264,12 +1697,9 @@ class PlanFamily:
                 else:
                     ents.append(NodeTiling(e.j, e.kind, e.members, k=e.k))
             bodies[plan.key] = BodyTiling(plan.key, plan.spec.id, plan.spec, len(plan.spec.body.nodes), tuple(ents), plan.total)
-            for e in plan.entries:
-                if e.kind == "descend":
-                    visit(e.sub)
+            return all(visit(e.sub) for e in plan.entries if e.kind == "descend")
 
-        visit(self.plan)
-        return Tiling(self.plan.key, bodies)
+        return Tiling(self.plan.key, bodies) if visit(self.plan) else None
 
     def classes(self) -> list[SetClass]:
         """The layout classes of the family's sets (one per non-descend entry of every refined body reached from the
@@ -1301,6 +1731,21 @@ class PlanFamily:
             scope = first[plan.key][0]
             for t, e in enumerate(plan.entries):
                 if e.kind == "descend" or not e.count:
+                    continue
+                if e.kind == "grid":  # one class per rectangle shape: full or edge rows by full or edge columns
+                    (r, c), n, n_in = e.k, total(e.members), e.inner[1]  # type: ignore[misc, index]
+                    rows = [(n // r, 0), (1 if n % r else 0, n // r)]
+                    cols = [(n_in // c, 0), (1 if n_in % c else 0, n_in // c)]
+                    for nu, u in rows:
+                        for nv, v in cols:
+                            if nu and nv:
+                                rep = _set_of(scope, e, u * _grid_cols(e) + v)
+                                out.append(SetClass(plan.key, t, e.kind, rep, nu * nv, acts[plan.key]))
+                    continue
+                if e.multi:  # each label's set has its own layout
+                    for pos in range(e.count):
+                        label = pos if e.kind in ("table", "affine") else e.value
+                        out.append(SetClass(plan.key, t, e.kind, _set_of(scope, e, pos), 1, acts[plan.key], label))
                     continue
                 rep = GateSet((Part(scope, e.items_of(0)),))
                 out.append(SetClass(plan.key, t, e.kind, rep, e.count, acts[plan.key]))
@@ -1397,19 +1842,22 @@ def evaluator(program: "Program") -> _Evaluator:
     return ev
 
 
-def evaluate(program: "Program", query) -> Family:
-    """Evaluate `query` (a Query or its string form) against `program`; the root body is the top-level context."""
+def evaluate(program: "Program", query, tables: Mapping[str, Mapping[str, Sequence[int | None]]] | None = None) -> Family:
+    """Evaluate `query` (a Query or its string form) against `program`; the root body is the top-level context.  `tables`
+    gives the rows of the query's `table` terms: table name -> descriptor id -> one label per body node (`of="nodes"`)
+    or per gate of an activation (`of="gates"`), None for none, the labels 0..L-1 each used (`Flock.Annot`'s tables).
+    Plans read the tables, so they are memoised per call."""
     from .query import parse  # string sugar lives with the legacy syntax
     q = parse(query) if isinstance(query, str) else query
     if not isinstance(q, Query):
         raise QueryError(f"not a query: {query!r}")
-    ev = evaluator(program)
+    ev = evaluator(program) if tables is None else _Evaluator(program, tables)
     if isinstance(q, Root) or (isinstance(q, Instances) and (q.path.is_self or (
             len(q.path.steps) == 1 and ev._root_match(program.root, q.path.steps)))):
         return ConstFamily([gateset_of_scope(ev.root_scope)])
     if isinstance(q, (Union, Minus, Inter)):
         op = {Union: "union", Minus: "minus", Inter: "inter"}[type(q)]
-        return AlgebraFamily(op, evaluate(program, q.a), evaluate(program, q.b))
+        return AlgebraFamily(op, evaluate(program, q.a, tables), evaluate(program, q.b, tables))
     return PlanFamily(ev, ev.root_scope, ev.plan(program.root, q))
 
 
@@ -1436,8 +1884,8 @@ def query_id(query: Query) -> str:
 __all__ = ["GateSet", "Family", "Tiling", "BodyTiling", "NodeTiling", "SetClass", "QueryError", "Part", "Item",
            "NameSel", "NodeSel", "Step", "Path", "Pred",
            "Query", "Instances", "Members", "Nodes", "Zip", "Each", "Concat", "Rest", "Default", "Override", "Where",
-           "Union", "Minus", "Inter", "Root",
+           "Union", "Minus", "Inter", "Root", "Table", "Group", "Label", "TABLE_OF",
            "instances", "members", "nodes", "zip_", "each", "concat", "rest", "default", "override", "where",
-           "union", "minus", "inter", "root",
+           "union", "minus", "inter", "root", "table", "group", "label",
            "evaluate", "evaluator", "parse", "to_json", "from_json", "query_id", "gateset_of_scope",
            "PlanFamily", "ConstFamily", "AlgebraFamily", "Plan", "Entry"]

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainLock
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainLock
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain simulator's rounds are the record's
@@ -7,6 +9,8 @@ import Proofs.Flock.Claims.Recursion.PlainK
 Where `P`'s deployed run at `plainΦ`'s coins decides and accepts, the plain simulator's live outcome has the record's
 rep streams, round by round, and the last message's proof files (`plainSimReps`, `plainSimProofs`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -34,7 +38,7 @@ theorem check_true {b : Bool} {why : String} {u : Unit} (h : Record.check b why 
 
 /-- **The verifier's decoder reads only rounds of `1` to `65536` coins** (S12), at any `keep`. -/
 theorem decodeWithK_n (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 := by
   unfold Record.decodeWithK at h
   dsimp only at h
@@ -73,7 +77,7 @@ theorem decodeWithK_n (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Sessi
       cases hr
       exact ⟨hb.1.1.1, hb.1.1.2⟩
 
-theorem decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : Session}
+theorem decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) :
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 :=
   decodeWithK_n id hs h

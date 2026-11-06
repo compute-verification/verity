@@ -1,6 +1,10 @@
-import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+module
+
+public import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
 
 /-! # `test-16-mxfp4`: rows 16 to 23 of `G = F_Bᵀ·F_A` (`PeelFp4Checks`, which joins them) -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelFp4Checks
 

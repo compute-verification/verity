@@ -1,6 +1,8 @@
-import Definitions.Pouw.Guarantees.Window
-import Proofs.Flock.Soundness.Audit.Extraction
-import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
+module
+
+public import Definitions.Pouw.Guarantees.Window
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 
 /-!
 # The bridge from the window's game to C-Flock's
@@ -33,6 +35,8 @@ denominator, not in `κ`. `ksJoint_le` (`Proofs/Flock/Soundness/Audit/FlockCompi
 non-ZK plain-leaf table's, which main's window doesn't run. The link term `δlink_c` stays `LinkSoundIn`, C-Flock's link
 finder at the window's state.
 -/
+
+@[expose] public section
 
 namespace Pouw.Window
 

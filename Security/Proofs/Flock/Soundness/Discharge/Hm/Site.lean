@@ -5,8 +5,12 @@ statement, the `b ‖ c` a satisfying witness holds at row port `p`'s `hm96` out
 (`bc_site_col`, `bc_site_commit`): `row_bc_setupH`, with each column in the block (`bcCol_lt`, `saltCol_lt`,
 `Layout.msgCol_lt_of_parse`), so the site's addresses read the block's bits (`bit_siteAddr`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Bc
-import Proofs.Flock.Soundness.Discharge.Layout
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Bc
+public import Proofs.Flock.Soundness.Discharge.Layout
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Flock.HmNets hiding and

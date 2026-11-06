@@ -1,6 +1,8 @@
-import Definitions.Nci
-import Mathlib.Data.ENat.Lattice
-import Mathlib.Data.Nat.Log
+module
+
+public import Definitions.Nci
+public import Mathlib.Data.ENat.Lattice
+public import Mathlib.Data.Nat.Log
 
 /-!
 # Local description length on a `(c,k)`-partition: the vocabulary
@@ -19,6 +21,8 @@ each inherits the circuit's topological order.
 * `Products`, `Products.inBlock`, `Products.acts`, `Products.FanOut`: counted product occurrences, `𝓙_I`, `V_I`, and
   activation fan-out at most `e`.
 -/
+
+@[expose] public section
 
 namespace Nci.Ldl
 

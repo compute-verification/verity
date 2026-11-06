@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainAlign
-import Proofs.Flock.Claims.KS.OffAlign
+module
+
+public import Proofs.Flock.Claims.KS.PlainAlign
+public import Proofs.Flock.Claims.KS.OffAlign
 
 /-!
 # The plain slot's off mass, after the slot's coins
@@ -14,6 +16,8 @@ off mass after `j` coins at the cap table 0's output records (`opCapL`):
   `Lock.nodeE_nodeOff_le_offC`, whose openings agree with `opCapL`'s on the outcomes the session's leaves relate
   (`capAtL_of_sessRelL`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

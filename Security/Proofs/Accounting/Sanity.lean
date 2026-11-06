@@ -1,9 +1,11 @@
-import Proofs.Accounting.Joint
-import Proofs.Accounting.Bandwidth.Honest
-import Proofs.Accounting.RateAudit.Honest
-import Proofs.Accounting.RateAudit.Interactive
-import Definitions.Accounting.BandwidthAudit
-import Definitions.Accounting.RateAuditJoint
+module
+
+public import Proofs.Accounting.Joint
+public import Proofs.Accounting.Bandwidth.Honest
+public import Proofs.Accounting.RateAudit.Honest
+public import Proofs.Accounting.RateAudit.Interactive
+public import Definitions.Accounting.BandwidthAudit
+public import Definitions.Accounting.RateAuditJoint
 
 /-!
 # The joint guarantee's hypotheses hold
@@ -21,6 +23,8 @@ not vacuous. Its device never sends, so the same run realizes the game with inte
 ignore the oracle (`rateRun_realizesRateInteractive`), and `Accounting.Guarantees.RateOfAuditInteractive` and
 `Accounting.Guarantees.RateOfAuditInteractiveRO` are not vacuous either.
 -/
+
+@[expose] public section
 
 namespace Accounting.Run
 

@@ -17,7 +17,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache, partial, reduce
-from typing import Callable, Collection, Sequence
+from typing import Callable, Collection, Iterator, Sequence
 
 import numpy as np
 
@@ -32,8 +32,9 @@ from .gf2 import Circuit, L, const_bits
 
 FORMAT = "flock-ir-unit/v2"
 WORD = 128
-#: the netlist's rows per joined piece, and the characters a digest encodes at a time
-NETLIST_ROWS = 1 << 16
+#: the netlist's rows per piece (what a caller that writes it as it renders it holds at a time; one row can be past 100 KB),
+#: and the characters a digest encodes at a time
+NETLIST_ROWS = 1 << 10
 HASH_CHUNK = 1 << 24
 NAN_TORCH = 0x7FC0
 NAN_F2FP = 0x7FFF
@@ -942,7 +943,15 @@ class _Read:
 
 
 def netlist(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
-    """The layout as ``flock-ir-unit/v2`` text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
+    """The layout as ``flock-ir-unit/v2`` text (:func:`netlist_pieces`), joined once: a GLM-5.3 norm unit's is 8.6 GB."""
+    return "".join(netlist_pieces(lay, name, cut, leaves))
+
+
+def netlist_pieces(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> Iterator[str]:
+    """:func:`netlist`'s text a piece at a time (its header line, its rows :data:`NETLIST_ROWS` lines at a time, its pins),
+    for a caller that writes or hashes it as it is rendered (`circuit.compose_to`): one piece is alive at a time.
+
+    The text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
     n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``, then ``LEAVES <canonical JSON>``
     (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the netlist's sha256
     pins the units' leaf maps and the cut structure."""
@@ -951,13 +960,11 @@ def netlist(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict |
         head.append(len(groups))
         for c, words, bits in groups:
             head += [c, words, len(bits), *bits]
-    # rows go in pieces of NETLIST_ROWS lines, and the text is joined once: a GLM-5.3 norm unit's is 8.6 GB
-    out = [" ".join(map(str, head)) + "\n"]
+    yield " ".join(map(str, head)) + "\n"
     for k in range(0, lay.useful, NETLIST_ROWS):
-        out.append("\n".join([" ".join(map(str, [len(a), *_cols_of(a), len(b), *_cols_of(b)]))
-                              for a, b in zip(lay.rows_a[k:k + NETLIST_ROWS], lay.rows_b[k:k + NETLIST_ROWS])]) + "\n")
-    out.append(netlist_pins(cut, leaves))
-    return "".join(out)
+        yield "\n".join([" ".join(map(str, [len(a), *_cols_of(a), len(b), *_cols_of(b)]))
+                         for a, b in zip(lay.rows_a[k:k + NETLIST_ROWS], lay.rows_b[k:k + NETLIST_ROWS])]) + "\n"
+    yield netlist_pins(cut, leaves)
 
 
 def netlist_pins(cut: dict | None, leaves: dict | None) -> str:
@@ -1109,7 +1116,12 @@ class Lowering:
     def sha256_of(self, expanded: str) -> str:
         """:attr:`sha256` from ``expanded``, the unit's ``netlist(layout, name)`` (:attr:`text` without its LEAVES and CUT
         lines), for a caller that renders it anyway (`circuit.compose`'s unit section): the netlist is rendered once."""
-        h = _sha256(expanded)
+        return self.sha256_after(_sha256(expanded))
+
+    def sha256_after(self, h: hashlib._Hash) -> str:
+        """:attr:`sha256` from ``h``, SHA-256 so far of the unit's ``netlist(layout, name)``, for a caller that hashes it as it
+        writes it (`circuit.compose_to`); ``h`` is left as it was."""
+        h = h.copy()
         h.update(netlist_pins(self.cut, self.leaves).encode())
         return h.hexdigest()
 

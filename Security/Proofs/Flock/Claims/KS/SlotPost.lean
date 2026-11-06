@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.SlotFirst
+module
+
+public import Proofs.Flock.Claims.KS.SlotFirst
 
 /-!
 # A slot's coin count in a lockstep the strategy plays first, beside the games after it
@@ -22,6 +24,8 @@ every table choice (`SlotAtD`):
 * `SlotAtD.leftSame`, `SlotAtD.batchLock_nil`: so a slot met after `j` coins there is met after `j` coins in
   `leftSame L h`, and in the batch with nothing in front.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game.Lock
 

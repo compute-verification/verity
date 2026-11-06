@@ -1,4 +1,6 @@
-import Proofs.Nci.Fit
+module
+
+public import Proofs.Nci.Fit
 
 /-!
 # A window across optimizer steps: `FitBoundSlots` applies where `FitBound` can't
@@ -19,6 +21,8 @@ tight), `ReachSlots` at `N* = 2`, and `S = 6 < N* b_w = 8`, so `FitBoundSlots` a
 window uses two, so `Fits` charges window 0 `2 b_w ≤ 6 ≤ S`, while `Reach` allows only `N* ≤ 2` and `FitBound` needs
 `S < N* b_w ≤ 2 b_w`: no choice of `N*`, `S`, `b_w`, `w_e` meets `FitBound`'s hypotheses here (`not_fits`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.FitSlotsWitness
 

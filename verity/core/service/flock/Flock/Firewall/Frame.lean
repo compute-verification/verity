@@ -4,8 +4,8 @@
 The outer firewall's release function, with the rep's prover randomness and its two refusals. At the rep's start the frame
 draws from the operating system's bytes (`IO.getRandomBytes`) everything the rep's hiding rests on (`Draws`): the pads `h`
 (with `h_ab = h_a h_b` and the triple's `w = x y`), the dot-product mask `μ`, each inner row's padding, `τ`'s salt and the
-pads tree's leaf salts, and it commits them itself (`padsRoot`, the tree the inner proof opens). The prover proves with
-exactly these draws, and the frame masks with them.
+pads tree's leaf salts, and it commits them itself (`padsRoot`, the tree the inner proof opens). The draws never leave the
+frame: the prover gets their root alone, and the frame masks with them.
 
 `round` takes one device round as the device frames it (transcript-v2, its values unmasked, ending in its squeeze) and the
 rep's masking state, and returns the round that leaves for the verifier's stream with the state after it: every label,
@@ -39,13 +39,17 @@ honest rep's. A stopped rep's `finish` is `stop`.
 `flock-firewall frame` serves this to the firewall (`cmd`), which releases only what it returns, and the session loop
 serves it on connections of its own (`serveWith`, `Session.frames`), where the coins a frame takes are the ones the loop
 opened (`Frames`). Each request is one pure step of the rep's state (`step`, folded by `run`); `serveWith` only reads the
-request's bytes, runs the host's hooks and writes the answer. Rust's `zk_veil::Masking`
-and `zk_veil::Pads` are its speed references: the firewall holds Rust's masked rounds to this release byte for byte, and
-Rust's tree over these draws to `padsRoot`.
+request's bytes, runs the host's hooks and writes the answer. Rust's `zk_veil::Masking` and `zk_veil::Pads` do the same
+on the unfirewalled `--zk` path, which no ZK server serves.
 -/
-import Flock.Zk
-import Flock.ZkLigerito
-import Flock.Firewall.Coins
+module
+
+public import Flock.Zk
+public import Flock.ZkLigerito
+public import Flock.Firewall.Coins
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Firewall.Frame
 
@@ -153,10 +157,6 @@ def padsRoot (l : Zk.PadLayout) (d : Draws) : ByteArray :=
   treeRoot ((Array.range (codeLen l)).map fun j =>
     Hm96.Default512.leaf (Sha512.hash ((Zk.codeAt rh j).toBytes ++ (Zk.codeAt rm j).toBytes)) (d.salts.extract (SALT * j) (SALT * j + SALT)))
 
-/-- The draws as the start's answer carries them, then the pads' root. -/
-def Draws.toBytes (d : Draws) (root : ByteArray) : ByteArray :=
-  wordBytes d.h ++ wordBytes d.mu ++ wordBytes d.padH ++ wordBytes d.padMu ++ d.tauSalt ++ d.salts ++ root
-
 /-! ## The refusals -/
 
 /-- The two z-claims' word coordinates (`x[1..]` of each claim point the opening takes) from the algebraic phase's coins
@@ -192,6 +192,17 @@ structure MaskSlot where
 
 /-- Word `i` of the slot, in a circuit of `2^kLog` coordinates a block (128 a word). -/
 def MaskSlot.word (m : MaskSlot) (kLog i : Nat) : Nat := (i / m.n) * 2 ^ (kLog - 7) + m.w0 + i % m.n
+
+/-- The slot's words: `n` in each of its blocks. -/
+def MaskSlot.size (m : MaskSlot) : Nat := m.n * m.blocks
+
+/-- **The packed witness `g` with the slot's words `w` in it**: word `i` of `w` at `m.word kLog i`, every other word `g`'s;
+refused unless `w` has the slot's `m.size` words and each falls inside `g`. -/
+def MaskSlot.fill (m : MaskSlot) (kLog : Nat) (g w : Array F128) : V (Array F128) := do
+  if w.size != m.size then throw s!"the mask slot: {w.size} words, where it has {m.size}"
+  if let some i := (Array.range m.size).find? (m.word kLog · ≥ g.size) then
+    throw s!"the mask slot: its word {m.word kLog i} is past a {g.size}-word witness"
+  return (Array.range m.size).foldl (fun g i => g.set! (m.word kLog i) w[i]!) g
 
 /-- The GF(2)-rank of the rows `(eq(p_1, x), …, eq(p_k, x))` over the slot's words `x` (`zk_veil::mask_rank_ok`): each
 row reduced into an echelon basis, its pivot its lowest set bit, until the basis holds all `128 k` columns. Each reduction
@@ -402,6 +413,27 @@ def innerOwn (c : Cfg) (s : Masker) (k : Nat) (content : ByteArray) (n : Nat) : 
     if content != header 3 2 y.size ++ wordBytes y ++ header 4 2 n then
       throw "the inner proof's round 3 is not the rep's Y = (h ‖ pad_h) + β (μ ‖ pad_μ) and the queries"
   | _ => throw s!"a round after the inner proof's {INNER_ROUNDS}"
+
+/-- **The firewall's own round `k` of the inner proof** at the configuration `c` and the state `s` (its `ε` and `β`),
+squeezing `n` coins, as the frame fixes it (`innerOwn`): round 0 the inner label, `final_c'`'s word `w` and `ε`'s
+squeeze; round 1 `(ρ, σ) = (ε h_fa + h_tx, h_fb + h_ty)` and the batching coins; round 2 `τ`'s 64-byte commitment `t`
+and `β`'s squeeze; round 3 `Y = (h ‖ pad_h) + β (μ ‖ pad_μ)` and the queries. -/
+def ownRound (c : Cfg) (s : Masker) (w t : ByteArray) (n : Nat) : Nat → ByteArray
+  | 0 => (labelFrame Zk.LABEL_INNER.toUTF8 ++ header 3 1 1) ++ w ++ header 4 1 1
+  | 1 => header 3 2 2 ++ wordBytes #[s.eps * c.h[c.lay.fa]! + c.h[c.lay.tx]!, c.h[c.lay.fb]! + c.h[c.lay.ty]!] ++
+      header 4 2 n
+  | 2 => header 5 0 64 ++ t ++ header 4 1 1
+  | _ =>
+    let y := (c.rowH.zip c.rowMu).map fun (a, b) => a + s.beta * b
+    header 3 2 y.size ++ wordBytes y ++ header 4 2 n
+
+/-- **The inner proof's round `k` as the frame schedules it** from the rounds `fin` the rep's finish computed: the
+firewall's own round (`ownRound`) at the frame's configuration and state, its `final_c'` round 0's word after its label
+frame and observe header, and `τ`'s commitment round 2's four words after its header. Only those two are the finish's;
+every other byte is the frame's own, so the round has `innerOwn`'s shape whatever `fin` holds. -/
+def innerSched (c : Cfg) (s : Masker) (fin : Array ByteArray) (n k : Nat) : ByteArray :=
+  ownRound c s (wordBytes (words (fin.getD 0 .empty) ((labelFrame Zk.LABEL_INNER.toUTF8).size + 16) 1))
+    (wordBytes (words (fin.getD 2 .empty) 16 4)) n k
 
 /-- `round`, with the offsets in `content` of the values it absorbs in the algebraic phase (16 bytes each, ascending): the
 values a device round carries freely, since each leaves masked. A round of the inner proof is the one `innerOwn` fixes. -/
@@ -638,8 +670,8 @@ def run (c : Cfg) : State → List Req → State × Bool
 
 /-- One rep's draws, refusals and release, served on `ch` beside the host's hooks `hk`, its draws read from `get`.
 The first line starts the rep (`start`): the frame draws `drawBytes` bytes from `get` in one read (`drawsWith`, refusing
-any other count), commits them (`padsRoot`), and answers `ok LEN` followed by the
-`LEN` bytes of `Draws.toBytes`, the draws then the root. `prior N` followed by `16 N` bytes, before the first round, is an
+any other count), commits them (`padsRoot`), and answers `ok 64` followed by the root alone: the draws never leave the
+frame. `prior N` followed by `16 N` bytes, before the first round, is an
 earlier rep of the table's algebraic-phase coins, whose claim points the rank check covers too; it is answered `ok`.
 
 `round N LEN REFLEN` followed by the device round's `LEN` bytes, then the `REFLEN` bytes of the statement's scheduled round
@@ -667,7 +699,7 @@ def serveWith (get : USize → IO ByteArray) (ch : Chan) (hk : Hooks) : IO UInt3
     ch.flush
     return (0 : UInt32)
   let first ← ch.getLine
-  let (l, mask) ← match Json.parse first >>= start with
+  let (l, mask) ← match JsonParse.parse first >>= start with
     | .ok x => pure x
     | .error e => return (← refuse s!"the rep's start: {e}")
   let d ← match ← drawsWith get l with
@@ -676,9 +708,8 @@ def serveWith (get : USize → IO ByteArray) (ch : Chan) (hk : Hooks) : IO UInt3
   let c := Cfg.ofDraws l d mask
   if let .error e := c.check then return (← refuse s!"the rep's start: {e}")
   let mut st : State := {}
-  let drawn := d.toBytes c.root
-  say s!"ok {drawn.size}"
-  ch.write drawn
+  say s!"ok {c.root.size}"
+  ch.write c.root
   ch.flush
   repeat
     let line := (← ch.getLine).replace "\n" ""
@@ -745,10 +776,10 @@ def cmd : List String → IO UInt32 := cmdWith IO.getRandomBytes
 /-- The most bytes one `tap` request takes. -/
 def TAP_MAX : Nat := 2 ^ 24
 
-/-- `flock-firewall tap`: the OS bytes of every other draw of a firewalled prover (the mask slot's words, level 0's hiding,
-the leaf salts of every tree but the pads', the coin tree's nonce), which the prover takes from here and never from the OS
-itself. Each request is a line `N`, `N ≤ TAP_MAX`, answered with `N` bytes of `IO.getRandomBytes`. Anything else ends it
-with exit 1, and its end of input with exit 0. -/
+/-- `flock-firewall tap`: the OS bytes of every other draw of a firewalled prover (level 0's hiding, the leaf salts of every
+tree but the pads', the coin tree's nonce), which the prover takes from here and never from the OS itself. The mask slot's
+words are the session loop's own (`Session.level0`). Each request is a line `N`, `N ≤ TAP_MAX`, answered with `N` bytes of
+`IO.getRandomBytes`. Anything else ends it with exit 1, and its end of input with exit 0. -/
 def tapCmd (_ : List String) : IO UInt32 := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout

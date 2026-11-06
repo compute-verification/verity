@@ -1,5 +1,7 @@
-import Mathlib.Algebra.Order.BigOperators.Group.LocallyFinite
-import Properties.Accounting.Requirement
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Group.LocallyFinite
+public import Properties.Accounting.Requirement
 
 /-!
 # Proofs of the requirement code's equalities (`Properties.Accounting.Requirement`)
@@ -11,6 +13,8 @@ its length. `packs` sorts the values by block, first bit and end (`before`, a to
 `List.pairwise_mergeSort`) and checks neighbours: on the sorted list, neighbours of one block that don't overlap chain
 (`Chained` is transitive), so every pair of one block is apart (`apart_pairwise`), and conversely (`apart_of`).
 -/
+
+@[expose] public section
 
 namespace Properties.Requirement
 

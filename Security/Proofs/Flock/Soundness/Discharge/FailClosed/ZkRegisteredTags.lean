@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
-import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
+public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 
 /-!
 # The tags of a statement `verify --zk --registered F` accepts
@@ -14,6 +16,8 @@ file only at `hiddenOutputs && registered` and `hm96-sha512/v1` leaves (`Checks.
 * `hidden_of_acceptsZKR`, `tagsOkZHJ_of_acceptsZKR`: at one that passes `ScopeZR`, the statement has hidden outputs, and
   the hidden-output chain's tags `TagsOkZHJ` hold.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 
@@ -55,7 +59,7 @@ theorem tables_of_acceptsZKR {reg : Bool} (hck : Checks (zkTags I) true I reg) (
           rw [← Except.ok.inj h1]
           exact hck.loadH hh'
         | some tu =>
-          obtain ⟨-, -, -, hn, -⟩ := hck.templated hf
+          obtain ⟨-, -, hn, -⟩ := hck.templated hf
           have h1 := s.parse
           rw [show tagsAt (zkTags I) I.count 0 = zkTags I by simp [tagsAt, hn], hck.parseC hh'] at h1
           rw [← Except.ok.inj h1]

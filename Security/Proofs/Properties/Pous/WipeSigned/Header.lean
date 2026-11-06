@@ -1,6 +1,8 @@
-import Proofs.Properties.Pous.WipeSigned.Json
-import Proofs.Properties.Pous.MemoryChallenger.Sort
-import Proofs.Properties.NetworkRecords.Bytes
+module
+
+public import Proofs.Properties.Pous.WipeSigned.Json
+public import Proofs.Properties.Pous.MemoryChallenger.Sort
+public import Proofs.Properties.NetworkRecords.Bytes
 
 /-!
 # The wipe's signed header determines its commitment
@@ -12,6 +14,8 @@ is its key, a colon and its value, and each value is read back from the value fo
 are digits and a sign. So the entries come back one by one (`entries_inj`), and with them every field (`header_inj`),
 whatever characters the ending and the tiers' names hold.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties.SecurityProofs.WipeHeader
 

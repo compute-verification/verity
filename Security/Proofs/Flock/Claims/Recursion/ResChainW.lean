@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.ResAccPorts
-import Proofs.Flock.Claims.Recursion.ResLowerDA
-import Proofs.Flock.Claims.Recursion.LayoutBAcc
+module
+
+public import Proofs.Flock.Claims.Recursion.ResAccPorts
+public import Proofs.Flock.Claims.Recursion.ResLowerDA
+public import Proofs.Flock.Claims.Recursion.LayoutBAcc
 
 /-!
 # P3 from the outer witness's own `rec-acc` chain
@@ -18,6 +20,8 @@ holds it (`accCanon`, `accSegs`), read as two elements (`chainW`). P3 splits in 
 
 `accPorts_of_W` is `AccPorts` at the dense form from the two.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

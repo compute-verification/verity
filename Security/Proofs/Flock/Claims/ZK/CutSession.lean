@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Session
-import Proofs.Flock.Claims.Complete.Sim
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Session
+public import Proofs.Flock.Claims.Complete.Sim
 
 /-!
 # The masked session from the values it sends
@@ -22,6 +24,8 @@ before it reads it.
 * `eraseC`, `eraseL`, `eraseIC`, `eraseZ`: a commitment, an opening, a pads commitment and a rep's proof with what only the
   final message reads forgotten.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

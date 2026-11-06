@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.Soundness.Refine.LiveSim
+module
+
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.Soundness.Refine.LiveSim
 
 /-!
 # A stage's decode is its play
@@ -8,6 +10,8 @@ A game plays on at most one prefix of a tape, to one output (`playsT_prefix`), s
 prefix of is that play (`stageOf_of_playsT`). The read facts' dischargers (`hSparse_of_read`, `hRegLevels_of_read`)
 decode their stages through it.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

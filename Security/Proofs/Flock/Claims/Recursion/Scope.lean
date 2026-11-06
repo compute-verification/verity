@@ -1,6 +1,8 @@
-import Definitions.Claims.Recursion
-import Proofs.Flock.Claims.DeployCode
-import Flock.RecSetup
+module
+
+public import Definitions.Claims.Recursion
+public import Proofs.Flock.Claims.DeployCode
+public import Flock.RecSetup
 
 /-!
 # `Claims.Recursion.ScopeMatches` at the compiled verifier's parser and scope check
@@ -32,11 +34,14 @@ at the shape (V*'s parts as many as the verifier's groups, a holo shape's `h` ro
 and the parser refuses a shape where that fails, as the verifier's setup does.
 -/
 
+@[expose] public section
+
 namespace Flock.RecScope
 
 /-- **What the compiled verifier reads** of a recursion statement: the inner statement's bytes, the inner statement's
 files where it holds them, its own inner shape, each V* session's record, and the link table's root and row count
-where the statement carries them (`--rec-links`, which every V* session refuses, `RecLinks.refuseLinks`). -/
+where the statement carries them (`--rec-links ROOT:N`, which V*'s link part holds to the inner statement's rows,
+`RecLinkPart.check`). -/
 structure Read where
   inner : Claims.Msg
   src : Option RecCoins.Source

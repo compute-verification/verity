@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 
 /-!
 # The lincheck is complete on the masked replay (live PROTOCOL.md §4, §10)
@@ -14,6 +16,8 @@ pads `h`.
 each under its pad, the constraint vanishes at `h` and the `ab` claim holds for `w`, at every coin: the lincheck neither
 divides nor refuses.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed.Lincheck
 
