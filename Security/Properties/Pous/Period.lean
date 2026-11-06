@@ -91,7 +91,7 @@ structure Audits (ΩW ΩQ : Type) where
   W : ΩW × ΩQ → Bits sch.n
   /-- the memory challenger's signed session -/
   session : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
-    PousCheck.Run.ChallengerRecord
+    PousCheck.Run.ChallengePhaseRecord
   /-- the memory challenger's record of its sessions -/
   device : ΩW × ΩQ × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) →
     MemoryChallenger.Properties.Challengers
