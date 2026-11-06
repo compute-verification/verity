@@ -59,7 +59,9 @@ its wall time beside the served window's, and `replay_tokens.jsonl.gz` its token
 schedule doesn't depend on the tokens: a replay with no differing step can still sample other tokens. A mode listed twice
 in `REPLAY_MODES` replays again and compares its tokens with the first replay's too, which tells a replay that differs from
 serving from one that differs from itself; `REPLAY_FROM` with no `ARMS` replays an earlier job's window alone, reading
-that job's run directory where it lies on the node, so only while the node keeps its `plan.jsonl` and `client.jsonl`.
+that job's run directory where it lies on the node. A finished run's large files (`plan.jsonl`, `client.jsonl`) are
+evicted to its files artifact (`run-files.evicted.json` names it) after custody; `research data fetch ART --path GLOB
+--to RUN_DIR` puts them back first.
 
 The `kv` arm hashes the whole pool, free blocks too, at each edge: an upper bound on hashing the blocks live there, and a
 measurement of the cost, not a commitment of the state (a block written after the edge before the side stream reads it
