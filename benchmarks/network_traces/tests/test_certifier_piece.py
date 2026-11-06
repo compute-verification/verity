@@ -61,7 +61,7 @@ import served_verdicts as S  # noqa: E402
 import warden_serve as WS  # noqa: E402
 from test_scan_zk import published, sz  # noqa: E402
 from test_served_session import RUN, STUB  # noqa: E402
-from test_warden_chain import WC, gate_run  # noqa: E402
+from test_warden_chain import WC, gate_run, warden_network  # noqa: E402
 from verity.core.protocols.certifier import warden as W  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
@@ -672,7 +672,7 @@ def _private_chain_out(out: Path) -> Path:
                        "rows": [{"window": 0, "certified": True}],
                        "warden_check": {"accepted": True, "summary": {"requests": REQUESTS, "outputs": OUTPUTS}}},
         "n2/summary.json": {"warden_run": RUN, "ok": True, "link": {"unit": "n2"}, "members": {"honest": {
-            "network": {"accepted": True}, "windows": [{"window": 0, "accepted": True, "as_expected": True}]}}},
+            "network": warden_network(), "windows": [{"window": 0, "accepted": True, "as_expected": True}]}}},
         "scan/summary.json": {"warden_run": RUN, "T": 30, "ok": True, "responses": {"0": OUTPUTS}, "rounds": {
             "honest": {"ok": True, "audit": {"accepted": True, "window_accepted": True}},
             "chain": {"ok": True, "audit": {"accepted": False, "window_accepted": False}}}},
