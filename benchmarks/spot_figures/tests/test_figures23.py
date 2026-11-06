@@ -37,7 +37,7 @@ def test_figure2_derives_the_model_overhead_once_every_type_is_measured(card_dir
     cards.write(po, force=True)
     out = figure2.run("GLM-5.3")
     assert out["pending_mac_share"] == 0 and out["stand_ins"] == []
-    token_s = sum(s["per_token"] * (b["seconds_per_block"] + 0.2 / 2048) for s, b in zip(strata, blocks))
+    token_s = sum(s["per_token"] * b["seconds_per_block"] for s, b in zip(strata, blocks))
     macs = sum(s["per_token"] * s["macs"] for s in strata)
     assert out["derived_model_overhead"] == pytest.approx(token_s * peak / macs)
 

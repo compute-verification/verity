@@ -79,7 +79,7 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
         ax.xaxis.set_major_locator(FixedLocator(_decades(lo_x, hi_x, 3) + [hi_x]))
         ax.xaxis.set_major_formatter(LogFormatterMathtext())
         ax.xaxis.set_minor_locator(NullLocator())
-        ax.set_xlabel("Proof overhead", labelpad=8)
+        ax.set_xlabel("Marginal proof overhead", labelpad=8)
         ax.set_ylabel(ylabel, labelpad=8)
         for side in ("top", "right"):
             ax.spines[side].set_visible(False)

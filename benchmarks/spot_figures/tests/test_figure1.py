@@ -33,7 +33,8 @@ def envelope(slot: str, model: str | None, value: dict) -> dict:
 def world():
     c = f.cards()
     part = f.TokenBlocks.of(c["partition"].value["strata"])
-    return c, part, next(s for s in f.scopes(c, part) if s.name == "world year")
+    fill = f.Fill.of(c["partition"].value["strata"], c["proof_blocks"].value)
+    return c, part, fill, next(s for s in f.scopes(c, part) if s.name == "world year")
 
 
 def test_every_input_is_a_card_with_its_source(out):
@@ -77,7 +78,7 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
 def test_the_world_fleet_computes_the_census_world(world):
     """rho's world fleet at serving's MFU over a year computes the census's world, and its requests are that compute at
     GLM-5.3's FLOP a request."""
-    c, _, s = world
+    c, _, _, s = world
     flop = s.gpu_seconds * c["mfu_serve"].value * c["peak_flops"].value
     assert flop == pytest.approx(f._entry(f.ADVERSARY, f.CENSUS_WORLD)["total_flop"], rel=1e-3)
     assert s.requests * s.flop_request == pytest.approx(flop)
@@ -85,8 +86,8 @@ def test_the_world_fleet_computes_the_census_world(world):
 
 @pytest.mark.parametrize("panel,target", [("exfiltration", "leak"), ("skipped_work", "work")])
 def test_a_point_is_the_least_target_its_budget_buys(world, panel, target):
-    c, part, s = world
-    m = f.model(c, part, s, c["proof_overhead"].value)
+    c, part, fill, s = world
+    m = f.model(c, part, s, c["proof_overhead"].value, fill)
     budget = 0.01 * s.gpu_seconds
     for design in f.DESIGNS[panel]:
         p = f.point(m, design, target, budget)
@@ -96,9 +97,53 @@ def test_a_point_is_the_least_target_its_budget_buys(world, panel, target):
 
 
 def test_two_stage_certifies_no_work(world):
-    c, part, s = world
+    c, part, fill, s = world
     with pytest.raises(ValueError, match="no work target"):
-        f.cost(f.model(c, part, s, 1.0), "two-stage", "work", 1e20)
+        f.cost(f.model(c, part, s, 1.0, fill), "two-stage", "work", 1e20)
+
+
+def test_a_statement_pays_its_fixed_cost_over_its_fill():
+    """A type's price over the marginal is 1 + fixed / (blocks in its statement), at most its cap; a type the card
+    measures takes its own fixed cost and cap, the rest the measured blocks' pooled ones."""
+    strata = [{"block": "A", "per_token": 3.0, "macs": 1, "out_bits": 16},
+              {"block": "B", "per_token": 1.0, "macs": 1, "out_bits": 16}]
+    blocks = [{"block": "A", "macs": 1, "seconds_per_block": 1.0, "fixed_seconds": 10.0, "statement_blocks": 4},
+              {"block": "S", "macs": 1, "seconds_per_block": 1.0, "fixed_seconds": 30.0, "statement_blocks": 8}]
+    fill = f.Fill.of(strata, blocks)
+    assert fill.types == ((.75, .75, 10.0, 4), (.25, .25, 20.0, 4))
+    assert fill.factor(1) == pytest.approx(.75 * 11 + .25 * 21)
+    assert fill.factor(4) == pytest.approx(.75 * (1 + 10 / 3) + .25 * 21)
+    assert fill.factor(f.inf) == pytest.approx(.75 * 3.5 + .25 * 6)
+
+
+def test_each_design_is_priced_at_its_fill(world):
+    """One-stage proves one block a statement, request-level a request's blocks, and two-stage the k its planner picks
+    at that price."""
+    c, part, fill, s = world
+    m = f.model(c, part, s, c["proof_overhead"].value, fill)
+    budget = 0.01 * s.gpu_seconds
+    po = c["proof_blocks"].value[0]
+    assert f.cost(m, "one-stage", "leak", 1e12)["fill"] == pytest.approx(1 + po["fixed_seconds"]
+                                                                          / po["seconds_per_block"])
+    assert f.cost(m, "request", "leak", 1e18)["fill"] == pytest.approx(fill.factor(f.inf), rel=1e-6)
+    row = f.point(m, "two-stage", "leak", budget)["row"]
+    assert row["fill"] == pytest.approx(fill.factor(row["k"]), rel=1e-6)
+    assert fill.factor(f.inf) <= row["fill"] < fill.factor(1)
+
+
+def test_each_design_states_its_serve_time_hashing(out):
+    rows = f.at_overhead(out)
+    for r in rows:
+        sc = out["scopes"][r["scope"]]
+        one = r["design"] == "one-stage"
+        assert r["serve_hash_share"] == sc["serve_hash_share" if one else "boundary_hash_share"]
+        assert r["serve_hash_in_budget"] is not one
+        assert r["fill"] >= 1 if r["fill"] is not None else r["capped"]
+    for scope in SCOPES:
+        sc = out["scopes"][scope]
+        assert sc["boundary_hash_share"] < 1e-6 < 1 < sc["serve_hash_share"]
+        for panel in ("exfiltration", "skipped_work"):
+            assert f"the token ids, {sc['boundary_hash_share']:.2g} of the scope's compute" in sc["captions"][panel]
 
 
 def test_curves_rise_with_overhead_and_fall_with_budget(out):

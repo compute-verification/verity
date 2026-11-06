@@ -34,9 +34,14 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     datacenter (the census's `dc-12500-machines-600s`), each over a week, a month and a year
     (`wipe_monitoring.PERIODS`).
   - Costs are the scope's GPU-seconds: a replay costs the `replay` card's factor times its request at serving's MFU,
-    proving a proof block takes the proof overhead times its FLOP at the H200's dense FP8 peak, and hashing takes the
-    `commitment` card's rate. A curve's point is the least target the planner's cheapest plan certifies within the
-    budget.
+    proving a proof block takes the marginal proof overhead (the x-axis) times its FLOP at the H200's dense FP8 peak
+    plus its share of its statement's fixed cost, and hashing takes the `commitment` card's rate. A statement holds
+    one replay block's sampled proof blocks of one Definition, up to the `proof_overhead` card's `statement_blocks`,
+    so each design pays at its own fill: one block under one-stage, the k it samples in a request under two-stage, a
+    request's blocks under request-level sampling. A curve's point is the least target the planner's cheapest plan
+    certifies within the budget.
+  - Each design's serve-time hashing is in its caption and in the table at the vertical line: every proof block's
+    outputs under one-stage, outside the budget; the token ids under two-stage and request-level, inside it.
   - Each panel shows its headline design solid and its comparisons dashed or dotted:
     - exfiltration: two-stage sampling (serving commits only token ids), one-stage sampling of dot-product proof
       blocks, and request-level sampling, in `consumers.exfiltration_bound`'s form (the incorrect proof blocks'
@@ -45,7 +50,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     - skipped work: one-stage and request-level sampling. One-stage needs every proof block's outputs hashed at
       serve time, outside the budget, and the JSON gives that hashing's share of the scope's compute
       (`serve_hash_share`).
-  - The vertical line is the `proof_overhead` card's `model_overhead`. The reference lines come from rho's reference,
+  - The vertical line is the `proof_overhead` card's `model_overhead`, the marginal: a token's per-block proving
+    seconds, statements' fixed costs excluded, over its MACs at the peak. The reference lines come from rho's reference,
     the model's checkpoint and any `references` card. A MAC's AND gates, read from the FP8 MoE coordinate's
     circuit-check pin, state each scope's compute and the skipped work in AND gates.
 - **Figure 2** (`figure2.py`): proof overhead per proof-block type, the `proof_overhead` card's blocks joined to the

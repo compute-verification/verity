@@ -4,8 +4,9 @@ its `workload` card on the proof block's Definition.
 Each of the model's proof-block types shows its proof overhead at a full statement where the card measures it and is
 pending where it doesn't, beside its share of a token's proof blocks and MACs, which weight the model's overhead.  A
 measured block that isn't one of the model's (`stands_in`) shows below them, marked as a stand-in.  Once every type is
-measured, the model's overhead follows from the blocks (`derived_model_overhead`): a token's proving GPU-seconds, each
-block at its share of a full statement's fixed cost, over its MACs at the card's peak.
+measured, the model's overhead follows from the blocks (`derived_model_overhead`): a token's marginal proving
+GPU-seconds, statements' fixed costs left to the design's fill (Figure 1's `Fill`), over its MACs at the card's peak,
+the `proof_overhead` card's `model_overhead` and Figure 1's vertical line.
 """
 from __future__ import annotations
 
@@ -59,7 +60,8 @@ def run(model: str) -> dict:
         "pending_block_share": sum(t["block_share"] for t in types if not t["measured"]),
         "uncovered_mac_share": 1 - macs / served,
         "model_overhead": po["value"]["model_overhead"], "label": po["value"]["label"],
-        "derived_model_overhead": sum(t["seconds_per_token"] for t in types) * peak / macs if done else None,
+        "derived_model_overhead": sum(t["per_token"] * measured[t["block"]]["seconds_per_block"] for t in types)
+        * peak / macs if done else None,
     }
 
 
@@ -90,7 +92,8 @@ def render(out: dict, outdir):
         else:
             a.text(lo * 1.3, y, "pending", va="center", fontsize=11, color="#909090", style="italic")
     a.axvline(out["model_overhead"], color="#E69F00", lw=1.8)
-    a.text(out["model_overhead"] * 1.1, ys[0] + .6, out["label"], color="#E69F00", fontsize=11, va="bottom")
+    a.text(out["model_overhead"] * 1.1, ys[0] + .6, f"{out['label']}, marginal", color="#E69F00", fontsize=11,
+           va="bottom")
     a.set_xscale("log")
     a.set_xlim(lo, hi)
     a.set_yticks(ys, labels, fontsize=11)
