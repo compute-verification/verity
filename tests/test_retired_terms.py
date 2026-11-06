@@ -203,6 +203,9 @@ PENDING: dict[str, str] = {
     "verity/core/difftest/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/primitives/requirement/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/bandwidth/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    ".agents/skills/lean-proofs/SKILL.md": "queued PRs on next rewrite its lines naming named premises; the rename follows them",
+    "verity/core/devices/memory_challenger/README.md": "a queued PR on next adds it, naming the prover's node and site; the rename "
+                                                       "follows it",
     "verity/core/protocols/certifier/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/certifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/composition/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
