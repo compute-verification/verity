@@ -167,11 +167,12 @@ through the harness's `ProtocolPort` (`../../difftest`), holding every field of 
 Lean to:
 
 - PoUW's period: `period_check.case`, with `credit.commit_of` reading each window's Commit record for remote's tie;
-- remote's sampled proofs: its form's split (`sampled_proofs`) over one-stage v2's decoders and checks before the proof
-  check (the challenger's coins and coin trees, the registered file, the proofs' blobs) and then the one-stage
-  difftest's `check`, on v2's audits that drew nothing at the challenger's coins, those with one break each
-  (`V2_BREAKS`, among them v1's params or evidence, refused by name) and v1's audits with one or two changes under the
-  form `one-stage` (refused as v1's), and the recursive form refused where the case names none of its files;
+- remote's sampled proofs: its form's split (`sampled_proofs`) over one-stage v2's decoders and its check up to its one
+  session's coin tree (the challenger's coins, the evidence's one session, `oneSession`, and that session's record on
+  the blobs and the challenger's coin trees), on v2's audits that drew nothing at the challenger's coins (naming no
+  session, which v2 refuses), those with one break each (`V2_BREAKS`, among them v1's params or evidence, refused by
+  name) and v1's audits with one or two changes under the form `one-stage` (refused as v1's), and the recursive form
+  refused where the case names none of its files;
 - onsite's one-stage audit: the one-stage difftest's `answer`, `one_stage` behind the decoders `OneStage` reads, on
   audits that drew nothing and audits with one or two changes;
 - network certification: its period difftest's `reference`, the Python mirror over the certifier's certificates and
@@ -188,14 +189,15 @@ Lean to:
 Hypothesis samples 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
 (one sample in six every one aimed at acceptance, one in six all but one, which is aimed at undecided; the inference-only
 policy is never undecided), every case hands the subprotocols the same blobs, and the composition's inputs, its blobs or
-the case itself are often broken. Integrity's cases are aimed at undecided at best (audits whose sample is empty; the
-rest reject), so no product accepts in the difftest. Often
+the case itself are often broken. Onsite's integrity cases are aimed at undecided at best (audits whose sample is
+empty; the rest reject), and remote's sampled proofs' cases all reject (v2 refuses an audit naming no session, and a
+session on the challenger's coin trees goes to `flock-verify`, outside the mirror), so no product accepts in the
+difftest. Often
 the tied subprotocols are put on one record (`one_record`), and otherwise they mostly commit to two, which the product
 refuses. On one record the policy declares the one-stage audit's own circuit on its record, which it accepts, so
-onsite's cases reach undecided. Remote's cases reject: an honest period's windows each name their own Commit record,
-not the audit's, so remote's tie refuses them, and a period whose windows are put on the audit's record
-(`windows_on`) refuses itself. `test_remote_refuses_a_period_window_on_another_record` pins the tie's refusal of an
-otherwise undecided case, in Lean and Python, and
+onsite's cases reach undecided. Remote's cases reject, so its `windows` tie, which decides only where no subprotocol
+rejects, decides none of them: `CoreRemote`'s `#guard`s check which windows it finds stray, and
+`test_remote_on_one_record_that_reuses_the_windows_registration` reads the tie off a made case.
 `test_remote_refuses_two_records_and_else_keeps_the_products_verdict` shows that the record checks change no other
 verdict of the product's. Onsite's PoUS and PoUB-P2 cases are on one store, but for PoUS's honest run on another
 (`periods.OTHER_STORE`, a quarter of its cases aimed at acceptance), which onsite refuses beside PoUB-P2's unless it
@@ -214,9 +216,9 @@ Remote with the network certifier's cases are remote's beside network certificat
 certification whose compute audits are on remote's record, rejects beside a rejected one and is undecided beside an
 undecided one. Beside an accepted period with no compute audit, or one on another record, it refuses by `egress`. Each
 holds in Lean, `product` and Python (`test_remote_network_is_remotes_verdict_and_the_network_certifiers`).
-Remote-network without PoUW's cases are remote with the network certifier's without PoUW's period, so its `egress` tie
-is reached where remote with the network certifier's `windows` tie refuses first (`test_remote_network_no_pouw_agrees`).
-Beside the
+Remote-network without PoUW's cases are remote with the network certifier's without PoUW's period
+(`test_remote_network_no_pouw_agrees`); its `egress` tie, like remote's `windows` tie, decides only where no subprotocol
+rejects, so it is read off the made cases. Beside the
 same periods of network certification its verdict is the network certifier's, the policy's and sampled proofs', held to
 `egress` alone, and a PoUW period beside them is refused by name, as no subprotocol of it, in Lean, `product` and Python
 (`test_remote_network_without_pouw_is_the_network_certifiers_verdict_beside_the_policy_and_sampled_proofs`).
