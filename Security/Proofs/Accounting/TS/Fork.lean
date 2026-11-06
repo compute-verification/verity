@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.TS
 public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # Binding from the fork form

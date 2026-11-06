@@ -19,8 +19,8 @@ pv = "pv"
 
 [operands]          # the noise's operand-delivery floor φ_del a MMA (`--operands floor`, and the floor program's)
 floor = { LDSM_X4 = 0.025641 }
-source = "SPEC §3.4: CO-Dither's U is resident (B̃ a data-independent map of a resident matrix), so Dither's one-operand floor, least 1/39 at (a, b) = (1, 39); co32c's words are subset sums of wide U values, as fresh as Dither's (SKIP)"
+source = "CO-Dither's U is resident (B̃ a data-independent map of a resident matrix), so Dither's one-operand floor, least 1/39 at (a, b) = (1, 39); co32c's words are subset sums of wide U values, as fresh as Dither's (SKIP)"
 
 [skip.served]
 eps = 0.00341
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 17.158 SMSP-cycles a 4096-MAC MMA on VF3r-16; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 8K prefill: the linears' co32c recombination 0.0760%; lm_head's co32c recombination 4.48e-08%; QKᵀ's cohalf sums 0.0258%; P·V's pv digits, epilogue and scaling 0.239%. With P·V's served output checked it is 0.341% (8B) / 0.165% (70B) there. Skip terms: the checked leaves' vector work only the served output needs at the TS model's gap (TS_EPS of TS_CHEAT, pv_ts)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭, ♭ 17.158 SMSP-cycles a 4096-MAC MMA on VF3r-16; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 8K prefill: the linears' co32c recombination 0.0760%; lm_head's co32c recombination 4.48e-08%; QKᵀ's cohalf sums 0.0258%; P·V's pv digits, epilogue and scaling 0.239%. With P·V's served output checked it is 0.341% (8B) / 0.165% (70B) there. Skip terms: the checked leaves' vector work only the served output needs at the TS model's gap (TS_EPS of TS_CHEAT, pv_ts)"

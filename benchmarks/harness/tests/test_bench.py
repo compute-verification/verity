@@ -459,8 +459,8 @@ def test_the_launcher_sources_the_setup_before_the_point_runs(tmp_path):
 
 
 def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_their_libraries_built():
-    spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth")
-    assert spec.arms == ("stock-fp8", "bandwidth-plain", "bandwidth-audit")
+    spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
+    assert spec.arms == ("stock-fp8", "bandwidth-plain", "bandwidth-audit", "stock-fp8@compiled")
     assert spec.arm_modules == ("benchmarks.vllm_encoded.bench_arm:PLAIN", "benchmarks.vllm_encoded.bench_arm:AUDIT")
     assert spec.env["VERITY_VLLM_BENCH_KV_RECEIPTS"] == "on"
     stock = resolve_spec("llama31-8b-fp8-1gpu")
@@ -476,16 +476,11 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
         assert (root / source).is_file(), source
 
 
-def test_the_served_bandwidth_spec_is_the_bandwidth_spec_with_compiled_stock_beside_its_graph_path_at_six_reps():
+def test_the_served_bandwidth_spec_times_compiled_stock_uncontrolled_beside_its_graph_path_at_six_reps():
     from verity_bench.vllm import runner
 
-    graph, served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth"), resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
-    assert served_spec.arms == (*graph.arms, "stock-fp8@compiled") and served_spec.reps == 6
-    assert served_spec.arm_settings["stock-fp8@compiled"].control == "none"
-    assert replace(graph.preset, id=served_spec.preset.id) == served_spec.preset
-    same = dict(id=served_spec.id, arms=served_spec.arms, arm_settings=served_spec.arm_settings, preset=served_spec.preset,
-                reps=served_spec.reps)
-    assert replace(graph, **same) == served_spec
+    served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
+    assert served_spec.reps == 6 and served_spec.arm_settings["stock-fp8@compiled"].control == "none"
 
     stock, compiled = resolve_arms("stock-fp8,stock-fp8@compiled", (), served_spec.arm_settings)
     assert compiled.control is None and compiled.execution == "compiled"
@@ -1361,22 +1356,38 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
                                  "lag_ends": True, "whole_tree_sm": True, "aside_ends": True} and whole.schedule == "serial"
 
 
-def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():
-    served_points = expand_sweep("served")
-    assert [(p.batch, p.sampling) for p in served_points] == [
+SAMPLED_SWEEP = '''schema = "verity-bench/vllm-sweep/v0"
+id = "sampled"
+batches = [1, 8, 32, 64]
+prompt_tokens = [512]
+traffic = ["mixed"]
+sampling = ["greedy", "stochastic"]
+
+[output_tokens]
+mixed = 64
+'''
+
+
+def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids(tmp_path, monkeypatch):
+    from verity_bench.vllm import presets
+
+    assert {p.sampling for p in expand_sweep("quick")} == {"greedy"}
+    (tmp_path / "sampled.toml").write_text(SAMPLED_SWEEP)
+    monkeypatch.setattr(presets, "SPEC_ROOT", tmp_path)
+    sampled = presets.expand_sweep("sampled")
+    assert [(p.batch, p.sampling) for p in sampled] == [
         (b, s) for b in (1, 8, 32, 64) for s in ("greedy", "stochastic")
     ]
-    assert [p.id for p in served_points[4:6]] == ["b32-p512-mixed", "b32-p512-mixed-stochastic"]
-    assert [p.headline for p in served_points[4:6]] == [True, False]
-    assert served_points[5].to_json()["sampling"] == "stochastic"
-    assert {p.sampling for p in expand_sweep("quick")} == {"greedy"}
+    assert [p.id for p in sampled[4:6]] == ["b32-p512-mixed", "b32-p512-mixed-stochastic"]
+    assert [p.headline for p in sampled[4:6]] == [True, False]
+    assert sampled[5].to_json()["sampling"] == "stochastic"
 
 
 def test_an_unknown_sampling_refuses(tmp_path, monkeypatch):
     from verity_bench.vllm import presets
 
     (tmp_path / "odd.toml").write_text(
-        (SPEC_ROOT / "served.toml").read_text().replace('id = "served"', 'id = "odd"').replace('"stochastic"', '"beam"'))
+        SAMPLED_SWEEP.replace('id = "sampled"', 'id = "odd"').replace('"stochastic"', '"beam"'))
     monkeypatch.setattr(presets, "SPEC_ROOT", tmp_path)
     with pytest.raises(presets.ConfigError, match="unknown sampling"):
         presets.load_sweep("odd")

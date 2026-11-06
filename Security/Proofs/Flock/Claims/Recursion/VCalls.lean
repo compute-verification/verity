@@ -102,7 +102,8 @@ theorem Bound.linkOutV_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlo
     ⟨hg, by simp only [fork_fork]; exact hgv, by simp only [fork_fork]; exact Ne.symm hfv⟩
   simp only [forkCollV, fork_fork] at hfc
   have hv' : firstPick (linkG H D (Inner.ofFlock Bd.deploy decI) DO decO P x j ω r) M us = some v := hv
-  simp only [linkOutV, hv', Option.getD_some]
+  have hg' : linkG H D (Inner.ofFlock Bd.deploy decI) DO decO P x j ω r u := hg
+  simp only [linkOutV, hg', hv', ↓reduceIte, Option.getD_some]
   exact hfc
 
 /-- **`P_O`'s bad draws, linearly, over the draws' evaluations**: `Pr_badO_le_lin` with `FdevV`. -/

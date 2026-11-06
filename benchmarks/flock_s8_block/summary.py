@@ -1,6 +1,7 @@
-"""`run.sh`'s summary: per statement and mode (``gpu``, ``cpu``), the timed sessions' prove times from the prover's ``LIVE``
-records, the GPU's busy share, tensor-pipe activity and power over the timed sessions' window, the prover's CPU seconds and
-peak memory, and the staged statement's size.
+"""`run.sh`'s summary: per statement and mode (``MODES``), the timed sessions' prove times from the prover's ``LIVE``
+records, the verifier's verdicts, the GPU's busy share, tensor-pipe activity and power over the timed sessions' window, the
+prover's CPU seconds and peak memory, the staged statement's size (a served window's member: its staging record and
+served-root check), and Lean's verdicts and times over the kept sessions (``lean``, the lean step's).
 
     python summary.py OUT_DIR      prints the summary as JSON
 """
@@ -14,6 +15,8 @@ from pathlib import Path
 
 #: a decimal number as ``float`` reads one; a sampler's other fields (``[N/A]``, units, headers) aren't samples
 NUM = re.compile(r"[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?")
+#: run.sh's session sets: with ``--zk`` or without (``plain``), on the GPU or the CPU, and under Nsight Systems
+MODES = ("gpu", "gpu-plain", "cpu", "cpu-plain", "gpu-nsys", "gpu-plain-nsys")
 
 
 def text(p: Path) -> str:
@@ -72,6 +75,7 @@ def session_set(d: Path, gpu: bool = True) -> dict:
     t0 = warm[-1][0] if warm else None
     t1 = timed[-1][0] if timed else None
     s = {"sessions": len(live), "timed": len(timed), "accepted": [v.get("accepted") for _, v in live],
+         "verifier_accepted": [json.loads(l).get("accepted") for l in text(d / "verdicts.jsonl").splitlines() if l.strip()],
          "instances": live[0][1].get("instances"), "k_log": live[0][1].get("k_log"),
          "prove_total_s": med(lambda v: v.get("prove_total_s")),
          "prove_total_all_s": [v.get("prove_total_s") for _, v in live],
@@ -104,17 +108,41 @@ def session_set(d: Path, gpu: bool = True) -> dict:
     return s
 
 
+def statement(st: Path) -> dict:
+    """A staged statement: class_statement's ``rec.json`` (an int8 row block) or ``rec_inner.py stage-window``'s record,
+    ``stage.json``, with its served-root check (a served window's member), its files' sizes and the staging process."""
+    s = {"sizes": text(st / "sizes.txt"), "stage_process": time_v(st / "time-stage.txt")}
+    if (st / "rec.json").exists():
+        rec = json.loads(text(st / "rec.json"))
+        s |= {k: rec.get(k) for k in ("definition", "ands", "in_bits", "out_bits", "stage")}
+    for f, key in (("stage.json", "staged"), ("served-root.json", "served_root")):
+        if (st / f).exists():
+            s[key] = json.loads(text(st / f))
+    return s
+
+
+def lean_set(d: Path) -> dict:
+    """Lean's flock-verify over one kept session set: each session's exit (0: accepted), wall and peak memory."""
+    runs = {f.stem: (text(f).strip(), time_v(d / f"time-{f.stem}.txt")) for f in sorted(d.glob("*.rc"))}
+    walls = [t["wall_s"] for _, t in runs.values() if t["wall_s"] is not None]
+    peaks = [t["peak_rss_gb"] for _, t in runs.values() if t["peak_rss_gb"] is not None]
+    return {"sessions": len(runs), "accepted": [rc == "0" for rc, _ in runs.values()],
+            "wall_s": statistics.median(walls) if walls else None, "wall_all_s": walls,
+            "user_s": [t["user_s"] for _, t in runs.values()], "peak_rss_gb": max(peaks, default=None)}
+
+
 def main(out: Path) -> dict:
     res = {"host": text(out / "host.txt"), "binary": text(out / "binary.sha256").strip(),
            "statements": {}}
-    for st in sorted((out / "stage").glob("k*-n*")):
-        rec = json.loads(text(st / "rec.json") or "{}")
-        res["statements"][st.name] = {"definition": rec.get("definition"), "ands": rec.get("ands"), "in_bits": rec.get("in_bits"),
-                                      "out_bits": rec.get("out_bits"), "stage": rec.get("stage"), "sizes": text(st / "sizes.txt"),
-                                      "stage_process": time_v(st / "time-stage.txt")}
-    for mode in ("gpu", "cpu", "gpu-nsys"):
-        for d in sorted((out / mode).glob("k*-n*")):
-            res["statements"].setdefault(d.name, {})[mode] = session_set(d, gpu=mode != "cpu")
+    for st in sorted(p for p in (out / "stage").glob("*") if p.is_dir()):
+        res["statements"][st.name] = statement(st)
+    for mode in MODES:
+        for d in sorted(p for p in (out / mode).glob("*") if p.is_dir()):
+            res["statements"].setdefault(d.name, {})[mode] = session_set(d, gpu=not mode.startswith("cpu"))
+        for d in sorted(p for p in (out / "lean" / mode).glob("*") if p.is_dir()):
+            res["statements"].setdefault(d.name, {}).setdefault("lean", {})[mode] = lean_set(d)
+    if (out / "time-lean-build.txt").exists():
+        res["lean_build"] = time_v(out / "time-lean-build.txt")
     res["nsys"] = {f.name: nsys_total_s(f) for f in sorted((out / "nsys").glob("*.csv"))}
     return res
 

@@ -31,7 +31,7 @@ E.counts()                                                 # the host twin's com
 ```
 
 `tensors` are (slots, …) with contiguous slot rows. `SaltKey` draws row r's salt in slot s as ChaCha20 chunks 3r … 3r + 2
-under the key with nonce `nonce0 + s` (C-Flock's `hm96_salt`, commit_slots' `row_salts`). The leaf kernel runs at 1 or
+under the key with nonce `nonce0 + s` (Flock's `hm96_salt`, commit_slots' `row_salts`). The leaf kernel runs at 1 or
 2 CTAs an SM (`leaves(..., minb=)`), on all the device's SMs or `leaves(..., sms=)` of them, for a stream on a green
 context of that many (commit_slots' `Plan(sms=)`). Calls run on the current torch stream.
 

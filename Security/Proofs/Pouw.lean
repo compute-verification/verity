@@ -154,6 +154,8 @@ public import Proofs.Pouw.PearlC.TileCapRev1Gamma
 public import Proofs.Pouw.PearlC.TileCircuit
 public import Proofs.Pouw.PearlC.TileValues
 public import Proofs.Pouw.PearlC.TileGamma
+public import Proofs.Pouw.PearlC.TileGammaTol
+public import Proofs.Pouw.PearlC.TileDrawGamma
 public import Proofs.Pouw.PearlC.TileUOnlyGamma
 public import Proofs.Pouw.PearlC.UOnlyGamma
 public import Proofs.Pouw.PearlC.UOnlyLoopGamma
@@ -172,6 +174,7 @@ public import Proofs.Pouw.PearlC.RowStats
 public import Proofs.Pouw.PearlC.PeelExists
 public import Proofs.Pouw.PearlC.PeelExists4
 public import Proofs.Pouw.PearlC.TileCheckWords
+public import Proofs.Pouw.PearlC.TileCheckWordsRev1
 public import Proofs.Pouw.Pool
 public import Proofs.Pouw.PoolWitness
 public import Proofs.Pouw.Prob
@@ -179,6 +182,7 @@ public import Proofs.Pouw.QTree
 public import Proofs.Pouw.Receipt
 public import Proofs.Pouw.Reduction
 public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Pouw.RelativeSecurityFork
 public import Proofs.Pouw.RelativeSecurityGuarantees
 public import Proofs.Pouw.RelativeSecurityJ10R
 public import Proofs.Pouw.SakLb
@@ -198,6 +202,7 @@ public import Proofs.Pouw.TileBound.WinogradStrassen
 public import Proofs.Pouw.TileBound.Witness
 public import Proofs.Pouw.Window
 public import Proofs.Pouw.Witness
+public import Proofs.Pouw.Lemmas.Game
 
 /-!
 # PoUW's proofs

@@ -1,7 +1,7 @@
 # `pouw_check`: PoUW's window check as a core protocol
 
 One `Core.Protocol` (`verity/core/protocols/interface`), `PouwCheck.protocol`, id `verity/pouw/v1`, Lean core only:
-PoUW's verifier of record (`verity/core/protocols/pouw/verifier.py`), with `verity/core/protocols/pouw/core_check.py` the
+PoUW's verifier (`verity/core/protocols/pouw/verifier.py`), with `verity/core/protocols/pouw/core_check.py` the
 Python reference held to it.
 
 | field | here |
@@ -43,7 +43,7 @@ window of the period's close is credited.
 | `PouwCheck.Rounds` | `salt`, `rounds`: a live window's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the window (`SampledProofs.Challenger.auditedSession`, `sessionNamed`) |
 | `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `live-salt`, `rounds`, `chunks`) |
 | `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
-| `PouwCheck.Credit` | `credit.py`'s `_window_outcomes` and `_period_outcomes` (its entries `window` and `period_credit` on each sampled proof block's proof outcome in place of the proof files they verify themselves, until this runs the verifier of record in-process), and the steps they compose (`Credit.Internal`'s `credited`, `outcome`, `aLink`, `registration` and `weights`; `drawn`, `layoutOf`, `period`, `committedWeights`): a served window's credit bits fixed before its sampling coin, its round log the challenger's, its A trees tied to its round roots, its sampled proof blocks the sampling coin's over its committed circuit's layout, no partial credit over them, its entries and its sampled proof blocks' proofs its own registration's, its B rows the ones its period's open signed the weights' root of, its served rows the fixed length its period's open committed (`Internal.length`, `committedLength`), and a period counted only closed and complete |
+| `PouwCheck.Credit` | `credit.py`'s `_window_outcomes` and `_period_outcomes` (its entries `window` and `period_credit` on each sampled proof block's proof outcome in place of the proof files they verify themselves, until this runs the verifier in-process), and the steps they compose (`Credit.Internal`'s `credited`, `outcome`, `aLink`, `registration` and `weights`; `drawn`, `layoutOf`, `period`, `committedWeights`): a served window's credit bits fixed before its sampling coin, its round log the challenger's, its A trees tied to its round roots, its sampled proof blocks the sampling coin's over its committed circuit's layout, no partial credit over them, its entries and its sampled proof blocks' proofs its own registration's, its B rows the ones its period's open signed the weights' root of, its served rows the fixed length its period's open committed (`Internal.length`, `committedLength`), and a period counted only closed and complete |
 | `PouwCheck.CreditDifftest` | the difftest's `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` behind `pouw-check-difftest` (`CreditDifftest.all`, the functions `DifftestMain` serves) |
 | `PouwCheck.LeafOwn` | not `credit.py`'s: a window unit's leaf statements' tile and the placement of the values they read in the window's tables (`placeOf`: its round's A table of K, the weights' B, its call's z and receipt tables, each from the unit's base row), from the window's committed descriptor and round log alone, and `pouw-leaf-own-window`, `PouwWindow.Lanes.leafOwn?` at that placement (`tests/test_leaf_own.py`) |
 | `PouwCheck.LeafOwnMain` | `pouw-leaf-own-window`'s entry point |
@@ -136,7 +136,7 @@ the period. Every step that reads the challenger's session (`credited`, `roundsC
 of the serving process's own round root and that round's rows of every registered A value as aligned subtrees
 (`credit.cover`): round s's share of a window's `…/a/<K>`, or the whole of round s's A table of K `…/a/<K>@<s>` (the M rows
 of each of round s's calls of K, call after call, its calls the C/S calls from s·C/S) in round s; and each A value's registered root must be the frame-v3 SHA-512 tree over those
-subtrees and its domain's pads. `registration`: each sampled proof block's proof outcome is the verifier of record's verdict for its session
+subtrees and its domain's pads. `registration`: each sampled proof block's proof outcome is the verifier's verdict for its session
 (`PROOF_KEYS`: the SHA-512 of the descriptor it verified the session against and the session's registered finding,
 the Lean verifier's `registered`, each port's value and the root its reads were opened against); each A value's domain, and
 each other value's a proof opened, is the one one-stage's registration gives it under the committed descriptor's
@@ -170,8 +170,8 @@ end, a second session for the window, roots the challenger's log doesn't show,
 a coin opened twice, one opened before its round's root, a foreign epoch's, a seeded epoch's commitment or another
 layout's). `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
 aims at. Its `window` and `period` go against `credit._window_outcomes` and `credit._period_outcomes` (`credit.window`
-and `credit.period_credit` on proof outcomes, which they derive from a window's proof files by running the verifier of
-record; `test_pouw_credit_statements.py` holds that step), and its `credit`, `drawn`,
+and `credit.period_credit` on proof outcomes, which they derive from a window's proof files by running the
+verifier; `test_pouw_credit_statements.py` holds that step), and its `credit`, `drawn`,
 `outcome` and `a-link` against the steps they run, `credit._credited`, `credit.drawn`, `credit._outcome` and
 `credit._a_link`, over
 `tests/pouw_credit_cases.py` (a credit bit flipped after the sampling coin, units the prover chose, a sampled proof block failed or

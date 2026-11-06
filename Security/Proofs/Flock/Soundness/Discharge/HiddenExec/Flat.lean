@@ -15,12 +15,13 @@ bits, copied from the output bits the circuit computes. Its flat twin `Hidden.fl
 `HmRow.delta`'s Δ alone, the one `Stmt.setupH` would have built on the same circuit. It has `layout_of`'s layout
 (`flat_layout`) and the unit facts the copy positions read (`flat_unitFacts`), as setupH's statement does.
 
-Every first column of `outPairs` is a message bit of a row's `sha512x3` slot (`deltaMsgCol`), which no unit slot's row
-is (`outPairs_ne_unit`, for unsegmented output rows, `Hidden.Any.OutRowsS`). So at every unit slot's row the hidden
-statement's level-0 matrices are its flat twin's (`unitRowsFlat`): the rows that place a template instance and copy its
-inputs read the same in both. The hidden-output headlines' rows (`Layout.v1Ports` or `Layout.bitRows`, which
-`Layout.scopeOkH` and `Layout.scopeGenH` require) are each unsegmented, their padding perhaps starting in their last
-compression's block, or `sha512/row-seg/v1`, the output rows unsegmented (`rowsFit_of_rows`).
+Every first column of `outPairs` is a message bit of a row's `sha512x3` or `hm96` slot (`deltaMsgCol`), which no unit
+slot's row is (`outPairs_ne_unit`, for unsegmented or row-seg output rows, `Hidden.Any.OutRowsS`). So at every unit
+slot's row the hidden statement's level-0 matrices are its flat twin's (`unitRowsFlat`): the rows that place a template
+instance and copy its inputs read the same in both. The hidden-output headlines' rows (`Layout.v1Ports` or
+`Layout.bitRows`, which `Layout.scopeOkH` and `Layout.scopeGenH` require) are each unsegmented, their padding perhaps
+starting in their last compression's block, or `sha512/row-seg/v1`, output rows included, one output port each
+(`rowsFit_of_rows`).
 -/
 
 @[expose] public section
@@ -100,16 +101,16 @@ theorem deltaMsgCol_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : Chec
   refine hne (Eq.trans ?_ he)
   omega
 
-/-- **No output pair of Δ is at a unit slot's row**, at unsegmented output rows: every output row's data bit is an input bit of
-its compression's `sha512x3` slot or of its `hm96` slot (`Hidden.Any.msg_at`), another net's slot. -/
+/-- **No output pair of Δ is at a unit slot's row**, at unsegmented or row-seg output rows: every output row's data bit is
+an input bit of its compression's `sha512x3` slot or of its `hm96` slot (`Hidden.Any.msg_atK`), another net's slot. -/
 theorem outPairs_ne_unitP (L : Layout st) (F : Aliased.UnitFacts tags st) (hrows : Hidden.Any.OutRowsP st.c)
     {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {s₀ b : ℕ} (hs₀ : s₀ < st.c.unitRange.count)
     (hb : b < 2 ^ st.c.unit.unitLog) : q.1 ≠ st.c.unitRange.slot s₀ + b := by
   obtain ⟨g, hg, j, hj, k, hk, t, ht, hq1⟩ := outPairs_fst hq
   rw [hq1]
-  obtain ⟨hp, -, ht8⟩ := hrows.bound hj hk ht
+  obtain ⟨hp, hbw, ht8⟩ := hrows.bound hj hk ht
   have R := Hm.RowRanges.ofL L F.parse F.check
-  obtain ⟨n, s, off, hn, hat, -⟩ := Hidden.Any.msg_at R (b := 2 * k + t / 8) hg hp (hrows.segs hj) ht8
+  obtain ⟨n, s, off, hn, hat, -⟩ := Hidden.Any.msg_atK R hg hp (hrows.2 j hj).2 hbw ht8
   have hun : st.c.unitNet ≠ n := by
     rcases hn with rfl | rfl
     · exact F.sha
@@ -125,9 +126,9 @@ theorem outPairs_ne_unit (L : Layout st) (F : Aliased.UnitFacts tags st) (hrows 
     (hb : b < 2 ^ st.c.unit.unitLog) : q.1 ≠ st.c.unitRange.slot s₀ + b :=
   outPairs_ne_unitP L F hrows.toP hq hs₀ hb
 
-/-- **An untyped hidden statement reads its flat twin's rows at every unit slot's row**, at unsegmented output rows, its Δ being
-`HmRow.delta`'s, then `outPairs` (`Hidden.hidden_delta_unpinned`: one output row per output port pins none), of a session
-on its committed circuit, flat or templated (`Hidden.SpecC`). -/
+/-- **An untyped hidden statement reads its flat twin's rows at every unit slot's row**, at unsegmented or row-seg output
+rows, its Δ being `HmRow.delta`'s, then `outPairs` (`Hidden.hidden_delta_unpinned`: one output row per output port pins
+none), of a session on its committed circuit, flat or templated (`Hidden.SpecC`). -/
 theorem unitRowsFlatC (ht : tags.typed = false) (sc : Hidden.SpecC tags cf pf coins tables draw st)
     (hrows : Hidden.Any.OutRowsS st.c) : UnitRowsFlat st := by
   have s := sc.self
@@ -185,7 +186,7 @@ theorem unitRowsFlat_unpin (ht : tags.typed = false)
 
 /-- **The hidden-output headlines' rows are covered**: on a circuit `HmRow.parse` accepts after any nets ahead of the
 file's (`pre`: a templated file's read unit) and `HmOut.checkRows` passes, all `sha512/row/v1` rows (whole blocks, `ParseFacts.portWords`; one output row per output port,
-`Hidden.out_rows_v1`), or each row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port. -/
+`Hidden.out_rows_v1`), or each row a `v2Row` or a `segRow`, each output row of one output port. -/
 theorem rowsFit_of_rowsPre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
     {pre : Array (String × Net)} {c : Circuit}
     (hp : HmRow.parse tags cf tables (pre := pre) = .ok c) (hc : HmOut.checkRows c = .ok ())
@@ -211,9 +212,12 @@ theorem rowsFit_of_rowsPre {tags : Tags} {cf : ByteArray} {tables : List (String
       exact hr _ (Array.getElem_mem_toList hj)
     have hsz : c.outRowPorts.size = c.outPorts.size := by rw [hrep, Array.size_replicate]
     refine ⟨⟨hrep, fun j hj => ⟨(Hidden.checkRows_out hc (by rw [hsz]; exact hj)).1, ?_⟩⟩, fun p hm => ?_⟩
-    · obtain ⟨-, hs, hb, h1', h2'⟩ := Layout.v2Row_spec (ho j (by rw [hsz]; exact hj))
-      rw [Hidden.getElem!_eq_getD']
-      exact ⟨hs, hb, h1', h2'⟩
+    · rw [Hidden.getElem!_eq_getD']
+      rcases ho j (by rw [hsz]; exact hj) with hv | hs
+      · obtain ⟨-, hs, hb, h1', h2'⟩ := Layout.v2Row_spec hv
+        exact Or.inl ⟨hs, hb, h1', h2'⟩
+      · obtain ⟨hs, hb, hn, hf⟩ := Layout.segRow_spec hs
+        exact Or.inr ⟨hs, hb, hn, hf⟩
     · rcases h2 p hm with hv | hs
       · obtain ⟨-, hs, hb, h1', h2'⟩ := Layout.v2Row_spec hv
         exact Or.inl ⟨hs, hb, h1', h2'⟩
@@ -271,7 +275,8 @@ theorem rowsFit_of_stmt {tags : Tags} {cf : ByteArray} {tables : List (String ×
     exact (rowsFit_unrolled ct).2 (rowsFit_of_committed hty (Or.inr hct) hr)
 
 /-- **`rowsFit_of_rows` with pinned outputs**: at `bitRowsU`, which `bitRows` is without `unpinned`, each output row is
-a `v2Row` of one output port, and the output ports past the rows (META `pinned_outputs`') have none (`RowsFitP`). -/
+a `v2Row` or a `segRow` of one output port, and the output ports past the rows (META `pinned_outputs`') have none
+(`RowsFitP`). -/
 theorem rowsFitP_of_rows {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ())
     (h : (Layout.v1Ports c || Layout.bitRowsU c) = true) : Hidden.Any.RowsFitP c := by
@@ -287,9 +292,12 @@ theorem rowsFitP_of_rows {tags : Tags} {cf : ByteArray} {tables : List (String �
       have := hr _ (Array.getElem_mem hi)
       simp [this]
     refine ⟨⟨hrep, fun j hj => ⟨(Hidden.checkRows_out hc hj).1, ?_⟩⟩, fun p hm => ?_⟩
-    · obtain ⟨-, hs, hb, h1', h2'⟩ := Layout.v2Row_spec (ho j hj)
-      rw [Hidden.getElem!_eq_getD']
-      exact ⟨hs, hb, h1', h2'⟩
+    · rw [Hidden.getElem!_eq_getD']
+      rcases ho j hj with hv | hs
+      · obtain ⟨-, hs, hb, h1', h2'⟩ := Layout.v2Row_spec hv
+        exact Or.inl ⟨hs, hb, h1', h2'⟩
+      · obtain ⟨hs, hb, hn, hf⟩ := Layout.segRow_spec hs
+        exact Or.inr ⟨hs, hb, hn, hf⟩
     · rcases hpr p (Array.mem_toList_iff.1 hm) with hv | hs
       · obtain ⟨-, hs, hb, h1', h2'⟩ := Layout.v2Row_spec hv
         exact Or.inl ⟨hs, hb, h1', h2'⟩
