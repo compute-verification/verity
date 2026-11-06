@@ -1345,6 +1345,119 @@ def test_the_clone_keeps_the_merge_drivers_side_files_of_a_reader_that_let_the_l
     assert side.read_text() == "a side\n" and not stray.exists()
 
 
+def _queue_at(world: World, workdir: Path, remote: str) -> Queue:
+    return Queue(workdir, remote=remote, github=world.gh, ready=lambda n, h: True, store=world.store, log=world.logs.append)
+
+
+def _bare(world: World, name: str) -> Path:
+    """Another repository than `world`'s origin, holding its `main`."""
+    path = world.tmp / name
+    _git(world.tmp, "init", "-q", "--bare", "-b", "main", str(path))
+    _git(world.dev, "push", "-q", str(path), "main")
+    return path
+
+
+def test_repo_alone_takes_its_github_remote_and_a_clone_of_its_own_and_a_remote_of_another_repository_is_refused(
+        world, monkeypatch, capsys):
+    """`--remote` defaulted to the caller's origin whatever `--repo` said, so `status --repo` of another repository than the
+    caller's read that one's PRs against the caller's pull refs, each waiting forever on a head the two disagreed on.
+    `--repo OWNER/NAME` alone takes https://github.com/OWNER/NAME.git and ~/.research/queue/NAME; with neither, the caller's
+    origin and ~/.research/queue/verity stay; a `--remote` naming another repository on GitHub is refused before any clone."""
+    from research.queue import remote_and_repo
+
+    assert remote_and_repo(None, "o/infra", world.dev) == ("https://github.com/o/infra.git", "o/infra")
+    assert remote_and_repo(str(world.origin), "o/infra", world.dev) == (str(world.origin), "o/infra")     # a path: no OWNER/NAME
+    with pytest.raises(QueueError, match=re.escape(f"can't tell OWNER/NAME from '{world.origin}': pass --repo")):
+        remote_and_repo(None, None, world.dev)
+    for same in ("https://github.com/o/infra", "https://u@github.com/O/Infra.git", "git@github.com:o/infra.git",
+                 "ssh://git@github.com/o/infra.git/"):
+        assert remote_and_repo(same, "o/infra", world.dev) == (same, "o/infra")
+    for other, shown in (("https://x-access-token:" "dummy@github.com/o/verity.git", "https://github.com/o/verity.git"),
+                         ("git@github.com:o/verity", "git@github.com:o/verity")):
+        with pytest.raises(QueueError) as e:
+            remote_and_repo(other, "o/infra", world.dev)
+        assert str(e.value) == (f"--remote {shown} is o/verity on GitHub, not --repo o/infra: pass --repo alone (its remote is "
+                                "https://github.com/o/infra.git), or a --remote of o/infra")
+    with pytest.raises(QueueError, match="--repo 'https://github.com/o/infra': OWNER/NAME on GitHub"):
+        remote_and_repo(None, "https://github.com/o/infra", world.dev)
+
+    _git(world.dev, "remote", "set-url", "origin", "https://verity-agent@github.com/o/verity")
+    monkeypatch.chdir(world.dev)
+    monkeypatch.setattr(Q, "WORKDIR", world.tmp / "home" / ".research" / "queue" / "verity")
+    monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
+    cloned = []
+
+    def clone(q: Queue) -> None:
+        cloned.append((q.workdir, q.remote))
+        raise QueueError("cloned nothing")
+
+    monkeypatch.setattr(Queue, "_clone", clone)
+    store = ["--store", str(world.tmp / "qs")]
+    assert research_main(["queue", "status", "--repo", "o/infra", *store]) == 1
+    assert research_main(["queue", "status", *store]) == 1
+    assert cloned == [(world.tmp / "home" / ".research" / "queue" / "infra", "https://github.com/o/infra.git"),
+                      (Q.WORKDIR, "https://verity-agent@github.com/o/verity")]
+    capsys.readouterr()
+    assert research_main(["queue", "status", "--repo", "o/infra", "--remote", "git@github.com:o/verity.git", *store]) == 1
+    assert "research queue: --remote git@github.com:o/verity.git is o/verity on GitHub, not --repo o/infra" in capsys.readouterr().err
+    assert len(cloned) == 2
+
+
+def test_the_queue_never_repoints_the_origin_of_a_checkout_it_did_not_clone(world, monkeypatch, capsys):
+    """`_clone` set the workdir's origin to the queue's remote whatever the workdir held: pointed with `--workdir` at a clone of
+    another repository, it made that clone's origin the caller's, and a later `git push` there went to the wrong repository.
+    A checkout the queue didn't clone keeps its origin: one of another repository is refused before anything in it changes,
+    and one of the remote's repository, in another URL's form, is used as it is."""
+    infra = _bare(world, "infra.git")
+    theirs = world.tmp / "infra-clone"
+    _git(world.tmp, "clone", "-q", str(infra), str(theirs))
+    (theirs / "notes.txt").write_text("not committed\n")
+    with pytest.raises(QueueError) as e:
+        _queue_at(world, theirs, str(world.origin)).status()
+    assert str(e.value) == (f"{theirs} is a checkout the queue didn't clone (its git config has no research.queueclone), whose "
+                            f"origin, {infra}, is another repository than the queue's remote {world.origin}, and the queue never "
+                            f"repoints such a checkout: pass --workdir a directory of its own, where the queue clones "
+                            f"{world.origin}, or --remote {infra}, the repository that checkout is a clone of")
+    monkeypatch.chdir(world.dev)
+    monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
+    argv = ["queue", "status", "--workdir", str(theirs), "--remote", str(world.origin), "--repo", "o/verity",
+            "--store", str(world.tmp / "qs")]
+    assert research_main(argv) == 1
+    assert f"research queue: {e.value}\n" in capsys.readouterr().err
+    assert _git(theirs, "remote", "get-url", "origin") == str(infra) and (theirs / "notes.txt").read_text() == "not committed\n"
+    drivers = subprocess.run(["git", "config", "--local", "--get-regexp", r"^merge\."], cwd=theirs, capture_output=True, text=True)
+    assert drivers.stdout == "", "nothing in it changed: not even the record merge drivers"
+
+    mine = world.tmp / "verity-clone"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(mine))
+    _git(mine, "remote", "set-url", "origin", "https://verity-agent@github.com/o/verity")
+    for remote in ("git@github.com:o/verity.git", "https://github.com/O/verity"):
+        _queue_at(world, mine, remote)._clone()
+        assert _git(mine, "remote", "get-url", "origin") == "https://verity-agent@github.com/o/verity"
+    with pytest.raises(QueueError, match=f"^{re.escape(str(mine))} is a checkout the queue didn't clone .* is another repository "
+                                         r"than the queue's remote https://github\.com/o/infra\.git, and"):
+        _queue_at(world, mine, "https://x-access-token:" "dummy@github.com/o/infra.git")._clone()
+
+
+def test_a_clone_the_queue_made_follows_the_remote_marked_copied_or_at_the_default_workdir(world, monkeypatch):
+    """What drive relies on: its clone's origin follows the remote it is given, as the URL changes.  The queue marks each clone
+    it makes in that clone's git config, a copy keeps the mark (drive seeds its clone with `cp -a`), and a clone at the
+    default workdir is the queue's whether marked or not, since it made those before it marked any."""
+    q = world.queue()
+    q._clone()
+    assert _git(q.workdir, "config", "--local", "--get", "research.queueclone") == "true"
+    other = _bare(world, "other.git")
+    copy = world.tmp / "copy"
+    shutil.copytree(q.workdir, copy, symlinks=True)
+    _queue_at(world, copy, str(other))._clone()
+    assert _git(copy, "remote", "get-url", "origin") == str(other)
+
+    monkeypatch.setattr(Q, "WORKDIR", world.tmp / "home" / ".research" / "queue" / "verity")
+    _git(world.tmp, "clone", "-q", str(other), str(Q.WORKDIR))
+    _queue_at(world, Q.WORKDIR, str(world.origin))._clone()
+    assert _git(Q.WORKDIR, "remote", "get-url", "origin") == str(world.origin)
+
+
 HTTP_BACKEND = Path(subprocess.run(["git", "--exec-path"], capture_output=True, text=True).stdout.strip()) / "git-http-backend"
 
 

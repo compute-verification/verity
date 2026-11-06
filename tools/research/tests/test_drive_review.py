@@ -541,6 +541,30 @@ def test_no_verdict_counts_by_the_owner_its_handle_or_its_ready_marks_author_wha
     assert h.tick().startswith("landed #1")
 
 
+def test_with_signed_verdicts_drive_lands_only_on_an_authenticated_land_verdict(world, monkeypatch):
+    """drive.toml's `signed_verdicts`: drive reads the store's labels through a verifier (`StoreLabels`, `research.labelauth`),
+    so a land verdict written as another lane counts only once its holder's token authenticates it."""
+    from research import labelauth
+    from test_labelauth import OTHER, TS, _mint, _verifier
+
+    world.with_store_remote()
+    h = Review(world, monkeypatch)
+    labels = StoreLabels(world.store, log=lambda s: None, verify=_verifier())
+    h.d.reviews, h.d.ready_by = labels.reviews, labels.ready_by
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1, by="proofs")
+    out = h.tick()
+    assert "no land verdict" in out and not out.startswith("landed #1"), out
+
+    def down(nonce: str) -> str:
+        raise labelauth.AuthError("the Cursor identity socket is unavailable")
+
+    with pytest.raises(QueueError, match="isn't written: drive.toml's `signed_verdicts` is on at `main`, and it can't be signed"):
+        Q.review(h.q, labelauth.Signer(world.store, down, required=True, now=lambda: TS), labels, 1, "land", None, "proofs")
+    assert Q.review(h.q, labelauth.Signer(world.store, _mint(OTHER), now=lambda: TS), labels, 1, "land", None, "proofs") == 0
+    assert h.tick().startswith("landed #1"), world.logs
+
+
 def test_the_lowest_member_waiting_for_a_land_verdict_rings_the_reviewers_and_top_every_30_min_at_its_head(world, monkeypatch):
     """`next`'s lowest member with no land verdict holds every landing above it, and its tick's log rang nobody: drive rings @ci
     (who staffs the reviewers) and @top `BOTTOM_WAIT_S` after it became the lowest or its ready mark, whichever is later, once

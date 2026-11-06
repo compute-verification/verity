@@ -79,6 +79,9 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    review landing counts unless LANE is the PR's owner, its handle or its ready
                                                    mark's author, refused here; without --sha, refused when GitHub has another
                                                    head than `next` (pushed since drive's last sync)
+    research queue delegate AGENT --by LANE [--days N]
+                                                   as LANE's holder, let the Cursor agent AGENT (a worker) sign ready marks and
+                                                   land verdicts as LANE for N days (default 7, at most 14): see Signed verdicts
     research queue baseline SHA --by ci             record `checked` at SHA as green for the review landing (and `main`'s to
                                                    follow), which otherwise first runs the after-landing run on `checked` itself,
                                                    and lands nothing until it ends
@@ -270,6 +273,18 @@ reverting on `checked` what that check fails, and fast-forwarding `main` to each
 if drive wrote it, and otherwise holds and rings `CI` and `TOP` (`Driver._unwritten`).  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
 `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
 
+Signed verdicts.  A label's `by` is whatever its writer said.  With drive.toml's `signed_verdicts` on at `main`, drive counts a
+ready mark or land verdict only beside a `label_auth` label that authenticates it (`research.labelauth`, `StoreLabels`): a
+Cursor identity token over the label's SHA-512 nonce, minted when the label was written by the agent that holds its `by` in
+`main`'s registry, or by a worker that holder delegated to (`research queue delegate`); `ready = false` (an ejection) and holds
+count unsigned.  `ready`, `judge` and `review` sign each ready mark and land verdict they write whenever this agent can mint a
+token, and with the flag on refuse to write one they can't sign, or one an agent that neither holds the handle nor has its
+delegation would sign; the
+`review` listing names each land verdict that doesn't count and why.  Drive refuses a tick when it can't read the registry or
+the issuer's keys (the last set fetched, kept beside the queue's clone, covers an outage of the issuer), since judging every
+mark absent would take every PR off `next`, and the flag is refused unless the low-risk lane can't land a change to the registry
+or the code that judges a label (`SIGNED_GUARDS`).
+
 Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `CI` and the owner's handle, once per PR head:
 drive tells each conflict its sync finds, and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
 there reached its owner only when the VM that ran the sync pushed its notes, inside that lane's commit.  What a sync leaves out
@@ -279,13 +294,18 @@ owner once, and again only when its head, those PRs or its reason changes (`Driv
 `--shadow` builds `queue-shadow` instead of `next`, never pushes `main` and sends no notices, so the queue can run beside the trains
 with no effect on them; its `sync`, `land` and `drive` still run only on drive (`--dry-run` shows the same off it).
 
-Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/verity), and fetches with forced refspecs: a
-local copy of a branch that wasn't force-fetched once put a train on a stale base.  `state.json` beside the clone keeps ejections and
-the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`), and one that only reads
-(`status`, `review` without N) holds it only while it clones and fetches, not while it reads labels.  The clone authenticates as
-the caller's checkout does (`credential_args`): a cloud VM sets its credential helper in the checkout's own config, which a clone
-elsewhere never reads.  Git never prompts, so a remote the queue can't read fails the command instead of answering from what the
-clone fetched last.
+Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/NAME for `--repo OWNER/NAME`, else
+~/.research/queue/verity) of its remote (`--remote`, default https://github.com/OWNER/NAME.git for `--repo`, else the caller's
+origin; one naming another repository on GitHub than `--repo` is refused: `remote_and_repo`), and fetches with forced refspecs: a
+local copy of a branch that wasn't force-fetched once put a train on a stale base.  Only a clone the queue made has its origin
+set to the remote (`Queue._clone`): it sets `research.queueclone` in each clone's git config, and those it made before that are
+at ~/.research/queue/verity.  Any other checkout keeps its origin, so a push from it still goes where its owner meant, and one
+whose origin is another repository than the remote is refused before anything in it changes.  `state.json` beside the clone
+keeps ejections and the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`), and
+one that only reads (`status`, `review` without N) holds it only while it clones and fetches, not while it reads labels.  The
+clone authenticates as the caller's checkout does (`credential_args`): a cloud VM sets its credential helper in the checkout's
+own config, which a clone elsewhere never reads.  Git never prompts, so a remote the queue can't read fails the command instead
+of answering from what the clone fetched last.
 """
 from __future__ import annotations
 
@@ -392,6 +412,13 @@ MOVE_DIR, MOVE_PINS = "tools/move/", "tools/verity/check/pins.py"
 #: landed, and the moves a PR based before them is restacked through
 LANDED_WINDOW = 2000
 SLUG_RE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$")
+#: OWNER/NAME on GitHub, as `--repo` takes it
+REPO_ARG_RE = re.compile(r"[\w.-]+/[\w.-]+")
+#: the git config key the queue sets to `true` in each clone it makes (`Queue._clone`): only such a clone, or one at `WORKDIR`, has
+#: its origin set to the queue's remote
+CLONE_MARK = "research.queueclone"
+#: the queue's clone with no --repo or --workdir: one there without `CLONE_MARK` is one the queue made before it set it (drive's)
+WORKDIR = Path.home() / ".research" / "queue" / "verity"
 AUTH_FAILED_RE = re.compile(r"could not read (Username|Password)|Authentication failed|unable to get password")
 #: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
 CHECK_TOOLING = ("tools/verity/check/", "tools/verity/lean/", "tools/verity/circuit_check/")
@@ -437,6 +464,42 @@ def credential_args(repo: Path, remote: str) -> tuple[str, ...]:
             return ()
         conf = {"credential.helper": f"!{shlex.quote(gh)} auth git-credential"}
     return ("-c", "credential.helper=", *(o for k, v in conf.items() for o in ("-c", f"{k}={v}")))
+
+
+def redacted(url: str) -> str:
+    """``url`` without the user and password it may carry, so a token in a remote's URL never reaches a message."""
+    return re.sub(r"(?<=://)[^/@]*@", "", url)
+
+
+def slug(url: str) -> str | None:
+    """The OWNER/NAME a GitHub URL names (https or ssh, with or without `.git`, whatever user it carries), else None."""
+    return (m := SLUG_RE.search(url)) and m.group(1)
+
+
+def same_repository(a: str, b: str) -> bool:
+    """Whether two remote URLs name one repository: on GitHub by OWNER/NAME in any case (`slug`), elsewhere (a path) by the URL
+    itself."""
+    sa, sb = slug(a), slug(b)
+    return (sa or "").lower() == (sb or "").lower() if sa or sb else a.rstrip("/") == b.rstrip("/")
+
+
+def remote_and_repo(remote: str | None, repo: str | None, cwd: Path) -> tuple[str, str]:
+    """The remote the queue clones and fetches, and its OWNER/NAME on GitHub, from `--remote` and `--repo`: `--repo` alone takes
+    `https://github.com/OWNER/NAME.git`, and with neither the remote is ``cwd``'s origin.  Refused when `--remote` names
+    another repository on GitHub than `--repo` (the queue would read one's PRs against the other's pull refs), and when no
+    OWNER/NAME can be told."""
+    if repo is not None and not REPO_ARG_RE.fullmatch(repo):
+        raise QueueError(f"--repo {repo!r}: OWNER/NAME on GitHub, as {REPO}")
+    if repo and remote is None:
+        return f"https://github.com/{repo}.git", repo
+    remote = remote or _out(cwd, "remote", "get-url", "origin")
+    named = slug(remote)
+    if repo and named and named.lower() != repo.lower():
+        raise QueueError(f"--remote {redacted(remote)} is {named} on GitHub, not --repo {repo}: pass --repo alone (its remote is "
+                         f"https://github.com/{repo}.git), or a --remote of {repo}")
+    if not (repo := repo or named):
+        raise QueueError(f"can't tell OWNER/NAME from {redacted(remote)!r}: pass --repo")
+    return remote, repo
 
 
 # ---- the open PRs -------------------------------------------------------------------------------------------------------------------
@@ -549,6 +612,33 @@ class GitHub:
             raise QueueError(f"gh pr close {number}: {(r.stderr or r.stdout).strip()[-300:]}")
 
 
+def landing_waiter(repo: str | None = None, store_root: str | None = None) -> Callable[[list[int]], bool]:
+    """Whether PRs wait only on landing: each is open, not held (the rules' hold label) and marked ready at its current head
+    (`StoreLabels.ready`), as the Linear audit asks of an issue In Review.  The open PRs are read once, on the first call;
+    `repo` defaults to the checkout's origin, and a PR GitHub or the store can't answer for doesn't wait.  When the open PRs
+    can't be read at all (no checkout, gh failing), nothing waits: the audit then counts the issue as it would without this."""
+    from .store.local import LocalStore
+
+    state: dict = {}
+
+    def waiting(numbers: list[int]) -> bool:
+        if "heads" not in state:
+            try:
+                slug = repo or ((m := SLUG_RE.search(_out(Path.cwd(), "remote", "get-url", "origin"))) and m.group(1))
+                hold = Rules().hold_label
+                state["heads"] = {pr.number: pr.head for pr in GitHub(slug).open_prs() if hold not in pr.labels}
+                state["labels"] = StoreLabels(LocalStore(store_root), log=lambda s: None)
+                state["labels"].prefetch(state["heads"].items())
+            except (QueueError, OSError) as e:
+                print(f"linear audit: can't read the open PRs ({e}), so no issue counts as waiting on landing",
+                      file=sys.stderr)
+                state["heads"], state["labels"] = {}, None
+        heads, labels = state["heads"], state["labels"]
+        return bool(numbers) and all(n in heads and labels.ready(n, heads[n]) for n in numbers)
+
+    return waiting
+
+
 # ---- rules and labels ---------------------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -581,6 +671,9 @@ LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
 EXECUTOR_MODES = ("off", "shadow", "on")
 #: the keys a flag of drive's command line can set (`DriveFlags.override`), each as `--KEY` with `_` as `-`
 COMMAND_LINE = ("on", "marked_after", "regenerate_locks", "first", "after_landing_no_cache")
+#: what `DriveFlags.signed_verdicts` keeps off the low-risk lane: who holds each handle, and the code that judges a label
+SIGNED_GUARDS = (str(REGISTRY), "tools/research/src/research/labelauth.py", "tools/research/src/research/queue.py",
+                 "tools/research/src/research/drive.py")
 
 
 @dataclass(frozen=True)
@@ -640,6 +733,10 @@ class DriveFlags:
     #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
     #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
     executor_enqueue: tuple[str, ...] = ()
+    #: count a ready mark or land verdict only when its `label_auth` companion authenticates it as its author's, or as an agent's
+    #: its author delegated to (`research.labelauth`, `StoreLabels`); `ready`, `judge` and `review` then refuse to write one they
+    #: can't sign.  On only while the low-risk lane can't change who holds a handle or how a label is judged (`SIGNED_GUARDS`)
+    signed_verdicts: bool = False
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -709,7 +806,7 @@ class DriveFlags:
                 raise bad("lowrisk_excludes", "a non-empty list of directories from the repository's root, each ending in `/`, "
                                               "and file name globs, as [\"*.lean\", \"verity/core/\"]")
             got["lowrisk_excludes"] = tuple(v)
-        for k in ("regenerate_locks", "nonlean_first", "reviewed_first", "verdict_first", "lowrisk_lane"):
+        for k in ("regenerate_locks", "nonlean_first", "reviewed_first", "verdict_first", "lowrisk_lane", "signed_verdicts"):
             if k in doc:
                 if not isinstance(doc[k], bool):
                     raise bad(k, "true or false")
@@ -758,6 +855,11 @@ class DriveFlags:
             got["command_line"] = tuple(v)
         if got.get("stale_close_days") and not 0 < got.get("stale_days", 0) <= got["stale_close_days"]:
             raise bad("stale_close_days", "0, or at least stale_days, which must be on: drive closes only a stale PR")
+        if got.get("signed_verdicts") and got.get("lowrisk_lane", cls.lowrisk_lane) and \
+                (open_ := [p for p in SIGNED_GUARDS if lowrisk([p], got.get("lowrisk_excludes", cls.lowrisk_excludes))]):
+            raise bad("signed_verdicts", f"true lets a change to {' or '.join(open_)} land on its ready mark alone, so a lane "
+                                         "could make itself another handle's holder or loosen the check: add each to "
+                                         "`lowrisk_excludes`, or set `lowrisk_lane = false`")
         return cls(**got)
 
     def override(self, a: argparse.Namespace, where: str = DRIVE_FLAGS) -> "DriveFlags":
@@ -927,6 +1029,33 @@ def into_at(repo: Path, ref: str) -> str:
     except tomllib.TOMLDecodeError as e:
         raise QueueError(f"{source}: not TOML: {e}") from None
     return "main" if into is None else DriveFlags.parse(f"land_into = {json.dumps(into)}\n", source).land_into
+
+
+def signed_at(repo: Path, ref: str) -> bool:
+    """drive.toml's `signed_verdicts` at ``ref``, false when it has none.  Only that key is read, as `into_at` reads its own (its
+    guard reads two others, which drive's strict parse of `main` checks)."""
+    r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
+    if r.returncode:
+        return False
+    source = f"{DRIVE_FLAGS} at {ref}"
+    try:
+        on = tomllib.loads(r.stdout).get("signed_verdicts", False)
+    except tomllib.TOMLDecodeError as e:
+        raise QueueError(f"{source}: not TOML: {e}") from None
+    if not isinstance(on, bool):
+        raise QueueError(f"{source}: signed_verdicts = {on!r}: true or false")
+    return on
+
+
+def holders_at(repo: Path, ref: str) -> dict[str, str]:
+    """{agent id: handle} of the registry at ``ref``: each agent id a handle's `holder` names holds that handle; none when ``ref``
+    has no registry.  QueueError when it can't be parsed, as then no one's handle is known."""
+    r = _git(repo, "show", f"{ref}:{REGISTRY}", check=False)
+    try:
+        reg = json.loads(r.stdout).get("handles", []) if r.returncode == 0 else []
+    except (ValueError, AttributeError) as e:
+        raise QueueError(f"{REGISTRY} at {ref} can't be parsed ({e}), so who holds each handle is unknown: fix it") from None
+    return {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h for a in AGENT_RE.findall(str(h.get("holder", "")))}
 
 
 def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, str]:
@@ -1107,10 +1236,12 @@ PREFETCH_JOBS = 128
 
 class StoreLabels:
     """Ready marks from the evidence store: `ready` labels on `pr:{n}@{head}`, pulled from the remote first.  Without that pull it
-    raises: a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled."""
+    raises: a cloud VM's shell that lost its store secrets has no remote, and its local labels are whatever it last pulled.
+    With ``verify`` (a `labelauth.Verifier`: drive.toml's `signed_verdicts`), a ready mark or land verdict its `label_auth`
+    companion doesn't authenticate is read as absent (`refusals` says why); `ready = false` and holds count as written."""
 
-    def __init__(self, store, log: Callable[[str], None] = print, since: str | None = None):
-        self.store, self.log, self.since = store, log, since
+    def __init__(self, store, log: Callable[[str], None] = print, since: str | None = None, verify=None):
+        self.store, self.log, self.since, self.verify = store, log, since, verify
         self._pulled: set[int] = set()
         self._newest: dict[tuple[int, str], object] = {}
         self._fresh: set[str] = set()
@@ -1134,18 +1265,37 @@ class StoreLabels:
         """Whether the newest `ready` label on `pr:{n}@{head}` is `true`, written at or after ``since`` (`--marked-after`) when
         given.  `research queue eject` writes `ready = false` there, so an ejection holds on every VM's queue until the owner
         marks it again or pushes a new head (an ejection kept in the ejecting VM's state would be lost to drive, which re-admits)."""
-        labs = sorted(self._labels(pr, head, vocab.READY), key=lambda lab: lab.ts)
+        labs = sorted(self._counted(pr, head, vocab.READY)[0], key=lambda lab: lab.ts)
         self._newest[(pr, head)] = labs[-1] if labs else None
         return bool(labs) and str(labs[-1].value).lower() == "true" and (self.since is None or labs[-1].ts >= self.since)
 
     def reviews(self, pr: int, head: str) -> list:
         """The `reviewed` labels on `pr:{n}@{head}` (`research queue review`), pulled as `ready`'s are."""
-        return self._labels(pr, head, vocab.REVIEWED)
+        return self._counted(pr, head, vocab.REVIEWED)[0]
 
     def ready_by(self, pr: int, head: str) -> str | None:
         """Who wrote the newest `ready = true` label on `pr:{n}@{head}`, whenever it was written."""
-        labs = [lab for lab in sorted(self._labels(pr, head, vocab.READY), key=lambda lab: lab.ts) if str(lab.value).lower() == "true"]
+        labs = [lab for lab in sorted(self._counted(pr, head, vocab.READY)[0], key=lambda lab: lab.ts) if str(lab.value).lower() == "true"]
         return labs[-1].by if labs else None
+
+    def refusals(self, pr: int, head: str, key: str) -> list[str]:
+        """Each ``key`` label on `pr:{n}@{head}` that ``verify`` reads as absent, with why; none without ``verify``."""
+        return self._counted(pr, head, key)[1]
+
+    def _counted(self, pr: int, head: str, key: str) -> tuple[list, list[str]]:
+        labs = self._labels(pr, head, key)
+        if self.verify is None:
+            return labs, []
+        from .labelauth import landing
+
+        beside = self.store.labels(label_target(pr, head), key=vocab.LABEL_AUTH)
+        counted, refused = [], []
+        for lab in labs:
+            if landing(lab) and (why := self.verify.why(lab, beside)):
+                refused.append(f"{lab.key} = {lab.value} by {lab.by} at {lab.ts}: {why}")
+            else:
+                counted.append(lab)
+        return counted, refused
 
     def marked_by(self, pr: int, head: str) -> str | None:
         """Who wrote the newest `ready` label `ready` read on `pr:{n}@{head}`."""
@@ -1404,12 +1554,29 @@ class Queue:
             raise QueueError(f"git {' '.join(args)}: {err}{hint}")
         return r
 
+    def _ours(self) -> bool:
+        """Whether the workdir is a clone the queue made: one whose git config has `CLONE_MARK`, which the queue sets in each
+        clone it makes, or `WORKDIR`, where it cloned before it set it."""
+        return (_git(self.workdir, "config", "--local", "--get", CLONE_MARK, check=False).stdout.strip() == "true"
+                or self.workdir.resolve() == WORKDIR.resolve())
+
     def _clone(self) -> None:
+        """Clone the remote into the workdir, or bring the checkout there to the remote's state.  The origin of a clone the queue
+        made (`_ours`) follows the remote; any other checkout keeps its own, and one whose origin names another repository
+        than the remote is refused before anything in it changes."""
         if fresh := not (self.workdir / ".git").exists():
             self.workdir.parent.mkdir(parents=True, exist_ok=True)
-            self._remote(self.workdir.parent, "clone", "-q", self.remote, str(self.workdir))
-        # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
-        _git(self.workdir, "remote", "set-url", "origin", self.remote)
+            self._remote(self.workdir.parent, "clone", "-q", "--config", f"{CLONE_MARK}=true", self.remote, str(self.workdir))
+        if fresh or self._ours():
+            # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
+            _git(self.workdir, "remote", "set-url", "origin", self.remote)
+        elif not same_repository(origin := _git(self.workdir, "remote", "get-url", "origin", check=False).stdout.strip(),
+                                 self.remote):
+            here, there = redacted(origin), redacted(self.remote)
+            raise QueueError(f"{self.workdir} is a checkout the queue didn't clone (its git config has no {CLONE_MARK}), whose "
+                             f"origin, {here or 'unset'}, is another repository than the queue's remote {there}, and the queue "
+                             f"never repoints such a checkout: pass --workdir a directory of its own, where the queue clones "
+                             f"{there}" + (f", or --remote {here}, the repository that checkout is a clone of" if here else ""))
         # `.gitattributes` names these drivers; `git_env` gives them to the queue's own git, but without them in the clone's
         # config any other git in it (one by hand) merges the records line by line
         from .clone import Refused, set_drivers
@@ -5017,7 +5184,9 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
 
 
 def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
-    """`ready = true` on `pr:{n}@{head}`, pushed to the store's remote, unless the quick tier ``failed`` there (the refusal)."""
+    """`ready = true` on `pr:{n}@{head}`, pushed to the store's remote, unless the quick tier ``failed`` there (the refusal), or
+    ``store``, a `labelauth.Signer` (`label_signer`), refuses to write a mark it can't sign."""
+    from .labelauth import AuthError
     from .store.cli import _label_write_through
 
     if isinstance(failed, StillGoing):
@@ -5033,7 +5202,11 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
               f"fix, or run it again: passes are cached by input, so a re-run on the same cache runs only what failed", file=sys.stderr)
         return 1
     target = label_target(pr.number, pr.head)
-    store.add_label(target, vocab.READY, True, by)
+    try:
+        store.add_label(target, vocab.READY, True, by)
+    except AuthError as e:
+        print(f"research queue {command}: #{pr.number} is not marked ready at {pr.head[:12]}: {e}", file=sys.stderr)
+        return 1
     said, lost = _label_write_through(store, target)
     print(f"research queue: #{pr.number} is ready at {pr.head[:12]} ({target}); {said}")
     return 1 if lost else 0
@@ -5045,7 +5218,9 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
     (`unreviewed`), bottom first, the order drive lands them in; with it, write ``verdict`` (`land` or `hold`, ``ref`` its note or
     reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner.  Without
     ``sha`` it refuses when GitHub has a head other than `next`'s, as the reviewer may have read either; a short ``sha`` is the
-    known head or clone commit it starts."""
+    known head or clone commit it starts.  The list names each land verdict ``labels`` doesn't authenticate
+    (`StoreLabels.refusals`); ``store``, a `labelauth.Signer` (`label_signer`), refuses a verdict it can't sign."""
+    from .labelauth import AuthError
     from .store.cli import _label_write_through
 
     q._clone()
@@ -5060,6 +5235,8 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
         for m in chain:
             if (why := unreviewed(labels.reviews(m.pr, m.head), review_owners(q, labels, m.pr, m.head, m.owner, opened))) is None:
                 continue
+            if refused := labels.refusals(m.pr, m.head, vocab.REVIEWED):
+                why += f"; not authenticated: {'; '.join(refused)}"
             files = sorted(changed(q.workdir, f"{m.commit}^1", m.commit))
             rows.append({"pr": m.pr, "head": m.head, "owner": m.owner, "lean": lean_change(q.workdir, m.commit), "files": files,
                          "why": why})
@@ -5094,10 +5271,68 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
         raise QueueError(f"review: #{pr} is {by}'s own PR (its owner, its owner's handle or its ready mark's author; or it has no "
                          "owner), and an owner's verdict doesn't count: a reviewer who isn't its owner reviews it")
     target = label_target(pr, head)
-    store.add_label(target, vocab.REVIEWED, verdict, by, ref=ref or None)
+    try:
+        store.add_label(target, vocab.REVIEWED, verdict, by, ref=ref or None)
+    except AuthError as e:
+        raise QueueError(f"review: #{pr}'s `{verdict}` at {head[:12]} isn't written: {e}") from None
     said, lost = _label_write_through(store, target)
     print(f"research queue: #{pr} reviewed `{verdict}` at {head[:12]} by {by} ({target}); {said}")
     return 1 if lost else 0
+
+
+def delegate(store, agent: str, lane: str, days: int, holders: dict[str, str] | None,
+             mint: Callable[[str], str] | None = None, now: Callable[[], float] = time.time) -> int:
+    """`research queue delegate AGENT --by LANE [--days N]`: as LANE's holder, let the Cursor agent AGENT (a worker) authenticate
+    ready marks and land verdicts as LANE for ``days`` (at most `labelauth.DELEGATION_MAX_DAYS`): a `label_delegation` label on
+    the agent's delegation target, pushed to the store's remote, which `labelauth.Signer` copies into each companion it writes.
+    Refused, nothing written, when this agent isn't LANE's holder in ``holders`` (the registry: its delegation would never count)."""
+    from . import labelauth
+    from .store.cli import _label_write_through
+
+    if not AGENT_RE.fullmatch(agent):
+        raise QueueError(f"delegate: {agent!r} isn't a Cursor agent id (bc-, then a UUID)")
+    if not 1 <= days <= labelauth.DELEGATION_MAX_DAYS:
+        raise QueueError(f"delegate: --days {days}: 1 to {labelauth.DELEGATION_MAX_DAYS}")
+    until = time.strftime(labelauth.TS_FORMAT, time.gmtime(now() + days * 86400))
+    try:
+        value = labelauth.delegation(lane, agent, until, mint or labelauth.cursor_mint)
+        me = labelauth.unverified_claims(value["token"]).get("cloud_agent_id")
+    except labelauth.AuthError as e:
+        raise QueueError(f"delegate: {agent} can't be delegated {lane}: {e}") from None
+    if holders is None or not isinstance(me, str) or _who(holders.get(me, "")) != _who(lane):
+        raise QueueError(f"delegate: this agent ({me}) doesn't hold {lane} in main's registry ({REGISTRY}), so its delegation "
+                         f"would never count: {lane}'s holder runs it")
+    target = labelauth.delegation_target(agent)
+    store.add_label(target, vocab.LABEL_DELEGATION, value, lane)
+    said, lost = _label_write_through(store, target)
+    print(f"research queue: {agent} signs as {lane} until {until}, while this agent holds {lane} in main's registry "
+          f"({target}); {said}")
+    return 1 if lost else 0
+
+
+def label_signer(store, repo: Path | None):
+    """``store`` as the `labelauth.Signer` `ready`, `judge` and `review` write through: required, with the registry's holders, when
+    drive.toml's `signed_verdicts` is on at `origin/main` in ``repo`` (the caller's checkout); otherwise it signs what it can."""
+    from . import labelauth
+
+    main, holders = "refs/remotes/origin/main", None
+    if on := repo is not None and signed_at(repo, main):
+        holders = holders_at(repo, main)
+    return labelauth.Signer(store, labelauth.cursor_mint, required=on, holders=holders,
+                            log=lambda s: print(f"research queue: {s}", file=sys.stderr))
+
+
+def label_verifier(repo: Path, ref: str, keys: Path, log: Callable[[str], None] = print):
+    """The `labelauth.Verifier` of drive.toml's `signed_verdicts`: the registry at ``ref`` in ``repo`` names who holds each handle,
+    and the issuer's keys are fetched (kept at ``keys`` for an outage of the issuer).  QueueError when either can't be had: no
+    mark could be judged, and judging every one absent would take every PR off `next`."""
+    from . import labelauth
+
+    holders = holders_at(repo, ref)
+    try:
+        return labelauth.Verifier(labelauth.issuer_keys(keys, log=log), holders)
+    except labelauth.AuthError as e:
+        raise QueueError(f"no ready mark or land verdict can be authenticated (drive.toml's `signed_verdicts`): {e}") from None
 
 
 def review_owners(q: Queue, labels: StoreLabels, pr: int, head: str, owner: str | None,
@@ -5556,10 +5791,12 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "link", "stats",
                                             "checked-heads", "review", "baseline", "accept-checked", "lean-check", "drive-shard-add",
+                                            "delegate",
                                             "shadow-report"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; baseline: the "
                     "commit of the landing branch (`checked`, or `main` until `checked` exists) ci knows is green; lean-check: the commit of `next` to Lean-check; "
-                    "accept-checked: `checked`'s tip, which drive didn't write; drive-shard-add: the after-landing run's tip")
+                    "accept-checked: `checked`'s tip, which drive didn't write; drive-shard-add: the after-landing run's tip; "
+                    "delegate: the Cursor agent id to delegate --by's handle to")
     ap.add_argument("shard_run", nargs="*", metavar="K RUN_ID", help="drive-shard-add: the shard and the run to count in it")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one): a later failure of "
@@ -5571,8 +5808,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--shadow", action="store_true", help=f"build `{SHADOW_BRANCH}`, never push `main`, send no notices")
     ap.add_argument("--dry-run", action="store_true", help="sync/drive: decide and report, push and launch nothing, tell no "
                                                            "one; open, edit: say what it would send, and send nothing")
-    ap.add_argument("--workdir", type=Path, default=Path.home() / ".research" / "queue" / "verity", help="the queue's own clone")
-    ap.add_argument("--remote", default=None, help="the repository to clone (default: this checkout's origin)")
+    ap.add_argument("--workdir", type=Path, default=None, help="the queue's own clone (default: ~/.research/queue/NAME for --repo "
+                                                              "OWNER/NAME, else ~/.research/queue/verity)")
+    ap.add_argument("--remote", default=None, help="the repository to clone (default: https://github.com/OWNER/NAME.git for --repo "
+                                                   "OWNER/NAME, else this checkout's origin); one naming another repository on "
+                                                   "GitHub than --repo is refused")
     ap.add_argument("--repo", default=None, help="OWNER/NAME on GitHub (default: from the remote's URL)")
     ap.add_argument("--rules", type=Path, default=None, help=f"the admission rules (default: {RULES} on `main`)")
     ap.add_argument("--store", default=None, help="evidence store root (default $RESEARCH_STORE or ~/.research/store)")
@@ -5652,6 +5892,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--tips", type=int, default=10, metavar="N", help="shadow-report: the newest N `checked` tips drive compared "
                     "with the executor's verdicts (default 10)")
     ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
+    ap.add_argument("--days", type=int, default=7, help="delegate: how long the delegation lasts (default 7, at most 14)")
     ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="stats: the window's end (default now)")
     a = ap.parse_args(argv)
     global MERGED_ROOT
@@ -5675,10 +5916,7 @@ def main(argv: list[str]) -> int:
         if not (a.pr and a.pr.isdigit() and a.issue and ISSUE_KEY_RE.fullmatch(a.issue)) or a.dry_run:
             ap.error("link needs the PR number and --issue KEY (its Linear issue, like ENG-123), and has no --dry-run")
         try:
-            remote = a.remote or _out(Path.cwd(), "remote", "get-url", "origin")
-            repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
-            if not repo:
-                raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            repo = remote_and_repo(a.remote, a.repo, Path.cwd())[1]
             print(f"research queue link: {link_issue(a.issue, f'https://github.com/{repo}/pull/{a.pr}')}")
             return 0
         except (QueueError, OSError) as e:
@@ -5691,10 +5929,7 @@ def main(argv: list[str]) -> int:
         try:
             body = with_issue(a.body_file.read_text(), a.issue)
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
-            remote = a.remote or _out(top, "remote", "get-url", "origin")
-            repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
-            if not repo:
-                raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            repo = remote_and_repo(a.remote, a.repo, top)[1]
             app = issue_app(a.issue) if ISSUE_KEY_RE.fullmatch(a.issue) else None
             if app is not None:
                 body = with_goals(body, a.issue, app)
@@ -5720,10 +5955,7 @@ def main(argv: list[str]) -> int:
             ap.error("edit needs the PR number and --body-file F")
         try:
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
-            remote = a.remote or _out(top, "remote", "get-url", "origin")
-            repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
-            if not repo:
-                raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            repo = remote_and_repo(a.remote, a.repo, top)[1]
             url, body = edit_pr(top, repo, int(a.pr), a.body_file.read_text(), title=a.title, dry_run=a.dry_run)
             titled = f" and its title with {a.title!r}" if a.title else ""
             if a.dry_run:
@@ -5770,21 +6002,26 @@ def main(argv: list[str]) -> int:
         ap.error(f"unrecognized arguments: {' '.join(a.shard_run)}")
     if a.command == "drive-shard-add" and not (a.pr and len(a.shard_run) == 2 and a.shard_run[0].isdigit()):
         ap.error("drive-shard-add TIP K RUN_ID: the after-landing run's tip, the shard's number and the run to count in it")
+    if a.command == "delegate" and not (a.pr and a.by):
+        ap.error("delegate AGENT lets a Cursor agent (a worker) sign as your handle: pass its agent id and --by <your lane>")
     a.by = a.by or "merge-queue"
-    if a.command not in ("judge", "baseline", "accept-checked", "lean-check", "drive-shard-add") and a.pr is not None:
+    if a.command not in ("judge", "baseline", "accept-checked", "lean-check", "drive-shard-add", "delegate") and a.pr is not None:
         if not a.pr.isdigit():
             ap.error(f"{a.command}: {a.pr!r} is not a PR number")
         a.pr = int(a.pr)
     from .store.local import LocalStore
 
     try:
-        remote = a.remote or _out(Path.cwd(), "remote", "get-url", "origin")
-        repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
-        if not repo:
-            raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+        remote, repo = remote_and_repo(a.remote, a.repo, Path.cwd())
+        workdir = a.workdir or (WORKDIR.with_name(repo.split("/")[1].lower()) if a.repo else WORKDIR)
         store = LocalStore(a.store)
+        here = _git(Path.cwd(), "rev-parse", "--show-toplevel", check=False).stdout.strip()
+        main_ref, keys = "refs/remotes/origin/main", workdir.parent / f"{workdir.name}.issuer-keys.json"
+        if a.command == "delegate":
+            return delegate(store, a.pr, a.by, a.days, holders_at(Path(here), main_ref) if here else None)
+        if a.command in ("judge", "ready"):
+            store = label_signer(store, Path(here) if here else None)
         if a.command == "judge":
-            here = _git(Path.cwd(), "rev-parse", "--show-toplevel", check=False).stdout.strip()
             return judge(GitHub(repo), store, a.pr, a.by, on=a.on, repo=Path(here) if here else None, url=remote,
                          records=RecordsGate(Path(here) if here else Path.cwd(), remote, store), goals=goal_gate)
         if a.command == "ready":
@@ -5795,12 +6032,12 @@ def main(argv: list[str]) -> int:
             return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha, as_json=a.json,
                          records=RecordsGate(top, remote, store), goals=goal_gate)
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
-        q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
+        q = Queue(workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
                   auth=credential_args(Path.cwd(), remote), first=tuple(int(n) for n in (a.first or "").split(",") if n),
                   before_cutoff=labels.before_cutoff, marked_by=labels.marked_by, marked_at=labels.marked_at,
                   prefetch=labels.prefetch)
-        lock = _lock(a.workdir)
+        lock = _lock(workdir)
         q.unlock = lock.close
         if ignored := [f"--{k.replace('_', '-')}" for k in ("max_running", "train_size") if getattr(a, k) is not None]:
             q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted (#5070); drop them from "
@@ -5819,6 +6056,8 @@ def main(argv: list[str]) -> int:
             a.marked_after = flags.marked_after
             labels.since = a.marked_after
             q.log(f"research queue drive: flags from {where}: {flags.line()}")
+            if flags.signed_verdicts:
+                labels.verify = label_verifier(q.workdir, main_ref, keys, q.log)
         if not a.marked_after and a.command != "status":
             if a.rules is None:
                 q._clone()
@@ -5850,8 +6089,10 @@ def main(argv: list[str]) -> int:
                 print(_render(entries) + _unnamed(q.listed, teams))
             return 0
         if a.command == "review":
-            return review(q, store, labels, a.pr, "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by,
-                          sha=a.sha, as_json=a.json)
+            if a.pr is None and here and signed_at(Path(here), main_ref):
+                labels.verify = label_verifier(Path(here), main_ref, keys, lambda s: print(f"research queue: {s}", file=sys.stderr))
+            return review(q, label_signer(store, Path(here) if here else None) if a.pr else store, labels, a.pr,
+                          "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by, sha=a.sha, as_json=a.json)
         from .merge import DRIVE_ENV, off_drive, on_drive
 
         if a.command == "baseline":
