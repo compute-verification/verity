@@ -195,11 +195,10 @@ end FlockDeploy
 
 namespace Claims.ZKMal
 
-/-- **A statement that sets up has a coin round**: the deployed verifier's `k` is `2 + rounds` there. -/
+/-- **A statement that sets up has a coin round**: `refK` is `1 + rounds` there. -/
 theorem refK_pos {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) : 0 < refK x := by
-  unfold refK
-  simp only [FlockDeploy.V, hs]
+  rw [refK_of_flock hs]
   omega
 
 end Claims.ZKMal

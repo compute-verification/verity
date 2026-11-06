@@ -516,7 +516,7 @@ namespace Flock.HmRow
 /-- `checkPublic` with the default key's digest in hex, the tree leaf and the zero row as parameters. -/
 def checkPublicP (kh : String) (tl : ByteArray → ByteArray) (zr : Port → ByteArray) (c : Circuit) (pub : Public) :
     V Unit := do
-  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are §16.13's)"
+  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are a hidden-output statement's: `HmOut`)"
   let fv ← pub.frameV3
   if (← J.str fv "frame" "public file") != "frame-v3-sha512"
       || (← J.str fv "row_key_sha512" "public file") != kh then
