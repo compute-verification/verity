@@ -22,10 +22,11 @@ applies `main`'s allowances the same way.
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
 checks `checked`'s tip, and doesn't hold `main`; under drive.toml's `executor = "on"`, `ratchet-gate` runs with
-`lean-agreement` in a run of their own beside the executor's check of the tip, and `main` waits for that run. A red
-`circuit-check` or `ratchet-gate` reverts its culprit at once, as every after-landing red does, and while `circuit-check` is
-red no PR touching its inputs lands. `circuit-check` goes back on the gate once `circuit-check --all` fits inside
-the rest of the check; `ratchet-gate` is in no shard plan, and reports without blocking a merge.
+`lean-agreement` in a run of their own beside the executor's check of the tip, and `main` waits for that run's preflights and
+`lean-agreement`, not its `ratchet-gate`. A red `circuit-check` or `ratchet-gate` reverts its culprit at once, as every
+after-landing red does, and while `circuit-check` is red no PR touching its inputs lands. `circuit-check` goes back on the gate
+once `circuit-check --all` fits inside the rest of the check; `ratchet-gate` is in no shard plan, and reports without blocking
+a merge.
 
 ## Suites and reuse
 
