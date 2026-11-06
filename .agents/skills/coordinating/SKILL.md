@@ -71,10 +71,10 @@ using-slack skill).
 | Canceled | dropped, with a one-line reason; a person's ask only with their yes, quoted, and `asker-ok` |
 
 - **PRs.** A PR names its issue (`research queue open --issue KEY` writes `Refs KEY` and links it) and the goal it
-  serves: the issue carries the goal's label, which `open` writes as `Goal <id>` and refuses an issue without, and a ready
-  mark needs that line or `Issue: none: REASON`. A key in a PR's title or body attaches nothing: `research queue link N
-  --issue KEY` attaches a PR opened without it. An issue In Review 24 h with no open PR attached is `unlinked`. Merging a
-  PR doesn't close the issue; the owner does.
+  serves: the issue carries the goal's label, which `open` writes as `Goal <id>`; `open` and a ready mark warn, never
+  refusing, when the body has neither that line nor `Issue: none: REASON`. A key in a PR's title or body attaches nothing:
+  `research queue link N --issue KEY` attaches a PR opened without it. An issue In Review 24 h with no open PR attached is
+  `unlinked`. Merging a PR doesn't close the issue; the owner does.
 - **Sub-issues** split a deliverable into pieces that move separately: one per worker. A parent is In Progress while any
   child is, and Done once every child is and its own done-condition holds.
 - **Dependencies** between lanes are Linear's blocking relations (`research msg linear relate`), not prose.
