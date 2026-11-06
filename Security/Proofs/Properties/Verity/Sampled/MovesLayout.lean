@@ -46,38 +46,6 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The digest each opening of a rep stream answers -/
 
-/-- Two places of a list holding elements `p` accepts, with as many such elements before each, are one place. -/
-theorem eq_of_countP_eq {β : Type} {p : β → Bool} :
-    ∀ {a a' b b' : List β} {x x' : β}, a ++ x :: b = a' ++ x' :: b' → p x = true → p x' = true →
-      a.countP p = a'.countP p → x = x'
-  | [], [], _, _, _, _, h, _, _, _ => by
-    simp only [List.nil_append, List.cons.injEq] at h
-    exact h.1
-  | [], y :: a', _, _, _, _, h, hx, _, hc => by
-    simp only [List.nil_append, List.cons_append, List.cons.injEq] at h
-    obtain ⟨rfl, -⟩ := h
-    simp [hx] at hc
-  | y :: a, [], _, _, _, _, h, _, hx', hc => by
-    simp only [List.nil_append, List.cons_append, List.cons.injEq] at h
-    obtain ⟨rfl, -⟩ := h
-    simp [hx'] at hc
-  | y :: a, y' :: a', _, _, _, _, h, hx, hx', hc => by
-    simp only [List.cons_append, List.cons.injEq] at h
-    obtain ⟨rfl, h⟩ := h
-    rw [List.countP_cons, List.countP_cons] at hc
-    exact eq_of_countP_eq h hx hx' (Nat.add_right_cancel hc)
-
-/-- **Each round of a tree's stream has one line**: where `coinTreesOf` accepts the release log `lines`, two of its
-lines opening round `k` of stream `name` of the coin tree whose root is `ρ` are one, each the line after the `k` lines
-opening that stream (`coinTreesOf_round`). -/
-theorem opensRound_unique {lines : List String} {trees : Array LoggedTree} (h : coinTreesOf lines = .ok trees)
-    {ρ name l l' : String} {k : ℕ} (hl : l ∈ lines) (hl' : l' ∈ lines) (ho : OpensRound l ρ name k)
-    (ho' : OpensRound l' ρ name k) : l = l' := by
-  obtain ⟨a, b, he⟩ := List.append_of_mem hl
-  obtain ⟨a', b', he'⟩ := List.append_of_mem hl'
-  exact eq_of_countP_eq (he.symm.trans he') ho.opensLine ho'.opensLine
-    ((coinTreesOf_round h he ho).symm.trans (coinTreesOf_round h he' ho'))
-
 /-- **The line opening a round a tree shows opened is after the opening's bytes**: where `coinTreesOf` accepts the
 release log `lines`, a line of it opening round `k` of stream `name` of a tree `t` of its trees (`OpensRound`) is the
 one line opening that round (`opensRound_unique`), so its `after` is that of the opening `t` shows (`opened_after`). -/
