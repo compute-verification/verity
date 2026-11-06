@@ -30,7 +30,7 @@ sidecar that backs every cell with its run or art ids, and fills each ladder mod
 
 ## Running it
 
-On a node with the pinned vLLM venv and the ladder's checkpoints (`integrations/vllm/ops/verity_vllm/ops/pod_bootstrap.sh
+On a node with the pinned vLLM venv and the ladder's checkpoints (`integrations/vllm/verity_vllm/ops/pod_bootstrap.sh
 --cpu --cases ROLE,...` installs both on a RunPod pod and checks every shard), under `research run`, with the C4 shard
 `benchmarks/ppl/datasets.json` pins sent with `--send`:
 
@@ -41,4 +41,5 @@ python benchmarks/replay_ladder/coverage_table.py render COVERAGE.json --ladder 
 ~~~
 
 `run.sh` takes `REPLAYS` (3), `FRESH` (1), `ALONE` (64), and `SPAN_S`, `OVER` and `BURST` for the window. A TP2 or TP4
-model needs a node with that many GPUs.
+model needs a node with that many GPUs. FP8 models run DeepGEMM, compiled through NVRTC (`DG_JIT_USE_NVRTC=1`), unless
+`DEEP_GEMM=0`; `engine_env.txt` records the choice.

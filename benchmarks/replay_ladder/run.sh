@@ -13,7 +13,11 @@ export PATH="$VENV/bin:$PATH"
 export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
 # FlashInfer's sampler JIT needs a newer nvcc than some images carry; greedy rows never reach it
 export VLLM_USE_FLASHINFER_SAMPLER=${VLLM_USE_FLASHINFER_SAMPLER:-0}
-unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
+# DeepGEMM, vLLM's FP8 block GEMM, JIT-compiles its kernels with CUDA_HOME's nvcc unless told to use NVRTC, the torch
+# wheel's (CUDA 12.9): an image's older nvcc (12.4) can't compile them. DEEP_GEMM=0 serves FP8 without DeepGEMM.
+export DG_JIT_USE_NVRTC=${DG_JIT_USE_NVRTC:-1}
+unset NCCL_P2P_DISABLE
+if [ -n "${DEEP_GEMM:-}" ]; then export VLLM_USE_DEEP_GEMM=$DEEP_GEMM; else unset VLLM_USE_DEEP_GEMM; fi
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 REPLAYS=${REPLAYS:-3}; FRESH=${FRESH:-1}; ALONE=${ALONE:-64}
 [ $# -gt 0 ] || { echo "replay-ladder: name the models (ladder.py's LADDER)"; exit 2; }
@@ -21,6 +25,7 @@ REPLAYS=${REPLAYS:-3}; FRESH=${FRESH:-1}; ALONE=${ALONE:-64}
 v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
 case $v in *+gd9105ea8*) ;; *) echo "replay-ladder: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
 mkdir -p "$OUT"
+for k in VLLM_USE_DEEP_GEMM DG_JIT_USE_NVRTC VLLM_USE_FLASHINFER_SAMPLER; do echo "$k=${!k-unset}"; done > "$OUT/engine_env.txt"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total,clocks.max.sm,driver_version --format=csv | tee "$OUT/gpus.csv"
 rc=0
 for m in "$@"; do
