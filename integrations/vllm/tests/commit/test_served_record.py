@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.commit import served_record as SR
-from verity_vllm.commit.served_record import IDS_NAMES, SAMPLED, SAMPLER_INPUTS, Record, Row
+from verity_vllm.commit.served_record import IDS_NAMES, SAMPLED, SAMPLER_INPUTS, BlockValues, Row
 
 IDS = IDS_NAMES[1]
 SEED = 11
@@ -56,8 +56,8 @@ def served(prompt: list[int], out: list[int], *, chunk: int | None = None, preem
     return com
 
 
-def absorbed(com: FakeCommitter, known: dict | None = None) -> Record:
-    rec = Record(known=known or {"a": None})
+def absorbed(com: FakeCommitter, known: dict | None = None) -> BlockValues:
+    rec = BlockValues(known=known or {"a": None})
     rec.absorb(com, 0)
     return rec
 
@@ -116,7 +116,7 @@ B_PROMPT, B_OUT = A_PROMPT + A_OUT + [7, 8], [11, 12]
 C_PROMPT, C_OUT = B_PROMPT + B_OUT + [6], [13]
 
 
-def three_turns(flip: int | None = None) -> Record:
+def three_turns(flip: int | None = None) -> BlockValues:
     """A conversation of three turns, each turn's prompt the last one's prompt, its streamed ids and the user's next ids: b reads
     [0, 5) from a's cache, c reads [0, 9) from a's and b's (b computed [5, 9) itself). ``flip``: a's committed id at that
     position is another than the one served."""
@@ -228,7 +228,7 @@ def test_readback_refuses_a_draw_at_another_position_and_unknown_requests():
     com = FakeCommitter()
     com.step([("a", 0, 3, 0, 3)], [1, 2, 3], [9], pos=[1])
     com.step([("zz", 0, 1, 0, 1)], [1], [9])
-    rec = Record(known={"a": None})
+    rec = BlockValues(known={"a": None})
     w = rec.absorb(com, 0)
     assert not w["passed"]
     assert any("read position 1, the row ends at 2" in e for e in w["readback_errors"])
@@ -238,7 +238,7 @@ def test_readback_refuses_a_draw_at_another_position_and_unknown_requests():
 def test_readback_refuses_a_step_without_its_sampler_inputs():
     com = FakeCommitter()
     com.step([("a", 0, 3, 0, 3)], [1, 2, 3], [9], drop=SAMPLER_INPUTS[0])
-    w = Record(known={"a": None}).absorb(com, 0)
+    w = BlockValues(known={"a": None}).absorb(com, 0)
     assert not w["passed"] and "runner.sampler/seed" in w["readback_errors"][0]
 
 

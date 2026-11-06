@@ -1,4 +1,4 @@
-"""V*'s statements over one inner session (hiding model architectures, lane rec-v0): each Ligerito level's `RecOpen`
+"""V*'s statements over one inner session (hiding model architectures): each Ligerito level's `RecOpen`
 statement (`verity_flock.rec_outer`) and the algebra's `InnerRepCheck` (`verity_flock.rec_residuals`), staged from the inner
 session's directory (`verity_flock.rec_live.Proxy.write`: ``public.json``, ``private.json``, ``session/``). The algebra is
 staged as its parts (`rec_residuals.parts`, ``alg/p<j>/``), each within --zk's coin schedule, and holds when every part does.
@@ -6,7 +6,7 @@ With each level, that level's committed tops are staged too, every node held at 
 ``root_B`` under ``cap/``, a later level ``l``'s both reps' tops under ``cap/L<l>/``, `stage_cap`).
 
     python -m verity_flock.rec_vstage points INNER CIRCUIT PUBLIC > points.json
-    inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json os > fold.json    (tests/lean/InnerFold.lean)
+    inner-fold [--partition FILE] verity/flock-circuit CIRCUIT PUBLIC points.json tree > fold.json    (tests/lean/InnerFold.lean)
     python -m verity_flock.rec_vstage stage INNER fold.json OUT [--levels all|none|0,1,..] [--no-algebra] [--forge KIND]
         [--salts FILE] [--part-jobs N]
     python -m verity_flock.rec_vstage stage-links CIRCUIT INST LINKS OUT [--forge link]
@@ -494,8 +494,9 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     registered as ``rec-links`` at the part's program (`rec_links.register`, ``salts`` its rows', default fresh), which
     ``trow`` reads; each row's reader and writer rows are opened in the input and output rows' trees (`rec_link.Tree` over
     the rows' ``b || c``), a filler's at unit 0's row 0 of each; ``rin`` and ``rout`` are the verifier's own rows, the two
-    roots (`rec_link.expected`), as `Flock.RecLinkPart.check` holds them. ``xyr``, ``raux``, ``xyw`` and ``waux`` are under
-    fresh salts, drawn port by port in that order, row by row. These are `VStar.In.linkIn`'s port inputs, which the V*
+    roots (`rec_link.expected`), as `Flock.RecLinkPart.check` holds them. ``xyr``, ``raux``, ``xyw`` and ``waux`` are the
+    prover's own registrations ``rec-link-<port>`` under fresh salts, drawn port by port in that order, row by row, so the
+    reads file names every port of the part (`Registered.checkComplete`). These are `VStar.In.linkIn`'s port inputs, which the V*
     difftest (``part_in``) holds to this ``inst.bin``. With `rec_circuits`' cache the circuit text is built once per
     ``(UB, PB, N)``, and ``evaluate`` (the unit's replay against `rec_link.link_ref`) runs only when it is built.
 
@@ -506,7 +507,6 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
     from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.ml.commitments import hm96
 
     from . import circuit as FC
     from . import rec_budget as RB
@@ -579,8 +579,13 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
         agrees = [bool((int(ok) >> i) & 1) and got[i].astype(np.uint16).tolist() == ref[i][0] + ref[i][1] for i in range(N)]
     in_rows, in_salts, in_entry = rin.statement(range(N))
     out_rows, out_salts, out_entry = rout.statement(range(N))
+    private = {p: G.Registered.commit(prog, f"rec-link-{p}", tables[p].tolist()) for p in LK.ROWS[1:]}
     read = lambda e: {**e, "word_bits": 16, "reads": list(range(N))}  # noqa: E731
-    own = {"format": G.READS, "ports": {"trow": read(reg.entry()), "rin": read(rin.entry()), "rout": read(rout.entry())}}
+    own = {"format": G.READS, "ports": {"trow": read(reg.entry()), **{p: read(r.entry()) for p, r in private.items()},
+                                        "rin": read(rin.entry()), "rout": read(rout.entry())}}
+    salts_, entries = {"trow": tsalts, "rin": in_salts, "rout": out_salts}, {"trow": tentry, "rin": in_entry, "rout": out_entry}
+    for p, r in private.items():
+        _rows, salts_[p], entries[p] = r.statement(range(N))
     RB.check(own, LK.TEMPLATE, N)
     d = Path(out) / LINKS_DIR
     d.mkdir(parents=True, exist_ok=True)
@@ -590,12 +595,10 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     (d / "registered.json").write_text(json.dumps(own))
     rec_links = f"{reg.root.hex()}:{N}"
     (d / "rec-links.txt").write_text(rec_links + "\n")
-    fresh = {p: [hm96.SHA512.fresh_salt() for _ in range(N)] for p in LK.ROWS[1:]}
     FC.write(text, SimpleNamespace(name=LK.TEMPLATE, subcircuit=sub), 0, N, d / "inst.bin", d / "pub.bin", None, list(range(N)),
              share_rows=True, outs={"rin": np.asarray(in_rows, np.uint16), "rout": np.asarray(out_rows, np.uint16)},
              tables=tables, refs={p: list(range(N)) for p in LK.ROWS},
-             salts={"trow": tsalts, **fresh, "rin": in_salts, "rout": out_salts},
-             registered={"trow": tentry, "rin": in_entry, "rout": out_entry})
+             salts=salts_, registered=entries)
     m = json.loads(text.split("\n", 2)[1][5:])
     return res | {"template": defn.id, "name": LK.unit_name(UB, PB), "UB": UB, "PB": PB, "instances": N, "links": len(links),
                   "holds": holds, "unit_agrees": agrees, "rec_links": rec_links, "in_root": tin.root.hex(),

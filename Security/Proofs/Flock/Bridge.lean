@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Bridge.PortRoots
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Bridge.Targets
+public import Proofs.Flock.Bridge.FilePartTarget
 public import Proofs.Flock.Bridge.Lowers
 public import Proofs.Flock.Bridge.Count
 public import Proofs.Flock.Bridge.CircuitOf
@@ -11,6 +12,7 @@ public import Proofs.Flock.Bridge.OpeningsCanon
 public import Proofs.Flock.Bridge.Assembly
 public import Proofs.Flock.Bridge.EndToEndHiddenC
 public import Proofs.Flock.Bridge.FaultyRightC
+public import Proofs.Flock.Bridge.RelSGuards
 public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Bridge.KSLive
 public import Proofs.Flock.Bridge.PublicDeployed

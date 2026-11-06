@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# The e2e's environment on node 2, CPU only (no GPU lease), idempotent: vLLM d9105ea80 cu129 and torch in a Python 3.12 venv
-# (pod_bootstrap.sh --cpu, no checkpoint cases), Llama-3.1-8B-Instruct at its pinned revision, and FlashInfer's sampling
-# kernels, which vLLM's top-p/top-k sampler would otherwise JIT-compile on its first call inside a window.  They are built
-# for window.sh's FLASHINFER_CUDA_ARCH_LIST (12.0f, what the card's (12, 0) maps to) with the venv's ninja first on PATH, so
-# the window's build flags and cache path are these and nothing rebuilds there; the cache is the venv's FlashInfer build's own
-# (flashinfer_env.sh).  pyarrow reads the quality run's WikiText-2.
+# The e2e's environment on an RTX PRO 6000 node, CPU only (no GPU lease), idempotent: vLLM d9105ea80 cu129 and torch in
+# a Python 3.12 venv (pod_bootstrap.sh --cpu, no checkpoint cases), Llama-3.1-8B-Instruct at its pinned revision, and
+# FlashInfer's sampling kernels, which vLLM's top-p/top-k sampler would otherwise JIT-compile on its first call inside a
+# window.  They are built for window.sh's FLASHINFER_CUDA_ARCH_LIST (12.0f, what the card's (12, 0) maps to) with the
+# venv's ninja first on PATH, so the window's build flags and cache path are these and nothing rebuilds there; the cache
+# is the venv's FlashInfer build's own (flashinfer_env.sh).  pyarrow reads the quality run's WikiText-2.
 #   research run --on MACHINE --project verity --source <run tree> --cwd source \
 #     --env GPU_LEASE_WHO=<you> -- bash benchmarks/pouw/pearl_c_vllm/setup.sh
 # Env: WORK (/workspace/pouw/mvp-e2e), HF_HOME (/workspace/hf).  Writes $WORK/ready.json.  LINK_VENV=DIR links a venv already
-# on the node (node 1's /workspace/jobs/venv312) as $WORK/venv312 instead of bootstrapping one, once its vLLM and torch are
+# on the node (such as /workspace/jobs/venv312) as $WORK/venv312 instead of bootstrapping one, once its vLLM and torch are
 # pod_bootstrap.sh's pins; nothing is installed into it, so pyarrow (the quality run's) is left out.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)

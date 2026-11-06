@@ -34,7 +34,8 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
   archive` restores them.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
-  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill).
+  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). New infra components go to
+  compute-verification/infra, and `INFRA_PATHS` (`tests/test_infra_paths.py`) lists what is still here and only shrinks.
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
 `verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`
@@ -60,7 +61,8 @@ The team's agents run these remotely (the team skill).
 The rules in force, each stated as itself; the friction skill has the standing rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
-  every output, is a value, committed under a hiding leaf and touched only inside a zero-knowledge proof.
+  every output, is a value, touched only inside a zero-knowledge proof. Only a proof block's inputs and outputs are
+  committed, each under a hiding leaf; the values inside a proof block never are.
 - **Everything zero-knowledge.** Every protocol is, PoUS included. Only four kinds of things are public, each with its
   reason: protocol structure, the protocol's outputs, the verifier's coins and samples, and hiding commitments. Partitions
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
@@ -148,10 +150,12 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 
 There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
 `circuit-check --all`, C-Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
-`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes. `circuit-check` is off the
-merge gate (`gate = false` in `tools/verity/check/ci.toml`) until `circuit-check --all` fits inside the rest of the check: a
-recorded check, `research merge` and the move of `main` leave it out, and it runs after landing on `checked`'s tip, where a red
-reverts its culprit at once and holds the PRs touching its inputs until it passes.
+`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes. The runners report facts: each
+suite, test, target and step's real verdict. What gates, what may stay red and what a red triggers is drive's config,
+`tools/verity/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
+which drive takes a failure as not red until it expires. `circuit-check` is off the merge gate until `circuit-check --all`
+fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it out, and it runs after
+landing on `checked`'s tip, where a red reverts its culprit at once and holds the PRs touching its inputs until it passes.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
@@ -205,6 +209,10 @@ reverted on `checked` (how a PR lands: the team skill).
 - Solve the task with the smallest clear implementation, reusing code and commands before adding any. Enforce
   deterministic requirements in code, with the fix in the failure message, rather than in prose. Remove obsolete rules and
   machinery rather than accumulating them.
+- **Something broken becomes a benchmark.** A step that fails or costs far too much (an OOM, hours where minutes would
+  do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
+  baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research
+  run` compute. Each measured run carries a label with its numbers, and the best one that passes the guard lands.
 - **The tree gets smaller over time.** Make two interfaces or definitions of one thing one, make things extensible,
   delete dead and superseded code, and move data and logs to the evidence store.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
@@ -244,4 +252,4 @@ and its parameters). What a run measured, what happened and who decided live out
 call something served, end to end, proved or credited), `writing-runs` (a job for `research run`), `friction` (when
 something is in your way, and the standing rulings), `process-design` and `authoring-skills` (at most 16 KB a skill).
 The team's own agents start with `team` (machines, landing, lanes, and where work, notes and evidence live), then
-`coordinating`, `using-slack` and `asking-daniel`.
+`coordinating`, `using-slack`, `asking-daniel` and `writing-goals` (your goals in the plan Daniel reads).
