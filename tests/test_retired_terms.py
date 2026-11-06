@@ -178,7 +178,6 @@ ALLOWED: dict[str, str] = {
     "report-proof-service-": "a cited note's id",
     "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
                                             "it; renamed after it lands",
-    "before any coin draws (the firewall's staged statements)": "a line of GLOSSARY.md that queued PRs on next rewrite; the protocol vocabulary's rename follows them",
     "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
@@ -358,7 +357,7 @@ def test_the_scan_reads_each_form():
         "b.rs": "/// the proof\n/// unit of it; a bulletproof unit\nlet reason = \"N, the round's proof units\";\n",
         "d.py": '# the Proof-Service and a proof\n# services; proof_service, verity/proof-service/stream/v0; a faulty service\n',
         "c.lean": "-- a proof unit",
-        "verity/README.md": "a proof unit",
+        next(iter(PENDING)): "a proof unit",
         GLOSSARY: '| "proof unit", and "unit" alone meaning one | proof block |\n| other | a proof unit |\n',
     }
     found, used = offenders(list(docs), read=docs.__getitem__)

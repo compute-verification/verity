@@ -21,7 +21,7 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 
 | Subprotocol | What an accepted run establishes | Where |
 | --- | --- | --- |
-| Sampled proofs | The auditor samples proof blocks of a committed circuit with live coins, and C-Flock proves each sampled proof block's values in the committed trace right. The result bounds how many proof blocks are incorrect. | [`verity/core/protocols/sampled_proofs`](verity/core/protocols/sampled_proofs/README.md), C-Flock in [`verity/ml/flock`](verity/ml/flock/README.md) |
+| Sampled proofs | The auditor samples proof blocks of a committed circuit with live coins, and Flock proves each sampled proof block's values in the committed trace right. The result bounds how many proof blocks are incorrect. | [`verity/core/protocols/sampled_proofs`](verity/core/protocols/sampled_proofs/README.md), Flock in [`verity/ml/flock`](verity/ml/flock/README.md) |
 | Proof of useful work (PoUW) | A credited size S of noised matrix products, at least (1 − ε)·S of their AND gates computed right. Dither is its no-fold design, stated over the ACCEL model of the accelerator. | [`verity/core/protocols/pouw`](verity/core/protocols/pouw/README.md), [Dither](verity/core/protocols/pouw/dither/PROTOCOL.md) |
 | Proof of useful space (PoUS) | A lower bound on the bits a device's memory held, from timed rounds the memory challenger runs and signs. | [`verity/core/protocols/pous`](verity/core/protocols/pous/README.md) |
 | The bandwidth audit | A lower bound on the bits read from PoUS's store. | [`verity/core/protocols/bandwidth`](verity/core/protocols/bandwidth/PROTOCOL.md) |
@@ -79,7 +79,7 @@ traced Build on every rank (`verity-vllm predict compare`). `verity-vllm row cha
 Match and Commit from scratch on its GPUs.
 
 Llama-3.2-1B in bf16 on one RTX PRO 6000 has gone through sampled proofs end to end in a run of record: vLLM serves it,
-its values are committed under SHA-512, live coins sample proof blocks, C-Flock `--zk` proves them, and the Lean verifier
+its values are committed under SHA-512, live coins sample proof blocks, Flock `--zk` proves them, and the Lean verifier
 accepts them and refuses every tampered case. Each sampled proof block is part of one serving step's circuit, not yet of
 the whole served run's. The vLLM demo ([`examples/vllm`](examples/vllm/README.md)) serves Llama-3.2-1B INT8 on one H200,
 the default of `benchmarks/one_stage/served_verdicts.sh`, through sampled proofs and PoUW, and has no passing run of
@@ -96,7 +96,7 @@ Not yet:
 
 - **The sampled proof system**: `verity/core/protocols/sampled_proofs`, its guarantees in
   `Security/Definitions/Flock/Guarantees/`.
-- **Hiding the circuit, by recursion**: an outer C-Flock proof checks the inner proofs, so the auditor sees neither the
+- **Hiding the circuit, by recursion**: an outer Flock proof checks the inner proofs, so the auditor sees neither the
   values nor the circuit. Circuit privacy is `Flock.SecurityProofs.RecursiveCircuitPrivate`, and its bound carries its
   terms, among them the commitment key's hiding gap, which isn't proved small for the pinned key. Recursion's knowledge
   soundness is not yet proved.
@@ -113,7 +113,7 @@ uv sync --all-packages --extra torch-cpu    # a CPU machine; a GPU machine takes
 verity --help
 ~~~
 
-You also need Rust (C-Flock's prover), Lean through elan (the C-Flock verifier and the protocol checks), and CUDA on a
+You also need Rust (Flock's prover), Lean through elan (the Flock verifier and the protocol checks), and CUDA on a
 GPU machine.
 
 | Demo | What it serves and audits | Command | Details |
