@@ -2241,6 +2241,18 @@
   "Verity.ZkSystem.ZK": {
    "owner": "@lean",
    "digest": "930ff1b2c507f083a7872be8f15f4e78eaa15f4a1cc287304b1376da022be53c"
+  },
+  "WeightSecurity.Assumptions.HonestUseHard": {
+   "owner": "@proofs",
+   "digest": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48"
+  },
+  "WeightSecurity.Assumptions.LeaksThrough": {
+   "owner": "@proofs",
+   "digest": "3a2698362a1e14711580dd145fafd0556395f7956c8d950e365e49f1246a683e"
+  },
+  "WeightSecurity.Assumptions.Simulable": {
+   "owner": "@proofs",
+   "digest": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29"
   }
  },
  "meaning": [
@@ -2296,6 +2308,9 @@
   "Definitions.Hash",
   "Definitions.Hash.Guarantees",
   "Definitions.Population",
+  "Definitions.WeightSecurity",
+  "Definitions.WeightSecurity.Assumptions",
+  "Definitions.WeightSecurity.Guarantees",
   "Proofs.Accounting.TS.Session",
   "PouwCheck.Inputs",
   "Properties.Pous",
@@ -3091,6 +3106,11 @@
   "Claims.RecGeneric.compilerKS": {
    "honest": ["Claims.RecGeneric.compilerKS_honest"],
    "nontrivial": "Claims.RecGeneric.compilerKS_nontrivial"
+  },
+  "WeightSecurity.SecurityProofs.Theft": {
+   "honest": ["WeightSecurity.SecurityProofs.TheftHonest"],
+   "nontrivial": "WeightSecurity.SecurityProofs.TheftNontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -3760,6 +3780,29 @@
    ],
    "except": [],
    "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the network certifier's window good event (Definitions.NetworkCertifier.Period), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
+  },
+  "Definitions.WeightSecurity": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.WeightSecurity"],
+   "except": [],
+   "why": "weight security's definitions are trusted text: they import no assumption, guarantee or proof; the weights are a core declaration's registered inputs and probability is core's"
+  },
+  "Definitions.WeightSecurity.Assumptions": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.WeightSecurity", "Definitions.WeightSecurity.Assumptions"],
+   "except": [],
+   "why": "weight security's named assumption and premises are Props over its definitions, never over a guarantee or a proof",
+   "sealed": true
+  },
+  "Definitions.WeightSecurity.Guarantees": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.WeightSecurity",
+    "Definitions.WeightSecurity.Assumptions",
+    "Definitions.WeightSecurity.Guarantees"
+   ],
+   "except": [],
+   "why": "a guarantee is stated over weight security's definitions and assumptions, never over a proof",
+   "sealed": true
   }
  },
  "reads_exempt": {
@@ -12247,6 +12290,30 @@
    "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
    "assumptions": [],
    "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
+  },
+  "WeightSecurity.SecurityProofs.Theft": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.Theft : WeightSecurity.Guarantees.Theft"],
+   "assumptions": [],
+   "type_hash": "e9765a688f6dcb14a14db81583b5eef4eefb1b701eaa7af7e9cbc972256abad0"
+  },
+  "WeightSecurity.SecurityProofs.TheftHonest": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftHonest : WeightSecurity.Guarantees.TheftHonest"],
+   "assumptions": [],
+   "type_hash": "c9bdd6c0d049c71a5b4914e9d5e65eb21dcecb5e8173103f1133cd032f7dcfdc"
+  },
+  "WeightSecurity.SecurityProofs.TheftNontrivial": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftNontrivial : WeightSecurity.Guarantees.TheftNontrivial"],
+   "assumptions": [],
+   "type_hash": "b323b0ddb8d347a1e79ca51622e9dd6ebbc41d28b222cf7d660533cfd063df78"
+  },
+  "WeightSecurity.SecurityProofs.TheftTight": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftTight : WeightSecurity.Guarantees.TheftTight"],
+   "assumptions": [],
+   "type_hash": "8e5244a0e2b442ec2d7f535eb5774ec55c7f866c873684cdbd9e4a6342420620"
   }
  },
  "shape": {
@@ -13314,7 +13381,11 @@
    "Flock.SecurityProofs.JointShareV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with more than an eps share of the window's proof blocks incorrect by the law's largest miss of such a set plus the members' eps_ks and eps_bind, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointShareV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Flock.SecurityProofs.JointHorizonV5": "frozen (no-function): JointSampledV5's window audit (JointAuditV5) over a monitoring period of T windows played as one causal game against one adaptive prover (periodG): the probability that every window accepts and the windows' incorrect proof blocks lie outside the period's confidence set at delta (the windows' laws miss them together with probability at least delta, and their ANDs and output bits in all are at most the most any choice in that set holds) is at most delta plus the sum of the windows' eps, under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays); a Verity.Game.value event over the period's run rather than a run of a Lean function; it reads JointHorizonV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function."
+   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "WeightSecurity.SecurityProofs.Theft": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an arbitrary datacenter, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard) and the premise that what leaves goes through a covert channel (WeightSecurity.Assumptions.LeaksThrough), which the audit's guarantees are to discharge (Security/Definitions/WeightSecurity/Assumptions.lean); it reads no function's acceptance.",
+   "WeightSecurity.SecurityProofs.TheftHonest": "completeness: Theft's honest witness (its witnesses entry): at the toy instance (Security/Definitions/WeightSecurity/Toy.lean), honest use reveals the first of two uniform weight bits, so HonestUseHard holds for every party at one query and p = 1/2, and the user's view of the honest datacenter goes through the plain channel with ε = 0, so Theft's premises hold together there and its bound is 1/2, below 1.",
+   "WeightSecurity.SecurityProofs.TheftNontrivial": "completeness: Theft's nontrivial witness (its witnesses entry): at the toy instance, the cheating datacenter appends the second weight bit to each answer; through the silent channel HonestUseHard and Simulable hold, LeaksThrough fails at ε = 0, and the thief steals the weights on every coin, above the bound 1/2.",
+   "WeightSecurity.SecurityProofs.TheftTight": "completeness: at the toy instance, the cheating datacenter's view goes through the one-bit channel with ε = 0 and the thief steals the weights with probability 1, Theft's bound 2 · 1/2 + 0: the factor |S| is attained."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -18511,6 +18582,58 @@
     "Pouw.RelativeSecurity.jU": "61e6503d0ccbdf2889d79f4c8979ed035d997ae59401c3e764eceae352b14a75",
     "Pouw.RelativeSecurity.jW": "ac518d55b5713d0e3e25c62f931c3b0f166e1bfed819553b08d0de6a5d8a07f0",
     "Pouw.RelativeSecurity.jX": "b388a7ba494cb6837985a7c8e1e756b614649479245ff8b983d715f36df11d86"
+   }
+  },
+  "Definitions.WeightSecurity": {
+   "digest": "b10ac259effbbfd487bc6a3658bb72433f47ec0de0ea5fd2b004565765a025e5",
+   "definitions": {
+    "WeightSecurity.Channel": "abdabb1154627d520332b1750cb8c83a4658c528c3c3d1e1e00701c28325ab89",
+    "WeightSecurity.Channel.S": "60d2c76402dc8b377a0be64ac1b65c1ca59bef801781aac0c012d6f25a10c8bd",
+    "WeightSecurity.Channel.ask": "443996cba29408124edf1f07a0c07d12c6a2d98b178e4c59d7a0e2575b2d94f8",
+    "WeightSecurity.Channel.fin": "ac4c68f23e4da5927d875e3b5b152813117fbf9daaf4e604231f4fadcd14c07a",
+    "WeightSecurity.Channel.resp": "b3669b9780a87ce2249e28eb9e6fd2177c80c928691beca773efb64c45c52458",
+    "WeightSecurity.Channel.tell": "f19f7974b6546c7b6ad3f11aa7988bd34c7ff7a519d00f1420e6ddc4c67df29d",
+    "WeightSecurity.Outsider": "6a008045b50491d03449092ace7464543d7de3dc4f0448b3c3ba9b2f94a0f41d",
+    "WeightSecurity.Outsider.model": "c50ddf6c63d476604f808b7ad2ae42f9b275dd0c4d057d4f94796875cd3273d7",
+    "WeightSecurity.Outsider.out": "a16ffbc2896f0657e1b23ea42814eefd24759c81f070905dea8508af5a505f29",
+    "WeightSecurity.Outsider.query": "032e7c0deba796741ec3eebfbb4ade02db485f8dc224cb5d8b7026a642d110c4",
+    "WeightSecurity.Outsider.rebuild": "74356455035ba8f8c1af949ab2813981bda5f0bd1b9c28c43d711043de4cd262",
+    "WeightSecurity.Outsider.view": "9d94e4a721068ef8084422f4b473fd2579c17a1f31ac0e37885e760f0b9ca574",
+    "WeightSecurity.Outsider.withString": "2e385efff53c23bfb27e3eb3a7a93d07a5d261084cce94aa08d17fd19778a5bb",
+    "WeightSecurity.honest": "e8b142bc54e62ce972cdb4496cd309846bfeb0c77f38c1254f47cb5c402f22c8"
+   }
+  },
+  "Definitions.WeightSecurity.Assumptions": {
+   "digest": "0c73be8318892d7a67d5d0963a192517086597473a3f75aa782db7430ef0a78e",
+   "definitions": {
+    "WeightSecurity.Assumptions.HonestUseHard": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
+    "WeightSecurity.Assumptions.LeaksThrough": "3a2698362a1e14711580dd145fafd0556395f7956c8d950e365e49f1246a683e",
+    "WeightSecurity.Assumptions.Simulable": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29"
+   }
+  },
+  "Definitions.WeightSecurity.Guarantees": {
+   "digest": "81b2ae91924a1246b3bfb0933fb3cd31ea0a164ed13ed3bca662147d93ae2007",
+   "definitions": {
+    "WeightSecurity.Guarantees.Theft": "243a4531b248cccfef6facd28bc3405391f5da31d56ab1cb55fcb1c107ca67af",
+    "WeightSecurity.Guarantees.TheftHonest": "72e9b3a8936b16d0d7115cf8f4c18c39b8286904a734832a8e17681fba583de2",
+    "WeightSecurity.Guarantees.TheftNontrivial": "144fb046147db5ec96bc6865c101ddcf1fdc47d360b52327e75b0ca6b7874344",
+    "WeightSecurity.Guarantees.TheftTight": "0b67f1b682672364e50c2439fee9de34b89e2b71c07cfe196b2d9dc563ebd90f"
+   }
+  },
+  "Definitions.WeightSecurity.Toy": {
+   "digest": "dfcbd8e496a9816355030fd48014ff7d76b12fd2d74db669a1ac8c9aa9d5eab0",
+   "definitions": {
+    "WeightSecurity.Toy.C": "2601558493cd49246ab91747c8420d7b8cacb5a3290bb0468ccdfbeebce0c067",
+    "WeightSecurity.Toy.Stolen": "dac7d1cb8fa1d47041a3f17e87d5fda79660ecc1c09d20c38ec5ea5183e09d5a",
+    "WeightSecurity.Toy.anyone": "77ba39195c1b1a9006cfb5fea6781f721e32104feac5446cb44233b206e03573",
+    "WeightSecurity.Toy.cheatDC": "c1b71e4b9b5bfb9cd863758b3cf804cf42bd1e460eecc183ad2bf7153af3393d",
+    "WeightSecurity.Toy.gen": "ac5ac35eff5b7aadd2ce93fcde29fe41e8fd2292406a6f25f22c2c856022c3ec",
+    "WeightSecurity.Toy.honestDC": "7658e6ad5698ed81b6aba15914ecb704f6a97318471194935a70831ffbe58c5c",
+    "WeightSecurity.Toy.oneBit": "23e032b2695e69f63db5c3df27298fa2b95d6c00a280f3eea7bef24d7988c4b9",
+    "WeightSecurity.Toy.plain": "25632b65b56ca0ce7d732abf034940cbb4ec10ba0909d911a55fb5f2790d5078",
+    "WeightSecurity.Toy.silent": "b0b616e206663a6e8094b9a7b6a568306c8544a6490464c898cbc8a97812a48a",
+    "WeightSecurity.Toy.thief": "f4c89279c043eba1b9034f27e3ae0cf393472af02867fd1e3f8d528d693db865",
+    "WeightSecurity.Toy.user": "c0800da2e0d99641faf805d0b95e7ab038074cc2c43e192b5c6d739fd27034b2"
    }
   },
   "Flock.Bytes": {
