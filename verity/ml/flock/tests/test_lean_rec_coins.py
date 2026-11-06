@@ -974,7 +974,7 @@ FORM = "verity/flock-circuit+plain-leaves"
 def test_the_inner_statement_is_set_up_as_its_files_set_it_up(built, tmp_path):
     """`RecSetup.checkForm`, last in `RecSetup.checkShape`: how Flock's plain verifier is told to set the inner statement up
     is how its files set it up (`RecCoins.Files.stmt`), so its `m` and regions are the files' (`innerSetup_files`): a
-    `verity/flock-circuit+plain-leaves` statement on the challenger's coin tree with no lookup table, at a sample of every
+    `verity/flock-circuit+plain-leaves` statement with no lookup table, at a sample of every
     one of the files' units in order. The honest form is refused only at the (empty) outer circuit; each other by name."""
     (tmp_path / "tables").mkdir()
     (tmp_path / "tables" / "rsq.u32").write_bytes(b"")
@@ -988,7 +988,7 @@ def test_the_inner_statement_is_set_up_as_its_files_set_it_up(built, tmp_path):
 
     assert why(honest) == NOT_A_CIRCUIT
     assert why([]) == ("setup: rec-inner: the verifier holds no setup of the inner statement (--rec-inner-statement, "
-                       "--rec-inner-statement-coins, --rec-inner-draw) to hold to its files' setup")
+                       "--rec-inner-draw) to hold to its files' setup")
     assert why(["--rec-inner-statement", "verity/flock-circuit", *honest[2:]]) == (
         f"setup: rec-inner: the inner statement is a verity/flock-circuit statement, not {FORM}, as its files set it up")
     assert why([*honest, "--rec-inner-tables", str(tmp_path / "tables")]) == (
@@ -1001,20 +1001,12 @@ def test_the_inner_statement_is_set_up_as_its_files_set_it_up(built, tmp_path):
 
 
 def test_the_inner_statements_setup_flags_go_with_its_statement(built, tmp_path):
-    """`RecCoins.formInput`: the inner statement's coins, tables and draw go with `--rec-inner-statement`, and its coins
-    are never per-round OS coins (`os`): the inner statement is on the challenger's coin tree."""
+    """`RecCoins.formInput`: the inner statement's tables and draw go with `--rec-inner-statement`."""
     u = SET / "u" / "stage"
     (tmp_path / "empty").write_bytes(b"")
     base = [str(BIN), "statement", "--circuit", str(tmp_path / "empty"), "--public", str(tmp_path / "empty"),
             "--rec-inner-circuit", str(u / "circuit.txt"), "--rec-inner-public", str(u / "pub-64.bin"),
             "--rec-inner-partition", str(u / "partition.json"), "--rec-inner-session", str(SET / "inner-honest" / "session")]
     p = subprocess.run([*base, "--rec-inner-draw", str(tmp_path / "empty")], capture_output=True, text=True)
-    assert "--rec-inner-statement-coins, --rec-inner-tables and --rec-inner-draw go with --rec-inner-statement" in (
+    assert "--rec-inner-tables and --rec-inner-draw go with --rec-inner-statement" in (
         p.stdout + p.stderr), (p.returncode, p.stdout, p.stderr)
-    p = subprocess.run([*base, "--rec-inner-statement", FORM, "--rec-inner-statement-coins", "keyed"], capture_output=True,
-                       text=True)
-    assert "--rec-inner-statement-coins keyed: not seed" in p.stdout + p.stderr, (p.returncode, p.stdout, p.stderr)
-    p = subprocess.run([*base, "--rec-inner-statement", FORM, "--rec-inner-statement-coins", "os"], capture_output=True,
-                       text=True)
-    assert ("--rec-inner-statement-coins os: refused: the inner statement is on the challenger's coin tree "
-            "(RecVStar.innerTree), never on per-round OS coins") in p.stdout + p.stderr, (p.returncode, p.stdout, p.stderr)

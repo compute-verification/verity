@@ -284,8 +284,7 @@ def _shared(d: Path, inner: str | None, session: str, transcript: str, links: st
     root, _, rows = (links or "").partition(":")
     return RC.shared(rec_inner=rec_inner, inner_circuit=b"c", inner_public=b"p", inner_partition=b"{}",
                      inner_session=session.encode(), inner_transcript=transcript.encode(), inner_statement="i",
-                     inner_statement_coins="os", inner_tables=[],
-                     rec_links=(bytes.fromhex(root), int(rows)) if links else None)
+                     inner_tables=[], rec_links=(bytes.fromhex(root), int(rows)) if links else None)
 
 
 def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True, inner: str | None = None,
@@ -378,11 +377,11 @@ def test_the_staged_shared_set_names_the_inner_program_and_the_link_table(tmp_pa
     args = ["--rec-inner", str(tmp_path / "inner"), "--rec-inner-circuit", str(tmp_path / "circuit"),
             "--rec-inner-public", str(tmp_path / "public"), "--rec-inner-partition", str(tmp_path / "partition"),
             "--rec-inner-program", str(tmp_path / "program"), "--rec-inner-statement",
-            "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os", "--rec-inner-draw",
+            "verity/flock-circuit+plain-leaves", "--rec-inner-draw",
             str(tmp_path / "draw"), "--rec-inner-session", str(tmp_path / "s"), "--rec-links", f"{root}:3"]
     want = RC.shared(rec_inner=b"inner", inner_circuit=b"circuit", inner_public=b"public", inner_partition=b"partition",
                      inner_session=b"session", inner_statement="verity/flock-circuit+plain-leaves",
-                     inner_statement_coins="os", inner_tables=[], inner_draw=b"draw",
+                     inner_tables=[], inner_draw=b"draw",
                      rec_links=(bytes.fromhex(root), 3), inner_program=b"program")
     assert RC.shared_of_args(args) == want and want["inner_program"] == RC.digest(b"program")
     assert RC.shared_of_args([a for a in args if a not in ("--rec-inner-program", str(tmp_path / "program"))]) == {
