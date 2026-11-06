@@ -276,7 +276,7 @@ def run(a: argparse.Namespace) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rates = parse_rates(a.rates)
-    need = max(a.requests or 0, max(math.ceil(r * a.span_s * 1.5) + 64 for r in rates.values()))
+    need = a.requests or max(math.ceil(r * a.span_s * 1.5) + 64 for r in rates.values())
     t = time.monotonic()
     plan = plan_of(out, Path(a.c4), checkpoint, need, a.docs, a.seed)
     print(f"[serve-tax] plan: {len(plan)} requests in {time.monotonic() - t:.1f} s", flush=True)
