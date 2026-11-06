@@ -196,10 +196,10 @@ def missing(ex: Demo, axis: str, step: str, root: Path) -> list[str]:
             out.append(f"{head}: add a run of record on the declared placement to [evidence] runs")
         pl = ex.data.get("placement") or {}
         if off := sorted(r for r, m in pl.items() if ROLES.get(r) == "auditor" and m != "auditor-host"):
-            out.append(f"{head}: the auditor's roles run off the prover's node: put "
+            out.append(f"{head}: the auditor's roles run off the developer's node: put "
                        f"{', '.join(f'{r} (now {pl[r]})' for r in off)} on auditor-host, and cite a run of that placement")
         if on := sorted(r for r, m in pl.items() if ROLES.get(r) == "prover" and m == "auditor-host"):
-            out.append(f"{head}: the prover's roles {on} are on auditor-host, a machine the prover doesn't control")
+            out.append(f"{head}: the developer's roles {on} are on auditor-host, a machine the developer doesn't control")
         if not any(ROLES.get(r) == "auditor" for r in pl):
             out.append(f"{head}: place the auditor's roles (a verifier at least) in [placement]")
     elif step == "stated":

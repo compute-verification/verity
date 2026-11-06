@@ -429,7 +429,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "order, pinning (accounting-ts-proofs-pin) and E1(c) (accounting-ts-right-fixed), ProofsSound: outside an "
           "event of probability at most S·(δ_bind + n_π·δ_ZK), an accepted window is accepted by the ideal game and its "
           "owned right fixed words per unit are at least (1 − Σ_w d_w/S)·N_w, rightness read on the path's coins. The "
-          "headlines (sm_120's, the H200's and the B200's) take the two alone as named premises: binding in its fork "
+          "headlines (sm_120's, the H200's and the B200's) take the two alone as assumptions: binding in its fork "
           "form at δ_fork (BindingForkAt: at every round w, on a run and on its continuation from w on fresh coins, "
           "which share w's commitment, every proof of round w is accepted and some proof opens w's leaves differently, "
           "with probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's "
