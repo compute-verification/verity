@@ -4,7 +4,7 @@
  "model": "GLM-5.3",
  "status": "modeled",
  "provisional": true,
- "source": "GLM-5.3's MoE cut per expert at its TP8 statics (the circuit glm53-moe-per-expert): the router's slots, one output field a slot; each slot's w13 and w2 rows and scales read from tables registered one expert a row (EmbeddingRead_v1 at the leaf the router's committed slot index names); per-expert GEMMs over the rows read. Units a token are 75 layers x 8 slots on each of 8 ranks; ANDs and staged k_log as circuit-check reports them at those statics; output bits from each Definition's outputs (a read's h, H 16-bit words, and ok; a GEMM's N bf16 words). model_overhead is the marginal end to end, a k27 block's 7.9 ms on the H200 scaled by witness bits, over a token's MACs at the dense FP8 peak: priced from staged k_log, not measured. The Definitions and the circuit are built; GLM-5.3 does not serve this cut yet.",
+ "source": "GLM-5.3's MoE cut per expert at its TP8 statics (the circuit glm53-moe-per-expert): the router's slots, one output field a slot; each slot's w13 and w2 rows and scales read from tables registered one expert a row (EmbeddingRead_v1 at the leaf the router's committed slot index names); per-expert GEMMs over the rows read. Units a token are 75 layers x 8 slots on each of 8 ranks; ANDs and staged k_log as circuit-check reports them at those statics; output bits from each Definition's outputs (a read's h, H 16-bit words, and ok; a GEMM's N bf16 words). model_overhead is the marginal end to end, a k27 block's 7.9 ms on the H200 scaled by witness bits, over a token's MACs at the dense FP8 peak: computed from staged k_log, not measured. Its Definitions and circuit are built and circuit-checked per block type (in review); the cut is not yet proved or served, and the expert's binding is proved for the read's reference, not yet for its gates.",
  "runs": [
   "r20261106-131055-0e29",
   "r20261106-131003-3028"
@@ -12,7 +12,7 @@
  "owner": "@proofs",
  "value": {
   "name": "per-expert",
-  "label": "Definitions and circuit built, not yet served",
+  "label": "Definitions and circuit built and circuit-checked per block type (in review); h computed, not measured; not yet proved or served; the expert's binding proved for the read's reference, not yet for its gates",
   "replaces": [
    "MoeExpertFp8Gemm_v1",
    "MoeExpertFp8GemmW_v1",
@@ -85,7 +85,7 @@
   ],
   "price": "witness_bits",
   "model_overhead": 431000000.0,
-  "overhead_label": "4.31e8, marginal end to end, priced from staged k_log at the H200's per-bit prices (not measured)"
+  "overhead_label": "4.31e8, marginal end to end, computed from staged k_log at the H200's per-bit prices, not measured"
  },
- "art": "art:8656642ba14aa4d882c9a3052be9e41245a08f5ad91b62939c80a9cb9aeb5ccc"
+ "art": "art:b92d5a0f1352dd51d8a23ff616b9d8acd105c2e27998fc98d5a58fb01169015b"
 }

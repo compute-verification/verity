@@ -22,7 +22,8 @@ its y the bound at β, every cost at the `proof_overhead` card's marginal overhe
   above the scope's served bits.  Infiltration is its write form at a footprint of the layer's boundary bits.
 * `per_expert` (A′): (A)'s serving and tax on another cut of the circuit, the model's `partition` card `per-expert`
   (the MoE cut per expert: the router's slots, table reads at each slot's expert and per-expert GEMMs), at that card's
-  marginal overhead and its proving priced as the card says; a line only for a model with that card.
+  marginal overhead and its proving priced as the card says, labelled with the card's `label`; a line only for a
+  model with that card.
 * `every_block` (C): serving commits every proof block's outputs, and the audit samples them one-stage; its tax is a
   lower bound, the hashing alone.  Exfiltration is `consumers.exfiltration_bound`'s form, at most the served bits by
   the same count, which Lean states for two-stage only; infiltration is its write form (the K incorrect blocks the plan
@@ -43,6 +44,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from math import ceil, expm1, floor, inf, log, log1p, log10
 from pathlib import Path
+from textwrap import fill
 
 import cards as spot_cards
 import figure1 as f1
@@ -476,8 +478,8 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     configs = list(dict.fromkeys(s["config"] for s in series))
     handles = [plt_line(STYLE[n]) for n in configs]
     conf = out["configurations"]
-    labels = [conf[n]["label"] + (" (priced)" if n == "every_block" else f" ({conf[n]['cut']['label']})"
-                                  if "cut" in conf[n] else "") for n in configs]
+    labels = [fill(conf[n]["label"] + (" (priced)" if n == "every_block" else f" ({conf[n]['cut']['label']})"
+                                       if "cut" in conf[n] else ""), 72) for n in configs]
     ax.legend(handles, labels, loc="lower left", bbox_to_anchor=(0, 1.01), ncol=2 if len(configs) > 3 else 3,
               frameon=False, fontsize=15, handlelength=2.6, columnspacing=1.4, borderaxespad=0)
 
@@ -508,11 +510,14 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
         fig, axes = plt.subplots(1, len(panels), figsize=(width, 12), squeeze=False)
         left = .06 if len(panels) > 1 else .11
         fig.subplots_adjust(left=left, right=.99, bottom=.42, top=.88, wspace=.28)
-        fig.text(left, .975, f"{out['model']} served on all of {where} for a {info['period']}: {_sci(info['gpus'])} "
-                 f"H200s, {_sci(info['requests'])} requests. Hollow: a priced serve tax; the bar, its range.",
-                 ha="left", va="center", fontsize=21)
         for ax, panel in zip(axes[0], panels):
             _panel(fig, ax, out, scope, panel, 108 if len(panels) > 1 else 110)
+        renderer = fig.canvas.get_renderer()
+        legend_top = max(ax.get_legend().get_window_extent(renderer).transformed(fig.transFigure.inverted()).y1
+                         for ax in axes[0])
+        fig.text(left, max(.963, legend_top + .02), f"{out['model']} served on all of {where} for a "
+                 f"{info['period']}: {_sci(info['gpus'])} H200s, {_sci(info['requests'])} requests. Hollow: a priced "
+                 "serve tax; the bar, its range.", ha="left", va="bottom", fontsize=21)
         paths += _save(fig, outdir, stem(scope, panels[0]))
     return paths
 

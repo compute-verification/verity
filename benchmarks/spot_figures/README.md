@@ -54,8 +54,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     edges committed; a replay block is a request), (B) each layer's state (a replay block is one layer of one token),
     and (C) every proof-block boundary (one-stage, dashed, its tax a lower bound from hashing alone, the only line
     with skipped work). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
-    expert), dash-dot, a line only for a model with that card. A new configuration, such as another cut, is a new
-    entry with its own line.
+    expert), dash-dot, labelled with the card's `label` (what of the cut is built, checked, proved and served), a
+    line only for a model with that card. A new configuration, such as another cut, is a new entry with its own line.
   - Exfiltration: (A) and (B) in the capped sets' form (`card_influenceTwo_le_served_min`) and never above the
     scope's served bits (`card_influenceTwo_le_min`), the JSON saying which term binds at each β; (C) in
     `consumers.exfiltration_bound`'s form, at most the served bits by the same count.
@@ -127,5 +127,5 @@ Limits of the model:
 - The two-stage write forms need a harm bound at the footprint, which no lemma states yet, and (B) replays a layer of
   one token at its share of its request's replay, from state it retains.
 - The registered cut's lines prove each block at its MACs and (A′)'s at its staged witness bits, so where the two
-  disagree on a block's share of a token's proving, the lines price it differently; (A′)'s overhead is priced from
-  staged k_log, not measured.
+  disagree on a block's share of a token's proving, the lines price it differently; (A′)'s overhead is computed
+  from staged k_log, not measured.
