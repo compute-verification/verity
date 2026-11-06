@@ -1,8 +1,9 @@
 """The training rules for a quantizer's masks, integers, conversions and order statistics (`rules.training_masks`), each Program
 run on small CPU tensors and its output words compared with torch's: comparisons, logic, `where`, `clamp`, integer sums, the
-conversions among int64, uint8, bool and f32, and a codebook lookup, bit for bit against torch CPU on words with signed zeros,
-infinities and NaNs, with and without a compute capability; at one, the GPU's conversions to bf16 and to and from f16 against
-torch CPU on NaN-free words and against the GPU's NaN words, and `kthvalue` against a model of torch's CUDA radix select
+conversions among int64, uint8, bool and f32, a codebook lookup, `amax` and `floor`, bit for bit against torch CPU on words with
+signed zeros, infinities and NaNs, with and without a compute capability; at one, a clamp by ±0 against the GPU kernel's
+`fmaxf` and `fminf`, the GPU's conversions to bf16, to and from f16 and from f32 to int64 and uint8 against torch CPU on NaN-free
+words and against the GPU's NaN and saturated words, and `kthvalue` against a model of torch's CUDA radix select
 (`radixSelect` as SortingRadixSelect.cuh writes it, two bits a digit) on slices with NaNs and signed zeros, and against torch
 CPU's `kthvalue` where the two agree; QAT's sparse quantizer, dequantized and added to a bf16 parameter, against torch CPU with
 the sum of the kept magnitudes the GPU's `reduce_kernel` model's; tensor constants of a traced function; and the refusals."""
@@ -17,9 +18,11 @@ import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 
 from tests.program.test_train_step import _program
+from verity.ml.circuits.ops import scalar as SC
 from verity.ml.definitions.numerics import torch_kernels as TK
 from verity.ml.definitions.numerics.serve3_reference import materialize
 from verity.ml.definitions.registry import cublas_bf16 as CB
+from verity.ml.definitions.registry import int8_exact as IE
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.rules.training import training_rules
@@ -135,6 +138,26 @@ def test_a_zero_bound_is_torch_cpus() -> None:
     _check(lambda a: (a.clamp(min=0.0), a.clamp(max=-0.0), a.clamp(-0.0, 0.0)), _special(67, seed=6), rules=CPU)
 
 
+def _gpu_clamp(words: list[int], lo, hi) -> list[int]:
+    """`launch_clamp_scalar`: a NaN kept, else `fminf(fmaxf(x, lo), hi)` of the bounds' f32 words."""
+    out = []
+    for w in words:
+        y = w if lo is None or w & 0x7FFFFFFF > 0x7F800000 else SC.F32Fmaxf.evaluate(w, _words(torch.tensor(lo))[0])
+        out.append(y if hi is None or w & 0x7FFFFFFF > 0x7F800000 else SC.F32Fminf.evaluate(y, _words(torch.tensor(hi))[0]))
+    return out
+
+
+def test_a_zero_bound_is_the_gpus() -> None:
+    """At a compute capability a bound ±0 is the GPU kernel's: `fmaxf` and `fminf` order -0 below +0, so `clamp(min=0.0)` makes
+    -0 +0 where torch CPU keeps it; a NaN kept."""
+    x = _special(67, seed=6)
+    bounds = [(0.0, None), (None, -0.0), (-0.0, 0.0), (0.0, -0.0), (-0.0, None), (None, 0.0)]
+    got = _run(lambda a: tuple(a.clamp(lo, hi) for lo, hi in bounds) + (torch.clamp_min(a, 0.0), torch.clamp_max(a, -0.0)), x)
+    want = [y for lo, hi in bounds + [(0.0, None), (None, -0.0)] for y in _gpu_clamp(_words(x), lo, hi)]
+    _same(got, want)
+    assert _gpu_clamp([0x80000000], 0.0, None) == [0]
+
+
 @BOTH
 def test_exact_conversions(rules) -> None:
     """int64 to uint8 (the low byte), uint8 to int64, int64 to f32 at ties and the ends of its range, bool to f32 and int64."""
@@ -159,6 +182,19 @@ def test_the_gpus_f16_and_bf16_conversions() -> None:
     h = _f16_words()
     h = h[~torch.isnan(h)]
     _check(lambda a, h: (a.to(torch.float16), h.float(), a.to(torch.bfloat16)), x.reshape(-1), h)
+
+
+def test_the_gpus_truncations() -> None:
+    """At a compute capability f32 to int64 and to uint8 (through int64, its low byte) truncate toward zero, as torch CPU does
+    below 2^63 in magnitude, negative values too; a NaN is 0, from 2^63 up INT64_MAX and below -2^63 INT64_MIN (the GPU's
+    `cvt.rzi.s64.f32`), whose low bytes are 0xFF and 0."""
+    v = torch.tensor([0.0, -0.0, 0.5, -0.5, 1.5, -1.5, 255.9, 256.0, -255.9, -256.0, 1e-40, 2.0 ** 31 + 2.0 ** 8, -(2.0 ** 40),
+                      2.0 ** 62, -(2.0 ** 63)])
+    x = torch.cat([v, torch.randn(41, generator=torch.Generator().manual_seed(16)) * 1000])
+    _check(lambda a: (a.long(), a.to(torch.uint8)), x)
+    odd = _f32([NAN_A, NAN_B, 0x5F000000, INF, 0xDF000001, NINF])
+    top, bottom = (1 << 63) - 1, 1 << 63
+    assert _run(lambda a: (a.long(), a.to(torch.uint8)), odd) == [0, 0, top, top, bottom, bottom, 0, 0, 0xFF, 0xFF, 0, 0]
 
 
 def test_the_gpus_nan_words() -> None:
@@ -195,6 +231,32 @@ def test_a_codebook_lookup(rules) -> None:
         return cb[u.long()], cb[i]
 
     _check(f, u, i, rules=rules)
+
+
+@BOTH
+def test_amax(rules) -> None:
+    """Over each axis, kept, over both and over all, of values with ±0, infinities and subnormals whose maxima are not zeros,
+    against torch CPU; a row with a NaN has the canonical NaN 0x7FC00000."""
+    x = torch.where(torch.isnan(X), 1.5, X)
+    x[3] = x[3].abs() + 0.5
+    _check(lambda a: (a.amax(1), a.amax(0, keepdim=True), a.amax((0, 1)), a.amax(), a.abs().amax(1, keepdim=True)), x,
+           rules=rules)
+    want = [0x7FC00000 if torch.isnan(r).any() else _words(r.amax())[0] for r in X]
+    assert 0x7FC00000 in want
+    _same(_run(lambda a: (a.amax(1),), X, rules=rules), want)
+
+
+@BOTH
+def test_floor(rules) -> None:
+    """Halves and their neighbours of either sign, ±0, values within one of 0, around 2^23 and 2^24, infinities and subnormals,
+    over 81 elements (torch CPU's vector body and scalar tail), against torch CPU; a NaN quieted, as `F32Rint_v1` quiets it."""
+    v = torch.tensor([0.5, 1.5, 2.5, 0.49999997, 0.50000006, 0.3, 0.9999999, 1.0, 1.0000001, 2.0 ** 23 - 0.5, 2.0 ** 23,
+                      2.0 ** 23 + 1, 2.0 ** 24, 1e30, float("inf"), 1e-40, 2.0 ** -126, 3.75, 7.0])
+    x = torch.cat([v, -v, torch.tensor([0.0, -0.0]), torch.randn(41, generator=torch.Generator().manual_seed(15)) * 100])
+    _check(lambda a: (torch.floor(a),), x, rules=rules)
+    nans = [NAN_A, NAN_B, 0x7F800001, 0xFFFFFFFF]
+    got = _run(lambda a: (torch.floor(a),), _f32(nans), rules=rules)
+    assert got == [IE.F32Rint.evaluate(w) for w in nans] and all(w & 0x7FC00000 == 0x7FC00000 for w in got), [hex(w) for w in got]
 
 
 def test_an_index_out_of_range_reads_a_nan() -> None:
@@ -332,13 +394,16 @@ A = torch.randn(4, 16, generator=torch.Generator().manual_seed(13)).abs()
     (lambda a: (a.to(torch.float16),), (A,), CPU, "vector body"),
     (lambda h: (h.float(),), (A.half(),), CPU, "vector body"),
     (lambda a: (a.bfloat16() > 0.5,), (A,), GPU, "a bf16 comparison"),
-    (lambda a: (a.clamp(min=0.0),), (A,), GPU, "a bound ±0 on the GPU"),
+    (lambda a: (a.long(),), (A,), CPU, "INT64_MIN for a NaN"),
+    (lambda a: (a.to(torch.uint8),), (A,), CPU, "INT64_MIN for a NaN"),
     (lambda a: (a.clamp(min=float("nan")),), (A,), CPU, "a NaN bound"),
     (lambda a: (a.bfloat16().clamp(min=1.0),), (A,), GPU, "this rule lowers an int64 or f32 value"),
     (lambda a: (a.bfloat16().abs(),), (A,), GPU, "(this rule lowers f32)"),
+    (lambda a: (a.bfloat16().floor(),), (A,), GPU, "(this rule lowers f32)"),
+    (lambda a: (a.bfloat16().amax(1),), (A,), GPU, "not an f32 value"),
     (lambda a, i: (a.bfloat16() * i,), (A, I64), GPU, "an int64 operand of a bf16 result"),
-], ids=["kth-cpu", "kth-indices", "to-f16-cpu", "from-f16-cpu", "bf16-compare", "zero-bound", "nan-bound", "bf16-clamp",
-        "bf16-abs", "int64-bf16"])
+], ids=["kth-cpu", "kth-indices", "to-f16-cpu", "from-f16-cpu", "bf16-compare", "to-int64-cpu", "to-uint8-cpu", "nan-bound",
+        "bf16-clamp", "bf16-abs", "bf16-floor", "bf16-amax", "int64-bf16"])
 def test_refusals(f, xs, rules, why: str) -> None:
     u = _refused(f, *xs, rules=rules)
     assert u.reason == "numerics_unregistered" and why in u.hint, u
