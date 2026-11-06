@@ -194,10 +194,10 @@ theorem names_program {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Comm
   simpa using hn
 
 /-- `PolicyMet` from its first clause, every inference block meeting both bounds, at `α ≥ 0`: the rest follows
-(`Nci.Complies`, and the padded partitions by `CompliesCK`, `ExpandComplies` and `expand_boolean`). -/
-theorem policyMet_of_meets {d : Declaration} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ} (hα : 0 ≤ α)
+(`Nci.CompliesRate`, and the padded partitions by `CompliesCK`, `ExpandComplies` and `expand_boolean`). -/
+theorem policyMet_of_meets {d : RegisteredCircuit} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ} (hα : 0 ≤ α)
     (h : ∀ u, Meets d U Γ α u) : PolicyMet d U Γ α := by
-  have hcomp : Nci.Complies Γ α d := ⟨n, U, h⟩
+  have hcomp : Nci.CompliesRate Γ α d := ⟨n, U, h⟩
   refine ⟨h, hcomp, fun hB => Nci.SecurityProofs.CompliesCK _ _ d hB hcomp, ?_⟩
   intro W hfan hw hW
   exact Nci.SecurityProofs.CompliesCK _ _ d.expand (d.D.expand_boolean hfan)
@@ -206,7 +206,7 @@ theorem policyMet_of_meets {d : Declaration} {n : ℕ} {U : Partition d.D n} {Γ
 /-- **Honest witness of the policy's existence clause**: a declaration and a division into nonempty inference blocks
 that meet the policy, `Nci.SecurityProofs.FitWitness`'s five-gate circuit in its two one-gate windows, at `Γ = 1` and
 `α = 3`. -/
-theorem policyMet_honest : ∃ (d : Declaration) (n : ℕ) (U : Partition d.D n) (Γ : ℕ) (α : ℝ),
+theorem policyMet_honest : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition d.D n) (Γ : ℕ) (α : ℝ),
     0 < n ∧ (∀ u, (U.gates u).Nonempty) ∧ PolicyMet d U Γ α := by
   have hs : ∀ u, Nci.SecurityProofs.FitWitness.decl.D.size (Nci.SecurityProofs.FitWitness.windows.gates u) = 1 := by
     decide +kernel
@@ -217,7 +217,7 @@ theorem policyMet_honest : ∃ (d : Declaration) (n : ℕ) (U : Partition d.D n)
 
 /-- **Nontrivial witness of the policy's existence clause**: the policy refuses a declaration and a division into
 nonempty inference blocks, the same windows at `Γ = 0`, at every `α`: each block is a gate of width 1. -/
-theorem policyMet_nontrivial : ∃ (d : Declaration) (n : ℕ) (U : Partition d.D n),
+theorem policyMet_nontrivial : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition d.D n),
     (∀ u, (U.gates u).Nonempty) ∧ ∀ α : ℝ, ¬ PolicyMet d U 0 α := by
   refine ⟨Nci.SecurityProofs.FitWitness.decl, 2, Nci.SecurityProofs.FitWitness.windows, by decide +kernel,
     fun α h => ?_⟩
@@ -230,12 +230,12 @@ theorem policyMet_nontrivial : ∃ (d : Declaration) (n : ℕ) (U : Partition d.
 theorem policy_met {p : NciCheck.Protocol.Params} {e : NciCheck.Protocol.Evidence} {out : Json}
     (hd : NciCheck.Desc.evaluate (instanceOf p e) = .ok out) (hc : out.getObjVal? "complies" = .ok (.bool true))
     {P : Prog} (hP : Flock.Program.decode p.program.toUTF8 = .ok P) :
-    ∀ (j' : Json) (i : NciCheck.Instance) (d : Declaration) (n : ℕ) (U : Partition d.D n),
-      Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ → Divides i.owner U →
-        VerifierOwn p i ∧ PolicyMet d U i.gamma ((i.num : ℝ) / i.den) := by
-  intro j' i d n U hx hi hL hN hD
+    ∀ (j' : Json) (i : NciCheck.Instance) (d : RegisteredCircuit),
+      Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ → Divides i.owner d.𝓘 →
+        VerifierOwn p i ∧ PolicyMet d d.𝓘 i.gamma ((i.num : ℝ) / i.den) := by
+  intro j' i d hx hi hL hN hD
   have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := expands_program hx hi ▸ hP
-  have hR := (NciCheck.Properties.SecurityProofs.DescReports _ _ hd).2 j' hx i P d n U hi hP' hL hN hD
+  have hR := (NciCheck.Properties.SecurityProofs.DescReports _ _ hd).2 j' hx i P d hi hP' hL hN hD
   exact ⟨verifier_own hx hi,
     policyMet_of_meets (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)) (hR.2.2.1.1 hc)⟩
 
@@ -249,9 +249,9 @@ theorem policyHeld {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitm
   obtain ⟨i, P, hpi, hP', D, hL, ⟨θ, hθ, hθin⟩, n, U, hD⟩ :=
     NciCheck.Properties.SecurityProofs.Decodes _ _ (hev j' hx)
   have hP : Flock.Program.decode p.program.toUTF8 = .ok P := expands_program hx hpi ▸ hP'
-  let d : Declaration := ⟨D, θ, hθin⟩
+  let d : RegisteredCircuit := .ofPartition D θ hθin n U
   exact ⟨P, hP, names_program hn hP, NciCheck.Properties.SecurityProofs.BaselineProvenance _ _ _ hb,
-    ⟨j', i, d, n, U, hx, hpi, hL, hθ, hD, policy_met hd hc hP j' i d n U hx hpi hL hθ hD⟩, policy_met hd hc hP⟩
+    ⟨j', i, d, hx, hpi, hL, hθ, hD, policy_met hd hc hP j' i d hx hpi hL hθ hD⟩, policy_met hd hc hP⟩
 
 /-- What one-stage v1's check at any coins gives on acceptance: its record keeps R2 against the audit's own
 verifier. -/
@@ -509,11 +509,11 @@ theorem acceptComplies : AcceptComplies := by
   obtain ⟨kI, kW, kS, pI, cI, eI, hev, -, -, -, hp, hc, he, ⟨pub', prof', hchk⟩, -⟩ := remote_accept h
   obtain ⟨hn, out, hb, hcomp⟩ := policy_accept hchk
   obtain ⟨hd, -⟩ := NciCheck.Properties.SecurityProofs.BaselineSteps.evaluate_ok _ _ _ hb
-  obtain ⟨P, hP, hname, -, ⟨j', i, d, n, U, hx, hpi, hL, hθ, -, hown, hmet⟩, -⟩ := policyHeld hchk
+  obtain ⟨P, hP, hname, -, ⟨j', i, d, hx, hpi, hL, hθ, -, hown, hmet⟩, -⟩ := policyHeld hchk
   refine ⟨kI, kW, kS, pI, cI, eI, P, hev, hp, hc, he, hP, hname, ⟨j', i, d, hx, hpi, hL, hθ, hown, hmet.2.1⟩, ?_⟩
   intro j' i d hx hi hL hN
   have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := expands_program hx hi ▸ hP
-  exact ⟨verifier_own hx hi, (NciCheck.Properties.SecurityProofs.DescWitnesses _ _ hd).2 j' hx i P d hi hP' hL hN hcomp⟩
+  exact ⟨verifier_own hx hi, ((NciCheck.Properties.SecurityProofs.DescWitnesses _ _ hd).2 j' hx i P d hi hP' hL hN hcomp).1⟩
 
 /-- **`AcceptComplies`'s nontrivial lemma**, as `AcceptInferenceOnly`'s: its conclusion fails at `ev = []`, which a check
 that accepts every input accepts. -/
