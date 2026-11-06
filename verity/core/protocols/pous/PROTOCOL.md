@@ -373,19 +373,20 @@ stream, so the stream is never stopped or extended on misses, though it may reje
 1. **No pipelining.** `challenge()` reveals index `j + 1` only once answer `j` is in or `Δ_late + RTT` has passed since
    index `j` was revealed, and in that case it first closes challenge `j` as rejected; the close stands even when `j`
    was the last and `challenge()` then refuses (`run_continuous` closes it with `expire()`). Each deadline runs from the
-   memory challenger's own clock reading at the reveal; a latency the responder reports (`Answer.report`) is never read.
-   An answer names its challenge (`respond(j, block)`), and an answer to any challenge but the open one is refused,
-   whether that challenge is closed or not yet revealed. So a stale answer is never credited to the next challenge,
-   even when both ask for the same block.
-2. **A hard deadline.** An answer past `Δ_late + RTT` is rejected without its block being checked (`Answer.rejected`).
-   So is a challenge still unanswered by then, closed by `expire()` or by the next `challenge()`. `UnsignedRounds`
-   refuses a `Δ_late` below `Δ`, and one whose `D_late` exceeds `audit.LATE_ROUNDS = 12` or the band's `d`, where
+   memory challenger's own clock reading at the reveal; a latency the responder reports (`ChallengeReply.report`) is
+   never read. An answer names its challenge (`respond(j, block)`), and an answer to any challenge but the open one is
+   refused, whether that challenge is closed or not yet revealed. So a stale answer is never credited to the next
+   challenge, even when both ask for the same block.
+2. **A hard deadline.** An answer past `Δ_late + RTT` is rejected without its block being checked
+   (`ChallengeReply.rejected`). So is a challenge still unanswered by then, closed by `expire()` or by the next
+   `challenge()`. `UnsignedRounds` refuses a `Δ_late` below `Δ`, and one whose `D_late` exceeds `audit.LATE_ROUNDS = 12`
+   or the band's `d`, where
    `D_late` is the number of 241.5 µs calls that fit in `Δ_late + RTT`; at `d = 12`, `Δ_late + RTT` must be under
    3,139,500 ns. That cap is the graded audit's; `ContinuousAudit` holds at every `D_late`, so for it the cap is only
    conservative. `ContinuousMemoryChallenger` refuses to run without a hard deadline.
-3. **Every late answer counted.** Every challenge closes with exactly one `Answer`, whether it was answered, rejected
-   or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer past
-   `Δ + RTT`, rejected ones included.
+3. **Every late answer counted.** Every challenge closes with exactly one `ChallengeReply`, whether it was answered,
+   rejected or expired. `AuditResult.misses` counts every wrong or late answer, and `AuditResult.late` every answer
+   past `Δ + RTT`, rejected ones included.
 
 Run the continuous audit only on `ContinuousMemoryChallenger`, never on a bare `UnsignedRounds` with `late_deadline_ns`. Its
 `respond(block)` names no challenge, so once challenge `j` expires, an answer to `j` still in flight is credited to
@@ -630,7 +631,7 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
-| `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
+| `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `ChallengeReply.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
 | `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed before the session; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
 | `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `draw_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`; `Challenger(secret, server, session, params, signer, log=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close(egress_bits)` (one signature, `SignedWipe`) and `coins()`; `Prover`, the honest server; `verdict` (its public output `Verdict.public`: the verdict and `egress_mib`), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; the bound, `log2_error`, `retained_bits`, `challenges_for` |
 | `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, one `Session` (signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
