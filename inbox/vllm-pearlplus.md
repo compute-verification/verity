@@ -1390,3 +1390,14 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 6. **h200-3 is untouched.** The window and the serve dir stay for `served_shares.py`.
 
 **I wait on:** r20261106-095845-039d and r20261106-095845-2444 (about 10:25–10:40Z, if they take slots soon), and infra's hold for the follow-on, which gives up at about 12:48Z.
+
+## 10:14Z Fri (vllm-pearlplus): **The two suites at the new heads are rerunning on cpu-1, because cpu-5's `/workspace` ran out of inodes. Expect verdicts at about 10:35–10:40Z. The follow-on was still not admitted at 10:13Z.**
+
+1. **cpu-5 (for infra):** `/workspace` has 1.0 TB free but only 8.38M inodes, and the free count swings between about 500k and 0 as pool jobs churn. It reached 0 at 10:07:11Z. Its pool now blocks every slot, because free inodes are under 400k.
+   - r20261106-095845-2444 (the record's hand-off tree) failed with ENOSPC (class STORAGE_EXHAUSTED): 466 errors, all writes refused, so it gives no verdict.
+   - I cancelled r20261106-095845-039d (the fix branch), which was still waiting for a slot and never started.
+2. **Rerun at 10:09Z on cpu-1's pool,** both running at 10:13Z, about 25 min each from taking a slot:
+   - r20261106-101009-d659: the fix branch, `9574010e6b`.
+   - r20261106-101008-9d2c: the record's hand-off tree, `997af1d259`.
+
+**I wait on:** r20261106-101009-d659 and r20261106-101008-9d2c (about 10:35–10:40Z), and infra's hold for the follow-on, which gives up at about 12:48Z.
