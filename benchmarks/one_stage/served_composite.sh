@@ -8,20 +8,18 @@
 # (`benchmarks/pous/served_case.sh OUT/pieces`, which writes each under SERVE_DIR/private) with their Lean answers
 # (pous-run-protocol and wipe-protocol, built here; without both it writes no case), PoUS's under a lease of its own of
 # CASE_LEASE_MIN minutes (default 60) and CASE_MEM_GB GiB of host memory (default 170: its Python and its Lean each hold
-# the whole re-encoded store), all within CASE_TIMEOUT (default 90m). Then, where the tree has `served_cases.py`, the
-# cases on the window's registration record R (its docstring), each under SERVE_DIR/private: sampled proofs' one-stage
-# v1 case and the inference-only case from the window's records audit (SERVE_DIR/v3c-w*/audit; in a run without V3c
-# whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl, `served_verdicts.sh`'s step 3's,
+# the whole re-encoded store), all within CASE_TIMEOUT (default 90m). Then, where the tree has `served_cases.py`,
+# sampled proofs' v2 case and the registration case from the window's records audit (SERVE_DIR/v3c-w*/audit; in a run
+# without V3c whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl, `served_verdicts.sh`'s step 3's,
 # SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ read off the case's own division
-# (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record;
-# and PoUW's period case (`served_pouw.sh`'s SERVE_DIR/private/pouw/period) once every window of it names R as its
-# Commit record, refused otherwise. Each CASE line's protocol and verdict go to OUT/verdicts.txt, and α and Γ, which
-# count the block's gates, stay in the case's private policy.json. Then
-# `composite.py` remote and onsite,
+# (`--from-division`), or ALPHA and GAMMA where both are set, each under SERVE_DIR/private; each CASE line's protocol
+# and verdict go to OUT/verdicts.txt, and α and Γ, which count the block's gates, stay in the case's private policy.json.
+# Then `composite.py` remote and onsite,
 # each with `--exe` its product's Lean (`remote`, `onsite`, built here), over the directories under SERVE_DIR/private
 # that hold a case.json and an answer.json whose protocol is one of that product's subprotocols (composite.py's
-# COMPONENTS), but for SERVE_DIR/private/pouw, whose period case only served_cases.py hands on, tied to R; each within
-# COMPOSITE_TIMEOUT (default 60m) and, where a systemd user scope is available,
+# COMPONENTS), but under H1's tie (a SERVE_DIR/h1/log.jsonl) for SERVE_DIR/private/pouw, whose period case reaches a
+# product only tied to the record H1 named; each within COMPOSITE_TIMEOUT (default 60m) and, where a systemd user scope
+# is available,
 # COMPOSITE_MEM_GB GiB (default 170). A case's evidence and params, and an answer's query, digests and profile, are
 # witness, so composite.py's private output and every log of this step are under SERVE_DIR/private/composite/PRODUCT, on
 # the node; its public output (composite.json: the composite's commitment, each case's id, params digest and commitment,
@@ -96,8 +94,9 @@ fi
 bad=0
 for x in "${products[@]}"; do
   e=$(exe "$x" "verity/core/protocols/$x") || { bad=1; continue; }
-  cases=()
-  while IFS= read -r c; do cases+=(--cases "$c"); done < <("$TPY" - "$D/private" "$x" "$P" "$D/private/pouw" <<'EOF'
+  cases=() skips=("$P")
+  [ -f "$D/h1/log.jsonl" ] && skips+=("$D/private/pouw")
+  while IFS= read -r c; do cases+=(--cases "$c"); done < <("$TPY" - "$D/private" "$x" "${skips[@]}" <<'EOF'
 import json, sys
 from pathlib import Path
 sys.path.insert(0, "benchmarks/one_stage")

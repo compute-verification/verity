@@ -153,9 +153,8 @@
 # H1's W, H1 names as the window's Commit record (`serve_tie`). Its output stays in the serve dir's h1/w<k>/. H1's sessions
 # are reserved for the gate's default 120 minutes, the window's sample session at the serve's start, and the sample coin
 # waits for R. Step 6 then audits that commit and makes none of its own: a window H1 bound no R for has no V3c. It runs
-# before the composite, which composes the cases on R: V3c's audit's, the policy's (its log the serve's h1/log.jsonl)
-# and PoUW's period case once each of its windows names R (`served_cases.py`). The
-# preflight refuses H1_TIE on a tree whose window-commit takes no --window-registration.
+# before the composite, which hands no product SERVE_DIR/private/pouw's period case, untied to R (`served_composite.sh`).
+# The preflight refuses H1_TIE on a tree whose window-commit takes no --window-registration.
 # Under H1_TIE on a node with less memory than V3c's audit needs (its MemTotal, NODE_MEM_GB, under V3C_AUDIT_MEM_GB, default
 # 290), step 6 holds the tie (WINDOW-COMMIT, WINDOW-CIRCUIT-HELD) and defers the audit and the composite (`defer`), for
 # PRODUCT=remote alone (onsite's composite reads PoUS's case, which needs this node's card: the preflight refuses it).

@@ -1694,9 +1694,9 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     and without composite.py in the tree it says so and fails, since no Lean answered. PRODUCT=remote needs no
     served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone. A serve dir with no V3c
     audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
-    case, but not under H1's tie (a ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and no product
-    is handed a case under ``SERVE_DIR/private/pouw``, whose period case reaches a product only as served_cases.py
-    writes it, tied to that record. Where SERVED_NODE names another host (a deferral's follow-on), it says it composed
+    case, but not under H1's tie (a ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and under it no
+    product is handed a case under ``SERVE_DIR/private/pouw``, whose period case reaches a product only tied to that
+    record, while an untied serve dir's goes to remote as its own. Where SERVED_NODE names another host (a deferral's follow-on), it says it composed
     there, from a prover-side copy of the serve dir's audit inputs."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
@@ -1788,6 +1788,12 @@ sys.exit(1)
     assert run().returncode == 0
     assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--serve-dir", str(d)]
     assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
+    (d / "h1" / "log.jsonl").unlink()
+    (out / "verdicts.txt").unlink()
+    for x in (out / "composite", p, v2):
+        shutil.rmtree(x)
+    assert run().returncode == 0
+    assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(piece), str(v2)]
     (out / "verdicts.txt").unlink()
     for x in (out / "composite", p, v2):
         shutil.rmtree(x)
