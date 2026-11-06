@@ -4,6 +4,7 @@ public import Properties.Pouw.Period
 public import Proofs.Accounting.ComposePeriod
 public import Proofs.Accounting.Compose.SplitRateClosed
 public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # Proofs: a period's work over the windows PoUW's deployed check accepts (`Properties.Pouw.Period`)

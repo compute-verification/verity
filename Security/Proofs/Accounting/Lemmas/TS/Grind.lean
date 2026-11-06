@@ -3,7 +3,9 @@ module
 public import Definitions.Pouw.RelativeSecurity
 
 /-!
-# The grinding premium under hashed seeds (trusted)
+# The grinding premium under hashed seeds: lemmas
+
+These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
 GRIND: a unit's seed is `SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B))`: the salt is a live coin, the roots are
 hiding commitments, and a cheater re-rolls a root for free through its blinds, so `T` hash queries give it `T` fresh

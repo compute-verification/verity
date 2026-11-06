@@ -3,7 +3,9 @@ module
 public import Definitions.Accounting.TS.SharedNoise
 
 /-!
-# One noise seed a call: the bridge and the grid's moment
+# One noise seed a call: the bridge and the grid's moment, lemmas
+
+These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
 J10's guarantees: H1 + fx1's noise derived from one seed a call (`Definitions.Accounting.TS.SharedNoise`).
 
