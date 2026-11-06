@@ -8,6 +8,7 @@ statement, the `b ‖ c` a satisfying witness holds at row port `p`'s `hm96` out
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Copy
+public import Proofs.Flock.Soundness.Discharge.Layout
 public import Proofs.Flock.Soundness.Discharge.Layout.Keyed
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

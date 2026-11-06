@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.Fork.CouplingGame
 public import Proofs.Flock.Soundness.CompiledLock
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.MeasureTheory.Integral.Bochner.Basic

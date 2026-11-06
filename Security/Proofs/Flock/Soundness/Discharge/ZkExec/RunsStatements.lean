@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
 public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements

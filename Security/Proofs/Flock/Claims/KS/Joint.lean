@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.DeployCode
 public import Proofs.Flock.Claims.KS.Flock
+public import Proofs.Flock.Claims.KS.Range
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Bridge.Transport
 import Proofs.Flock.Claims.KS.Deploy
-import Proofs.Flock.Claims.KS.Range
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

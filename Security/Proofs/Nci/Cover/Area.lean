@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Nci.Assumptions.Cover
+public import Mathlib.Tactic.Positivity
+public import Proofs.Nci.Cover.Charge
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Data.Rat.Cast.Order
 import Mathlib.Tactic.Linarith.Frontend
@@ -9,7 +11,6 @@ import Mathlib.Tactic.NormNum.DivMod
 import Mathlib.Tactic.NormNum.OfScientific
 import Mathlib.Tactic.Positivity.Finset
 import Mathlib.Tactic.Ring.RingNF
-import Proofs.Nci.Cover.Charge
 import Proofs.Nci.Cover.Paths
 
 /-!

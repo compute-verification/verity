@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.ZK.Split
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
 public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
+public import Proofs.Flock.Claims.ZK.PiopSrcSv
+public import Proofs.Flock.Claims.ZK.Split
 import Flock.With.SimWalk
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -47,7 +48,6 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import Proofs.Flock.Claims.Complete.ZkTables.Trace
 import Proofs.Flock.Claims.ZK.HiSalts
-import Proofs.Flock.Claims.ZK.PiopSrcSv
 import Proofs.Flock.Claims.ZK.SentE
 import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Level3.LookupRows

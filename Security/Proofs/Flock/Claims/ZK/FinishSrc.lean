@@ -1,8 +1,9 @@
 module
 
+public import Proofs.Flock.Claims.ZK.CausalExe
 public import Proofs.Flock.Claims.ZK.FinishRep
-public import Proofs.Flock.Claims.ZK.SimLig
 public import Proofs.Flock.Claims.ZK.SimInner
+public import Proofs.Flock.Claims.ZK.SimLig
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.ZK.CausalExe
 
 /-!
 # The firewall's rep against the rep from a source

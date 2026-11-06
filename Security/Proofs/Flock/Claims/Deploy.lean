@@ -1,11 +1,11 @@
 module
 
-public import Proofs.Flock.Claims.DeployOC
+public import Flock.RecordText
+public import Flock.With.Deployed
 public import Proofs.Flock.Claims.DeployInputs
+public import Proofs.Flock.Claims.DeployOC
 public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Flock.Level3.ArithFacts
-public import Flock.RecordText
-import Flock.With.Deployed
 import Flock.With.SetupEq
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

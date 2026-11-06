@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.KS.PlainCapsDep
 public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
+public import Proofs.Flock.Claims.Recursion.KSLin2Deployed
 public import Proofs.Flock.Claims.Recursion.LastColsDeployed
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.PlainKSLin
-import Proofs.Flock.Claims.Recursion.KSLin2Deployed
 
 /-!
 # `KSLin2` at the intended choice, with `KSFlockLin` at `DE` proved

@@ -1,12 +1,12 @@
 module
 
-public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 public import Definitions.Pouw.PearlC.DevicePrices
+public import Proofs.Pouw.PearlC.DeviceSm120Gamma
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.DeviceSm120Gamma
 import Proofs.Pouw.PearlC.TileGamma
 import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.Prob

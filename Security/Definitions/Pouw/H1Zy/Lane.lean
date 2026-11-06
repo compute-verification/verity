@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.H1Zy.Combine
+public import Mathlib.Algebra.BigOperators.Fin
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Data.Fintype.Basic
 import Mathlib.Algebra.GroupWithZero.Nat

@@ -1,17 +1,17 @@
 module
 
-public import Definitions.Pouw.Guarantees.PearlC
 public import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.FreezeP
+public import Proofs.Pouw.PearlC.UOnlyGamma
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.DeviceCapGamma
 import Proofs.Pouw.PearlC.DeviceChainCapGamma
-import Proofs.Pouw.PearlC.FreezeP
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.TTOutW1Variants
 import Proofs.Pouw.PearlC.TileUOnlyGamma
-import Proofs.Pouw.PearlC.UOnlyGamma
 
 /-!
 # γ at the RTX PRO 6000 (sm_120) records (staging, nothing pinned)

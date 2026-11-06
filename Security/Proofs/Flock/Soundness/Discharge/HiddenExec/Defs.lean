@@ -2,6 +2,7 @@ module
 
 public import Aesop.BuiltinRules
 public import Flock.HmRow
+public import Proofs.Flock.Soundness.Discharge.Exec
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.CategoryTheory.Category.Init
 import Mathlib.Combinatorics.Matroid.Init

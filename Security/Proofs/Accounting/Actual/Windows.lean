@@ -1,10 +1,10 @@
 module
 
 public import Definitions.Accounting.Guarantees.Actual
+public import Proofs.Accounting.Actual.Physical
+public import Proofs.Nci.ReadsIn
 import Mathlib.Data.NNRat.Floor
-import Proofs.Accounting.Actual.Physical
 import Proofs.Accounting.Actual.Split
-import Proofs.Nci.ReadsIn
 
 /-!
 # The capacity form: the windows divide the developer's region

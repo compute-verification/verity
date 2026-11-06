@@ -2,6 +2,8 @@ module
 
 public import Mathlib.Basic.Real.Basic
 public import Mathlib.Data.Fintype.Card
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
 
 /-!
 # Uniform probability (trusted)

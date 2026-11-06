@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Escape
+public import Proofs.Flock.Claims.Sampling.ExecBernoulli
 public import Proofs.Flock.Claims.Sampling.Select.Layout
 public import Proofs.Flock.Claims.Sampling.Select.Take
 public import Properties.SampledProofs.Draw
@@ -39,7 +40,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Claims.Sampling.ExecBernoulli
 import Proofs.Flock.Claims.Sampling.Select.Steps
 import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Game.Basic

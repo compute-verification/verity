@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Realizes
+public import Proofs.Flock.Soundness.Refine.Zerocheck
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Algebra.Order.Ring.Star
 import Mathlib.CategoryTheory.Category.Init
@@ -11,7 +12,6 @@ import Proofs.Flock.Level3.FoldedBase
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Exec
 import Proofs.Flock.Soundness.Refine.Plays
-import Proofs.Flock.Soundness.Refine.Zerocheck
 import VCVio.Prelude.Core
 
 /-!

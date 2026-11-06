@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.KS.PlainCapPrefix
 public import Proofs.Flock.Claims.KS.PlainLevels
 public import Proofs.Flock.Claims.KS.RoundsN
 import Flock.With.SimVerify
@@ -37,7 +38,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.KS.PlainCapPrefix
 import Proofs.Flock.Claims.Recursion.CallsBridgeE
 import Proofs.Flock.Soundness.Refine.Seam
 

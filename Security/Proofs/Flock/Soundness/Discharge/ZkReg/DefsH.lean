@@ -2,6 +2,7 @@ module
 
 public import Flock.Registered
 public import Proofs.Flock.Soundness.Discharge.Exec.Event
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.CategoryTheory.Category.Init
 import Mathlib.Combinatorics.Matroid.Init

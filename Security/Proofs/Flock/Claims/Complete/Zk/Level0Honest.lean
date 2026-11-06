@@ -1,11 +1,12 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoHonest
 public import Proofs.Flock.Claims.Complete.Zk.Level0Model
+public import Proofs.Flock.Claims.Complete.Zk.Level0Pad
+public import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
-public import Proofs.Flock.Claims.Complete.Replay.LigeritoHonest
-public import Proofs.Flock.Claims.Complete.Zk.Level0Pad
-public import Proofs.Flock.Claims.Complete.ZkTables.Level0
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,7 +39,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
-import Proofs.Flock.Claims.Complete.Zk.Level0Premises
 import Proofs.Flock.Claims.Complete.Zk.Level0Shape
 import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams

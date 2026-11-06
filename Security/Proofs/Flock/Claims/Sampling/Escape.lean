@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.Sampling
+public import Proofs.Flock.Claims.Sampling.Draws
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -38,7 +39,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Soundness.Game.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 

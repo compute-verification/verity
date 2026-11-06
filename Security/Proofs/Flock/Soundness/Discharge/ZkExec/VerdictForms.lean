@@ -1,6 +1,9 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
 public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+public import Proofs.Flock.Soundness.Refine.Lincheck
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -17,7 +20,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Final
 

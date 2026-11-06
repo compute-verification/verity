@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.Claims.Sampling.Select.Misses
 public import Properties.SampledProofs.Draw
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -38,7 +39,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.Sampling.Select.Misses
 import Proofs.Flock.Claims.Sampling.Session
 import VCVio.Prelude.Core
 

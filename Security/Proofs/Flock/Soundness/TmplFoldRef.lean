@@ -2,12 +2,12 @@ module
 
 public import Proofs.Flock.Level3.Fold
 public import Proofs.Flock.Level3.FoldStmt
+public import Proofs.Flock.Soundness.SparseRows
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Level3.FoldedBase
 import Proofs.Flock.Level3.Nodes
-import Proofs.Flock.Soundness.SparseRows
 
 /-!
 # The template fold's reference, in closed form

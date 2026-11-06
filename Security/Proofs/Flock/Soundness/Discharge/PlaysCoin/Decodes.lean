@@ -1,8 +1,8 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 import Proofs.Flock.Soundness.Discharge.PlaysCoin.Tape
 
 /-!

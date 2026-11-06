@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FinishSwLig
+public import Proofs.Flock.Claims.ZK.FinishSwSv
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

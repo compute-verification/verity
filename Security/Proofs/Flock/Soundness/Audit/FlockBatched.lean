@@ -1,9 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Extraction
-public import Proofs.Flock.Soundness.SessionBatch
 public import Definitions.Flock.Lowering
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Audit.Flock
 public import Proofs.Flock.Soundness.Instance
+public import Proofs.Flock.Soundness.SessionBatch
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Game.Basic

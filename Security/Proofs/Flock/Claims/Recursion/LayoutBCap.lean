@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.C3.Reps.AtList
 public import Proofs.Flock.Claims.KS.PlainCapsDep
 public import Proofs.Flock.Claims.Recursion.BindsDeployed
 public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.C3.Reps.AtList
 import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
 import Std.Tactic.BVDecide.Normalize.Bool
 

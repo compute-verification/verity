@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
 public import Proofs.Flock.Claims.Recursion.LastColsDeployed
 import Mathlib.Algebra.Order.Floor.Extended

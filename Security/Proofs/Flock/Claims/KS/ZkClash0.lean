@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.KS.ZkRows
 public import Proofs.Flock.Claims.KS.ZkSim
+public import Proofs.Flock.Claims.KS.ZkStep
 import Flock.With.SimVerify
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -38,7 +39,6 @@ import Proofs.Flock.Claims.DeployK
 import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Width
-import Proofs.Flock.Claims.KS.ZkStep
 import Proofs.Flock.Claims.ZkQueryRound
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 

@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
 public import Proofs.Flock.Soundness.Refine.Regions
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -17,7 +18,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 
 /-!
 # What `Stmt.setupHidden` returns, as this area reads it

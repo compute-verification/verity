@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Accounting.RemoteHeld.Draw
 public import Properties.RemoteAudit.Line
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.RemoteHeld
-import Proofs.Accounting.RemoteHeld.Draw
 import Proofs.Accounting.RemoteHeld.Outside
 import Proofs.Accounting.RemoteHeld.Window
 import Proofs.Pouw.Prob

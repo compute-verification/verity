@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FinishFwRows
+public import Proofs.Flock.Claims.ZK.FinishSwRep
 public import Proofs.Flock.Claims.ZK.SimLig
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

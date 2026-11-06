@@ -7,10 +7,10 @@ and no other entry changes.
 module
 
 public import Flock.Lookup
+public import Proofs.Flock.Level3.Fold
 public import Proofs.Flock.Level3.GF128Field
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
-import Proofs.Flock.Level3.Fold
 import Proofs.Flock.Level3.Nodes
 
 @[expose] public section

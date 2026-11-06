@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.KS.PlainLeafDecK
 public import Proofs.Flock.Claims.KS.PlainDrawAccJK
+public import Proofs.Flock.Claims.KS.PlainDrawDecJK
+public import Proofs.Flock.Claims.KS.PlainLeafDecK
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.PlainDrawDecJK
 import Proofs.Flock.Claims.KS.PlainDrawK
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts

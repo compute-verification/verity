@@ -2,6 +2,8 @@ module
 
 public import Definitions.Accounting.Guarantees.RateAuditHorizon
 public import Definitions.Accounting.Guarantees.RateAuditNamed
+public import Proofs.Accounting.RateAudit.Horizon
+public import Proofs.Accounting.RateAudit.Named
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,8 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.RateAudit.Chain
-import Proofs.Accounting.RateAudit.Horizon
-import Proofs.Accounting.RateAudit.Named
 import Proofs.Accounting.RateAudit.Windows
 import Std.Tactic.BVDecide.Normalize.Prop
 

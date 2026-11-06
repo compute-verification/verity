@@ -10,8 +10,8 @@ length is `shaCalls h`, the number of SHA-512 calls a run with the counting orac
 module
 
 public import Flock.With.Sim
+public import Flock.With.SimVerify
 public import Flock.With.Zk
-import Flock.With.SimVerify
 import Flock.With.SimZk
 
 @[expose] public section

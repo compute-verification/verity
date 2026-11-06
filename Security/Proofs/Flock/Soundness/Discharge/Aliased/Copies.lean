@@ -1,9 +1,9 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 public import Proofs.Flock.Soundness.Discharge.Hm.SatEx
 public import Proofs.Flock.Soundness.ExecFlatCopies
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Proofs.Flock.Soundness.ExecLookup
 
 /-!

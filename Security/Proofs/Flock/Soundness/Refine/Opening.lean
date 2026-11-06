@@ -3,6 +3,7 @@ module
 public import Mathlib.RingTheory.Henselian
 public import Mathlib.RingTheory.RegularLocalRing.Defs
 public import Mathlib.RingTheory.SimpleRing.Principal
+public import Proofs.Flock.Soundness.Refine.Lincheck
 public import Proofs.Flock.Soundness.Refine.Tapes
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Combinatorics.Matroid.Init

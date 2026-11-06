@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Bridge.DecodePlain
+public import Proofs.Flock.Claims.KS.Entries
 public import Proofs.Flock.Claims.KS.Trace
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.Entries
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 import Proofs.Flock.Soundness.Discharge.Exec.Merkle

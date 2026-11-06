@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Bridge.LeafMap
 public import Proofs.Flock.Bridge.Transports
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import all Init.Data.String.Defs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.RegLevels.ValueTie
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Refine.Walk

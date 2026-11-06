@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Layout
 public import Proofs.Flock.Soundness.Discharge.Hm.Flat
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd

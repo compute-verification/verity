@@ -1,9 +1,9 @@
 module
 
 public import Proofs.Pouw.PearlC.Gamma
+public import Proofs.Pouw.Sampling
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
-import Proofs.Pouw.Sampling
 
 /-!
 # γ under the sampled audit, from TT_OUT per tile

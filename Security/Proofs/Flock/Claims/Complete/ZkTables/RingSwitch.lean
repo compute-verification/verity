@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Complete.ZkTables.Reps
+public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,7 +40,6 @@ import Proofs.Flock.Claims.Complete.Zk.Extras
 import Proofs.Flock.Claims.Complete.Zk.RepRounds
 import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
-import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import Proofs.Flock.Claims.Complete.ZkTables.Trace
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.StmtOf

@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Accounting.TS.Session.Lanes.Holds
 public import Proofs.Accounting.TS.Session.Lanes.Range
 public import Proofs.Flock.SoundAtBridge.Served
 import Mathlib.Algebra.Order.Floor.Extended

@@ -1,5 +1,6 @@
 module
 
+public import Batteries.Data.ByteArray
 public import Proofs.Flock.Claims.KS.SlotDist
 public import Proofs.Flock.Soundness.CompiledLock
 import Mathlib.Algebra.Order.Floor.Extended

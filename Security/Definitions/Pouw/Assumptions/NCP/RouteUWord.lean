@@ -1,7 +1,8 @@
 module
 
-public import Definitions.Pouw.NCP.RouteU
+public import Definitions.Pouw.Assumptions.NCP.Chain
 public import Definitions.Pouw.NCP.Relation
+public import Definitions.Pouw.NCP.RouteU
 
 /-!
 # The word layer on route U (trusted statements)

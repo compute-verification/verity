@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.Forest
+public import Mathlib.LinearAlgebra.Matrix.Rank
 public import Proofs.Pouw.Dimension.Proofs
-import Mathlib.LinearAlgebra.Matrix.Rank
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Dimension.PipeProofs
 

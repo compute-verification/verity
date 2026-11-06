@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.ZK.Worker
 public import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
+public import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
+public import Proofs.Flock.Claims.ZK.Worker
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
 
 /-!
 # The inner constraint at a worker's values reads no pad

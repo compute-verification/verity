@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.OpensReads
 public import Proofs.Flock.Claims.Recursion.RecRecord
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -38,7 +39,6 @@ import Proofs.Flock.C3.Reps.RoundLinks
 import Proofs.Flock.C3.VStarList.Accepts
 import Proofs.Flock.Claims.Recursion.DeployHonest
 import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Claims.Scope.Setup

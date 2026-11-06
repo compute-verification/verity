@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.RateAuditHorizon
+public import Proofs.Accounting.RateAudit.Chain
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real
@@ -37,7 +38,6 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Bandwidth.AuditRO
-import Proofs.Accounting.RateAudit.Chain
 import Proofs.Accounting.RateAudit.Windows
 import Std.Tactic.BVDecide.Normalize.Prop
 

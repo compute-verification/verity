@@ -1,10 +1,10 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.RouteU
+public import Proofs.Pouw.Dimension.MixingProofs
 import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Dimension.CausalProofs
-import Proofs.Pouw.Dimension.MixingProofs
 import Proofs.Pouw.NCP.GameProofs
 import Proofs.Pouw.NCP.RelationWitness
 import Proofs.Pouw.NCP.RouteUProofs

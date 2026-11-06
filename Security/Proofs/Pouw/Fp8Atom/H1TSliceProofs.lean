@@ -2,12 +2,12 @@ module
 
 public import Definitions.Pouw.Fp8Atom.H1TLemmas
 public import Definitions.Pouw.Fp8Atom.H1TVectors
+public import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 public import Proofs.Pouw.Fp8Atom.Proofs
 import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Tactic.IntervalCases
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Fp8Atom.H1TAtomProofs
 import Proofs.Pouw.Fp8Atom.H1TProofs
 
 /-!

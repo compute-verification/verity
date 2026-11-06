@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Claims
 public import Mathlib.Algebra.Polynomial.Eval.Defs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

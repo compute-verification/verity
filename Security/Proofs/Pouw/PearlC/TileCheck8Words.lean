@@ -1,14 +1,15 @@
 module
 
-public import Proofs.Pouw.PearlC.TileCheck8
 public import Definitions.Pouw.PearlC.Device
 public import Definitions.Pouw.PearlC.TileCheck8
 public import Proofs.Pouw.PearlC.PeelExactProofsP
 public import Proofs.Pouw.PearlC.RowCircuit
+public import Proofs.Pouw.PearlC.TileCheck8
+public import Proofs.Pouw.PearlC.TileGamma
+public import Proofs.Pouw.PearlC.TileValues
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.TileValues
 
 /-!
 # `pc8`'s tile check computes the words (proofs)

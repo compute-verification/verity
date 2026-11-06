@@ -1,10 +1,11 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.BoundReaders
-public import Proofs.Flock.Claims.Recursion.VStarBDeploy
 public import Proofs.Flock.Claims.KS.PlainCapsDep
+public import Proofs.Flock.Claims.Recursion.BoundReaders
 public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
+public import Proofs.Flock.Claims.Recursion.KSLin2Plain
 public import Proofs.Flock.Claims.Recursion.LastColsDeployed
+public import Proofs.Flock.Claims.Recursion.VStarBDeploy
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -42,7 +43,6 @@ import Proofs.Flock.Claims.Recursion.BoundRoute
 import Proofs.Flock.Claims.Recursion.DeployFacts
 import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeploySessions
-import Proofs.Flock.Claims.Recursion.KSLin2Plain
 import Proofs.Flock.Claims.Recursion.SetupCalls
 
 /-!

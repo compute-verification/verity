@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Accounting.Assumptions.TS
 public import Definitions.Accounting.Compose
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

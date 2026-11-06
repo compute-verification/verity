@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
 public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -17,7 +18,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams

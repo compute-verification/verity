@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Accounting.Guarantees.RateAuditDeployed
+public import Proofs.Accounting.RateAudit.Deployed
+public import Proofs.Accounting.Remote
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,8 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Bandwidth.Chip
-import Proofs.Accounting.RateAudit.Deployed
-import Proofs.Accounting.Remote
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

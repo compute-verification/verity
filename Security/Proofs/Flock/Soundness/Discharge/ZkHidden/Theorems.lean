@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Statements
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -21,8 +23,6 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
 /-!
 # The theorems of `Statements.lean`

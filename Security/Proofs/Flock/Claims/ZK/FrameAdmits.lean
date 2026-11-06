@@ -1,8 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FinishRound
-public import Proofs.Flock.Claims.ZK.LinkRecheck
 public import Proofs.Flock.Claims.ZK.FrameLoop
+public import Proofs.Flock.Claims.ZK.FrameZK
+public import Proofs.Flock.Claims.ZK.LinkRecheck
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

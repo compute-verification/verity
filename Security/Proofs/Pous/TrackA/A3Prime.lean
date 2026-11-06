@@ -2,12 +2,12 @@ module
 
 public import Definitions.Pous.Model.Inc
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Proofs.Pous.Thm1.Theorem1iiiTimed
 import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Pous.Sanity
 import Proofs.Pous.Thm1.Theorem1iTimed
 import Proofs.Pous.Thm1.Theorem1iiSeq
-import Proofs.Pous.Thm1.Theorem1iiiTimed
 
 /-!
 # A3′, the sequential audit from a per-run Lemma A (pinned as `Pous.Guarantees.A3Prime` and `A3PrimeLam`)

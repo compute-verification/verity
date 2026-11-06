@@ -1,7 +1,9 @@
 module
 
 public import Definitions.Accounting.Assumptions.Stacking
+public import Definitions.Accounting.Guarantees.DeclaredCircuit
 public import Mathlib.Tactic.Continuity
+public import Proofs.Accounting.Stacking
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +39,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Bandwidth.Chip
 import Proofs.Accounting.RateAudit.Windows
-import Proofs.Accounting.Stacking
 
 /-! The first pieces of the proof of `Accounting.Guarantees.DeclaredCircuitRequirement`, whose theorem is in
 `DeclaredCircuit/Requirement.lean`: a carrier of a declared circuit's is within its census over its life, its inputs

@@ -1,11 +1,11 @@
 module
 
+public import Proofs.Flock.Soundness.Refine.Arith
 public import Proofs.Flock.Soundness.Refine.Tapes
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.CategoryTheory.Category.Init
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
-import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.Soundness.Refine.Exec
 import Proofs.Flock.Soundness.Refine.Plays
 import VCVio.Prelude.Core

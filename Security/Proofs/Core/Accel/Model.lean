@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Assumptions.Accel
+public import Mathlib.Tactic.Positivity
 import Mathlib.Tactic.Positivity.Finset
 
 /-!

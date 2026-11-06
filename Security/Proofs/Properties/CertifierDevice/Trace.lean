@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Properties.CertifierDevice.Step
+public import Batteries.Data.ByteArray
 public import Mathlib.Tactic.Basic
+public import Proofs.Properties.CertifierDevice.Step
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

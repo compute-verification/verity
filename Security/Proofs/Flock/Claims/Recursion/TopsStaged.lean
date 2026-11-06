@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.BitsLin2
+public import Proofs.Flock.Claims.Recursion.CapPorts
+public import Proofs.Flock.Claims.Recursion.KSLin2Staged
 public import Proofs.Flock.Claims.Recursion.LayoutBTops
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,9 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.CallsOfProofs
-import Proofs.Flock.Claims.Recursion.CapPorts
 import Proofs.Flock.Claims.Recursion.DeployFacts
-import Proofs.Flock.Claims.Recursion.KSLin2Staged
 import Proofs.Flock.Claims.Recursion.LastBindsClosed
 import Proofs.Flock.Claims.Recursion.RowsCover
 import Proofs.Flock.Claims.Recursion.SchedDense

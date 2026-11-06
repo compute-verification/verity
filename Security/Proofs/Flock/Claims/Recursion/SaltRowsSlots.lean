@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.HmOpen
 public import Proofs.Flock.Claims.Recursion.RestLowR
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -32,7 +33,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.HmOpen
 
 /-!
 # `SaltRowsJ` at `finalR` off the hm96 slots the openings sit at (`OpensSlots`)

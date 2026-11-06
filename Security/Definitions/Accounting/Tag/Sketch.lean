@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Pouw.Fp8Atom.Fp32
 public import Definitions.Pouw.PearlC.Sm120
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Data.Fintype.Basic

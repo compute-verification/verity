@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.BitsLin2
 public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.TopsStaged
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.TopsStaged
 
 /-!
 # The last round's pieces at the parts that commit the earlier rounds (`finOpen`), and `FinPieces` there

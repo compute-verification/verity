@@ -6,6 +6,7 @@ module
 
 public import Mathlib.Algebra.Group.Nat.Defs
 public import Proofs.Flock.Soundness.Discharge.Hm.Hash
+public import Proofs.Flock.Soundness.Discharge.Hm.Slot
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 import Mathlib.Data.List.GetD
 import Mathlib.Tactic.ENatToNat

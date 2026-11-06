@@ -1,6 +1,7 @@
 module
 
 public import Flock.Firewall.Session
+public import Proofs.Flock.Claims.ZK.FrameInner
 public import Proofs.Flock.Claims.ZK.FrameReal
 public import Proofs.Flock.Claims.ZK.FrameState
 import Mathlib.Algebra.Order.Floor.Extended
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.ZK.FrameInner
 
 /-!
 # `Flock.zk_server_lean` at the session loop's own frames

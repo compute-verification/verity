@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.NextRRep
+public import Proofs.Flock.Claims.Complete.Json.Goals
 public import Proofs.Flock.Claims.Complete.Json.Session
+public import Proofs.Flock.Claims.Recursion.NextRRep
+public import Proofs.Flock.Claims.Recursion.NextRSetup
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +39,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Walk
 import Proofs.Flock.Claims.Complete.Zk.Walk
 import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.Recursion.NextRSetup
 import Proofs.Flock.Claims.Recursion.SchedCount
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 

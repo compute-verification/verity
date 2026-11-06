@@ -1,10 +1,10 @@
 module
 
 public import Definitions.Pouw.Receipt.Duo
+public import Mathlib.Tactic.LinearCombination
 import Mathlib.Basic.Finite.Prod
 import Mathlib.Data.BitVec
 import Mathlib.Data.Nat.Prime.Basic
-import Mathlib.Tactic.LinearCombination
 
 /-!
 # duo's words are bound: one word, and runs of two, three and four words at every state

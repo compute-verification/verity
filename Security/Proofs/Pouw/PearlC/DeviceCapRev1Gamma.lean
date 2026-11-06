@@ -1,11 +1,12 @@
 module
 
 public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
+public import Proofs.Pouw.PearlC.UOnlyGamma
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.KernelWrefGamma
 import Proofs.Pouw.PearlC.TTOutW1
-import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.Prob
 
 /-!

@@ -1,9 +1,9 @@
 module
 
-public import Proofs.Pouw.QTree
 public import Proofs.Pouw.M1
+public import Proofs.Pouw.Milestone
+public import Proofs.Pouw.QTree
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.Milestone
 import Proofs.Pouw.Prob
 
 /-!

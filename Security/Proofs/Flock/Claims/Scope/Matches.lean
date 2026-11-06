@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Scope.Readable
+public import Proofs.Flock.Claims.Scope.Sizes
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Scope.InScope
-import Proofs.Flock.Claims.Scope.Sizes
 import VCVio.Prelude.Core
 
 /-!

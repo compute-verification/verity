@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
 public import Proofs.Flock.Claims.Complete.Link
+public import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
 public import Proofs.Flock.Claims.Complete.Zk.PiopGo
+public import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
 import Proofs.Flock.Claims.Complete.Zk.InnerGo
-import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop
 

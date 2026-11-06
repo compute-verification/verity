@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.KS.PlainClash0
 public import Proofs.Flock.Claims.KS.PlainDrawAccJK
+public import Proofs.Flock.Claims.KS.PlainLeafDecJK
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

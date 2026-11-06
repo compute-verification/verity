@@ -17,6 +17,7 @@ this fixes:
 module
 
 public import Flock.Firewall.Finish
+public import Flock.Firewall.Skeleton
 
 @[expose] public section
 

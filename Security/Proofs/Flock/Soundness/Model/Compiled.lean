@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Flock.Compiled
+public import Proofs.Flock.Soundness.Merkle
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Tactic.Positivity.Finset
 

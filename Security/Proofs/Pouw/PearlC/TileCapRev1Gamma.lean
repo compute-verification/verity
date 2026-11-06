@@ -3,9 +3,9 @@ module
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.PearlC.DeviceKernelWref
 public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
 import Proofs.Pouw.PearlC.KernelWrefGamma
 import Proofs.Pouw.PearlC.TileGamma
 import Proofs.Pouw.PearlC.UOnlyGamma

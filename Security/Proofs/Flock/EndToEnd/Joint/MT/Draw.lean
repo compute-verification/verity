@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -17,7 +18,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
-import Proofs.Flock.Soundness.Discharge.ZkReg.Guarded
 
 /-!
 # The coin server's stratified draw at `J` tables

@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Claims.Complete.Json.Live
 public import Proofs.Flock.Claims.Complete.Json.Session
 public import Proofs.Flock.Claims.Complete.Zk.Json.Record
+public import Proofs.Flock.Claims.Complete.Zk.Json.Session
 public import Proofs.Flock.Claims.Complete.Zk.Skeleton
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -43,7 +44,6 @@ import Proofs.Flock.Claims.Complete.Json.Goals
 import Proofs.Flock.Claims.Complete.Json.Text
 import Proofs.Flock.Claims.Complete.Zk.Discharge
 import Proofs.Flock.Claims.Complete.Zk.Json.Decode
-import Proofs.Flock.Claims.Complete.Zk.Json.Session
 import Std.Data.String.ToNat
 import Std.Tactic.BVDecide.Normalize.Bool
 import Std.Tactic.BVDecide.Normalize.Prop

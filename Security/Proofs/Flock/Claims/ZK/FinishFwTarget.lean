@@ -1,6 +1,7 @@
 module
 
 public import Flock.Firewall.Drive
+public import Proofs.Flock.Claims.ZK.FinishFwRep
 public import Proofs.Flock.Claims.ZK.SimLig
 public import Proofs.Flock.Claims.ZK.Worker
 import Mathlib.Algebra.Order.Floor.Extended
