@@ -143,6 +143,7 @@ theorem cell_disj {Pt Pρ : Partition} {ρ t ρ' t' v : ℕ} (h : v ∈ cell Pt 
   ⟨Option.some.inj ((replayOf_of_mem_cell h).symm.trans (replayOf_of_mem_cell h')),
     (mem_filter.1 h).2.2.symm.trans (mem_filter.1 h').2.2⟩
 
+open Classical in
 theorem wrongIn_subset_cell (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
     (w : Wit) (ρ t : ℕ) (ι : ℕ → Bool) : wrongIn H Cm s Pt Pρ w ρ t ι ⊆ cell Pt Pρ ρ t :=
   filter_subset _ _
