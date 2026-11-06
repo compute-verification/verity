@@ -582,7 +582,7 @@ def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed
     """The challenger samples a ``--zk`` session's coin tree under the prover's nonce and opens each round itself, after
     what it follows, between the session's own coins; each line is logged before its answer, the signed close covers
     them, the verifier's read of the session's roots reads past them, and a record on those coins is held to them
-    (`session_tree_reason`), one whose round's coins differ refused."""
+    (`session_tree_reason`), one whose round's coins differ refused, as is one held to another ``root_B`` length."""
     host = Host(tmp_path, signer, withhold=True)
     client = R.RemoteChallenger.connect(host.address)
     positions = C.LiveRecord(client, "positions", itertools.count().__next__)
@@ -604,10 +604,12 @@ def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed
     trees = C.coin_trees_of(log)
     assert list(trees) == [tree_root.hex()] and trees[tree_root.hex()].record()["key"] == key.hex()
     record = tree_record(nonce, tree_root, key, points, {"t/rep0": [(root(30), 3, rep[0]), (root(31), 2, rep[1])]})
-    assert C.session_tree_reason(trees, record) is None
+    lens = {t: len(r) for t, r in ROOT_B.items()}
+    assert C.session_tree_reason(trees, lens, record) is None
+    assert C.session_tree_reason(trees, {"t": 2 * lens["t"]}, record) == C.LINK_ROOT_LEN
     record["streams"][0]["rounds"][1]["coins"][0] = f128(rep[1][0] ^ 1)
-    assert C.session_tree_reason(trees, record) == ("its t/rep0 round 1 is not coins the challenger opened under its tree "
-                                                    "after that round's message")
+    assert C.session_tree_reason(trees, lens, record) == ("its t/rep0 round 1 is not coins the challenger "
+                                                          "opened under its tree after that round's message")
 
 
 def _tree_frames(tree_root: str) -> dict[str, list[dict]]:

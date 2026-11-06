@@ -664,7 +664,7 @@ def publicDigestOf (θ : ByteArray) : Option Hash.Digest := (paramsOf θ).bind f
 /-- **`verify --zk`'s tags at the inputs v2 hands it** (`zkTags`): the statement's tags `tags`, one table and the
 circuit file `circuitFile`. -/
 def zkTagsOf (tags : Flock.Tags) (circuitFile : ByteArray) : Flock.Tags :=
-  Flock.Zk.tags (tags.withCoins (.tree (Flock.Zk.coinSpec (tags.tableNames 1)))) (Flock.Zk.maskLogOf circuitFile) 1
+  Flock.Zk.tags tags (Flock.Zk.maskLogOf circuitFile) 1
 
 /-- **v2's reading of the committed files `F` at the parameters `θ`, as deployed**: the files the digests v2's
 parameters name (`programDigestOf`, `publicDigestOf`), the pinned MUFU tables the committed files hold
@@ -701,8 +701,8 @@ theorem readOf_eq (V : Vocab d α) (hc : ∀ θ, V.programDigest θ = programDig
     readOf θ F = A.fileRead := by
   have hc' : V.circuitFile θ F = Verity.namedFile (programDigestOf θ) F := by rw [Vocab.circuitFile, hc]
   have hp' : V.publicFile θ F = Verity.namedFile (publicDigestOf θ) F := by rw [Vocab.publicFile, hp]
-  simp only [readOf, Live.fileRead, zkTagsOf, FlockSoundness.Discharge.ZkExec.zkTags,
-    FlockSoundness.Discharge.ZkExec.zkCoins, htags, Option.getD_some, hcount, hcirc, hpub, htab, hc', hp']
+  simp only [readOf, Live.fileRead, zkTagsOf, FlockSoundness.Discharge.ZkExec.zkTags, htags, Option.getD_some,
+    hcount, hcirc, hpub, htab, hc', hp']
 
 /-- **v2's case in what the prover sent**: v2's parameters in the parameters sent, as `ParamsAt` reads them, and the
 registration and the evidence of the case the composition's evidence names under the sampled component's id, each read

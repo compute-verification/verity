@@ -78,8 +78,8 @@ def _served(tmp):
 
 
 def _warden(tmp):
-    """The plain link as a warden's (`WardenProfile`): both records certified under the warden's parameters digest, no
-    occupancy profile."""
+    """The plain link as a network certifier's (`WardenProfile`): both records certified under the network certifier's
+    parameters digest, no occupancy profile."""
     run = plain.Run(tmp)
     run.lw = lw = replace(run.lw, occupancy=(None, None), warden=SVC.WardenProfile(3, plain.WARDEN_DIGEST))
     run.stream = lw.stream(budget=8, delta=plain.DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
@@ -194,10 +194,11 @@ def test_the_lean_verdict_is_the_pythons(tmp_path, kind):
 
 
 def test_a_warden_link_window_reads_the_wardens_digest_and_no_sync(tmp_path):
-    """On a warden link the Lean holds both ends' grids to the warden's parameters digest and reads no sync, as the
-    Python does: syncs missing or off Σ_sync change neither verdict; the link under another warden's digest, or as the
-    plain link whose grids carry the certifier's digests, is a reject by both; and a warden case the Python never makes
-    (a digest of another length or none, an end with a profile, two grids) is refused, which `verify` rejects."""
+    """On a network certifier link the Lean holds both ends' grids to the network certifier's parameters digest and
+    reads no sync, as the Python does: syncs missing or off Σ_sync change neither verdict; the link under another
+    network certifier's digest, or as the plain link whose grids carry the certifier's digests, is a reject by both; and
+    a network certifier case the Python never makes (a digest of another length or none, an end with a profile, two
+    grids) is refused, which `verify` rejects."""
     c = _warden(tmp_path)
     honest = c.both()
     assert honest[0] == honest[1] and honest[1]["accepted"] and honest[1]["public"] == {"verdict": 1, "deadline": 1}
