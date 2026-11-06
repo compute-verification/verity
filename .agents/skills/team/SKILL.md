@@ -51,11 +51,12 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY` and
   linked through the Linear app, since Linear's GitHub integration is off here; a failed link prints its retry, `research
   queue link N --issue KEY`), or `none:REASON`. The issue carries the label of the goal it serves (its id on the Goals
-  page), which `open` writes as `Goal <id>`, refusing an issue whose labels name no live goal. It marks it ready at its
-  head, `research queue ready N --mark --by LANE`, which refuses a body with neither a `Goal <id>` line naming a live goal
-  nor `Issue: none: REASON` (fix it with `research queue edit N --body-file F`). A push makes a new head, which needs a
+  page), which `open` writes as `Goal <id>`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A
+  body with neither a `Goal <id>` line naming a live goal nor `Issue: none: REASON` gets a warning from both, never a
+  refusal (fix it with `research queue edit N --body-file F`). A push makes a new head, which needs a
   new mark and a new review. `research queue status` says what each PR waits for and
-  lists the PRs naming no issue. A `hold` label, a conflict on `next` or a Markdown file over its cap keeps a PR out, and a
+  lists the PRs naming no issue. The mark admits a PR: the sync's own merge onto `next` is the only check before it joins,
+  so a conflict there or a Markdown file over its cap (`landing_gates`) keeps it out, as a `hold` label does; a
   PR from a fork, or by an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at
   admission.
 - Before marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on
