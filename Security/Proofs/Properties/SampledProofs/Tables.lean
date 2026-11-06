@@ -44,6 +44,7 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
     (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ r, OneStageZk.run p.own e.sessions (some e.base.provedUnits) bs = .ok r := by
   unfold OneStageZk.checkBlobsAt at h
+  dsimp only at h
   split at h
   · cases h
   · rename_i r hr
@@ -64,9 +65,10 @@ def honestBlobs : Core.Blobs :=
 
 /-- **`TablesRefused`'s honest lemma**: blobs holding a circuit file and a public file pass v2's refusal. -/
 theorem tablesRefused_honest : OneStageZk.tablesHeld honestBlobs = .ok () := by
-  have h : (OneStageZk.tablesOf honestBlobs).isEmpty = true := by decide
+  have h : (OneStageZk.tablesOf honestBlobs).isEmpty = true := by decide +kernel
   unfold OneStageZk.tablesHeld
   rw [List.isEmpty_iff.1 h]
+  rfl
 
 /-- `rcp`'s pinned SHA-512 (`Flock.MUFU_TABLES`), as bytes. -/
 def rcpDigest : ByteArray :=
@@ -81,7 +83,7 @@ def tableBlobs : Core.Blobs := ⟨#[(rcpDigest, ByteArray.empty)]⟩
 /-- **`TablesRefused`'s nontrivial lemma**: blobs holding a file under a pinned table's SHA-512 hold a table, so a check
 that accepts them, as one that accepts every input does, does not have `TablesRefused`'s conclusion. -/
 theorem tablesRefused_nontrivial : ¬ HoldsNoTable tableBlobs := by
-  have h : (OneStageZk.tablesOf tableBlobs).isEmpty = false := by decide
+  have h : (OneStageZk.tablesOf tableBlobs).isEmpty = false := by decide +kernel
   intro hn
   unfold HoldsNoTable at hn
   rw [hn] at h
