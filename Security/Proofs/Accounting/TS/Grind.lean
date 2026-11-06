@@ -24,6 +24,8 @@ is Fubini over the private coins (`Grind.sum_exp_pi`). `TileLuck` takes both AM-
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Accounting.SecurityProofs.TS
 
 open Pouw.RelativeSecurity

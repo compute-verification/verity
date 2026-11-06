@@ -23,6 +23,8 @@ public import Proofs.Accounting.Lemmas.Compose
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Accounting.SecurityProofs.Compose.Budget
 
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
