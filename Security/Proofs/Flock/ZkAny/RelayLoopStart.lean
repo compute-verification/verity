@@ -1,16 +1,17 @@
 module
 
 public import Proofs.Flock.ZkAny.RelayLoopPre
-public import Proofs.Flock.ZkAny.RelayServes
 import Proofs.Flock.Claims.ZK.Reference
+public import Proofs.Flock.ZkAny.RelayAuditor
+public import Proofs.Flock.ZkAny.RelayWorker
 
 /-!
 # The relay's model frames at the model's run, from the session's first request
 
 `envPre_withInner` gives `EnvPre` wherever `LoopP` at `LoopJ` holds, given that each of the run's messages is the
 deferred release's (`LoopModel.Own`), its first the `Hello` at the relay's nonce and the worker's link the firewall's
-own. Here `LoopP` holds at the session's first request, and those three are read off the model's run of the deferred
-server against `V*`:
+own. Here `LoopP` holds at the session's first request, the first two are read off the model's run of the deferred
+server against `V*`, and the link off the deployed worker (`LoopModel.link_deployed`):
 
 * `loopP_start`: at the session's first request, where the loop's frames hold no rep of the session yet and the
   session's slots took none of the model's messages, `LoopP` at `LoopJ` holds wherever the relay's requests to come are
@@ -20,11 +21,12 @@ server against `V*`:
 * `LoopModel.Deployed.head_hello`: at the deployed loop, such a run's first message is the `Hello` at the tape's nonce
   (`frameD_own`, `loop_helloIs`).
 * **`envPre_run`**: `EnvPre` at the relay's requests from its start, at the release with the session loop's own rounds
-  of the inner proof, at the model's run of the deferred server against `V*` whose worker answers the link and the
-  `Finish` with the firewall's own message, where the relay's nonce is the tape's, the relay serves its requests as its
-  IO code reads (`RelayServes`), the model's worker gives the worker's round values (`WorkerDeterministic`) and the
-  auditor answered the relay's model slots as `V*` did (`AuditorAnswers`): what `relay_zkOut_env` reads at each
-  randomness.
+  of the inner proof over `withoutCross` (Rust's checks are the worker's, so `CrossPasses` holds by definition), at the
+  model's run of the deferred server against the relay's auditor as `V*` (`auditorV`, with at least the schedule's
+  model slots as rounds) whose worker is the deployed worker (`deployedWk`), which answers the link and the `Finish`
+  with the firewall's own message, where the relay's nonce is the tape's, the relay serves its requests as its IO code
+  reads with the auditor's answers (`RelayServes`) and the model's worker gives the worker's round values
+  (`WorkerDeterministic`): what `relay_zkOut_env` reads at each randomness.
 * **`relayPre_run`**: so the relay's model frames are the model's messages, encoded (`relayPre_of_env`).
 -/
 
@@ -129,18 +131,18 @@ theorem LoopModel.Deployed.head_hello {T : ZKMal.CoinLayer.TableData}
   unfold ZKMal.CoinLayer.helloMsg
   rw [Claims.ZKMal.sessOf_flock hD.setup]
 
-open Claims.ZKMal in
 /-- **`EnvPre` at the relay's requests from its start, at the model's run**: at the release
-`withFiles (withLink (withInner Masked.dataE L₁ (Loop.realOf src) fin) src) src` on the loop's own tables on `src`,
-with `envPre_withInner`'s premises on the loop and the release (`hsrc`, `hfin`, `hS`, `hlive`,
-`LeanRelease.CrossPasses`), where the model's run is the deferred server's against `V*` (`hτ`), of at least one round
-(`hk`), its worker answering the link and the `Finish` with the firewall's own message (`hlk`, `hfw`) and giving the
-worker's round values `rv` (`WorkerDeterministic`), and the relay's nonce is the tape's (`hn`): at every requests the
-worker sends and every answer of the auditor at the setup `spec`, `sts` (`hs`, `hb`), where at the session's first
-request the loop's frames hold no rep of the session and the session's slots took none of the model's messages, the
-relay serves its requests as its IO code reads (`RelayServes`), and the auditor answered its model slots as `V*` did
-(`AuditorAnswers`), so they are read as the loop answers them (`RelayServes.loopReads`), what the relay read at each
-model slot is the model's message there. -/
+`withFiles (withLink (withInner Masked.dataE L₁.withoutCross (Loop.realOf src) fin) src) src` on the loop's own tables
+on `src`, whose `cross` passes every value as Rust's checks are the worker's (`LoopModel.Deployed.crossPasses`), with
+`envPre_withInner`'s premises on the loop (`hsrc`, `hfin`, `hS`, `hlive`), where the model's run is the deferred
+server's against the relay's auditor `A` as `V*` (`auditorV`, `hτ`), of at least as many rounds as the schedule has
+model slots (`hK`; `audK`'s rounds are those), its worker the deployed worker (`hdw`, `LeanRelease.deployedWk`), which
+answers the link and the `Finish` with the firewall's own message, giving the worker's round values `rv`
+(`WorkerDeterministic`), and the relay's nonce is the tape's (`hn`): at every requests the worker sends and
+every answer of the auditor at the setup `spec`, `sts` (`hs`, `hb`), where at the session's first request the loop's
+frames hold no rep of the session and the session's slots took none of the model's messages, and the relay serves its
+requests as its IO code reads with `A`'s answers at its tape `θ` (`RelayServes`), they are read as the loop answers
+them (`loopReads_auditorV`), what the relay read at each model slot is the model's message there. -/
 theorem envPre_run
     {L₁ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
@@ -158,35 +160,36 @@ theorem envPre_run
         (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hD : LoopModel.Deployed M (LeanRelease.withFiles (LeanRelease.withLink
-      (LeanRelease.withInner ZKMal.Masked.dataE L₁ (Loop.realOf src) fin) src) src) (Loop.realOf src) s0 spec sts)
+      (LeanRelease.withInner ZKMal.Masked.dataE L₁.withoutCross (Loop.realOf src) fin) src) src) (Loop.realOf src) s0
+      spec sts)
     (hsrc : M.src = src M.x M.w M.ρ) (hfin : M.fin = fin M.x M.w M.ρ) (hS : Loop.Level0Src src M.x M.w)
-    (hlive : ZKMal.Masked.Live M.x) (hcp : M.L.CrossPasses) {Θ : Type} {H : Msg → Msg}
-    {Vs : VStar Θ} {θ : Θ}
-    (hτ : M.τ = (runStar H (M.L.toSrv.proverD M.L.fillOf M.nN M.wk M.w) Vs M.x (M.ρ, M.κ) θ).msgs)
-    (hk : 0 < Vs.k M.x)
-    (hlk : ∀ h : List (Msg × Msg), h.length = 1 → M.wk M.x M.w M.ρ h 0 = some (M.L.ownMsg M.x M.w M.ρ h, false))
-    (hfw : ∀ h : List (Msg × Msg), h.length = M.L.last M.x →
-      M.wk M.x M.w M.ρ h 0 = some (M.L.ownMsg M.x M.w M.ρ h, false))
+    (hlive : ZKMal.Masked.Live M.x) {Θ : Type} {H : Msg → Msg}
+    {k : Msg → ℕ} {A : Θ → List ByteArray → Option ByteArray} {θ : Θ}
+    (hτ : M.τ = (runStar H (M.L.toSrv.proverD M.L.fillOf M.nN M.wk M.w) (auditorV k spec sts A) M.x (M.ρ, M.κ)
+      θ).msgs)
+    (hK : (tmplOf (.ok (spec, sts))).countP isModel ≤ k M.x)
+    {dv : M.L.toSrv.Worker} (hdw : M.wk = M.L.deployedWk dv)
     {rv : List (Msg × Msg) → Option Msg} (hwd : WorkerDeterministic M rv)
     {sid : Nat} {nonce : ByteArray} (hn : nonce = ⟨(ZKMal.CoinLayer.nb M.ρ.1).toArray⟩)
     {ins : List (ByteArray × Env)} (hs : ∀ p ∈ ins, p.2.setup = .ok (spec, sts))
     (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) {σ : LoopAt} (hc : σ.c = 0)
-    (hnew : ∀ p ∈ σ.R.reps, p.sid ≠ sid) {aud : List ByteArray → Option ByteArray}
-    (hR : RelayServes M rv aud sid spec sts nonce σ ins)
-    (hA : AuditorAnswers M (modelSlots {} {} (pick true {} {} ins))) :
+    (hnew : ∀ p ∈ σ.R.reps, p.sid ≠ sid) (hR : RelayServes M rv (A θ) sid spec sts nonce σ ins) :
     EnvPre spec [] (relaySteps true ins) M.msgs := by
   have hOwn := LoopModel.own_of_runStar hτ
-  have hne : 0 < M.τ.length := by
-    obtain ⟨n, hn'⟩ : ∃ n, Vs.k M.x = n + 1 := ⟨_, (Nat.succ_pred_eq_of_pos hk).symm⟩
-    rw [hτ, ZKMal.runStar_msgs, hn']
-    simp only [interact]
-    split <;> simp
+  have hk : 0 < k M.x := lt_of_lt_of_le (audK_pos spec sts M.x) hK
+  have hne : 0 < M.τ.length := (runStar_auditorV hτ).2 0 hk fun _ hi => absurd hi (Nat.not_lt_zero _)
   have h0 : M.msgs.headD [] = _root_.Flock.Firewall.Hello.msg spec nonce := by
     rw [hn]
     exact hD.head_hello hOwn hne
-  have hwk := hlk (M.hist 1) (by rw [LoopModel.hist, length_histOf_take]; omega)
-  exact envPre_withInner hD hsrc hfin hS hlive hcp hOwn hn h0 hwk _ [] {} {} M.msgs
-    (loopP_start hc hnew (hR.loopReads hwd hfw hc hA) (pick_setup hs hb))
+  have hwk := LoopModel.link_deployed hdw (M.hist 1) (by rw [LoopModel.hist, length_histOf_take]; omega)
+  have hF : ∀ es, (∀ e ∈ es, e.setup = .ok (spec, sts)) → LoopReads M sid spec sts nonce σ {} {} es →
+      EnvPre spec [] (schedSteps true {} {} es) M.msgs := fun es hes hLR =>
+    envPre_withInner hD hsrc hfin hS hlive hD.crossPasses hOwn hn h0 hwk es [] {} {} M.msgs
+      (loopP_start hc hnew hLR hes)
+  exact hF _ (pick_setup hs hb)
+    (loopReads_auditorV hτ hK
+      (fun _ _ _ _ _ _ hv hp => loopRead_of_serve hv hwd (LoopModel.finish_deployed hdw) hp)
+      (fun _ _ _ _ _ _ hv => hv.ans_none) hc hF (pick_setup hs hb) (pick_barrier hb) hR.2 hR.1)
 
 /-- **The relay's model frames are the model's messages, encoded, at the model's run**: `envPre_run`'s premises give
 `EnvPre`, so `relayPre_of_env` gives `RelayPre` at `encOf`. -/
@@ -207,24 +210,22 @@ theorem relayPre_run
         (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Rand)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hD : LoopModel.Deployed M (LeanRelease.withFiles (LeanRelease.withLink
-      (LeanRelease.withInner ZKMal.Masked.dataE L₁ (Loop.realOf src) fin) src) src) (Loop.realOf src) s0 spec sts)
+      (LeanRelease.withInner ZKMal.Masked.dataE L₁.withoutCross (Loop.realOf src) fin) src) src) (Loop.realOf src) s0
+      spec sts)
     (hsrc : M.src = src M.x M.w M.ρ) (hfin : M.fin = fin M.x M.w M.ρ) (hS : Loop.Level0Src src M.x M.w)
-    (hlive : ZKMal.Masked.Live M.x) (hcp : M.L.CrossPasses) {Θ : Type} {H : Msg → Msg}
-    {Vs : VStar Θ} {θ : Θ}
-    (hτ : M.τ = (runStar H (M.L.toSrv.proverD M.L.fillOf M.nN M.wk M.w) Vs M.x (M.ρ, M.κ) θ).msgs)
-    (hk : 0 < Vs.k M.x)
-    (hlk : ∀ h : List (Msg × Msg), h.length = 1 → M.wk M.x M.w M.ρ h 0 = some (M.L.ownMsg M.x M.w M.ρ h, false))
-    (hfw : ∀ h : List (Msg × Msg), h.length = M.L.last M.x →
-      M.wk M.x M.w M.ρ h 0 = some (M.L.ownMsg M.x M.w M.ρ h, false))
+    (hlive : ZKMal.Masked.Live M.x) {Θ : Type} {H : Msg → Msg}
+    {k : Msg → ℕ} {A : Θ → List ByteArray → Option ByteArray} {θ : Θ}
+    (hτ : M.τ = (runStar H (M.L.toSrv.proverD M.L.fillOf M.nN M.wk M.w) (auditorV k spec sts A) M.x (M.ρ, M.κ)
+      θ).msgs)
+    (hK : (tmplOf (.ok (spec, sts))).countP isModel ≤ k M.x)
+    {dv : M.L.toSrv.Worker} (hdw : M.wk = M.L.deployedWk dv)
     {rv : List (Msg × Msg) → Option Msg} (hwd : WorkerDeterministic M rv)
     {sid : Nat} {nonce : ByteArray} (hn : nonce = ⟨(ZKMal.CoinLayer.nb M.ρ.1).toArray⟩)
     {ins : List (ByteArray × Env)} (hs : ∀ p ∈ ins, p.2.setup = .ok (spec, sts))
     (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) {σ : LoopAt} (hc : σ.c = 0)
-    (hnew : ∀ p ∈ σ.R.reps, p.sid ≠ sid) {aud : List ByteArray → Option ByteArray}
-    (hR : RelayServes M rv aud sid spec sts nonce σ ins)
-    (hA : AuditorAnswers M (modelSlots {} {} (pick true {} {} ins))) :
+    (hnew : ∀ p ∈ σ.R.reps, p.sid ≠ sid) (hR : RelayServes M rv (A θ) sid spec sts nonce σ ins) :
     RelayPre (relayTrace true ins) (encOf spec sts M.msgs) :=
   relayPre_of_env ins M.msgs hs hb
-    (envPre_run hD hsrc hfin hS hlive hcp hτ hk hlk hfw hwd hn hs hb hc hnew hR hA)
+    (envPre_run hD hsrc hfin hS hlive hτ hK hdw hwd hn hs hb hc hnew hR)
 
 end Claims.ZKServer.Relay
