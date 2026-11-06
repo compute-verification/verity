@@ -16,6 +16,8 @@ For every agent, whatever it owns, it also refuses a push that would update `mai
 them; INF-110), and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token (INF-105).
 A lander's hand repair of `next` under the queue lock names its reason on the push itself (`AGENT_GUARD_PUSH_NEXT_OK='REASON'
 git push ...`), and is logged to `$AGENT_GUARD_STATE/push-next-ok.jsonl`. Nothing lets a push to `main` through.
+It refuses, too, a push, branch switch or worktree add with `$` or a backquote in its words, whose branch the shell names only
+after the hook has read it.
 The registry is `$AGENT_GUARD_STATE/branches.json` (default /tmp/agent-guard), one VM's: an agent on a VM of its own is never
 judged. Where a command names no directory (`git -C DIR`, or a `cd DIR` before it in the same command) the hook judges the
 event's cwd, else the workspace root, since the shell's remembered directory never reaches it.
@@ -175,11 +177,28 @@ def main_or_config_reason(invocations_: list[tuple[int, str, list[str]]], next_o
     return None
 
 
+#: what the shell expands after the hook has read the command: a branch or directory named through one can't be judged
+UNEXPANDED = ("$", "`")
+
+
+def unexpanded_reason(commands: list[list[str]], indexed: list[tuple[int, str, list[str]]]) -> str | None:
+    """Whatever agent runs it: a push, branch switch or worktree add whose words the shell has yet to expand. The hook sees
+    `refs/heads/$B`, not the branch it becomes, so it can't hold that branch to its owner or to `main`, `checked` and `next`."""
+    for i, _, args in indexed:
+        sub = args[0]
+        if sub not in ("push", "checkout", "switch", "worktree") or (sub == "checkout" and "--" in args):
+            continue
+        if words := [w for w in commands[i][1:] if any(c in w for c in UNEXPANDED)]:
+            return (f"this `git {sub}` names `{words[0]}`, which the shell expands only after the guard has read it, so the guard "
+                    f"can't check which branch or checkout it is. Name it literally (`git push origin HEAD:refs/heads/<your-branch>`).")
+    return None
+
+
 def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] | None = None) -> str | None:
     """Why the agent may not run these git commands here, or None. Registers the branches an allowed command creates.
     `next_ok[i]` is the AGENT_GUARD_PUSH_NEXT_OK reason `commands[i]` was given, if any."""
     indexed = indexed_invocations(commands, cwd)
-    if why := main_or_config_reason(indexed, next_ok or [], agent):
+    if why := unexpanded_reason(commands, indexed) or main_or_config_reason(indexed, next_ok or [], agent):
         return why
     found = [(d, args) for _, d, args in indexed]
     if not agent:

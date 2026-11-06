@@ -135,8 +135,9 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   (`claude-opus-5-5-<effort>`; `inherit` runs it at your own effort), a standing request for every agent here: `max` for
   the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for slightly heavy work, `medium` for routine
   execution, `low` for trivial lookups.
-- **Reach a running subagent** on your VM through its next shell command, since it never rereads a shared file mid-run:
-  `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'`. Agents on other VMs: through their coordinator on Slack.
+- **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
+  `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
+  its shell hook delivers it within about a minute (`--local`: a subagent on your VM, at once).
 - **Stay reachable.** Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a run, end
   your turn naming its id and ETA, and your launcher resumes you. The control pod's agent watch flags a stalled or
   stopped agent and an out-of-memory kill. A worker resumed twice, whose base branch is gone, or silent past the watch's
