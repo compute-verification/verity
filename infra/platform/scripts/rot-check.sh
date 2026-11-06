@@ -9,7 +9,7 @@ here=$(cd "$(dirname "$0")/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-tar -C "$here" --exclude=node_modules --exclude=.next --exclude='.workflow-*' --exclude=.data -cf - . | tar -C "$work" -xf -
+tar -C "$here" --exclude=node_modules --exclude=.next --exclude='.workflow-*' --exclude=.data --exclude='*.tsbuildinfo' -cf - . | tar -C "$work" -xf -
 cd "$work"
 
 deps=(ai workflow next @ai-sdk/harness @ai-sdk/harness-claude-code @ai-sdk/harness-codex @ai-sdk/sandbox-vercel

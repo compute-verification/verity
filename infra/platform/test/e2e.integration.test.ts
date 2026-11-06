@@ -5,7 +5,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { beforeAll, describe, expect, it } from "vitest";
 import { getRun, start } from "workflow/api";
 import { tick } from "../src/cron.ts";
-import { jobCallback, slackEvents, status } from "../src/http.ts";
+import { changeLead, jobCallback, slackEvents, status } from "../src/http.ts";
 import { mcpHandler } from "../src/mcp.ts";
 import { type LeadResult, leadWorkflow } from "../workflows/lead.ts";
 import { NOW, signedSlackRequest, slackBody, slackEnv, testRuntime } from "./helpers.ts";
@@ -187,5 +187,47 @@ describe("a lead on the platform", () => {
     const m = await say("C_INFRA", "still there?");
     await reply(m.thread, "slack/message");
     expect((await t.store.getLead("infra"))!.runId).toBe(run.runId);
+  });
+
+  it("registers, rings, rebudgets, replaces the doc of and pauses a lead through the admin endpoint", async () => {
+    const admin = (body: object, token = API.PLATFORM_API_TOKEN) =>
+      changeLead(
+        new Request("http://platform.test/api/leads", { method: "POST", headers: { authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
+        API,
+      );
+    const get = async (q: string) =>
+      (await status(new Request(`http://platform.test/api/leads?${q}`, { headers: { authorization: `Bearer ${API.PLATFORM_API_TOKEN}` } }), API)).json();
+    expect((await admin({ lane: "comms" }, "wrong")).status).toBe(401);
+    expect((await admin({ lane: "Not A Lane" })).status).toBe(400);
+
+    const reg = await (
+      await admin({
+        lane: "comms",
+        slackChannel: "C_COMMS",
+        harness: "fake",
+        model: "fake/fake",
+        charter: "Keep the public story true.",
+        doc: "# comms workstream\n",
+        monthlyBudgetUsd: 200,
+        status: "active",
+        roll: true,
+        kick: "You are on the platform now.",
+      })
+    ).json();
+    expect(reg.runId).toBeTruthy();
+    expect(reg.lead).toMatchObject({ lane: "comms", gatewayKeyId: "local-key-comms", docBytes: 19 });
+    await t.slack.waitFor((p) => p.channel === "C_COMMS" && !p.threadTs && p.text.includes("mcp/cutover"));
+    expect((await t.store.getLead("comms"))!.runId).toBe(reg.runId);
+
+    await admin({ lane: "comms", monthlyBudgetUsd: 300, doc: "# comms, from the old side\n" });
+    const keys = (await t.store.listGrants("comms")).filter((g) => g.kind === "ai-gateway-key");
+    expect(keys.map((g) => g.scope).sort()).toEqual(["monthly $200", "monthly $300"]);
+    const now = await get("lane=comms&doc=1");
+    expect(now.doc).toBe("# comms, from the old side\n");
+    expect(now.revisions.map((r: { turnId: string }) => r.turnId)).toContain("admin");
+    expect((await get("lane=comms&doc=1&rev=0")).doc).toBe("# comms workstream\n");
+
+    expect((await (await admin({ lane: "comms", status: "paused" })).json()).lead.status).toBe("paused");
+    expect(await t.store.leadByChannel("C_COMMS")).toBeNull();
   });
 });

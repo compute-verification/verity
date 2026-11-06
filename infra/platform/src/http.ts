@@ -91,8 +91,14 @@ export async function status(req: Request, env: Env = process.env) {
   const q = new URL(req.url).searchParams;
   const lane = q.get("lane") ?? undefined;
   if (lane && q.get("doc") === "1") {
-    const lead = await (await runtime()).store.getLead(lane);
-    return lead ? json({ lane, docRev: lead.docRev, doc: lead.doc }) : json({ error: "no such lead" }, 404);
+    const { store } = await runtime();
+    const rev = q.get("rev");
+    if (rev != null) {
+      const doc = await store.docAt(lane, Number(rev));
+      return doc == null ? json({ error: "no such revision" }, 404) : json({ lane, docRev: Number(rev), doc });
+    }
+    const lead = await store.getLead(lane);
+    return lead ? json({ lane, docRev: lead.docRev, doc: lead.doc, revisions: await store.docRevisions(lane) }) : json({ error: "no such lead" }, 404);
   }
   return json(await statusReport(lane));
 }
@@ -112,7 +118,8 @@ type LeadChange = {
 };
 
 // The cutover's one write: register or change a lead, provision its gateway key
-// the first time it has a budget, park its sandbox when it is paused, and
+// the first time it has a budget (and move the key's limit with the budget),
+// park its sandbox when it is paused, and
 // optionally ring it (`kick`, an event it handles at once) or move it to a fresh
 // run on this deployment (`roll`).
 export async function changeLead(req: Request, env: Env = process.env) {
@@ -122,10 +129,19 @@ export async function changeLead(req: Request, env: Env = process.env) {
   const rt = await runtime();
   const before = await rt.store.getLead(c.lane);
   const model = c.model ?? before?.model ?? env.PLATFORM_DEFAULT_MODEL ?? "anthropic/claude-opus-5.5";
-  let lead = await rt.store.upsertLead({ ...c, model });
+  const { doc, ...change } = c;
+  let lead = await rt.store.upsertLead({ ...change, doc: before ? undefined : doc, model });
+  // A lead's doc is its memory: the imported doc and every replacement are
+  // revisions like any turn's, so the doc a replacement overwrote can be read back.
+  if (doc != null && doc !== before?.doc) {
+    await rt.store.saveDoc(c.lane, doc, "admin");
+    lead = (await rt.store.getLead(c.lane))!;
+  }
   if (lead.monthlyBudgetUsd && !lead.gatewayKeyId) {
     await rt.credentials.provisionGatewayKey(lead.lane, lead.monthlyBudgetUsd);
     lead = (await rt.store.getLead(lead.lane))!;
+  } else if (lead.monthlyBudgetUsd && lead.gatewayKeyId && lead.monthlyBudgetUsd !== before?.monthlyBudgetUsd) {
+    await rt.credentials.setGatewayBudget(lead.lane, lead.gatewayKeyId, lead.monthlyBudgetUsd);
   }
   if (lead.status !== "active") await rt.sandbox.park(`lead-${lead.lane}`);
   let runId: string | null = null;
