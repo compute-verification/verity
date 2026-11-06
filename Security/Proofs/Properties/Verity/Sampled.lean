@@ -152,9 +152,9 @@ structure Live where
   src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
   hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src
   hTags : TagsOkZHJ I
-  /-- `live-verifier` at the writer as V5 reads it, under the law (`DrawFileZK (printedDraw law) law n`) -/
+  /-- `live-verifier` at the writer as V5 reads it, under the law at every draw (`DrawFileZK (printedDraw law) law n`) -/
   hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw I own (printedDraw law)
-    (fun S R => (planZHJP (Reg := Reg) (printedDraw law) y₀ S R).length) wr law
+    (fun S R => (planZHJP (Reg := Reg) (printedDraw law) y₀ S R).length) wr fun _ => law
   k : ℕ
   Rw : ℕ
   M : ℕ
@@ -253,10 +253,14 @@ noncomputable abbrev Cc :=
 noncomputable def P :=
   (keyProgP A.D.unroll {} A.hU A.n).partition (FlockSoundness.Discharge.Layout.outsOfP A.D.unroll A.hU A.n {})
 
+/-- The session's circuit file read as its statement circuit (`HmOut.parseStmt`), from its descriptor's flat parse. -/
+theorem hcS : Flock.HmOut.parseStmt (zkTags A.I) A.I.circuitFile A.I.tables = .ok A.D.unroll :=
+  Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse A.hD)
+
 /-- V5's binding at the session's ports. -/
 noncomputable def vb :=
-  (rsZHJP (Reg := A.Reg) A.dj A.y₀ A.ht (Flock.Desc.parse_flat A.hD) A.hscope A.hU A.hpi A.hpub).bindingZ
-    (rsZHJP_computes (Reg := A.Reg) A.dj A.y₀ A.ht (Flock.Desc.parse_flat A.hD) A.hscope A.hU A.hpi A.hpub)
+  (rsZHJP (Reg := A.Reg) A.dj A.y₀ A.ht A.hcS A.hscope A.hU A.hpi A.hpub).bindingZ
+    (rsZHJP_computes (Reg := A.Reg) A.dj A.y₀ A.ht A.hcS A.hscope A.hU A.hpi A.hpub)
 
 /-- **V5's simulator at a strategy of the live audit**: the strategy in the compiled batched session at flock-verify
 `--zk`'s acceptance at `own`, through the decoder `RecordCustodyZKJPLaw` and the draw file's size give at the session's
@@ -265,8 +269,7 @@ noncomputable def sim (τ : FlockSoundness.Game.Strategy A.game) :=
   simZJA execArith hs512 (planZHJP A.dj A.y₀) (AcceptsZKP A.I A.own) A.wr
     (opnAtZHJP (planZHJP A.dj A.y₀) A.I A.own A.dj) A.dg (decAtZJ (planZHJP A.dj A.y₀)) (fun _ _ _ _ => true)
     (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) A.N
-    (decodesZCJH_custodyP A.I A.own A.ht (Flock.Desc.parse_flat A.hD) A.law A.kd A.hdiv A.dj A.y₀ A.wr A.L A.hTags
-      A.hCust A.hsz) τ
+    (decodesZCJH_custodyP A.I A.own A.ht A.hcS A.law A.kd A.hdiv A.dj A.y₀ A.wr A.L A.hTags A.hCust A.hsz) τ
 
 /-- **V5's extractor at a strategy of the live audit**: `XplurZC` at the simulator's registration and continuation. -/
 noncomputable def Xr (τ : FlockSoundness.Game.Strategy A.game) :=
