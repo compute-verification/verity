@@ -31,24 +31,6 @@ open Claims.Sampling Finset
 
 /-! ## The first stage, independent or less often -/
 
-theorem escCell_nonneg (n k m : ℕ) : 0 ≤ escCell n k m := by
-  unfold escCell
-  positivity
-
-theorem escCell_le_one (n k m : ℕ) : escCell n k m ≤ 1 := by
-  unfold escCell
-  rcases Nat.eq_zero_or_pos (n.choose (min k n)) with h | h
-  · rw [h, Nat.cast_zero, div_zero]
-    exact zero_le_one
-  · rw [div_le_one (by exact_mod_cast h)]
-    exact_mod_cast Nat.choose_le_choose _ (Nat.sub_le n m)
-
-theorem esc_nonneg (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) (ρ : ℕ) : 0 ≤ d.esc Pt fp ρ :=
-  prod_nonneg fun _ _ => escCell_nonneg _ _ _
-
-theorem esc_le_one (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) (ρ : ℕ) : d.esc Pt fp ρ ≤ 1 :=
-  prod_le_one (fun _ _ => escCell_nonneg _ _ _) fun _ _ => escCell_le_one _ _ _
-
 /-- **The first stage, independent or less often**: when it accepts each set `T` of the `R` replay blocks with
 probability at most `q^{|T|}`, the acceptance probability at a footprint is at most `∏_ρ (q + (1 − q)·e_ρ)`, each
 replay block's own. -/
@@ -62,8 +44,8 @@ theorem pa_le_prod (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) 
   rw [hR]
   refine sum_le_sum fun T hT => ?_
   have hw : 0 ≤ (∏ ρ ∈ T, (1 - d.esc Pt fp ρ)) * ∏ ρ ∈ range R \ T, d.esc Pt fp ρ :=
-    mul_nonneg (prod_nonneg fun ρ _ => sub_nonneg.2 (esc_le_one d Pt fp ρ))
-      (prod_nonneg fun ρ _ => esc_nonneg d Pt fp ρ)
+    mul_nonneg (prod_nonneg fun ρ _ => sub_nonneg.2 (d.esc_le_one Pt fp ρ))
+      (prod_nonneg fun ρ _ => d.esc_nonneg Pt fp ρ)
   rw [prod_mul_distrib, prod_const, mul_assoc (q ^ T.card)]
   exact mul_le_mul_of_nonneg_right (hrep T (mem_powerset.1 hT)) hw
 
