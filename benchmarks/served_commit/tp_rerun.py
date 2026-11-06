@@ -1,21 +1,24 @@
-"""A served window replayed in fresh engine processes, under a TP engine in eager mode (GLM-5.3 TP8): whether serving the same
-window again, with the same arrivals, in a new engine on the same node reproduces it bit for bit. It compares each forward step's
-rows (the schedule), every request's tokens, and on every rank, per token row, every module's values as `tp_replay` fingerprints
-them (each DSA attention layer's top-k indices and core output, and the logits rows, among them). Measurement only.
+"""A served window replayed in fresh engine processes, under a TP engine in eager mode (GLM-5.3 TP8, or DeepSeek-V4-Pro with
+``--case``): whether serving the same window again, with the same arrivals, in a new engine on the same node reproduces it bit for
+bit. It compares each forward step's composition (the schedule), every request's tokens, and on every rank, per token row, every
+module's values as `tp_replay` fingerprints them (GLM-5.3's DSA top-k indices and attention core outputs, and the logits rows,
+among them). Measurement only.
 
     bash benchmarks/served_commit/tp_rerun.sh      (its header has the knobs)
 
 ``run`` serves `tp_replay`'s arms (``--arms``, default ``served`` and ``served-2``: the window, then the same window again in the
-same engine) in one engine process with `Rerun` on every rank, after one run of fillers of the window's shapes, as `tp_replay` does.
-Per arm, `arms.jsonl` has its tokens, its schedule (each forward step's rows as runs of [request, first position, rows]), its wall
+same engine) in one engine process with `Rerun` on every rank, after one run of fillers of the window's shapes, each arm from an
+empty prefix cache, as `tp_replay` does. Per arm, `arms.jsonl` has its tokens, its schedule (`tp_replay.composition` of each
+forward step: [request, first position, scheduled tokens]), the top-1 - top-2 logit gap of every row the sampler read, its wall
 time and `tp_replay`'s comparison with ``served`` in the same engine for every request of the arm. Every rank's fingerprints go to
 ``--dump`` (`<arm>.rank<r>.npz`), with the request and module names their codes index, so another process's codes don't matter.
 
-``compare RUN RUN...`` compares each arm of each later run with the same arm of the first: tokens, schedule, and on each rank the
+``compare RUN RUN...`` compares each arm of each later run with the same arm of the first: tokens (with `tp_replay.flips` for a
+request whose tokens differ: how many flipped, the first, and the logit gap there in both runs), schedule, and on each rank the
 entries (request, position, module group) both runs have, how many are equal, those only one has, and the first that differs by
 step, then module in the order the first run's forward first called it, then request and position. ``bit_exact`` is equal tokens
 and schedules and, on every rank, entries compared, none differing and none one-sided. ``run`` exits 3 when the instrument failed:
-`tp_replay`'s conditions, or ranks that recorded different schedules.
+`tp_replay`'s conditions, ranks that recorded different schedules, or an arm that read the prefix cache.
 """
 from __future__ import annotations
 
@@ -35,34 +38,15 @@ ARMS = "served,served-2"
 NO_STEP = np.iinfo(np.int64).max
 
 
-def runs_of(req: np.ndarray, pos: np.ndarray, names: list[str]) -> list[list[Any]]:
-    """A forward's rows, in order, as runs of consecutive positions of one request: [request, first position, rows]."""
-    n = len(req)
-    if not n:
-        return []
-    cut = np.flatnonzero((req[1:] != req[:-1]) | (pos[1:] != pos[:-1] + 1)) + 1
-    starts, ends = np.concatenate([[0], cut]), np.concatenate([cut, [n]])
-    return [[names[int(req[s])], int(pos[s]), int(e - s)] for s, e in zip(starts, ends)]
-
-
 class Rerun(R.Interior):
-    """`tp_replay.Interior` that also keeps each forward step's rows, and writes an arm's fingerprints with their names."""
-
-    def begin(self) -> None:
-        super().begin()
-        self.sched: list[tuple[np.ndarray, np.ndarray]] = []
-
-    def _map(self, req: np.ndarray, pos: np.ndarray, padded: int, keep: np.ndarray | None = None) -> int:
-        if padded >= 0:
-            self.sched.append((req, pos))
-        return super()._map(req, pos, padded, keep)
+    """`tp_replay.Interior` that writes an arm's fingerprints with the names their codes index, and its schedule on every rank."""
 
     def dump(self, path: Path) -> dict[str, Any]:
         self.flush()
         keys, fp, _dups = R.flatten(self.steps)
         names = sorted(self.req_code, key=self.req_code.__getitem__)
         np.savez(path, keys=keys, fp=fp, requests=np.array(names, dtype=str), groups=np.array(self.groups, dtype=str))
-        return {"rank": self.rank, "entries": int(len(keys)), "schedule": [runs_of(q, p, names) for q, p in self.sched]}
+        return {"rank": self.rank, "entries": int(len(keys)), "schedule": [[list(x) for x in step] for step in self.schedule]}
 
 
 def install(worker: Any) -> dict[str, Any]:
@@ -71,23 +55,28 @@ def install(worker: Any) -> dict[str, Any]:
     return worker._tp_replay.install()
 
 
-def end(worker: Any, *, arm: str, drawn: list[str], reference: str, dump: str) -> dict[str, Any]:
+def end(worker: Any, *, arm: str, sampled: list[str], reference: str, dump: str) -> dict[str, Any]:
     """On a rank: the arm's fingerprints written to ``dump`` and its schedule, then `tp_replay`'s comparison with ``reference``."""
     me = worker._tp_replay
     made = me.dump(Path(dump) / f"{arm}.rank{me.rank}.npz")
-    return {**me.end(arm, drawn, reference), **made}
+    return {**me.end(arm, sampled, reference), **made}
 
 
-def record(arm: str, result: dict[str, Any], ranks: list[dict[str, Any]], world: int) -> tuple[dict[str, Any], list[str]]:
-    """An arm's `arms.jsonl` row, from its `run_workload` result and its ranks' `end`, and the instrument failures they show."""
+def record(arm: str, reqs: list[dict[str, Any]], result: dict[str, Any], cached: dict[str, int], ranks: list[dict[str, Any]],
+           world: int) -> tuple[dict[str, Any], list[str]]:
+    """An arm's `arms.jsonl` row, from its requests, its `run_workload` result, each request's cached prompt tokens and its ranks'
+    `end`, and the instrument failures they show."""
     ranks = sorted(ranks, key=lambda x: x["rank"])
     schedules = [x.pop("schedule") for x in ranks]
+    gaps = next((x.pop("gaps") for x in ranks if "gaps" in x), {})
     broken = [f"{arm}: rank {x['rank']}'s schedule differs from rank {ranks[0]['rank']}'s" for x, s in zip(ranks, schedules) if s != schedules[0]]
+    broken += R.cache_misuse(arm, cached)
     if arm == R.REFERENCE:
         broken += [f"rank {x['rank']}: {d} compared nothing" for x in ranks for d, v in x["per_request"].items() if not v["compared"]]
     row = {"arm": arm, "wall_s": result["wall_s"], "gpu_s": world * result["wall_s"], "steps": result["iterations"],
            "step_wall_s": result["step_wall_s"], "tokens": result["tokens"], "finish_reasons": result["finish_reasons"],
-           "schedule": schedules[0] if schedules else [], "ranks": ranks}
+           "prompts": {q["request_id"]: len(q["prompt_token_ids"]) for q in reqs}, "cached_tokens": cached,
+           "schedule": schedules[0] if schedules else [], "gaps": gaps, "ranks": ranks}
     return row, broken
 
 
@@ -104,7 +93,7 @@ def run(a: argparse.Namespace) -> int:
     llm, eng, wl, world = E.llm, E.eng, E.wl, E.world
     sampling = wl["sampling"]
     vocab = int(llm.llm_engine.vllm_config.model_config.hf_config.vocab_size)
-    plan = R.arms([int(t) for t in wl["requests"][0]["prompt_token_ids"]], vocab)
+    plan = R.arms([int(t) for t in wl["requests"][0]["prompt_token_ids"]], vocab, a.long)
     names = list(plan) if a.arms == "all" else a.arms.split(",")
     if set(names) - set(plan):
         raise SystemExit(f"unknown arms {sorted(set(names) - set(plan))}: tp_replay's are {list(plan)}")
@@ -120,10 +109,12 @@ def run(a: argparse.Namespace) -> int:
     broken: list[str] = []
     with (out / "arms.jsonl").open("w") as f:
         for arm in names:
+            R.cold(llm)
             llm.collective_rpc(R.begin, timeout=a.rpc_timeout)
-            r = run_workload(eng, plan[arm], sampling)
-            kw = {"arm": arm, "drawn": sorted({q["request_id"] for q in plan[arm]}), "reference": R.REFERENCE, "dump": str(dump)}
-            row, bad = record(arm, r, llm.collective_rpc(end, timeout=a.rpc_timeout, kwargs=kw), world)
+            st = R.Steps()
+            r = run_workload(eng, plan[arm], sampling, step=st)
+            kw = {"arm": arm, "sampled": sorted({q["request_id"] for q in plan[arm]}), "reference": R.REFERENCE, "dump": str(dump)}
+            row, bad = record(arm, plan[arm], r, st.cached, llm.collective_rpc(end, timeout=a.rpc_timeout, kwargs=kw), world)
             broken += bad
             f.write(json.dumps(row) + "\n")
             f.flush()
@@ -233,6 +224,8 @@ def compare_arm(a: dict[str, Any], dump_a: Path, b: dict[str, Any], dump_b: Path
     """One arm in two runs: tokens, schedule, and every rank both ran."""
     ranks = sorted({x["rank"] for x in a["ranks"]} & {x["rank"] for x in b["ranks"]})
     toks = tokens_differ(a["tokens"], b["tokens"])
+    gaps = [{rid: {int(p): g for p, g in v.items()} for rid, v in x["gaps"].items()} for x in (a, b)]
+    flips = {rid: v for rid, v in R.flips(a["tokens"], b["tokens"], *gaps, a["prompts"]).items() if not v["tokens_equal"]}
     sched = schedule_differs(a["schedule"], b["schedule"])
     per: dict[int, dict[str, Any]] = {}
     for rank in ranks:
@@ -251,7 +244,7 @@ def compare_arm(a: dict[str, Any], dump_a: Path, b: dict[str, Any], dump_b: Path
         kinds.update(v["kinds_differ"])
     exact = (not toks and sched is None and len(ranks) == len(a["ranks"]) == len(b["ranks"])
              and all(v["compared"] and not (v["differ"] or v["only_first"] or v["only_this"]) for v in per.values()))
-    return {"bit_exact": bool(exact and ranks), "tokens_differ": toks, "requests": len(set(a["tokens"]) | set(b["tokens"])),
+    return {"bit_exact": bool(exact and ranks), "tokens_differ": toks, "flips": flips, "requests": len(set(a["tokens"]) | set(b["tokens"])),
             "schedule_first_differ": sched, "forwards": [len(a["schedule"]), len(b["schedule"])], "ranks": len(ranks), **total,
             "ranks_differ": sum(1 for v in per.values() if v["differ"] or v["only_first"] or v["only_this"]),
             "first_differ": None if first is None else {"rank": first[0], **first[1]}, "kinds_differ": dict(kinds.most_common(12)),
@@ -277,7 +270,8 @@ def compare(runs: list[Path], out: Path | None) -> int:
         doc["across"][str(r)] = {k: compare_arm(arms[0][k], dumps[0], v, dump) for k, v in a.items() if k in arms[0]}
     for r, res in doc["across"].items():
         for arm, v in res.items():
-            print(f"[tp-rerun] {r} vs {runs[0]}, {arm}: bit-exact {v['bit_exact']} (tokens differ {v['tokens_differ'] or 'none'}; schedule "
+            fl = {rid: f"{x['flipped']} from output {x['first_flip']}, gap {x['gap_ref']} vs {x['gap_run']}" for rid, x in v["flips"].items()}
+            print(f"[tp-rerun] {r} vs {runs[0]}, {arm}: bit-exact {v['bit_exact']} (tokens differ {fl or v['tokens_differ'] or 'none'}; schedule "
                   f"{'equal' if v['schedule_first_differ'] is None else 'differs at step ' + str(v['schedule_first_differ'])}, "
                   f"{v['forwards'][0]} forwards; {v['differ']} of {v['compared']} entries differ on {v['ranks_differ']} of {v['ranks']} ranks, "
                   f"{v['only_first'] + v['only_this']} one-sided; first {v['first_differ']})", flush=True)
@@ -301,6 +295,7 @@ def main() -> None:
     r.add_argument("--case", default=None)
     r.add_argument("--checkpoints", default="manifests/checkpoints.json")
     r.add_argument("--tp", type=int, default=8)
+    r.add_argument("--long", type=int, default=R.LONG, help="d-long's prompt length")
     r.add_argument("--engine-arg", action="append", default=[])
     r.add_argument("--rpc-timeout", type=float, default=3600.0)
     c = sub.add_parser("compare", help="compare each later run's arms with the first run's")

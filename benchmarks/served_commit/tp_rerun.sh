@@ -3,7 +3,7 @@
 # tree's root:
 #   RESEARCH_RUN_DIR=DIR bash benchmarks/served_commit/tp_rerun.sh
 # `run` in RUNS (default 3) engine processes one after another, then `compare` of each with the first. ARMS (default
-# served,served-2; `all` for every arm of tp_replay); ROW, CASE, TP, GPU_UTIL, MAX_MODEL_LEN, MAX_BATCHED and VENV as in
+# served,served-2; `all` for every arm of tp_replay); ROW, CASE, TP, LONG, GPU_UTIL, MAX_MODEL_LEN, MAX_BATCHED and VENV as in
 # tp_replay.sh. The fingerprints (about 100 MB a rank and arm for GLM-5.3's window) go to DUMP, by default a new directory under
 # /workspace outside the run dir, removed after the comparison unless KEEP_DUMP=1.
 # Out: $RESEARCH_RUN_DIR/out/rerun/run<i> (versions.json, arms.jsonl, run.json) and cross.json.
@@ -15,7 +15,7 @@ OUT=$RESEARCH_RUN_DIR/out/rerun
 DUMP=${DUMP:-$(mktemp -d /workspace/tp-rerun.XXXXXX)}
 for i in $(seq 0 $((${RUNS:-3} - 1))); do
   python -u -m served_commit.tp_rerun run --workload "workloads/$ROW.json" --case "${CASE:-GLM53}" --tp "${TP:-8}" \
-    --arms "${ARMS:-served,served-2}" --engine-arg "gpu_memory_utilization=${GPU_UTIL:-0.90}" \
+    --arms "${ARMS:-served,served-2}" --long "${LONG:-3072}" --engine-arg "gpu_memory_utilization=${GPU_UTIL:-0.90}" \
     --engine-arg "max_model_len=${MAX_MODEL_LEN:-4096}" --engine-arg "max_num_batched_tokens=${MAX_BATCHED:-2048}" \
     --engine-arg disable_custom_all_reduce=false --out "$OUT/run$i" --dump "$DUMP/run$i"
 done

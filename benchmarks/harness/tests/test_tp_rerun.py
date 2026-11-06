@@ -1,7 +1,9 @@
-"""served_commit's rerun driver (`benchmarks/served_commit/tp_rerun.py`): `Rerun` records each forward's rows as the schedule and
-writes every rank's fingerprints with the names their codes index; `compare` finds two engine processes that served a window alike
-bit-exact even when they coded its requests differently, names a perturbed rank's first difference by step and module, and tells a
-changed schedule from changed values. Fake engine processes on CPU tensors, no engine."""
+"""served_commit's rerun driver (`benchmarks/served_commit/tp_rerun.py`): `Rerun` keeps each forward's composition as the schedule
+on every rank and writes every rank's fingerprints with the names their codes index; `record` flags ranks whose schedules differ, an
+arm that read the prefix cache and a reference that compared nothing; `compare` finds two engine processes that served a window
+alike bit-exact even when they coded its requests differently, names a perturbed rank's first difference by step and module, tells
+a changed schedule from changed values, and reads the logit gap at a flipped token in both runs. Fake engine processes on CPU
+tensors, no engine."""
 from __future__ import annotations
 
 import json
@@ -23,12 +25,6 @@ finally:
     sys.path.remove(str(BENCH))
 
 
-def test_runs_of_cuts_at_each_request_and_each_gap():
-    req, pos = np.array([0, 0, 0, 1, 2, 2, 0]), np.array([4, 5, 6, 9, 0, 2, 7])
-    assert M.runs_of(req, pos, ["d", "c", "e"]) == [["d", 4, 3], ["c", 9, 1], ["e", 0, 1], ["e", 2, 1], ["d", 7, 1]]
-    assert M.runs_of(np.zeros(0, np.int64), np.zeros(0, np.int64), []) == []
-
-
 def test_tokens_and_schedules_differ_where_they_first_do():
     assert M.tokens_differ({"d": [1, 2, 3], "c": [4]}, {"d": [1, 2, 3], "c": [4]}) == {}
     assert M.tokens_differ({"d": [1, 2, 3], "c": [4]}, {"d": [1, 9, 3], "e": [4]}) == {"c": 0, "d": 1, "e": 0}
@@ -36,6 +32,22 @@ def test_tokens_and_schedules_differ_where_they_first_do():
     s = [[["d", 0, 3]], [["d", 3, 1], ["c", 0, 2]]]
     assert M.schedule_differs(s, s) is None and M.schedule_differs(s, s[:1]) == 1
     assert M.schedule_differs(s, [[["d", 0, 2]], *s[1:]]) == 0
+
+
+def _ranks(*schedules):
+    return [{"rank": r, "schedule": s, "per_request": {"d": {"compared": r}}, **({"gaps": {"d": {2: 0.5}}} if r == 0 else {})}
+            for r, s in reversed(list(enumerate(schedules)))]
+
+
+def test_record_flags_split_schedules_cache_reads_and_an_empty_reference():
+    reqs = [{"request_id": "d", "prompt_token_ids": [3, 7, 11], "max_tokens": 1}]
+    result = {"wall_s": 2.0, "iterations": 1, "step_wall_s": [2.0], "tokens": {"d": [13]}, "finish_reasons": {"d": "length"}}
+    row, broken = M.record("served", reqs, result, {"d": 0}, _ranks([[["d", 0, 3]]], [[["d", 0, 3]]]), 8)
+    assert broken == ["rank 0: d compared nothing"]
+    assert [x["rank"] for x in row["ranks"]] == [0, 1] and not any({"schedule", "gaps"} & set(x) for x in row["ranks"])
+    assert (row["schedule"], row["gaps"], row["prompts"], row["gpu_s"]) == ([[["d", 0, 3]]], {"d": {2: 0.5}}, {"d": 3}, 16.0)
+    _row, broken = M.record("served-2", reqs, result, {"d": 2}, _ranks([[["d", 0, 3]]], [[["d", 0, 2]]]), 8)
+    assert broken == ["served-2: rank 1's schedule differs from rank 0's", "served-2: d read 2 cached tokens"]
 
 
 class _Attn(torch.nn.Module):
@@ -133,8 +145,10 @@ ALONE_C = [([5, 9], [("c", 2, 0)]), ([1], [("c", 1, 2)])]
 TOKENS = {"d": [13, 4], "c": [1, 6]}
 
 
-def _process(tmp: Path, monkeypatch, name: str, arms: dict, *, world: int = 2, perturb: int | None = None) -> Path:
-    """A fake engine process: ``world`` ranks serve ``arms`` (name -> steps) in order and `tp_rerun.run`'s files are written."""
+def _process(tmp: Path, monkeypatch, name: str, arms: dict, *, world: int = 2, perturb: int | None = None,
+             tokens: dict | None = None) -> Path:
+    """A fake engine process: ``world`` ranks serve ``arms`` (name -> steps) in order and `tp_rerun.run`'s files are written; the
+    engine's tokens are ``tokens`` (default `TOKENS`)."""
     monkeypatch.setitem(sys.modules, "vllm", SimpleNamespace())
     out, dump = tmp / name, tmp / "dump" / name
     out.mkdir(parents=True)
@@ -155,12 +169,12 @@ def _process(tmp: Path, monkeypatch, name: str, arms: dict, *, world: int = 2, p
                 for s in steps:
                     w.model_runner.execute_model(s)
                     w.model_runner.sample(w.model_runner.h, w.model_runner.ib)
-                drawn = sorted({r for _ids, rs in steps for r, _n, _c in rs})
-                ranks.append(M.end(w, arm=arm, drawn=drawn, reference=R.REFERENCE, dump=str(dump)))
+                served = sorted({r for _ids, rs in steps for r, _n, _c in rs})
+                ranks.append(M.end(w, arm=arm, sampled=served, reference=R.REFERENCE, dump=str(dump)))
             result = {"wall_s": 0.5, "iterations": len(steps), "step_wall_s": [0.5 / len(steps)] * len(steps),
-                      "tokens": {k: v for k, v in TOKENS.items() if any(r == k for _ids, rs in steps for r, _n, _c in rs)},
-                      "finish_reasons": {}}
-            row, bad = M.record(arm, result, ranks, world)
+                      "tokens": {k: v for k, v in (tokens or TOKENS).items() if k in served}, "finish_reasons": {}}
+            reqs = [{"request_id": k, "prompt_token_ids": [0] * _Runner.PROMPT[k]} for k in served]
+            row, bad = M.record(arm, reqs, result, dict.fromkeys(served, 0), ranks, world)
             rows.append(row)
             broken += bad
     finally:
@@ -177,6 +191,8 @@ def test_rerun_records_the_schedule_and_dumps_named_fingerprints(tmp_path, monke
     run = _process(tmp_path, monkeypatch, "a", {"served": WINDOW})
     row = json.loads((run / "arms.jsonl").read_text())
     assert row["schedule"] == [[["d", 0, 3], ["c", 0, 2]], [["d", 3, 1], ["c", 2, 1]], [["d", 4, 1], ["c", 3, 1]]]
+    assert {k: sorted(v) for k, v in row["gaps"].items()} == {"d": ["2", "3", "4"], "c": ["1", "2", "3"]}
+    assert all(g >= 0 for v in row["gaps"].values() for g in v.values()) and row["prompts"] == {"c": 2, "d": 3}
     assert [x["rank"] for x in row["ranks"]] == [0, 1] and json.loads((run / "run.json").read_text())["instrument_failures"] == []
     keys, fp, requests, groups = M.load(tmp_path / "dump" / "a", "served", 1)
     assert requests == ["d", "c"] and groups[:4] == ["model.embed_tokens", "L0.attn", "L0.topk", "L0.self_attn"]
@@ -189,14 +205,20 @@ def test_compare_finds_reruns_bit_exact_and_names_what_differs(tmp_path, monkeyp
     b = _process(tmp_path, monkeypatch, "b", {"alone-c": ALONE_C, "served": WINDOW, "served-2": WINDOW})
     c = _process(tmp_path, monkeypatch, "c", {"served": WINDOW}, perturb=1)
     d = _process(tmp_path, monkeypatch, "d", {"served": OTHER_SCHEDULE})
+    e = _process(tmp_path, monkeypatch, "e", {"served": WINDOW}, tokens={**TOKENS, "d": [13, 5]})
     assert M.load(tmp_path / "dump" / "b", "served", 0)[2] == ["c", "d"]
-    assert M.compare([a, b, c, d], tmp_path / "cross.json") == 0
+    assert M.compare([a, b, c, d, e], tmp_path / "cross.json") == 0
     doc = json.loads((tmp_path / "cross.json").read_text())
-    same, perturbed, moved = (doc["across"][str(p)] for p in (b, c, d))
+    same, perturbed, moved, flipped = (doc["across"][str(p)] for p in (b, c, d, e))
     assert set(same) == {"served", "served-2"} and all(v["bit_exact"] for v in same.values())
     v = same["served"]
     assert (v["ranks"], v["differ"], v["only_first"], v["only_this"], v["first_differ"], v["schedule_first_differ"]) == (2, 0, 0, 0, None, None)
-    assert v["compared"] == v["equal"] > 0
+    assert v["compared"] == v["equal"] > 0 and v["flips"] == {}
+    v = flipped["served"]
+    gaps = json.loads((a / "arms.jsonl").read_text().splitlines()[0])["gaps"]["d"]
+    assert not v["bit_exact"] and v["tokens_differ"] == {"d": 1} and v["differ"] == 0 and set(v["flips"]) == {"d"}
+    assert v["flips"]["d"] == {"tokens_equal": False, "flipped": 1, "first_flip": 1, "gap_ref": gaps["3"], "gap_run": gaps["3"],
+                               "min_gap_ref": min(gaps.values())}
     v = perturbed["served"]
     assert not v["bit_exact"] and v["ranks_differ"] == 1 and v["per_rank"]["0"]["differ"] == 0
     assert v["first_differ"] == {"rank": 1, "step": 0, "request": "d", "pos": 0, "group": "L1.mlp"}
