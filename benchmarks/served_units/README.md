@@ -27,10 +27,10 @@ Files:
 - `job.sh`: builds, stages, proves and verifies every proof block of `SU_UNITS` (its header lists the checks and the environment);
   the builds, the run and the controls are `benchmarks/pouw/hidden_zk/job.sh`'s.
 - `summarize.py`: `out/<tag>/summary.json` and one table row per proof block.
-- `gpu.sh`: the GPU prover's time on statements of each `GU_UNITS` type (`TYPE[:S=V,...]`, `+public-weights` for that arm) at
-  each size of `GU_NS`, under one `gpu-lease`; `gpu_summary.py` fits each type's fixed seconds a statement and seconds a block,
-  and gives its proof overhead (seconds a block × the card's peak MACs a second ÷ the block's MACs), marginal and amortized
-  at each size.
+- `prove_time.sh`: the prover's time on statements of each `PT_UNITS` type (`TYPE[:S=V,...]`, `+public-weights` for that arm)
+  at each size of `PT_NS`, on one leased GPU (`PT_DEVICE=gpu`) or the CPU prover (`cpu`); `prove_time.py` fits each type's
+  fixed seconds a statement and seconds a block, and on a GPU gives its proof overhead (seconds a block × the card's peak MACs
+  a second ÷ the block's MACs), marginal and amortized at each size.
 
 From the source tree's root on a CPU node with 160 GB for the job (results go to `$RESEARCH_RUN_DIR/out`; `SU_CACHE` keeps
 builds and stagings between runs):
@@ -40,9 +40,9 @@ RESEARCH_RUN_DIR=DIR SU_UNITS="fp8-coord:K=6144 router moe-w13" SU_N=4 SU_MEM_GB
   bash benchmarks/served_units/job.sh
 ~~~
 
-On a GPU node (results go to `$RESEARCH_RUN_DIR/out`, the build and stagings to `FLOCK_WORK`, kept between runs):
+Prove times (results go to `$RESEARCH_RUN_DIR/out`, the build and stagings to `FLOCK_WORK`, kept between runs):
 
 ~~~text
-research run --on NODE --cwd source -- bash benchmarks/served_units/gpu.sh \
-  GU_UNITS="fp8-coord:K=6144 fp8-coord:K=6144+public-weights" GU_NS="16 64" SM=120
+research run --on NODE --cwd source -- bash benchmarks/served_units/prove_time.sh \
+  PT_UNITS="fp8-coord:K=6144 fp8-coord:K=6144+public-weights" PT_NS="16 64" PT_DEVICE=gpu SM=120
 ~~~
