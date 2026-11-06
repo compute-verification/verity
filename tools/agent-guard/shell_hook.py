@@ -307,12 +307,10 @@ def available() -> tuple[float, float] | None:
         cg = os.environ.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
         limit = open(f"{cg}/memory.max").read().strip()
         if limit != "max" and int(limit) < total:
-            try:
-                cache = int(dict(re.findall(r"^(\w+) (\d+)$", open(f"{cg}/memory.stat").read(), re.M))["inactive_file"])
-            except (OSError, KeyError):
-                cache = 0
-            used = max(0, int(open(f"{cg}/memory.current").read()) - cache)
-            total, avail = int(limit), min(avail, int(limit) - used)
+            meminfo_avail, used, total = avail, int(open(f"{cg}/memory.current").read()), int(limit)
+            avail = min(meminfo_avail, total - used)        # stands when memory.stat can't be read
+            cache = int(dict(re.findall(r"^(\w+) (\d+)$", open(f"{cg}/memory.stat").read(), re.M)).get("inactive_file", 0))
+            avail = min(meminfo_avail, total - max(0, used - cache))
     except (OSError, IndexError, ValueError):
         pass
     return avail, total
