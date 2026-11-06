@@ -114,6 +114,7 @@
     {"file": "infra/ops/tests/test_watchers.py", "count": 2},
     {"file": "infra/ops/verity_ops/agent_watch.py", "count": 38},
     {"file": "infra/ops/verity_ops/deploy.py", "count": 1},
+    {"file": "integrations/vllm/tests/lint/test_p11_names.py", "count": 6},
     {"file": "ruff.toml", "count": 1},
     {"file": "tests/test_boundaries.py", "count": 5},
     {"file": "tools/agent-guard/boot.sh", "count": 1},
