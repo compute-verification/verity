@@ -1,6 +1,6 @@
 {
  "model": "GLM-5.3 as served: vLLM eager, H200, TP8, block FP8, greedy",
- "source": "art:f6ad06f19bdb5e3a7ff875798c1d8d235c92fa3e98dd6d4bf1a8f161c9ef9ae5",
+ "source": "art:cdef90831b5febd5308ec0f81cc2b5f20901197a94acad0779352d9bef53411b",
  "build": "art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35",
  "prompt_len": 256,
  "decode_steps": 31,
