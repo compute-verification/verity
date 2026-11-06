@@ -629,7 +629,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   check: PoUW's compile pass holds a proof block's z to read none of them (`noise-in-z`), or under a one-stream scheme to be made
   from the words its receipt folds by the Definitions that peel the noise back out (`stream`). No dataflow rule can tell
   a peeled value from a noised one: the peel removes the noise by its arithmetic. So a seed is minted only by PoUW's
-  `verity/core/protocols/pouw/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
+  `verity/ml/protocols/pouw/circuit/seeds.py`, and a `"kind": "position"` port is declared only there, beside a proof block's
   sink return, as a padded proof block's key count with no coin port beside it (never a seed), or in a test named with its reason
   (`tests/test_seed_ports.py`).
 - **`E_COIN_REUSE`** (one use): in the flattened Program (every call, batch member and scan iteration counted), an input leaf

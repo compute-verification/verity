@@ -123,7 +123,7 @@ def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
     TG.load_registries()
     _no_catalog(monkeypatch)
     (make,) = [make for units, make in TG._root_bindings("_pouw_roots") if units[0].startswith(
-        "verity.core.protocols.pouw.circuit.h1tile.circuit-check#")]
+        "verity.ml.protocols.pouw.circuit.h1tile.circuit-check#")]
     roots = make()
     if not roots:
         pytest.skip("PouwH1Tile is not registered on this tree (no circuit.segment)")

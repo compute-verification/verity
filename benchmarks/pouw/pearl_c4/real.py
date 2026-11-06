@@ -1,7 +1,7 @@
 """Pearl-C4's reference replay on real activations (CPU; a development shortcut: the protocol's check is a ZK proof,
 PROTOCOL.md), per linear of a `pearlc_capture.py` directory: X, the linear's input rows (float32 holding BF16 exactly),
 and its weight W (the model's BF16 safetensors); or of an `fp4_v3_real.capture` npz file (X and W of each linear as
-float32 holding BF16), judged in the clear as the scheme (`verity.core.protocols.pouw.schemes.pearl_c4`) judges a unit:
+float32 holding BF16), judged in the clear as the scheme (`verity.ml.protocols.pouw.schemes.pearl_c4`) judges a unit:
 
 * admission per row of X and of W (`row_passes`, D-NF), over the full k and over the split unit, and the rows with a
   non-finite word (D-SB rejects the transcript);
@@ -34,9 +34,9 @@ from types import SimpleNamespace
 
 import numpy as np
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 from verity_config.settings import of
 
 settings = of(__file__)

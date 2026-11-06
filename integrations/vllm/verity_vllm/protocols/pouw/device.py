@@ -24,7 +24,7 @@ from functools import cache
 from pathlib import Path
 
 import numpy as np
-from verity.core.protocols.pouw.circuit import ncp2
+from verity.ml.protocols.pouw.circuit import ncp2
 
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import native as PN
