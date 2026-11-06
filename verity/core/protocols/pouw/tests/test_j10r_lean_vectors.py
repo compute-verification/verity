@@ -35,7 +35,7 @@ def _vectors() -> dict[str, str]:
         "callSeed_vec": _lean(list(sc[:8])),
         "receiptSeed_vec": _lean(list(SD.receipt_seed(SALT, 46, RA, RB)[:8])),
         "seed_vec": _lean(list(SD.seed(SALT, 46, RA, RB)[:8])),
-        "noiseBlock_vec": _lean(list(SD.noise_block(sc, 24)[:8])),
+        "noiseChunk_vec": _lean(list(SD.noise_block(sc, 24)[:8])),
         "unitBlocks_vec": _lean(blocks),
         "row_vec": _lean([(H._value(rows[0][0][:32]), [H._value(z) for z in rows[0][1]])]),
         "col_vec": _lean([(H._value(cols[3][0][:32]), cols[3][1][:8])]),
