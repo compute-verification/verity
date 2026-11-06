@@ -2,7 +2,7 @@
 infiltration panel from its card, and the JSON and renders the console and the post read."""
 import json
 import shutil
-from math import ceil, log, log1p, log2
+from math import log, log1p
 
 import cards
 import figure1 as f
@@ -346,21 +346,17 @@ def test_the_capped_curves_charge_at_most_what_a_request_serves(tmp_path):
                + render_appendix(out, "datacenter week", tmp_path))
 
 
-def test_a_request_serves_each_token_as_its_id(monkeypatch):
-    """A request serves its tokens as ids of ⌈log2 vocab_size⌉ bits, the checkpoint config's: the census's mean
-    request or, with `request="workload"`, the workload card's; another request, or a model without a config, is
-    refused."""
-    vocab = json.loads((f.ROOT / f.VOCAB["GLM-5.3"]).read_text())["vocab_size"]
+def test_a_request_serves_each_token_as_the_token_selects_word():
+    """A request serves each of its tokens as the token select's 32-bit output word, the registered circuit's output,
+    which is wider than the vocabulary's ⌈log2 vocab_size⌉ = 18 bits because an incorrect token select can write any
+    word: the census's mean request or, with `request="workload"`, the workload card's; another request is refused."""
     for request, tokens in (("census", f._entry(f.ADVERSARY, f.CENSUS_WORLD)["tokens_per_request"]),
                             ("workload", cards.load("workload", "GLM-5.3")["value"]["tokens"])):
         c = f.cards("GLM-5.3", request)
         assert c["tokens_per_request"].value == tokens
-        assert c["served_bits"].value == tokens * ceil(log2(vocab)) == tokens * 18
+        assert c["served_bits"].value == tokens * 8 * c["token_bytes"].value == tokens * 32
     with pytest.raises(ValueError, match="a request is one of"):
         f.cards(request="mean")
-    monkeypatch.setattr(f, "VOCAB", {})
-    with pytest.raises(ValueError, match="no checkpoint config for GLM-5.3"):
-        f.cards()
 
 
 def test_the_headline_designs_win_at_the_measured_overhead(out):

@@ -33,7 +33,7 @@ block's outputs under one-stage, outside the budget, and the token ids under two
   (`optimize.two_stage_exfil`), so a wholly incorrect request is charged every bit it commits.
 * `two-stage-capped` and `two-stage-capped-uniform`, `two-stage-patterns` and `two-stage-patterns-uniform`: the same
   designs with each request charged at most the bits it serves (the `served_bits` input: every one of its tokens
-  served as an id of ⌈log2 vocab_size⌉ bits), in `two_stage_exfil`'s sets' form (a cap lemma in progress), which still
+  served as the token select's output word), in `two_stage_exfil`'s sets' form (a cap lemma in progress), which still
   counts which of a request's proof blocks are incorrect, or its patterns' form (no lemma states it yet), which counts
   a request's sets of more than its served bits once.  `CAP_STATUS` says what each rests on.
 * `one-stage`: every proof block sampled uniformly, each sampled one's request replayed.  Its serve-time commitment,
@@ -92,9 +92,6 @@ TWO_STAGE = {"two-stage": (True, None), "two-stage-uniform": (False, None), "two
              "two-stage-patterns-uniform": (False, "patterns")}
 #: what each served-output cap's form rests on
 CAP_STATUS = {"sets": "cap lemma in progress", "patterns": "no lemma states it yet"}
-#: each model's checkpoint config, whose vocab_size prices a served token id
-VOCAB = {"GLM-5.3": "integrations/vllm/tests/check/fixtures/glm_moe_dsa/config.json",
-         "DeepSeek-V4-Pro": "integrations/vllm/tests/check/fixtures/deepseek_v4/config.json"}
 #: a request's tokens: the census's mean, or the `workload` card's request
 REQUESTS = ("census", "workload")
 #: the deployment each panel assumes: what serving commits, and the replay block
@@ -161,7 +158,7 @@ def _card(c: dict, value, unit: str, field: str) -> InputCard:
 
 def cards(model: str = "GLM-5.3", request: str = "census") -> dict[str, InputCard]:
     """Every input: the model's slot cards', those read from the census and rho's reference, and the bits a request
-    serves, each of its tokens as an id of ⌈log2 vocab_size⌉ bits, from the model's config (`VOCAB`).  A request is
+    serves, each of its tokens as the token select's output word, the `design` card's `token_bytes`.  A request is
     the census's mean or, under `request="workload"`, the `workload` card's."""
     if request not in REQUESTS:
         raise ValueError(f"a request is one of {REQUESTS}, not {request!r}")
@@ -219,13 +216,11 @@ def cards(model: str = "GLM-5.3", request: str = "census") -> dict[str, InputCar
         out["params"] = out["ref_params"]
     if request == "workload":
         out["tokens_per_request"] = _card(work, work["value"]["tokens"], "token", "tokens")
-    if model not in VOCAB:
-        raise ValueError(f"no checkpoint config for {model} in VOCAB: a served token id's bits need its vocab_size")
-    vocab = json.loads((ROOT / VOCAB[model]).read_text())["vocab_size"]
-    tokens, bits = out["tokens_per_request"].value, ceil(log2(vocab))
+    tokens, bits = out["tokens_per_request"].value, round(8 * out["token_bytes"].value)
     out["served_bits"] = InputCard(tokens * bits, "bit", "modeled",
-                                   f"every one of a request's {tokens:,} tokens served as its id, ⌈log2 {vocab:,}⌉ = "
-                                   f"{bits} bits, at {VOCAB[model]}'s vocab_size")
+                                   f"every one of a request's {tokens:,} tokens served as the token select's output "
+                                   f"word, {bits} bits (the design card's token_bytes), the registered circuit's "
+                                   "only output a token")
     return out
 
 
