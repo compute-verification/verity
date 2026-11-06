@@ -196,16 +196,9 @@ def dominant(v: dict[str, Any]) -> dict[str, Any] | None:
             "phases": {p: round(x, 4) for p, x in sorted(parts.items(), key=lambda kv: -kv[1])}}
 
 
-def _num(x: Any) -> float | None:
-    """A per-run number; a per-rep list (``prove_s``) summed."""
-    if isinstance(x, list):
-        return sum(float(y) for y in x) if x else None
-    return x
-
-
 def prover_row(d: Path, stage: str, step: str, what: str) -> Row:
     """One prove_live directory: the timed runs (warm ones left out), the invocation's peak RSS, the GPU's peak."""
-    stamped = live_lines(d / "prove.tsv") or live_lines(d / "prove.txt")
+    stamped = live_lines(d / "prove.tsv")
     rows = [v for _, v in stamped]
     timed = [v for v in rows if not v.get("warm")]
     r = Row(stage, step, what, "gpu")
@@ -220,12 +213,12 @@ def prover_row(d: Path, stage: str, step: str, what: str) -> Row:
         r.ok, r.note = False, "; ".join(why + stops[:1])[:300] if d.exists() else "not run"
         r.extra = {"preempted": preempted, "lease_held": held}
         return r
-    r.wall_s = Stat.of(_num(v.get("prove_total_s", v.get("prove_s"))) for v in timed)
+    r.wall_s = Stat.of(v.get("prove_total_s") for v in timed)
     r.e2e_s = Stat.of(v.get("e2e_s") for v in timed)
     tv = timev(d / "time-prove.txt")
     r.peak_rss_gb = tv["peak_rss_gb"] if tv else None
     r.gpu_peak_mib = gpu_peak(d / "gpu-mib.txt")
-    med = sorted(timed, key=lambda v: _num(v.get("prove_total_s", v.get("prove_s"))) or 0)[len(timed) // 2]
+    med = sorted(timed, key=lambda v: v.get("prove_total_s") or 0)[len(timed) // 2]
     pb = med.get("proof_bytes")
     r.proof_bytes = sum(pb) if isinstance(pb, list) else pb
     if med.get("wire_sent") is not None:
@@ -475,8 +468,9 @@ def release(root: Path) -> dict[str, Any] | None:
 
 
 def staged_units(p: Path) -> dict[str, dict[str, Any]]:
-    """What `rec_vstage.stage` printed of each unit it staged (85's ``summary-vstage.json``): its template, instances, rows,
-    k_log, seconds and (the algebra's parts) its lowering's seconds and circuit bytes, by statement name."""
+    """What `rec_vstage.stage` printed of each statement it staged (85's ``summary-vstage.json``): its template,
+    instances, rows, k_log, seconds and (the algebra's parts) its lowering's seconds and circuit bytes, by statement
+    name."""
     try:
         st = json.loads(text(p) or "{}").get("statements") or {}
     except ValueError:
@@ -747,7 +741,7 @@ def markdown(doc: dict[str, Any]) -> str:
 
     def each(q: dict[str, Any]) -> str:
         return (f"commit {str(q.get('commit'))[:12]}, the inner's {q.get('RUNS')} timed runs after {q.get('WARM')} warm, "
-                f"each V* statement's {q.get('OPROVE_RUNS', q.get('RUNS'))} after {q.get('OPROVE_WARM', q.get('WARM'))} "
+                f"each V* statement's {q.get('OPROVE_RUNS')} after {q.get('OPROVE_WARM')} "
                 f"(lease {q.get('GPU_MAX_MIN', '?')} min)"
                 + (f", V* statements {q['OPROVE_JOBS']} at a time" if q.get("OPROVE_JOBS") else "")
                 + f", {q.get('REPEAT')} repeats per CPU step")
@@ -769,7 +763,7 @@ def markdown(doc: dict[str, Any]) -> str:
     for r in doc["rows"]:
         run = f" {r.get('extra', {}).get('run')} |" if doc.get("runs") else ""
         dom = r.get("dominant")
-        dom_s = (f"{dom['phase']} {dom['s']:.3g} s" + (f" ({dom['share']:.0%} of {dom.get('of', 'prove_total_s')})"
+        dom_s = (f"{dom['phase']} {dom['s']:.3g} s" + (f" ({dom['share']:.0%} of {dom['of']})"
                                                        if dom.get("share") else "")) if dom else "—"
         pace = r.get("extra", {}).get("session_s")
         pace_s = f"{pace:.3g}" if isinstance(pace, (int, float)) else "—"
