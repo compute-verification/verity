@@ -147,7 +147,9 @@ theorem notNotTwo_Pa (fp : ℕ → ℕ → ℕ) :
     have hv2 : v < 2 := Finset.mem_range.1 (Finset.mem_powerset.1 hT hv)
     have hw : window 0 2 T ≠ ∅ := by
       intro hw
-      have hvw : v ∈ window 0 2 T := by simp [window, hv] <;> omega
+      have hvw : v ∈ window 0 2 T := by
+        simp [window, hv]
+        omega
       rw [hw] at hvw
       simp at hvw
     rw [notNotTwo_replay_Pa]
