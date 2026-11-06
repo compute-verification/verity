@@ -359,7 +359,7 @@ class _Run:
         rows = [a[i].tobytes() for i in range(mp)]
         u = Matmul(len(self.units), Shape(mp, k, n), w)
         self.scheme.check(u)
-        root_a = commit_rows(activation_binding(self.salt, u.index), u.index, rows).commitment.root
+        root_a = commit_rows(activation_binding(self.salt, u.index), u.index, rows, self.scheme.commitment_hash).commitment.root
         ctx = UnitContext(self.salt, u, root_a, self.weight_roots[w])
         tiles = ncp_tiles(self.scheme, ctx, self.scheme.noise(ctx), a, ops)
         z = np.empty((mp, n), np.int64)
@@ -379,7 +379,8 @@ class _Run:
         """Commit the transcript: the Merkle root over every tile digest, in unit and tile order (`Prover.prove`'s tree)."""
         if self.leaves:
             epoch = Epoch(Workload(tuple(self.units)), dict(self.weight_roots), self.salt)
-            tree = MerkleTree(transcript_domain(epoch, len(self.leaves)), dict(enumerate(self.leaves)), lambda _: TILE_SCHEMA)
+            tree = MerkleTree(transcript_domain(epoch, len(self.leaves), self.scheme.commitment_hash), dict(enumerate(self.leaves)),
+                              lambda _: TILE_SCHEMA)
             self.commits["transcript_root"] = tree.commitment.root.hex()
         self.commits.update(units=len(self.units), tiles=len(self.leaves))
         if self.settings.transcript_dir:
@@ -610,7 +611,7 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     roots = {}
     for w, layer in enumerate(layers):
         b, _ = quantize(_host(layer.weight))
-        roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])]).commitment.root.hex()
+        roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])], "sha256").commitment.root.hex()
     return {"weight_roots": roots, "shapes": {str(w): list(v) for w, v in shapes.items()}}
 
 
