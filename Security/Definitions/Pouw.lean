@@ -145,9 +145,6 @@ binade, to one slice's two block-1 words against step-`W` staircases (`TagStairc
 crosses one power of two at one step, to the same with cuts (`TagCutSplit`, unproved); and below `2^e` it separates
 them by the rounding margin outright, unpinned.
 
-H-1T's per-tile count statement: the tiles, their domain `Tiling.AtLeast` and the output slots (`H1TTile`), the named
-assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProofs`).
-
 ## `FpG1`: FP8-g1 and W4A8-g1's operands
 
 The encodings (`Encoding`): E4M3's integer grid to a bound, the doubled E2M1 grid, round to nearest onto a grid, the
