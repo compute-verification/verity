@@ -455,8 +455,8 @@
     },
     {
       "handle": "dashboard",
-      "holder": "Daniel's desktop agent (4d92fa93-101a-42e1-8282-d4a998892829), the dashboard agent, on his laptop beside the console's dev server: it reads its Slack inbox whenever Daniel opens it, so asks queue there, and nothing wakes it",
-      "remit": "Daniel's dashboards on the console: the Goals page (goals, steps and asks) and live plots of running experiments.",
+      "holder": "4d92fa93-101a-42e1-8282-d4a998892829",
+      "remit": "Daniel's dashboards on the console: the Goals page and live plots of running experiments. Asks wait until Daniel opens it; nothing wakes it.",
       "charter": "Daniel, 2026-11-02 11:24 AM PST",
       "linear": "CON",
       "examples": [
