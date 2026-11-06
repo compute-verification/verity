@@ -2378,7 +2378,7 @@ pub struct Stmt {
     pub flock_digest: [u8; 32],
     /// how the verifier's identity is pinned: profile, reps, zk, leaf scheme, coin mode (backend identity)
     pub identity: Value,
-    /// `r1cs.c0_is_identity()`, a function of the statement alone: computed by its first verification, read by the rest
+    /// `r1cs.c0_is_identity()`, a function of the statement alone: computed by its first verification or zk replay, read by the rest
     pub c0_identity: OnceLock<bool>,
 }
 
