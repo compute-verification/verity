@@ -80,6 +80,7 @@
   "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Verity.Sampled.Binding",
+  "Proofs.Properties.Verity.Sampled.Device",
   "Proofs.Properties.Challenger.Window",
   "Proofs.Properties.Challenger.CanonLine",
   "Proofs.Properties.Challenger.Drawn",
