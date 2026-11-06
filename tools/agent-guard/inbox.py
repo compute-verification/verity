@@ -49,8 +49,20 @@ def entry(text: str, ident: str | None = None) -> str:
     return f"[{stamp}]{' ' + ident if ident else ''}\n{text.rstrip()}\n\n"
 
 
+#: a conversation id as the hook reads it (`conversation_id`): a UUID, `bc-` before it for a cloud agent or subagent
+AGENT_ID = re.compile(r"(bc-)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
+def full_id(agent: str) -> str:
+    if not AGENT_ID.fullmatch(agent or ""):
+        raise SystemExit(f"inbox: {agent!r} is no full agent id; the hook delivers only to the whole conversation id, "
+                         "e.g. bc-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (the id the Task call returned), never a prefix")
+    return agent
+
+
 def send(agent: str, text: str, inbox: Path = INBOX) -> Path:
     """Queue `text` for `agent` in this VM's inbox."""
+    full_id(agent)
     inbox.mkdir(parents=True, exist_ok=True)
     box = inbox / f"{agent_id(agent)}.md"
     with open(box, "a") as f:
@@ -156,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.local:
             print(f"queued for {a.agent}: {send(a.agent, text)}")
         else:
-            print(f"pushed for {a.agent}: origin's inbox/{agent_id(a.agent)} at {push(a.agent, text, a.repo)[:12]}; its "
+            print(f"pushed for {a.agent}: origin's inbox/{full_id(a.agent)} at {push(a.agent, text, a.repo)[:12]}; its "
                   "shell hook delivers it within a poll interval")
         return 0
     if a.cmd == "pull":
