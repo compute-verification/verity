@@ -1,12 +1,13 @@
 """Figure 1's PNG and SVG for one scope, drawn from `figure1.json` alone, so anything holding the JSON draws the same
 figure: three panels (exfiltration, infiltration, skipped work) against proof overhead, a colour per share of compute
-spent on verification, the panel's headline design solid and thick, the uniform two-stage design solid and thin, and
-the other comparisons dashed or dotted, the measured overhead as a vertical line, the references as grey horizontal
-ones in the style the JSON gives each, and each panel's caption from the JSON.  The main figure plots the series and
-references the JSON marks `main`; the appendix figure (`appendix_stem`) is the exfiltration panel with every design
-and the references the main figure leaves out.  A panel's y-axis spans its headline curves and the references up to
-`OFF_SCALE` above them, so a comparison curve may leave it at the top; a reference further up is named at the axis's
-top, and one at 0 only in the caption.
+spent on verification, the panel's headline design solid and thick, the uniform two-stage design solid and thin, the
+capped two-stage designs dash-dotted (`CAPPED`, `PATTERNS`; uniform thin), and the other comparisons dashed or dotted,
+the measured overhead as a vertical line, the references as grey horizontal ones in the style the JSON gives each, and
+each panel's caption from the JSON.  The main figure plots the series and references the JSON marks `main`; the
+appendix figure (`appendix_stem`) is the exfiltration panel with every design and the references the main figure
+leaves out.  A panel's y-axis spans its headline curves and the references up to `OFF_SCALE` above them, so a
+comparison curve may leave it at the top; a reference further up is named at the axis's top, and one at 0 only in the
+caption.
 
     uv run python benchmarks/spot_figures/render.py DIR/figure1.json [--scope "world year"] [--out DIR]
 """
@@ -26,11 +27,19 @@ from matplotlib.ticker import FixedLocator, FuncFormatter, LogFormatterMathtext,
 from matplotlib.transforms import offset_copy
 
 COLORS = ("#9ECAE1", "#3182BD", "#08306B")
-COMPARISON = {"one-stage": (0, (6, 3)), "request": (0, (1.2, 2.4)), "two-stage-uniform": "-"}
+CAPPED, PATTERNS = (0, (7, 2.5, 1.5, 2.5)), (0, (7, 2.5, 1.5, 2.5, 1.5, 2.5))
+COMPARISON = {"one-stage": (0, (6, 3)), "request": (0, (1.2, 2.4)), "two-stage-uniform": "-",
+              "two-stage-capped": CAPPED, "two-stage-capped-uniform": CAPPED, "two-stage-patterns": PATTERNS,
+              "two-stage-patterns-uniform": PATTERNS}
 #: a comparison's line width; the headline's is `HEADLINE_LW`
-THIN = {"two-stage-uniform": 1.2}
+THIN = {"two-stage-uniform": 1.2, "two-stage-capped": 2.6, "two-stage-capped-uniform": 1.2,
+        "two-stage-patterns": 2.6, "two-stage-patterns-uniform": 1.2}
 HEADLINE_LW, COMPARISON_LW = 3.2, 1.8
 NAMES = {"two-stage": "Two-stage, width-stratified", "two-stage-uniform": "Two-stage, uniform",
+         "two-stage-capped": "Capped at served bits, width-stratified (cap lemma in progress)",
+         "two-stage-capped-uniform": "Capped at served bits, uniform (cap lemma in progress)",
+         "two-stage-patterns": "Served patterns, width-stratified (no lemma yet)",
+         "two-stage-patterns-uniform": "Served patterns, uniform (no lemma yet)",
          "one-stage": "One-stage, dot-product blocks", "request": "Request-level",
          "layer_of_token": "Deferred interiors, a layer of a token"}
 REFERENCE_STYLE = {"solid": "-", "dashed": (0, (4, 3))}

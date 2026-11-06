@@ -2,12 +2,14 @@
 card it read) and its PNG and SVG, Figure 1's appendix figure too, into one directory, which `research data put --kind
 spot-figure/v1 --tree DIR` publishes for the console.
 
-    uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR [--points N]
+    uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR [--points N] [--request workload]
+        [--workers N]
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import figure1
@@ -25,11 +27,14 @@ def main(argv=None) -> None:
     ap.add_argument("--model", choices=MODELS, default=MODELS[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--points", type=int, default=57, help="Figure 1's proof overheads, the vertical line's besides")
+    ap.add_argument("--request", choices=figure1.REQUESTS, default="census",
+                    help="a request's tokens: the census's mean, or the workload card's request")
+    ap.add_argument("--workers", type=int, default=os.cpu_count(), help="processes planning Figure 1's curves")
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
     from render import render, render_appendix
 
-    one = figure1.run(args.model, args.points)
+    one = figure1.run(args.model, args.points, request=args.request, workers=args.workers)
     one["at_overhead"] = figure1.at_overhead(one)
     write(one, args.out / "figure1.json")
     for name in one["scopes"]:

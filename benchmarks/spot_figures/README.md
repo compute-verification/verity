@@ -7,6 +7,7 @@ plotted series.
 
 ~~~sh
 uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,2,3}.json, PNGs and SVGs
+                                                       # [--request workload] [--workers N] [--points N]
 uv run python benchmarks/spot_figures/render.py DIR/figure1.json            # Figure 1 and its appendix, from the JSON
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
 ~~~
@@ -51,14 +52,20 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   - Each design's serve-time hashing is in its caption and in the table at the vertical line: every proof block's
     outputs under one-stage, outside the budget; the token ids under two-stage and request-level, inside it.
   - Each panel names the deployment it assumes (`DEPLOYMENT`: what serving commits, and the replay block) and shows
-    its headline design solid and its comparisons thin, dashed or dotted:
+    its headline design solid and its comparisons thin, dash-dotted, dashed or dotted:
     - exfiltration: two-stage sampling (serving commits only token ids), width-stratified (the headline: the public
-      size classes up to a threshold sampled together and each wider one apart) and uniform, and request-level
-      sampling. A two-stage bound is `CompiledTwo.Exfil`'s count (`optimize.two_stage_exfil`): every admissible set
-      of incorrect proof blocks, each charged its own blocks' committed bits, so a wholly incorrect request is
-      charged every bit it commits. The appendix figure adds one-stage sampling of dot-product proof blocks, in
-      `consumers.exfiltration_bound`'s form (the incorrect proof blocks' output bits and which ones they are), where
-      the adversary makes the widest ones incorrect first and each is charged the widest block's output bits;
+      size classes up to a threshold sampled together and each wider one apart), and request-level sampling. A
+      two-stage bound is `CompiledTwo.Exfil`'s count (`optimize.two_stage_exfil`): every admissible set of incorrect
+      proof blocks, each charged its own blocks' committed bits, so a wholly incorrect request is charged every bit it
+      commits. Beside it (dash-dot) is the same design with each request charged at most the bits it serves, every one
+      of its tokens as an id of ⌈log2 vocab_size⌉ bits from the model's checkpoint config (`served_bits`), in
+      `two_stage_exfil`'s sets' form, on a cap lemma in progress, which still counts which of a request's proof blocks
+      are incorrect. `--request workload` sizes a request as the `workload` card's instead of the census's mean. The
+      appendix figure adds the uniform designs (one sample over a request's proof blocks), the patterns' form, which
+      no lemma states yet (a request's incorrect sets of more than its served bits count once), and one-stage
+      sampling of dot-product proof blocks, in `consumers.exfiltration_bound`'s form (the incorrect proof blocks'
+      output bits and which ones they are), where the adversary makes the widest ones incorrect first and each is
+      charged the widest block's output bits;
     - infiltration: the `infiltration` card's design and series, pending without one;
     - skipped work: one-stage and request-level sampling. One-stage needs every proof block's outputs hashed at
       serve time, outside the budget, and the JSON gives that hashing's share of the scope's compute
@@ -84,5 +91,6 @@ Limits of the model:
   batch.
 - The one-stage curves leave serve-time hashing out of the budget.
 - The one-stage certificate counts location bits over every proof block of the scope.
-- The two-stage bound charges a wholly incorrect request every bit it commits, its interior included, not only what
-  it serves.
+- The uncapped two-stage bound charges a wholly incorrect request every bit it commits, its interior included, not
+  only what it serves; the capped ones charge at most what it serves, on a lemma in progress or none yet.
+- The served bits count every token of a request as served.
