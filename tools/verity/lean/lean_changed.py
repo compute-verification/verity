@@ -548,7 +548,9 @@ def git_head(d: Path) -> str | None:
 
 
 def records_tree() -> Path:
-    """The tree of the Lean slot this process holds (LEAN_SLOT, `build/1` -> `build-1`), else `local`."""
+    """The tree of the Lean slot this process holds (LEAN_SLOT, `build/1` -> `build-1`), else `local`.  A node may keep it
+    as a symlink onto a larger disk, whose target a cleanup can remove: its users make the tree at `resolve()`, which
+    makes the target again."""
     return LA.COMMON.cache_dir() / RECORDS / (os.environ.get(LEAN_SLOT.HELD) or "local").replace("/", "-")
 
 
@@ -831,7 +833,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     try:
         tree = tree or records_tree()
         log(f"lean-records: taking the slot path: check.py on {tree}, which keeps its build between runs")
-        tree.mkdir(parents=True, exist_ok=True)
+        tree.resolve().mkdir(parents=True, exist_ok=True)
         with open(tree / ".lock", "w") as held:
             if not hold_tree(held, tree, log):
                 return 2
@@ -996,7 +998,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print) -> int:
         return 2
     try:
         tree = tree or records_tree()
-        tree.mkdir(parents=True, exist_ok=True)
+        tree.resolve().mkdir(parents=True, exist_ok=True)
         with open(tree / ".lock", "w") as held:
             if not hold_tree(held, tree, log):
                 return 2
@@ -1097,7 +1099,7 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
         return done(2)
     try:
         tree = tree or records_tree()
-        tree.mkdir(parents=True, exist_ok=True)
+        tree.resolve().mkdir(parents=True, exist_ok=True)
         with open(tree / ".lock", "w") as held:
             if not hold_tree(held, tree, log):
                 doc["skipped"]["*"] = f"another run held {tree}"

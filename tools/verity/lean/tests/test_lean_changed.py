@@ -103,6 +103,24 @@ def test_no_record_change_keeps_nothing(fast, tmp_path, monkeypatch):
     assert not (out / "record").exists(), "an unchanged record keeps nothing"
 
 
+def test_a_slot_tree_linked_onto_a_removed_target_is_made_again(fast, tmp_path, monkeypatch):
+    _, tree, _ = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    linked = tree.parent / "build-1"
+    linked.symlink_to(tmp_path / "big-disk" / "build-1")
+    monkeypatch.setattr(LC, "records_tree", lambda: linked)
+
+    def sync(_closure, _files, t):
+        (t / "pkg").mkdir(exist_ok=True)
+        (t / "pkg" / "lean-audit.json").write_text(OLD)
+        return 0
+
+    monkeypatch.setattr(LC, "sync", sync)
+    assert LC.audit_records("pkg", tmp_path / "deps", update=True, out=tmp_path / "out") == 0
+    assert (tmp_path / "big-disk" / "build-1" / ".lock").is_file(), "the link's target is made again and holds the lock"
+
+
 def refuse(*_a, **_k):
     raise LC.LEAN_SLOT.Refused("lean-slots lists no pool 'build', the only one this request takes")
 
