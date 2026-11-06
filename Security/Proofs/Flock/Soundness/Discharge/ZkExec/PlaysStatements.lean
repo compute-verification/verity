@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
 
 /-!
 # `RunsZC`'s plays half: `repProg`'s run is a run of the compiled `--zk` rep (statements)
@@ -25,6 +27,8 @@ claims whose points the replay's coins give and whose values are the claim check
 * `ZkRepRun`: with `ZkRepFrames` and `ZkCut`, that run is a `RepRun` along `repShapeZ` for the decoder `decZ`, with no
   tail.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

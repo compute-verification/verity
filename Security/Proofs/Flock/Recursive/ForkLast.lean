@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.HoloExec
+module
+
+public import Proofs.Flock.Recursive.HoloExec
 
 /-!
 # Recursion: the inner fork with the last round's message unbound
@@ -16,6 +18,8 @@ commitment fixed before the coin. An inner verifier that ignores the last round'
   `InnerSoundForkOn` at a verifier and a pick that ignore the last coin, unless the recursive prover has an inner fork.
 * `schedInner_lastFree`, `clashPickCL_lastFree`, `clashPickHL_lastFree`: the three for C-Flock's inner protocols.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

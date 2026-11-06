@@ -1,4 +1,6 @@
-import Proofs.Nci.Fit
+module
+
+public import Proofs.Nci.Fit
 
 /-!
 # A window across optimizer steps: `FitBoundSlots` applies where `FitBound` can't
@@ -20,6 +22,8 @@ window uses two, so `Fits` charges window 0 `2 b_w ≤ 6 ≤ S`, while `Reach` a
 `S < N* b_w ≤ 2 b_w`: no choice of `N*`, `S`, `b_w`, `w_e` meets `FitBound`'s hypotheses here (`not_fits`).
 -/
 
+@[expose] public section
+
 namespace Nci.SecurityProofs.FitSlotsWitness
 
 open Verity Finset
@@ -39,10 +43,7 @@ abbrev circuit : Circuit where
   op_congr _ _ _ _ := rfl
   outputs := {8, 9}
 
-abbrev decl : Declaration where
-  D := circuit
-  θ := ∅
-  θ_input := by decide +kernel
+abbrev decl : RegisteredCircuit := .ofCircuit circuit ∅ (by decide +kernel)
 
 /-- Two threads, of activations 2 and 3; each counted multiplication uses a weight once. -/
 abbrev threading : Threading decl where

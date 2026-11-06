@@ -1,7 +1,7 @@
-"""The verifier's coins: its own randomness and the one-stage draws it makes from it.
+"""A draw's coins: the auditor's challenger's, and the one-stage draws the verifier makes from them.
 
-The verifier samples every coin from its own randomness (`OwnRandomness`), with no derivation and no beacon, after the
-prover's commitments are registered.  `draw_first` draws a one-stage sampling design's proof blocks as the Lean verifier's
+The verifier samples no coins of its own. Every coin of a sample is the challenger's (`ChallengerCoins`), read from its log
+after the prover's commitments are registered, with no derivation and no beacon, by exact samplers (`OwnRandomness`).  `draw_first` draws a one-stage sampling design's proof blocks as the Lean verifier's
 `Flock.Draw.drawWith` does from the same bytes, and `closure_of` widens a work sample by the verifier's closure map.  A
 sampled proof block's outcome is final: nothing resamples.
 
@@ -20,12 +20,12 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
-from typing import Any
+from typing import Any, NamedTuple
 
 from verity.ml.randomness import uniform_from_words
 
-from .challenger import (COIN_BYTES, WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify,
-                         live_reason, record_many, trusted_session_of, withheld_on)
+from .challenger import (COIN_BYTES, MAX_COINS, MAX_LOG_LINES, WITHHELD, ChallengerKey, CoinError, LiveCommitment,
+                         LiveOpening, LiveRecord, Verify, live_reason, record_many, trusted_session_of, withheld_on)
 from .one_stage.draw import digits, strata_problem
 from .remote import MAX_BATCH
 
@@ -101,9 +101,8 @@ def _on(src: bytes) -> Callable[[int], bytes]:
 
 
 class OwnRandomness:
-    """The verifier's randomness, read directly: exact samplers over raw bytes from `source`, the caller's coins (the
-    proof system's are the Lean verifier's, `verifier.coins`; there is no default, so nothing here reads the operating
-    system), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
+    """Exact samplers over raw bytes from `source`, the caller's coins (the proof system's are the challenger's,
+    `ChallengerCoins`; there is no default, so nothing here reads the operating system), consumed in order, with no hash and no derivation.  They are the Lean verifier's `Flock.Draw` and
     `flock-circuit`'s `unit_draw` samplers: `uniform(n)` reads w = ceil((bitlen(n) + 64) / 8)-byte big-endian words and returns the
     first below the largest multiple of n, mod n; `bernoulli(a/b)`, a/b in lowest terms, is `uniform(b) < a` (p = 0 and
     p = 1 read nothing); `subset` is a sparse partial Fisher-Yates."""
@@ -346,6 +345,53 @@ def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins:
     return challenger_stream(commitment, segment, after, roots.get(label, ()))
 
 
+#: the most refused hellos a session's evidence holds
+MAX_HELLOS = 1 << 20
+#: the most lines an auditor's ledger holds: each is signed at its own leaf of the challenger's key, of which a key at the
+#: deployed parameters (`lms.DEPLOYED`) has 2^20
+MAX_LEDGER_LINES = 1 << 20
+#: the most lines a host's pins log holds
+MAX_PINS = 1 << 20
+#: the longest path a coin opening holds: the depth of a layout of `MAX_COINS` coins
+MAX_PATH = (MAX_COINS - 1).bit_length()
+
+
+class Limits(NamedTuple):
+    """Bounds on the sizes of a draw's coin evidence (`coins_within`)."""
+    log: int
+    hellos: int
+    ledger: int
+    pins: int
+    openings: int
+    path: int
+
+    def form(self) -> str:
+        """The refusal of evidence past these."""
+        return (f"a draw's coin evidence holds at most {self.log} release log lines, {self.hellos} refused hellos, "
+                f"{self.ledger} ledger lines, {self.pins} pins log lines and {self.openings} openings, each opening's "
+                f"path at most {self.path} digests")
+
+
+LIMITS = Limits(MAX_LOG_LINES, MAX_HELLOS, MAX_LEDGER_LINES, MAX_PINS, MAX_COINS, MAX_PATH)
+
+
+def coins_within(coins: Any, limits: Limits = LIMITS) -> bool:
+    """Lean `Challenger.withinAt`: every size the evidence of a draw's coins holds is within `limits`, as v2 requires of
+    its evidence's ``coins`` at `LIMITS` before it reads anything else of it (`OneStageZk.evidenceOf`): the session's
+    release log lines and refused hellos, the ledger's and the pins log's lines, the segment's openings and each
+    opening's path. A value absent or not a list counts as none: what reads it refuses it."""
+    def get(j: Any, k: str) -> Any:
+        return j.get(k) if isinstance(j, Mapping) else None
+
+    def size(j: Any) -> int:
+        return len(j) if isinstance(j, list) else 0
+    session, openings = get(coins, "session"), get(get(coins, "segment"), "openings")
+    return (size(get(session, "log")) <= limits.log and size(get(session, "hellos")) <= limits.hellos
+            and size(get(coins, "ledger")) <= limits.ledger and size(get(coins, "pins")) <= limits.pins
+            and size(openings) <= limits.openings
+            and all(size(get(o, "path")) <= limits.path for o in (openings if isinstance(openings, list) else ())))
+
+
 def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> list[int]:
     """A sample's closure under the verifier's closure map (Lean `Flock.Draw.closureOf`): every proof block in a sampled proof block's
     closure that is not itself drawn, ascending."""
@@ -402,5 +448,6 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     raise IndexError(j)
 
 
-__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "SEGMENT_FORM", "Segment",
-           "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "read_reason"]
+__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "LIMITS", "Limits", "MAX_HELLOS", "MAX_LEDGER_LINES", "MAX_PATH",
+           "MAX_PINS", "OwnRandomness", "SEGMENT_FORM", "Segment", "challenger_stream", "closure_of", "coins_reason",
+           "coins_within", "draw_coins", "draw_first", "read_reason"]

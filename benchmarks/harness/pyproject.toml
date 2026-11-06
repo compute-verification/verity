@@ -25,6 +25,8 @@ addopts = "-q -p no:cacheprovider"
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_bench.py"]
 # The harness is a user of the vLLM integration. Its fake-engine tests import
 # the public hook set and exercise the integration-facing arm contract, and
 # `build_bound` reads the protocol options' `requires_build` to refuse CUDA
@@ -100,4 +102,26 @@ inputs = [
     # a direct point's command must pass a slot-only node's launcher rule (research's slot_only.through_slot), which a
     # test checks
     "tools/research/src/research/pods/nebius/slot_only.py",
+    # the overhead table scales γ by the census's datacenter, world and datasheet rates and rho's FLOP-to-gates conversion,
+    # and `verity bench overhead` is the door's runner, which a test runs
+    "benchmarks/census/deployments.json",
+    "benchmarks/census/adversary.json",
+    "benchmarks/census/hardware.json",
+    "benchmarks/rho/data/hardware.toml",
+    "benchmarks/overhead/run.py",
 ]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_bench.py"]
+paths = ["verity/core/protocols/pouw/lean/check/models.json"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_breakdown.py", "tests/test_served_table.py"]
+paths = ["fixtures/artifacts.json"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_settings.py"]
+paths = ["benchmarks/harness/tests", "benchmarks/harness/verity_bench"]

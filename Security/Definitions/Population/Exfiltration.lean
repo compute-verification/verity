@@ -1,5 +1,7 @@
-import Mathlib.Analysis.SpecialFunctions.Exp
-import Mathlib.Data.Fin.Tuple.Basic
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Exp
+public import Mathlib.Data.Fin.Tuple.Basic
 
 /-!
 # Weight exfiltration before detection: the windowed audit as a game
@@ -38,6 +40,8 @@ detection.
 
 When a guarantee states these, they move to a `Models/Population/Assumptions` module with their records.
 -/
+
+@[expose] public section
 
 namespace Population.Exfil
 

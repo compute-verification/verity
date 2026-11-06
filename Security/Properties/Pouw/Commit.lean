@@ -1,6 +1,8 @@
-import PouwCommit.Coins
-import PouwCommit.Draws
-import PouwCommit.Rows
+module
+
+public import PouwCommit.Coins
+public import PouwCommit.Draws
+public import PouwCommit.Rows
 
 /-!
 # PoUW's commitments: properties of the port (`PouwCommit`)
@@ -12,6 +14,8 @@ disjunct is a collision among the messages actually hashed: two different ones, 
 framed messages), with one digest. That is collision resistance's content, taken as a disjunct rather than assumed away, and
 bounded to the inputs, since some collision of SHA-512 exists outright.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Commit
 

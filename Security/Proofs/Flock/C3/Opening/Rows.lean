@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Opening.Read
-import Proofs.Flock.VBridge.Algebra.Sizes
+module
+
+public import Proofs.Flock.C3.Opening.Read
+public import Proofs.Flock.VBridge.Algebra.Sizes
 
 /-!
 # n4's rows: the `rec-opening` unit's residuals are `RecOpening.run`'s
@@ -18,6 +20,8 @@ begins with the opening's steps on w's ring switches.
 * `run_shift`: over F, raising each claim's value raises its ring switch's residual by as much; the rest is unchanged.
 * `run_of_inline`: `RecCoins.opening`'s run, which also returns Ligerito's points, is `RecOpening.run`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

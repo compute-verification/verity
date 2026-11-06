@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Complete.Zk.ConsReplay
-import Proofs.Flock.Claims.Complete.Zk.RingSwitch
-import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.ConsReplay
+public import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 
 /-!
 # The masked replay's coins are the prover's, and its five rows vanish on the honest run
@@ -20,6 +22,8 @@ and `r′` are the masked prover's. Live coins give them: the replay reads each 
   rows `Zk.verify` hands `verifyInner` ahead of level 0's lane rows: `rp.cons` (three, `replay_cons_size`) and the two
   ring-switch rows.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

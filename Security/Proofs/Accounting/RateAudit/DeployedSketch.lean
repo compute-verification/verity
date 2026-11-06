@@ -1,7 +1,9 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditDeployed
-import Proofs.Accounting.RateAudit.Deployed
-import Proofs.Accounting.RateAudit.SketchRank
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditDeployed
+public import Proofs.Accounting.RateAudit.Deployed
+public import Proofs.Accounting.RateAudit.SketchRank
 
 /-!
 # The deployed verbatim-sketch session
@@ -11,6 +13,8 @@ correct digest query without obtaining a sector. `card_guess_le` prices the form
 `card_bad_le` and `SketchRankFiber` price the latter by `q/2^(8r)`. A union over a pass's ground candidates and passes,
 then the existing causal pooled-draw argument over windows, gives `RemoteSessionConservationSketch`.
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 

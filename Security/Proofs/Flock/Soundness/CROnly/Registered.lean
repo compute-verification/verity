@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Registered.E2E
-import Proofs.Flock.Soundness.CROnly.Link
+module
+
+public import Proofs.Flock.Soundness.Registered.E2E
+public import Proofs.Flock.Soundness.CROnly.Link
 
 /-!
 # The end-to-end theorems with registered reads, under `cr/sha-512` alone
@@ -9,6 +11,8 @@ for `hCR : LinkCR …`, as `CROnly.E2E` restates the forms they extend: the boun
 `strictRunCost t' q` in place of `t'`, and every other hypothesis is the original's, unchanged. So `ε_ks`, `δ_link`,
 `δ_tree` and `δ_reg` are all under `SHA512CRStrict` (`hKS`, `hCRs`, `hT`, `hR`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

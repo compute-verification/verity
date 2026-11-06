@@ -1,5 +1,7 @@
-import Definitions.Accounting.TS.Receipt
-import Definitions.Accounting.HMu
+module
+
+public import Definitions.Accounting.TS.Receipt
+public import Definitions.Accounting.HMu
 
 /-!
 # (H-μ) at the receipt's operands (trusted)
@@ -19,6 +21,8 @@ at `μ` (`ReceiptGame.OperandLuck`). It asks nothing of the cheater's play beyon
 the view everything the cheater's skip and values are functions of, and (H-μ) is that the skipped values' point mass
 given that view is at most `μ`. A cheater that reads a coin pinning the skipped value fails it.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

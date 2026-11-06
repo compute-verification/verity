@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Exec
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec
 
 /-!
 # The statement flock-verify sets up for one table, under either tag
@@ -9,6 +11,8 @@ import Proofs.Flock.Soundness.Discharge.Exec
 off the tags it is given; `setupTables` gives each table its session's tags with only `identity` changed
 (`Exec.tagsAt`), so the flag is the session's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenExec
 

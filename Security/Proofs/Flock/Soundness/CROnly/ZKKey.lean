@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.CROnly.ZK
+module
+
+public import Proofs.Flock.Soundness.CROnly.ZK
 
 /-!
 # Lemma C at a uniform hm96 key
@@ -11,6 +13,8 @@ salt hashes under key `κ`. Here the key is drawn uniformly, first and independe
 `H(leaf_prefix(key) ‖ ·)` with `leaf_prefix(key) = leaf tag ‖ H(key)` (`hm96/PROTOCOL.md` §2). So Lemma C needs of the
 key only that it is uniform.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

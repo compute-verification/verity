@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Reps.KeysInW
+module
+
+public import Proofs.Flock.C3.Reps.KeysInW
 
 /-!
 # Ligerito's names in w: `wKey` at its sumcheck messages, out-of-domain values and final `yr`
@@ -10,6 +12,8 @@ message `j` below `k₀ + 4`, and below `k₀ + 4 + 7n + 4` at `n + 1` levels af
 below `3`, and below `3 + 2n` there, and there the final `yr`'s `2^(ext+1)` entries. Those rounds are w's
 (`mem_wNames_of_lig`), so these keys pass `wKey` (`ligKeys_wKey`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

@@ -29,17 +29,14 @@ LLAMA = [(6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336)]
 @functools.cache
 def dither(name: str):
     """`benchmarks/hash/dither/<name>.py`, imported as its scripts import it (its directory on sys.path, and j10r_units'
-    own entries); sys.path and the ``receipts`` module the suite may hold are restored once it's loaded."""
-    path, shadow = list(sys.path), sys.modules.pop("receipts", None)
+    own entries); sys.path is restored once it's loaded."""
+    path = list(sys.path)
     sys.path.insert(0, str(DITHER))
     try:
         return __import__(name)
     finally:
         sys.path[:] = path
         sys.modules.pop(name, None)
-        sys.modules.pop("receipts", None)
-        if shadow is not None:
-            sys.modules["receipts"] = shadow
 
 
 @functools.cache

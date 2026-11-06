@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.Actual.Confidence
+module
+
+public import Mathlib
+public import Proofs.Accounting.Actual.Confidence
 
 /-!
 # A location as a transducer over what reaches it
@@ -20,6 +22,8 @@ location of memory `M` carries `M + 1` bits across a tick, not `M`. With the lin
 into `X` on one of its ports, the observation is the ports' signals (`portSignals`), and what `X` does during
 `[t, t + n)` takes at most `2^{M + 1 + β_X n}` values, `β_X` the ports' capacities summed (`acts_encard_le_links`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Actual
 

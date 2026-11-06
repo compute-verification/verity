@@ -21,7 +21,11 @@ from the parse of an untyped statement. A V* session (`--rec-inner`) is the recu
 `verify` doesn't run the check on it. `flock-verify ks-form` runs `checkOf` alone on a statement's files, and the Python
 mirror (`one_stage.proofs.ks_form_why`, `filesWhy` on the files' heads) is held to it.
 -/
-import Flock.PortRoots
+module
+
+public import Flock.PortRoots
+
+@[expose] public section
 
 namespace Flock.KsScope
 

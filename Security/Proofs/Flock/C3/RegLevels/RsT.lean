@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.RegLevels.SrcOpenRel
-import Proofs.Flock.C3.RegLevels.SrcUnits
-import Proofs.Flock.C3.Opening.SrcCover
+module
+
+public import Proofs.Flock.C3.RegLevels.SrcOpenRel
+public import Proofs.Flock.C3.RegLevels.SrcUnits
+public import Proofs.Flock.C3.Opening.SrcCover
 
 /-!
 # n7's levels: `hR`'s `OpenRel` from R's opening's run
@@ -13,6 +15,8 @@ is the term `wt` at the first of them (`valO`), `tOf` of those elements (`decode
 `hR_of_units` are `levelTie_of_run`'s and `levelTie_of_units`' (so `levelTie_of_reads`') `hR` with that conjunct given
 and the others left; at the units' messages `hT` holds and `OpenTie` is `hmsg`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

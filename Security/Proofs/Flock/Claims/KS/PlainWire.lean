@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainSimW
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainSimW
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain wire, and the lockstep a simulator owes
@@ -23,6 +25,8 @@ rounds and the proof files are the remaining named Props. The abort, the live ev
 failing at `P'`'s outcome wherever `P`'s run is rejected (`PlainSimAbort`), gives the acceptance `PlainRawClashRun`
 asks for (`plain_acc_of_abort`, `plainRawClashRun_of_abort`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

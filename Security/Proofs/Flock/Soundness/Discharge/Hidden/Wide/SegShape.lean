@@ -1,4 +1,6 @@
-import Flock.HmRow
+module
+
+public import Flock.HmRow
 
 /-!
 # A segmented row's compressions in closed form
@@ -9,6 +11,8 @@ compressions start at `firstOf segs j`, the compressions of the segments before 
 these prefix sums: `chainStart_some` and `chainStart_first` say a compression starts a chain exactly at a segment's or
 the outer message's first, and `msgBit_seg` and `msgBit_outer` say what each compression's message bit is.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

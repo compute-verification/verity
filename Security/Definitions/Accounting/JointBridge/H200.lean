@@ -1,5 +1,7 @@
-import Definitions.Accounting.Device
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Accounting.Device
+public import Definitions.Pouw.PearlC.W1
 
 /-!
 # The device model's price at W1's prices, and the H200's with INT8 (trusted)
@@ -9,6 +11,8 @@ format's multiply-add and each CUDA-core instruction, in one dense E4M3 multiply
 off the second for a run whose tensor-core multiply-adds are of format `f`, and `h200S8Price` is the H200's with INT8,
 the format of an H1 + fx1 tile's products (`GemmAccumulatorS8_v2`).
 -/
+
+@[expose] public section
 
 namespace Accounting
 

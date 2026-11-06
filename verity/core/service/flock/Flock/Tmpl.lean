@@ -27,7 +27,13 @@ its own. Each row is then canonical as `flock-ir-unit/v2` writes it, a sum over 
 named an even number of times dropped. The root has no inputs; the unit's columns are its, and the constant its last,
 `[const]·[const]`. Every column is written at most once, and one never written is empty.
 -/
-import Flock.Net
+module
+
+public import Flock.Net
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Tmpl
 

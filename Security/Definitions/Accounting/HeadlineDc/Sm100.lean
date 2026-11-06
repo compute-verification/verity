@@ -1,4 +1,6 @@
-import Definitions.Accounting.HeadlineDc.Encoding
+module
+
+public import Definitions.Accounting.HeadlineDc.Encoding
 
 /-!
 # B200 (sm_100)'s headline instance: DS-100 and `dither-2s-licpw-redux-ldtm0-l32` (trusted; generated)
@@ -32,6 +34,8 @@ this file. `Accounting.Guarantees.TS.Sm100SheetHeadline` reads it.
 * `lamStar`: π*, the certificate minimising the bound over this menu (DS_issue 0.666667 + DS_alu 0.333333).
 * `checks`: the checks a window, one a round (Theorem S's S).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Headline.Sm100
 

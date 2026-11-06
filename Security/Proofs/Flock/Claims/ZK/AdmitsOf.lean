@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishRank
+module
+
+public import Proofs.Flock.Claims.ZK.FinishRank
 
 /-!
 # Every table admits the coins where no refusal shows
@@ -17,6 +19,8 @@ round.
 * `slotsBelow_refK`: at a `Live` statement every refusal's round is a round of the session, each within its rep's
   `repRounds`, so **`admits_of_not_refused_refK`** needs no refusal by `refK x` only.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

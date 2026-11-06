@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Family.Commits
+module
+
+public import Proofs.Flock.VBridge.Family.Commits
 
 /-!
 # The decoder's last round, read from σ's leaf
@@ -9,6 +11,8 @@ decoder's mask: stage `i`'s commit strings (`skOf`) at the committed rounds `i +
 last. At the committed rounds its mask is `skOf`'s (`maskOf_skLeaf`), so `MsgsReadC3` reads those rounds from their
 commit strings and the last from every read wire of the layers; `vDecodesR_wmsgLeaf` is `VBridgeC`'s decoding at it.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

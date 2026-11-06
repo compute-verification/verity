@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.PlainStep
-import Proofs.Flock.Claims.KS.PlainDrawSim
-import Proofs.Flock.Claims.KS.PlainSlackFit
-import Proofs.Flock.Claims.KS.PlainClashL
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainStep
+public import Proofs.Flock.Claims.KS.PlainDrawSim
+public import Proofs.Flock.Claims.KS.PlainSlackFit
+public import Proofs.Flock.Claims.KS.PlainClashL
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain chain from the concrete simulator's parts
@@ -23,6 +25,8 @@ have yet is two parts, each a named Prop here:
 * `plainRawClashRunL_of_abort`, `plainSimWrPAtD_of_parts`, `plainSimWD_of_parts`: so `PlainSimWD` holds from
   `PlainSimClashAt` and `PlainSimForkLe` alone.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

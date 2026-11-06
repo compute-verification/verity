@@ -1,4 +1,6 @@
-import Definitions.NetworkCertifier.SampledAudit
+module
+
+public import Definitions.NetworkCertifier.SampledAudit
 
 /-!
 # The sampled audit's charge: what the faulty proof blocks add to the leak
@@ -10,6 +12,8 @@ charges, beyond the inputs the circuit reads besides the ingress, the faulty pro
 and the choice of faulty set among the ones `RAcc δ` allows (`faultySets`). The sequences it counts are
 `AccSeqsSampled`.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

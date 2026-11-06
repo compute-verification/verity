@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowRLeaf
-import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
-import Proofs.Flock.Claims.Recursion.PartsVStar
-import Proofs.Flock.Claims.Recursion.VStarLinks
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.VBridge.Family.Rep
-import Proofs.Flock.VBridge.Family.Structure
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowRLeaf
+public import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
+public import Proofs.Flock.Claims.Recursion.PartsVStar
+public import Proofs.Flock.Claims.Recursion.VStarLinks
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.VBridge.Family.Rep
+public import Proofs.Flock.VBridge.Family.Structure
 
 /-!
 # The concrete `rec-residuals` pieces and their owners (`resPD`, `ownRD`)
@@ -30,6 +32,8 @@ have an owner (`PiecesOwned`). Both hold at every statement `readX` reads, with 
 * `resPiecesAt_D`, `openOwned_D`, `piecesOwned_D`: `ResPiecesAt` and `PiecesOwned` at `resPD`, `ownRD` and
   `OpenLower.ownQR`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecompBR
 
@@ -185,6 +189,7 @@ theorem listed_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : R
   obtain ⟨t, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨A, hA, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨C, -, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨L, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨K0, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u', -, h⟩ := FlockC3.VStarList.eok_bind h

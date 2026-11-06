@@ -1,4 +1,6 @@
-import Properties.RemoteAudit.Component
+module
+
+public import Properties.RemoteAudit.Component
 
 /-!
 # The bandwidth component accepts only what `Shared.run g` accepts, proved (`Properties.RemoteAudit.Component`)
@@ -8,6 +10,8 @@ that ended accepted with a record, publishing `certify` of it at g (`acceptIsVer
 as `Verified`: the session `sessionOf` decodes is the one it decodes, so it is the record's at the node, at the node's
 windows a draw.
 -/
+
+@[expose] public section
 
 namespace Properties.RemoteAudit.Component
 

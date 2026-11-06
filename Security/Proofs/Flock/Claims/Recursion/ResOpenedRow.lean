@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.OpenSlots
+module
+
+public import Proofs.Flock.Claims.Recursion.OpenSlots
 
 /-!
 # The row a stream round opens is its first holder's
@@ -8,6 +10,8 @@ first half), so each round's opened rows are its slots' rows read off their part
 round's slots are its tops' instances, then its row's slot (`roundSlots`), so the row past the tops' rows is the
 round's `rowSlot`'s (`opened_row`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenSlots
 

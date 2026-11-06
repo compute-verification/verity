@@ -1,11 +1,13 @@
-import Proofs.Flock.C3.HoloValues.Reps
-import Proofs.Flock.C3.HoloValues.Shape
-import Proofs.Flock.C3.HoloValues.ZcLc
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.C3.Compose.Plays
-import Proofs.Flock.Soundness.Refine.Paths
-import Proofs.Flock.Soundness.Refine.Seam
-import Proofs.Flock.Soundness.Refine.Table
+module
+
+public import Proofs.Flock.C3.HoloValues.Reps
+public import Proofs.Flock.C3.HoloValues.Shape
+public import Proofs.Flock.C3.HoloValues.ZcLc
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.C3.Compose.Plays
+public import Proofs.Flock.Soundness.Refine.Paths
+public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.Soundness.Refine.Table
 
 /-!
 # n2's read fact: each rep's accepting run from the tape
@@ -26,6 +28,8 @@ refines to `holoRepC` (`holoRep_refines`), the run is a play on the unit's steps
 pass the plain leaf's path checks (`opensOK_of`); two games play on at most one pair of prefixes of a tape in the
 reps' interleaving (`Read.repsOf_of_playsT`), so the reps the run decodes are those plays.
 -/
+
+@[expose] public section
 
 namespace FlockC3.HoloValues
 

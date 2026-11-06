@@ -37,7 +37,7 @@ LINT = _module("repo_env_reads_for_check", ROOT / "tests" / "lint" / "test_repo_
 #: ``research.remote``), `common.py` is in every Lean package's audit key (`lean_audit.py`), and the read guard (``guard/``)
 #: loads in every test process; what each reads is declared in `settings.py` all the same (`test_every_name_read_is_declared`).
 DIRECT = {"common.py": 1, "guard/child/sitecustomize.py": 5, "guard/child/verity_suite_reads.py": 2,
-          "guard/verity_suite_guard.py": 9, "lean_slot.py": 8, "slot.py": 12}
+          "guard/verity_suite_guard.py": 9, "lean_slot.py": 8, "slot.py": 11}
 
 
 def _library(suffix: str) -> list[Path]:

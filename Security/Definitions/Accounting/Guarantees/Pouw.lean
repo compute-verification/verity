@@ -1,6 +1,8 @@
-import Definitions.Accounting.Pouw
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.Assumptions.Game
+module
+
+public import Definitions.Accounting.Pouw
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.Assumptions.Game
 
 /-!
 # PoUW's guarantee as a joint run's compute guarantee (trusted)
@@ -12,6 +14,8 @@ EndToEnd's certificate and error, with the oracle-call budget `q` the device's o
 Proved by `Accounting.SecurityProofs.ComputeOfPouw : Accounting.Guarantees.ComputeOfPouw` (`Proofs.Accounting.Pouw`),
 from `Pouw.SecurityProofs.EndToEnd`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

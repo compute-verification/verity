@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Finder
-import Definitions.Claims.Recursion
+module
+
+public import Proofs.Flock.Claims.Finder
+public import Definitions.Claims.Recursion
 
 /-!
 # The registered finder's search
@@ -14,6 +16,8 @@ them, or with a recorded call (`findCollIn`). This file is what a proof reads of
   run;
 * `setupCalls_eq_nil`: a record whose setup makes no evaluation gives `Br` nothing to find.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

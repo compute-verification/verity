@@ -1,4 +1,6 @@
-import Proofs.Properties.RemoteAudit.Frozen
+module
+
+public import Proofs.Properties.RemoteAudit.Frozen
 
 /-!
 # `Live` under the release order (`LiveUnder`)
@@ -13,6 +15,8 @@ induction with `ReleaseOrder`), and the second draws it there too: were it undra
 from the second coins would leave it undrawn on the first. Nor does the second draw it earlier, by the same lemma
 from the first coins. Runs are taken over lists (`runL`), split by `runL_append`.
 -/
+
+@[expose] public section
 
 open RemoteAudit RemoteAudit.Session
 

@@ -1,5 +1,7 @@
-import Definitions.Accounting.TS.Receipt
-import Proofs.Pouw.Receipt
+module
+
+public import Definitions.Accounting.TS.Receipt
+public import Proofs.Pouw.Receipt
 
 /-!
 # li units bind their words a checkpoint a segment, and one word a window does not
@@ -13,6 +15,8 @@ chain (`ofFn_split`, three times), so `Pouw.SecurityProofs.Receipt.LiCheckpointW
 (`(x ⊕ T)·a = x·a ⊕ T`, `Pouw.ReceiptProofs.add_twoPow_top`, `twoPow_mul_odd`), so a flip of `d₀`'s top bit moves the
 state by `T`, and a second flip of the next segment's `d₀` takes it back.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.LiLemmas
 

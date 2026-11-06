@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.PipeAssumptions
-import Definitions.Pouw.Assumptions.Dimension.RouteU
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.PipeAssumptions
+public import Definitions.Pouw.Assumptions.Dimension.RouteU
 
 /-!
 # The closed pipe's named assumptions on route U
@@ -12,6 +14,8 @@ the same `c`. Theorem 1 proves `A1_cost_quad_U β 2 0` for every `β`, `k` and `
 `Forest.a1CostQuadNear`); `A1_cost_U` stays open, as `A1_cost` does. Each has a satisfiability witness
 (`A1CostWitnessU`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

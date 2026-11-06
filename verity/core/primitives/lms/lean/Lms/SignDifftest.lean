@@ -1,5 +1,7 @@
-import Lms.Sign
-import Lean.Data.Json
+module
+
+public import Lms.Sign
+public import Lean.Data.Json
 
 /-!
 # The sign difftest: LMS keys and signing against `lms.py`, on generated seeds
@@ -13,6 +15,8 @@ and not a proof. `evaluate` gives:
 * `public`: the key's public key, `null` where `keygen` or `key` refuses;
 * `signatures`: each `signAt`'s encoding with `verify`'s verdict on it, `null` where `signAt` refuses the leaf.
 -/
+
+@[expose] public section
 
 namespace Lms.SignDifftest
 

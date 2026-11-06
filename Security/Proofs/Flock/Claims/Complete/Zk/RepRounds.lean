@@ -1,7 +1,11 @@
-import Proofs.Flock.Claims.Complete.Zk.ProverOk
-import Proofs.Flock.Claims.Complete.Replay.RepRounds
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.ProverOk
+public import Proofs.Flock.Claims.Complete.Replay.RepRounds
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # Each masked rep records a round, each of at most `65536` coins (`RepRoundsZk`)
@@ -20,6 +24,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 * The `--zk` schedules squeeze fewer than `65536` coins (`zkSchedule_small`), and a masked case's table has at most
   1,024 regions (`CaseZk.regions`), so at most 2,050 claims: `repRoundsZk_goal`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

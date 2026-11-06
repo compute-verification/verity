@@ -1,11 +1,13 @@
-import Flock.RecVStar
-import Flock.RecCoins
-import Flock.Firewall
-import Definitions.Flock.Recursive.Holo
-import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Recursive.Compile
-import Proofs.Flock.Recursive.ExecClass
-import Definitions.Flock.HoloCompiled
+module
+
+public import Flock.RecVStar
+public import Flock.RecCoins
+public import Flock.Firewall
+public import Definitions.Flock.Recursive.Holo
+public import Proofs.Flock.Soundness.Defs
+public import Proofs.Flock.Recursive.Compile
+public import Proofs.Flock.Recursive.ExecClass
+public import Definitions.Flock.HoloCompiled
 
 /-!
 # Recursion: candidate 3's inner protocol as the executable runs it
@@ -18,7 +20,7 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
   padded to `PAD_TO` as the verifier opens R (the default, whose empty levels reject R, where `ℓ` is out of
   `[6, k_log]`, which the verifier refuses: `SparseRangeOk`).
 * `HoloReg`: a word `w` and a level-0 cap `cap`, the inner statement; `Opens` is a registrant's openings of every
-  position of `cap` to `w`'s columns (`RecursiveAudit`'s `_hreg` for an encoded table), which `RecursiveAuditC3` does
+  position of `cap` to `w`'s columns (`RecursiveAudit`'s `_hreg` for an encoded table), which `RecursiveAuditHolo` does
   not take: its word is the one the prover's own runs open (`Recursive/RegExtract.lean`).
 * `StackedTopAt lv st reg cap salt bcs'`: `cap` is R's registered top at the explicit commit strings `bcs'` under the
   held salts `salt` (`registrant-holds-openings`), the `stacked`
@@ -42,6 +44,8 @@ The objects `Flock.Guarantees.AuditC3` reads, beside `ExecClass.lean`'s for `Pub
 * `vstarCount ish`: the length of V*'s statement list as the verifier builds it (`RecVStar.statements`), zero where it
   refuses.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

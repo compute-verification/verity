@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.ExecStratified
-import Proofs.Flock.Soundness.Assumptions
-import Init.Internal.Order.While
+module
+
+public import Proofs.Flock.Soundness.ExecStratified
+public import Proofs.Flock.Soundness.Assumptions
+public import Init.Internal.Order.While
 
 /-!
 # The live draw: `drawOS`, extend-and-rerun included, escapes no more often than the model's
@@ -33,6 +35,8 @@ measure theory the theorems don't state.
 
 The Bernoulli law's live draw is `Proofs.Flock.Claims.Sampling.ExecBernoulli`'s `drawOS_bernoulli_escape_le`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Law
 

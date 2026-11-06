@@ -542,7 +542,41 @@ def test_a_shard_takes_the_records_artifact_only_with_its_digest_and_this_tree(t
     assert not cache.exists() or not list(cache.rglob("*.json")), "nothing refused goes in"
     assert CHECK.cc_records_in(f"art:r5@{sha}", cache, fetch) is None
     assert (cache / "v9" / "abc" / "e1.json").read_text() == '{"key": "k"}' and fetched == ["art:r1", "art:r2", "art:r5"]
-    assert [p.name for p in cache.parent.iterdir()] == ["circuit-check"], "its scratch is gone"
+    assert [p.name for p in cache.parent.iterdir()] == ["circuit-check"] and [p.name for p in cache.iterdir()] == ["v9"], \
+        "its scratch is gone"
+
+
+def test_the_records_go_in_by_renames_inside_the_cache_as_its_path_resolves(tmp_path, monkeypatch):
+    """A cache whose path is a link onto another directory (on a node, another disk) gets the records by renames inside that
+    directory, none from beside the link, which would cross filesystems there."""
+    import hashlib
+    import os
+
+    run_dir, _ = _records_run(tmp_path, monkeypatch)
+    tar = run_dir / CHECK.CC_RECORDS
+    sha = hashlib.sha256(tar.read_bytes()).hexdigest()
+
+    def fetch(art, d):
+        (got := d / "got.tar.gz").write_bytes(tar.read_bytes())
+        return got
+
+    real = tmp_path / "disk" / "circuit-check"
+    real.mkdir(parents=True)
+    cache = tmp_path / "check" / "circuit-check"
+    cache.parent.mkdir()
+    cache.symlink_to(real, target_is_directory=True)
+    moves, replace = [], os.replace
+
+    def recorded(src, dst):
+        moves.append((Path(src), Path(dst)))
+        replace(src, dst)
+    monkeypatch.setattr(CHECK.os, "replace", recorded)
+    assert CHECK.cc_records_in(f"art:r1@{sha}", cache, fetch) is None
+    root = real.resolve()
+    assert len(moves) == 1 and all(s.is_relative_to(root) and d.is_relative_to(root) for s, d in moves), moves
+    assert (real / "v9" / "abc" / "e1.json").read_text() == '{"key": "k"}'
+    assert [p.name for p in real.iterdir()] == ["v9"], "the unpacking directory is left in the cache"
+    assert [p.name for p in cache.parent.iterdir()] == ["circuit-check"], "something was made beside the link"
 
 
 def test_each_shard_holding_circuit_check_starts_from_the_records_and_one_refused_runs_nothing(tmp_path, monkeypatch, capsys):

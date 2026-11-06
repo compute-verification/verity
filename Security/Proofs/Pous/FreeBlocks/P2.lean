@@ -1,5 +1,7 @@
-import Proofs.Pous.FreeBlocks.Audit
-import Proofs.Pous.P2.Margin
+module
+
+public import Proofs.Pous.FreeBlocks.Audit
+public import Proofs.Pous.P2.Margin
 
 /-!
 # `P2SlackFamilyFreeBlocks`: P2's family with `⌊B/100⌋` free blocks, `k = 140`
@@ -9,6 +11,8 @@ blocks enter the 1% term only: `((g − 1 + ⌊B/100⌋)/B)^k ≤ (c + 1/100)^k 
 state, `⌊ρ·(99/100)·|C|⌋ + 128·B`, is below `(18/19)·16448·B`, so the row is the `λ = 0` one, with a margin of 146
 bits per block.
 -/
+
+@[expose] public section
 
 namespace Pous.FreeBlocks
 
