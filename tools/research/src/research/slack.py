@@ -15,6 +15,7 @@ Notes are records, never messages.
                    --page FILE.md --area AREA                      # to @daniel: the ask's page and card, as `ask-daniel --page`
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
   research msg linear check|state|comment|list|audit|place|edit ... # Linear through the app, never the MCP connector (`linear -h`)
+  research msg linear audit [TEAM ...] [--lane HANDLE] [--close-strays --as HANDLE]   # findings; the flag cancels the strays
   research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER | unrelate ISSUE OTHER
   research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F   # a project update
   research msg linear project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]
@@ -1948,7 +1949,8 @@ def render_asks(rows: list[dict], now: float) -> str:
 def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     """`check` (what the credentials reach), `state ISSUE STATE`, `comment ISSUE TEXT --as HANDLE` (or `--worker NAME`, a
     lane's worker, which holds no handle: as LANE/NAME, ringing no one), `list TEAM [--state S]`, `audit [TEAM ...]
-    [--lane HANDLE]` (exit 1 on any finding; a team the app can't read is named and skipped), `place ISSUE PROJECT
+    [--lane HANDLE]` (exit 1 on any finding; a team the app can't read is named and skipped; `--close-strays --as HANDLE`
+    also cancels the strays, a line each on stderr), `place ISSUE PROJECT
     [--milestone M]` (`--asks [--asker NAME]`: the ledger of people's asks), `edit ISSUE [--title T] [--due D|none]
     [--file BRIEF.md] [--parent ID] [--label L [--remove]]`, `relate ISSUE
     blocks|blocked-by|related|duplicate OTHER`, `unrelate ISSUE OTHER`, `update PROJECT --health H --body-file F`,
@@ -1970,6 +1972,8 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment", "create"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
                          "`place` or `comment`, which have one")
+    if ns.close_strays and (ns.verb != "audit" or ns.asks):
+        raise SlackError("--close-strays goes with `audit` alone (not --asks): it cancels the strays that audit finds")
     try:
         brief = Path(ns.file).read_text() if ns.file else None
     except OSError as e:
@@ -2009,6 +2013,11 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             counts = linear.tally(found)
             print(json.dumps({"findings": found, "counts": counts, "unread": unread, "landing": landing}, indent=2) if ns.json
                   else render_audit(found, counts) + render_landing(landing))
+            if ns.close_strays:
+                author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, who the closing comments are from"))["handle"]
+                strays = [f for f in found if f["kind"] == "stray"]
+                print("\n".join([f"dry-run: would cancel {f['issue']}, a stray, with the comment: {linear.STRAY_NOTE}" for f in strays]
+                                if ns.dry_run else lin.close_strays(strays, author)) or "no strays to close", file=sys.stderr)
             return 1 if found else 0
         if ns.verb == "update":
             print(lin.update(need(" ".join(filter(None, [ns.target, *ns.value])), "the PROJECT (a prefix of its name)"),
@@ -3010,14 +3019,38 @@ def render_volume(rep: dict, hours: float) -> str:
     return "\n".join(lines)
 
 
+ALERT_LINK_RE = re.compile(r"\s*\(alert: ([^)\s]+)\)")             # a mirrored machine alert's pointer to #agent-alerts
+ALERT_NUMBER_RE = re.compile(r"(?<![\w.-])[+-]?\d+(?:\.\d+)?(?![\w-])")   # a count or measure, which a repeat updates
+
+
+def alert_post(alerts: dict, m: dict, reg: dict) -> None:
+    """Count a mirrored machine alert (kind `alert`) into `alerts`: one entry per alert, which a repeat joins by its link or
+    by its addressees and text up to the numbers in it (each repeat links a new #agent-alerts post).  An entry is
+    {to, title, posts, links, latest, link, picked_up}; picked up is 👀, ✅, ❌ or a reply on any of its posts."""
+    text = plain(m.get("text") or "", reg)
+    to = lead_names(m.get("text") or "", reg)
+    lead = LEAD_RE.match(text)
+    link = (found := ALERT_LINK_RE.search(text)) and found[1]
+    title = ALERT_LINK_RE.sub("", text[lead.end():] if lead else text).strip()
+    keys = [("link", link)] * bool(link) + [("text", tuple(to), ALERT_NUMBER_RE.sub("#", title))]
+    a = next((alerts[k] for k in keys if k in alerts), None) or {"to": to, "posts": 0, "links": 0, "latest": "0", "picked_up": False}
+    a["posts"] += 1
+    a["links"] += bool(link) and ("link", link) not in alerts
+    a["picked_up"] = a["picked_up"] or bool(m.get("reply_count")) or any(r.get("name") in ANSWER_REACTIONS for r in m.get("reactions", []))
+    if float(m["ts"]) >= float(a["latest"]):
+        a.update(title=title, latest=m["ts"], link=link)
+    alerts.update(dict.fromkeys(keys, a))
+
+
 def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     """Doorbells per inbox (the most in any one hour), pauses, `@name`s nobody owns (dropped), and each ask with the record
     that says whether it was answered, over the last --hours: a handle's ask linked to a Linear issue by the issue
     (`issue_state`), an #ask-daniel card by its page's Status (`page_state`), and only an ask with neither by Slack (a
     reply, or 👀, ✅ or ❌).  An ask unanswered after --stale-h hours is listed with its record's state; one whose record can't
     be read (no Linear or Notion credentials) is listed apart as unchecked, so a missing key is one finding, not a false alert
-    per ask.  With --latency, how fast each lane first answered its asks instead (`ask_latency`); with --volume, how
-    much each poster wrote (`volume`)."""
+    per ask.  A mirrored machine alert (a post of kind `alert`) is no ask: it is listed once per alert, however often it
+    repeats (`alert_post`), as an alert to the names it addresses.  With --latency, how fast each lane first answered its
+    asks instead (`ask_latency`); with --volume, how much each poster wrote (`volume`)."""
     api, ch, routes = client(ns), channel_id(ns, reg, FRONT_DOOR), routes_of(ns)
     now = time.time() if ns.now is None else float(ns.now)
     since = now - ns.hours * 3600
@@ -3043,7 +3076,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
                      "paused": sum(_from(m.get("text") or "", "router") for m in bells)})
     posts = api.paged("conversations.history", "messages", channel=ch, oldest=f"{since:.6f}")
     handles = {h["handle"] for h in reg["handles"]} | {poster({"user": p.get("slack_user")}, reg) for p in reg.get("humans", [])}
-    dropped, asks, groups = [], [], {g for h in reg["handles"] for g in group_ids(h)}
+    dropped, asks, groups, alerts = [], [], {g for h in reg["handles"] for g in group_ids(h)}, {}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
     taken: dict[str, tuple[bool, str]] = {}                          # Linear issue -> (taken, its state)
     for m in posts:
@@ -3057,6 +3090,9 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
                     fresh = origin_groups(registry_path(ns.registry))   # this checkout's registry may predate the group
                 if gid not in fresh:                                 # a group no handle has: `lead_names` can't route it
                     dropped.append({"name": f"subteam^{gid}", "ts": m["ts"], "by": poster(m, reg)})
+        if kind_of(m) == "alert":
+            alert_post(alerts, m, reg)
+            continue
         if not (m.get("bot_id") and LEAD_RE.match(m.get("text") or "") and is_ask(m)):   # older clients tagged an fyi without (quiet)
             continue
         x = {"ts": m["ts"], "by": poster(m, reg), "to": lead_names(m.get("text") or "", reg)}
@@ -3078,8 +3114,10 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     old_enough = [(x, ok) for x, ok in asks if now - float(x["ts"]) > ns.stale_h * 3600]
     stale = [x for x, ok in old_enough if ok is False]
     unchecked = [x for x, ok in old_enough if ok is None]
+    alerted = sorted({id(a): a for a in alerts.values()}.values(), key=lambda a: a["latest"])
     if ns.json:
-        print(json.dumps({"inboxes": rows, "dropped": dropped, "answered": answered_by, "unanswered": stale, "unchecked": unchecked}, indent=2))
+        print(json.dumps({"inboxes": rows, "dropped": dropped, "answered": answered_by, "unanswered": stale, "unchecked": unchecked,
+                          "alerts": alerted}, indent=2))
         return 0
     print(f"traffic over the last {ns.hours:g} h (to {both(now)})")
     for x in rows:
@@ -3091,6 +3129,9 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         n = {r: sum(x["record"] == r for x in answered_by) for r in ("linear", "notion", "slack")}
         print(f"  answered: {len(answered_by)} ask(s), by their record: {n['linear']} on Linear, {n['notion']} on Notion, "
               f"{n['slack']} on Slack (no record)")
+    for a in alerted:
+        print(f"  ALERT to {' '.join('@' + t for t in a['to']) or 'no one it can ring'}: {a['title']} ({a['posts']} post(s), the "
+              f"latest {both(a['latest'])}, {'picked up' if a['picked_up'] else 'not picked up'}): {a['link'] or 'no link'}")
     for s in stale:
         print(f"  UNANSWERED {s['ts']} by @{s['by']} to {' '.join('@' + t for t in s['to']) or 'no one it can ring'} ({both(s['ts'])}): "
               + {"linear": f"Linear {s['ref']} {s['state']}", "notion": f"Notion page {s['ref']} {s['state']}",
@@ -4157,7 +4198,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "`comment ISSUE TEXT --as HANDLE` (a lane's worker: `--worker NAME`), `list TEAM [--state S]` (open by "
                       "default), `audit [TEAM ...] [--lane HANDLE]` (each open issue off its board or stale, and each person's "
                       "ask parked, unstaffed, slipped or asked again, with its fix; exit 1 on any; `--asks [--asker NAME]`: "
-                      "the ledger of people's asks, delivered or not), `place ISSUE PROJECT [--milestone M]` (by name "
+                      "the ledger of people's asks, delivered or not; `--close-strays --as HANDLE`: also cancel each stray "
+                      "with a comment naming the rule), `place ISSUE PROJECT [--milestone M]` (by name "
                       "prefixes), `edit ISSUE [--title T] [--due YYYY-MM-DD|none] [--file BRIEF.md] [--parent ID] [--label L "
                       "[--remove]]`, `relate ISSUE blocks|blocked-by|related|"
                       "duplicate OTHER` (Linear moves a duplicate to its Duplicate status), `unrelate ISSUE OTHER`, `update "
@@ -4175,7 +4217,8 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--state", default=None, metavar="NAME", help="list: only issues in this state (default: every open one)")
     p.add_argument("--write", default=None, metavar="TEAM", help="check: also file, comment on and cancel a test issue in TEAM")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
-                   help="comment: its sender, a handle you hold (or --worker); check: the test issue's sender (default comms)")
+                   help="comment: its sender, a handle you hold (or --worker); audit --close-strays: the closing comments' "
+                        "sender; check: the test issue's sender (default comms)")
     p.add_argument("--worker", default=None, metavar="NAME",
                    help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME, "
                         "LANE the handle of the issue's team, and rings no one")
@@ -4198,6 +4241,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--asks", action="store_true", help="audit: the ledger of people's asks (an `asker:` label) instead: "
                                                        "each not delivered, and the counts")
     p.add_argument("--asker", default=None, metavar="NAME", help="audit --asks: only this person's asks (daniel)")
+    p.add_argument("--close-strays", action="store_true",
+                   help="audit: also cancel each stray it finds (an ask in another lane's team nobody took up or touched for "
+                        "48 h), with a comment from --as naming the rule; without it the audit only reports")
     p.add_argument("--label", default=None, metavar="L", help="edit: add this label (`asker:NAME`, `asker-ok`)")
     p.add_argument("--remove", action="store_true", help="edit --label: remove it instead")
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")
