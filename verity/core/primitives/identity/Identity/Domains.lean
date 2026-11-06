@@ -212,7 +212,7 @@ abbrev WORD_CODEC_KV : String := "verity/word-codec/kv/v0"
 -- Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
 abbrev LMS_I : String := "verity/lms/v0/I"
 
--- Not yet read from here: sampled proofs and the proof service's challenger
+-- Not yet read from here: sampled proofs and the proof system's challenger
 abbrev CHALLENGER_KEY : String := "challenger-key/v1"
 abbrev COIN_TREE_HM96_SHA512 : String := "coin-tree/hm96-sha512/v2"
 abbrev IR_OBLIGATION : String := "verity-ir/obligation/v0"

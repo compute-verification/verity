@@ -213,7 +213,7 @@ WORD_CODEC_KV = "verity/word-codec/kv/v0"
 # Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
 LMS_I = "verity/lms/v0/I"
 
-# Not yet read from here: sampled proofs and the proof service's challenger
+# Not yet read from here: sampled proofs and the proof system's challenger
 CHALLENGER_KEY = "challenger-key/v1"
 COIN_TREE_HM96_SHA512 = "coin-tree/hm96-sha512/v2"
 IR_OBLIGATION = "verity-ir/obligation/v0"

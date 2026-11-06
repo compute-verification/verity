@@ -34,7 +34,7 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
 
 /-- **An accepted onsite period frees at most `ε C`**. In every accelerator model `G` at its
 device premises (G1, G2, P1, P2), for every round protocol `P` over a period of `k` sampling blocks, every work check
-`vw` on the transcript (the proof service's, which reads no device), every network certifier's check `vn` on the
+`vw` on the transcript (the proof system's, which reads no device), every network certifier's check `vn` on the
 transcript and the devices' readings `dev`, every period `Pd` of the registered devices and every price `μ` that is
 the period's dual price at one credit (`Period.DualOpt μ 1`), with `C = μ · hon > 0` the credited work's honest cost
 there and `β ≥ 0`: if

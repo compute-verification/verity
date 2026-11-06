@@ -147,7 +147,7 @@ def test_counts_fixed_is_a_conjecture_and_modes_run_standard() -> None:
 
 
 def test_the_dc_headlines_claims_name_what_their_statements_assume() -> None:
-    """The H200's and B200's headlines assume FOLD-OPT at π* and the proof service's named premises, as sm_120's."""
+    """The H200's and B200's headlines assume FOLD-OPT at π* and the proof system's named premises, as sm_120's."""
     for e in ("accounting-ts-fold-opt", "accounting-ts-proofs-sound"):
         assert "the H200's and the B200's" in get(e).name, e
     assert "RT3-LOGIC-6" in get("accounting-ts-fold-opt").name
