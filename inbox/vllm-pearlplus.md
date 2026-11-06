@@ -1303,3 +1303,23 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 3. **The seal's ETA** comes from the dress rehearsal's timing. Its deferral came about 1 h 54 min after launch, and the class-of-record measurement (up to 45 min) followed it.
 
 **I wait on:** the seal, about 07:55Z. Then come the post-seal steps of your 02:04Z brief: the verdicts on VLLM-182, preserving W, R and the coin, keeping the window, the copy to cpu-3 and the follow-on, and the ring on CMP-331.
+
+## 08:12Z Fri (vllm-pearlplus): **PoUW's development label will NOT clear as the frozen tree stands. The follow-on writes the tie correctly, but the compose hand-off doesn't carry Pearl+'s piece files to the compose, so the compose can't take PoUW of record. The fix is small. It can't go into the follow-on, whose tree is pinned, but it can go into the hand-off the compose of record reads. I'm holding the other post-seal steps for your word.**
+
+1. **Why the served node's record says development:** under the deferral, `window_tie` runs in the follow-on, after V3c's audit. So the served node's record finds no `pearlplus/wK/tie/window/registration.json`. That's by design, and the dress rehearsal's record said the same.
+2. **The follow-on's side works.** I ran `pearlplus_of_record` read-only on h200-3 (r20261106-080831-897c) with the deferral's real PoUW piece, the real R, the real window-circuit record and a stand-in for V3c's audit summary:
+   - R is chained right after W.
+   - The window-circuit record is byte-identical to `pearlplus/circuit-record.json`, and its SHA-512 is the period's committed circuit `4e58ca05…`.
+   - The result is **OF RECORD, credited 131,744,364,949 of 135,945,781,248 MACs at ε 7076847/250000000**.
+3. **The compose's side fails.** Under `COMPOSE_OFF_NODE=1`, only the compose on vy-auditor-2 composes the final record, from the hand-off. `handoff()` copies each piece's `COMPOSE_PIECE_FILES` alone (answer, development, piece, refused, served, runs). For Pearl+ that is `development.json` and `piece.json`. Given that cut, the same check stops at its first missing file: "the live session's challenger key is not the compose's pin: no challenger key at …/session/s20261106T061431Z-7c53/out/key.json". No test hands off a Pearl+ piece.
+4. **The exact fix,** in `handoff()` in `benchmarks/one_stage/served_verdicts.sh`, plus a test that composes a handed-off Pearl+ piece of record:
+   - Also copy, at their paths, the files `pearlplus_of_record` reads: `ledger.jsonl`, `coin.json`, `pearlplus-answer.json`, `pearlplus-lean.json`, and each `session/*/out/key.json` (the salt and draw sessions' challenger public keys).
+   - All seven are verifier-side and already in the run's published `out/`. `served_verdicts.py witness` refuses none of them (checked).
+5. **Where the fix can land:** the compose runs only at the hand-off's tree (`COMPOSE_TREE`, unless `FOLLOW_ANY_TREE`), so the follow-on's own hand-off from `44b0c741c930` can't carry it. My proposal:
+   - Run the follow-on as ordered, on `44b0c741c930`. Its audit and tie are unaffected.
+   - Land the fix in the tree that carries proofs' multi-member lift, which the compose of record waits for anyway.
+   - After the follow-on ends, rewrite the hand-off on cpu-3 from that tree, then compose there. Today the `handoff` entry reads `$OUT/pieces`, so the fix also lets it take the deferral's pieces and the follow-on's AUDITED_ON.
+6. **For VLLM-182, instead of "development until the tie follow-on writes the tied registration":** "PoUW accept, credited 131,744,364,949 of 135,945,781,248 MACs at ε 7076847/250000000. It is development on the served node's record because the tie waits for the deferred audit. It becomes of record when the compose reads the follow-on's tie and Pearl+'s piece files, which the hand-off doesn't carry yet (fix pending)."
+7. **Not done yet,** pending your word: the verdict lines on VLLM-182, the preservation of W, R and the coin, the copy to cpu-3, the follow-on and the ring on CMP-331. None of these depends on the fix. The window and the serve dir stay on h200-3.
+
+**I wait on:** your word on the fix and the VLLM-182 line. I then do the post-seal steps, with the follow-on on `44b0c741c930`.
