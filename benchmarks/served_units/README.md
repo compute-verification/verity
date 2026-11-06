@@ -20,11 +20,17 @@ Two kinds of type (`stage.py`'s docstring has both):
 
 Files:
 
-- `stage.py UNIT N OUT`: the proof-block types at GLM-5.3's statics (per TP8 rank), the W8A8 coordinate at Llama-3.2-1B's, and
-  their synthetic values.
+- `stage.py UNIT N OUT [--public-weights]`: the proof-block types at GLM-5.3's statics (per TP8 rank), the W8A8 coordinate at
+  Llama-3.2-1B's, and their synthetic values; `--public-weights` stages a `UNITS` type's weight row as public input ports on
+  the same values, the block without its weight row's in-circuit opening (a statement the verifier refuses as outside the
+  proved scope, after every check).
 - `job.sh`: builds, stages, proves and verifies every proof block of `SU_UNITS` (its header lists the checks and the environment);
   the builds, the run and the controls are `benchmarks/pouw/hidden_zk/job.sh`'s.
 - `summarize.py`: `out/<tag>/summary.json` and one table row per proof block.
+- `gpu.sh`: the GPU prover's time on statements of each `GU_UNITS` type (`TYPE[:S=V,...]`, `+public-weights` for that arm) at
+  each size of `GU_NS`, under one `gpu-lease`; `gpu_summary.py` fits each type's fixed seconds a statement and seconds a block,
+  and gives its proof overhead (seconds a block × the card's peak MACs a second ÷ the block's MACs), marginal and amortized
+  at each size.
 
 From the source tree's root on a CPU node with 160 GB for the job (results go to `$RESEARCH_RUN_DIR/out`; `SU_CACHE` keeps
 builds and stagings between runs):
@@ -32,4 +38,11 @@ builds and stagings between runs):
 ~~~text
 RESEARCH_RUN_DIR=DIR SU_UNITS="fp8-coord:K=6144 router moe-w13" SU_N=4 SU_MEM_GB=160 SU_CACHE=CACHE \
   bash benchmarks/served_units/job.sh
+~~~
+
+On a GPU node (results go to `$RESEARCH_RUN_DIR/out`, the build and stagings to `FLOCK_WORK`, kept between runs):
+
+~~~text
+research run --on NODE --cwd source -- bash benchmarks/served_units/gpu.sh \
+  GU_UNITS="fp8-coord:K=6144 fp8-coord:K=6144+public-weights" GU_NS="16 64" SM=120
 ~~~
