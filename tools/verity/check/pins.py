@@ -164,6 +164,8 @@ WRITERS = (
         ("template_instance_vectors.json", "test_template_instance.py"),
     )),
     Writer(VLLM_PROGRAM_TESTS + "data/sampling_split_digests.json", VLLM_PROGRAM_TESTS + "test_sampling_split.py"),
+    Writer("tools/verity/circuit_check/tests/fixtures/split/prims_serve.json",
+           "tools/verity/circuit_check/tests/test_split_prims_serve.py"),
 )
 #: the directories whose every test module with a ``--write`` is a `Writer`'s (`tests/test_pins.py`)
 WRITER_DIRS = (CIRCUITS_TESTS, VLLM_PROGRAM_TESTS)
