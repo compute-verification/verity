@@ -26,6 +26,8 @@ draw probability prices the share at `r` (`Stages.prob_comp`).
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Accounting.SecurityProofs.TS
 
 open Accounting.TS Accounting.Assumptions.TS Accounting.Guarantees.TS Pouw.RelativeSecurity
