@@ -1295,6 +1295,33 @@ def test_a_pr_carries_a_contained_unmarked_pr_of_its_own_owner_or_one_whose_owne
     assert q.sync()[0] == []
 
 
+def test_the_sync_leaves_off_next_a_head_that_merged_next_carrying_a_pr_head_its_pr_no_longer_lands(world):
+    """A mark written as a label skips the preflight's (g), so the sync judges such a head itself: one that merged `next`
+    lands after the PRs it carries from there while they land as they stand, and is refused, with the fix, once one of them
+    is rebuilt without the carried head, or withdrawn by its owner, which carries it only for a rebuild."""
+    world.gh.put(5, five := world.change({"x.txt": "x\n"}))
+    world.gh.put(6, six := world.change({"y.txt": "y\n"}))
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [5, 6]
+    tip = _git(world.origin, "rev-parse", "refs/heads/next")
+    by = {n: _git(world.origin, "log", "-1", "--format=%H", f"--grep=^Queue: #{n} ", tip) for n in (5, 6)}
+    world.gh.put(4, world.change({"z.txt": "z\n"}, base=tip))
+    assert [m.pr for m in q.sync()[0]] == [5, 6, 4]
+    world.gh.put(5, new := world.change({"x.txt": "x2\n"}))
+    members, entries = q.sync()
+    assert sorted(m.pr for m in members) == [5, 6] and entries[4].state == "refused"
+    assert entries[4].why == (f"it carries #5's head {five[:12]} through `next`'s merge {by[5][:12]}, which neither `main` nor "
+                              f"#5's current head {new[:12]} holds: merge origin/main and #5's current head instead of `next`, "
+                              "or drop #5's commits")
+    world.gh.put(5, five)
+    world.gh.ready.discard((6, six))
+    q.marked_by = lambda n, h: "lane-6" if n == 6 else None                 # #6's owner wrote its `ready = false`
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [5] and entries[4].why == (
+        f"it carries #6's head {six[:12]} through `next`'s merge {by[6][:12]}, and #6 isn't admitted at {six[:12]} (not marked "
+        f"ready at {six[:8]}): merge origin/main and #6's current head instead of `next`, or drop #6's commits")
+
+
 def test_an_ejected_head_stays_out_until_its_pr_is_pushed_again(world):
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
@@ -2750,6 +2777,44 @@ def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_a
     world.gh.put(6, six := world.change({"z.txt": "z\n"}), ready=False, body="Lane `lane-4`.")
     world.gh.put(4, world.change({"w.txt": "w\n"}, base=six), ready=False)
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0         # #6 is lane-4's own: #4 carries it
+
+
+def test_the_preflight_refuses_a_head_that_merged_next_carrying_a_pr_head_its_pr_no_longer_lands(world, capsys):
+    """Branches that merged an older `next` carried the heads of PRs rebuilt or withdrawn since, which would land under their
+    marks.  A head carried through `next`'s merge (`Queue: #N`) refuses the mark, with the fix, when #N's current head doesn't
+    hold it, #N is closed, or #N isn't admitted, even when #N's owner withdrew it, which carries it for a rebuild; one #N still
+    lands as it stands refuses nothing, nor does one the landing branch holds (an older merge of a PR landed since)."""
+    from research.queue import MarkOnly, carried_heads, ready
+    from research.store.cli import _label_write_through
+
+    world.with_store_remote()
+    world.gh.put(5, five := world.change({"x.txt": "x\n"}))
+    world.gh.put(6, six := world.change({"y.txt": "y\n"}))
+    assert [m.pr for m in world.queue().sync()[0]] == [5, 6]
+    tip = _git(world.origin, "rev-parse", "refs/heads/next")
+    by = {n: _git(world.origin, "log", "-1", "--format=%H", f"--grep=^Queue: #{n} ", tip) for n in (5, 6)}
+    world.gh.put(4, four := world.change({"z.txt": "z\n"}, base=tip), ready=False)
+    world.gh.put(5, new := world.change({"x.txt": "x2\n"}), ready=False)                   # #5 rebuilt on `main`
+    for n in (5, 6):
+        assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=None) == 0
+    pre = _preflight(world)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
+    err = capsys.readouterr().err
+    assert (f"it carries #5's head {five[:12]} through `next`'s merge {by[5][:12]}, which neither `main` nor #5's current head "
+            f"{new[:12]} holds: merge origin/main and #5's current head instead of `next`, or drop #5's commits") in err, err
+    assert "#6's" not in err                                                     # #6 lands at the head #4 carries
+    del world.gh.prs[5]
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
+    assert (f"it carries #5's head {five[:12]} through `next`'s merge {by[5][:12]}, and #5 is closed: drop #5's commits "
+            "(rebuild the branch on origin/main, without `next`)") in capsys.readouterr().err
+    world.store.add_label(label_target(6, six), vocab.READY, False, "lane-6")
+    _label_write_through(world.store, label_target(6, six))
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
+    err = capsys.readouterr().err
+    assert (f"it carries #6's head {six[:12]} through `next`'s merge {by[6][:12]}, and #6 isn't admitted at {six[:12]} (not "
+            f"marked ready at {six[:8]}): merge origin/main and #6's current head instead of `next`, or drop #6's commits") in err
+    assert "it contains #6's head" not in err                                   # a withdrawn PR a rebuild would carry
+    assert [n for n, _, _ in carried_heads(world.dev, five, four)] == [6]       # #5's head on the landing branch
 
 
 #: Lake packages as the Lean step reads them: `lean/a` (library `A`), `lean/a/Proofs` nested in it with `srcDir = ".."` and its
