@@ -1,6 +1,7 @@
 module
 
-public import SampledProofs.WiresSound
+public import SampledProofs.Wires
+import SampledProofs.WiresSound
 
 /-! **`check` is complete against its unrolled reference** (`check_complete`): whatever `checkRef` accepts, `check`
 accepts, for wires whose radices are 1 or more (as every wire `Wire.ofJson` reads is). With `check_sound` the two decide

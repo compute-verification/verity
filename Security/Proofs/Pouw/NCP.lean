@@ -6,6 +6,7 @@ public import Proofs.Pouw.NCP.GameProofs
 public import Proofs.Pouw.NCP.RelationWitness
 public import Proofs.Pouw.NCP.RouteUProofs
 public import Proofs.Pouw.NCP.RouteUWordProofs
+import Mathlib.Tactic.Positivity.Finset
 public import Proofs.Pouw.Lemmas.NCP
 
 /-!

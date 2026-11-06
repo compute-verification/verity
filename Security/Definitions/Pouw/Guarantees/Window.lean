@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Pouw.Window
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A window's ε from its calls' (M2), with a draw that depends on the registration (C1) (trusted)

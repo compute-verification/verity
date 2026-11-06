@@ -3,8 +3,12 @@ module
 public import Definitions.Pouw.PearlC.Completeness
 public import Definitions.Pouw.PearlC.DevicePricesLoop
 public import Definitions.Pouw.Assumptions.PearlC.HonestCap
-public import Proofs.Pouw.PearlC.HonestWords
-public import Proofs.Pouw.Copy
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.HonestWords
+import Proofs.Pouw.Prob
 
 /-!
 # The sampled audit's completeness from the honest tiles' measured cap rate

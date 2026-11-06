@@ -1,9 +1,12 @@
 module
 
-public import Definitions.Pouw.Assumptions.NCP.RouteUWord
-public import Proofs.Pouw.NCP.ChainProofs
-public import Proofs.Pouw.NCP.RouteUProofs
 public import Definitions.Pouw.Guarantees.NCP
+public import Proofs.Pouw.NCP.RelationProofs
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.NCP.ChainProofs
+import Proofs.Pouw.NCP.RelationWitness
+import Proofs.Pouw.NCP.RouteUProofs
+import Proofs.Pouw.NCP.WordProofs
 public import Proofs.Pouw.Lemmas.NCP
 
 /-!

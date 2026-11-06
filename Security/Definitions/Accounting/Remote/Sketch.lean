@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Accounting.RateAuditSketch
+public import Mathlib.Data.Fintype.Sum
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The receipts' sketch over a remote audit session: the seeds' keys and the passes' devices (trusted)

@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Stratified
-public import Mathlib.Analysis.MeanInequalities
+import Mathlib.Analysis.MeanInequalities
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 public import Proofs.Flock.Lemmas.Audit
 
 /-!

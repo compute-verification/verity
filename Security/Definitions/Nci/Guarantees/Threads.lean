@@ -3,7 +3,7 @@ module
 public import Definitions.Nci.Assumptions
 public import Definitions.Nci.Assumptions.Threads
 public import Definitions.Nci.Assumptions.Baseline
-public import Definitions.Nci.Dark
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # The inference-only policy over threads: the guarantees

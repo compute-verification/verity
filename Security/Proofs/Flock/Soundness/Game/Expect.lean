@@ -2,8 +2,11 @@ module
 
 public import Proofs.Core.Game.Expect
 public import Definitions.Flock.Game.Expect
+public import Definitions.Flock.Rewinding
+public import Mathlib.Analysis.Real.Sqrt
 public import Proofs.Flock.Soundness.Game.Basic
-public import Proofs.Flock.Soundness.Rewinding
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Basic.ENNReal.BigOperators
 
 /-!
 # C-Flock's game library is Core's: `Expect`

@@ -5,7 +5,6 @@ some fuel it gives, unchanged, at any more (`defOfJsonIn_mono`, `cutIn_mono`, `e
 -/
 module
 
-public import Flock.Qword
 public import Flock.Qcall
 public import Flock.Extract
 

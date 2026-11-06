@@ -1,8 +1,7 @@
 module
 
-public import Mathlib.Data.List.Perm.Basic
 public import Properties.Core.Site
-public import Proofs.Core.Site
+import Proofs.Core.Site
 
 /-!
 # The Site's code is the spec's: the proofs

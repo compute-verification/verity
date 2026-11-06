@@ -1,6 +1,8 @@
 module
 
 public import Grader.Registry
+public import Lean.Replay
+public import Std.Do.Triple.SpecLemmas
 
 /-!
 # The grader

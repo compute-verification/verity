@@ -2,6 +2,8 @@ module
 
 public import Definitions.Pouw.PearlC.FlockTile.Audit
 public import Proofs.Pouw.PearlC.FlockTile.Bridge
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # C-Flock's hidden audit: a `TileGame` per drawn tile

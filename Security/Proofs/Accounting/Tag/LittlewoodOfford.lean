@@ -1,7 +1,9 @@
 module
 
-public import Mathlib.Combinatorics.SetFamily.LYM
-public import Proofs.Accounting.Tag.Signs
+public import Definitions.Accounting.Guarantees.Sketch
+import Mathlib.Combinatorics.SetFamily.LYM
+import Mathlib.NumberTheory.LucasLehmer
+import Proofs.Accounting.Tag.Basic
 
 /-!
 # Erdős's Littlewood–Offord bound

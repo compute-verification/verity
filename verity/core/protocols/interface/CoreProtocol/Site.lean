@@ -1,9 +1,9 @@
 module
 
-public import Lean.Data.Json
 public import Flock.Canon
 public import Flock.Hash
 public import CoreProtocol.Ratio
+public import Lean.Data.Json.FromToJson.Basic
 
 /-!
 # The Site in code

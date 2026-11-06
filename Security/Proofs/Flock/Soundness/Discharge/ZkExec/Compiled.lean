@@ -1,7 +1,24 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkExec.Refines
-public import Proofs.Flock.Soundness.Discharge.ZkLink
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Live
+public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.ZkExec.Refines
+import Proofs.Flock.Soundness.Discharge.ZkLink.Count
+import Proofs.Flock.Soundness.Discharge.ZkLink.One
 
 /-!
 # flock-verify `--zk`'s headline at the compiled `--zk` table

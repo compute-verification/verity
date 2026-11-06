@@ -4,8 +4,8 @@ statement digest, or matched byte for byte against the pinned files, so each ver
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Hm96
+public import Lean.Data.Json.FromToJson.Basic
 public import Flock.CanonForm
 
 @[expose] public section

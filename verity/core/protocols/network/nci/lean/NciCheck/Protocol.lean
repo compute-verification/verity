@@ -1,9 +1,9 @@
 module
 
-public import NciCheck.Baseline
 public import CoreProtocol.Protocol
-meta import NciCheck.Baseline
+public import NciCheck.Baseline
 meta import CoreProtocol.Protocol
+meta import NciCheck.Baseline
 
 /-!
 # The inference-only policy as a core protocol: `verity/inference-only/v0`

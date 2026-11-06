@@ -1,10 +1,12 @@
 module
 
-public import Batteries.Tactic.OpenPrivate
 public import Properties.Pouw.LiveSalt
+public import Std.Do.Triple.Basic
 public import Std.Tactic.Do
-import all Lean.Data.Json.Basic
+import Batteries.Tactic.OpenPrivate
 import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import Std.Tactic.Do.Syntax
 
 /-!
 # The challenger's ledger, for `Properties.Pouw.LiveSalt.LedgerShows`

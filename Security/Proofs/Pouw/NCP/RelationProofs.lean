@@ -1,7 +1,8 @@
 module
 
 public import Definitions.Pouw.NCP.Relation
-public import Proofs.Pouw.NCP.WordProofs
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.NCP.WordProofs
 
 /-!
 # The reduction, FinalOnly for NCP, and the floor without FinalOnly

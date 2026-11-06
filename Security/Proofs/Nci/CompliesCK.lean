@@ -1,6 +1,9 @@
 module
 
 public import Definitions.Nci.Guarantees.CompliesCK
+import Mathlib.Data.NNRat.Floor
+import Proofs.Core.Expand
+import Proofs.Core.Padding
 public import Proofs.Core.Expand
 public import Mathlib.Tactic.Linarith
 

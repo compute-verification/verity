@@ -2,7 +2,10 @@ module
 
 public import Proofs.Pous.Statements
 public import Proofs.Pous.Graded.Tail
-public import Proofs.Pous.Continuous.PerAnswer
+import Proofs.Pous.Continuous.PerAnswer
+import Proofs.Pous.Sanity
+import Proofs.Pous.Thm1.Theorem1iiSeq
+import Proofs.Pous.Thm1.Theorem1iiiTimed
 
 /-!
 # Completeness of the continuous audit: `Pous.Guarantees.ContinuousComplete`

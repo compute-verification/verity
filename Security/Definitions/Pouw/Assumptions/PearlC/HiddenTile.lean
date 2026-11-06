@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Pouw.PearlC.Hidden
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The hidden audit's open obligation, a drawn tile's proof is sound (trusted; a `Prop` taken as a hypothesis)

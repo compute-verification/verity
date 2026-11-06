@@ -1,7 +1,9 @@
 module
 
 public import Definitions.Nci.Assumptions.Packed
-public import Definitions.Nci.Dark
+public import Definitions.Nci.Assumptions.Baseline
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # The inference-only policy's fan-out bound on a chain with several products to a gate

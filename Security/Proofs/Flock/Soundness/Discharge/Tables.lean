@@ -6,6 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.Tables.Session
 public import Proofs.Flock.Soundness.Discharge.Tables.Headline
 public import Proofs.Flock.Soundness.Discharge.Tables.Accepts
 public import Proofs.Flock.Soundness.Discharge.Tables.Statements
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Sessions of `J` tables

@@ -1,8 +1,13 @@
 module
 
-public import Proofs.Pouw.PearlC.Fp4IssueGamma
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4ChainOnly
 public import Definitions.Pouw.Guarantees.PearlC
+public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceFp4Gamma
+import Proofs.Pouw.PearlC.TileGamma
+import Proofs.Pouw.Prob
 public import Proofs.Pouw.Lemmas.PearlC
 
 /-!

@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Nci
+public import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI in reads form: the read factor, and reads in a set of gates

@@ -1,8 +1,13 @@
 module
 
-public import Proofs.Flock.VBridge.Sparse.Residuals
-public import Proofs.Flock.Soundness.Refine.Plays
-public import Proofs.Flock.Soundness.Instance
+public import Proofs.Flock.Soundness.Refine.Tapes
+public import Proofs.Flock.VBridge.Sparse.Defs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Refine.Plays
+import VCVio.Prelude.Core
 
 /-!
 # A run of the sparse phase on `RecSparse_v1`'s ports

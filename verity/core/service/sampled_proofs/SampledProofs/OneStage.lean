@@ -50,8 +50,6 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
 -/
 module
 
-public import CoreProtocol.Cli
-public import CoreProtocol.Profile
 public import CoreProtocol.Live
 public import SampledProofs.Registration
 public import SampledProofs.Record

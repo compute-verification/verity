@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
-public import Proofs.Flock.Soundness.Discharge.Exec.Headline
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Headline
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The refinement at `--zk`, one table, and the `--zk` headline at flock-verify's acceptance

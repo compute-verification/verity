@@ -1,8 +1,10 @@
 module
 
-public import Proofs.Pouw.Reduction
-public import Proofs.Pouw.Sampling
 public import Definitions.Pouw.Guarantees.Game
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
+import Proofs.Pouw.Reduction
+import Proofs.Pouw.Sampling
 public import Proofs.Pouw.Lemmas.Game
 
 /-!

@@ -1,7 +1,11 @@
 module
 
-public import Definitions.Nci.Guarantees.CoverChained
 public import Proofs.Nci.CoveringTwoCostsWitness
+public import Definitions.Nci
+public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.BitDecl
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.Positivity.Finset
 public import Proofs.Nci.Rate
 
 /-!

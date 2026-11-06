@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Pous
-public import Definitions.Pous.Assumptions
-public import Proofs.Pous.Statements
-public import Proofs.Pous.Sanity
-public import Proofs.Pous.Accounting.Numbers
 public import Definitions.Pous.Model.BandGraph
+public import Definitions.Pous.Model.Pebbling
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 
 /-!
 # Band-graph combinatorics (game-independent)

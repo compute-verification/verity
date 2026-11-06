@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pous.Claims.StreamedWipeDisk
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe with a server's disks in the fill

@@ -1,9 +1,32 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
-public import Proofs.Flock.Soundness.Discharge.Composed.DefsJA
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.RowsAtHP
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyHP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SitesP
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.RowsAtHP
+import Proofs.Flock.Soundness.Discharge.Tables.Accepts
+import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 @[expose] public section

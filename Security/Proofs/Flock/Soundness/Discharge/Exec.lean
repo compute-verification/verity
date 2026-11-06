@@ -36,6 +36,7 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Pts
 public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionLDecisive
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The refinement: flock-verify's acceptance and the audit as Lean defines it

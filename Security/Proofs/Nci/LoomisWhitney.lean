@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Nci.LoomisWhitneyBase
+import Mathlib.Data.NNRat.Floor
+import Proofs.Nci.LoomisWhitneyBase
 public import Proofs.Nci.Lemmas
 
 /-!

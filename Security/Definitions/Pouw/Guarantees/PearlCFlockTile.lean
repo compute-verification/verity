@@ -1,10 +1,10 @@
 module
 
-public import Definitions.Pouw.PearlC.Device
 public import Definitions.Pouw.PearlC.DeviceKernelWref
 public import Definitions.Pouw.PearlC.DevicePricesLoop
-public import Definitions.Pouw.PearlC.Instance
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 public import Definitions.Pouw.PearlC.FlockTile.Audit
 
 /-!

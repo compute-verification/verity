@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.Schedule
 public import RemoteAudit.Schedule
+public import Definitions.Accounting.Schedule
 public import Properties.RemoteAudit
 
 /-!

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The session on committed coins opens each round at most once

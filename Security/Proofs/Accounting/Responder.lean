@@ -3,6 +3,9 @@ module
 public import Definitions.Accounting.Guarantees.Responder
 public import Proofs.Accounting.Actual.Confidence
 public import Proofs.Accounting.Memory
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 
 /-!
 # B2, proved

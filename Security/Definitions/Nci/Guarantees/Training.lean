@@ -2,7 +2,7 @@ module
 
 public import Definitions.Nci.Assumptions
 public import Definitions.Nci.Assumptions.Training
-public import Definitions.Nci.Dark
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # The inference-only policy's guarantees on a reference training circuit, under one assumption

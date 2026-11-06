@@ -1,7 +1,8 @@
 module
 
 public import Definitions.Pouw.PearlC.TileCircuit
-public import Definitions.Pouw.PearlC.DeviceFp4
+public import Definitions.Pouw.PearlC.Fp4
+import Mathlib.Algebra.Order.AbsoluteValue.Basic
 
 /-!
 # Pearl-C4's tile unit as a core circuit (definitions only)

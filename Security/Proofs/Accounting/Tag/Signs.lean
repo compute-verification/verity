@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Accounting.Tag.Basic
 public import Definitions.Accounting.Guarantees.Sketch
+import Mathlib.NumberTheory.LucasLehmer
+import Proofs.Accounting.Tag.Basic
 
 /-!
 # ±1 rows: non-collision

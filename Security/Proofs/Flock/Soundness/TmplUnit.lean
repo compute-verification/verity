@@ -1,6 +1,16 @@
 module
 
-public import Proofs.Flock.Soundness.TmplSplitEq
+public import Flock.Statement
+public import Proofs.Flock.Soundness.TmplFoldClassOk
+public import Proofs.Flock.Soundness.TmplPosMap
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Nodes
+import Proofs.Flock.Soundness.TmplFoldPos
+import Proofs.Flock.Soundness.TmplFoldRef
+import Proofs.Flock.Soundness.TmplLayOk
+import Proofs.Flock.Soundness.TmplSplitEq
+import Proofs.Flock.Soundness.TmplWf
 
 /-!
 # A templated unit slot's fold is the flat slot's

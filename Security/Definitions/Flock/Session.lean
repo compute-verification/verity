@@ -2,6 +2,9 @@ module
 
 public import Definitions.Flock.Ligerito
 public import Definitions.Flock.Game.Interleave
+public import Definitions.Flock.Piop
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # One rep, and one table's session

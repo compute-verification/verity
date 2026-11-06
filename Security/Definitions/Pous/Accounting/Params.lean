@@ -1,8 +1,7 @@
 module
 
-public import Mathlib.Algebra.Order.Floor.Semiring
-public import Mathlib.Data.Rat.Floor
 public import Definitions.Pous.Model.Audit
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The problem statement's parameters, and the requirement at them

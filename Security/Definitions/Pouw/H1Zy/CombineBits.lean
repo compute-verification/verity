@@ -1,6 +1,9 @@
 module
 
 public import Definitions.Pouw.H1Zy.Combine
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # `PouwH1Combine_v1{TILE}` on bits (trusted)

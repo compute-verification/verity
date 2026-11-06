@@ -1,10 +1,10 @@
 module
 
-public import Mathlib.Data.Fintype.BigOperators
-public import Mathlib.Data.Fintype.Fin
-public import Mathlib.Logic.Equiv.Fin.Basic
-public import Mathlib.Tactic.NormNum
-public import Definitions.Pous.Guarantees
+public import Definitions.Pous.Accounting.Params
+public import Definitions.Pous.Model.M1
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 
 /-!
 # Sanity theorems: the definitions are not vacuous

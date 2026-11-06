@@ -1,7 +1,13 @@
 module
 
-public import Proofs.Accounting.ServingBlocks
 public import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
+public import Proofs.Accounting.ServingBlocks
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
 public import Proofs.Accounting.Lemmas.ServingBlocks.Witnesses
 
 /-!

@@ -1,6 +1,8 @@
 module
 
-public import Mathlib.Analysis.MeanInequalities
+public import Mathlib.Basic.ENNReal.Basic
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 
 /-!
 # C-Flock's one-stage audit: lemmas

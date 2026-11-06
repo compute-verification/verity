@@ -1,6 +1,9 @@
 module
 
 public import Definitions.Pouw.Window
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 public import Proofs.Core.Game.Prob
 
 /-!

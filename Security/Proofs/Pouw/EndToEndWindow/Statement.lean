@@ -1,11 +1,10 @@
 module
 
-public import Definitions.Pouw.Game.Params
-public import Definitions.Pouw.Assumptions.Game
-public import Definitions.Pouw.Assumptions.NCP.Assumptions
-public import Proofs.Flock.Soundness.Audit.Extraction
 public import Proofs.Flock.Soundness.Audit.RegDraw
-public import Proofs.Flock.Soundness.Audit.Window
+public import Definitions.Pouw.Game.Defs
+public import Proofs.Flock.Soundness.Audit.Closure
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 
 /-!
 # PoUW's work bound at the window audit (trusted)

@@ -1,9 +1,16 @@
 module
 
-public import Proofs.Flock.Soundness.ExecCircuit
-public import Proofs.Flock.Soundness.ExecCheck
-public import Proofs.Flock.Soundness.ExecTyped
-public import Proofs.Flock.Soundness.ExecSetup
+public import Aesop.BuiltinRules
+public import Flock.HmRow
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.ExecCheck
+import Proofs.Flock.Soundness.ExecCircuit
+import Proofs.Flock.Soundness.ExecParse
 
 /-!
 # A typed template's statement, as `HmRow.parse` and `Stmt.setupH` accept it (1e for templates, T2)

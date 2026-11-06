@@ -1,8 +1,28 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.CopiesP
 public import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
+public import Proofs.Flock.Soundness.Discharge.Zero.Stack
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Const.ConstCols
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+import Proofs.Flock.Soundness.Discharge.Zero.Cols
+import Proofs.Flock.Soundness.Discharge.Zero.Uniform
+import Proofs.Flock.Soundness.Lowering
 public import Proofs.Flock.Soundness.Discharge.Hidden.UnrolledP
 
 /-!

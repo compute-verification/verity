@@ -1,8 +1,16 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Law
 public import Flock.Draw
 import all Init.Data.Array.QSort.Basic
+public import Definitions.Flock.Audit.Law
+public import Mathlib.Algebra.Group.End
+public import Mathlib.Data.Fintype.Prod
+import Batteries.Tactic.OpenPrivate
+import Mathlib.Basic.ENNReal.BigOperators
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
+import Std.Data.HashMap.Lemmas
 
 /-!
 # The executable draw escapes no more often than the model's

@@ -49,17 +49,22 @@ Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file
 module
 
 public import CoreProtocol.Blobs
-public import SampledProofs.OneStage
-public import SampledProofs.ChallengerTrees
 public import SampledProofs.Slots
 public import SampledProofs.FilePart
 public import Flock
+public import Flock.KnownRead
+public import Flock.KsScope
+public import Flock.RecSetup
+public import Flock.RecordText
+public import Flock.RegKnown
+public import SampledProofs.ChallengerTrees
+public import SampledProofs.OneStage
 meta import CoreProtocol.Blobs
-meta import SampledProofs.OneStage
-meta import SampledProofs.ChallengerTrees
 meta import SampledProofs.Slots
 meta import SampledProofs.FilePart
 meta import Flock
+meta import SampledProofs.ChallengerTrees
+meta import SampledProofs.OneStage
 
 @[expose] public section
 set_option backward.privateInPublic true

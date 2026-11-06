@@ -42,6 +42,7 @@ proof reads back (`ownOf`) rather than computing them again.
 module
 
 public import Flock.Firewall.Drive
+public import Flock.Firewall.Skeleton
 
 @[expose] public section
 

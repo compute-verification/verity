@@ -1,7 +1,16 @@
 module
 
-public import Proofs.Flock.Soundness.TmplSplitWalk
-public import Proofs.Flock.Soundness.TmplFoldLayout
+public import Proofs.Flock.Soundness.TmplSplitOk
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Nodes
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.TmplFoldLayout
+import Proofs.Flock.Soundness.TmplFoldRef
+import Proofs.Flock.Soundness.TmplLayOk
+import Proofs.Flock.Soundness.TmplSplitWalk
+import Proofs.Flock.Soundness.TmplWf
+import Std.Data.HashMap.Lemmas
 
 /-!
 # The split fold is the template fold

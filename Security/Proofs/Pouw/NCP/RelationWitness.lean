@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Pouw.NCP.RelationProofs
-public import Proofs.Pouw.NCP.GameProofs
 public import Definitions.Pouw.Guarantees.NCP
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.NCP.GameProofs
+import Proofs.Pouw.NCP.RelationProofs
 public import Proofs.Pouw.Lemmas.NCP
 
 /-!

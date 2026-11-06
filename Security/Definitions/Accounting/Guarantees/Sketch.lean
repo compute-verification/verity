@@ -3,6 +3,7 @@ module
 public import Mathlib.Probability.Distributions.Uniform
 public import Definitions.Core.Prob
 public import Definitions.Accounting.Tag.Sketch
+public import Definitions.Pouw.Fp8Atom.Fp32
 
 /-!
 # Exact integer ±1 sketches: the statements (trusted)

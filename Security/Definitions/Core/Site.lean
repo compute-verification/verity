@@ -5,8 +5,8 @@ public import Definitions.Core.DeviceFigures
 public import Definitions.Core.Period
 public import Mathlib.Data.Finset.Lattice.Fold
 public import Definitions.Core.Compiler
-public import Mathlib.Data.List.Perm.Basic
 public import Mathlib.Data.List.Nodup
+public import Mathlib.Data.List.Perm.Basic
 public import Mathlib.Data.NNRat.Floor
 
 /-!

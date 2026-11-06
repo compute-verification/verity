@@ -1,6 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Seq
+public import Definitions.Core.Game
+public import Definitions.Flock.Game.Expect
+public import Definitions.Flock.Game.Seq
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # Zero knowledge: programs on finitely many uniform coins

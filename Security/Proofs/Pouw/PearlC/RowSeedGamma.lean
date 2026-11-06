@@ -1,8 +1,15 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
-public import Proofs.Pouw.PearlC.DeviceRev1Gamma
-public import Proofs.Pouw.PearlC.DeviceSm120Gamma
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.PearlC.DevicePrices
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceSm120Gamma
+import Proofs.Pouw.PearlC.TileGamma
+import Proofs.Pouw.PearlC.UOnlyGamma
+import Proofs.Pouw.Prob
 
 /-!
 # Row additivity: rev1's TT_OUT gives the row-seeded one (staging, nothing pinned)

@@ -1,9 +1,14 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.HiddenTile
-public import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
-public import Proofs.Pouw.PearlC.TTOutW1
-public import Proofs.Core.Game.Prob
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Game.Prob
+import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
+import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
 # The hidden audit keeps the sampled audit's γ (compute accounting's file)

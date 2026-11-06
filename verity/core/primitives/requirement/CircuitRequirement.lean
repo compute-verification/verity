@@ -1,6 +1,6 @@
 module
 
-public import Std.Data.HashSet
+public import Std.Data.HashSet.Basic
 
 /-!
 # A declared circuit's requirement, computed

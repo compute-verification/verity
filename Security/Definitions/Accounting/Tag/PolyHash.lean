@@ -1,7 +1,5 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Fin
-public import Mathlib.Data.ZMod.Defs
 public import Mathlib.Probability.Distributions.Uniform
 public import Definitions.Core.Prob
 

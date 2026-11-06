@@ -1,7 +1,10 @@
 module
 
 public import Definitions.Nci.Guarantees.Activations
-public import Proofs.Nci.Threads
+import Mathlib.Data.NNRat.Floor
+import Proofs.Core.Circuit
+import Proofs.Nci.Pull
+import Proofs.Nci.Threads
 public import Proofs.Nci.Lemmas.Activations
 
 /-!

@@ -1,8 +1,6 @@
 module
 
 public import Mathlib.Data.Fintype.Pi
-public import Mathlib.Data.Fintype.Sum
-public import Mathlib.Data.Fintype.Prod
 public import Definitions.Pouw.Fp8Atom.H1T
 
 /-!

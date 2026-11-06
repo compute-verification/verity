@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Layered
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI over threads: the reference circuit is keyed

@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Core.Formalism
-public import Mathlib.Basic.Real.Basic
 
 /-!
 # Serving blocks and the training class's counts (trusted)

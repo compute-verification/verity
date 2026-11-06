@@ -3,6 +3,8 @@ module
 public import Proofs.Pouw.PearlC.FlockTile.Bridge
 public import Proofs.Pouw.PearlC.FlockTile.Audit
 public import Proofs.Pouw.PearlC.FlockTile.Gamma
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Pearl-C under C-Flock's hidden audit

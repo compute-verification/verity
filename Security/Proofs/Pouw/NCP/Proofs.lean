@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Pouw.NCP.Pinned
-public import Proofs.Pouw.Exact
 public import Definitions.Pouw.Guarantees.NCP
+import Proofs.Pouw.Exact
 public import Proofs.Pouw.Lemmas.NCP
 
 /-!

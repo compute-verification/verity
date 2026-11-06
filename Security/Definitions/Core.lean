@@ -22,6 +22,8 @@ public import Definitions.Core.Expand.Instances
 public import Definitions.Core.NaiveStrassen
 public import Definitions.Core.Site
 public import Definitions.Core.ValueSalts
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Core's protocol: the model every protocol states its guarantees in
