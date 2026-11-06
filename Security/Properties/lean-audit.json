@@ -33,6 +33,7 @@
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
+  "Properties.SampledProofs.Tables",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.Wipe",
@@ -545,6 +546,10 @@
   "Properties.Firewall.afterOnTime": {
    "honest": ["Properties.Firewall.afterOnTime_honest"],
    "nontrivial": "Properties.Firewall.afterOnTime_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.tablesRefused": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.tablesRefused_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.tablesRefused_nontrivial"
   }
  },
  "unwitnessed": {
@@ -3670,6 +3675,15 @@
    "assumptions": [],
    "type_hash": "303f59f6e5d086c022bcd5f65d8494f0da4a42aa9cb9b2d7b80aaba186bfc119"
   },
+  "Properties.SampledProofs.SecurityProofs.tablesRefused": {
+   "owner": "@soundness"
+  },
+  "Properties.SampledProofs.SecurityProofs.tablesRefused_honest": {
+   "owner": "@soundness"
+  },
+  "Properties.SampledProofs.SecurityProofs.tablesRefused_nontrivial": {
+   "owner": "@soundness"
+  },
   "Properties.SampledProofs.acceptMeans": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.acceptMeans : Properties.SampledProofs.AcceptMeans"],
@@ -4793,6 +4807,10 @@
    "Properties.SampledProofs.SecurityProofs.drawMisses": {
     "function": "SampledProofs.Slots.select",
     "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.tablesRefused": {
+    "conjuncts": [{"function": "SampledProofs.OneStageZk.tablesHeld", "outcome": "accept"},
+     {"function": "SampledProofs.OneStageZk.checkBlobsAt", "outcome": "accept"}]
    },
    "Properties.Requirement.topological": {
     "function": "CircuitRequirement.Instance.topological",
