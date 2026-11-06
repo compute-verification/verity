@@ -196,6 +196,8 @@ HERE = Path(__file__).resolve().parent
 TOOL = HERE
 ROOT = HERE.parents[2]
 POLICY = "lean-audit.json"
+#: the facts document `facts_of` keeps beside a package's reports, gzipped with no timestamp: equal facts are equal bytes
+FACTS = "facts.json.gz"
 STANDARD = ["Classical.choice", "Quot.sound", "propext"]
 #: compiler trust: `native_decide` declares an axiom `<decl>._native.native_decide.ax_<i>` (older toolchains used these two)
 NATIVE = {"Lean.ofReduceBool", "Lean.trustCompiler"}
@@ -1043,10 +1045,11 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     `lift` (`head`) that of its unfolded type under the old names (`unfolded_sha256`).  Each entry of `assumption_reads` (a
     named assumption's walk, `Facts.lean`) gets the SHA-256 of its text (`sha256`), and so does each definition and theorem
     of `constants` (the names of the lock's `shape.inline` texts, and those its premises print, that the build holds), for
-    `paired`, which reads ``moved`` as `moves`."""
-    out, canon = work / "facts.json", work / "canon.jsonl"
-    out.unlink(missing_ok=True)
-    canon.unlink(missing_ok=True)
+    `paired`, which reads ``moved`` as `moves`.  ``work`` keeps the document only gzipped, as `FACTS` (read back by
+    `stored_facts`), since a recorded run publishes ``work``."""
+    out, kept, canon = work / "facts.json", work / FACTS, work / "canon.jsonl"
+    for p in (out, kept, canon):
+        p.unlink(missing_ok=True)
     config = work / "facts-config.json"
     premises = (policy.get("shape") or {}).get("premises")
     inline = (policy.get("shape") or {}).get("inline")
@@ -1064,7 +1067,10 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     rc, text = run(["lake", "env", facts_program(pkg), str(config)], pkg, work / "facts.log")
     if rc or not out.exists():
         raise RuntimeError(f"`Facts.lean` failed (exit {rc}; a root that was not built?):\n{text[-3000:]}")
-    facts = json.loads(out.read_text())
+    data = out.read_bytes()
+    kept.write_bytes(gzip.compress(data, compresslevel=1, mtime=0))
+    out.unlink()
+    facts = json.loads(data)
     hashes, renamed_as, lifts = {}, {}, {}
     with canon.open() as f:
         for line in f:
@@ -1094,6 +1100,12 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
             e["sha256"] = hashes[f"const:{c}"]
     facts["moves"] = dict(moved or {})
     return facts
+
+
+def stored_facts(path: Path) -> dict:
+    """The facts document at ``path``: a `FACTS` that `facts_of` kept, or the plain `facts.json` of an older audit."""
+    data = path.read_bytes()
+    return json.loads(gzip.decompress(data) if path.suffix == ".gz" else data)
 
 
 def renamed(name: str, moved: dict[str, str]) -> str:
