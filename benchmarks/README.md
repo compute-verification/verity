@@ -25,6 +25,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `specs/` | the harness's specs and sweeps, one TOML file each | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
+| `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
 | `g2/` | the served Commit's overhead curve over stock, rendered from the evidence store; it measures nothing itself | maintained |
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
 | `resource_accounting/` | a chain of dependent matmuls at Llama-3.1-8B's shapes on one RTX PRO 6000, natively and under each protocol, with what each run certifies | maintained |
