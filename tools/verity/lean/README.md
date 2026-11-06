@@ -124,8 +124,8 @@ another floor (0: none). Lake runs as many `lean` at once as `LEAN_NUM_THREADS`,
 or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, from the
 process's own cgroup, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
 replay runs at most one thread per `REPLAY_GIB_PER_THREAD` (4 GiB), one such replay at a time (`replay_threads`). An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
-is refused below `SPEC_FLOOR_GIB` (160 GiB): the replay's resident base is about 120 GiB whatever its threads, and
-the refusal names `--kind lean-audit`, a 280 GiB shape.
+is refused below `SPEC_FLOOR_GIB` (160 GiB; why: note:lean/20261106T1225Z-report-lean-audit-readme-history), and the
+refusal names `--kind lean-audit`, a 280 GiB shape.
 
 **The replay cache and the import closure.** Without `--closure` the replay trusts the package's dependencies (the
 toolchain's library, Mathlib, ArkLib) as their `.olean` files state them: a dependency module holding a theorem that
@@ -152,10 +152,8 @@ its scratch tree, so `Security` reuses what `Security/Proofs` checked in the sam
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, and checks the closure
-again on every run, so it is not part of every run: the steward runs `check.py --all --build --fresh` nightly on `main`,
-and `upstream.py --fetch` against ArkLib's head weekly, each as a recorded run on a pod (`tool.py`; `[[run]]` in
-`tools/research/README.md`). `--closure` with a kept cache, which `check` runs, checks the same closure once per change of its
-`.olean` files.
+again on every run, so it runs nightly on `main` instead (`[[run]]` in `tools/research/README.md`). `--closure` with a
+kept cache, which `check` runs, checks the same closure once per change of its `.olean` files.
 
 `--all` first runs the controls (`--no-controls` skips them; `check`'s audit does, and the `tools/verity/lean` suite runs them, only
 when `tools/verity/lean/` changes): `tests/fixtures/control` and `tests/fixtures/modules`, built with each audited package's
@@ -259,13 +257,9 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   acceptance holds under no hypothesis of its own (`A → accepts` is not one), and a premise's head is its body's (`∀ j,
   P j` is headed by `P`). A `Prop` field of a structure under `meaning` that an input ranges over, or that an input
   returns (a family `Vs : Fin S → VStmt`, through reducible abbreviations), is a hypothesis, its
-  own `Nonempty` among them. A statement that fits written in another order fits as written: outside a probability
-  statement, its binders are also read reordered, its acceptances and premises with every binder they mention first and
-  the rest after, so a hypothesis on a binder no acceptance reads is the conclusion's (`∀ x w, Q x w → accepts x → P w`
-  is `∀ x, accepts x → ∀ w, Q x w → P w`), when it mentions a binder its conclusion reads and no kept binder mentions its
-  proof; an input with a `Prop` field never moves. A hypothesis equating one field of two inputs its acceptance reads
-  (`c.root = c'.root`, `Facts.lean`'s `shares`), whose proof nothing mentions, is allowed: it is the field bound once
-  (`⟨s, e, fs, r⟩` and `⟨s', e', fs', r⟩`). A guarantee under `frozen` (with why it doesn't fit yet) is
+  own `Nonempty` among them. A statement that fits written in another order fits as written (outside a probability
+  statement), and so does one with a hypothesis equating one field of two inputs, the field bound once: `check.py`'s
+  `reordered` and `shares` say when. A guarantee under `frozen` (with why it doesn't fit yet) is
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` name part) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
@@ -310,9 +304,9 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   "rehashed" where the 32-bit hash still matches, which the landing DM (below) leaves out.
 
 **A changed guarantee is shown when it lands.** A weakened definition leaves every proof valid, so the axiom checks and
-the replay pass it: only the records see it, and only a person can judge it. (A redefinition of `Collision` once made a
-Merkle binding guarantee vacuous for unsalted schemes; the records flagged it and a review caught it.) `--update` records
-the change and prints it: each changed guarantee's signature before and after, and each changed definition a guarantee
+the replay pass it: only the records see it, and only a person can judge it (a case:
+note:lean/20261106T1225Z-report-lean-audit-readme-history). `--update` records the change and prints it: each
+changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
 An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions or
 type hash, a `reads` group, an assumption's digest: what a train's merge of two PRs, each recorded on its own side, can
@@ -331,13 +325,10 @@ read from another module with the same content is counted on one line.
 **A lift is not a change.** Lifting a guarantee into the spec, `theorem X (xs) : e` becoming `theorem X (xs) : G as` with
 `def G (ys) : Prop := e'` in a `Guarantees` module, changes its record's signature and type hash. `check.py --update`
 certifies the lift as the same statement when the type, with `G` unfolded once, hashes to the record's type hash and the
-named assumptions are the record's (`lifted_into`). `Facts.lean` (`liftOf`) unfolds by delta alone: the binders `xs` as they
-are, and in place of `G as` the value of `G` at the type's universe levels with its leading `fun`s instantiated by `as` (as
-`Meta.unfoldDefinition?` unfolds an applied constant), the proofs Lean abstracts out of a definition (its `G._proof_<n>`
-theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
-type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
-read by no other guarantee, needs no reading of its own; the review then holds no statement change. (No merge needs a
-statement reviewer, for a lift or any other change.) Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
+named assumptions are the record's (`lifted_into`); `Facts.lean`'s `liftOf` says how it unfolds `G`, by delta alone, and
+the text is hashed as every type is. A certified lift gets one line, "lifted into G: the same statement, its definition
+unfolded once", and `G`, new and read by no other guarantee, needs no reading of its own; the review then holds no
+statement change. Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
 (binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
 theorem's binders into `G`, which the record's `assumptions` would lose. The landing DM reads only the records, so it
 still lists a lifted guarantee as changed.
@@ -347,16 +338,11 @@ still lists a lifted guarantee as changed.
 audit fails on any other guarantee under a listed root. A package's owner adds its root once every guarantee there is
 lifted, or no longer a guarantee.
 
-`check.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` with the theorem's doc comment,
-binders and type as its source writes them, after the `variable`s in scope that Lean includes in the theorem (those the
-statement mentions, and the instances over them), in the theorem's namespace with its file's `open`s (less the namespaces
-only proof modules declare) and the `open … in` right above it, so that its names resolve as they did, and
-`theorem X.SecurityProofs.G : X.Guarantees.G := @X.t` beside the proof, whose module then imports the spec module;
-`"beside": M` puts the theorem in `M` instead (a package that collects its guarantees' proofs in one module), which then
-imports the proof's module too. The spec module imports the modules of the definitions the statement reads, and a
-statement that reads a definition of a `proved_in` package (in `reads` or `outside`) is refused: move the definition
-first. What it cannot follow (an `open` of a namespace a definition module opens only through a proof's declaration, a
-`variable` an `omit` or `include` changes) fails the build or prints as a change, never as the same statement. It writes
+`check.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` in the spec module, and
+`theorem X.SecurityProofs.G : X.Guarantees.G := @X.t` beside the proof or in the module `"beside": M` names (`check.py`'s
+`lift` says what each copies and imports, and what it refuses). What it cannot follow (an `open` of a namespace a
+definition module opens only through a proof's declaration, a `variable` an `omit` or `include` changes) fails the build
+or prints as a change, never as the same statement. It writes
 the moves (`LIFTS.json.moved.json`, each `X.t` to `X.SecurityProofs.G`) for `--update --moved`,
 which certifies each lift or prints it; `X.t` stays as a lemma. A guarantee that takes a named assumption as a hypothesis
 moves it into `G`, which prints as a change.
@@ -369,10 +355,9 @@ mapped back to the old ones, a lifted statement also with its definition unfolde
 records of the old names: a guarantee that says what its record says gets one line, "the same statement under its old
 names" (moved from its old name, lifted as above, or both), and the definitions the same under their old names are counted
 on one line. The landing DM, which reads only the records, leaves out a guarantee renamed with its type hash unchanged and
-a definition moved with its content. Everything else prints as without the map. A map whose new names nest differently
-from its old ones is refused, and so is one under which two constants of those texts (or two guarantees) would have one old
-name, since the comparison could not tell them apart; an old theorem kept under its old name as the lemma behind a new
-guarantee is no conflict.
+a definition moved with its content. Everything else prints as without the map. A map the comparison could not read back
+is refused (`check.py`'s `move_errors`); an old theorem kept under its old name as the lemma behind a new guarantee is no
+conflict.
 
 ## A spec and its proofs in two packages: `proved_in`
 
