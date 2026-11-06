@@ -3,6 +3,7 @@ others."""
 
 from __future__ import annotations
 
+import copy
 import re
 from fractions import Fraction
 
@@ -96,6 +97,32 @@ def test_the_quoted_numbers() -> None:
     assert round(float(value(sapphire, "rate.ops")), -11) == 7.471e14
     timing = ("memory.read", "memory.bandwidth", "memory.write", "store.chip")
     assert [float(value(granite, k)) for k in timing] == [606.8e9, 819.2e9, 819.2e9, 1_000_341_504]
+
+
+def test_the_rates_readers_quote() -> None:
+    """`rate`, the one calculator of the peaks the benchmarks quote: the tensor peak in s8 MACs and in another format's
+    MACs, at the SM clock on a card without a `clock.tensor` (every card file today), at the tensor's own clock on a
+    card with one, and at a clock a reader names; every other resource at the SM clock, and device memory's words a
+    second."""
+    server, h200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb")
+    assert "tensor" not in h200["clock"] and "tensor" not in server["clock"]
+    assert hardware.rate(server) == 188 * 1024 * 2430 * 10 ** 6
+    assert hardware.rate(h200, fmt="bf16") == 132 * 4096 * 1980 * 10 ** 6 / 2
+    assert hardware.rate(h200, "issue") == 132 * 4 * 1980 * 10 ** 6
+    slower = copy.deepcopy(h200)
+    slower["clock"]["tensor"] = {"value": 1830, "unit": "MHz", "mark": "ceiling", "source": "a test's tensor clock"}
+    assert hardware.rate(slower) == 132 * 4096 * 1830 * 10 ** 6
+    assert hardware.rate(slower, "issue") == 132 * 4 * 1980 * 10 ** 6
+    assert hardware.rate(server, "issue", mhz=2092) == 4 * 188 * 2092 * 10 ** 6
+    assert hardware.rate(server, fmt="nvf4", mhz=2092.5) == 188 * 1024 * Fraction("2092.5") * 10 ** 6 * 2
+    assert hardware.rate(h200, "dram") == 4916736 * 10 ** 6 / 4
+    for call, refusal in ((lambda: hardware.rate(load("xeon-6776p-2s")), "is a host card"),
+                          (lambda: hardware.rate(h200, "dram", mhz=1500), "no SM clock"),
+                          (lambda: hardware.rate(h200, "tensr"), "no rate.tensr"),
+                          (lambda: hardware.rate(h200, "issue", fmt="s8"), "weighs tensor MACs only"),
+                          (lambda: hardware.rate(h200, fmt="fp8"), "weighs tensor MACs only")):
+        with pytest.raises((KeyError, ValueError), match=refusal):
+            call()
 
 
 def test_an_unknown_sku_names_the_cards() -> None:
