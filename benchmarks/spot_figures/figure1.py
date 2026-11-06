@@ -44,13 +44,13 @@ served model's parameters where its `workload` card gives them), the model's che
 from __future__ import annotations
 
 import json
+import re
 import tomllib
 from dataclasses import dataclass, replace
 from math import inf, sqrt
 from pathlib import Path
 
 import cards as spot_cards
-from glm53_partition import _k
 from verity.core.protocols.pous.wipe_monitoring import PERIODS
 from verity.core.protocols.sampled_proofs.optimize import Grain, ReplayGrain, grain_costs, leak_count, loc_bits
 
@@ -94,6 +94,13 @@ def _entry(path: str, ident: str) -> dict:
 
 def _toml(path: str) -> dict:
     return tomllib.loads((ROOT / path).read_text())
+
+
+def _k(definition: str) -> int:
+    m = re.search(r"[{,]K=(\d+)", definition)
+    if m is None:
+        raise ValueError(f"no K in {definition!r}")
+    return int(m.group(1))
 
 
 def slot_cards(model: str) -> dict:

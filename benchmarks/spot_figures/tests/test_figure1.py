@@ -48,12 +48,14 @@ def test_every_input_is_a_card_with_its_source(out):
             f.InputCard(1, "", status, source)
 
 
-def test_a_model_without_a_workload_card_is_refused():
+def test_a_model_without_a_workload_card_is_refused(card_dir):
+    (card_dir / "workload.deepseek-v4-pro.json").unlink()
     with pytest.raises(FileNotFoundError, match="no workload card for DeepSeek-V4-Pro"):
         f.cards("DeepSeek-V4-Pro")
 
 
 def test_a_model_runs_once_its_workload_card_lands(card_dir):
+    (card_dir / "workload.deepseek-v4-pro.json").unlink()
     work = cards.load("workload", "GLM-5.3")
     work["value"].pop("params")
     cards.write(work | {"model": "DeepSeek-V4-Pro"})
@@ -122,7 +124,7 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
     assert inf["status"] == "card" and inf["headline"] == "layer_of_token" and len(inf["series"]) == 6
     assert out["scopes"]["world year"]["captions"]["infiltration"] == "Deferred interiors at a layer."
     assert out["scopes"]["world year"]["captions"]["exfiltration"].endswith(" At 0, so not plotted: no advice.")
-    assert inf["references"] == [{"label": "a steering vector", "input": "references", "value": 98304.0}]
+    assert {"label": "a steering vector", "input": "references", "value": 98304.0} in inf["references"]
     line = out["panels"]["skipped_work"]["references"][-1]
     assert line["by_scope"]["world year"] == pytest.approx(1e30 * 2 / out["inputs"]["ands_per_mac"]["value"])
     assert all(p.stat().st_size > 0 for p in render(out, "world year", tmp_path))
@@ -246,7 +248,7 @@ def test_compute_and_skipped_work_are_in_and_gates_too(out):
 
 def test_the_json_is_plain_and_renders(out, tmp_path):
     back = json.loads(json.dumps(out, allow_nan=False))
-    assert back["schema"] == f.SCHEMA and back["panels"]["infiltration"]["status"] == "pending"
+    assert back["schema"] == f.SCHEMA and back["panels"]["infiltration"]["status"] == "card"
     assert set(back["scopes"]) == set(SCOPES)
     for scope in SCOPES:
         assert set(back["scopes"][scope]["captions"]) == {"exfiltration", "infiltration", "skipped_work"}

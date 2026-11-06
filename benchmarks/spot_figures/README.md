@@ -68,9 +68,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   card's series against hill-climbing effort, with each series' best so far. On the right, the model's serve-time
   cuts, priced from their bytes a token and the hash rate, beside the card's measured points for the model.
   `figure3.py card` writes the hash loop's card from its `hash-loop.json`.
-- `glm53_partition.py` writes GLM-5.3's `workload` card from the census of its request Program
-  (`benchmarks/one_stage/a11_kinds.py`, the TP8 B1 row's rank 0, scaled to its 8 ranks): each matmul is its output
-  coordinates, every other Call its output words. Attention's growth with context past the census's row is not in it.
+- A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build
+  on every rank and step of one request, one stratum per proof-block Definition; its `source` names the census.
 
 Limits of the model:
 - A replay is priced at the `replay` card's factor; one that must reproduce the served batch's layout costs that
