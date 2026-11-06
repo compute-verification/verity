@@ -176,9 +176,10 @@ def stage(a) -> int:
             jsonl(out / "records" / "stage.jsonl", rec)
             statement = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             for k in draws(c, a.draws):
-                p = a0.challenger_draw(a.lean, ["--program", str(sd / "program.json"), "--partition", str(sd / "partition.json"),
-                                                "--stratified", str(k)], D.derive(program, query, D.parse_law(f"stratified:{k}")),
-                                       c, statement, sd / f"draw-k{k}.log")
+                law = D.derive(program, query, D.parse_law(f"stratified:{k}"))
+                p = a0.challenger_draw(a.lean, ["--program", str(sd / "program.json"), "--partition",
+                                                str(sd / "partition.json"), "--stratified", str(k)], law, c, statement,
+                                       sd / f"draw-k{k}.log")
                 line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
                 if line is None:
                     raise SystemExit(f"Lean draw k={k} on k{K}-c{c}: no DRAW line (rc {p.returncode}): {p.stderr[-400:]}")
