@@ -11,9 +11,10 @@ public import Flock.Lookup
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Algebra.CharP.Defs
 public import Mathlib.Algebra.Field.Defs
+public import Mathlib.Tactic.IntervalCases
+public import Mathlib.Tactic.Linarith
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.CharP.Two
-import Mathlib.Tactic.IntervalCases
 import Mathlib.Tactic.Ring.RingNF
 
 @[expose] public section

@@ -2,6 +2,7 @@ module
 
 -- level3 already realizes the lemmas this file's `simp` calls need (`Std.Legacy.Range.mk.congr_simp`), so they are
 -- reused rather than declared a second time, which the audit's kernel replay refuses
+public import Proofs.Flock.Soundness.Lowering
 public import Proofs.Flock.Soundness.SparseRows
 public import Properties.Flock.Circuit.Rows
 import Mathlib.Data.Rat.Cast.Order
