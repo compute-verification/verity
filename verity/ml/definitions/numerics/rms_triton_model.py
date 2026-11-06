@@ -87,17 +87,10 @@ def build(force: bool = False) -> Path:
     return _jit.atomic_build(LIB, SOURCES, lambda out: _jit.cxx_compile(out, CPP_SRC, cwd=CPP_SRC.parent), force=force)
 
 
-def _load() -> ctypes.CDLL:
-    try:
-        return _jit.Model(build(), SOURCES)
-    except OSError:  # a stale or foreign-platform .so (e.g. copied from another machine): rebuild here
-        return _jit.Model(build(force=True), SOURCES)
-
-
 def lib() -> ctypes.CDLL:
     global _lib
     if _lib is None:
-        _lib = _load()
+        _lib = _jit.load(build, SOURCES)
         _lib.rms_triton_rows.restype = None
         _lib.rms_triton_rows.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_int, ctypes.c_float,
                                          ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,

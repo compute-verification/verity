@@ -138,6 +138,15 @@ def atomic_build(lib: Path, sources: Sequence[Path], compile_to: Callable[[Path]
     return lib
 
 
+def load(build: Callable[..., Path], sources: Sequence[str | os.PathLike]) -> Model:
+    """The library ``build()`` publishes, opened as a `Model` of ``sources``; rebuilt once with ``build(force=True)`` when it
+    fails to open."""
+    try:
+        return Model(build(), sources)
+    except OSError:  # a stale or foreign-platform .so (e.g. copied from another machine): rebuild here
+        return Model(build(force=True), sources)
+
+
 def cxx_compile(out: Path, src: Path, *, cwd: Path | None = None, extra: Sequence[str] = ()) -> None:
     """:func:`cxx` with ``CXX_FLAGS`` and OpenMP when the compiler has it, serial otherwise."""
     base = [cxx(), *CXX_FLAGS, *extra, "-o", str(out), str(src)]
