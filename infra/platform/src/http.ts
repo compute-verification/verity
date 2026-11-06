@@ -143,6 +143,15 @@ export async function changeLead(req: Request, env: Env = process.env) {
   const rt = await runtime();
   const before = await rt.store.getLead(c.lane);
   const model = c.model ?? before?.model ?? env.PLATFORM_DEFAULT_MODEL ?? "anthropic/claude-opus-5.5";
+  const channel = c.slackChannel ?? before?.slackChannel;
+  const inboxHolder = c.slackInbox && channel ? await rt.store.leadByInbox(channel, c.slackInbox) : null;
+  const teamHolder = c.linearTeam ? await rt.store.leadByLinearTeam(c.linearTeam) : null;
+  for (const [held, what, fix] of [
+    [inboxHolder, `inbox ${channel} ${c.slackInbox}`, `swap register ${inboxHolder?.lane} --inbox <its new inbox ts>`],
+    [teamHolder, `Linear team ${c.linearTeam}`, `swap register ${teamHolder?.lane} --linear <its other team>`],
+  ] as const) {
+    if (held && held.lane !== c.lane) return json({ error: `${what} belongs to lead ${held.lane}; move it first (${fix})` }, 409);
+  }
   const { doc, ...change } = c;
   let lead = await rt.store.upsertLead({ ...change, doc: before ? undefined : doc, model });
   // A lead's doc is its memory: the imported doc and every replacement are

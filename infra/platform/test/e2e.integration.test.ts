@@ -298,6 +298,10 @@ describe("a lead on the platform", () => {
     expect((await admin({ lane: "comms" }, "wrong")).status).toBe(401);
     expect((await admin({ lane: "Not A Lane" })).status).toBe(400);
     expect((await admin({ lane: "comms", apis: ["slack", "jira"] })).status).toBe(400);
+    const taken = await admin({ lane: "comms", slackChannel: COORD, slackInbox: INBOX.infra });
+    expect(taken.status).toBe(409);
+    expect((await taken.json()).error).toContain("belongs to lead infra");
+    expect(await t.store.getLead("comms")).toBeNull();
 
     const reg = await (
       await admin({
