@@ -38,6 +38,8 @@ prefix's live tiles:
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Accounting.SecurityProofs.ComposePeriod
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
