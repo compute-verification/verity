@@ -3,20 +3,23 @@ R7, the verifier's read map from its own program, the read check, and the audit 
 from __future__ import annotations
 
 import hashlib
+import random
 import re
 import tracemalloc
 
 import pytest
 
 import verity.ml.circuits.ops.scalar  # noqa: F401
-from verity.ml.commitments import hm96
-from verity.ml.commitments.merkle import merkle_depth
+from verity.ml.commitments import CommitmentDomain, RangeIndexedDomain, hm96
+from verity.ml.commitments.merkle import merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
 from verity.ml.circuits.types import Array, Value
+from verity.core.protocols.pouw import audit as PA
+from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registered as G, registration as R
 
 XOR8 = PrimitiveDefinition("RegisteredTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -1060,6 +1063,90 @@ def test_r7_reuses_an_earlier_records_registered_value():
                 {"W": {**out["W"], "record": "EE" * 64}}):
         with pytest.raises(ValueError):
             R.check(rec, prog, Q, **kw, outputs=bad)
+
+
+#: Pearl+'s y trees' binding tag: PoUW's rows domain over a call's served y, at salt nonce 2^61 + the call's index
+PEARL_Y_ROWS = "verity/pouw/pearl-plus/y-rows/v1"
+PEARL_SALT, PEARL_KEY, PEARL_CALL = bytes(range(64)), bytes(range(32)), 7
+
+
+def _pearl_plus(rows, y: bool = False):
+    """A Pearl+ call's tree of `rows` (each a row of FP32 words) as PoUW commits it, `audit.commit_rows` under
+    hm96-sha512: A's under `activation_binding` at salt nonce u, y's under `PEARL_Y_ROWS` at 2^61 + u. With the domain
+    as a verifier rebuilds it from that binding, owner and rows, and `bc(i, row)`: one-stage's `b || c` of `row` as a
+    `row-seg/v1` row of 32-bit words under row i's salt."""
+    u = PEARL_CALL
+    binding = tagged(PEARL_Y_ROWS, PEARL_SALT, u) if y else PA.activation_binding(PEARL_SALT, u)
+    nonce = (1 << 61) + u if y else u
+    tree = PA.commit_rows(binding, u, [b"".join(w.to_bytes(4, "little") for w in r) for r in rows], PA.HM96,
+                          salt_key=PEARL_KEY, nonce=nonce)
+    dom = CommitmentDomain(binding, u, RangeIndexedDomain(0, len(rows)), hash="sha512")
+    assert dom.domain_id == tree.domain.domain_id
+
+    def bc(i: int, row) -> bytes:
+        return hm96.SHA512.commit_string(hm96.SHA512.default_key, G.row_digest(row, 32, G.SCHEMA_SEG),
+                                         PA.hm96_salt(PEARL_KEY, nonce, i))
+    return tree, dom, bc
+
+
+def test_one_stage_reads_open_a_pearl_plus_tree_under_its_own_domain():
+    """A value committed outside one-stage, under PoUW's rows domain: Pearl+'s A (a call's x widened to FP32, K words a
+    row, zero rows up to 16) and y (its served y widened to FP32, N words a row). One-stage's `row-seg/v1` leaves of
+    32-bit words under that domain are Pearl+'s leaves, so its reads open Pearl+'s root at every row. A row with one
+    word flipped opens nothing, nor does a row read as `row/v2`, nor any row under one-stage's own domain for the value
+    (`registered.domain`, whichever binding it takes)."""
+    rnd = random.Random(7)
+
+    def rows(n: int, words: int, real: int) -> list[list[int]]:
+        return [[rnd.getrandbits(16) << 16 for _ in range(words)] if i < real else [0] * words for i in range(n)]
+
+    for y, value, rs in ((False, "pearl-a/0/0", rows(16, 2048, 5)), (True, "pearl-y/0/0", rows(5, 3072, 5))):
+        tree, dom, bc = _pearl_plus(rs, y)
+        root, bcs = tree.commitment.root, [bc(i, r) for i, r in enumerate(rs)]
+        paths = [b"".join(tree.open(i).path) for i in range(len(rs))]
+        assert tree_levels(dom, [G.leaf(dom, i, b, G.SCHEMA_SEG) for i, b in enumerate(bcs)])[-1][0] == root, value
+        assert all(G.verify_read(dom, root, i, b, paths[i], G.SCHEMA_SEG) for i, b in enumerate(bcs)), value
+        flipped = [rs[0][0] ^ 1 << 16, *rs[0][1:]]
+        assert not G.verify_read(dom, root, 0, bc(0, flipped), paths[0], G.SCHEMA_SEG), value
+        assert not G.verify_read(dom, root, 0, bcs[0], paths[0], G.SCHEMA_V2), value
+        own = G.domain("ab" * 64, value, len(rs[0]), len(rs), 32)
+        assert own.domain_id != dom.domain_id
+        assert not any(G.verify_read(own, root, i, b, paths[i], G.SCHEMA_SEG) for i, b in enumerate(bcs)), value
+
+
+def test_r7_reuses_a_pearl_plus_entry_under_its_own_domain():
+    """Pearl+'s window record W registers each call's A rows and y under PoUW's rows domain, not one-stage's. A value
+    reusing W's entry (`outputs`) as `row-seg/v1` rows of 32-bit words is held to that domain and root verbatim, A's and
+    y's alike. The record's entry under one-stage's own domain for the value is `R7-domain` (`registered.domain`,
+    whichever binding it takes), under another root `R7-held`; W's entry of 16-bit words, or of the call's real rows
+    rather than its 16, is `R7-output`. R7 counts the value's rows alike under `row/v2`, so the row format binds where a
+    row is read (`test_one_stage_reads_open_a_pearl_plus_tree_under_its_own_domain`)."""
+    prog = _program(rows=16, w=32)
+    first, ports = _record(prog, _registered(prog))
+    own = G.domain(P.program_digest(prog), "W", 2, 16, 32).domain_id.hex()
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "schemas": {"W": G.SCHEMA_SEG}}
+    for y, name in ((False, "pearl-a/0/0"), (True, "pearl-y/0/0")):
+        rows = [[(2 * r + j + 1) << 16 for j in range(2)] if r < 5 else [0, 0] for r in range(16)]
+        tree, dom, _ = _pearl_plus(rows, y)
+        theirs = {"value": name, "root": tree.commitment.root.hex(), "leaves": 16, "words": 2, G.WIDTH_KEY: 32,
+                  "domain": dom.domain_id.hex()}
+        assert theirs["domain"] != own
+
+        def earlier(e):
+            return R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[e])
+
+        def codes(entry, w=theirs, **change):
+            rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier(w)),
+                           registered=[{**theirs, "value": "W", **entry}])
+            return R.check(rec, prog, Q, **{**kw, "log": [earlier(w)], **change},
+                           outputs={"W": {"record": R.digest(earlier(w)), "value": name}}).codes
+
+        assert codes({}) == ()
+        assert codes({}, schemas={"W": G.SCHEMA_V2}) == ()
+        assert codes({"domain": own}) == ("R7-domain",)
+        assert codes({"root": "ef" * 64}) == ("R7-held",)
+        for w in ({k: v for k, v in theirs.items() if k != G.WIDTH_KEY}, {**theirs, "leaves": 5}):
+            assert codes({}, w)[0] == "R7-output", (name, w)
 
 
 #: an AROW row table's port (`verity.ml.windows.rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
