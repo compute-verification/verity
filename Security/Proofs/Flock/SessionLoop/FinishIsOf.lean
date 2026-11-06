@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.FinPiopRet
-import Proofs.Flock.SessionLoop.FinHmkFw
-import Proofs.Flock.SessionLoop.FinRepRows
-import Proofs.Flock.SessionLoop.FinRepTau
+module
+
+public import Proofs.Flock.SessionLoop.FinPiopRet
+public import Proofs.Flock.SessionLoop.FinHmkFw
+public import Proofs.Flock.SessionLoop.FinRepRows
+public import Proofs.Flock.SessionLoop.FinRepTau
 
 /-!
 # `FinishIs` from the rows' consumed facts and level 0's openings
@@ -19,6 +21,8 @@ import Proofs.Flock.SessionLoop.FinRepTau
 * **`Loop.finishIs_of_consumed`**: at SessionLoopZKDeployed's premises, `FinRepMsgs`, `FinRepLanes`, `FinRepTarget`,
   `FinRepRestart` and `FinRepL0` give `FinishIs`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -113,7 +117,7 @@ theorem finFc_of_rows (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     (fun _ _ _ _ i hlo hhi => by
       have e := swSrcE_l0_views L₀ src wk x w vs hsc hR hServe hL0 hE hc hF hsx hs hcms j r hexts hprev hRep hext
         hic hl hlo hhi
-      rw [hg, hexT] at e
+      rw [hg, Masked.l0Clear_ligTab _ _ x w t j _ _ hexT] at e
       exact e)
     hcm0 hicE hrun _ hlt
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FrameAdmits
-import Proofs.Flock.Claims.ZK.FrameTape
-import Proofs.Flock.Claims.ZK.PiopSrcVals
+module
+
+public import Proofs.Flock.Claims.ZK.FrameAdmits
+public import Proofs.Flock.Claims.ZK.FrameTape
+public import Proofs.Flock.Claims.ZK.PiopSrcVals
 
 /-!
 # C-Flock's zero knowledge at the session loop's own frames (trusted)
@@ -62,6 +64,8 @@ witness, the tape and the history, and whether it stops:
 * **The stop**: the loop's `Finish` stops where any of this throws (`Loop.filesE`), a rep's proof file above all
   (`Finish.proofFile`: its `repFw`, whose constraints fail at a `final_c` the passed values do not fix).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -289,9 +293,11 @@ def Loop.LinkLevel0 (src : Msg → Flock.Wit →
 
 /-- **The level-0 inputs are the tape's** at `x`: at every nonce and tape, table `j`'s rep `r`'s drawn level 0
 (`Loop.level0At` at rep stream `2j + r`) has `Masked.linkIn`'s inputs: the witness's packed table at the tape's mask
-words (what the host hands the loop) and the tape's extra lanes, lane paddings and level-0 salts (the bytes
-`Level0.draw` reads from `IO.getRandomBytes`). It says nothing of how a root is committed: the root is `Link.root` of
-those inputs by the code (`Level0.ofDraws_ok`). -/
+words (what the host hands the loop) and the tape's extra lanes, lane paddings and level-0 salts at the sizes the table's
+level 0 draws (the bytes `Level0.draw` reads from `IO.getRandomBytes`): each extra lane's first `2^cols` words, each of
+the `2^lanes + 4` lanes' first `t_pad` padding coefficients and the salts of the `2^d` tree positions, with `0` or
+empty past them, as every level 0 drawn at those sizes holds. It says nothing of how a root is committed: the root is
+`Link.root` of those inputs by the code (`Level0.ofDraws_ok`). -/
 def Loop.Level0Src (src : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray))
@@ -331,7 +337,7 @@ def Loop.RepSrc
 
 /-- `flock-firewall-os-src` (a trust in the host's inputs and in the operating system's bytes, which the loop reads and
 does not check). **Every input the session loop takes from its host and its operating system is the tape's** at `x`, in
-two halves: the level-0 inputs (`Loop.Level0Src`: the packed witness the host hands it and the bytes `Level0.draw`
+two halves: level 0's inputs at its sizes (`Loop.Level0Src`: the host's packed witness and the bytes `Level0.draw`
 reads) and the rep draws (`Loop.RepSrc`: the bytes `Frames.startRep` and `Finish.serve` read for each rep). Why it is
 reasonable: the loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the
 tape models, and which hands the loop the witness `w` the statement is served at. The host is the developer's, not an

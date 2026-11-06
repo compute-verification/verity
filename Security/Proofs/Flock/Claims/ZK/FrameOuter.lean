@@ -1,4 +1,8 @@
-import Proofs.Flock.Claims.ZK.FrameBeta
+module
+
+public import Proofs.Flock.Claims.ZK.FrameBeta
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The frames refuse an outer coin `1` (`FrameUnrefused`'s outer fault)
@@ -20,6 +24,8 @@ round 1 squeezes them, and the frame's taking of a round's coins in the algebrai
 * **`LeanRelease.rfOf_outer`**: the same at every coin vector, for the stop rule of the transport's reading (`rfOf`):
   where it has not fired by a rep's outer coins' round, the frame took that round's coins (`answer_of_refuseOf`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Split
+module
+
+public import Proofs.Flock.Claims.ZK.Split
 
 /-!
 # The deployed round plan reads the coins before each round only (`CausalExe`)
@@ -17,6 +19,8 @@ and the guards before them), and `s ≤ n` until the throw, so body `n` is the s
 * **The cut's sources agree where read** (`repAgree_czExe`): at coins agreeing before `n`, each field `repSrcCut` reads
   is the same wherever the session reads it before body `n`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.CutEq
 

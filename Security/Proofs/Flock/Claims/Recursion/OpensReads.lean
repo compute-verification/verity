@@ -1,12 +1,16 @@
-import Proofs.Flock.Claims.Recursion.RecRecord
-import Proofs.Flock.Claims.Recursion.DeployHonest
-import Proofs.Flock.C3.VStarList.Accepts
-import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
-import Proofs.Flock.Soundness.Discharge.Layout.QSort
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.LayoutBTops
+module
+
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.C3.VStarList.Accepts
+public import Proofs.Flock.C3.PubRows.Check
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+public import Proofs.Flock.Soundness.Discharge.Layout.QSort
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+import all Init.Data.String.Defs
+import all Init.Data.Repr
 
 /-!
 # What a staged part's transcript shows is the record the verifier read in its own format
@@ -29,6 +33,8 @@ digest (`slotPub_table`). On the record's side, rep `x`'s `kc`-th `c_k` in the J
 schedule lists `kc`-th, and at a round with no salted tops it is the record's message `x · R + k + 1`
 (`cmt_of_rep`): the rounds open with the two reps' schedules (`scheduleOf_reps`), whose streams are apart (`rep_ne`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -625,7 +631,12 @@ theorem RecIns.setup_coins {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} 
   unfold RecIns.setup at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
-  all_goals first | (cases h; done) | (cases h; assumption)
+  all_goals first | (cases h; done) | skip
+  all_goals
+    obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst h2
+    -- reducibly: at default transparency each later check's `forM` is unfolded against this one's first
+    with_reducible assumption
 
 /-- `RecCoins.check` refuses a rec-residuals, rec-sparse or rec-opening unit without the verifier's own reads. -/
 theorem registered_of_coins {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
@@ -658,6 +669,7 @@ theorem params_of_own {tags : Tags} {pre : Array (String × Net)} {c : Circuit} 
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- With an inner shape and own reads, `RecVStar.checkStmt` runs `checkCircuit` and `checkOwn` at them. -/
 theorem checkStmt_own {i : RecVStar.Inner} {tags : Tags} {tables : List (String × ByteArray)} {st : Stmt}
@@ -838,6 +850,7 @@ theorem ownPorts_row {sv : VStar.Stmt} {q : String × String × Array (Option �
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- What `heldRows` holds, with its round: a row of a statement's own port under `rec-c<k>`, at the port's index,
 held at that rep's `k`-th message round. -/

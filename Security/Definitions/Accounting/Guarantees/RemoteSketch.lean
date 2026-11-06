@@ -1,6 +1,8 @@
-import Definitions.Accounting.Assumptions.RateAuditDeployed
-import Definitions.Accounting.Assumptions.RemoteHeld
-import Definitions.Accounting.Assumptions.RemoteSketch
+module
+
+public import Definitions.Accounting.Assumptions.RateAuditDeployed
+public import Definitions.Accounting.Assumptions.RemoteHeld
+public import Definitions.Accounting.Assumptions.RemoteSketch
 
 /-!
 # The receipts' sketch bound, derived (trusted)
@@ -36,6 +38,8 @@ store is uniform (the outcome's coins), the devices obtain sectors whole and ver
 `rate-sketch-verbatim`), the signs' rank tail (`SketchRank`, evaluated outside Lean), the hash budget (`KeyBudget`), and
 the model's receipts and obtained blocks are the trace's (`Receipted`, `Present`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Remote
 

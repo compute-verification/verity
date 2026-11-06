@@ -1,9 +1,11 @@
-import Proofs.Flock.C3.Compose.SparseEnds
-import Proofs.Flock.C3.Compose.SrcClauses
-import Proofs.Flock.C3.Compose.Tied
-import Proofs.Flock.C3.RegLevels.LigWhole
-import Proofs.Flock.C3.Reps.RepCoins
-import Proofs.Flock.Recursive.HoloCoins
+module
+
+public import Proofs.Flock.C3.Compose.SparseEnds
+public import Proofs.Flock.C3.Compose.SrcClauses
+public import Proofs.Flock.C3.Compose.Tied
+public import Proofs.Flock.C3.RegLevels.LigWhole
+public import Proofs.Flock.C3.Reps.RepCoins
+public import Proofs.Flock.Recursive.HoloCoins
 
 /-!
 # `StageCoins` at the guarantee's coin types
@@ -17,6 +19,8 @@ which `holoCTs` counts after the link points (`coins_total_holo`, the bound `h5`
 come from custody's coins half (`repCoins_repsOfVals`) at some of the map's draws (`custody_sel`), and the rest from
 `LaterCoins`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

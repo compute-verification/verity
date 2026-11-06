@@ -1,11 +1,13 @@
-import Flock.Zk
-import Flock.Norm
-import Flock.ProvedScope
-import Flock.RecVStar
-import Flock.RecCoins
-import Flock.Registered
-import Flock.Lookup
-import Flock.JsonParse
+module
+
+public import Flock.Zk
+public import Flock.Norm
+public import Flock.ProvedScope
+public import Flock.RecVStar
+public import Flock.RecCoins
+public import Flock.Registered
+public import Flock.Lookup
+public import Flock.JsonParse
 
 /-!
 # `flock-witness`: the recursive audit's predicates, evaluated on recorded sessions
@@ -34,6 +36,8 @@ reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the mo
 
 One `WITNESS` line per check: its name, `ok`, and the refusal when it fails. Exit 0 iff every check passes.
 -/
+
+@[expose] public section
 
 namespace Flock.Witness
 
@@ -71,11 +75,13 @@ def setupOf (I : Inputs) (record : String) : V (SessionSpec × Array Stmt) :=
     I.program
 
 /-- `verify --zk --registered F`'s verdict on a session set up as `s`: every table's registered reads against `own`,
-every table's shape, and `Zk.verify`. -/
+every port of every table's circuit a port of `own` (`Registered.checkComplete`), every table's shape, and
+`Zk.verify`. -/
 def acceptsZKRAt (s : V (SessionSpec × Array Stmt)) (own : Array Registered.Port) (record : String)
     (proofs : Array ByteArray) : V Unit := do
   let r ← s
   r.2.forM (checkRegistered · (some own))
+  r.2.forM fun st => Registered.checkComplete st.c own
   r.2.forM Zk.shapeOk
   Zk.verify r.1 (r.2.map Setup.ofCircuit) record proofs
 

@@ -1,8 +1,10 @@
-import Proofs.Flock.SessionLoop.FinishParts
-import Proofs.Flock.Claims.ZK.FinishBridge
-import Proofs.Flock.Claims.ZK.FinishTrunc
-import Proofs.Flock.Claims.ZK.FrameReal
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
+module
+
+public import Proofs.Flock.SessionLoop.FinishParts
+public import Proofs.Flock.Claims.ZK.FinishBridge
+public import Proofs.Flock.Claims.ZK.FinishTrunc
+public import Proofs.Flock.Claims.ZK.FrameReal
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
 /-!
 # `FinishParts`' (c), the reps' proof files, in parts
@@ -31,6 +33,8 @@ the table's `m`, its schedule and the extra claims are small enough (`Loop.finRe
 * **(c.2) `Loop.FinRepPads`**: the rep's table commits under `hm96-sha512`, and the request's pads have the layout's
   length, `h_ab = h_a·h_b` and `w = x·y` (`repFw_eq`'s premises). It holds in the masked scope (`Loop.finRepPads`).
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

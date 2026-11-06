@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.FinL0Vals
-import Proofs.Flock.Claims.ZK.FrameFree
-import Proofs.Flock.Claims.ZK.FinishTau
+module
+
+public import Proofs.Flock.SessionLoop.FinL0Vals
+public import Proofs.Flock.Claims.ZK.FrameFree
+public import Proofs.Flock.Claims.ZK.FinishTau
 
 /-!
 # `hmk` from the history: the views' masked values below `zp 64`, read off the cut session's PIOP
@@ -20,6 +22,8 @@ request's values there are the source's plus the pads (`valsOf_at`), and the pad
 * **`Loop.swSrcE_hmk_cut`**: the views' source's masked values below `zp 64`, but `final_c`'s, are `q.vals + pads.h`.
   `final_c`'s is read from the inner proof's round 0, past the PIOP, Ligerito and the replay, and is not stated here.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

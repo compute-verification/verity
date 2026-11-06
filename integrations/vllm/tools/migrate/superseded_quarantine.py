@@ -290,7 +290,7 @@ def library_importers(root: Path, prefixes: tuple[str, ...]) -> list[str]:
 # --- deleting versions -------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class Site:
+class SourceSpan:
     path: str
     start: int           # 1-based, first decorator included
     end: int             # inclusive
@@ -312,7 +312,7 @@ def _bound(node: ast.AST) -> tuple[str, ...]:
     return tuple(n.id for t in targets for n in ast.walk(t) if isinstance(n, ast.Name))
 
 
-def find_sites(root: Path, version_id: str) -> list[Site]:
+def find_sites(root: Path, version_id: str) -> list[SourceSpan]:
     m = re.fullmatch(r"(\w+)_v(\d+)", version_id)
     if not m:
         raise Refused(f"{version_id}: not a Definition version id (Name_vN)")
@@ -326,7 +326,7 @@ def find_sites(root: Path, version_id: str) -> list[Site]:
             for node in ast.parse(p.read_text(encoding="utf-8")).body:
                 if _declares(node, name, version):
                     first = min([node.lineno, *(x.lineno for x in getattr(node, "decorator_list", []))])
-                    sites.append(Site(rel, first, node.end_lineno, _bound(node)))
+                    sites.append(SourceSpan(rel, first, node.end_lineno, _bound(node)))
     return sites
 
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.SeqKey
-import Proofs.Flock.Claims.Recursion.DeployZK
+module
+
+public import Proofs.Flock.Claims.Recursion.SeqKey
+public import Proofs.Flock.Claims.Recursion.DeployZK
 
 /-!
 # The recursion's `ZK` at the masked record
@@ -19,6 +21,8 @@ are `deployRec`'s.
   `zk_deployRecM_commit_sha512`: at the inner prover that commits (`Brings.commit`), on each statement's first-part
   tape (`preTape`), from `zkBoundM_of_commit_sha512`'s.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

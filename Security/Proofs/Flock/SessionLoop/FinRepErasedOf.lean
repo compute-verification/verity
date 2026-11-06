@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.FinRepErasedAt
-import Proofs.Flock.SessionLoop.FinL0Vals
+module
+
+public import Proofs.Flock.SessionLoop.FinRepErasedAt
+public import Proofs.Flock.SessionLoop.FinL0Vals
 
 /-!
 # `FinRepErased` from its parts
@@ -13,6 +15,8 @@ switched cut too (`repCut_eraseZ`), so level 0's masked values are `l0Clear` plu
 `finRepErased_at` gives stream `k`; the firewall's rep at `k` returns (`proofsOf_at`, `proofFile_ok`, `finRepCut`), so
 stream `k` returns from the views with the auditor's rounds.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -220,7 +224,7 @@ theorem finRepErased_step (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_
       have e' := hicC l
       rw [hsj] at e'
       exact e') hl hpiopC hlo hhi
-  rw [hg, hexT] at e
+  rw [hg, Masked.l0Clear_ligTab _ _ x w t j _ _ hexT] at e
   exact e
 
 set_option maxHeartbeats 1000000 in

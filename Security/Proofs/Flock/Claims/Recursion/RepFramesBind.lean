@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
 # Two reps accepted on one stream have one rep's frames
@@ -21,6 +23,8 @@ What the frames don't carry is open: the openings (rows, siblings and salts at e
 tie to the caps the frames carry, and the fields the transcript never absorbs (`params`, which `verifyRep` pins,
 `finalC` and `initialCap`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
