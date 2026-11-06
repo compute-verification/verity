@@ -554,7 +554,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--plan", help="the plan's file, shared by a job's arms (default: OUT/plan.jsonl)")
     r.add_argument("--docs", type=int, default=20000, help="the shard's documents a plan draws from")
     r.add_argument("--seed", type=int, default=0)
-    r.add_argument("--tick-from", metavar="STEP_TRACE")
+    r.add_argument("--tick-from", metavar="STEP_TRACE|RECORD_DIR", help="τ for the tick arms (ignored by the others)")
     r.add_argument("--tick-ms", metavar="SAT,FREE")
     r.add_argument("--out", required=True)
     pl = sub.add_parser("plan", help="make the plan a job's arms share, before any GPU is held")

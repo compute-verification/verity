@@ -46,13 +46,8 @@ if [ "${1:-}" = leased ]; then
     exit $?
   fi
   rc=0
+  if [ -n "${TICK_MS:-}" ]; then tick=(--tick-ms "$TICK_MS"); else tick=(--tick-from "${TICK_FROM:-$OUT/record}"); fi
   for arm in ${ARMS:?ARMS: the arms to serve, in order}; do
-    tick=()
-    case $arm in
-      tick|tokens)
-        if [ -n "${TICK_MS:-}" ]; then tick=(--tick-ms "$TICK_MS")
-        else tick=(--tick-from "${TICK_FROM:-$OUT/record}"); fi ;;
-    esac
     echo "== $arm $(date -u +%FT%TZ)"
     "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" --rates "$RATES" --reps "$REPS" --span-s "$SPAN_S" \
       --plan "$PLAN" --docs "$DOCS" --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" --out "$OUT/$arm" || rc=1
@@ -76,6 +71,7 @@ fi
 export PLAN DOCS WINDOW_S KV_WINDOW_S
 GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" -- bash "$here/run.sh" leased
 rc=$?
+gzip -f "$OUT"/*/server/step_trace.*.jsonl 2>/dev/null
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
