@@ -51,7 +51,7 @@ RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "dec
 DOC_TERMS = {
     "wrong unit, incorrect unit": "incorrect proof block",
     "faulty proof block, faulty block, faulty set": "incorrect proof block; the incorrect set F",
-    "isolation unit, IU": "isolation block",
+    "isolation unit, IU": "inference block",
     "replay unit": "replay block",
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
     "components, the composite's product": "subprotocols, composition",
@@ -73,13 +73,14 @@ DOC_TERMS = {
     "hm96 rows, outside the commitments' docs": "hiding commitments",
     "that period's coins": "before any coins are flipped",
     "rejection dominates, reject dominance": "any rejection rejects the whole",
-    "physical block": "server-time block",
+    "physical block": "server block",
     "thread block": "CTA",
     "KV block": "KV page",
     "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
                                           "renamed)",
-    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
+    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, PoUB, network certification), the bandwidth audit's or the "
+           "memory wipe's, or run",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -112,7 +113,6 @@ ALLOWED: dict[str, str] = {
     "report-proof-service-": "a cited note's id",
     "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
                                             "it; renamed after it lands",
-    "before any coin draws (the firewall's staged statements)": "a line of GLOSSARY.md that queued PRs on next rewrite; the protocol vocabulary's rename follows them",
     "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
@@ -302,7 +302,7 @@ def test_the_scan_reads_each_form():
         "b.rs": "/// the proof\n/// unit of it; a bulletproof unit\nlet reason = \"N, the round's proof units\";\n",
         "d.py": '# the Proof-Service and a proof\n# services; proof_service, verity/proof-service/stream/v0; a faulty service\n',
         "c.lean": "-- a proof unit",
-        "verity/README.md": "a proof unit",
+        next(iter(PENDING)): "a proof unit",
         GLOSSARY: '| "proof unit", and "unit" alone meaning one | proof block |\n| other | a proof unit |\n',
     }
     found, used = offenders(list(docs), read=docs.__getitem__)
@@ -361,7 +361,7 @@ def test_the_doc_scan_reads_each_form():
                 "```sh\nLEGS=A,B ./run.sh  # each leg\n```\n~~~\na leg\n~~~\nA thread block after the fences.\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
         "benchmarks/pouw/CHANGELOG.md": "a leg",
-        "verity/README.md": "a leg",
+        next(f for f in PENDING if f.endswith(".md")): "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [(GLOSSARY, 2, "leg"),
