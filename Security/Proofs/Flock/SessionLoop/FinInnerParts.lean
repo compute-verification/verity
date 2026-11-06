@@ -219,8 +219,9 @@ theorem sched_piop {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx : M
   have hrsl : (roundsOf spec (Masked.stsOf x)).length = spec.repStreams.size := by simp [roundsOf]
   rcases hsch : schedOf real x cs with _ | b
   · exfalso
+    obtain ⟨-, hp, -⟩ := hx.1
     obtain ⟨s0', spec', sts', q, k, i, tr, hi, rsched, hs', hq, hloc, hrk, hrs, hle⟩ :=
-      (schedOf_eq_none_iff (by omega) (by omega)).1 hsch
+      (schedOf_eq_none_iff (decodeRec_none_of_parse hp) (by omega) (by omega)).1 hsch
     rw [hs] at hs'
     obtain ⟨rfl, rfl, rfl⟩ : s0 = s0' ∧ spec = spec' ∧ Masked.stsOf x = sts' := by
       simpa only [Option.some.injEq, Prod.mk.injEq] using hs'
