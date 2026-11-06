@@ -30,7 +30,7 @@ hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its ou
 | `sources/<topic>.json` | sources filed under their first topic, each with `findings`: `claim` (ours), `quote` (verbatim), `location`, `quantities`, `grade`, `bears_on`. A fetched fixture (`fixtures/artifacts.json`), since it would put the tree over its data budget: `research data fetch-fixtures benchmarks/nci/sources` brings it; after an edit, `research data put --kind fixture/v1 --tree benchmarks/nci/sources --preserve` and the new id in the registry (the control pod exports it once the PR is admitted) |
 | `parameters.json` | parameters, each with estimates: `low`, `central`, `high`, `confidence`, `evidence` (finding ids), `merge` |
 | `calibrations.json` | a policy (`K`, a block's fresh-input budget in bits; `Gamma`, its gate budget; `b_tok`) and the model it is calibrated to |
-| `rows.json` | the board's rows: method, configuration, state representation, calculator inputs (a number or `estimate-id:low|central|high`), notes, sources, demonstrated capability |
+| `rows.json` | the board's rows: method, configuration, state representation, calculator inputs (a number or `estimate-id:low|central|high`), notes, sources |
 | `algorithms.json` | the algorithm library: training algorithms by architecture-agnostic traits (`library.TRAITS`), measured multipliers and their evidence |
 | `models.json` | model shapes the library queries against |
 | `arguments.json` | the argument map: claims on a ladder, the premises each rests on, the attacks against it, and the proposed evidence with its review |
@@ -363,7 +363,6 @@ at most the bits of data the budgets allow.
 ## Not yet here
 
 - Scenario columns (today, ordinary progress to 2028, a crash program) and capability ratings on agreed scales.
-  Rows record only the capability the literature has demonstrated.
 - Constructions run at small scale.
 - Rows for distillation, model merging, test-time training and offline RL.
 
