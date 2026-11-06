@@ -128,7 +128,8 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
         for amount, label in refs:
             ax.axhline(amount, color="#909090", ls=(0, (4, 3)), lw=1.3, zorder=1)
             at = log10(amount / lo) / log10(hi / lo)
-            side = "left" if at - last["left"] >= LABEL_GAP or at - last["right"] < LABEL_GAP else "right"
+            gap = {k: at - v for k, v in last.items()}
+            side = "left" if gap["left"] >= LABEL_GAP else max(gap, key=gap.get)
             last[side] = at
             ax.text(lo_x * 1.5 if side == "left" else hi_x / 1.5, amount, label, ha=side, va="bottom", fontsize=15,
                     color="#555555", transform=offset_copy(ax.transData, fig=fig, y=3, units="points"), zorder=5,
