@@ -15401,6 +15401,12 @@
     "Core.Composition.holdTies": "58978c3d6a9badbbc9069d95c57b2fa90022278632ffb8fe3e212859c4f16a62"
    }
   },
+  "CoreOnsite": {
+   "digest": "e840fd552795d12adddc19937dd8649da07286c2bf56cc47f8d8e6f035b700ab",
+   "definitions": {
+    "Core.Onsite.ties": "787633b56799a02d9498c28a62ebadad461eb4712290ef10aa41963581403bae"
+   }
+  },
   "CoreProtocol.Blobs": {
    "digest": "e637bdcd849cd8c331fc6650824f70c82fbce9fe78faad3a2c32ca8fafb79cd7",
    "definitions": {
