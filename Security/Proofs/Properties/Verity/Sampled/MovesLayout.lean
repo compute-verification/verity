@@ -46,38 +46,6 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The digest each opening of a rep stream answers -/
 
-/-- Two places of a list holding elements `p` accepts, with as many such elements before each, are one place. -/
-theorem eq_of_countP_eq {β : Type} {p : β → Bool} :
-    ∀ {a a' b b' : List β} {x x' : β}, a ++ x :: b = a' ++ x' :: b' → p x = true → p x' = true →
-      a.countP p = a'.countP p → x = x'
-  | [], [], _, _, _, _, h, _, _, _ => by
-    simp only [List.nil_append, List.cons.injEq] at h
-    exact h.1
-  | [], y :: a', _, _, _, _, h, hx, _, hc => by
-    simp only [List.nil_append, List.cons_append, List.cons.injEq] at h
-    obtain ⟨rfl, -⟩ := h
-    simp [hx] at hc
-  | y :: a, [], _, _, _, _, h, _, hx', hc => by
-    simp only [List.nil_append, List.cons_append, List.cons.injEq] at h
-    obtain ⟨rfl, -⟩ := h
-    simp [hx'] at hc
-  | y :: a, y' :: a', _, _, _, _, h, hx, hx', hc => by
-    simp only [List.cons_append, List.cons.injEq] at h
-    obtain ⟨rfl, h⟩ := h
-    rw [List.countP_cons, List.countP_cons] at hc
-    exact eq_of_countP_eq h hx hx' (Nat.add_right_cancel hc)
-
-/-- **Each round of a tree's stream has one line**: where `coinTreesOf` accepts the release log `lines`, two of its
-lines opening round `k` of stream `name` of the coin tree whose root is `ρ` are one, each the line after the `k` lines
-opening that stream (`coinTreesOf_round`). -/
-theorem opensRound_unique {lines : List String} {trees : Array LoggedTree} (h : coinTreesOf lines = .ok trees)
-    {ρ name l l' : String} {k : ℕ} (hl : l ∈ lines) (hl' : l' ∈ lines) (ho : OpensRound l ρ name k)
-    (ho' : OpensRound l' ρ name k) : l = l' := by
-  obtain ⟨a, b, he⟩ := List.append_of_mem hl
-  obtain ⟨a', b', he'⟩ := List.append_of_mem hl'
-  exact eq_of_countP_eq (he.symm.trans he') ho.opensLine ho'.opensLine
-    ((coinTreesOf_round h he ho).symm.trans (coinTreesOf_round h he' ho'))
-
 /-- **The line opening a round a tree shows opened is after the opening's bytes**: where `coinTreesOf` accepts the
 release log `lines`, a line of it opening round `k` of stream `name` of a tree `t` of its trees (`OpensRound`) is the
 one line opening that round (`opensRound_unique`), so its `after` is that of the opening `t` shows (`opened_after`). -/
@@ -215,8 +183,8 @@ attribute [local irreducible] Live.rounds Live.N in
 rounds' empty classes, beside a play that the sampled verdict accepts, that misses nowhere and whose log v2's check read
 is the device's, is the writer's at the widened sample, the decoded registration and an outcome whose moves are those
 v2's files decode to (`MovesOf`). It takes, for the record's sample (`recordDraw_firstStop`, at the session tied to v2's
-verifier, `SetsUp.popTied`, and at v2's log at its coins, `drawReadAll_coinsRead`), that v2 holds the record's draw to
-its own (`DrawHeld`) and reads the sample's coins of the family `label` answering `after` (`hN`); that v2's order
+verifier, `SetsUp.popTied`, at v2's log at its coins, `drawReadAll_coinsRead`, and at v2's hold on the record's draw,
+`drawHeld`), that v2 reads the sample's coins of the family `label` answering `after` (`hN`); that v2's order
 refusal passes (`OrderHeld`), which gives that every release of that family precedes every opening
 (`freshBefore_verdict`) and that the device's log opens the session stream first (`linkFirst_verdict`); and, for the rep
 rounds (`firstStop_reps_verdict`), that the log opens only the record's rounds. That the log has an opening and that its
@@ -226,7 +194,7 @@ round and its `N` live rounds from `Live.rounds_eq`. The roots (`firstStop_rootB
 the same first opening. -/
 theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
-    (hH : DrawHeld k) (reg : Option Claims.Msg → A.Reg)
+    (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String} {after : ByteArray} {m : ℕ}
@@ -278,7 +246,7 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
   refine ⟨_, _, _, ho, fun text proofs spec sts sess hrec hpr hs hd =>
     ⟨?_, ?_, ?_, hreps text proofs spec sts sess hrec hpr hs hd, proofs_of_sent reg A.layout hpr⟩⟩
   · rw [sample_extend]
-    exact recordDraw_firstStop fieldEnc hA hA.popTied (drawReadAll_coinsRead k) hH
+    exact recordDraw_firstStop fieldEnc hA hA.popTied (drawReadAll_coinsRead k) (drawHeld k)
       (readingAt_picks A.tables A.layout record recordDigest) hm hsrc ω
       (firstStop_playReaches V θ F c A _ σ _ ω hr) hv hl hN hP hrec
   · exact firstStop_rootB hA rfl rfl hr hn hv hl hfirst hLA hc h₀ hrec hs hd
@@ -292,7 +260,7 @@ whose draw answers `after`, and v2's order refusal passing (`OrderHeld`) at ever
 accepts. -/
 theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
-    (hH : DrawHeld k) (reg : Option Claims.Msg → A.Reg)
+    (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String} {after : ByteArray} {m : ℕ}
@@ -312,7 +280,7 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
     MovesReach V θ F c k (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent after) A rd σ D M
       (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
-  fun _ h ⟨hv, hn, hl, hd⟩ => h.movesOf hA hDg hH reg record recordDigest hrd hD hm hsrc hM hv hn hl
+  fun _ h ⟨hv, hn, hl, hd⟩ => h.movesOf hA hDg reg record recordDigest hrd hD hm hsrc hM hv hn hl
     (hN _ hv hl hd) (hord _ hv) (hO _ hv hl)
 
 end Verity.Sampled

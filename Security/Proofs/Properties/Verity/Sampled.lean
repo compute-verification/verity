@@ -290,10 +290,11 @@ noncomputable abbrev wr : (S : Finset (Fin A.n)) → (R : A.Reg) →
       FlockSoundness.Discharge.Exec.Transcript :=
   Claims.Bridge.CustodyZkP.wrZP A.I A.own A.dj fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length
 
-/-- **`live-verifier` at the writer under the draw file's law**, as V5 reads it, holds with no premise: the record's draw
-is the `.subset` print of the session's `kd` units (`recordCustodyZKJPLaw_deployed`). -/
+/-- **`live-verifier` at the writer under the draw file's law at every draw**, as V5 reads it, holds with no premise:
+the record's draw is the `.subset` print of the session's `kd` units (`recordCustodyZKJPLaw_deployed`). The session's
+draws hold `kd` units (`Flock.Bridge.drawUnits_size`), so at each of them this law is a member's `subset |S|`. -/
 theorem hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPtsOf A.D.unroll.g (A.kd / nTab A.I))
-    A.I A.own A.dj (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr (.subset A.kd) :=
+    A.I A.own A.dj (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr fun _ => .subset A.kd :=
   recordCustodyZKJPLaw_deployed A.I A.own A.kd _
 
 /-- **The session at the device's bytes as deployed**: the draw reads the device's one-stage rounds
@@ -347,10 +348,14 @@ noncomputable abbrev Cc :=
 noncomputable def P :=
   (keyProgP A.D.unroll {} A.hU A.n).partition (FlockSoundness.Discharge.Layout.outsOfP A.D.unroll A.hU A.n {})
 
+/-- The session's circuit file read as its statement circuit (`HmOut.parseStmt`), from its descriptor's flat parse. -/
+theorem hcS : Flock.HmOut.parseStmt (zkTags A.I) A.I.circuitFile A.I.tables = .ok A.D.unroll :=
+  Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse A.hD)
+
 /-- V5's binding at the session's ports. -/
 noncomputable def vb :=
-  (rsZHJP (Reg := A.Reg) A.dj A.y₀ A.ht (Flock.Desc.parse_flat A.hD) A.hscope A.hU A.hpi A.hpub).bindingZ
-    (rsZHJP_computes (Reg := A.Reg) A.dj A.y₀ A.ht (Flock.Desc.parse_flat A.hD) A.hscope A.hU A.hpi A.hpub)
+  (rsZHJP (Reg := A.Reg) A.dj A.y₀ A.ht A.hcS A.hscope A.hU A.hpi A.hpub).bindingZ
+    (rsZHJP_computes (Reg := A.Reg) A.dj A.y₀ A.ht A.hcS A.hscope A.hU A.hpi A.hpub)
 
 /-- **V5's simulator at a strategy of the live audit**: the strategy in the compiled batched session at flock-verify
 `--zk`'s acceptance at `own`, through the decoder `RecordCustodyZKJPLaw` and the draw file's size give at the draw
@@ -359,8 +364,7 @@ noncomputable def sim (τ : FlockSoundness.Game.Strategy A.game) :=
   simZJA execArith hs512 (planZHJP A.dj A.y₀) (AcceptsZKP A.I A.own) A.wr
     (opnAtZHJP (planZHJP A.dj A.y₀) A.I A.own A.dj) A.dg (decAtZJ (planZHJP A.dj A.y₀)) (fun _ _ _ _ => true)
     (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) A.N
-    (decodesZCJH_custodyP A.I A.own A.ht (Flock.Desc.parse_flat A.hD) (.subset A.kd) A.kd A.hdiv A.dj A.y₀ A.wr A.L
-      A.hTags A.hCust A.hsz) τ
+    (decodesZCJH_custodyP A.I A.own A.ht A.hcS (.subset A.kd) A.kd A.hdiv A.dj A.y₀ A.wr A.L A.hTags A.hCust A.hsz) τ
 
 /-- **V5's extractor at a strategy of the live audit**: `XplurZC` at the simulator's registration and continuation. -/
 noncomputable def Xr (τ : FlockSoundness.Game.Strategy A.game) :=
@@ -704,7 +708,7 @@ def publicDigestOf (θ : ByteArray) : Option Hash.Digest := (paramsOf θ).bind f
 /-- **`verify --zk`'s tags at the inputs v2 hands it** (`zkTags`): the statement's tags `tags`, one table and the
 circuit file `circuitFile`. -/
 def zkTagsOf (tags : Flock.Tags) (circuitFile : ByteArray) : Flock.Tags :=
-  Flock.Zk.tags (tags.withCoins (.tree (Flock.Zk.coinSpec (tags.tableNames 1)))) (Flock.Zk.maskLogOf circuitFile) 1
+  Flock.Zk.tags tags (Flock.Zk.maskLogOf circuitFile) 1
 
 /-- **v2's reading of the committed files `F` at the parameters `θ`, as deployed**: the files the digests v2's
 parameters name (`programDigestOf`, `publicDigestOf`), the pinned MUFU tables the committed files hold
@@ -741,8 +745,8 @@ theorem readOf_eq (V : Vocab d α) (hc : ∀ θ, V.programDigest θ = programDig
     readOf θ F = A.fileRead := by
   have hc' : V.circuitFile θ F = Verity.namedFile (programDigestOf θ) F := by rw [Vocab.circuitFile, hc]
   have hp' : V.publicFile θ F = Verity.namedFile (publicDigestOf θ) F := by rw [Vocab.publicFile, hp]
-  simp only [readOf, Live.fileRead, zkTagsOf, FlockSoundness.Discharge.ZkExec.zkTags,
-    FlockSoundness.Discharge.ZkExec.zkCoins, htags, Option.getD_some, hcount, hcirc, hpub, htab, hc', hp']
+  simp only [readOf, Live.fileRead, zkTagsOf, FlockSoundness.Discharge.ZkExec.zkTags, htags, Option.getD_some, hcount,
+    hcirc, hpub, htab, hc', hp']
 
 /-- **v2's case in what the prover sent**: v2's parameters in the parameters sent, as `ParamsAt` reads them, and the
 registration and the evidence of the case the composition's evidence names under the sampled component's id, each read

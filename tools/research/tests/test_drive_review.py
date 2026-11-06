@@ -554,6 +554,30 @@ def test_no_verdict_counts_by_the_owner_its_handle_or_its_ready_marks_author_wha
     assert h.tick().startswith("landed #1")
 
 
+def test_with_signed_verdicts_drive_lands_only_on_an_authenticated_land_verdict(world, monkeypatch):
+    """drive.toml's `signed_verdicts`: drive reads the store's labels through a verifier (`StoreLabels`, `research.labelauth`),
+    so a land verdict written as another lane counts only once its holder's token authenticates it."""
+    from research import labelauth
+    from test_labelauth import OTHER, TS, _mint, _verifier
+
+    world.with_store_remote()
+    h = Review(world, monkeypatch)
+    labels = StoreLabels(world.store, log=lambda s: None, verify=_verifier())
+    h.d.reviews, h.d.ready_by = labels.reviews, labels.ready_by
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1, by="proofs")
+    out = h.tick()
+    assert "no land verdict" in out and not out.startswith("landed #1"), out
+
+    def down(nonce: str) -> str:
+        raise labelauth.AuthError("the Cursor identity socket is unavailable")
+
+    with pytest.raises(QueueError, match="isn't written: drive.toml's `signed_verdicts` is on at `main`, and it can't be signed"):
+        Q.review(h.q, labelauth.Signer(world.store, down, required=True, now=lambda: TS), labels, 1, "land", None, "proofs")
+    assert Q.review(h.q, labelauth.Signer(world.store, _mint(OTHER), now=lambda: TS), labels, 1, "land", None, "proofs") == 0
+    assert h.tick().startswith("landed #1"), world.logs
+
+
 def test_the_lowest_member_waiting_for_a_land_verdict_rings_the_reviewers_and_top_every_30_min_at_its_head(world, monkeypatch):
     """`next`'s lowest member with no land verdict holds every landing above it, and its tick's log rang nobody: drive rings @ci
     (who staffs the reviewers) and @top `BOTTOM_WAIT_S` after it became the lowest or its ready mark, whichever is later, once
@@ -3151,3 +3175,27 @@ def test_lean_check_again_replaces_a_passed_record_with_a_pending_hand_check(wor
     (again,) = [r for r in h.lean_ids() if r != rid]
     assert h.d.q.load_state()["drive"]["lean"][top] == rec and "run" not in rec
     assert (rec["ids"], rec["state"], rec["hand"], rec["by"]) == ([again], None, True, "ci")
+
+
+def test_the_low_risk_lanes_rebuild_merges_with_each_tips_drivers_not_its_checkouts(world):
+    """The low-risk lane rebuilds `next` on the landing branch with `Driver._clean_merge`, which ran `git merge-tree` with the
+    drivers of the clone's checkout: once that checkout held another `merge.py` than the tip it merged onto, every lock it
+    merged came out in that driver's format.  It is the sync's merge (`Queue._recorded`), which runs the tip's own drivers;
+    any record the sync made of it is dropped, so the merge is made again under the checkout's broken `merge.py`."""
+    import types
+
+    caps = "tests/test_lean_packages.py"
+
+    def counts(sec: int, props: int) -> str:
+        return f'UNWITNESSED = {{"Security": {sec}, "Security/Properties": {props}}}\n'
+
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    _move_main(world, {caps: counts(354, 184), ".gitattributes": f"{caps} merge=lean-caps\n",
+                       **{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}})
+    two, three = world.change({caps: counts(355, 184)}), world.change({caps: counts(354, 185)})
+    q = world.queue()
+    q.sync()
+    (q.workdir / "tools/verity/lean/merge.py").write_text("import sys\nsys.exit('merge.py: error: unrecognized arguments: --caps')\n")
+    q._merge_records = {}
+    tree, why = D.Driver._clean_merge(types.SimpleNamespace(repo=q.workdir, q=q), two, three)
+    assert tree is not None and _git(q.workdir, "show", f"{tree}:{caps}") == counts(355, 185).strip(), why

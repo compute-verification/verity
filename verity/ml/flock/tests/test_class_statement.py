@@ -262,7 +262,7 @@ def test_a_class_of_whole_activations_names_its_definition_as_the_circuits_templ
 def test_a_class_staged_without_shared_rows_opens_every_instances_own_rows_under_the_same_circuit(tmp_path: Path):
     """``share_rows=False``: the same circuit, and public and prover files without ``shared_rows`` (the form Lean's
     ``ProvedScope.sharedRowsOk`` covers without registered reads), every instance's rows its own, one per port, so the prover's
-    file is the shared one's with every table as long as the instances; a wired class keeps its link rows shared."""
+    file is the shared one's with every table as long as the instances (a wired class's: `test_wired_links`)."""
     units, s, cl, _act, _uc, _groups = _fp_class("e4m3", 128)
     lanes, key = _lanes(units, cl), hashlib.sha256(b"test").digest()
     shared = CS.stage(units, "q-word", s, cl, lanes, tmp_path / "shared", key)
@@ -275,8 +275,6 @@ def test_a_class_staged_without_shared_rows_opens_every_instances_own_rows_under
     n, words = own["n"], sum(w for _p, w, _c in meta["ports"])
     body = (tmp_path / "own" / f"inst-{n}.bin").read_bytes().split(b"\n", 1)[1]
     assert len(body) == n * (2 * words + (192 + 128) * len(meta["ports"]))
-    with pytest.raises(ValueError, match="share_rows"):
-        CS.stage(units, "q-word", s, cl, lanes, tmp_path / "wired", key, wiring=SimpleNamespace(), share_rows=False)
 
 
 def test_own_rows_is_its_own_stage_cache_entry(monkeypatch, tmp_path: Path):

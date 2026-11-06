@@ -53,6 +53,8 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity_difftest import protocol as PR
+from verity.core.protocols.pouw import audit as PA
+from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import challenger as CH, service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
@@ -927,16 +929,35 @@ def slots(j):
     return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
 
 
+def _public_units(public) -> list:
+    """`FilePart.unitIndices`: the public file's ``units.indices`` (``public``, its bytes in hex), off its header as the
+    Python verifier reads it (`proofs._header`: the first line, decoded, ``json.loads``)."""
+    if not (isinstance(public, str) and len(public) % 2 == 0 and re.fullmatch(r"[0-9a-f]*", public)):
+        raise D.Reject("public is not lowercase hex")
+    try:
+        head = json.loads(bytes.fromhex(public).split(b"\n", 1)[0].decode())
+    except ValueError as e:
+        raise D.Reject(f"the public file's header is not JSON: {e}") from None
+    units = head.get("units") if isinstance(head, dict) else None
+    indices = units.get("indices") if isinstance(units, dict) else None
+    if not (isinstance(indices, list) and all(map(_nat, indices))):
+        raise D.Reject("the public file's units.indices is not a list of natural numbers")
+    return indices
+
+
 def file_population(j):
     """`FilePart.why` (`proofs.population_why`): the registration's strata over the program and query
-    (`partition.strata`), against a public file's units (`units.indices`)."""
+    (`partition.strata`), against a public file's units (`units.indices`): given, or read off the public file."""
     j = _json(j)
     if not isinstance(j, dict):
         raise D.Reject("not an object")
     desc = _obj(j.get("program"), "program")
-    indices = j.get("indices")
-    if not (isinstance(indices, list) and all(map(_nat, indices))):
-        raise D.Reject("indices is not a list of natural numbers")
+    if j.get("public") is not None:
+        indices = _public_units(j["public"])
+    else:
+        indices = j.get("indices")
+        if not (isinstance(indices, list) and all(map(_nat, indices))):
+            raise D.Reject("indices is not a list of natural numbers")
     if not desc:
         raise D.Reject("not a program descriptor")
     sha = PO.program_sha512(desc)
@@ -1957,14 +1978,21 @@ def _sha(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
 
 
-def _public_of(rec: dict, roots: dict | None = None) -> bytes:
+def _public_of(rec: dict, roots: dict | None = None, indices: list | None = None) -> bytes:
     """A public file whose header is `rec`'s as `registration.matches_public` reads one (`OneStageZk.publicHeld`): its
-    scheme, its ``frame_v3`` roots (`roots` in their place) and their ``domain_ids``, and its population as ``instances``.
-    No statement follows it, so a session set up on it is rejected."""
+    scheme, its ``frame_v3`` roots (`roots` in their place) and their ``domain_ids``, its population as ``instances``,
+    and its population's units in order as ``units.indices`` (`indices` in their place). No statement follows it, so a
+    session set up on it is rejected."""
     reg = {r["port"]: r for r in rec["roots"]}
     fv = {"domain_ids": {p: r["domain"] for p, r in reg.items()}, "roots": roots or {p: r["root"] for p, r in reg.items()}}
-    header = {"frame_v3": fv, "instances": rec["population"], "scheme": rec["scheme"]}
+    units = {"indices": list(range(rec["population"])) if indices is None else indices}
+    header = {"frame_v3": fv, "instances": rec["population"], "scheme": rec["scheme"], "units": units}
     return json.dumps(header, sort_keys=True).encode() + b"\nnot a public file"
+
+
+#: `OneStageZk.INDICES_WHY`
+INDICES_WHY = ("public file: its units.indices are not the registration's population units in order "
+               "(instance i is unit i)")
 
 
 #: `OneStageZk.NO_CHALLENGER`
@@ -2033,11 +2061,12 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     a statement's; refused before the session is verified when its coins are not a tree the challenger logged or its
     link was opened after other keys than its one table (`LINK_TABLES`; the `root_B` length a statement fixes,
     `LINK_ROOT_LEN`, these files set up none to hold), or the public file is not the registration's
-    (`publicHeld`, its codes Python's `matches_public`'s); refused when a file it names is in no blob, as the public
-    file the parameters name is when the blobs hold another, or its sessions are not the evidence's. The public file is
-    the parameters', committed before any coin: evidence naming one of its own, or parameters naming none, are refused.
-    `test_proofs.py` holds the verdicts to `verify`'s on a real session, and `test_challenger_difftest.py` the trees'
-    check to its Python."""
+    (`publicHeld`, its codes Python's `matches_public`'s), or its ``units.indices`` are not the population's units in
+    order (`indicesHeld`): a header rewritten after the draw, its pin with it, to credit an honest instance as the drawn
+    unit, or naming none; refused when a file it names is in no blob, as the public file the parameters name is when
+    the blobs hold another, or its sessions are not the evidence's. The public file is the parameters', committed before
+    any coin: evidence naming one of its own, or parameters naming none, are refused. `test_proofs.py` holds the
+    verdicts to `verify`'s on a real session, and `test_challenger_difftest.py` the trees' check to its Python."""
     s = SETUPS[3]
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -2103,6 +2132,14 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     assert run(one, blobs_=[circuit.hex(), wrong.hex(), *blobs[2:]],
                p=p2 | {"proofs": {**p2["proofs"], "public": _sha(wrong)}}) == (
         "reject", f"proofs: public file: not the registration's: {', '.join(codes)}")
+    n = rec["population"]
+    head, body = public.split(b"\n", 1)
+    unitless = json.dumps({k: v for k, v in json.loads(head).items() if k != "units"}, sort_keys=True).encode()
+    relabelled = [_public_of(rec, indices=is_) for is_ in ([0, *range(2, n + 1)], [*range(1, n), 0], list(range(n - 1)),
+                                                           list(range(n + 1)))]
+    for f in (*relabelled, unitless + b"\n" + body):
+        assert run(one, blobs_=[circuit.hex(), f.hex(), *blobs[2:]],
+                   p=p2 | {"proofs": {**p2["proofs"], "public": _sha(f)}}) == ("reject", f"proofs: {INDICES_WHY}"), f
     assert run(base | {"proofs": {"public": _sha(public), **proofs(["s"])}, "sessions": ["s"]}) == (
         "reject", "evidence: the keys of the evidence's proofs are not sessions")
     got = run(one, p=p2 | {"proofs": {k: v for k, v in p2["proofs"].items() if k != "public"}})
@@ -2706,8 +2743,35 @@ def file_populations(draw) -> dict:
     return {"indices": indices, "program": desc, "query": query}
 
 
-FILE_POPULATION = D.Port(PIECES, "file_population", file_population, st.one_of(file_populations(), file_populations(),
-                                                                                  JSON), package=PACKAGE)
+@st.composite
+def file_population_publics(draw) -> dict:
+    """The file_population piece's input with the public file itself (``public``, in hex): a header written as
+    `verity_flock`'s producers write theirs (`json.dumps(head, sort_keys=True)`, a newline, then the body), over
+    `file_populations`' units; else that header cut short, without its units, or after a byte that isn't UTF-8."""
+    j = draw(file_populations())
+    indices = j.pop("indices")
+    n, g = len(indices), draw(st.integers(1, 4))
+    head = {"format": "flock-instances/v3", "statement": "hm96-sha512-rows", "scheme": "hm96-sha512", "set": "eval",
+            "subcircuit": "unit", "range": [0, n], "instances": n, "circuit_sha512": "ab" * 64, "rows": True,
+            "units": {"vus_per_block": g, "units_per_vu": draw(st.integers(1, 2)), "indices": indices,
+                      "blocks": [indices[b:b + g] for b in range(0, n, g)], "classes": ["cd" * 64] * n},
+            "frame_v3": {"roots": {"x": "ef" * 64}, "domain_ids": {"x": "01" * 32}},
+            **draw(st.sampled_from([{}, {"identifier": {"name": "caf\u00e9 \u2603"}}, {"shared_rows": {"x": n}},
+                                    {"registered": {"w": {"value": "w", "positions": [0, 3], "paths": ["a/b"]}}}]))}
+    kind = draw(st.integers(0, 9))
+    if kind == 8:
+        del head["units"]
+    line = json.dumps(head, sort_keys=True).encode()
+    if kind == 7:
+        line = line[:draw(st.integers(0, len(line) - 1))]
+    elif kind == 9:
+        line = b"\xff" + line
+    return {**j, "public": (line + b"\n" + draw(st.binary(max_size=64))).hex()}
+
+
+FILE_POPULATION = D.Port(PIECES, "file_population", file_population,
+                         st.one_of(file_populations(), file_populations(), file_population_publics(),
+                                   file_population_publics(), JSON), package=PACKAGE)
 
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
@@ -3638,6 +3702,53 @@ def test_a_bit_row_values_rows_are_counted_in_its_format(pieces):
             assert codes(b) == (["R7-leaves", "R7-domain"] if "A" in values else []), values
 
 
+#: Pearl+'s y trees' binding tag: PoUW's rows domain over a call's served y, at salt nonce 2^61 + the call's index
+PEARL_Y_ROWS = "verity/pouw/pearl-plus/y-rows/v1"
+
+
+def test_an_output_reuse_takes_a_pearl_plus_domain_verbatim(pieces):
+    """`T` reusing (`outputs`) Pearl+'s window record's entry for a call's A rows or served y, which PoUW commits
+    (`audit.commit_rows` under hm96-sha512) under its rows domain, not one-stage's: `T`'s 32-bit rows as `row-seg/v1`
+    rows, or `row/v2` rows (which R7 counts alike), are accepted under that domain and root verbatim, and without
+    `outputs` are `R7-domain`. The record's entry under one-stage's own domain for `T` (`registered.domain`, whichever
+    binding it takes) is `R7-domain`, under another root `R7-held`, and Pearl+'s entry of 16-bit words or of other rows
+    `R7-output`, Lean and Python agreeing."""
+    s, values, law = REGISTERED_SETUPS[1], {"T": 2}, {"k": 1, "law": "subset"}
+    mine = s.committed["T", 2].entry()
+    roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
+    salt, u = bytes(range(64)), 7
+
+    def codes(b):
+        kind, out = D.replay(REGISTRATION, _json(b), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    for name, binding, nonce in (("pearl-a/0/0", PA.activation_binding(salt, u), u),
+                                 ("pearl-y/0/0", tagged(PEARL_Y_ROWS, salt, u), (1 << 61) + u)):
+        tree = PA.commit_rows(binding, u, [b"".join(w.to_bytes(4, "little") for w in r) for r in s._rows("T", 2)[0]],
+                              PA.HM96, salt_key=bytes(range(32)), nonce=nonce)
+        theirs = {**mine, "value": name, "root": tree.commitment.root.hex(), "domain": tree.domain.domain_id.hex()}
+        assert theirs["domain"] != mine["domain"]
+
+        def case(entry=(), earlier=theirs, drop=(), **change):
+            log = [R.record(s.program, s.query, law, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=[earlier])]
+            rec = R.record(s.program, s.query, law, SCHEME, roots, {**WINDOW, **BINDING}, leaf_layer=LEAF,
+                           previous=R.digest(log[0]),
+                           registered=[{**mine, "root": theirs["root"], "domain": theirs["domain"], **dict(entry)}])
+            params = {"anchors": [], "binding": BINDING, "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": log,
+                      "outputs": {"T": {"record": R.digest(log[0]), "value": name}}, "parameters": s.signature,
+                      "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
+                      "row_schemas": {"T": G.SCHEMA_SEG}, "scheme": SCHEME, "work_table": None, **change}
+            return {"params": {k: v for k, v in params.items() if k not in drop}, "record": rec}
+
+        assert codes(case()) == [], name
+        assert codes(case(row_schemas={"T": G.SCHEMA_V2})) == [], name
+        assert codes(case(drop=["outputs"])) == ["R7-domain"], name
+        assert codes(case({"domain": mine["domain"]})) == ["R7-domain"], name
+        assert codes(case({"root": "ef" * 64})) == ["R7-held"], name
+        for e in ({k: v for k, v in theirs.items() if k != G.WIDTH_KEY}, {**theirs, "leaves": 4, "words": 1}):
+            assert codes(case(earlier=e))[0] == "R7-output", (name, e)
+
+
 def test_a_tile_replayed_across_streams_in_one_window_is_refused(pieces):
     """The supplied setup whose seeds read the window's salt and positions, bound to one stream and prover: its record, as
     another stream's (or prover's) verifier checks it in the same window, is refused as it stands (`R6-stream` or
@@ -4164,3 +4275,32 @@ def test_the_run_refuses_a_population_out_of_order(pieces):
         else:
             assert (out.get("step"), out.get("codes")) == ("register", ["population-order"]), out
     assert not P.in_order(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)
+
+
+#: The public files C-Flock's producers wrote, recorded in `verity/ml/flock/tests`' fetched fixtures
+#: (`fixtures/artifacts.json`): `verity_flock`'s staging (`json.dumps(sort_keys=True)`), and the selftest's and the
+#: recursive links' (compact, sorted).
+RECORDED = PACKAGE.parents[2] / "ml" / "flock" / "tests" / "fixtures"
+RECORDED_FIXTURES = ("forged-proofs", "public-inputs", "public-inputs-blocks", "rec-coins", "rec-links", "zk-sessions")
+
+
+def _recorded_publics() -> list[Path]:
+    missing = [f"verity/ml/flock/tests/fixtures/{f}" for f in RECORDED_FIXTURES if not (RECORDED / f).is_dir()]
+    assert not missing, f"not fetched: `uv run research data fetch-fixtures {' '.join(missing)}`"
+    return sorted(p for f in RECORDED_FIXTURES for p in (RECORDED / f).rglob("*.bin")
+                  if re.fullmatch(r"(.+\.)?pub(-\d+)?\.bin", p.name))
+
+
+def test_the_recorded_public_files_pass_the_population_check(pieces):
+    """Each public file the producers recorded (`RECORDED`) passes `FilePart.check` against a population of as many units
+    in order as it names, its header read by `FilePart.header` (`Flock.JsonParse.parse`, then `Flock.norm`) as Python's
+    `json.loads` reads it: the check refuses none of them."""
+    files = _recorded_publics()
+    assert len(files) >= 23, files
+    query = P.template_instance_query(MEMBERS[0].id)
+    for p in files:
+        b = p.read_bytes()
+        n = len(json.loads(b.split(b"\n", 1)[0])["units"]["indices"])
+        case = {"program": json.loads(_population(((0, n),))), "query": query, "public": b.hex()}
+        assert file_population(copy.deepcopy(case)) == {"why": None}, p
+        assert D.replay(FILE_POPULATION, case, pieces) == ("output", D.canonical({"why": None})), p

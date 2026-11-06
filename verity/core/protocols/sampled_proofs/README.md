@@ -26,9 +26,10 @@ accepts, at most the profile's count of proof blocks are incorrect. Its top stat
 `Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
 `Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
-and the V5 guarantees cover sessions of non-templated statements only: knowledge soundness for a templated statement
-(`Flock.Tags.templated`), whose acceptance `flock_verify_sound` covers, is open until the V5 guarantees are restated
-over the statement circuit. It rests on these named assumptions:
+covers sessions of non-templated statements, as `Flock.Desc.parse` reads a flat file. The V5 guarantees
+(`Bridge.SampledKSLiveV5` and those behind it) read the file through `Flock.Desc.parseStmt`, so they also cover templated
+statements (`Flock.Tags.templated`, whose acceptance `flock_verify_sound` covers), at the circuit `HmOut.unrolled`
+builds. The top statement rests on these named assumptions:
 
 - `UniformRandomBytes`: the bytes the verifier's draw reads from its operating system are uniform (the CSPRNG
   idealized; its docstring says what that leaves out).
@@ -138,9 +139,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
   circuit and public files' digests and the verifier's registered file; its evidence names step 4's one session's
   record and rep files by SHA-512 in place of `verdicts`, the files coming in as `Core.Blobs`. It refuses none or
-  several sessions, a public file whose header isn't the registration's (`Record.matchesPublic`) or whose population
-  isn't the program's proof blocks in order (`Slots.popOk`), parameters naming no challenger coins or a key off
-  `Lms.deployed`, and coins past `Challenger.LIMITS`. It reads the
+  several sessions, a public file whose header isn't the registration's (`Record.matchesPublic`) or whose
+  `units.indices` aren't its population's units in order (`indicesHeld`), a population that isn't the program's proof
+  blocks in order (`Slots.popOk`), parameters naming no challenger coins or a key off `Lms.deployed`, and coins past
+  `Challenger.LIMITS`. It reads the
   draw's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened, a link
   `root_B` of any length but its statement's refused before the hash (`LINK_ROOT_LEN`;
