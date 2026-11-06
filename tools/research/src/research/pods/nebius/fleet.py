@@ -45,10 +45,12 @@ import time
 import tomllib
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 from zoneinfo import ZoneInfo
+
+from research.pods.nebius import settings
 
 HERE = Path(__file__).resolve().parent
 FLEET_DIR = Path(os.environ.get("FLEET_DIR", str(Path.home() / ".research" / "fleet")))
@@ -68,8 +70,7 @@ KERNEL_TROUBLE = re.compile(r"soft lockup|hung_task|blocked for more than|out of
                             r"rcu_sched self-detected|kernel panic", re.I)
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 #: the usage record as the console's compute tabs read it: three table panels PUT to the site with its panels key
-PANELS_URL = os.environ.get("FLEET_PANELS_URL", "https://website-docs-sage.vercel.app")
-PANELS_KEY = Path(os.environ.get("FLEET_PANELS_KEY", str(Path.home() / ".config" / "verity" / "panels.key")))
+PANELS_URL, PANELS_KEY = settings.PANELS_URL, settings.PANELS_KEY
 PANEL_ONLINE, PANEL_HOURLY, PANEL_DAILY = "compute/online", "compute/hourly", "compute/daily"
 HOURLY_DAYS, DAILY_DAYS = 7, 30
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -418,7 +419,7 @@ def busy(row: dict) -> tuple[float | None, str]:
 
 
 def _parse(t: str) -> datetime:
-    return datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    return datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
 
 
 def _panel(pid: str, title: str, columns: list[str], rows: list[list], now: float, note: str) -> dict:
@@ -493,11 +494,14 @@ def fitted(panel: dict) -> dict:
 
 
 def put_panel(panel: dict, key: str) -> str | None:
-    """PUT one panel; None when the site took it, else why not."""
-    req = urllib.request.Request(f"{PANELS_URL}/api/panels/{panel['id']}", data=json.dumps(panel).encode(), method="PUT",
+    """PUT one panel; None when the site took it, else why not. Only an https site is sent the key."""
+    if not (PANELS_URL or "").startswith("https://"):
+        return f"{panel['id']}: $FLEET_PANELS_URL is {PANELS_URL!r}, not an https URL: nothing sent"
+    url = f"{PANELS_URL}/api/panels/{panel['id']}"
+    req = urllib.request.Request(url, data=json.dumps(panel).encode(), method="PUT",  # noqa: S310 (https, checked above)
                                  headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=30):
+        with urllib.request.urlopen(req, timeout=30):  # noqa: S310 (https, checked above)
             return None
     except urllib.error.HTTPError as e:
         return f"{panel['id']}: HTTP {e.code} {e.read()[:300].decode(errors='replace')}"
@@ -519,9 +523,9 @@ def store_put(path: Path) -> tuple[str | None, str]:
     """``path`` into the store (`research data put --kind fleet-samples/v1 --preserve`): its art id, or None and why. The store is
     $RESEARCH_STORE, else ~/fleet-store, and its remote's credentials are $FLEET_STORE_ENV's KEY=VALUE lines (the pod's r2.env),
     which the loop's own environment doesn't hold."""
-    research = Path(os.environ.get("FLEET_RESEARCH", "/workspace/.venv/bin/research"))
-    env = {**os.environ, "RESEARCH_STORE": os.environ.get("RESEARCH_STORE") or str(Path.home() / "fleet-store")}
-    creds = Path(os.environ.get("FLEET_STORE_ENV", str(Path.home() / ".config" / "verity" / "r2.env")))
+    research = settings.research_bin()
+    env = {**os.environ, "RESEARCH_STORE": settings.store_root()}
+    creds = settings.store_env()
     for line in creds.read_text().splitlines() if creds.is_file() else []:
         k, sep, v = line.removeprefix("export ").partition("=")
         if sep and k.strip() and not line.lstrip().startswith("#"):
@@ -546,8 +550,8 @@ def archive(now: float, put: Callable[[Path], tuple[str | None, str]] = store_pu
     f, state_path = FLEET_DIR / f"samples-{day}.jsonl", FLEET_DIR / "archived.json"
     try:
         state = json.loads(state_path.read_text()) if state_path.exists() else {}
-    except (OSError, ValueError):
-        state = {}
+    except (OSError, ValueError) as e:
+        return f"{state_path.name} unreadable ({type(e).__name__}: {e}): nothing archived until it is fixed"
     if day in state or not f.exists():
         return None
     art, why = put(f)
@@ -562,7 +566,7 @@ def archive(now: float, put: Callable[[Path], tuple[str | None, str]] = store_pu
 
 def post(args: list[str], text: str) -> str | None:
     """Send one post with `research msg send`; None when it went out, else why not (its exit and the end of its stderr)."""
-    research = Path(os.environ.get("FLEET_RESEARCH", "/workspace/.venv/bin/research"))
+    research = settings.research_bin()
     try:
         p = subprocess.run([str(research), "msg", "send", "--as", "infra", *args, "--text", text], cwd="/workspace", timeout=120,
                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)

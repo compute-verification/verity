@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from research.pods.nebius import fleet as F
 
@@ -243,7 +243,7 @@ def test_the_online_panel_names_each_running_vm_with_its_class_lane_rate_and_bus
 def test_hourly_and_daily_panels_price_each_sample_and_weight_busy_by_cost(tmp_path, monkeypatch):
     """compute/hourly and compute/daily: a sample costs its 5 minutes at its rate; busy dollars are each read sample's cost times
     its share, an unread sample at its slot's mean share; `minutes` counts what was sampled. A Pacific day spans two UTC days."""
-    t0 = int(datetime(2026, 11, 5, 7, 0, tzinfo=timezone.utc).timestamp())          # 11 PM Pacific, the day before
+    t0 = int(datetime(2026, 11, 5, 7, 0, tzinfo=UTC).timestamp())          # 11 PM Pacific, the day before
     samples = [_sample(t0 + i * F.INTERVAL_S, "cpu", 6.0, load=96.0) for i in range(11)]     # half busy
     samples.append(_sample(t0 + 11 * F.INTERVAL_S, "cpu", 6.0, read=False))
     samples += [_sample(t0 + 3600 + i * F.INTERVAL_S, "cpu", 6.0, load=0.0) for i in range(12)]  # midnight PST: a new day
@@ -286,7 +286,7 @@ def test_each_days_samples_are_put_in_the_store_once_the_day_is_over(tmp_path, m
     """The usage record's second copy, off the control pod: the last UTC day's samples file goes in the store once, its art id
     kept so a restarted loop doesn't put it again; a failed put is retried and says why."""
     monkeypatch.setattr(F, "FLEET_DIR", tmp_path)
-    now = int(datetime(2026, 11, 6, 0, 30, tzinfo=timezone.utc).timestamp())
+    now = int(datetime(2026, 11, 6, 0, 30, tzinfo=UTC).timestamp())
     assert F.archive(now, put=lambda p: (_ for _ in ()).throw(AssertionError("no file, no put"))) is None
     (tmp_path / "samples-20261105.jsonl").write_text("{}\n")
     assert F.archive(now, put=lambda p: (None, "exit 1: no remote")) == "samples-20261105.jsonl: exit 1: no remote"
