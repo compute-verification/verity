@@ -45,7 +45,7 @@ def novelReads (d : RegisteredCircuit) (R : Finset (Fin d.D.N)) : ℕ := d.D.wid
 abbrev Policy : Type := RegisteredCircuit → Prop
 
 /-- **The inference-only policy** at `(c, k)`: `d` has a `(c, k)`-partition, its circuit Boolean and divided into
-inference blocks of exactly `c` gates, padding included, each with at most `k` fresh input bits. -/
+inference blocks of at most `c` gates, each with at most `k` fresh input bits. -/
 def Complies (c k : ℕ) : Policy := fun d =>
   ∃ (B : ℕ) (P : Partition d.D B), P.IsCK d c k
 
@@ -153,7 +153,7 @@ noncomputable def spread {n : ℕ} (P : Partition D n) (ℓ : Fin c.L) (t : Fin 
 end Chain
 
 /-- **The slowdown factor for updated matrix multiplications** `F` (the draft's theorem, "Throttling updated matrix
-multiplications"), at rate `α` (under the policy `k / c`), read cap `k`, widths `b_w` of a weight entry and `b_a` of an
+multiplications"), at rate `α`, read cap `k` (the policy's `α Γ`), widths `b_w` of a weight entry and `b_a` of an
 activation entry, and smallest inner dimension `d`:
 `F = 1/(2α) · max_{0<μ<1} min{(1 + √μ)² b_w b_a d / k, √2 (1 + √μ) √(1 − μ) b_a √(b_w / k)}`,
 the maximum written as a supremum. The first term covers inference blocks that complete entries themselves, the second

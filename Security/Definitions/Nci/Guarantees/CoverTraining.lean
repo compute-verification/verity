@@ -19,19 +19,19 @@ the upstream certificate) are on `r`'s circuit bit by bit (`Circuit.ofDecl r`), 
 
 The route: a compliant division of `d` pulled back through the containment divides `r` into pieces, each no larger than
 its inference block and reading no more fresh input. A piece `R`'s block, the bits of `R` and of what it reads, computes
-every bit of `R` that reads something and is handed at most `novelReads R ≤ k` bits outside the free bits; it has at
-most `w₀ c + k + width(θ)` bits when no gate of `r` is wider than `w₀`. So the blocks cover `r`'s bits, each finishes at
-most `(k² + b k) / b` counted products, and summed over the `size(d) / c` inference blocks the counted products are at
-most `(k² + b k) / (b c) · size(d)`.
+every bit of `R` that reads something and is handed at most `novelReads R ≤ α σ` bits outside the free bits, where
+`σ ≤ Γ` is its inference block's size; it has at most `w₀ Γ + α Γ + width(θ)` bits when no gate of `r` is wider than
+`w₀`. So the blocks cover `r`'s bits, each finishes at most `(k² + b k) / b` counted products at its own `k ≤ α σ`, and
+summed over the inference blocks the counted products are at most `(α² Γ + b α) / b · size(d)`.
 
-That is `size(d) ≥ α₀ b c / (k² + b k) · size(r)`: the covering bound's per-block count at `c_w = b`, `c_a = 1` (with
-the upstream certificate in place of activation-chaining), at `s = c` word gates, when the counted products are a
-fraction `α₀` of `r`'s gates. The products are counted at the granularity of `r`'s gates (a Dot16 step, not a scalar
-product), and `UpdateHardness` is needed at the block size in bits, `s = w₀ c + k + width(θ)`.
+With `k = α Γ` this is `size(d) ≥ α₀ b Γ / (k² + b k) · size(r)`: the covering bound's per-block count at `c_w = b`,
+`c_a = 1` (with the upstream certificate in place of activation-chaining), at `s = Γ` word gates, when the counted
+products are a fraction `α₀` of `r`'s gates. The products are counted at the granularity of `r`'s gates (a Dot16 step,
+not a scalar product), and `UpdateHardness` is needed at the block size in bits, `s = w₀ Γ + α Γ + width(θ)`.
 
 `CoverTrainingAligned` is the width variant when every activation region is a set of whole words at least `f` bits wide:
 the blocks are whole words too, so each use of their whole products costs them `f` bits of its region, and the factor is
-`α₀ b f c / (k² + b f k)`, up to `f` times `CoverTraining`'s, with no premise beyond `UpdateHardness`.
+`α₀ b f Γ / (k² + b f k)`, up to `f` times `CoverTraining`'s, with no premise beyond `UpdateHardness`.
 -/
 
 @[expose] public section
@@ -39,33 +39,35 @@ the blocks are whole words too, so each use of their whole products costs them `
 namespace Nci.Cover.Guarantees
 
 /-- **Training through a compliant declaration pays the cover theorem's factor**: a declaration `d` that contains a
-reference training circuit `r` and complies at `(c, k)`, with its registered information free of the reference circuit's
-fresh input (`ThetaRegistered`), has `α₀ b c size(r) ≤ (k² + b k) size(d)` when the counted products of `r`'s bit
-view are a fraction `α₀` of `r`'s gates, under `UpdateHardness` at the block size `s ≥ w₀ c + k + width(θ)` (no gate of
-`r` wider than `w₀`) and the upstream certificate at depth `D` with `k < b D`. -/
+reference training circuit `r` and complies at `(Γ, α)` (`CompliesRate`), with its registered information free of the
+reference circuit's fresh input (`ThetaRegistered`), has `α₀ b size(r) ≤ (α² Γ + b α) size(d)` when the counted
+products of `r`'s bit view are a fraction `α₀` of `r`'s gates, under `UpdateHardness` at the block size
+`s ≥ w₀ Γ + α Γ + width(θ)` (no gate of `r` wider than `w₀`) and the upstream certificate at depth `D` with
+`α Γ < b D`. -/
 def CoverTraining : Prop :=
-  ∀ (c k : ℕ) (b α₀ : ℝ) (r d : Verity.RegisteredCircuit) (M : Verity.Containment r.D d.D)
+  ∀ (Γ : ℕ) (α b α₀ : ℝ) (r d : Verity.RegisteredCircuit) (M : Verity.Containment r.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl r) J L)
     (A : J → Finset (Fin (Circuit.ofDecl r).N)) (s D w₀ : ℕ),
-    0 < b → Nci.Complies c k d →
+    0 < b → 0 ≤ α → Nci.CompliesRate Γ α d →
     Nci.Assumptions.ThetaRegistered r d (Nci.PartialContainment.ofContainment M) →
-    Assumptions.UpdateHardness Mb s b → Mb.Upstream A D → Assumptions.CapBelowDepth k b D →
-    Assumptions.BlockFits r c k w₀ s → Nci.Assumptions.Coverage α₀ r Mb.P.card →
-      α₀ * b * c * r.D.size r.D.computed ≤ (k * k + b * k) * d.D.size d.D.computed
+    Assumptions.UpdateHardness Mb s b → Mb.Upstream A D → Assumptions.CapBelowDepth (α * Γ) b D →
+    Assumptions.BlockFits r Γ (α * Γ) w₀ s → Nci.Assumptions.Coverage α₀ r Mb.P.card →
+      α₀ * b * r.D.size r.D.computed ≤ (α * α * Γ + b * α) * d.D.size d.D.computed
 
 /-- **On whole-word activations, training through a compliant declaration pays the width factor**: `CoverTraining` with
 each use's activation region the bits of a set `Aw j` of `r`'s gates (`wordBits`), each at least `f` bits wide, has
-`α₀ b f c size(r) ≤ (k² + b f k) size(d)`, under `UpdateHardness` alone. A block of whole words handed a bit of a region
+`α₀ b f size(r) ≤ (α² Γ + b f α) size(d)`, under `UpdateHardness` alone. A block of whole words handed a bit of a region
 of whole words is handed all of that word's bits, so each use of its whole products costs it `f` bits of its region. -/
 def CoverTrainingAligned : Prop :=
-  ∀ (c k : ℕ) (b α₀ : ℝ) (r d : Verity.RegisteredCircuit) (M : Verity.Containment r.D d.D)
+  ∀ (Γ : ℕ) (α b α₀ : ℝ) (r d : Verity.RegisteredCircuit) (M : Verity.Containment r.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl r) J L)
     (Aw : J → Finset (Fin r.D.N)) (s D w₀ f : ℕ),
-    0 < b → Nci.Complies c k d →
+    0 < b → 0 ≤ α → Nci.CompliesRate Γ α d →
     Nci.Assumptions.ThetaRegistered r d (Nci.PartialContainment.ofContainment M) →
-    Assumptions.UpdateHardness Mb s b → Mb.Upstream (fun j => wordBits r (Aw j)) D → Assumptions.CapBelowDepth k b D →
-    Assumptions.RegionsAtLeast Mb Aw f → Assumptions.BlockFits r c k w₀ s →
+    Assumptions.UpdateHardness Mb s b → Mb.Upstream (fun j => wordBits r (Aw j)) D →
+    Assumptions.CapBelowDepth (α * Γ) b D →
+    Assumptions.RegionsAtLeast Mb Aw f → Assumptions.BlockFits r Γ (α * Γ) w₀ s →
     Nci.Assumptions.Coverage α₀ r Mb.P.card →
-      α₀ * b * f * c * r.D.size r.D.computed ≤ (k * k + b * f * k) * d.D.size d.D.computed
+      α₀ * b * f * r.D.size r.D.computed ≤ (α * α * Γ + b * f * α) * d.D.size d.D.computed
 
 end Nci.Cover.Guarantees
