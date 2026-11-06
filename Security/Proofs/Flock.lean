@@ -29,6 +29,7 @@ public import Proofs.Flock.Claims
 public import Proofs.Flock.SamplingClaims
 public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Masked
+public import Proofs.Flock.SamplingGeneric.TwoDeployed
 public import Proofs.Flock.Bridge
 public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs
