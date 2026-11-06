@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.FirewallAdaptive
+module
+
+public import Proofs.Flock.Recursive.FirewallAdaptive
 
 /-!
 # The live firewall at a worker whose requests are fixed
@@ -13,6 +15,8 @@ length.
 * `adaptOut_fixed`, `adaptFinished_fixed`: the session at the fixed worker is the live session on `chopReqs reqs ys`.
 * `liveFinished_chopReqs`: that session finishes at `ys` exactly when it finishes at any `ys'` of the same length.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallAdaptive
 
