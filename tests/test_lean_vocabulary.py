@@ -166,8 +166,6 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                               "the memory challenger's port"),
     f"{MC_PY}streamed_wipe.py::Verdict": (f"{MC}StreamedWipe.lean::MemoryChallenger.StreamedWipe.Verdict",
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
-    f"{MC_PY}run.py::Session": ("verity/core/protocols/pous/check/PousCheck/Run.lean::PousCheck.Run.Session", "pous-run",
-                                "the PoUS run's protocol port reads the sessions the Python records"),
 }
 
 
