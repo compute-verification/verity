@@ -25,7 +25,7 @@ from record_text import session_text  # noqa: E402
 
 
 def layout(b, zk=False):
-    """Byte offsets of every field element, hash and nonce of a proof (PROTOCOL.md §8.2), by field; `zk`: a `--zk` proof's
+    """Byte offsets of every field element, hash and nonce of a proof (`Flock.Proof`), by field; `zk`: a `--zk` proof's
     (live PROTOCOL.md), whose Ligerito proof ends with level 0's hiding messages and is followed by the inner proof."""
     r, off, sb = tc.R(b, tc.digest_width(b)), {}, tc.salt_bytes(b)
 
