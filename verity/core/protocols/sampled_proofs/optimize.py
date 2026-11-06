@@ -47,7 +47,7 @@ stage samples k_t of the n_t proof blocks of each stratum t in it with fresh coi
 incorrect proof blocks of 2^{b(T)}, each T charged its own blocks' committed bits.  `two_stage_exfil` bounds that count's
 log2 (a wholly incorrect replay block is charged all its bits, so the bound is near Λ/q of them), `two_stage_price`
 prices a sampled replay block's proving, and `two_stage_design` the design with the least bound at a budget, width-stratified
-(a stratum per public size class) or uniform (one stratum).
+(the public size classes up to a threshold in one stratum, each wider one in its own) or uniform (one stratum).
 """
 from __future__ import annotations
 
@@ -1188,41 +1188,48 @@ def _size_class(bits: float) -> int:
 def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *, budget: float, replay: float,
                      boundary: float = 0.0, h: float = 0.0, stratify: bool = True) -> dict | None:
     """The two-stage design with the least `two_stage_exfil` bound at a cost of at most `budget`: width-stratified
-    (`stratify`, one stratum per public size class, `unit_class`) or uniform (one stratum).  At each κ of `KAPPAS` it
-    samples k_t = κ n_t (b_t + ℓ_t)/B of stratum t's n_t proof blocks, at least 1 and at most n_t, at b_t the stratum's
-    widest bits, ℓ_t = log2(e R n_t) and B a replay block's bits: at κ = 1 one incorrect proof block of a stratum's
-    widest, with its location, leaks as much a unit of escape as a wholly incorrect replay block does.  The first
-    stage's q, at most 1, spends what `boundary` (serving's boundary hashing) leaves of the budget on sampled replay
-    blocks, each costing `replay`, its interior's `commit_bytes` at `h` a byte, and `two_stage_price`'s proving.  Its
-    row: `kappa`, `k`, `q`, `bound` (bits), `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`,
-    `boundary`, `interior`, `commit` (their sum), `total` and `fill` (proving over its marginal); None when the
-    boundary alone is over the budget."""
-    cells = [replace(c, stratum=_size_class(c.bits) if stratify else 0) for c in cells]
+    (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`unit_class`) up
+    to a threshold into stratum 0 and gives each wider class a stratum of its own, the threshold chosen with κ: at the
+    narrowest class every class is its own stratum, and at the widest the design is the uniform one, so it is never
+    worse.  At each κ of `KAPPAS` it samples k_t = κ n_t (b_t + ℓ_t)/B of stratum t's n_t proof blocks, at least 1 and at
+    most n_t, at b_t the stratum's widest bits, ℓ_t = log2(e R n_t) and B a replay block's bits: at κ = 1 one incorrect
+    proof block of a stratum's widest, with its location, leaks as much a unit of escape as a wholly incorrect replay
+    block does.  The first stage's q, at most 1, spends what `boundary` (serving's boundary hashing) leaves of the budget
+    on sampled replay blocks, each costing `replay`, its interior's `commit_bytes` at `h` a byte, and
+    `two_stage_price`'s proving.  Its row: `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `bound`
+    (bits), `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`, `boundary`, `interior`, `commit` (their
+    sum), `total` and `fill` (proving over its marginal); None when the boundary alone is over the budget."""
+    cells = list(cells)
     if not cells or not budget >= boundary:
         return None
-    strata: dict[int, float] = {}
-    widest: dict[int, float] = {}
-    for c in cells:
-        strata[c.stratum] = strata.get(c.stratum, 0.0) + c.n
-        widest[c.stratum] = max(widest.get(c.stratum, 0.0), c.bits)
+    classes = [_size_class(c.bits) for c in cells]
+    thresholds = sorted(set(classes)) if stratify else [max(classes)]
     bits = fsum(c.n * c.bits for c in cells)
     interior = fsum(c.n * c.commit_bytes for c in cells) * h
     rows, seen = [], set()
-    for kappa in KAPPAS:
-        k = {t: min(ceil(n), max(1, ceil(kappa * n * (widest[t] + 1 / _LN2F + log2(replay_blocks * n)) / bits)))
-             if bits > 0 else 1 for t, n in strata.items()}
-        if (key := tuple(sorted(k.items()))) in seen:
-            continue
-        seen.add(key)
-        blocks, marginal, prove = two_stage_price(cells, k)
-        per = replay + interior + prove
-        q = min(1.0, (budget - boundary) / (replay_blocks * per)) if per > 0 else 1.0
-        sampled = q * replay_blocks
-        rows.append({"design": "stratified" if stratify else "uniform", "kappa": kappa, "k": k, "q": q,
-                     "bound": two_stage_exfil(cells, k, replay_blocks, q, delta), "replay_sample": sampled,
-                     "draws": sampled * blocks, "prove": sampled * prove, "replay": sampled * replay,
-                     "boundary": boundary, "interior": sampled * interior, "commit": boundary + sampled * interior,
-                     "total": boundary + sampled * per, "fill": prove / marginal if marginal > 0 else 1.0})
+    for merged in thresholds:
+        split = [replace(c, stratum=0 if w <= merged else w) for c, w in zip(cells, classes)]
+        strata: dict[int, float] = {}
+        widest: dict[int, float] = {}
+        for c in split:
+            strata[c.stratum] = strata.get(c.stratum, 0.0) + c.n
+            widest[c.stratum] = max(widest.get(c.stratum, 0.0), c.bits)
+        for kappa in KAPPAS:
+            k = {t: min(ceil(n), max(1, ceil(kappa * n * (widest[t] + 1 / _LN2F + log2(replay_blocks * n)) / bits)))
+                 if bits > 0 else 1 for t, n in strata.items()}
+            if (key := (merged, *sorted(k.items()))) in seen:
+                continue
+            seen.add(key)
+            blocks, marginal, prove = two_stage_price(split, k)
+            per = replay + interior + prove
+            q = min(1.0, (budget - boundary) / (replay_blocks * per)) if per > 0 else 1.0
+            sampled = q * replay_blocks
+            rows.append({"design": "stratified" if stratify else "uniform", "merged": merged, "kappa": kappa,
+                         "k": k, "q": q, "bound": two_stage_exfil(split, k, replay_blocks, q, delta),
+                         "replay_sample": sampled, "draws": sampled * blocks, "prove": sampled * prove,
+                         "replay": sampled * replay, "boundary": boundary, "interior": sampled * interior,
+                         "commit": boundary + sampled * interior, "total": boundary + sampled * per,
+                         "fill": prove / marginal if marginal > 0 else 1.0})
     return min(rows, key=lambda r: (r["bound"], r["total"]))
 
 

@@ -612,8 +612,9 @@ def test_a_sampled_replay_block_proves_each_stratums_k_in_its_types_statements()
 def test_the_width_stratified_design_beats_the_uniform_one_when_proving_costs():
     """Many narrow proof blocks and a few wide ones: sampled uniformly, a wide incorrect block is met as rarely as a
     narrow one, so the uniform design proves thousands of blocks a request to price it as a wholly incorrect request,
-    and the width-stratified one samples the wide size class apart.  Free proving, the two meet; either spends at most
-    the budget, and none fits when the boundaries alone are over it."""
+    and the width-stratified one samples the wide size class apart.  Free proving, the two meet.  The width-stratified
+    family merges the classes up to a threshold, the widest one's being the uniform design, so it is never worse; either
+    spends at most the budget, and none fits when the boundaries alone are over it."""
     delta, replay_blocks, budget = 2.0 ** -20, 10 ** 8, 1e7
     for prove, apart in ((1e-3, True), (0.0, False)):
         cells = [Cell(10 ** 5, 16.0, prove=prove, commit_bytes=2.0), Cell(4, 131072.0, prove=prove, commit_bytes=2.0 ** 14)]
@@ -621,14 +622,16 @@ def test_the_width_stratified_design_beats_the_uniform_one_when_proving_costs():
                                     stratify=s) for s in (True, False)}
         for s, row in rows.items():
             assert row["design"] == ("stratified" if s else "uniform") and 0 < row["q"] <= 1
-            assert set(row["k"]) == ({16, 131072} if s else {0})
+            assert row["merged"] in ({16, 131072} if s else {131072})
+            assert set(row["k"]) == ({0} if row["merged"] == 131072 else {0, 131072})
             assert row["total"] == pytest.approx(row["boundary"] + row["replay"] + row["interior"] + row["prove"])
             assert row["total"] <= budget * (1 + 1e-12) and row["commit"] == row["boundary"] + row["interior"]
             assert row["replay_sample"] == pytest.approx(row["q"] * replay_blocks)
-            strata = [replace(c, stratum=(16 if c.bits == 16 else 131072) if s else 0) for c in cells]
+            strata = [replace(c, stratum=0 if c.bits <= row["merged"] else 131072) for c in cells]
             assert row["bound"] == two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta)
+        assert rows[True]["bound"] <= rows[False]["bound"]
         if apart:
-            assert rows[True]["bound"] < 0.5 * rows[False]["bound"]
+            assert rows[True]["merged"] == 16 and rows[True]["bound"] < 0.5 * rows[False]["bound"]
         else:
             assert rows[True]["bound"] == pytest.approx(rows[False]["bound"], rel=1e-2)
     assert two_stage_design(cells, replay_blocks, delta, budget=1.0, replay=1.0, boundary=2.0) is None
