@@ -69,8 +69,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
   `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, `Security/Models.lean` and `Security/`'s Lake
   files) or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that passed at or above
-  it, or passed each package whose Lean inputs key its merge changes on that key wherever it ran, whatever its title says
-  ("two demos" included); `Security/` proofs alone land on the verdict. A PR whose merge onto `checked` changes nothing drive.toml's
+  it, whatever its title says ("two demos" included); `Security/` proofs alone land on the verdict. A PR whose merge onto `checked` changes nothing drive.toml's
   `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
   with no verdict (the low-risk lane: up to `lowrisk_per_tick` a tick, the Lean checks of `next` moved to its rebuild).
 - One run checks `checked`'s tip after each landing; when it passes every step on the merge gate (not circuit-check), drive fast-forwards `main` there. A red

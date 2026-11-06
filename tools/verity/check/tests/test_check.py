@@ -1244,7 +1244,7 @@ def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
 def test_a_check_s_passes_are_the_packages_its_audit_passed_on_the_commit_s_own_lock_by_their_inputs_keys(tmp_path, monkeypatch):
     """result.json's `passes` ({inputs key: package}): each package the lean-audit step passed with the kernel replay on the
     commit's own lock, under the key `lean_changed.py --inputs-key` prints for it at that commit, which a records run of the
-    commit keeps too, so `research queue`'s records gate and drive find a check's pass as they find a records run's.  None of a
+    commit keeps too, so `research queue`'s records gate finds a check's pass as it finds a records run's.  None of a
     package that failed, passed only on a record it regenerated or without the replay; none at all from a refused or stopped
     step or an audit that crashed."""
     import subprocess

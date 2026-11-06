@@ -58,12 +58,7 @@ commit a rekey moved it to across trees that differ in no file a Lean check read
 `next` is rebuilt on that lock commit at once, each member above with its merge's tree and those records
 no merge above changed (`_carry`), so `main` stays a commit of `next` and the Lean checks above move with their commits: one
 covers its new commit when it regenerated the records they differ in, the tree that lands being the one it checked with its
-own.  With no such check, a Lean change lands by key (`_keyed`) when each package whose Lean inputs key its merge changes
-passed a Lean check of any commit whose result lists that key among its `passes` (check.py's `lean_passes`: the kernel replay
-on the lock as committed, so no lock lands with it).  The key covers the package's files, those of each package it reads,
-their toolchains and the checker (`lean_changed.closure_inputs`), so a reorder of `next` or a landing below the Lean change
-that changes none of them, a non-Lean PR the sync puts below it among them, keeps a passed check, and one that changes any
-voids it.  While one runs, a Lean change above it, reviewed or not, gets a check stacked at `next`'s top, below what came this tick
+own.  While one runs, a Lean change above it, reviewed or not, gets a check stacked at `next`'s top, below what came this tick
 (`lean_stack`, at most `max_lean_checks` running), so it doesn't wait for the lower one to pass and then for a whole check of
 its own; the lower one runs on.  Each Lean check launched or stacked stops at a cut point, just below the Lean
 change after the first ceil(n / f) of the n it would hold, f the Lean checks still free (`lean_cut`), lowest first: a failure
@@ -172,9 +167,8 @@ from typing import Callable, Iterable
 from . import policy
 from .executor import (AFTER_LANDING_PRIORITY, FAIL, PASS, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, compare,
                        old_verdicts)
-from .queue import (CHECK_KINDS, IDENTITY, PASSES_LOOKBACK_S, PR, Entry, Member, Queue, QueueError, StoreLabels,
-                    _git, _out, built_on, changed, forces_cold, hold, index_lean_results, lean_change, lean_hold, lean_keys,
-                    lean_passed, move_of, unreviewed)
+from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
+                    _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, move_of, unreviewed)
 from .queue_stats import ts
 from .store import vocab
 
@@ -1133,8 +1127,6 @@ class Driver:
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
         self.repo, self.dry_run, self._seen, self._prs, self._ev = q.workdir, False, {}, None, {}
         self._drive: dict | None = None
-        #: every package's Lean inputs key at a commit (`_keys`), which only the commit decides
-        self._keys_of: dict[str, dict[str, str]] = {}
 
     @property
     def tasks(self) -> Executor:
@@ -3327,8 +3319,6 @@ class Driver:
     #    (`_carry`: {"from": the commit it ran on, "files" that commit's tree and
     #    this one's differ in, "ok" once `_carried_ok` judged it}) when it moved there, "state": None while it runs, else
     #    "passed" (with "run", the id that passed) or "failed" (with "why")}}, each dropped once its commit leaves `next`.
-    #    `drive["keys"]`: {the commit of a Lean change on `next`: {each package whose Lean inputs key its merge changes: that
-    #    key}} (`_keyed`), dropped with its commit too.
     #    `drive["lean_failed"]`: each failed one by its members, kept past that until it is resolved (`_live_failures`).
     #    `drive["postland"]` also keeps "verified_as" ({"steps", "no_cache"} of the run that verified `verified`, or ci's
     #    `research queue baseline`), "verified_run" (the ids of the run that verified it; none for ci's baseline), "gated" and
@@ -4024,8 +4014,7 @@ class Driver:
     def _lean_gate(self, drive: dict, chain: list[Member], k: int, dry_run: bool, reviewed: int | None = None) -> tuple[int, str]:
         """(the highest index of ``chain[:k]`` that may land, the Lean check whose regenerated locks land with it or another that
         holds its Lean changes, or ""): every Lean change below it (`queue.lean_change`) has a passed lean-audit of a commit of
-        `next` at or above it (`_cover`) whose Lean is the Lean of what may land, or, with none, passed Lean checks of any commits
-        list the Lean inputs key of each package its merge changes the key of (`_keyed`); one whose check regenerated locks lands exactly
+        `next` at or above it (`_cover`) whose Lean is the Lean of what may land; one whose check regenerated locks lands exactly
         at that commit, its locks on top (`_land`), a check a rekey moved there included unless `_rekey_refusal` says its
         records don't hold there (then it is checked again).  For the lowest Lean change without one, a Lean check is launched, or waited
         for (`_lean_check`).  Nothing at or above a commit whose Lean check failed lands, but for one below a passed check of
@@ -4036,9 +4025,6 @@ class Driver:
         pos = {m.commit: i for i, m in enumerate(chain)}
         for c in [c for c, rec in lean.items() if c not in pos and rec.get("state") is not None]:
             del lean[c]                                         # of a `next` the sync rebuilt (a running one holds it)
-        keys = drive.setdefault("keys", {})
-        for c in [c for c in keys if c not in pos]:
-            del keys[c]
         over = max((pos[c] for c, rec in lean.items() if rec.get("state") == "passed" and pos.get(c, k) < k), default=-1)
         bad = min((pos[c] for c, rec in lean.items() if rec.get("state") == "failed" and over < pos.get(c, -1)), default=k)
         t, rid = min(k, bad) - 1, ""
@@ -4051,9 +4037,6 @@ class Driver:
             if not self._lean_change(chain[i]):
                 continue
             if (got := self._cover(drive, chain, i, top)) is None:
-                if i < bad and (why := self._keyed(drive, chain[i])):
-                    self.q.log(f"research queue drive: #{chain[i].pr}'s Lean change is covered by key: {why}")
-                    continue
                 self._lean_check(drive, chain, top, i, dry_run, cut)
                 return min(i - 1, t), rid
             commit, run = got
@@ -4120,43 +4103,6 @@ class Driver:
             self.q.log(f"research queue drive: the store's Lean checks of #{chain[i].pr} can't be read ({type(e).__name__}: {e}); "
                        "taken as none")
         return None
-
-    def _keyed(self, drive: dict, m: Member) -> str | None:
-        """Why Lean checks cover the Lean change ``m`` by key, or None: each package whose Lean inputs key ``m``'s merge changes
-        (`_keys` at its commit against its first parent, kept in `drive["keys"]`) passed a Lean check, of any commit, whose
-        result lists that key among its `passes` (`lean_passed` of `CHECK_KINDS`: lean-audit's kernel replay on the lock as
-        committed, so the check regenerated none of those locks and `_land` commits none).  The key covers every file of the
-        package and of each package it reads, its lock, toolchains and the checker among them, so a reorder of `next` or a
-        landing below ``m`` that changes none of them keeps the cover, and one that changes any voids it.  A merge that changes
-        no key, or keys or passes that can't be read, cover nothing."""
-        keys = drive.setdefault("keys", {})
-        if m.commit not in keys:
-            try:
-                at = self._keys(m.commit)
-                below = self._keys(_out(self.repo, "rev-parse", f"{m.commit}^1")) if at else {}
-            except (QueueError, OSError) as e:
-                self.q.log(f"research queue drive: #{m.pr}'s Lean inputs keys can't be read, so no key covers it: {e}")
-                return None
-            keys[m.commit] = {p: k for p, k in at.items() if below.get(p) != k}
-        got = []
-        try:
-            for pkg, key in sorted(keys[m.commit].items()):
-                if (hit := lean_passed(self.q.store, self.repo, m.commit, pkg, CHECK_KINDS, key)) is None:
-                    return None
-                got.append(f"{pkg} passed the Lean check {hit[0]} of {hit[2][:12]} on the key it has at {m.commit[:12]} "
-                           f"({key[:12]})")
-        except Exception as e:  # noqa: BLE001  (not covered: a Lean check of its commit settles it)
-            self.q.log(f"research queue drive: the store's passes of #{m.pr}'s packages can't be read ({type(e).__name__}: {e}); "
-                       "taken as none")
-            return None
-        return "; ".join(got) or None
-
-    def _keys(self, commit: str) -> dict[str, str]:
-        """{package: its Lean inputs key at ``commit``} for every package (`queue.lean_keys`), read once; QueueError when they
-        can't be."""
-        if commit not in self._keys_of:
-            self._keys_of[commit] = lean_keys(self.repo, commit)
-        return self._keys_of[commit]
 
     def _regenerated(self, drive: dict, run: str) -> bool | None:
         """Whether Lean check ``run`` regenerated lock records (`_locks`), None when that can't be read (told to `CI`)."""
@@ -4617,21 +4563,13 @@ class Driver:
         return self._review(state, drive, dry_run)
 
     def _refresh_attempts(self) -> None:
-        """Bring the store's catalog of attempts up to date from its remote, which the runs' states and records are read from,
-        and index the results of the checks among those of the last `PASSES_LOOKBACK_S` (`index_lean_results`), whose `passes`
-        cover a Lean change by key (`_keyed`)."""
+        """Bring the store's catalog of attempts up to date from its remote, which the runs' states and records are read from."""
         q = self.q
         if q.store is not None and q.store.remote is not None:
             try:
                 q.store.refresh(attempts_only=True)
             except Exception as e:  # noqa: BLE001  (the local catalog still answers)
                 q.log(f"research queue drive: refreshing attempts failed ({type(e).__name__}: {e}); using the local catalog")
-            try:
-                errs = index_lean_results(q.store, time.strftime("r%Y%m%d-%H%M%S", time.gmtime(self.now() - PASSES_LOOKBACK_S)))
-            except Exception as e:  # noqa: BLE001  (what the index holds still answers)
-                errs = [f"{type(e).__name__}: {e}"]
-            if errs:
-                q.log(f"research queue drive: {len(errs)} check result(s) that may list passes couldn't be read, e.g. {errs[0]}")
 
     def _old_git(self) -> str | None:
         """Why the tick is refused, before any sync or push, when drive's git is older than `GIT_MIN`: `Queue._merge` needs its

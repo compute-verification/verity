@@ -23,7 +23,7 @@ from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP, SIGTERM_RC
 from research.queue import PR, QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
-from test_queue import LOCK, World, _git, _key, _keyed, _lock, _published
+from test_queue import World, _git
 from test_queue_drive import Harness, _failed_run, _killed_run, _live_run, _steps_run, _tip
 
 EVERY = {s: "passed" for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL}
@@ -1392,87 +1392,26 @@ def test_a_pr_re_marked_at_its_ejected_head_lands(world, monkeypatch):
     assert h.tick().startswith("landed #1"), world.logs
 
 
-def _check_passed(world: World, h: Review, rid: str, commit: str) -> None:
-    """Drive's Lean check ``rid`` of ``commit`` passed, and its result in the store lists `pkg`'s Lean inputs key at ``commit``
-    among its `passes`, as check.py's `lean_passes` writes it."""
-    h.run_state[rid] = ("done", 0, None)
-    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
-    _published(world, commit, steps=[{"step": LEAN_STEP, "status": "passed"}], kind="check-deferred/v1",
-               passes={_key(world.origin, commit): "pkg"}, rid=rid)
-
-
-def test_a_passed_lean_check_covers_its_lean_change_on_a_rebuilt_next_by_key_until_its_lean_inputs_change(world, monkeypatch):
-    """`main` moving under `next` rebuilds it, and the commit a passed Lean check ran on leaves it.  The check's result lists the
-    Lean inputs key of each package it passed, so it still covers the Lean change by key (`_keyed`): a move that changes a file
-    `pkg` reads (`lib/L.lean`, through its Lake manifest) voids it, and the Lean change waits for a check of the new `next`;
-    one that changes none (`b.txt`) keeps it, and #1 lands with no check of its own commit."""
-    world.with_store_remote()
-    _keyed(world, {LOCK: _lock()})
+def test_a_lean_check_covers_only_while_its_commit_is_on_next(world, monkeypatch):
+    """A passed Lean check of a commit `next` was rebuilt away from checked a tree that no longer lands: `main` moved under it, so
+    the check is dropped and the Lean change waits for one of the new `next`."""
     h = Review(world, monkeypatch)
-    world.gh.put(1, world.change({LOCK: _lock(A="2")}))
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
     h.review(1)
     assert not h.tick().startswith("landed")
     old = _tip(world)
     assert h.launched == [(old, "m1", False)]
-    (first,) = h.lean_ids()
-    _check_passed(world, h, first, old)
-    _move_main(world, {"lib/L.lean": "def l := 2\n"})
+    (rid,) = h.lean_ids()
+    _move_main(world, {"b.txt": "moved\n"})
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
     out = h.tick()
     assert not out.startswith("landed"), out
     new = _tip(world)
     assert new != old and h.launched == [(old, "m1", False), (new, "m1", False)], world.logs
     assert list(h.d.q.load_state()["drive"]["lean"]) == [new]
-    second = h.lean_ids()[-1]
-    _check_passed(world, h, second, new)
-    _move_main(world, {"b.txt": "moved\n"})
-    assert h.tick().startswith("landed #1"), world.logs
-    assert len(h.launched) == 2 and _tip(world) not in (old, new) and _main(world) == _tip(world)
-    assert [s for s in world.logs if "covered by key" in s][-1].endswith(
-        f"#1's Lean change is covered by key: pkg passed the Lean check {second} of {new[:12]} on the key it has at "
-        f"{_main(world)[:12]} ({_key(world.origin, new)[:12]})")
-
-
-def test_with_nonlean_first_a_non_lean_pr_goes_below_a_lean_change_without_voiding_its_check(world, monkeypatch):
-    """`nonlean_first` merges what a sync adds non-Lean first, and a `next` rebuilt on a moved `main` is added whole: #2, which
-    changes no Lean, goes below #1, whose Lean check passed.  #1's merge there changes `pkg`'s Lean inputs to the key the
-    check passed, so the check covers it (`_keyed`), and both land with no check again."""
-    world.with_store_remote()
-    _keyed(world, {LOCK: _lock()})
-    h = Review(world, monkeypatch, nonlean_first=True)
-    world.gh.put(1, world.change({LOCK: _lock(A="2")}))
-    h.review(1)
-    h.tick()
-    old = _tip(world)
-    assert h.launched == [(old, "m1", False)]
-    (rid,) = h.lean_ids()
-    world.gh.put(2, world.change({"c.txt": "2\n"}))
-    h.review(2)
-    _check_passed(world, h, rid, old)
-    _move_main(world, {"b.txt": "moved\n"})
-    assert h.tick().startswith("landed #1"), world.logs
-    assert _subject(world, "main").startswith("Queue: #1") and _subject(world, "main^1").startswith("Queue: #2")
-    assert len(h.launched) == 1, h.launched
-    assert any(f"#1's Lean change is covered by key: pkg passed the Lean check {rid} of {old[:12]}" in s for s in world.logs)
-
-
-def test_only_a_lean_checks_pass_covers_by_key(world, monkeypatch):
-    """A records run (`lean_changed.py --records`, `lean-fast/v1`) audits without the kernel replay or the tests, which no merge
-    check accepts: its pass on the Lean change's key covers nothing in drive, and a Lean check's on that key does."""
-    world.with_store_remote()
-    _keyed(world, {LOCK: _lock()})
-    h = Review(world, monkeypatch)
-    world.gh.put(1, world.change({LOCK: _lock(A="2")}))
-    h.q.sync()
-    (m,) = h.q.chain()
-    drive: dict = {}
-    key = _key(world.origin, m.commit)
-    _published(world, m.commit, passes={key: "pkg"})
-    h.d._refresh_attempts()
-    assert h.d._keyed(drive, m) is None and drive["keys"] == {m.commit: {"pkg": key}}
-    rid = _published(world, m.commit, steps=[{"step": LEAN_STEP, "status": "passed"}], passes={key: "pkg"})
-    h.d._refresh_attempts()
-    assert h.d._keyed(drive, m) == (f"pkg passed the Lean check {rid} of {m.commit[:12]} on the key it has at {m.commit[:12]} "
-                                    f"({key[:12]})")
+    h.run_state[h.lean_ids()[-1]] = ("done", 0, None)
+    assert h.tick().startswith("landed #1")
 
 
 def test_a_failed_lean_check_above_a_lean_change_checks_its_own_commit_before_blaming_it(world, monkeypatch):

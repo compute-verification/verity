@@ -216,9 +216,7 @@ every marked PR left out for it in one post, with the fix (`Driver.tell_out`); b
 that comes new goes above it.  What a sync adds on top goes non-Lean first
 (drive.toml's `nonlean_first`, on by default: `Queue._nonlean_order`): each PR whose own change is no Lean change (`lean_change`
 on its diff against `main`, or against the PR it's stacked on) and contains none of those merged with it goes below every Lean
-change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check; a
-Lean change's passed Lean check still covers it there while what goes below changes none of its packages' Lean inputs (drive's
-cover by key, `Driver._keyed`).
+change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
 Members on `next` never move for it, merged again or not: those above a moved or dropped member are merged again in their order,
 and only a `--first` PR placed again, or a `next` rebuilt on a `main` that moved off it, sorts what is above it.  Nor do they
 move but for drive's lift (`Queue.lift`, `Driver._lift`): each sync, the members with a land verdict go below those waiting
@@ -4729,7 +4727,7 @@ FAST_KIND, CHECK_KINDS = "lean-fast/v1", ("check/v1", "check-shard/v1", "check-d
 PASS_KINDS = (FAST_KIND, *CHECK_KINDS)
 #: an attempt whose result may list passes (`index_lean_results`): a check (`check.py`) or a records run
 PASS_RUN_RE = re.compile(r"(?:^|[/\s])check\.py\b|lean_changed\.py\b.*\s--records\b")
-#: the attempts the records gate and drive read from the store's remote for passes: those started in the lookback before now
+#: the attempts the records gate reads from the store's remote for passes: those started in the lookback before now
 PASSES_LOOKBACK_S = 3 * 86400
 #: what keys a package's Lean inputs at a commit (`lean_keys`): that commit's own `KEY_COMMAND --inputs-key`, run from the Python
 #: files of `KEY_CODE` there, the directories it loads its helpers from
@@ -4783,22 +4781,17 @@ def lean_keys(repo: Path, commit: str, pkgs: Iterable[str] | None = None) -> dic
     return keys
 
 
-def lean_passed(store, repo: Path, commit: str, pkg: str, kinds: Iterable[str] = PASS_KINDS,
-                key: str | None = None) -> tuple[str, str, str] | None:
-    """Whether package ``pkg`` passed Lean at ``commit``: (the run, its result's kind, the commit it ran on) of the newest attempt,
-    of any commit, that ended by itself on a clean checkout and whose result, of one of ``kinds``, lists ``pkg``'s Lean inputs key
-    at ``commit`` (``key``, else `lean_keys`) among its `passes`; None when none does or ``commit`` has no key.  One indexed query
-    of the store's index, which holds what this machine has read of the store (`index_lean_results` reads the newest results
-    from its remote)."""
-    if key is None and (key := lean_keys(repo, commit, [pkg]).get(pkg)) is None:
-        return None
-    kinds = tuple(kinds)
+def lean_passed(store, pkg: str, key: str) -> tuple[str, str, str] | None:
+    """Whether package ``pkg`` passed Lean on the inputs whose key (`lean_keys`) is ``key``: (the run, its result's kind, the
+    commit it ran on) of the newest attempt, of any commit, that ended by itself on a clean checkout and whose result, of one of
+    `PASS_KINDS`, lists ``key`` for ``pkg`` among its `passes`; None when none does.  One indexed query of the store's index,
+    which holds what this machine has read of the store (`index_lean_results` reads the newest results from its remote)."""
     rows = store.index.sql(
         "SELECT t.id, a.kind, t.source_commit FROM artifact_meta m JOIN artifacts a ON a.id = m.id "
         "JOIN attempt_outputs o ON o.artifact = m.id AND o.name = 'result' JOIN attempts t ON t.id = o.attempt "
-        f"WHERE m.key = ? AND m.value = ? AND a.kind IN ({', '.join('?' * len(kinds))}) AND t.state IN ('done', 'failed') "
+        f"WHERE m.key = ? AND m.value = ? AND a.kind IN ({', '.join('?' * len(PASS_KINDS))}) AND t.state IN ('done', 'failed') "
         "AND t.rc BETWEEN 0 AND 127 AND t.source_dirty = 0 ORDER BY t.start_utc DESC, t.id DESC LIMIT 1",
-        (f"passes.{key}", pkg, *kinds))
+        (f"passes.{key}", pkg, *PASS_KINDS))
     return (str(rows[0][0]), str(rows[0][1]), str(rows[0][2])) if rows else None
 
 
@@ -4944,7 +4937,7 @@ class RecordsGate:
     def _vouch(self, commit: str, pkg: str, depth: int) -> str | None:
         """Why ``pkg``'s lock at ``commit`` passed Lean, or None: a pass on its Lean inputs there (`lean_passed`), or one below a
         commit that only merged the landing branch or only changed other packages' locks."""
-        if (key := self._key(commit, pkg)) and (got := lean_passed(self.store, self.repo, commit, pkg, key=key)):
+        if (key := self._key(commit, pkg)) and (got := lean_passed(self.store, pkg, key)):
             rid, kind, at = got
             what = f"records run {rid}" if kind == FAST_KIND else f"the Lean check {rid}"
             return f"{what} of {at[:12]} passed it on {commit[:12]}'s Lean inputs (key {key[:12]})"

@@ -757,8 +757,8 @@ def lean_fast(out: Path) -> str | None:
 def lean_passes(out: Path, done: list[dict], lc=None) -> dict[str, str]:
     """{inputs key: package} for each package the lean-audit step audited and passed on this tree's own lock (no failure, the
     kernel replay, not passed on a record it regenerated), each key `lean_changed.inputs_key` (``lc``, the module) of this tree:
-    the key a records run of the commit keeps and `lean_changed.py --inputs-key` prints, so `research queue`'s records gate and
-    drive find a check's passes as they find a records run's.  None from a step that didn't end with the audit's verdict
+    the key a records run of the commit keeps and `lean_changed.py --inputs-key` prints, so `research queue`'s records gate
+    finds a check's passes as it finds a records run's.  None from a step that didn't end with the audit's verdict
     (refused, hung, stopped) or from an audit that failed without reporting a package (check.py crashed)."""
     step = next((s for s in done if s.get("step") == "lean-audit"), None)
     if step is None or step.get("status") not in ("passed", "failed") or step.get("rc") not in (0, 1) or step.get("detail"):

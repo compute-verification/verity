@@ -3494,8 +3494,8 @@ def _lock(**entries: str) -> str:
 
 
 ROOT = Path(__file__).resolve().parents[3]
-#: what `lean_changed.py --inputs-key` runs, which `_keyed` commits into the origin so the records gate and drive key a commit's
-#: Lean inputs with that commit's own code (`lean_keys`)
+#: what `lean_changed.py --inputs-key` runs, which `_keyed` commits into the origin so the records gate keys a commit's Lean
+#: inputs with that commit's own code (`lean_keys`)
 KEY_FILES = ("tools/verity/lean/lean_changed.py", "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py",
              "tools/verity/lean/headers.py", "tools/verity/lean/check.py", "tools/verity/lean/siblings.py",
              "tools/verity/lean/axiom_probe.py", "tools/verity/check/common.py", "tools/verity/check/slot.py",

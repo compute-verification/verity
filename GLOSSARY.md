@@ -359,8 +359,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Low-risk lane**: drive landing a PR on `checked` on its ready mark alone, when its merge changes nothing drive.toml's
     `lowrisk_excludes` names (no Lean, lock or soundness-path change).
   - **Lean check**: a run of every Lake package's audit (`lean-audit`) on a commit of `next`. A PR that changes a lock, or
-    Lean that runs as code, lands only on a passed Lean check at or above it, or on Lean checks of any commits that passed
-    each package its merge changes on that package's Lean inputs key, a hash of every file its audit reads.
+    Lean that runs as code, lands only on a passed Lean check at or above it.
   - **After-landing run**: the full check of `checked`'s tip after each landing; `main` moves only to tips that passed every step on the merge gate.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
