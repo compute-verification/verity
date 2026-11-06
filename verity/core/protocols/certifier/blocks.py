@@ -1,12 +1,12 @@
 """A host's class circuit as network certification reads it: the rows that cross the host's uplink, and the pins of its loads.
 
 A circuit record is one host's: its class's window circuit, every slot's class Program whatever its traffic. Which host
-runs which units, and which request occupies which slot and step, are private: the network certifier on the host's uplink
-commits every row that crosses it, and the scan (`ingress_scan`, `egress`) places those rows into slots inside the
-zero-knowledge proof, its state committed as the registered value `ingress_scan.SCAN_STATE`. What is public is the class
-circuit itself, protocol structure, and its padded counts: proof blocks per host and bits per link, each execution
-block's. So a record names no server and no transfer, and nothing here pins a request, a response or a value one host
-sends another.
+runs which units, and which request occupies which slot and step, are private: the network certifier on the host's
+uplink commits every row that crosses it, and the scan (`verity.ml.protocols.certifier`'s `ingress_scan` and `egress`)
+places those rows into slots inside the zero-knowledge proof, its state committed as the registered value `SCAN_STATE`.
+What is public is the class circuit itself, protocol structure, and its padded counts: proof blocks per host and bits
+per link, each execution block's. So a record names no server and no transfer, and nothing here pins a request, a
+response or a value one host sends another.
 
 Two values cross the uplink into a host's units: its loads, the registration's values, each committed by the network
 certifier as it crosses once a session (`transfer_rows`, `benchmarks/network_traces/load_relay.py`), and the scan's state,
@@ -18,7 +18,7 @@ which the verifier pins at the root of the scan's rows the window reads (`ingres
   one host's;
 - no ``ingress`` declaration: a host's ingress is the scan's state, a registered read, never an Ingress;
 - every registered read and every table is of a load or of the scan's state: every registered parameter other than
-  `ingress_scan.SCAN_STATE` is a load;
+  `SCAN_STATE` is a load;
 - each load read by some unit, each read a whole row of it (base and steps multiples of the reader row's w words, one w
   a value, its leaves whole rows), a table over it the whole value, and none of its reads, nor a table read's or an
   opening's port, an external port;
@@ -43,8 +43,9 @@ from typing import Any
 
 from verity.core.protocols.certifier import transfer_rows as TR
 from verity.core.protocols.certifier.certificate import Direction, PublicKey
-from verity.core.protocols.certifier.ingress_scan import SCAN_STATE
 
+#: the registered value whose rows are the scan's state rows, as a window circuit reads them (`ingress_scan.window_state`)
+SCAN_STATE = "verity/certifier/scan-state/v1"
 #: the record's ``blocks`` keys that would make placement public; a record states none of them
 PRIVATE = ("server", "server_time", "transfers")
 #: the registration's ``window`` of a load: a load crosses once a session, in the session's first execution phase

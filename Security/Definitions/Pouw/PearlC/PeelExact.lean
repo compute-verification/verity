@@ -6,7 +6,7 @@ public import Definitions.Pouw.PearlC.Defs
 # U's pinned order, bit-exact (trusted definitions)
 
 Pearl-C's clean-up as `76134352:protocols/pouw/verity_pouw/schemes/pearl_c_u.py` pins it (git's `REV:PATH`,
-SHA-256 `aef10195…2485514a`; the file has moved to `verity/core/protocols/pouw/schemes/pearl_c_u.py` and changed
+SHA-256 `aef10195…2485514a`; the file has moved to `verity/ml/protocols/pouw/schemes/pearl_c_u.py` and changed
 since), transcribed op for op. FP32 words are natural numbers below `2^32`, BF16 words below `2^16`.
 A function returns `none` where the pin raises `NonFinite`, that is, where a step leaves the finite range.
 

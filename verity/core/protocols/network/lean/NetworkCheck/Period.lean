@@ -995,7 +995,7 @@ def wired (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json)
 /-- The scan's state in a registration: the entry of its `roots` whose port is `scan/state`. -/
 def stateName : String := "scan/state"
 
-/-- The value a window circuit registers the scan's state rows as (`ingress_scan`'s `SCAN_STATE`), row a the state
+/-- The value a window circuit registers the scan's state rows as (the certifier's `blocks.SCAN_STATE`), row a the state
 before bucket a: the entry of an audit's `registered`, or of the scan's, whose value it is. -/
 def stateValue : String := "verity/certifier/scan-state/v1"
 
