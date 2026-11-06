@@ -172,6 +172,17 @@ def _by_family(rows: dict[str, dict]) -> list[tuple[str, list[dict]]]:
     return sorted(out.items(), key=lambda kv: (-sum(r["prefill"] + r["decode"] for r in kv[1]), kv[0]))
 
 
+def gap_families(gaps: dict[str, dict]) -> dict[str, dict]:
+    """The gaps by row family: its Definitions, its rows per phase in one request, their ANDs and why its most rows'
+    Definition fits no cut."""
+    out = {}
+    for fam, gs in _by_family(gaps):
+        top = max(gs, key=lambda g: g["prefill"] + g["decode"])
+        out[fam] = {"definitions": len(gs), "prefill": sum(g["prefill"] for g in gs), "decode": sum(g["decode"] for g in gs),
+                    "ands": sum((g["prefill"] + g["decode"]) * (g["ands"] or 0) for g in gs), "why": top["why"]}
+    return out
+
+
 def _n(x: float) -> str:
     if isinstance(x, float) and not x.is_integer():
         return f"{x:,.1f}" if abs(x) < 1e6 else f"{x:.3e}"
@@ -201,11 +212,8 @@ def table(c: dict) -> str:
     out += ["", "Gaps: rows no cut fits, by family (each Definition in `census.json`).", "",
             "| row family | Definitions | prefill rows | decode rows | their ANDs | why (its most rows' Definition) |",
             "| --- | ---: | ---: | ---: | ---: | --- |"]
-    for fam, gs in _by_family(c["gaps"]):
-        top = max(gs, key=lambda g: g["prefill"] + g["decode"])
-        ands = sum((g["prefill"] + g["decode"]) * (g["ands"] or 0) for g in gs)
-        out.append(f"| `{fam}` | {len(gs)} | {sum(g['prefill'] for g in gs):,} | {sum(g['decode'] for g in gs):,} | {_n(ands)} | "
-                   f"{top['why']} |")
+    for fam, g in gap_families(c["gaps"]).items():
+        out.append(f"| `{fam}` | {g['definitions']} | {g['prefill']:,} | {g['decode']:,} | {_n(g['ands'])} | {g['why']} |")
     out += ["", "No proof block: rows of no gate or no input, by family.", "",
             "| row family | kind | Definitions | prefill rows | decode rows |", "| --- | --- | ---: | ---: | ---: |"]
     for fam, os_ in _by_family(c["not_blocks"]):
@@ -218,11 +226,12 @@ def table(c: dict) -> str:
 
 def card(c: dict) -> dict:
     """The planner's card (`benchmarks/sampling_plan/glm53.py` reads it): per proof-block Definition its counts in one
-    request, output bits, ANDs, MACs, opened rows' bytes and staged block log2, and the gaps."""
+    request, output bits, ANDs, MACs, opened rows' bytes and staged block log2, and the gaps by row family
+    (`gap_families`)."""
     keep = ("family", "prefill", "decode", "out_bits", "ands", "macs", "rows", "k_log")
     return {"prompt_len": c["prompt_len"], "decode_steps": c["tokens"]["decode"], "ranks": len(c["ranks"]),
             "definitions": {s: {k: d[k] for k in keep} | {"of": sorted(d["of"])} for s, d in c["definitions"].items()},
-            "gaps": {s: {k: g[k] for k in ("prefill", "decode", "ands", "why")} for s, g in c["gaps"].items()}}
+            "gaps": gap_families(c["gaps"])}
 
 
 def main() -> int:

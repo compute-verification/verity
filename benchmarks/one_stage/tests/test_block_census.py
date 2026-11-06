@@ -129,6 +129,8 @@ def test_the_census_counts_each_definition_per_phase_token_and_request_over_the_
     card = B.card(c)
     assert card["definitions"]["Lin_v1{N=1}"] == {"family": "Lin_v1", "prefill": 5, "decode": 8, "out_bits": 16, "ands": 10,
                                                   "macs": 0, "rows": [8, 4, 2], "k_log": 22, "of": ["Lin_v1"]}
+    assert card["gaps"] == {"Big_v1": {"definitions": 1, "prefill": 0, "decode": 3, "ands": 21,
+                                       "why": "a 2^30 block at 7 ANDs"}}
     md = B.table(c)
     assert "| proof blocks | 1.8 | 5 | 17 |" in md and "| `Big_v1` | 1 | 0 | 3 | 21 | a 2^30 block at 7 ANDs |" in md
 
