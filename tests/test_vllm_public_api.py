@@ -50,6 +50,9 @@ PUBLIC = {
                                                "values (VLLM-125)",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
                                               "the registered value, its class, its words and a slot's bridge",
+    "verity_vllm.program.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
+                                               "layout and the primitives a census prices, which the grader "
+                                               "(benchmarks/training_slowdown/grader) reads",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "

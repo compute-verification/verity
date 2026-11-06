@@ -377,7 +377,7 @@ def _root_.Flock.Guarantees.LoopInnerRound0 (T : CoinLayer.TableData)
     ∃ w' : ByteArray, w'.size = 16 ∧ L₀.scheduled x w ρ h vals =
       (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w' ++ header 4 1 1).data.toList
 
-/-- **C-Flock's zero knowledge at the session loop's own frames, at the tables `T`.** At the deployed relation, where
+/-- **Flock's zero knowledge at the session loop's own frames, at the tables `T`.** At the deployed relation, where
 `T`'s session meets the tables' side (`Tables`, `Complete` at the relation, `DummyReg`, `Causal`, `TapeOK`, and the
 switched round encoding at `vs` causal on the coins the loop computes at, `SwCausalOn` at `Loop.SwOk T`: no zerocheck
 outer coin `1` at a `Live` statement it serves, as its frames refuse one, or coins every table admits), at every
@@ -386,10 +386,11 @@ are the loop's own, `Loop.realOf src`) and worker `wk`, at every statement `x` t
 (`Loop.Serves`) with a witness `w` under the relation, where the loop's obligation (`LoopInnerRound0`) and the
 transport's round trusts hold: the deployed frame's state
 is the loop's but for `stopped` (`ProgChecks`), and against every `V*` of one more round than the verifier, the
-probability of any event of the real view at `ofLoop` is at most twice the simulator's, plus
+probability of any event of the real view at `ofLoop` is at most twice the sum of the simulator's probability,
 $$8\,n_L(x)\,\delta_1 + 8\,t\,n_L(x)\,\delta_1 + 2 \cdot 3^{-t}$$
-with `n_L(x)` the session's leaf count and `δ₁` the hm96 salted-leaf hiding gap at the pinned key, plus `4·t·3^t` times
-the fork probability. -/
+and `4·t·3^t` times the fork probability, with `n_L(x)` the session's leaf count and `δ₁` the hm96 salted-leaf hiding
+gap at the pinned key: the simulator's probability doubled, plus
+$$16\,n_L(x)\,\delta_1 + 16\,t\,n_L(x)\,\delta_1 + 4 \cdot 3^{-t} + 8\,t\,3^t\,\Pr[\mathrm{Fork}].$$ -/
 def _root_.Flock.Guarantees.SessionLoopZKAt (T : CoinLayer.TableData) : Prop :=
   ∀ (vs : (CoinLayer.session Loop.loopNr T).SwVals) (t : ℕ), 0 < t →
     (CoinLayer.session Loop.loopNr T).Tables →

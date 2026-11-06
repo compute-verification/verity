@@ -1,5 +1,5 @@
-"""`research run --on auto`'s placement: a CPU node's pool (`SPILL`) first, node 2's Verity share (the queue, `AUTO_NODE`) only
-for a job no pool fits.
+"""`research run --on auto`'s placement: a free slot of a CPU node's pool (`SPILL`) first, then node 2's Verity share (the queue,
+`AUTO_NODE`) when it can start the job now, then the shortest pool line, and node 2's line for a job no pool fits.
 
 Node 2's share is 48 cores that queued runs claim whole (research.cores) in one first-come line; on 19 Oct two runs held all 48
 from 17:40Z for hours (a 16-job quick tier and a 32-core Lean check) while 56 runs waited, the oldest since 17:42Z, a 4-CPU suite
@@ -10,6 +10,8 @@ then takes, in order:
 
   - a pool where a slot that fits the job (not trains-only, at least its CPUs and its memory: the slot's mem= reserves the
     run, with no cgroup cap) is free and unblocked for every waiter ahead and this job;
+  - else node 2's share when it can start the job now, with no one waiting there (INF-438, 3 Nov 03:49Z: a run queued 100 min
+    behind cpu-6's 8 held slots and 9 waiters while node 2's 48 CPUs sat free);
   - else the pool with the shortest wait, as waiters ahead per fitting slot;
   - node 2 only when no pool fits the job or none can be read, and node 2 itself can be. Node 2 is the only GPU node, and on
     24 Oct 02:10Z its GPUs sat at 0% under a load of 235 on 120 cores from CPU work while cpu-5 ran at 8 of 192 (top). A node 2
@@ -214,6 +216,8 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple
         if free > waiting:
             return (machine, pool), "; ".join(notes) + ": a slot is free there now"
         ranked.append(((waiting + 1) / fit, i, (machine, pool)))
+    if ranked and share is not None and share.get("fits") and not share["waiters"]:
+        return None, "; ".join(notes) + f": no pool slot is free, and it starts on {AUTO_NODE} now"
     if ranked:
         (_, _, target) = min(ranked)
         return target, "; ".join(notes) + f": the shortest line per run that fits is {target[0]}'s {target[1]} pool"

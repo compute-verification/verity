@@ -1,7 +1,8 @@
 """The registration log's Lean (`core-registration serve`: `Core.Registration.protocol`,
 `verity/registration/log/v1`, in the core interface's package) against its Python (`verity.core.protocols.registration`). Hypothesis generates a log for
-either composite, from the honest example site and its information (`EXAMPLE`, the Lean's `Core.Registration.Example`)
-with a few changes, or from small random entries, chained or with a broken `previous`; it checks it under the
+either composite, from the honest example site, its information and its declaration of day 0 (`EXAMPLE`, the Lean's
+`Core.Registration.Example`) with a few changes (among them a declaration added or changed, so a day is sometimes declared
+twice), or from small random entries, chained or with a broken `previous`; it checks it under the
 example's auditor or a changed one, and sometimes breaks the JSON of the log, the params or the evidence. The two must
 agree on every field of the outcome, and on the reason when the check refuses a log (`entry I: REFUSAL`, a composite
 the params don't name, or a log or params outside ASCII or holding DEL): the public view of an accepted log among them."""
@@ -49,7 +50,8 @@ WEIGHTS = {"checkpoint_sha512": "c" * 128, "domain": "b" * 128, "kind": "theta",
 ITEMS = (WEIGHTS, {"domain": "e" * 128, "kind": "theta", "leaves": 1, "root": "d" * 128, "value": "state",
                    "word_bits": 32, "words": 8},
          {"advice": "verity/advice/v1", "cap": 32, "digest": "f" * 128, "kind": "builder"})
-EXAMPLE = (G.Hardware((CARD,), LOCS, LINKS), G.Information(ITEMS))
+DAY0 = G.Declaration(0, "1" * 128, ("block0",))
+EXAMPLE = (G.Hardware((CARD,), LOCS, LINKS), G.Information(ITEMS), DAY0)
 
 
 def _wrap(f):
@@ -131,6 +133,10 @@ items = st.one_of(
 hardware = st.builds(G.Hardware, st.lists(cards, max_size=2).map(tuple), st.lists(locs, max_size=4).map(tuple),
                      st.lists(links, max_size=3).map(tuple))
 information = st.builds(G.Information, st.lists(items, max_size=3).map(tuple))
+#: Declarations: day 0 (the example's) or another, a program by its digest, and block Definitions, none, repeated, or
+#: one outside ASCII.
+declarations = st.builds(G.Declaration, st.sampled_from([0, 0, 1, 2]), HEX,
+                         st.lists(st.sampled_from(["block0", "block1", "bloc\u00e9"]), max_size=2).map(tuple))
 
 
 def pick(draw, xs):
@@ -158,15 +164,24 @@ TWISTS = (G.Hardware(links=(G.Link("l3", ("node0", G.OUTSIDE), 1, 0),)),
 @st.composite
 def changed(draw) -> list:
     """The example, sometimes with a twist after it, and with up to three changes: a location, a link, a card or an item dropped, replaced, added or with
-    one field set, a hardware entry split in two, or entries swapped."""
+    one field set, a hardware entry split in two, entries swapped, a declaration added, or the example's declaration's
+    day, program or blocks set."""
     bodies = list(EXAMPLE) + ([pick(draw, TWISTS)] if pick(draw, [True, False]) else [])
     for _ in range(pick(draw, [0, 0, 0, 1, 1, 2, 3])):
         i = pick(draw, range(len(bodies)))
         b = bodies[i]
-        op = pick(draw, ["drop", "drop", "set", "set", "set", "replace", "add", "split", "swap"])
+        op = pick(draw, ["drop", "drop", "set", "set", "set", "replace", "add", "split", "swap", "declare"])
         if op == "swap":
             j = pick(draw, range(len(bodies)))
             bodies[i], bodies[j] = bodies[j], bodies[i]
+        elif op == "declare":
+            bodies.insert(pick(draw, range(len(bodies) + 1)), draw(declarations))
+        elif isinstance(b, G.Declaration):
+            if op == "drop":
+                del bodies[i]
+            else:
+                bodies[i] = dataclasses.replace(b, **{(f := pick(draw, ["day", "program", "blocks"])):
+                                                      getattr(draw(declarations), f)})
         elif isinstance(b, G.Information):
             xs = list(b.items)
             if op in ("drop", "replace", "set") and xs:
@@ -217,7 +232,8 @@ def cases(draw) -> dict:
     source = pick(draw, ["changed"] * 5 + ["twist"] * 3 + ["random"] * 2)
     if source == "twist":
         return case(composite, chain(composite, [*EXAMPLE, pick(draw, TWISTS)]))
-    bodies = draw(changed()) if source == "changed" else draw(st.lists(st.one_of(hardware, information), max_size=3))
+    bodies = (draw(changed()) if source == "changed"
+              else draw(st.lists(st.one_of(hardware, information, declarations), max_size=3)))
     log = chain(composite, bodies)
     if log and not pick(draw, range(8)):
         k = pick(draw, range(len(log)))
@@ -252,9 +268,13 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
               (case("onsite", chain("onsite", bare)), "entry 0: uncertified"),
               (case("remote", chain("remote", bare)), None),
               (case("onsite", chain("onsite", [G.Hardware((CARD,), LOCS[:5], LINKS[:2])])), "entry 0: challenger-reach"),
-              (case("onsite", chain("onsite", [*EXAMPLE, G.Information(ITEMS[:1])])), "entry 2: duplicate-information"),
-              (case("onsite", chain("onsite", [*EXAMPLE, G.Information(ITEMS[2:])])), "entry 2: duplicate-information"),
+              (case("onsite", chain("onsite", [*EXAMPLE, G.Information(ITEMS[:1])])), "entry 3: duplicate-information"),
+              (case("onsite", chain("onsite", [*EXAMPLE, G.Information(ITEMS[2:])])), "entry 3: duplicate-information"),
               (case("onsite", chain("onsite", [*EXAMPLE, G.Information(({**WEIGHTS, "value": "tables"},))])), None),
+              (case("onsite", chain("onsite", [*EXAMPLE, dataclasses.replace(DAY0, program="2" * 128)])),
+               "entry 3: duplicate-declaration"),
+              (case("onsite", chain("onsite", [*EXAMPLE, DAY0])), "entry 3: duplicate-declaration"),
+              (case("onsite", chain("onsite", [*EXAMPLE, G.Declaration(1, "2" * 128, ("block0",))])), None),
               (case("onsite", chain("remote", EXAMPLE), composed="remote"), "composite: the log is remote's, not onsite's"),
               *((case("remote", chain("remote", [G.Hardware((k,))])), None) for k in WITHIN),
               *((case("remote", chain("remote", [G.Hardware((k,))])), "entry 0: figures") for k in PAST),
@@ -282,6 +302,10 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
     view = G.check(AUDITOR, "onsite", chain("onsite", EXAMPLE)).view()
     assert view.value("weights") == WEIGHTS and view.theta == ITEMS[:2] and view.builder == ITEMS[2]
     assert view.site.locs == LOCS
+    assert view.declared(0) == DAY0 and view.declared(1) is None
+    malformed = {**chain("onsite", EXAMPLE)[2].to_json(), "program": "1"}
+    with pytest.raises(G.Malformed, match="program"):
+        G.entry_of(malformed)
 
 
 def test_registration_difftest() -> None:
@@ -303,3 +327,16 @@ def test_a_reference_without_the_challengers_reach_is_caught() -> None:
             D.run(PORT, examples=1000, seed=0)
     finally:
         G.hardware_refusal = real
+
+
+def test_a_reference_that_takes_a_second_declaration_of_a_day_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Python that takes a second declaration of a day disagrees with the Lean on some drawn log."""
+    real = G.State.refusal
+
+    def lax(self, auditor, composite, e):
+        r = real(self, auditor, composite, e)
+        return None if r == "duplicate-declaration" else r
+
+    monkeypatch.setattr(G.State, "refusal", lax)
+    with pytest.raises(D.Mismatch):
+        D.run(PORT, examples=1000, seed=0)

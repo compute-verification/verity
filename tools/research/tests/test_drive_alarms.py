@@ -70,6 +70,12 @@ def test_running_steps_follow_the_preflights_then_each_group_in_order():
     # group 1 is done, group 2 stopped at its failure, lean-suites waits for lean-build, which runs
     assert got == {"lean-build": 100.0, "ratchet-gate": 60.0}
     assert running_steps([pre[0], {**pre[1], "status": "failed"}], steps, jobs, 0.0) == {}
+    # a shard that never runs lean-changed: the steps after it ended, so it isn't running, and the group's next one is
+    shard = running_steps([*pre, {"step": "lean-build", "status": "passed", "ended_utc": _utc(200)},
+                           {"step": "lean-unit-cut", "status": "passed", "ended_utc": _utc(210)},
+                           {"step": "lean-agreement", "status": "passed", "ended_utc": _utc(220)},
+                           {"step": "lean-audit", "status": "passed", "ended_utc": _utc(900)}], steps, jobs, 0.0)
+    assert "lean-changed" not in shard and shard["pytest"] == 60.0, shard
 
 
 def _landed(world: World, monkeypatch, **kw) -> Review:

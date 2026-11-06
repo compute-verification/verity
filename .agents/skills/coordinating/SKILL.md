@@ -43,7 +43,9 @@ using-slack skill).
 ## Issues
 
 - **One issue per deliverable**, in its owner's team, labelled with the goal it serves. An issue that serves no goal is
-  in Backlog or Canceled.
+  in Backlog or Canceled. An open issue (not Backlog) is in a project within 48 h of filing, or the audit flags it
+  (`orphan`), and one whose milestone's date has passed is `lapsed`: re-date the milestone and comment what moved it, or
+  move the issue on.
 - **The title is the deliverable**: a noun phrase or an imperative, whole, with no handle, sender or time. "Ring a lead
   only when it must act: run-end and worker-idle rings", not "@infra top 02:40Z, an ask for…".
 - **The description is the brief**, at most 300 words:
@@ -64,27 +66,33 @@ using-slack skill).
 | Backlog | filed and not taken on. An ask lands here, and moving it out says it was seen |
 | Todo | taken on and dated, not started |
 | In Progress | someone is working on it now |
-| In Review | every piece is in a ready PR or waits on a named verdict, and a comment says whose |
+| In Review | every piece is in an open PR attached to the issue, ready or waiting on a named verdict, and a comment says whose |
 | Done | the done-condition holds: the outcome exists. The owner closes it with one line and its evidence |
 | Canceled | dropped, with a one-line reason; a person's ask only with their yes, quoted, and `asker-ok` |
 
 - **PRs.** A PR names its issue (`research queue open --issue KEY` writes `Refs KEY` and links it) and the goal it
-  serves: the issue carries the goal's label, which `open` writes as `Goal <id>` and refuses an issue without, and a ready
-  mark needs that line or `Issue: none: REASON`. Merging a PR doesn't close the issue; the owner does.
+  serves: the issue carries the goal's label, which `open` writes as `Goal <id>`; `open` and a ready mark warn, never
+  refusing, when the body has neither that line nor `Issue: none: REASON`. A key in a PR's title or body attaches nothing:
+  `research queue link N --issue KEY` attaches a PR opened without it. An issue In Review 24 h with no open PR attached is
+  `unlinked`. Merging a PR doesn't close the issue; the owner does.
 - **Sub-issues** split a deliverable into pieces that move separately: one per worker. A parent is In Progress while any
   child is, and Done once every child is and its own done-condition holds.
 - **Dependencies** between lanes are Linear's blocking relations (`research msg linear relate`), not prose.
 - **Asks.** `research msg ask --as ME --to @OWNER --title 'DELIVERABLE' [--parent ISSUE] --file BRIEF.md` files the
   issue in the owner's team, under the deliverable it serves (so in that project and milestone), and rings the owner.
-  The owner dates it and moves it out of Backlog within the hour, or declines it (`research msg close --declined`). A
-  question that needs no issue is `research msg send --kind question` in its thread.
+  The owner dates it and moves it out of Backlog within the hour, or declines it (`research msg close --declined`). An
+  ask in another lane's team that nobody took up (a project and a date) or touched for 48 h is a `stray`: the audit and
+  top's sweep only report it, and `research msg linear audit --close-strays --as ME` cancels each with a comment naming
+  the rule. A person's ask is never a stray. A question that needs no issue is `research msg send --kind question` in its
+  thread.
 - **A person's ask is answered by its outcome, never by its issue.** Whoever relays Daniel's ask files it with
   `--asker daniel` (an existing issue: `research msg linear edit ISSUE --label asker:daniel`). Within the hour it is In Progress
   with a comment naming its worker (a `bc-` id, or the lead) and the date its outcome lands; filing, dating,
   planning and starting it answer nothing, and a reply to him names the worker and that date, not the issue. Only he
   parks or cancels it: quote his yes on the issue and add `asker-ok`. When he asks again, comment `asked again: <his
   words>` on the issue, never a new one, and `postmortem:` that day (why it wasn't delivered, and the change that stops
-  that recurring). The audit finds each break (`parked`, `unstaffed`, `slipped`, `repeated`); `research msg linear audit
+  that recurring). Once its date has moved later twice, each move gets a `slip:` comment: what missed the date and what
+  holds the next. The audit finds each break (`parked`, `unstaffed`, `slipped`, `repeated`); `research msg linear audit
   --asks` is the ledger, and a report to Daniel counts delivered, never filed.
 - **Write through the app, not the Linear connector.** The connector acts as Daniel, so its comments and state changes
   show as his. Use these commands:
@@ -94,7 +102,9 @@ using-slack skill).
   - `research msg linear edit ISSUE --title T --due D`;
   - `research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER`, and `unrelate ISSUE OTHER`;
   - `research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F`, a project update;
-  - `research msg linear project create NAME --team KEY` and `milestone create|edit PROJECT NAME [--date D]`.
+  - `research msg linear project create NAME --team KEY`, `project edit PROJECT [--team KEY] [--date D] [--status S]`
+    (a team its issues need, a target date that hasn't passed, Backlog for a paused project) and
+    `milestone create|edit PROJECT NAME [--date D]`.
 
 ## Workers
 
@@ -103,6 +113,10 @@ using-slack skill).
 - **Its brief starts with the issue's URL and done-condition.** It tells the worker to comment each run id, verdict line
   and PR on the issue with `research msg linear comment ISSUE 'TEXT' --worker NAME`.
 - **No issue, no worker.** A worker running for no issue is stopped, or gets an issue.
+- **Map the premises before staffing proofs.** Before staffing proof workers for a guarantee or bound, write one premise
+  map: a row per premise, with the code check that discharges it, its Lean Property and its owner. Check each row against
+  AGENTS.md's design rules (zero knowledge, no Python premise, one vocabulary, O(descriptor)), take the map to @soundness
+  for one ruling, then staff. A ruling that arrives after staffing reworks every piece already staffed.
 
 ## How long, and where
 
@@ -124,12 +138,15 @@ using-slack skill).
 
 - **On each wake:** read your inbox, and act on the issue each event names.
 - **Every few hours, and before ending a long turn:** run `research msg linear audit --lane ME` and fix what it finds.
-  Each line gives the fix: place an orphan, date it, retitle it, close a landed issue, comment on a quiet one, or cancel
-  a stale one.
-- **When a goal you own changes, and at least every 12 hours:** update it on the Goals page (the writing-goals skill).
+  Each line gives the fix: place an orphan, date it, retitle it, close a landed issue, attach an unlinked one's PR,
+  re-date a lapsed milestone, comment on a quiet one, or cancel a stale one.
+- **When a goal you own changes:** update it on the Goals page (the writing-goals skill).
 - **On a launch:** file the sub-issue first, then launch the worker named after it.
+- **At each checkpoint:** list your workers by state (`batch-fetch-details`) and resume each idle one whose runs have
+  ended or that has inbox messages queued. Completion notices can lapse, and the inbox reaches only running agents.
+  Judge a running worker by its commits, PRs, runs and notes: a fetched transcript lacks a resumed turn.
 
-top's hourly sweep (`infra/control/top_watch.py`) runs the same audit. It rings a lane with findings once every 12
-hours, a person's ask off track every hour (and @top) until it holds (a slip once per new date), and records the counts in `linear-audit.jsonl`.
-top's hourly audit of the Goals page rings the owner of a goal past its due, unchanged for 12 hours, or past a step's
-day. top reads the campaign's state from the Goals page and Linear, not from Slack.
+top's hourly sweep (`infra/control/top_watch.py`) runs the same audit and only reports. Once every 12 hours it rings a
+lane with findings, and a lane with a person's ask off track until it holds (a slip, until its `slip:` comment), and it
+records the counts in `linear-audit.jsonl`. Once a day top rings the owner of a goal past its due, for a new date or its
+evidence. top reads the campaign's state from the Goals page and Linear, not from Slack.

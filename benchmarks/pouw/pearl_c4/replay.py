@@ -1,6 +1,6 @@
 """Pearl-C4's reference replay of a device run's own transcript under the work law (`clear_work.audit`), with
 Pearl-C4's domain and debit (`schemes.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
-ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md), never the protocol's
+ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck), never the protocol's
 verdict.
 
 **The dump** (`write_dump`) is what a timed call emits, as the device holds it after the call: A's rows (BF16, row-major,
@@ -77,7 +77,7 @@ SHORTCUTS = (
     "the transcript tree over the tile leaves and the records (row_passes and R1 per row) are computed on the host after "
     "timing",
     "verify opens the drawn tiles' rows and words and recomputes them in the clear: its ACCEPT is replay-verified "
-    "(development shortcut; the protocol's check is a ZK proof, PROTOCOL.md)",
+    "(development shortcut; the protocol's check is a ZK proof, PouwCheck)",
 )
 
 
@@ -182,10 +182,10 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
     refs = au.tile_refs(s, workload)
     if len(leaves) != 32 * len(refs):
         raise ValueError(f"{len(leaves)} bytes of leaves are not {len(refs)} tile leaves")
-    tree = MerkleTree(au.transcript_domain(epoch, len(refs)), {i: leaves[32 * i:32 * i + 32] for i in range(len(refs))},
+    tree = MerkleTree(au.transcript_domain(epoch, len(refs), s.commitment_hash), {i: leaves[32 * i:32 * i + 32] for i in range(len(refs))},
                       lambda _: au.TILE_SCHEMA)
-    tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a)
-    tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b)
+    tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a, s.commitment_hash)
+    tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b, s.commitment_hash)
     real = call["real_rows"]
     fmap, done = _pool(workers, max(1, (real + n) // (4 * max(workers, 1))))
     try:

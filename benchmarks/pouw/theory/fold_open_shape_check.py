@@ -2,7 +2,7 @@
 """Two n = 8 keys that the reduced key_ok_r11 (egemm_depthr_check) admits and at which K_R = K_1 = P/X/N fails
 (the corrected depth-R criterion).
 
-`fold_kernel_sweep.py` found them among 400 random key_ok_r11 keys; this checks them independently. At (97, 179) with the
+A sweep found them among 400 random key_ok_r11 keys; this checks them independently. At (97, 179) with the
 word (255, 48, 87, 75), K_1 has 64 elements (meet in the middle), all fixing the R-fold for R = 1..5 on every state, 48
 of them outside (G₃). At (83, 225) with the word (144, 166, 44, 160), K_1 is the 16-element group, but changes outside it
 fix the 2-fold and the 4-fold on every state. At n = 10, (321, 411) has a 32-element K_1. All three keys are

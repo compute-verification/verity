@@ -179,7 +179,7 @@ A spec-level reference for network accounting's timing channel:
   committed as a registered read of the network certifier's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
   ingress link ℓ (its frame parameter row, the warden's registered row; with ``first``, `IngressScanFirst` holds bucket
   0), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.BoundaryGates`); its
-  format is `verity/boundary/v3`. `refusal`, the verifier's check before it draws, checks that the layout fits the
+  format is `verity/boundary/v3`. `refusal`, the verifier's check before it samples, checks that the layout fits the
   circuit (`NetTiming.BoundaryGates.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
   grain, which contains the gate grain's, held to `prog_fits`, `BoundaryGates.Fits` itself on a flattened program; the scan's
   state and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits`
@@ -265,8 +265,8 @@ A spec-level reference for network accounting's timing channel:
   stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the verifier's own tie source,
   which gives the verdict only on its own link. A size class no sidecar pins has no accepted proof.
 
-It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
-`tagged_sha512` and `canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's
+It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha512` and
+`canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's
 Definition, and in `active` the proof system's registration and receipt, which `reveal` reads, and the pair link's
 AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
@@ -281,7 +281,7 @@ what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge
 `lake exe certifier-window-difftest INSTANCES PYTHON N` on what `lean/scripts/window_vectors.py` writes from
 `window_charge.reference_window`.
 
-The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
+The two terms of the charge the capacity bounds leave open are fixed in the spec, in the last section of
 `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
 - the content advice `A_c`, which is the schedule. It gets a bound once the deployment declares a deterministic
   scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or

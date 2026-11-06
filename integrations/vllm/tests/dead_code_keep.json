@@ -25,6 +25,7 @@
   "verity_vllm.program.quarantine.act": "re-exports registry.act's SiluMul_v2 (promoted) for the properties-admission adapter",
   "verity_vllm.program.quarantine.act.silu_mul": "see quarantine.act; silu_mul_difftest.spec imports it",
   "verity_vllm.program.quarantine.act.silu_mul_difftest": "properties-admission adapter of SiluMul_v2, loaded by --adapter name",
-  "verity_vllm.program.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py"
+  "verity_vllm.program.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py",
+  "verity_vllm.query.query_artifact": "writes the query and query-use documents G8 reads; its one caller, lifted_records' lifted_vu_use_document, went with the VU validators. It goes with tests/query/test_query_artifact.py once #5652, which edits both, is on main"
  }
 }

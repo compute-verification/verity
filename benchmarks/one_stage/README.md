@@ -37,15 +37,15 @@ negatives.
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
   verifies each sampled chunk with its table's registered reads (`--registered`, `tables.registered_reads`).
 - `a5_warden.py` (`a5_tp.sh` with `STANDIN=warden`, `warden:altered`, `warden:pad`, `warden:pad-named` or `warden:swapped`):
-  A5 on a window with transfer gates, which no served window has yet: two chunks of the warden's toy unit whose ports are the
-  bucket rows of one connection's ingress and egress cells (a row a bucket, registration v2), committed under the warden's
+  A5 on a window with transfer gates, which no served window has yet: two chunks of the certifier's toy unit whose ports are the
+  bucket rows of one connection's ingress and egress cells (a row a bucket, registration v2), committed under the certifier's
   salts, proved whole (the work law's selection All) beside a sampled rest, on a local challenger's coins or the verifier's
   own. The units' wiring is the Program's (`warden_rows.Units`, from public structure alone: ingress cells 0 … n − 1, egress
-  cells D·r … D·r + n − 1). Lean verifies each chunk with the verifier's own registered reads at the root the warden signed,
-  named by the units' value and each unit's read (connection, cell) placed by the wiring the warden signed
-  (`warden_rows.port`, after `check_registration` under the warden's key), which refuses a foreign, a duplicate and a
+  cells D·r … D·r + n − 1). Lean verifies each chunk with the verifier's own registered reads at the root the certifier signed,
+  named by the units' value and each unit's read (connection, cell) placed by the wiring the certifier signed
+  (`warden_rows.port`, after `check_registration` under the certifier's key), which refuses a foreign, a duplicate and a
   padding-slot read by name; the altered run, and a statement made for another units' wiring (a pad in a data cell's place,
-  its rows under the Program's value, two units swapped: `--made-for`), are refused by Lean's registered reads. Its warden run
+  its rows under the Program's value, two units swapped: `--made-for`), are refused by Lean's registered reads. Its certifier run
   is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `warden_replay.py`'s: a served window's requests through the
   warden, each answered with the tokens the server streamed it.
 - `a5_tp_gates.py` (`a5_tp.sh` with `A5_CHALLENGER=local` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
@@ -109,6 +109,21 @@ negatives.
   byte run with any case's evidence. With `--exe`, it runs `onsite check` or `remote check` and exits with
   Lean's code. It decides nothing: a subprotocol with no case is left out, Lean's verdict on what remains stands (a
   rejection naming the missing case), and the run is labelled `NOT_ESTABLISHED` with what is missing.
+- `pouw_piece.py`: PoUW's `--cases` directory for `composite.py`, remote's `verity/pouw/v1` (`v1`: the verifier's params,
+  the window's one-stage registration and the proof service's answer to it) or onsite's `verity/pouw/period/v1`
+  (`period`: the key, main's first-parent history, the period's name, the auditor's ledger, the pins log and each
+  window's evidence), and its answer, `pouw-check`'s or `pouw-period`'s with `--exe`, written private as `composite.py`
+  reads it. From a served run (`--serve-run DIR --window K`) it names the piece MISSING with why and writes no case, so
+  `composite.py` leaves it out: an H1 window has no `v1` case, and no `period` case outside a period or without its drawn
+  units' proof outcomes.
+- `v2_case.py`: sampled proofs v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
+  partition, public file, sessions and circuit file), with its own Lean answer with `--exe`. A circuit file the run didn't
+  keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin.
+- `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
+  `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
+  (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the drawn and live legs'
+  statements, `POUW_STATEMENTS` and `POUW_LIVE`), v2's (`v2_case.py`) and every kept piece holding a case beside its
+  answer, all private in scratch, and runs `composite.py remote` and `onsite`; `$OUT` gets only their public output.
 - `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
   a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
   Lean, honest and with a tampered block, a scan of everything the verifier received for the sampled proof blocks' bytes, and the
@@ -118,7 +133,7 @@ negatives.
   proved, not opened, by the opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`) in a
   second statement. A7 is the requirement's plan and memory-map units
   (`verity.ml.circuits.requirement_units`), one of each per step of a stand-in decoder's requirement, under the stratified
-  law, their witness rows bound to canonical commitments, then wired to the remote bandwidth audit's ledger as its
+  law, their witness rows bound to canonical commitments, then wired to PoUB's ledger as its
   requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its sample leaves
   unproved can carry and its δ the sample's.
 - `plan_shards.py`: the sharded plan unit (`PlanShard_v1`) on a recorded remote session (vllm's `remote_session.json` and the
@@ -173,7 +188,15 @@ negatives.
   samples from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
   ANDs, table reads and assertions from its leaves lowered once (an upper bound on the flat count), against 2^26, and
   the log2 of M0's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below), the
-  same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use.
+  same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use, with
+  each unit's served MACs and the bits of each of its ports; `--steps all` takes every request step.
+- `block_census.py` (run by `block_census.sh ROW_DIR` on the machine holding the row's Build): the proof-block census of
+  a TP Commit's Build. Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
+  row itself when it fits C-Flock's block and a size class, else each slot of its split at its coarsest fitting unit, else
+  a gap with the reason), and per proof-block Definition its count in the prefill step and the decode steps, output bits
+  and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
+  and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
+  `benchmarks/sampling_plan/glm53.py`).
   `m1_unit.py` builds one family's unit through M0's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
 - `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
@@ -187,6 +210,12 @@ negatives.
 - `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
   (PoUS's `served_case.sh`), then gets remote's and onsite's Lean verdicts on the run's cases (soundness's composite
   reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
+- `onsite_periods.py`: the onsite record (`verity/onsite-network-record/v1`) per monitoring period, a week, a month and a
+  year by the node, a datacenter and the world, each cell its K, share of the weights and δ_net beside K over one
+  execution phase, marked proved or scaled by the record's rules. It refuses a record whose labels its rules contradict:
+  K/m proved past one phase, a node cell proved over a period the run doesn't cover, a datacenter or world cell proved,
+  a proved statement outside the lock, a rule without its sources. The tight K is shown conditional on what is open.
+  Its test reads stand-ins cut from the writer's own record (`tests/fixtures/onsite_periods/make.py`).
 - `served_util.sh` (with `served_util.py`): the whole-step tensor utilization of serve-openai on the int8 Llama-3.2-1B
   prefill mix (prompts of 1,024 ids, `max_tokens` 1, all queued at once, T tokens a step), one arm a run (stock, the
   Commit unsealed or sealed, the Commit with PoUW H1 on in-process coins), under Nsight Systems' GPU metrics.

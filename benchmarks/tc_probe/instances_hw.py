@@ -69,7 +69,7 @@ from verity_config.settings import SHARED
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import models as S
 from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 from verity.ml.circuits.targets import target as T
 

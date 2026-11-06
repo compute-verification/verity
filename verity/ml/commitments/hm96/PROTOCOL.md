@@ -9,8 +9,8 @@ instances have the same hiding bound.
 The one other rule is PoUW's lead's keyed leaf, which hides computationally under a window's secret key and commits that
 key as an `hm96-sha512/v1` leaf (frame-v3's `PROTOCOL.md`, §6, "Keyed leaves").
 
-- **Reference.** `verity.ml.commitments.hm96`, stdlib only: the instances `SHA256` and `SHA512`, and `Hm96Sha256(base)` and
-  `Hm96Sha512(base)` over a `vllm-v1` or `vllm-v1-sha512` configuration. The module-level names are `hm96-sha256/v1`'s.
+- **Reference.** `verity.ml.commitments.hm96`, stdlib only: the instances `SHA256` and `SHA512`, and `HidingLayout`, one leaf
+  over its inner layout. The module-level names are `hm96-sha256/v1`'s.
   `verity.ml.commitments.hm96.batch` (numpy) computes the masks and tree leaves of many rows at once, byte-identical to it.
 - **Vectors.** `vectors.json` (`hm96-sha256/v1`) and `vectors_sha512.json` (`hm96-sha512/v1`), written by
   `python -m verity.ml.commitments.hm96.vectors`. `--check` exits nonzero if either is stale.
@@ -49,13 +49,13 @@ leaf_prefix(key) = leaf tag ‖ H(key)         zero-padded to one block of H
 | key label | `verity/hm96-sha256/key/v1\0` | `verity/hm96-sha512/key/v1\0` |
 
 - **The inner layout** is any `LeafLayout` with hash H that the verifier derives for the position: a fixed prefix, suffix and value
-  length. The host committer's opt-in uses vllm-v1's position leaf (`pos_leaf_layout`, or `pos_leaf_layout(n, "sha512")`). A circuit
-  prefers a block-aligned prefix such as `sha256/row/v1`'s, `sha512/row/v1`'s or a bit row's (`sha512/row/v2`), since its midstate
-  is a constant. Under frame-v3 the tree leaf's schema names the inner one: `hm96-sha512/row/v1`, or `hm96-sha512/row/v2` over a bit
+  length. The vLLM integration's SHA-256 host committer's opt-in uses its position leaf,
+  `H("verity/pos-leaf/v0" ‖ u64be(n) ‖ value)`. A circuit prefers a block-aligned prefix such as `sha256/row/v1`'s,
+  `sha512/row/v1`'s or a bit row's (`sha512/row/v2`), since its midstate is a constant. Under frame-v3 the tree leaf's schema names the inner one: `hm96-sha512/row/v1`, or `hm96-sha512/row/v2` over a bit
   row (`frame_v3/PROTOCOL.md` §6).
 - **`b ‖ c` is the commit string.** A backend proves it and publishes it, and the verifier computes the tree leaf natively.
 - **An opening** is `(value, y)`. The verifier recomputes `x`, `c`, `b` and the leaf, and checks the path with the base scheme's tree
-  (`vllm-v1`'s or `vllm-v1-sha512`'s node and lift rule and root bindings).
+  and root bindings (frame-v3-sha512's for `hm96-sha512/row/v2`).
 - **Bits.** Bit t of a byte string is bit `t mod 8` of byte `⌊t/8⌋`. `y_j`, `x_i` and `b_i` are read this way, and `M·y` is written
   this way into n/8 bytes.
 
@@ -67,7 +67,7 @@ leaf_prefix(key) = leaf tag ‖ H(key)         zero-padded to one block of H
 - **The family is universal.** For a nonzero d, the map `key ↦ M·d` is linear, with rows `d ≪ i` for `i < n`. Those rows are
   independent, so `M·d` is uniform over n bits when the key is. For `y ≠ y'`, `Pr[M·y = M·y'] = 2^-n`.
 - **The key is fixed and public.** Each instance's configured key is its pinned key (section 2a), a circuit
-  constant that fixes a gadget's XOR network. `fresh_key` draws a uniform key, which is the theorem's setting; it exists for tests.
+  constant that fixes a gadget's XOR network. `fresh_key` samples a uniform key, which is the theorem's setting; it exists for tests.
 - **The key is bound.** Every leaf binds `H(key)` through its prefix, and `scheme_digest(key)` names the configured rule for a root
   binding or statement. The verifier takes the key from its own statement, never from an opening. A key chosen after commitment
   would let a committer fit an opening to any value.

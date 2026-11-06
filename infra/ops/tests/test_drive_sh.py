@@ -1,5 +1,5 @@
 """infra/control/drive.sh's checkout: `drive.sh merge` runs `research merge` on branch main, which it refuses on a detached HEAD
-(CI-169, 25 Oct: every `drive.sh merge` was refused), while the tick and `drive.sh queue` keep a detached checkout of origin's main."""
+(else every `drive.sh merge` is refused), while the tick and `drive.sh queue` keep a detached checkout of origin's main."""
 import os
 import re
 import subprocess
@@ -43,7 +43,7 @@ def checkout(repo, verb):
 
 
 def test_store_links_puts_the_stores_bulk_on_the_volume_and_keeps_what_it_held(tmp_path):
-    """objects/ and attempts/ become links into the volume's copy (they took the pod's root to 94%, 26 Oct); a real directory
+    """objects/ and attempts/ become links into the volume's copy (they can fill the pod's root); a real directory
     already there is merged in first, so nothing it held is lost, and the catalog stays where it is."""
     store, vol = tmp_path / "store", tmp_path / "volume"
     (store / "objects" / "sha256" / "ab").mkdir(parents=True)
@@ -108,3 +108,45 @@ def test_queue_and_the_tick_stay_detached(repo):
     checkout(clone, "queue")                                            # the tick is `locked queue drive ...`
     assert subprocess.run(["git", "symbolic-ref", "-q", "HEAD"], cwd=clone).returncode == 1
     assert git("rev-parse", "HEAD", cwd=clone) == tip
+
+
+def deploy(repo, arg):
+    tmp = Path(repo).parent
+    env = {**os.environ, "REPO": str(repo), "DIR": str(tmp / "volume")}
+    return subprocess.run(["sh", "-c", f'{function("deploy")}deploy "$1"', "sh", arg], env=env, capture_output=True, text=True)
+
+
+def test_the_tick_runs_the_deployed_commit_until_deploy_main_and_merge_stays_on_main(repo):
+    """A landing of drive's own code changes what drive runs only once it is deployed: the tick and `queue` check out the pin,
+    `merge` still lands on main's tip, and `deploy main` follows main again."""
+    clone, tip = repo
+    origin = Path(clone).parent / "origin"
+    first = git("rev-parse", "HEAD~1", cwd=origin)
+    (Path(clone).parent / "volume").mkdir()
+    assert deploy(clone, first).returncode == 0
+    checkout(clone, "queue")
+    assert git("rev-parse", "HEAD", cwd=clone) == first
+    checkout(clone, "merge")
+    assert git("rev-parse", "HEAD", cwd=clone) == tip
+    assert deploy(clone, "main").returncode == 0
+    checkout(clone, "queue")
+    assert git("rev-parse", "HEAD", cwd=clone) == tip
+
+
+def test_deploy_takes_only_landed_code_and_a_pin_that_names_no_commit_fails_the_tick(repo):
+    """Drive pushes `next`, `checked` and `main`, so it runs only a commit `checked` or `main` holds; a pin file that names no
+    commit fails the tick rather than run main's tip unannounced."""
+    clone, _ = repo
+    origin = Path(clone).parent / "origin"
+    vol = Path(clone).parent / "volume"
+    vol.mkdir()
+    git("checkout", "-q", "-b", "unlanded", cwd=origin)
+    git("commit", "-q", "--allow-empty", "-m", "on no branch drive lands", cwd=origin)
+    other = git("rev-parse", "HEAD", cwd=origin)
+    git("checkout", "-q", "main", cwd=origin)
+    git("fetch", "-q", "origin", "unlanded", cwd=clone)
+    out = deploy(clone, other)
+    assert out.returncode == 1 and "on neither checked nor main" in out.stderr and not (vol / "deployed").exists()
+    (vol / "deployed").write_text("not a commit\n")
+    with pytest.raises(subprocess.CalledProcessError):
+        checkout(clone, "queue")

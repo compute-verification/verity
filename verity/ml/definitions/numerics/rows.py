@@ -25,7 +25,7 @@ import numpy as np
 
 from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
 from verity.ml.definitions.evidence import EVIDENCE
-from verity.ml.definitions.numerics.kernel_registry import Declined, prim_static, register
+from verity.ml.definitions.numerics.kernel_registry import Declined, prim_static, register, register_rows
 from verity.ml.definitions.numerics.moe_router_rows import moe_router_topk
 from verity.ml.definitions.numerics import value_rows as VR
 
@@ -64,8 +64,8 @@ EVALUATORS = {
                     "-- HopperBF16WgmmaDot16_v1 + Fa3InvSum_v1 = FA3 on sm_90 (== verity.ml.definitions.numerics.fa3_model.fa3_rows); "
                     "AmpereBF16TcDot16_v2 + Fa2InvSum_v1 = FA2 under the lifted name); "
                     # the silicon envelope of the FA3 relation, stated with the evaluator
-                    "FA3 envelope MEASURED exact on the H100 production capture at hdim 128 / kBlockN 128, T = 1..527 (39 leaves, "
-                    "hopper-profile.md s1b); rows beyond it (1024/128, hdim 64 / kBlockN 192) are measured BY THE COMMIT -- a chain "
+                    "FA3 envelope MEASURED exact on the H100 production capture at hdim 128 / kBlockN 128, T = 1..527 (39 leaves); "
+                    "rows beyond it (1024/128, hdim 64 / kBlockN 192) are measured BY THE COMMIT -- a chain "
                     "mismatch FAILs by name, never a silent word; "
                     "k16 steps = registry.tc_total hopper_bf16_wgmma_k16 family v1 / ampere_bf16_m16n8k16 total family v3",
     "Attention_v4": "verity.ml.definitions.numerics.derived_rows.attention_rows (Attention_v4{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}: Attention_v2's evaluator "
@@ -784,10 +784,10 @@ for m, fn in ((softcap_rows, attention_softcap), (act_rows, act_rows.silu_mul_ex
               (batched_gemm_rows, batched_gemm_rows.batched_gemm)):
     _row(m.FAMILY, fn, ("out",), check_targets=m.check_targets)
 EVALUATOR_PROVENANCE[batched_gemm_rows.FAMILY] = batched_gemm_rows.PROVENANCE
-int8_rows.register_rows(EVALUATORS, _row)
+register_rows(int8_rows, EVALUATORS, _row)
 from verity.ml.definitions.numerics import marlin_moe_rows  # noqa: E402
 marlin_moe_rows.register_rows(EVALUATORS, _row)
-deepgemm_rows.register_rows(EVALUATORS, _row)
+register_rows(deepgemm_rows, EVALUATORS, _row)
 moe_align_rows.register_rows(EVALUATORS, _row)
 glm53_rows.register_rows(EVALUATORS, _row, _sample, EVALUATOR_PROVENANCE)
 cublas_gemm_rows.register_rows(EVALUATORS, _row, EVALUATOR_PROVENANCE)

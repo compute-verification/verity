@@ -1,4 +1,4 @@
-"""verity.ml.circuits — circuits and their Programs; the program format is ``PROTOCOL.md``, and "IR §" cites veritor's ``docs/verity-ir-2026-09-07.md``.
+"""verity.ml.circuits — circuits and their Programs; the program format is ``PROTOCOL.md``, and "IR §" cites a section of veritor's IR document (``docs/verity-ir-*.md``).
 
 Semantics packages register their primitives with this core (``codec``'s ``register_lazy_family`` hook for the lazily
 materialised families).
@@ -33,7 +33,7 @@ from .defs import (PrimitiveDefinition, CompositeDefinition, SpecializedDefiniti
                    Registry, REGISTRY)
 from .program import Program, input_prim  # noqa: F401
 from .layout import Circuit, GateSelection, Region, FunctionCall, Gate  # noqa: F401
-from .query import query, groups, GapError, QueryError  # noqa: F401
+from .query import query, QueryError  # noqa: F401
 from .codec import encode_program, decode_program, program_digest, descriptor_size, canonical_json  # noqa: F401
 from . import boolean  # noqa: F401  (registers the three gates and the constant bits)
 

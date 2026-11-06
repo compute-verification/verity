@@ -1,7 +1,7 @@
 /-
 One table of domain separators: every versioned string a protocol hashes, derives from or commits under, or names its
 records, schemes and protocols by. `verity/ml/commitments/domains.py` mirrors it, entry for entry
-(`tests/test_domains.py`), beside `identity.tagged_sha512` as this file is beside `Identity.Tagged`.
+(`tests/test_domains.py`).
 
 A name is in today's words; the bytes keep the words of their version (a PoUW period's tags say "window", its
 sampling's say "draw"), because committed formats, pinned vectors and recorded runs carry them. Bytes never change in
@@ -69,7 +69,7 @@ abbrev POUW_H1_ROUND_A : String := "verity/pouw/h1/round-a/v1"
 abbrev POUW_H1_COMMIT : String := "verity/pouw/h1/commit/v1"
 abbrev POUW_H1_REQUEST_IDS : String := "verity/pouw/h1/requests/ids/v1"
 abbrev POUW_H1_WEIGHTS : String := "verity/pouw/h1/weights/v1"
-abbrev POUW_H1_OK_ROW_SALT : String := "verity/pouw/h1-prove/ok-row-salt/v0"
+abbrev POUW_H1_OK_ROW_SALT : String := "verity/pouw/h1-prove/ok-row-salt/v1"
 
 -- PoUW: noise, seeds and receipts
 abbrev POUW_SEED : String := "verity/pouw/seed/v2"
@@ -212,7 +212,7 @@ abbrev WORD_CODEC_KV : String := "verity/word-codec/kv/v0"
 -- Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
 abbrev LMS_I : String := "verity/lms/v0/I"
 
--- Not yet read from here: sampled proofs and the proof service's challenger
+-- Not yet read from here: sampled proofs and the proof system's challenger
 abbrev CHALLENGER_KEY : String := "challenger-key/v1"
 abbrev COIN_TREE_HM96_SHA512 : String := "coin-tree/hm96-sha512/v2"
 abbrev IR_OBLIGATION : String := "verity-ir/obligation/v0"
@@ -261,6 +261,8 @@ abbrev FLOCK_ZK_TAU : String := "verity/flock-zk/tau/v1"
 abbrev LAYOUT : String := "verity/layout/v1"
 abbrev REC_COINS : String := "verity/rec-coins/v1"
 abbrev REC_INNER : String := "verity/rec-inner/v1"
+abbrev REC_V1_VERIFIER_SALT : String := "verity/rec-v1/verifier-salt/v1"
+abbrev REC_V1_ZERO_RESIDUAL_SALT : String := "verity/rec-v1/zero-residual-salt/v1"
 
 -- Not yet read from here: PoUS, the wipe and the memory challenger
 abbrev CHAIN_DENSE_H : String := "chain-dense-H/v1"
@@ -356,10 +358,12 @@ abbrev CERTIFIER_PAIR_MAC : String := "verity-network-certifier/pair/v1/mac"
 abbrev CERTIFIER_PARAMETERS_V1 : String := "verity-network-certifier/parameters/v1"
 abbrev CERTIFIER_PERIOD_SAMPLING : String := "verity-network-certifier/period-draw/v1"
 abbrev CERTIFIER_PERIOD : String := "verity-network-certifier/period/v0"
+abbrev CERTIFIER_RECORD_SHA512 : String := "verity-network-certifier/record-sha512/v1"
 abbrev CERTIFIER_RECORD_V2 : String := "verity-network-certifier/record/v2"
 abbrev CERTIFIER_RECORDS : String := "verity-network-certifier/records/v2"
 abbrev CERTIFIER_REVEAL_REQUEST : String := "verity-network-certifier/reveal-request/v1"
 abbrev CERTIFIER_REVEAL_RESPONSE : String := "verity-network-certifier/reveal-response/v1"
+abbrev CERTIFIER_ROW_SHA512 : String := "verity-network-certifier/row-sha512/v1"
 abbrev CERTIFIER_SERVICE_SPEC : String := "verity-network-certifier/service-spec/v0"
 abbrev CERTIFIER_SESSION : String := "verity-network-certifier/session/v0"
 abbrev CERTIFIER_STATEMENT : String := "verity-network-certifier/statement/v0"
@@ -371,9 +375,7 @@ abbrev NETWORK_COIN_LINK_PARAMETERS : String := "verity-network-coin-link/parame
 abbrev CERTIFIER_CELLS_DOMAIN : String := "verity-network-warden/cells-domain/v2"
 abbrev CERTIFIER_CELLS : String := "verity-network-warden/cells/v2"
 abbrev CERTIFIER_PARAMETERS_V3 : String := "verity-network-warden/parameters/v3"
-abbrev CERTIFIER_RECORD_V1 : String := "verity-network-warden/record/v1"
 abbrev CERTIFIER_REGISTRATION : String := "verity-network-warden/registration/v2"
-abbrev CERTIFIER_ROW : String := "verity-network-warden/row/v1"
 abbrev CERTIFIER_BLOCKS : String := "verity-network-warden/units/v1"
 abbrev CERTIFIER_WIRING : String := "verity-network-warden/wiring/v1"
 abbrev ADVICE : String := "verity/advice/v0"

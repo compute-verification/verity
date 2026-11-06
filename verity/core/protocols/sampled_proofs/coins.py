@@ -24,8 +24,9 @@ from typing import Any, NamedTuple
 
 from verity.ml.randomness import uniform_from_words
 
-from .challenger import (COIN_BYTES, MAX_COINS, MAX_LOG_LINES, WITHHELD, ChallengerKey, CoinError, LiveCommitment,
-                         LiveOpening, LiveRecord, Verify, live_reason, record_many, trusted_session_of, withheld_on)
+from .challenger import (COIN_BYTES, MAX_COINS, MAX_HELLOS, MAX_LEDGER_LINES, MAX_LOG_LINES, MAX_PATH, MAX_PINS,
+                         WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,
+                         record_many, trusted_session_of, withheld_on)
 from .one_stage.draw import digits, strata_problem
 from .remote import MAX_BATCH
 
@@ -345,19 +346,9 @@ def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins:
     return challenger_stream(commitment, segment, after, roots.get(label, ()))
 
 
-#: the most refused hellos a session's evidence holds
-MAX_HELLOS = 1 << 20
-#: the most lines an auditor's ledger holds: each is signed at its own leaf of the challenger's key, of which a key at the
-#: deployed parameters (`lms.DEPLOYED`) has 2^20
-MAX_LEDGER_LINES = 1 << 20
-#: the most lines a host's pins log holds
-MAX_PINS = 1 << 20
-#: the longest path a coin opening holds: the depth of a layout of `MAX_COINS` coins
-MAX_PATH = (MAX_COINS - 1).bit_length()
-
-
 class Limits(NamedTuple):
-    """Bounds on the sizes of a draw's coin evidence (`coins_within`)."""
+    """Bounds on the sizes of a sample's coin evidence (`coins_within`), each defined once in `challenger`, whose device
+    code refuses past each (`remote`, "The device's caps")."""
     log: int
     hellos: int
     ledger: int

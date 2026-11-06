@@ -51,7 +51,7 @@ RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "dec
 DOC_TERMS = {
     "wrong unit, incorrect unit": "incorrect proof block",
     "faulty proof block, faulty block, faulty set": "incorrect proof block; the incorrect set F",
-    "isolation unit, IU": "isolation block",
+    "isolation unit, IU": "inference block",
     "replay unit": "replay block",
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
     "components, the composite's product": "subprotocols, composition",
@@ -68,18 +68,38 @@ DOC_TERMS = {
     "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
+    "uplink tap, the auditor's tap": "the network certifier, and its records network certificates",
+    "timed verifier": "the memory challenger",
+    "network transparency": "network accounting",
+    "prover gateway, verifier gateway": "the ZK server; the challenger",
+    "batch verifier": "the verifier",
+    "GPU workers": "workers",
+    "escape probability": "acceptance probability",
+    "post-landing run, postland": "after-landing run",
+    "Commit window": "Commit period",
+    "accounting period": "the monitoring period",
+    "isolation block, certified block": "inference block",
+    "transformer block": "layer",
+    "audit phase, audit round": "the verification phase",
+    "monitored compute, monitored hardware, monitored server": "registered hardware (the monitoring period keeps its name)",
+    "staging decode": "the store's load",
+    "pinned theorem, pinned statement": "guarantee",
+    "trusted text": "spec",
     "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
                                                             "verification phase)",
     "hm96 rows, outside the commitments' docs": "hiding commitments",
+    "integrity period": "execution phase (`IntegrityPeriod` stays in backticks until renamed)",
+    "execution transcript": "trace (a proof's or a session's messages stay its transcript)",
     "that period's coins": "before any coins are flipped",
     "rejection dominates, reject dominance": "any rejection rejects the whole",
-    "physical block": "server-time block",
+    "physical block": "server block",
     "thread block": "CTA",
     "KV block": "KV page",
     "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
                                           "renamed)",
-    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
+    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, PoUB, network certification), the bandwidth audit's or the "
+           "memory wipe's, or run",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -87,10 +107,18 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
                        rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
+                       rf"|integrity{_SPACE}periods?|execution{_SPACE}transcripts?"
                        rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
                        rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
+                       rf"|uplink{_SPACE}taps?|auditor's{_SPACE}taps?"
+                       rf"|timed{_SPACE}verifiers?|network{_SPACE}transparency|(?:prover|verifier){_SPACE}gateways?"
+                       rf"|batch{_SPACE}verifiers?|GPU{_SPACE}workers?|escape{_SPACE}probabilit(?:y|ies)"
+                       rf"|post{_SPACE}landing(?:{_SPACE}runs?)?|postland\w*|commit{_SPACE}windows?|accounting{_SPACE}periods?"
+                       rf"|(?:isolation|certified|transformer){_SPACE}blocks?|audit{_SPACE}(?:phases?|rounds?)"
+                       rf"|monitored{_SPACE}(?:compute|hardware|servers?)|staging{_SPACE}decodes?"
+                       rf"|pinned{_SPACE}(?:theorems?|statements?)|trusted{_SPACE}texts?"
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
                        rf"|\bcommit{_SPACE}periods?\b")
 #: The commitments' own docs, where hm96 rows keep their name.
@@ -112,7 +140,6 @@ ALLOWED: dict[str, str] = {
     "report-proof-service-": "a cited note's id",
     "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
                                             "it; renamed after it lands",
-    "before any coin draws (the firewall's staged statements)": "a line of GLOSSARY.md that queued PRs on next rewrite; the protocol vocabulary's rename follows them",
     "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
@@ -125,8 +152,6 @@ PENDING: dict[str, str] = {
     "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
     "integrations/vllm/verity_vllm/pipeline/serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
     "integrations/vllm/tests/pipeline/test_serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
-    "integrations/vllm/verity_vllm/program/predict/weights_tie.py": "queued PRs add the term here; the proof-service rename follows them",
-    "integrations/vllm/tests/program/predict/test_weights_tie.py": "queued PRs add the term here; the proof-service rename follows them",
     "verity/ml/commitments/domains.py": "queued PRs add the term here; the proof-service rename follows them",
     "benchmarks/pouw/served_h1/coins.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/claims/tests/test_claims_registry.py": "queued PRs rewrite its lines; the proof-service rename follows them",
@@ -138,22 +163,15 @@ PENDING: dict[str, str] = {
     "examples/h200/interfaces/verity_e2e_demo/report.py": "#4691 adds a line",
     "examples/h200/README.md": "#4680 rewrites its lines",
     "benchmarks/stacked_share/README.md": "#4514 rewrites its lines",
-    "benchmarks/torch_gpu/p2_stage/README.md": "#4761 adds lines",
     "integrations/vllm/README.md": "#4773 adds lines",
     "verity/README.md": "#4502 rewrites its lines",
-    "verity/core/protocols/certifier/boundary.py": "#4721 rewrites its lines",
-    "verity/core/protocols/certifier/egress.py": "#4721 rewrites its lines",
-    "verity/core/protocols/certifier/tests/test_network_certifier_egress.py": "#4721 rewrites its lines",
     "verity/core/protocols/network/tests/period_case.py": "#6383 rewrites its docstrings and the rows form's refusals",
     "verity/core/protocols/network/tests/test_network_period_protocol.py": "#6383 rewrites its docstrings and the rows "
                                                                            "form's refusals",
     "verity/core/protocols/pous/README.md": "#4719 rewrites its lines",
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
-    "verity/ml/circuits/ops/boolean/rowwise.py": "#4539 rewrites its lines",
     "verity/ml/windows/interface.py": "#4502 adds lines",
-    "benchmarks/pouw/accel_v31/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "examples/onsite_served/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "Security/Definitions/Nci/Capability/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "Security/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/hash/lib/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/multi_unit/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
@@ -161,18 +179,13 @@ PENDING: dict[str, str] = {
     "benchmarks/pouw/commit_gpu/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/pouw/machine_model/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/sampling_plan/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/core/devices/certifier/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/core/protocols/interface/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/core/protocols/network/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/core/protocols/pouw/lean/check/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/ml/circuits/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/ml/definitions/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     ".agents/skills/friction/SKILL.md": "queued PRs on next add the warden here; the network certifier's rename follows them",
     "AGENTS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "ARCHITECTURE.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/rho/README.md": "queued PRs on next rewrite it",
-    "benchmarks/verifier_cost/README.md": "queued PRs add the term here; the training vocabulary's rename follows them",
     "benchmarks/prove_path/e2e_chains/README.md": "queued PRs on next rewrite lines the training vocabulary's rename touches; it follows them",
     "Security/Proofs/Flock/Soundness/Audit/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/bandwidth/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -180,7 +193,6 @@ PENDING: dict[str, str] = {
     "benchmarks/network_sim/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/network_traces/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/one_stage/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/pouw/fp_exact/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/pouw/opcode_probe/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/torch_gpu/sha512_rows/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -195,7 +207,6 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/composition/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/pous/DISCREPANCIES.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/pous/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/pous/p2/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/remote/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/sampled_proofs/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/commitments/hm96/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -303,7 +314,7 @@ def test_the_scan_reads_each_form():
         "b.rs": "/// the proof\n/// unit of it; a bulletproof unit\nlet reason = \"N, the round's proof units\";\n",
         "d.py": '# the Proof-Service and a proof\n# services; proof_service, verity/proof-service/stream/v0; a faulty service\n',
         "c.lean": "-- a proof unit",
-        "verity/README.md": "a proof unit",
+        next(iter(PENDING)): "a proof unit",
         GLOSSARY: '| "proof unit", and "unit" alone meaning one | proof block |\n| other | a proof unit |\n',
     }
     found, used = offenders(list(docs), read=docs.__getitem__)
@@ -353,6 +364,14 @@ def test_the_scan_reads_the_incorrect_ands():
     assert offenders(list(docs), read=docs.__getitem__)[0] == [("a.py", 1, "faulty ANDs"), ("a.py", 1, "faulty # ANDs")]
 
 
+def test_the_doc_scan_reads_the_trace_and_phase_terms():
+    """A run's trace and the execution phase, on toy files: a proof's transcript and `IntegrityPeriod` stay."""
+    docs = {"a.md": "An integrity period, two integrity\nperiods and an execution-transcript; a proof's transcript, "
+                    "`IntegrityPeriod`.\n"}
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "integrity period"), ("a.md", 1, "integrity periods"), ("a.md", 2, "execution-transcript")]
+
+
 def test_the_doc_scan_reads_each_form():
     """The maintained-docs scan, on toy files: prose only, in Markdown only."""
     docs = {
@@ -362,7 +381,7 @@ def test_the_doc_scan_reads_each_form():
                 "```sh\nLEGS=A,B ./run.sh  # each leg\n```\n~~~\na leg\n~~~\nA thread block after the fences.\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
         "benchmarks/pouw/CHANGELOG.md": "a leg",
-        "verity/README.md": "a leg",
+        next(f for f in PENDING if f.endswith(".md")): "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [(GLOSSARY, 2, "leg"),
@@ -387,6 +406,22 @@ def test_the_doc_scan_reads_the_protocol_terms():
         ("a.md", 1, "sampling block"), ("a.md", 2, "declared circuit"), ("a.md", 3, "hm96 rows"),
         ("a.md", 3, "period's coins"), ("a.md", 3, "rejection dominates"), ("a.md", 4, "commit period"),
         ("a.md", 4, "flock-verify"), ("verity/ml/commitments/x/PROTOCOL.md", 1, "draw")]
+
+
+def test_the_doc_scan_reads_the_network_and_process_terms():
+    """The network certifier's, the lock's and the landing's older names, on toy files: a Commit period, a pinned key and
+    a trusted host stay."""
+    docs = {
+        "a.md": "The uplink\ntap and the auditor's tap.\n"
+                "A Commit window, the isolation blocks, a transformer block; each pinned theorem in the trusted text.\n"
+                "The timed verifier, the prover gateway, GPU workers, the escape probability, the post-landing run.\n"
+                "A Commit period, a pinned key and a trusted host stay.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "uplink tap"), ("a.md", 2, "auditor's tap"), ("a.md", 3, "Commit window"),
+        ("a.md", 3, "isolation blocks"), ("a.md", 3, "transformer block"), ("a.md", 3, "pinned theorem"),
+        ("a.md", 3, "trusted text"), ("a.md", 4, "timed verifier"), ("a.md", 4, "prover gateway"), ("a.md", 4, "GPU workers"),
+        ("a.md", 4, "escape probability"), ("a.md", 4, "post-landing run")]
 
 
 def test_the_doc_scan_reads_the_reporting_terms():

@@ -34,7 +34,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   roots and their domains and its instance count the record's, else the check refuses, before any session is verified;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
-  (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
+  (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports, domains and roots,
   `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV3` covers, or at a shared-row public file
   `SampledKSLiveV5`'s, `Flock.KsScope.checkOf`), and a session's verdict holds only where the registration's population
   is the circuit file's units in order (`FilePart.check`: its strata over the verifier's program and query, read stratum
@@ -86,6 +86,27 @@ def KEY_PARAMS : String :=
 /-- The key is at `Lms.deployed`, field by field (`Lms.Params` derives only `BEq`). -/
 def deployedKey (key : Challenger.ChallengerKey) : Bool :=
   key.params.N == Lms.deployed.N && key.params.W == Lms.deployed.W && key.params.H == Lms.deployed.H
+
+/-- The refusal of a template instance of no unit: each proof block would hold no gate. Every unit holds a computed row,
+its own constant, so `units_per_vu ≥ 1` is all a proof block's gate needs. -/
+def NO_ROW_WHY : String := "the circuit's units_per_vu is 0: a template instance of no unit, a proof block of no gate"
+
+/-- The widest public size class of a proof block's outputs, in bits (`Claims.Sampling.unitClassMax`). -/
+def UNIT_CLASS_MAX : Nat := 262144
+
+/-- The refusal of a template instance that returns more bits than the widest size class holds. -/
+def WIDE_WHY : String :=
+  "a template instance returns more than 262144 bits (16 per output leaf of its units_per_vu units): past the " ++
+    "widest size class"
+
+/-- **The bits a template instance returns**: 16 per output leaf of each of its `units_per_vu` units. -/
+def returnedBits (c : Flock.Circuit) : Nat := 16 * ((List.range c.upv).map fun u => (c.leavesOut.getD u #[]).size).sum
+
+/-- **The unit template's refusals** on the parsed circuit: a template instance of no unit (`NO_ROW_WHY`), and one
+returning more than `UNIT_CLASS_MAX` bits (`WIDE_WHY`). -/
+def templateOk (c : Flock.Circuit) : V Unit := do
+  if c.upv = 0 then throw NO_ROW_WHY
+  if returnedBits c > UNIT_CLASS_MAX then throw WIDE_WHY
 
 /-- The verifier's own inputs to `flock-verify verify --zk`: the program's descriptor (as JSON and as the bytes
 `--program` reads), the partition object, the circuit and public files' committed SHA-512s and the registered file. -/
@@ -452,8 +473,10 @@ def run (p : Own) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)
   let I := inputsOf tags0 p circuitB pubB bs
   let rd ← readsOf p.registered
   let tags := Flock.Witness.zkTags I
-  let scope := Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true pubB I.count
-    false rd.registered.isSome
+  let scope : V Unit := do
+    Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags true pubB I.count false
+      rd.registered.isSome
+    templateOk (← Flock.ProvedScope.circuitOf tags I.circuitFile I.tables)
   let ksFiles := Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf tags I.circuitFile I.tables) tags pubB
   let population := FilePart.check p.program (getD p.partition "query") pubB
   let r ← sessions.foldlM

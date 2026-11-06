@@ -18,6 +18,9 @@
     CublasSerialSplitKGemm_v1{K, N, SPLIT_K, DOT}
                                     cc 12.0's serial split-K: the same chunks in order, each chain added to the previous
                                     chunk's bf16 output and rounded to bf16
+    GemmPad_v1{T, K, N, DOT}        (x: Array<T, BF16>, w: Array<N, Array<T, BF16>>) -> Array<N, BF16>
+                                    `GemmCoordinatePad_v1{T, K, DOT}` of x against each W row: both padded with K - T +0
+                                    words at the back
 
 on words, and each one's v2 the same function on bits (its ``word`` the v1, so `boolean.boolean_version` finds it): `GemmF32Out_v2`
 takes the K/16 steps of every W row at once, each step one batch over the rows, and `BatchedGemm_v2` is `GemmF32Out_v2` of each
@@ -41,11 +44,15 @@ rows against partition, reduction-order and partial-type alternatives.  On cc 12
 with each partial rounded to bf16 before the reduction widens it; at others it launches a cutlass kernel alone, whose grid.z
 slices meet in its epilogue through the bf16 output: `CublasSerialSplitKGemm`.
 
-smollm2-135m's training step (`TRAIN_CAPTURE`) reuses these Definitions on bits for every GEMM it runs.  F.linear's three GEMMs
+smollm2-135m's training step (`TRAIN_CAPTURE`) reuses these Definitions on bits for every GEMM it runs, and the lf model's s step
+(`LF_M`, `LF_LINEARS`) for its linears'.  F.linear's three GEMMs
 at x (M, K), W (N, K) are each one row's `x @ w^T` (`TRAIN_LINEAR_ROLES`): forward x = X's row against W's rows, dX = dY's row
 against W^T's, dW = dY^T's row against X^T's.  `train_route` is the route sm_120 takes for one at the captured (M, K, N), and
-`route_gemm` binds a route, an explicit parameter, on `TRAIN_DOT`: unsplit `Gemm_v3`, `CublasSplitKGemmBf16Partials_v2`,
-`CublasSerialSplitKGemm_v2`, or, where cuBLAS slices K over grid.z at ceil(K / z) rounded up to 8 (B 8 x S 512's dW),
+`route_gemm` binds a route, an explicit parameter, on `TRAIN_DOT`: unsplit `Gemm_v3` (at a K that is not a multiple of 16,
+`GemmPad_v2`, x and each W row padded with +0 words at the back to the next multiple, which no capture at such a K has told
+apart yet from the residue k-tile first that the grid.z kernels take, nor from the gemv kernel cuBLAS 12.9.1 launches at M 1,
+`cublas_gemv`), `CublasSplitKGemmBf16Partials_v2`, `CublasSerialSplitKGemm_v2`, or, where cuBLAS slices K over grid.z at
+ceil(K / z) rounded up to 8 (B 8 x S 512's dW),
 `CublasSplitKGemmBf16PartialsAligned_v1{K, N, SPLIT_K, ALIGN, TILE_K, DOT}`, on bits only, whose chunks need not be whole
 k16 steps: each chunk's chain takes its k-tiles of TILE_K words residue first, as the launched cutlass kernel does;
 `train_linear` is the two together.  Eager attention's six bmm's (`TRAIN_BMM`) are all unsplit, the batch on grid.z and no
@@ -74,11 +81,11 @@ from verity.ml.definitions.evidence import EVIDENCE
 __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSerialSplitKGemm", "CublasSerialSplitKGemmWord",
            "CublasSplitKGemm", "CublasSplitKGemmBf16Partials", "CublasSplitKGemmBf16PartialsAligned",
            "CublasSplitKGemmBf16PartialsWord", "CublasSplitKGemmF32Out", "CublasSplitKGemmF32OutWord", "CublasSplitKGemmWord",
-           "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP", "HOPPER_STEP_V3",
+           "GemmF32Out", "GemmF32OutWord", "GemmPad", "GemmPadWord", "HOPPER_STEP", "HOPPER_STEP_V3",
            "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstV2", "HopperBf16Dot16StepFirstX",
            "HopperBf16Dot16StepFirstXV2", "HopperBf16Dot16StepV2", "HopperBf16Dot16StepX", "HopperBf16Dot16StepXV2",
-           "TRAIN_BMM", "TRAIN_BMM_SHAPES", "TRAIN_CAPTURE", "TRAIN_DOT", "TRAIN_LINEARS", "TRAIN_LINEAR_ROLES", "TRAIN_M",
-           "TRAIN_ROUTES",
+           "LF_LINEARS", "LF_M", "TRAIN_BMM", "TRAIN_BMM_SHAPES", "TRAIN_CAPTURE", "TRAIN_CC", "TRAIN_DOT", "TRAIN_LINEARS",
+           "TRAIN_LINEAR_ROLES", "TRAIN_M", "TRAIN_ROUTES",
            "aligned_bounds", "attention_bmm", "chain_step", "conformance_cc12", "dot_step", "residue_first", "route_gemm",
            "split_bounds", "train_linear", "train_route"]
 
@@ -104,10 +111,10 @@ def conformance_cc12(launch: str) -> str:
 CONFORMANCE_CC12 = conformance_cc12("`splitKreduce_kernel` with a bf16 workspace (M 1 to 303, split counts 2 to 16)")
 CONFORMANCE_CC12_SERIAL = conformance_cc12("a cutlass kernel whose grid.z slices meet through the bf16 output, no reduction kernel "
                                            "(M 303, K 12288, 5 slices)")
-TRAIN_CAPTURE = ("a capture of the training workload's GEMMs on cc 12.0 with 188 SMs (torch 2.14.0+cu130 on "
-                 "cuBLAS 13.1.1.3, deterministic, CUBLAS_WORKSPACE_CONFIG=:4096:8) at B 1 x S 256 and B 8 x S 512, every "
-                 "launch's kernel and grid recorded, each role's sampled words fitting its route exactly on random and "
-                 "count-probe words")
+TRAIN_CAPTURE = ("captures of the training workloads' GEMMs on cc 12.0 with 188 SMs (torch 2.14.0+cu130 on "
+                 "cuBLAS 13.1.1.3, deterministic, CUBLAS_WORKSPACE_CONFIG=:4096:8) at B 1 x S 256, B 8 x S 512 and B 2 x S "
+                 "1024 (the lf model's s step's linears), every launch's kernel and grid recorded, each role's sampled words "
+                 "fitting its route exactly on random and count-probe words")
 CONFORMANCE_ALIGNED = ("exact-model-tested: every output word of the B 8 x S 512 step's dW in a full-tensor dump of the step "
                        "(row GEMMs at K 4096: N 576 over 7 and 3 grid.z slices at TILE_K 32 and over 12 at TILE_K 64, N 1536 "
                        "over 3 at TILE_K 32), where cuBLAS launches a cutlass kernel over grid.z and `splitKreduce_kernel` with "
@@ -191,6 +198,16 @@ def _gemm_f32(dot):
 def _batched(gemm):
     def body(B, S, x, w):
         return B.batch(bind(gemm, K=S.K, N=S.N, DOT=S.DOT), x, w, axes=(0, 0))
+    return body
+
+
+def _gemm_pad_type(X):
+    return lambda S: ((("x", Array(S.T, X)), ("w", Array(S.N, Array(S.T, X)))), Array(S.N, X))
+
+
+def _gemm_pad(coordinate):
+    def body(B, S, x, w):
+        return B.batch(bind(coordinate, T=S.T, K=S.K, DOT=S.DOT), x, w, axes=(None, 0))
     return body
 
 
@@ -296,6 +313,11 @@ def _aligned_splitk(B, S, x, w):
 
 
 GEMM_F32_DOC = "`x[K] @ W[N, K]^T` with the f32 accumulator as the output: `DotBf16{K, DOT}` on each W row (torch.mm out_dtype=float32)"
+GEMM_PAD_DOC = ("`x[T] @ W[N, T]^T` with x and each W row padded with K - T +0 words at the back, what a k loop that masks its "
+                "loads past T multiplies: `GemmCoordinatePad{T, K, DOT}` on each W row")
+CONFORMANCE_PAD = ("not-yet-established: `GemmCoordinatePad`'s k16 chain on each W row, which no capture of a cuBLAS route at a K "
+                   "that is not a multiple of 16 has fitted (cc 12.0's grid.z kernels take a residue k-tile first, "
+                   "`residue_first`, and cuBLAS 12.9.1 launches a gemv kernel there at M 1, `cublas_gemv`)")
 BATCHED_DOC = "torch.bmm on bf16: `Gemm{K, N, DOT}` of each member's x against its W (w[b][n][k] the operand at [b, k, n])"
 SPLITK_DOC = ("cuBLAS 12.9.1's cc 9.0, 132-SM split-K: equal 64-element-aligned contiguous chunks and a final remainder, one ascending DOT "
               "chain from +0 per chunk, then a separate serial f32 reduction in increasing split order")
@@ -321,6 +343,10 @@ BatchedGemmWord = CompositeDefinition("BatchedGemm", 1, ("B", "K", "N", "DOT"), 
 GemmF32Out = CompositeDefinition("GemmF32Out", 2, ("K", "N", "DOT"), _gemm_f32_type(BF16, F32), _gemm_f32_bits,
                                  doc=f"{GEMM_F32_DOC} (on bits: each k16 step over every row at once, x's own gates once)",
                                  conformance=CONFORMANCE)
+GemmPadWord = CompositeDefinition("GemmPad", 1, ("T", "K", "N", "DOT"), _gemm_pad_type(P.BF16), _gemm_pad(G.GemmCoordinatePad),
+                                  doc=GEMM_PAD_DOC, conformance=CONFORMANCE_PAD, refuse=G.GemmCoordinatePad.refuse)
+GemmPad = CompositeDefinition("GemmPad", 2, ("T", "K", "N", "DOT"), _gemm_pad_type(BF16), _gemm_pad(BG.GemmCoordinatePad),
+                              doc=f"{GEMM_PAD_DOC}, on bits", conformance=CONFORMANCE_PAD, refuse=G.GemmCoordinatePad.refuse)
 BatchedGemm = CompositeDefinition("BatchedGemm", 2, ("B", "K", "N", "DOT"), _batched_type(BF16), _batched_bits,
                                   doc=f"{BATCHED_DOC} (on bits: `GemmF32Out_v2` of each member, then `F2fpBf16_v2` of each word)",
                                   conformance=CONFORMANCE)
@@ -356,6 +382,7 @@ CublasSplitKGemmBf16PartialsAligned = CompositeDefinition(
     _aligned_splitk,
     doc=ALIGNED_DOC, conformance=CONFORMANCE_ALIGNED)
 GemmF32Out.word = lambda b: bind(GemmF32OutWord, K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
+GemmPad.word = lambda b: bind(GemmPadWord, T=b["T"], K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 BatchedGemm.word = lambda b: bind(BatchedGemmWord, B=b["B"], K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 CublasSplitKGemmF32Out.word = lambda b: bind(CublasSplitKGemmF32OutWord, K=b["K"], N=b["N"], SPLIT_K=b["SPLIT_K"],  # type: ignore[attr-defined]
                                                       DOT=word_of(b["DOT"]))
@@ -368,6 +395,9 @@ CublasSerialSplitKGemm.word = lambda b: bind(CublasSerialSplitKGemmWord, K=b["K"
 
 TRAIN_M = (256, 4096)
 TRAIN_LINEARS = ((576, 576), (576, 192), (576, 1536), (1536, 576), (576, 49152))
+#: the lf model's s step (d 512, SwiGLU 1408, vocabulary 32,000) at B 2 x S 1024
+LF_M = (2048,)
+LF_LINEARS = ((512, 512), (512, 1408), (1408, 512), (512, 32000))
 #: F.linear's GEMMs at x (M, K), W (N, K): role -> (x's rows, w's rows, the row GEMM's (K, N) at (M, K, N))
 TRAIN_LINEAR_ROLES: dict[str, tuple[str, str, Callable[[int, int, int], tuple[int, int]]]] = {
     "fwd": ("X", "W", lambda M, K, N: (K, N)),
@@ -385,6 +415,8 @@ TRAIN_BMM: dict[str, tuple[str, str, Callable[[int, int], tuple[int, int]]]] = {
 }
 TRAIN_BMM_SHAPES = ((256, 64), (512, 64))
 _NOSPLIT = {"kernel": "nosplit"}
+#: the compute capability whose cuBLAS `TRAIN_ROUTES` are (`TRAIN_CAPTURE`)
+TRAIN_CC = (12, 0)
 #: (M, K, N, role) -> the route sm_120 takes, in `bf16_gemm_check.cublas_route_rows`' form
 TRAIN_ROUTES: dict[tuple[int, int, int, str], dict[str, Any]] = {
     **{(M, K, N, role): _NOSPLIT for M in TRAIN_M for K, N in TRAIN_LINEARS for role in TRAIN_LINEAR_ROLES},
@@ -397,6 +429,15 @@ TRAIN_ROUTES: dict[tuple[int, int, int, str], dict[str, Any]] = {
 _GRID_Z_DW = {(576, 576): (7, 32), (576, 192): (12, 64), (576, 1536): (3, 32), (1536, 576): (3, 32)}
 for (_K, _N), (_z, _t) in _GRID_Z_DW.items():
     TRAIN_ROUTES[(4096, _K, _N, "dW")] = {"kernel": "splitk", "SPLIT_K": _z, "partial": "bf16", "align": 8, "tile_k": _t}
+#: The s step's dW slices K 2048 over grid.z into whole k-tiles, where `aligned_bounds` is `split_bounds` and `residue_first`
+#: is (0, 0): its route is the plain bf16-workspace split-K, which also has a Definition on words.
+TRAIN_ROUTES.update({
+    **{(M, K, N, role): _NOSPLIT for M in LF_M for K, N in LF_LINEARS for role in TRAIN_LINEAR_ROLES},
+    (2048, 512, 512, "dW"): {"kernel": "splitk", "SPLIT_K": 8, "partial": "bf16"},
+    (2048, 512, 1408, "dW"): {"kernel": "splitk", "SPLIT_K": 4, "partial": "bf16"},
+    (2048, 1408, 512, "dW"): {"kernel": "splitk", "SPLIT_K": 4, "partial": "bf16"},
+    (2048, 512, 32000, "dX"): {"kernel": "serialk", "SPLIT_K": 5},
+})
 
 
 def train_route(role: str, M: int, K: int, N: int) -> dict[str, Any]:
@@ -405,16 +446,18 @@ def train_route(role: str, M: int, K: int, N: int) -> dict[str, Any]:
     if role not in TRAIN_LINEAR_ROLES:
         raise ValueError(f"train_route: role {role!r} (only {', '.join(TRAIN_LINEAR_ROLES)})")
     if (M, K, N, role) not in TRAIN_ROUTES:
-        raise ValueError(f"train_route: (M, K, N) = ({M}, {K}, {N}) is not captured (M in {TRAIN_M}, (K, N) in {TRAIN_LINEARS})")
+        raise ValueError(f"train_route: (M, K, N) = ({M}, {K}, {N}) is not captured (M in {TRAIN_M} at (K, N) in "
+                         f"{TRAIN_LINEARS}, M in {LF_M} at (K, N) in {LF_LINEARS})")
     return dict(TRAIN_ROUTES[(M, K, N, role)])
 
 
 def route_gemm(route: dict[str, Any], K: int, N: int) -> Any:
     """``route``'s Definition on bits at the row GEMM (K, N), `HopperBF16WgmmaDot16_v3` (`TRAIN_DOT`) its k16 step:
-    (x: Array<K, BF16>, w: Array<N, Array<K, BF16>>) -> Array<N, BF16>."""
+    (x: Array<K, BF16>, w: Array<N, Array<K, BF16>>) -> Array<N, BF16>.  An unsplit route at a K that is not a multiple of 16
+    is `GemmPad_v2`, its operands padded with +0 words to the next multiple."""
     kind, dot = route.get("kernel"), TRAIN_DOT
     if kind == "nosplit":
-        return bind(BG.Gemm, K=K, N=N, DOT=dot)
+        return bind(BG.Gemm, K=K, N=N, DOT=dot) if K % 16 == 0 else bind(GemmPad, T=K, K=K + (-K) % 16, N=N, DOT=dot)
     if "align" in route and kind == "splitk" and route.get("partial") == "bf16":
         if "tile_k" not in route:
             raise ValueError(f"route_gemm: route {route} has no tile_k, the grid.z kernel's k-tile")

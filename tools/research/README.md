@@ -107,6 +107,7 @@ research merge --canary [--tool check] [--json]                    # the gates' 
 research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
+research lean-times ...  # Lean tasks' p95
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
@@ -158,7 +159,7 @@ one `--no-ff` merge commit each, and drive fast-forwards `checked` to the review
 stuck ready PR or a red, and the lander handles only what drive refuses. A PR is admitted when it's open (drafts too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
 owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
-`pr:{n}@{head}`); `ready` refuses a body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes
+`pr:{n}@{head}`); `ready` and `open` only warn of a body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes
 from KEY's goal label, nor `Issue: none: REASON`. No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and one post per
 root cause names each PR it leaves out. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.

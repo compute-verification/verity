@@ -51,8 +51,8 @@ $S$ of $N$ units and a block $B$, conditioned on $|S \cap B| = j$ the share $S \
 (`share_uniform`, `share_cond`), the share size is hypergeometric (`share_card`), and $W \subseteq B$ escapes at share
 size $j$ with that size's probability times the member's own $\binom{|B|-|W|}{j}/\binom{|B|}{j}$ (`share_escape`,
 `share_escape_total`). **The pooled escape** (`Audit/Pooled.lean`): over $T$ periods, each a fresh uniform
-$kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier draws
-escapes every draw with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`horizon_escape`), at most
+$kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier samples
+escapes every sample with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`horizon_escape`), at most
 $\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`horizon_escape_prod`); at $\delta$, the escaped total
 reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$ (`pooled_escape_log`, in `Claims.Pr`, which is outside the audit layer:
 `Claims/Sampling/PooledPr.lean`).
@@ -76,10 +76,11 @@ over strata; `flock_e2e_drawn_exec` and `flock_e2e_count_exec` are the e2e theor
 stratum's `k` at most its size, so those two hypotheses follow from the verifier accepting. The `FailClosed` claims take
 neither: their law is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
 (`liveStrata_of_ofJson`: non-empty at an accepted sample file's law). `drawOS_subset_escape_le`,
-`drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live sample**: `Flock.Draw.drawOS`,
-which is `drawWith` on `IO.getRandomBytes` (`drawOS_def`), extending a stream that runs out and rerunning, misses $B$
-with probability at most the same acceptance probabilities, on a byte source that A3 makes uniform
-(`Assumptions.UniformRandomBytes`); `execOS_escape_le` and `execOS_subset_escape_le` state it for the live sample as a
+`drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live sample**:
+`Flock.Draw.drawWith` on the challenger's coins (`SampledProofs.Draw.drawUnits`; `Flock.Draw.drawOS` is `drawWith` on
+`IO.getRandomBytes`, `drawOS_def`), extending a stream that runs out and rerunning, misses $B$ with probability at most
+the same acceptance probabilities, on a byte source that A3 makes uniform (`Assumptions.UniformRandomBytes`);
+`execOS_escape_le` and `execOS_subset_escape_le` state it for the live sample as a
 sampling design (`execOS`). `subsetOn_escape_le`, `drawOn_escape_le` and `keyedWindow_escape_le` (`KeyedDraw.lean`),
 **the PoUW circuit's keyed samples**. `Key.subset`, which samples each swap from its own `verity.ml.randomness` stream, has
 no higher acceptance probability than the uniform $k$-subset. The window's per-call samples under one key form one
