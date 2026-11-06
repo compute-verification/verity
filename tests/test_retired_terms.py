@@ -219,7 +219,6 @@ PENDING: dict[str, str] = {
     "verity/ml/windows/interface.py": "#4502 adds lines",
     "examples/onsite_served/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "Security/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "benchmarks/hash/lib/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/multi_unit/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/pous/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "benchmarks/pouw/commit_gpu/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
