@@ -384,8 +384,8 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's, so it takes the next
-    slot ahead of drive's unranked Lean checks) and --twin for one of a check's twins."""
+    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's and lock run's, so
+    they take the next slot ahead of unranked priority checks) and --twin for one of a check's twins."""
     by = SETTINGS.RESEARCH_LANE or SETTINGS.RESEARCH_AGENT_URL
     rank = SETTINGS.CHECK_SLOT_RANK
     return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []),
@@ -715,8 +715,8 @@ LEAN_SLOT_WRAP = [sys.executable, str(ROOT / "tools" / "verity" / "check" / "lea
 
 def lean_regenerates() -> bool:
     """Whether this tree's lean-audit job takes `--regenerate`: a package whose only failures are record differences passes,
-    and its report names the regenerated lock, which drive commits onto the train it lands.  Read from the job, so a
-    tree from before it runs as it always did."""
+    and its report names the regenerated lock, which drive commits after its lock run (`research.drive.Driver._commit_locks`).
+    Read from the job, so a tree from before it runs as it always did."""
     try:
         return '"--regenerate"' in (LEAN_JOBS / "lean_audit.py").read_text()
     except OSError:

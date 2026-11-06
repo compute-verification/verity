@@ -121,8 +121,8 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; only a conflict it refuses needs `check.py --update` on the merged tree.
 - Record your lock at your own head, then mark; a passing Lean check, a clean merge of `main` over a passing head, or a
-  commit of exactly the records a passing run kept needs no new run. A train regenerates records another PR moved;
-  re-record only what it can't (a refused conflict, `shape`, a move's map).
+  commit of exactly the records a passing run kept needs no new run. Once your PR lands, drive's lock run regenerates
+  records another PR moved; re-record only what it can't (a refused conflict, `shape`, a move's map).
 
 ## Standing rulings
 

@@ -351,15 +351,16 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   record means a guarantee now says something else. It protects only the guarantees
   and what they read, though it lists many lemmas too.
 - **Checking and landing** (the team skill, "Landing"):
-  - **Ready mark**: an owner's statement that a PR's head may land; drive admits only marked heads.
+  - **Ready mark**: an owner's statement that a PR's head may land; it admits that head to `next`.
   - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
   - **`next`**: drive's branch of admitted PRs, one merge each, above `main`, which fast-forwards to its reviewed prefix.
-  - **Preflight**: `research queue ready`'s checks of a head merged onto `next`, before the mark and at the sync that admits it.
+  - **Preflight**: `research queue ready`'s checks of a head merged onto `next`, before the mark; the sync runs none.
   - **Landing gate**: a script at `main` that every PR's merge onto `next` must pass.
   - **Low-risk lane**: drive landing a PR on `checked` on its ready mark alone, when its merge changes nothing drive.toml's
     `lowrisk_excludes` names (no Lean, lock or soundness-path change).
-  - **Lean check**: a run of every Lake package's audit (`lean-audit`) on a commit of `next`. A PR that changes a lock, or
-    Lean that runs as code, lands only on a passed Lean check at or above it.
+  - **Lock run**: drive's run of `lean-audit` alone on `checked`'s tip after a landing that changes Lean, a lock or the spec,
+    which lands on its verdict like any other; drive commits the lock records it regenerated there (`Lock records regenerated
+    for #N...`), and the after-landing run checks that commit.
   - **After-landing run**: the full check of `checked`'s tip after each landing; `main` moves only to tips that passed every step on the merge gate.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
