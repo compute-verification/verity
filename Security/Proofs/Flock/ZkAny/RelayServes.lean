@@ -16,10 +16,11 @@ auditor's a statement about `V*`:
 * `LoopServe`: `LoopRead` without the couplings: a frame round runs on the worker's round value at the model's history.
   `LoopServe.count_model`, `LoopServe.count_ctl`: each model slot takes one of the model's messages, and no other slot
   does.
-* `LoopServes`, **`RelayServes`**: the relay's requests to come, each served so, from the relay's start.
+* `ReadsBy`: `LoopReads`' walk over the requests at any reading of a slot; **`RelayServes`**: the relay's requests,
+  each served so (`ReadsBy` at `LoopServe`), from the relay's start.
 * **`WorkerDeterministic`**: the model's worker gives the worker's round values, a function of the history.
-* `AuditorAnswers`: at the relay's `j`-th model slot the model's run has a `j`-th message, and the auditor answered as
-  `V*` did.
+* `AnsPart`: what `LoopRead` asks of a slot beyond `LoopServe`'s clauses and the worker's values; `AuditorAnswers`: at
+  the relay's `j`-th model slot, `AnsPart` at the model's `j`-th message.
 * `loopRead_of_serve`, **`loopReads_of_serves`**, `RelayServes.loopReads`: so the requests are read as the loop answers
   them (`LoopReads`), where the model's worker answers the `Finish` with the firewall's own message.
 -/
@@ -89,37 +90,38 @@ def LoopServe {W Rr : Type} (M : LoopModel W Rr) (rv : List (Claims.Msg × Claim
       σ'.c = σ.c + 1
   | _, _, _, _, σ, σ' => Between sid σ.R σ'.R ∧ σ'.c = σ.c ∧ Stays sid σ σ'
 
-/-- **The relay's requests `es` to come as its IO code serves them**, from the session `st`, placement `pl` and the
-loop at `σ`: `LoopReads` at `LoopServe`. -/
-inductive LoopServes {W Rr : Type} (M : LoopModel W Rr) (rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg)
-    (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) (nonce : ByteArray) :
+/-- **The relay's requests `es` to come, each read by `Rd`**, from the session `st`, placement `pl` and the loop at
+`σ`: `LoopReads`' walk at the reading `Rd` of a slot, the rest so from the loop at the session's next request where the
+session goes on; nothing past the session's end. -/
+inductive ReadsBy (Rd : Session.Kind → State → Placed → Env → LoopAt → LoopAt → Prop) :
     LoopAt → State → Placed → List Env → Prop
-  | nil (σ : LoopAt) (st : State) (pl : Placed) : LoopServes M rv sid spec sts nonce σ st pl []
+  | nil (σ : LoopAt) (st : State) (pl : Placed) : ReadsBy Rd σ st pl []
   | stop {σ : LoopAt} {st : State} {pl : Placed} {e : Env} {rest : List Env} :
-      slot st pl = none → LoopServes M rv sid spec sts nonce σ st pl (e :: rest)
+      slot st pl = none → ReadsBy Rd σ st pl (e :: rest)
   | step {σ σ' : LoopAt} {st : State} {pl : Placed} {e : Env} {rest : List Env} (k : Session.Kind) :
-      slot st pl = some k → LoopServe M rv sid spec sts nonce k st pl e σ σ' →
+      slot st pl = some k → Rd k st pl e σ σ' →
       (((stepK true st pl (some (tagOf k)) (.ok k) e).go &&
           (stepK true st pl (some (tagOf k)) (.ok k) e).st.stop.isNone) = true →
-        LoopServes M rv sid spec sts nonce σ' (stepK true st pl (some (tagOf k)) (.ok k) e).st
+        ReadsBy Rd σ' (stepK true st pl (some (tagOf k)) (.ok k) e).st
           (stepK true st pl (some (tagOf k)) (.ok k) e).pl rest) →
-      LoopServes M rv sid spec sts nonce σ st pl (e :: rest)
+      ReadsBy Rd σ st pl (e :: rest)
 
 /-- `relay-serves` (a trust in the relay's IO code, which Lean reads but does not run). **The relay serves session
 `sid`'s requests `ins` as its IO code reads**, from its start with the loop at `σ`: at each request that reaches a
-slot, `LoopServe`'s clauses. They read `Flock.Firewall.Session.relay`'s loop body (`stepK`, held to it by reading), the
-rep frames' tasks it calls on the shared frames (`Frames.round` on the request's `roundContent`, `Frames.coins` on the
-auditor's coins, `Frames.finish`; their pure updates `RegStep`, `RoundRun`), the `Commit`'s `Level0.commit` against the
-level 0s `Session.level0` drew (`Level0.draw`), the `Link`'s put, the loop's own proofs (`ownProofs`) and the
-updates of the loop's other requests between the session's (`Between`, `Stays`), with the rep frames' starts
-(`Frames.startRep`, `StartOk`), the rounds of the inner proof the loop's finish computes (`Sessions.innerRound`,
-`InnerSrc`) and the salts `Finish.serve` keeps (`SaltsSrc`), each against the model's run `M`; a frame round's content
-being the worker's round value `rv` at the model's history (`WorkerDeterministic`). Why it is reasonable: each clause
-is one IO function's effect on the loop's references, stated with the pure functions the function calls. -/
+slot, `LoopServe`'s clauses (`ReadsBy`). They read `Flock.Firewall.Session.relay`'s loop body (`stepK`, held to it by
+reading), the rep frames' tasks it calls on the shared frames (`Frames.round` on the request's `roundContent`,
+`Frames.coins` on the auditor's coins, `Frames.finish`; their pure updates `RegStep`, `RoundRun`), the `Commit`'s
+`Level0.commit` against the level 0s `Session.level0` drew (`Level0.draw`), the `Link`'s put, the loop's own proofs
+(`ownProofs`) and the updates of the loop's other requests between the session's (`Between`, `Stays`), with the rep
+frames' starts (`Frames.startRep`, `StartOk`), the rounds of the inner proof the loop's finish computes
+(`Sessions.innerRound`, `InnerSrc`) and the salts `Finish.serve` keeps (`SaltsSrc`), each against the model's run `M`;
+a frame round's content being the worker's round value `rv` at the model's history (`WorkerDeterministic`). Why it is
+reasonable: each clause is one IO function's effect on the loop's references, stated with the pure functions the
+function calls. -/
 def RelayServes {W Rr : Type} (M : LoopModel W Rr) (rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg)
     (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) (nonce : ByteArray) (σ : LoopAt)
     (ins : List (ByteArray × Env)) : Prop :=
-  LoopServes M rv sid spec sts nonce σ {} {} (pick true {} {} ins)
+  ReadsBy (LoopServe M rv sid spec sts nonce) σ {} {} (pick true {} {} ins)
 
 /-- `worker-deterministic` (a trust in the worker's code). **The model's worker gives the worker's round values**: at
 each history `h` where the worker sends a frame round's content `v` (`rv h = some v`: the content
@@ -131,10 +133,25 @@ def WorkerDeterministic {W Rr : Type} (M : LoopModel W Rr)
     (rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg) : Prop :=
   ∀ h v, rv h = some v → M.wk M.x M.w M.ρ h 0 = some (v, false)
 
-/-- **The auditor answered the relay's model slots as `V*` did**: at the `j`-th of the model slots `sl` the model's run
-has a `j`-th message, and where it is not the `Finish`, the auditor answered it as `V*` did (`LoopModel.Ans`). -/
+/-- **What `LoopRead` asks of a slot of kind `k` beyond what the IO code serves and the worker's values**, with the
+loop at the model's `c`-th message: at a `Hello`, the `Commit` or a coin request, that the auditor answered `e` as `V*`
+did (`LoopModel.Ans`); at the `Finish`, that the model's run has a `c`-th message; nothing at a control slot. -/
+def AnsPart {W Rr : Type} (M : LoopModel W Rr) (c : Nat) (e : Env) : Session.Kind → Prop
+  | .hello | .commit | .round _ _ => M.Ans c e
+  | .finish => c < M.τ.length
+  | _ => True
+
+/-- **The auditor answered the relay's model slots as `V*` did**: at the `j`-th of the model slots `sl`, `AnsPart` at
+the model's `j`-th message. -/
 def AuditorAnswers {W Rr : Type} (M : LoopModel W Rr) (sl : List (Session.Kind × Env)) : Prop :=
-  ∀ j k e, sl[j]? = some (k, e) → j < M.τ.length ∧ (k ≠ .finish → M.Ans j e)
+  ∀ j k e, sl[j]? = some (k, e) → AnsPart M j e k
+
+/-- **A control slot asks nothing beyond what the IO code serves.** -/
+theorem AnsPart.of_ctl {W Rr : Type} {M : LoopModel W Rr} {c : Nat} {e : Env} {k : Session.Kind}
+    (hm : isModel k = false) : AnsPart M c e k := by
+  cases k
+  case hello | commit | round | finish => exact absurd hm (by decide : ¬(true = false))
+  all_goals exact True.intro
 
 /-- **A model slot takes one of the model's messages.** -/
 theorem LoopServe.count_model {W Rr : Type} {M : LoopModel W Rr}
@@ -167,26 +184,26 @@ theorem LoopServe.count_ctl {W Rr : Type} {M : LoopModel W Rr}
     obtain ⟨-, hc, -⟩ := h
     exact hc
 
-/-- **What the IO code serves at a slot is what the relay reads there**, where at a model slot the model's run has a
-message and the auditor answered as `V*` did but at the `Finish` (`hA`), the model's worker gives the worker's round
-values (`hw`), and it answers the `Finish` with the firewall's own message (`hfw`). -/
+/-- **What the IO code serves at a slot is what the relay reads there**, where the slot's `AnsPart` holds (`hA`), the
+model's worker gives the worker's round values (`hw`), and it answers the `Finish` with the firewall's own message
+(`hfw`). -/
 theorem loopRead_of_serve {W Rr : Type} {M : LoopModel W Rr}
     {rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {k : Session.Kind} {st : State} {pl : Placed} {e : Env} {σ σ' : LoopAt}
     (hs : LoopServe M rv sid spec sts nonce k st pl e σ σ') (hw : WorkerDeterministic M rv)
     (hfw : ∀ h : List (Claims.Msg × Claims.Msg), h.length = M.L.last M.x →
       M.wk M.x M.w M.ρ h 0 = some (M.L.ownMsg M.x M.w M.ρ h, false))
-    (hA : isModel k = true → σ.c < M.τ.length ∧ (k ≠ .finish → M.Ans σ.c e)) :
+    (hA : AnsPart M σ.c e k) :
     LoopRead M sid spec sts nonce k st pl e σ σ' := by
   cases k
-  case hello => exact ⟨(hA rfl).2 (fun h => nomatch h), hs⟩
-  case commit => exact ⟨(hA rfl).2 (fun h => nomatch h), hs⟩
+  case hello => exact ⟨hA, hs⟩
+  case commit => exact ⟨hA, hs⟩
   case round stream n =>
     obtain ⟨⟨i, r, dom, v, hv, hrr, hcf, hin, hsk⟩, hc, hst, hsa⟩ := hs
-    exact ⟨(hA rfl).2 (fun h => nomatch h), ⟨i, r, dom, v, hw _ _ hv, hrr, hcf, hin, hsk⟩, hc, hst, hsa⟩
+    exact ⟨hA, ⟨i, r, dom, v, hw _ _ hv, hrr, hcf, hin, hsk⟩, hc, hst, hsa⟩
   case finish =>
     obtain ⟨hb, hc⟩ := hs
-    have hlt := (hA rfl).1
+    have hlt : σ.c < M.τ.length := hA
     refine ⟨hlt, fun hbn => ?_, hc⟩
     obtain ⟨hst, hl, hfs, hf⟩ := hb hbn
     refine ⟨hst, hl, hfs, hfw _ ?_, hf⟩
@@ -194,19 +211,19 @@ theorem loopRead_of_serve {W Rr : Type} {M : LoopModel W Rr}
     exact hl
   all_goals exact hs
 
-/-- **The requests the IO code serves are read as the loop answers them**: at `LoopServes` from the loop at `σ`, where
-at the `j`-th of its model slots (`modelSlots`) the model's run has its `σ.c + j`-th message and the auditor answered
-it as `V*` did but at the `Finish`, the model's worker gives the worker's round values (`hw`) and answers the `Finish`
-with the firewall's own message (`hfw`): `LoopReads`, each model slot taking the model's next message
-(`LoopServe.count_model`, `LoopServe.count_ctl`). -/
+/-- **The requests the IO code serves are read as the loop answers them**: at `ReadsBy` at `LoopServe` from the loop
+at `σ`, where at the `j`-th of its model slots (`modelSlots`) `AnsPart` holds at the model's `σ.c + j`-th message, the
+model's worker gives the worker's round values (`hw`) and answers the `Finish` with the firewall's own message
+(`hfw`): `LoopReads`, each model slot taking the model's next message (`LoopServe.count_model`,
+`LoopServe.count_ctl`). -/
 theorem loopReads_of_serves {W Rr : Type} {M : LoopModel W Rr}
     {rv : List (Claims.Msg × Claims.Msg) → Option Claims.Msg} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} (hw : WorkerDeterministic M rv)
     (hfw : ∀ h : List (Claims.Msg × Claims.Msg), h.length = M.L.last M.x →
       M.wk M.x M.w M.ρ h 0 = some (M.L.ownMsg M.x M.w M.ρ h, false))
-    {σ : LoopAt} {st : State} {pl : Placed} {es : List Env} (h : LoopServes M rv sid spec sts nonce σ st pl es) :
-    (∀ j k e, (modelSlots st pl es)[j]? = some (k, e) →
-      σ.c + j < M.τ.length ∧ (k ≠ .finish → M.Ans (σ.c + j) e)) →
+    {σ : LoopAt} {st : State} {pl : Placed} {es : List Env}
+    (h : ReadsBy (LoopServe M rv sid spec sts nonce) σ st pl es) :
+    (∀ j k e, (modelSlots st pl es)[j]? = some (k, e) → AnsPart M (σ.c + j) e k) →
       LoopReads M sid spec sts nonce σ st pl es := by
   induction h with
   | nil σ st pl => exact fun _ => .nil σ st pl
@@ -220,21 +237,21 @@ theorem loopReads_of_serves {W Rr : Type} {M : LoopModel W Rr}
             (stepK true st pl (some (tagOf k)) (.ok k) e).pl rest
         else [] := by
       simp only [modelSlots, hk]
-    refine .step k hk (loopRead_of_serve hs hw hfw fun hm => ?_) fun hgo => ih hgo fun j k' e' hj => ?_
-    · exact hA 0 k e (by rw [hms, if_pos hm]; simp)
+    refine .step k hk (loopRead_of_serve hs hw hfw ?_) fun hgo => ih hgo fun j k' e' hj => ?_
+    · rcases hm : isModel k with _ | _
+      · exact AnsPart.of_ctl hm
+      · exact hA 0 k e (by rw [hms, if_pos hm]; simp)
     · rw [if_pos hgo] at hms
       rcases hm : isModel k with _ | _
       · rw [if_neg (show ¬(isModel k = true) by rw [hm]; decide), List.nil_append] at hms
-        obtain ⟨h1, h2⟩ := hA j k' e' (by rw [hms]; exact hj)
         rw [hs.count_ctl hm]
-        exact ⟨h1, h2⟩
+        exact hA j k' e' (by rw [hms]; exact hj)
       · rw [if_pos hm] at hms
-        obtain ⟨h1, h2⟩ := hA (j + 1) k' e' (by rw [hms]; simpa using hj)
         rw [hs.count_model hm, show σ.c + 1 + j = σ.c + (j + 1) by omega]
-        exact ⟨h1, h2⟩
+        exact hA (j + 1) k' e' (by rw [hms]; simpa using hj)
 
 /-- **The relay's requests, served from its start, are read as the loop answers them**: at `RelayServes` from the loop
-at `σ`, whose count of the model's messages is `0`, where the auditor answered the relay's model slots as `V*` did
+at `σ`, whose count of the model's messages is `0`, where `AnsPart` holds at the relay's model slots
 (`AuditorAnswers`), the model's worker gives the worker's round values (`WorkerDeterministic`) and answers the
 `Finish` with the firewall's own message (`hfw`). -/
 theorem RelayServes.loopReads {W Rr : Type} {M : LoopModel W Rr}
