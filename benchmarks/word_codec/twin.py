@@ -86,17 +86,6 @@ def encode_word(x: int, t: int, c: tuple[int, ...], form: int = 0) -> int:
     return x
 
 
-def horner31(acc: int, g: int, w: int) -> int:
-    _fits(acc, 32)
-    _fits(w, 32)
-    assert 0 <= g < 1 << 31
-    s = _fits(acc * g + w, 64)
-    f = _fits((s & M31) + (s >> 31), 64)
-    out = _fits((f & M31) + (f >> 31), 32)
-    assert out % M31 == (acc * g + w) % M31
-    return out
-
-
 def take4(payloads: list[int], bit: int, pb: int = 56) -> int:
     """Stream bits `bit` … `bit` + 31 of `pb`-bit payloads."""
     w, sh = divmod(bit, pb)
@@ -109,32 +98,3 @@ def take4(payloads: list[int], bit: int, pb: int = 56) -> int:
 def lane_registers(payloads: list[int], pb: int = 56) -> list[int]:
     """One lane's 64 A-fragment registers (16 tiles × 4) from its decoded payloads, as the fused kernel forms them."""
     return [take4(payloads, 128 * tt + 32 * r, pb) for tt in range(16) for r in range(4)]
-
-
-B3_CHUNK_START, B3_CHUNK_END, B3_ROOT, B3_KEYED = 1, 2, 8, 16
-
-
-def b3_lane_messages(j: int, words: list[int]) -> list[tuple[list[int], int, int]]:
-    """`b3_lane_tag`'s compressions of block j (its words, encoded): each one's 16 message words, length and flags."""
-    _fits(j, 64)
-    msg = 2 + 2 * len(words)
-    blocks = (msg + 15) // 16
-    bswap = lambda v: int.from_bytes(v.to_bytes(4, "little"), "big")  # noqa: E731
-    out = []
-    for b in range(blocks):
-        m = []
-        for i in range(16):
-            u = 16 * b + i
-            if u == 0:
-                m.append(bswap(j >> 32))
-            elif u == 1:
-                m.append(bswap(j & U32))
-            elif u < msg:
-                m.append(_fits(words[(u - 2) // 2], 64) >> (32 * (u & 1)) & U32)
-            else:
-                m.append(0)
-        length = 64 if b + 1 < blocks else 4 * (msg - 16 * (blocks - 1))
-        flags = B3_KEYED | (B3_CHUNK_START if b == 0 else 0) | (B3_CHUNK_END | B3_ROOT if b + 1 == blocks else 0)
-        out.append((m, length, flags))
-    return out
-

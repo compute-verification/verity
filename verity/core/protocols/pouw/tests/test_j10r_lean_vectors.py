@@ -11,7 +11,7 @@ import pytest
 from verity.core.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw.circuit import seeds as SD
 
-pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
+pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 CHECKS = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Accounting" / "TS" / "J10RChecks.lean"
 SALT = bytes(range(64))
 RA = bytes((7 * i + 3) % 256 for i in range(64))

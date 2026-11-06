@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Split
+module
+
+public import Proofs.Flock.Claims.ZK.Split
 
 /-!
 # The cut run answers by the openings (`Masked.prefixLive`)
@@ -15,6 +17,8 @@ send `ops.length`, and a live run that sends no more than `ops.length` bodies st
 * **The returning count** (`sessionPZk_size`): a masked session that returns sent `repStartZk` of its last rep, which is
   `1 + rounds = refK x` (`repStart_last`, `refK_eq`), more than `ops.length`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.PrefixAgree
 

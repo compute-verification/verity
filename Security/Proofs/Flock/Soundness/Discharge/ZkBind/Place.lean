@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Placed
-import Proofs.Flock.Soundness.Discharge.ZkExec
-import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+module
+
+public import Proofs.Flock.Soundness.Discharge.Placed
+public import Proofs.Flock.Soundness.Discharge.ZkExec
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
 
 /-!
 # `--zk` unit placements: each drawn unit's `UnitPlace` from setupH's accept
@@ -18,6 +20,8 @@ e2e-placed's `Placed.Sites.progPlaces_keyProg`, for plans of `TabZK` tables:
   from the sites and the parse alone: its rows the program's (W6 from the parse), its instance the program's own
   (`Const.Prog.instC`), its block the site's (`SitesZ.placeKey_spec`), aliased as Δ copies.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -114,7 +118,7 @@ noncomputable def SitesZ.placeKey (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h 
   inst := Const.Prog.instC (keyProg c hU n) outs u
   o := si.o S R u h
   col := si.colKey hU hparse S R u h
-  placed := si.placed_keyProg hU hparse S R u h
+  placed := (si.placed_keyProg hU hparse S R u h).sat
   aliased := si.aliased_keyProg hU hparse outs S R u h
 
 /-- **`placeKey` is the program's unit at its site**: its rows are the program's, its instance the program's own

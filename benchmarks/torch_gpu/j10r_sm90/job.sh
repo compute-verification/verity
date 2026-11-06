@@ -38,14 +38,13 @@ build() {
     "$D/j10r_ref.cu" -o "$lib/j10r_ref.so" > "$lib/ptxas.txt" 2>&1 || { cat "$lib/ptxas.txt"; return 2; }
   { echo "commit $(cat "$OUT/commit.txt")"; "$nv" --version | tail -2
     echo "flags -O3 -std=c++17 -shared -Xcompiler -fPIC -gencode arch=compute_90a,code=sm_90a"
-    sha256sum "$lib/j10r_ref.so" "$D/j10r_ref.cu" benchmarks/torch_gpu/sha512_rows/sha512x.cuh; } > "$lib/BUILD.txt"
+    sha256sum "$lib/j10r_ref.so" "$D/j10r_ref.cu" verity/ml/kernels/sha512.cuh; } > "$lib/BUILD.txt"
   cat "$lib/BUILD.txt"; grep -E 'registers|spill' "$lib/ptxas.txt"
 }
 
-# sm_90a arms of benchmarks/hash/dither/h1u.cu, compiled from this tree with
-# benchmarks/hash/dither/j10r90.sh's defines and dither/job.sh's flags plus --no-compress: $OUT/lib/sm_90a/h1u_ARM.so,
-# their resource usage and BUILD.txt; then benchmarks/pouw/harness/sass_gate.py on them as sass_pins.json stands
-# (sass-gate.json, a diagnostic only)
+# sm_90a arms of benchmarks/hash/dither/h1u.cu, compiled from this tree with dither/job.sh's flags plus --no-compress:
+# $OUT/lib/sm_90a/h1u_ARM.so, their resource usage and BUILD.txt; then benchmarks/pouw/harness/sass_gate.py on them as
+# sass_pins.json stands (sass-gate.json, a diagnostic only)
 H1U_BASE=-DH1U_KSPLIT=4,-DH1K_AUTO=1,-DH1K_RONLY=1
 H1U_A=$H1U_BASE,-DH1U_JCTA=1,-DH1U_WARPS=4,-DH1U_JX=1,-DH1U_JBW=1
 H1U_Q=$H1U_A,-DH1U_PF=1,-DH1U_JPI=1
@@ -84,10 +83,12 @@ h1u_build() {
 }
 
 # s8_linear's exact plain linear (benchmarks/torch_gpu/s8_linear), given as files in LIBS: its build.sh run unchanged
-# from a scratch copy, $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory
+# from a scratch copy, with this tree's harness gate (benchmarks/pouw/harness/sass_gate.py, its sass_gate.py's mma_gate)
+# beside it, $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory
 s8_build() {
-  local w=$S/s8/benchmarks/torch_gpu/s8_linear nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-  mkdir -p "$w" && cp "$LIBS"/{build.sh,s8_wgmma.cu,s8_acc.h,sass_gate.py,wgmma.py,configs.py} "$w/" || return 2
+  local w=$S/s8/benchmarks/torch_gpu/s8_linear h=$S/s8/benchmarks/pouw/harness nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
+  mkdir -p "$w" "$h" && cp "$LIBS"/{build.sh,s8_wgmma.cu,s8_acc.h,sass_gate.py,wgmma.py,configs.py} "$w/" || return 2
+  cp "$ROOT/benchmarks/pouw/harness/sass_gate.py" "$h/" || return 2
   CUDA=$(dirname "$(dirname "$nv")") PY=/nonexistent bash "$w/build.sh" "$OUT/s8ship" >&2 || return 2
   echo "$w"
 }

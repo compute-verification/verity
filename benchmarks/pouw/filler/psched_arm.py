@@ -1,4 +1,4 @@
-"""HC-SCHED's arm (cmp-13, approach pouw/filler-sched): FILL v1's split, re-chosen per point, plus the phase filler, dcap.cu's
+"""The scheduled arm: FILL v1's split, re-chosen per point, plus the phase filler, dcap.cu's
 dfill_p forked into each decode layer's attention on the step's own SMs (attention is dp4a on the CUDA cores and leaves
 the tensor pipe idle). filler-arm/v1 can't place a phase filler, so the arm's `placement` is its split, the contract's,
 and `phase(phase, B, L)` names the phase filler; psched_score.py runs the pair through pscore.cu and scores the out dir
@@ -27,7 +27,7 @@ class PhaseFill:
     tiles: int = 1
 
 
-#: (B, L) -> (split SMs, phase filler or None), chosen on psched runs r20261016-044809-fb5f and r20261016-045835-d45c
+#: (B, L) -> (split SMs, phase filler or None), chosen on two psched runs
 #: (dcap pfill: each arm's slowdown against the whole-GPU step, the phase tiles 0.9 of the layer's attention time on the
 #: step's SMs), preferring ≤ 1.03 there; B 1 keeps FILL v1's split alone (the phase filler cost 2% there for 0.01–0.05).
 TABLE = {
@@ -73,19 +73,19 @@ class PhaseSched:
     def placement(self, phase, b, l):
         if phase == "prefill":
             return A.NONE
-        return A.Placement("split", self._row(b, l)[0])
+        return A.Colocation("split", self._row(b, l)[0])
 
     def phase(self, phase, b, l):
         return None if phase == "prefill" else self._row(b, l)[1]
 
 
-#: TABLE with the larger phase fillers that screened ≤ 1.04 through pscore itself (r20261016-052231-a839); 48/16K keeps
+#: TABLE with the larger phase fillers that screened ≤ 1.04 through pscore itself; 48/16K keeps
 #: TABLE's (108 W8 t90 screened 1.037 for +0.017 there, +0.0003 SCORE)
 TABLE_V2 = {**TABLE, (32, 8192): (108, PhaseFill(W=4, tiles=47)), (32, 24576): (108, PhaseFill(tiles=95)),
             (128, 2048): (92, PhaseFill(tiles=28)), (256, 3072): (60, PhaseFill(tiles=98))}
 #: FILL's filler in prefill at the lowest stream priority, in blocks short enough (8 tiles a warp of S 128, ~90 µs) that
-#: the GEMMs' blocks, at the highest, take each SM back within one: it fills their wave tails (r20261016-051913-f189,
-#: r20261016-052231-a839: 1.027, coverage 0.180 against 0.135 alone; 2^16 a chunk 1.083)
+#: the GEMMs' blocks, at the highest, take each SM back within one: it fills their wave tails (1.027, coverage 0.180
+#: against 0.135 alone; 2^16 a chunk 1.083)
 CO_PREFILL = A.Filler(W=8, NC=4, S=128, chunk_log2=15)
 
 
@@ -108,18 +108,18 @@ class PhaseSchedCo(PhaseSched):
         return A.point_lookup(TABLE_V2, b, l)
 
     def placement(self, phase, b, l):
-        return A.Placement("co") if phase == "prefill" else super().placement(phase, b, l)
+        return A.Colocation("co") if phase == "prefill" else super().placement(phase, b, l)
 
     def filler_at(self, phase, b, l):
         return CO_PREFILL if phase == "prefill" else self.filler
 
 
-#: TABLE_V2 with the phase fillers that screened below their cliff on r20261016-053942-7ea0 and r20261016-054329-880b
+#: TABLE_V2 with the phase fillers that screened below their cliff on two screens
 TABLE_V3 = {**TABLE_V2, (32, 1024): (92, PhaseFill(tiles=4)), (32, 8192): (108, PhaseFill(W=4, tiles=52)),
             (48, 16384): (92, PhaseFill(tiles=99)), (128, 6144): (92, PhaseFill(tiles=100)),
             (132, 5120): (60, PhaseFill(tiles=84)), (144, 5120): (60, PhaseFill(tiles=90))}
-#: the co shape that spends prefill's slowdown budget: 4-warp blocks of 2^16 MMAs, 1.042 / 0.195 on three screens
-#: (r20261016-052231-a839, r20261016-053450-31f8, r20261016-053942-7ea0); every co shape screened lies near
+#: the co shape that spends prefill's slowdown budget: 4-warp blocks of 2^16 MMAs, 1.042 / 0.195 on three screens;
+#: every co shape screened lies near
 #: coverage 0.135 + 1.5 × (slowdown − 1), and W 5–8 at 2^17 fall off a cliff (1.08–1.25)
 CO_PREFILL_V3 = A.Filler(W=4, NC=4, S=128, chunk_log2=16)
 

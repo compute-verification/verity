@@ -1,12 +1,12 @@
-"""Row leaves of frame-v3: one tensor row per leaf, committed as a row digest under the SHA-256 indexed trees of :mod:`merkle`.
+"""Row leaves of frame-v3: one tensor row per leaf, committed as a row digest under the indexed trees of :mod:`merkle`.
 
 A leaf is one *row* of a tensor in the orientation the GEMM consumes it -- a row of the activation matrix ``x`` (K
 words), a column of the weight matrix ``W`` (K words).  The row's digest is the leaf *value* under
-:meth:`CommitmentDomain.leaf` with the schema's string; ranks are row indices and the tree above is the ordinary
-SHA-256 ``node`` / pad framing, so a verifier that has the digest checks an opening with SHA-256 alone.  A backend
+:meth:`CommitmentDomain.leaf` with the schema's string; ranks are row indices and the tree above is the domain's
+``node`` / pad framing, so a verifier that has the digest checks an opening with the domain's hash alone.  A backend
 proves only the row digest (its ``leaf_layout``) and publishes it.
 
-Five schemas:
+The schemas:
 
 ``sha256/row/v1``            ``SHA-256(sha256_row_prefix(role, word_bits, n_words) || row_bytes)``: a 64-byte constant
                              first block (tag, role, word width, row length), so the gadget starts from a fixed
@@ -27,9 +27,6 @@ Five schemas:
 ``hm96-sha512/row/v1``       the schema a ``frame-v3-sha512`` leaf binds over a hiding row's leaf digest:
                              ``hm96.SHA512.tree_leaf(key, b || c)`` over ``sha512/row/v1`` (64 bytes); ``hm96-sha512/row/v2`` over
                              ``sha512/row/v2``, ``hm96-sha512/row-seg/v1`` over ``sha512/row-seg/v1``.
-``poseidon2-babybear-w24/row/v2h``  the Poseidon2 row digest. Admissible in a Table 2 cell (``frame-v3/poseidon2-babybear``),
-                             but algebraic: its results are reported and flagged as algebraic in the security section,
-                             and never count toward a standard-hash claim (Daniel's standing decision).
 
 ``row_bytes`` are the row's words little-endian, ``word_bits`` 8, 16 or 32 bits each, in row order.  ``nvfp4_row_bytes``
 are the codes packed two per byte (code ``2i`` in the low nibble), then the scale bytes: the code buffer and the scale
@@ -43,7 +40,6 @@ import hashlib
 from collections.abc import Sequence
 
 from verity.ml.crypto import blake3 as _blake3
-from . import poseidon2_babybear as h2
 from .merkle import CommitmentDomain
 from .scheme import LeafLayout
 
@@ -55,7 +51,6 @@ __all__ = [
     "SCHEMA_HM96_SHA512_ROW",
     "SCHEMA_HM96_SHA512_ROW_SEG",
     "SCHEMA_HM96_SHA512_ROW_V2",
-    "SCHEMA_ROW",
     "SCHEMA_SHA256_ROW",
     "SCHEMA_SHA256_ROW_NVFP4",
     "SCHEMA_SHA512_ROW",
@@ -69,9 +64,7 @@ __all__ = [
     "blake3_row_nvfp4_layout",
     "nvfp4_row_bytes",
     "row_bytes",
-    "row_digest",
     "row_leaf",
-    "row_leaf_value",
     "sha256_row_digest",
     "sha256_row_layout",
     "sha256_row_nvfp4_digest",
@@ -91,7 +84,6 @@ __all__ = [
     "sha512_row_v2_prefix",
 ]
 
-SCHEMA_ROW = "poseidon2-babybear-w24/row/v2h"
 SCHEMA_SHA256_ROW = "sha256/row/v1"
 SCHEMA_BLAKE3_ROW = "blake3-keyed/row/v2"
 SCHEMA_SHA256_ROW_NVFP4 = "sha256/row-nvfp4/v1"
@@ -106,7 +98,8 @@ _DIGEST_SCHEMAS = {SCHEMA_SHA256_ROW: 32, SCHEMA_BLAKE3_ROW: 32, SCHEMA_SHA256_R
                    SCHEMA_HM96_SHA512_ROW: 64, SCHEMA_SHA512_ROW_V2: 64, SCHEMA_HM96_SHA512_ROW_V2: 64,
                    SCHEMA_SHA512_ROW_SEG: 64, SCHEMA_HM96_SHA512_ROW_SEG: 64}
 
-ROLE_X, ROLE_W = h2.ROLE_X, h2.ROLE_W
+#: an x row (the ``a`` operand of a unit) and a W column (the ``b`` operand)
+ROLE_X, ROLE_W = 1, 2
 _ROLE_KEY_NAME = {ROLE_X: b"x", ROLE_W: b"w"}
 SHA256_ROW_TAG = b"verity/sha256-row/v1\0"
 SHA256_ROW_NVFP4_TAG = b"verity/sha256-row-nvfp4/v1\0"
@@ -372,31 +365,15 @@ def blake3_row_nvfp4_digest(codes: Sequence[int], scales: Sequence[int], role: i
     return blake3_row_nvfp4_layout(role, len(codes)).digest(nvfp4_row_bytes(codes, scales))
 
 
-# --- poseidon2-babybear-w24/row/v2h ------------------------------------------------------------------------------
-
-
-def row_leaf_value(digest) -> bytes:
-    """The 8 Poseidon2 digest lanes as 32 bytes (each lane a big-endian u32)."""
-    d = [int(x) for x in digest]
-    if len(d) != h2.OUT or any(not 0 <= x < h2.P for x in d):
-        raise ValueError("a row digest is 8 BabyBear lanes")
-    return b"".join(x.to_bytes(4, "big") for x in d)
-
-
-def row_digest(words, word_bits: int, role: int) -> list[int]:
-    """Poseidon2 digest (8 lanes) of one row of ``word_bits``-bit words (``role``: ``h2.ROLE_X`` or ``h2.ROLE_W``)."""
-    return h2.hash_row(words, word_bits, role)
-
-
-def row_leaf(domain: CommitmentDomain, rank: int, digest, schema: str = SCHEMA_ROW) -> bytes:
+def row_leaf(domain: CommitmentDomain, rank: int, digest: bytes, schema: str) -> bytes:
     """The frame-v3 leaf of the row at ``rank`` (rank == position in a range domain).
 
-    ``digest`` is 8 Poseidon2 lanes for ``leaf/v2h`` (the default), the 32-byte SHA-256 / BLAKE3 row digest (four digest
+    ``digest`` is the 32-byte SHA-256 / BLAKE3 row digest (four digest
     schemas, NVFP4 rows included), the 64-byte ``sha512/row/v1`` or ``sha512/row/v2`` digest (under a ``frame-v3-sha512``
     domain), or a hiding row's hm96 leaf digest under ``hm96-sha512/row/v1``, ``hm96-sha512/row/v2`` or
     ``hm96-sha512/row-seg/v1`` (64 bytes); ``sha512/row-seg/v1`` digests too.
     """
-    value = row_leaf_value(digest) if schema == SCHEMA_ROW else bytes(digest)
-    if schema != SCHEMA_ROW and len(value) != _DIGEST_SCHEMAS.get(schema, -1):
+    value = bytes(digest)
+    if len(value) != _DIGEST_SCHEMAS.get(schema, -1):
         raise ValueError(f"unknown row schema {schema!r} or a digest of the wrong size ({len(value)} bytes)")
     return domain.leaf(rank, rank, schema, value)

@@ -1,5 +1,7 @@
-import Definitions.Core.Formalism
-import Definitions.Core.Boolean
+module
+
+public import Definitions.Core.Formalism
+public import Definitions.Core.Boolean
 
 /-!
 # The working draft's Lemma 1 and Theorem 3
@@ -11,6 +13,8 @@ summed by `ServingBlockSum`, with each serving block's inference cap from `Infer
 which credit and reporting are stated, is at most `size` (`AndSizeLe`), and on C-Flock's circuits counts its AND gates
 and rows (`ToCircuitAnd`). Credit under the pinned lowering is at most the lowered circuit's size (`CreditSizeLe`).
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 
@@ -40,12 +44,12 @@ def ToCircuitAnd : Prop :=
       ∀ a b x y, B.op g = .row a b → Odd (a.count x) → Even (b.count x) → Even (a.count y) → Odd (b.count y) →
         B.toCircuit.IsAnd g
 
-/-- **Lemma 1 (proof-block description).** Let `R` register a `(c, k)`-partition into `B` proof blocks, and let a fixed
+/-- **Lemma 1 (proof-block description).** Let `R` commit a `(c, k)`-partition into `B` proof blocks, and let a fixed
 evaluator `e` of at most `a_blk` bits perform an extraction rule `y` within time `t` for every proof block. Then in every
 run of the registered circuit, each proof block's extracted string has local description length at most
 `k + ⌈log₂ B⌉ + a_blk`. The registered information `r` is any the decoder is given, side information included. -/
 def BlockDescription : Prop :=
-  ∀ (R : Registration) (c k : ℕ), R.P.IsCK R.d c k →
+  ∀ (R : Committed) (c k : ℕ), R.P.IsCK R.d c k →
     ∀ (ρ : Type) (M : Decoder ρ) (r : ρ) (t a_blk : ℕ) (e : List Bool)
       (y : Fin R.B → R.d.D.Transcript → List Bool),
       e.length ≤ a_blk → Evaluates M r t R e y →

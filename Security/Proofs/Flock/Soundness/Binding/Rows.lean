@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Binding.Layout
-import Proofs.Flock.Level3.RowV2
+module
+
+public import Proofs.Flock.Soundness.Binding.Layout
+public import Proofs.Flock.Level3.RowV2
 
 /-!
 # `hm96-sha512/row/v1` and `/row/v2` rows: the registration fact from `HmRowComputes`
@@ -19,6 +21,8 @@ then follows from `Assumptions.HmRowComputes` (`HmRows.registered`): the `b ‖ 
 string of its row and salt, and its leaf is the registered one. So the value binding (`HmRows.binding`) takes
 `HmRowComputes` and the layout's facts, and nothing cryptographic.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Binding
 

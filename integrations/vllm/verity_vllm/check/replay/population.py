@@ -1,5 +1,5 @@
 """The VU population of a request's Program: every row instance with its stratum (spec, request, phase), minus the
-Calls outside the executed prefix, which leave the pool into a named class before any draw (`executed_prefix_of_record`,
+Calls outside the executed prefix, which leave the pool into a named class before sampling (`executed_prefix_of_record`,
 `split_not_executed`)."""
 from __future__ import annotations
 
@@ -381,7 +381,7 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
 
 
 def split_not_executed(vus: list[dict], executed_prefix: dict[str, dict] | None) -> tuple[list[dict], list[dict]]:
-    """(rows the sampler may draw, rows at request-relative step >= n_exec of their request).  No `executed_prefix` -> nothing is split."""
+    """(rows the sampler may pick, rows at request-relative step >= n_exec of their request).  No `executed_prefix` -> nothing is split."""
     if not executed_prefix:
         return list(vus), []
     keep, out = [], []

@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Family.Registered
+module
+
+public import Proofs.Flock.VBridge.Family.Registered
 
 /-!
 # VBridge G at V*'s family: `rec-acc`'s rows at the openings and at the reps' ends
@@ -18,6 +20,8 @@ the registrant's row at `rec-acc`'s root, so each comes from three facts:
 from `HResL` and the three facts. `hAccRows_of_keys` gives `HAccRows`' `acc` half from them and takes its `acc_out` half
 as `AccOutL`, the openings' outputs in the layer.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

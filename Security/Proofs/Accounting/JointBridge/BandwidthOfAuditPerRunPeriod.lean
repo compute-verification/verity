@@ -1,7 +1,9 @@
-import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod
-import Definitions.Accounting.Guarantees.BandwidthAudit
-import Proofs.Pouw.Prob
-import Proofs.Accounting.BandwidthAudit
+module
+
+public import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod
+public import Definitions.Accounting.Guarantees.BandwidthAudit
+public import Proofs.Pouw.Prob
+public import Proofs.Accounting.BandwidthAudit
 
 /-!
 # Proof that PoUB's per-period guarantee is the bandwidth audit's
@@ -13,6 +15,8 @@ are the period's at `ξ` with PoUB's coordinate replaced. That run realizes the 
 `Accounting.Guarantees.BandwidthOfAuditPerRun` bounds its accept-while-short event. Uniform coins carried by an
 equivalence keep their probabilities (`Pouw.pr_equiv`), so the same bound holds over PoUB's coordinate.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge
 

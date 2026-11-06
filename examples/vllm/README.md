@@ -3,25 +3,28 @@
 The vLLM demo is the runnable form of the **remote protocol** (`verity/remote/v0`, in `verity/core/protocols/remote/`):
 what an auditor with no devices at the site establishes about a datacenter serving a model. One served run of
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
-The remote protocol composes two subprotocols over one commitment and accepts only when both accept:
+The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
 
 - **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/sampled_proofs/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed sampling block, the
-  prover proves each sampled block with C-Flock `--zk` behind the Lean firewall, and the Lean verifier gives the verdict;
+  prover proves each sampled block with Flock `--zk` behind the Lean firewall, and the Lean verifier gives the verdict;
 - **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`), on the served model itself: the endpoint
   serves PoUW's H1, each sampling block's coins come from a session of its own on the challenger's gate, and PoUW's
-  piece checks them against that session, the gate's ledger and its pins.
+  piece checks them against that session, the gate's ledger and its pins;
+- **the inference-only policy** (`verity/core/protocols/network/nci/`): the declared circuit divides into inference
+  blocks within their gate and fresh-input budgets. This demo doesn't run it: the served run doesn't produce the
+  declared division yet.
 
 PoUW's verdict on the served run credits nothing. The challenger's gate holds a development key, so every served PoUW
-run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case, the form
+run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case, the form
 remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
 `example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
 is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol has no guarantee in Lean for the demo to instantiate: `Verity.Soundness` is not in Lean
-yet, and remote's verifier reads one-stage v1, which takes the sessions' verdicts as evidence
-(`verity/core/protocols/remote/README.md`, "The open gap"). PoUW's proof layer needs `AcceptedLive`, which no served path
+yet, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
+itself, to `SampledKSLiveV3`'s event (`verity/core/protocols/remote/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
 meets. Onsite's chain has a gap of its own: network certification's `NetTiming.Guarantees.SampledAuditAccepted` takes
 `Claims.Sampling.KS` as a hypothesis, and the theorem that gives it at the deployed record,
 `Claims.Sampling.sampling_assembled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
@@ -38,7 +41,7 @@ it serves (`--scheme rows-sha512`), and every closed sampling block is sealed. T
 1. the endpoint, under a GPU lease, with the committer's weights registration before the first request;
 2. greedy requests from the certifier's traffic generator (`serve_load.py --varied`), closed into one sampling block;
 3. sampled proofs on that sampling block: its advice and request Programs, the circuit of the served execution blocks
-   at each class, and the records audit (C-Flock `--zk` on the sampled proof blocks behind the Lean firewall, and the
+   at each class, and the records audit (Flock `--zk` on the sampled proof blocks behind the Lean firewall, and the
    Lean verifier's verdict);
 4. PoUW's piece, and each onsite subprotocol's piece where it has one;
 5. one record of every piece's verdict (`$OUT/record/verdicts.json`), `pending` while any subprotocol is missing.
@@ -58,7 +61,8 @@ gets no verdict.
 
 The auditor's parties are the verifier, the challenger, the network certifier and the memory challenger. The
 challenger is an auditor host reached through its gate, and its live coins are PoUW's always and sampled proofs' when
-`PP_CHALLENGER` names it; otherwise the Lean verifier's own coins sample the proof blocks. The other three are not
+`PP_CHALLENGER` names it; otherwise a local development challenger session on the endpoint's node samples the proof
+blocks, which shows the path but is no auditor's coins. The verifier draws no coins of its own. The other three are not
 placed: the Lean verifier runs on the endpoint's node beside the prover, and the network certifier and the memory
 challenger, which onsite's pieces read, may run there too. Being placed needs each of them on a machine the prover
 doesn't control.
@@ -67,8 +71,10 @@ doesn't control.
 
 - The workload: the integration's one (`integrations/vllm/workloads/`) that `placement.toml`'s `row` names, with its
   requests, its model and revision, and its pinned engine. Its bytes are a fixture in the evidence store, which `run.sh`
-  fetches and checks against that directory's `SHA256SUMS`. The endpoint commits under the Build's manifest in the
-  workload dir that `placement.toml`'s `COMMIT_RUN` names.
+  fetches and checks against that directory's `SHA256SUMS`. The endpoint commits under the workload's Build of record,
+  which `verity-vllm predict row` writes from the workload alone before serving. The traced Build in the workload dir
+  that `placement.toml`'s `COMMIT_RUN` names is its cross-check (`predict compare --predicted`), and the endpoint serves
+  only when they agree.
 - The load, `serve_load.py`: `served_verdicts.sh`'s one sampling block of varied requests (`--varied`, or with
   `LOAD=fixed` one full sampling block of fixed length), or `serve.sh`'s `BURSTS` bursts of `PER_BURST` requests, each
   burst sealed on its own (8 and 4 by default), or with `VARIED=N` and `ADMIT=release-order` the network certifier's
@@ -86,7 +92,7 @@ recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints t
 
 1. `verity example vllm commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
    that seals its replay bundle, kept on the node and put in the evidence store. `placement.toml`'s `COMMIT_RUN` names
-   the Commit the endpoint commits under.
+   the Commit whose traced Build the endpoint's Build of record is held to.
 2. `verity example vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
 3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
    block in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and

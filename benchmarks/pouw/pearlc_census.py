@@ -226,7 +226,7 @@ ACTIVATION_FAMILIES = ("zero-row", "zero-slices", "sparse10", "rank1", "saturate
 OUTLIER_FAMILIES = ("outliers-first", "outliers-groupstart")
 FREEZE_FAMILIES = ("aligned-spikes-r64", "aligned-spikes-r160", "aligned-spikes-r220", "aligned-spikes-r300",
                    "aligned-spikes-pm1-r64", "aligned-spikes-pm1-r220", "aligned-spikes-pm1-r300", "aligned-spikes-pm1-r444")
-#: Whole-word cross-group cancellation (ASK-91): the second half of k mirrors the first with B negated, so at k = 256 the two
+#: Whole-word cross-group cancellation: the second half of k mirrors the first with B negated, so at k = 256 the two
 #: promotion groups of every word cancel (`xcancel-mirror`, with spikes `xcancel-spikes-rR`); or the second half is scaled
 #: down by 2^-F so its atoms sit near the ulp of the first group's word (`xcancel-tail-fF`).
 XCANCEL_FAMILIES = ("xcancel-mirror", "xcancel-mirror-pm1", "xcancel-spikes-r16", "xcancel-spikes-r64", "xcancel-spikes-r160",

@@ -1,5 +1,7 @@
-import Definitions.Accounting.JointPeriod
-import Definitions.Accounting.BandwidthAudit
+module
+
+public import Definitions.Accounting.JointPeriod
+public import Definitions.Accounting.BandwidthAudit
 
 /-!
 # A period whose PoUB audit is the bandwidth audit's game (trusted)
@@ -17,6 +19,8 @@ As in `RealizesBandwidth`, the game's side sources are a function of the store l
 realization carries relayed tags: a device that relays tags in over a side channel is the relay variant's
 (`Bandwidth.AuditRelay`), which this structure does not cover.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

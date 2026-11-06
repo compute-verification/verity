@@ -14,5 +14,5 @@ FLAGS = -O3 -arch=$(ARCH) -std=c++17 -DP2_BITS=16448 -DP2_TPI=32 -DXMP_WMAD -DP2
 
 all: $(BIN)/libp2v1.so
 
-$(BIN)/libp2v1.so: p2v1.cu ../p2_gpu/p2dec.cu p2sq.cuh p2keys.cuh p2keys4.cuh Makefile
+$(BIN)/libp2v1.so: p2v1.cu ../p2_gpu/p2dec.cu p2sq.cuh p2keys.cuh p2keys4.cuh ../../../verity/ml/kernels/sha512.cuh Makefile
 	@mkdir -p $(BIN); $(NVCC) $(FLAGS) -Xcompiler -fPIC -shared $(INC) -I $(CGBN)/include -o $@ $< -Xptxas -v 2> $@.ptxas

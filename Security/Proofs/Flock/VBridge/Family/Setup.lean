@@ -1,8 +1,10 @@
-import Proofs.Flock.VBridge.Family.Assembly
-import Proofs.Flock.VBridge.Family.Lig
-import Proofs.Flock.VBridge.Algebra.Sim
-import Proofs.Flock.VBridge.Algebra.LigeritoConverse
-import Proofs.Flock.VBridge.Family.Names
+module
+
+public import Proofs.Flock.VBridge.Family.Assembly
+public import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.VBridge.Algebra.Sim
+public import Proofs.Flock.VBridge.Algebra.LigeritoConverse
+public import Proofs.Flock.VBridge.Family.Names
 
 /-!
 # The inner statement's setup, from the hidden statement
@@ -24,6 +26,8 @@ executable statement `Stmt` stands behind it, so the setup the table files are r
 * `vbridgeRead_model`: `vbridgeRead_assembled` at `innerSetup`, without `hne`: with no history and registration,
   `VBridgeRead`'s first two conjuncts are vacuous.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -527,7 +531,7 @@ variable (spec : SessionSpec)
 `ShapeIs`, `FoldsOk` and `CoinsAgree` follow from `ShapeAt`, and `HOpenName` and `HUnitName` from the circuit files'
 emit/parse round trip (`hOpenName_of`, `hUnitName_of`). Without a history and registration
 (`¬ Nonempty (Reg × L.Ω × Reg₂)`), `VBridgeRead`'s first two conjuncts quantify over none and its last two are the
-lanes' (`vDecodesRead_of`, `vFullRead_of`), so `hne` is not needed. -/
+parts' (`vDecodesRead_of`, `vFullRead_of`), so `hne` is not needed. -/
 theorem vbridgeRead_model
     (hshape : F.ShapeAt) (hcount : F.HPartCount)
     (hv : (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).HVCoins dg N k Rw)

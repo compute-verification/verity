@@ -1,7 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Pins
-import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
-import Proofs.Flock.Soundness.Binding.RowsX
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCommit
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.Pins
+public import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
+public import Proofs.Flock.Soundness.Binding.RowsX
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCommit
+
+@[expose] public section
 
 set_option Elab.async false
 

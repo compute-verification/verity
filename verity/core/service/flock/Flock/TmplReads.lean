@@ -1,5 +1,5 @@
 /-
-A templated unit's input columns that a computed row surely reads, from its description (PRF-133). `RecResiduals.readIns`
+A templated unit's input columns that a computed row surely reads, from its description. `RecResiduals.readIns`
 marks the input columns the unit's computed rows read by walking every row of the unrolled net; `Tmpl.readsSure` marks a
 subset of them per Definition, so `KnownRead.readsOk` can check a templated unit's known bits without building its rows.
 
@@ -13,7 +13,11 @@ its rows and calls past the input rows (`Tmpl.readsSure`): those are computed ro
 marks is read by a computed row of `Tmpl.rows`. Its cost is each Definition's rows and each call's bound inputs, never
 the unit's gates.
 -/
-import Flock.TmplOrder
+module
+
+public import Flock.TmplOrder
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

@@ -1,4 +1,8 @@
-import Proofs.Flock.Claims.Complete.Shape
+module
+
+public import Proofs.Flock.Claims.Complete.Shape
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The first send is the link message
@@ -10,6 +14,8 @@ import Proofs.Flock.Claims.Complete.Shape
   the link message and what follows its coin (`afterLinkP`), whose sends only append to the bodies (`afterLinkP_sim`).
 * `sessionS_link`: a pure session that returns sent the link message of its level-0 caps, with no public words, first.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

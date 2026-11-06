@@ -1,6 +1,6 @@
-"""The active warden (`warden`), a relay that knows bytes only: driven tick by tick on a `VirtualClock`, its clients
-in-memory connections speaking cells and its server an in-memory one whose bytes the test schedules, it releases honest
-traffic exactly on its schedule, fails a late byte closed, queues past its lanes then refuses (and withholds that
+"""The active network certifier (`warden`), a relay that knows bytes only: driven tick by tick on a `VirtualClock`, its
+clients in-memory connections speaking cells and its server an in-memory one whose bytes the test schedules, it releases
+honest traffic exactly on its schedule, fails a late byte closed, queues past its lanes then refuses (and withholds that
 window's records from `publish`), passes both directions'
 bytes unchanged (the server's copy of a request adding only its place in the release order), and puts the same number
 of same-size cells in the same buckets however the server times its bytes."""
@@ -139,8 +139,8 @@ class Client:
 
 
 class SocketClient(Client):
-    """A client whose connection's warden end is a socket, the one a paced warden's pacer writes to, and whose other
-    end the test reads (`received`) once the run is over."""
+    """A client whose connection's network certifier end is a socket, the one a paced network certifier's pacer writes
+    to, and whose other end the test reads (`received`) once the run is over."""
 
     def __init__(self, warden: Warden, data: bytes | tuple[bytes, bool]) -> None:
         self.ours, self.peer = socket.socketpair()
@@ -179,9 +179,9 @@ def settled(warden: Warden, server: Server) -> bool:
 async def drive(server: Server, arrivals: dict[int, list[bytes]], *, windows: int = 1, late: dict | None = None,
                 params: WardenParams = PARAMS, client: type[Client] = Client, **hooks):
     """Connect `arrivals[t]` (each a client's raw cell bytes) just before bucket t's tick, let the server answer what is
-    due and the warden read it, then tick, and with `paced` wait for the pacer to report the bucket's release, for
-    `windows` windows; `late[t]` puts tick t that many seconds late. `hooks` are the warden's `publish`, `release` and
-    `paced`."""
+    due and the network certifier read it, then tick, and with `paced` wait for the pacer to report the bucket's
+    release, for `windows` windows; `late[t]` puts tick t that many seconds late. `hooks` are the network certifier's
+    `publish`, `release` and `paced`."""
     clock = VirtualClock(-TAU / 2)
     warden = Warden(params, server.connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
     running = asyncio.create_task(warden.run())
@@ -450,9 +450,9 @@ def test_over_capacity_queues_fifo_then_refuses():
 
 
 def test_a_window_with_a_refusal_goes_to_withhold_whole():
-    """The warden certifies no record of a window in which it refused a connection (traffic past its Program slots):
-    of two windows, the second's refusal, just before its second bucket, gives its three records to `withhold` in place
-    of `publish`, and the first's three are published."""
+    """The network certifier certifies no record of a window in which it refused a connection (traffic past its Program
+    slots): of two windows, the second's refusal, just before its second bucket, gives its three records to `withhold`
+    in place of `publish`, and the first's three are published."""
     T = PARAMS.window
     answers = [[(0, b"r%d" % k), (0, EOF)] for k in range(4)]
     warden, clients, _ = run(answers, {T: [cells(request(5, k), B) for k in range(2)],
@@ -527,9 +527,9 @@ def http(body: bytes, extra: bytes = b"") -> bytes:
 def test_the_server_gets_each_request_whole_with_its_place_among_the_signed_ends():
     """Two requests admitted in one bucket, the first two buckets long and the second one, so their `END`s are
     released in the other order: each reaches the server once, whole, at its `END`'s release, with
-    `x-verity-release: N`, N its `END`'s index among the `END` cells of the signed ingress records, and the warden's
-    run id; a client's own release header is dropped there, while the cells, the records and the audit hold the
-    client's bytes as sent, which the audit accepts."""
+    `x-verity-release: N`, N its `END`'s index among the `END` cells of the signed ingress records, and the network
+    certifier's run id; a client's own release header is dropped there, while the cells, the records and the audit hold
+    the client's bytes as sent, which the audit accepts."""
     reqs = [http(b'{"prompt":"%s"}' % (b"a" * 140)), http(b"{}", b"X-Verity-Release: 0\r\n")]
     assert [-(-len(r) // P) for r in reqs] == [2 * R, R]
     run_id = bytes(range(100, 132))
@@ -554,7 +554,7 @@ def test_the_server_gets_each_request_whole_with_its_place_among_the_signed_ends
 
 def test_a_connection_that_fails_before_its_end_is_never_numbered_and_its_server_gets_nothing():
     """A client that never ends fails at s + D with nothing sent to its server, and takes no place in the order: the
-    next request's N is 0. Each warden draws its own run id."""
+    next request's N is 0. Each network certifier samples its own run id."""
     slow = (cell(DATA, 0, b"a" * P, B), False)
     warden, _, server = run([[], [(0, b"r"), (0, EOF)]], {0: [slow], 4: [cells(http(b"{}"), B)]})
     log = {e["ordinal"]: e for e in warden.log}

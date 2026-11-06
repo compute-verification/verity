@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Coins
-import Proofs.Flock.Claims.Complete.Sim
-import Proofs.Flock.Claims.Complete.Verdict
-import Proofs.Flock.Claims.Scope.Matches
+module
+
+public import Proofs.Flock.Claims.Complete.Coins
+public import Proofs.Flock.Claims.Complete.Sim
+public import Proofs.Flock.Claims.Complete.Verdict
+public import Proofs.Flock.Claims.Scope.Matches
 
 /-!
 # The completeness proof's skeleton
@@ -25,6 +27,8 @@ error `δc H` (`Claims.Flock.Complete H (deployPlain rel)`), given one goal per 
 * **The composition**: `Run.rep_ok` (`verifyRepWith_ok`), `Run.verdict_ok` (`verifyWith_ok`), `Run.checks_ok'`
   (`checks_ok`), then `Run.acc` (`run_acc_of`), and `complete_of_goals` (`complete_of`).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy Transcript
 
@@ -105,7 +109,7 @@ def live {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 
 /-- The record, decoded. -/
 def sess {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (o : Run H rel) : Session := val (Record.decodeWith o.hs o.spec o.record)
+    (o : Run H rel) : RunRecord := val (Record.decodeWith o.hs o.spec o.record)
 
 /-- Table `i`'s schedule. -/
 def sch {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}

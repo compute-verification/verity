@@ -11,8 +11,8 @@ argmax), each id `stub:` until its Definition lands, its ANDs composed from pinn
 **The law is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one C-Flock `--zk`
 session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` drawn units each
 (m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
-fewer than `K0 = ln(S/delta) n/k` <= share n units wrong outside delta (the S sampling blocks of the block split delta), and by
-`IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The faulty ANDs beside
+fewer than `K0 = ln(S/delta) n/k` <= share n units incorrect outside delta (the S sampling blocks of the block split delta), and by
+`IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The incorrect ANDs beside
 them (`Stratified.harm_bound`, each unit weighted by its ANDs) are informative: the law-level bound is proved
 (`FlockSoundness.Audit.stratified_isHarmBound_exact`), but no guarantee in the lock composes it with acceptance.
 
@@ -47,7 +47,7 @@ from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F, gemm as G  # noqa: E402
 
 DELTAS = X.DELTAS
-#: each subcircuit's sampling block certifies at most this share of its units wrong at delta = 1% (`transformer.TARGET_SHARE`)
+#: each subcircuit's sampling block certifies at most this share of its units incorrect at delta = 1% (`transformer.TARGET_SHARE`)
 SHARE = X.TARGET_SHARE
 #: replaying the drawn requests, in blocks of the block's own run: stand-in, the drawn units touch nearly every request
 #: and a step's cost is its weights' decode, not its batch, which is not yet priced
@@ -213,7 +213,7 @@ def window(t: Template, k: int, windows: int, r: Rates) -> Window:
 
 def plan(ts: list[Template], share: float, r: Rates) -> list[Window]:
     """Every subcircuit's sampling block at `k = ceil(ln(S/delta)/share)`, delta = 1%: each certifies at most `share` of its
-    units wrong."""
+    units incorrect."""
     k = ceil(log(len(ts) / DELTAS[0]) / share)
     return [window(t, k, len(ts), r) for t in ts]
 
@@ -304,7 +304,7 @@ def render(o: dict) -> str:
              f"(MQA, {m['kv_heads']} KV head), MLP {m['mlp']}, V {m['vocab']}, C {m['context']}; a block of "
              f"{m['batch']:,} requests, {o['block_s']:g} s", "",
              f"Every subcircuit's sampling block draws k = ceil(ln(S/1%)/{o['share']:g}) of its units (S = {len(o['windows'])} "
-             f"sampling blocks), so each has fewer than K0 = ln(S/delta) n/k units wrong outside delta (IntegrityPeriodLog), "
+             f"sampling blocks), so each has fewer than K0 = ln(S/delta) n/k units incorrect outside delta (IntegrityPeriodLog), "
              f"and its sampling blocks over any period fewer than that in all (IntegrityHorizon). {o['units']:,} units, "
              f"{o['ands']:.4g} ANDs a block.", "",
              "| template | units a block | k | statements | ANDs a unit | proved, rows opened | statements GPU-s "
@@ -320,7 +320,7 @@ def render(o: dict) -> str:
     b = o["budget_share"]
     B = o["window_blocks"]
     lines += ["", "the block's own GPU time buys " + ("no plan" if b is None else
-              f"a share of {b:.3g} of each template's units wrong at 1%") +
+              f"a share of {b:.3g} of each template's units incorrect at 1%") +
               f"; sampling blocks of {B:,} blocks ({B * o['block_s'] / 86400:.3g} days of one H200) prove the same share "
               "within their own GPU time", "",
               "| share at 1% | proving GPU-s a block |", "|---|---|"]
@@ -328,7 +328,7 @@ def render(o: dict) -> str:
     lines += ["", "| cut | sampling blocks | proving GPU-s a block |", "|---|---|---|",
               f"| as planned (tiles {o['tiles']}, padded {o['pad']}) | {len(o['windows'])} | {c['proving']:.4g} |"]
     lines += [f"| {k} | {v['windows']} | {v['proving']:.4g} |" for k, v in o["alternatives"].items()]
-    lines += ["", "faulty proof blocks over a period, summed over the templates (Lean: pooled is IntegrityHorizon a template, "
+    lines += ["", "incorrect proof blocks over a period, summed over the templates (Lean: pooled is IntegrityHorizon a template, "
               "delta split over the S templates; each block is IntegrityPeriodLog at delta / (S blocks)):", "",
               "| period | fleet | blocks | pooled at 1% | at 1e-6 | each block at 1% | at 1e-6 |",
               "|---|---|---|---|---|---|---|"]
@@ -336,7 +336,7 @@ def render(o: dict) -> str:
         lines.append(f"| {p['period']} | {p['fleet']} | {p['blocks']:,.0f} | {p['pooled']['0.01']:.4g} | "
                      f"{p['pooled']['1e-06']:.4g} | {p['each_block']['0.01']:.4g} | {p['each_block']['1e-06']:.4g} |")
     a = o["informative_ands"]
-    lines += ["", f"informative, not a Lean guarantee: faulty ANDs a block at most {a['0.01']:.4g} at 1% and "
+    lines += ["", f"informative, not a Lean guarantee: incorrect ANDs a block at most {a['0.01']:.4g} at 1% and "
               f"{a['1e-06']:.4g} at 1e-6 ({a['0.01'] / o['ands']:.3g} and {a['1e-06'] / o['ands']:.3g} of the "
               "block's)."]
     return "\n".join(lines)

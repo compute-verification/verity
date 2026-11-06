@@ -1,10 +1,15 @@
 /-
-The statement forms the soundness proof covers (PROTOCOL.md §16.15). `verify` refuses every other: soundness is one theorem
+The statement forms the soundness proof covers. `verify` refuses every other: soundness is one theorem
 over every session the verifier accepts, so a form no theorem covers is refused, never accepted. Widening the proof to
 another form is a change to one rule here, with the proof that the headlines cover it. With hidden outputs that is the
 general instance form (`scopeOkI`, once `wiresAcyclic` passed); with public outputs, the unit's form (`scopeOk`).
 -/
-import Flock.HmRow
+module
+
+public import Flock.HmRow
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.ProvedScope
 
@@ -22,9 +27,17 @@ def portReadsB (net : Net) : Bool :=
   (List.range (net.constPos - n)).all fun i =>
     ((net.a.row (n + i)).toList ++ (net.b.row (n + i)).toList).all fun x => decide (x < n → mask.getD x false = true)
 
+/-- No output port is pinned (META `pinned_outputs`, `HmRow.pinnedCount`): a form no soundness theorem covers yet. -/
+def unpinned (c : Circuit) : Bool := HmRow.pinnedCount c.metaJ == 0
+
+def pinnedWhy : String := HmRow.pinnedWhy
+
 /-- Every row is an unsegmented `sha512/row/v1` row: `16 · words` bits in at least one chunk. -/
-def v1Ports (c : Circuit) : Bool :=
+def v1Rows (c : Circuit) : Bool :=
   c.ports.all fun p => !p.v2 && p.segs.isNone && p.bits == 16 * p.words && 0 < p.chunks
+
+/-- `v1Rows`, and no pinned output (`unpinned`). -/
+def v1Ports (c : Circuit) : Bool := v1Rows c && unpinned c
 
 /-- The circuits the headlines cover: the unit reads only its leaf group, returns the outputs, has at most `2^32` rows and
 reads only port bits among its inputs, and every row is a `sha512/row/v1` row. -/
@@ -50,9 +63,12 @@ def segRow (p : Port) : Bool :=
       decide (128 * (((m + 7) / 8 + 17 + 127) / 128 - 1) ≤ (m + 7) / 8)
 
 /-- Every row is a `v2Row` or a `segRow`, of any mix, and each output row is a `v2Row` holding one output port. -/
-def bitRows (c : Circuit) : Bool :=
+def bitRowsU (c : Circuit) : Bool :=
   c.ports.all (fun p => v2Row p || segRow p) && c.outRowPorts.all (· == 1) &&
     (List.range c.outRowPorts.size).all fun j => v2Row (c.ports.getD (HmOut.nIn c + j) default)
+
+/-- `bitRowsU`, and no pinned output (`unpinned`). -/
+def bitRows (c : Circuit) : Bool := bitRowsU c && unpinned c
 
 /-- The circuits the hidden-output headlines cover: `scopeOk`'s conditions on the unit, and every row a
 `sha512/row/v1` row (`v1Ports`) or every row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port
@@ -161,14 +177,37 @@ def scopeWhy (hidden : Bool) (c : Circuit) : String :=
   else if !hidden && c.outNet != c.unitNet then "a circuit whose outputs a tail stage computes (META out_net)"
   else if c.unit.unitLog > 32 then s!"a unit of 2^{c.unit.unitLog} rows"
   else if !portReadsB c.unit then "a unit row reading an input column that is not a port bit"
+  else if v1Rows c || (hidden && bitRowsU c) then pinnedWhy
   else if hidden then "rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all \
     unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of \
     16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each"
   else "a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk"
 
-/-- The circuit as `Stmt.setupTables` parses it: `HmOut`'s for a statement with hidden outputs, else `HmRow`'s. -/
+/-- **A templated circuit the hidden-output headlines cover** (its statement circuit is the flat
+circuit its template unrolls to, `HmOut.unrolled`), checked on the template's description, never on the rows it unrolls
+to: a `--zk` session of one table at hidden outputs, with or without the verifier's own registered reads (which
+`circuitRules` and `Registered.check` hold to the ports and the public file, as for a flat statement), whose unrolled unit
+(`Tmpl.unroll`'s net: the root's columns, the template's ports) reads only its leaf group and returns the outputs, so the
+wires feed neither (`wiresFeed`), at most `2^32` rows, and `scopeOkI`'s rows. `TmplUnit.read` passed `Tmpl.unrollOk`,
+whose `Tmpl.ordered` makes the unrolled unit read only port bits among its inputs (`portReadsB`). -/
+def scopeOkT (hidden zk : Bool) (count : Nat) (c : Circuit) (tu : TmplUnit) : Bool :=
+  hidden && zk && decide (count ≤ 1) && tu.t.inGroups.size == 1 && c.outNet == c.unitNet &&
+    decide (max 7 (log2ceil (tu.t.defs.getD tu.t.root default).cols) ≤ 32) && (v1Ports c || bitRows c)
+
+/-- Which part of `scopeOkT` a templated circuit fails, for the refusal. -/
+def scopeWhyT (hidden zk : Bool) (count : Nat) (c : Circuit) (tu : TmplUnit) : String :=
+  if !hidden then "a templated statement without hidden outputs"
+  else if !zk then "a templated statement without --zk"
+  else if count > 1 then s!"a templated statement in {count} tables"
+  else if tu.t.inGroups.size != 1 then s!"a templated unit reading {tu.t.inGroups.size} input groups"
+  else if c.outNet != c.unitNet then "a templated circuit whose outputs a tail stage computes (META out_net)"
+  else if max 7 (log2ceil (tu.t.defs.getD tu.t.root default).cols) > 32 then "a templated unit of more than 2^32 rows"
+  else scopeWhy true c
+
+/-- The circuit as `Stmt.setupTables` parses it: for a statement with hidden outputs the one its session commits
+(`HmOut.parseCommit`: a templated statement's carries its template, `Circuit.tmpl`), else `HmRow`'s. -/
 def circuitOf (tags : Tags) (file : ByteArray) (tables : List (String × ByteArray)) : V Circuit :=
-  if tags.hiddenOutputs then HmOut.parse tags file tables else HmRow.parse tags file tables
+  if tags.hiddenOutputs then HmOut.parseCommit tags file tables else HmRow.parse tags file tables
 
 /-- The public file as the headlines read it: `HmOut`'s for a statement with hidden outputs, else `HmRow`'s. -/
 def publicOf (tags : Tags) (c : Circuit) (file : ByteArray) : V Public :=
@@ -178,7 +217,7 @@ def publicOf (tags : Tags) (c : Circuit) (file : ByteArray) : V Public :=
 def zkTableCap : Nat := 65536
 
 /-- **The proof's Merkle leaves the headlines cover**: `hm96-sha512/v1` in every form, and plain SHA-512 leaves
-(`flock-leaf/sha512-unsalted`, a recursive session's inner statement, §16.16) on a statement with hidden outputs without
+(`flock-leaf/sha512-unsalted`, a recursive session's inner statement, `Tags.withPlainLeaves`) on a statement with hidden outputs without
 `--zk`. Without `--zk` a leaf only binds its column, which either leaf does (a second column under one leaf is a SHA-512
 collision); `--zk`'s hiding needs `hm96`'s salts. -/
 def leafOk (tags : Tags) (zk : Bool) : Bool :=
@@ -204,6 +243,16 @@ def firstFailure (rules : List (Bool × String)) : Option String := (rules.find?
 
 def refusal (why : String) : String := s!"refused: {why}: a statement form the soundness proof does not cover"
 
+/-- The legacy statements: upstream's recorded cells whose checks evaluate part of the
+computation natively and make intermediate values public. None is a statement `verify` sets up (`Tags.all`,
+`Tags.templated`), and `verify` refuses every session of one (`legacyWhy`). -/
+def legacyStatements : List String :=
+  ["verity/flock-pure-block/v2", "verity/flock-ir-frame/v2", "verity/flock-ir-frame/v3", "verity/flock-ir-sampling/v1",
+   "verity/flock-ir-block/v1", "verity/flock-vllm-block/v1"]
+
+def legacyWhy (name : String) : Option String :=
+  if legacyStatements.contains name then some (refusal s!"{name}, a legacy statement (§16.9)") else none
+
 /-- The least `m` the proof covers: `25` under `--zk`, else `22`. -/
 def mMin (zk : Bool) : Nat := if zk then 25 else 22
 
@@ -224,6 +273,23 @@ keeps its own rows. `zk` is unread: `--zk` needs `hm96-sha512/v1` leaves (`leafO
 def sharedRowsOk (tags : Tags) (_zk registered : Bool) : Bool :=
   tags.hiddenOutputs && registered && tags.merkleLeaf == "hm96-sha512/v1"
 
+/-- What `check` requires of the circuit and public file it read: a shared-row public file only where `sharedRowsOk`; for a
+templated circuit (`Circuit.tmpl`) `scopeOkT`, on its description; for any other, wherever the wires feed the unit or the
+outputs (`wiresFeed`) an order of the wires that computes every slot (`wiresAcyclic`), and `scopeOk` (`scopeOkI` for a
+statement with hidden outputs). -/
+def circuitRules (tags : Tags) (zk : Bool) (count : Nat) (registered : Bool) (c : Circuit) (pub : Public) :
+    Except String Unit :=
+  if pub.tables.isSome && !sharedRowsOk tags zk registered then
+    .error (refusal "a shared-row public file (header shared_rows)")
+  else match c.tmpl with
+    | some tu =>
+      if scopeOkT tags.hiddenOutputs zk count c tu then .ok ()
+      else .error (refusal (scopeWhyT tags.hiddenOutputs zk count c tu))
+    | none =>
+      if wiresFeed c && !wiresAcyclic c then .error (refusal wiresWhy)
+      else if (if tags.hiddenOutputs then scopeOkI c else scopeOk c) then .ok ()
+      else .error (refusal (scopeWhy tags.hiddenOutputs c))
+
 /-- **`verify`'s statement is one the soundness proof covers**: every rule of `statementRules`, and on the circuit and public
 file as the proof reads them, a shared-row public file only where `sharedRowsOk`, wherever the wires feed the unit or the
 outputs (`wiresFeed`) an order of the wires that computes every slot (`wiresAcyclic`), and `scopeOk` (`scopeOkI` for a
@@ -236,7 +302,9 @@ and any number of stages the verifier evaluates, each reading wires from earlier
 them. Its headlines are at the template instance's program (`instProg`), which needs `wiresAcyclic`. A circuit the wires
 don't feed passes `scopeOkH` and is also covered at the unit's program (`keyProg`). With public outputs `scopeOk` keeps
 `wiresFeed` false: the public-output headlines read the outputs off the unit, so the unit reads only its leaf group and
-returns the outputs. -/
+returns the outputs. A templated statement's circuit (`HmOut.parseCommit`'s, carrying its template) is checked on its
+description (`scopeOkT`): its statement circuit, the flat circuit it unrolls to, is one `scopeOkH` covers at one `--zk`
+table. -/
 def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
     (publicInputs registered : Bool) : Except String Unit :=
   match firstFailure (statementRules tags zk count publicInputs) with
@@ -245,12 +313,7 @@ def check (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables
     | .error e => .error (refusal s!"a circuit that does not parse ({e})")
     | .ok c => match publicOf tags c publicFile with
       | .error e => .error (refusal s!"a public file that does not load ({e})")
-      | .ok pub =>
-        if pub.tables.isSome && !sharedRowsOk tags zk registered then
-          .error (refusal "a shared-row public file (header shared_rows)")
-        else if wiresFeed c && !wiresAcyclic c then .error (refusal wiresWhy)
-        else if (if tags.hiddenOutputs then scopeOkI c else scopeOk c) then .ok ()
-        else .error (refusal (scopeWhy tags.hiddenOutputs c))
+      | .ok pub => circuitRules tags zk count registered c pub
 
 /-- `check` on its circuit as `circuitOf` returns it (`parsed`), which `verify` parses once for this and the setup
 (`check_eq`). -/
@@ -262,18 +325,30 @@ def checkOf (parsed : V Circuit) (tags : Tags) (zk : Bool) (publicFile : ByteArr
     | .error e => .error (refusal s!"a circuit that does not parse ({e})")
     | .ok c => match publicOf tags c publicFile with
       | .error e => .error (refusal s!"a public file that does not load ({e})")
-      | .ok pub =>
-        if pub.tables.isSome && !sharedRowsOk tags zk registered then
-          .error (refusal "a shared-row public file (header shared_rows)")
-        else if wiresFeed c && !wiresAcyclic c then .error (refusal wiresWhy)
-        else if (if tags.hiddenOutputs then scopeOkI c else scopeOk c) then .ok ()
-        else .error (refusal (scopeWhy tags.hiddenOutputs c))
+      | .ok pub => circuitRules tags zk count registered c pub
 
 theorem check_eq (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray))
     (count : Nat) (publicInputs registered : Bool) :
     check tags zk circuitFile publicFile tables count publicInputs registered
       = checkOf (circuitOf tags circuitFile tables) tags zk publicFile count publicInputs registered :=
   rfl
+
+theorem circuitOf_hidden {tags : Tags} (hh : tags.hiddenOutputs = true) (file : ByteArray)
+    (tables : List (String × ByteArray)) : circuitOf tags file tables = HmOut.parseCommit tags file tables := by
+  simp only [circuitOf, hh, ↓reduceIte]
+
+/-- At hidden outputs, the circuit `HmOut.parse` reads (a flat statement's: it refuses a templated one's tags) is the one
+`circuitOf` reads. -/
+theorem circuitOf_of_parse {tags : Tags} {file : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hh : tags.hiddenOutputs = true) (h : HmOut.parse tags file tables = .ok c) : circuitOf tags file tables = .ok c := by
+  rw [circuitOf_hidden hh, HmOut.parseCommit, if_neg (by simp [HmOut.parse_isTmpl h])]
+  exact h
+
+/-- At hidden outputs and a flat statement's tags, the circuit `circuitOf` reads is `HmOut.parse`'s. -/
+theorem parse_of_circuitOf {tags : Tags} {file : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hh : tags.hiddenOutputs = true) (hi : tags.isTmpl = false) (h : circuitOf tags file tables = .ok c) :
+    HmOut.parse tags file tables = .ok c := by
+  rwa [circuitOf_hidden hh, HmOut.parseCommit, if_neg (by simp [hi])] at h
 
 /-- What `--plain-tables` refuses of a statement: hidden outputs with leaves other than `hm96-sha512/v1` (the plain proof
 at several tables reads hm96 leaves; `check` at one table also passes plain SHA-512 leaves at hidden outputs) and more
@@ -292,7 +367,7 @@ def NO_PROGRAM : String :=
 /-- `program_sha512` of the verifier's own `--program` bytes: SHA-512 of the canonical descriptor without `annotations`
 (`TemplateQuery.Desc`'s, the digest a partition object and META name); none for bytes that are not a JSON descriptor. -/
 def programDigest (b : ByteArray) : Option String := do
-  let j ← (Lean.Json.parse (← String.fromUTF8? b)).toOption
+  let j ← (JsonParse.parse (← String.fromUTF8? b)).toOption
   let bare := match j with
     | .obj kvs => Lean.Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
     | x => x
@@ -320,7 +395,7 @@ def programP (parsed : V Circuit) (program : Option ByteArray) : Except String U
     | some why => .error why
     | none => .ok ()
 
-/-- **`verify --plain-tables`'s statement is one the soundness proof covers** (PROTOCOL.md §16.15): a plain (no `--zk`)
+/-- **`verify --plain-tables`'s statement is one the soundness proof covers**: a plain (no `--zk`)
 session of public or hidden outputs at any number of tables up to `Tags.MAX_TABLES`, at hidden outputs with
 `hm96-sha512/v1` leaves, every condition `check` puts on a one-table plain session, and the verifier's own program is
 the one META binds (`programP`). The one-table plain form keeps `check` without the flag. -/
@@ -398,7 +473,7 @@ theorem programP_ok {parsed : V Circuit} {program : Option ByteArray} (h : progr
     | none => rfl
     | some w => simp [hw] at h
 
-/-- What a draw's law is, when no soundness claim draws by it at the session's form (PROTOCOL.md §16.15): the one rule
+/-- What a draw's law is, when no soundness claim draws by it at the session's form: the one rule
 for which law each form draws by. Without `--plain-tables`: the stratified law at every form `check` passes, each claim at
 one table (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`); the subset law under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`)
 and, without it, exactly where a plain claim draws by it: at hidden outputs, at the one table `check` admits there
@@ -412,7 +487,7 @@ def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : 
   | .bernoulli .. => some "a bernoulli draw"
   | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
 
-/-- **The session's draw is by a law a soundness claim draws by at its form** (`lawWhy`, PROTOCOL.md §16.15): `draw` is
+/-- **The session's draw is by a law a soundness claim draws by at its form** (`lawWhy`): `draw` is
 the record's (`recordDraw`), none for a session without one. Every claim is about a drawn session, so a session without
 a draw is refused (D12); so is a draw that does not parse. -/
 def drawLaw (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json → Except String Unit
@@ -433,5 +508,36 @@ theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .
   split at h
   · assumption
   · cases h
+
+/-- **The statement versions `verify` takes**: the current statement and a recursive session's inner one. Every other
+version `Tags.all` names is superseded: a `+seed-injection` one is a selftest build's, whose coins the prover injected, and
+the older ones' coins derive through SHA-256 or, under `--zk`, their pads are ChaCha20 streams of the prover's seed. They
+stay in `Tags.all` so the agreement corpus and the recorded fixtures replay: `verify` runs every check on them, then
+refuses the session (`servedForm`). -/
+def served : List String := [Tags.circuit.name, Tags.circuitPlainLeaves.name]
+
+def versionWhy (tags : Tags) : Option String :=
+  if served.contains tags.name then none
+  else
+    let what := if tags.name.endsWith "+seed-injection" then "a selftest build's statement, whose coins the prover injected"
+      else "a superseded statement version"
+    some s!"refused: {tags.name}, {what}: verify takes only {" and ".intercalate served}"
+
+/-- A session on seed coins (a plain session without `--coins tree`): every coin derives from the prover's seed, so none
+is live and no plain claim's record premise (`RecordCustodyExec`) can hold. The verifier reads coins only from a
+challenger's log. -/
+def SEED_COINS : String :=
+  "refused: a session on seed coins (a plain session without --coins tree): every coin derives from the prover's seed, so none is live; the verifier reads coins only from a challenger's log: verify a plain session on the challenger's keyed coin tree with --coins tree"
+
+def coinsWhy : Coins → Option String
+  | .seed => some SEED_COINS
+  | .tree _ => none
+
+/-- **The session is in a form `verify` takes**: a statement version of `served`, on the challenger's keyed coin tree
+(`--coins tree`, or `--zk`). `verify` runs it last, once every check has passed. -/
+def servedForm (tags : Tags) (coins : Coins) : Except String Unit :=
+  match versionWhy tags <|> coinsWhy coins with
+  | some why => .error why
+  | none => .ok ()
 
 end Flock.ProvedScope

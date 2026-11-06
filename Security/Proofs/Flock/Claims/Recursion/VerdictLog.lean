@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DecodeLog
-import Proofs.Flock.Claims.DeployOC
+module
+
+public import Proofs.Flock.Claims.Recursion.DecodeLog
+public import Proofs.Flock.Claims.DeployOC
 
 /-!
 # The plain verdict's SHA-512 calls
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.DeployOC
 files, and each table's two reps' own calls (`repLog`, what the rep appends to the empty log), and nothing else.
 `verifyRepWith_congr` is `verifyRep_congr` for any oracle.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -27,11 +31,11 @@ theorem go_shift {α : Type} {H : Claims.Msg → Claims.Msg} {x : Claims.OCV α}
   simp
 
 /-- A rep's own SHA-512 calls: what it appends to the empty log. -/
-def repLog (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : ℕ)
+def repLog (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes : ByteArray) : List ByteArray :=
   ((verifyRepWith (Hashes.logged h) spec st sch sess i r bytes).go #[]).2.toList
 
-theorem rep_shift (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session)
+theorem rep_shift (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord)
     (i r : ℕ) (bytes : ByteArray) (l : Array ByteArray) :
     (verifyRepWith (Hashes.logged h) spec st sch sess i r bytes).go l =
       (((verifyRepWith (Hashes.logged h) spec st sch sess i r bytes).go #[]).1,
@@ -45,7 +49,7 @@ theorem rep_shift (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup
 oracle. -/
 theorem verifyRepWith_congr {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT Flock.V M]
     (hs : Hashes M)
-    {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess sess' : Session} {i r : ℕ}
+    {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess sess' : RunRecord} {i r : ℕ}
     (bytes : ByteArray) {y y' : StreamRec}
     (hy : sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some y)
     (hy' : sess'.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some y')
@@ -61,7 +65,7 @@ theorem verifyRepWith_congr {M : Type → Type} [Monad M] [MonadExceptOf String 
 theorem verdictK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup}
     {record : String} {proofs : Array ByteArray} {l₀ : Array ByteArray} :
     RetL (verifyWithMK keep (Hashes.logged h) spec tabs record proofs) l₀ fun _ l' =>
-      ∃ (sess : Session) (schs : Array Schedule) (l₁ : Array ByteArray),
+      ∃ (sess : RunRecord) (schs : Array Schedule) (l₁ : Array ByteArray),
         (Record.decodeWithK keep (Hashes.logged h) spec record).go l₀ = (.ok sess, l₁) ∧
         List.Forall₂ (fun st sch => fast100 st.m = some sch) tabs.toList schs.toList ∧
         tabs.size = spec.tables.size ∧ proofs.size = spec.repStreams.size ∧
@@ -115,7 +119,7 @@ theorem verdictK_log (keep : Bool → Bool) {h : ByteArray → ByteArray} {spec 
 theorem verdict_log {h : ByteArray → ByteArray} {spec : SessionSpec} {tabs : Array Setup} {record : String}
     {proofs : Array ByteArray} {l₀ : Array ByteArray} :
     RetL (verifyWithM (Hashes.logged h) spec tabs record proofs) l₀ fun _ l' =>
-      ∃ (sess : Session) (schs : Array Schedule) (l₁ : Array ByteArray),
+      ∃ (sess : RunRecord) (schs : Array Schedule) (l₁ : Array ByteArray),
         (Record.decodeWith (Hashes.logged h) spec record).go l₀ = (.ok sess, l₁) ∧
         List.Forall₂ (fun st sch => fast100 st.m = some sch) tabs.toList schs.toList ∧
         tabs.size = spec.tables.size ∧ proofs.size = spec.repStreams.size ∧

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishRep
+module
+
+public import Proofs.Flock.Claims.ZK.FinishRep
 
 /-!
 # The firewall's rep reads the extra claims' coordinates alone
@@ -12,6 +14,8 @@ claims with the same coordinates give one rep: the firewall's `claimsOf xs` and 
 * `switchVec_x`, `ringSwitchCut_switchVec`: so is the ring switch on their switched vectors of a packed table.
 * **`repFwC_claims_x`**: `repFwC` at extra claims with the same coordinates is one run.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

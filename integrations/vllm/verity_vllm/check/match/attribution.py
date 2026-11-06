@@ -30,7 +30,7 @@ def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
     n_in = B.n_input_nodes
     # the shared weights = the Input nodes no request owns (one per leaf field of a mixed-width Record:
     # FP8 435; one node for a homogeneous bf16 Record) -- never `n_input_nodes - 1`.  The request-owned inputs are the prompts
-    # (one per header request) + the seeds (compare.Prog.seed_index).  A layout that does not hold is a G2 failure by name, not a guess.
+    # (one per header request) + the seeds (compare.RootView.seed_index).  A layout that does not hold is a G2 failure by name, not a guess.
     _seed_index_all = dict(getattr(B, "seed_index", {}))
     _peer_index_all = dict(getattr(B, "peer_index", {}))   # TP rank fold: peers node -> request index (one per request)
     weights_nodes_error = None

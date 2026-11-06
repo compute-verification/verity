@@ -1,32 +1,32 @@
-"""The ingress-ids tie (`io_ids`, a prototype on a fake upstream Commit and the warden's own ingress): `IoTieRequest`
-with the prompt ids' values held to the Commit's `c00.input/ids` rows, so the model computes on the prompt the user
-sent (IoTieRequest counts each request's prompt fields and checks each is a u32, but ties the ids' values to
-nothing). Like IoTieRequest it is one unit a bucket row of the warden's registered ingress
+"""The ingress-ids tie (`io_ids`, a prototype on a fake upstream Commit and the network certifier's own ingress):
+`IoTieRequest` with the prompt ids' values held to the Commit's `c00.input/ids` rows, so the model computes on the
+prompt the user sent (IoTieRequest counts each request's prompt fields and checks each is a u32, but ties the ids'
+values to nothing). Like IoTieRequest it is one proof block a bucket row of the network certifier's registered ingress
 (`warden_rows.bucket_port`).
 
 **The Commit side** (the fake upstream's layout, what the served path's Commit exposes): one `hm96-sha512/row/v2` row a
 step under a fresh salt, the step's input ids u32be in the forward's token order (its batch rows in order, row r's n_r
 tokens at offset Σ_{r' < r} n_{r'}), zero past to P, in a dense `frame-v3-sha512` tree of the session's steps whose
 root and domain the Commit registers before the sample. A bucket reads its S rows at the map's steps as registered
-reads (`port_reads`, the egress port's `io_tie.port_reads` over `INPUT_IDS`), so no gate of the unit hashes them.
+reads (`port_reads`, the egress port's `io_tie.port_reads` over `INPUT_IDS`), so no gate of the proof block hashes them.
 
 **The map** (`bucket_map`, the verifier's, public in the named gap; at the target under the advice's hiding root).
 The bucket's prompt fields in scan order are its lanes': lane by lane, connection q's positions from the lane's
-carry-in fields to its carry-out's, q advice request i's where q = order[i] + 1; which cells hold them is the warden's
-timing. Field f is position p of request i, and its class is that of the position whose computation i's KV holds
-there, its root: (i, p), or for a prefix-cache hit (p below i's hit) its source's root at p, so a cached position
+carry-in fields to its carry-out's, q advice request i's where q = order[i] + 1; which cells hold them is the network
+certifier's timing. Field f is position p of request i, and its class is that of the position whose computation i's KV
+holds there, its root: (i, p), or for a prefix-cache hit (p below i's hit) its source's root at p, so a cached position
 shares a class with the computation it reads. `keys[f]` is field f's class, numbered from 0 in order of first
 appearance, the sink 2^CB − 1 past the bucket's fields. The opened steps are every step with a token whose root is a
 class of the bucket, and `ekeys[e]` is opened entry e's class, or the sink. The verifier refuses an advice whose class
 has no computation in any step.
 
 **What 1 means** (`reference`): every read row opens at its step under the Commit's root (the verifier's registered
-reads, outside the unit, as the bucket row's under the warden's; here `reads_open`), and the unit is 1
-(`unit_reference`): IoTieRequest's output on the row and the lanes, and the bucket's fields (`scan`) and the read
-entries hold one value a class, each class with a field. So every computation of a prompt position of the bucket, and
-every KV read in its place, is the id the user sent there.
+reads, outside the proof block, as the bucket row's under the network certifier's; here `reads_open`), and the proof
+block is 1 (`unit_reference`): IoTieRequest's output on the row and the lanes, and the bucket's fields (`scan`) and the
+read entries hold one value a class, each class with a field. So every computation of a prompt position of the bucket,
+and every KV read in its place, is the id the user sent there.
 
-**The unit** (`IoTieRequestIds{B, L, R, P, S}`) is IoTieRequest's scan, lane by lane, plus:
+**The proof block** (`IoTieRequestIds{B, L, R, P, S}`) is IoTieRequest's scan, lane by lane, plus:
 - each request cell's slots (`IoTieIdsSlots{B}`): slot k is a field when the frame's count of fields is above k, its
   value the u32 its 10 characters spell, its ordinal nf + k, nf the bucket's fields before the cell;
 - the classes routed to the fields (`io_tie.IoTieRoute` over M1 = 2^D1 ≥ NK slot positions, NK = N·K): record f is
@@ -300,15 +300,15 @@ def unit_reference(shape: Shape, inst: Instance) -> int:
 
 
 def reference(shape: Shape, inst: Instance) -> int:
-    """The bucket's ids tie (the module docstring, "What 1 means"): its registered reads and its unit."""
+    """The bucket's ids tie (the module docstring, "What 1 means"): its registered reads and its proof block."""
     return int(reads_open(shape, inst) and unit_reference(shape, inst) == 1)
 
 
 def port_reads(maps: Sequence[Map], root: bytes, domain_id: bytes, count: int, P: int,
                reads_from: int = 0) -> dict[str, dict[str, Any]]:
-    """The verifier's own `--registered` ports of the buckets' units over the Commit's `count` rows of P input ids
-    under its registration's `root` and `domain_id`, never an instance's (`io_tie.port_reads`): unit `reads_from + u`
-    reads the verifier's map u's steps."""
+    """The verifier's own `--registered` ports of the buckets' proof blocks over the Commit's `count` rows of P input
+    ids under its registration's `root` and `domain_id`, never an instance's (`io_tie.port_reads`): proof block
+    `reads_from + u` reads the verifier's map u's steps."""
     return IT.port_reads([m.steps for m in maps], root, domain_id, count, P, INPUT_IDS, reads_from)
 
 
@@ -337,8 +337,8 @@ def route_switches(shape: Shape, inst: Instance) -> list[int]:
 
 
 def sort_switches(shape: Shape, inst: Instance) -> list[int]:
-    """The members' sort as the unit forms them: each slot position its field's class (the sink but at a field), each
-    entry its class, by (class, slot before entry, position)."""
+    """The members' sort as the proof block forms them: each slot position its field's class (the sink but at a field),
+    each entry its class, by (class, slot before entry, position)."""
     sh = shape
     got = scan(sh, inst.request)
     keys = [sh.sink] * sh.NK
@@ -497,7 +497,7 @@ IoTieIdsChain = CompositeDefinition(
 
 
 def _unit_shape(S) -> Shape:
-    """The unit's shape: the Commit's depth DS is its reads' (`port_reads`), not the unit's."""
+    """The proof block's shape: the Commit's depth DS is its reads' (`port_reads`), not the proof block's."""
     return Shape(S.B, S.L, S.R, S.P, S.S, 1)
 
 

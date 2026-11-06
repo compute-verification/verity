@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
+module
+
+public import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
 
 /-!
 # The composition at the parts' own messages, landing on `DecompBV` (`decompBV_lastSplitP_sharesJV`)
@@ -10,6 +12,8 @@ evaluations too. `decompBV_lastSplitP_sharesJV` asks `hlowP` under `JointV` at `
 `DecompBV` at `PartAcceptsV` (`decompBV_of_jointV`), the form `RecDeploy.ksLin2_deployedR_layRV` takes. `JointV` gives
 `Joint` at `PartAccepts` (`joint_of_jointP`, `jointP_of_jointV`), so a share proved under `Joint` is one under `JointV`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenLower
 
@@ -36,10 +40,10 @@ theorem decompBV_lastSplitP_sharesJV (ownB : Msg → VerdictR → Option ℕ) (o
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
     (DO : Claims.Flock.Deploy Coin Col' T') (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ r ∈ (lastSplitP H rd pieces pholds hpieces).checks (Claims.Recursion.xI (recBound rel' b L IV) x), ∀ s,
         ownP ownB ownQ x r = some s → s < (recBound rel' b L IV).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ q ∈ ivChecks (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w)
           (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
             (lastSplitP H rd pieces pholds hpieces).toLast)
@@ -57,7 +61,7 @@ theorem decompBV_lastSplitP_sharesJV (ownB : Msg → VerdictR → Option ℕ) (o
         (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
           (lastSplitP H rd pieces pholds hpieces).toLast)
         (ownHolders (recBound rel' b L IV) L (ownDeploy (ownJ (recBound rel' b L IV) L (ownP ownB ownQ)))) s x c ms)
-    (hlowP : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hlowP : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
         JointV H (recBound rel' b L IV) L (PartAcceptsV H (recBound rel' b L IV) DO L shape shows cmt) x c xs ws →
         ∀ s < (recBound rel' b L IV).nS x,

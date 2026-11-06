@@ -1,5 +1,6 @@
 """``circuit-check --shard K/N`` and ``--combine DIR...``: one run's targets spread over N processes or nodes, and the shards'
-records joined into the report the unsharded run gives.
+records joined into the report the unsharded run gives.  ``--binding NAME`` checks the targets of one catalog binding
+(`binding`), unjoined as a shard's.
 
 Shards are numbered 1..N, as check.py's are (``check.py --shard K/N``).  A target is shard K's when the hash of its id, its
 kind and label, is K - 1 modulo N (`shard_of`): never its place in the list, so a new target moves no other.  Each shard builds the whole task list as the unsharded run does (the catalog, or the task list
@@ -56,6 +57,19 @@ def mine(ids: Iterable[tuple[str, str]], shard: tuple[int, int]) -> list[int]:
     return [i for i, (kind, label) in enumerate(ids) if shard_of(kind, label, n) == k]
 
 
+def binding(units: Iterable[str]) -> str:
+    """The name ``--binding`` gives the catalog binding that a unit tuple (`targets.catalog_units`) belongs to: a root function's
+    first unit (``<module>.circuit-check#_X_roots``, `targets.py`'s own by name alone), every model of one `_model_roots` as
+    ``<module>.circuit-check#_model_roots``, every instance of one ``TEMPLATE_PARAMS`` entry as that entry, every template
+    `targets.py` checks at its example as ``TEMPLATE_PARAMS``, and the registered roots as ``<registered>``."""
+    head, sep, name = next(iter(units)).partition("#")
+    if not sep:
+        head, name = "", head
+    if name.startswith("_model_roots:") or (not sep and name.startswith("TEMPLATE_PARAMS:")):
+        name = name.partition(":")[0]
+    return head + sep + name
+
+
 def digest(ids: Iterable[tuple[str, str]]) -> str:
     """The SHA-256 of the list of targets ``ids`` (kind and label each, in order), as compact JSON."""
     return hashlib.sha256(json.dumps([[kind, label] for kind, label in ids], separators=(",", ":")).encode()).hexdigest()
@@ -84,8 +98,8 @@ def _replace(path: Path, data: bytes) -> None:
 
 def write(directory: Path, rep: dict, **measured) -> None:
     """A shard's report ``rep`` (`cli.run` with ``shard``) into ``directory``: its records (`RECORDS`, as the cache serializes
-    a report), then its manifest (`MANIFEST`) naming them by digest, with its cache counts and ``measured`` (its wall time and
-    jobs).  An earlier manifest there goes first, so a directory holds a manifest only once its shard has finished."""
+    a report), then its manifest (`MANIFEST`) naming them by digest, with its cache counts and ``measured`` (its wall time,
+    prologue and jobs).  An earlier manifest there goes first, so a directory holds a manifest only once its shard has finished."""
     directory.mkdir(parents=True, exist_ok=True)
     (directory / MANIFEST).unlink(missing_ok=True)
     data = json.dumps(rep["targets"], default=str).encode()

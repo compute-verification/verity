@@ -1,47 +1,81 @@
 // The filler top-up: a host thread of its own reads registered regions of HBM on a low-priority stream, chunk after
-// chunk, each chunk with its receipts, so that a window's reads approach R·T while a serving process runs beside it and
-// its Python never waits on the top-up.
+// chunk, so that a window's reads approach R·T while a serving process runs beside it and its Python never waits on the
+// top-up.
 //
-//   mode -1  read only: every 16 bytes loaded once and XOR-folded (the floor of a receipt's cost)
-//   mode  0  gf31-poly/v1 over 2,056-byte blocks, the bandwidth audit's uncertified fast check
-//   mode  2  ro-blake3/v1 over 2,056-byte blocks, the bandwidth audit's certified receipt, with its leaves and tree
-//   mode  3  sk16: the cost of a sketch-then-hash receipt over the same blocks (the sketch tag's shape, not its format):
-//            each block's 2,056 bytes as int8 against 16 rows of ±1 signs (dp4a), the 16 int32 sums hashed by one keyed
-//            BLAKE3 compression under the block's index, then ro-blake3/v1's leaves and tree over those 32-byte digests;
-//            the signs are sampled once a run from its seed (a deployment draws them a pass, F29: the cost is the same)
+//   mode -1  read only: every 16 bytes loaded once and XOR-folded (the floor of a receipt's cost), one CTA a
+//            `tile_bytes` tile, so an inference kernel queued on a higher-priority stream gets an SM as soon as a tile
+//            ends
 //   mode  4  fill-sk16/v0 (`fill.cu`): 4,096-byte blocks sketched on the tensor cores against 16 rows of ±1 signs, each
 //            block's sums hashed by one keyed BLAKE3 compression and each 32 blocks' leaves into a unit root; a chunk is
 //            whole units, read by a fixed grid (`ctas`, default one CTA an SM) of 4 warps a CTA, a unit a warp at a time,
 //            the chunk's check word the XOR of its units' first root words. Chunks alternate between two streams so that
-//            one chunk's tail overlaps the next one's start. Signs sampled once a run, as sk16's
+//            one chunk's tail overlaps the next one's start. Its signs are sampled once a run from the run's seed
 //
-// The receipts are the bandwidth audit's own kernels (`../bandwidth/tagger.cu`, included here): a chunk is one tag pass
-// over `chunk_bytes / 2056` blocks of a region under the chunk's seed (the run's seed with its first 8 bytes XORed with
-// the chunk's number), its root copied to pinned memory once the chunk ends.  A chunk is launched as many CTAs of
-// microseconds each (read: one CTA a `tile_bytes` tile; ro-blake3/v1: 64 blocks a CTA), so an inference kernel queued
-// on a higher-priority stream gets an SM as soon as a tile ends.  `depth` chunks are kept in flight.
-//
-// Each chunk's start and end are CUDA events, read back as milliseconds since the start event, so a window's filler
-// bytes come from the GPU's clock, not the host's.  `tu_pause(1)` stops launching new chunks (the in-flight ones
-// finish): the engine-driven, idle-only top-up.
+// `depth` chunks are kept in flight. Each chunk's start and end are CUDA events, read back as milliseconds since the
+// start event, so a window's filler bytes come from the GPU's clock, not the host's.  `tu_pause(1)` stops launching new
+// chunks (the in-flight ones finish): the engine-driven, idle-only top-up. fill-sk16/v2 (`sq_*`, below) is the filler
+// by sequence number, its receipts SHA-512's.
 //
 // Built as libtopup.so (run.sh).  C ABI at the end.
 
-#include "../bandwidth/tagger.cu"
-#include "readers.cu"
-#include "fill.cu"
+#include <cuda_runtime.h>
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <mutex>
 #include <thread>
+#include <vector>
+
+#define CK(x)                                                                                                  \
+  do {                                                                                                         \
+    cudaError_t e_ = (x);                                                                                      \
+    if (e_ != cudaSuccess) {                                                                                   \
+      fprintf(stderr, "CUDA error %s at %s:%d: %s\n", #x, __FILE__, __LINE__, cudaGetErrorString(e_));         \
+      return (int)e_;                                                                                          \
+    }                                                                                                          \
+  } while (0)
+
+// SHA-512 (`../codec_tensor/sha512.cuh`): fill-sk16/v0's signs on the host, fill-sk16/v2's receipts on the device.
+#include "../codec_tensor/sha512.cuh"
+
+namespace sha {
+static void sha512_host(const uint8_t* msg, size_t len, uint64_t out[8]) {
+  uint64_t s[8];
+  sx::iv(s);
+  std::vector<uint8_t> m(msg, msg + len);
+  m.push_back(0x80);
+  while (m.size() % 128 != 112) m.push_back(0);
+  for (int i = 0; i < 8; ++i) m.push_back(0);
+  const uint64_t bits = (uint64_t)len * 8;
+  for (int i = 7; i >= 0; --i) m.push_back((uint8_t)(bits >> (8 * i)));
+  for (size_t off = 0; off < m.size(); off += 128) {
+    uint64_t w[16];
+    for (int i = 0; i < 16; ++i) {
+      uint64_t v = 0;
+      for (int k = 0; k < 8; ++k) v = (v << 8) | m[off + 8 * i + k];
+      w[i] = v;
+    }
+    sha512_compress(s, w);
+  }
+  memcpy(out, s, sizeof s);
+}
+
+static void digest_bytes(const uint64_t s[8], uint8_t out[64]) {
+  for (int i = 0; i < 8; ++i)
+    for (int k = 0; k < 8; ++k) out[8 * i + k] = (uint8_t)(s[i] >> (56 - 8 * k));
+}
+}  // namespace sha
+
+#include "readers.cu"
+#include "fill.cu"
 
 namespace tu {
 
-constexpr int MODE_READ = -1, MODE_SK = 3, MODE_FILL = 4;
-constexpr int SK_ROWS = 16, SK_WORDS = (int)(bw::BLOCK_BYTES / 4), SK_G = 2, SK_WARPS = 8, SK_KS = 17;
-constexpr size_t SK_SMEM = sizeof(uint32_t) * (SK_WORDS * SK_ROWS + SK_WARPS * 32 * SK_KS);
-static const char SK_NAME[] = "verity/kv-filler/sk16-proxy/v0";
+constexpr int MODE_READ = -1, MODE_FILL = 4;
 
 struct Region {
   const uint8_t* p;
@@ -51,7 +85,7 @@ struct Region {
 struct Rec {
   double t0_ms, t1_ms;  // the chunk's start and end events, since the start event
   uint64_t bytes;
-  uint32_t region, root4;  // root4: the first 4 bytes of the chunk's root (mode >= 0), else 0
+  uint32_t region, root4;  // root4: the chunk's check word (fill), else 0
   uint64_t chunk;
 };
 
@@ -95,136 +129,6 @@ __global__ void __launch_bounds__(256) page_read(const uint4* __restrict__ p, ui
   if ((threadIdx.x & 31) == 0 && acc == 0x9e3779b9u) atomicXor(out, acc);
 }
 
-// The ±1 signs: row r's byte 4q + b is bit b of nibble r of the q-th 64-bit SplitMix64 output from the seed's first 8
-// bytes, set meaning -1; stored [q][r] as int8x4 words.
-static void sk_signs(const uint8_t seed[32], uint32_t* out) {
-  uint64_t x = 0;
-  for (int k = 0; k < 8; ++k) x |= (uint64_t)seed[k] << (8 * k);
-  for (int q = 0; q < SK_WORDS; ++q) {
-    uint64_t z = (x += 0x9e3779b97f4a7c15ull);
-    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
-    z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
-    z ^= z >> 31;
-    for (int r = 0; r < SK_ROWS; ++r) {
-      uint32_t w = 0;
-      for (int b = 0; b < 4; ++b) w |= (uint32_t)((z >> (4 * r + b)) & 1 ? 0xFFu : 0x01u) << (8 * b);
-      out[q * SK_ROWS + r] = w;
-    }
-  }
-}
-
-// One warp per 32 blocks, SK_G blocks at a time against each sign word, then a halving reduction that leaves row
-// (lane >> 1) & 15 of each block's sums in lanes 2i and 2i + 1; lane b hashes block base + b.
-__global__ void __launch_bounds__(SK_WARPS * 32, 2) sk_kernel(const uint64_t* __restrict__ E8, uint64_t count,
-                                                           const uint32_t* __restrict__ signs, bw::Key3 key,
-                                                           uint32_t* __restrict__ tags) {
-  extern __shared__ __align__(16) uint32_t smem[];
-  uint32_t* S = smem;
-  uint32_t* KS = smem + SK_WORDS * SK_ROWS + (threadIdx.x >> 5) * 32 * SK_KS;
-  for (int i = threadIdx.x; i < SK_WORDS * SK_ROWS / 4; i += blockDim.x) ((uint4*)S)[i] = ((const uint4*)signs)[i];
-  __syncthreads();
-  const int lane = threadIdx.x & 31;
-  const uint64_t base = ((uint64_t)blockIdx.x * SK_WARPS + (threadIdx.x >> 5)) * 32;
-  if (base >= count) return;
-  const int myrow = (lane >> 1) & 15;
-#pragma unroll 1
-  for (int g0 = 0; g0 < 32; g0 += SK_G) {
-    int acc[SK_G][SK_ROWS];
-#pragma unroll
-    for (int g = 0; g < SK_G; ++g)
-#pragma unroll
-      for (int r = 0; r < SK_ROWS; ++r) acc[g][r] = 0;
-#pragma unroll
-    for (int t = 0; t < 9; ++t) {
-      const int w = lane + 32 * t;
-      if (w < (int)bw::ROW_U64) {
-        uint64_t v[SK_G];
-#pragma unroll
-        for (int g = 0; g < SK_G; ++g) {
-          const uint64_t j = base + g0 + g;
-          v[g] = j < count ? __ldcs(E8 + j * bw::ROW_U64 + w) : 0;
-        }
-#pragma unroll
-        for (int h = 0; h < 2; ++h) {
-          const uint4* sq = (const uint4*)(S + (2 * w + h) * SK_ROWS);
-          uint32_t sr[SK_ROWS];
-#pragma unroll
-          for (int i = 0; i < 4; ++i) {
-            const uint4 u = sq[i];
-            sr[4 * i] = u.x, sr[4 * i + 1] = u.y, sr[4 * i + 2] = u.z, sr[4 * i + 3] = u.w;
-          }
-#pragma unroll
-          for (int g = 0; g < SK_G; ++g) {
-            const int x = (int)(uint32_t)(v[g] >> (32 * h));
-#pragma unroll
-            for (int r = 0; r < SK_ROWS; ++r) acc[g][r] = __dp4a(x, (int)sr[r], acc[g][r]);
-          }
-        }
-      }
-    }
-#pragma unroll
-    for (int g = 0; g < SK_G; ++g) {
-      int* a = acc[g];
-#pragma unroll
-      for (int k = 0; k < 8; ++k) {
-        const int send = (lane & 16) ? a[k] : a[k + 8], keep = (lane & 16) ? a[k + 8] : a[k];
-        a[k] = keep + __shfl_xor_sync(bw::FULL, send, 16);
-      }
-#pragma unroll
-      for (int k = 0; k < 4; ++k) {
-        const int send = (lane & 8) ? a[k] : a[k + 4], keep = (lane & 8) ? a[k + 4] : a[k];
-        a[k] = keep + __shfl_xor_sync(bw::FULL, send, 8);
-      }
-#pragma unroll
-      for (int k = 0; k < 2; ++k) {
-        const int send = (lane & 4) ? a[k] : a[k + 2], keep = (lane & 4) ? a[k + 2] : a[k];
-        a[k] = keep + __shfl_xor_sync(bw::FULL, send, 4);
-      }
-      {
-        const int send = (lane & 2) ? a[0] : a[1], keep = (lane & 2) ? a[1] : a[0];
-        a[0] = keep + __shfl_xor_sync(bw::FULL, send, 2);
-      }
-      a[0] += __shfl_xor_sync(bw::FULL, a[0], 1);
-      if (!(lane & 1)) KS[(g0 + g) * SK_KS + myrow] = (uint32_t)a[0];
-    }
-  }
-  __syncwarp();
-  const uint64_t j = base + lane;
-  if (j < count) {
-    uint32_t m[16], y[8];
-#pragma unroll
-    for (int r = 0; r < 16; ++r) m[r] = KS[lane * SK_KS + r];
-    bw::b3_compress(key.k, m, (uint32_t)j, 64, bw::B3_KEYED | bw::B3_CHUNK_START | bw::B3_CHUNK_END | bw::B3_ROOT, y);
-    uint4* o = (uint4*)(tags + j * 8);
-    o[0] = make_uint4(y[0], y[1], y[2], y[3]);
-    o[1] = make_uint4(y[4], y[5], y[6], y[7]);
-  }
-}
-
-// The sk16 pass over `count` blocks of E: digests, then ro-blake3/v1's leaves (under SK_NAME) and tree.
-static void sk_pass(const bw::Pass& p, const void* E, const uint32_t* signs, const uint8_t seed[32], uint64_t count,
-                    cudaStream_t st) {
-  const unsigned grid = (unsigned)((count + 32 * SK_WARPS - 1) / (32 * SK_WARPS));
-  sk_kernel<<<grid, SK_WARPS * 32, SK_SMEM, st>>>((const uint64_t*)E, count, signs, bw::b3_key(seed), p.tags);
-  const unsigned leaf_grid = (unsigned)(((count + 15) / 16 + 127) / 128);
-  bw::b3_leaves<<<leaf_grid, 128, 0, st>>>(p.tags, p.blocks, count, bw::prefix_midstate(bw::LEAF_DOMAIN, SK_NAME, seed),
-                                           p.nodes);
-  bw::launch_tree(p, st);
-}
-
-// The host's digest of block E_j (2,056 bytes) under sk16: the gate's reference.
-static void sk_host(const uint8_t* Ej, uint64_t j, const uint32_t* signs, const bw::Key3& key, uint32_t y[8]) {
-  uint32_t m[16];
-  for (int r = 0; r < SK_ROWS; ++r) {
-    int64_t sum = 0;
-    for (int q = 0; q < SK_WORDS; ++q)
-      for (int b = 0; b < 4; ++b)
-        sum += (int64_t)(int8_t)Ej[4 * q + b] * (int8_t)(uint8_t)(signs[q * SK_ROWS + r] >> (8 * b));
-    m[r] = (uint32_t)(int32_t)sum;
-  }
-  bw::b3_compress(key.k, m, (uint32_t)j, 64, bw::B3_KEYED | bw::B3_CHUNK_START | bw::B3_CHUNK_END | bw::B3_ROOT, y);
-}
-
 // fill-sk16/v0's signs: SHA-512(seed ‖ "verity/kv-filler/fill-sk16/v0/signs" ‖ u32le i) for i = 0..127, 8 KiB.
 static void fill_signs(const uint8_t seed[32], uint32_t* out) {
   static const char name[] = "verity/kv-filler/fill-sk16/v0/signs";
@@ -235,8 +139,8 @@ static void fill_signs(const uint8_t seed[32], uint32_t* out) {
   for (uint32_t i = 0; i < 128; ++i) {
     for (int k = 0; k < 4; ++k) msg[msg.size() - 4 + k] = (uint8_t)(i >> (8 * k));
     uint64_t d[8];
-    bw::sha512_host(msg.data(), msg.size(), d);
-    bw::digest_bytes(d, bytes + 64 * i);
+    sha::sha512_host(msg.data(), msg.size(), d);
+    sha::digest_bytes(d, bytes + 64 * i);
   }
 }
 
@@ -340,7 +244,7 @@ struct State {
   std::vector<int> busy;
   uint8_t* roots_h = nullptr;  // pinned, depth × 64
   uint32_t* xr = nullptr;
-  uint32_t* signs = nullptr;  // sk16's, on the device
+  uint32_t* signs = nullptr;  // fill-sk16/v0's, on the device
   std::thread th;
   std::atomic<int> run{0}, paused{0}, err{0};
   std::atomic<uint64_t> bytes_done{0}, chunks_done{0};
@@ -365,10 +269,6 @@ static int finish(State& st, int i) {
     memcpy(&taken, st.roots_h + 64 * i, 8);
     memcpy(&root4, st.roots_h + 64 * i + 8, 4);
     st.slot_bytes[i] = std::min<uint64_t>(taken * fl::UNIT_BYTES, st.slot_bytes[i]);
-  } else if (st.mode >= 0) {
-    uint8_t root[64];
-    bw::digest_bytes((const uint64_t*)(st.roots_h + 64 * i), root);
-    root4 = (uint32_t)root[0] << 24 | (uint32_t)root[1] << 16 | (uint32_t)root[2] << 8 | root[3];
   }
   {
     std::lock_guard<std::mutex> g(st.m);
@@ -380,13 +280,9 @@ static int finish(State& st, int i) {
   return 0;
 }
 
-// The next chunk's region and bytes, wrapping over the regions; blocks of 2,056 bytes for a receipt mode.
-// Under a CTA cap a receipt mode's chunk is at most the cap's CTAs of blocks (ro-blake3/v1 64 a CTA, the others 256).
+// The read mode's next chunk: its region and bytes, whole 16-byte words, wrapping over the regions.
 static void next_chunk(State& st, size_t& region, const uint8_t*& p, uint64_t& bytes) {
-  const uint64_t unit = st.mode >= 0 ? bw::BLOCK_BYTES : 16;
-  uint64_t limit = st.chunk_bytes / unit * unit;
-  const int cap = st.ctas.load();
-  if (cap > 0 && st.mode >= 0) limit = std::min<uint64_t>(limit, (uint64_t)cap * (st.mode == bw::TAG_B3 ? 64 : 256) * unit);
+  const uint64_t unit = 16, limit = st.chunk_bytes / unit * unit;
   for (;;) {
     const Region& R = st.regions[st.r];
     const uint64_t usable = R.bytes / unit * unit;
@@ -433,26 +329,10 @@ static int launch(State& st, int i) {
   next_chunk(st, region, p, bytes);
   cudaError_t e = cudaEventRecord(st.e0[i], st.s);
   if (e != cudaSuccess) return (int)e;
-  if (st.mode == MODE_READ) {
-    const uint64_t n16 = bytes / 16, tile16 = st.tile_bytes / 16, tiles = (n16 + tile16 - 1) / tile16;
-    const int cap = st.ctas.load();
-    const uint64_t grid = cap > 0 && (uint64_t)cap < tiles ? (uint64_t)cap : tiles;
-    tile_read<<<(unsigned)grid, 256, 0, st.s>>>((const uint4*)p, n16, (uint32_t)tile16, st.xr);
-  } else {
-    const uint64_t blocks = bytes / bw::BLOCK_BYTES;
-    bw::Pass pass = bw::make_pass(st.mode == MODE_SK ? bw::TAG_B3 : st.mode, blocks, st.ws[i]);
-    uint8_t seed[32];
-    memcpy(seed, st.seed, 32);
-    for (int k = 0; k < 8; ++k) seed[k] ^= (uint8_t)(st.chunk >> (8 * k));
-    if (st.mode == MODE_SK) {
-      sk_pass(pass, p, st.signs, seed, blocks, st.s);
-    } else {
-      bw::launch_tags(pass, p, seed, blocks, st.s);
-      bw::launch_tree(pass, st.s);
-    }
-    e = cudaMemcpyAsync(st.roots_h + 64 * i, pass.nodes + pass.lv.off.back() * 8, 64, cudaMemcpyDeviceToHost, st.s);
-    if (e != cudaSuccess) return (int)e;
-  }
+  const uint64_t n16 = bytes / 16, tile16 = st.tile_bytes / 16, tiles = (n16 + tile16 - 1) / tile16;
+  const int cap = st.ctas.load();
+  const uint64_t grid = cap > 0 && (uint64_t)cap < tiles ? (uint64_t)cap : tiles;
+  tile_read<<<(unsigned)grid, 256, 0, st.s>>>((const uint4*)p, n16, (uint32_t)tile16, st.xr);
   e = cudaEventRecord(st.e1[i], st.s);
   if (e != cudaSuccess) return (int)e;
   st.slot_bytes[i] = bytes;
@@ -508,14 +388,11 @@ extern "C" {
 
 // Starts the top-up on `device` over `n` regions (device pointers and byte counts).  `priority` is the stream's
 // (cudaDeviceGetStreamPriorityRange: 0 the least, negative greater).  `ctas` > 0 caps the grid: the read mode's CTAs, or
-// a receipt mode's chunk at that many CTAs of blocks.  Once sq_green has split the SMs, the stream is on the filler's
-// green context, so every chunk runs on its SMs only.  Returns 0 or a CUDA error.
+// the fill's.  Once sq_green has split the SMs, the stream is on the filler's green context, so every chunk runs on its
+// SMs only.  Returns 0 or a CUDA error.
 int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int mode, uint64_t chunk_bytes,
              uint64_t tile_bytes, int depth, int priority, const uint8_t* seed, int ctas) {
-  if (tu::S || n <= 0 || depth <= 0 ||
-      (mode != tu::MODE_READ && mode != bw::TAG_GF31 && mode != bw::TAG_B3 && mode != tu::MODE_SK &&
-       mode != tu::MODE_FILL))
-    return -1;
+  if (tu::S || n <= 0 || depth <= 0 || (mode != tu::MODE_READ && mode != tu::MODE_FILL)) return -1;
   tu::last_log.clear();
   auto* st = new tu::State();
   st->device = device;
@@ -553,17 +430,7 @@ int tu_start(int device, const uint64_t* ptrs, const uint64_t* bytes, int n, int
   for (int i = 0; i < depth; ++i) {
     CK(cudaEventCreate(&st->e0[i]));
     CK(cudaEventCreateWithFlags(&st->e1[i], cudaEventBlockingSync));
-    if (mode == tu::MODE_FILL)
-      CK(cudaMalloc(&st->ws[i], tu::fill_ws_bytes(chunk_bytes / fl::UNIT_BYTES)));
-    else if (mode >= 0)
-      CK(cudaMalloc(&st->ws[i], bw::workspace_bytes(mode == tu::MODE_SK ? bw::TAG_B3 : mode, chunk_bytes / bw::BLOCK_BYTES)));
-  }
-  if (mode == tu::MODE_SK) {
-    std::vector<uint32_t> sg(tu::SK_WORDS * tu::SK_ROWS);
-    tu::sk_signs(seed, sg.data());
-    CK(cudaMalloc(&st->signs, sg.size() * 4));
-    CK(cudaMemcpy(st->signs, sg.data(), sg.size() * 4, cudaMemcpyHostToDevice));
-    CK(cudaFuncSetAttribute(tu::sk_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)tu::SK_SMEM));
+    if (mode == tu::MODE_FILL) CK(cudaMalloc(&st->ws[i], tu::fill_ws_bytes(chunk_bytes / fl::UNIT_BYTES)));
   }
   if (mode == tu::MODE_FILL) {
     std::vector<uint32_t> sg(fl::SIGN_WORDS);
@@ -683,68 +550,6 @@ int tu_stop() {
   tu::last_log = std::move(st->log);
   delete st;
   tu::S = nullptr;
-  return rc;
-}
-
-// One chunk's receipt root, computed synchronously the way the thread computes it (the gate): mode 0 or 2 over `blocks`
-// 2,056-byte blocks at `store` under `seed`; the 64-byte root into `root`.
-int tu_root(int mode, const void* store, uint64_t blocks, const uint8_t* seed, uint8_t* root) {
-  void* ws = nullptr;
-  CK(cudaMalloc(&ws, bw::workspace_bytes(mode, blocks)));
-  bw::Pass pass = bw::make_pass(mode, blocks, ws);
-  bw::launch_tags(pass, store, seed, blocks, 0);
-  bw::launch_tree(pass, 0);
-  int rc = bw::read_root(pass, root, 0);
-  cudaFree(ws);
-  return rc;
-}
-
-// sk16's gate: the device's digests of `blocks` blocks at `store` (device memory) under `seed` against the host's, and
-// the pass's root into `root`.  Returns the number of blocks whose digests differ, or -1 on a CUDA error.
-int tu_sk_gate(const void* store, uint64_t blocks, const uint8_t* seed, uint8_t* root) {
-  std::vector<uint32_t> sg(tu::SK_WORDS * tu::SK_ROWS);
-  tu::sk_signs(seed, sg.data());
-  uint32_t* signs = nullptr;
-  void* ws = nullptr;
-  if (cudaMalloc(&signs, sg.size() * 4) != cudaSuccess) return -1;
-  if (cudaMalloc(&ws, bw::workspace_bytes(bw::TAG_B3, blocks)) != cudaSuccess) return -1;
-  cudaMemcpy(signs, sg.data(), sg.size() * 4, cudaMemcpyHostToDevice);
-  cudaFuncSetAttribute(tu::sk_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)tu::SK_SMEM);
-  bw::Pass pass = bw::make_pass(bw::TAG_B3, blocks, ws);
-  tu::sk_pass(pass, store, signs, seed, blocks, 0);
-  if (bw::read_root(pass, root, 0)) return -1;
-  std::vector<uint32_t> dev(blocks * 8);
-  std::vector<uint8_t> E(blocks * bw::BLOCK_BYTES);
-  if (cudaMemcpy(dev.data(), pass.tags, dev.size() * 4, cudaMemcpyDeviceToHost) != cudaSuccess) return -1;
-  if (cudaMemcpy(E.data(), store, E.size(), cudaMemcpyDeviceToHost) != cudaSuccess) return -1;
-  const bw::Key3 key = bw::b3_key(seed);
-  int bad = 0;
-  for (uint64_t j = 0; j < blocks; ++j) {
-    uint32_t y[8];
-    tu::sk_host(E.data() + j * bw::BLOCK_BYTES, j, sg.data(), key, y);
-    if (memcmp(y, dev.data() + j * 8, 32)) ++bad;
-  }
-  cudaFree(ws);
-  cudaFree(signs);
-  return bad;
-}
-
-// One chunk's sk16 root, computed synchronously the way the thread computes it: the chunk's `seed` keys the hash and
-// names the leaves, the run's `sign_seed` gives the signs (the thread draws them once, at its start).
-int tu_sk_root(const void* store, uint64_t blocks, const uint8_t* seed, const uint8_t* sign_seed, uint8_t* root) {
-  std::vector<uint32_t> sg(tu::SK_WORDS * tu::SK_ROWS);
-  tu::sk_signs(sign_seed, sg.data());
-  uint32_t* signs = nullptr;
-  void* ws = nullptr;
-  CK(cudaMalloc(&signs, sg.size() * 4));
-  CK(cudaMalloc(&ws, bw::workspace_bytes(bw::TAG_B3, blocks)));
-  CK(cudaMemcpy(signs, sg.data(), sg.size() * 4, cudaMemcpyHostToDevice));
-  CK(cudaFuncSetAttribute(tu::sk_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)tu::SK_SMEM));
-  bw::Pass pass = bw::make_pass(bw::TAG_B3, blocks, ws);
-  tu::sk_pass(pass, store, signs, seed, blocks, 0);
-  int rc = bw::read_root(pass, root, 0);
-  cudaFree(ws);
-  cudaFree(signs);
   return rc;
 }
 

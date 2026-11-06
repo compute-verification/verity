@@ -1,7 +1,9 @@
-import Proofs.Flock.Bridge.Defs
-import Proofs.Flock.Claims.Sampling.Deployed
-import Proofs.Flock.Soundness.Binding.RowSeg
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
+module
+
+public import Proofs.Flock.Bridge.Defs
+public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Soundness.Binding.RowSeg
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
 /-!
 # The deployed sampling commitment at a C-Flock session
@@ -42,6 +44,8 @@ and the registered path check). A `sha512/row-seg/v1` row's outer message is not
 openings of one leaf are a SHA-512 collision of a segment's message (`Binding.RowSeg.extPair_spec`), which the leaf's
 queries don't make.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -158,7 +162,7 @@ def rootsOf (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : List Msg :=
 /-- **The deployed trace commitment at a session's rows**: `SamplingDeploy.commit`'s form, at the layout above, each
 row in its port's format (`rowDep`). -/
 noncomputable def commitDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
-    (nl : ℕ) (roots : List Msg) : Commitment Bool :=
+    (nl : ℕ) (roots : List Msg) : CommitmentScheme Bool :=
   pathCommit (atOf C rows) (hm96Leaf (rowDep C rows c (placeOf C rows) (bitsOf (Flock.log2ceil nl))) saltOf)
     (pathOf (Flock.log2ceil nl)) (regPath (portsOf c nl roots)) fun _ _ _ => []
 
@@ -214,7 +218,7 @@ def LayoutIs (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt
 open Classical in
 /-- **The evaluation's values as claims openings**: at each wire, its value in `C`'s evaluation on `xv`'s inputs, with
 data its position passes `Cm` under `roots` at, where some does. -/
-noncomputable def witDep (C : FlockSoundness.Audit.Circuit) (Cm : Commitment Bool) (H : Msg → Msg) (roots : List Msg)
+noncomputable def witDep (C : FlockSoundness.Audit.Circuit) (Cm : CommitmentScheme Bool) (H : Msg → Msg) (roots : List Msg)
     (xv : Fin C.N → Bool) : Wit :=
   ⟨(List.finRange C.N).map fun g =>
     if h : ∃ d : Msg, Cm.Opens H roots ⟨posOf C g, C.eval xv g, d⟩ = true then

@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.ValueFinder
+module
+
+public import Proofs.Flock.Recursive.ValueFinder
 
 /-!
 # The verifier's own rows as `valueFinder`'s source
@@ -9,13 +11,15 @@ import Proofs.Flock.Recursive.ValueFinder
 (`rec-open-stacked`, `RecCoins.checkStackedLevel`: `coef`, `dirs`) and a part of R's opening (`rec-opening`,
 `RecCoins.checkOpening`: `v`, and `out`'s one zero row, which `checkZero` holds under `zeroSalt`, `valueSrcAll`'s salt
 there), and none elsewhere. The finder's budget counts each row's words once and each salt's
-SHAKE256 once. The definitions are in `Recursive/ValueSrc.lean`, below `RecursiveAuditC3At`, which reads them; here
+three SHA-512 (`RecCoins.saltOf`) once. The definitions are in `Recursive/ValueSrc.lean`, below `RecursiveAuditC3At`, which reads them; here
 are their ties:
 
 * `stacked_of_check`, `opening_of_check`: an accepted unit's `checkValue`s are at `valueRows`' rows
   (`valueRows_coef`, `valueRows_dirs`, `valueRows_v`), so `valueSrcC3_eq` gives `value_tie_coll`'s `hsrc`;
 * `stackedLevel_of_check`, `openingCheck_of_check`: `RecCoins.check` runs those checks at those units.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

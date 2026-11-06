@@ -1,9 +1,11 @@
-import Proofs.Pouw.PearlC.ChainOnlyGamma
-import Definitions.Pouw.PearlC.DevicePricesLoop
-import Definitions.Pouw.PearlC.DevicePrices
-import Definitions.Pouw.Guarantees.PearlC
-import Proofs.Pouw.PearlC.TTOutW1
-import Proofs.Pouw.PearlC.TTOutW1Variants
+module
+
+public import Proofs.Pouw.PearlC.ChainOnlyGamma
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.PearlC.DevicePrices
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.TTOutW1
+public import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
 # γ at the RTX PRO 6000 (sm_120) records against the kernel as it runs (staged)
@@ -27,6 +29,8 @@ gains `c` per activation element over the record's: the honest cast `h` less the
 A-only forming's measured 1.047 less the record's rounded 2. So `c = h − 8` at `Prices.sm120` and `c = h − 8.953` at
 `Prices.sm120Loop`, and `W_ref` is the kernel's at each price exactly.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

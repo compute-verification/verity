@@ -67,7 +67,7 @@ class Lane:
         leaf = self.leaves[-1] + 3 if self.leaves else 2
         if h1:
             ch = Wd.live_challenger(rng.randrange(4), 1, rng.randbytes)
-            s = rc.Session(rng, ch, [rng.randbytes(64)], salt=r, sid=sid, leaf=leaf, draw=lambda _: rng.randbytes(64))
+            s = rc.Session(rng, ch, [rng.randbytes(64)], salt=r, sid=sid, leaf=leaf)
         else:
             s = rc.Session(rng, Ch.LiveChallenger(Wd.LIVE_SCHEME, rng.randrange(4), Wd.SALT_FAMILIES, rng.randbytes), [],
                            salt=r, sid=sid, leaf=leaf)
@@ -165,7 +165,7 @@ def test_a_pass_whose_epoch_the_close_does_not_list_or_a_session_with_no_pass_re
     assert Cr.pearl_c_period_credit(*lane.args("p-a", [p0, p0b]))[1][0] == "missing"
     assert Cr.pearl_c_period_credit(*lane.args("p-a", [p1, p0, p0b]))[1][0] == "order"
     _, why = Cr.pearl_c_period_credit(*lane.args("p-a", [p0, b[0], p0b, p1]))
-    assert why[0] == "period" and "only the windows its close lists count" in why[1]
+    assert why[0] == "period" and "only the sessions its close lists count" in why[1]
     assert Cr.pearl_c_period_credit(*lane.args("p-c", a))[1][0] == "period"
 
 
@@ -187,7 +187,7 @@ def test_an_abandoned_complete_salt_only_session_refuses_its_period():
 
 
 def test_a_session_not_salt_only_refuses_the_period():
-    """Clause 2: an H1 window's session (salt, draw and rounds, every coin released, so the period's close is complete)
+    """Clause 2: an H1 window's session (salt and rounds, every coin released, so the period's close is complete)
     opened on an epoch's root is not a Pearl-C salt session, and H1's window check refuses a salt-only session."""
     lane = Lane("salt-only")
     base, w, n = _base(lane.rng)
@@ -252,7 +252,7 @@ def test_a_context_not_a_string_refuses_the_period_as_a_refused_pass():
 
 
 def _retained(lane: Lane, sid: str, base: dict) -> bytes:
-    """Session `sid`'s pass retained in vllm #3985's form (`PearlCDeviceRun._write_retained`, `write_manifest`: the
+    """Session `sid`'s pass retained in the vLLM integration's form (`PearlCDeviceRun._write_retained`, `write_manifest`: the
     head, then ``weights`` and ``matmuls``, at indent 1 with a newline), its ``session`` `session_head`'s, the gate's
     open answer's {session, seq, root, commitment} alone, beside ``pass_index``."""
     man = lane.manifest(sid, base, 0)
@@ -279,7 +279,7 @@ def _retained(lane: Lane, sid: str, base: dict) -> bytes:
 
 
 def test_a_pass_retained_in_vllms_form_is_accepted_and_credited_in_a_one_epoch_period():
-    """A retained manifest exactly as vllm #3985 writes it passes `core_check.pass_epoch` under the live inputs (``live
+    """A retained manifest exactly as the vLLM integration writes it passes `core_check.pass_epoch` under the live inputs (``live
     coin``), and its one-epoch period credits it."""
     lane = Lane("retained")
     base, w, _ = _base(lane.rng)

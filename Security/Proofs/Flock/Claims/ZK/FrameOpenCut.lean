@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.SimLig
-import Proofs.Flock.Claims.ZK.FrameOpen
+module
+
+public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.Claims.ZK.FrameOpen
 
 /-!
 # Level 0's masked rounds of the opening, cut round by round
@@ -21,6 +23,8 @@ those of rounds `l.size`, `l.size + 1`, …:
 * **The cut opening** (`ligeritoPZk_cutL0`): cut `j < k_0 + 4` rounds on, the opening stops past the openings having
   sent `l0BodyAt`'s first `j + 1` bodies after `l`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.LigLock
 

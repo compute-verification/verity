@@ -66,7 +66,7 @@ def test_portions_that_overlap_never_share_a_digest_across_orders(monkeypatch, t
 
 
 def test_todays_digest_is_the_one_portion_walk():
-    """On today's layout every package has one portion, and the digest is the old per-portion walk, byte for byte, less the
+    """On the current layout every package has one portion, and the digest is the old per-portion walk, byte for byte, less the
     files under a name holding a dot."""
     h = hashlib.sha256()
     for name in ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.core", "verity_flock", "circuit_check", "verity_vllm"):

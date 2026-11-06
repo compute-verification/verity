@@ -1,4 +1,6 @@
-import Proofs.Nci.Cover.FanOutWalk
+module
+
+public import Proofs.Nci.Cover.FanOutWalk
 
 /-!
 # The fan-out proof: a held root costs `d`
@@ -14,6 +16,8 @@ exit to a value the block reads, which it spends through that leg, or to a held 
 lookup since no root of the token is held there. The legs' key paths are disjoint (`legs_disjoint`), so distinct legs
 end at distinct values, and the ends number at least `d`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

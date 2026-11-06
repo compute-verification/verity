@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Tables.Steps
-import Proofs.Flock.Soundness.Discharge.Tables.Sim
-import Proofs.Flock.Soundness.Discharge.Tables.Session
-import Proofs.Flock.Soundness.Discharge.Tables.Headline
-import Proofs.Flock.Soundness.Discharge.Tables.Accepts
-import Proofs.Flock.Soundness.Discharge.Tables.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.Tables.Steps
+public import Proofs.Flock.Soundness.Discharge.Tables.Sim
+public import Proofs.Flock.Soundness.Discharge.Tables.Session
+public import Proofs.Flock.Soundness.Discharge.Tables.Headline
+public import Proofs.Flock.Soundness.Discharge.Tables.Accepts
+public import Proofs.Flock.Soundness.Discharge.Tables.Statements
 
 /-!
 # Sessions of `J` tables
@@ -18,3 +20,5 @@ order the prover picks, then every proof file.
 * `Accepts`: `Stmt.setupTables`'s tables at `count > 1` (`setupTables_parts`).
 * `Statements`: the statements, as `Prop`s, and their theorems.
 -/
+
+@[expose] public section

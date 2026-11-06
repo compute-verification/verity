@@ -1,6 +1,8 @@
-import Definitions.Nci.Assumptions.Cover
-import Definitions.Nci.Guarantees.CoverFanOut
-import Definitions.Nci.CoverFanOutValue
+module
+
+public import Definitions.Nci.Assumptions.Cover
+public import Definitions.Nci.Guarantees.CoverFanOut
+public import Definitions.Nci.CoverFanOutValue
 
 /-!
 # The cover theorem's fan-out tightening: the read tier from wiring
@@ -21,6 +23,8 @@ by fan-out, where the two agree; with Dgrad counted (`c = 2`) the `c k` term set
 `ValueReadHardness` itself doesn't follow from the wiring: a block that holds a root and cuts the word of a value keyed
 to it, reading one of its gates, spends that value at one gate.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Guarantees
 

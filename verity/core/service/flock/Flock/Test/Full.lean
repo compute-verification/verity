@@ -2,7 +2,12 @@
 U4 (`Registered.checkFull`) on a five-unit population of two strata, `a = [0, 1)` and `b = [1, 5)`: `stratified:2` draws `a`
 in full (`k_a = 1 = n_a`) and two of `b`'s four units. A unit reading a round's commitment must be in `a`.
 -/
-import Flock.Registered
+module
+
+public import Flock.Registered
+meta import Flock.Registered
+
+@[expose] public section
 
 namespace Flock.Test.Full
 

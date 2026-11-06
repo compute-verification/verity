@@ -1,6 +1,8 @@
-import Proofs.Pouw.PearlC.FormingP
-import Proofs.Pouw.PearlC.PeelExactProofs
-import Proofs.Pouw.PearlC.AccumProofs
+module
+
+public import Proofs.Pouw.PearlC.FormingP
+public import Proofs.Pouw.PearlC.PeelExactProofs
+public import Proofs.Pouw.PearlC.AccumProofs
 
 /-!
 # P2(b) and (c) on `PeelExactP`'s U, at any step width (sm_120 at width 26)
@@ -27,6 +29,8 @@ step `p` that has a relative error on a range, and for every `G`, with `G = 0` t
   formed by sm_120's atom-mix (`FormingP.atomMixP sm120E4m3`) and served by `peelExactValP sm120E4m3 G`; the two salts
   give `0` and `10` at `G = 4` and at `G = 0`, by kernel evaluation.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelExactP
 

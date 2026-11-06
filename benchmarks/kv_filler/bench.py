@@ -2,13 +2,11 @@
 top-up costs inference. Writes `bench.json` and `bench.log` under `--out`.
 
 Nothing is timed before every gate passed:
-- `gate`: `tu_root` over the bandwidth audit's 37-block test store under `SEED` equals `vectors.json`'s gf31-poly/v1 and
-  ro-blake3/v1 roots; the top-up thread's ro-blake3/v1 receipts over a 4,096-block test store, chunk after chunk (the
-  regions wrapping), equal `tu_root` over the same blocks under each chunk's seed; and `kv.cu`'s p512 encode at k = 2
-  equals `kv.encode_word` on edge and random payloads.
+- `gate`: the top-up thread's fill-sk16/v0 receipts and fill-sk16/v2's roles equal `fill_ref`'s, and `kv.cu`'s p512
+  encode at k = 2 equals `kv.encode_word` on edge and random payloads.
 - `read`: R, a plain read of the filler by one CTA a tile, the best of a few tile sizes.
-- `alone`: the top-up thread alone over the filler in each mode (read, gf31, b3): its bytes a second on the GPU's clock,
-  the idle phase's harvest.
+- `alone`: the top-up thread alone over the filler in each mode (read and fill, then each fill mode of
+  `--throttle-modes` at each of `--throttle-ctas`): its bytes a second on the GPU's clock, the idle phase's harvest.
 - `phases`: a synthetic Llama-3.1-8B step (32 layers of FP8 linears, `torch._scaled_mm` on cold weights, and bf16
   attention over a cache of its own) at decode batches × contexts and prefill lengths, alone and with the top-up running,
   over each arrangement of streams (the step on the default stream at priority 0 beside a top-up at 0, or on a stream
@@ -37,20 +35,17 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "benchmarks/word_codec"))
 
+import cuda_lib  # noqa: E402
 import kv as K  # noqa: E402
 
-VECTORS = ROOT / "verity/core/protocols/bandwidth/tests/vectors.json"
-GATE_SEED = bytes(range(32))
 RUN_SEED = hashlib.sha256(b"verity/kv-filler/bench/seed").digest()
-BLOCK = 2056
-MODES = {"read": -1, "gf31": 0, "b3": 2, "sk16": 3, "fill": 4}
+MODES = {"read": -1, "fill": 4}
 FILL_WARPS = {"fill": 4, "fill8": 8, "fill16": 16, "fillg": 4}  # fill-sk16/v0 at that many warps a CTA
 GATED = {"fillg"}  # every SM's CTA resident, `ctas` of them let through the gate
 
 
 def mode_of(name: str) -> int:
     return MODES["fill"] if name in FILL_WARPS else MODES[name]
-TAG_NAMES = {0: "gf31-poly/v1", 2: "ro-blake3/v1"}
 # Llama-3.1-8B: 32 layers, hidden 4,096, 32 query heads on 8 KV heads of 128, MLP 14,336.
 LAYERS, HIDDEN, HEADS, KV_HEADS, HEAD_DIM, MLP = 32, 4096, 32, 8, 128, 14336
 SHAPES = {"qkv": (HIDDEN + 2 * KV_HEADS * HEAD_DIM, HIDDEN), "o": (HIDDEN, HIDDEN), "gate_up": (2 * MLP, HIDDEN),
@@ -61,27 +56,39 @@ KV_GATE_BASES = (77, (1 << 32) - 20)
 ENCODE_K = (2, 3)  # the codec's rounds: k = 3 is the stated guarantee's, k = 2 the upgrade behind the same parameter
 
 
+_v, _i, _q, _d = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_double
+TOPUP = {   # topup.cu's functions (`cuda_lib.load`): the top-up thread's (tu_*) and fill-sk16/v2's (sq_*, `Seq`)
+    "tu_start": [_i, _v, _v, _i, _i, _q, _q, _i, _i, _v, _i],
+    "tu_pause": [_i],
+    "tu_throttle": [_i],
+    "tu_gate": [_i, _i],
+    "tu_gate_step": [_i, _v],
+    "tu_now_ms": ([_v], _d),
+    "tu_progress": [_v],
+    "tu_log": [_q, _v, _i],
+    "tu_read": [_v, _q, _q, _v, _v],
+    "tu_fill_units": [_v, _v, _i, _q, _q, _v, _v, _i, _v],
+    "tu_fill_signs": [_v, _v],
+    "rd_read_reps": [_i, _i, _v, _q, ctypes.c_uint32, _i, _v, _v],
+    "tu_page_read": [_v, _q, _q, _q, _q, _i, _q, _i, _v, _v],
+    "sq_start": [_i, _v, _v, _i, _v, _i, _i, _q, _i, _i, _i],
+    "sq_idle": [_i, _q],
+    "sq_step_begin": [_i, _v],
+    "sq_step_end": [_v],
+    "sq_step_begin_phase": [_i, _i, _i, _v],
+    "sq_step_end_phase": [_i, _v],
+    "sq_progress": [_v],
+    "sq_prefill_reader": [_i],
+    "sq_probe": [_i],
+    "sq_shape": [_i, _i],
+    "sq_now_ms": ([_v], _d),
+}
+CODEC = {"kv_set_key": [_v, _i, _v], "kv_encode": [_v, _v, _q, _q, _i, _i, _v], "kv_encode_carveout": [_i]}   # kv.cu's
+
+
 class Topup:
     def __init__(self, path: str) -> None:
-        v, i, q, d = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_double
-        so = self.so = ctypes.CDLL(str(Path(path).resolve()))
-        so.tu_start.argtypes = [i, v, v, i, i, q, q, i, i, v, i]
-        so.tu_pause.argtypes = [i]
-        so.tu_gate.argtypes = [i, i]
-        so.tu_gate_step.argtypes = [i, v]
-        so.tu_now_ms.argtypes = [v]
-        so.tu_now_ms.restype = d
-        so.tu_progress.argtypes = [v]
-        so.tu_log.argtypes = [q, v, i]
-        so.tu_root.argtypes = [i, v, q, v, v]
-        so.tu_read.argtypes = [v, q, q, v, v]
-        so.tu_sk_gate.argtypes = [v, q, v, v]
-        so.tu_sk_root.argtypes = [v, q, v, v, v]
-        so.bw_fill_test_store.argtypes = [v, q]
-        so.tu_fill_units.argtypes = [v, v, i, q, q, v, v, i, v]
-        so.tu_fill_signs.argtypes = [v, v]
-        so.rd_read_reps.argtypes = [i, i, v, q, ctypes.c_uint32, i, v, v]
-        so.tu_page_read.argtypes = [v, q, q, q, q, i, q, i, v, v]
+        self.so = cuda_lib.load(Path(path).resolve(), TOPUP)
 
     def fill_units(self, regions, unit0: int, units: int, seed: bytes, sign_seed: bytes, ctas: int):
         ptrs = (ctypes.c_uint64 * len(regions))(*[p for p, _ in regions])
@@ -124,35 +131,13 @@ class Topup:
             if n < 65536:
                 return out
 
-    def root(self, mode: int, store: int, blocks: int, seed: bytes) -> bytes:
-        r = ctypes.create_string_buffer(64)
-        rc = (self.so.tu_sk_root(store, blocks, seed, RUN_SEED, r) if mode == 3
-              else self.so.tu_root(mode, store, blocks, seed, r))
-        if rc:
-            raise RuntimeError(f"tu_root error {rc}")
-        return r.raw
-
 
 class Seq:
     """fill-sk16/v2 through `topup.cu`'s sq_* ABI; its log is `Topup.log`'s (an epoch's number where a chunk's is, its
     ring slot where a chunk's region is)."""
 
     def __init__(self, tu: Topup) -> None:
-        v, i, q, d = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64, ctypes.c_double
-        so = self.so = tu.so
-        self.tu = tu
-        so.sq_start.argtypes = [i, v, v, i, v, i, i, q, i, i, i]
-        so.sq_idle.argtypes = [i, q]
-        so.sq_step_begin.argtypes = [i, v]
-        so.sq_step_end.argtypes = [v]
-        so.sq_step_begin_phase.argtypes = [i, i, i, v]
-        so.sq_step_end_phase.argtypes = [i, v]
-        so.sq_progress.argtypes = [v]
-        so.sq_prefill_reader.argtypes = [i]
-        so.sq_probe.argtypes = [i]
-        so.sq_shape.argtypes = [i, i]
-        so.sq_now_ms.argtypes = [v]
-        so.sq_now_ms.restype = d
+        self.so, self.tu = tu.so, tu
 
     def start(self, regions, seed: bytes, base_ctas: int, warps: int = 4, base_budget: int = 0, shift: int = 8,
               priority: int = 0, step_priority: int | None = None, device: int = 0) -> None:
@@ -189,11 +174,7 @@ class Seq:
 
 class Codec:
     def __init__(self, path: str) -> None:
-        v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-        so = self.so = ctypes.CDLL(str(Path(path).resolve()))
-        so.kv_set_key.argtypes = [v, i, v]
-        so.kv_encode.argtypes = [v, v, q, q, i, i, v]
-        so.kv_encode_carveout.argtypes = [i]
+        so = self.so = cuda_lib.load(Path(path).resolve(), CODEC)
         if so.kv_bits() != 512:
             raise RuntimeError("the codec library is not p512")
         self.field = K.field("p512")
@@ -225,60 +206,6 @@ def overlap_bytes(records, t0: float, t1: float) -> float:
 
 def gate(tu: Topup, codec: Codec, torch, log) -> dict:
     out = {}
-    pinned = {r["tag"]: r["tag_root"] for r in json.loads(VECTORS.read_text())["roots"]
-              if r["blocks"] == 37 and r["seed"] == GATE_SEED.hex()}
-    store = torch.empty(4096 * BLOCK, dtype=torch.uint8, device="cuda")
-    if tu.so.bw_fill_test_store(store.data_ptr(), 4096):
-        raise RuntimeError("bw_fill_test_store")
-    for mode, name in TAG_NAMES.items():
-        got = tu.root(mode, store.data_ptr(), 37, GATE_SEED).hex()
-        out[f"vectors_{name}"] = got == pinned[name]
-    # the thread's receipts: 2 regions of 2,048 blocks, chunks of 1,024 blocks, so chunk c covers region (c // 2) % 2
-    # at block offset (c % 2) · 1,024, under the run seed with its first 8 bytes XORed with c
-    half = 2048 * BLOCK
-    regions = [(store.data_ptr(), half), (store.data_ptr() + half, half)]
-    tu.start(regions, 2, 1024 * BLOCK, 2, 0, RUN_SEED)
-    while True:
-        prog = (ctypes.c_uint64 * 2)()
-        tu.so.tu_progress(prog)
-        if prog[1] >= 10:
-            break
-        time.sleep(0.01)
-    tu.stop()
-    recs = tu.log()
-    bad = []
-    for _, _, n, region, root4, c in recs:
-        seed = bytearray(RUN_SEED)
-        for j in range(8):
-            seed[j] ^= (c >> (8 * j)) & 0xFF
-        lo = ((c // 2) % 2) * half + (c % 2) * 1024 * BLOCK
-        want = tu.root(2, store.data_ptr() + lo, 1024, bytes(seed))
-        if int(n) != 1024 * BLOCK or region != (c // 2) % 2 or root4 != int.from_bytes(want[:4], "big"):
-            bad.append(c)
-    out["thread_chunks"] = len(recs)
-    out["thread_receipts"] = not bad and len(recs) >= 10
-    # sk16, the sketch receipt's cost proxy: device digests equal the host's over 600 blocks (two CTAs and a partial
-    # warp), and the thread's chunks equal tu_sk_root's
-    root = ctypes.create_string_buffer(64)
-    out["sk16_digests_mismatch"] = tu.so.tu_sk_gate(store.data_ptr(), 600, RUN_SEED, root)
-    tu.start(regions, 3, 1024 * BLOCK, 2, 0, RUN_SEED)
-    while True:
-        prog = (ctypes.c_uint64 * 2)()
-        tu.so.tu_progress(prog)
-        if prog[1] >= 10:
-            break
-        time.sleep(0.01)
-    tu.stop()
-    bad = []
-    for _, _, n, region, root4, c in tu.log():
-        seed = bytearray(RUN_SEED)
-        for j in range(8):
-            seed[j] ^= (c >> (8 * j)) & 0xFF
-        lo = ((c // 2) % 2) * half + (c % 2) * 1024 * BLOCK
-        want = tu.root(3, store.data_ptr() + lo, 1024, bytes(seed))
-        if int(n) != 1024 * BLOCK or region != (c // 2) % 2 or root4 != int.from_bytes(want[:4], "big"):
-            bad.append(c)
-    out["sk16_thread_receipts"] = not bad and out["sk16_digests_mismatch"] == 0
     out.update(fill_gate(tu, torch))
     out.update(seq_gate(tu, torch))
     out.update(codec_gate(codec, torch, ENCODE_K))
@@ -287,7 +214,7 @@ def gate(tu: Topup, codec: Codec, torch, log) -> dict:
     return out
 
 
-COUNTS = ("thread_chunks", "sk16_digests_mismatch", "fill_cut_chunks", "seq_base_moved_bytes", "seq_roles_bytes")
+COUNTS = ("fill_cut_chunks", "seq_base_moved_bytes", "seq_roles_bytes")
 
 
 def fill_gate(tu: Topup, torch) -> dict:
@@ -983,8 +910,8 @@ def prefill_cost(tu: Topup, torch, model: Model, filler, R: float, args, least: 
 
 
 def throttle(tu: Topup, torch, model: Model, filler, R: float, args, least: int, greatest: int, log) -> list[dict]:
-    """The top-up held to a few CTAs (read: `ctas` long-lived CTAs; ro-blake3/v1: chunks of `ctas` × 64 blocks, a CTA
-    each) beside a decode step as a CUDA graph and a prefill, both on the greatest-priority stream: harvest against
+    """The top-up held to a few CTAs (read: `ctas` long-lived CTAs; a fill mode: launches of `ctas` CTAs, or for
+    `fillg` every SM's CTA resident with `ctas` let through the gate) beside a decode step as a CUDA graph and a prefill, both on the greatest-priority stream: harvest against
     slowdown."""
     rows = []
     high = torch.cuda.Stream(priority=greatest)
@@ -1160,7 +1087,7 @@ def main() -> int:
     ap.add_argument("--decode", type=pairs, default=pairs("8x4096,64x2048"))
     ap.add_argument("--prefill", type=lambda s: [int(v) for v in s.split(",") if v], default=[1024, 4096])
     ap.add_argument("--steps", type=int, default=24)
-    ap.add_argument("--topup-modes", type=lambda s: s.split(","), default=["read", "b3", "sk16"])
+    ap.add_argument("--topup-modes", type=lambda s: s.split(","), default=["read", "fill"])
     ap.add_argument("--graphs", type=int, default=1)
     ap.add_argument("--encode-mib", type=int, default=512)
     ap.add_argument("--encode-k", type=lambda s: [int(v) for v in s.split(",") if v], default=list(ENCODE_K))
@@ -1169,7 +1096,7 @@ def main() -> int:
     ap.add_argument("--throttle-prefill", type=lambda s: [int(v) for v in s.split(",") if v], default=[4096])
     ap.add_argument("--seq-depths", type=lambda s: [int(x) for x in s.split(",")], default=[2],
                     help="the seq IDLE rate at each of these depths (offsets of loads in flight a warp)")
-    ap.add_argument("--throttle-modes", type=lambda s: s.split(","), default=["read", "b3", "sk16"])
+    ap.add_argument("--throttle-modes", type=lambda s: s.split(","), default=["read", "fill"])
     ap.add_argument("--throttle-ctas", type=lambda s: [int(v) for v in s.split(",") if v], default=[2, 4, 8, 16, 32, 64])
     ap.add_argument("--fill-chunk-mib", type=int, default=1024)
     ap.add_argument("--pc-prefill", type=lambda s: [int(v) for v in s.split(",") if v], default=[4096])

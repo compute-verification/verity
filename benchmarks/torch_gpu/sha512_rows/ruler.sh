@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# sha512x.cuh's compression variants (README "Compression variants") on commit_gpu's ruler, against commit_gpu's default
+# sx's compression variants (README "Compression variants") on commit_gpu's ruler, against commit_gpu's default
 # build, on one leased GPU. commit_gpu (benchmarks/pouw/commit_gpu) is built from its own path, unedited: a0r0l as
-# is (SHA_ADD 0, SHA_ROT 0, SHA_ROLL 1), and sx<variant> with as_commit_gpu.cuh force-included, so its sha::compress is
-# sx::compress<V, ROLL>. Each build is checked bit for bit against reference.py before it is timed.
+# is (SHA_ADD 0, SHA_ROT 0, SHA_ROLL 1), and sx<variant> under -DSHA_SX (verity/ml/kernels/sha512.cuh), so its
+# sha::compress is sx::compress<V, ROLL>. Each build is checked bit for bit against reference.py before it is timed.
 # cwd = the source tree's root. Outside the leases: the builds (sm_90a on an H200), reference.py's full cases, and each
 # build's sha_rate SASS with its opcode and pipe counts (sass_count.py). Check leases (as many as it takes): selftest and the
 # full check per build. Timing lease: ROUNDS rounds of `commit_gpu sha 20`, the builds interleaved, nvidia-smi every 200 ms,
@@ -34,7 +34,7 @@ build() {
   if [ "$t" != a0r0l ]; then
     sx=$($PY -c "import sys; sys.path.insert(0, '$X'); import engine; print(*engine.variant_flags('${t#sx}'))") ||
       { echo "build $t rc flags" >> "$O/rc.txt"; return; }
-    flags="$flags -include $X/as_commit_gpu.cuh $sx"
+    flags="$flags -DSHA_SX $sx"
   fi
   # shellcheck disable=SC2086
   nvcc -O3 -std=c++17 -gencode arch=compute_$SM,code=sm_$SM -Xptxas -v $flags -o "$W/commit_gpu_$t" $D/commit_gpu.cu \

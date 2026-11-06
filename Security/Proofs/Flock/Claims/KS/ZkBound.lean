@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.MixtureZk
-import Proofs.Flock.Claims.KS.PlainBound
+module
+
+public import Proofs.Flock.Claims.KS.MixtureZk
+public import Proofs.Flock.Claims.KS.PlainBound
 
 /-!
 # The masked table bound from masked sessions after `Commit`
@@ -26,6 +28,8 @@ With the mixture the simulated strategies after `Commit` (`simAtZ`) of live stra
 the live verdict bounding the deployed runs that accept on `C`, and the decoder right for the verdict accepting with
 no opening off `C` (`ZkLiveAt`, which `zk_tableBoundθAt_of_live` reads).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

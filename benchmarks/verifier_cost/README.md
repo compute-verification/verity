@@ -1,6 +1,6 @@
 # verifier_cost
 
-A verifier of record's time against the size of the description it reads and against the size of the circuit that
+A verifier's time against the size of the description it reads and against the size of the circuit that
 description unrolls to. The rule it measures (AGENTS.md "Design rules"): a verifier's cost is
 O(circuit description), never O(unrolled circuit).
 
@@ -14,7 +14,7 @@ the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says w
   circuit is small enough (`--unrolled-max`), the instance expanded gate by gate also goes through
   `nci-check --policy --unrolled` (`NciCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
 * `partition`, the one-stage verifier's partition: `sampled-proofs-difftest`'s `partition` (`Partition.units`, `strata`,
-  the expanded law and the digest, as the verifier of record computes them) on Serve_v1 under the template query of its
+  the expanded law and the digest, as the verifier computes them) on Serve_v1 under the template query of its
   Calls (`Q_template_instances`), under `Q_word` v1 and `Q_call` v1 at `X = 16` where its Calls' distinct Definitions are
   small enough (`--unrolled-max`), and on the served shape: the population program of Serve_v1's largest Definition at
   1 to 10⁶ instances under `Q_template_instance`, as a served window registers one. A template query must apply.
@@ -37,13 +37,12 @@ wires: rank 0's with its weights bound at registration (θ), one isolation block
 one Definition the node's root calls once, each collective reading the other ranks' partials where it read its
 `peers_*` inputs, one isolation block per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
 α = 2^-25 bits per gate (`GAMMA`, `ALPHA`), and at its four neighbours. Finer divisions of a whole session (per step,
-per layer, per Call) are out of `NciCheck.Desc`'s reach at this size: it holds each root node's reads as pieces of
-gates, about one per leaf on GLM-5.3, so only a Call's internal reads stay small. Three of rank 0's Definitions (the
-router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in all through `--policy`,
-`--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json` (`verity/nci-glm/v1`) has a row
-per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict summarised, wall seconds and
-peak RSS; `$OUT/ius/` has each verdict's isolation blocks. A rank's check takes about 21 minutes and 7 GB, the node's (a 2.2 GB
-descriptor) about 2.6 hours and 50 GB, and the whole run about 3 hours (r20261023-064803-3874).
+per layer, per Call) aren't checked here: their root would be the request's body, whose reads `NciCheck.Desc` holds as
+segments of gates, each Definition's return coalesced into runs (`Desc.coalesce`); `nci_cost.py glm` counts and times
+them. Three of rank 0's Definitions (the router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in
+all through `--policy`, `--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json`
+(`verity/nci-glm/v1`) has a row per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict
+summarised, wall seconds and peak RSS; `$OUT/ius/` has each verdict's isolation blocks.
 
 ~~~sh
 research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --to B1 \
@@ -51,6 +50,16 @@ research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58
 research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
   --send glm53-b1-pins.json $(for r in 0 1 2 3 4 5 6 7; do echo --send glm53-b1-rank$r.descriptor.json.gz; done) \
   -- bash benchmarks/verifier_cost/nci_glm.sh --jobs 10 [--case registered|rank|slice|node ...]
+~~~
+
+`nci_cost.sh` times `NciCheck.Desc` step by step (`nci-phases`, `nci_phases/Main.lean`: decode, summaries, root reads,
+the verdict, the slowest Definitions' summaries and their return pieces) beside `nci-check --policy`, on the `nci` suite's
+vectors (`suite`), Serve_v1 word-level and on bits (`serve`), and GLM-5.3's rank 0 word-level and lifted to bits (`glm`);
+`nci_cost.py`'s docstring has the cases.
+
+~~~sh
+research run --project verity --on vy-nebius-cpu-2 --pool network --source . --cwd clone --mem-gb 320 --timeout 12h \
+  --send glm53-b1-rank0.descriptor.json.gz -- bash benchmarks/verifier_cost/nci_cost.sh [suite|serve|glm ...]
 ~~~
 
 `--case registered-node` checks the node Program that `verity-vllm predict node` registered, as registered.
@@ -129,9 +138,9 @@ config's word-level descriptor: `flock-verify qcall-program` at each X, with the
 compare, a `perf` profile at the first X, and the one-stage `partition` piece under `Q_call` v1 at X = 16. Its header has
 the command.
 
-`results.json` (`verity/verifier-cost/v1`) has one row per config and IR: the description's bytes, Definitions and body
+`results.json` (`verity/verifier-cost/v1`) has one row per config and `ir` (word or Boolean): the description's bytes, Definitions and body
 nodes, the unrolled circuit's gates, and per check its wall seconds (the best of `--repeat`), peak RSS and the verdict.
-`partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, IR, shape and query: the description's
+`partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, `ir`, shape and query: the description's
 bytes, the unrolled gates, the gates of the Calls' distinct Definitions (what `Q_word` and `Q_call` lay out), the wall
 seconds, peak RSS and the population (null where the verifier refuses the query). `store` puts either in the store as
 an `evidence/v1` record naming the run and its commit; it runs where the store's keys are (a VM), since a node's shell

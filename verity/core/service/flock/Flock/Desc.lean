@@ -1,4 +1,6 @@
-import Flock.HmRow
+module
+
+public import Flock.HmRow
 
 /-!
 # A circuit's descriptor
@@ -7,9 +9,11 @@ A circuit file describes its circuit, and the verifier's statements read the cir
 reads the file as a descriptor `D`, and `D.unroll` is the circuit it describes. The circuit's pin is SHA-512 of the
 file, so it is SHA-512 of `D`'s bytes, whatever form `D` takes.
 
-Every descriptor today is a flat file, `single c`: `HmOut.parse` reads it, and it unrolls to `c` itself
+Every descriptor is a flat file for now, `single c`: `HmOut.parse` reads it, and it unrolls to `c` itself
 (`parse_flat`, `parse_single`).
 -/
+
+@[expose] public section
 
 namespace Flock
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Assumptions
+module
+
+public import Proofs.Flock.Soundness.Assumptions
 
 /-!
 # Zero knowledge: T1, an hm96 leaf swapped for an ideal one
@@ -16,6 +18,8 @@ the bound. Here XOR is the addition of the group `B`, so the proof holds for any
 every leaf the final message doesn't open ideal (world `W₁`); with `|Hid|` such leaves on each side, the hybrid is Lemma B's
 bound `2·|Hid|·δ₁`, at most the paper's `2·δ₁·N_hid` (`RealLeaves.table_shvzk_hm96`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

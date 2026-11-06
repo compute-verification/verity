@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VStarNets
-import Proofs.Flock.Claims.Recursion.SlotsDeployed
-import Proofs.Flock.C3.PubRows.Shape
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarNets
+public import Proofs.Flock.Claims.Recursion.SlotsDeployed
+public import Proofs.Flock.C3.PubRows.Shape
 
 /-!
 # `TraceOkAt` and `TraceAt` at the deployed V\*'s staged parts
@@ -12,6 +14,8 @@ and a 192-byte salt (`rows_fitPin`), which reads each port's words by its name: 
 naming a port twice (`names_of_checkStmt`). So the only hypothesis left is that every part is staged, the one
 `SlotsDeployed.circOkAt_staged` takes, and the two give `TraceAt` (`traceAt_of`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarTraceAt
 

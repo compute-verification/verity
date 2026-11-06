@@ -210,7 +210,8 @@ def reencode(repo: str, rev: str, published: R.Setup, point: R.Point, digests: b
         _need(commitment == published.commitment, "the snapshot's W is not the one setup committed to")
         store = pous._encode(layout, tensors, commitment, published.salt, "the kept salt", p2_lib)
         try:
-            _need(store.point == point, f"C* is at {store.point}, not the run's point {point}")
+            _need((store.point.params, store.point.limit_ns) == (point.params, point.limit_ns),
+                  f"C* is at {store.point}, not at the run's point {point} (the challenge count aside)")
             _need(store.root == published.root, "C* encoded at the kept salt has another root than setup published")
             _need(store.digests == digests, "C* encoded at the kept salt is not the memory challenger's table")
             return commitment, published.salt, store.segments()

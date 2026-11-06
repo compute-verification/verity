@@ -1,6 +1,8 @@
-import NetworkCertifier.Ingress
-import NetworkCertifier.Schedule
-import Lean.Data.Json
+module
+
+public import NetworkCertifier.Ingress
+public import NetworkCertifier.Schedule
+public import Lean.Data.Json
 
 /-!
 # The difftest: the certifier program against the Python audit, on random instances
@@ -21,11 +23,11 @@ records stop at a window boundary, so the sequence has `T` steps per window reco
 `evaluate` gives, from the definitions themselves:
 * `rows`: `expectedRow` of each egress link's frames under the syncs that link declares, for every bucket of the
   horizon (Python's `expected_grids`);
-* `verdicts`, per egress link-window, in the order `check_link` checks: `no-verdict` when the window isn't recorded,
+* `verdicts`, per egress execution phase, in the order `check_link` checks: `no-verdict` when the window isn't recorded,
   `status:<reason>` when one of the link's statuses in it is not complete, `advice` when the declared sync is outside
   `Σ_sync` or other than link 0's (the spatial unit's, which `Audit.syncs` keeps), `mismatch` when a recorded row is
   not the link's `expectedRow`; and `diff`, the first such bucket of a recorded window;
-* `status`, per boundary link-window: `check_ingress_link`'s verdict from the statuses alone;
+* `status`, per boundary execution phase: `check_ingress_link`'s verdict from the statuses alone;
 * for every prefix of `m ≤ W` whole windows, `accepted`: `Accepted` of the constant-rate Program on the first `m·T`
   steps, by `decide`, with link 0's syncs as the declared advice (one clock per spatial unit), and no link declaring a
   sync outside `Σ_sync` or other than link 0's in those windows: such a declaration is no value of the advice type
@@ -33,6 +35,8 @@ records stop at a window boundary, so the sequence has `T` steps per window reco
   which the Program's rows before step `m·T` don't read; Python computes each link's grids from its own declaration;
 * for every prefix, `complete`: `StatusComplete` on the first `m·T` steps, by `decide`.
 -/
+
+@[expose] public section
 
 namespace NetworkCertifier.Difftest
 

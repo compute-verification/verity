@@ -1,6 +1,8 @@
-import Definitions.Nci.Reads
-import Proofs.Nci.Pull
-import Proofs.Nci.Threads
+module
+
+public import Definitions.Nci.Reads
+public import Proofs.Nci.Pull
+public import Proofs.Nci.Threads
 
 /-!
 # Reads in a set of gates, the pull into the contained circuit, and Theorem 1 over a read measure
@@ -15,6 +17,8 @@ import Proofs.Nci.Threads
   twice, through `ρ R ≤ S` and through `ρ R` paying for the weights used and the thread values read, so it goes through
   for any `ρ`; `threaded_count` (`Proofs.Nci.Threads`) is the counting. Theorem 1 is the instance `ρ = novelReads`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

@@ -1,4 +1,4 @@
-//! The verifier's per-session coin commitment (lane flock-zk, C-Flock ZK; soundness ASSUMPTIONS.md §2 and §6, DESIGN.md §11.1), keyed
+//! The verifier's per-session coin commitment (C-Flock ZK; soundness ASSUMPTIONS.md §2 and §6, DESIGN.md §11.1), keyed
 //! (`coin-tree/hm96-sha512/v2`, docs/coin-tree-v2.md).
 //!
 //! At `Hello`, before the prover's first message, the verifier samples every coin of the session and commits to all of them
@@ -337,6 +337,62 @@ impl CoinTree {
             w.extend(words64(bytes(&h)));
         }
         Ok((coins, w))
+    }
+}
+
+/// A session's committed coins as the verifier's coin server holds them: drawn here ([`CoinTree`]), or sampled by the
+/// challenger ([`crate::tree_from`]), which keeps the coins and salts on its host and opens each round after what it follows.
+/// Either way `Hello` is answered with the root and the session key, and each round with its coins and their opening.
+pub struct Held {
+    pub spec: Spec,
+    root: [u8; 64],
+    key: Box<[u8; KEY_BYTES]>,
+    source: Source,
+}
+
+enum Source {
+    Here(CoinTree),
+    Challenger(crate::tree_from::Shared),
+}
+
+impl Held {
+    pub fn here(t: CoinTree) -> Self {
+        Held { spec: t.spec.clone(), root: t.root(), key: Box::new(*t.key()), source: Source::Here(t) }
+    }
+
+    /// The tree the challenger samples of `spec` under the prover's `nonce`.
+    pub fn challenger(spec: Spec, nonce: &[u8; NONCE_BYTES], c: crate::tree_from::Shared) -> Result<Self, String> {
+        let (root, key) = c.lock().unwrap_or_else(std::sync::PoisonError::into_inner).tree(&spec, nonce)?;
+        Ok(Held { spec, root, key: Box::new(key), source: Source::Challenger(c) })
+    }
+
+    pub fn root(&self) -> [u8; 64] {
+        self.root
+    }
+
+    /// The session key (in the record, and in `Hello`'s answer: never before it).
+    pub fn key(&self) -> &[u8; KEY_BYTES] {
+        &self.key
+    }
+
+    /// `Hello`'s answer: the root's 4 words, then the session key's 16.
+    pub fn answer_words(&self) -> Vec<F128> {
+        let mut w = words64(&self.root);
+        w.extend(words64(self.key()));
+        w
+    }
+
+    /// Round `round` of `stream`'s first `n` coins, and their opening words: the challenger's, opened after `after` and
+    /// checked against the tree ([`crate::tree_from::Challenger::tree_open`]), or this host's ([`CoinTree::open`], where
+    /// `after` orders nothing).
+    pub fn open(&self, stream: usize, round: usize, n: usize, after: &[u8; 64]) -> Result<(Vec<F128>, Vec<F128>), String> {
+        match &self.source {
+            Source::Here(t) => t.open(stream, round, n),
+            Source::Challenger(c) => {
+                let name = self.spec.streams.get(stream).ok_or(format!("coin tree: stream {stream} is outside the committed schedule"))?;
+                c.lock().unwrap_or_else(std::sync::PoisonError::into_inner).tree_open(&self.root, name, round, n, after)
+            }
+        }
     }
 }
 

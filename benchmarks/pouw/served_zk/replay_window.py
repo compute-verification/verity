@@ -20,7 +20,7 @@ entries are the 336-byte entry rows:
   the root with an entry's salt, a sibling or the index tampered, each failing its path; and a unit past the padded count,
   in no entry.
 
-A window of an older entry layout (the 6 Oct runs) gets the registered items only.  Every input goes to both sides, which
+A window of an older entry layout gets the registered items only.  Every input goes to both sides, which
 must give the same outcome, reason included; a check holds when the Python's outcome is the recorded value.
 """
 from __future__ import annotations
@@ -141,8 +141,9 @@ def row_layout(advice: dict) -> bool:
     return all(isinstance(x, dict) and set(x) == keys for x in advice.get("entries") or [None])
 
 
-class Window:
-    """One recorded window's checks (each the Python's outcome against the recorded value) and controls (each refused)."""
+class SideReplay:
+    """One recorded side's replay, the execution block it committed: its checks (each the Python's outcome against the
+    recorded value) and controls (each refused)."""
 
     def __init__(self, sides: Sides, out: Path, side: str) -> None:
         self.sides, self.out, self.side = sides, out, side
@@ -307,7 +308,7 @@ def replay(sides: Sides, runs: list[Path]) -> dict:
         for side in SIDES:
             if all((out / side / f).is_file() for f in ("advice.json", "registration.json", "params.json")):
                 try:
-                    got[side] = Window(sides, out, side).run()
+                    got[side] = SideReplay(sides, out, side).run()
                 except (KeyError, TypeError, ValueError, IndexError) as e:
                     got[side] = {"unmapped": f"{type(e).__name__}: {e}"}
         if got:

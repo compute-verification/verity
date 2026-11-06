@@ -25,6 +25,8 @@ CHUNK = 64
 PD = hashlib.sha256(b"program").hexdigest()
 LAYERS = 2
 STEPS = 3
+#: the run's identities coin, as the auditor host's challenger would open it after the run's root
+COIN = b"identities coin"
 
 
 def structure() -> dict:
@@ -83,7 +85,7 @@ def reference(stream) -> dict[str, bytes]:
 
 
 def open_population(c, run, bmap, pop, k: int = 16, salt: bytes = b"t"):
-    picks = B.challenge_identities(pop, bmap, run.run_root, k, salt=salt)
+    picks = B.challenge_identities(pop, bmap, run.run_root, k, salt=salt, source=COIN)
     assert picks, "no identities drawn"
     bound = [(ident, e, leaf) for ident, e, leaf in picks if e is not None]
     unbound = [ident for ident, e, _ in picks if e is None]
@@ -121,14 +123,14 @@ def test_honest_run_covers_population_and_openings_correspond():
     # the map is fixed before the challenge: its digest is over the entries, and the challenge changes with it
     assert bmap["digest"] == hashlib.sha256(__import__("json").dumps(bmap["entries"], sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
     other = dict(bmap, digest="00" * 32)
-    assert B.challenge_identities(pop, other, run.run_root, 16, salt=b"t") != picks
+    assert B.challenge_identities(pop, other, run.run_root, 16, salt=b"t", source=COIN) != picks
     # registered inputs (weights): required by the population when registered, covered by the map's registered-input entry, never drawn as a leaf
     st_w = dict(structure(), weights_registered=True)
     pop_w = list(B.expected_population(st_w, workload()))
     assert not B.coverage_check(pop_w, bmap)["ok"]                      # this run registered no weights -> missing
     bmap_w = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, chunk=CHUNK, weight_registration={"root": "ab" * 32})
     assert B.coverage_check(pop_w, bmap_w)["ok"]
-    assert all(e is not None and e["kind"] == "leaf" for _, e, _ in B.challenge_identities(pop_w, bmap_w, run.run_root, 40))
+    assert all(e is not None and e["kind"] == "leaf" for _, e, _ in B.challenge_identities(pop_w, bmap_w, run.run_root, 40, source=COIN))
 
 
 def test_map_leaves_are_the_committers_leaves():
@@ -187,7 +189,7 @@ def test_omitted_step_is_rejected():
     cov = B.coverage_check(list(B.expected_population(structure(), workload(steps=STEPS))), bmap)
     assert not cov["ok"] and {m["step"] for m in cov["missing"]} == {STEPS - 1}
     # and openings drawn from the expected population reach the missing late step: they cannot be opened
-    picks = B.challenge_identities(list(B.expected_population(structure(), workload(steps=STEPS))), bmap, run.run_root, 8)
+    picks = B.challenge_identities(list(B.expected_population(structure(), workload(steps=STEPS))), bmap, run.run_root, 8, source=COIN)
     assert any(e is None and ident[2] == STEPS - 1 for ident, e, _ in picks)
 
 

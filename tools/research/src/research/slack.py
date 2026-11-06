@@ -99,9 +99,14 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 try:
-    from . import waitcap
+    from . import vocabulary, waitcap
     from .timefmt import both, slack_dates
 except ImportError:                                                 # run as a single file: `python3 slack.py ...`
+    class vocabulary:  # research/vocabulary.py's table isn't beside a single file: nothing is flagged
+        @staticmethod
+        def retired(text: str) -> list[tuple[str, str]]:
+            return []
+
     def both(t: Any) -> str:
         return f"{datetime.fromtimestamp(float(t), UTC):%H:%MZ}" if re.fullmatch(r"\d+(?:\.\d+)?", str(t)) else str(t)
 
@@ -664,9 +669,9 @@ class _UnixHTTP(http.client.HTTPConnection):
 OIDC_RETRY_S = (1, 4)
 
 
-def oidc_token(aud: str, sleep: Callable[[float], Any] = time.sleep) -> str:
-    """A Cursor OIDC token for this agent with audience `aud`, from the local cursor-agent socket. Asking again is safe: a token
-    request changes nothing."""
+def oidc_token(aud: str, sleep: Callable[[float], Any] = time.sleep, nonce: str | None = None) -> str:
+    """A Cursor OIDC token for this agent with audience `aud`, from the local cursor-agent socket, carrying `nonce` as its
+    `nonce` claim when given. Asking again is safe: a token request changes nothing."""
     path = os.environ.get("CURSOR_AGENT_SOCKET", "/run/cursor/api.sock")
     hint = "the Slack broker needs is unavailable (not a Cursor agent? set SLACK_BOT_TOKEN)" if aud == BROKER else \
         f"{aud} needs is unavailable (only a Cursor agent has one)"
@@ -675,7 +680,8 @@ def oidc_token(aud: str, sleep: Callable[[float], Any] = time.sleep) -> str:
     for wait in (*OIDC_RETRY_S, None):
         conn = _UnixHTTP(path)
         try:
-            conn.request("POST", "/v1/tokens/oidc", json.dumps({"aud": aud}), {"Content-Type": "application/json"})
+            conn.request("POST", "/v1/tokens/oidc", json.dumps({"aud": aud, **({"nonce": nonce} if nonce else {})}),
+                         {"Content-Type": "application/json"})
             r = conn.getresponse()
             status, body = r.status, r.read(32768)
             break
@@ -1254,15 +1260,105 @@ def _route_ok(r: Any, name: str) -> bool:
 RAW_HOST = "raw.githubusercontent.com"                           # the notes are private: `http_get` sends it the notes token
 
 
+NOTES_TOKEN_URL = BROKER.rsplit("/api/", 1)[0] + "/api/agent-github/token"   # the broker's notes token, by OIDC identity
+NOTES_TOKEN_TTL_S, NOTES_TOKEN_MARGIN_S = 50 * 60, 120          # a token with no stated expiry lasts this long; renewed early
+NOTES_TOKEN_RETRY_S = 60                                        # after a refusal, the broker isn't asked again for this long
+_notes_token: dict = {}
+#: where this deployment's Vercel OIDC token comes from when $VERCEL_OIDC_TOKEN doesn't hold it: a host whose identity arrives
+#: with each request (the Slack events service, through the vercel SDK) sets it
+OIDC_TOKEN: Callable[[], str | None] | None = None
+
+
+def vercel_oidc_token() -> str | None:
+    """This deployment's Vercel OIDC token: `OIDC_TOKEN`'s when a host set it, else $VERCEL_OIDC_TOKEN; None when there is
+    no identity here (every agent and pod)."""
+    if OIDC_TOKEN is None:
+        return os.environ.get("VERCEL_OIDC_TOKEN") or None
+    try:
+        return OIDC_TOKEN() or None
+    except Exception as e:  # noqa: BLE001 - the host's lookup has no identity for this call: the notes token falls back
+        _notes_token["why"] = f"no OIDC identity ({type(e).__name__})"
+        print(f"research msg: no Vercel OIDC identity ({type(e).__name__}): using RESEARCH_NOTES_TOKEN if set", file=sys.stderr)
+        return None
+
+
+def notes_token(now: float | None = None) -> str | None:
+    """A token for the private notes repository.  Where there is a Vercel OIDC identity (`vercel_oidc_token`, as the Slack events
+    service has it), the one the broker mints for it (`NOTES_TOKEN_URL`, scope `notes`), kept until shortly before it
+    expires; else, or when the broker refuses (said on stderr), $RESEARCH_NOTES_TOKEN.  None when there is neither, so a
+    read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one it was, and why."""
+    _notes_token.pop("why", None)
+    oidc = vercel_oidc_token()
+    if oidc and (token := _broker_notes_token(oidc, time.time() if now is None else now)):
+        _notes_token["source"] = "broker"
+        return token
+    if not oidc:
+        _notes_token.setdefault("why", "no OIDC identity")
+    token = os.environ.get("RESEARCH_NOTES_TOKEN") or None
+    _notes_token["source"] = "env" if token else None
+    return token
+
+
+def notes_token_source() -> str | None:
+    """Where `notes_token` got the token it gives now: "broker", "env" (RESEARCH_NOTES_TOKEN), or None."""
+    notes_token()
+    return _notes_token.get("source")
+
+
+def notes_token_why() -> str | None:
+    """Why the last `notes_token` didn't come from the broker: "no OIDC identity", the broker's refusal, or None."""
+    return None if _notes_token.get("source") == "broker" else _notes_token.get("why")
+
+
+def _broker_notes_token(oidc: str, now: float) -> str | None:
+    if now < _notes_token.get("until", 0):
+        if not _notes_token.get("token"):
+            _notes_token["why"] = _notes_token.get("refused", "the broker refused")
+        return _notes_token.get("token")
+    _notes_token.update(oidc=oidc, token=None, until=now + NOTES_TOKEN_RETRY_S)
+    try:
+        out = http_json("POST", NOTES_TOKEN_URL, json.dumps({"scope": "notes"}).encode(),
+                        {"Authorization": f"Bearer {oidc}", "Content-Type": "application/json"}) or {}
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        said = _refusal(e)
+        why = f"the broker refused ({getattr(e, 'code', '') or getattr(e, 'reason', e)}{': ' + said if said else ''})"
+        _notes_token.update(why=why, refused=why)
+        print(f"research msg: the broker gave no notes token ({getattr(e, 'code', '') or getattr(e, 'reason', e)}): using "
+              "RESEARCH_NOTES_TOKEN if set, else reading the notes unauthenticated", file=sys.stderr)
+        return None
+    token, expires = out.get("token"), out.get("expires_at")
+    if not token:
+        _notes_token.update(why="the broker's answer had no token", refused="the broker's answer had no token")
+        print("research msg: the broker's notes-token answer has no `token`: using RESEARCH_NOTES_TOKEN if set, else reading "
+              "the notes unauthenticated", file=sys.stderr)
+        return None
+    until = (_iso_epoch(expires) if expires else now + NOTES_TOKEN_TTL_S) - NOTES_TOKEN_MARGIN_S
+    _notes_token.update(oidc=oidc, token=token, until=until)
+    return token
+
+
+def _refusal(e: Exception) -> str:
+    """What an HTTP refusal's JSON body says it refused (the broker's `error` and the claim it names), or ""."""
+    if not isinstance(e, urllib.error.HTTPError):
+        return ""
+    try:
+        body = json.loads(e.read(4096) or b"{}")
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(body, dict):
+        return ""
+    return " ".join(str(body[k]) for k in ("error", "reason", "claim", "message") if body.get(k))[:160]
+
+
 def http_get(url: str, timeout: float = 10) -> bytes | None:
     """The body at `url` (http(s), or a `file://` directory for tests and offline use), or None when there is none.  A
-    github.com raw file is read with RESEARCH_NOTES_TOKEN when it is set: the notes repository is private, and without
-    the token its raw files answer 404 as if they weren't there."""
+    github.com raw file is read with the notes token (`notes_token`) when there is one: the notes repository is private,
+    and without a token its raw files answer 404 as if they weren't there."""
     if url.startswith("file://"):
         p = Path(urllib.parse.unquote(url[7:]))
         return p.read_bytes() if p.is_file() else None
     headers = {}
-    if urllib.parse.urlsplit(url).hostname == RAW_HOST and (token := os.environ.get("RESEARCH_NOTES_TOKEN")):
+    if urllib.parse.urlsplit(url).hostname == RAW_HOST and (token := notes_token()):
         headers["Authorization"] = f"Bearer {token}"
     try:
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as r:
@@ -1882,7 +1978,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                          "--worker NAME for a lane's worker, which holds no handle")
     if ns.worker and not WORKER_RE.fullmatch(ns.worker):
         raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
-    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment"):
+    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment", "create"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
                          "`place` or `comment`, which have one")
     try:
@@ -1936,6 +2032,20 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 raise SlackError(f"linear milestone {ns.target}: give PROJECT (a prefix of its name, one word or quoted) and NAME")
             else:
                 print(lin.milestone(ns.value[0], " ".join(ns.value[1:]), ns.date, brief, ns.rename, create=ns.target == "create"))
+            return 0
+        if ns.verb == "create":
+            h = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the issue's filer"))
+            team = ns.team[0] if ns.team else need(h.get("linear"), f"--team KEY (@{h['handle']} has no Linear team)")
+            title, body = need(ns.title, "--title, the deliverable"), need(brief, "--file BRIEF.md, the issue's brief")
+            if ns.dry_run:
+                print(f"dry-run: would file {title!r} in {team} as {h['handle']}" + (f" under {ns.parent}" if ns.parent else "")
+                      + (f", due {ns.due}" if ns.due else ""))
+                return 0
+            made = lin.file(team, h["handle"], body, parent=ns.parent, title=title)
+            if ns.due:
+                lin.edit(made["identifier"], due=ns.due)
+            board = " / ".join(x["name"] for x in (made.get("project"), made.get("projectMilestone")) if x)
+            print(f"{made['identifier']} {made['url']}" + (f" on {board}" if board else ""))
             return 0
         issue = need(ns.target, "the ISSUE (e.g. INF-12)")
         if ns.verb == "relate":
@@ -2337,7 +2447,7 @@ def publish_route(root: Path, r: dict, message: str, where: str = ROUTES_DIR, na
         except ImportError:
             pass
     if not (root / ".git").exists():
-        if os.environ.get("RESEARCH_NOTES_TOKEN"):                  # no git here (the Slack events service): GitHub's API
+        if notes_token():                                           # no git here (the Slack events service): GitHub's API
             rel = f"{where}/{name}.json"
             cur = notes_api("GET", rel)
             notes_api("PUT", rel, {"message": message, "branch": "main",
@@ -2366,10 +2476,11 @@ def publish_route(root: Path, r: dict, message: str, where: str = ROUTES_DIR, na
 
 
 def notes_api(method: str, rel: str, body: dict | None = None) -> Any:
-    """GitHub's contents API on the notes repository, with RESEARCH_NOTES_TOKEN, for a caller with no clone (the Slack events
-    service): the JSON answer, or None for a GET of a path that isn't there."""
-    if not (token := os.environ.get("RESEARCH_NOTES_TOKEN")):
-        raise SlackError("RESEARCH_NOTES_TOKEN is not set: without a notes clone, the notes are read and written with it")
+    """GitHub's contents API on the notes repository, with the notes token (`notes_token`), for a caller with no clone (the
+    Slack events service): the JSON answer, or None for a GET of a path that isn't there."""
+    if not (token := notes_token()):
+        raise SlackError("no notes token: set RESEARCH_NOTES_TOKEN, or run where the broker mints one (VERCEL_OIDC_TOKEN); "
+                         "without a notes clone, the notes are read and written with it")
     req = urllib.request.Request(NOTES_API + urllib.parse.quote(rel) + ("?ref=main" if method == "GET" else ""), method=method,
                                  data=None if body is None else json.dumps(body).encode(),
                                  headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
@@ -2811,8 +2922,14 @@ LENGTH_FIX = ("put the body in its Linear issue (`research msg linear comment IS
 
 def check_length(reg: dict, ch: str, text: str, limit: int) -> None:
     """A post `send`, `reply`, `announce` or `ask` makes in the front door, in words as `traffic --volume` counts them: past
-    `limit` it goes out with a note on stderr, and past twice `limit` it is refused before anything is posted."""
-    if ch != channel_id_for(reg, FRONT_DOOR) or (n := len(plain(text).split())) <= limit:
+    `limit` it goes out with a note on stderr, and past twice `limit` it is refused before anything is posted.  A retired term
+    (`vocabulary.retired`) in its prose goes out with a note naming what to write instead."""
+    if ch != channel_id_for(reg, FRONT_DOOR):
+        return
+    if found := vocabulary.retired(plain(text)):
+        print("research msg: retired term(s), posted anyway: " + "; ".join(f"{t!r}: write {w}" for t, w in found)
+              + " (GLOSSARY.md's older names; a name quoted in backticks is kept)", file=sys.stderr)
+    if (n := len(plain(text).split())) <= limit:
         return
     if n > 2 * limit:
         raise SlackError(f"{n} words, past twice the {limit} a post in #{FRONT_DOOR} may have, so nothing was posted: {LENGTH_FIX}")
@@ -3258,11 +3375,13 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
 # --- the app's configuration ------------------------------------------------------------------------------------------------
 
 MANIFEST_REL = REGISTRY_REL.with_name("slack-app.json")
-APP_STATE_ENV, APP_SEED_ENV = "RESEARCH_SLACK_APP_STATE", "SLACK_APP_CONFIG_REFRESH_TOKEN"
+APP_STATE_ENV = "RESEARCH_SLACK_APP_STATE"                      # set on the control pod only (infra/control/msg.sh)
 #: the app configuration API: these take the configuration token (rotating it, the refresh token), never the bot's scopes
 APP_METHODS = ("apps.manifest.export", "apps.manifest.update", "apps.manifest.validate", "tooling.tokens.rotate")
 ROTATE_BEFORE_S = 600                                            # a configuration token lives 12 h; rotate this long before its exp
 APP_TOKENS_PAGE = "https://api.slack.com/apps"                   # "Your App Configuration Tokens": where a person generates a pair
+NEW_PAIR = (f"A person generates a new pair at {APP_TOKENS_PAGE} (Your App Configuration Tokens) and, on the control pod, "
+            'writes its refresh token to {path} as {{"refresh_token": "..."}}, mode 600; no environment variable seeds it')
 MANIFEST_IGNORED = ("_metadata",)                                # the manifest format's version, which export adds
 
 
@@ -3271,7 +3390,11 @@ def _epoch() -> float:
 
 
 def app_state_path() -> Path:
-    return Path(os.environ.get(APP_STATE_ENV) or Path.home() / ".research" / "slack-app-token.json")
+    """The configuration token's state file, which only the control pod has: `slack-app` runs there, never on an agent."""
+    if not (p := os.environ.get(APP_STATE_ENV, "").strip()):
+        raise SlackError(f"${APP_STATE_ENV} is unset: `research msg slack-app` runs on the control pod, where infra/control/msg.sh "
+                         "sets it to the app configuration token's state file; ask @comms or @infra to run it there")
+    return Path(p)
 
 
 def _write_private(path: Path, data: dict) -> None:
@@ -3297,11 +3420,7 @@ def _write_private(path: Path, data: dict) -> None:
 
 def _app_state(path: Path) -> dict:
     if not path.exists():
-        if seed := os.environ.get(APP_SEED_ENV, "").strip():
-            return {"refresh_token": seed}
-        raise SlackError(f"no app configuration token: {path} is absent and {APP_SEED_ENV} is unset. A person generates a pair at "
-                         f"{APP_TOKENS_PAGE} (Your App Configuration Tokens); set {APP_SEED_ENV} to its refresh token, which "
-                         f"seeds the file once, or {APP_STATE_ENV} to the state file")
+        raise SlackError(f"no app configuration token: {path} is absent. " + NEW_PAIR.format(path=path))
     if path.stat().st_mode & 0o077:
         raise SlackError(f"{path} is readable by others: `chmod 600 {path}` (it holds the app's configuration tokens)")
     try:
@@ -3309,14 +3428,14 @@ def _app_state(path: Path) -> dict:
     except (OSError, ValueError) as e:
         raise SlackError(f"{path}: {type(e).__name__}; it should be {{token, refresh_token, exp}} as rotation writes it") from None
     if not isinstance(state, dict) or not isinstance(state.get("refresh_token"), str) or not state["refresh_token"]:
-        raise SlackError(f"{path} has no refresh_token; move it aside and set {APP_SEED_ENV} to a new one")
+        raise SlackError(f"{path} has no refresh_token. " + NEW_PAIR.format(path=path))
     return state
 
 
 def app_token(path: Path | None = None, *, transport=None) -> str:
     """The app configuration token from its state file (`app_state_path`), rotated through tooling.tokens.rotate first when it
     is within ROTATE_BEFORE_S of its exp. A refresh token works once, so the new pair is written before the new token is used,
-    under a lock so that two processes never spend the same one; an absent file is seeded once from $SLACK_APP_CONFIG_REFRESH_TOKEN."""
+    under a lock so that two processes never spend the same one."""
     path = path or app_state_path()
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with open(path.with_name(path.name + ".lock"), "a") as lock:
@@ -3329,10 +3448,8 @@ def app_token(path: Path | None = None, *, transport=None) -> str:
         except SlackError as e:
             if e.code is None:                                     # no answer: whether Slack spent the token is unknown
                 raise SlackError(f"{e}; if Slack refuses the refresh token on the next try, it was spent: see the using-slack skill") from None
-            raise SlackError(f"tooling.tokens.rotate: {e.code}: Slack refused the refresh token in "
-                             f"{path if path.exists() else '$' + APP_SEED_ENV}. A refresh token works once, so an earlier "
-                             f"rotation or another copy of it spent it. A person generates a new pair at {APP_TOKENS_PAGE} "
-                             f"(Your App Configuration Tokens); then move {path} aside and set {APP_SEED_ENV} to the new refresh token") from None
+            raise SlackError(f"tooling.tokens.rotate: {e.code}: Slack refused the refresh token in {path}. A refresh token works "
+                             "once, so an earlier rotation or another copy of it spent it. " + NEW_PAIR.format(path=path)) from None
         token, refresh, exp = out.get("token"), out.get("refresh_token"), out.get("exp")
         if not (isinstance(token, str) and token and isinstance(refresh, str) and refresh and isinstance(exp, (int, float))):
             raise SlackError(f"tooling.tokens.rotate: the answer lacks a token, refresh_token or exp, so {path} is unchanged "
@@ -4016,9 +4133,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "duplicate OTHER` (Linear moves a duplicate to its Duplicate status), `unrelate ISSUE OTHER`, `update "
                       "PROJECT --health onTrack|atRisk|offTrack --body-file F` (a project update), `project create NAME --team "
                       "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `milestone create|edit PROJECT NAME "
-                      "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`; none sends a state")
+                      "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`, `create --as HANDLE --title T --file BRIEF.md [--team KEY] "
+                      "[--due YYYY-MM-DD] [--parent ID]` (an issue in your own team, or KEY's); none sends a state")
     p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
-                                    "project", "milestone"))
+                                    "project", "milestone", "create"))
     p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
                                              "team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "

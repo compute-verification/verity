@@ -1,37 +1,38 @@
-"""IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on the warden's own ingress: the unit a
-bucket row that binds each request's prompt_len and arrival ordinal to the warden's certified ingress cells, its
-reference in the clear and the Boolean Definitions it is built from. Nothing here is in a Spec or proved.
+"""IoTieRequest (`PROTOCOL.md`, "The I/O tie", "The ingress tie"), a prototype on the network certifier's own ingress:
+the proof block a bucket row that binds each request's prompt_len and arrival ordinal to the network certifier's
+certified ingress cells, its reference in the clear and the Boolean Definitions it is built from. Nothing here is in a
+Spec or proved.
 
-**The cells are the warden's** (`warden.Warden._ingress`, its rows as `warden_rows` registers them, a row a bucket).
-A link-window's ingress is T rows, row t bucket t's L·R slots of B bytes, R the warden's r. A bucket's live
-connections, admitted and not past their ingress `END`, hold R slots each, ranked by ordinal (lane ρ: slots ρ·R …
-ρ·R + R − 1), and a slot no connection holds is B zero bytes. Connection q's cells are its client's bytes cut as
-`warden.cells` cuts them: byte k in its request cell ⌊k / P⌋, a `DATA` of exactly P = B − 9 bytes while more follow,
-then an `END` with the last 1 … P; and a `PAD` on q (no payload) where fewer than P of its bytes wait and its client
-hasn't ended, and after its `END`. So a bucket's R cells on q are `DATA` cells, then its `END` or none, then `PAD`s.
-The bytes are a canonical id request (`active.id_request` at offset 0: the cells carry the bytes alone, no LENGTH),
-whose every field is at a place fixed by the prompt's length and B alone, and whose length is its content-length plus
-`BODY_AT`. Each cell is parsed without its request's prompt length (`parse_frame`): the head and the fixed fields at
-their places, 11-byte prompt fields (`[` or `,`, then a u32 in 10 characters), the gap spaces only where the next
-piece would straddle a cell, and `]}` then zero fill at the request's last byte. So each request's prompt_len is its
-count of prompt fields, read from the certified bytes. A name (`model`, `user`) is printable ASCII but `"` and `\\`
-in quotes, so a request whose name needs a JSON escape is refused.
+**The cells are the network certifier's** (`warden.Warden._ingress`, its rows as `warden_rows` registers them, a row a
+bucket). An execution phase's ingress is T rows, row t bucket t's L·R slots of B bytes, R the network certifier's r. A
+bucket's live connections, admitted and not past their ingress `END`, hold R slots each, ranked by ordinal (lane ρ:
+slots ρ·R … ρ·R + R − 1), and a slot no connection holds is B zero bytes. Connection q's cells are its client's bytes
+cut as `warden.cells` cuts them: byte k in its request cell ⌊k / P⌋, a `DATA` of exactly P = B − 9 bytes while more
+follow, then an `END` with the last 1 … P; and a `PAD` on q (no payload) where fewer than P of its bytes wait and its
+client hasn't ended, and after its `END`. So a bucket's R cells on q are `DATA` cells, then its `END` or none, then
+`PAD`s. The bytes are a canonical id request (`active.id_request` at offset 0: the cells carry the bytes alone, no
+LENGTH), whose every field is at a place fixed by the prompt's length and B alone, and whose length is its
+content-length plus `BODY_AT`. Each cell is parsed without its request's prompt length (`parse_frame`): the head and the
+fixed fields at their places, 11-byte prompt fields (`[` or `,`, then a u32 in 10 characters), the gap spaces only where
+the next piece would straddle a cell, and `]}` then zero fill at the request's last byte. So each request's prompt_len
+is its count of prompt fields, read from the certified bytes. A name (`model`, `user`) is printable ASCII but `"` and
+`\\` in quotes, so a request whose name needs a JSON escape is refused.
 
 **The lanes** (`Lane`, public in the named gap): each lane's connection, its ordinal q (0 for a lane no connection
 holds), and its request's carry-in and carry-out, (bytes left, prompt fields so far) before and after the bucket's
 cells: (0, 0) before its first cell and (0, n) after its `END`, n its prompt_len. The verifier computes them (`lanes`)
 from the advice's prompt lengths, advice request i on ordinal order[i] + 1 (advice v1's order permutation; v0's is
-the identity), and the warden's ingress release (`Release`: each connection's first bucket and its request cells a
-bucket), which it takes in the clear for now as it takes the ingress record's wiring (the named gap). So connection
-q's lanes chain by construction: (0, 0) into its first bucket, each bucket's carry-out the next one's carry-in, and
-(0, n_q) out of its last, and the link's bucket verdicts hold every request's prompt_len to its cells, whatever
-buckets it spans (a carry checked alone would accept any added count).
+the identity), and the network certifier's ingress release (`Release`: each connection's first bucket and its request
+cells a bucket), which it takes in the clear for now as it takes the ingress record's wiring (the named gap). So
+connection q's lanes chain by construction: (0, 0) into its first bucket, each bucket's carry-out the next one's
+carry-in, and (0, n_q) out of its last, and the link's bucket verdicts hold every request's prompt_len to its cells,
+whatever buckets it spans (a carry checked alone would accept any added count).
 
 **What 1 means** (`reference`): in each lane, the R cells read from the carry-in are pads and request cells on its
 ordinal, no request cell after a pad or after the request's `END`, each request cell that cell of a canonical id
 request with its header's length (P for a `DATA`, the bytes left for the `END`), leaving the carry-out with no count
-past 2^32; a lane of ordinal 0 is B zero bytes a slot. That the row is row t of the warden's registered root is the
-proof system's registered read, outside the unit (`warden_rows.bucket_port`).
+past 2^32; a lane of ordinal 0 is B zero bytes a slot. That the row is row t of the network certifier's registered root
+is the proof system's registered read, outside the proof block (`warden_rows.bucket_port`).
 
     IoTieRequestFrame{B}(cell: Array<B, Byte>, left, q: Array<32>) -> Array<68>
         pad, req, start, ended, the bytes left after it (u32) and its prompt fields (u32), LSB first
@@ -41,12 +42,12 @@ proof system's registered read, outside the unit (`warden_rows.bucket_port`).
     IoTieRequest{B, L, R}(row: Array<8·L·R·B>, lanes: Array<L, Array<160>>) -> Value<1>
         a lane: q, left, fields, left_out, fields_out, u32 each, LSB first
 
-`IoTieRequest` is the unit, one a bucket row: in each lane, one `IoTieRequestFrame` and one `IoTieRequestStep` a cell
-from the carry-in, then `IoTieRequestEnd` against the carry-out. The frame reads its cell's header (kind, ordinal
+`IoTieRequest` is the proof block, one a bucket row: in each lane, one `IoTieRequestFrame` and one `IoTieRequestStep` a
+cell from the carry-in, then `IoTieRequestEnd` against the carry-out. The frame reads its cell's header (kind, ordinal
 against q, length) and its payload against the bytes its request has left (0: the request starts here) both ways, a
 first cell's reading and a continuation's, each with its slots at fixed places and `]}` where the bytes left put it.
 The step keeps (left, fields, over, padded, ok), and a request cell after a pad or the `END` drops ok. Public: the
-lanes. Witness: the row, which the registered read holds to the warden's root.
+lanes. Witness: the row, which the registered read holds to the network certifier's root.
 """
 from __future__ import annotations
 
@@ -85,7 +86,7 @@ STATE = 32 + 32 + 1 + 1 + 1
 LANE = 5 * 32
 
 
-class Layout(NamedTuple):
+class FirstCell(NamedTuple):
     """An id request's first-cell layout at cell size B: `room` = P payload bytes a cell, the head's bytes up to the
     first prompt field (`head`, the zero request's), its variable spans (the content-length first), and `start`, the
     first prompt field's offset in the payload."""
@@ -97,8 +98,8 @@ class Layout(NamedTuple):
 
 
 @lru_cache(maxsize=None)
-def layout(B: int) -> Layout:
-    """`Layout` at cell size B. Raises `ValueError` where the head and one prompt field don't fit the first cell
+def layout(B: int) -> FirstCell:
+    """`FirstCell` at cell size B. Raises `ValueError` where the head and one prompt field don't fit the first cell
     unmoved."""
     room = B - HEADER.size
     try:
@@ -117,7 +118,7 @@ def layout(B: int) -> Layout:
     start = zero.index(b',"prompt":') + len(b',"prompt":')
     if start + ID_FIELD_BYTES > room or zero[start:start + 1] != b"[":
         raise ValueError(f"at {B}-byte cells an id request's first prompt field isn't in its first cell")
-    return Layout(room, zero[:start], tuple(spans), start)
+    return FirstCell(room, zero[:start], tuple(spans), start)
 
 
 def _u32(field: bytes) -> bool:
@@ -150,7 +151,7 @@ class Frame(NamedTuple):
     used: int
 
 
-def parse_frame(lay: Layout, payload: bytes, first: bool, left: int) -> Frame | None:
+def parse_frame(lay: FirstCell, payload: bytes, first: bool, left: int) -> Frame | None:
     """The parse of one request cell's payload (P bytes, zero fill past the request's last byte), `left` the request's
     bytes still to come before it (ignored on a first cell, whose content-length says), or None for a payload that
     isn't that cell of a canonical id request."""
@@ -194,7 +195,7 @@ def parse_frame(lay: Layout, payload: bytes, first: bool, left: int) -> Frame | 
 PADDED = "pad"
 
 
-def read(lay: Layout, cell: bytes, q: int, left: int) -> Frame | str | None:
+def read(lay: FirstCell, cell: bytes, q: int, left: int) -> Frame | str | None:
     """A cell in a lane of ordinal q read against its request's bytes left: `PADDED` for a `PAD` on q (B zero bytes for
     q = 0), its `Frame` for a request cell on q (a `DATA` of P bytes that doesn't end the request or its `END` of the
     bytes left), else None."""
@@ -215,7 +216,7 @@ def read(lay: Layout, cell: bytes, q: int, left: int) -> Frame | str | None:
     return p if (kind, n) == ((W.END, before) if before <= lay.room else (DATA, lay.room)) else None
 
 
-def lane_cut(lay: Layout, cells: Sequence[bytes], q: int, left: int, fields: int) -> tuple[int, int] | None:
+def lane_cut(lay: FirstCell, cells: Sequence[bytes], q: int, left: int, fields: int) -> tuple[int, int] | None:
     """A lane's cells read from the carry (left, fields): the carry after them, or None where a cell isn't a pad or a
     request cell on q, or a request cell follows a pad or its request's `END`."""
     padded = False
@@ -250,7 +251,7 @@ UNHELD = Lane(0, 0, 0, 0, 0)
 
 @dataclass(frozen=True)
 class Shape:
-    """An ingress bucket row: L lanes of R cells of B bytes (N = L·R slots), R the warden's r."""
+    """An ingress bucket row: L lanes of R cells of B bytes (N = L·R slots), R the network certifier's r."""
 
     B: int
     L: int
@@ -289,7 +290,7 @@ def reference(shape: Shape, inst: Instance) -> int:
 # --- the verifier's lanes --------------------------------------------------------------------------------------------
 
 def request_bytes(prompt_len: int, B: int) -> int:
-    """The bytes of an id request of a `prompt_len`-token prompt in the warden's cells."""
+    """The bytes of an id request of a `prompt_len`-token prompt in the network certifier's cells."""
     return len(id_request(model="", user="", prompt=[0] * prompt_len, max_tokens=0, frame_bytes=B, offset=0))
 
 
@@ -308,8 +309,8 @@ def carries(prompt_len: int, B: int) -> tuple[tuple[int, int], ...]:
 
 
 class Release(NamedTuple):
-    """Connection q's ingress in the warden's record: admitted at bucket `first` (the session's), its request cells
-    (`DATA` and its `END`) in each bucket from it on, its `END` in the last."""
+    """Connection q's ingress in the network certifier's record: admitted at bucket `first` (the session's), its request
+    cells (`DATA` and its `END`) in each bucket from it on, its `END` in the last."""
 
     q: int
     first: int
@@ -320,9 +321,9 @@ def lanes(shape: Shape, prompt_lens: Sequence[int], releases: Sequence[Release],
           order: Sequence[int] | None = None) -> tuple[Lane, ...]:
     """The verifier's lanes of session bucket `bucket` (the module docstring, "The lanes"): its live connections by
     ordinal, connection q = order[i] + 1 carrying advice request i's prompt_lens[i], then unheld lanes. Raises
-    `ValueError` where the releases aren't the warden's schedule (ordinals 1, 2, … admitted in order, at most L live, R
-    request cells a bucket), the connections aren't the advice's requests one to one, or a connection's cells aren't
-    its request's, ending in its last bucket."""
+    `ValueError` where the releases aren't the network certifier's schedule (ordinals 1, 2, … admitted in order, at most
+    L live, R request cells a bucket), the connections aren't the advice's requests one to one, or a connection's cells
+    aren't its request's, ending in its last bucket."""
     order = list(range(len(prompt_lens))) if order is None else list(order)
     if sorted(order) != list(range(len(prompt_lens))):
         raise ValueError("the order is a permutation of the advice's requests")
@@ -352,9 +353,9 @@ def lanes(shape: Shape, prompt_lens: Sequence[int], releases: Sequence[Release],
     return tuple(live) + (UNHELD,) * (shape.L - len(live))
 
 
-# --- the fake upstream: the warden's own ingress ---------------------------------------------------------------------
+# --- the fake upstream: the network certifier's own ingress ----------------------------------------------------------
 
-class Link(NamedTuple):
+class ServedIngress(NamedTuple):
     """A link's ingress served through the warden: its rows, a bucket each (a slot no connection holds B zero bytes),
     each connection's release, and the ingress records its grid closed, a window each."""
 
@@ -364,7 +365,7 @@ class Link(NamedTuple):
 
 
 def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
-          buckets: int, hold: int = 0) -> Link:
+          buckets: int, hold: int = 0) -> ServedIngress:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], and the warden's own ingress
     (`warden.Warden._ingress`) serves it: admitted in arrival order at the first bucket with a free lane, which it
     holds until `hold` buckets after its ingress `END` (standing in for its egress), its client's bytes arriving
@@ -396,7 +397,7 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
             records.append(grid.close_window())
     if queue or any(c.ingress_end is None for c in conns):
         raise ValueError("every connection ends its ingress within the link's buckets")
-    return Link(rows, [Release(c.ordinal, c.admitted, tuple(got[c.ordinal])) for c in conns], tuple(records))
+    return ServedIngress(rows, [Release(c.ordinal, c.admitted, tuple(got[c.ordinal])) for c in conns], tuple(records))
 
 
 # --- the circuit -----------------------------------------------------------------------------------------------------
@@ -487,7 +488,7 @@ def _name_ok(C, ch: _Chars, at: int) -> list:
 _SPANS = {"u32": _u32_ok, "ratio": _ratio_ok, "name": _name_ok}
 
 
-def _reading(C, ch: _Chars, zero: Sequence, lay: Layout, first: bool, L: Sequence | None) -> tuple:
+def _reading(C, ch: _Chars, zero: Sequence, lay: FirstCell, first: bool, L: Sequence | None) -> tuple:
     """One reading of a request cell's payload: a first cell's (`first`, L its content-length plus `BODY_AT`) or a
     continuation's (L the bytes left): (ok, ended, the bytes left after it, its prompt fields, L)."""
     room = lay.room
@@ -659,7 +660,8 @@ def frame_arguments(cells: Sequence[bytes], lefts: Sequence[int], qs: Sequence[i
 
 
 def lane_bits(lanes_: Sequence[Lane]) -> list[int]:
-    """The lanes' bits as the unit reads them, u32s least significant bit first. Raises `ValueError` past a u32."""
+    """The lanes' bits as the proof block reads them, u32s least significant bit first. Raises `ValueError` past a
+    u32."""
     if any(type(x) is not int or not 0 <= x < 1 << 32 for ln in lanes_ for x in ln):
         raise ValueError(f"a lane is five u32s, not {lanes_!r:.200}")
     return [b for ln in lanes_ for x in ln for b in HC._int_bits(x, 32)]
@@ -673,6 +675,6 @@ def arguments(shape: Shape, inst: Instance) -> list[list[int]]:
 
 
 __all__ = ["BODY_AT", "END", "FRAME_OUT", "Frame", "Instance", "IoTieRequest", "IoTieRequestEnd", "IoTieRequestFrame",
-           "IoTieRequestStep", "LANE", "Lane", "Layout", "Link", "PADDED", "PINS", "Release", "STATE", "Shape",
+           "IoTieRequestStep", "LANE", "Lane", "FirstCell", "ServedIngress", "PADDED", "PINS", "Release", "STATE", "Shape",
            "UNHELD", "arguments", "carries", "frame_arguments", "lane_bits", "lane_cut", "lanes", "layout",
            "parse_frame", "read", "reference", "request_bytes", "serve"]

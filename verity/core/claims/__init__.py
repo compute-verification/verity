@@ -119,10 +119,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "hm96-sha256/v1 and hm96-sha512/v1 (their hiding bound holds except for a 2^-64 fraction of keys)", "CRS"),
 
     Entry("random-oracle", "assumption", "A hash behaves as a random oracle", "Random oracle", "standard"),
-    # the bandwidth audit v0's device (Bandwidth.Guarantees.AuditRO, Security/Definitions/Accounting/Guarantees/Bandwidth.lean): the
-    # guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is such;
-    # a co-audited set is one such device over its members' stores (Bandwidth.Guarantees.AuditSet), and side sources that may
-    # carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
+    # the device of PoUB's per-pass bound (Bandwidth.Device, Security/Definitions/Accounting/Bandwidth/Game.lean):
+    # the guarantee quantifies over devices bounded by S_chip, cap_side * T and T / R_regen, and these say a deployed one is
+    # such; a co-audited set would be one such device over its members' stores, which no guarantee states yet, and side
+    # sources that may carry a peer's tags are Bandwidth.Guarantees.AuditRelay's
     Entry("bandwidth-device", "model",
           "Bandwidth device model: the bound is stated for a co-audited set of whole PCIe-only GPUs (no MIG slices, no NVLink; "
           "NVLink domains are to be certified as sets later) running simultaneous windows over pairwise-distinct stores, with "
@@ -184,7 +184,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # only the digest's d bits per tile, from a table of |signs| * N * d bits, at any number of rows. What Lean proves is
     # the narrower verbatim class (Accounting.Guarantees.RateAuditSketch, RateAuditTensorSketchRank: on-chip state, device
     # memory, the side link and rebuilding each return whole sectors as they are); the restated form, where a device that
-    # computes from blocks it read has those reads counted, is the remote audit's composition, not yet proved for the sketch
+    # computes from blocks it read has those reads counted, is PoUB's composition, not yet proved for the sketch
     Entry("rate-sketch-verbatim", "model",
           "Rate sketch store-as-blocks model: in every tier the prover holds the store only as its blocks (any number of "
           "copies, anywhere), and any device may compute from the blocks it reads, every such read counted; a layout from "
@@ -218,6 +218,31 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
           "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
           "standard"),
+    # `Verity.Assumptions.ZkServerOwnUser` (Security/Definitions/Core/Assumptions/ZkServer.lean), the premise of
+    # `Verity.Guarantees.RegisteredLeakage`: a stack is the same function under every key of the ZK server's
+    Entry("zk-server-own-user", "assumption",
+          "The ZK server's value service and its session loop run under the ZK server's own OS user, which no worker and no "
+          "serving stack shares, and the salt key's file is that user's alone, so nothing the serving stack runs reads the "
+          "key", "ZK server's own user", "standard"),
+    # The four per-party assumptions of `Accounting.Assumptions.Parties` (Security/Definitions/Accounting/Assumptions/
+    # Parties.lean), each about one auditor party p; the reason to believe them is that p runs on a machine the auditor
+    # owns, which is not itself an assumption.  The device-attest statements (`Properties.Attest`) read them
+    Entry("faithful", "assumption",
+          "Faithful p: the auditor party p runs its stated code on its true inputs, its own clock's readings and its own "
+          "coin source's draws among them, and its state persists: each step starts from the state the last one left, "
+          "never an earlier copy (NIST SP 800-208's no snapshot restore of a stateful hash-based key)", "Faithful party",
+          "standard"),
+    Entry("secret", "assumption",
+          "Secret p: the prover can neither read nor set the auditor party p's signing keys, its LMS leaf states or its "
+          "coins not yet released; what it learns of them is what p's outputs carry", "Secret party", "standard"),
+    Entry("confined", "assumption",
+          "Confined p: the auditor party p's only outputs are the messages of its declared channels (toward the auditor, "
+          "its manifest's public messages, such as one liveness record per sampling block): no other channel, timing "
+          "included, carries its state out", "Confined party", "standard"),
+    Entry("witness-path-private", "assumption",
+          "Witness path private: the path between an auditor party and the prover carries no observer but its two "
+          "endpoints, so the party's private messages (its signed roots and records, the prover's witness) reach nobody "
+          "else; they travel unencrypted for now", "Witness path private", "standard"),
     # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
     # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
     Entry("certifier-coverage", "assumption",
@@ -453,6 +478,15 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "32 cells have z = A·Bᵀ and y = dq(z), or for the combine that the rows' XOR is the receipt. That every port "
           "is registered and opens at its registered root is proved from flock-verify's complete check, not assumed",
           "TS leaf checks", "conjectured"),
+    Entry("accounting-ts-group-realizes", "assumption",
+          "A leaf's group of statements (its lanes, each in n chunks along K, and its combine) realizes the leaf's "
+          "relation at the rows its sessions open: past the leaf verifier's check of the tile and its chunks, where "
+          "each session's complete, known-read and file checks pass, every served root is registered, each session "
+          "has a unit, the sessions' registrants' rows agree at one tree and position, the known rows hold, and each "
+          "session's committed rows are the port rows of a wire assignment its circuit's evaluation agrees with, the "
+          "relation holds of the leaf the layer opens. Proved at the 32 × 32 leaf with one chunk a lane from the "
+          "circuits' lowerings; at another shape no Lean states the shape's Definitions yet, and circuit-check and "
+          "h1zy's tests back it", "TS group realizes", "conjectured"),
     Entry("accounting-ts-ok-realizes", "assumption",
           "The checked unit's Flock circuit is its declared unit's: on any wire assignment the key program's "
           "evaluation agrees with at a unit, whose ok wires carry the ok row (the word 1), every check the declared "
@@ -495,8 +529,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
           "for each table's level 0, the witness's packed table at the tape's mask words and the tape's extra lanes, lane "
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
-          "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
-          "uniform draws the tape models", "Firewall OS source", "standard"),
+          "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
+          "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
+          "since zero knowledge protects the developer", "Firewall OS source", "standard"),
 )}
 
 

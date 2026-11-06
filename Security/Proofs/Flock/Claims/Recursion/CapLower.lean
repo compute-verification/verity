@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.Claims.Recursion.CapOpens
-import Proofs.Flock.Claims.Recursion.SlotsCommit
-import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Soundness.Binding.Leaf
+module
+
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.Claims.Recursion.CapOpens
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Soundness.Binding.Leaf
 
 /-!
 # The cap's lowering at the deployed layout (U14b)
@@ -24,6 +26,8 @@ opened position (`CopyTopR`). This file reduces the second half to two facts.
 
 `capTop_of` gives `CopyTopR` at `sideAtR rd` from the two, and `openTieR_deployed` its `OpenTieR`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.CapLower
 

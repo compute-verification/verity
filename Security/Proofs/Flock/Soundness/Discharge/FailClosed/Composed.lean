@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Headline
-import Proofs.Flock.Soundness.Discharge.Composed.Custody
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Headline
+public import Proofs.Flock.Soundness.Discharge.Composed.Custody
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 
 /-!
 # The public-output `--zk` headlines, over what flock-verify accepts
@@ -20,6 +22,8 @@ one table (`hn`); `zk_session_soundJ` covers every number of tables. Zero knowle
 (`DrawSetupZK.avoidsMask`): `verify --zk` refuses a statement whose Δ or regions meet the mask slot (`Zk.maskFree`, D12).
 The `Composed` headlines remain, as lemmas.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 
@@ -88,7 +92,7 @@ theorem zk_session_composed
       ZkViewAt (coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st) ((2 : ℝ≥0∞) ^ (-193 : ℤ))) :=
   ⟨prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs =>
       (FlockSoundness.Discharge.Composed.zk_session_composed P I hs.typed dj y₀ wr dg N (hs.parse hh) hs.built (hs.load hh) hs.tables (hs.scope hh) σs ks hks St hS Kd pop Lb src hA3 hDraw (hs.tagsOk hh hn) hRec hk hRw hM hρ hr ht' K₀ τ (hCR hs) (fun _ y => DrawSetupZK.avoidsMask y) hKey).1,
-    fun hs => Composed.zk_session_view P I dj y₀ hs.typed hs.parseRow (hs.outNet hh) (fun _ y => DrawSetupZK.avoidsMask y)
+    fun hs => Composed.zk_session_view P I dj y₀ hs.typed (hs.parseRow hh) (hs.outNet hh) (fun _ y => DrawSetupZK.avoidsMask y)
       hKey⟩
 
 end

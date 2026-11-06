@@ -1,34 +1,41 @@
-import SampledProofs.Json
-import SampledProofs.Program
-import SampledProofs.Partition
-import SampledProofs.PartitionRef
-import SampledProofs.Draw
-import SampledProofs.Supplied
-import SampledProofs.Registration
-import SampledProofs.Produced
-import SampledProofs.Bound
-import SampledProofs.PyJson
-import SampledProofs.Record
-import SampledProofs.OneStage
-import SampledProofs.OneStageZk
-import SampledProofs.Rate
-import SampledProofs.HiddenDraw
-import SampledProofs.Select
-import SampledProofs.Slots
-import SampledProofs.Service
-import SampledProofs.Run
-import SampledProofs.Stream
-import SampledProofs.Fleet
-import SampledProofs.Pieces
-import SampledProofs.Hello
-import SampledProofs.DomainAgrees
-import SampledProofs.Challenger
-import SampledProofs.ChallengerRecord
-import SampledProofs.ChallengerSession
-import SampledProofs.ChallengerCoins
-import SampledProofs.ChallengerDraw
-import SampledProofs.Wires
-import SampledProofs.WiresSpan
-import SampledProofs.WiresSound
-import SampledProofs.WiresComplete
-import SampledProofs.WiresDrawn
+module
+
+public import SampledProofs.Json
+public import SampledProofs.Program
+public import SampledProofs.Partition
+public import SampledProofs.PartitionRef
+public import SampledProofs.Draw
+public import SampledProofs.Supplied
+public import SampledProofs.Registration
+public import SampledProofs.Produced
+public import SampledProofs.Bound
+public import SampledProofs.PyJson
+public import SampledProofs.Record
+public import SampledProofs.OneStage
+public import SampledProofs.OneStageZk
+public import SampledProofs.Rate
+public import SampledProofs.HiddenDraw
+public import SampledProofs.Select
+public import SampledProofs.Slots
+public import SampledProofs.FilePart
+public import SampledProofs.Service
+public import SampledProofs.Run
+public import SampledProofs.Stream
+public import SampledProofs.Fleet
+public import SampledProofs.Pieces
+public import SampledProofs.Hello
+public import SampledProofs.Challenger
+public import SampledProofs.ChallengerRecord
+public import SampledProofs.ChallengerSession
+public import SampledProofs.ChallengerCoins
+public import SampledProofs.ChallengerDraw
+public import SampledProofs.ChallengerTrees
+public import SampledProofs.ChallengerInnerTrees
+public import SampledProofs.Wires
+public import SampledProofs.WiresSpan
+public import SampledProofs.WiresSound
+public import SampledProofs.WiresComplete
+public import SampledProofs.WiresDrawn
+public import SampledProofs.SiteDifftest
+
+@[expose] public section

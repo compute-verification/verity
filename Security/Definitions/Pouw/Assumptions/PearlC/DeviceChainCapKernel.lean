@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
-import Definitions.Pouw.PearlC.DeviceKernelWref
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+public import Definitions.Pouw.PearlC.DeviceKernelWref
 
 /-!
 # The chain cap at a device record with the honest kernel's `W_ref` (definitions only,
@@ -10,6 +12,8 @@ staged)
 are the record's, so TT_OUT reads the same game (`ttOut_wref`). At `c = 8 − 8953/1000` and `Prices.sm120Loop`,
 `W_ref` is the exact in-loop one: the statement's cast at the credited 8.0 and the A-only forming at its measured 1.047.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

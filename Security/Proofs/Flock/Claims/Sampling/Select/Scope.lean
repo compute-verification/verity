@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Select.Design
-import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Design
+public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
 
 /-!
 # The sampling scope check from the deployed design (`Claims.Sampling.ScopeMatches`, `Refuses`)
@@ -15,6 +17,8 @@ and draws on (`designWellFormed`), so the scope check need check only the progra
   program part.
 * `refuses_of`: `Refuses` from `ScopeMatches` where the verifier runs its scope check.
 -/
+
+@[expose] public section
 
 open SampledProofs
 

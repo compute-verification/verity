@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.H100W
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100W
 
 /-!
 # Dense words and the legacy k8 class in `MH100w` (trusted statements; draft semantics)
@@ -39,6 +41,8 @@ Round 8's loop-free prices, where the H100 SXM's legacy k8 costs 32.00 and `H32`
 satisfiable, not that a real atom word is dense once `β` carries the atom's truncation. A witness on the pinned atom
 `HOPPER_E4M3_K32` is open, since the package does not model the atom's semantics.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

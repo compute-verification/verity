@@ -1,11 +1,15 @@
-import Proofs.Flock.Claims.KS.PlainSim
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainSim
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain simulator's lockstep
 
 `plainSim P x spec st` runs in lockstep with `P`'s deployed run at `plainΦ`'s coins.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
