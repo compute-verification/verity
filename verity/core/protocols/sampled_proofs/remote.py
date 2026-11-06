@@ -47,6 +47,22 @@ is written.  A session served with a `secret` (the auditor host's gate gives one
 that doesn't carry it, so no other process that reaches the port takes the session's coins first.  `greet` reads the
 hello alone, so a server can refuse a bad one and take the next connection: a refused hello releases nothing.
 
+**The device's caps.**  The challenger's host never writes evidence v2 refuses (`coins.coins_within` at `coins.LIMITS`,
+Lean `Challenger.LIMITS`, and each line's length): past each bound, each defined once in `challenger`, it refuses and
+writes nothing, or ends the session with a named reason.  Each lives in one function:
+
+- the release log's lines, `MAX_LOG_LINES`, and each line's characters, `MAX_LOG_LINE`: `_append`, the one place the
+  log grows after its head (`open_session`).  Inside that, the log is its head, a root and a release a coin, each coin
+  once (`LiveChallenger.open`), and at most `MAX_TREE_LINES` coin-tree lines (`LiveChallenger._tree_line`);
+- the openings, `MAX_COINS`: `layout_problem`, in `LiveChallenger`'s constructor, each coin opened once; an opening's
+  path, `MAX_PATH`, is its layout's depth (`merkle.merkle_depth`), at most that of `MAX_COINS` coins;
+- a coin tree's coins, `MAX_TREE_COINS`: `LiveChallenger.sample_tree`, before it samples;
+- the refused hellos, `MAX_HELLOS`: `log_hello`, which `benchmarks/live_challenger/serve.py` calls for each, the
+  session ending at the first past them;
+- the auditor's ledger lines, `MAX_LEDGER_LINES`, and each line's characters, `MAX_LEDGER_LINE`:
+  `benchmarks/live_challenger/auditor.py`'s `append`, the one place the ledger grows, the count before it signs;
+- the host's pins log lines, `MAX_PINS`: that file's `record_pin`, before it writes.
+
 `RemoteChallenger` is the client's `LiveChallenger`, its `commitment`, `open(label, index, after)` and `open_many`, so
 `LiveRecord` (and a client's seam over it) runs on it unchanged.  `open_many` asks for several coins in one round trip:
 their frames back to back, then the replies in order, the wire and the release log as the same opens one at a time.  It
@@ -240,7 +256,12 @@ def _release(head: dict, records: dict[str, LiveRecord], log: Any, lines: list[s
 
 
 def _append(log: Any, lines: list[str], new: list[str], what: str) -> None:
-    """Write `new` to the release log, fsynced, before `what` leaves the host."""
+    """Write `new` to the release log, fsynced, before `what` leaves the host; refused, unwritten, past the log's
+    `challenger.MAX_LOG_LINES` lines or a line's `challenger.MAX_LOG_LINE` characters."""
+    if len(lines) + len(new) > Ch.MAX_LOG_LINES:
+        raise CoinError(f"a release log holds at most {Ch.MAX_LOG_LINES} lines, so {what} stays on the host")
+    if any(len(line) > Ch.MAX_LOG_LINE for line in new):
+        raise CoinError(f"a release log line is at most {Ch.MAX_LOG_LINE} characters, so {what} stays on the host")
     try:
         log.write("".join(line + "\n" for line in new))
         log.flush()
@@ -643,6 +664,18 @@ def released_roots(path: str | os.PathLike, commitment: LiveCommitment) -> dict[
     return Ch.released_roots_of(commitment, log_lines(path))
 
 
+def log_hello(directory: str | os.PathLike, n: int, why: str) -> None:
+    """Log the session's refused hello `n` (from 0), refused for `why`, to its refused hellos (`HELLOS`) in `directory`,
+    fsynced; past `challenger.MAX_HELLOS` of them, write nothing and raise `CoinError`, which ends the session."""
+    if n >= Ch.MAX_HELLOS:
+        raise CoinError(f"the challenger refused {Ch.MAX_HELLOS} hellos, the most a session's evidence holds, and "
+                        f"refuses the session at the next ({why})")
+    with open(Path(directory) / HELLOS, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"n": n, "reason": why}, sort_keys=True) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+
+
 def hello_lines(path: str | os.PathLike) -> list[str] | None:
     """The refused hellos' lines at `path`, each without its newline (None when there is no such file)."""
     text = _read(Path(path), "challenger's refused hellos")
@@ -703,5 +736,5 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
 
 
 __all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
-           "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
-           "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]
+           "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_hello",
+           "log_lines", "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]

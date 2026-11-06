@@ -276,6 +276,15 @@ RECORD_FILE, CLOSE_FILE, HELLOS_FILE = "record.json", "challenger.json", "hellos
 SEALED_FILES = (RECORD_FILE, CLOSE_FILE, LOG_FILE, HELLOS_FILE)
 #: an auditor's ledger line's most characters: its signature at W = 1, H = 30 is 70928 hex digits
 MAX_LEDGER_LINE = 1 << 18
+#: the most refused hellos a session's evidence holds
+MAX_HELLOS = 1 << 20
+#: the most lines an auditor's ledger holds: each is signed at its own leaf of the challenger's key, of which a key at the
+#: deployed parameters (`lms.DEPLOYED`) has 2^20
+MAX_LEDGER_LINES = 1 << 20
+#: the most lines a host's pins log holds
+MAX_PINS = 1 << 20
+#: the longest path a coin opening holds: the depth of a layout of `MAX_COINS` coins
+MAX_PATH = (MAX_COINS - 1).bit_length()
 _ZERO = core_record.ZERO
 _LEDGER_ROOT = re.compile(r"[0-9a-f]{128}")
 _LEDGER_HEX = re.compile(r"(?:[0-9a-f]{2})+")
@@ -1871,7 +1880,8 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "DESCRIPTOR_FORM", "END_FORM", "HEADS_FORM", "HELLOS_FILE", "HELLOS_FORM", "KEY_FORM", "KEY_RECORD_FORM", "KEY_RECORD_SCHEMA",
            "LEDGER_FORM", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_SCHEMA_V1", "LEDGER_TAGS", "LOG_FILE", "LOG_FORM",
            "LOG_MALFORMED", "LOG_TAG", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
-           "MAIN_FORM", "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
+           "MAIN_FORM", "MAX_HELLOS", "MAX_LEDGER_LINE", "MAX_LEDGER_LINES", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_PATH",
+           "MAX_PINS", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
            "NO_MAIN", "NO_PINS", "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE",
            "RUN_KIND", "RunRecord",
            "RECORD_FORM", "RECORD_ROLE",
