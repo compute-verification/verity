@@ -1013,14 +1013,16 @@ def _jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in lines[:-1] if line.strip()]
 
 
-def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block_size: int = 16,
+def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block_size: int | None = None,
                       egress: str = "engine", ingress: str = "client") -> Trace:
     """One trace of the trace corpus (`benchmarks/network_e2e/traces`, store kind `vllm-trace-corpus/v1`): its
-    directory's `steps.jsonl`, `requests.jsonl` and `meta.json` (the server's argv), and `server.log` for the KV pool's
-    size unless `num_gpu_blocks` is given. The hook records no arrivals, so a request's engine order and admission step
-    are its first scheduling (FCFS schedules new requests in arrival order), and a step's release is the time its output
-    was back. With `egress="client"` each kept output left when the client got the streamed chunk that carried it (its
-    `chunks`), which is what an egress certifier on the link sees.
+    directory's `steps.jsonl`, `requests.jsonl` and `meta.json` (the server's argv), and the KV pool where not given: its
+    block size and block count from `engine.json` (the hook's record of the scheduler's), else 16-token blocks and the
+    count `server.log`'s KV cache size gives. A pool of more than one KV cache group is refused: the replay models one.
+    The hook records no arrivals, so a request's engine order and admission step are its first scheduling (FCFS schedules
+    new requests in arrival order), and a step's release is the time its output was back. With `egress="client"` each
+    kept output left when the client got the streamed chunk that carried it (its `chunks`), which is what an egress
+    certifier on the link sees.
 
     A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on the link),
     or with `ingress="warden"` the server's own arrival stamp (`arrival`, its body read), the order vLLM schedules in.
@@ -1038,6 +1040,13 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
     def opt(name: str) -> str | None:
         return argv[argv.index(name) + 1] if name in argv else None
 
+    pool = json.loads((d / "engine.json").read_text()) if (d / "engine.json").exists() else {}
+    if (pool.get("kv_cache_groups") or 1) != 1:
+        raise ValueError(f"{d / 'engine.json'}: {pool['kv_cache_groups']} KV cache groups; the replay models one pool")
+    if block_size is None:
+        block_size = int(pool.get("block_size") or 16)
+    if num_gpu_blocks is None and pool.get("num_gpu_blocks"):
+        num_gpu_blocks = int(pool["num_gpu_blocks"])
     if num_gpu_blocks is None:
         m = re.search(r"GPU KV cache size: ([\d,]+) tokens", (d / "server.log").read_text(errors="replace"))
         if m is None:
