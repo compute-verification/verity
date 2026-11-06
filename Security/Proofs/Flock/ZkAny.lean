@@ -72,6 +72,8 @@ public import Proofs.Flock.ZkAny.RelayRankStop
 public import Proofs.Flock.ZkAny.RelayOpenFirst
 public import Proofs.Flock.ZkAny.RelayRankSched
 public import Proofs.Flock.ZkAny.RelayFreshStart
+public import Proofs.Flock.ZkAny.RelayWorker
+public import Proofs.Flock.ZkAny.RelayDeployed
 public import Proofs.Flock.ZkAny.RelayAuditor
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
@@ -143,6 +145,9 @@ frame releases; and that first-round state a masking state at the deployed loop 
 frame starts at its table's statement, the placeholder's table of the shape of the loop's and its algebraic phase one
 as the loop's; and so, from the session's first request, at the model's run of the deferred server against `V*`
 whose worker answers the link with the firewall's own message, `EnvPre` at the relay's requests, and the relay's model
-frames the model's messages, encoded. -/
+frames the model's messages, encoded; and the deployed worker, a device's rounds at the frame rounds and the
+firewall's own message at every other round, the honest workers among them, answering the link and the `Finish` with
+the firewall's own message; and Rust's checks the worker's, so `CrossPasses` by definition at the release without them
+beside the frame, and there the relay's model frames the model's messages at the deployed worker. -/
 
 @[expose] public section
