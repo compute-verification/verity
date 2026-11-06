@@ -158,7 +158,7 @@ def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
 
 def test_every_subcircuit_is_bound_to_a_registry_instruction() -> None:
     """Every subcircuit's semantics is an exact instruction of the registry, with its operand datatype and a stable id; a
-    subcircuit need not have a (legacy) target: the H100 BF16 wgmma one (lane wgmma-bf16) came after the targets froze."""
+    subcircuit need not have a (legacy) target: the H100 BF16 wgmma one came after the targets froze."""
     gemm = [s for s in census.SUBCIRCUITS.values() if s.template == "gemm-coordinate"]
     for s in gemm:
         ins = INSTRUCTIONS[s.parameters.semantics]
@@ -318,7 +318,7 @@ def test_every_template_carries_a_work_model() -> None:
 
 def test_memory_bound_templates_carry_a_bandwidth_work_model_and_the_h100_its_bandwidth() -> None:
     """The four non-GEMM templates Flock has cells on: bytes per input over their ports (bench-spine's templates), evaluated at
-    their #101 bindings; the H100's HBM3 bandwidth is the denominator."""
+    their row 101 bindings; the H100's HBM3 bandwidth is the denominator."""
     want = {"rope-head/d64/neox-bf16": 6 * 64, "silu-mul/i8192/bf16": 6 * 8192, "rmsnorm-fused-cuda/n2048-eps1e-05/bf16": 10 * 2048,
             "rmsnorm-triton/n2048-eps1e-05/bf16": 6 * 2048}
     for sid, nbytes in want.items():

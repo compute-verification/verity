@@ -3,7 +3,7 @@ module
 public import Definitions.Pouw.Barrier.Pinned
 public import Proofs.Pouw.NCP.Proofs
 public import Proofs.Pouw.Prob
-public import Definitions.Pouw.Guarantees.Barrier
+public import Proofs.Pouw.Lemmas.Barrier
 
 /-!
 # The degenerate-input barrier: proofs

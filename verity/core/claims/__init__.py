@@ -219,7 +219,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
           "standard"),
     # `Verity.Assumptions.ZkServerOwnUser` (Security/Definitions/Core/Assumptions/ZkServer.lean), the premise of
-    # `Verity.Guarantees.RegisteredLeakage`: a stack is the same function under every key of the ZK server's
+    # `Verity.Guarantees.RegisteredLeakage` and `Verity.Guarantees.RegisteredStreamLeakage`: a stack is the same function
+    # under every salt key of the ZK server's
     Entry("zk-server-own-user", "assumption",
           "The ZK server's value service and its session loop run under the ZK server's own OS user, which no worker and no "
           "serving stack shares, and the salt key's file is that user's alone, so nothing the serving stack runs reads the "
@@ -302,6 +303,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
+    # the min-cut bound's cut conjectures (Security/Definitions/Nci/Assumptions/Cut.lean): (H) is
+    # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
+    Entry("training-cut-hardness", "assumption",
+          "(H), cut hardness: every set S of words of the registered circuit with κ(S) ≤ k has "
+          "Σ_r β_r |val(S ∩ A_r)| ≤ κ(S), κ(S) the least number of gates meeting every path from the unregistered "
+          "inputs to the gates of S's words: each value of array A_r that S's words carry costs β_r of those gates; "
+          "refuted by exhibiting a set of words whose values cost more than κ(S)", "(H) cut hardness", "conjectured"),
+    Entry("training-cut-exports", "assumption",
+          "(E), cut exports: every set B of computed gates has κ(B → E(B)) ≥ b |E(B)|, E(B) the outputs fed by a MAC "
+          "inside B with no wire in B: each output B finishes costs b of the gates separating B from it; refuted by "
+          "exhibiting a set of computed gates with κ(B → E(B)) < b |E(B)|", "(E) cut exports", "conjectured"),
     # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
     # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
     # (Security/Definitions/Accounting/Assumptions/Stages.lean)
@@ -527,10 +539,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
     Entry("flock-firewall-os-src", "assumption",
           "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
-          "for each table's level 0, the witness's packed table at the tape's mask words and the tape's extra lanes, lane "
+          "for each table's level 0, at the sizes it draws: the witness's packed table at the tape's mask words and the "
+          "tape's extra lanes, lane "
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
-          "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
-          "uniform draws the tape models", "Firewall OS source", "standard"),
+          "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
+          "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
+          "since zero knowledge protects the developer", "Firewall OS source", "standard"),
 )}
 
 

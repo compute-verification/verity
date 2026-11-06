@@ -32,7 +32,7 @@ BOT = "B0VERITY"
 BOT_USER = "U0VERITYBOT"                                 # the bot's user, as auth.test names it
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "compute-research", "memory-accounting", "network-accounting",
-           "console", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "soundness"]
+           "console", "dashboard", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "soundness"]
 
 
 class FakeSlack:
@@ -897,6 +897,12 @@ def test_oidc_token_asks_the_cursor_socket_for_the_brokers_audience(identity_soc
         identity_socket["answer"] = answer
         with pytest.raises(slack.SlackError, match=re.escape(says)):
             slack.oidc_token(slack.BROKER)
+
+
+def test_oidc_token_asks_for_the_nonce_it_is_given(identity_socket):
+    """A label's authentication binds the token to the label through its `nonce` claim (`research.labelauth`)."""
+    assert slack.oidc_token("urn:verity:label-auth", nonce="ab" * 64) == OIDC
+    assert identity_socket["seen"] == [("/v1/tokens/oidc", {"aud": "urn:verity:label-auth", "nonce": "ab" * 64})]
 
 
 def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_socket, monkeypatch, tmp_path):

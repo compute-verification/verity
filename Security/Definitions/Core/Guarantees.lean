@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Guarantees.Circuit
+public import Definitions.Core.Guarantees.DeviceFigures
 public import Definitions.Core.Guarantees.Game
 public import Definitions.Core.Guarantees.Challenger
 public import Definitions.Core.Guarantees.NaiveStrassen
@@ -8,6 +9,7 @@ public import Definitions.Core.Guarantees.PrivatePartition
 public import Definitions.Core.Guarantees.TC
 public import Definitions.Core.Guarantees.Formalism
 public import Definitions.Core.Guarantees.Expand
+public import Definitions.Core.Guarantees.Rec
 public import Definitions.Core.Guarantees.ValueSalts
 
 /-!

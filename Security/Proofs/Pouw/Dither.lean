@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.Dither
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Pouw.ShaRealize
+public import Proofs.Pouw.Lemmas.Dither
 
 /-!
 # The no-fold Dither protocol's work-soundness: the headline's proof
