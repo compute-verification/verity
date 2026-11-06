@@ -58,7 +58,7 @@ mutations both sides refuse; each scalar primitive on the whole grid of its oper
 words out of range; each FP32 and BF16 primitive the same way, its grid of FP edge words (signed zeros, subnormals, the
 extreme normals, ties and overflows on rounding, the infinities and every NaN class) batched in one Program per row,
 `Bf16ToF32` and `E4m3ToF32` on every word, and the GPU captures in `verity/ml/circuits/ops/tests/fixtures` (the FP32
-probe of `gpu-nan-2026-09-28`, and the fetched `cvt.rn.bf16.f32` campaign of `tc-total-2026-09-07`); each tensor-core dot
+NaN probe, and the fetched `cvt.rn.bf16.f32` campaign of the A100 and RTX 4090 special values); each tensor-core dot
 step batched on every pair of its format's edge codes under every FP32 edge accumulator, on pairs of specials across its
 groups, on every pair of edge scale bytes, on 3118 accumulators over structured operands, on sampled words and on words out of
 range, its traced Boolean Definition evaluated gate by gate against it, and the captures: the RTX 4090 golden records, the

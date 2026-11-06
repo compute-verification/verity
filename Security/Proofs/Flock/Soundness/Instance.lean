@@ -6,8 +6,8 @@ public import Proofs.Flock.Level3
 /-!
 # The executable's arithmetic satisfies `Arith.Correct`
 
-`execArith` is the arithmetic the executable verifier computes with (lane `flock-verifier`,
-package `level3`): `F = GF(2^128)` in GHASH form, `K = GF(2^256)`, the Lagrange weights of the
+`execArith` is the arithmetic the executable verifier computes with (package
+`level3`): `F = GF(2^128)` in GHASH form, `K = GF(2^256)`, the Lagrange weights of the
 univariate-skip nodes, the pinned zerocheck coordinates, the packing basis `x^v`, the embedding
 `F ⊂ K` and `u`, the Reed–Solomon domain `ω_q` and novel basis `Ŵ_i`, and `lo`. Every field of
 `Arith.Correct` is a theorem of `FlockLevel3` about those functions (`execArith_correct`), so
