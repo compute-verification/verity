@@ -5,6 +5,7 @@
   "Proofs.Nci",
   "Proofs.Pous",
   "Proofs.Pouw",
+  "Proofs.Pouw.PeriodJ10R.Binding",
   "Proofs.NetworkCertifier",
   "Proofs.Flock",
   "Proofs.Hash",
