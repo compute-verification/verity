@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Flock.Bridge.LeafMap
+public import Proofs.Flock.Claims.Sampling.Cost
+public import Mathlib.Tactic.Tauto
 
 /-!
 # The row-seg leaf binds (hm96-sha512/row-seg/v1), and the deployed commitment with it
