@@ -1,5 +1,8 @@
-import Flock.Draw
-import Flock.Norm
+module
+
+public import Flock.Draw
+public import Flock.Norm
+public import Flock.JsonParse
 
 /-!
 # A drawn H1 leaf's sessions draw every unit
@@ -9,10 +12,13 @@ session is `subset` of every unit of its partition, a non-empty population. floc
 it is (any law it decodes, `Flock.Draw.UnitDraw.ofJson`), so the leaf verifier holds each session record to the
 policy itself (`checkFull`, which `pouw-leaf-own` runs on every session of a statement):
 
-* `recordDraw`: the record's `unit_draw`, rebuilt (`Flock.norm`), as flock-verify reads it (`Main.recordDraw`);
+* `recordDraw`: the record's `unit_draw`, rebuilt (`Flock.norm`), as flock-verify reads it (`Main.recordDraw`, through
+  C-Flock's total parser `Flock.JsonParse.parse`);
 * `checkFull`: that draw decodes, its law is `subset k` with `k` its population, `0 < k`, and its units are every unit
   `[0, k)`; `checkFull_ok` states what its `.ok` gives.
 -/
+
+@[expose] public section
 
 namespace PouwWindow.Lanes
 
@@ -20,7 +26,7 @@ open Lean (Json)
 
 /-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`Flock.norm`): `Main.recordDraw`. -/
 def recordDraw (record : String) : Option Json :=
-  match Json.parse record with
+  match Flock.JsonParse.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some (Flock.norm d)

@@ -1,5 +1,7 @@
-import Definitions.Pouw.H1Zy.Tile
-import Proofs.Pouw.H1Zy.Lane
+module
+
+public import Definitions.Pouw.H1Zy.Tile
+public import Proofs.Pouw.H1Zy.Lane
 
 /-!
 # What the tile's `ok = 1` gives, on words
@@ -14,6 +16,8 @@ its A row's and B row's codes as an s32 word and its y the dequant of that z at 
   (`X = A + b - 256 xa`, `W′ = B + c + U - 256 wb⁺ + 256 wb⁻`), once the digits recombine to each residue sum exactly:
   at `K / 32 ≤ 4095` segments every rest is within s32 and the top digit within int8 (`digits_val`).
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

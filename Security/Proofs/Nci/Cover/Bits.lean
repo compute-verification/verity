@@ -1,8 +1,10 @@
-import Definitions.Nci
-import Definitions.Nci.BitView
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Fin
-import Proofs.Nci.Cover.Paths
+module
+
+public import Definitions.Nci
+public import Definitions.Nci.BitView
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.Fin
+public import Proofs.Nci.Cover.Paths
 
 /-!
 # A declaration's circuit, bit by bit: blocks of word gates
@@ -24,6 +26,8 @@ computed gates cover the bit view (`mem_computed_block_of_pred`).
 `width_aligned`: a block of whole words that is handed a bit of a region of whole words, each at least `f` bits wide,
 is handed at least `f` of the region's bits, since all bits of one gate read the same bits.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 
@@ -73,7 +77,7 @@ end Words
 
 section Blocks
 
-variable (d : Verity.Declaration)
+variable (d : Verity.RegisteredCircuit)
 
 /-- The numbering of `d`'s bits (`enc`), as the bit view's gates. -/
 def benc : Bit d.D ≃ Fin (Circuit.ofDecl d).N := enc d.D

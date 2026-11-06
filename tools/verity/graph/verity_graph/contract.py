@@ -61,6 +61,26 @@ def key(task: dict, file_digests: dict[str, str], read_digests: dict[str, dict[s
     return digest(KEY_TAG + canonical(key_doc(task, file_digests, read_digests, env_digest)))
 
 
+def keyer(file_digests: dict[str, str]):
+    """`key` over ``file_digests``, the same digest, with each input's `[path, file digest]` encoded once for every task that
+    reads it: the listing keys thousands of tasks that share most of their thousands of inputs."""
+    pairs: dict[str, bytes] = {}
+
+    def pair(p: str) -> bytes:
+        if (b := pairs.get(p)) is None:
+            b = pairs[p] = canonical([p, file_digests[p]])
+        return b
+
+    def of(task: dict, read_digests: dict[str, dict[str, str]] | None, env_digest: str) -> str:
+        doc = key_doc({**task, "inputs": []}, file_digests, read_digests, env_digest)
+        head, mark, tail = canonical(doc).partition(b'"inputs":[')
+        h = hashlib.sha512(KEY_TAG + head + mark)
+        h.update(b",".join([pair(p) for p in sorted(task["inputs"])]))
+        h.update(tail)
+        return "sha512:" + h.hexdigest()
+    return of
+
+
 def result_errors(res: object, task: dict | None = None) -> list[str]:
     """What makes ``res`` no result/v1 (of ``task``, when given): an empty list when it is one."""
     if not isinstance(res, dict):

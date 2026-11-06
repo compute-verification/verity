@@ -1,4 +1,6 @@
-import Definitions.Pouw.Window
+module
+
+public import Definitions.Pouw.Window
 
 /-!
 # PoUW's reading of the window: its bound plus the tie to what's served, and its collision term at counted queries
@@ -13,6 +15,8 @@ plus `δ_in`.
 on average over the oracle: at plays whose sessions make at most `q` counted queries, the collision term becomes the
 counted bound `f q` (`CollCounted`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Window
 

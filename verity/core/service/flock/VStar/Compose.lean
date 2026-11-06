@@ -1,6 +1,8 @@
-import Flock.HmRow
-import VStar.Stream
-import VStar.Unit
+module
+
+public import Flock.HmRow
+public import VStar.Stream
+public import VStar.Unit
 
 /-!
 # The `flock-circuit` file of a unit (`verity_flock.circuit.compose`)
@@ -13,10 +15,13 @@ the all-zero instance's outputs and each row's `b ‖ c` under a zero salt (`dum
 bindings (`Bindings`), which come from core's descriptor codec and are taken as given here.
 -/
 
+@[expose] public section
+
 namespace VStar
 
 open Lean (Json)
 open Flock.HmNets
+open Flock.HmRow (MAX_K_LOG)
 
 def FORMAT_CIRCUIT : String := "flock-circuit"
 def STATEMENT : String := "verity/flock-circuit"
@@ -28,7 +33,6 @@ def PER_SLOT : Nat := 3
 def SHA_LOG : Nat := 18
 def HM_LOG : Nat := 18
 def MASK_LOG : Nat := 14
-def K_MAX : Nat := 27
 def PARTITION_V1 : String := "verity/partition/v1"
 def SALT_BYTES : Nat := 192
 def KEY_SHA512 : String :=
@@ -202,7 +206,7 @@ def metaHead (u : UnitC) (l : Laid) (sub : Sub) (b : Bindings) (unitSha256 : Str
   let G := vusPerBlock nSha nHm ul
   let its := items G nSha nHm ul
   let (pos, kLog) := placeRanges its
-  if kLog > K_MAX then throw s!"{u.name}: an instance needs a block of 2^{kLog} bits (at most 2^{K_MAX})"
+  if kLog > MAX_K_LOG then throw s!"{u.name}: an instance needs a block of 2^{kLog} bits (at most 2^{MAX_K_LOG})"
   let words := zeroOutputs u
   let outRow := fun (j : Nat) =>
     let at_ := (u.outPorts.take j).foldl (· + ·) 0

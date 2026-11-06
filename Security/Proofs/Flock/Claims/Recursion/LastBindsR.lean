@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.PlainDrawRColsE
-import Proofs.Flock.Claims.KS.PlainLock
-import Proofs.Flock.Claims.Complete.Zk.Run
-import Proofs.Flock.Claims.Recursion.VStarCross
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawRColsE
+public import Proofs.Flock.Claims.KS.PlainLock
+public import Proofs.Flock.Claims.Complete.Zk.Run
+public import Proofs.Flock.Claims.Recursion.VStarCross
 
 /-!
 # (P4) modulo what `E*` reads, and `LastCoinFree`, at the deployed reader (`nextR`)
@@ -23,6 +25,8 @@ they are at `bdDeployed` with the deployed reader's steps `nextR rd`, its column
   (`RecDeploy.RCallsBind`) (`RecDeploy.rLastBinds_of`), as `PlainLastBindsOrSlack` does at the plain verifier, with no
   decoder slack: `nextR` decides on proofs, not proof files.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

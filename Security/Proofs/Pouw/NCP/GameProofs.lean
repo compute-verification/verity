@@ -1,9 +1,11 @@
-import Definitions.Pouw.Assumptions.NCP.GamePinned
-import Proofs.Pouw.NCP.Proofs
-import Proofs.Pouw.Barrier.Proofs
-import Proofs.Pouw.Reduction
-import Proofs.Pouw.Witness
-import Proofs.Pouw.Sanity
+module
+
+public import Definitions.Pouw.Assumptions.NCP.GamePinned
+public import Proofs.Pouw.NCP.Proofs
+public import Proofs.Pouw.Barrier.Proofs
+public import Proofs.Pouw.Reduction
+public import Proofs.Pouw.Witness
+public import Proofs.Pouw.Sanity
 
 /-!
 # NCP's game instance: proofs
@@ -13,6 +15,8 @@ import Proofs.Pouw.Sanity
 * `gammaFromTTNCP`: the reduction with credited work `3·m·k·n`; `ttncpWitness`, in `outputPriced3`.
 * `oneSegment`: the zero-input adversary of class (c), in `Pouw.Barrier.gemmModel`.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.GameProofs
 

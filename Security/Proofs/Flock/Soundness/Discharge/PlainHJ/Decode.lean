@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.PlainHJ.Defs
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Defs
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 
 /-!
 # The decoder is right at a plain session of `J` hidden-output tables
@@ -16,6 +18,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
   each rep's run and rounds and the salted verdict; `repRun_at` makes each run a `RepRun` for `decJ`, and
   `playsT_of_repRun` a run on its tape.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainHJ
 

@@ -1,4 +1,6 @@
-import Proofs.Population.Determinacy
+module
+
+public import Proofs.Population.Determinacy
 
 /-!
 # Integrity: what the checker confirms is exactly determinacy for every choice of unit functions
@@ -15,6 +17,8 @@ The counterexamples, each a choice of Boolean unit functions:
   unit `false`; then "all `false`" and "`true` on the component's writes" are both correct (`cycle_two_fixed_points`):
   a self-consistent wrong fixed point, with no faulty proof block.
 -/
+
+@[expose] public section
 
 namespace Population.Dataflow
 

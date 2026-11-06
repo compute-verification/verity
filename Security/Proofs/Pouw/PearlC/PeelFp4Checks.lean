@@ -1,21 +1,23 @@
-import Proofs.Pouw.PearlC.PeelFp4Checks.P64nChains01
-import Proofs.Pouw.PearlC.PeelFp4Checks.P64nChains23
-import Proofs.Pouw.PearlC.PeelFp4Checks.P64nGuards
-import Proofs.Pouw.PearlC.PeelFp4Checks.P64nWords
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16mChains
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16mFactors
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16mGram0
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16mGram1
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16mGram2
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16mGram3
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16mWords
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16nChains
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16nFactors
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram0
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram1
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram2
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram3
-import Proofs.Pouw.PearlC.PeelFp4Checks.T16nWords
+module
+
+public import Proofs.Pouw.PearlC.PeelFp4Checks.P64nChains01
+public import Proofs.Pouw.PearlC.PeelFp4Checks.P64nChains23
+public import Proofs.Pouw.PearlC.PeelFp4Checks.P64nGuards
+public import Proofs.Pouw.PearlC.PeelFp4Checks.P64nWords
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16mChains
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16mFactors
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16mGram0
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16mGram1
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16mGram2
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16mGram3
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16mWords
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16nChains
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16nFactors
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram0
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram1
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram2
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16nGram3
+public import Proofs.Pouw.PearlC.PeelFp4Checks.T16nWords
 
 /-!
 # Conformance of `Fp4Dev.peelFp4` to `pearl_c4.py` (staging, nothing pinned)
@@ -38,6 +40,8 @@ Each cell's `peelFp4` entry is then assembled from its parts by `PeelFp4Proofs.p
 The checks are in the modules under `PeelFp4Checks/`, one per case and part, so that they build in parallel; this module
 joins them.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelFp4Checks
 

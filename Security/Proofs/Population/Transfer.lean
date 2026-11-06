@@ -1,5 +1,7 @@
-import Proofs.Population.Oblivious
-import Proofs.Population.Leakage
+module
+
+public import Proofs.Population.Oblivious
+public import Proofs.Population.Leakage
 
 /-!
 # The population theorems for a program, with its padding's public cones
@@ -16,6 +18,8 @@ are its own dataflow's (`population_of_addressedBy`).
 * `downAt_sub_padDown`: the padding's cone holds the cone of every honest run in `C`. It can hold more than their
   union, a path joining reads of different runs; `HonestCone` states the damage theorems at the union.
 -/
+
+@[expose] public section
 
 namespace Population.DynPopulation
 

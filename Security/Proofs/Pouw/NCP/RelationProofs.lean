@@ -1,9 +1,13 @@
-import Definitions.Pouw.NCP.Relation
-import Proofs.Pouw.NCP.WordProofs
+module
+
+public import Definitions.Pouw.NCP.Relation
+public import Proofs.Pouw.NCP.WordProofs
 
 /-!
 # The reduction, FinalOnly for NCP, and the floor without FinalOnly
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.RelationProofs
 

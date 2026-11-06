@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Tile.Layer
+module
+
+public import Proofs.Accounting.TS.Session.Tile.Layer
 
 /-!
 # The named premise a tile unit's C-Flock session takes for its Definition's checks
@@ -11,6 +13,8 @@ package, so it sits here beside `Accounting.Assumptions.TS`'s other session prem
 `TileOk`, that the circuit computes its Definition (`Accounting.TS.Tile.TileComputes`, which gives it by
 `tileChecks_of_computes`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 
@@ -27,8 +31,8 @@ each of its cells has `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_b]`.
 
 The decode reads only the registered reads (`rowsReg`), so the premise holds of the circuit only if every input its
 `ok` depends on is registered: its A and B rows with their scales and its z/y record. A port read only from the public
-file is free in `vals`. flock-verify's complete check (`Flock.Registered.checkComplete`, on a `--registered` file that
-sets `complete`) refuses a session one of whose circuit's ports is no port of `own`, and `tileLayer`'s acceptance
+file is free in `vals`. flock-verify's complete check (`Flock.Registered.checkComplete`, on every statement whenever
+`--registered` is given) refuses a session one of whose circuit's ports is no port of `own`, and `tileLayer`'s acceptance
 includes it. `dq` is the Program's dequant on
 words (`PouwZyDequant_v2`'s word view). -/
 def TileChecks {R C K : ℕ} (dq : List ℤ → ℤ) (s : RowsSession) (ok : String)

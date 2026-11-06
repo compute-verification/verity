@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainDraw
-import Proofs.Flock.Claims.Recursion.RepErase
-import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDraw
+public import Proofs.Flock.Claims.Recursion.RepErase
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 
 /-!
 # The plain verdict at the statement's draw, at `VK keep`: the definitions
@@ -14,6 +16,8 @@ round's bytes with its recorded digest. At `keep := id` each is `PlainDraw`'s.
   through `keep`.
 * `plainVerdictAtK`: `plainVerdictAt` at `wrPDK`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 

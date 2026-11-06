@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.CoinCheck
+module
+
+public import Proofs.Flock.Claims.ZK.CoinCheck
 
 /-!
 # The coin-tree check binds the whole opening
@@ -16,6 +18,8 @@ that pass and differ anywhere still collide:
 * `Proto.binding_of_open`: a committed-coin protocol whose check is the walk on an opening read at the round's context,
   and whose coin is a function of the opening's message, meets `Binding`, with no hypothesis on `H`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.GK
 

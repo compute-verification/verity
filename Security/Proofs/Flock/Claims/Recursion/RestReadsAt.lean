@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.RestFinal
-import Proofs.Flock.Claims.Recursion.RestLive
-import Proofs.Flock.Claims.Recursion.DeployChecked
+module
+
+public import Proofs.Flock.Claims.Recursion.RestFinal
+public import Proofs.Flock.Claims.Recursion.RestLive
+public import Proofs.Flock.Claims.Recursion.DeployChecked
 
 /-!
 # `ReadsAt` at the deployed readers `rdR`, `finalR` and `restR elem`
@@ -21,6 +23,8 @@ here:
 rounds after the link fits some proof and `T` (`FitsRep`), at round 0's nodes (`nodesR`), and the proofs `readPs` reads
 there are shaped (`ShapedAt`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestRead
 

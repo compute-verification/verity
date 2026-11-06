@@ -1,5 +1,7 @@
-import Definitions.Pouw.Dither
-import Definitions.Pouw.MerkleExtract
+module
+
+public import Definitions.Pouw.Dither
+public import Definitions.Pouw.MerkleExtract
 
 /-!
 # Commit-and-open from SHA-512 as a random oracle: the extraction premise and its realization (trusted)
@@ -86,6 +88,8 @@ The answers' calls are counted: the cap reads them (`Prover.WithinCap`), an acce
 selected answers run within it (`AnswersFit`, from `Assumptions.AnswerAfterWork` and the deadlines on the card), and
 the budget logs them in the last segment.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 

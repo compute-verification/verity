@@ -1,7 +1,9 @@
-import Proofs.Flock.Recursive.Statements
-import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
-import Proofs.Flock.Recursive.OuterAbort
+module
+
+public import Proofs.Flock.Recursive.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+public import Proofs.Flock.Recursive.OuterAbort
 
 /-!
 # Recursion: V*'s outer sessions as (ii) sees them
@@ -23,6 +25,8 @@ them (`Proofs.Flock.Recursive.Firewall`); their zero knowledge is `Proofs.Flock.
 * `HCtx`, `hctxAt`: what the honest prover holds in (ii), at the firewall's commitments (`firewallCommits`: the inner
   coins live, each message reading the commit strings before it).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.OuterZK
 

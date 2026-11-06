@@ -1,6 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.PlainHJ.Decode
-import Proofs.Flock.Soundness.Discharge.PlainHJ.Bind
-import Proofs.Flock.Soundness.Discharge.Tables.Headline
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Decode
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Bind
+public import Proofs.Flock.Soundness.Discharge.Tables.Headline
+
+@[expose] public section
 
 set_option Elab.async false
 

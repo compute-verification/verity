@@ -1,11 +1,11 @@
 ---
 name: coordinating
 description: >
-  How Verity's lanes plan, track and report work. Linear is the campaign map and the status: Goal labels, projects,
-  milestones, one issue per deliverable, one sub-issue per worker. Slack only rings people and carries one conversation
-  per ask, and Notion holds what Daniel reads. Covers where each thing goes, project and issue structure, states,
-  titles and the issue brief, filing asks (`research msg ask --title --parent`), placing issues (`research msg linear
-  place`), comments and project updates and how long each message is, tying workers to issues, and the lead's routine
+  How Verity's lanes plan, track and report work. The Goals page is the plan and Daniel's interface; Linear holds the
+  work under it: one issue per deliverable, labelled with its goal, one sub-issue per worker. Slack only rings people
+  and carries one conversation per ask, and Notion holds Daniel's decisions. Covers where each thing goes, project and
+  issue structure, states, titles and the issue brief, filing asks (`research msg ask --title --parent`), placing
+  issues (`research msg linear place`), comments and how long each message is, tying workers to issues, and the lead's routine
   with `research msg linear audit`. Use when filing, planning, updating or closing a Linear issue or project, launching
   or briefing a worker, reporting status or a result, answering top's sweep or survey, writing a Slack post, or
   cleaning up a team's board.
@@ -13,16 +13,17 @@ description: >
 
 # Coordinating
 
-Linear holds the work and its status. Anyone who reads Linear should see what each lane is doing, for which goal, by
-when and how it's going, without reading Slack. `research msg` is the tool for both Linear and Slack (the using-slack
-skill).
+The Goals page says what each lane is doing, by when and how it's going; Daniel reads it, and it is kept as current as
+the work (the writing-goals skill, `research goals`). Linear holds the work under each goal, so anyone can follow a goal
+to its issues and their PRs without reading Slack. `research msg` is the tool for both Linear and Slack (the
+using-slack skill).
 
 ## Where each thing goes
 
 | What | Where |
 |---|---|
 | A deliverable or an ask, with its status, results and PRs | one Linear issue in its owner's team (the registry's `linear`) |
-| Goals, projects, milestones and their health | Linear's Projects view, grouped by the Goal label |
+| Goals: what will be true, its owner, date, status, where it stands and its next step | the Goals page (the writing-goals skill) |
 | "Act now", a yes/no question, an alert | a Slack post to one handle |
 | The conversation about one ask | that ask's Slack thread |
 | Daniel's decisions, anything for a person | Notion: the decisions log, the Asks database (the asking-daniel skill), a page |
@@ -31,28 +32,26 @@ skill).
 
 ## The map
 
-- **Goals** are the project label group *Goal*: `A · Verified deployment, end to end`, `B · Accounting bounds on real
-  hardware`, `C · Training` and `D · Research velocity`. Daniel adds a goal.
-- **A project** is one outcome with one lead and a date. It has:
-  - one Goal label;
-  - `Lead: @handle` at the start of its summary, with that handle's team as its lead team;
-  - a target date, and dated milestones named `ID · date · outcome` (`M3 · Mon 4 PM PDT · composed verdict`);
-  - priority Urgent for this week's Goal A work, High for Goal D and Medium for the rest;
-  - project updates from its lead (below).
-- A stream of three or more issues toward one outcome that fits no project gets its own project. Its lead creates it
-  (the Linear connector is fine for projects, milestones and labels), labels it and tells top. top keeps the goals,
-  priorities and leads consistent.
+- **Goals** are the Goals page's: one outcome each, with one owner and a date, tier 1 a project in Daniel's words and
+  tiers 2 and 3 its pieces and steps (the writing-goals skill). Leads write their own; Daniel sets priorities.
+- **An issue carries its goal's label**, from the `goal` label group (one label per goal id, kept in step with the page
+  by top), and is due no later than that goal.
+- **A Linear project** groups a stream of issues under one goal when that helps its lead: `Lead: @handle` at the start
+  of its summary, a target date no later than the goal's, and dated milestones named `ID · date · outcome`. The goal,
+  not the project, carries the status Daniel reads. top keeps goals, labels and leads consistent.
 
 ## Issues
 
-- **One issue per deliverable**, in its owner's team, in a project and the milestone it serves. An issue in no project
-  is in Backlog or Canceled.
+- **One issue per deliverable**, in its owner's team, labelled with the goal it serves. An issue that serves no goal is
+  in Backlog or Canceled. An open issue (not Backlog) is in a project within 48 h of filing, or the audit flags it
+  (`orphan`), and one whose milestone's date has passed is `lapsed`: re-date the milestone and comment what moved it, or
+  move the issue on.
 - **The title is the deliverable**: a noun phrase or an imperative, whole, with no handle, sender or time. "Ring a lead
   only when it must act: run-end and worker-idle rings", not "@infra top 02:40Z, an ask for…".
 - **The description is the brief**, at most 300 words:
 
 ~~~markdown
-**Goal:** one sentence, naming whose ruling it serves.
+**Goal:** the goal it serves (its id on the Goals page), and in one sentence how.
 **Done when:** a checkable list.
 **Due:** a date (also set as the issue's due date).
 **Pointers:** PRs, notes, art: ids, the parent issue.
@@ -67,19 +66,25 @@ skill).
 | Backlog | filed and not taken on. An ask lands here, and moving it out says it was seen |
 | Todo | taken on and dated, not started |
 | In Progress | someone is working on it now |
-| In Review | every piece is in a ready PR or waits on a named verdict, and a comment says whose |
+| In Review | every piece is in an open PR attached to the issue, ready or waiting on a named verdict, and a comment says whose |
 | Done | the done-condition holds: the outcome exists. The owner closes it with one line and its evidence |
 | Canceled | dropped, with a one-line reason; a person's ask only with their yes, quoted, and `asker-ok` |
 
-- **PRs.** A PR names its issue in its body (`Part of CMP-<n>`), which attaches it in Linear. Merging a PR doesn't close
-  the issue; the owner does.
+- **PRs.** A PR names its issue (`research queue open --issue KEY` writes `Refs KEY` and links it) and the goal it
+  serves: the issue carries the goal's label, which `open` writes as `Goal <id>`; `open` and a ready mark warn, never
+  refusing, when the body has neither that line nor `Issue: none: REASON`. A key in a PR's title or body attaches nothing:
+  `research queue link N --issue KEY` attaches a PR opened without it. An issue In Review 24 h with no open PR attached is
+  `unlinked`. Merging a PR doesn't close the issue; the owner does.
 - **Sub-issues** split a deliverable into pieces that move separately: one per worker. A parent is In Progress while any
   child is, and Done once every child is and its own done-condition holds.
 - **Dependencies** between lanes are Linear's blocking relations (`research msg linear relate`), not prose.
 - **Asks.** `research msg ask --as ME --to @OWNER --title 'DELIVERABLE' [--parent ISSUE] --file BRIEF.md` files the
   issue in the owner's team, under the deliverable it serves (so in that project and milestone), and rings the owner.
-  The owner dates it and moves it out of Backlog within the hour, or declines it (`research msg close --declined`). A
-  question that needs no issue is `research msg send --kind question` in its thread.
+  The owner dates it and moves it out of Backlog within the hour, or declines it (`research msg close --declined`). An
+  ask in another lane's team that nobody took up (a project and a date) or touched for 48 h is a `stray`: the audit and
+  top's sweep only report it, and `research msg linear audit --close-strays --as ME` cancels each with a comment naming
+  the rule. A person's ask is never a stray. A question that needs no issue is `research msg send --kind question` in its
+  thread.
 - **A person's ask is answered by its outcome, never by its issue.** Whoever relays Daniel's ask files it with
   `--asker daniel` (an existing issue: `research msg linear edit ISSUE --label asker:daniel`). Within the hour it is In Progress
   with a comment naming its worker (a `bc-` id, or the lead) and the date its outcome lands; filing, dating,
@@ -96,7 +101,9 @@ skill).
   - `research msg linear edit ISSUE --title T --due D`;
   - `research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER`, and `unrelate ISSUE OTHER`;
   - `research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F`, a project update;
-  - `research msg linear project create NAME --team KEY` and `milestone create|edit PROJECT NAME [--date D]`.
+  - `research msg linear project create NAME --team KEY`, `project edit PROJECT [--team KEY] [--date D] [--status S]`
+    (a team its issues need, a target date that hasn't passed, Backlog for a paused project) and
+    `milestone create|edit PROJECT NAME [--date D]`.
 
 ## Workers
 
@@ -115,10 +122,9 @@ skill).
 | An issue brief | ≤ 300 words, in the template above | the issue |
 | A result or progress comment | ≤ 100 words: run id, verdict, the number against its target, the next step and its date | the issue |
 | A closing comment | ≤ 60 words: what holds, its evidence, and what's left (filed as a new issue) | the issue |
-| A project update | its health (on track, at risk or off track) and ≤ 5 bullets, ≤ 120 words | the project, daily and at each milestone |
 
 - **No status on Slack.** That rules out "(quiet)" lines, "on it", restated confirmations, relays that ask nobody to
-  act, and one notice per PR. Status goes on the issue or in the project update.
+  act, and one notice per PR. Status goes on the goal and the issue.
 - Long content goes in a file, PR, note or page, and the message links it.
 - Subscribe only to your inbox thread and to threads where a human may answer (using-slack). Any other subscription to a
   busy thread wakes you for every reply.
@@ -127,11 +133,12 @@ skill).
 
 - **On each wake:** read your inbox, and act on the issue each event names.
 - **Every few hours, and before ending a long turn:** run `research msg linear audit --lane ME` and fix what it finds.
-  Each line gives the fix: place an orphan, date it, retitle it, close a landed issue, comment on a quiet one, or cancel
-  a stale one.
-- **Daily and at each milestone:** post a project update on each project you lead.
+  Each line gives the fix: place an orphan, date it, retitle it, close a landed issue, attach an unlinked one's PR,
+  re-date a lapsed milestone, comment on a quiet one, or cancel a stale one.
+- **When a goal you own changes, and at least every 12 hours:** update it on the Goals page (the writing-goals skill).
 - **On a launch:** file the sub-issue first, then launch the worker named after it.
 
-top's hourly sweep (`infra/control/top_watch.py`) runs the same audit. It rings a lane with findings once every 12
-hours, a person's ask off track every hour (and @top) until it holds (a slip once per new date), and records the counts in `linear-audit.jsonl`.
-top reads the campaign's state from Linear, not from Slack.
+top's hourly sweep (`infra/control/top_watch.py`) runs the same audit and only reports. It rings a lane with findings
+once every 12 hours, a person's ask off track every hour (and @top) until it holds (a slip once per new date), and records the counts in `linear-audit.jsonl`.
+top's hourly audit of the Goals page rings the owner of a goal past its due, unchanged for 12 hours, or past a step's
+day. top reads the campaign's state from the Goals page and Linear, not from Slack.

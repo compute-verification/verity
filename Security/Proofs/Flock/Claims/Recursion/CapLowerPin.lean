@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.CapLower
-import Proofs.Flock.Claims.Recursion.PartAcceptsPin
+module
+
+public import Proofs.Flock.Claims.Recursion.CapLower
+public import Proofs.Flock.Claims.Recursion.PartAcceptsPin
 
 /-!
 # The `rec-open` pieces' facts with each part's check at its own witness (`AtPiecesP`, `OutBindRP`)
@@ -20,6 +22,8 @@ check at `ws[s]`, `PartAcceptsPin`), at `w = ws[s]`.
   copy's `out` columns are its opening's `out` row's node, the two slots' commit strings are one and their ports share
   a row prefix (`OutTopTie`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenLower
 

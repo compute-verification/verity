@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
 
 /-!
 # Exfiltration: a law that certifies the target
@@ -9,6 +11,8 @@ Independent draws with probability `q = num/N` (`Law.bernoulli`) give a set of `
 law certifies at `n·q ≤ n·Λ/(K+1) + ε` draws (`exists_certifying_law`). At `δ = 1` this still draws every unit with a small
 positive probability, so only the empty set escapes with probability `1`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil
 

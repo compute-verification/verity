@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
 
 /-!
 # Product laws on committed rounds
@@ -7,6 +9,8 @@ The hybrid of `Hybrid.lean` runs on `ω : I → Z` drawn from a product of per-r
 `ω`). `resample` redraws one coordinate `k` from its own law inside the sum, and `reweight` changes `k`'s law under a
 function that does not read `ω k`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkCoins
 

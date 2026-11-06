@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
-import Proofs.Flock.Soundness.Discharge.Hidden.Binding
-import Proofs.Flock.Soundness.Discharge.Hidden.Committed
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Binding
+public import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 
 /-!
 # A tail that returns the outputs (`OutputsCommittedTail`, `OutputsBindingTail`)
@@ -10,6 +12,8 @@ row needs (`Hm.zero_bit`); everything else it uses holds at any `outNet` (the ou
 `outputs_committed_tail'` is its argument with `0 < upv` taken as given, and `outputs_binding_tail_of` is
 `outputs_binding_of`'s. `outputs_committed_of_tail`: the Tail statement gives the old one.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

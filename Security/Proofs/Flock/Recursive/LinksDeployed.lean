@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.LinksRefProof
-import Proofs.Flock.Claims.Recursion.InnerAtCoins
-import Proofs.Flock.Recursive.KSLinked
+module
+
+public import Proofs.Flock.Recursive.LinksRefProof
+public import Proofs.Flock.Claims.Recursion.InnerAtCoins
+public import Proofs.Flock.Recursive.KSLinked
 
 /-!
 # The links bind at the deployment
@@ -22,6 +24,8 @@ This file names those inputs and proves the binding, with the link part's refere
   `stagedAll_run`) and `E_O`'s witnesses check against them (`eoGives_outerHolds`), at every compiled record
   `deployRec` whose inner relation is the deployed one's; `recursiveKSLink_links` is `RecursiveKSLinkAt` there.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Links
 

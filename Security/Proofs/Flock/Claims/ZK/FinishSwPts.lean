@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishSwFw
-import Proofs.Flock.Claims.Complete.ZkTables.View
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwFw
+public import Proofs.Flock.Claims.Complete.ZkTables.View
 
 /-!
 # The firewall's PIOP's points and switched claims at the coins
@@ -14,6 +16,8 @@ coins' (`ZcOutAt`), the lincheck's `r'` and `r_in` are its coins' (`LcOutAt`), a
 * **`piopFw_at`**: the firewall's PIOP's switched claims are `Rs.sws` of the closed-form claims (`Zc.out`, `Lc.out` at
   any trace) at the coins from its base, after `3 + (m − 6) + 3 + (k_log − 6) + (2 + |extras|) + 1` bodies.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

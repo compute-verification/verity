@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.ExecRows
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.Soundness.Discharge.Aliased.Rows
-import Flock.TmplOrder
-import Flock.NetAt
+module
+
+public import Proofs.Flock.Soundness.ExecRows
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+public import Flock.TmplOrder
+public import Flock.NetAt
 
 /-!
 # A templated unit's port reads, from its description
@@ -12,6 +14,8 @@ whenever the template is ordered (`portReadsB_unrollAt`): `Tmpl.ordered` makes e
 the input columns (`TmplOrder.rows_good`), and the position map keeps the input rows in place and moves nothing else
 onto them (`Net.posOk`), so a committed row past the input rows reads input columns only at port bits.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl
 

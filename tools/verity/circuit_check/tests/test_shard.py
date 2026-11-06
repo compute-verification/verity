@@ -17,14 +17,14 @@ import pytest
 
 from circuit_check import cache as CC
 from circuit_check import cli
-from circuit_check import known as KN
 from circuit_check import shard as SH
 from circuit_check import targets as TG
+from circuit_check import units as UN
 from test_cache import REPO, _bindings, _edit, _tree
 from test_units import BINDINGS as UNIT_BINDINGS
 from test_units import FORKED as UNITS_FORKED
 from test_units import HARNESS as UNITS
-from test_units import _copied, _fresh, _records_only
+from test_units import RECORDS_ONLY, _copied, _fresh, _records, _records_only, _words_tree
 from test_units import _run as _run_units
 
 
@@ -59,13 +59,12 @@ def _result(failures=(), warnings=(), **more) -> dict:
     return {"failures": list(failures), "warnings": list(warnings), **more}
 
 
-#: the stub targets: a pass, a new and a known failure, a warning, a Boolean Call recomputing across units, a by-calls root whose
-#: callee (another shard's at N = 3) fails with a known failure, so only the joined report fails the root, and three heavy ones
+#: the stub targets: a pass, a failure, a warning, a Boolean Call recomputing across units, a by-calls root whose callee (another
+#: shard's at N = 3) fails, so only the joined report fails the root, and three heavy ones
 CALLEE, ROOT = "SynCallee_v1", "SynRoot_v1"
 TARGETS = {
     "SynPass_v1": lambda: _result(),
     "SynNew_v1": lambda: _result([_fail("SynNew_v1", "lowering-mismatch")]),
-    "SynKnown_v1": lambda: _result([_fail("SynKnown_v1", "dead")]),
     "SynWarn_v1": lambda: _result(warnings=[{**_fail("SynWarn_v1", "and", "redundant"), "count": 3}]),
     "SynAcross_v1": lambda: _result(partition={"q_word": 2, "recomputed_across": 5}),
     ROOT: lambda: _result(mode="by-calls", by_calls={"callees": [{"callee": "c0", "binding": CALLEE}]}),
@@ -74,8 +73,6 @@ TARGETS = {
     "SynHeavyB_v1": lambda: _result(),
     "SynHeavyC_v1": lambda: _result(),
 }
-KNOWN = {"lowering/dead SynKnown_v1": "a known failure", f"lowering/dead {CALLEE}": "the callee's known failure",
-         "lowering/dead SynGone_v1": "no longer fails: --all drops it"}
 HEAVY = {"SynHeavyA_v1": 30, "SynHeavyB_v1": 20, "SynHeavyC_v1": 40}
 
 
@@ -95,8 +92,6 @@ def stub(monkeypatch):
             yield i, (i, cli._one(*cli._TASKS[i][:3]), None, [], None), 1.0, 0.5
 
     monkeypatch.setattr(cli, "parallel", parallel)
-    monkeypatch.setattr(KN, "KNOWN", dict(KNOWN))
-    monkeypatch.setattr(KN, "KNOWN_PIECES", {})
     return types.SimpleNamespace(tasks=tasks, order=order)
 
 
@@ -121,15 +116,15 @@ def _shards(capsys, tmp_path: Path, n: int, base: list[str]) -> tuple[list[Path]
 def test_combining_three_shards_gives_the_unsharded_run_s_report_verdict_and_output(stub, tmp_path, capsys):
     """Each shard runs only the targets its hash gives it, heaviest first, and writes its records unjoined; ``--combine`` of
     the three, in any order, prints what the unsharded ``--all`` prints, byte for byte, writes its report (its summary byte
-    for byte, every record but its timings) and exits as it does: here 1, on a new failure, a by-calls root whose callee is
-    another shard's and a known entry that no longer fails."""
+    for byte, every record but its timings) and exits as it does: here 1, on its failures, among them a by-calls root whose
+    callee is another shard's."""
     out = tmp_path / "r.json"
     base = ["--all", "--no-cache", "-q", "-j", "2"]
     whole = cli.main([*base, "--out", str(out)])
     said = capsys.readouterr().out
     rep = json.loads(out.read_text())
-    assert whole == 1 and "lowering/dead SynGone_v1" in said
-    assert f"by-calls/callee-failed {ROOT}" in " ".join(rep["summary"]["new_failures"])
+    assert whole == 1 and f"FAIL lowering/dead {CALLEE}" in said
+    assert f"by-calls/callee-failed {ROOT}" in " ".join(rep["summary"]["failure_names"])
     out.unlink()
 
     dirs, codes = _shards(capsys, tmp_path, 3, base)
@@ -144,7 +139,7 @@ def test_combining_three_shards_gives_the_unsharded_run_s_report_verdict_and_out
     for o in stub.order[1:]:                                                    # each shard's heavy targets first, heaviest first
         heavy = [t for t in o if t in HEAVY]
         assert o[:len(heavy)] == heavy == sorted(heavy, key=lambda t: -HEAVY[t])
-    assert [SH.shard_of("definition", t, 3) for t in (CALLEE, ROOT, "SynNew_v1")] == [1, 2, 3] and codes == [0, 0, 1]
+    assert [SH.shard_of("definition", t, 3) for t in (CALLEE, ROOT, "SynNew_v1")] == [1, 2, 3] and codes == [1, 0, 1]
 
     random.Random(3).shuffle(dirs)
     combined = cli.main(["--combine", *map(str, dirs), "-q", "--out", str(out)])
@@ -156,22 +151,21 @@ def test_combining_three_shards_gives_the_unsharded_run_s_report_verdict_and_out
     assert all(0 <= w["prologue_s"] <= w["wall_s"] for w in got["combined"]["walls"]), got["combined"]["walls"]
 
 
-def test_a_shard_fails_on_its_own_new_failures_and_only_the_combine_on_the_joined_ones(stub, tmp_path, capsys, monkeypatch):
-    """Without a new failure of its own, every shard passes, while the combined run fails as the unsharded one does: on the
-    by-calls root whose callee is in another shard, and on the known entry that no longer fails, which only the whole list
-    shows."""
+def test_a_shard_fails_on_its_own_failures_and_only_the_combine_on_the_joined_ones(stub, tmp_path, capsys):
+    """A shard fails on its own targets' failures alone: the by-calls root whose callee is in another shard passes in its own
+    shard, and the combined run fails it as the unsharded one does, which only the whole list shows."""
     stub.tasks[:] = [t for t in stub.tasks if t[1] != "SynNew_v1"]
     base = ["--all", "--no-cache", "-q", "-j", "2"]
     whole = cli.main(base)
     said = capsys.readouterr().out
-    dirs, codes = _shards(capsys, tmp_path, 3, base)
-    assert codes == [0, 0, 0] and whole == 1
+    assert whole == 1 and f"by-calls/callee-failed {ROOT}" in said
+    dirs, codes, shards = [], [], []
+    for k in (1, 2, 3):
+        dirs.append(tmp_path / f"shard{k}")
+        codes.append(cli.main([*base, "--shard", f"{k}/3", "--shard-dir", str(dirs[-1])]))
+        shards.append(capsys.readouterr().out)
+    assert codes == [1, 0, 0] and not any(f"by-calls/callee-failed {ROOT}" in o for o in shards)
     assert (cli.main(["--combine", *map(str, dirs), "-q"]), capsys.readouterr().out) == (whole, said)
-    monkeypatch.setitem(KN.KNOWN, f"by-calls/callee-failed {ROOT}", "the root's known join")
-    monkeypatch.delitem(KN.KNOWN, "lowering/dead SynGone_v1")
-    assert cli.main(base) == 0
-    said = capsys.readouterr().out
-    assert (cli.main(["--combine", *map(str, dirs), "-q"]), capsys.readouterr().out) == (0, said)
 
 
 def _refused(capsys, dirs, why: str) -> None:
@@ -693,3 +687,189 @@ def test_a_binding_run_does_in_each_other_binding_s_place_what_making_its_roots_
         ["SynLz_v1", "SynWide7_v1", "SynFresh_v1"] and "syn.late.lz" in got["modules"], got
     assert got["stats"]["units"] == full["stats"]["units"] == {"reused": 7, "rebuilt": [], "stored": 0}, (got, full)
     assert got["here"] == full["here"] == [] and got["values"] == full["values"] and got["values"], (got, full)
+
+
+#: `test_units`' ``--records-only`` with each binding's slice and the shared part beside the tree (`cli.records`' ``slices``)
+SLICED_RECORDS = RECORDS_ONLY.replace("jobs=2)", "jobs=2, slices=root.parent / f'{root.name}-slices')")
+#: the real registry loaded before the run, as `_forked` loads it
+LOADED = ("rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(")
+
+
+def _slices(root: Path) -> tuple[dict, Path]:
+    """``root``'s records into its cache and its slices beside it (`SLICED_RECORDS`): the report, the slices' directory."""
+    assert SLICED_RECORDS.count("slices=") == 1
+    got = _py(root, SLICED_RECORDS)
+    assert got.returncode == 0, got.stderr
+    rep, cut = json.loads(got.stdout.strip().splitlines()[-1]), root.parent / f"{root.name}-slices"
+    assert "why" not in rep and rep["slices"]["bindings"] == len(json.loads((cut / "index.json").read_text())["bindings"]), rep
+    return rep, cut
+
+
+def _sliced(name: str, cut: Path) -> str:
+    """`_forked`'s ``--binding name`` from that binding's slice in ``cut`` and the shared part alone (`units.read_slice`)."""
+    piece = cut / json.loads((cut / "index.json").read_text())["bindings"][name]
+    return _forked(name).replace(f"binding={name!r})", f"binding={name!r}, sliced=UN.read_slice(Path({str(piece)!r}), "
+                                 f"Path({str(cut / 'shared.json')!r}), {name!r}))", 1)
+
+
+def _bare(root: Path, to: Path) -> Path:
+    """A copy of ``root`` at ``to`` with no cache: a binding's task on a machine that holds none of the catalog's records."""
+    shutil.copytree(root, to, ignore=shutil.ignore_patterns("cache"))
+    return to
+
+
+def _digests(cut: Path) -> dict[str, str]:
+    """Each binding's slice's digest by name, and the shared part's (``<shared>``): what a graph keys each binding's task on."""
+    index = json.loads((cut / "index.json").read_text())
+    return {name: hashlib.sha256((cut / f).read_bytes()).hexdigest()
+            for name, f in [("<shared>", index["shared"]), *index["bindings"].items()]}
+
+
+@pytest.mark.slow
+def test_each_binding_from_its_slice_alone_checks_what_it_checks_from_every_record(tmp_path):
+    """``--records-only --slices`` cuts each binding's slice and the part they share (`units.slices`).  Each forked ``--binding
+    --slice`` run, in a copy of the tree with no record at all (a task that reads its slice and the shared part alone), makes
+    only its own binding's roots, holds its own record to its reads and stores no record, with the values and keys of the run
+    from every record (`units.plan`'s ``binding``); together they are the targets, values and keys of a forked ``--all`` from
+    the records.  An edit to a file only one binding reads leaves every other binding's slice counting, and that one's is
+    refused; so is another binding's slice, and a slice cut with another shared part.  Only a run in a tree with no record
+    shows that a slice holds all a binding's run reads of the catalog, and only the bindings' own runs that it gives their
+    keys and verdicts."""
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    rep, cut = _slices(root)
+    index = json.loads((cut / "index.json").read_text())
+    assert rep["stored"] == 5 and sorted(index["bindings"]) == ["<registered>", "_core_roots", "_model_roots", "_sized_roots",
+                                                                "_xor_roots"], (rep, index)
+    whole = _run_units(_copied(root, tmp_path / "whole"), UNITS_FORKED.replace(*LOADED, 1))
+    values, keys = {}, set()
+    for i, name in enumerate(sorted(index["bindings"])):
+        bare = _bare(root, tmp_path / f"s{i}")
+        out = _run_units(bare, _sliced(name, cut))
+        assert out["stats"]["units"] == {"reused": 1, "rebuilt": [], "stored": 0} and out["here"] == [], (name, out["stats"])
+        assert _roots_made(tmp_path / f"s{i}-roots.jsonl") == {name} - {"<registered>"}, name
+        assert _records(bare) == [] and out["hits"] == [] and len(out["keys"]) == len(out["values"]), name
+        if name in ("_core_roots", "_xor_roots"):
+            full = _run_units(_copied(root, tmp_path / f"r{i}"), _forked(name))
+            assert (out["values"], out["keys"]) == (full["values"], full["keys"]), name
+        assert not set(out["values"]) & set(values), name
+        values.update(out["values"])
+        keys.update(out["keys"])
+    assert values == whole["values"] and keys == set(whole["keys"]), (values, whole["values"])
+
+    edited = _bare(root, tmp_path / "edited")
+    _edit(edited, "syn/xdef.py", "B.call(SynXor, a, b)", "B.call(SynXor, b, a)")
+    kept = _run_units(edited, _sliced("_core_roots", cut))
+    assert kept["values"] and kept["values"] == {t: values[t] for t in kept["values"]}, kept["values"]
+    refused = _py(edited, _sliced("_xor_roots", cut))
+    assert refused.returncode and "its record in the slice doesn't count here" in refused.stderr, refused.stderr
+    with pytest.raises(UN.Stale, match="binding _core_roots's slice, not _xor_roots's"):
+        UN.read_slice(cut / index["bindings"]["_core_roots"], cut / "shared.json", "_xor_roots")
+    (other := tmp_path / "other.json").write_bytes(b" " + (cut / "shared.json").read_bytes())
+    with pytest.raises(UN.Stale, match="cut with another shared part"):
+        UN.read_slice(cut / index["bindings"]["_xor_roots"], other, "_xor_roots")
+
+
+@pytest.mark.slow
+def test_the_registered_roots_slice_holds_each_of_their_records(tmp_path):
+    """Two registered roots take a record each (`units.registered_entries`), and the ``<registered>`` binding's slice holds both,
+    each at its place: its ``--binding --slice`` run in a tree with no record holds each to its reads and checks what its run
+    from every record checks, with the same keys.  The one-record tree of the test above can't tell a slice that holds only the
+    first."""
+    from test_units import TWO_REGISTERED
+
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    _edit(root, "syn/catalog.py", "BINDINGS = [", TWO_REGISTERED + "BINDINGS = [")
+    _, cut = _slices(root)
+    piece = json.loads((cut / json.loads((cut / "index.json").read_text())["bindings"]["<registered>"]).read_text())
+    assert [x["at"] for x in piece["entries"]] == [[["<registered>"], "registered", str(i), i] for i in range(2)], piece
+    out = _run_units(_bare(root, tmp_path / "s"), _sliced("<registered>", cut))
+    full = _run_units(Path(shutil.copytree(root, tmp_path / "r")), _forked("<registered>"))
+    assert out["stats"]["units"] == {"reused": 2, "rebuilt": [], "stored": 0} and out["values"], out["stats"]
+    assert (out["values"], out["keys"]) == (full["values"], full["keys"]), (out["values"], full["values"])
+
+
+@pytest.mark.slow
+def test_a_binding_from_its_slice_registers_and_imports_what_it_does_from_every_record(tmp_path):
+    """From its slice and the shared part alone, in a copy of the tree with no record, a binding's run does in each other
+    binding's place what making its roots did beyond them where the shared part notes it, and makes them where that can't be
+    done (``_minted_roots``' composite): this process's registry and in-tree modules are, in order, those of a run that makes
+    every binding's roots, with its verdicts.  An edit to what one binding registers beyond its roots changes the shared part,
+    so every slice, which holds the shared part's digest, and no binding's own part but that one's."""
+    root = _late_tree(tmp_path / "t")
+    rep, cut = _slices(root)
+    assert rep["stored"] == 7, rep
+    noted = {at[2] for at, *_ in json.loads((cut / "shared.json").read_text())["replay"]}
+    assert {"_late_roots", "_minted_roots"} <= noted, noted
+    lazy, stale = _bare(root, tmp_path / "lazy"), _late_tree(tmp_path / "stale")
+    shutil.copytree(root / "cache", stale / "cache")
+    _edit(stale, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")
+    got = _run_units(lazy, _sliced("_core_roots", cut).replace(*HELD_HERE))
+    full = _run_units(stale, _forked("_core_roots").replace(*HELD_HERE))
+    assert _roots_made(tmp_path / "lazy-roots.jsonl") == {"_core_roots", "_minted_roots"}
+    assert got["registry"] == full["registry"] and got["modules"] == full["modules"], (got, full)
+    assert got["values"] == full["values"] and got["values"] and got["here"] == full["here"] == [], (got, full)
+    assert got["stats"]["units"] == {"reused": 1, "rebuilt": [], "stored": 0}, got["stats"]
+
+    more = _late_tree(tmp_path / "more")
+    _edit(more, "syn/late/lz.py", "def SynLz(a, b):\n    return a & b\n",
+          'def SynLz(a, b):\n    return a & b\n\n\n@primitive("SynLz2", 1, [("a", V), ("b", V)], V)\ndef SynLz2(a, b):\n'
+          "    return a | b\n")
+    _, moved = _slices(more)
+    before, after = _digests(cut), _digests(moved)
+    assert before.keys() == after.keys() and all(before[k] != after[k] for k in before), (before, after)
+
+    def own(d: Path) -> dict:
+        return {name: {k: v for k, v in json.loads((d / f).read_text()).items() if k != "shared"}
+                for name, f in json.loads((d / "index.json").read_text())["bindings"].items()}
+    was, now = own(cut), own(moved)
+    assert {name for name in was if was[name] != now[name]} == {"_late_roots"}, now["_late_roots"]
+
+
+@pytest.mark.slow
+def test_a_binding_from_its_slice_finds_the_boolean_definitions_and_statics_a_full_build_does(tmp_path):
+    """From its slice and the shared part alone, in a copy of the tree with no record, a word primitive's check finds the
+    Boolean Definition of its word that only another binding's body build registers (made here along the path that binding's
+    record reaches it by: the shared part's ``words``) or a module registers as it is imported, and a reference two bindings
+    bind at two statics is checked at the kept binding's: each with the value and key a full build gives."""
+    root, here = _words_tree(tmp_path / "t"), _words_tree(tmp_path / "here")
+    whole = _run_units(here, UNITS_FORKED.replace(", jobs=2, isolate=True, fork=True)", ")").replace(*LOADED, 1))
+    _, cut = _slices(root)
+    words = {w["id"]: w for w in json.loads((cut / "shared.json").read_text())["words"]}
+    assert words["SynWBits_v1"]["via"][0][2] == "_wtop_roots" and words["SynWBits_v1"]["node"], words
+    for i, (name, target) in enumerate((("_wprim_roots", "SynW_v1"), ("_vtop_roots", "SynV_v1"),
+                                        ("_scale3_roots", "syn.scale"))):
+        out = _run_units(_bare(root, tmp_path / f"s{i}"), _sliced(name, cut))
+        assert target in out["values"] and out["values"] == {t: whole["values"][t] for t in out["values"]}, (name, out)
+        assert set(out["keys"]) <= set(whole["keys"]) and len(out["keys"]) == len(out["values"]), name
+    assert whole["values"]["SynW_v1"][1] and whole["values"]["SynV_v1"][1], whole["values"]
+
+
+@pytest.mark.slow
+def test_one_binding_s_edit_changes_its_own_slice_alone(tmp_path):
+    """The slices are a function of the tree's bytes alone: two trees of the same bytes at two paths cut the same bytes.  An
+    edit to a file only ``_xor_roots`` reads (its Definition's body) changes that binding's slice and no other's, nor the
+    shared part: a graph keying each binding's task on its slice reruns that binding's alone.  ``_model_roots``' binding asks
+    `inspect` for the module of its frame, as torch's import does, which looks for the source of every module loaded, that
+    file's among them: its record holds that module by whether it is there (``present``, `units._unchanged`), so its slice is
+    unchanged too, and the edited tree's records cut from the first tree's rebuild ``_xor_roots``' alone, into the same slices
+    as from none."""
+    trees = {}
+    for name in ("a", "b", "c", "warm"):
+        trees[name] = _tree(tmp_path / name)
+        _bindings(trees[name], *UNIT_BINDINGS)
+        _edit(trees[name], "syn/catalog.py", "def model():\n",
+              "def model():\n    import inspect\n    import sys\n\n    inspect.getmodule(sys._getframe())\n")
+    for name in ("b", "warm"):
+        _edit(trees[name], "syn/xdef.py", "B.call(SynXor, a, b)", "B.call(SynXor, b, a)")
+    cuts = {name: _slices(root)[1] for name, root in trees.items() if name != "warm"}
+    got = {name: _digests(cut) for name, cut in cuts.items()}
+    index = json.loads((cuts["a"] / "index.json").read_text())["bindings"]
+    (model,) = json.loads((cuts["a"] / index["_model_roots"]).read_text())["entries"]
+    assert model["reads"]["present"].get("syn.xdef") is True, model["reads"]["present"]
+    assert got["a"] == got["c"] and len(got["a"]) == 6, got
+    assert {k for k in got["a"] if got["a"][k] != got["b"][k]} == {"_xor_roots"}, got
+    shutil.copytree(trees["a"] / "cache", trees["warm"] / "cache")
+    rep, cut = _slices(trees["warm"])
+    assert rep["rebuilt"] == ["_xor_roots"] and _digests(cut) == got["b"], (rep, _digests(cut))

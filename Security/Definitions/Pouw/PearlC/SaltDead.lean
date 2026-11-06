@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.Defs
+module
+
+public import Definitions.Pouw.PearlC.Defs
 
 /-!
 # Pearl-C's salt-dead elements (definitions only)
@@ -21,6 +23,8 @@ its support has `Forming.FlatPairs`, and that ρ_D = 1/64 bounds it are proved i
   under `Stat.every8`, and Π's folding `√32/(256·16)` of the two line norms), so the predicate judges the forming that
   ran.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.SaltDead
 

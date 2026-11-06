@@ -2,6 +2,10 @@
 FIPS 202: Keccak-f[1600] and SHAKE256, for the salts of the values V*'s verifier registers itself
 (`verity_flock.rec_residuals.verifier_salts`, Python's `hashlib.shake_256`).
 -/
+module
+
+@[expose] public section
+
 namespace Flock
 namespace Keccak
 

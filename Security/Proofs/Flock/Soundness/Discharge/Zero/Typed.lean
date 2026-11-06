@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Zero.Cols
-import Proofs.Flock.Soundness.Discharge.Zero.Flat
-import Proofs.Flock.Soundness.Discharge.Zero.Uniform
-import Proofs.Flock.Soundness.Discharge.Placed.Typed
-import Proofs.Flock.Soundness.Types.ProgramE2E
+module
+
+public import Proofs.Flock.Soundness.Discharge.Zero.Cols
+public import Proofs.Flock.Soundness.Discharge.Zero.Flat
+public import Proofs.Flock.Soundness.Discharge.Zero.Uniform
+public import Proofs.Flock.Soundness.Discharge.Placed.Typed
+public import Proofs.Flock.Soundness.Types.ProgramE2E
 
 /-!
 # `hZero` on the typed path (e2e, typed flat classes)
@@ -18,6 +20,8 @@ On a typed flat-class statement, `Placed.UProg.progPlaces_of_classes` places eac
 - `flatKey_zero_iff`: a flat class's unit input key (`Aliased.flatKey`) is the zero exactly when its slot offset reads the
   zero, so `UProg.zeroCols_progPlaces_of_setupH_key` states `hza` on the keys `Aliased.flatCopies_of_key` reads.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

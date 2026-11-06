@@ -1,6 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
-import Proofs.Flock.Claims.Complete.ZkTables.Count
-import Proofs.Flock.Claims.Complete.Json.Record
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+public import Proofs.Flock.Claims.Complete.ZkTables.Count
+public import Proofs.Flock.Claims.Complete.Json.Record
+import all Init.Data.Repr
 
 /-!
 # The tables' names and the rep streams' are distinct
@@ -16,6 +19,8 @@ name, so at several tables those names must differ.
 * `Case.names`: at a good case of several tables the spec names its tables `Tags.tableNames`, so they are distinct
   (`Case.tables_nodup`, at any number of tables).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

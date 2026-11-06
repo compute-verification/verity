@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchL
-import Proofs.Flock.Soundness.Discharge.Exec.SessionAccL
-import Proofs.Flock.Soundness.SessionBatchAcc
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionBatchL
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionAccL
+public import Proofs.Flock.Soundness.SessionBatchAcc
 
 /-!
 # Several salted tables in one batched session, from accepted reruns
@@ -10,6 +12,8 @@ which the salted session accepts (`extractProbAccBL`, `failProbAccBL`), and
 `joint_le_accBL`: `Pr[the session accepts] · failProbAccBL ≤ ksBoundAccBL + rateB · Pr[accepts]`, with `ksBoundAccBL`
 table `j`'s `ε_c⁻ + √(k·adv₀)` (`session_knowledge_sound_accL`); `one_le_fail_add_accBL` is the audit's `cover`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

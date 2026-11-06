@@ -12,6 +12,10 @@ whose calls overlap or leave gaps only gives up positions. `locate` is the hones
 covers the position (`locate_witness`).
 -/
 
+module
+
+@[expose] public section
+
 namespace SampledProofs.HiddenDraw
 
 structure Call where

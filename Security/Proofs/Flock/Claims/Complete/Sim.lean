@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Run
-import Flock.With.SimVerify
-import Flock.With.Log
+module
+
+public import Proofs.Flock.Claims.Complete.Run
+public import Flock.With.SimVerify
+public import Flock.With.Log
 
 /-!
 # The honest run as a pure session
@@ -20,6 +22,8 @@ which a send pushes its body onto the state and reads its coin from `resp` at it
   and the proof files, the honest run's sends are the session's bodies with tag `0`, and its last message is
   `Final.encode ⟨x, record, proofs⟩`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

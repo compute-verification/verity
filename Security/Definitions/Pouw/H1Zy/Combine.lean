@@ -1,4 +1,6 @@
-import Mathlib.Data.BitVec
+module
+
+public import Mathlib.Data.BitVec
 
 /-!
 # `PouwH1Combine_v1{TILE}` on words (trusted)
@@ -16,6 +18,8 @@ and returns one bit `ok`. Its body (`h1zy._combine_body`), on its primitives' wo
 Python's loops read the first word of a non-empty list; a leaf has at least two lanes and `nw ≥ 2`, so the empty
 list's value (`tree`'s default: `0` for the XOR, `true` for the AND) is never read.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

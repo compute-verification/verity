@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.DeployInputs
-import Proofs.Flock.Claims.NumbersDeploy
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployInputs
+public import Proofs.Flock.Claims.NumbersDeploy
 
 /-!
 # The outer verifier: `verify --zk` with the recursive inputs, in public-coin form
@@ -23,6 +25,8 @@ each read at the recursive setup's tables (`Readable.tableOf`, `colsO`, `εtable
 every table's level-0 codeword length, as `FlockDeploy.N₀ true` does, so the tables' words together are no longer
 than it (`sum_wordLenJO_le`, the `hN` a masked KS proof reads).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

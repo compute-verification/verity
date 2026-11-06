@@ -1,4 +1,6 @@
-import Definitions.Accounting.RateAuditSketch
+module
+
+public import Definitions.Accounting.RateAuditSketch
 
 /-!
 # The sketch rate audit with interactive side sources, verbatim (trusted)
@@ -12,6 +14,8 @@ taken in or rebuilt is a function of several sectors. A source that picked its a
 the oracle itself, rather than from what the chip sent, would tell the chip about sectors it never took in, or relay
 tags, which this game leaves out.
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 

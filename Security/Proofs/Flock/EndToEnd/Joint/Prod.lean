@@ -1,4 +1,6 @@
-import Proofs.Flock.EndToEnd.Period.Union
+module
+
+public import Proofs.Flock.EndToEnd.Period.Union
 
 /-!
 # A period's run: the product of the escapes
@@ -9,6 +11,8 @@ escapes below `c` with probability at most `c`. It is `period_horizon` with the 
 block `i`'s escape is fixed by the strategy that plays it, before its coins, so the rest of the period has to miss below
 `c / e`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

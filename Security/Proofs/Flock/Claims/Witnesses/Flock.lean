@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Witnesses.Shared
+module
+
+public import Proofs.Flock.Claims.Witnesses.Shared
 
 /-!
 # Refutation witnesses: Flock's claims
@@ -26,6 +28,8 @@ that met its first form at every record is gone. `ZK` reads the masked record's 
 `ZK_quiet_toyZD`, where every witness is in the relation). At the deployed masked record (`ZKMal.zkDeployed`) the coin
 layer is the deployed one, not such a record's (`ZK_meets`, `ZK_coins_fails`).
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.Flock
 

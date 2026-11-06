@@ -1,5 +1,7 @@
-import Proofs.Flock.EndToEnd.Blocks.Statement
-import Proofs.Flock.Soundness.LinkCarry
+module
+
+public import Proofs.Flock.EndToEnd.Blocks.Statement
+public import Proofs.Flock.Soundness.LinkCarry
 
 /-!
 # The integrity audit over a monitoring period of blocks, with carried state (trusted)
@@ -30,6 +32,8 @@ one it picked, and that session's trial's (`CarriedLeaf.costMix`). The named ass
 and `ecr/sha-512` (`Assumptions.SHA512CRExpected`) at each carried leaf's finder, with that cost. The proofs are
 `Flock.SecurityProofs.IntegrityHorizonCarried` and `IntegrityBlockCarried`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

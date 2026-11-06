@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS.Stages
+module
+
+public import Definitions.Accounting.TS.Stages
 
 /-!
 # Per-stage coins' named assumption (trusted)
@@ -11,6 +13,8 @@ model's, a `Prop` over `Accounting.TS.StageWindow`, taken as a hypothesis, never
   closure and a steering bound (`Accounting.Guarantees.TS.SegmentSteer`, `SteerUnion`); with each stage's coin released
   after its operands are committed there is no such unit.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

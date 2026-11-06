@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.LayoutBDeployed
-import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
-import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.C3.Reps.AtList
+module
+
+public import Proofs.Flock.Claims.Recursion.LayoutBDeployed
+public import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
+public import Proofs.Flock.Claims.Recursion.DeployScope
+public import Proofs.Flock.C3.Reps.AtList
 
 /-!
 # V*'s bound layout with round 0 at RecCap (`layoutBCap`), and `HeldB` there
@@ -41,6 +43,8 @@ circuit has its port `top` (`CapPorts`), proved at every shape (`capPorts`, `Cap
 `TopsHeld` asks for a part that holds a tops round whole, which none does; `ksLin2_deployed_tops` (`LayoutBTops.lean`)
 takes the same facts but that one.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.KSStatement
-import Proofs.Flock.Claims.Recursion.LamDeployed
-import Proofs.Flock.Claims.Scope.Tables
+module
+
+public import Proofs.Flock.Recursive.KSStatement
+public import Proofs.Flock.Claims.Recursion.LamDeployed
+public import Proofs.Flock.Claims.Scope.Tables
 
 /-!
 # `RecursiveKS`'s nontrivial fixture: what the deployed readers make of it
@@ -17,6 +19,8 @@ the V\* parts' scope at the run's coin-server record, the premises `RecDeploy.la
 statement. Wherever no statement reads, `RecursiveKS` holds at the verifier that accepts everything
 (`Flock.Guarantees.recursiveKSAtAll_of_readX_none`), so some such reading is needed.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

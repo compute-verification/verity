@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.Actual
-import Definitions.Nci.Assumptions.Threads
-import Definitions.Nci.Dark
+module
+
+public import Definitions.Accounting.Guarantees.Actual
+public import Definitions.Nci.Assumptions.Threads
+public import Definitions.Nci.Dark
 
 /-!
 # The memory cap over threads (trusted)
@@ -31,6 +33,8 @@ the state can determine, not the width of the gates a window reads from before i
 needs the read bound in its determination form.
 -/
 
+@[expose] public section
+
 namespace Accounting.Guarantees.Actual
 
 open Verity Nci Finset
@@ -50,7 +54,7 @@ def ThreadedRuntime : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R r b_w b_a : ℝ)
-    (c : Declaration) (T : Threading c) (d e : ℕ),
+    (c : RegisteredCircuit) (T : Threading c) (d e : ℕ),
     0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
     A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →
     0 < b_w → 0 < b_a → 0 < d →
@@ -75,7 +79,7 @@ def ThreadedRate : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω p Γ : ℕ) (R r b_w b_a : ℝ)
-    (c : Declaration) (T : Threading c) (d e : ℕ),
+    (c : RegisteredCircuit) (T : Threading c) (d e : ℕ),
     0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
     A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →
     0 < b_w → 0 < b_a → 0 < d →
@@ -100,7 +104,7 @@ def ThreadedRuntimeDark : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R r b_w b_a : ℝ)
-    (c : Declaration) (T : Threading c) (d e : ℕ) (M : PartialContainment c (A.declaration (univ.biUnion X) t θ hθ)),
+    (c : RegisteredCircuit) (T : Threading c) (d e : ℕ) (M : PartialContainment c (A.declaration (univ.biUnion X) t θ hθ)),
     0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
     A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →
     0 < b_w → 0 < b_a → 0 < d →
@@ -122,7 +126,7 @@ def ThreadedRuntimeSlots : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R r b_w b_a : ℝ)
-    (c : Declaration) (T : Threading c) (σ : T.Slots) (d e : ℕ),
+    (c : RegisteredCircuit) (T : Threading c) (σ : T.Slots) (d e : ℕ),
     0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
     A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →
     0 < b_w → 0 < b_a → 0 < d →
@@ -142,7 +146,7 @@ def ThreadedRateSlots : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω p Γ : ℕ) (R r b_w b_a : ℝ)
-    (c : Declaration) (T : Threading c) (σ : T.Slots) (d e : ℕ),
+    (c : RegisteredCircuit) (T : Threading c) (σ : T.Slots) (d e : ℕ),
     0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
     A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →
     0 < b_w → 0 < b_a → 0 < d →
@@ -165,7 +169,7 @@ def ThreadedRuntimeDarkSlots : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ) (Φ : Finset L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t ω Γ : ℕ) (R r b_w b_a : ℝ)
-    (c : Declaration) (T : Threading c) (σ : T.Slots) (d e : ℕ)
+    (c : RegisteredCircuit) (T : Threading c) (σ : T.Slots) (d e : ℕ)
     (M : PartialContainment c (A.declaration (univ.biUnion X) t θ hθ)),
     0 < ω → (∀ i j, i ≠ j → Disjoint (X i) (X j)) →
     A.Causal ℓ → A.ComputeRate (Set.range X) (fun _ => 1) Φ → A.Links ends β link →

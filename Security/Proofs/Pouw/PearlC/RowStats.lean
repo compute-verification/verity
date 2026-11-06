@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlC.Block4Sem
+module
+
+public import Proofs.Pouw.PearlC.Block4Sem
 
 /-!
 # A row's `α` and `β` by magnitudes (proofs)
@@ -31,6 +33,8 @@ The squares-overflow row (`test_circuit_pc8`'s and `test_circuit_pc4`'s `squares
 live (`rowOK8_nonFinite`, `rowOK8_notLive`): with the squares-overflow row, one weight row per clause of the rule a
 tile's check asks of its weight rows, as `check_tile` does (`test_check_tile_refuses_a_weight_row_outside_the_rules`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 

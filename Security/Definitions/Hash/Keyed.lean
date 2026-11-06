@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Hash.Tree
+module
+
+public import Mathlib
+public import Definitions.Hash.Tree
 
 /-!
 # The keyed leaf over a hash (trusted)
@@ -25,6 +27,8 @@ unkeyed root, which the committer never computes.
 The window's key is committed before its salt is drawn, as the hm96 leaf over `ks` under 192 OS salt bytes
 (`Hm96.leaf` at `x = ks`), the window's key leaf, which a drawn unit's proof opens `ks` against.
 -/
+
+@[expose] public section
 
 namespace Hash.Keyed
 

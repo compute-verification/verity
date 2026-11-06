@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.RepFree
-import Proofs.Flock.Claims.ZK.SimInner
+module
+
+public import Proofs.Flock.Claims.ZK.RepFree
+public import Proofs.Flock.Claims.ZK.SimInner
 
 /-!
 # The cut rep's inner proof returns on its coins alone
@@ -14,6 +16,8 @@ cut's returns from a log of the same size, with a log of the same size, whatever
   left returns nothing; a pure step on the left sends nothing.
 * **`innerP_cut_fw`**: the firewall's inner proof and the cut's, from logs of one size.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

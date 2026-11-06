@@ -1,4 +1,6 @@
-import Definitions.Claims.IndexedTapes
+module
+
+public import Definitions.Claims
 
 /-!
 # Claims: the sampling compiler (frozen before any proof work)
@@ -11,18 +13,19 @@ the code side's.
 1. **Statement** (`AuditStatement`): the program `C` (named by its digest; both parties hold it), as its descriptor and its gates,
    the partition query `Q` (named, versioned, with its parameters), the sampling design, and the roots the trace is
    committed under. The partition is public: `P = Q(C)`, which the verifier evaluates itself on the statement it parsed,
-   descriptor and gates (`Deploy.partition`), gives the proof units (sets of gates of `C`, every gate but a constant in
-   exactly one, input gates included; a constant is public and in one or in none), the strata and the classes. `x` is
-   the canonical bytes of what the verifier reads before it draws, and `parse` is its own.
+   descriptor and gates (`Deploy.partition`), gives the proof units (sets of gates of `C`, every gate but a constant and
+   an unread input in exactly one, the other input gates included; a constant is public and in one or in none, and so is
+   an input that no gate reads and `C` doesn't return), the strata and the classes. `x` is the canonical bytes of what
+   the verifier reads before it draws, and `parse` is its own.
 2. **Witness** (`Wit`): openings of the committed values of `C`'s gates under the roots.
 3. **Relation** (`R δ`): the set of faulty units of the committed trace is in the confidence set
    `M_δ = {B : P_a(B) > δ}`. A unit is faulty when its committed outputs differ from its gates applied to its committed
    inputs, or a value it reads or writes is unopened: one is faulty unless some interior makes it correct, which on a
    topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`).
 4. **Scope** (`Scope`, `InScope`, `ScopeMatches`): a statement that parses, whose query evaluates; a topologically
-   ordered program; a partition of all its gates but constants into proof units, each a set of gates whose committed
-   values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`unitClasses`: powers of two from 16 to 262,144); and a
-   well-formed design, one rule per class. `KS`, `KSCount`, `Bits` and
+   ordered program; a partition of all its gates but constants and unread inputs into proof units, each a set of gates
+   whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`unitClasses`: powers of two from 16 to
+   262,144); and a well-formed design, one rule per class. `KS`, `KSCount`, `Bits` and
    `Complete` hold on it, and it excludes every design whose `P_a` is not its draw's miss probability: `subset K` with
    `K > N`, whose `P_a` is `0` at every set, so that `KS` there is vacuous, and a Bernoulli rule with `den = 0` or
    `num > den`. That the verifier refuses what is out of it is `ScopeMatches`, open.
@@ -51,6 +54,8 @@ nothing here reads Flock's former decoding threshold or count (`agree`, `nMin`).
 Frozen by `Flock.Guarantees.SamplingClaimsStated` (`Definitions/Flock/Guarantees/SamplingClaims.lean`), whose statement
 reads every claim here: the lock records each one's text under `reads`, so a changed claim is a changed record.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 
@@ -172,6 +177,14 @@ def Prog.refIn (C : Prog) (u : List ℕ) (val : ℕ → Option Bool) (ι : ℕ �
 /-- The values proof unit `u` of `C` commits: its gates that `C.Boundary` commits. -/
 def committed (C : Prog) (u : List ℕ) : ℕ := (u.filter fun g => C.Boundary u g).length
 
+/-- **An unread input** of `C`: an input gate that `C` doesn't return and no gate of `C` reads. No gate's value and no
+returned value depends on it. -/
+def Prog.Unread (C : Prog) (g : ℕ) : Prop :=
+  C.gates[g]? = some .input ∧ g ∉ C.outs ∧ ∀ x ∈ C.gates, g ∉ x.reads
+
+instance instDecidableUnread (C : Prog) (g : ℕ) : Decidable (C.Unread g) :=
+  inferInstanceAs (Decidable (C.gates[g]? = some .input ∧ g ∉ C.outs ∧ ∀ x ∈ C.gates, g ∉ x.reads))
+
 /-- **A partition** `P = Q(C)`, as the verifier evaluates it: its classes, each its strata, each its proof units (each
 a set of gates in layout order), in population order. -/
 structure Partition where
@@ -195,13 +208,14 @@ def unitClasses : List ℕ := (List.range (Nat.log2 (unitClassMax / 16) + 1)).ma
 function of the program and the unit, both public; `none` when no class does. -/
 def unitClass (C : Prog) (u : List ℕ) : Option ℕ := unitClasses.find? fun w => decide (committed C u ≤ w)
 
-/-- **`P` partitions `C`**: no gate is in two proof units, and every gate of `C` but a constant is in one, input gates
-included (a constant, public, may be in one or in none); every proof unit has a gate of `C`; and each proof unit `u`
-has a public size class `c(u)` whose width holds the values it commits, its gates that `Boundary` commits:
-`|out(u)| ≤ w_{c(u)}`. A proof unit is a set of gates, so a unit's gates may interleave with another's. -/
+/-- **`P` partitions `C`**: no gate is in two proof units, and every gate of `C` but a constant and an unread input is
+in one, the other input gates included. A constant, public, may be in one or in none, and so may an unread input
+(`Prog.Unread`), on which no gate's value and no returned value depends. Every proof unit has a gate of `C`, and each
+proof unit `u` has a public size class `c(u)` whose width holds the values it commits, its gates that `Boundary`
+commits: `|out(u)| ≤ w_{c(u)}`. A proof unit is a set of gates, so a unit's gates may interleave with another's. -/
 def Partition.Partitions (P : Partition) (C : Prog) : Prop :=
   P.gates.Nodup ∧ (∀ g ∈ P.gates, g < C.gates.length) ∧
-    (∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → g ∈ P.gates) ∧
+    (∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → ¬ C.Unread g → g ∈ P.gates) ∧
     (∀ u ∈ P.blocks, u ≠ []) ∧ ∀ u ∈ P.blocks, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
 
 /-! ## Proof units and the universal unit -/
@@ -385,8 +399,8 @@ def Design.WellFormed (d : Design) (P : Partition) : Prop :=
   d.rules.length = P.classes.length ∧ ∀ p ∈ d.rules.zip P.classes, p.1.WellFormed (strataSizes p.2)
 
 /-- **The sampling scope, readable**, at the statement's partition: a topologically ordered program, partitioned into
-proof units (sets of gates, constants in one or in none) whose committed values fit their public size classes, and a
-well-formed design.
+proof units (sets of gates, constants and unread inputs in one or in none) whose committed values fit their public size
+classes, and a well-formed design.
 
 The query: whatever its own width parameter, every unit, input units included, commits at most its class's width
 `w_{c(u)}` (`unitClasses`, up to `unitClassMax`). A unit that commits more than the widest class is out of scope. -/

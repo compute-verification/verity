@@ -30,6 +30,24 @@ def test_every_lake_package_is_audited():
     assert not missing, f"Lake packages without a lean-audit.json (tools/verity/lean/README.md): {missing}"
 
 
+def test_every_package_module_is_a_module():
+    """Every in-tree package's Lean is on Lean's module system (`tools/verity/lean/modules.py`), so an importer rebuilds
+    only when what a module exports changes, never for a proof's body."""
+    spec = importlib.util.spec_from_file_location("lean_modules", ROOT / "tools" / "verity" / "lean" / "modules.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    tracked = m.tracked()
+    files = m.modules([], tracked)
+    assert len(files) > 1000, len(files)
+    left = [f for f in files if not m.is_module((ROOT / f).read_text())]
+    assert not left, "not on Lean's module system; port each with `python3 tools/verity/lean/modules.py FILE`:\n  " + \
+        "\n  ".join(left)
+    lakefiles = m.lake_option_missing(tracked)
+    assert not lakefiles, f"without `{m.LAKE_OPTION}` under [leanOptions], so a public statement's proofs become auxiliary " \
+        "theorems and its lock records move; add it with `python3 tools/verity/lean/modules.py PACKAGE`:\n  " + \
+        "\n  ".join(lakefiles)
+
+
 def test_one_toolchain():
     """The jobs' base image installs the same one."""
     pins = {str(p.relative_to(ROOT)): (p / "lean-toolchain").read_text().strip() for p in lake_packages()}
@@ -51,9 +69,14 @@ def test_one_mathlib():
 
 #: the size of each lock's `unwitnessed`: the guarantees stating what an acceptance means, or an exclusion's bound, that
 #: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
-#: PRs on `next` then brought, and the exclusion bounds that read a partition once a derived circuit's registration built
-#: its one-block partition (`RegisteredCircuit.ofCircuit`)
-UNWITNESSED = {"Security": 464, "Security/Properties": 221, "verity/core/service/flock": 7}
+#: PRs on `next` then brought, NCI's `ActivationsChain`, `ReferenceThreaded` and `ThreadedOfLayered`, bounds a
+#: definition hides that read a partition once stated over a registered circuit, the exclusion bounds that read
+#: a partition once a derived circuit's registration built
+#: its one-block partition (`RegisteredCircuit.ofCircuit`), the six C-Flock statements whose claim or verifier read
+#: lies in a module of `trees`' `except`, once the rule read through those, and C-Flock's `LoopInnerRound0Own`, which
+#: reads a claim, from a PR on `next`; and the two exclusion bounds a definition hides, once `Facts.lean`'s `chain`
+#: recorded the bound it ends at
+UNWITNESSED = {"Security": 604, "Security/Properties": 234, "verity/core/service/flock": 8}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -68,7 +91,7 @@ def test_the_unwitnessed_list_only_shrinks():
 
 
 def test_the_randomness_assumption_cites_this_toolchain():
-    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
+    """A3 (C-Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
     for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and
     updates the citation."""
     proofs = ROOT / "Security/Proofs"
@@ -169,7 +192,7 @@ def test_proofs_require_the_security_package():
 
 
 def test_code_never_requires_the_security_analysis():
-    """Code (Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
+    """Code (C-Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
     `Security/`: the analysis reads the code, never the reverse."""
     code = [pkg for pkg in lake_packages() if not pkg.is_relative_to(SECURITY) and not pkg.is_relative_to(ROOT / "tools")]
     assert code, "no code packages outside Security"
@@ -209,7 +232,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: a named assumption, another listed guarantee's statement nor a plain range when the inline rule came (`check.py`'s
 #: `inline_failures`), with those the PRs on `next` then brought and those `main` landed before the rule reached them; a
 #: renamed or restated premise counts twice, under both texts, until `--update` drops the one no tree prints
-INLINE = {"Security": 1700, "Security/Properties": 434, "verity/core/service/flock": 6}
+INLINE = {"Security": 1959, "Security/Properties": 528, "verity/core/service/flock": 6}
 
 
 def test_the_inline_list_only_shrinks():

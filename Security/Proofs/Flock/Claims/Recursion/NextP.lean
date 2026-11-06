@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.NextJ
+module
+
+public import Proofs.Flock.Claims.Recursion.NextJ
 
 /-!
 # The last message with its proofs decoded (`FinalP`)
@@ -17,6 +19,8 @@ carries once `coinSubJ` substitutes the live coins.
   encoding at every proof of the shape (`FlockVBridge.Family.decodeProof_encodeProof`), where `shapeAt` is the verdict's
   shape; the reps' proofs are `RepsRead`'s, read from their step messages.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

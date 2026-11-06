@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkSim
+module
+
+public import Proofs.Flock.Claims.KS.ZkSim
 
 /-!
 # The masked simulator, message by message, and its abort
@@ -14,6 +16,8 @@ last message (`zk_liveOut_known`, `zkSim_liveOut`).
   (`zkSim_proofs_nil`), and the verdict at the draw refuses an outcome without proof files (`not_accTxJ_nil`), so
   `ZkSimAbortAt` holds at every statement.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
