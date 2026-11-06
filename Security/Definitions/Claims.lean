@@ -3,7 +3,7 @@ module
 public import Mathlib
 public import Definitions.Core.Boolean
 public import Definitions.Core.Interaction
-public import Definitions.Claims.Hm96
+public import Definitions.Core.Hm96
 public import Definitions.Claims.Json
 
 /-!
@@ -65,7 +65,7 @@ Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
 
 The named assumptions: `StrictBirthday` and `ExpectedCR` (Core's) and hm96's hiding, `Hm96Hiding`
-(`Definitions/Claims/Hm96.lean`, which the soundness proofs read). What the claims rest on and no Lean statement can say
+(`Definitions/Core/Hm96.lean`, which the soundness proofs read). What the claims rest on and no Lean statement can say
 is `trustedBase`. The texts the canonical printer prints are ASCII without DEL, `Json.Ascii`
 (`Definitions/Claims/Json.lean`), which only completeness reads.
 

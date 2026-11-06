@@ -24,11 +24,13 @@ module
 public import Flock.Circuit
 public import Flock.RecResiduals
 public import Flock.KnownRead
+public import Flock.JsonParse
 public import Flock.Norm
 public import SampledProofs.Partition
 meta import Flock.Circuit
 meta import Flock.RecResiduals
 meta import Flock.KnownRead
+meta import Flock.JsonParse
 meta import Flock.Norm
 meta import SampledProofs.Partition
 
