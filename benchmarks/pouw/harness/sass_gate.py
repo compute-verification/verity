@@ -1063,7 +1063,7 @@ def signature(fn: Function, start: int, end: int) -> list[list[str]]:
     starts = sorted({start} | {t for k in body for lab in fn.insns[k].targets
                                if (t := fn.labels.get(lab)) is not None and start <= t <= body[-1]}
                     | {k + 1 for k in body if fn.insns[k].op[0] in ("BRA", "RET", "EXIT") and k + 1 <= body[-1]})
-    block_of = {k: sum(s <= k for s in starts) - 1 for k in body}
+    basic_block_of = {k: sum(s <= k for s in starts) - 1 for k in body}
     out = []
     for bi, s in enumerate(starts):
         e = starts[bi + 1] if bi + 1 < len(starts) else body[-1] + 1
@@ -1085,7 +1085,7 @@ def signature(fn: Function, start: int, end: int) -> list[list[str]]:
                 i = fn.labels.get(lab)
                 if ins.op[0] == "RET":
                     return "`(caller)"
-                return f"`(B{block_of[i] - bi:+d})" if i in block_of else "`(END)"
+                return f"`(B{basic_block_of[i] - bi:+d})" if i in basic_block_of else "`(END)"
 
             items.append(_CLASS.sub(lambda m: m.group(1), _TARGET.sub(tgt, t)))
         out.append(sorted(items))

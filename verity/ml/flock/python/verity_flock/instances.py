@@ -140,7 +140,7 @@ def instances_digest(name: str, n: int) -> str:
     return hashlib.sha256(f"{rel.name} synthetic|seed={rel.instance_seed}|n={n}|K={K}".encode()).hexdigest()
 
 
-def instances_ref(name: str, total: int) -> dict:
+def input_set_ref(name: str, total: int) -> dict:
     rel = _relation(name)
     if rel.frozen_tier:
         return {"dataset": rel.instances_dataset, "tier": rel.instances_tier, "range": [0, total],
@@ -276,7 +276,7 @@ def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | 
     x, w, accs = draw(name, total, procs, cache, lo, hi)
     st = statement(name, x, w, accs, total, lo, leaf)
     out = np.asarray([f32_to_bf16_word(int(a[-1])) if pipe.epilogue else int(a[-1]) for a in accs], dtype="<u4")
-    ref = instances_ref(name, total)
+    ref = input_set_ref(name, total)
     ref["range"] = [lo, hi]
     header = {"format": FORMAT, "relation": name, "vus": hi - lo, "k": K, "word_bits": pipe.word_bits, "units": rel.steps,
               "row_bytes": K * pipe.word_bits // 8, "epilogue": pipe.epilogue, "instances": ref,
