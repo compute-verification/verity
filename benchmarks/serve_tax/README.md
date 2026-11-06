@@ -40,7 +40,9 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
 `run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit window and the KV edge's window).
 `MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
 edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
-The `tick` arm needs `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in certifier.
+The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in certifier,
+and refuse a tree without them. A saturated load keeps a connection open for every request queued in the server, so the
+client raises its open-file limit to the hard limit first.
 
 ## What it writes
 
@@ -49,8 +51,10 @@ the plugin's changes, τ, versions, each load's start), `server/` (the server's 
 trace, each window's token roots, each KV edge's bytes and kernel time) and `<load>/rep-<r>/client.jsonl` (each request's
 send, streamed chunks and tokens), then `table.md` and `table.json` (`serve_tax.py table`): per arm and load, output tokens
 and requests a second, goodput at the SLO (TTFT and time per output token), TTFT and ITL at p50 and p99, each a mean over
-reps with a 95% interval, and each arm's tax, its compute per token over the reference's at the same load less one,
-against `compiled` and against its parent. `replay-{compiled,eager}/replay.json` has the replay's counts and wall time
+reps with a 95% interval, the requests sent and not served, and each arm's tax, its compute per token over the
+reference's at the same load less one, against `compiled` and against its parent. Below capacity the throughput is set
+by the arrivals, so the tax there reads the drain and the cost shows in the latencies; a tax beside unserved requests
+isn't over the same requests. `replay-{compiled,eager}/replay.json` has the replay's counts and wall time
 beside the served window's.
 
 The `kv` arm hashes the whole pool, free blocks too, at each edge: an upper bound on hashing the blocks live there, and a
