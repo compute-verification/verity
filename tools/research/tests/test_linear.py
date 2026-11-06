@@ -554,6 +554,45 @@ def test_the_audit_finds_each_kind_once_on_its_issue_and_nothing_on_the_rest(tmp
     assert fake.audited["team"] == {"or": [{"key": {"in": ["INF", "infra"]}}, {"name": {"in": ["INF", "infra"]}}]}
 
 
+def test_an_issue_that_waits_only_on_landing_is_neither_overdue_nor_slipped_and_is_counted_apart(tmp_path):
+    """The queue's wait is ci's: In Review, every attached PR open and marked ready at its head."""
+    fake = FakeLinear()
+    fake.open = [issue("INF-50", "In Review", dueDate="2026-10-18", attachments={"nodes": [pr(20, "open")]}),        # waits
+                 issue("INF-51", "In Review", dueDate="2026-10-18", attachments={"nodes": [pr(21, "open")]}),        # unmarked
+                 issue("INF-52", dueDate="2026-10-18", attachments={"nodes": [pr(20, "open")]}),                     # In Progress
+                 issue("INF-53", "In Review", dueDate="2026-10-18", attachments={"nodes": [pr(20, "open"), pr(22, "merged")]}),
+                 issue("INF-54", "In Review", dueDate="2026-10-18")]                                                # no PR
+    fake.asked = [asked("INF-50", "In Review", dates=("2026-10-14", "2026-10-16", "2026-10-18")),                   # slipped, waits
+                  asked("INF-51", "In Review", dates=("2026-10-14", "2026-10-16", "2026-10-18"))]                   # slipped
+    asks: list[list[int]] = []
+    lin = linear.Linear(KEY, fake, cache=tmp_path / "t")
+    found = lin.audit({"INF": "infra"}, now=AUDIT_NOW, waiting=lambda nums: asks.append(nums) or set(nums) <= {20})
+    assert [(f["issue"], f["kind"]) for f in found] == [
+        ("INF-51", "overdue"), ("INF-51", "slipped"), ("INF-52", "overdue"), ("INF-53", "overdue"), ("INF-54", "overdue")]
+    assert lin.landing == [{"issue": "INF-50", "lane": "infra", "due": "2026-10-18", "late_h": 20.0}]
+    assert asks == [[20], [21]]                                     # asked only of an In Review issue whose PRs are all open
+    assert ("INF-50", "overdue") in [(f["issue"], f["kind"]) for f in lin.audit({"INF": "infra"}, now=AUDIT_NOW)]   # no `waiting`
+    assert slack.render_landing(lin.audit({"INF": "infra"}, now=AUDIT_NOW, waiting=lambda n: True) and lin.landing) == (
+        "\nwaiting on landing: 2 issue(s), not findings; ci and top see the total (2 past their date, the oldest by 20 h)")
+    assert slack.render_landing([]) == ""
+
+
+@pytest.mark.parametrize("fail", ["no checkout", "gh fails"])
+def test_landing_waiter_that_cant_read_the_open_prs_lets_nothing_wait_instead_of_crashing_the_audit(fail, tmp_path, monkeypatch,
+                                                                                                   capsys):
+    from research import queue
+
+    def refuse(*a, **k):
+        raise (OSError("not a git repository") if fail == "no checkout" else queue.QueueError("gh pr list: HTTP 502"))
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(queue, "_out", refuse)
+    monkeypatch.setattr(queue.GitHub, "open_prs", refuse)
+    waiting = queue.landing_waiter(repo=None if fail == "no checkout" else "o/r", store_root=str(tmp_path))
+    assert waiting([20]) is False and waiting([21]) is False
+    assert capsys.readouterr().err.count("can't read the open PRs") == 1          # read, and refused, once
+
+
 def test_audit_prints_each_lanes_findings_and_their_counts_and_exits_1_on_any(fake, registry, capsys, lin):
     lin.open = [issue("INF-2", "Todo", project=None, projectMilestone=None), issue("INF-9", title="x\u2026"), issue("DAN-1"),
                 issue("CMP-3", dueDate=None, labels={"nodes": [{"name": "lane:compute-research"}]})]
