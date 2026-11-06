@@ -15,8 +15,10 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and `{file: SHA-512}` naming at least each rep
   file the statement's session reads (`<stream with / as .>.bin`). The drawn units are proved in one session, whose
   statement is theirs: the check refuses evidence naming none or several (`oneSession`) before it reads a tree;
-* **blobs**: the files those digests name (`Core.Blobs`), and the MUFU tables any lookup reads, found under their pinned
-  SHA-512 as `flock-verify --archive` finds them;
+* **blobs**: the files those digests name (`Core.Blobs`). The parameters register no lookup table, so blobs holding a
+  pinned MUFU table under its SHA-512 (`tablesOf`, as `flock-verify --archive` finds one) refuse (`tablesHeld`,
+  `NO_TABLES`) before the session is set up: the session `run` sets up reads no table, and a circuit with a lookup
+  rejects (its table is not given);
 * **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
   the challenger's key, on the verifier's window; none read refuses. The check below runs at them (`checkBlobsAt`): v1's
   `checkAt` refuses a draw other than the one they give before v1's `check`;
@@ -288,6 +290,28 @@ def tablesOf (bs : Core.Blobs) : List (String × ByteArray) :=
   Flock.MUFU_TABLES.filterMap fun t =>
     (bs.entries.find? fun (d, _) => Flock.hexOf d == t.sha512).map fun (_, b) => (t.name, b)
 
+/-- The refusal of blobs holding a pinned MUFU table (`tablesHeld`): the parameters register the circuit and public
+files and no lookup table. -/
+def NO_TABLES : String :=
+  "tables: the parameters register no lookup table (proofs names the circuit and public files only), and the blobs " ++
+    "hold the pinned MUFU table"
+
+/-- The blobs' lookup tables held to the registration's (module docstring, **blobs**): it registers none, so blobs that
+hold a pinned MUFU table (`tablesOf`) refuse, naming each. -/
+def tablesHeld (bs : Core.Blobs) : V Unit :=
+  match tablesOf bs with
+  | [] => pure ()
+  | ts => throw s!"{NO_TABLES} {", ".intercalate (ts.map (·.1))}"
+
+/-- `tablesHeld` on blobs under the digests `digests` (lowercase hex), whatever their bytes: the `tables_held` piece,
+`{"digests": [hex, ...]}` to `{"why": refusal or null}`. -/
+def tablesPiece (j : Json) : V Json := do
+  let .arr ds := getD j "digests" | throw "digests is not a list"
+  let entries ← ds.mapM fun
+    | .str s => return (← Flock.unhex s, ByteArray.empty)
+    | _ => throw "digests is not a list of hex strings"
+  return Json.mkObj [("why", match tablesHeld ⟨entries⟩ with | .ok () => Json.null | .error w => Json.str w)]
+
 /-- What `flock-verify verify --zk` reads besides a session's directory, as `verdicts` runs it: the statement's tags
 `tags`, the circuit and public files, one table, the lookup tables the blobs hold, and the verifier's own partition
 object and program. -/
@@ -465,10 +489,12 @@ def provedHeld (proved want : Array Nat) : V Unit :=
 /-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
 session set up at its own record's draw: every session's verdict, the units the accepted ones proved and whether all
 accepted. A session accepts only where the registration's population is the public file's units in order
-(`FilePart.check`, last). A refusal for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
+(`FilePart.check`, last). A refusal, first, of blobs holding a lookup table the registration doesn't (`tablesHeld`),
+then for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
 file no blob holds, an accepted session naming another program than the partition object's, or proved units other than
 the evidence's (`provedHeld`). -/
 def run (p : Own) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) : V Run := do
+  tablesHeld bs
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   (if tags0.plainLeaves then throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
     else pure () : V Unit)
@@ -676,5 +702,26 @@ private def refusal : V Unit → String
 
 #guard (rootBLen { (default : Flock.Setup) with m := 25, merkle := Flock.MerkleScheme.hm96Sha512 }).toOption == some 16384
 #guard (rootBLen { (default : Flock.Setup) with m := 26, merkle := Flock.MerkleScheme.hm96Sha512 }).toOption == some 8192
+
+/-- Blobs under the pinned SHA-512s of the MUFU tables `names`, whatever their bytes, after a blob that is no table. -/
+private def pinnedBlobs (names : List String) : Core.Blobs :=
+  ⟨#[(Flock.Sha512.hash "not a table".toUTF8, "not a table".toUTF8)] ++ (Flock.MUFU_TABLES.filter fun t =>
+    names.contains t.name).toArray.map fun t => ((Flock.unhex t.sha512).toOption.getD .empty, .empty)⟩
+
+private def noOwn : Own :=
+  { programJ := Json.mkObj [("definitions", Json.mkObj [])], program := .empty, partition := Json.null, circuit := "",
+    pub := "", registered := none }
+
+#guard refusal (tablesHeld (pinnedBlobs [])) == ""
+#guard refusal (tablesHeld (pinnedBlobs ["ex2"])) == s!"{NO_TABLES} ex2"
+#guard refusal (tablesHeld (pinnedBlobs ["ex2", "rsq"])) == s!"{NO_TABLES} rsq, ex2"
+#guard refusal ((fun _ => ()) <$> run noOwn #[] none (pinnedBlobs ["rcp"])) == s!"{NO_TABLES} rcp"
+#guard (refusal ((fun _ => ()) <$> run noOwn #[] none (pinnedBlobs []))).startsWith "circuit: "
+#guard (tablesPiece (Json.mkObj [("digests", Json.arr #[Json.str
+  "8a317adbcc078bf70ae01959b679d49f97cd9c8a93d6f39b7325c93d0fd550fa4396a4c3a0568d2387c2ff2f33eb76453b33a7b8890d97752d86cc1d971aeacc",
+  Json.str "00"])])).toOption == some (Json.mkObj [("why", Json.str s!"{NO_TABLES} rcp")])
+#guard (tablesPiece (Json.mkObj [("digests", Json.arr #[Json.str "00"])])).toOption ==
+  some (Json.mkObj [("why", Json.null)])
+#guard !(tablesPiece (Json.mkObj [("digests", Json.arr #[Json.str "0"])])).toBool
 
 end SampledProofs.OneStageZk
