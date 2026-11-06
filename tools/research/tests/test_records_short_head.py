@@ -1,14 +1,22 @@
-"""The records gate compares inputs by full shas, whatever form the head came in."""
+"""The records gate keys a head's Lean inputs from its tree, whatever form the head came in."""
 
-from test_queue import _gate, world  # noqa: F401  (world: the fixture)
+from test_queue import LOCK, _gate, _key, _keyed, _lock, _published, world  # noqa: F401  (world: the fixture)
 
 
-def test_a_short_head_compares_inputs_like_its_full_sha(world):  # noqa: F811
-    """`git diff-tree --stdin` reads a pair whose head isn't a full sha as one commit and prints no paths, so a 12-character head
-    vouched for every candidate.  The gate resolves every name first: the short head's diff is the full one's."""
-    a = world.change({"pkg/A.lean": "def a := 1\n"})
-    b = world.change({"pkg/A.lean": "def a := 2\n"}, base=a)
+def test_a_short_head_is_vouched_for_exactly_as_its_full_sha(world):
+    """A 12-character head is keyed from the tree its name resolves to, so it has its full sha's key: a pass on its parent's key
+    vouches for neither form, and a pass on the head's own key vouches for both.  A gate that read no Lean inputs at a short
+    head would vouch for every candidate."""
+    world.with_store_remote()
+    a = _keyed(world, {LOCK: _lock()})
+    b = world.change({LOCK: _lock(A="2")})
+    _published(world, a, passes={_key(world.dev, a): "pkg"})
     gate = _gate(world)
-    assert gate._differs(b, [a], ["pkg"]) == {a}
-    assert gate._differs(b[:12], [a], ["pkg"]) == {a}
-    assert gate._differs(b[:12], [b], ["pkg"]) == set()
+    gate._read()
+    assert gate._vouch(b, "pkg", 0) is None and gate._vouch(b[:12], "pkg", 0) is None
+    key = _key(world.dev, b)
+    _published(world, b, passes={key: "pkg"})
+    gate = _gate(world)
+    gate._read()
+    full, short = gate._vouch(b, "pkg", 0), gate._vouch(b[:12], "pkg", 0)
+    assert full and short and f"(key {key[:12]})" in full and f"(key {key[:12]})" in short, (full, short)
