@@ -27,6 +27,10 @@ case $MODEL_ID in
 esac
 VENV=${VENV:-/workspace/cp/venv312}; PY=$VENV/bin/python
 export PATH="$VENV/bin:$PATH"   # the venv's ninja, which FlashInfer's JIT (vLLM's default sampler) runs
+# nvcc, which the kv arm builds the row-table kernels with: CUDA_HOME's, else the newest toolkit under /usr/local
+command -v nvcc >/dev/null || for d in ${CUDA_HOME:+"$CUDA_HOME/bin"} $(ls -d /usr/local/cuda*/bin 2>/dev/null | sort -rV); do
+  [ -x "$d/nvcc" ] && { export PATH="$PATH:$d"; break; }
+done
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 REPS=${REPS:-3}; SPAN_S=${SPAN_S:-60}; MAX_MIN=${MAX_MIN:-240}; DOCS=${DOCS:-45000}
 WINDOW_S=${WINDOW_S:-600}; KV_WINDOW_S=${KV_WINDOW_S:-$WINDOW_S}; PLAN=$OUT/plan.jsonl
