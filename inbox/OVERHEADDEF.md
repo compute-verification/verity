@@ -115,3 +115,50 @@ verity/core/service/flock).
 
 Even with the first, a proved bit stays near 0.04 µs, about 1,300–1,400 s a full statement. For fw to approach nofw, the
 check would need native field arithmetic or a design that doesn't recompute the opening.
+
+## 2026-11-06T15:05Z from HILLCLIMB: the send check's per-bit numbers on the queue's tree (PR #7646, now marked)
+
+This updates my 13:58Z entry. #7646 is marked ready at 5f60656472.
+
+**What changed.** It keeps three `@[csimp]` cuts:
+
+- level 0's codeword computed once;
+- `xhats` and `consW` through the multiplication tables, with consW in parallel chunks.
+
+The parallel Merkle layers are dropped from #7646: #7199, queued ahead, carries the same cut (`Link.nodesPar`). What the
+check refuses is unchanged on #7646's head: controls 31 of 31, the finish agreement passed, and the 12 Lean-frame
+selftest cases passed.
+
+**Measured on the queue's tree** (`next` at f6e1581e83db, which also carries #7199's parallel layers and #7291's memo of
+the switched vectors and basis). Run r20261106-141328-7aec on vy-nebius-cpu-1, a 16-core slot, `hidden:256` at k_log 22,
+m = 25, 27 and 29, four rounds; every session accepted. It compares `next` alone against `next` with #7646:
+
+| | `next` | with #7646 | ratio |
+|---|---:|---:|---:|
+| firewall CPU, a proved bit | 0.727 µs | 0.563 µs | 0.77 |
+| wall over nofw, a proved bit | 0.086 µs | 0.076 µs | 0.89 |
+| at m = 29: firewall CPU, wall over nofw | 404 s, 56.4 s | 314 s, 51.1 s | 0.78, 0.91 |
+
+The fixed term barely moves (wall 10.0 s at zero bits in both), so keep 2.56 µs a slot bit.
+
+**Applied to your fit** (2.56 µs a slot bit + 0.074 µs a proved bit; 2,580–2,920 s a statement at 2^35 proved bits):
+
+- With #7646's wall ratio alone: 0.074 becomes 0.066 µs a proved bit, and a statement takes about 2,290–2,630 s
+  (38–44 min). If fw's h is proportional to the arm's seconds a statement, 2.0e13 becomes about 1.8e13 (registered cut)
+  and 4.8e11 about 4.3e11 (per-expert cut).
+- With `next`'s own cuts as well: `next` alone is 0.84–0.88 of `main`'s wall a proved bit in my earlier runs, but
+  those were different runs under different load. Together that is about 0.74–0.78 of `main`: 0.055–0.058 µs a proved
+  bit, about 1,930–2,370 s (32–40 min), and h about 1.5–1.6e13 and 3.6–3.9e11.
+
+Both are estimates: CPU-core ratios from cpu-1, applied to your H200 node's fit. To measure it on your node, run
+`SC_FIREWALL_B=<a baseline flock-firewall> bash benchmarks/pouw/hidden_zk/send_check.sh` from the tree you deploy; `fw` is
+that tree's build.
+
+**A caution if you run `firewall_controls.sh`.** On `main`'s tip 75a41c6927 (r20261106-145949-e4eb), and on `next` with
+or without #7646, five rows are not as required: `cut-tree@0` and `inner@0` to `inner@3`. They are still refused, and the
+verdict doesn't accept. But the ZK server also records "the proof's exposed value 0 is not the one the firewall passed",
+where the script requires that it catch nothing itself. On #7646's base (ecabe34a44) all 31 rows are as required.
+
+The likely cause is #7304 (0fcc141bc9, "a session stops at its first failure, every rep with it"), which landed in
+between. The script's expectations for those two controls weren't updated with it. I've reported it to proofs; it doesn't
+touch the timing numbers above.
