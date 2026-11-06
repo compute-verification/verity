@@ -135,3 +135,53 @@ def test_priority_sets_or_clears_a_goal_s_priority_as_its_own_write():
     fake = Fake([stored])
     assert goals.main(["set", "demos/both", "--title", "Reworded"], fake) == 0
     assert not {"priority", "prioritySet", "prioritySetBy", "prioritySetAt"} & set(fake.posted[-1]["set"]), "a goal write never sends priority back"
+
+
+def test_a_read_sends_the_site_key_in_read_key_and_a_write_this_agents_identity(monkeypatch, tmp_path):
+    """A machine with no Cursor identity reads the page with the site key of `READ_KEY`; a write never sends it, a key the route
+    refuses is named by its file and never echoed, and with no key (or an empty file) a read sends this agent's identity."""
+    import io
+    import urllib.error
+
+    key = tmp_path / "goals.key"
+    key.write_text("vsk_dummy-site-key\n")
+    monkeypatch.setattr(goals, "READ_KEY", key)
+    sent: list[tuple[str, str]] = []
+
+    def answer(method, url, data, headers):
+        sent.append((method, headers["Authorization"]))
+        return {"goals": [GOAL]}
+
+    def refuse(*a, **k):
+        raise urllib.error.HTTPError(goals.GOALS, 401, "Unauthorized", {}, io.BytesIO(b'{"error": "invalid_key"}'))
+
+    route = goals.Route()
+    monkeypatch.setattr(route._oidc, "send", lambda fn: fn("dummy-identity-token"))
+    monkeypatch.setattr(goals, "http_json", answer)
+    assert route.call() == route.call({"set": GOAL}) == [GOAL]
+    assert sent == [("GET", "Bearer vsk_dummy-site-key"), ("POST", "Bearer dummy-identity-token")]
+    monkeypatch.setattr(goals, "http_json", refuse)
+    with pytest.raises(RouteError) as e:
+        route.call()
+    assert e.value.status == 401 and str(e.value) == (
+        f"GET {goals.GOALS}: the route refused the site key in {key} (HTTP 401 invalid_key): put a key with events:read there, "
+        "or remove it to read with this agent's Cursor identity")
+    monkeypatch.setattr(goals, "http_json", answer)
+    key.write_text("\n")
+    assert route.call() == [GOAL] and sent[-1] == ("GET", "Bearer dummy-identity-token")
+    key.unlink()
+    assert route.call() == [GOAL] and sent[-1] == ("GET", "Bearer dummy-identity-token")
+
+
+def test_due_time_takes_a_day_as_its_end_in_pacific_time_and_a_time_at_its_offset():
+    from datetime import UTC, datetime
+
+    def utc(at: str) -> float:
+        return datetime.fromisoformat(at).replace(tzinfo=UTC).timestamp()
+
+    assert goals.due_time("2026-11-06") == utc("2026-11-07T08:00")
+    assert goals.due_time("2026-07-01") == utc("2026-07-02T07:00")
+    assert goals.due_time("2026-11-06T10:00-08:00") == goals.due_time("2026-11-06T10:00") == utc("2026-11-06T18:00")
+    assert goals.due_time("2026-11-06T18:00Z") == utc("2026-11-06T18:00")
+    for bad in (None, "", "Thursday", 5):
+        assert goals.due_time(bad) == float("inf")
