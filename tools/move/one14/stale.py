@@ -12,7 +12,7 @@ paths, modules = m["paths"], m["modules"]
 
 
 def git(*a: str) -> str:
-    return subprocess.run(["git", *a], capture_output=True, text=True, check=True).stdout
+    return subprocess.run(["git", *a], capture_output=True, text=True, errors="replace", check=True).stdout
 
 
 mods = sorted(modules, key=len, reverse=True)
