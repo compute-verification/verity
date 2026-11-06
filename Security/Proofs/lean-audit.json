@@ -123,6 +123,7 @@
   "Proofs.Properties.Verity.Sampled.Counts",
   "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Verity.Sampled.Instance",
+  "Proofs.Properties.Verity.Sampled.OpensAt",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",

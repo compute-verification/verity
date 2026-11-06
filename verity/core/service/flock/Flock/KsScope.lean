@@ -156,27 +156,10 @@ theorem sharedWhy_none {tags : Tags} {c : Circuit} {publicFile : ByteArray} (h :
 /-- **No collision over a file's tables says each pair of ports with one root has one domain.** -/
 theorem domOf_eq_of_collidesT_false {c : Circuit} {pub : Public} {t : Tables} (h : collidesT c pub t = false)
     {q q' : Nat} (hlt : q' < q) (hq : q < c.ports.size) (he : rootT c pub t q' = rootT c pub t q) :
-    PortRoots.domOf c q' = PortRoots.domOf c q := by
-  have hq' : q' < c.ports.size := Nat.lt_trans hlt hq
-  have get : ∀ i, i < c.ports.size →
-      ((Array.range c.ports.size).map (rootT c pub t)).getD i ByteArray.empty = rootT c pub t i := by
-    intro i hi
-    have hs : i < ((Array.range c.ports.size).map (rootT c pub t)).size := by simpa using hi
-    first
-      | (unfold Array.getD; rw [dif_pos hs]; simp)
-      | simp [Array.getD_eq_getD_getElem?, hi]
-      | simp [hi]
-  refine Classical.byContradiction fun hd => ?_
-  have hx : collidesT c pub t = true := by
-    unfold collidesT PortRoots.collidesIn
-    rw [List.any_eq_true]
-    refine ⟨q, List.mem_range.2 hq, ?_⟩
-    rw [List.any_eq_true]
-    refine ⟨q', List.mem_range.2 hlt, ?_⟩
-    rw [get q' hq', get q hq, he]
-    simp [hd]
-  rw [hx] at h
-  cases h
+    PortRoots.domOf c q' = PortRoots.domOf c q :=
+  PortRoots.dom_eq_of_collidesBy_false (np := c.ports.size) (dom := PortRoots.domOf c)
+    (roots := (Array.range c.ports.size).map (rootT c pub t)) h hlt hq
+    (by rw [PortRoots.getD_range_map _ (Nat.lt_trans hlt hq), PortRoots.getD_range_map _ hq]; exact he)
 
 theorem filesWhy_none {tags : Tags} {c : Circuit} {pub : Public} {publicFile : ByteArray}
     (h : filesWhy tags c pub publicFile = none) :
