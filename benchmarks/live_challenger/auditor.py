@@ -33,7 +33,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
 - **What runs.** `/opt/vy-challenger/current` -> `/opt/vy-challenger/<commit>`, a root-owned `git archive` of that commit
   (`pin.sh`); the commit is the directory's name, and every entry names it (`pinned`). pin.sh pins only a commit on
   origin/main's first-parent history, which it fetches from GitHub itself, and appends `pin_line(commit, main, utc)` to
-  the pins log (`/opt/vy-challenger/pins.jsonl`, root's, `chattr +a`; `record_pin`) before it moves `current`.
+  the pins log (`/opt/vy-challenger/pins.jsonl`, root's, `chattr +a`; `record_pin`, which refuses past `MAX_PINS` lines)
+  before it moves `current`.
   A reserve or an open is refused unless that log records this tree's pin (`pins_refusal`, the verifier's `pins_reason`),
   and each open seals the log as it stands (`pins: {lines, sha512}`), so `pinned_session` can hold the session to a pin
   the log records, and that pin to the auditor's own first-parent list of main. The key (`/var/lib/vy-challenger/key`,
@@ -116,7 +117,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
 - **The ledger** (`/var/lib/vy-challenger/windows.jsonl`, `chattr +a`) is one JSON object a line: `schema`, `seq` (from 0),
   `prev` (SHA-512 of the previous line's bytes, 128 zeros first), `kind`, `session`, `body` and `sig`, an LMS signature under
   the challenger key over `entry_message(I, entry)`. Its entries' LMS leaves strictly increase (`append` refuses an entry
-  whose leaf isn't after the last one, as a restored key state would sign), and each record's leaf lies between its
+  whose leaf isn't after the last one, as a restored key state would sign), it holds at most `MAX_LEDGER_LINES` lines of
+  at most `MAX_LEDGER_LINE` characters (`append` refuses an entry past either, as v2 refuses such a ledger;
+  `remote`'s "The device's caps"), and each record's leaf lies between its
   session's open and end and is no entry's. v2 entries follow the host's v1 entries in one chain, and `verify_ledger`, the
   reference check, reads both, and checks each window's reserve, open and end in that order, its expiry, and the periods
   (`verify_periods` returns them). Infra publishes the ledger and each ended session to the store (`publish.sh`, the control
@@ -281,8 +284,9 @@ sys.path.insert(0, str(TREE))
 
 from verity.core.protocols.sampled_proofs.challenger import (LEDGER_ROLE as ROLE, LEDGER_SCHEMA as SCHEMA,  # noqa: E402
                                                              LEDGER_SCHEMA_V1 as SCHEMA_V1,
-                                                             LEDGER_TAGS as TAGS, PERIOD_KINDS, RESERVED,
-                                                             SESSION_KINDS, cap_of as _cap_of,
+                                                             LEDGER_TAGS as TAGS, MAX_LEDGER_LINE, MAX_LEDGER_LINES,
+                                                             MAX_PINS, PERIOD_KINDS, RESERVED, SESSION_KINDS,
+                                                             cap_of as _cap_of,
                                                              circuit_of as _circuit_of, extends, lane_of, leaf_of,
                                                              ledger_message as entry_message, ledger_text, pin_line,
                                                              pins_reason, pins_seal, root_of, verify_ledger, verify_periods)
@@ -493,11 +497,15 @@ def append_only(path: Path) -> None:
 def record_pin(log: Path, commit: str, main: str, now: datetime, *, seal: Callable[[Path], None] = append_only) -> str:
     """pin.sh's last step before it moves `current`, as root: `pin_line(commit, main, now)` appended to the pins log `log`,
     which is root's, 0644, and append-only (`chattr +a`, which only root can lift, as the ledger) before any line is
-    written. A failure here fails the pin, so `current` never names a tree the log doesn't."""
+    written. A failure here fails the pin, so `current` never names a tree the log doesn't; a log that holds `MAX_PINS`
+    lines, the most v2 reads, takes no more."""
     try:
         line = pin_line(commit, main, utc(now))
     except ValueError as e:
         raise Refused(f"pin {commit!r} at main {main!r}: {e}") from None
+    if len(read_pins(log)) >= MAX_PINS:
+        raise Refused(f"pin {commit}: {log} holds {MAX_PINS} lines, the most v2 reads (MAX_PINS), so no pin is logged "
+                      "and `current` doesn't move")
     if not log.exists():
         log.touch()
         log.chmod(0o644)
@@ -700,9 +708,14 @@ def locked(path: Path) -> Iterator[None]:
 def append(host: Host, kind: str, session: str, body_of: Callable[[list[bytes]], dict], I: bytes,
            sign: Callable[[bytes], bytes]) -> dict:
     """Append one signed entry, its body `body_of` the ledger as it stands (which may refuse), under the ledger's lock;
-    fsynced. Refused, unwritten, when the signature's leaf isn't after the ledger's last entry's (a restored key state)."""
+    fsynced. Refused, unwritten, when the ledger holds `MAX_LEDGER_LINES` lines (before it signs), when the entry's line
+    is past `MAX_LEDGER_LINE` characters, or when the signature's leaf isn't after the ledger's last entry's (a restored
+    key state): v2 refuses a ledger past either bound."""
     with locked(host.root / "ledger.lock"):
         lines = read_ledger(host.ledger)
+        if len(lines) >= MAX_LEDGER_LINES:
+            raise Refused(f"the ledger holds {len(lines)} lines, the most v2 reads (MAX_LEDGER_LINES), so no {kind} entry "
+                          "is written")
         entry = {"schema": SCHEMA, "seq": len(lines), "prev": hashlib.sha512(lines[-1]).hexdigest() if lines else ZERO,
                  "kind": kind, "session": session, "body": body_of(lines)}
         with locked(host.root / "sign.lock"):
@@ -710,9 +723,13 @@ def append(host: Host, kind: str, session: str, body_of: Callable[[list[bytes]],
         if lines and leaf_of(entry["sig"]) <= leaf_of(json.loads(lines[-1])["sig"]):
             raise Refused(f"the key signed at leaf {leaf_of(entry['sig'])}, not after the ledger's last entry's: its key state "
                           "was restored or forked, and no entry is written under it")
+        text = ledger_text(entry)
+        if len(text) > MAX_LEDGER_LINE:
+            raise Refused(f"the {kind} entry's line is {len(text)} characters, past the {MAX_LEDGER_LINE} v2 reads "
+                          "(MAX_LEDGER_LINE), so it is not written")
         fd = os.open(host.ledger, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
         try:
-            os.write(fd, ledger_text(entry).encode() + b"\n")
+            os.write(fd, text.encode() + b"\n")
             os.fsync(fd)
         finally:
             os.close(fd)
