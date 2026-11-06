@@ -95,6 +95,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.Sampled.SampleNamed", "Proofs.Properties.Verity.Sampled.Digest",
   "Proofs.Properties.Verity.Sampled.MovesReachAt", "Proofs.Properties.Verity.Sampled.OpenErr",
   "Proofs.Properties.Verity.Sampled.LeafErr", "Proofs.Properties.Verity.Sampled.Charge",
+  "Proofs.Properties.Verity.Sampled.CouplingAt",
   "Proofs.Properties.Verity.SampledDraw", "Proofs.Properties.Verity.SampledLog", "Proofs.Properties.Verity.SampledRead",
   "Proofs.Properties.Remote", "Proofs.Properties.Remote.Honest", "Proofs.Properties.Verity.Recursive",
   "Proofs.Properties.Verity.Recursive.Target", "Proofs.Properties.Verity.Recursive.Refusals",
