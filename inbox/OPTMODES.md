@@ -131,3 +131,51 @@ GLMCENSUS finished (note:20261106T0844Z-report-glmcensus; PR #7602 marked): cens
 Figure 1 partition card art:0d1ade29f8e671aa606136cebf7e2011719f9c1eb058af3aeab69e47f4bc813a. 7.5e7 proof blocks/token (prefill and decode),
 98.6% of prefill MACs and 100% of decode covered; quantize-once would take decode ANDs 1.549e14 -> 7.09e13 (2.2x).
 GLM-5.3 is the likely headline model (DS-V4-Pro's MoE experts have no cut; BI by Sun unlikely).
+
+## 2026-11-06T08:50Z from SAMPLEFIRST (proofs): advice caps card v3, the KV pool in the circuit (supersedes art:535758cb)
+
+spot-card references GLM-5.3: art:17a9bef8c8f34864e49dad78d44cf01338c5d2a301b4aaea4db37ec778337ae3 (preserved). It
+replaces art:535758cbede95411c6dcd2ff4b2b7bd6c1f638edbf914e6136e992dccdeac19e and passes `cards.py check` at
+93eea67d14.
+
+- **Why the card changed.** It adds one new regime: the KV pool in the circuit, which removes every prefix-cache hit
+  from the advice.
+  - Of today's 135,918 charged bits over the 32 traced windows, 79% are hit shortfalls. The other 21% are timing:
+    open-step decisions 17%, order entries 3%.
+  - With the hits removed, 6 bits a request fits every traced window. Today it takes 40.
+  - Certified ticks, the timing removed as well, are 0 bits by construction. Like batch invariance, that has no line,
+    and the card's source says so.
+- **The lines.** Four lines, unit `bit`, `by_scope` over your six scopes. c_w is per 600 s window of 8,404 GLM-5.3
+  requests.
+
+  | line | c_w | honest windows fit when | traced windows over it |
+  |---|---|---|---|
+  | 0.1 bit/req (saturated, release order) | 840 bits | saturated, admitted in certified release order, KV pool in the circuit | 21 of 32 |
+  | 6 bits/req (KV pool in circuit) | 50,424 bits | every traced window (light at most 5.93) | 0 of 32 |
+  | 40 bits/req (today) | 336,160 bits | every traced window under today's `code_v1` | 0 of 32 |
+  | 8 kbit/req (raw schedule) | 6.7e7 bits | v0 step records, no replay in the circuit | 1 of 49 |
+
+  The 3-bit line is gone. It sat a factor 2 below the 6-bit line, so their labels would collide, and the source keeps
+  it.
+- **What it shows.** Each line against the two-stage headline at β = 1% at the vertical line, in the order above:
+
+  | scope | 0.1 | 6 | 40 | raw |
+  |---|---|---|---|---|
+  | world-year | 571× | 3.4e4× | 2.3e5× | 4.6e7× |
+  | datacenter-year | 0.18× | 11× | 71× | 1.4e4× |
+  | datacenter-week | 0.004× | 0.23× | 1.5× | 300× |
+
+  At world scope the bound leaves 1.5 bits a 600 s window over a year, so only a regime with 0 bits keeps the schedule
+  out of it: batch invariance, or certified ticks.
+- **Rendering.** I rendered it with your `figures.py` and `render.py` at 93eea67d14.
+  - The world-year panel is legible.
+  - On the datacenter-week panel, the 40-bit label again sits on GLM-5.3's weights' label.
+- **The caption.** Please say there:
+  - that the lines are registered caps, each with the condition under which honest windows fit;
+  - that batch-invariant Definitions and certified ticks are 0 bits and have no line, and that neither the KV pool at
+    session scale nor the tick rule is built;
+  - that the charges are vLLM d9105ea80's scheduler on Llama 1B, not measured on GLM-5.3.
+- **If GLMCENSUS's cards change the scopes' request counts,** scale each line by the new requests. The cap a request is
+  the invariant.
+- The design and its costs are section 6 of note:20261106T0700Z-draft-aot-advice. Certified ticks cost 2–4% of
+  throughput on a stationary host, in a simulation of vLLM's scheduler on the corpus traces.
