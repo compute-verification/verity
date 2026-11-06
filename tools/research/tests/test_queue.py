@@ -516,6 +516,9 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
 POUS = "verity/core/protocols/pous/lean"
 TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json"
 UP = "../../../../../Security/Proofs/lakefile.toml"
+#: what `_pin_main`'s pins record: PoUS's, relative to its directory, and the JSON pin's
+MAIN_TRUSTED, MAIN_EXFIL = ["lean-toolchain", "lakefile.toml", "Old.lean", UP], ["Security/Proofs/lakefile.toml", "x.lean"]
+VECTORS = ('{"a": 1}', '{"b": 2}')
 
 
 def _trusted(paths: list[str], tree: dict[str, str]) -> str:
@@ -523,14 +526,15 @@ def _trusted(paths: list[str], tree: dict[str, str]) -> str:
     return "".join(f"{hashlib.sha256(tree[posixpath.normpath(f'{POUS}/{p}')].encode()).hexdigest()}  {p}\n" for p in paths)
 
 
-def _exfil(paths: list[str], tree: dict[str, str]) -> str:
-    """A JSON pin under `inputs`, followed by vectors one per line as its generate.sh writes them."""
+def _exfil(paths: list[str], tree: dict[str, str], vectors: tuple[str, ...] = VECTORS) -> str:
+    """A JSON pin under `inputs`, followed by ``vectors`` one per line as its generate.sh writes them."""
     doc = {"source": "s", "inputs": {p: hashlib.sha256(tree[p].encode()).hexdigest() for p in paths}}
-    return json.dumps(doc, indent=1)[:-2] + ',\n "vectors": [\n{"a": 1},\n{"b": 2}\n ]\n}\n'
+    return json.dumps(doc, indent=1)[:-2] + ',\n "vectors": [\n' + ",\n".join(vectors) + "\n ]\n}\n"
 
 
-def _pinned(world: World, tree: dict[str, str], trusted: list[str], exfil: list[str], base: str = "origin/main") -> str:
-    return world.change({**tree, TRUSTED: _trusted(trusted, tree), EXFIL: _exfil(exfil, tree)}, base=base)
+def _pinned(world: World, tree: dict[str, str], trusted: list[str], exfil: list[str], base: str = "origin/main",
+            vectors: tuple[str, ...] = VECTORS) -> str:
+    return world.change({**tree, TRUSTED: _trusted(trusted, tree), EXFIL: _exfil(exfil, tree, vectors)}, base=base)
 
 
 def _pin_main(world: World) -> dict[str, str]:
@@ -538,8 +542,7 @@ def _pin_main(world: World) -> dict[str, str]:
     tree = {f"{POUS}/lakefile.toml": "l0\n", f"{POUS}/lean-toolchain": "t0\n", f"{POUS}/Old.lean": "o0\n",
             "Security/Proofs/lakefile.toml": "s0\n", "x.lean": "x0\n"}
     pins = (Path(__file__).resolve().parents[2] / "verity" / "check" / "pins.py").read_text()
-    base = _pinned(world, {**tree, "tools/verity/check/pins.py": pins}, ["lean-toolchain", "lakefile.toml", "Old.lean", UP],
-                   ["Security/Proofs/lakefile.toml", "x.lean"])
+    base = _pinned(world, {**tree, "tools/verity/check/pins.py": pins}, MAIN_TRUSTED, MAIN_EXFIL)
     _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
     return tree
 
@@ -578,6 +581,44 @@ def test_prs_whose_only_conflicts_are_in_pins_merge_with_each_pin_rebuilt_from_t
     tip = _git(world.origin, "rev-parse", "refs/heads/next")
     assert _git(world.origin, "rev-parse", f"{tip}^2") == world.gh.prs[2].head
     assert _git(world.origin, "log", "-1", "--format=%B", tip) == f"Queue: #2 change 2\n\nPR: #2\nHead: {world.gh.prs[2].head}\nOwner: lane-2"
+
+
+def test_prs_that_each_changed_a_json_pins_vectors_conflict_in_the_pin_rather_than_one_losing_its_vectors(world):
+    """Two PRs that each added vectors to a JSON pin, beside its digests for their own inputs, conflict only in the pin, but
+    neither side's text is the merge's: rebuilding it from `next`'s text dropped the PR's vectors, and the test reading one
+    failed after landing.  The merge refuses, naming the pin and the PR that touched it, and so do `status` and the preflight
+    (`conflicting_files`)."""
+    tree = _pin_main(world)
+    world.gh.put(1, _pinned(world, {**tree, "x.lean": "x1\n"}, MAIN_TRUSTED, MAIN_EXFIL, vectors=(*VECTORS, '{"c": 3}')))
+    world.gh.put(2, _pinned(world, {**tree, "y.lean": "y\n"}, MAIN_TRUSTED, [*MAIN_EXFIL, "y.lean"],
+                            vectors=(*VECTORS, '{"d": 4}')))
+    assert conflicting_files(world.dev, world.gh.prs[1].head, world.gh.prs[2].head) == [EXFIL]
+    members, entries = world.queue().sync()
+    assert [m.pr for m in members] == [1]
+    assert entries[2].state == "refused" and entries[2].why == f"conflicts with `next` in {EXFIL} (touched by #1)"
+    assert not [line for line in world.logs if "conflicts only in pins" in line], world.logs
+
+
+@pytest.mark.parametrize("by", ["next", "the PR"])
+def test_a_json_pins_vectors_one_side_alone_changed_are_kept_with_its_digests_rebuilt(world, by):
+    """A conflict in a JSON pin whose vectors one side alone changed, `next`'s member or the PR, while the other changed only
+    its digests is a pin's: the merge keeps that side's vectors, with the digests rebuilt from the merged tree, where
+    rebuilding it from `next`'s text dropped a PR's."""
+    tree = _pin_main(world)
+    more = (*VECTORS, '{"c": 3}')
+    one, two = {**tree, "x.lean": "x1\n"}, {**tree, "z.lean": "z\n"}
+    world.gh.put(1, _pinned(world, one, MAIN_TRUSTED, MAIN_EXFIL, vectors=more if by == "next" else VECTORS))
+    world.gh.put(2, _pinned(world, two, MAIN_TRUSTED, [*MAIN_EXFIL, "z.lean"], vectors=more if by == "the PR" else VECTORS))
+    raw = subprocess.run(["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", world.gh.prs[1].head,
+                          world.gh.prs[2].head], cwd=world.dev, capture_output=True, text=True)
+    assert raw.returncode == 1 and raw.stdout.splitlines()[1:] == [EXFIL], raw.stdout
+    assert conflicting_files(world.dev, world.gh.prs[1].head, world.gh.prs[2].head) == []
+    members, entries = world.queue().sync()
+    assert [m.pr for m in members] == [1, 2], entries[2].why
+    assert f"research queue: #2 conflicts only in pins: {EXFIL} rebuilt from the merged tree" in world.logs
+    pin = subprocess.run(["git", "show", f"refs/heads/next:{EXFIL}"], cwd=world.origin, check=True, capture_output=True,
+                         text=True).stdout
+    assert pin == _exfil([*MAIN_EXFIL, "z.lean"], {**one, **two, "x.lean": "x1\n"}, more)
 
 
 def test_a_sync_admits_a_ready_pr_whose_merge_is_clean_and_runs_no_preflight(world, monkeypatch):
