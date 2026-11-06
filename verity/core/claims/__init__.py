@@ -219,7 +219,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
           "standard"),
     # `Verity.Assumptions.ZkServerOwnUser` (Security/Definitions/Core/Assumptions/ZkServer.lean), the premise of
-    # `Verity.Guarantees.RegisteredLeakage`: a stack is the same function under every key of the ZK server's
+    # `Verity.Guarantees.RegisteredLeakage` and `Verity.Guarantees.RegisteredStreamLeakage`: a stack is the same function
+    # under every salt key of the ZK server's
     Entry("zk-server-own-user", "assumption",
           "The ZK server's value service and its session loop run under the ZK server's own OS user, which no worker and no "
           "serving stack shares, and the salt key's file is that user's alone, so nothing the serving stack runs reads the "
