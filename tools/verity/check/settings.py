@@ -85,7 +85,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("CHECK_SLOT_MEM_GB", str, "", WHERE, "the GB the check slot gives the run it holds (slot.py sets it): circuit-check's "
       "budget and the suites' jobs", "it sizes how much runs at once, never what a step computes"),
     S("CHECK_SLOT_RANK", str, "", WHERE, "the rank `slot.py --rank` orders priority waiters by: drive's after-landing run's "
-      "(`research.drive.POSTLAND_SLOT_RANK`), none for its Lean checks", "placement: the order drive's checks take slots in"),
+      "and lock run's (`research.drive.POSTLAND_SLOT_RANK`), none for a hand `train.sh`", "placement: the order drive's checks "
+      "take slots in"),
     S("CHECK_STORE_CUSTODY", str, None, WHERE, "the recording run's custody dir, which check gives its steps in place of the "
       "RESEARCH_* that named the store (`store_io`)", "where the store's key is, not what a step computes"),
     # ---- the Lean slots (lean_slot.py)
