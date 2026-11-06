@@ -119,6 +119,27 @@ def test_a_merge_changing_nothing_the_codemod_reads_onto_a_ported_base_runs_no_c
     assert _show(world, members[1].commit, "Lib/New.lean") == _port(new)
 
 
+def test_a_merge_made_again_onto_the_same_tree_takes_its_recorded_porting_without_a_codemod_run(world, tmp_path):
+    """A rebuild of `next` in a later tick (a new process: no codemod run cached) merges each member again; one merged onto
+    the tree it had takes its recorded merge, its porting and pins too, and runs no codemod; the log names the ported files
+    as the merge did."""
+    from research import queue as Q
+
+    argv, runs = tmp_path / "argv", tmp_path / "runs"
+    _move_main(world, {**_tooling(argv, f"open({str(runs)!r}, 'a').write('x')\n"),
+                       "Lib/Old.lean": "module\n\npublic import Init\n"})
+    world.gh.put(1, world.change({"Lib/New.lean": "import Lib.Old\n"}))
+    members, _ = world.queue().sync()
+    said = [s for s in world.logs if "module system" in s]
+    assert runs.read_text() == "x" and said
+    Q._codemod.cache_clear()
+    _git(world.origin, "update-ref", "-d", "refs/heads/next")
+    again, _ = world.queue().sync()
+    assert runs.read_text() == "x" and [s for s in world.logs if "module system" in s] == said * 2
+    assert _git(world.origin, "rev-parse", f"{again[0].commit}^{{tree}}") == _git(world.origin, "rev-parse",
+                                                                                   f"{members[0].commit}^{{tree}}")
+
+
 def test_each_pin_recording_a_ported_file_records_its_ported_digest_and_keeps_every_other_byte(world, tmp_path):
     """A pin records a Lean source's digest (PoUS's TRUSTED.sha256, a JSON pin with vectors after it), so each file the
     codemod ports, the PR's or one below it, moves its record with it."""

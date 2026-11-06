@@ -11,8 +11,9 @@ tree's root changed, or a bit row's port with its words or width changed.
 `--zk` holds the files to the form `SampledKSLiveV4` covers, or at a shared-row public file `SampledKSLiveV5`'s
 (`Flock.PortRoots`, `Flock.KsScope`). The rows of all three and their shared-row public files are in it, so each session
 is accepted.
-A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw) is accepted on that file too,
-and refused with the root changed and without `--registered`.
+A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw, on the challenger's coin tree,
+its coins the ones the challenger's release log shows) is accepted on that file too, and refused with the root changed and
+without `--registered`.
 Each verify sets up an m = 25 table (about 10 s), so the module is slow; it is the one test of `register_served`'s file on
 a proved session, which the Python round trip (`verity/core/protocols/sampled_proofs/tests/test_served.py`) can't
 reach."""
@@ -39,13 +40,14 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: partition.json, served.json, registered.json, tables/), session/ (the drawn --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
 FIXTURES = {
-    G.SCHEMA: "art:891ffb0bfc8ae3032e5b113d766ffe594c6e8446d293f0bfe5cba62286437edf",
-    G.SCHEMA_V2: "art:cd47a8fe806ef14308e22d07275d125334595b3a73d63ef8626ed762a7b9c181",
-    G.SCHEMA_SEG: "art:5be3f6b0639f3dda47fe19366da782ffdc0b4b5fc886ccf45b36feb3f4fcfc34",
+    G.SCHEMA: "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b",
+    G.SCHEMA_V2: "art:f14126710f23f62410d0387454ab8c69b236f75f5b92df10ddc214ebc45f37e6",
+    G.SCHEMA_SEG: "art:ae8f5cf2b166710fd2418eea10dddc217102587c75d00db85abf2474b2d0864c",
 }
 #: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified sample of `PLAIN_K`
-#: (stage/draw.json), and session/ a plain session (no --zk, OS coins) sampled by it; vectors/ is vectors.json's live set
-PLAIN = "art:da138c653377954f4eb906a002814ea73a89a766daa9a0c979f6e31fe18ba60f"
+#: (stage/draw.json), session/ a plain session (no --zk) sampled by it on the challenger's coin tree, and challenger/ its
+#: record and release log; vectors/ is vectors.json's live set
+PLAIN = "art:e43917db0ffa59b34e6beae04917b27a70489a4d7ab778d734ddb10c85c5af7b"
 PLAIN_K = 16
 STATEMENT = "verity/flock-circuit"
 
@@ -168,6 +170,19 @@ def plain(built, tmp_path_factory):
         pytest.skip(f"the evidence store is not reachable: {e}")
 
 
+def test_the_plain_sessions_coins_are_the_challengers(plain):
+    """The plain session's coin tree is one the challenger's release log shows it sampled, with the rounds it opened; with
+    one of its link points changed, it is refused at them."""
+    from verity.core.protocols.sampled_proofs import challenger as C, remote as R
+
+    trees = C.coin_trees_of(R.log_lines(plain / "challenger" / R.RELEASES))
+    rec = json.loads((plain / "session" / "session.json").read_text())
+    assert len(trees) == 1 and C.sessions_tree_reason(trees, [("session", rec)]) is None
+    c = rec["link"]["points"][0][0]
+    rec["link"]["points"][0][0] = ("0" if c[0] != "0" else "1") + c[1:]
+    assert "link points are not the coins" in C.sessions_tree_reason(trees, [("session", rec)])
+
+
 def test_a_plain_session_on_registered_reads_is_accepted_and_refused_without_its_reads(plain, tmp_path):
     """Without `--zk`, a shared-row public file at hidden outputs and `hm96-sha512/v1` leaves is a covered form when the
     verifier holds its own registered reads (`ProvedScope.sharedRowsOk`, `FailClosed.SoundExecHR`): the plain session sampled by
@@ -177,7 +192,7 @@ def test_a_plain_session_on_registered_reads_is_accepted_and_refused_without_its
 
     program, query = SR.program()
     tree, x_tree, out_port = SR.load(plain / "stage")
-    mode = ("--stratified", str(PLAIN_K), "--coins", "os")
+    mode = ("--stratified", str(PLAIN_K), "--coins", "tree")
     ok = _verify(plain, SR.write_registered(SR.registered_file(program, query, tree, x_tree, out_port),
                                             tmp_path / "registered.json"), mode)
     assert ok["accepted"] is True, ok

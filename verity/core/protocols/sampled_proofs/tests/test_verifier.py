@@ -274,8 +274,8 @@ def test_lean_that_cannot_run_fails_closed(monkeypatch):
 
 
 def test_floats_reach_the_lean_as_python_wrote_them():
-    """A float of 10^16 or more is sent with its digits (`Json.parse` would read Python's `1e+22` as an integer), so the
-    Lean writes back what Python does; one it can't read back (-0.0) makes the two disagree."""
+    """A float of 10^16 or more is sent with its digits (`Flock.JsonParse.parse` would read Python's `1e+22` as an
+    integer), so the Lean writes back what Python does; one it can't read back (-0.0) makes the two disagree."""
     assert V._dumps({"a": 1e22, "b": [2.5, 1e16, 3]}) == '{"a":10000000000000000000000.0,"b":[2.5,10000000000000000.0,3]}'
     _, reg, draw = _drawn()
     floats = {"big": 1e22, "small": 1e-7, "third": 1 / 3, "huge": 1.7976931348623157e308, "tiny": 5e-324}

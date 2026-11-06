@@ -1,5 +1,5 @@
 /-
-Level 3, L3-A: the lookup slots' B side (`Lookup.foldB`, PROTOCOL.md §16.5). Product row `(j, h)` has a B-side 1 in the
+Level 3, L3-A: the lookup slots' B side (`Lookup.foldB`, `Flock.Circuit`). Product row `(j, h)` has a B-side 1 in the
 column of low minterm `l` exactly when bit `j` of table word `h·2^lo + l` is set; `foldB` adds `Bᵀe` for these rows,
 with a subset-sum table per byte of the word. `foldB_get`: entry `loTop + l` gains `Σ_h Σ_{j : bit j of word(h, l)} e(j, h)`,
 and no other entry changes.

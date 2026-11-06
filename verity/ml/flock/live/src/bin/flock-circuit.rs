@@ -17,8 +17,8 @@
 //! `--session-tables J` (both sides, CPU prover): the session's units in J equal tables (`session_tables`), each with its own
 //! randomness, all J roots in one `Commit`, and every proof after the session's last coin (the barrier).
 //!
-//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk`, with `--sessions N`): each session's coin tree sampled and
-//! opened by the challenger (`flock_live::tree_from`), not drawn here.
+//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk` or `FC_COINS=tree`, with `--sessions N`): each session's
+//! coin tree sampled and opened by the challenger (`flock_live::tree_from`), not drawn here.
 
 use std::{
     collections::BTreeMap,
@@ -123,8 +123,6 @@ enum CoinMode {
     /// M0's step-0 seed (the default; `coin_seed`): the verifier's OS-random seed under a SHA-512 commitment sent at Hello and
     /// opened in the verdict, every round's coins its SHA-256 counter-mode PRF
     Seed,
-    /// `os`: every round's coins flipped from the OS, so soundness rests on SHA-512 collision resistance alone
-    Os,
     /// `tree`: the challenger's keyed coin tree (`coin_tree::SCHEME`, M2's commitment without M1's masks): every coin committed
     /// at Hello, the Hello answered with the root and session key, each round's coins opened against it. The prover checks
     /// each opening ([`flock_live::coin_tree::Checked`]) unless a ZK server does ([`zk_server_checks_coins`])
@@ -137,15 +135,13 @@ fn zk_server_checks_coins() -> bool {
     std::env::var("FC_COIN_STREAMS").is_ok_and(|x| !x.is_empty())
 }
 
-/// The Hello and the identity carry the mode, so a prover and a server that disagree refuse the session. A selftest build
-/// seeds where it would flip OS coins: its harness fixes the coins through the seed.
+/// The Hello carries the mode, so a prover and a server that disagree refuse the session. The verifier reads coins only from
+/// a challenger's log, so it refuses a seeded session once every check has passed; the seed stays for upstream's form.
 fn coin_mode() -> CoinMode {
     match std::env::var("FC_COINS").as_deref() {
-        Err(_) | Ok("" | "seed") => CoinMode::Seed,
-        Ok("os") if cfg!(feature = "seed-injection") => CoinMode::Seed,
-        Ok("os") => CoinMode::Os,
+        Err(_) | Ok("") => CoinMode::Seed,
         Ok("tree") => CoinMode::Tree,
-        Ok(v) => refuse(format!("FC_COINS={v}: \"seed\" (the default), \"os\" or \"tree\"")),
+        Ok(v) => refuse(format!("FC_COINS={v}: \"tree\" (the challenger's keyed coin tree), or unset for the seed")),
     }
 }
 
@@ -395,13 +391,6 @@ fn identity(c: &Composite) -> Value {
                       "coin_derivation": "sha512 (verity.randomness)", "frame_v3_tree": "sha512 (frame-v3-sha512)",
                       "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "hm96-sha512/row/v1 over sha512/row/v1"},
            "hooks": hooks});
-    // only under FC_COINS=os: the statement digest pins the identity, and the default's must not move (a coin-tree session's
-    // identity is the default's, as `Tags.withCoins` keeps it)
-    if !zk_mode() && coin_mode() == CoinMode::Os {
-        id["coins"] = json!("live-os (every round's coins the verifier's OS draws: no seed, no PRF)");
-        id["hashes"]["coin_commitment"] = json!("none (FC_COINS=os)");
-        id["hashes"]["coin_derivation"] = json!("none (FC_COINS=os)");
-    }
     // only for bit rows (META `row_schemas`): a `sha512/row/v1` statement's digest must not move
     if c.meta.get("row_schemas").is_some() {
         id["hashes"]["row_leaf_in_circuit"] = json!("hm96-sha512/row/v2 over sha512/row/v2");
@@ -738,7 +727,7 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
     let specs = tabs.iter().map(|(name, st, _)| TableSpec { name: name.to_string(), binding: Binding::R1cs { statement_digest: st.flock_digest } }).collect();
     let mut cfg = SessionConfig::flock_128_r2(specs);
     cfg.link = Some(LinkSpec { sigma: session_sigma(tabs).to_vec(), m: st.m_pts, points: 2 });
-    // M2 (--zk) and FC_COINS=tree: every coin committed at Hello and opened round by round; M0: the step-0 seed, or OS coins
+    // M2 (--zk) and FC_COINS=tree: every coin committed at Hello and opened round by round; M0: the step-0 seed
     let names = tabs.iter().map(|t| t.0.to_string()).collect::<Vec<_>>();
     if is_zk(st) {
         cfg.coin_tree = Some(coin_spec_of(&names));
@@ -857,8 +846,8 @@ impl Drop for TreeFrom {
 }
 
 /// `serve --tree-from HOST:PORT [--tree-secret-file F]`: the challenger that samples and opens every session's coin tree
-/// ([`flock_live::tree_from`]). Only a `--zk` statement's sessions commit their coins to a tree, and the challenger's
-/// session closes after the server's last, so a bounded `--sessions N`.
+/// ([`flock_live::tree_from`]). Only sessions on the keyed coin tree (`--zk`, or plain ones under `FC_COINS=tree`)
+/// commit their coins to a tree, and the challenger's session closes after the server's last, so a bounded `--sessions N`.
 fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
     let (address, secret_file) = (arg("--tree-from", ""), arg("--tree-secret-file", ""));
     if address.is_empty() {
@@ -868,7 +857,8 @@ fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
         return None;
     }
     if std::env::args().nth(1).as_deref() != Some("serve") || config_of(tabs).coin_tree.is_none() {
-        refuse("--tree-from is serve's, for a --zk statement: only its sessions commit their coins to a tree".into());
+        refuse("--tree-from is serve's, for sessions on the keyed coin tree (--zk, or FC_COINS=tree): only theirs commit \
+                their coins to a tree".into());
     }
     if arg("--sessions", "").parse::<usize>().is_err() {
         refuse("--tree-from: the challenger's session closes after the server's last, so --sessions N".into());
@@ -3838,13 +3828,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             // M0's seed commitment (4 words), the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them,
             // or the ZK server did), or under the Lean session loop, which checked them, the loop's id for the session in their
             // place (4, `Session.idFrame`)
-            Resp::Coins(c) if c.len() == if tree && !plan.lean_session { 20 } else { 4 } && (tree || seed_coins()) => commit = c,
-            // FC_COINS=os: nothing committed, every round's coins the verifier's OS draws
-            Resp::Ok if !is_zk(st) && coin_mode() == CoinMode::Os => {}
+            Resp::Coins(c) if c.len() == if tree && !plan.lean_session { 20 } else { 4 } => commit = c,
             r => return Err(format!("hello: step 0 expects {}, got {r:?}",
                                     if plan.lean_session { "the Lean session loop's id for the session" }
                                     else if tree { "the verifier's coin-tree root and session key" }
-                                    else if seed_coins() { "the verifier's seed commitment" } else { "the verifier's Ok (FC_COINS=os)" })),
+                                    else { "the verifier's seed commitment" })),
         }
         // under the ZK server every table's level 0 is the Lean session loop's, drawn once it has every table's witness, before
         // any rep's frame starts (its time counts in table 0's level 0)
@@ -4223,7 +4211,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
     let (ws, wr, calls) = t.lock().unwrap_or_else(PoisonError::into_inner).stats();
     let wait_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
     // M0's seed opens at the end; under M2 and a plain coin-tree session every coin was checked against the commitment before
-    // it was used, and OS coins commit to nothing
+    // it was used
     let step0 = if verified(&v) && !is_zk(st) && seed_coins() { check_coin_seed(&commit, &hello, &v, &log.lock().unwrap_or_else(PoisonError::into_inner)) } else { Ok(()) };
     let v = if let Err(e) = &step0 { json!({"accepted": false, "why": e, "verdict": v}) } else { v };
     let c = &st.c;
@@ -4239,7 +4227,7 @@ fn session_finish(p: Proved) -> (Value, Vec<Vec<u8>>) {
                "unit_draw": if tabs.list.len() == 1 { inst.header.get("unit_draw").cloned() } else { tabs.draw.clone() },
                "tables": tabs.list.iter().map(|t| &t.name).collect::<Vec<_>>(),
                "identity": st.identity, "tp_s": tp0.elapsed().as_secs_f64(), "coin_seed": v["coin_seed"].clone(),
-               "step0_checked": step0.is_ok() && verified(&v) && (is_zk(st) || plain_tree(st) || seed_coins())});
+               "step0_checked": step0.is_ok() && verified(&v)});
     // past json!'s recursion limit in the literal above
     live["public_file_sha512"] = json!(hex(&inst.public_file_sha512));
     (live, proofs)
