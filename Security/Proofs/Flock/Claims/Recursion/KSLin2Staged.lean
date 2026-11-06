@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.BoundReaders
-import Proofs.Flock.Claims.Recursion.KSLin2Plain
-import Proofs.Flock.Claims.Recursion.VStarBDeploy
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundReaders
+public import Proofs.Flock.Claims.Recursion.KSLin2Plain
+public import Proofs.Flock.Claims.Recursion.VStarBDeploy
 
 /-!
 # `KSLin2` with V*'s staging read off the run
@@ -23,6 +25,8 @@ at an accepted run (`ReadsBackB`, `stagedB_deployRec_part`), and `RunPairs` hold
   the dense form `HeldB`, `PartChecksBV`, `PartOpensB` and `DecompB` for some inner check, and the readers'
   `ReadersTrue` (the inner verifier's calls are searched at each draw's coins, `callsLogCollAt_deployRec`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,6 +1,8 @@
-import Evaluate.MufuFits
-import Flock.Bytes
-import Flock.Hash
+module
+
+public import Evaluate.MufuFits
+public import Flock.Bytes
+public import Flock.Hash
 
 /-!
 # The MUFU primitives
@@ -14,6 +16,10 @@ its interpolant (`Evaluate.MufuFits`, from `verity.ml.circuits.ops.boolean.mufu`
 the measured words), and `tableSha512` hashes each table as the library stores it, so the suite holds the words to the
 library's SHA-512 (`Flock.LIBRARY_TABLES`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Evaluate.Mufu
 

@@ -22,9 +22,15 @@ not have written, refuses every call. Python reads any JSON line and defaults wh
 instead. Its other liberties Lean doesn't take either: a `\r` before a line's end, a budget or release time past 2^64, a
 statement name that isn't a string.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import Firewall.PyJson
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+public import Firewall.PyJson
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Firewall
 

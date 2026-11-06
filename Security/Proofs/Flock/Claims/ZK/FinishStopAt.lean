@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishStop
+module
+
+public import Proofs.Flock.Claims.ZK.FinishStop
 
 /-!
 # The firewall's stop at a table's own draw
@@ -6,14 +8,16 @@ import Proofs.Flock.Claims.ZK.FinishStop
 `FinishStop` decides the firewall's stop at any pads and masked values related as a draw relates them. Here it is at a
 `--zk` table's own draw `ω₀` of a worker's values `p`: the masked values are the view's, the pads are the draw's
 (`hFull`, by layout index), and where the firewall goes on at both reps with constraints that are the rows, the worker's
-rows hold at `ω₀`'s mask slot and extra lanes (`Table.RowsAt`), so the switched view is the worker's own.
+rows hold at `ω₀`'s mask slot and level 0's hiding (`Table.RowsAt`), so the switched view is the worker's own.
 
 * `arrOf_padsAt`: the pads on the layout's slots are the pads, as the executable's array.
 * `viewPads`: at a draw, the view's masked values are the worker's clear values plus the exposed pads, and the drawn
   pads have `h_ab = h_fa·h_fb` and `h_tw = h_tx·h_ty`.
 * **`rowsAt_of_cons`**: where, at each rep, the firewall's constraints are the first seven rows on the view's masked
-  values, each on the layout's length, and none fails on the drawn pads, `RowsAt p ω₀.1 ω₀.2.1.2.1`.
+  values, each on the layout's length, and none fails on the drawn pads, `RowsAt p ω₀.1 ω₀.2.1`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -34,7 +38,7 @@ exposed pads, and the drawn pads have `h_ab = h_fa·h_fb` and `h_tw = h_tx·h_ty
 theorem viewPads (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
     ∀ c (r : Fin 2) p (ω : (C.T c).tab.onVals.Rand),
-      (∀ i, ((C.T c).tab.onVals.view p ω).pre.2.1 r i = (C.T c).tab.onVals.vals r p ω.1 ω.2.1.2.1 i +
+      (∀ i, ((C.T c).tab.onVals.view p ω).pre.2.1 r i = (C.T c).tab.onVals.vals r p ω.1 ω.2.1 i +
         ((C.T c).tab.onVals.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.onVals.nE).symm) (Fin.castAdd 4 i)) ∧
       ((C.T c).tab.onVals.hFull (ω.2.2.1 r) ∘ (padEquiv (C.T c).tab.onVals.nE).symm)
           (ix (C.T c).tab.onVals.nE (layOf Tz st).hab) =
@@ -69,7 +73,7 @@ theorem viewPads (Tz : TabZK 𝔽 mPts) (st : Stmt) :
 
 /-- **Where the firewall goes on at a table's draw, the worker's rows hold there**: where, at each rep, the firewall's
 constraints are the first seven rows on the view's masked values, each on the layout's length, and none fails on the
-drawn pads, the worker's rows hold at the draw's mask slot and extra lanes at every pad. -/
+drawn pads, the worker's rows hold at the draw's mask slot and level 0's hiding at every pad. -/
 theorem rowsAt_of_cons (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
     ∀ c p (ω₀ : (C.T c).tab.onVals.Rand),
@@ -80,9 +84,9 @@ theorem rowsAt_of_cons (Tz : TabZK 𝔽 mPts) (st : Stmt) :
             (((C.T c).tab.onVals.view p ω₀).pre.2.2.2.2.2 r).1 (0, 0) (Fin.castAdd 3 k)) ∧
         Flock.Firewall.Finish.failingOn cons
           (arrOf ((C.T c).tab.onVals.hFull (ω₀.2.2.1 r) ∘ (padEquiv (C.T c).tab.onVals.nE).symm)) = #[]) →
-      (C.T c).tab.onVals.RowsAt p ω₀.1 ω₀.2.1.2.1 := by
+      (C.T c).tab.onVals.RowsAt p ω₀.1 ω₀.2.1 := by
   intro C c p ω₀ h
-  refine rowsAt_of_rows P Tz st c p ω₀.1 ω₀.2.1.2.1 fun r => ?_
+  refine rowsAt_of_rows P Tz st c p ω₀.1 ω₀.2.1 fun r => ?_
   obtain ⟨cons, hsz, hlen, hform, hf⟩ := h r
   have hE : (layOf Tz st).hab = (C.T c).tab.onVals.nE := by
     show _ = padLenOf _ _ - 4

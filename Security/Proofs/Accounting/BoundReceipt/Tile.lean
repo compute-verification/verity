@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.BoundReceipt
-import Proofs.Pouw.Prob
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.BoundReceipt
+public import Proofs.Pouw.Prob
 
 /-!
 # A tile's output is unpredictable below its work: from PoUW's named assumptions
@@ -8,6 +10,8 @@ import Proofs.Pouw.Prob
 A checked unit whose credit is above `T/(1 − γ₀)` puts the checked units' total credit above it, when every credit is
 nonnegative; `TT` and `TT_NCP_U` bound the probability of the second.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ZK.GK.Theorem
-import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
+module
+
+public import Proofs.Flock.Soundness.ZK.GK.Theorem
+public import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
 
 /-!
 # Zero knowledge: Lemmas B and C as Theorem GK's two distances
@@ -19,6 +21,8 @@ witness), and the session has at most `N_hid` hidden leaves, `RewindClose` holds
 assumptions are `Hm96Hiding` at `δ₁` and `SHA512CRStrict` for the finder, and
 `ε = 3·2|L|δ₁ + 8t·2·N_hid·δ₁ + 3^{-t} + t/M + q²/2^513`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.GK
 

@@ -1,0 +1,8 @@
+name = "modules"
+defaultTargets = ["Modular"]
+
+[leanOptions]
+autoImplicit = false
+
+[[lean_lib]]
+name = "Modular"

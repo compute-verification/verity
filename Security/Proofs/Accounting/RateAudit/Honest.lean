@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAudit
-import Proofs.Accounting.Bandwidth.Honest
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAudit
+public import Proofs.Accounting.Bandwidth.Honest
 
 /-!
 # The honest device: the rate audit is not vacuous
@@ -11,6 +13,8 @@ word under the stream. It is accepted on every store, stream, oracle and sample;
 the store, `N·b` bits, its link carries exactly the stream, and its compute is `N` tags (`honest_accepts`; the
 guarantee `Accounting.SecurityProofs.RateHonest`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate.Completeness
 

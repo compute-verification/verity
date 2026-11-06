@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.Fmt2
-import Proofs.Nci.Fmt
+module
+
+public import Definitions.Nci.Guarantees.Fmt2
+public import Proofs.Nci.Fmt
 
 /-!
 # Proofs of NCI's guarantees with each value charged once over its copies
@@ -10,6 +12,8 @@ A thread's counted multiplications read each source at most `reuse` times over i
 baseline are what `WeightsSupportFmt2` asks of the circuit before it claims anything; the counting reads neither. The
 containment and the state carry over as in `Proofs.Nci.Fmt`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

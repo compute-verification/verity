@@ -35,10 +35,10 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import producer as P  # noqa: E402
-import receipts as RC  # noqa: E402
 
 from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
 from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity_vllm.protocols.pouw.h1 import receipts as RC  # noqa: E402
 
 #: Llama-3.1-8B's linears (name, n, K)
 LLAMA = [("qkv", 6144, 4096), ("o", 4096, 4096), ("gate_up", 28672, 4096), ("down", 4096, 14336)]
@@ -73,8 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     if not units.j10r:
         ap.error(f"{a.so} has no J10-R units (kh_units_multi_j10r)")
     gen = torch.Generator(device=dev).manual_seed(20261024)
-    rec_v1 = torch.from_numpy(P.seed_record(SALT, RA, RB)).to(dev)
-    rec_j = torch.from_numpy(P.seed_record(SALT, RA, RB, j10r=True)).to(dev)
+    rec_v1 = torch.from_numpy(RC.seed_record(SALT, RA, RB)).to(dev)
+    rec_j = torch.from_numpy(RC.seed_record(SALT, RA, RB, j10r=True)).to(dev)
     out: dict = {"slot": a.slot, "rows": a.rows, "layers": a.layers, "reps": a.reps, "so": a.so, "cubin": a.cubin,
                  "device": torch.cuda.get_device_name(dev), "load": os.getloadavg(), "linears": {}}
     ok = True

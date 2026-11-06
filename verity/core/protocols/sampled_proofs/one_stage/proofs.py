@@ -17,9 +17,12 @@ its registered finding (each port's value and opened root) and the proof blocks 
 indices of the instances its session sampled (`unit_draw`), read only off a session the verifier accepted.
 
 `ks_form_why` mirrors `verify --zk`'s refusal of a circuit outside the unit's form the sampled audit's knowledge
-soundness (`SampledKSLiveV4`, and `SampledKSLiveV5` at a shared-row public file) covers, on the circuit file's head
+soundness (`SampledKSLiveV3`, and `SampledKSLiveV5` at a shared-row public file) covers, on the circuit file's head
 (`Flock.KsScope.filesWhy`, which `flock-verify ks-form` runs alone). A session Lean accepts whose files it refuses is a
 ``form`` refusal, so the mirror can only refuse more.
+
+`population_why` mirrors the v2 audit's check that the public file's units are the registration's population in order
+(`SampledProofs.FilePart.why`), which `verify` applies to the one-stage audit's statement when handed its strata.
 
 The verifier reads the whole circuit file once a call, in time and memory linear in it (about six times the file at
 peak), then O(proof) a session: so a protocol verifies one statement a stratum, every sampled proof block of it an instance.
@@ -79,7 +82,8 @@ class Proof:
 @dataclass(frozen=True)
 class Finding:
     """One session's verdict from the verifier's own run: accepted or not and why, the program its verdict names, its
-    registered finding (port -> {value, root}) and the global proof blocks it proved (none unless accepted)."""
+    registered finding (port -> {value, root}), the global proof blocks it proved (none unless accepted) and the rows it
+    opened (its verdict's ``openings``, which `produced.shared` reads; None when it reports none)."""
 
     session: str
     accepted: bool
@@ -87,6 +91,7 @@ class Finding:
     program: str | None
     registered: dict
     units: tuple[int, ...]
+    openings: Any = None
 
 
 @functools.cache
@@ -170,6 +175,22 @@ def reads_registered(program: bytes) -> bool:
     return not isinstance(defs, dict) or any(_REGISTERED_INPUT.fullmatch(k) for k in defs)
 
 
+def population_why(indices: Sequence[int], strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> str | None:
+    """`SampledProofs.FilePart.why`: why the registration's population is not the public file's units in order, None
+    when it is. `strata` is the registration's over the verifier's program and query (`partition.strata`), read stratum
+    by stratum, and must be its proof blocks ``0, 1, …`` in order; `indices` (the public file's ``units.indices``) must be
+    exactly those, so the file's unit ``u`` is the registration's proof block ``u``."""
+    at = 0
+    for _t, rs in strata:
+        for lo, hi in rs:
+            if lo != at or hi < lo:
+                return "partition: the registration's strata, read stratum by stratum, are not its units in order"
+            at = hi
+    if list(indices) != list(range(at)):
+        return f"partition: the public file's {len(indices)} units are not the registration's {at}, in order"
+    return None
+
+
 def proved_units(public: Path, session: Path) -> tuple[int, ...]:
     """The global proof blocks a session proved: the public file's proof block indices (``units.indices``) of the instances its record
     drew (``unit_draw.units``), ascending. Read only off a session the verifier accepted."""
@@ -179,7 +200,9 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
 
 
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
-           registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
+           registered: Mapping[str, Any] | None = None,
+           strata: Sequence[tuple[str, Sequence[Sequence[int]]]] | None = None,
+           ) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by C-Flock's Lean verifier against the verifier's own `program` (its
     descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
     as N2's, whose proof block opens the committed value inside its circuit), on the circuit file the auditor committed as
@@ -188,6 +211,12 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     committed one; ``proof``: a file is missing or the verifier's answer is not one verdict a session naming the
     partition object's program; ``form``: the verifier accepted a session whose files `ks_form_why` refuses). A session
     the verifier rejects is a finding, not a refusal.
+
+    With `strata`, the registration's over `program` and the partition's query (`partition.strata`), the statement is
+    the one-stage audit's, whose public file holds the whole population: a session the verifier accepts is rejected with
+    `population_why`'s reason where the public file's units are not that population in order, as the v2 audit's own
+    run rejects it (`SampledProofs.FilePart.check`). Without it (a statement of some of a population's proof blocks, as
+    the certifier's) the public file's units are the verifier's own.
 
     The ``registered`` refusal is the verifier's own: without ``--registered``, Lean refuses a statement's registered
     reads only where its public file, which the prover writes, names them (`Registered.check`), and doesn't read a
@@ -227,17 +256,21 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     want = partition.get("program")
     accepted = any(v.get("accepted") is True for v in lines)
     form = ks_form_why(proof.circuit, proof.public) if accepted else None
+    population = (population_why(_header(proof.public)["units"]["indices"], strata)
+                  if accepted and strata is not None else None)
     out = []
     for s, v in zip(proof.sessions, lines):
-        ok = v.get("accepted") is True
+        ok, why = v.get("accepted") is True, str(v.get("why", ""))
         if ok and form is not None:
             return None, ("form", f"the verifier of record accepted session {s}, whose files its mirror refuses "
                                   f"(`ks_form_why`): {form}")
+        if ok and population is not None:
+            ok, why = False, population
         if ok and v.get("program_sha512") != want:
             return None, ("proof", f"session {s}'s verdict names program {v.get('program_sha512')}, not the partition "
                                    f"object's {want}")
-        out.append(Finding(str(s), ok, str(v.get("why", "")), v.get("program_sha512"), v.get("registered") or {},
-                           proved_units(proof.public, s) if ok else ()))
+        out.append(Finding(str(s), ok, why, v.get("program_sha512"), v.get("registered") or {},
+                           proved_units(proof.public, s) if ok else (), v.get("openings")))
     return out, None
 
 
@@ -268,10 +301,10 @@ def _canonical(x: Any) -> bytes:
 
 
 def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict, list[Path]]:
-    """The v2 evidence's ``proofs`` for `proof`'s files, and the blobs that hold them: the public file's SHA-512 and, per
-    session (named `names`, the v1 evidence's ``sessions``; by default its directory's name), its ``session.json``'s and
-    each rep file's (``*.bin``). The blobs are the circuit file, which the parameters name by the auditor's digest, the
-    public file and each session's files."""
+    """The v2 evidence's ``proofs`` for `proof`'s files, and the blobs that hold them: per session (named `names`, the v1
+    evidence's ``sessions``; by default its directory's name), its ``session.json``'s SHA-512 and each rep file's
+    (``*.bin``). The blobs are the circuit and public files, which the parameters name by the auditor's digests, and each
+    session's files."""
     names = [s.name for s in proof.sessions] if names is None else list(names)
     if len(names) != len(proof.sessions):
         raise ValueError(f"{len(names)} names for {len(proof.sessions)} sessions")
@@ -281,7 +314,7 @@ def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict,
         sessions.append({"name": name, "record": file_sha512(s / "session.json"),
                          "reps": {r.name: file_sha512(r) for r in reps}})
         blobs += [s / "session.json", *reps]
-    return {"public": file_sha512(proof.public), "sessions": sessions}, blobs
+    return {"sessions": sessions}, blobs
 
 
 def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any], partition: Mapping[str, Any],
@@ -291,7 +324,7 @@ def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any]
     or None and Lean's refusal. `program` is the descriptor as JSON."""
     pr, blobs = evidence_v2(proof)
     own = {"circuit": circuit_sha512, "partition": dict(partition), "program": dict(program),
-           "registered": None if registered is None else dict(registered)}
+           "public": file_sha512(proof.public), "registered": None if registered is None else dict(registered)}
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
         paths = (Path(d, "own.json"), Path(d, "proofs.json"))
         paths[0].write_bytes(_canonical(own))
@@ -309,13 +342,19 @@ def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any]
 
 
 def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
-             circuit_sha512: str, registered: Mapping[str, Any] | None) -> dict:
+             circuit_sha512: str, public_sha512: str, registered: Mapping[str, Any] | None) -> dict:
     """The one-stage audit on `proof` itself (`sampled-proofs-one-stage-zk check`): v1's `params` with ``proofs``, the
-    auditor's circuit digest and the verifier's registered file, the registration `record`, and v1's `evidence` with
-    its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`, under the evidence's ``sessions``); the outcome
-    line."""
+    auditor's circuit and public files' digests, committed before any coin, and the verifier's registered file, the
+    registration `record`, and v1's `evidence` with its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`,
+    under the evidence's ``sessions``); the outcome line. `params` must name the auditor's challenger and its window
+    (``challenger``, ``window_root``), whose signed release in the evidence's ``coins`` the draw reads: v2 refuses
+    parameters naming none. The evidence names one session (v2 refuses none or several), whose record must be on the one
+    coin tree that release log shows the challenger sampled and opened, its link opened after the roots of exactly
+    `STATEMENT`'s one table, its ``root_B`` of the length the statement fixes (`challenger.sessions_tree_reason`,
+    `challenger.LINK_ROOT_LEN`), the program's proof blocks must be `record`'s population in order (`partition.in_order`), and the public file's header
+    must be `record`'s (`registration.matches_public`), before the session is verified."""
     pr, blobs = evidence_v2(proof, evidence["sessions"])
-    p2 = {**params, "proofs": {"circuit": circuit_sha512, "registered": registered}}
+    p2 = {**params, "proofs": {"circuit": circuit_sha512, "public": public_sha512, "registered": registered}}
     e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
         paths = [Path(d, n) for n in ("params.json", "record.json", "evidence.json")]
@@ -330,5 +369,5 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 
 __all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
-           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "proved_units", "reads_registered",
-           "v2_executable", "verdicts_v2", "verify"]
+           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "population_why", "proved_units",
+           "reads_registered", "v2_executable", "verdicts_v2", "verify"]

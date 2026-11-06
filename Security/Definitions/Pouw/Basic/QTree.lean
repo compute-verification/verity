@@ -1,4 +1,6 @@
-import Mathlib.Data.Nat.Notation
+module
+
+public import Mathlib.Data.Nat.Notation
 
 /-!
 # Adaptive oracle programs (trusted)
@@ -6,6 +8,8 @@ import Mathlib.Data.Nat.Notation
 A `QTree Q R α` returns a value, or queries the oracle at a point and continues with the answer. Any computation
 may happen between queries; `calls` counts the queries on the path taken against a given oracle.
 -/
+
+@[expose] public section
 
 namespace Pouw
 

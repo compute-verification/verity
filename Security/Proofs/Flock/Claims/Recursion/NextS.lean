@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.NextShaDec
+module
+
+public import Proofs.Flock.Claims.Recursion.NextShaDec
 
 /-!
 # `IVStar`'s last step with the proofs decoded (`nextS`)
@@ -20,6 +22,8 @@ Run against `H`, that decision is the verdict on the decoded proofs (`verifyJPWi
   verdict's checks keep their owners. This replaces `decompB_nextJ` as the route: its verdict's checks are
   `verifyJPWith`'s and `checksAtJ`'s, none of them a proof file's decode.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

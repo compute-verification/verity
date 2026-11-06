@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Decode
+module
+
+public import Proofs.Flock.Claims.Decode
 
 /-!
 # A finite family of interleaved Reed–Solomon codes as one code, and its decoder
@@ -11,6 +13,8 @@ on every opened column read at that code's width (`IRS.colsAt`), and lists every
 the family's Johnson count, at every `agree > 0` (`IRS.listComplete_famDecode`): reading keeps the number of columns
 and their positions, and a column a message's encoding agrees with reads back as its code's column.
 -/
+
+@[expose] public section
 
 namespace Claims
 

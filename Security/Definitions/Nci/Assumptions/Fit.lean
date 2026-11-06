@@ -1,4 +1,6 @@
-import Definitions.Nci.Fit
+module
+
+public import Definitions.Nci.Fit
 
 /-!
 # NCI over windows: the fit bound's named assumptions
@@ -11,6 +13,8 @@ so that a window spanning several optimizer steps is charged once per parameter,
 `ReachSlots` are predicates on the threading `T`, so its `shape.conjectures` lists them as open: false at token threads
 for a token-routed mixture of experts, the per-sequence form at sequence threads.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

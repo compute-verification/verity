@@ -191,7 +191,7 @@ Protocols and claims:
 - The deployed recursion's bound record states its inner claim at IVStar at the weight
   `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor
   under every weight (`Claims.Recursion.lam`), and every table, README or claim that cites it gives its λ and says so.
-- `Flock.Guarantees.RecursiveAuditC3` may rest on `registrant-holds-openings`; in Lean the salt is a binder
+- `Flock.Guarantees.RecursiveAuditHolo` may rest on `registrant-holds-openings`; in Lean the salt is a binder
   applied at the salts the prover's workers committed under, never `∃ salt` or a `Classical.choose` of one.
 - A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
@@ -199,7 +199,7 @@ Protocols and claims:
 - The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
-  are sampled from the OS, not expanded by a PRG.
+  are sampled from the OS, not expanded by a PRG, but the lead keys its instances under one window key (`Hash.Keyed`).
 - A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting
   implies the verifier accepts; completeness stays a test.
 - `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the

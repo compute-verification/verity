@@ -1,8 +1,10 @@
-import Definitions.Core.Guarantees.Formalism
-import Proofs.Core.Circuit
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.Core.Guarantees.Formalism
+public import Proofs.Core.Circuit
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Ring
 
 /-!
 # Proofs of the working draft's Lemma 1 and Theorem 3
@@ -12,6 +14,8 @@ import Mathlib.Tactic.Ring
 * `length_blockProgram`: on a Boolean circuit, proof block `u`'s program has `|e| + ⌈log₂ B⌉ + |in(I) \ θ|` bits;
 * `Partition.sum_blocks`: a sum over operation gates is the sum, over the proof blocks, of the sums over their gates.
 -/
+
+@[expose] public section
 
 namespace Verity
 

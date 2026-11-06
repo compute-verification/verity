@@ -1,7 +1,9 @@
-import Proofs.Flock.C3.Opening.SrcOpening
-import Proofs.Flock.Soundness.Refine.Opening
-import Proofs.Flock.Level3.Fold
-import Proofs.Flock.Level3.Assembly
+module
+
+public import Proofs.Flock.C3.Opening.SrcOpening
+public import Proofs.Flock.Soundness.Refine.Opening
+public import Proofs.Flock.Level3.Fold
+public import Proofs.Flock.Level3.Assembly
 
 /-!
 # n4's claim tie: `ClaimRel` from `claimO` to the run's claims
@@ -18,6 +20,8 @@ the tie is two facts about the run's claims:
 
 `openingReadAt_src_ties` is `openingReadAt_src` with the two in place of the claim tie.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 
 /-!
 # The hidden-output `--zk` headlines, over what flock-verify accepts
@@ -17,6 +19,8 @@ one table (`hn`); `zk_session_soundHJ` covers every number of tables. Zero knowl
 table's setup (`DrawSetupZHJ.avoidsMask`): `verify --zk` refuses a statement whose Δ or regions meet the mask slot
 (`Zk.maskFree`, D12). The `ZkHidden` headlines remain, as lemmas.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 
@@ -45,7 +49,7 @@ theorem ScopeZ.parseHG {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = 
   cases ht : (circC (zkTags I) I).tmpl with
   | none => rfl
   | some tu =>
-    obtain ⟨-, -, -, -, -, -, -, -, -, hw⟩ := Checks.templated h ht
+    obtain ⟨-, -, -, -, -, -, -, -, hw⟩ := Checks.templated h ht
     rw [hw] at hf
     cases hf
 

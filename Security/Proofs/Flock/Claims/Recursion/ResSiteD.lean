@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.ResLowerDA
-import Proofs.Flock.Claims.Recursion.ResSite
-import Proofs.Flock.Claims.Recursion.LabelsFull
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerDA
+public import Proofs.Flock.Claims.Recursion.ResSite
+public import Proofs.Flock.Claims.Recursion.LabelsFull
 
 /-!
 # `ResSite` from the verifier's checks, at part `s`'s decision
@@ -21,6 +23,8 @@ brings `b`:
 The decision is part `s`'s, at its staged statement `xO`, not the inner statement's (`Rows.DecAt`, which reads the inner
 session `xI x` and says nothing of `xO`'s draw). An accepted run gives it at each part it stages (`partDec_run`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

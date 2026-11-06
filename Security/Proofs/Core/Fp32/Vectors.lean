@@ -1,4 +1,6 @@
-import Definitions.Core.Fp32
+module
+
+public import Definitions.Core.Fp32
 
 /-!
 # Vectors: `verity.ml.fp32`'s primitives
@@ -9,6 +11,8 @@ checked by the kernel against the definition of the same name in `Verity.Fp32`.
 they reach every case the Python distinguishes, so a change on either side fails a build: the definitions
 cannot drift silently. That test, run as a script, writes this file.
 -/
+
+@[expose] public section
 
 namespace Verity.Fp32.Vectors
 

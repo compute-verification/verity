@@ -15,10 +15,14 @@ differ, each by a parameter or a line:
 The proof file's bytes are the analysis's `encZk` (`FlockSoundness.Discharge.ZkView.encZk`), `flock-circuit --zk`'s
 `bincode` of `(Commitment, R1csProofLigerito, InnerProof)`.
 -/
-import Flock.With.Verify
-import Flock.With.Zk
-import Flock.Zk
-import Flock.ZkProof
+module
+
+public import Flock.With.Verify
+public import Flock.With.Zk
+public import Flock.Zk
+public import Flock.ZkProof
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 
@@ -581,7 +585,7 @@ theorem ringSwitchP_eq_fast (io : Asks M) (sv : Nat → Array F128) (claims : Ar
   funext M _ _ io sv claims
   exact ringSwitchP_eq_fast (M := M) io sv claims
 
-/-- **The batched basis on the Boolean cube** (§12.4): `b(y) = Σ_k γ_k·Φ_k(eq(z_k, y))` for `y < 2^ℓ`, with
+/-- **The batched basis on the Boolean cube** (`Flock.Opening`): `b(y) = Σ_k γ_k·Φ_k(eq(z_k, y))` for `y < 2^ℓ`, with
 `Φ_k(x^u) = eq(r''_k, u)`. -/
 def basisVals (sws : Array Switched) (l : Nat) : Array F128 :=
   let tabs := sws.map fun sw => (sw.gamma, eqTable sw.z, eqTable sw.rpp)

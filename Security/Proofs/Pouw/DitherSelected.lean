@@ -1,4 +1,6 @@
-import Proofs.Pouw.SakLb
+module
+
+public import Proofs.Pouw.SakLb
 
 /-!
 # The served Dither sampling block, selected or not: SAK(matmul) from its residual at the selection's rate
@@ -29,6 +31,8 @@ The other premises of `WorkSound` read the round only through `RoundProto`'s fie
 is, at this `P`, `SAKResidual`'s at the selection's rate. Nothing here is a premise of a guarantee: `SAKResidual` is a
 proof-only definition, a hypothesis of these lemmas.
 -/
+
+@[expose] public section
 
 namespace Pouw.SakLb
 

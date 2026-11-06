@@ -1,4 +1,4 @@
-"""The receipt producer's time a decode step (`producer.Receipts` on h1u.cu's units kernel, `producer.Units`) with dead
+"""The receipt producer's time a decode step (`pouw_h1_receipts.Receipts` on h1u.cu's units kernel, `producer.Units`) with dead
 tiles computed (v1's unit) and skipped (``skip_dead``), each call on its own and a step's calls of one K in one launch
 (`Receipts.prepare`): Llama-3.1-8B's linears (qkv, o, gate_up, down) over ``--layers`` layers at a ``--slot``-row slot
 holding each of ``--rows`` served rows. Per call, ``gpu_ms`` is the step's seeds and receipts on the device (CUDA events
@@ -33,12 +33,14 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import producer as P  # noqa: E402
 
+from verity_vllm.protocols.pouw.h1 import receipts as RC  # noqa: E402
+
 #: Llama-3.1-8B's linears (name, n, K)
 LLAMA = [("qkv", 6144, 4096), ("o", 4096, 4096), ("gate_up", 28672, 4096), ("down", 4096, 14336)]
 SALT, RA, RB = (hashlib.sha512(x).digest() for x in (b"salt", b"A", b"B"))
 
 
-class _At(P.Receipts):
+class _At(RC.Receipts):
     """The producer with its calls' first units laid out in step order, without a window Program."""
 
     def __init__(self, starts: dict[int, tuple[int, int]], *args, **kw):
@@ -76,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
             u0 += starts[c.index][1]
             calls.append(c)
     groups = {k: [c for c in calls if c.k == k] for k in sorted({c.k for c in calls})}
-    record = torch.from_numpy(P.seed_record(SALT, RA, RB)).to(dev)
+    record = torch.from_numpy(RC.seed_record(SALT, RA, RB)).to(dev)
     out: dict = {"slot": a.slot, "layers": a.layers, "reps": a.reps, "calls": len(calls), "units": u0,
                  "groups": {str(k): len(g) for k, g in groups.items()}, "device": torch.cuda.get_device_name(dev),
                  "so": a.so, "rows": {}}

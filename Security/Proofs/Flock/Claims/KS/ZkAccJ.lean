@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ZkLiveJ
-import Proofs.Flock.Claims.KS.Escapes
-import Proofs.Flock.Claims.KS.OnAcc
+module
+
+public import Proofs.Flock.Claims.KS.ZkLiveJ
+public import Proofs.Flock.Claims.KS.Escapes
+public import Proofs.Flock.Claims.KS.OnAcc
 
 /-!
 # Every masked table's bound with escapes on accepted runs
@@ -24,6 +26,8 @@ accepted runs (`zk_tableBoundJAccAt_of_liveJ`, through `zk_le_sessionsJ`). At th
 gives table 0's, `TableBoundθAccAt` with the same escapes (`TableBoundJAccAt.tableBoundθAccAt`), so the masked
 `plain_tableBoundθAccAt` follows from `ZkLiveAccJ` where some run accepts (`zk_tableBoundθAccAt`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

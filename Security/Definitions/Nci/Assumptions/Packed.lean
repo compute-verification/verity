@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions
-import Definitions.Nci.Packed
+module
+
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Packed
 
 /-!
 # NCI's activations assumption on a chain with several products to a gate
@@ -7,6 +9,8 @@ import Definitions.Nci.Packed
 `ActivationsIncompressible`, restated for a `PackedChain`, so that it applies to a reference circuit that computes in
 `Dot16` steps. At `k = 1` it is `ActivationsIncompressible` on the chain itself (`Chain.toPacked`).
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

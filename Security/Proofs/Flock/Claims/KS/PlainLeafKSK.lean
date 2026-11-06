@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainLeafKS
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafKS
 
 /-!
 # The plain-leaf simulator and the slack's fit at `VK keep`
@@ -13,6 +15,8 @@ beside it:
 * `PlainSimWrPAtDUK`, `plainSimWrPAtD_of_partsUK`, `plainSimWrPAtDU_atK`, `plainSimWD_allK`: the concrete simulator at
   `plainVerdictAtK keep`, at plain SHA-512 leaves and at every statement.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

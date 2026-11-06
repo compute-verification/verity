@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Registered.ReadsX
-import Proofs.Flock.Recursive.StageRead
+module
+
+public import Proofs.Flock.Soundness.Registered.ReadsX
+public import Proofs.Flock.Recursive.StageRead
 
 /-!
 # Recursion: two sessions' registrant records, priced by a finder of the recursive audit
@@ -22,6 +24,8 @@ the audit once and outputs the pair where the outcome's history has one.
 * `zk_sessions_recursive_fork_read_off`: `zk_sessions_recursive_fork_read` on `VBridgeOff RegColl`, with `regFinder`
   finding a collision as one more fork.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Registered
 

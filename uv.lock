@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "extra == 'extra-11-verity-vllm-torch' and extra != 'extra-6-verity-torch-cpu'",
@@ -38,6 +38,7 @@ members = [
     "verity-difftest",
     "verity-exact-kit",
     "verity-flock",
+    "verity-graph",
     "verity-lean-audit",
     "verity-machine-model",
     "verity-native-peak",
@@ -2223,6 +2224,12 @@ requires-dist = [
 name = "verity-cli"
 version = "0.0.0"
 source = { editable = "tools/verity/cli" }
+dependencies = [
+    { name = "verity-graph" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "verity-graph", editable = "tools/verity/graph" }]
 
 [[package]]
 name = "verity-commit-slots"
@@ -2365,6 +2372,11 @@ requires-dist = [
     { name = "verity-numerical", editable = "benchmarks/numerical" },
     { name = "verity-vllm", editable = "integrations/vllm" },
 ]
+
+[[package]]
+name = "verity-graph"
+version = "0.0.0"
+source = { editable = "tools/verity/graph" }
 
 [[package]]
 name = "verity-lean-audit"

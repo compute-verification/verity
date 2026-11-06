@@ -1,4 +1,6 @@
-import Proofs.Core.TC.Proofs.Norm
+module
+
+public import Proofs.Core.TC.Proofs.Norm
 
 /-!
 # One group, the relation's side: what the predicates force
@@ -7,6 +9,8 @@ For the Hopper parameters (`HP`), `term_facts` reads a term's alignment off its 
 maximum exponent, `finite_path` every column of the finite path, and `out_poly` the output state as a polynomial in the
 group's flags. None of this looks at the semantics.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs
 

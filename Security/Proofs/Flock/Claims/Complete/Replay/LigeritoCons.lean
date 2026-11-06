@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoSync
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoSync
 
 /-!
 # The consistency value on an honest opening
@@ -10,6 +12,8 @@ challenges against the prover's consistency weight `V = consW` (`consE_honest`):
 rows by `eq(α)` batches the `X̂_c(ω_{pos_j})` into `V(c)`. The prover's iterated `foldK` is the model's `foldLoL`
 (`gv_foldKs`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

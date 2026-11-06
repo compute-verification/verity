@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.SeqStop
-import Proofs.Flock.Claims.Recursion.SeqDeploy
-import Proofs.Flock.Claims.Recursion.DeployStop
+module
+
+public import Proofs.Flock.Claims.Recursion.SeqStop
+public import Proofs.Flock.Claims.Recursion.SeqDeploy
+public import Proofs.Flock.Claims.Recursion.DeployStop
 
 /-!
 # The recursion's `ZKStop` at the masked record with the deployed stop
@@ -20,6 +22,8 @@ commit string (`nAt = 1`, `innerMsg` the commit string itself), so `εzkStop` is
 * `zkStop_deployRecMStop_commit_sha512`: at SHA-512, the inner prover that commits, and the session's tables at the
   recursive setup, whose premises remain, with `LiveWit` at the outer record's relation.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

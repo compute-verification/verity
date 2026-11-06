@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Refine.RepConverse
-import Proofs.Flock.Claims.Recursion.NextShaDec
-import Flock.With.Eq
+module
+
+public import Proofs.Flock.Soundness.Refine.RepConverse
+public import Proofs.Flock.Claims.Recursion.NextShaDec
+public import Flock.With.Eq
 
 /-!
 # A rep's verdict on its decoded proof, from its program's run
@@ -17,12 +19,14 @@ whose Merkle scheme is the registry's (`Named`):
 `FlockVBridge.Family.runs_of_files` gives the program's run from the pieces (`RunsFrom`, `AlgebraHolds`, `AccHolds`).
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Flock
 
 theorem verifyRepPWith_std_of_prog (spec : SessionSpec) (st : Setup) (hN : st.merkle.Named) (sch : Flock.Schedule)
-    (sess : Session) (i r : ℕ) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
+    (sess : RunRecord) (i r : ℕ) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
     (hpar : (p.params != pcsParams st.merkle sch) = false)
     (hprog : FlockSoundness.Refine.repProg st sch p extras
       (Transcript.init stream.rounds (spec.domain spec.tables[i]! r).toUTF8) = .ok ((), t₄))
@@ -43,7 +47,7 @@ theorem verifyRepPWith_std_of_prog (spec : SessionSpec) (st : Setup) (hN : st.me
   rfl
 
 theorem verifyRepDWith_std_of_prog (spec : SessionSpec) (st : Setup) (hN : st.merkle.Named) (sch : Flock.Schedule)
-    (sess : Session) (i r : ℕ) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
+    (sess : RunRecord) (i r : ℕ) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
     (hs : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) =
       some stream)
     (hex : st.extra sess.points = .ok extras)

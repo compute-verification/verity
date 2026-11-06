@@ -1,5 +1,7 @@
-import Definitions.Pouw.H1Zy.CombineBits
-import Proofs.Pouw.H1Zy.Combine
+module
+
+public import Definitions.Pouw.H1Zy.CombineBits
+public import Proofs.Pouw.H1Zy.Combine
 
 /-!
 # The combine's pieces on bits compute their word views, and so does their composition
@@ -9,6 +11,8 @@ Each piece's lowering computes its word view on every input: `PouwXor32_v2`'s (`
 another's is carried with it (`tree_map`), so the combine's body on bits, read at its words' bits, is its body on words
 (`combineBits_bitsOf`).
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

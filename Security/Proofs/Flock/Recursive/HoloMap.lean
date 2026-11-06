@@ -1,7 +1,9 @@
-import Proofs.Flock.Recursive.HoloSched
-import Proofs.Flock.Recursive.HoloCoins
-import Proofs.Flock.Soundness.Assumptions.Inner
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+module
+
+public import Proofs.Flock.Recursive.HoloSched
+public import Proofs.Flock.Recursive.HoloCoins
+public import Proofs.Flock.Soundness.Assumptions.Inner
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
 
 /-!
 # Candidate 3's inner record map
@@ -25,6 +27,8 @@ verifier's own inner shape (`RecVStar.Inner`) through the session's schedule (`H
 The table's prefix `tbl` (`<table>/`, which names the reps' streams in the inner transcript) and the `b ‖ c` of a
 round's commitment at a value's row (`bc`, at the generic commitment type) are the map's parameters.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

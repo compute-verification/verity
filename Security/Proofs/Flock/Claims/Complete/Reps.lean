@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Runs
-import Proofs.Flock.Soundness.Refine.Setup
-import Proofs.Flock.Soundness.Refine.Arith
+module
+
+public import Proofs.Flock.Claims.Complete.Runs
+public import Proofs.Flock.Soundness.Refine.Setup
+public import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # The honest reps return
@@ -17,6 +19,8 @@ through `Hashes.ofSha512` (`commitP_ok`), and every other step is a draw, an abs
 returning lifts, and lifted over a state (`Total.st`). `totS` is it on `PS` from any sends; `totT` and `totL` add the
 transcript and Ligerito's state. The walks apply the steps whose postcondition is `True` (`Total.bind'`, …).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

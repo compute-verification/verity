@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Core.Hash
+module
+
+public import Mathlib
+public import Definitions.Core.Hash
 
 /-!
 # Interaction: the live-coin model every proof system's claims are stated in
@@ -32,6 +34,8 @@ Core's, and keeps the namespace `Claims` its records were written under. Its for
 Mathlib and Core's hash vocabulary only (`Definitions/Core/Hash.lean`), as Core's layer is. The named assumptions here
 are `StrictBirthday` and `ExpectedCR`; what the claims rest on and no Lean statement can say is `trustedBase`.
 -/
+
+@[expose] public section
 
 namespace Claims
 

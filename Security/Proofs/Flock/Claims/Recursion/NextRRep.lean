@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.NextRShaped
-import Proofs.Flock.Claims.Complete.Shaped
-import Proofs.Flock.Claims.Complete.Discharge
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRShaped
+public import Proofs.Flock.Claims.Complete.Shaped
+public import Proofs.Flock.Claims.Complete.Discharge
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
 
 /-!
 # The honest rep's proof at any table
@@ -17,6 +19,8 @@ them, and `repP` sets `params` and `initialCap` as V\* takes them (`repP_unabsor
 The plain case's one table is `TableOk` (`Case.tableOk`); a statement of several plain tables has no deployed relation
 yet, so there `TableOk` stays a hypothesis per table.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

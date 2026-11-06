@@ -1,6 +1,8 @@
-import Definitions.Core.Guarantees.Expand
-import Definitions.Core.Boolean
-import Proofs.Core.Circuit
+module
+
+public import Definitions.Core.Guarantees.Expand
+public import Definitions.Core.Boolean
+public import Proofs.Core.Circuit
 
 /-!
 # Proofs of the bit-level expansion's guarantees
@@ -10,6 +12,8 @@ import Proofs.Core.Circuit
 * `FlockSoundness.Audit.Circuit.toCircuit_boolean`: C-Flock's circuits are Boolean in the draft's sense when no gate is
   an empty row, the one operation that reads nothing.
 -/
+
+@[expose] public section
 
 namespace Verity
 

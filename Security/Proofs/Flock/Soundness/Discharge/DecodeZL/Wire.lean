@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
-import Proofs.Flock.Soundness.Discharge.Exec.Decode
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
+public import Proofs.Flock.Soundness.Discharge.Exec.Decode
 
 /-!
 # The per-Kind decoder (R11b)
@@ -16,6 +18,8 @@ its values), or one `.bytes` frame.
 * `coinPat`, `groupPat`, `rdChunks`, `Carries`: a phase's frames carry its messages, in the groups its spine cuts them
   into at its coins, then a tail the proof file carries. `Carries.append` glues two phases.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 

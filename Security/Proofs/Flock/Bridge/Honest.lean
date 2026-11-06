@@ -1,7 +1,9 @@
-import Proofs.Flock.Bridge.Assumptions.Served
-import Proofs.Flock.Bridge.Public
-import Proofs.Flock.C3.VStarList.Parse
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+module
+
+public import Proofs.Flock.Bridge.Assumptions.Served
+public import Proofs.Flock.Bridge.Public
+public import Proofs.Flock.C3.VStarList.Parse
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 
 /-!
 # `SampledKSLive`'s file hypotheses hold at the deployed session
@@ -14,6 +16,8 @@ digests, at `verity/flock-circuit`'s tags with one table and no session tables, 
 the ones the statements take (`TagsOkZHJ`). The finders' collision resistance is no hypothesis of these: the statements
 take it as the named assumptions `Assumptions.TableCRZAt` and `Assumptions.LinkCRZCAt`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

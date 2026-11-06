@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Reps.RepsRead
-import Proofs.Flock.C3.Reps.Vals
-import Proofs.Flock.Soundness.Assumptions.Inner
+module
+
+public import Proofs.Flock.C3.Reps.RepsRead
+public import Proofs.Flock.C3.Reps.Vals
+public import Proofs.Flock.Soundness.Assumptions.Inner
 
 /-!
 # The reps' coins at `repsOfVals`, from the inner session's records
@@ -14,6 +16,8 @@ coins are the round's coordinate (`CoinsEncoded`).
 `repRoundsHeld_of_rounds`: `RepRoundsHeld` by definition at reps whose rounds are the record's (`heldRounds`).
 `capRead_vals`: `CapRead` at values whose cap is one constant.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

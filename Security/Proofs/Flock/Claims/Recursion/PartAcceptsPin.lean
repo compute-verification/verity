@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.PartAccepts
-import Proofs.Flock.Claims.Recursion.KSLin2Staged
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.PartAccepts
+public import Proofs.Flock.Claims.Recursion.KSLin2Staged
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
 
 /-!
 # `DecompB` with each part's witness pinned to the parts' own (`DecompBP`)
@@ -21,6 +23,8 @@ through the recorded calls (a level part's `out` rows to RecCap's `top` rows), t
   The route reads each part's check at the witness `E_O` extracted for that part, so it never needed more: `PartAcceptsP`
   at `ws[s]` is built there from the same facts `PartChecksBV` was applied to, and no `PartChecksBV` is asked.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 

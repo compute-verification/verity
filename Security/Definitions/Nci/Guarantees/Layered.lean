@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.Threads
-import Definitions.Nci.Assumptions.Layered
+module
+
+public import Definitions.Nci.Guarantees.Threads
+public import Definitions.Nci.Assumptions.Layered
 
 /-!
 # NCI over threads: keyed circuits are threaded
@@ -10,6 +12,8 @@ circuit's structure. At Kimi K2's shapes, written in `Dot16` steps, under the na
 circuit is keyed there (`Assumptions.ReferenceLayered`), that is `(10, 2328)` for `S ≤ 2·10⁷`, counting steps
 (`ReferenceThreaded`).
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

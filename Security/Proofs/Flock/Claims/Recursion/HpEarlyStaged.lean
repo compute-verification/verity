@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.HpEarlyTrace
-import Proofs.Flock.Claims.Recursion.VStarTraceAt
+module
+
+public import Proofs.Flock.Claims.Recursion.HpEarlyTrace
+public import Proofs.Flock.Claims.Recursion.VStarTraceAt
 
 /-!
 # hp before the last round on the honest run, with every part staged (`hpEarly_staged`)
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.Recursion.VStarTraceAt
 staged (`VStarTraceAt.traceAt_staged`: `traceOkAt_staged` and `SlotsDeployed.circOkAt_staged`), so hp before the last
 round needs only that and the fitted rows (`RowsFit`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.HpEarly
 

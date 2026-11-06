@@ -1,7 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
-import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
-import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+public import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
+
+@[expose] public section
 
 set_option Elab.async false
 

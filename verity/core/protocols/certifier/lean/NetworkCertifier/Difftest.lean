@@ -1,6 +1,8 @@
-import NetworkCertifier.Ingress
-import NetworkCertifier.Schedule
-import Lean.Data.Json
+module
+
+public import NetworkCertifier.Ingress
+public import NetworkCertifier.Schedule
+public import Lean.Data.Json
 
 /-!
 # The difftest: the certifier program against the Python audit, on random instances
@@ -33,6 +35,8 @@ records stop at a window boundary, so the sequence has `T` steps per window reco
   which the Program's rows before step `m·T` don't read; Python computes each link's grids from its own declaration;
 * for every prefix, `complete`: `StatusComplete` on the first `m·T` steps, by `decide`.
 -/
+
+@[expose] public section
 
 namespace NetworkCertifier.Difftest
 

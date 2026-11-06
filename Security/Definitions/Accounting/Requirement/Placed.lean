@@ -1,5 +1,7 @@
-import Definitions.Accounting.Requirement
-import Definitions.Accounting.Confidence
+module
+
+public import Definitions.Accounting.Requirement
+public import Definitions.Accounting.Confidence
 
 /-!
 # A placed execution as an actual run (trusted)
@@ -27,6 +29,8 @@ run of a node that runs `W` as placed, leaf, ticks and values as given, its oper
 coins among its gates: `Definitions/Accounting/Guarantees/RequirementPouw.lean` states what such a node is credited and
 helped, which is completeness, not what a node that passes PoUW ran.
 -/
+
+@[expose] public section
 
 namespace Accounting.Requirement
 

@@ -1,28 +1,30 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Readers
-import Proofs.Flock.Soundness.Discharge.Layout.Bytes
-import Proofs.Flock.Soundness.Discharge.Layout.Region
-import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
-import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
-import Proofs.Flock.Soundness.Discharge.Layout.InRegion
-import Proofs.Flock.Soundness.Discharge.Layout.InCover
-import Proofs.Flock.Soundness.Discharge.Layout.Pins
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
-import Proofs.Flock.Soundness.Discharge.Layout.QSort
-import Proofs.Flock.Soundness.Discharge.Layout.Site
-import Proofs.Flock.Soundness.Discharge.Layout.OutSite
-import Proofs.Flock.Soundness.Discharge.Layout.OfRows
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProgP
-import Proofs.Flock.Soundness.Discharge.Layout.OutShape
-import Proofs.Flock.Soundness.Discharge.Layout.OutPin
-import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
-import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
-import Proofs.Flock.Soundness.Discharge.Layout.Outs
-import Proofs.Flock.Soundness.Discharge.Layout.OutsP
-import Proofs.Flock.Soundness.Discharge.Layout.Keyed
-import Proofs.Flock.Soundness.Discharge.Layout.Tables
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.Readers
+public import Proofs.Flock.Soundness.Discharge.Layout.Bytes
+public import Proofs.Flock.Soundness.Discharge.Layout.Region
+public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+public import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
+public import Proofs.Flock.Soundness.Discharge.Layout.InRegion
+public import Proofs.Flock.Soundness.Discharge.Layout.InCover
+public import Proofs.Flock.Soundness.Discharge.Layout.Pins
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+public import Proofs.Flock.Soundness.Discharge.Layout.QSort
+public import Proofs.Flock.Soundness.Discharge.Layout.Site
+public import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+public import Proofs.Flock.Soundness.Discharge.Layout.OfRows
+public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+public import Proofs.Flock.Soundness.Discharge.Layout.KeyProgP
+public import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+public import Proofs.Flock.Soundness.Discharge.Layout.OutPin
+public import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
+public import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
+public import Proofs.Flock.Soundness.Discharge.Layout.Outs
+public import Proofs.Flock.Soundness.Discharge.Layout.OutsP
+public import Proofs.Flock.Soundness.Discharge.Layout.Keyed
+public import Proofs.Flock.Soundness.Discharge.Layout.Tables
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
 /-!
 # `lay` and `rs` of `Prog.flock_headline`, discharged
@@ -80,3 +82,5 @@ from the decoder's places and the executable's regions:
 * `Scope`: `rs`'s circuit conditions (`h1`, `ho`, `PortReads`) as one check on the parsed circuit that runs
   (`scopeOk`, `scopeOk_spec`).
 -/
+
+@[expose] public section

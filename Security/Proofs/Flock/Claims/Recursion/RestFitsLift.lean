@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.RestReadR
-import Proofs.Flock.Claims.Recursion.NextRHonest
+module
+
+public import Proofs.Flock.Claims.Recursion.RestReadR
+public import Proofs.Flock.Claims.Recursion.NextRHonest
 
 /-!
 # A fit lifts to rows of its rows' sizes (`fitsLift`)
@@ -14,6 +16,8 @@ The values are realizable because a rep's frames read every absorbed value slot 
 values is injective; both sides have `|F128|` to the same power (`vals_repFrames_length`), so it is onto
 (`realize`). Any 16 bytes are an `F128`'s by the same count (`toBytes_surj`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
