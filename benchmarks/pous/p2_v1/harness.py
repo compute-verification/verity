@@ -4,7 +4,7 @@ The kernels take a setup's key prefix, so one arm runs either framing, both on v
 
 - `V1` (`p2-v1-gpu`): the v4 spec as `reference.py` states it, audited by `memory_challenger.py`'s own loop.
 - `V3` (`p2-16448/v4`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
-  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `benchmarks/pous/band_gpu/memory_challenger.py --strict`, which
+  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `verity/core/devices/memory_challenger/timed_audit.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
   with the scheme's own codec back to `W`'s, when that segment is wholly encoded.  A joint run's `--bandwidth-salt GPU` sets
   `C` up under the bandwidth audit's salt for that GPU instead (`V3.bind_device`), so the bandwidth verifier audits the same `C`.
@@ -112,7 +112,7 @@ class V1:
 class V3(V1):
     """`p2-16448/v4` (`verity.core.protocols.pous.schemes.p2`): `protocol.commit`'s commitment to `W` under the
     scheme's manifest, `protocol.draw_salt`'s 24-byte salt, its key prefix (which frames that salt and no commitment) and `vk`'s
-    leaves, audited by `protocol.TimedAudit` (`benchmarks/pous/band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the
+    leaves, audited by `protocol.TimedAudit` (`verity/core/devices/memory_challenger/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
     the gaps."""
 
