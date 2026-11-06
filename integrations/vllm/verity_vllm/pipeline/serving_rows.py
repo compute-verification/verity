@@ -132,8 +132,8 @@ from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline import split_rows as SP, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
-from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, SLICES, SPLITS,  # noqa: F401
-                                                    Template, _bind, part, template, unit_templates)
+from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS, SLICES,  # noqa: F401
+                                                    SPLITS, Template, _bind, part, template, unit_templates)
 from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap

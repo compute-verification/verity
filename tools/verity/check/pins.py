@@ -26,8 +26,9 @@ and `tools/verity/lean/lean-deps.json`, a bundle per manifest that a cold run ex
 
 `--merged` is the merge's half (`research merge --train --prepare` runs it on every merge of a train): Lake manifests and pins
 are generated, so their merged text is never kept.  Drive's merge onto `next` has no checkout to run commands in, so when its
-only conflicts are in pins it rebuilds each from the merged tree itself, reading `PINS` from this file's text
-(`research.queue.repinned`). Each Lake package (a directory with a tracked `lakefile.toml` and
+only conflicts are in pins it rebuilds each from the merged tree itself, reading `PINS` from this file's text, unless both
+sides changed what a JSON pin holds besides its digests, which conflicts (`research.queue.repinned`).
+Each Lake package (a directory with a tracked `lakefile.toml` and
 `lake-manifest.json`) whose lakefile, manifest or toolchain, or one of a package it requires by path, both sides changed gets
 `lake update`, packages a package requires first (0fcc: two branches each added a dependency, and the merged manifest held
 neither); a package whose manifest moves to a new dependency key gets the pin of the bundle one side had for it, when the new

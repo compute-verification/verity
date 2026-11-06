@@ -25,6 +25,11 @@ TOOL = _module("repo_check_tool", ROOT / "tools" / "verity" / "check" / "tool.py
 HANDLES = {"ci", "lean", "proofs"}
 
 
+@pytest.fixture(autouse=True)
+def _provers(provers):
+    return provers(CHECK)
+
+
 def test_the_declaration_names_check_pys_jobs_in_their_groups_and_order(tmp_path):
     declared: dict[int, list[str]] = {}
     for j in D.load():

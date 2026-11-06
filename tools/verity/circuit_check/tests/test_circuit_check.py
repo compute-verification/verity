@@ -1122,8 +1122,12 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     [real] = json.loads(out.read_text())["targets"][0]["correspondence"]["realizations"]
     assert not real["lowered"] and real["reason"].endswith("over the whole-Definition budget (1)")
     capsys.readouterr()
-    fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"
-    assert cli.main([fp8, *call]) == 1                       # a failure drive's policy allows is still its real verdict
+    fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"           # no Call: its shared-scale form is served in its place
+    assert cli.main([fp8, *call]) == 0
+    with pytest.MonkeyPatch.context() as mp:                  # as a Call, its coordinates' copies of each scale product fail by name
+        mp.setattr(TG, "_CALLS", set())
+        mp.setitem(TG._SHORT, "words", TG.word_call_families() | {"ScaledMmFp8Block_v1"})
+        assert cli.main([fp8, *call]) == 1
     assert f"FAIL partition/gate-recomputed {fp8}" in capsys.readouterr().out
     assert cli.main([BOOL_RECOMPUTE, *call]) == 0
     assert "1 Boolean Call(s) recomputing 1120 gate(s) across units (Q_word v2)" in capsys.readouterr().out

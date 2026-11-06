@@ -38,11 +38,12 @@ python tools/verity/lean/upstream.py PKG [--lean]        what the pinned depende
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 
-The edit loop is `verity lean try FILE`: `lake env lean FILE` in the Lake package that holds FILE (the nearest lakefile above it),
-against its built imports, exiting with lean's status. With `--on NODE`, through `research run`, it runs `lean_changed.py --try
-FILE` on this checkout, uncommitted edits included: in one of the node's `build` Lean slots, on the tree `--records` keeps warm,
-`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`. Neither runs this audit or writes
-a record: `--records PKG --update` is for the lock and the mark only (`lean_changed.py`'s docstring).
+The edit loop is `verity lean try FILE`: `lake env lean FILE` in the nearest Lake package above FILE, against its built
+imports, with its `[leanOptions]` as a build has them, exiting with lean's status, the axiom probe's line last. `--siblings` then imports FILE's build beside each built
+module of its package not importing it, failing on a name two declare (`siblings.py`). With `--on NODE`, through `research
+run`, it runs `lean_changed.py --try FILE` on this checkout's working tree: in a node's `build` Lean slot, on the tree
+`--records` keeps warm, `lake build +MODULE:deps` and then `lake env lean FILE`. Neither runs this audit or writes a record
+(`lean_changed.py`'s docstring).
 
 ## What it checks
 
@@ -286,7 +287,7 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   property resting on it, which stays under `frozen` only as `falsified`. Every package is checked: without a `shape`
   section each guarantee is frozen or fails. An entry added to `frozen`, and a conjecture added or with a new status,
   is a claims change: the landing DM shows it with its reason (`research/spec_alert.py`), and nothing waits on it.
-- **The spec**, the trusted text a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
+- **The spec**, what a guarantee is stated over, is the `layers` prefixes: the modules whose imports the
   policy rules. Every definition a guarantee's statement reads (theorems are not read: a statement means the same
   whatever proves the propositions in it), followed through `meaning` and where the walk leaves it, must lie in the spec
   of its package or of a package it requires by path (by that package's own `layers`), or in a pinned dependency (the
@@ -431,7 +432,8 @@ so a merge that is clean but wrong (a definition that changed on one side withou
 other side's new guarantee reads it) fails there. `merge.py --normalize FILE` recomputes a record's digests without a build.
 The fast path (`lean_changed.py --records`) takes such a candidate as it is: after a merge of `main` that takes every Lean
 input of a package it changes whole from main's side and its lock from `merge.py`, on top of a commit whose records passed, it runs
-nothing for that package (`merged`), and neither does it on inputs whose records already passed on that node (`kept`).
+nothing for that package (`merged`), and neither does it on inputs whose records already passed on that node or in a result
+the node's store holds (`kept`, by `inputs_key`; `lean_changed.py --inputs-key PKG --head SHA` prints the key from git alone).
 
 ## Noticing when a dependency proves what we assume: `upstream.py`
 
