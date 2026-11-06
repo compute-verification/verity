@@ -61,6 +61,32 @@ KEY_WORDS = 1 << 18
 ABSENT = np.int64(0x5EED5EED5EED5EED)
 
 
+def fingerprint_keys() -> tuple[np.ndarray, np.ndarray]:
+    """The fixed odd keys: KEY_WORDS for a row's words, and those that fold a long row's chunks."""
+    g = np.random.default_rng(0x5EED)
+    return (g.integers(-(1 << 62), 1 << 62, KEY_WORDS, dtype=np.int64) | 1,
+            g.integers(-(1 << 62), 1 << 62, 4096, dtype=np.int64) | 1)
+
+
+def digest_rows(t: Any, rows: int, keys: Any, chunk_keys: Any) -> Any:
+    """[rows] int64: each row's words times ``keys``, summed with wraparound, plus its byte length times a fixed odd
+    constant; a row longer than the keys is cut into chunks whose sums are folded with ``chunk_keys``."""
+    import torch
+
+    b = t.detach().contiguous().view(torch.uint8).reshape(rows, -1)
+    n = b.shape[1]
+    w = b.view(torch.int32) if n % 4 == 0 else b.view(torch.int16) if n % 2 == 0 else b
+    w = w.to(torch.int64)
+    m, k = w.shape[1], len(keys)
+    if m <= k:
+        d = (w * keys[:m]).sum(dim=1)
+    else:
+        c = -(-m // k)
+        w = torch.nn.functional.pad(w, (0, c * k - m)).view(rows, c, k)
+        d = ((w * keys).sum(dim=2) * chunk_keys[:c]).sum(dim=1)
+    return d + n * 0x9E3779B97F4A7C15 % (1 << 63)
+
+
 def _identity(model_dir: Path) -> tuple[str, str]:
     """The checkpoint's name and revision: a hub snapshot's (``models--ORG--NAME/snapshots/REV``), else Moonlight's pin."""
     p = model_dir.resolve()
@@ -208,10 +234,8 @@ class Recorder:
         import torch
 
         if self.capture:
-            g = np.random.default_rng(0x5EED)
             dev = next(self.model.parameters()).device
-            self._keys = torch.from_numpy(g.integers(-(1 << 62), 1 << 62, KEY_WORDS, dtype=np.int64) | 1).to(dev)
-            self._chunk_keys = torch.from_numpy(g.integers(-(1 << 62), 1 << 62, 4096, dtype=np.int64) | 1).to(dev)
+            self._keys, self._chunk_keys = (torch.from_numpy(k).to(dev) for k in fingerprint_keys())
             self.handles.append(self.model.register_forward_pre_hook(self._pre, with_kwargs=True))
             for name, mod in self.model.named_modules():
                 if name == "logits_processor":
@@ -233,22 +257,7 @@ class Recorder:
     # --- fingerprints ---------------------------------------------------------------------------------------------------
 
     def _digest_rows(self, t: Any, rows: int) -> Any:
-        """[rows] int64: each row's words times the keys, summed with wraparound; a row longer than the keys is cut into
-        chunks whose sums are folded with keys of their own."""
-        import torch
-
-        b = t.detach().contiguous().view(torch.uint8).reshape(rows, -1)
-        n = b.shape[1]
-        w = b.view(torch.int32) if n % 4 == 0 else b.view(torch.int16) if n % 2 == 0 else b
-        w = w.to(torch.int64)
-        m = w.shape[1]
-        if m <= KEY_WORDS:
-            d = (w * self._keys[:m]).sum(dim=1)
-        else:
-            c = -(-m // KEY_WORDS)
-            w = torch.nn.functional.pad(w, (0, c * KEY_WORDS - m)).view(rows, c, KEY_WORDS)
-            d = ((w * self._keys).sum(dim=2) * self._chunk_keys[:c]).sum(dim=1)
-        return d + n * 0x9E3779B97F4A7C15 % (1 << 63)
+        return digest_rows(t, rows, self._keys, self._chunk_keys)
 
     def _put(self, label: str, t: Any) -> None:
         k = self._seen.get(label, 0)
