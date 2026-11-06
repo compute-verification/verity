@@ -22,6 +22,8 @@ public import Proofs.Accounting.TS.Stages
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Accounting.SecurityProofs.Compose.Budget
 
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
