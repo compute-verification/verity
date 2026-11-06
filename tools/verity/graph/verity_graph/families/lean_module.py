@@ -107,6 +107,16 @@ def rel(root: Path, p: Path) -> str:
     return r
 
 
+def options(table: dict, prefix: str = "") -> dict:
+    """A lakefile's `leanOptions` as Lake reads them (`decodeLeanOptions`): TOML reads a dotted key (`backward.proofsInPublic
+    = true`) as a nested table, and Lake joins its keys into one option's name, since `lean --setup` refuses a table as an
+    option's value."""
+    out: dict = {}
+    for k, v in table.items():
+        out |= options(v, f"{prefix}{k}.") if isinstance(v, dict) else {f"{prefix}{k}": v}
+    return out
+
+
 def packages(root: Path, files: list[str]) -> dict[str, Package]:
     """{directory: package} for each Lake package of the tree but the auditor's fixtures."""
     root = root.resolve()
@@ -129,7 +139,7 @@ def packages(root: Path, files: list[str]) -> dict[str, Package]:
                                  f"it; teach families/lean_module.py and runners/lean_module.py, or set it elsewhere")
         inputs = mk.input_files(root / d, doc)
         out[d] = Package(d, rel(root, p.src), p, f, tuple(rel(root, root / d / i) for i, _ in inputs),
-                         doc.get("leanOptions", {}), tuple(rel(root, q.dir) for q in ws[0]))
+                         options(doc.get("leanOptions", {})), tuple(rel(root, q.dir) for q in ws[0]))
     return out
 
 

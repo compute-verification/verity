@@ -2,7 +2,8 @@
 # proof_throughput's prover point: sessions that each prove B coordinates of one workload's population, the B its loopback
 # `flock-circuit serve` draws at the session's Register by the stratified law (`serve --draw-law`, the law verify.sh's Lean
 # verifier derives for itself), proved by Flock's native prover (ZK off) on one leased GPU with live coins, WARM warm and RUNS
-# timed sessions. The population (n_max instances) is staged once, whatever B (FLOCK_STAGE_CACHE). Build, staging and the
+# timed sessions. The coins are the challenger's keyed coin tree's (FC_COINS=tree: 70-class-sweep.sh gives the loopback verifier
+# its own challenger, pod/challenger.sh, and holds every session's record to the challenger's release log). The population (n_max instances) is staged once, whatever B (FLOCK_STAGE_CACHE). Build, staging and the
 # instance check run outside the lease; the lease covers the sessions alone. The timed sessions, the circuit, the population's
 # public file and the law go to the store as one bundle (out/bundle.json names it) for verify.sh, which runs the Lean verifier
 # on a CPU node and writes the point's contract result. This run's own result.json is the same contract result with the Lean
@@ -28,7 +29,7 @@ PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --own
   --regenerate "bash benchmarks/proof_throughput/job.sh WORKLOAD=$WORKLOAD B=$B" \
   --why "proof_throughput's prover builds, venv and stage cache: a cache, rebuilt by the next point" > "$O/keep.json" 2>&1 \
   || echo "no retention record on $FLOCK_WORK: $(tail -1 "$O/keep.json")" >&2
-export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache} FC_COINS=${FC_COINS:-os}
+export FLOCK_STAGE_CACHE=${FLOCK_STAGE_CACHE:-$FLOCK_WORK/stage-cache} FC_COINS=${FC_COINS:-tree}
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 # every instance's own rows: the verifiers refuse a plain statement's shared-row public file (ProvedScope.sharedRowsOk)
 export FLOCK_OWN_ROWS=${FLOCK_OWN_ROWS:-1}
@@ -128,6 +129,8 @@ PT point-result --workload "$WORKLOAD" --B "$B" --dir "$O" --out "${RESEARCH_RUN
 if [ "${BUNDLE:-1}" = 1 ] && [ -n "$D" ] && [ -n "$C" ] && [ -s "$O/results.jsonl" ]; then
   BD=$S/bundle; mkdir -p "$BD"
   cp "$C/circuit.txt" "$C/pub-$PT_N.bin" "$BD/" && cp -r "$D/sessions" "$BD/sessions"
+  # each challenger's release log and its audit of the sessions (its key and secret stay in the scratch)
+  for a in "$D"/challenger-*/audit.json; do [ -e "$a" ] && cp -r "$(dirname "$a")" "$BD/"; done
   for f in $BUNDLED; do [ -e "$O/$f" ] && cp "$O/$f" "$BD/"; done
   du -sb "$BD" | tee -a "$O/job.log"
   PT put-bundle --tree "$BD" --out "$O/bundle.json" \

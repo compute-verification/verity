@@ -1,6 +1,6 @@
 /-
 Level 3: the lemmas `folded_eq` (`Proofs.Flock.Level3.Folded`) reads, below the templated unit's fold, which reads some of
-them (PROTOCOL.md §10). `partial_eq_halve_fold`: halving a vector of `2^n · 64` entries
+them (`Flock.Piop`). `partial_eq_halve_fold`: halving a vector of `2^n · 64` entries
 at `ts` in turn (`halve`, the lincheck rounds' column fold) leaves at `s < 64` the sum `Σ_u eq(ts reversed, u) · v[s + 64·u]`.
 `folded_eq`: when `Stmt.folded` succeeds, its vector is `Stmt.fold`'s with `β` at the pin, halved at `ts` in turn, whether
 it read the block's structure (`foldedPartial`) or folded flat.

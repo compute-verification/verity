@@ -42,6 +42,7 @@ public import Proofs.Flock.Claims.Recursion.SeqDeploy
 public import Proofs.Flock.Claims.Recursion.DeployStop
 public import Proofs.Flock.Claims.Recursion.SeqStop
 public import Proofs.Flock.Claims.Recursion.SeqDeployStop
+public import Proofs.Flock.Claims.Recursion.RecSystem
 public import Proofs.Flock.Claims.Recursion.VStar
 public import Proofs.Flock.Claims.Recursion.VStarBound
 public import Proofs.Flock.Claims.Recursion.BoundDeploy
@@ -352,6 +353,7 @@ public import Proofs.Flock.Claims.Recursion.ResStepsWD
 public import Proofs.Flock.Claims.Recursion.ResNextW
 public import Proofs.Flock.Claims.Recursion.ResAccEnd
 public import Proofs.Flock.Claims.Recursion.OpenCoefTie
+public import Proofs.Flock.Claims.ZKOut
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
