@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Leaves
 public import Proofs.Properties.Verity.Sampled.OpenErr
 public import Proofs.Properties.Verity.Sampled.TreeGap
+import Proofs.Flock.Soundness.CROnly.Hiding
 
 /-!
 # Sampled proofs' coupling: the leaves' class errors, paid once each

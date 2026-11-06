@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.TreeMask
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.CROnly.Hm96Sha512
+import Proofs.Flock.Soundness.CROnly.ZKKey
 import Proofs.Flock.Soundness.Discharge.Hm.Commit
 
 /-!
