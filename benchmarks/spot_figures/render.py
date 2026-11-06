@@ -51,6 +51,8 @@ OFF_SCALE = 1e3
 COINCIDENT = 0.02
 #: the least gap, in the axis's height, between two labels on one side
 LABEL_GAP = 0.045
+#: how far below its axis, in the axis's height, a caption starts; the appendix's budget legend starts there beside it
+CAPTION_DROP = 0.17
 PANELS = (("exfiltration", "Exfiltration capacity"), ("infiltration", "Infiltration"),
           ("skipped_work", "Skipped work (H100-hours)"))
 
@@ -121,7 +123,7 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, ylabel: str, series: list
     ax.set_ylabel(ylabel, labelpad=8)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
-    ax.text(0, -.17, textwrap.fill(caption, wrap), transform=ax.transAxes, ha="left", va="top", fontsize=15,
+    ax.text(0, -CAPTION_DROP, textwrap.fill(caption, wrap), transform=ax.transAxes, ha="left", va="top", fontsize=15,
             color="#444444")
     ax.axvline(v["x"], color=VERTICAL, lw=2.2, zorder=2)
     if not series:
@@ -172,19 +174,21 @@ def _figure(out: dict, scope: str, panels: int, width: float, left: float):
     plt.rcParams.update({"font.family": "serif", "font.serif": ["STIXGeneral", "DejaVu Serif"],
                          "mathtext.fontset": "stix", "font.size": 20, "axes.labelsize": 22, "xtick.labelsize": 18,
                          "ytick.labelsize": 18, "savefig.facecolor": "white", "figure.facecolor": "white"})
-    top = .84 if panels > 1 else .8
+    top, bottom = .84 if panels > 1 else .8, .27
     fig, axes = plt.subplots(1, panels, figsize=(width, 10), squeeze=False)
-    fig.subplots_adjust(left=left, right=.99, bottom=.27, top=top, wspace=.3)
+    fig.subplots_adjust(left=left, right=.99, bottom=bottom, top=top, wspace=.3)
     info = out["scopes"][scope]
     colors = dict(zip(out["budgets"], COLORS))
     where = "the world's compute" if info["who"] == "world" else "a datacenter's compute"
     fig.text(left, .985, f"{out['model']} served on all of {where} for a {info['period']}: {_sci(info['gpus'])} H200s, "
              f"{_sci(info['requests'])} requests", ha="left", va="center", fontsize=23)
+    one = panels == 1
     fig.legend([plt.Line2D([], [], color=colors[b], lw=3.2) for b in out["budgets"]],
-               [f"{b * 100:g}%" for b in out["budgets"]], title="Share of compute for replays and proofs:",
-               loc="lower right" if panels == 1 else "center right",
-               bbox_to_anchor=(.99, top + .01) if panels == 1 else (.99, .985), ncol=4, frameon=False, fontsize=18,
-               title_fontsize=18, alignment="left")
+               [f"{b * 100:g}%" for b in out["budgets"]],
+               title="Share of compute for\nreplays and proofs:" if one else "Share of compute for replays and proofs:",
+               loc="upper right" if one else "center right",
+               bbox_to_anchor=(.99, bottom - CAPTION_DROP * (top - bottom)) if one else (.99, .985),
+               ncol=1 if one else 4, frameon=False, fontsize=18, title_fontsize=18, alignment="left")
     return fig, list(axes[0])
 
 
