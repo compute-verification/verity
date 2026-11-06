@@ -42,6 +42,7 @@ def test_the_card_in_the_tree_follows_the_rules():
     card = cards.load("workload", "GLM-5.3")
     v = card["value"]
     assert card["status"] == "modeled" and card["source"].startswith("art:") and v["ranks"] == g.RANKS
+    assert (v["weights_bytes"], v["params"]) == (g.WEIGHTS_BYTES, g.PARAMS)
     assert v["tokens"] > 0 and v["strata"]
     for s in v["strata"]:
         unit = s["block"].split("{")[0]

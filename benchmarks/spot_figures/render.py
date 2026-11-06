@@ -2,7 +2,8 @@
 figure: three panels (exfiltration, infiltration, skipped work) against proof overhead, a colour per share of compute
 spent on verification, the panel's headline design solid and its comparisons dashed or dotted, the measured overhead as
 a vertical line, the references as dashed horizontal ones, and each panel's caption from the JSON.  A panel's y-axis
-spans its headline curves and references, so a comparison curve may leave it at the top.
+spans its headline curves and the references up to `OFF_SCALE` above them, so a comparison curve may leave it at the
+top; a reference further up is named at the axis's top, and one at 0 only in the caption.
 
     uv run python benchmarks/spot_figures/render.py DIR/figure1.json [--scope "world year"] [--out DIR]
 """
@@ -27,6 +28,12 @@ NAMES = {"two-stage": "Two-stage", "one-stage": "One-stage, dot-product blocks",
          "layer_of_token": "Deferred interiors, a layer of a token"}
 VERTICAL = "#E69F00"
 PRIMARY = "world year"
+#: a reference line this far above the headline curves' top is named at the top of the axis instead of stretching it
+OFF_SCALE = 1e3
+#: reference lines within this relative distance coincide on the plot
+COINCIDENT = 0.02
+#: the least gap, in the axis's height, between two labels on one side
+LABEL_GAP = 0.045
 PANELS = (("exfiltration", "Exfiltration capacity"), ("infiltration", "Infiltration"),
           ("skipped_work", "Skipped work (H100-hours)"))
 
@@ -61,6 +68,18 @@ def _style(design: str, headline: str):
     return "-" if design == headline else COMPARISON[design]
 
 
+def _lines(references: list[dict], scope: str, scale: float) -> list[tuple[float, str]]:
+    """The panel's reference lines in `scope`, scaled and ascending: a line at 0 is in the caption, not here, and lines
+    within `COINCIDENT` of one another are drawn once, under the first one's label."""
+    rows = sorted(((r["value"] if "value" in r else r["by_scope"][scope]) * scale, r["label"]) for r in references
+                  if "value" in r or scope in r["by_scope"])
+    out: list[tuple[float, str]] = []
+    for amount, label in rows:
+        if amount > 0 and not (out and amount <= out[-1][0] * (1 + COINCIDENT)):
+            out.append((amount, label))
+    return out
+
+
 def render(out: dict, scope: str, outdir: Path) -> list[Path]:
     """Draw `scope`'s figure from `out` into `outdir` as `stem(scope)`.png and .svg; returns their paths."""
     plt.rcParams.update({"font.family": "serif", "font.serif": ["STIXGeneral", "DejaVu Serif"],
@@ -91,21 +110,33 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
             ax.text(.5, .5, "Pending", transform=ax.transAxes, ha="center", va="center", fontsize=26, color="#909090")
             continue
         scale = 1 / 8 if p["unit"] == "bit" else 1 / out["inputs"]["h100_hour_flop"]["value"]
-        shown = [r for r in p["references"] if "value" in r or scope in r["by_scope"]]
-        refs = [((r["value"] if "value" in r else r["by_scope"][scope]) * scale, r["label"]) for r in shown]
+        fmt = _bytes if p["unit"] == "bit" else _power
+        refs = _lines(p["references"], scope, scale)
         ys = [y * scale for s in series for y in s["y"]]
-        top = [y * scale for s in series if s["design"] == p["headline"] for y in s["y"]] + [r for r, _ in refs]
+        head = [y * scale for s in series if s["design"] == p["headline"] for y in s["y"]]
+        above = [(a, label) for a, label in refs if a > max(head) * OFF_SCALE]
+        refs = [r for r in refs if r not in above]
+        top = head + [r for r, _ in refs]
         lo, hi = 10.0 ** floor(log10(min(ys + top))), 10.0 ** (floor(log10(max(top))) + 1)
         ax.set_yscale("log")
         ax.set_ylim(lo, hi)
         ax.yaxis.set_major_locator(FixedLocator(_decades(lo, hi, 3 if hi / lo > 1e12 else 2)))
-        ax.yaxis.set_major_formatter(FuncFormatter(_bytes if p["unit"] == "bit" else _power))
+        ax.yaxis.set_major_formatter(FuncFormatter(fmt))
         ax.yaxis.set_minor_locator(NullLocator())
         ax.grid(which="major", color="#E2E2E2", lw=.45)
+        last = {"left": -1.0, "right": -1.0}
         for amount, label in refs:
             ax.axhline(amount, color="#909090", ls=(0, (4, 3)), lw=1.3, zorder=1)
-            ax.text(lo_x * 1.5, amount, label, ha="left", va="bottom", fontsize=15, color="#555555",
-                    transform=offset_copy(ax.transData, fig=fig, y=3, units="points"))
+            at = log10(amount / lo) / log10(hi / lo)
+            side = "left" if at - last["left"] >= LABEL_GAP or at - last["right"] < LABEL_GAP else "right"
+            last[side] = at
+            ax.text(lo_x * 1.5 if side == "left" else hi_x / 1.5, amount, label, ha=side, va="bottom", fontsize=15,
+                    color="#555555", transform=offset_copy(ax.transData, fig=fig, y=3, units="points"), zorder=5,
+                    bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
+        if above:
+            ax.text(lo_x * 1.5, hi, "Above the axis: " + "; ".join(f"{label} ({fmt(a)})" for a, label in above),
+                    ha="left", va="top", fontsize=14, color="#555555", wrap=True,
+                    transform=offset_copy(ax.transData, fig=fig, y=-4, units="points"))
         ax.text(v["x"] * 2.5, lo * 1.6, v["label"], color=VERTICAL, fontsize=15, ha="left", va="bottom", rotation=90)
         for s in series:
             headline = s["design"] == p["headline"]

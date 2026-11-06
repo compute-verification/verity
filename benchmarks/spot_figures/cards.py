@@ -11,7 +11,10 @@ A card is one JSON object:
 that hold for every model (`MODEL_FREE`).  A proof block's Definition is named as circuit-check names the
 specialization, the key `workload` and `proof_overhead` join on.  A `workload` card's strata are its proof blocks a
 token over its ranks; a stratum whose Definition has no cut on main, sized at the grain it would take, is `modeled`, and
-`served_macs_per_token` is the whole circuit's MACs a token where the strata leave some out.  A card reaches the
+`served_macs_per_token` is the whole circuit's MACs a token where the strata leave some out; `params`, the model's
+total parameters, scales the references that go as the model's size.  The `references` cards
+of a model add up: each is kept as `cards/references.MODEL.ART.json`, under the first twelve hex digits of its art id,
+and the figures draw every card's lines; a line at 0 is named in its panel's caption, not drawn.  A card reaches the
 figures by art id:
 
     uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields
@@ -34,6 +37,8 @@ CARDS = HERE / "cards"
 SCHEMA = "spot-card/v1"
 MODELS = ("GLM-5.3", "DeepSeek-V4-Pro")
 MODEL_FREE = ("design", "commitment", "references", "commit_hillclimb")
+#: the slots whose cards add up rather than replace one another: each is kept under its art id
+MANY = ("references",)
 PANELS = ("exfiltration", "infiltration", "skipped_work")
 CUTS = ("tokens", "kv", "layer_of_token", "every_block")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
@@ -75,7 +80,7 @@ CURVE = {"label": F(str), "model": _opt(str, nullable=True, choices=MODELS), "po
 SLOTS = {
     "workload": {"ranks": F(int), "device": F(str), "request": F(dict), "tokens": F(int), "weights_bytes": F(NUM),
                  "strata": F(list, each=STRATUM), "served_macs_per_token": _opt(NUM, nullable=True),
-                 "boundaries": _opt(dict)},
+                 "params": _opt(NUM, nullable=True), "boundaries": _opt(dict)},
     "proof_overhead": {"definition": F(str), "device": F(str), "format": F(str, choices=("fp8", "s8", "bf16", "nvfp4")),
                        "peak_mac_s": F(NUM), "arm": _opt(str), "blocks": F(list, each=OVERHEAD_BLOCK),
                        "model_overhead": F(NUM, nullable=True), "label": F(str)},
@@ -150,8 +155,9 @@ def check(card: dict) -> dict:
     return card
 
 
-def path(slot: str, model: str | None) -> Path:
-    return CARDS / f"{slot}.{(model or 'all').lower()}.json"
+def path(slot: str, model: str | None, art: str | None = None) -> Path:
+    tail = f".{art.removeprefix('art:')[:12]}" if slot in MANY and art else ""
+    return CARDS / f"{slot}.{(model or 'all').lower()}{tail}.json"
 
 
 def load(slot: str, model: str | None, required: bool = True) -> dict | None:
@@ -165,9 +171,18 @@ def load(slot: str, model: str | None, required: bool = True) -> dict | None:
     return None
 
 
+def load_all(slot: str, model: str | None) -> list[dict]:
+    """Every card of a slot in `MANY` for the model and for every model, the model's first."""
+    found = []
+    for m in (model, None):
+        p = path(slot, m)
+        found += [check(json.loads(q.read_text())) for q in [p, *sorted(CARDS.glob(f"{p.stem}.*.json"))] if q.exists()]
+    return found
+
+
 def write(card: dict, force: bool = False) -> Path:
     check(card)
-    p = path(card["slot"], card["model"])
+    p = path(card["slot"], card["model"], card.get("art"))
     if p.exists() and not force:
         old = json.loads(p.read_text()).get("art")
         if old == card.get("art"):

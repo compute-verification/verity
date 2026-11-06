@@ -17,7 +17,7 @@ def test_every_card_in_the_tree_passes_under_its_name():
     assert found
     for p in found:
         c = cards.check(json.loads(p.read_text()))
-        assert p == cards.path(c["slot"], c["model"]), p.name
+        assert p == cards.path(c["slot"], c["model"], c.get("art")), p.name
 
 
 @pytest.mark.parametrize("change,message", [
@@ -74,3 +74,15 @@ def test_load_falls_back_to_every_model_and_names_a_missing_card(tmp_path, monke
     assert cards.write(good() | {"art": "art:1"}) == p and cards.load("replay", "GLM-5.3")["value"]["factor"] == 33.0
     cards.write(good() | {"art": "art:2"})
     assert cards.load("replay", "GLM-5.3")["art"] == "art:2"
+
+
+def test_references_cards_add_up_the_models_first(tmp_path, monkeypatch):
+    monkeypatch.setattr(cards, "CARDS", tmp_path)
+    line = {"panel": "exfiltration", "label": "x", "unit": "bit", "value": 1.0, "source": "s"}
+    ref = good() | {"slot": "references", "value": {"lines": [line]}}
+    for model, art in (("GLM-5.3", "art:" + "a" * 64), ("GLM-5.3", "art:" + "b" * 64), (None, "art:" + "c" * 64),
+                       ("DeepSeek-V4-Pro", "art:" + "d" * 64), ("GLM-5.3", "art:" + "a" * 64)):
+        cards.write(ref | {"model": model, "art": art})
+    assert cards.path("references", "GLM-5.3", "art:" + "a" * 64).name == "references.glm-5.3.aaaaaaaaaaaa.json"
+    assert [c["art"][4] for c in cards.load_all("references", "GLM-5.3")] == ["a", "b", "c"]
+    assert [c["art"][4] for c in cards.load_all("references", "DeepSeek-V4-Pro")] == ["d", "c"]

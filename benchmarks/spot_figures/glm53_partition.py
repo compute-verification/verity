@@ -32,6 +32,8 @@ REQUEST = {"prefill": 256, "decode": 32}
 #: GLM-5.3's block-FP8 checkpoint at its pinned revision, as `integrations/vllm/manifests/checkpoints.json` (role
 #: GLM53) records its size
 WEIGHTS_BYTES = 7.557e11
+#: its parameters at that revision, the hub's safetensors metadata (its F8_E4M3, BF16 and F32 tensors' elements)
+PARAMS = 753_329_940_480
 WORD_BITS = 16
 #: the chain's matmul coordinate Definitions, whose `K` is a proof block's MACs
 COORDINATES = ("MoeExpertFp8Coordinate_v1", "MoeExpertFp8CoordinateW_v1", "ScaledMmFp8BlockCoordinateGivenScale_v1",
@@ -114,10 +116,11 @@ def card(census: dict, source: str) -> dict:
     return {"schema": SCHEMA, "slot": "workload", "model": "GLM-5.3", "status": "modeled", "provisional": True,
             "source": f"{source}: benchmarks/one_stage/a11_kinds.py's census of GLM-5.3's request Program, rank 0 "
                       f"of the TP8 B1 row ({census.get('descriptor', '')}), by `glm53_partition.py`; the weights' "
-                      "bytes from integrations/vllm/manifests/checkpoints.json, role GLM53",
+                      "bytes from integrations/vllm/manifests/checkpoints.json, role GLM53, and its parameters from "
+                      "the hub's safetensors metadata at that revision",
             "runs": [], "owner": "@proofs",
             "value": {"ranks": RANKS, "device": DEVICE, "request": REQUEST, "tokens": tokens,
-                      "weights_bytes": WEIGHTS_BYTES, "strata": rows,
+                      "weights_bytes": WEIGHTS_BYTES, "params": PARAMS, "strata": rows,
                       "boundaries": {"every_block": sum(r["per_token"] * r["out_bits"] for r in rows) / 8}}}
 
 

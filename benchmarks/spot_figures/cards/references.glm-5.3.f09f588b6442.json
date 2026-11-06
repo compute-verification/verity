@@ -1,0 +1,75 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "references",
+ "model": "GLM-5.3",
+ "status": "modeled",
+ "provisional": true,
+ "source": "The advice a schedule adds to the covert budget, bits a request times the scope's requests; regime (a), batch-invariant Definitions, is 0 bits and has no line on a log axis. Bits a request: network accounting's replay encoder (benchmarks/network_e2e/encodings/replay.py) on vLLM d9105ea80's traces, Llama-3.2-1B and Llama-3.1-8B on the RTX PRO 6000, 1,000 requests a trace (art:468c033980f026bd79f515b8dd6d7be9f7bcccef002e5de254185870571d6fa3, art:7b475cd238ad9f008c8a70937e06036bf98848559a45474a069e54276b8c0772, art:cddd5efa658f1f0fa6bfd40d94865b1dc8bde8cda3208a70a1e45d50af9b3033); vLLM's scheduler is the same at GLM-5.3, so the rates are carried over, not measured on GLM-5.3. Requests: figure1.scopes at cursor/proofs-spotfig-8216 ee32adc79c on the GLM-5.3 workload card, 4,500 tokens a request at 4.52e+14 FLOP, MFU 0.4 on the H200's dense FP8 peak: 2.07e+16 requests a world-year (3.75e+08 GPUs) and 5.52e+12 a datacenter-year (100,000 GPUs), 8,404 requests a 600 s machine-window.",
+ "runs": [
+  "r20261024-055757-f8a7",
+  "r20261024-064542-ae66",
+  "r20261024-090750-c45f"
+ ],
+ "owner": "@proofs",
+ "value": {
+  "lines": [
+   {
+    "panel": "exfiltration",
+    "label": "Advice, scheduler in circuit: 0.008 bit/request",
+    "unit": "bit",
+    "by_scope": {
+     "world week": 3177000000000.0,
+     "world month": 13610000000000.0,
+     "world year": 165600000000000.0,
+     "datacenter week": 847200000.0,
+     "datacenter month": 3631000000.0,
+     "datacenter year": 44170000000.0
+    },
+    "source": "0.008 bits a request: the residual on the heavy-load traces, 7-9 bits a 1,000 requests at engine and client egress; times the scope's GLM-5.3 requests"
+   },
+   {
+    "panel": "exfiltration",
+    "label": "Advice, scheduler in circuit, worst trace: 0.33 bit/request",
+    "unit": "bit",
+    "by_scope": {
+     "world week": 131000000000000.0,
+     "world month": 561600000000000.0,
+     "world year": 6832000000000000.0,
+     "datacenter week": 34950000000.0,
+     "datacenter month": 149800000000.0,
+     "datacenter year": 1822000000000.0
+    },
+    "source": "0.33 bits a request: the largest residual measured, 330 bits a 1,000 requests (seeded chunked prefill, client egress); times the scope's GLM-5.3 requests"
+   },
+   {
+    "panel": "exfiltration",
+    "label": "Advice, admission off release order: 2.2 bits/request",
+    "unit": "bit",
+    "by_scope": {
+     "world week": 873600000000000.0,
+     "world month": 3744000000000000.0,
+     "world year": 4.555e+16,
+     "datacenter week": 233000000000.0,
+     "datacenter month": 998400000000.0,
+     "datacenter year": 12150000000000.0
+    },
+    "source": "2.2 bits a request: async heavy behind the network certifier with its release order certified: 2,193.66 order bits plus about 9 residual bits a 1,000 requests; times the scope's GLM-5.3 requests"
+   },
+   {
+    "panel": "exfiltration",
+    "label": "Advice, raw schedule: 5.5 kbit/request",
+    "unit": "bit",
+    "by_scope": {
+     "world week": 2.184e+18,
+     "world month": 9.359e+18,
+     "world year": 1.139e+20,
+     "datacenter week": 582400000000000.0,
+     "datacenter month": 2496000000000000.0,
+     "datacenter year": 3.037e+16
+    },
+    "source": "5500 bits a request: the network certifier's advice v0 step records, 5.18-5.86 Mbit a 1,000 requests, which the scheduler replay replaces; times the scope's GLM-5.3 requests"
+   }
+  ]
+ },
+ "art": "art:f09f588b6442ef251890e7157398f1668e52a21f09e409b05f293534c4767a24"
+}

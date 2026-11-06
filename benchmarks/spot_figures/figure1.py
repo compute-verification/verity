@@ -37,7 +37,8 @@ they are.  The leak target samples proof blocks uniformly, so the adversary make
 count-weighted mean MACs to prove.  Skipped work is the work in incorrect proof blocks, under one-stage and request-level sampling: the
 two-stage design's interior commitments come after its first stage, so they don't show the work was done at serve
 time.  Infiltration is a panel of its own, plotted from the model's `infiltration` card and pending without one.  The
-horizontal lines are rho's reference objects (`REFERENCES`), the model's checkpoint and any `references` card's.
+horizontal lines are rho's reference objects (`REFERENCES`, its reference model's; SparseLoCo's syncs scaled to the
+served model's parameters where its `workload` card gives them), the model's checkpoint and every `references` card's.
 `figures.py` writes it with Figures 2 and 3.
 """
 from __future__ import annotations
@@ -64,6 +65,8 @@ PEAK = "h100-sxm5-80gb/e4m3"
 DESIGNS = {"exfiltration": ("two-stage", "one-stage", "request"), "skipped_work": ("one-stage", "request")}
 HEADLINE = {"exfiltration": "two-stage", "skipped_work": "one-stage"}
 SCHEMA = "spot-figure1/v1"
+#: rho's reference model, whose pretraining run, optimizer step and SparseLoCo syncs its references are
+REF_MODEL, RHO_MODEL = "DeepSeek-V4-Pro", "deepseek-v4-pro"
 #: the reference objects rho's reference rules, as cards: (table, key, field)
 REFERENCES = {"ref_sparseloco": ("exfil", "sparseloco-1000", "bits"), "ref_rollouts": ("exfil", "rl-rollouts", "bits"),
               "ref_pretrain": ("work", "v4-pretrain", "flops"), "ref_step": ("work", "v4-step", "flops")}
@@ -93,10 +96,13 @@ def _toml(path: str) -> dict:
     return tomllib.loads((ROOT / path).read_text())
 
 
-def slot_cards(model: str) -> dict[str, dict]:
-    """The model's `spot-card/v1` cards Figure 1 reads, the optional ones only where they exist."""
+def slot_cards(model: str) -> dict:
+    """The model's `spot-card/v1` cards Figure 1 reads, the optional ones only where they exist: `references` is the
+    list of every one."""
     out = {s: spot_cards.load(s, model) for s in ("workload", "proof_overhead", "commitment", "replay", "design")}
-    return out | {s: c for s in ("infiltration", "references") if (c := spot_cards.load(s, model, required=False))}
+    if inf := spot_cards.load("infiltration", model, required=False):
+        out["infiltration"] = inf
+    return out | ({"references": refs} if (refs := spot_cards.load_all("references", model)) else {})
 
 
 def _card(c: dict, value, unit: str, field: str) -> InputCard:
@@ -151,6 +157,12 @@ def cards(model: str = "GLM-5.3") -> dict[str, InputCard]:
     for name, (table, key, field) in REFERENCES.items():
         entry = rho[table][key][field]
         from_rho(name, entry["value"], entry["unit"], f"{table}.{key}", entry)
+    basis = rho["model"][RHO_MODEL]["n_total"]
+    from_rho("ref_params", basis["value"], "param", f"model.{RHO_MODEL}.n_total, the reference model's", basis)
+    if work["value"].get("params") is not None:
+        out["params"] = _card(work, work["value"]["params"], "param", "params")
+    elif model == REF_MODEL:
+        out["params"] = out["ref_params"]
     return out
 
 
@@ -347,28 +359,41 @@ def overheads(c: dict[str, InputCard], points: int) -> list[float]:
     return sorted(set(grid) | {float(c["proof_overhead"].value)})
 
 
-def references(c: dict[str, InputCard], model: str, card: dict | None = None) -> dict[str, list[dict]]:
+def references(c: dict[str, InputCard], model: str, refs: list[dict] = ()) -> dict[str, list[dict]]:
     """The panels' horizontal lines, in the panel's unit (bits, or FLOP for skipped work): rho's reference objects, the
-    served model's weights, and the lines of a `references` card, a line that depends on the scope by scope."""
+    served model's weights, and every `references` card's lines, a line that depends on the scope by scope.  rho's
+    references are its reference model's; SparseLoCo's sync goes as the parameters, so it is scaled to the served
+    model's where its `workload` card gives them."""
     def ref(label: str, name: str, scale: float = 1.0) -> dict:
         return {"label": label, "value": c[name].value * scale, "input": name}
 
-    out = {"exfiltration": [ref("1,000 SparseLoCo syncs", "ref_sparseloco"),
-                            ref(f"{model}'s weights", "weights_bytes", 8),
+    params, basis = c.get("params"), c["ref_params"].value
+    syncs = (ref(f"1,000 SparseLoCo syncs of {model}", "ref_sparseloco", params.value / basis)
+             | {"scaled_by": "params / ref_params"} if params else
+             ref(f"1,000 SparseLoCo syncs of a {basis / 1e12:g}T-parameter model", "ref_sparseloco"))
+    out = {"exfiltration": [syncs, ref(f"{model}'s weights", "weights_bytes", 8),
                             ref("100M tokens of RL rollouts", "ref_rollouts")],
            "infiltration": [],
-           "skipped_work": [ref("Pretraining run", "ref_pretrain"), ref("One optimizer step", "ref_step")]}
+           "skipped_work": [ref(f"{REF_MODEL}'s pretraining run", "ref_pretrain"),
+                            ref(f"One optimizer step of {REF_MODEL}", "ref_step")]}
     flop_per_and = 2 / c["ands_per_mac"].value
-    for line in (card or {}).get("value", {}).get("lines", []):
-        scale = flop_per_and if line["unit"] == "AND" else 1.0
-        row = {"label": line["label"], "input": "references"}
-        out[line["panel"]].append(row | ({"value": line["value"] * scale} if "value" in line else
-                                         {"by_scope": {k: v * scale for k, v in line["by_scope"].items()}}))
+    for card in refs:
+        for line in card["value"]["lines"]:
+            scale = flop_per_and if line["unit"] == "AND" else 1.0
+            row = {"label": line["label"], "input": "references"} | ({"art": card["art"]} if card.get("art") else {})
+            out[line["panel"]].append(row | ({"value": line["value"] * scale} if "value" in line else
+                                             {"by_scope": {k: v * scale for k, v in line["by_scope"].items()}}))
     return out
 
 
+def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
+    """Each panel's lines at 0 in `scope`, which a log axis can't draw and its caption names."""
+    return {panel: [r["label"] for r in rows if (r["value"] if "value" in r else r["by_scope"].get(scope, 1)) <= 0]
+            for panel, rows in refs.items()}
+
+
 def captions(serve_hash_share: float, infiltration: dict | None = None, coverage: dict | None = None,
-             boundary_hash_share: float = 0.0) -> dict[str, str]:
+             boundary_hash_share: float = 0.0, zeros: dict[str, list[str]] | None = None) -> dict[str, str]:
     serve = (f"hashes every proof block's outputs at serve time, {serve_hash_share:.2g}× the scope's compute, outside "
              "the budget")
     tokens = f"the token ids, {boundary_hash_share:.2g} of the scope's compute"
@@ -380,12 +405,12 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
     if coverage and coverage["modeled_mac_share"] > 0:
         gaps += (f" {coverage['modeled_mac_share']:.0%} are in proof blocks whose Definitions have no cut yet, "
                  "modeled at the grain they would take.")
-    return {
+    out = {
         "exfiltration": (f"Two-stage (solid): serving commits only {tokens}, and the sampled requests' interiors are "
                          "committed after the first stage, both inside the budget. One-stage (dashed) "
                          f"{serve}. Request-level (dotted) proves each sampled request whole; serving commits only the "
-                         "token ids, inside the budget. A bound counts the incorrect proof blocks' output bits and "
-                         f"which ones they are.{fill}{gaps}"),
+                         "token ids, inside the budget. A bound counts the incorrect proof blocks' output bits, each "
+                         f"the widest block's, and which ones they are.{fill}{gaps}"),
         "infiltration": (infiltration["value"]["caption"] if infiltration else
                          "Pending: the design that certifies infiltration, and its consumer."),
         "skipped_work": (f"One-stage (solid) {serve}. Request-level (dotted) proves each sampled request whole; "
@@ -393,6 +418,10 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
                          f"committed after the first stage, so they don't show the work was done at serve time."
                          f"{fill}{gaps}"),
     }
+    for panel, labels in (zeros or {}).items():
+        if labels:
+            out[panel] += f" At 0, so not drawn: {'; '.join(labels)}."
+    return out
 
 
 def infiltration_panel(card: dict | None, scope_names: list[str]) -> dict:
@@ -414,6 +443,7 @@ def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, .
     xs = overheads(c, points)
     budgets = c["budgets"].value
     and_per_flop = c["ands_per_mac"].value / 2
+    refs = references(c, model_name, sc.get("references", []))
     out_scopes, series = {}, {"exfiltration": [], "skipped_work": []}
     for s in scopes(c, part):
         if scope_names is not None and s.name not in scope_names:
@@ -427,7 +457,7 @@ def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, .
                               "flop": cap(base, "work"), "ands": cap(base, "work") * and_per_flop,
                               "serve_hash_share": serve_hash, "boundary_hash_share": boundary_hash,
                               "captions": captions(serve_hash, sc.get("infiltration"), part.coverage(),
-                                                   boundary_hash)}
+                                                   boundary_hash, zero_lines(refs, s.name))}
         models = [model(c, part, s, x, fill) for x in xs]
         for panel, target in (("exfiltration", "leak"), ("skipped_work", "work")):
             for design in DESIGNS[panel]:
@@ -440,7 +470,6 @@ def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, .
                         "plan": [None if p["row"] is None else {k: p["row"].get(k) for k in
                                  ("q", "k", "draws", "replay_sample", "prove", "replay", "commit", "total", "fill")}
                                  for p in pts]})
-    refs = references(c, model_name, sc.get("references"))
     return {
         "schema": SCHEMA, "model": model_name,
         "inputs": {k: v.__dict__ for k, v in c.items()},

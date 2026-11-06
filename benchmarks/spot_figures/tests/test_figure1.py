@@ -6,7 +6,7 @@ import shutil
 import cards
 import figure1 as f
 import pytest
-from render import render, stem
+from render import _lines, render, stem
 
 SCOPES = ("world year", "datacenter week")
 
@@ -54,11 +54,45 @@ def test_a_model_without_a_workload_card_is_refused():
 
 
 def test_a_model_runs_once_its_workload_card_lands(card_dir):
-    cards.write(cards.load("workload", "GLM-5.3") | {"model": "DeepSeek-V4-Pro"})
+    work = cards.load("workload", "GLM-5.3")
+    work["value"].pop("params")
+    cards.write(work | {"model": "DeepSeek-V4-Pro"})
     out = f.run("DeepSeek-V4-Pro", 2, ("world year",))
     assert out["model"] == "DeepSeek-V4-Pro"
     assert {out["cards"][s]["model"] for s in ("workload", "proof_overhead", "replay")} == {"DeepSeek-V4-Pro"}
-    assert out["panels"]["exfiltration"]["references"][1]["label"] == "DeepSeek-V4-Pro's weights"
+    syncs, weights = out["panels"]["exfiltration"]["references"][:2]
+    assert weights["label"] == "DeepSeek-V4-Pro's weights" and "references" not in out["cards"]
+    assert (syncs["label"], syncs["value"]) == ("1,000 SparseLoCo syncs of DeepSeek-V4-Pro",
+                                                out["inputs"]["ref_sparseloco"]["value"])
+
+
+def test_sparseloco_goes_as_the_served_models_parameters(out):
+    """rho's syncs are its reference model's: the line is scaled to the served model's parameters, and without them
+    names the model it is sized for; rho's work references name their model."""
+    c = out["inputs"]
+    syncs = out["panels"]["exfiltration"]["references"][0]
+    assert (syncs["label"], syncs["scaled_by"]) == ("1,000 SparseLoCo syncs of GLM-5.3", "params / ref_params")
+    assert syncs["value"] == pytest.approx(c["ref_sparseloco"]["value"] * c["params"]["value"] / c["ref_params"]["value"])
+    assert syncs["value"] / 8 == pytest.approx(8.0e12, rel=.01)
+    assert [r["label"] for r in out["panels"]["skipped_work"]["references"][:2]] == [
+        "DeepSeek-V4-Pro's pretraining run", "One optimizer step of DeepSeek-V4-Pro"]
+    bare = {k: v for k, v in f.cards().items() if k != "params"}
+    assert f.references(bare, "GLM-5.3")["exfiltration"][0]["label"] == "1,000 SparseLoCo syncs of a 1.6T-parameter model"
+
+
+def test_every_references_card_adds_its_lines(out):
+    arts = [c["art"] for c in out["cards"]["references"]]
+    assert len(arts) == len(set(arts)) >= 2
+    drawn = {r.get("art") for r in out["panels"]["exfiltration"]["references"]}
+    assert set(arts) <= drawn
+
+
+def test_a_line_at_zero_is_captioned_and_coincident_lines_drawn_once():
+    refs = [{"label": "a", "value": 100.0}, {"label": "b", "value": 101.0}, {"label": "zero", "value": 0.0},
+            {"label": "c", "by_scope": {"world year": 1e4}}, {"label": "elsewhere", "by_scope": {"world week": 1.0}}]
+    assert _lines(refs, "world year", 1.0) == [(100.0, "a"), (1e4, "c")]
+    assert f.zero_lines({"exfiltration": refs}, "world year") == {"exfiltration": ["zero"]}
+    assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(" At 0, so not drawn: zero.")
 
 
 def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
@@ -69,6 +103,7 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
                                      for s in SCOPES for b in (0.001, 0.01, 0.1)]})
     cards.write(card)
     cards.write(envelope("references", None, {"lines": [
+        {"panel": "exfiltration", "label": "no advice", "unit": "bit", "value": 0.0, "source": "a test"},
         {"panel": "infiltration", "label": "a steering vector", "unit": "bit", "value": 98304.0, "source": "a test"},
         {"panel": "skipped_work", "label": "every token", "unit": "AND", "by_scope": {"world year": 1e30},
          "source": "a test"}]}))
@@ -76,6 +111,7 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
     inf = out["panels"]["infiltration"]
     assert inf["status"] == "card" and inf["headline"] == "layer_of_token" and len(inf["series"]) == 6
     assert out["scopes"]["world year"]["captions"]["infiltration"] == "Deferred interiors at a layer."
+    assert out["scopes"]["world year"]["captions"]["exfiltration"].endswith(" At 0, so not drawn: no advice.")
     assert inf["references"] == [{"label": "a steering vector", "input": "references", "value": 98304.0}]
     line = out["panels"]["skipped_work"]["references"][-1]
     assert line["by_scope"]["world year"] == pytest.approx(1e30 * 2 / out["inputs"]["ands_per_mac"]["value"])
