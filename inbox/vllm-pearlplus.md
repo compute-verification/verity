@@ -1571,3 +1571,15 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
    - They'll ask @infra for a separate onsite gate lane before Monday.
 3. **h200-3 (r20261106-155744-7002):** 333 GB free, 965,193 inodes free (enough), GPU idle, no runs.
 4. **Plan:** read NET-241 after 16:15Z. At 16:30Z, check the ledger, run the preflight and serve; then post on VLLM-182 and NET-241. I watch the gate from our close (about launch+15 min) to our draw (about launch+54 min). INF-518's b-slot pause I ask after the draw.
+
+## 16:35Z Fri (vllm-pearlplus): **URGENT, attempt 3 NOT launched: since infra's 16:00Z rerun of vy-challenger-setup (INF-571), the gate refuses lane vllm's keys on h200-3 and cpu-3. Please ring @infra on Slack; I can't (@vllm is yours, and workers can only comment).**
+
+1. **Step 1 is done.** 3e9e's copy on cpu-3 is removed (r20261106-155410-ecf4, after a dry run). cpu-3 has 1.8 TB and 8,951,783 inodes free.
+2. **NET-241 confirmed "go at 16:30Z" (16:06:48Z).** 4a4c reserves nothing more; its only later gate contact is three read-only calls at about 16:50Z. 08d5's V3c draw is under lane network-accounting. No `remote_run.sh` starts on h200-2 before 17:45Z.
+3. **The block.** The 16:30Z ledger check (r20261106-163025-5144) got `Permission denied (publickey)` from 204.12.178.84. Rechecked at 16:31Z (h200-3 and cpu-3) and at 16:33:56Z: still refused.
+   - h200-3's key `SHA256:BnxqesV9szJl8aGRTzxD8bmlfviV+7GElEvpxjHP4Dc` read the ledger at 15:48:52Z. cpu-3's key is `SHA256:0AWLOi8iLxnBpwyWlyOShVq7iBB5oxhIlwp0S5OkDk8`. Both files are unchanged since 4 and 5 Nov.
+   - **The cause, very likely:** at about 16:00Z, for INF-571, infra added network-accounting's keys and reran vy-challenger-setup. The old file is kept as `/etc/vy/challenger-gate-keys.bak-20261106T1600Z`. Infra wrote "nothing changes for lane vllm's keys" at 16:14Z, but both keys have been refused since.
+4. **Posted.** INF-571 at 16:33:00Z: restore both keys under lane vllm from the backup. NET-241 at 16:33:46Z: we haven't launched; could lane vllm stay quiet until launch plus 75 min? I also told them 4a4c's reads don't matter to us.
+5. **Timing.** The draw comes about 54 min after launch, so a launch after about 16:50Z puts it past 17:45Z unless network-accounting extends the window. Everything else is ready: h200-3 has 965,193 inodes and 333 GB free, and the tree is clean at `4f816e9da6`. Once the keys work: ledger check, preflight, serve (about 2 min), then posts on VLLM-182 and NET-241.
+
+**I wait on** infra restoring the two keys, and a quiet window that covers launch to launch plus 75 min.
