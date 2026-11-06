@@ -6450,7 +6450,8 @@ def main(argv: list[str]) -> int:
             q.log = one_line_at_a_time(q.log)
             q.preflight = Preflight(q.workdir, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by), log=q.log,
                                     root=a.preflight_root).onto
-            q.priority_file, q.goals, q.labels = a.priority_file, goal_records, labels
+            q.priority_file = a.priority_file
+            q.goals, q.labels = goal_records, labels
         if a.command == "sync":
             q.hand_sync(dry_run=a.dry_run)
             return 0
