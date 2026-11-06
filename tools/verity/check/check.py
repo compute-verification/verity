@@ -94,9 +94,10 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
 
 Sharding.  `check.py --shard K/N` runs the preflight and then only shard K's parts of the plan with N shards that `ci.toml`
 declares (`declaration.py`: each job in one shard, `lean-audit` split by Lake package, `circuit-check` into its `shards`, its
-targets by the hash of each one's id), so one commit's check runs on N pods at once and takes about as long as its longest
-shard. Its result is a `check-shard/v1` (`SHARD_KIND`) that names the shard, the
-commit, the config (the tree of `tools/verity/check/` at that commit), the shard's parts and every part an unsharded check covers, and
+targets by the hash of each one's id, `lean-suites` by suite, one that declares `[tool.verity.tests] parts = P` into its P
+parts by test id, `lean-suites:SUITE:K/P`, with lean-build again on each shard that holds some of them and not it), so one
+commit's check runs on N pods at once and takes about as long as its longest shard. Its result is a `check-shard/v1`
+(`SHARD_KIND`) that names the shard, the commit, the config (the tree of `tools/verity/check/` at that commit), the shard's parts and every part an unsharded check covers, and
 each step the parts it ran. `--record --combine RUN...` records, on the clean commit, a `check/v1` whose steps are the shards'
 parts, each once (the preflight's steps once, passed in every shard), when `research.merge.shard_set` accepts them: the
 shards' Attempts are passing runs of the declared command with `--shard K/N` on that clean commit, their results passed with
@@ -109,12 +110,13 @@ When circuit-check is on the gate and its parts ran in more than one shard, the 
 (`circuit_join`: each shard's `CC_SHARDS` from its Attempt's run files, through `circuit-check --combine`), and fails unless
 that gives the verdict the unsharded `--all` gives: a by-calls root whose callee another shard checked is judged only there.
 An auto plan (`--shard auto:K/N`, `shards.py`) has finer parts: each suite of pytest and lean-suites (`pytest:SUITE`,
-`lean-suites:SUITE`) is a part of its own, packed by measured cost, and one measured past `shards.SPLIT_S` (`--split-s`) is
-M parts by test file (`pytest:SUITE:K/M`, `suite_splits`), whose partition and timing record the plan carries (`splits`), so
+`lean-suites:SUITE`), or each of the parts by test id one declares, is a part of its own, packed by measured cost, and one
+measured past `shards.SPLIT_S` (`--split-s`) is M parts by test file (`pytest:SUITE:K/M`, `suite_splits`), whose partition and timing record the plan carries (`splits`), so
 each shard runs `suites.py SUITE:K/M@DIGEST --timings` of the planner's partition; the plan travels with each shard as its run's input
 (`AUTO_PLAN`; unrecorded, `--shard-plan-file PLAN`), which refuses one whose parts aren't its tree's, and its result names the plan's digest, floor and predicted wall time
 (`shard.plan`), so a combine joins only shards of one plan.  The combine also joins a split suite's parts across shards
-(`suite_join`, `suites.combine_parts`), and fails unless every part of one partition passed once.
+(`suite_join`, `suites.combine_parts`), and fails unless every part of one partition passed once; a shard that holds every
+part of a suite runs it whole (`suites.py`), and that pass is its verdict.
 
 First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
 tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
@@ -208,12 +210,14 @@ Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for 
     lean-changed    not a verdict: its tree under `lean-changed/` keeps each package's last build there, so Lake rebuilds only
                     what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: verity/ml/flock/verifier/'s
-                    tracked files, which pin the upstream build and inputs, the interpreter, the environment)
+                    tracked files, which pin the upstream build and inputs, the interpreter, the platform, the environment)
     flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit and the Rust toolchain, the patches,
-                    the live crate, that toolchain's `rustc -vV`, the environment), so only a change to those pays for the Rust
-                    tests
-    preflight-lints likewise (`lints_key`: the commit's tree, which they read whole, the interpreter, the environment); a tree
-                    with uncommitted changes has no key, and runs them
+                    the live crate, that toolchain's `rustc -vV`, the platform, the environment), so only a change to those pays
+                    for the Rust tests
+    preflight-lints likewise (`lints_key`: the commit's tree, which they read whole, the interpreter, the platform, the
+                    environment); a tree with uncommitted changes has no key, and runs them
+                    The platform is `suites.platform_id` (not the kernel release) and the environment `_env_key` (the
+                    switches and the locale, not paths), so a pass is reused on any node for the same inputs, as a suite's is
     ratchet-gate    the gate's own, under `ratchet-gate/` ($RATCHET_GATE_CACHE): each change's verdict, keyed by the gate's bytes
                     and the change's commits (and BASE, for a verdict that read it)
 
@@ -249,7 +253,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import platform
 import re
 import shlex
 import shutil
@@ -271,13 +274,6 @@ FLOCK_VERIFIER = ROOT / "verity" / "ml" / "flock" / "verifier"
 #: the Lean verifier of record, the Lake package `flock-verify` is built from (a join of its own, so a layout move that takes
 #: the Lean package away from the scripts rewrites it)
 FLOCK_LEAN = ROOT / "verity" / "core" / "service" / "flock"
-#: environment variables that say nothing about what a step computes (the shell's own bookkeeping)
-VOLATILE = frozenset({"_", "OLDPWD", "PWD", "SHLVL", "TERM", "COLUMNS", "LINES", "TMUX", "TMUX_PANE", "SSH_CLIENT", "SSH_CONNECTION",
-                      "SSH_TTY", "SSH_AUTH_SOCK", "XDG_SESSION_ID", "MAIL", "LOGNAME", "USER", "HOSTNAME", "PUBLIC_KEY",
-                      "CHECK_STORE_CUSTODY"})
-#: variables naming the machine rather than what a step computes: a pod's id, address and pod-scoped key (so a verdict one pod
-#: stored stays valid on another; `verdicts.py`)
-MACHINE_PREFIXES = ("RUNPOD_",)
 #: the recording run's custody dir, for `store_io` (not VERITY_-prefixed: the suites' cache keys on those, and the path is per run)
 CUSTODY_ENV = "CHECK_STORE_CUSTODY"
 STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"
@@ -1510,7 +1506,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     a = max(1, n // 2)
     b = max(1, n - a)
     if only is not None:
-        # and the builds they need: an auto shard runs them beside its parts (`shards.py`); a hand-written plan's shard holds them
+        # and the builds they need, beside its parts when another shard holds them (an auto plan's, `shards.py`; a hand-written
+        # plan's lean-build, beside some of lean-suites' parts)
         names = DECLARATION.needed(JOBS, sorted({p.partition(":")[0] for p in only}))
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     with_lean = only is None or any(x.startswith("lean") for x in names)
@@ -1593,9 +1590,9 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
     gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
     of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
-    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages (`declaration.resolve`).
-    DeclarationError when there is no such plan or shard, or the tree can't be listed.  `auto:K/N`: shard K of the auto plan
-    (`auto_shard`)."""
+    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages, each spec's audit on its
+    provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree
+    can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
     if spec.startswith("auto:"):
         return auto_shard(spec, gated, plan_file, jobs)
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
@@ -1604,7 +1601,7 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
     parts_of = _parts_of()
-    shards = DECLARATION.resolve(plans[n], JOBS, parts_of)
+    shards = DECLARATION.resolve(plans[n], JOBS, parts_of, audit_provers(parts_of["lean-audit"]))
     held = {p for s in shards for p in s}
     mine = set(shards[k - 1]) | ({p for p in DECLARATION.all_parts(JOBS, parts_of) if p not in held} if k == n and not gated else set())
     return {"k": k, "n": n,
@@ -1621,23 +1618,23 @@ def auto_parts(gated: bool = True, jobs: set[str] | None = None, circuit_shards:
                splits: dict[str, int] | None = None) -> list[str]:
     """The auto plan's parts on this tree (`shards.parts`): those of the jobs on the gate (or, not ``gated``, of every job),
     of ``jobs`` alone when given; circuit-check in ``circuit_shards`` parts when given, else its ci.toml `shards`; each suite
-    ``splits`` names in its M parts."""
+    ``splits`` names in its M parts, and each that declares parts in those (`suite_parts`)."""
     js = [replace(j, shards=circuit_shards) if circuit_shards and j.name == "circuit-check" else j
           for j in (DECLARATION.gated(JOBS) if gated else JOBS) if jobs is None or j.name in jobs]
     return SHARDS.parts(DECLARATION.all_parts(js, _parts_of()), [s.name for s in SUITES.discover()], list(AFTER_LEAN),
-                        (FLOCK_LEAN / "lakefile.toml").exists(), splits)
+                        (FLOCK_LEAN / "lakefile.toml").exists(), splits, suite_parts())
 
 
 def suite_splits(suite_s: dict[str, float], times: dict[str, dict[str, float]], split_s: float = SHARDS.SPLIT_S) -> dict[str, dict]:
-    """The suites of this tree measured past ``split_s`` (``suite_s``, by name) split by test file (`shards.split_m`): {name:
-    {"m", "seconds", "digest": its partition's (`suites.partition` by ``times``, its files' recorded seconds), "timings": those of
-    its files, "shares": each part's share of its seconds, "files": each part's test files}}."""
+    """The suites of this tree measured past ``split_s`` (``suite_s``, by name) split by test file (`shards.split_m`), but those
+    that declare parts by test id: {name: {"m", "seconds", "digest": its partition's (`suites.partition` by ``times``, its files'
+    recorded seconds), "timings": those of its files, "shares": each part's share of its seconds, "files": each part's test files}}."""
     out: dict[str, dict] = {}
     if not any(v is not None and v > split_s for v in suite_s.values()):
         return out
     tree, pkgs = SUITES.worktree(), SUITES.members()
     for s in SUITES.discover():
-        if suite_s.get(s.name) is None or suite_s[s.name] <= split_s:
+        if s.parts or suite_s.get(s.name) is None or suite_s[s.name] <= split_s:
             continue
         files = SUITES.test_files(s, tree, SUITES.dropped(s, SUITES.inputs_of(s, pkgs)))
         m = SHARDS.split_m(suite_s[s.name], len(files), split_s)
@@ -1658,12 +1655,17 @@ def split_shares(splits: dict[str, dict]) -> dict[str, float]:
             for job in SHARDS.SUITE_JOBS}
 
 
+def audit_provers(packages: list[str]) -> dict[str, list[str]]:
+    """{`lean-audit:PKG`: its provers' audits} for each of ``packages`` whose `proved_in` names some (`lean_audit.provers`): its
+    audit audits them beside it, from one build of theirs, so a plan puts them on one shard."""
+    la = _lean_audit()
+    return {f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p in packages if (qs := la.provers(p))}
+
+
 def shard_needs() -> dict[str, list[str]]:
     """What a shard runs beside a part (`shards.builds`): each job's `needs` and `after`, and each audited package's provers
-    (`lean_audit.provers`, the packages its `proved_in` names, which its audit audits beside it)."""
-    la = _lean_audit()
-    return {**{j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS},
-            **{f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p in _parts_of()["lean-audit"] if (qs := la.provers(p))}}
+    (`audit_provers`), which `shards.units` holds on its shard."""
+    return {**{j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS}, **audit_provers(_parts_of()["lean-audit"])}
 
 
 def given_suites(suites: dict[str, float], given: dict[str, float] | None) -> dict[str, float]:
@@ -1865,11 +1867,24 @@ def auto_shard(spec: str, gated: bool = True, plan_file: Path | None = None, job
             **({"splits": splits} if splits else {})}
 
 
+def suite_parts() -> dict[str, int]:
+    """{suite: P} for each suite of this tree that declares `[tool.verity.tests] parts = P`: its P parts by test id
+    (`suites.id_part_of`) are parts of the check's plans.  DeclarationError when a suite declares another `parts`."""
+    try:
+        return {s.name: s.parts for s in SUITES.discover() if s.parts}
+    except ValueError as e:
+        raise DECLARATION.DeclarationError(str(e)) from None
+
+
 def _parts_of() -> dict[str, list[str]]:
+    """The split jobs' parts on this tree (`declaration.job_parts`): lean-audit's Lake packages, lean-suites' suites (`AFTER_LEAN`),
+    each one in `suite_parts` as its parts `SUITE:K/P`."""
     files = tracked_files(ROOT)
     if files is None:
         raise DECLARATION.DeclarationError("this tree's files can't be listed, so its Lake packages aren't known")
-    return {"lean-audit": _lean_audit().packages(files)}
+    by = suite_parts()
+    return {"lean-audit": _lean_audit().packages(files),
+            "lean-suites": [x for s in AFTER_LEAN for x in ([f"{s}:{k}/{by[s]}" for k in range(1, by[s] + 1)] if s in by else [s])]}
 
 
 def shard_parts() -> list[str]:
@@ -1963,13 +1978,16 @@ def circuit_join(store, steps: list[dict], into: Path) -> str | None:
 
 
 def suite_join(store, steps: list[dict], into: Path) -> str | None:
-    """Why the parts of the suites a set of shards split by test file (``steps``, `shard_set`'s: `pytest:SUITE:K/M`, each with
-    the run that ran it) don't make each suite's passing verdict, or None: each run's suite reports (its `suites.json` and
-    `suites-lean.json`), from its Attempt's run files into ``into``, joined (`suites.combine_parts`), must hold every part of one
-    partition once, each passed, so a part run on another partition (a machine with another timing record) passes nothing."""
+    """Why the parts of the suites a set of shards split (``steps``, `shard_set`'s: `pytest:SUITE:K/M` by test file,
+    `lean-suites:SUITE:K/P` by test id, each with the run that ran it) don't make each suite's passing verdict, or None: each
+    run's suite reports (its `suites.json` and `suites-lean.json`), from its Attempt's run files into ``into``, joined
+    (`suites.combine_parts`), must hold every part of one partition once, each passed, so a part run on another partition (a
+    machine with another timing record) passes nothing; or the suite's own pass, from the shard that held every part and ran it
+    whole."""
     runs = sorted({s["run_id"] for s in steps if SHARDS.suite_part(s["step"])[2] and s.get("run_id")})
     if not runs:
         return None
+    split = {SHARDS.suite_part(s["step"])[1] for s in steps if SHARDS.suite_part(s["step"])[2]}
     rows = []
     for rid in runs:
         try:
@@ -1978,14 +1996,15 @@ def suite_join(store, steps: list[dict], into: Path) -> str | None:
                 return f"suites: {rid} published no run files, so its suites' parts can't be joined"
             names = [n for n in ("suites.json", "suites-lean.json") if any(f["path"] == n for f in store.listing(files))]
             got = Path(store.fetch(files, to=into / rid, paths=names))
-            rows += [r for n in names for r in json.loads((got / n).read_text()) if isinstance(r.get("part"), dict)]
+            rows += [r for n in names for r in json.loads((got / n).read_text())
+                     if isinstance(r.get("part"), dict) or r.get("name") in split]
         except Exception as e:  # noqa: BLE001  (a guard never fails open)
             return f"suites: {rid}'s suite reports can't be read ({type(e).__name__}: {e})"
-    split = {SHARDS.suite_part(s["step"])[1] for s in steps if SHARDS.suite_part(s["step"])[2]}
     joined = {r["name"]: r for r in SUITES.combine_parts(rows)}
-    bad = [f"{n}: {'; '.join(joined[n]['why'])}" if n in joined else f"{n}: no shard reported its parts" for n in sorted(split)
-           if n not in joined or joined[n]["status"] != "passed"]
-    return f"suites split by file don't make their suites' verdicts: {' / '.join(bad)}" if bad else None
+    bad = [f"{n}: {'; '.join(joined[n].get('why') or [str(joined[n].get('status'))])}" if n in joined
+           else f"{n}: no shard reported its parts" for n in sorted(split)
+           if n not in joined or joined[n]["status"] not in ("passed", "cached")]
+    return f"split suites don't make their suites' verdicts: {' / '.join(bad)}" if bad else None
 
 
 def circuit_combine(dirs: list[Path], out: Path) -> subprocess.CompletedProcess:
@@ -1999,12 +2018,13 @@ def circuit_combine(dirs: list[Path], out: Path) -> subprocess.CompletedProcess:
 
 #: What reaches the steps from this process's environment, Turborepo's strict mode being the model: where things are (PATH, HOME,
 #: the temporary and XDG directories, the Rust and Lean toolchains' homes), the locale, how this machine reaches the network (its
-#: proxies and certificate bundles), uv and the environment it runs in, and the switches tests read (`VERITY_*`, `FLOCK_*`).
+#: proxies and certificate bundles), uv and the environment it runs in, the GPUs the run may use (`research run` hides those
+#: gpu-lease hands out), and the switches tests read (`VERITY_*`, `FLOCK_*`).
 #: Nothing else: not the store's, RunPod's or GitHub's credentials, not what the recording run gives its workload (`RESEARCH_*`,
 #: the machine's PYTHONPYCACHEPREFIX; the tests start runs of their own, which would inherit them).
 ENV_PASS = frozenset({"PATH", "HOME", "TMPDIR", "TEMP", "TMP", "LANG", "LANGUAGE", "VIRTUAL_ENV", "CARGO_HOME", "RUSTUP_HOME",
                       "ELAN_HOME", "SSL_CERT_FILE", "SSL_CERT_DIR", "http_proxy", "https_proxy", "no_proxy", "all_proxy",
-                      "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY"})
+                      "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "CUDA_VISIBLE_DEVICES"})
 ENV_PASS_PREFIXES = ("LC_", "XDG_", "UV_", "VERITY_", "FLOCK_")
 #: What check sets for its steps from its own state, never from the environment: a check run inside a step (its own tests) would
 #: otherwise pass its parent's on.
@@ -2034,10 +2054,19 @@ def env() -> dict[str, str]:
     return out
 
 
+#: what a step's key holds of its environment beside the switches tests read (`SUITES.keyed_variables`): the locale's, which say
+#: what encoding text without a declared one is read in, and the tree's own PYTHONPATH entries (`env`), which say what is imported
+KEYED_ENV = ("LANG", "LC_ALL", "LC_CTYPE", "PYTHONPATH")
+
+
 def _env_key(e: dict[str, str]) -> dict[str, str]:
-    """The environment as a key: without the shell's bookkeeping or the machine's identity, and with this tree's path written `<tree>`
-    (a machine keeps each commit's tree at its own path, and `uv run` puts that path in PATH, VIRTUAL_ENV and PYTHONPATH)."""
-    return {k: v.replace(str(ROOT), "<tree>") for k, v in sorted(e.items()) if k not in VOLATILE and not k.startswith(MACHINE_PREFIXES)}
+    """The environment as a key: what a step's verdict can turn on (`KEYED_ENV`, `SUITES.keyed_variables`), with this tree's path
+    written `<tree>` (a machine keeps each commit's tree at its own path). Not where a machine keeps things (PATH, HOME, the
+    temporary and XDG directories, uv's and the toolchains' homes, a check slot's test cache), how it reaches the network or what
+    names it, which differ between nodes for the same inputs: what a step runs that the PATH finds is keyed by itself (the
+    interpreter, `rustc -vV`, the Lean toolchain's pin in the tree)."""
+    keep = {k: v for k, v in e.items() if k in KEYED_ENV} | SUITES.keyed_variables(e)
+    return {k: v.replace(str(ROOT), "<tree>") for k, v in sorted(keep.items())}
 
 
 def agreement_key(e: dict[str, str]) -> str | None:
@@ -2048,7 +2077,7 @@ def agreement_key(e: dict[str, str]) -> str | None:
     files = tracked_files()
     if files is None:
         return None
-    h = hashlib.sha256(json.dumps([sys.version, platform.platform(), _env_key(e)]).encode())
+    h = hashlib.sha256(json.dumps([sys.version, SUITES.platform_id(), _env_key(e)]).encode())
     for f in agreement_closure(files):
         p = ROOT / f
         h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() else b"-") + b"\0")
@@ -2084,7 +2113,7 @@ def rust_tests_key(e: dict[str, str]) -> str | None:
                        capture_output=True, text=True)
     if r.returncode:
         return None
-    h = hashlib.sha256(json.dumps([r.stdout, platform.platform(), _env_key(e)]).encode())
+    h = hashlib.sha256(json.dumps([r.stdout, SUITES.platform_id(), _env_key(e)]).encode())
     for f in rust_tests_inputs(files):
         p = ROOT / f
         h.update(f.encode() + b"\0" + (_sha256(p).encode() if p.is_file() else b"-") + b"\0")
@@ -2099,7 +2128,7 @@ def lints_key(e: dict[str, str]) -> str | None:
     tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, capture_output=True, text=True)
     if st.returncode or st.stdout.strip() or tree.returncode:
         return None
-    return hashlib.sha256(json.dumps([tree.stdout.strip(), list(LINTS), sys.version, platform.platform(), _env_key(e)]).encode()).hexdigest()
+    return hashlib.sha256(json.dumps([tree.stdout.strip(), list(LINTS), sys.version, SUITES.platform_id(), _env_key(e)]).encode()).hexdigest()
 
 
 #: the steps whose pass is kept under a key of everything they read, and reused while it holds

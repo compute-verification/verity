@@ -18,9 +18,9 @@ def world(tmp_path):
 
 
 def _failed_above_running(world: World, monkeypatch) -> tuple[Review, str]:
-    """`next` = #1, #2 (Lean changes, reviewed), a Lean check of #1's commit running and the one stacked at #2's failed; then a
-    `--first` #5 goes above the running check's prefix, below #2, rebuilding #2's commit, and a Lean change #6 comes on top:
-    (the drive, the failed check's run id)."""
+    """`next` = #1, #2 (Lean changes, reviewed), a Lean check of #1's commit running and the one stacked at #2's failed; then
+    #5, of drive's priority list, goes above the running check's prefix, below #2, rebuilding #2's commit, and a Lean change
+    #6 comes on top: (the drive, the failed check's run id)."""
     h = Review(world, monkeypatch)
     for n in (1, 2):
         world.gh.put(n, world.change({f"pkg/L{n}.lean": f"-- {n}\n"}))
@@ -35,7 +35,7 @@ def _failed_above_running(world: World, monkeypatch) -> tuple[Review, str]:
     assert h.d.q.load_state()["drive"]["lean"][chain[1].commit]["state"] == "failed"
     world.gh.put(5, world.change({"e.txt": "5\n"}))
     h.review(5)
-    h.q.first = (5,)
+    world.prioritize(h.q, 5)
     world.gh.put(6, world.change({"pkg/L6.lean": "-- 6\n"}))
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1, 5, 2, 6] and h.q.chain()[0].commit == chain[0].commit, world.logs

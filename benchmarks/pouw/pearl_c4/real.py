@@ -1,5 +1,5 @@
 """Pearl-C4's reference replay on real activations (CPU; a development shortcut: the protocol's check is a ZK proof,
-PROTOCOL.md), per linear of a `pearlc_capture.py` directory: X, the linear's input rows (float32 holding BF16 exactly),
+PouwCheck), per linear of a `pearlc_capture.py` directory: X, the linear's input rows (float32 holding BF16 exactly),
 and its weight W (the model's BF16 safetensors); or of an `fp4_v3_real.capture` npz file (X and W of each linear as
 float32 holding BF16), judged in the clear as the scheme (`verity.core.protocols.pouw.schemes.pearl_c4`) judges a unit:
 
@@ -182,7 +182,7 @@ def tile(job: Job, name: str, t: int) -> dict:
     if fast:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import f1_fast
-    s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None)
+    s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None, hashing="h0")
     unit = Matmul(0, Shape(m, k_unit, n), 0)
     lab = lambda part: hashlib.sha256(f"pearl-c4-real/{name}/{t}/{part}".encode()).digest()  # noqa: E731
     noise = s.noise(Context(lab("salt"), unit, lab("root_a"), lab("root_b")))

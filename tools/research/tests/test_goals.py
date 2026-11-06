@@ -55,18 +55,6 @@ def test_wait_replaces_the_links_tier_overrides_the_derived_one_and_blockers_say
     assert goals.main(["set", "demos/both", "--wait", "partition"], fake) == 1
 
 
-def test_next_names_a_step_and_its_date_keeps_the_other_half_and_no_next_clears_it():
-    fake = Fake([GOAL])
-    assert goals.main(["set", "demos/both", "--next", "Run 2's verdicts", "--next-due", "2026-11-05T09:00-08:00"], fake) == 0
-    assert fake.posted[-1]["set"]["next"] == {"step": "Run 2's verdicts", "due": "2026-11-05T09:00-08:00"}
-    fake = Fake([GOAL | {"next": {"step": "Run 2's verdicts", "due": "2026-11-05"}}])
-    assert goals.main(["set", "demos/both", "--next-due", "2026-11-06"], fake) == 0
-    assert fake.posted[-1]["set"]["next"] == {"step": "Run 2's verdicts", "due": "2026-11-06"}
-    assert goals.main(["set", "demos/both", "--no-next"], fake) == 0
-    assert "next" not in fake.posted[-1]["set"]
-    assert goals.main(["set", "demos/both", "--next", "A step with no date"], Fake([GOAL])) == 1
-
-
 def test_a_new_goal_needs_title_status_and_due(capsys, tmp_path):
     fake = Fake()
     assert goals.main(["set", "infra/x", "--title", "Verity holds no infra"], fake) == 1
@@ -115,6 +103,21 @@ def test_a_refusal_is_one_line_naming_the_field(capsys):
     assert len(err) == 1 and "due must be a date" in err[0]
 
 
+def test_a_route_error_other_than_400_is_one_line_with_its_code(monkeypatch):
+    import io
+    import urllib.error
+
+    def refuse(*a, **k):
+        raise urllib.error.HTTPError(goals.GOALS, 403, "Forbidden", {}, io.BytesIO(b'{"error": "identity_refused"}'))
+
+    route = goals.Route()
+    monkeypatch.setattr(route._oidc, "send", lambda fn: fn("t"))
+    monkeypatch.setattr(goals, "http_json", refuse)
+    with pytest.raises(RouteError) as e:
+        route.call()
+    assert e.value.status == 403 and "HTTP 403 identity_refused" in str(e.value)
+
+
 @pytest.mark.parametrize("argv", [["set", "x", "--status", "maybe"], ["set", "x", "--wait", "goal:a", "--no-wait"],
                                   ["set", "x", "--tier", "2", "--no-tier"], ["set", "x", "--tier", "12"]])
 def test_the_command_line_refuses_what_the_site_would(argv):
@@ -132,3 +135,53 @@ def test_priority_sets_or_clears_a_goal_s_priority_as_its_own_write():
     fake = Fake([stored])
     assert goals.main(["set", "demos/both", "--title", "Reworded"], fake) == 0
     assert not {"priority", "prioritySet", "prioritySetBy", "prioritySetAt"} & set(fake.posted[-1]["set"]), "a goal write never sends priority back"
+
+
+def test_a_read_sends_the_site_key_in_read_key_and_a_write_this_agents_identity(monkeypatch, tmp_path):
+    """A machine with no Cursor identity reads the page with the site key of `READ_KEY`; a write never sends it, a key the route
+    refuses is named by its file and never echoed, and with no key (or an empty file) a read sends this agent's identity."""
+    import io
+    import urllib.error
+
+    key = tmp_path / "goals.key"
+    key.write_text("vsk_dummy-site-key\n")
+    monkeypatch.setattr(goals, "READ_KEY", key)
+    sent: list[tuple[str, str]] = []
+
+    def answer(method, url, data, headers):
+        sent.append((method, headers["Authorization"]))
+        return {"goals": [GOAL]}
+
+    def refuse(*a, **k):
+        raise urllib.error.HTTPError(goals.GOALS, 401, "Unauthorized", {}, io.BytesIO(b'{"error": "invalid_key"}'))
+
+    route = goals.Route()
+    monkeypatch.setattr(route._oidc, "send", lambda fn: fn("dummy-identity-token"))
+    monkeypatch.setattr(goals, "http_json", answer)
+    assert route.call() == route.call({"set": GOAL}) == [GOAL]
+    assert sent == [("GET", "Bearer vsk_dummy-site-key"), ("POST", "Bearer dummy-identity-token")]
+    monkeypatch.setattr(goals, "http_json", refuse)
+    with pytest.raises(RouteError) as e:
+        route.call()
+    assert e.value.status == 401 and str(e.value) == (
+        f"GET {goals.GOALS}: the route refused the site key in {key} (HTTP 401 invalid_key): put a key with events:read there, "
+        "or remove it to read with this agent's Cursor identity")
+    monkeypatch.setattr(goals, "http_json", answer)
+    key.write_text("\n")
+    assert route.call() == [GOAL] and sent[-1] == ("GET", "Bearer dummy-identity-token")
+    key.unlink()
+    assert route.call() == [GOAL] and sent[-1] == ("GET", "Bearer dummy-identity-token")
+
+
+def test_due_time_takes_a_day_as_its_end_in_pacific_time_and_a_time_at_its_offset():
+    from datetime import UTC, datetime
+
+    def utc(at: str) -> float:
+        return datetime.fromisoformat(at).replace(tzinfo=UTC).timestamp()
+
+    assert goals.due_time("2026-11-06") == utc("2026-11-07T08:00")
+    assert goals.due_time("2026-07-01") == utc("2026-07-02T07:00")
+    assert goals.due_time("2026-11-06T10:00-08:00") == goals.due_time("2026-11-06T10:00") == utc("2026-11-06T18:00")
+    assert goals.due_time("2026-11-06T18:00Z") == utc("2026-11-06T18:00")
+    for bad in (None, "", "Thursday", 5):
+        assert goals.due_time(bad) == float("inf")

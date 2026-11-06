@@ -168,7 +168,7 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 - **The prover** is the node. It registers a store and runs chained passes (inference reads every weight block and the
   live KV pages once a decode step, topped up with filler reads). It sends each pass's plan with the root of its
   receipts, and opens what the verifier draws.
-- **The challenger** is the proof service's one challenger (`sampled_proofs.challenger`, on the auditor's host through
+- **The challenger** is the proof system's one challenger (`sampled_proofs.challenger`, on the auditor's host through
   `sampled_proofs.remote` when it is remote). It draws every coin of a session, commits to them before the session,
   and releases each once, after the root the verifier recorded for it, in a release log it signs (`coins.SessionCoins`).
 - **The verifier** is remote. It holds a secret `source` (for the codec seed) and a clock, keeps the record, and checks.
@@ -349,7 +349,7 @@ process ends early, until `--close`. The registry's record holds digests and out
 
 ## 4. The coins and the chained passes
 
-Before a session the challenger draws its coins and commits to them, one epoch of the proof service's live coins
+Before a session the challenger draws its coins and commits to them, one epoch of the proof system's live coins
 (`coins.py`, `sampled_proofs.challenger`), and the verifier holds the commitment before the first coin. The prover
 receives each coin's value as it is released and the commitment only once the session has its outcome:
 
@@ -1036,7 +1036,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
 
 - **Zero knowledge.** Every protocol is zero-knowledge, and an opened block decodes to a KV page,
   which is user data. §6's openings reveal it, so the clear checks are only the specification of what each unit
-  proves. Deployed, each drawn receipt is one proof block that the proof service proves in zero knowledge, and the
+  proves. Deployed, each drawn receipt is one proof block that the proof system proves in zero knowledge, and the
   verifier sees only its verdict. The unit is §6's checks 1–3 and 5 on one opening (and 4 under a registration that
   binds \(z\)), plus the link from the block's payload to the circuit's committed values:
   - *Public*, each of the four kinds the rules allow (protocol structure, outputs, the verifier's coins and draws,
@@ -1153,9 +1153,11 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   (`AuditRun.scheduled`, a `Scheduled` verdict carrying the cap; `GammaTerms.steering` is the cap). `ledger` credits
   nothing after the seed without a `Scheduled` of the same session. So a credited plan is the verifier's own function
   of a schedule of at most \(a\) bits, and a plan that follows a coin at that schedule is refused: the `a` of the
-  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.RemoteAudit.steered_of_checked`, under
-  `Properties.RemoteAudit.ScheduleLayoutGap`), never the coins' bits for free. The cap, not the published schedule's
-  own bits, is what is credited: `SteeredLayout` takes one \(a\) at every coin, and a schedule's length can follow
+  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.RemoteAudit.steered_of_checked`, at the
+  verifier's own layout, `Properties.RemoteAudit.sessionLayout`: the positions of the plan the pass sent, where it
+  checks each opened block, `CodeLayoutTiles` and `OpensAtPosition`), never the coins' bits for free. The cap, not
+  the published schedule's own bits, is what is credited: `SteeredLayout` takes one \(a\) at every coin, and a
+  schedule's length can follow
   the coins. A prover that publishes a 200-bit schedule on most coins and a 300-bit one where it steers takes up to
   \(2^{200} + 2^{300}\) layouts, so only \(a = 301\) holds of it, and its 200-bit sessions credited at 200 would
   understate `DeclaredCircuitRequirement`'s \(\delta\), which grows as \(2^a\), by \(2^{100}\) (red team).

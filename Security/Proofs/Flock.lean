@@ -12,6 +12,7 @@ public import Proofs.Flock.EndToEnd.Blocks
 public import Proofs.Flock.EndToEnd.Carry
 public import Proofs.Flock.EndToEnd.Joint
 public import Proofs.Flock.EndToEnd.Joint.MT.Bound
+public import Proofs.Flock.EndToEnd.Joint.V5.Bound
 public import Proofs.Flock.EndToEndRegistered
 public import Proofs.Flock.EndToEndRegisteredRows
 public import Proofs.Flock.SoundAtBridge
@@ -19,6 +20,7 @@ public import Proofs.Flock.ZeroKnowledgeHidden
 public import Proofs.Flock.Masked
 public import Proofs.Flock.SessionLoop
 public import Proofs.Flock.SessionLoop.Fill
+public import Proofs.Flock.ZkAny.DeferLoop
 public import Proofs.Flock.Recursive
 public import Proofs.Flock.RecGeneric
 public import Proofs.Flock.C3

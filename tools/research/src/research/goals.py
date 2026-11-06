@@ -18,7 +18,8 @@ restates the fields. A goal nothing waits on is tier 1, a project; a piece of on
 3; --tier overrides that. What a goal waits on is links only: the narrowest goal that blocks it, due
 before it, or an open ask (--wait goal:ID, --wait ask:CARD). An off-track goal says why: what it waits on, or
 --blockers. The site checks every write and answers which field is wrong. --url points the command at another server;
-the token's audience stays the route's.
+the token's audience stays the route's. A machine with no Cursor identity (drive's control pod) reads the page with a site
+key that may read it, the one line of ~/.config/verity/goals.key (`READ_KEY`); every write still needs the identity.
 """
 from __future__ import annotations
 
@@ -26,16 +27,18 @@ import argparse
 import json
 import sys
 import urllib.error
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .slack import RouteError, SlackError, _Identity, http_json, route_error
+from .slack import RouteError, SlackError, _Identity, _code, http_json, route_error
 
 GOALS = "https://website-docs-sage.vercel.app/api/goals"   # the route, and its OIDC token's audience
 PACIFIC = ZoneInfo("America/Los_Angeles")
 STATUSES = ("on-track", "off-track", "done")
 STORED_ONLY = ("updatedAt", "updatedBy", "wasDue", "priority", "prioritySet", "prioritySetBy", "prioritySetAt")
+#: a site key (`vsk_`, with events:read) that a read sends in place of this agent's Cursor identity, when the file is there
+READ_KEY = Path("~/.config/verity/goals.key")
 
 
 class Route:
@@ -48,8 +51,11 @@ class Route:
         data = None if body is None else json.dumps(body).encode()
         headers = {"Content-Type": "application/json"} if data else {}
         what = f"{method} {GOALS}"
+        path = READ_KEY.expanduser()
+        key = path.read_text().strip() if body is None and path.is_file() else ""
+        send = (lambda request: request(key)) if key else self._oidc.send
         try:
-            out = self._oidc.send(lambda t: http_json(method, self.base, data, {"Authorization": f"Bearer {t}", **headers}))
+            out = send(lambda t: http_json(method, self.base, data, {"Authorization": f"Bearer {t}", **headers}))
         except urllib.error.HTTPError as e:
             if e.code == 400:
                 try:
@@ -57,6 +63,9 @@ class Route:
                 except (ValueError, AttributeError):
                     message = "an answer that isn't the site's JSON"
                 raise RouteError(f"{what}: refused: {message or 'a bad request'}", 400) from None
+            if key and e.code in (401, 403):
+                raise RouteError(f"{what}: the route refused the site key in {path} (HTTP {e.code}{_code(e)}): put a key "
+                                 "with events:read there, or remove it to read with this agent's Cursor identity", e.code) from None
             raise RouteError(route_error(what, e), e.code) from None
         except (urllib.error.URLError, OSError, ValueError) as e:
             raise SlackError(f"{what}: the route is unreachable: {getattr(e, 'reason', e)}") from None
@@ -69,6 +78,19 @@ def _when(due: str) -> str:
     if "T" not in due:
         return datetime.fromisoformat(due).strftime("%a %-d %b") + ", end of day"
     return datetime.fromisoformat(due).astimezone(PACIFIC).strftime("%a %-d %b, %-I:%M %p")
+
+
+def due_time(due: object) -> float:
+    """A goal's due as a POSIX time: a day means its end, in Pacific time like the times `show` prints; infinity when it isn't
+    a due."""
+    try:
+        if "T" not in due:
+            day = datetime.fromisoformat(due)
+            return (datetime(day.year, day.month, day.day, tzinfo=PACIFIC) + timedelta(days=1)).timestamp()
+        at = datetime.fromisoformat(due)
+        return (at if at.tzinfo else at.replace(tzinfo=PACIFIC)).timestamp()
+    except (TypeError, ValueError):
+        return float("inf")
 
 
 def _text(value: str) -> str:
@@ -93,8 +115,6 @@ def show(goals: list[dict]) -> str:
         was = f"  (was {_when(g['wasDue'])})" if g.get("wasDue") else ""
         tier = f"  (tier {g['tier']})" if g.get("tier") else ""
         waits = "".join(f"\n{'':<24} {'':<9}    waits on {next(iter(r.values()))}" for r in g.get("waitingOn", []))
-        if g.get("next"):
-            waits += f"\n{'':<24} {'':<9}    next: {g['next']['step']}, by {_when(g['next']['due'])}"
         lines.append(f"{_when(g['due']):<24} {g['status']:<9}  {g['title']}  {' '.join(g.get('tags', []))}{tier}{flag}{was}\n"
                      f"{'':<24} {'':<9}  {g['id']}{waits}")
     return "\n".join(lines) if lines else "No goals yet."
@@ -132,13 +152,6 @@ def edited(current: dict | None, ns: argparse.Namespace) -> dict:
         goal.pop("blockers", None)
     elif ns.blockers is not None:
         goal["blockers"] = _text(ns.blockers)
-    if ns.no_next:
-        goal.pop("next", None)
-    elif ns.next is not None or ns.next_due is not None:
-        step, due = ns.next or goal.get("next", {}).get("step"), ns.next_due or goal.get("next", {}).get("due")
-        if not step or not due:
-            raise SlackError("a next step needs both --next TEXT and --next-due WHEN")
-        goal["next"] = {"step": step, "due": due}
     missing = [f for f in ("title", "status", "due") if not goal.get(f)]
     if missing:
         raise SlackError(f"goal {ns.id} is new, so it needs --{', --'.join(missing)}")
@@ -169,9 +182,6 @@ def main(argv: list[str], route: Route | None = None) -> int:
     waits = s.add_mutually_exclusive_group()
     waits.add_argument("--wait", action="append", metavar="goal:ID|ask:CARD", help="what it waits on; repeat for each, replacing the list")
     waits.add_argument("--no-wait", action="store_true", help="it waits on nothing")
-    s.add_argument("--next", help="its next step, one plain line (a goal due within a week names one)")
-    s.add_argument("--next-due", help="that step's date: 2026-11-05, or 2026-11-05T10:00-08:00")
-    s.add_argument("--no-next", action="store_true", help="it names no next step")
     for name in ("confirm", "done", "remove"):
         sub.add_parser(name).add_argument("id")
     pr = sub.add_parser("priority", help="set a goal's priority (anyone may), or clear it back to the derived one")

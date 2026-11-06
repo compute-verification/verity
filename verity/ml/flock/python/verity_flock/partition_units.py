@@ -32,7 +32,7 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.cut import CallGraph, check_cut
 from verity.ml.circuits.program import input_id
-from verity.ml.circuits.units import Activation, PartitionUnits, UnitCircuit
+from verity.ml.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
 from verity.ml.randomness import derive
 
 from . import gf2
@@ -104,7 +104,7 @@ class ClassCircuit:
     reason: str = ""
 
 
-def lower_class(act: Activation, uc: UnitCircuit, max_gates: int = 1 << 20) -> ClassCircuit:
+def lower_class(act: Activation, uc: ProofBlockCircuit, max_gates: int = 1 << 20) -> ClassCircuit:
     """C-Flock's Boolean lowering of one unit (inputs ``in0 ..``, outputs ``out0 ..``, one word per port), or why not."""
     prims = {act.gate(j).prim.id for j in uc.gates}
     missing = tuple(sorted(p for p in prims if p not in IL.PIECES and not p.startswith("Const") and input_id(p) is None))
@@ -151,7 +151,7 @@ def evaluate(act: Activation, words: Sequence[int]) -> dict[int, int]:
     return t
 
 
-def lanes(act: Activation, units: Sequence[UnitCircuit], key: Any, T: int) -> dict[tuple[str, int], tuple[list, list]]:
+def lanes(act: Activation, units: Sequence[ProofBlockCircuit], key: Any, T: int) -> dict[tuple[str, int], tuple[list, list]]:
     """Per unit of one flat Definition: its input and output words over T synthetic draws (per port, one word per draw)."""
     widths = [act.width(-1 - p) for p in range(act.params)]
     runs = [evaluate(act, w) for w in synthetic_words(key, act.fn.id, widths, T)]
@@ -159,7 +159,7 @@ def lanes(act: Activation, units: Sequence[UnitCircuit], key: Any, T: int) -> di
             for uc in units}
 
 
-def class_mismatches(C: gf2.Circuit, uc: UnitCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]]) -> int:
+def class_mismatches(C: gf2.Circuit, uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]]) -> int:
     """Output words of the class circuit C that differ from ``want`` on the lanes ``ins`` (per port, one word per lane)."""
     n = len(want[0]) if want else 0
     got, _fail = C.evaluate({f"in{i}": IL.slice_words(v, w) for i, (v, w) in enumerate(zip(ins, uc.in_widths))}, n)

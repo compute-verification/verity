@@ -223,27 +223,29 @@ noncomputable def Constructions.assembled (e : 𝔽 ≃ (Fin 128 → Bool)) {V :
     (dev : Exchange → Properties.Challenger.History) (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
-    (label : ByteArray → Array ByteArray → ByteArray → String)
-    (after : ByteArray → Array ByteArray → ByteArray → ByteArray) {m : ℕ}
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
+    (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) : Constructions V :=
   ((Binding.withBinding K dev).withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd
 
 variable (e : 𝔽 ≃ (Fin 128 → Bool)) (V : Vocab d α) (k : Verity.Registration.Composite)
 
 /-- **The coupling, assembled from its pieces**: at the assembled constructions, `CouplingTarget` holds at the session
-`A`, the parameters `θ` and the committed files `F` wherever the device printed each play's log after `θ` (`hP`), the
-sample's coins are uniform (`hκ`), the openings' gaps over the stops are at most the hiding term (`hε`), `A` is the
-session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`), the session's writer keeps an
-accepted transcript's view (`hW`), and on the joint law's support the outcomes beside accepted plays whose log v2 read
-is the device's are the writer's at the moves v2's files decode to (`hM`). -/
+`A`, the parameters `θ` and the committed files `F` wherever the device printed each play's log after `θ` (`hP`), its
+history at each play signed what the play's signatures are on (`hS`, `Binding.SignsPlay`; `Device.signsPlay_dev` at
+the deployed device), the sample's coins are uniform (`hκ`), the openings' gaps over the stops are at most the hiding
+term (`hε`), `A` is the session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`), the
+session's writer keeps an accepted transcript's view (`hW`), and on the joint law's support the outcomes beside
+accepted plays whose log v2 read is the device's are the writer's at the moves v2's files decode to (`hM`). -/
 theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Properties.Challenger.History)
     (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
-    (label : ByteArray → Array ByteArray → ByteArray → String)
-    (after : ByteArray → Array ByteArray → ByteArray → ByteArray) {m : ℕ}
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
+    (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) (A : Live) (θ : ByteArray) (F : Array ByteArray)
     (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
+    (hS : ∀ c, Binding.SignsPlay V dev θ F c)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)
       (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
@@ -254,7 +256,7 @@ theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Prope
     CouplingTarget V k (K.assembled e dev rd D label after κ) A θ F :=
   couplingTarget_withProject_of_sample e V k rd (Binding.withBinding K dev) D label after κ A
     (Binding.Logged Binding.readsV2) θ F hκ
-    (fun c σ => Binding.logged_le V k Binding.readsV2 dev θ F c σ (Binding.binds_of_prints V k dev θ hP)) hε
+    (fun c σ => Binding.logged_le V k Binding.readsV2 dev θ F c σ (Binding.binds_of_prints V k dev θ hP) (hS c)) hε
     (fun c σ => decodes_of_digests hA hDg hW (hM c σ))
 
 /-- **The coupling, assembled, at the session's own coins**: `couplingTarget_assembled` with the sample's coins the
@@ -264,10 +266,10 @@ theorem couplingTarget_assembled_src (K : Constructions V) (dev : Exchange → P
     (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
-    (label : ByteArray → Array ByteArray → ByteArray → String)
-    (after : ByteArray → Array ByteArray → ByteArray → ByteArray) (m : ℕ) (A : Live) (θ : ByteArray)
-    (F : Array ByteArray) (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
-    (hL : A.Lb 0 = m * 64)
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
+    (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) (m : ℕ)
+    (A : Live) (θ : ByteArray) (F : Array ByteArray) (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
+    (hS : ∀ c, Binding.SignsPlay V dev θ F c) (hL : A.Lb 0 = m * 64)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ)
       (sampleMaps e V rd label after (srcCoinsAt m) A θ F c σ)
       (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
@@ -276,6 +278,7 @@ theorem couplingTarget_assembled_src (K : Constructions V) (dev : Exchange → P
     (hM : ∀ c σ, MovesReach V θ F c k (Binding.Logged Binding.readsV2) A (rd A θ F c) σ (D A θ F c σ)
       (sampleMaps e V rd label after (srcCoinsAt m) A θ F c σ)) :
     CouplingTarget V k (K.assembled e dev rd D label after (srcCoinsAt m)) A θ F :=
-  couplingTarget_assembled e V k K dev rd D label after (srcCoinsAt m) A θ F hP (avg_srcCoinsAt hL) hε hA hDg hW hM
+  couplingTarget_assembled e V k K dev rd D label after (srcCoinsAt m) A θ F hP hS (avg_srcCoinsAt hL) hε hA hDg hW
+    hM
 
 end Verity.Sampled

@@ -112,9 +112,6 @@ from verity_vllm.protocols.pouw.pearl_c.kernel import (
     source_digest,  # noqa: F401 - kept importable here, as callers read it
 )
 from verity_vllm.protocols.pouw.pearl_c.manifest import (  # noqa: F401 - the manifest's readers, kept importable here, as callers read them
-    MANIFEST_SCHEMA,
-    MANIFEST_SCHEMA_RECORDED,
-    MANIFEST_SCHEMAS,
     manifest_epoch,
     manifest_schema,
     session_head,

@@ -32,7 +32,6 @@ RECORD = "lean-audit.json"
 LIMIT = 12000
 #: lines of one signature shown; a longer one ends with a line saying how many more there are
 SIGNATURE_LINES = 40
-READERS_SHOWN = 4
 #: the files a definition's meaning is elaborated from, by suffix or name; the audit's own directory writes records, says nothing
 LEAN_INPUTS = (".lean", "lakefile.toml", "lakefile.lean", "lake-manifest.json", "lean-toolchain")
 AUDIT_DIR = "tools/verity/lean/"
@@ -57,14 +56,15 @@ def _guarantees(doc: dict) -> dict:
     return doc.get("guarantees") or doc.get("pins") or {}
 
 
-def _definitions(doc: dict) -> dict[str, tuple[str | None, list[str]]]:
-    """{definition: (hash, the guarantees that read it)} over every module under `reads`."""
-    out: dict[str, tuple[str | None, list[str]]] = {}
-    for group in (doc.get("reads") or {}).values():
+def _definitions(doc: dict) -> dict[str, tuple[str | None, str]]:
+    """{definition: (hash, its module)} over every module under `reads`. Which guarantees read one is the build's, and the
+    record doesn't list it: the review `check.py --update` prints does."""
+    out: dict[str, tuple[str | None, str]] = {}
+    for m, group in (doc.get("reads") or {}).items():
         defs = group.get("definitions", {})
         defs = defs if isinstance(defs, dict) else dict.fromkeys(defs)
         for d, h in defs.items():
-            out[d] = (h, sorted(group.get("guarantees") or group.get("pins") or []))
+            out[d] = (h, m)
     return out
 
 
@@ -138,15 +138,13 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
         for name, (h, _) in _definitions(d).items():
             da.setdefault(name, set()).add(h)
     for p, d in news.items():
-        for name, (h1, readers) in sorted(_definitions(d).items()):
+        for name, (h1, module) in sorted(_definitions(d).items()):
             before = {h for h in da.get(name, ()) if h is not None}
             if h1 is not None and before and h1 not in before and all(len(h) == len(h1) for h in before):
                 if not sources:
                     out.append((_package(p), "rehashed", ""))
                     continue
-                shown = ", ".join(f"`{r}`" for r in readers[:READERS_SHOWN])
-                more = f" and {len(readers) - READERS_SHOWN} more" if len(readers) > READERS_SHOWN else ""
-                out.append((_package(p), "definition", f"• definition `{name}` changed; read by {shown or 'no guarantee'}{more}"))
+                out.append((_package(p), "definition", f"• definition `{name}` (`{module}`) changed"))
     aa: dict[str, set] = {}
     for d in olds.values():
         for name, h in _assumptions(d).items():

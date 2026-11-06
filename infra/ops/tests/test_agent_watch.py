@@ -1666,6 +1666,29 @@ def test_a_note_naming_an_agent_by_its_short_id_is_its_activity(tmp_path):
     assert [r["window"] for r in silent(tmp_path)] == [1, 1] and silent(tmp_path)[-1]["since"] == W.iso(p.stat().st_mtime)
 
 
+def test_a_push_to_the_branch_a_worker_moved_its_task_to_is_its_activity(tmp_path):
+    """A worker that moved from its first branch to a successor no note or record names was rung as pushing nothing. A head
+    keeping its branch's stem and suffix is its push; a lane-only stem, or another task's branch, is not."""
+    notes = tmp_path / "notes"
+    note(notes, "lean", "a.md", f"lean worker ONE18 ({W1_}); code `cursor/lean-one18-fc8d`", age_s=2 * 3600)
+    first, moved = "cursor/lean-one18-fc8d", "cursor/lean-one18-v2-fc8d"
+    sh = FakeSh({first: "a" * 40, moved: "b" * 40, "cursor/lean-other-fc8d": "c" * 40})
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh)
+    w.sweep(lambda r: None)
+    for _ in range(6):
+        sweeps(w, clock, 60)
+        sh.heads[moved] = f"{clock.t:040.0f}"
+    assert silent(tmp_path) == [], "a push to its moved branch every hour is activity"
+    for _ in range(2):
+        sweeps(w, clock, 60)
+        sh.heads["cursor/lean-other-fc8d"] = f"{clock.t:040.0f}"
+    (rec,) = silent(tmp_path)
+    assert rec["branches"] == [first, moved], "another task's branch is not its push"
+    assert W.same_task(moved, first) and not W.same_task("cursor/lean-fc8d-x-fc8d", "cursor/lean-fc8d") \
+        and not W.same_task("cursor/lean-one18-fc8d", "cursor/lean-one18-9f2a")
+
+
 def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_top(tmp_path):
     """top, 26 Oct: nine workers sat ACTIVE with no step for 30-64 h, each rung twice as silent and then by no one."""
     notes = tmp_path / "notes"
@@ -1675,12 +1698,14 @@ def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_t
                                  git_remote=REMOTE, sh=sh)
     w.sweep(lambda r: None)
     sweeps(w, clock, 359)
-    assert [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step")] == ["silent", "silent"]
+    assert [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step", "archived")] == ["silent", "silent"]
+    assert not [p for p, _ in api.posts if p.endswith("/archive")]
     sweeps(w, clock, 1)
     sweeps(w, clock, 600)
-    got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
-    assert [{k: r[k] for k in ("agent", "since", "hours", "handle", "owner", "role")} for r in got] == [
-        {"agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": "top", "role": "worker"}]
+    got = [r for r in records(tmp_path) if r["kind"] in ("no_step", "archived")]
+    assert [{k: r.get(k) for k in ("kind", "agent", "since", "hours", "handle", "owner", "role")} for r in got] == [
+        {"kind": "archived", "agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": None, "role": "worker"}]
+    assert [p for p, _ in api.posts if p.endswith("/archive")] == [f"/v1/agents/{W1_}/archive"]
 
 
 def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(tmp_path):
@@ -1891,6 +1916,24 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
                         notes=tmp_path / "notes", nodes=tmp_path / "nodes.json", sh=sh)
     restarted.sweep(lambda r: None)
     assert len(ended(tmp_path)) == 4, "each run rings once, across restarts"
+
+
+def test_a_run_a_worker_sent_is_its_activity(tmp_path):
+    """A worker whose only sign of life was the runs it sent (no note, no push) was rung silent and then no_step while its runs
+    ended every hour. A run counts from when it was sent (its end less its wall time), learned when it ends."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})", age_s=2 * 3600)
+    api, clock, w, sh, roots = nodes_setup(tmp_path, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, git_remote=REMOTE)
+    sh.heads["main"] = "m" * 40
+    w.sweep(lambda r: None)
+    for i in range(6):
+        sweeps(w, clock, 60)
+        node_run(roots["vy-nebius-1"], f"r20261018-2{i}0000-000{i}", clock.t, by=f"https://cursor.com/agents/{W1_}", wall_s=600)
+    sent = clock.t - 600
+    assert silent(tmp_path) == [], "a run sent every hour is activity"
+    sweeps(w, clock, 120)
+    (rec,) = silent(tmp_path)
+    assert rec["agent"] == W1_ and rec["since"] == W.iso(sent), "silence counts from its newest run's sending"
 
 
 def test_a_run_ends_sender_resolves_as_a_learned_worker_does_and_the_rest_are_one_record_for_infra(tmp_path):
@@ -2413,6 +2456,60 @@ def test_a_sender_no_route_knows_is_learned_from_its_brief(tmp_path):
     assert widths in w.children, "a worker still sending runs is kept past WORKER_KEEP_S from its learning"
 
 
+def test_a_sender_no_route_knows_is_watched_as_infras_until_a_route_claims_it(tmp_path):
+    """A worker its coordinator never registered, whose brief names no coordinator, was rung to infra once at a run's end and
+    never watched: pous-prf hung for hours unseen. Such a sender is kept as infra's worker (`UNOWNED`), so going IDLE rings
+    infra, while its runs still go to infra as unowned (never resumed or relaunched as infra's). A workers.d entry claims it."""
+    stray = "bc-abababab-abab-abab-abab-abababababab"
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    api.workers[stray] = worker("ACTIVE", W.iso(T0 - 600), "pous-prf: hiding budget per leaf")
+    api.convs[stray] = [("user_message", "You are pous-prf. Read the note and go on.")]
+    w.sweep(lambda r: None)
+    clock.t += 60
+    node_run(roots["vy-nebius-1"], "r20261105-110000-0001", clock.t, by=f"https://cursor.com/agents/{stray}", state="failed", rc=1)
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    (rec,) = [r for r in ended(tmp_path) if r["role"] == "unknown"]
+    assert w.children[stray]["owner"] == W.UNOWNED and stray not in w.awaiting, "unowned: rung to infra, no clock started"
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert w.workers[stray]["handle"] == W.UNOWNED
+    api.workers[stray] = worker("IDLE", W.iso(clock.t), "pous-prf: hiding budget per leaf")
+    for _ in range(W.BURST_S // 60 + 2):                    # a worker's idle is held to join its parent's others (`bursts`)
+        clock.t += 60
+        w.sweep(lambda r: None)
+    idle = [r for r in records(tmp_path) if r["kind"] in ("worker_idle", "workers_failed") and stray in json.dumps(r)]
+    assert idle and idle[-1]["handle"] == W.UNOWNED
+    (tmp_path / "workers.d").mkdir(exist_ok=True)
+    (tmp_path / "workers.d" / f"{stray}.json").write_text(json.dumps({"agent_id": stray, "lane": "vllm", "launched_by": NEW}))
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert stray not in w.children and w.workers[stray]["handle"] == "vllm"
+
+
+def test_a_listed_stray_stays_unowned_and_is_never_resumed_as_infras(tmp_path):
+    """A stray the agent list has (launched through the API) read as infra's owned agent: its next run routed as infra's worker
+    and the watch resumed it. Its owner is infra only for the watch's rings; its runs stay unowned, and nothing resumes it."""
+    stray = "bc-cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd"
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    api._agents.append({"id": stray, "name": "an API-launched agent", "status": "IDLE", "latestRunId": "run-s",
+                        "updatedAt": W.iso(T0 - 1800)})
+    api._runs["run-s"] = dict(FINISHED)
+    api.convs[stray] = [("user_message", "Do the thing.")]
+    w.sweep(lambda r: None)
+    for i in range(2):
+        clock.t += 60
+        node_run(roots["vy-nebius-1"], f"r20261105-11000{i}-000{i}", clock.t, by=f"https://cursor.com/agents/{stray}")
+        clock.t += 5 * 60
+        w.sweep(lambda r: None)
+    assert stray not in w.owners and stray not in w.awaiting
+    assert all(r["role"] == "unknown" for r in ended(tmp_path)), "both runs go to infra as unowned"
+    while clock.t < T0 + 3 * 3600:
+        clock.t += 300
+        w.sweep(lambda r: None)
+    assert not [p for p, _ in api.posts if p == f"/v1/agents/{stray}/runs"], "never resumed"
+
+
 def test_a_relaunched_worker_routes_as_its_lanes_worker_and_the_watch_resumes_it(tmp_path):
     """INF-143: a relaunched worker is an agent the list has, so `watch_workers` drops it from the workers it reads; its runs
     resolved as nobody's. Its workers.d entry (launched by its coordinator) makes it its lane's worker: its run's end routes to
@@ -2683,3 +2780,87 @@ def test_a_holder_whose_worker_went_quiet_is_not_held_unread(tmp_path):
         api._agents[0]["updatedAt"] = W.iso(clock.t)
         w.sweep(lambda r: None)
     assert api.posts == [] and "held_unread" not in [r["kind"] for r in records(tmp_path)]
+
+
+def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap_once_coordinators_are_back(tmp_path):
+    """Most coordinators ended in ERROR over a few hours while every restart failed. The watch spent each one's restarts within
+    minutes and left them for a person, nobody was rung, and after a ring revived them they stayed 'left for a person' until
+    state.json was cleared by hand. Replayed: one coordinator down every 20 minutes."""
+    ids = [f"bc-{i:08x}-0000-0000-0000-{i:012x}" for i in range(1, 14)]
+    reg, routes = tmp_path / "registry.json", tmp_path / "routes.d"
+    routes.mkdir()
+    reg.write_text(json.dumps({"handles": [{"handle": f"h{i}", "holder": f"the h{i} coordinator ({a})"} for i, a in enumerate(ids)]}))
+    api = FakeApi([{"id": a, "name": f"verity: h{i}", "status": "ACTIVE", "latestRunId": f"ok-{i}"} for i, a in enumerate(ids)],
+                  {f"ok-{i}": {"status": "FINISHED"} for i in range(len(ids))})
+    clock = Clock(T0)
+    w = W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, routes=routes)
+    w.errors[ids[0]], w.left = W.MAX_RESTARTS, {ids[0]}          # its cap already spent
+    refused = []
+
+    def down(path, body=None):
+        refused.append((path, clock.t))
+        raise W.urllib.error.HTTPError(path, 503, "Service Unavailable", {}, None)
+    api.post = down
+    for minute in range(0, 4 * 60 + 1, 5):
+        if minute % 20 == 0 and minute // 20 < len(ids):
+            i = minute // 20
+            api._agents[i]["latestRunId"] = f"err-{i}"
+            api._runs[f"err-{i}"] = {"status": "ERROR"}
+        clock.t = T0 + minute * 60
+        w.sweep(lambda r: None)
+    outages = [r for r in records(tmp_path) if r["kind"] == "outage"]
+    assert [r["t"] for r in outages] == [W.iso(T0 + m * 60) for m in (110, 170, 230)], \
+        "rung once 5 have been down 30 min (the 5th fell at 80 min), then hourly"
+    assert outages[0]["count"] == 5 and outages[0]["owner"] == "top" and outages[0]["handles"] == [f"h{i}" for i in range(5)]
+    tries = [t for path, t in refused if path == f"/v1/agents/{ids[0]}/runs"]
+    outage_tries = [t for t in tries if t >= T0 + 40 * 60]
+    assert len(outage_tries) >= 12 and all(b - a >= W.OUTAGE_RETRY_S for a, b in zip(outage_tries, outage_tries[1:])), \
+        "in the outage the first coordinator is still tried every 15 min, its spent cap notwithstanding"
+    assert not any(r["kind"] == "relaunch" for r in records(tmp_path) if r["agent"] == ids[0] and r["t"] >= W.iso(T0 + 2400))
+    assert all(w.errors.get(a, 0) == 0 for a in ids[2:]), "a restart in an outage is not counted"
+    assert not any(r["kind"] in ("erroring", "relaunch") for r in records(tmp_path) if r["agent"] in ids[2:])
+    api.post = lambda path, body=None: {"run": {"id": "run-new"}}
+    for i, a in enumerate(ids):
+        api._agents[i]["latestRunId"] = f"back-{i}"
+        api._runs[f"back-{i}"] = {"status": "RUNNING"}
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert w.errors[ids[0]] and w.down, "seeing a restart running is not enough: one reads RUNNING a minute before it errors"
+    clock.t += W.STICK_S
+    w.sweep(lambda r: None)
+    assert not w.left and not any(w.errors.values()) and not w.down, "back STICK_S: every cap cleared, no person needed"
+    api._agents[3]["latestRunId"] = "err-again"
+    api._runs["err-again"] = {"status": "ERROR"}
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert w.errors[ids[3]] == 1 and records(tmp_path)[-1]["action"].startswith("restarted (1 of"), \
+        "one coordinator down alone is restarted and counted as before"
+
+
+def test_a_sweep_refused_with_429_waits_retry_after_or_doubles_to_a_cap():
+    def refused(retry_after=None):
+        return W.urllib.error.HTTPError("/v1/agents", 429, "Too Many Requests",
+                                        {"Retry-After": retry_after} if retry_after else {}, None)
+    assert W.rate_wait(refused("300"), 0) == 300
+    assert W.rate_wait(refused(), 0) == W.RATE_WAIT_S[0]
+    assert W.rate_wait(refused(), 240) == 480
+    assert W.rate_wait(refused(), 800) == W.RATE_WAIT_S[1] == W.rate_wait(refused("99999"), 0)
+
+
+def test_a_silent_worker_the_api_wont_archive_is_a_no_step_for_top_with_why(tmp_path):
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
+    sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40})
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh)
+
+    def refuse(path, body=None):
+        if path.endswith("/archive"):
+            raise W.urllib.error.HTTPError(path, 403, "Forbidden", {}, None)
+        return {}
+    api.post = refuse
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 960)
+    got = [r for r in records(tmp_path) if r["kind"] in ("no_step", "archived")]
+    assert [{k: r.get(k) for k in ("kind", "owner", "role", "archive_failed")} for r in got] == [
+        {"kind": "no_step", "owner": "top", "role": "worker", "archive_failed": "HTTP 403"}]

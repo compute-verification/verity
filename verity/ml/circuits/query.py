@@ -5,7 +5,7 @@ call-preorder, zero-based. `groups(F, k)` is evaluated once per scope selected b
 concatenated; a block whose calls are not adjacent is rejected (`GapError`), never absorbed or re-cut.
 
 `parse(text)` turns the general structural query syntax of `verity.ml.circuits.query_ast` into its AST:
-`members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")`, `each(F, G)`, `concat(...)`, `rest()`, `default(32)`,
+`members("//Gemm_v1{K=*,N=*}", "@batch:GemmCoordinate_v1")`, `each(F, G)`, `concat(...)`, `rest()`, `default(32)`, `frontier(32)`,
 `override(F, {"//Gemm_v1{*}": G})`, `zip(...)`, `where(F, spec=..., form=..., w_max=...)`, `union/minus/inter(F, G)`,
 `root()`, `table(".", "owners")`, `table(path, name, of="gates")`, `group(F, "name")`, `group(F, ["base", "static:K"])`,
 `members(path, sel, k=(r, c))`, `label(F, affine=(a, b, n))`, `label(F, table="dev")` (a tuple and a list are one value).  The legacy strings stay valid as sugar: `//A//B` -> `instances("//A//B")`, `/` -> `root()`,
@@ -19,8 +19,9 @@ import re
 from typing import Iterator
 
 from .query_ast import (Default, Each, Instances, Members, Nodes, NodeSel, Path, Query, QueryError, Rest, Root, Zip,
-                      concat as _concat, group as _group, inter as _inter, label as _label, members as _members,
-                      minus as _minus, override as _override, table as _table, union as _union, where as _where)
+                      concat as _concat, frontier as _frontier, group as _group, inter as _inter, label as _label,
+                      members as _members, minus as _minus, override as _override, table as _table, union as _union,
+                      where as _where)
 from .layout import FunctionCall, Circuit, Region
 
 
@@ -302,6 +303,9 @@ def _construct(name: str, args: list, kw: dict) -> Query:
         if w is None:
             raise QueryError("default(w) needs a width")
         return Default(_int_arg(name, "w", w))
+    if name == "frontier":
+        need(1)
+        return _frontier(args[0])
     if name == "override":
         need(2)
         if not isinstance(args[1], dict):

@@ -27,7 +27,7 @@
 Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
 ``--transcript`` takes it), writes ``verify.json`` beside the manifest, and exits 0 only on acceptance, or with
 ``--expect-reject`` (a negative control's pass) only on rejection.  An ACCEPT is replay-verified (development shortcut; the
-protocol's check is a ZK proof, PROTOCOL.md).
+protocol's check is a ZK proof, PouwCheck).
 """
 from __future__ import annotations
 
@@ -210,9 +210,8 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         source = PV.coins(32) if source is None else source
         key = CW.replay_key(CW.RecordedDraw(1, source), transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt)
         ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in verifier.refs}
-        picks = CW.draw(scheme, records, key, draws)
-        picks += CW.exclusion_tiles(scheme, records)
-        todo = [(pos, ids[(pos, t.rows[0], t.cols[0])]) for pos, t in picks]
+        drawn, excluded = CW.draw(scheme, records, key, draws), CW.exclusion_tiles(scheme, records)
+        todo = [(pos, ids[(pos, t.rows[0], t.cols[0])]) for pos, t in drawn + excluded]
         if fast and (scheme.forming != "v1" or scheme.device.g is None):
             fast, out["replay"] = False, "scalar"
         _JOB.clear()
@@ -241,10 +240,10 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         at = CW.draw_wref(scheme)
         out.update(accepted=ok, scheme=scheme.name, source=source.hex(), tiles=[t for t, *_ in verdicts],
                    draw_wref=at.statement if at else "wref",
-                   drawn=draws, exclusion_tiles=len(todo) - draws,
+                   drawn=len(drawn), exclusion_tiles=len(excluded),
                    verdicts=[{"tile": t, "ok": g, "reason": r} for t, g, r, _ in verdicts], w_ref=str(w_ref), credit=str(credit))
-        out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({draws} drawn, "
-                       f"{len(todo) - draws} for excluded rows) of {c['count']} over {len(matmuls)} matmuls"
+        out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({len(drawn)} drawn, "
+                       f"{len(excluded)} for excluded rows) of {c['count']} over {len(matmuls)} matmuls"
                        f"{'' if ok else ' (' + bad + ')'}; transcript root {c['root'][:16]}, records {man['records_root'][:16]}, "
                        f"source {source.hex()[:16]}; transcript {named}; verifier {commit}"
                        f"{'; batch replay, ' + str(len(out['cross_checked'])) + ' tiles cross-checked' if fast else ''}")
