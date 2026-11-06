@@ -1,6 +1,7 @@
 {
  "roots": [
   "Proofs.Core",
+  "Proofs.Core.Rec",
   "Proofs.Nci",
   "Proofs.Pous",
   "Proofs.Pouw",
@@ -37,6 +38,7 @@
   "Proofs.Properties.NetworkScan",
   "Proofs.Properties.SampledProofs",
   "Proofs.Properties.SampledProofs.Halt",
+  "Proofs.Properties.SampledProofs.Tables",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.MemoryChallenger.Attest",
