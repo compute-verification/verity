@@ -13,11 +13,10 @@ calls at its statement's reading `r` (`Readable.Read`): the hm96-sha512 rows che
 `checkRegistered` and `noIdentifier`, and `Registered.checkFull` at the reading's draw.
 
 `baseSetup_of_build`: where `r` reads the part's inputs as `FlockDeploy.Raw.ins` reads a `--zk` statement (the tags
-`tags0.withCoins coins`, the coin tree, one table, no tables, no `--work`, `--stratified`, `--closure` or
+`tags0`, the coin tree, one table, no tables, no `--work`, `--stratified`, `--closure` or
 `--public-inputs`), the compiled setup's success gives each of those model calls, with the same `(spec, sts)`:
 
-* the tags agree: `withCoins` is the identity on a coin tree, so `r.tags` (`ZkExec.zkTags`) is the compiled `tags`, and
-  `r.coins` (`ZkExec.zkCoins`) the compiled `coins`;
+* the tags agree: `r.tags` (`ZkExec.zkTags`) is the compiled `tags`, and `r.coins` (`ZkExec.zkCoins`) the compiled `coins`;
 * the session agrees: under hidden outputs the compiled setup runs `Stmt.setupTablesOf` on `ProvedScope.circuitOf`'s
   parse, which is `Stmt.setupTables` (`Stmt.setupTables_eq`);
 * the compiled `checkIdentifier` refuses every header naming an identifier, which is `noIdentifier`'s refusal.
@@ -125,14 +124,14 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
     {sts : Array Flock.Stmt}
     (hb : SampledProofs.OneStageZk.buildSessionOf
       (Flock.ProvedScope.circuitOf
-        (Flock.Zk.tags (tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1)))) (Flock.Zk.maskLogOf circuitB) 1)
+        (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1)
         circuitB [])
-      (Flock.Zk.tags (tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1)))) (Flock.Zk.maskLogOf circuitB) 1)
+      (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1)
       circuitB pubB (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) [] 1 draw partition program registered =
         .ok (spec, sts))
     (r : Flock.Readable.Read)
     (hI : r.I =
-      { tags := tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1)))
+      { tags := tags0
         circuitFile := circuitB
         publicFile := pubB
         coins := .tree (Flock.Zk.coinSpec (tags0.tableNames 1))
@@ -151,28 +150,24 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
           FlockDeploy.noIdentifier st
           pure (ForInStep.yield PUnit.unit) : V PUnit) = .ok PUnit.unit ∧
       Flock.Registered.checkFull registered r.draw = .ok () := by
-  have hos : (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1)) == Flock.Coins.os) = false := rfl
-  have hwc : tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) = tags0 := by
-    simp [Flock.Tags.withCoins, hos]
   have hcoins : r.coins = .tree (Flock.Zk.coinSpec (tags0.tableNames 1)) := by
-    simp [Flock.Readable.Read.coins, hzk, FlockSoundness.Discharge.ZkExec.zkCoins, hI, hwc]
+    simp [Flock.Readable.Read.coins, hzk, FlockSoundness.Discharge.ZkExec.zkCoins, hI]
   have htags : r.tags =
-      Flock.Zk.tags (tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1)))) (Flock.Zk.maskLogOf circuitB) 1 := by
+      Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1 := by
     simp [Flock.Readable.Read.tags, hzk, FlockSoundness.Discharge.ZkExec.zkTags,
-      FlockSoundness.Discharge.ZkExec.zkCoins, hI, hwc]
+      FlockSoundness.Discharge.ZkExec.zkCoins, hI]
   have hsetup : r.setup = Flock.Stmt.setupTables
-      (Flock.Zk.tags (tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1)))) (Flock.Zk.maskLogOf circuitB) 1)
+      (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1)
       circuitB pubB (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) 1 [] draw partition program := by
     simp only [Flock.Readable.Read.setup, htags, hcoins, hdraw, hpi, hI]
   unfold SampledProofs.OneStageZk.buildSessionOf at hb
-  have hh : (Flock.Zk.tags (tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
-      (Flock.Zk.maskLogOf circuitB) 1).hm96Rows = true := by
+  have hh : (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1).hm96Rows = true := by
     refine Classical.byContradiction fun hne => ?_
     simp [hne, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at hb
   simp only [hh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, pure_bind] at hb
   have hstep : ∃ x : Flock.SessionSpec × Array Flock.Stmt,
       Flock.Stmt.setupTables
-        (Flock.Zk.tags (tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1)))) (Flock.Zk.maskLogOf circuitB) 1)
+        (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1)
         circuitB pubB (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) 1 [] draw partition program = .ok x ∧
       (∀ st ∈ x.2, Flock.checkRegistered st registered = .ok () ∧
         SampledProofs.OneStageZk.checkIdentifier st = .ok ()) ∧

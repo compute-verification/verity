@@ -102,8 +102,8 @@ that the unit net lowers its template's Definition. The tail stages of `tc_units
 rows. The typed path is not production. `keyProg` has no edges between units: the headline bounds template instances
 that fail at their own committed values, and a template instance reading its producers' outputs is carried by the copy
 constraints and the region pins, not by an edge of the program. The proof coins are the challenger's, on its keyed coin
-tree or per-round OS coins (A6): `verify` refuses a session on a committed seed's coins (`ProvedScope.servedForm`), so a
-session counts only under `--coins tree` or `--coins os`. The tag is whatever the verifier passes as `--statement`: a session counts when
+tree (A6, tree coins): `verify` refuses a session on a committed seed's coins (`ProvedScope.servedForm`), so a session
+counts only under `--coins tree`. The tag is whatever the verifier passes as `--statement`: a session counts when
 `flock-verify verify --statement verity/flock-circuit@967b8d06 --coins tree` accepts it with one table, so the headline
 covers only public-output `@967b8d06` sessions, from older builds. Main's prover now always writes the
 hidden-output statement (`verity/flock-circuit`, the default `--statement`, `hiddenOutputs = true`), under which

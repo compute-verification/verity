@@ -238,12 +238,11 @@ theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Pr
   obtain rfl : q.base.circuit = circuitB := Except.ok.inj (hP.circuit.symm.trans hcB)
   obtain rfl : st.pub x ms j = pubB := Except.ok.inj ((get_what hSp).symm.trans hpB)
   obtain ⟨hregC, hregB⟩ := regC_of_part hPR
-  have hhm' : (Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
-      (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows = true := hhm
+  have hhm' : (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows = true := hhm
   have hdraw := hP.draw tags0 recordB record hT hrecB hrec
   rw [if_pos hhm', hrd] at hdraw
   have hins := Part.ins_partRaw (r := xrOf o h w ri) (st := st) (x := x) (ms := ms) (s := j) hh hT hplain
-    hregC hbind hI.circuit hI.pub hI.statement hI.os hI.tables hI.partition hI.program hI.draw (hI.shape h hh)
+    hregC hbind hI.circuit hI.pub hI.statement hI.tables hI.partition hI.program hI.draw (hI.shape h hh)
     hI.registration hI.links hP.form rfl hP.partition hP.program hP.registered hP.bindings hdraw rfl hSr hSt hSrows
   obtain ⟨-, hbset, hregs, -, hfull⟩ := baseSetup_of_build (tags0 := tags0) (circuitB := q.base.circuit)
     (pubB := st.pub x ms j) (draw := some d) (partition := some po.partition) (program := some po.program)
