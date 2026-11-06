@@ -992,8 +992,12 @@ def test_the_ratchet_joins_the_facts_of_this_run_s_audits_or_of_the_passes_it_re
     assert rc == 0 and ran == ["Security", "Security/Proofs", "pkg/a", "pkg/b"] and seen == ["Security", "Security/Proofs"]
     assert doc["unread"]["failures"] == [] and sorted(p.stem for p in (cache / "unread").glob("*.json")) == sorted(
         [keys["Security"], keys["Security/Proofs"]])
+    published = sorted(f"{keys[p]}.jsonl.gz" for p in LA.UNREAD_FACTS)
+    assert sorted(f.name for f in (tmp_path / "out1" / "unread").glob("*.jsonl.gz")) == published, \
+        "an audit's facts are left by their key, as the landing gate looks for them"
     rc, ran, doc, seen = run(2)
     assert rc == 0 and ran == [] and seen == ["Security", "Security/Proofs"] and len(doc["cached"]) == 4
+    assert sorted(f.name for f in (tmp_path / "out2" / "unread").glob("*.jsonl.gz")) == published, "a reused pass's too"
     (root / "tools/verity/lean/unread-caps.json").write_text("1")
     rc, ran, doc, seen = run(3)
     assert rc == 1 and ran == [] and doc["failed"] == ["unread"] and doc["unread"]["failures"] == ["unread: 2 above 1"]

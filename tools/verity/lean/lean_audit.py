@@ -67,7 +67,11 @@ the cache, `UNREAD_KEPT` last used kept). After the audits, the run joins both p
 passes', and runs the ratchet on wholly unread modules (`unread_ratchet`, `unread.py`): an area of the analysis whose
 wholly unread modules, or their declarations, rose above its cap in `unread-caps.json` fails the run (`unread` in
 `audit.json`'s `failed`), and one that came down leaves the lowered caps in `unread/` under ``--out``. It builds nothing
-and takes seconds. `unread.py` and the caps are out of every key (`NOT_READ`), so a change to either reruns no audit.
+and takes seconds. `unread.py` and the caps are out of every key (`NOT_READ`), so a change to either reruns no audit. The
+seeds it reads outside Lean (code that names a declaration or a module, the documents a lock names) are in no key either,
+so each run leaves the facts it read under ``--out`` as `unread/K.jsonl.gz`, by the package's key (`facts_file`), which a
+recorded check publishes: drive's landing gate (`unread_gate.py`) runs the ratchet from them on a change to those seeds
+before it lands.
 
 A machine without a package's dependencies restores them from the evidence store instead of cloning them from GitHub, which
 throttles anonymous clones from shared addresses. `lean-deps.json` pins one bundle per `lake-manifest.json`'s fetched entries + `lean-toolchain`
@@ -174,6 +178,7 @@ NOT_READ = {
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
     "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
     "unread-caps.json": "the ratchet's caps, which `unread.py` reads",
+    "unread_gate.py": "drive's landing gate on the seeds the ratchet reads, which runs `main`'s copy of this tool",
     "pyproject.toml": "the tools/verity/lean suite's settings",
 }
 
@@ -210,8 +215,8 @@ def keep_facts(cache: Path, pkg: str, k: str, rep: dict, out: Path) -> bool:
 
 
 def kept_facts(cache: Path, pkg: str, k: str, out: Path, log=print) -> Path | None:
-    """The facts kept beside ``pkg``'s pass under ``k``, written out to ``out`` (`unread/PKG.jsonl.gz`), or None when there
-    are none or (logged) they don't read or their bytes aren't the ones the entry's sha256 names."""
+    """The facts kept beside ``pkg``'s pass under ``k``, written out to ``out`` (`unread/K.jsonl.gz`, `facts_file`), or None
+    when there are none or (logged) they don't read or their bytes aren't the ones the entry's sha256 names."""
     entry = cache / "unread" / f"{k}.json"
     if not entry.is_file():
         return None
@@ -224,11 +229,17 @@ def kept_facts(cache: Path, pkg: str, k: str, out: Path, log=print) -> Path | No
     if doc.get("schema") != UNREAD_SCHEMA or hashlib.sha256(data).hexdigest() != doc.get("sha256"):
         log(f"lean-audit: {pkg}: the facts kept under {k[:12]} aren't {UNREAD_SCHEMA} bytes of the sha256 they name")
         return None
-    dst = out / "unread" / f"{pkg.replace('/', '_')}.jsonl.gz"
+    dst = facts_file(out, k)
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_bytes(data)
     os.utime(entry)
     return dst
+
+
+def facts_file(out: Path, k: str) -> Path:
+    """Where a run leaves the facts the ratchet read of the package whose key is ``k``: `unread/K.jsonl.gz` under ``out``,
+    which a recorded check publishes, so that drive's landing gate (`unread_gate.py`) finds them by the key alone."""
+    return out / "unread" / f"{k}.jsonl.gz"
 
 
 def prune_facts(cache: Path, kept: int = UNREAD_KEPT) -> int:
@@ -1363,7 +1374,9 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     for p in UNREAD_FACTS:
         f = (reports.get(p) or {}).get("unread_facts") or {}
         if p not in facts and p not in cached and f.get("file") and (out / f["file"]).is_file():
-            facts[p] = out / f["file"]
+            facts[p] = facts_file(out, keys[p])
+            facts[p].parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(out / f["file"], facts[p])
     unread = unread_ratchet(pkgs, failed, facts, files, out, log)
     if unread and unread["failures"]:
         failed.append("unread")
