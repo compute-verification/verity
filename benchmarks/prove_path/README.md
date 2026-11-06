@@ -84,7 +84,7 @@ reads and its named assumptions.
 files (their ports `sha512/row/v1`, `row/v2` or `row-seg/v1` rows of distinct names, no root registered under two domains)
 and the sampled-proofs run passes the registration's population, the committed transcript, read as the sampling witness, is
 outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + δ_link. It takes no hypothesis on the files.
-It follows from `SampledKSLiveV2`, the same bound at the circuit files the verifier of record reads. Its named assumptions
+It follows from `SampledKSLiveV2`, the same bound at the circuit files the verifier reads. Its named assumptions
 are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live verifier, and SHA-512's collision resistance.
 
 **The property.** `NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`, at any
@@ -156,7 +156,7 @@ guarantee above.
 - The certifier's wire (`Security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. They enter through the wire bounds, which
   have no sampled form yet.
-- For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`Security/Definitions/Claims/Hm96.lean`).
+- For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`Security/Definitions/Core/Hm96.lean`).
 
 **Off the page:** whether the circuit matches the model. That is completeness: an honest run on a circuit that doesn't
 match is refused. It is never a soundness gap.

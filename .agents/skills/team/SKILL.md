@@ -51,32 +51,35 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY` and
   linked through the Linear app, since Linear's GitHub integration is off here; a failed link prints its retry, `research
   queue link N --issue KEY`), or `none:REASON`. The issue carries the label of the goal it serves (its id on the Goals
-  page), which `open` writes as `Goal <id>`, refusing an issue whose labels name no live goal. It marks it ready at its
-  head, `research queue ready N --mark --by LANE`, which refuses a body with neither a `Goal <id>` line naming a live goal
-  nor `Issue: none: REASON` (fix it with `research queue edit N --body-file F`). A push makes a new head, which needs a
+  page), which `open` writes as `Goal <id>`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A
+  body with neither a `Goal <id>` line naming a live goal nor `Issue: none: REASON` gets a warning from both, never a
+  refusal (fix it with `research queue edit N --body-file F`). A push makes a new head, which needs a
   new mark and a new review. `research queue status` says what each PR waits for and
-  lists the PRs naming no issue. A `hold` label, a conflict on `next` or a Markdown file over its cap keeps a PR out, and a
+  lists the PRs naming no issue. The mark admits a PR: the sync's own merge onto `next` is the only check before it joins,
+  so a conflict there or a Markdown file over its cap (`landing_gates`) keeps it out, as a `hold` label does; a
   PR from a fork, or by an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at
   admission.
 - Before marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on
   auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
   --changed $(git rev-parse origin/main) --quick"`, plus a suite's slow tier when you changed its core. Prefer small PRs.
   You hear back only if yours is held, ejected or reverted.
-- Drive stacks admitted PRs on `next`, non-Lean changes first. Reviewers ci staffs, never the owner, record a verdict at
+- Drive stacks admitted PRs on `next`. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
   fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync
-  moves reviewed members below those awaiting a verdict (above any Lean check's prefix), so a PR waiting for review holds only itself; a
+  moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself; a
   held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
   `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, `Security/Models.lean` and `Security/`'s Lake
-  files) or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that passed at or above
-  it, whatever its title says ("two demos" included); `Security/` proofs alone land on the verdict. A PR whose merge onto `checked` changes nothing drive.toml's
+  files) or to Lean that runs as code (a `.lean` outside `Security/`) lands on its verdict like any other. Drive then runs
+  `lean-audit` alone on `checked`'s tip (the lock run), commits the records it regenerated there as `Lock records
+  regenerated for #N...`, and checks that commit, so `main` moves only to one whose records are the regenerated ones; a
+  lock run that fails is a red like any other. A PR whose merge onto `checked` changes nothing drive.toml's
   `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
-  with no verdict (the low-risk lane: up to `lowrisk_per_tick` a tick, the Lean checks of `next` moved to its rebuild).
+  with no verdict (the low-risk lane: up to `lowrisk_per_tick` a tick).
 - One run checks `checked`'s tip after each landing; when it passes every step on the merge gate (not circuit-check), drive fast-forwards `main` there. A red
-  suite's culprit is rung and reverted on `checked` 60 min later unless a fix is marked, and `main` doesn't move. A marked
-  low-risk fix of a red lands even while a Lean check of `next` runs, and the next run waits for it up to 45 min after its mark. A red
-  circuit-check's culprit is reverted at once, and until circuit-check passes on `checked` no PR touching its inputs lands
-  (a PR whose body says `fixes step circuit-check` does).
+  suite's or step's culprit is rung and reverted on `checked` at once, a marked fix or not, and `main` doesn't move; a shard
+  whose failures name no failing test and no error line first runs again once on other machines, ringing @infra. The next
+  run waits up to 45 min after its mark for a marked low-risk fix of a red with no culprit to land. Until circuit-check
+  passes on `checked` no PR touching its inputs lands (a PR whose body says `fixes step circuit-check` does).
   Citations and tables read only commits whose after-landing run passed: `main`'s.
 - A layout move lands from `next` with no pause in landing: its PR's body says `Move: tools/move/MAP.toml`, and it needs a
   mark and a land verdict like any PR. Where the sync puts it, drive regenerates it on the tip below it (`rename.py --map

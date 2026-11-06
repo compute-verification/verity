@@ -26,7 +26,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `Security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `examples/`: one directory per example: its workload, placement, commands and doneness (`examples/README.md`).
+- `examples/`: one directory per demo: its workload, placement, commands and doneness (`examples/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
@@ -46,7 +46,7 @@ Nothing outside `infra/` imports it (`INFRA_IMPORTERS`), and nothing under `veri
 package name or by a path put on `sys.path` or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a
 protocol uses reaches it through a card file citing an `art:` id.
 
-`verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|example NAME`, `verity --help`.
+`verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|demo NAME`, `verity --help`.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu        # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
@@ -165,7 +165,11 @@ docs-only change reruns nothing; a nightly uncached check must agree, and a disa
 only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, and its low-risk members (no Lean, lock or
 soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alone, runs the full check on its tip itself,
 and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate; a red step's culprit is
-reverted on `checked` (how a PR lands: the team skill).
+reverted on `checked` (how a PR lands: the team skill). A ready mark admits a PR: the sync's own merge onto `next` (a
+conflict, drive.toml's `landing_gates`) is the only check before it joins, and a body naming no live goal draws a warning,
+never a refusal. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on
+`checked`'s tip (its lock run), commits the lock records it regenerated there, and checks that commit, so `main` moves only
+to a commit whose records are the regenerated ones and whose gated steps all passed on it.
 
 ## Lean
 

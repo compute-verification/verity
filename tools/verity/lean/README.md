@@ -38,11 +38,12 @@ python tools/verity/lean/upstream.py PKG [--lean]        what the pinned depende
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 
-The edit loop is `verity lean try FILE`: `lake env lean FILE` in the Lake package that holds FILE (the nearest lakefile above it),
-against its built imports, exiting with lean's status. With `--on NODE`, through `research run`, it runs `lean_changed.py --try
-FILE` on this checkout, uncommitted edits included: in one of the node's `build` Lean slots, on the tree `--records` keeps warm,
-`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`. Neither runs this audit or writes
-a record: `--records PKG --update` is for the lock and the mark only (`lean_changed.py`'s docstring).
+The edit loop is `verity lean try FILE`: `lake env lean FILE` in the nearest Lake package above FILE, against its built
+imports, exiting with lean's status, the axiom probe's line last. `--siblings` then imports FILE's build beside each built
+module of its package not importing it, failing on a name two declare (`siblings.py`). With `--on NODE`, through `research
+run`, it runs `lean_changed.py --try FILE` on this checkout's working tree: in a node's `build` Lean slot, on the tree
+`--records` keeps warm, `lake build +MODULE:deps` and then `lake env lean FILE`. Neither runs this audit or writes a record
+(`lean_changed.py`'s docstring).
 
 ## What it checks
 
@@ -141,8 +142,9 @@ one process, `leanchecker --fresh`'s check of every root at once; warm, nothing 
 an own module replays it and what imports it, as without `--closure`. The cache is shared between packages, so
 `Security` reuses the Mathlib modules `Security/Proofs` checked. For a module's verdict to be a function of its key,
 `Replay.lean` refuses a declaration that mentions a constant its module neither declares nor imports, checks a theorem
-that two modules each declare (an equation lemma realized in both) once per module, and requires the quotient's
-constants to be the ones the kernel makes. A change to `Replay.lean` changes every key, so the next run is cold.
+that two modules each declare (an equation lemma realized in both) once per module, taking a reused module's public
+part's axiom copy as Lean's import does (`subsumesInfo`), and requires the quotient's constants to be the ones the
+kernel makes. A change to `Replay.lean` changes every key, so the next run is cold.
 The audit prints `closure: N modules checked, M reused` under each package's line. `check`'s lean-audit step runs
 `--closure` against the node's kept cache (`lean_audit.FLAGS`, `lean-replay/`), so a dependency module that skipped the
 kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. Cold, after a bump of the
@@ -421,8 +423,8 @@ the digest is recomputed. A guarantee's `owner` merges apart from the rest of it
 other side's restatement both apply.
 
 What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
-`reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
-them. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
+`reads` and assumption digests merge as the union or ours' value, named on stderr, and drive's lock run regenerates them
+once the merge lands. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
 conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree. Git runs the driver
 from the worktree you merge into, and one whose rules are older than `origin/main`'s runs `origin/main`'s (`deferred`), so
 fetch `main` before you merge.
