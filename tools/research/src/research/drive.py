@@ -288,8 +288,7 @@ TOP = "@top"
 #: a step of a check of drive's still running this many times its median rings the step's owner (`Driver._slow_steps`); the
 #: median is of its newest `STEP_PASSES` uncached passes in drive's own runs of that kind, and needs `STEP_MIN_PASSES` of them
 SLOW_STEP_FACTOR, STEP_PASSES, STEP_MIN_PASSES = 1.5, 10, 3
-#: how long a member of `next` marked ready may go unlanded before drive rings the owner of what holds it, and `TOP` beside `CI`
-#: when that is a missing land verdict, so top can record one (`Driver._stuck`)
+#: how long a member of `next` marked ready may go unlanded before drive rings the owner of what holds it (`Driver._stuck`)
 STUCK_S = 2 * 3600
 #: how often an alarm rings again while its subject stays past its bound (`Driver._due`)
 ALARM_EVERY_S = 3600
