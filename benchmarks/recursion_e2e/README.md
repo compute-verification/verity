@@ -18,8 +18,10 @@ verity bench recursion_e2e run   [POINT] [--e2e] [--release] [--dry-run] [--here
                                                                    plain run on a CPU node; a GPU run: a GPU node's queue)
 verity bench recursion_e2e result --dir OUT [--out F] [--md F]    the result from a job's out/ (the job runs it last)
 verity bench recursion_e2e table RESULT... [--merge] [--json]     the table from results (a file, or a run id whose
-                                                                   records are fetched and read with this reader)
-verity bench recursion_e2e store RESULT... [--merge]              the results and their table as one art: id
+                                                                   records `research fetch --all RUN` fetched, read with
+                                                                   this reader)
+verity bench recursion_e2e store RESULT... [--merge] --dir DIR    the results and their table as one art's tree in DIR,
+                                                                   and the `research data put` command that stores it
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 --lease-min M --neg challenge,query
        --forge KINDS [--no-forge-after] --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
@@ -157,8 +159,8 @@ Each GPU step runs once, with its runs inside it: the inner's `WARM=1 RUNS=3`, e
 `--oprove-warm 0 --oprove-runs 1`. Each invocation of the pod script runs under its own `RESEARCH_RUN_DIR`
 (`out/steps/<step>/r<i>/`), so every record it writes is kept. `result` reads them into `out/recursion_e2e.json` and
 `out/table.md`. `job.sh` tries to write them on SIGTERM too, but cancelling the run ends its scope within a second,
-which leaves only the records. `table RUN` rebuilds the result from a fresh fetch of them, so a cancelled run's rows
-are still read.
+which leaves only the records. `table RUN` rebuilds the result from them once `research fetch --all RUN` has fetched
+them, so a cancelled run's rows are still read.
 
 - **Prover time** (`inner`, `oprove`; the table's "time s"): each timed run's `prove_total_s` from the prover's `LIVE`
   line (both reps' `prove_s` summed). This covers the device's phases, not the host witness.
