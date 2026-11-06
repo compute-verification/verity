@@ -58,7 +58,9 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     line only for a model with that card. A new configuration, such as another cut, is a new entry with its own line.
   - Exfiltration: (A) and (B) in the capped sets' form (`card_influenceTwo_le_served_min`) and never above the
     scope's served bits (`card_influenceTwo_le_min`), the JSON saying which term binds at each β; (C) in
-    `consumers.exfiltration_bound`'s form, at most the served bits by the same count.
+    `consumers.exfiltration_bound`'s form, at most the served bits by the same count. The caption names the lines
+    that at β = 1% are bounded only by everything the scope serves, the trivial bound, so that value isn't read as a
+    result.
   - Infiltration: the write form, the bits the incorrect proof blocks write, at the design each exfiltration line
     plans (`write_form`): each replay block charged at most its footprint, a request's served bits under (A) and a
     layer's boundary bits under (B); (C)'s is the K incorrect blocks its plan detects, each the widest block's bits.

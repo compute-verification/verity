@@ -147,6 +147,8 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     assert out["configurations"]["per_expert"]["cut"]["label"] in caps["exfiltration"]
     assert "card_influenceTwo_le_served_min" in caps["exfiltration"] and "card_influenceTwo_le_min" in caps["exfiltration"]
     assert "serve tax 3%" in caps["exfiltration"] and "measured" in caps["exfiltration"]
+    assert "At β = 1% every line is bounded here only by everything the scope serves" in caps["exfiltration"]
+    assert "everything the scope serves (" not in caps["infiltration"]
     assert "a lower bound, the hashing alone" in caps["skipped_work"]
     rows = t.at_budgets(out)
     assert {(r["panel"], r["config"]) for r in rows} == {(p, n) for n, c in t.CONFIGURATIONS.items() for p in c.panels}

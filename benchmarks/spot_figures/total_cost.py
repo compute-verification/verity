@@ -254,6 +254,14 @@ def _share(v: float) -> str:
     return f"{v:.2g}×" if v >= 1 else f"{v * 100:.2g}%" if v >= 1e-4 else f"{v:.1e}"
 
 
+def _size(bits: float) -> str:
+    """Bits as the captions write a size: bytes in decimal units."""
+    for unit, name in ((1e21, "ZB"), (1e18, "EB"), (1e15, "PB"), (1e12, "TB"), (1e9, "GB"), (1e6, "MB")):
+        if bits / 8 >= unit:
+            return f"{bits / 8 / unit:.3g} {name}"
+    return f"{bits / 8e3:.3g} kB"
+
+
 def _binds(betas: list[float], binds: list[str]) -> str:
     """Where the served bits bind on a line, as the caption says it."""
     at = [b for b, w in zip(betas, binds) if w == "served"]
@@ -289,7 +297,16 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         f"cut, at its marginal overhead, {k['overhead_label']}, {pricing[k['price']]}; the same form: "
         f"{_binds(out['betas'], lines['exfiltration'][n]['binds'])}." for n, (e, k) in cuts.items())
     infil_cuts = "".join(f" {e.label} (dash-dot): {short}'s footprint at its own design." for e, _ in cuts.values())
-    exfil = (f" {a.label}: serving commits {a.commits}, a replay block is {a.replay_block}, {priced('tokens')}; the "
+    trivial = [CONFIGURATIONS[n].label.split(" ")[0] for n, s in lines["exfiltration"].items()
+               if f1.RATIO_BUDGET in out["betas"] and s["binds"][out["betas"].index(f1.RATIO_BUDGET)] == "served"]
+    who = ("every line is" if len(trivial) == len(lines["exfiltration"]) else
+           f"{', '.join(trivial)} {'is' if len(trivial) == 1 else 'are'}")
+    one = len(trivial) == 1
+    exfil = (f" At β = {_share(f1.RATIO_BUDGET)} {who} bounded here only by everything the scope serves "
+             f"({_size(sc['served_bits'])}), the trivial bound: the audit's {'count is' if one else 'counts are'} "
+             f"above it, so {'that value is not a result' if one else 'those values are not results'} of the audit."
+             if trivial else "")
+    exfil += (f" {a.label}: serving commits {a.commits}, a replay block is {a.replay_block}, {priced('tokens')}; the "
              f"capped sets' form (card_influenceTwo_le_served_min) at most the {sc['served_bits']:.2g} bits the scope "
              f"serves (card_influenceTwo_le_min): {_binds(out['betas'], lines['exfiltration']['tokens']['binds'])}."
              f"{exfil_cuts} {b.label}: serving commits {b.commits}, a replay block is {b.replay_block}, "
