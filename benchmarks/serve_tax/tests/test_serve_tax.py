@@ -111,3 +111,23 @@ def test_tick_arms_refuse_a_tree_without_the_tick(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(S, "TICK_PLUGIN", tmp_path / "tick_plugin.py")
     with pytest.raises(SystemExit, match="the tick arms need the certified tick"):
         S.tick_args(None, "23.2,28.3")
+
+
+def test_drive_load_counts_what_the_client_sent_and_the_server_did_not_serve(monkeypatch: pytest.MonkeyPatch,
+                                                                             tmp_path: Path):
+    class Corpus:
+        class traffic:
+            @staticmethod
+            def arrivals(plan, rate):
+                return [r["i"] / rate for r in plan]
+
+        @staticmethod
+        async def drive(port, served, reqs, arr, ids, out, drain_s, sampling):
+            recs = [rec(r["i"], a, 0.1, 0.01, 2) for r, a in zip(reqs, arr)]
+            recs[1] |= {"status": None, "error": "ClientConnectorError: [Too many open files]", "done_s": None}
+            out.write_text("".join(json.dumps(x) + "\n" for x in recs))
+            return {"sent": len(recs), "unfinished": 0}
+
+    monkeypatch.setattr(S, "corpus", lambda: Corpus)
+    m = S.drive_load(0, "m", [{"i": i} for i in range(4)], 10.0, 1.0, "light1", tmp_path / "rep-1", 1.0, None)
+    assert (m["requests"], m["unserved"]) == (4, 1)

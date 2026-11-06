@@ -277,7 +277,7 @@ def drive_load(port: int, served: str, plan: list[dict], rate: float, span_s: fl
     meta = {"tag": tag, "rate": rate, "span_s": span_s, "requests": k, "arrivals_span_s": round(arr[-1], 3),
             "wall_s": round(time.monotonic() - t, 3), **got}
     recs = [json.loads(x) for x in (d / "client.jsonl").read_text().splitlines() if x.strip()]
-    meta["unserved"] = len(recs) - len(served(recs))
+    meta["unserved"] = len(recs) - len(served_records(recs))
     (d / "meta.json").write_text(json.dumps(meta, indent=1))
     return meta
 
@@ -434,14 +434,14 @@ def pct(xs: list[float], q: float) -> float | None:
     return s[lo] + (s[hi] - s[lo]) * (k - lo)
 
 
-def served(recs: list[dict]) -> list[dict]:
+def served_records(recs: list[dict]) -> list[dict]:
     """The client records of requests served to their end."""
     return [r for r in recs if r.get("status") == 200 and not r.get("error") and r.get("done_s") is not None]
 
 
 def load_metrics(recs: list[dict], slo: tuple[float, float]) -> dict:
     """One load's metrics from its client records (module docstring)."""
-    ok = served(recs)
+    ok = served_records(recs)
     if not ok:
         return {"sent": len(recs), "ok": 0}
     span = max(r["send_unix"] + r["done_s"] for r in ok) - min(r["send_unix"] for r in recs)
