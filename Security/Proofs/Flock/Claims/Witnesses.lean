@@ -8,6 +8,7 @@ public import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericCompiler
 public import Proofs.Flock.Claims.Witnesses.SamplingTwo
+public import Proofs.Flock.Claims.Witnesses.SamplingTwoWork
 public import Proofs.Flock.Claims.Witnesses.ZKOutLeak
 public import Proofs.Flock.Claims.Witnesses.Recursion
 public import Proofs.Flock.Claims.Witnesses.RecursionMeets
