@@ -47,6 +47,7 @@ integrations/vllm/tests/pipeline/test_source_identity.py -> tools/research/src/r
 integrations/vllm/tests/pipeline/test_window_advice.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/tests/program/predict/test_batch.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/tests/program/predict/test_batch.py -> verity/core/protocols/certifier/advice.py
+integrations/vllm/tests/program/predict/test_block_counts.py -> verity/core/protocols/network/nci/lean/scripts/nci_reference.py
 integrations/vllm/tests/program/predict/test_node.py -> verity/core/protocols/network/nci/lean/scripts/nci_reference.py
 integrations/vllm/tests/program/predict/test_node_registration.py -> verity/core/protocols/network/nci/lean/scripts/nci_reference.py
 integrations/vllm/tests/program/predict/test_steps.py -> verity/core/protocols/certifier/__init__.py
