@@ -20,7 +20,7 @@ an identity is spelt for a collector are the integration's concern (``verity_vll
 example of the design (``x -- Matmul -- u -- Activation -- y``: one unit -> {x, y}; two units -> {x, u, y}) is the
 contract; see ``integrations/vllm/tests/query/test_units.py``.
 
-The Program is read through the :class:`Program` protocol so an integration can present a decoded ``verity.ml.circuits`` descriptor,
+The Program is read through the :class:`CallGraph` protocol so an integration can present a decoded ``verity.ml.circuits`` descriptor,
 a streamed instance sequence, or a synthetic graph without converting it: a Program is a sequence of :class:`Call` records
 (id, definition id, output ports, the Values each read), the Values its prescribed inputs produce, and its outputs.
 Prescribed inputs are modelled as *Values of a producer that is not a Call* (``ValueRef.call`` is the input's id, which
@@ -33,13 +33,13 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import NamedTuple, Protocol, runtime_checkable
 
-__all__ = ["ValueRef", "Call", "Program", "VerificationUnit", "Query", "Partition", "partition_by", "unit_boundary",
+__all__ = ["ValueRef", "Call", "CallGraph", "VerificationUnit", "Query", "Partition", "partition_by", "unit_boundary",
            "boundary_values", "Policy", "RequiredValues", "required_values", "admissibility", "PartitionError"]
 
 
 class ValueRef(NamedTuple):
     """One logical Value: the ``port`` of producer ``call``.  ``call`` is a Call id of the Program, or the id of one of its
-    prescribed inputs (``Program.inputs`` says which); ``port`` names the output collection it leaves by (``"out"`` for a
+    prescribed inputs (``CallGraph.inputs`` says which); ``port`` names the output collection it leaves by (``"out"`` for a
     Definition returning one collection, ``"0"``/``"1"``/... for the slots of a tuple, a field name for a record input).
     A tuple, so millions of them hash and compare at C speed (a derived request Program has 10^6 Calls)."""
 
@@ -66,7 +66,7 @@ class Call(Protocol):
 
 
 @runtime_checkable
-class Program(Protocol):
+class CallGraph(Protocol):
     """What a query reads.  ``calls`` in body order (ids unique; a Call id never equals an input id); ``inputs`` the Values
     the prescribed inputs produce (their ``call`` ids are not Call ids); ``outputs`` the Values the Program returns."""
 
@@ -94,7 +94,7 @@ class VerificationUnit:
 
 
 #: ``Q(P) -> units``.  A ``Query`` is any callable of this shape; :func:`partition_by` builds one from a Call -> unit-id map.
-Query = Callable[[Program], Sequence[VerificationUnit]]
+Query = Callable[[CallGraph], Sequence[VerificationUnit]]
 #: A query whose units are a partition of the Program's Calls (every Call in exactly one unit); :func:`unit_boundary` and
 #: :func:`boundary_values` require this and check it (:class:`PartitionError`).
 Partition = Query
@@ -109,7 +109,7 @@ def partition_by(key: Callable[[Call], str], *, order: Callable[[str], object] |
     key.  Units are returned in first-seen body order unless ``order`` sorts the ids.  The canonical way to write a
     membership-derived query (``key`` = the owning module path, the layer, the Definition family, ...)."""
 
-    def Q(P: Program) -> Sequence[VerificationUnit]:
+    def Q(P: CallGraph) -> Sequence[VerificationUnit]:
         groups: dict[str, set[int]] = {}
         for c in P.calls:
             groups.setdefault(key(c), set()).add(c.id)
@@ -119,7 +119,7 @@ def partition_by(key: Callable[[Call], str], *, order: Callable[[str], object] |
     return Q
 
 
-def _index(P: Program) -> tuple[dict[int, Call], frozenset[int]]:
+def _index(P: CallGraph) -> tuple[dict[int, Call], frozenset[int]]:
     by_id = {c.id: c for c in P.calls}
     if len(by_id) != len(P.calls):
         raise ValueError("Program: Call ids are not unique")
@@ -130,7 +130,7 @@ def _index(P: Program) -> tuple[dict[int, Call], frozenset[int]]:
     return by_id, inputs
 
 
-def _check_partition(P: Program, units: Sequence[VerificationUnit]) -> dict[int, str]:
+def _check_partition(P: CallGraph, units: Sequence[VerificationUnit]) -> dict[int, str]:
     """Call id -> unit id; raises :class:`PartitionError` unless every Call is in exactly one unit."""
     owner: dict[int, str] = {}
     for u in units:
@@ -147,7 +147,7 @@ def _check_partition(P: Program, units: Sequence[VerificationUnit]) -> dict[int,
     return owner
 
 
-def unit_boundary(P: Program, unit: VerificationUnit, owner: Mapping[int, str] | None = None) -> tuple[frozenset[ValueRef], frozenset[ValueRef]]:
+def unit_boundary(P: CallGraph, unit: VerificationUnit, owner: Mapping[int, str] | None = None) -> tuple[frozenset[ValueRef], frozenset[ValueRef]]:
     """``(in(V), out(V))`` of one unit.  ``owner`` (Call id -> unit id, from the partition) lets the outputs be decided; without
     it, every read from outside the unit's own Calls counts as outside (correct for a partition, computed per call)."""
     by_id, _inputs = _index(P)
@@ -186,7 +186,7 @@ class Boundary:
 _FEW_READERS = 16
 
 
-def boundary(P: Program, Q: Partition) -> Boundary:
+def boundary(P: CallGraph, Q: Partition) -> Boundary:
     """One pass over the Program: the crossing Values of ``Q(P)`` with their producing and reading units."""
     units = tuple(Q(P))
     owner = _check_partition(P, units)
@@ -222,7 +222,7 @@ def boundary(P: Program, Q: Partition) -> Boundary:
     return Boundary(frozenset(produced_in), produced_in, {v: tuple(r) for v, r in read_by.items()}, units, owner)
 
 
-def boundary_values(P: Program, Q: Partition) -> frozenset[ValueRef]:
+def boundary_values(P: CallGraph, Q: Partition) -> frozenset[ValueRef]:
     """``U_{V in Q(P)} (in(V) u out(V))`` as logical Values.  In a partition every ``in(V)`` produced by a Call is some other
     unit's ``out``, so the union is: every Call-produced Value read across a unit boundary or returned by the Program, plus
     every prescribed-input Value some Call reads."""
@@ -266,7 +266,7 @@ class RequiredValues:
         return v in self.values
 
 
-def required_values(P: Program, Q: Partition, policy: Policy) -> RequiredValues:
+def required_values(P: CallGraph, Q: Partition, policy: Policy) -> RequiredValues:
     """Boundary Values of ``Q(P)`` u the policy's prescribed inputs u the policy's protocol-required Values."""
     by_id, inputs = _index(P)
     known_inputs = frozenset(P.inputs)
