@@ -367,13 +367,15 @@ AUDIT_SUMMARY = Path("v3c-audit") / "summary.json"
 #: (`NetworkCheck.Period.stateValue`, `records_audit.TIED`)
 SCAN_STATE = "verity/certifier/scan-state/v1"
 CREDIT = ("sampled proofs credits only the drawn members whose --registered file named every port of their circuit at "
-          "the window's committed roots: the audit completed it from the auditor's record before any session "
-          "(`a5.complete_drawn`, its record's checks_after_draw.registered_complete), and the member's Lean verdict of "
-          "record, which refuses a file that leaves out a port (Flock.Registered.checkComplete), accepted it reporting "
-          "exactly its reads (registered_reads). A member accepted with no file or a partial one is no evidence of the "
-          "served window, whose inputs it commits afresh, so each other drawn member is listed as not credited, by "
-          "name; one the audit couldn't complete (a port with no committed tree) refuses the audit, which rejects "
-          "naming it, a visible failure")
+          "the window's committed roots: the audit completed it at the registration's roots before any session "
+          "(`a5.complete_drawn`, its record's checks_after_draw.registered_complete) and wrote its record only once the "
+          "auditor's record tied that registration to the coins after the sessions (`a5.tie_after_sessions`, "
+          "checks_after_draw.record), and the member's Lean verdict of record, which refuses a file that leaves out a "
+          "port (Flock.Registered.checkComplete), accepted it reporting exactly its reads (registered_reads). A member "
+          "accepted with no file or a partial one is no evidence of the served window, whose inputs it commits afresh, "
+          "so each other drawn member is listed as not credited, by name; one the audit couldn't complete (a port with "
+          "no committed tree) refuses the audit, which rejects naming it, and so does a tie that fails, each a visible "
+          "failure")
 NO_COMPLETION = ("the audit's record states no registered-file completion (checks_after_draw.registered_complete), so "
                  "no member's file is known complete and none is credited")
 UNCOMPLETED = "the audit couldn't complete its --registered file, and refused it"
