@@ -1,6 +1,7 @@
 module
 
 public import NciCheck.Baseline
+public import NciCheck.Count
 
 /-! `nci-check [--unrolled] INSTANCE TRUSTED`: the verdict on one instance, as JSON on stdout. By default the instance is
 `NciCheck.Desc`'s (θ and the owners per root node) with θ's `provenance`, checked at the size of the description and then
@@ -8,19 +9,24 @@ against the trusted input `TRUSTED` (the deployment's registration log, the run'
 parameters: `NciCheck.Baseline`); `--unrolled` reads one of `NciCheck.Check` (per gate) and runs the unrolled
 check, the reference the description-sized one is held to. `nci-check --policy [--unrolled] INSTANCE` runs the policy
 check alone, without θ's provenance: a measurement of `NciCheck.Desc` (`benchmarks/verifier_cost/`), not the check of
-record. -/
+record. `nci-check --count INSTANCE` runs the count of `(c, k)`-inference blocks on one of `NciCheck.Count`. -/
 
 @[expose] public section
 
 def main (args : List String) : IO UInt32 := do
-  let usage := "usage: nci-check [--unrolled] INSTANCE TRUSTED | nci-check --policy [--unrolled] INSTANCE"
+  let usage := "usage: nci-check [--unrolled] INSTANCE TRUSTED | nci-check --policy [--unrolled] INSTANCE | " ++
+    "nci-check --count INSTANCE"
+  let read (path : String) : IO (Option Lean.Json) := do
+    return (Lean.Json.parse (← IO.FS.readFile path)).toOption
+  if let "--count" :: [p] := args then
+    let some j ← read p | IO.eprintln s!"nci-check: {p} is not JSON"; return 2
+    IO.println (NciCheck.Count.check j).compress
+    return 0
   let (policy, unrolled, paths) := match args with
     | "--policy" :: "--unrolled" :: ps => (true, true, ps)
     | "--policy" :: ps => (true, false, ps)
     | "--unrolled" :: ps => (false, true, ps)
     | ps => (false, false, ps)
-  let read (path : String) : IO (Option Lean.Json) := do
-    return (Lean.Json.parse (← IO.FS.readFile path)).toOption
   match policy, paths with
   | true, [p] =>
     let some j ← read p | IO.eprintln s!"nci-check: {p} is not JSON"; return 2
