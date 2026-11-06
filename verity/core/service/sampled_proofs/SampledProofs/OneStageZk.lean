@@ -56,12 +56,14 @@ public import SampledProofs.ChallengerTrees
 public import SampledProofs.Slots
 public import SampledProofs.FilePart
 public import Flock
+public import Flock.JsonParse
 meta import CoreProtocol.Blobs
 meta import SampledProofs.OneStage
 meta import SampledProofs.ChallengerTrees
 meta import SampledProofs.Slots
 meta import SampledProofs.FilePart
 meta import Flock
+meta import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -239,16 +241,6 @@ def programDigest (b : ByteArray) : Option String := do
     | x => x
   return Flock.hexOf (Flock.Sha512.hash (← (Flock.canon bare).toOption).toUTF8)
 
-private def headerLine (b : ByteArray) : ByteArray := Id.run do
-  for i in [0:b.size] do
-    if b[i]! == 10 then return b.extract 0 i
-  return b
-
-/-- The public file's header as `HmRow.loadPublic` reads it: parsed, then `Flock.norm`. -/
-private def headerOf (pubB : ByteArray) : V Json := do
-  let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
-  Flock.norm <$> (Flock.JsonParse.parse line).mapError (s!"the public file's header is not JSON: {·}")
-
 /-- The refusal of a public file whose instances are not the registration's population units in order (`indicesHeld`). -/
 def INDICES_WHY : String :=
   "public file: its units.indices are not the registration's population units in order (instance i is unit i)"
@@ -266,7 +258,7 @@ one-stage drivers hold theirs before the draw): its header's scheme, `frame_v3` 
 `instances` against the record's scheme, roots, domains and population, a refusal naming the codes that fail; then its
 `units.indices` the population's units in order (`indicesHeld`). -/
 def publicHeld (rec : Json) (pubB : ByteArray) : V Unit := do
-  let h ← headerOf pubB
+  let h ← FilePart.header pubB
   let fv := getD h "frame_v3"
   let c := Record.matchesPublic rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids") (getD h "instances")
   if !c.codes.isEmpty then throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
@@ -275,9 +267,9 @@ def publicHeld (rec : Json) (pubB : ByteArray) : V Unit := do
 /-- `publicHeld` passes only on a public file whose header's `units.indices` are the registration's population units in
 order (`indicesHeld`): the unit `provedUnits` credits for instance `i` is `i`, fixed by the registration before any coin. -/
 theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} (h : publicHeld rec pubB = .ok ()) :
-    ∃ hd, headerOf pubB = .ok hd ∧ indicesHeld rec hd = true := by
+    ∃ hd, FilePart.header pubB = .ok hd ∧ indicesHeld rec hd = true := by
   unfold publicHeld at h
-  cases hh : headerOf pubB with
+  cases hh : FilePart.header pubB with
   | error e => simp [hh, bind, Except.bind] at h
   | ok hd =>
     refine ⟨hd, rfl, ?_⟩
@@ -286,14 +278,14 @@ theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} (h : publicHel
       split at h <;> simp_all
     · rfl
 
-/-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`) of the instances the session's
-record drew (`unit_draw.units`), ascending. -/
+/-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`, as the population check reads
+them: `FilePart.indicesOf` of `FilePart.header`) of the instances the session's record drew (`unit_draw.units`),
+ascending. -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
-  let h ← headerOf pubB
-  let .arr is := getD (getD h "units") "indices" | throw "the public file's header names no units.indices"
+  let is ← FilePart.indicesOf (← FilePart.header pubB)
   let .arr ds := getD (getD (← Flock.JsonParse.parse record) "unit_draw") "units"
     | throw "the record's unit_draw names no units"
-  let units ← ds.mapM fun d => match nat? d >>= fun i => is[i]? >>= nat? with
+  let units ← ds.mapM fun d => match nat? d >>= (is[·]?) with
     | some u => pure u
     | none => throw "the record draws an instance the public file's units.indices does not name"
   return units.qsort (· < ·)
