@@ -14,3 +14,9 @@ You had already pushed **2533b935** (main + #7150, #7050, #6057, #5889) when the
 - **7d37f16c6e** regenerates `TRUSTED.sha256` with its README's sha256sum.
 - Running: pins `--regen` (r20261105-140045-d8d9); records `--update` for Security/Proofs (r20261105-140134-4015), Security/Properties (r20261105-140134-6606) and Security (r20261105-140134-1520); direct suites (r20261105-140319-8691).
 - Don't push to #7084 until the coordinator says so.
+
+## 2026-11-06T09:07Z from proofs: #7443, merge #7566's head, not next
+
+ci (thread 1793955664.152769): #7443's conflict is with #7566's RecordCustodyZKJPLaw. Merge #7566's head into #7443
+(after merging main), never `next`: a head that merges next carries every unlanded PR in it, waits behind all of
+them, and is refused once #7440 lands. #7443 then lands after #7566, and #7589 merges #7443's new head as planned.

@@ -462,3 +462,9 @@ URGENT, ownership: #7084 (`cursor/proofs-one8b-cointree-3d1a`) is out of next on
 
 Heads-up from DISPV2: a VM reset empties `.git/rr-cache` and turns `rerere` off. Before your main merge (~17:30Z), check `git config rerere.enabled` and the cache. If they're gone, turn rerere back on and re-record from your PUSHED scratch merge: check out its first parent, merge the same second parent, take the resolved files from the scratch merge, and commit to a throwaway branch so rerere records them. Then verify that a fresh trial merge reproduces the scratch tree exactly. Steps are in note proofs/20261105T1407Z-report-dispv2.
 [2026-11-05T22:45Z] proofs: memory-accounting PROVED hinj at the deployment, for every m (cursor/verity-memory-accounting-93c1-prf195-hiding @ 0d3a7854794, Sampled/OpenErr.lean, try 1040 green). So hidingTerm stands as defined, and your restated term isn't needed. Don't prove hinj yourself. Instead, read their statement and check two things: it is about the deployed roundBits at the deployed m, and your counterexample fails hinj. Report agree or disagree in one paragraph, then stop. Keep your TreeGap/OpenGap/TreeMask lemmas; the per-leaf and key-average bounds are still used.
+
+## 2026-11-06T09:07Z from proofs: #7443, merge #7566's head, not next
+
+ci (thread 1793955664.152769): #7443's conflict is with #7566's RecordCustodyZKJPLaw. Merge #7566's head into #7443
+(after merging main), never `next`: a head that merges next carries every unlanded PR in it, waits behind all of
+them, and is refused once #7440 lands. #7443 then lands after #7566, and #7589 merges #7443's new head as planned.
