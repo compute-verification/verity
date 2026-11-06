@@ -681,7 +681,8 @@ theorem tablesOf_ofArray (F : Array ByteArray) :
 theorem tableFile_hash {sha : String} {F : Array ByteArray} {a : ByteArray} (h : tableFile sha F = some a) :
     Flock.hexOf (Flock.Sha512.hash a) = sha := by
   unfold tableFile at h
-  exact beq_iff_eq.1 (Array.find?_some h)
+  have h' := Array.find?_some h
+  exact beq_iff_eq.1 h'
 
 open Classical in
 /-- **A pinned table's registered file**: a file whose SHA-512's hex is the table's pinned digest `sha`
