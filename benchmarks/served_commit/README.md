@@ -17,7 +17,10 @@ labeled run, `served.py` the served arm's runs).
 - `tp_replay.py` and `tp_replay.sh`: whether a sampled request replays bit for bit (its tokens and every module's values at its
   rows, the DSA top-k and the attention core among them) in the same batch, beside fillers of its companions' shapes, alone and
   in another batch, and its replay's GPU-seconds with its prompt's KV cold or in the prefix cache (GLM-5.3 TP8, eager).
-  `tp_env.sh` is both TP drivers' node setup.
+  `tp_env.sh` is the TP drivers' node setup.
+- `tp_rerun.py` and `tp_rerun.sh`: whether a served window replays bit for bit in fresh engine processes on the same node, with
+  the same arrivals (its schedule, every request's tokens, and every rank's module values at every row, as `tp_replay`
+  fingerprints them), and where the first difference is (GLM-5.3 TP8, eager).
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
   serving on a high-priority stream over the worker's hashing, NVTX ranges; `-base` and `-batch`
   arms turn the decode host-cost changes off, or all but the batched captured copies; `-ring8` and `-w64` arms size the

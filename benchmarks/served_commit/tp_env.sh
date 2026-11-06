@@ -1,4 +1,4 @@
-# The node side of the TP drivers (tp_decode.sh, tp_replay.sh), sourced from the source tree's root on an 8-GPU H200 node:
+# The node side of the TP drivers (tp_decode.sh, tp_replay.sh, tp_rerun.sh), sourced from the source tree's root on an 8-GPU H200 node:
 # GLM-5.3's checkpoint bind-mounted from the node's verified local copy where the checkpoint manifest reads it, the Hub offline,
 # a scratch TMPDIR removed on exit, the venv (VENV, default /workspace/cp/venv312) and PYTHONPATH over the tree, and the working
 # directory integrations/vllm. Sets TREE, the tree's root.
