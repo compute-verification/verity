@@ -72,8 +72,8 @@ def _legal(s: Shape) -> bool:
     return unit_class(s.out_bits) is not None
 
 
-def _candidate(op: str, s: Shape, n: int, label: str = "", replay: tuple[str, int] | None = None) -> Candidate:
-    name, per = ("", 0) if replay is None else (replay[0], n // replay[1])
+def _candidate(op: str, s: Shape, n: int, label: str = "", grain: tuple[str, int] | None = None) -> Candidate:
+    name, per = ("", 0) if grain is None else (grain[0], n // grain[1])
     return Candidate(op, f"{op}:{s.id}", n, s.work, s.out_bits, s.out_gates, label, s.influence, s.ands, s.rows,
                      s.commit_bits, s.commit_rows, s.cap, name, per)
 
@@ -88,12 +88,12 @@ def _unchecked(s: Shape, n: int) -> Candidate:
 
 
 class _Program:
-    def __init__(self, op: str, costs: CostModel, objective: Objective, lam: float, replay: tuple[str, int] | None):
-        self.op, self.costs, self.objective, self.lam, self.replay = op, costs, objective, lam, replay
+    def __init__(self, op: str, costs: CostModel, objective: Objective, lam: float, grain: tuple[str, int] | None):
+        self.op, self.costs, self.objective, self.lam, self.grain = op, costs, objective, lam, grain
         self.memo: dict[tuple[str, int], tuple[float, tuple[tuple[Shape, int], ...]]] = {}
 
     def unit(self, s: Shape, n: int) -> float:
-        return _price(_candidate(self.op, s, n, replay=self.replay), self.costs, self.objective, self.lam)
+        return _price(_candidate(self.op, s, n, grain=self.grain), self.costs, self.objective, self.lam)
 
     def best(self, s: Shape, n: int) -> tuple[float, tuple[tuple[Shape, int], ...]]:
         key = (s.id, n)
@@ -179,30 +179,31 @@ def _pressure(prog: _Program, s: Shape, n: int, threshold: float, out: list[Pres
 
 
 def pressure(op: str, root: Shape, n: int, costs: CostModel, objective: Objective, lam: float, *,
-             replay: tuple[str, int] | None = None, threshold: float = 0.1) -> list[Pressure]:
+             grain: tuple[str, int] | None = None, threshold: float = 0.1) -> list[Pressure]:
     """The hints at one density `lam` (a plan's), each saving more than `threshold`."""
     out: list[Pressure] = []
-    _pressure(_Program(op, costs, objective, lam, replay), root, n, threshold, out, set())
+    _pressure(_Program(op, costs, objective, lam, grain), root, n, threshold, out, set())
     return _strongest(out)
 
 
 def cuts(op: str, root: Shape, n: int, costs: CostModel, objective: Objective, *, grid: int = 41,
-         replay: tuple[str, int] | None = None, threshold: float = 0.1
+         grain: tuple[str, int] | None = None, threshold: float = 0.1
          ) -> tuple[list[Candidate], dict[str, tuple[tuple[str, int], ...]], list[Pressure]]:
     """The op's alternatives for `optimize.frontier`: `n` instances of `root`, cut by the dynamic program at each density of
     a `grid`, each distinct cheapest cut one alternative ("c0" the sparsest's, and on), its proof blocks merged by Definition.
-    Also each alternative's proof blocks (Definition id, instances) and the hints that save more than `threshold`.  `replay`
-    (domain, replay blocks) puts every subcircuit in that replay domain, `n` and each part's count splitting evenly."""
+    Also each alternative's proof blocks (Definition id, instances) and the hints that save more than `threshold`.  `grain`
+    (a replay grain, its replay blocks) puts every subcircuit in that replay grain, `n` and each part's count splitting
+    evenly."""
     found: dict[tuple, str] = {}
     out: list[Candidate] = []
     hints: list[Pressure] = []
     for lam in _lams(root, n, objective, grid):
-        prog = _Program(op, costs, objective, lam, replay)
+        prog = _Program(op, costs, objective, lam, grain)
         units = _merge(prog.best(root, n)[1])
         key = tuple((s.id, k) for s, k in units)
         if key not in found:
             label = found[key] = f"c{len(found)}"
-            out.extend(replace(_candidate(op, s, k, label, replay), template=f"{op}#{label}:{s.id}") for s, k in units)
+            out.extend(replace(_candidate(op, s, k, label, grain), template=f"{op}#{label}:{s.id}") for s, k in units)
         _pressure(prog, root, n, threshold, hints, set())
     return out, {label: key for key, label in found.items()}, _strongest(hints)
 

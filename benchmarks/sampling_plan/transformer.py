@@ -4,7 +4,7 @@ reference) or scaled onto one RTX PRO 6000 (the Phase 2 model), every operation 
 The Definition DAG is one server-time block of serving: `requests` requests of `context` positions each (`prompt` given,
 the rest generated greedily, the last one never fed back, so `positions` = context - 1 run), through `layers` pre-norm
 blocks of width `width` (`heads` heads of 64, an MLP of `mlp` with ReLU), learned absolute positions, a byte vocabulary
-and a W8A8 output head. Every op is a unit of one request's (`cuts` puts every subcircuit in the `request` replay domain),
+and a W8A8 output head. Every op is a unit of one request's (`cuts` puts every subcircuit in the `request` replay grain),
 and its units, from the finest up:
 
 - the static matmuls (QKV, the output projection, MLP up and down, the head): `ScaledMmS8Coordinate_v1{K}` on sm_120's
@@ -57,7 +57,7 @@ from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, shape_o
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
-                                                           Plan, ReplayDomain, certify, density_bound, for_target,
+                                                           Plan, ReplayGrain, certify, density_bound, for_target,
                                                            frontier, ln_upper, row_ands)
 from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
@@ -371,21 +371,21 @@ def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
 
 def costs(m: Model, s: Serving) -> CostModel:
     """Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
-    `request` replay domain."""
+    `request` replay grain."""
     obs = observations()
     fitted = Fitted(fit(obs, "prove", ["one", "ands", "ands*staged", "ands*drawn"]),
                     fit(obs, "verify", ["one", "ands", "ands*staged", "ands*drawn"]),
                     fit(obs, "stage", ["one", "ands", "ands*staged"]), I["cpu"].value, KEY)
     return replace(fitted.model(), commit_per_bit=I["commit_per_byte"].value / 8, serve=serve(m, s),
-                   replay={"request": ReplayDomain(m.requests, s.replay)})
+                   replay={"request": ReplayGrain(m.requests, s.replay)})
 
 
 def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
-    """`candidates.cuts` on each op, every subcircuit in the `request` replay domain: its alternatives, each its units
+    """`candidates.cuts` on each op, every subcircuit in the `request` replay grain: its alternatives, each its units
     by Definition."""
     out, alts = [], {}
     for op, (root, n) in dag.ops.items():
-        cs, a, _ = cuts(op, root, n, cm, objective, grid=grid, replay=("request", dag.m.requests))
+        cs, a, _ = cuts(op, root, n, cm, objective, grid=grid, grain=("request", dag.m.requests))
         out += cs
         alts[op] = {label: [list(u) for u in units] for label, units in a.items()}
     return out, alts
