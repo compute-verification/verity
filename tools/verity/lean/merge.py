@@ -1008,7 +1008,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--lakefile", action="store_true", help="BASE OURS THEIRS [PATH] are a `lakefile.toml`'s: merge its "
                     "`[[require]]` blocks and string arrays")
     ap.add_argument("--caps", action="store_true", help="BASE OURS THEIRS [PATH] are `tests/test_lean_packages.py`'s: merge "
-                    "its ratchet caps (`CAP_NAMES`) as counters")
+                    "its ratchet caps (`UNWITNESSED`, `INLINE`) as counters")
     a = ap.parse_args(argv)
     if a.install is not None:
         install(a.install)
