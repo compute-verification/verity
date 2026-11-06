@@ -2058,10 +2058,9 @@ _clock = time.time_ns
 def _stat(p: str | Path) -> tuple[int, ...] | None:
     """What a write to ``p``, or an entry added to or removed from it, changes of its stat: its inode, size, and modification
     and change times (a change time no program sets); None when it is gone."""
-    try:
-        st = os.stat(p)
-    except OSError:
+    if not os.path.exists(p):
         return None
+    st = os.stat(p)
     return st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns
 
 
