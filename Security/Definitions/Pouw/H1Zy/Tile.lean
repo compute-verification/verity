@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.H1Zy.Lane
+public import Mathlib.Data.BitVec
 
 /-!
 # `PouwH1TileZy_v1{TILE}` on words, over `PouwH1Tile_v1` or `PouwH1Tile_v3` (trusted)

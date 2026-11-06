@@ -2,9 +2,18 @@ module
 
 public import Properties.Pouw.LiveSalt
 public import Proofs.Properties.Pouw.LiveSalt.Ledger
-public import Proofs.Properties.Pouw.Commit
-public import Proofs.Properties.NetworkRecords.Bytes
 import all Lean.Data.Json.Basic
+public import Proofs.Properties.NetworkCertifier.Bytes
+import Mathlib.Algebra.GroupWithZero.Nat
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.Nat.Basic
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.Push
+import Mathlib.Tactic.SetLike
+import Proofs.Properties.NetworkRecords.Bytes
+import Proofs.Properties.Pouw.Commit
+import Std.Tactic.Do.Syntax
 
 /-!
 # Proofs of the Pearl-C live salt's properties (`Properties.Pouw.LiveSalt`)

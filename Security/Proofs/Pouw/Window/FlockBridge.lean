@@ -1,8 +1,8 @@
 module
 
-public import Definitions.Pouw.Guarantees.Window
-public import Proofs.Flock.Soundness.Audit.Extraction
 public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
+public import Definitions.Pouw.Window
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The bridge from the window's game to C-Flock's

@@ -1,7 +1,17 @@
 module
 
-public import Proofs.Properties.NetworkRecords.Bytes
-public import Properties.NetworkRecords
+public import Aesop.BuiltinRules
+public import Mathlib.Algebra.GroupWithZero.Nat
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.ToDual
+public import Properties.NetworkCertifier
+import Batteries.Data.Fin.Lemmas
+import Mathlib.Algebra.BigOperators.Group.List.Basic
+import Mathlib.Algebra.Order.Ring.Nat
+import Mathlib.Data.Finset.Attr
+import Mathlib.Order.Fin.Basic
+import Mathlib.Tactic.SetLike
+import Proofs.Properties.NetworkRecords.Bytes
 
 /-!
 # Every frame of the Program's grid is one of the link's frames

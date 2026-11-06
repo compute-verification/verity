@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Core.TC.Proofs.SemGroup
+public import Proofs.Core.TC.Proofs.Prod
+import Proofs.Core.TC.Proofs.Norm
 
 /-!
 # One group, both sides: `group_sound`

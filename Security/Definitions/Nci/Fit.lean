@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Threads
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # NCI over windows: the fit bound's vocabulary

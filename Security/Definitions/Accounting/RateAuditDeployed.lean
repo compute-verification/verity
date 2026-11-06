@@ -1,8 +1,7 @@
 module
 
-public import Definitions.Accounting.RateAuditInteractive
-public import Definitions.Accounting.RateAuditRemote
 public import Definitions.Accounting.RateAuditHorizon
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The remote rate audit as deployed: one game (trusted)

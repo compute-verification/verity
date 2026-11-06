@@ -3,14 +3,51 @@ module
 public import Proofs.Flock.Claims.Bridge.CustodyZkP
 public import Proofs.Flock.Bridge.Draw
 public import Proofs.Properties.Verity.SampledCoins
+import Batteries.Tactic.OpenPrivate
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # A3 and `live-verifier` at the session the deployment runs, with no premise
 
-`Verity.Sampled.Live` reads two of V5's hypotheses, A3 at the device's bytes the draw reads (`Live.hA3`, a field) and
-`live-verifier` at the writer whose record v2 decodes (`Live.hCust`, `RecordCustodyZKJPLaw` at the draw file's law at
-every draw, with the draw file's size, V5's `hsz`). This file proves both at the deployment's session, for the
-vocabulary instance to cite:
+`Verity.Sampled.Live` proves two of V5's hypotheses from this file, `live-verifier` at the writer whose record v2
+decodes (`Live.hCust`, `RecordCustodyZKJPLaw` at the draw file's law at every draw) and the draw file's size (V5's
+`hsz`, `Live.hsz`), and carries a third as a field, A3 at the device's bytes the draw reads (`Live.hA3`), which the
+session as deployed takes from here (`Live.deployed`). This file proves the three at the deployment's session:
 
 * **The draw file** (`printedDraw law`): at each draw `S`, the one `flock-verify draw` prints for the verifier's own draw
   of `S` under `law` over the `n` proof blocks (`UnitDraw.toJson` of `ZkLink.drawOf`); at a subset law it is

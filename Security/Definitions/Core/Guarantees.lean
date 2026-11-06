@@ -11,6 +11,8 @@ public import Definitions.Core.Guarantees.Formalism
 public import Definitions.Core.Guarantees.Expand
 public import Definitions.Core.Guarantees.Rec
 public import Definitions.Core.Guarantees.ValueSalts
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Core's guarantees

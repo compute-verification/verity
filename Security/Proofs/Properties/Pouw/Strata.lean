@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pouw.Strata
-public import Std.Data.String.ToNat
+import Std.Data.String.ToNat
 
 /-!
 # Proofs: a served window's work strata tile its units, and what `law`, `epsAt` and `established` answer

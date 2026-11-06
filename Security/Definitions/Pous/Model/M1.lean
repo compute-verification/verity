@@ -3,6 +3,7 @@ module
 public import Mathlib.Data.Fintype.Perm
 public import Mathlib.Logic.Equiv.Fin.Basic
 public import Definitions.Pous.Model.Scheme
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Model M1: independent ideal permutations, and its encoding

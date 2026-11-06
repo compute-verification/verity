@@ -1,6 +1,16 @@
 module
 
-public import Proofs.Pouw.PearlC.ServedRev1Gamma
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
+import Proofs.Pouw.PearlC.KernelWrefGamma
+import Proofs.Pouw.PearlC.ServedRev1Gamma
+import Proofs.Pouw.PearlC.TileCapRev1Gamma
+import Proofs.Pouw.PearlC.TileGamma
+import Proofs.Pouw.PearlC.UOnlyGamma
 
 /-!
 # v1 under rev1 on a served step's layout, every linear at once (compute accounting's file)

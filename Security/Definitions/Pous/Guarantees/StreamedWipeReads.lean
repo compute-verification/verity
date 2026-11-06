@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe at any number of reads, and the H200 at 5 GB

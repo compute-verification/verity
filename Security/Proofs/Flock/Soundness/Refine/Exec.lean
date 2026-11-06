@@ -1,9 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Run
-public import Flock.Verify
-public import Proofs.Flock.Verifier.Transcript
-public import Mathlib.Data.List.Range
+public import Flock.Piop
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Flock.Verifier.Transcript
 
 /-!
 # Runs of the executable's transcript programs

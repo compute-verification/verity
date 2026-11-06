@@ -1,6 +1,10 @@
 module
 
 public import Definitions.Pouw.TileBound.Defs
+import Mathlib.Data.Nat.Totient
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.ContinuousFunctionalCalculus
+import Mathlib.Tactic.NormNum.GCD
 
 /-!
 # The FP8-tile model at sm_120's E4M3 atom (trusted definitions)

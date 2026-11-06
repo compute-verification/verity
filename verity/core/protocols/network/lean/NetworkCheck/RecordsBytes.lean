@@ -1,6 +1,7 @@
 module
 
-public import NetworkCheck.RecordsGrid
+public import NetworkCheck.Records
+import NetworkCheck.RecordsGrid
 
 /-!
 # The records check's byte payloads are v4's bits
