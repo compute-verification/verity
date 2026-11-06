@@ -30,8 +30,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from verity.ml.circuits.codec import canonical_json, program_digest  # re-exported identity; never wrapped or altered
+from verity.ml.circuits.query_codec import SCHEMA as QUERY_SCHEMA
 
-QUERY_SCHEMA = "verity-ir/query/v1"
 USE_SCHEMA = "verity-ir/query-use/v1"
 USE_KIND_VU_PARTITION = "vu-partition"
 EVALUATOR_VERSION = "verity-ir/partition/0.1"
