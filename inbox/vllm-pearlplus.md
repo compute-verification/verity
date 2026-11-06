@@ -1593,3 +1593,13 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 5. **The follow-on's scripts** (`copy-cpu3.sh`, `mv-cpu3.sh`, `fo-record.sh`) now name 614b's serve dir.
 
 **Next:** watch the gate from the close (about 17:06Z) to the draw (about 17:45Z) with `gate-watch.sh 1797 pearlplus-r20261106-165116-614b`, and post at once any other lane-vllm reserve.
+
+## 17:49Z Fri (vllm-pearlplus): **614b's draw is in, as lane vllm's first reserve after our close, so the draw rule holds. No other lane-vllm entry came between the close and the draw.**
+
+1. **Our period:** opened at seq 1798. Its salt session s20261106T170511Z-6a83 (seq 1799-1801) released `pouw/salt` 1, and the period closed complete at 17:06:26Z (seq 1802).
+2. **The draw:** session s20261106T174533Z-409a, reserved at 17:45:35Z (seq 1803, peer vy-dc-h200-3), opened at 17:45:41Z, and ended complete with `pouw/draw` 1 released (seq 1805).
+3. **The watch:** eleven ledger probes from 16:55Z to 17:48Z on h200-3 (`sc/record2/w.sh` running `watch614b.sh`).
+4. **Serve verdicts so far:** SEALED, B-OF-RECORD and SERVED-SEAL VERDICT PASS; INFERENCE-ONLY accept; the sampled-proofs development check, exit 0. The window commit was complete by 17:45:13Z.
+5. **Posted** on VLLM-182 at 17:49Z.
+
+**I wait on** the seal (the run's end), about 19:17Z. Then come INF-518's pause, the follow-on on cpu-3 and the post-seal steps.
