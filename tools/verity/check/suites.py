@@ -854,13 +854,30 @@ def fetched_fixtures(tree: str, paths: set[str]) -> dict[str, str]:
     return {v: k for v, k in reg.items() if held[v] == "absent"}
 
 
+def fetch_env() -> dict[str, str]:
+    """The fixture fetch's environment, with the store the tests reach: a recorded check's steps and a `research run` carry no
+    store config, only the run's custody key (`$CHECK_STORE_CUSTODY`, `store_custody`), which goes into this subprocess's
+    environment as the tests' own store helpers hand it to theirs (integrations/vllm's `store_io`, Flock's `verifier/ci.py`),
+    when no store config is set here.  Without it the fetch read the public export alone, so a fixture registered since failed
+    its suite before any test, though the tests that read it would have fetched it."""
+    env = SETTINGS.environ()
+    custody = Path(SETTINGS.CHECK_STORE_CUSTODY) if SETTINGS.CHECK_STORE_CUSTODY else None
+    if (custody is None or SETTINGS.RESEARCH_STORE_CONFIG or (Path.home() / ".research" / "store.toml").is_file()
+            or not ((custody / "store.toml").is_file() and (custody / "cred.json").is_file())):
+        return env
+    cred = json.loads((custody / "cred.json").read_text())
+    env["RESEARCH_STORE_CONFIG"] = str(custody / "store.toml")
+    env.update({k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN") if cred.get(k)})
+    return env
+
+
 def fetch_fixtures(fixtures: dict[str, str], log: Path) -> set[str]:
-    """Fetch the entries (`research data fetch-fixtures`), its output in `log`; returns the paths that are still missing or
-    different afterwards."""
+    """Fetch the entries (`research data fetch-fixtures`, in `fetch_env`), its output in `log`; returns the paths that are still
+    missing or different afterwards."""
     if not fixtures:
         return set()
     p = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(ROOT), "--json", *sorted(fixtures)],
-                       cwd=ROOT, capture_output=True, text=True)
+                       cwd=ROOT, capture_output=True, text=True, env=fetch_env())
     log.write_text(p.stdout + p.stderr)
     try:
         rep = json.loads(p.stdout)
