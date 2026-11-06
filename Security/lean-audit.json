@@ -11572,15 +11572,36 @@
     "  {π : Pouw.PearlC.Layout → Equiv Q Q} (m : Nat)",
     "  (hTT : Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : Pouw.PearlC.RowSeedNoise sem sem')",
     "  (hC : Pouw.PearlC.CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :",
-    "  Pouw.PearlC.GγSampled CM (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
+    "  Pouw.PearlC.GγSampledDraw CM (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
     "    (fun L =>",
     "      And (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 { m := m, n := 6144, k := 256 } L)",
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
-    "    (32437 / 2521000).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
+    "    (Pouw.PearlC.pearlCDrawRev1 Pouw.PearlC.devH100) (32437 / 2521000).cast fun q N =>",
+    "    Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
    ],
    "assumptions": [],
-   "type_hash": "cd5315129f9e8a0ce845524fc730a3ba4665f471ff5eac2e2ea8249a000a2cf9"
+   "type_hash": "b6f1266b3b0597c3e65f67e595129a36e72c2f0b6bcc710f413e3cf4371c7913"
+  },
+  "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]",
+    "  [Fintype S] (CM : Pouw.PearlC.CostModel Q R S) {sem sem' semC : Pouw.PearlC.PearlCSem Q R S}",
+    "  {π : Pouw.PearlC.Layout → Equiv Q Q} (m : Nat)",
+    "  (hTT : Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : Pouw.PearlC.RowSeedNoise sem sem')",
+    "  (hC : Pouw.PearlC.CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :",
+    "  Pouw.PearlC.GγSampledDrawTolThreshold CM",
+    "    (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
+    "    (Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
+    "    (fun L =>",
+    "      And (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 { m := m, n := 6144, k := 256 } L)",
+    "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
+    "    (Pouw.PearlC.pearlCDrawRev1 Pouw.PearlC.devH100) (32437 / 2521000).cast fun q N =>",
+    "    Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
+   ],
+   "assumptions": [],
+   "type_hash": "da0b40685f9de11c32470f5a00335cb067753050462f689bad196ece67d3a743"
   },
   "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256": {
    "owner": "@compute-accounting",
@@ -11589,15 +11610,35 @@
     "  [Fintype S] (CM : Pouw.PearlC.CostModel Q R S) {sem sem' : Pouw.PearlC.PearlCSem Q R S} (m : Nat)",
     "  (hTT : Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : Pouw.PearlC.RowSeedNoise sem sem')",
     "  (hCM : CM.SplitClosed) :",
-    "  Pouw.PearlC.GγSampled CM (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
+    "  Pouw.PearlC.GγSampledDraw CM (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
     "    (fun L =>",
     "      And (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 { m := m, n := 6144, k := 256 } L)",
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
-    "    (32437 / 2521000).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
+    "    (Pouw.PearlC.pearlCDrawRev1 Pouw.PearlC.devH100) (32437 / 2521000).cast fun q N =>",
+    "    Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
    ],
    "assumptions": [],
-   "type_hash": "7993b61309d4731d5f1506dbcc1977d1cd86cd517db1383b5b8ac39ac04b425b"
+   "type_hash": "463c89795112885024f7ab689e21f774603b015c7b66cd7fea72055a0b410fd3"
+  },
+  "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]",
+    "  [Fintype S] (CM : Pouw.PearlC.CostModel Q R S) {sem sem' : Pouw.PearlC.PearlCSem Q R S} (m : Nat)",
+    "  (hTT : Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : Pouw.PearlC.RowSeedNoise sem sem')",
+    "  (hCM : CM.SplitClosed) :",
+    "  Pouw.PearlC.GγSampledDrawTolThreshold CM",
+    "    (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
+    "    (Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
+    "    (fun L =>",
+    "      And (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 { m := m, n := 6144, k := 256 } L)",
+    "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
+    "    (Pouw.PearlC.pearlCDrawRev1 Pouw.PearlC.devH100) (32437 / 2521000).cast fun q N =>",
+    "    Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
+   ],
+   "assumptions": [],
+   "type_hash": "8d8e0fac632471f9dd593417808a54b73d2353214f54aae7021062ca6a43a748"
   },
   "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192": {
    "owner": "@compute-accounting",
@@ -15233,7 +15274,9 @@
    "Nci.Formalism.SecurityProofs.FitTraining_honest": "completeness: Fit's honest lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), its two blocks of one gate are compute blocks that fit at k = 2, with Δ = Δ_t = Δ_grad = s = τ = 1 and no decoder. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's partition into training blocks, which no check reads yet, would supply the deployed premises.",
    "Nci.Formalism.SecurityProofs.FitTraining_nontrivial": "lemma: Fit's nontrivial lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), at k = 1 its blocks don't fit, no partition into inference blocks exists, and ρ = ⊤, above c / (c - d) = 1. A counterexample at an instance, not a property of a Lean function.",
    "Verity.SecurityProofs.CKSize_honest": "completeness: CKSize's honest lemma: at Honest (Verity.Formalism.Honest, Security/Definitions/Core/Formalism/Instances.lean), the proof blocks {1, 2} and {3} of a chain of three gates after a registered input, its premise holds at (c, k) = (2, 1), the second proof block having one gate, under c. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound and rests on no run and no art:.",
-   "Verity.SecurityProofs.CKSize_nontrivial": "lemma: CKSize's nontrivial lemma: at Counter (Verity.Formalism.Counter, Security/Definitions/Core/Formalism/Instances.lean), the same chain's three operation gates in one proof block, its premise fails at (c, k) = (2, 1), and so does the bound, |C| = 3 > 2 * 1. A counterexample at an instance, not a property of a Lean function."
+   "Verity.SecurityProofs.CKSize_nontrivial": "lemma: CKSize's nontrivial lemma: at Counter (Verity.Formalism.Counter, Security/Definitions/Core/Formalism/Instances.lean), the same chain's three operation gates in one proof block, its premise fails at (c, k) = (2, 1), and so does the bound, |C| = 3 > 2 * 1. A counterexample at an instance, not a property of a Lean function.",
+   "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -17376,14 +17419,6 @@
     "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "HA.ProverBounded σ q": "HA.ProverBounded taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256": {
-    "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100)).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100)).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256": {
-    "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100)).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100)).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -17825,6 +17860,14 @@
     "∀ (ℓ : Fin c.L), instLENat.le d (c.d ℓ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin n), instLENat.le (D.D.size (P.gates u)) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin n), Real.instLE.le (Nci.novelReads D (P.gates u)).cast K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256": {
+    "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100)).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100)).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256": {
+    "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100)).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100)).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
     "∀ (u : Fin B), SetLike.instMembership.mem S u → And (instLENat.le (P.gates u).card (cS u)) (instLENat.le (d.unregistered (P.gates u)).card (kS u))": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
@@ -26664,7 +26707,7 @@
    }
   },
   "Definitions.Pouw.Game.Defs": {
-   "digest": "58b56dd0d334b1d128502e86299fa8399332d65ed7fb8d2c739d8bfc94fa1d4c",
+   "digest": "a116fbc0761839bba7fce81c19a963293d81e3a490591882761614f0bc601c75",
    "definitions": {
     "Pouw.ActOK": "57df5c36d420d174dd1ebd0c6da6f2b1b1224f87e845887cad3141376edf8246",
     "Pouw.AdmitsRef": "18672cb8492b5f31c1d2409559ff52b617493363921150daeacc7c57395aa6fd",
@@ -26675,6 +26718,7 @@
     "Pouw.Adversary.pre": "d962772536799da87120dbbf7fa08d3b3b62c92134eb6bf076b7c1573a0be8b4",
     "Pouw.Adversary.transcript": "1c56533d3d4595cfc187b83eb4ebc10ce9f0cf92783432e59c89ab2637657571",
     "Pouw.AuditAccepts": "a820eec4f37801f83a13f329d4e98bde106b2d261626f37790d09d7525eb9eff",
+    "Pouw.AuditAcceptsTol": "cdf12ac80d402896e81c4a50aa9e61d11b01c60e6413960b52bfb530c6661b62",
     "Pouw.Checked": "9babb72b7f36e7cbcb114a72e4bc13aa45fe9532d3f78d9df308ef3183f36a8c",
     "Pouw.CheckedOK": "adbd3e8bfb156131721c35fe71de78f0edcbc8b3305ced9d760069b0d7a7e4fd",
     "Pouw.Commit": "35e054f707da97f9d81156e7654fa25a4fcf489d657cfb72254ba37ecefcbd99",
@@ -26718,6 +26762,7 @@
     "Pouw.Workload.weight": "347a358b6cbe9912d096ec6adcd9ed71eddd137823226db66ae9acafd7e24c95",
     "Pouw.checkedSet": "146cff53c42f69698486cd1002a89dfff5315f517b75cc10217efa290e265cc8",
     "Pouw.correctSet": "65f3c4235814c036237829734679ddc74ad3fb1c8cb2cb9936478538d6c56646",
+    "Pouw.drawsIn": "0fe3da60716106ff198ee4a1fe476d1d26728a6cbf7c72709b5b499d92d961d3",
     "Pouw.honestTranscript": "d0ce91268cb68b41923182075146f19131f52d328bb4a7b978211b1b749eee02",
     "Pouw.totalWref": "3d8335db3ac54640710d963c0f384ba2b1873c754407a631506112891ea4f35a"
    }
@@ -28139,7 +28184,7 @@
    }
   },
   "Definitions.Pouw.PearlC.Tile": {
-   "digest": "a9015415957d3a64b37eb85e76da6e51ae31431e9a3b1688c3c21365541742fe",
+   "digest": "bf14f4927e047f42ba867b54ca967d26ecaa43c84072540a68e8eed3d4037b2d",
    "definitions": {
     "Pouw.PearlC.GγSampled": "9279ec55cc7369b92f405866f30c59640610f26feb40111325cdad9ef8020a35",
     "Pouw.PearlC.PearlCSem.passRows": "501dbad8f3a8e06e8bb593ceaa0a7e85bcd2ce56d2ad81056371c8e4fb83fa22",
@@ -28162,6 +28207,7 @@
     "Pouw.PearlC.claimedWref": "692adf0dd8d465a09b58a1776b904a9ca66cb58fc11a5057b3605110e8f1cdd3",
     "Pouw.PearlC.goodTiles": "d5e0ad40614504f0ae1fadacbfdea02990b7b21c82bb1a265f7520f36fbe78e1",
     "Pouw.PearlC.gridTiles": "cd94e5959b68a2e8f30fb0dc72db8cd4817a255343b85f33bbfa7e4c7e5d9b39",
+    "Pouw.PearlC.overCapTiles": "a62b4bef31f9e001eafccee5ab8415eef43f6dc3200aa3b5fb41858d1d3c2de6",
     "Pouw.PearlC.pearlCTiles": "3b437f1f247b61f48446890a7d49baf412fa3fab511662237e866e5d0e2d3f3e",
     "Pouw.PearlC.tileShare": "e5769f881eba3e3067186ea9b70725c392bec6e7311827aa077a78e44fcb20fa",
     "Pouw.PearlC.tileWrefTotal": "386e9e51f5f23870c7a84efb172d3d877a87a0b0ee2b51bb608c59c1a613f9be"
@@ -28259,6 +28305,25 @@
     "Pouw.PearlC.TileCircuit.tileSpec": "6796c3ee4475f25e96aec852d6b085b7a00147715831c9a332168fc8635b24a2",
     "Pouw.PearlC.TileCircuit.uGate": "6b7b9b25a7f42c90e5fff1be9f7c0e2c1136472cf07f8ab3df68f6370e816232",
     "Pouw.PearlC.TileCircuit.val": "5eba5b68841a39918695a18e0e73ccd6a967f7f072c3c12129067f507623d17e"
+   }
+  },
+  "Definitions.Pouw.PearlC.TileDraw": {
+   "digest": "651ebc2b476b322e3bf6395aa20ed3c9ecc4fba952230ece70b3a73ef99cb643",
+   "definitions": {
+    "Pouw.PearlC.Decl": "141fb994d42557b746b1ecc75426b646cfc1c3469e75ab7614bd66e4a92c64dc",
+    "Pouw.PearlC.Decl.cols": "e1ce13ba51bd3add61f510baa924d9f013c702b55c7fa80ae8013735e404aeb7",
+    "Pouw.PearlC.Decl.kept": "0b0c019bb2854eb81ad1deb35c69a3c81454270f59dc7f19828577107ed6d228",
+    "Pouw.PearlC.Decl.rows": "4c695d0ca526ee20bc2d6468e9783f08b39597e06b3c7e30d2e1e1b8b24a1380",
+    "Pouw.PearlC.GγSampledDraw": "7e15f72467fcb1c36d14725aa5fe91ff0450abe16a5fe4329a3b2a6e7f008ffe",
+    "Pouw.PearlC.GγSampledDrawTolThreshold": "b071fc20cb5c717883102e93ef5cb9c0ff4cba333d767678450fbe25aa3ccecc",
+    "Pouw.PearlC.claimedDraw": "7e1f80a332b907b43ae3a928c34471415c9f6aa93e90b6fc2c6624a660aafe62",
+    "Pouw.PearlC.declOK": "5f965b450232e6b5793c38d8a3aec92b13321694619aa0c4149a1f11ef755156",
+    "Pouw.PearlC.drawTickets": "764c9b72ba32fd18079e7acb3eca9b3fb23b17758b6c35521acdabd450c1e433",
+    "Pouw.PearlC.drawWeight": "67cd9cd36eec721ff6df12d643bff2ab593954f98ab944073523755e2ba11d3b",
+    "Pouw.PearlC.goodDeclTiles": "6e351acd87bf7b3c78a865b20f19768f3d84bcc15e1f56f3513ffb05a1e84ebe",
+    "Pouw.PearlC.pearlCDrawRev1": "fb780da95e93f59caa6df42cb17b21821f380d460faf98f905796a62a6bd533a",
+    "Pouw.PearlC.ticketsOf": "bb645cc836030831ef35ab6b121010e070c66d9e779c765acc9e9382f15212d7",
+    "Pouw.PearlC.wrefRowRev1": "28fe9d0394f33dc6591180ffdf040e620032a119e385adcffaedbe0c9ae98b69"
    }
   },
   "Definitions.Pouw.PearlC.W1": {
