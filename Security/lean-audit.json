@@ -1180,7 +1180,7 @@
   },
   "Nci.Assumptions.CapBelowColumns": {
    "owner": "@lean",
-   "digest": "262ba2aed142115072e7844249a6590b20774b9b1ce794439419059af36e6a43"
+   "digest": "aae638ad32224f459cb0a973699c9e18f2a594f1d9c5bdf7d8950250e5a03598"
   },
   "Nci.Assumptions.CheatingAtMost": {
    "owner": "@training",
@@ -1256,7 +1256,7 @@
   },
   "Nci.Assumptions.PouwPerWindow": {
    "owner": "@training",
-   "digest": "a0c7452a234c6c066ada42f4fd69f3611d4879b4959dd4a7fb0cc7e8be4c989f"
+   "digest": "73c9272c6730698f6165c13cdc251d08c790d55adbdb9688fff024707355941a"
   },
   "Nci.Assumptions.PouwSound": {
    "owner": "@lean",
@@ -1296,7 +1296,7 @@
   },
   "Nci.Assumptions.SampledPerWindow": {
    "owner": "@training",
-   "digest": "b4551085c57fd3e5842a71c3536b642b66b067f48ef4e25eb2784fa717330588"
+   "digest": "77104bd85c50c8f0996b5b055c8263f036328b6ed9d9730b5ec70e223843542d"
   },
   "Nci.Assumptions.SourceHard": {
    "owner": "@training",
@@ -1344,11 +1344,11 @@
   },
   "Nci.Assumptions.WindowLength": {
    "owner": "@lean",
-   "digest": "75fc88ca4a46d35c94a12a39979bd2e18b2b8099c0467558c9f238e28f088144"
+   "digest": "b88a4399e57fec983f33b9108140c60973f74a6c19df53ed3345a650cda9940a"
   },
   "Nci.Assumptions.WindowsHold": {
    "owner": "@lean",
-   "digest": "4ecb0fe6367123c89e464fb645d8543789989e21aa6e18f491e028d25c08be17"
+   "digest": "05d3f99ad636dda34c9d92cc4c56cee029364a7e7adf70614357df19b374e68f"
   },
   "Nci.Assumptions.WithinBlock": {
    "owner": "@lean",
@@ -1396,11 +1396,11 @@
   },
   "Nci.Cover.Assumptions.BlockFits": {
    "owner": "@training",
-   "digest": "ee906bc2d535d5ad6a83af3e953d5cabc91620eb72a0a6901a7a70ab97faaca9"
+   "digest": "6c8a39590d5ed889ee6d76adba07cee9e4ce74f76ad35fd00388552b0cf4a1fd"
   },
   "Nci.Cover.Assumptions.CapBelowDepth": {
    "owner": "@training",
-   "digest": "b6a2e9a44600c3a9661d08320279a30d4f6aaaad8e812302fd44694922c961aa"
+   "digest": "4a59a4806a27c95100ab3b95c905c33acb34c61829b50f990a197d9ea06dc17d"
   },
   "Nci.Cover.Assumptions.ColumnsIncompressible": {
    "owner": "@training",
@@ -1457,6 +1457,78 @@
   "Nci.Covering.Covers": {
    "owner": "@compute-accounting",
    "digest": "9c96012ae81b0ff1a9f66f26485d7cd844a7b00cd5e99fd4e72ecc0d6fc3035a"
+  },
+  "Nci.Formalism.Annotation.Valid": {
+   "owner": "@training",
+   "digest": "cb976b329589b2866775b70a459f1333ed2df278cfc0413164a7d6865955151d"
+  },
+  "Nci.Formalism.Annotation.WorkPerBit": {
+   "owner": "@training",
+   "digest": "7bdd11c2cba1213609919fd49575d0c00d26f086f9a078736adc80886b5ffde8"
+  },
+  "Nci.Formalism.Assumptions.CutCost": {
+   "owner": "@training",
+   "digest": "6f7541ca1175cad38a3a58df3032ca71d908a492f15dde825421e128bad8c5b4"
+  },
+  "Nci.Formalism.Assumptions.EfficiencyFloor": {
+   "owner": "@training",
+   "digest": "10a23be267b3535ede3be1dc5f00a9f08200bcc1a81e1e8488d295e77031d75e"
+  },
+  "Nci.Formalism.Assumptions.TokenWork": {
+   "owner": "@training",
+   "digest": "d17288db09108dcb49f4caaf63f493763bd14c3f660dbe809178307fec2a498a"
+  },
+  "Nci.Formalism.Caps": {
+   "owner": "@training",
+   "digest": "341559f3ef65736d8b2f54aba57f2fa4b9b92c503e50d7fd19f28720f35c58c7"
+  },
+  "Nci.Formalism.GateSet": {
+   "owner": "@training",
+   "digest": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e"
+  },
+  "Nci.Formalism.InPeriods": {
+   "owner": "@training",
+   "digest": "2e9c8f7af1c83a77da3bc7a6cb8c309403d4e72509733fdede069044836a1e79"
+  },
+  "Nci.Formalism.InferenceBlock": {
+   "owner": "@training",
+   "digest": "051d470c6f69d6fa95188b5511f234920621994dbf94255920a2c59f483e776f"
+  },
+  "Nci.Formalism.PartitionBound": {
+   "owner": "@training",
+   "digest": "0efdf3fb0d8f5335cb985e182b6c341fd479b1ed34be23cac225dc95def769f6"
+  },
+  "Nci.Formalism.PeakAtMost": {
+   "owner": "@training",
+   "digest": "d846aaf90484906bcd76942d72dc6be57f5601ddaff436fd6e475ca537f48dce"
+  },
+  "Nci.Formalism.Run.Among": {
+   "owner": "@training",
+   "digest": "d5db13c72b34859a9308ac0ded9b0203e2d3efd37c51faa2a22e3b994542e247"
+  },
+  "Nci.Formalism.Run.Reaches": {
+   "owner": "@training",
+   "digest": "adc282a207f99fc85220964a134b1487df52085b85deba8bdf0de92dcf2377ef"
+  },
+  "Nci.Formalism.Run.Within": {
+   "owner": "@training",
+   "digest": "95f913d00b89c636477a1bf3d9c0a83455b5f5f0489aa40c336c351abe977792"
+  },
+  "Nci.Formalism.ServingFits": {
+   "owner": "@training",
+   "digest": "9362c658fc805110812ff7fed480889858ba419e8ac09d892301fc1e6440a7b4"
+  },
+  "Nci.Formalism.SessionBlocks": {
+   "owner": "@training",
+   "digest": "7a5b062f583e6adef87ad44a6639c7d7e68defa02bca99207acfe26349d472d8"
+  },
+  "Nci.Formalism.TrainingBlocks": {
+   "owner": "@training",
+   "digest": "e3c33e2b849c3b792833dc2980a0ffe283dd178a0ff9737b5430b7e6fac31936"
+  },
+  "Nci.Formalism.TrainingFits": {
+   "owner": "@training",
+   "digest": "b708a3fe8eb9aecf99d6e6ee46afc57aee936c361957b2e2c85ad49e028467a7"
   },
   "Nci.Ldl.Assumptions.ActivationRate": {
    "owner": "@training",
@@ -2128,7 +2200,7 @@
   },
   "Verity.Partition.IsCK": {
    "owner": "@lean",
-   "digest": "87b4741808fe13ef55c92c4f2ea30a647f0eda9918c2d42cdc91f8c9efa55829"
+   "digest": "7022e53569d6e81aa4d134c8af406a451fc85818d71cf6de766aa7e784f4db68"
   },
   "Verity.Rec.Compiled.ByShape": {
    "owner": "@lean",
@@ -2988,6 +3060,41 @@
   "Flock.SecurityProofs.LoopInnerRound0Own": {
    "honest": ["Flock.SecurityProofs.LoopInnerRound0Own_honest"],
    "nontrivial": "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial"
+  },
+  "Nci.Formalism.SecurityProofs.Counting": {
+   "honest": ["Nci.Formalism.SecurityProofs.Counting_honest"],
+   "nontrivial": "Nci.Formalism.SecurityProofs.Counting_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Formalism.SecurityProofs.TokenCap": {
+   "honest": ["Nci.Formalism.SecurityProofs.TokenCap_honest"],
+   "nontrivial": "Nci.Formalism.SecurityProofs.TokenCap_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Formalism.SecurityProofs.Slowdown": {
+   "honest": ["Nci.Formalism.SecurityProofs.Slowdown_honest"],
+   "nontrivial": "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Formalism.SecurityProofs.Security": {
+   "honest": ["Nci.Formalism.SecurityProofs.Security_honest"],
+   "nontrivial": "Nci.Formalism.SecurityProofs.Security_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Formalism.SecurityProofs.FitServing": {
+   "honest": ["Nci.Formalism.SecurityProofs.FitServing_honest"],
+   "nontrivial": "Nci.Formalism.SecurityProofs.FitServing_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Formalism.SecurityProofs.FitTraining": {
+   "honest": ["Nci.Formalism.SecurityProofs.FitTraining_honest"],
+   "nontrivial": "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
+   "kind": "exclusion"
+  },
+  "Verity.SecurityProofs.CKSize": {
+   "honest": ["Verity.SecurityProofs.CKSize_honest"],
+   "nontrivial": "Verity.SecurityProofs.CKSize_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -3317,7 +3424,9 @@
   "Verity.SecurityProofs.CreditSizeLe": "1d82216e931154c5b736226230471bd9983409d8bd95d9d21ef3b787124dcb6c",
   "Flock.SecurityProofs.JointHorizonV5": "6bf001db90d1e2f2293065e87750097905100b4b3bfaefd4f26474959f331d72",
   "Flock.SecurityProofs.JointSampledV5": "2ab8f9edfaf8c3dbbcf8b9fa37933dd79f84b94347d45e1a3fe266d199210b76",
-  "Flock.SecurityProofs.JointShareV5": "021a8367cbb384241ac411da6a2b8a523ce3aba4efe29fc8d6ba1e1a0add071f"
+  "Flock.SecurityProofs.JointShareV5": "021a8367cbb384241ac411da6a2b8a523ce3aba4efe29fc8d6ba1e1a0add071f",
+  "Nci.SecurityProofs.Inference": "9577814bc7cda3860fee9d3428ecde7e11d7299009a1d3bfb405e11c92e5c600",
+  "Nci.SecurityProofs.UpdatedMatMulReads": "3d44d307610a81a4747f64dcc7d3945c2dcfe9ea92f7a0339d49a79417e45c83"
  },
  "layers": {
   "Definitions.Core": {
@@ -8209,6 +8318,126 @@
    "assumptions": [],
    "type_hash": "8cde8a03744aead7d37650a220d532f712e5bda0a694ddcc01fc4a95f6f2e08e"
   },
+  "Nci.Formalism.SecurityProofs.Counting": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.Counting : Nci.Formalism.Guarantees.Counting"],
+   "assumptions": [],
+   "type_hash": "96c5ec87f0094bf26dad0608ccc8e4aca5b07c8c8daf55870a94e21c7ce8e320"
+  },
+  "Nci.Formalism.SecurityProofs.Counting_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.Counting_honest : Nci.Formalism.Guarantees.Counting_honest"],
+   "assumptions": [],
+   "type_hash": "b10ec018942105655f56fef0e92100c9a101d1b53d359eb44cc2b48ae008f9d5"
+  },
+  "Nci.Formalism.SecurityProofs.Counting_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.Counting_nontrivial : Nci.Formalism.Guarantees.Counting_nontrivial"],
+   "assumptions": [],
+   "type_hash": "2916c4d34047aedd76252d35416171baf1d1c692683ca2118ba1d243bc7025da"
+  },
+  "Nci.Formalism.SecurityProofs.FitHonestServing": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.FitHonestServing : Nci.Formalism.Guarantees.FitHonestServing"],
+   "assumptions": [],
+   "type_hash": "bfae53c68d0f93781f091c9e81afeeecb98e024d9594055698b9c2db9aecc35d"
+  },
+  "Nci.Formalism.SecurityProofs.FitServing": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.FitServing : Nci.Formalism.Guarantees.FitServing"],
+   "assumptions": [],
+   "type_hash": "e495189c93343b179f33a6e3dc20b0e59b31ff2ba0ea94c144900aebaa47672d"
+  },
+  "Nci.Formalism.SecurityProofs.FitServing_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.FitServing_honest : Nci.Formalism.Guarantees.FitServing_honest"],
+   "assumptions": [],
+   "type_hash": "7bd5fa3db95d5252a3b9d113b6f187507277577f65a917beddd1a45171e0cf05"
+  },
+  "Nci.Formalism.SecurityProofs.FitServing_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.FitServing_nontrivial : Nci.Formalism.Guarantees.FitServing_nontrivial"],
+   "assumptions": [],
+   "type_hash": "e90625923ba8586020b0987f4b2c4b47b0089548cbcb73a0204303fcc6c0c58c"
+  },
+  "Nci.Formalism.SecurityProofs.FitTraining": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.FitTraining : Nci.Formalism.Guarantees.FitTraining"],
+   "assumptions": [],
+   "type_hash": "13cfd833481570bc9c77447603c713773b929bbf159c95ed608e485233e21cf7"
+  },
+  "Nci.Formalism.SecurityProofs.FitTraining_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.FitTraining_honest : Nci.Formalism.Guarantees.FitTraining_honest"],
+   "assumptions": [],
+   "type_hash": "285bd5f860212f82b59cd28446cd3a686f049a8361a04e2f585cc87100ff3842"
+  },
+  "Nci.Formalism.SecurityProofs.FitTraining_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.FitTraining_nontrivial : Nci.Formalism.Guarantees.FitTraining_nontrivial"],
+   "assumptions": [],
+   "type_hash": "a2e416e64a3c7e18867956a05e3d0c38262e210d1dac1b439fa94770011e7bb7"
+  },
+  "Nci.Formalism.SecurityProofs.Security": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.Security : Nci.Formalism.Guarantees.Security"],
+   "assumptions": [],
+   "type_hash": "e6bfd536653a805aeeb68fe25b8f0891329f10521bf1e08190cec749f536ac0f"
+  },
+  "Nci.Formalism.SecurityProofs.Security_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.Security_honest : Nci.Formalism.Guarantees.Security_honest"],
+   "assumptions": [],
+   "type_hash": "32b38a599b1f46fb34a5b18aaa1d1360e558eaf9c01e26c1730d01790f878e63"
+  },
+  "Nci.Formalism.SecurityProofs.Security_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.Security_nontrivial : Nci.Formalism.Guarantees.Security_nontrivial"],
+   "assumptions": [],
+   "type_hash": "7b245c6be9e31a9c731ca73213290b1ec8f185cb520cf2a2a66ffc3cffa066e8"
+  },
+  "Nci.Formalism.SecurityProofs.Slowdown": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.Slowdown : Nci.Formalism.Guarantees.Slowdown"],
+   "assumptions": [],
+   "type_hash": "ba14aa73d3305b0ebe3f9f179382ced038d2bb3cb762a14e3edaaadaad14e0cd"
+  },
+  "Nci.Formalism.SecurityProofs.Slowdown_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.Slowdown_honest : Nci.Formalism.Guarantees.Slowdown_honest"],
+   "assumptions": [],
+   "type_hash": "6d03942408b3bccf5ac45b1c11764ca669a6cb3945282275b6c9d87215b45dcd"
+  },
+  "Nci.Formalism.SecurityProofs.Slowdown_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.Slowdown_nontrivial : Nci.Formalism.Guarantees.Slowdown_nontrivial"],
+   "assumptions": [],
+   "type_hash": "8c096d237b91c06c539129c94179a07a86ccb30f0a957146abf518d2e0991320"
+  },
+  "Nci.Formalism.SecurityProofs.TokenCap": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.TokenCap : Nci.Formalism.Guarantees.TokenCap"],
+   "assumptions": [],
+   "type_hash": "38ba091a0645f4ca040d35881517e921b79544f0ed75743d4374d1ac71a4d0e3"
+  },
+  "Nci.Formalism.SecurityProofs.TokenCapClean": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.TokenCapClean : Nci.Formalism.Guarantees.TokenCapClean"],
+   "assumptions": [],
+   "type_hash": "cdddad07cca1322a3635d718e77a334309334d7770dac3b8afa5d3855986251e"
+  },
+  "Nci.Formalism.SecurityProofs.TokenCap_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.TokenCap_honest : Nci.Formalism.Guarantees.TokenCap_honest"],
+   "assumptions": [],
+   "type_hash": "434577cdd327c6df9356c83a874563e51f34700206228d26aaa8979518fd4ae0"
+  },
+  "Nci.Formalism.SecurityProofs.TokenCap_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Formalism.SecurityProofs.TokenCap_nontrivial : Nci.Formalism.Guarantees.TokenCap_nontrivial"],
+   "assumptions": [],
+   "type_hash": "e7a18d6079a11ae11f32255c6bb8e6c7ef16d33c5f1607672b3ff340a8ca0b9d"
+  },
   "Nci.Ldl.SecurityProofs.BlockDescription": {
    "owner": "@training",
    "signature": ["Nci.Ldl.SecurityProofs.BlockDescription : Nci.Ldl.Guarantees.BlockDescription"],
@@ -11570,6 +11799,18 @@
    "assumptions": [],
    "type_hash": "d29489247f5da3d50fd1a297d4dedec5e94940fa1ff83ecab62fd5b8fae592df"
   },
+  "Verity.SecurityProofs.CKSize_honest": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.CKSize_honest : Verity.Guarantees.CKSize_honest"],
+   "assumptions": [],
+   "type_hash": "18290bcdc7e31898f7382e147bc6505e1b1dc89875723c87707b8bba853376e6"
+  },
+  "Verity.SecurityProofs.CKSize_nontrivial": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.CKSize_nontrivial : Verity.Guarantees.CKSize_nontrivial"],
+   "assumptions": [],
+   "type_hash": "2272ed38498bee7b4cf314d5e00e5f27ae4f5d62b35ad6bc7dfb1b8e0c808c94"
+  },
   "Verity.SecurityProofs.CapacityWithinEstimate": {
    "owner": "@soundness",
    "signature": ["Verity.SecurityProofs.CapacityWithinEstimate : Verity.Guarantees.CapacityWithinEstimate"],
@@ -11749,12 +11990,6 @@
    "signature": ["Verity.SecurityProofs.PackSoundComplete : Verity.Guarantees.PackSoundComplete"],
    "assumptions": [],
    "type_hash": "4c3bae588a8b15087f0b98c7fee1a916e24956b95df6fd0453546703c7f048e0"
-  },
-  "Verity.SecurityProofs.Padding": {
-   "owner": "@lean",
-   "signature": ["Verity.SecurityProofs.Padding : Verity.Guarantees.Padding"],
-   "assumptions": [],
-   "type_hash": "9d099908575f929e292eacd34b28c58d0cca723ea0b2700691e5b7ecf4782e3a"
   },
   "Verity.SecurityProofs.PrivateFitsOfLocal": {
    "owner": "@proofs",
@@ -13028,19 +13263,18 @@
    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on an 8xH200 server's HBM and host RAM, a 3,128 GB fill with 3.9 GB outside it, at r = 2922 and k = 261,229 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on a whole 8xH200 server, a 15,128 GB fill of every tier with 3.9 GB outside it, at r = 14,183 and k = 1,268,143 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsDisk": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) on one session over a server's tiers and its disks, n + f labels on M + 8 D bits with the disks' 8 D - 512 f bits outside the fill in R (Security/Definitions/Pous/Model/StreamedWipeDisk.lean), at its threshold B(n + f, r, k, R), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Verity.SecurityProofs.CKSize": "frozen (no-function): It is about an arbitrary Boolean declaration and a (c,k)-partition of it (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), the working draft's |C| = c B, not about a function's code; the NCI check joined to it is what would give it an acceptance.",
+   "Verity.SecurityProofs.CKSize": "frozen (no-function): It is about an arbitrary Boolean declaration and a (c,k)-partition of it (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), the working draft's |C| <= c B, not about a function's code; the NCI check joined to it is what would give it an acceptance.",
    "Verity.SecurityProofs.BlockDescription": "frozen (no-function): It is the working draft's Lemma 1, about an arbitrary committed declaration of a (c,k)-partition, a decoder and an extraction rule that a fixed evaluator performs (Verity.Committed, Verity.Decoder, Verity.LDL, Verity.Evaluates, Security/Definitions/Core/Formalism.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
    "Verity.SecurityProofs.CountingSum": "frozen (no-function): It is the working draft's Theorem 3 summed over any partition (Verity.Partition, Security/Definitions/Core/Partition.lean) with per-block allowances, about an arbitrary circuit, not about a function's code; the serving-block bound applies it to the actual circuit's partitions.",
-   "Verity.SecurityProofs.Counting": "frozen (no-function): It is the working draft's Theorem 3, about an arbitrary (c,k)-partition, counted gates and an allowance (Verity.Partition.IsCK, Verity.slowdown, Security/Definitions/Core/Formalism.lean), not about a function's code; the NCI check joined to it is what would give it an acceptance.",
+   "Verity.SecurityProofs.Counting": "frozen (no-function): It is the working draft's Theorem 3, about an arbitrary (c,k)-partition, counted gates and an allowance, each block priced at c gates (Verity.Partition.IsCK, Verity.slowdown, Security/Definitions/Core/Formalism.lean), not about a function's code; the NCI check joined to it is what would give it an acceptance.",
    "Nci.SecurityProofs.PartitionCovers": "frozen (no-function): It is the working draft's Lemma A.1, about an arbitrary (c,k)-partition (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean) and the covering its completed blocks give (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Verity.SecurityProofs.ExpandEval": "frozen (no-function): It is about an arbitrary multi-bit circuit and its bit-level expansion (Verity.Circuit.expand, Security/Definitions/Core/Expand.lean), the expansion computing the circuit bit for bit, not about a function's code; NciCheck.Properties.LaysOut joined to it is what would give the NCI check's circuit the draft's Boolean form.",
    "Verity.SecurityProofs.ExpandBits": "frozen (no-function): It is about an arbitrary circuit's bundles (Verity.Circuit.bits) read through its bit-level expansion (Security/Definitions/Core/Expand.lean), not about a function's code.",
    "Verity.SecurityProofs.ExpandBoolean": "frozen (no-function): It is about an arbitrary circuit whose computed gates of positive width read a gate of positive width (Verity.Circuit.BitFaninPos, Security/Definitions/Core/Expand.lean): its expansion is Boolean in the working draft's sense; not about a function's code.",
    "Verity.SecurityProofs.ExpandSize": "frozen (no-function): It is about an arbitrary registered circuit, a partition of it and their expansions (Verity.RegisteredCircuit.expand, Verity.Partition.expand, Security/Definitions/Core/Expand.lean): sizes become widths and a block's unregistered reads do not grow; not about a function's code.",
-   "Verity.SecurityProofs.Padding": "frozen (no-function): It is about an arbitrary Boolean declaration whose chosen blocks have at most c gates, padded to exactly c gates with the others unchanged and every block's unregistered reads kept (Verity.Pad, Security/Definitions/Core/Formalism.lean): the serving blocks at c_S beside the dark remainder, and a (c,k)-partition when every block is chosen; not about a function's code.",
    "Verity.SecurityProofs.ServingBlockSum": "frozen (no-function): It is the working draft's Theorem 3 at the serving blocks, the serving-block bound's per-block minimum summed over any partition with a dark remainder (Verity.Partition, Security/Definitions/Core/Partition.lean), about an arbitrary circuit, not about a function's code.",
    "Verity.SecurityProofs.InferenceCap": "frozen (no-function): It is the serving-block bound's inference cap, about an arbitrary circuit with inference blocks refining serving blocks (Verity.Partition.Refines, Security/Definitions/Core/Partition.lean), not about a function's code.",
-   "Nci.SecurityProofs.CompliesCK": "frozen (no-function): It is about an arbitrary Boolean declaration that complies with the inference-only policy at a rate (Nci.CompliesRate, Security/Definitions/Nci.lean), padded to a (c,k)-partition (Verity.Pad, Verity.Partition.IsCK), not about the NCI check's code; NciCheck.Properties.Witnesses joined to it is what would give it an acceptance.",
+   "Nci.SecurityProofs.CompliesCK": "frozen (no-function): It is about an arbitrary Boolean declaration that complies with the inference-only policy at a rate (Nci.CompliesRate, Security/Definitions/Nci.lean), whose division into inference blocks is a (c,k)-partition (Verity.Partition.IsCK), not about the NCI check's code; NciCheck.Properties.Witnesses joined to it is what would give it an acceptance.",
    "Nci.SecurityProofs.ExpandComplies": "frozen (no-function): It is about an arbitrary multi-bit registered circuit that complies with the inference-only policy at a rate (Nci.CompliesRate, Security/Definitions/Nci.lean) and its bit-level expansion (Verity.RegisteredCircuit.expand, Security/Definitions/Core/Expand.lean), not about the NCI check's code.",
    "Verity.SecurityProofs.AndSizeLe": "frozen (no-function): It is about an arbitrary circuit and set of its gates (Verity.Circuit.andSize, Security/Definitions/Core/Formalism.lean): its AND gates are operation gates, so the AND count is at most the size; not about a function's code.",
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, Security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code.",
@@ -13185,7 +13419,29 @@
    "Flock.SecurityProofs.JointShareV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with more than an eps share of the window's proof blocks incorrect by the law's largest miss of such a set plus the members' eps_ks and eps_bind, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointShareV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Flock.SecurityProofs.JointHorizonV5": "frozen (no-function): JointSampledV5's window audit (JointAuditV5) over a monitoring period of T windows played as one causal game against one adaptive prover (periodG): the probability that every window accepts and the windows' incorrect proof blocks lie outside the period's confidence set at delta (the windows' laws miss them together with probability at least delta, and their ANDs and output bits in all are at most the most any choice in that set holds) is at most delta plus the sum of the windows' eps, under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays); a Verity.Game.value event over the period's run rather than a run of a Lean function; it reads JointHorizonV5 (Security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function."
+   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
+   "Nci.Formalism.SecurityProofs.Counting": "frozen (no-function): The counting lemma over kinds: it is about an arbitrary declaration, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, Security/Definitions/Nci/Formalism/Inference.lean), kinds that each give a bound for the whole partition (Nci.Formalism.PartitionBound, Security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.TokenCap": "frozen (no-function): The token kind's cap from A1 and the token-work bound: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, Security/Definitions/Nci/Formalism/Training.lean) and a set of its token gates, at every inference block, under the named CutCost and TokenWork (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.TokenCapClean": "frozen (no-function): The token cap's clean form, beside it, which gives the named TokenWork (Security/Definitions/Nci/Assumptions/Formalism.lean) from a bound on the token work per bit of state: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, Security/Definitions/Nci/Formalism/Training.lean) and a set of its token gates, reading no partition, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.Slowdown": "frozen (no-function): Slowdown, the one bound: the counting lemma over kinds with the token kind's cap from the token-work bound: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, Security/Definitions/Nci/Formalism/Training.lean), a set of its token gates, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, Security/Definitions/Nci/Formalism/Inference.lean), kinds that each give a bound for the whole partition (Nci.Formalism.PartitionBound, Security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost and TokenWork (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.FitServing": "frozen (no-function): Fit's construction for running θ': it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.FitHonestServing": "frozen (no-function): FitServing at Δ = 0 with no decoder, beside it: it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.FitTraining": "frozen (no-function): Fit's construction for training: it is about an arbitrary Boolean declaration and a Verity.Partition of it into training blocks (Nci.Formalism.TrainingBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.Security": "frozen (no-function): Security: it is about an arbitrary run of a class of methods (Nci.Formalism.Run, Security/Definitions/Nci/Formalism/Runs.lean) and a partition of its declaration into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost, TokenWork and EfficiencyFloor (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.Counting_honest": "completeness: The counting lemma's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), the kind of the token's gates {3, 4} has the cap 1, every inference block at (c, k) = (1, 1) holding at most one of its gates, the partition-level bound 1, which every partition into blocks of one gate meets with its |C| = 4 blocks, and its four gates, each a block of its own, are a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Formalism.SecurityProofs.Counting_nontrivial": "lemma: The counting lemma's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the kind {3, 4} with the cap 1, the partition-level bound 1 and (c, k) = (1, 1), whole, one block of its four gates, is no partition into inference blocks, and the bound max(1/2, 1) = 1, the kind's (|B_K| / |C|) / (cap_K / c) = 1/2 beside the partition-level 1, is above whole's price 1/4. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Formalism.SecurityProofs.TokenCap_honest": "completeness: The token cap's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its premises hold together at (c, k) = (1, 1): A1 at the witness block of the token's three gates, which reads the new weight alone, one shared bit and none of the token's state, the token-work bound at the cap 1 on the token gates {3, 4}, and the block of gate 3, an inference block. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation and A1's checked witness blocks, which no check reads yet, would supply the deployed premises.",
+   "Nci.Formalism.SecurityProofs.TokenCap_nontrivial": "lemma: The token cap's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the witness block of gates 2 and 4, which reads the new weight and gate 3's value, A1 fails: that witness block reads one shared bit, the new weight, and one bit of the token's state, gate 3, so A1 prices every block that works on the token at two bits, and the block of gate 3 reads one; A1's budget then admits no block that works on the token, so the token-work bound holds at the cap 0, and the block of gate 3, an inference block, holds one of the token gates {3, 4}, above the cap 0. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Formalism.SecurityProofs.Slowdown_honest": "completeness: Slowdown's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its premises hold together at (c, k) = (1, 1): its valid annotation, A1 at the witness block of the token's three gates, which reads the new weight alone, one shared bit and none of the token's state, the token-work bound at the cap 1 on the token gates {3, 4}, the cap 1 on the kind of the new weight {1}, the partition-level bound 1, which every partition into blocks of one gate meets with its |C| = 4 blocks, and its four gates, each a block of its own, a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Formalism.SecurityProofs.Slowdown_nontrivial": "lemma: Slowdown's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the witness block of gates 2 and 4, which reads the new weight and gate 3's value, and the rest as in its honest lemma, every premise but A1 holds, the token-work bound at the cap 0 among them, A1 fails: that witness block reads one shared bit, the new weight, and one bit of the token's state, gate 3, so A1 prices every block that works on the token at two bits, and the block of gate 3 reads one, and the bound, ⊤ at the cap 0, is above the blocks' price 1. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Formalism.SecurityProofs.Security_honest": "completeness: Security's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its run the one method, with a decoder that outputs nothing, D = ⊤, the loss 0 and ℓ* = 0, its premises hold together, A1, the token-work bound and A2 among them, at p = 1, (c, k) = (1, 1), its four blocks in one period of four, and Slowdown's premises as in Slowdown's honest lemma. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Formalism.SecurityProofs.Security_nontrivial": "lemma: Security's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the witness block of gates 2 and 4, which reads the new weight and gate 3's value, and the rest as in its honest lemma, every premise but A1 holds, the token-work bound and A2 among them, A1 fails: that witness block reads one shared bit, the new weight, and one bit of the token's state, gate 3, so A1 prices every block that works on the token at two bits, and the block of gate 3 reads one, and ρ̲ p H(ℓ*), ⊤ at the token kind's cap 0, is above N n c = 4. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Formalism.SecurityProofs.FitServing_honest": "completeness: Fit's honest lemma for running θ': at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), its two blocks of one gate are session blocks, each reading a description of one value and one token's one data bit, and Δ + s τ = 2 fits k = 2, with no decoder. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a served model's partition into session blocks, which no check reads yet, would supply the deployed premises.",
+   "Nci.Formalism.SecurityProofs.FitServing_nontrivial": "lemma: Fit's nontrivial lemma for running θ': at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), at k = 1 its session blocks' Δ + s τ = 2 does not fit, and the token's gate reads two values beyond the weight, so no partition into inference blocks exists and ρ = ⊤, above c / (c - d) = 1. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Formalism.SecurityProofs.FitTraining_honest": "completeness: Fit's honest lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), its two blocks of one gate are compute blocks that fit at k = 2, with Δ = Δ_t = Δ_grad = s = τ = 1 and no decoder. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's partition into training blocks, which no check reads yet, would supply the deployed premises.",
+   "Nci.Formalism.SecurityProofs.FitTraining_nontrivial": "lemma: Fit's nontrivial lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), at k = 1 its blocks don't fit, no partition into inference blocks exists, and ρ = ⊤, above c / (c - d) = 1. A counterexample at an instance, not a property of a Lean function.",
+   "Verity.SecurityProofs.CKSize_honest": "completeness: CKSize's honest lemma: at Honest (Verity.Formalism.Honest, Security/Definitions/Core/Formalism/Instances.lean), the proof blocks {1, 2} and {3} of a chain of three gates after a registered input, its premise holds at (c, k) = (2, 1), the second proof block having one gate, under c. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound and rests on no run and no art:.",
+   "Verity.SecurityProofs.CKSize_nontrivial": "lemma: CKSize's nontrivial lemma: at Counter (Verity.Formalism.Counter, Security/Definitions/Core/Formalism/Instances.lean), the same chain's three operation gates in one proof block, its premise fails at (c, k) = (2, 1), and so does the bound, |C| = 3 > 2 * 1. A counterexample at an instance, not a property of a Lean function."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -14982,9 +15238,6 @@
     "Finset.instPartialOrder.le V C.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i : Fin nf), Real.instLE.le ((Finset.instInter.inter (Finset.instSDiff.sdiff V U) (Pf.gates i)).sum fun v => ω v) q": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Verity.SecurityProofs.Padding": {
-    "∀ (u : Fin B), SetLike.instMembership.mem S u → instLENat.le (P.gates u).card c": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Verity.SecurityProofs.ProbBatchInduced": {
     "∀ (s : g.Strategy), Cls s → ENNReal.instLE.le (Verity.Game.prob Q g s) ε": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : g.Strategy), g.InducedAt post pre σ s → Cls s": "g.InducedAt taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -15048,53 +15301,8 @@
    "Verity.SecurityProofs.RegisteredMeets": {
     "Eq (Verity.Advice.Registration.root H F A r) root": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.DampenerRemotePeriod": {
-    "Real.instLE.le (Finset.univ.sum fun t => c t) C": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ ξ' : (t : Fin T) → Ω t), (∀ (s : Fin T), instLTFin.lt s t → Eq (ξ s) (ξ' s)) → ∀ (b : β), Eq (win b) t → Iff (SetLike.instMembership.mem (bad ξ) b) (SetLike.instMembership.mem (bad ξ') b)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ ξ' : (t : Fin T) → Ω t), (∀ (s : Fin T), instLEFin.le s t → Eq (ξ s) (ξ' s)) → ∀ (b : β), Eq (win b) t → And (Iff (SetLike.instMembership.mem (drawn ξ) b) (SetLike.instMembership.mem (drawn ξ') b)) (Iff (SetLike.instMembership.mem (detected ξ) b) (SetLike.instMembership.mem (detected ξ') b))": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t t' : Fin T), Eq (idW t) (idW t') → instLTFin.lt t t' → Real.instLT.lt (τw t) (τw t')": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t) (b : β), SetLike.instMembership.mem (bad ξ) b → SetLike.instMembership.mem I (idW (win b))": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul Φ H) C": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t) (j : ι) (s : Real), Real.instLE.le ((Finset.filter (fun b => And (Eq (idW (win b)) j) (And (Real.instLE.le s (τw (win b))) (Real.instLE.le (τw (win b)) (instHAdd.hAdd s Δ)))) (bad ξ)).sum fun b => w b) (instHMul.hMul Φ Δ)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t) (b : β), SetLike.instMembership.mem (bad ξ) b → Real.instLE.le (w b) B": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : R), Real.instLE.le (instHMul.hMul b_a (Th i).M.card.cast) (instHMul.hMul (instHMul.hMul α ((Th i).bound (instHMul.hMul α Γ.cast) b_w dd e)) ((d i).D.size (d i).D.computed).cast)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : R), Real.instLE.le ((Th i).bound (instHMul.hMul α Γ.cast) b_w dd e) Λ": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (Finset.univ.sum fun i => ((d i).D.size (d i).D.computed).cast) C": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t), instLENat.le (M ξ) (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (Mu ξ) (Mr ξ)) (Finset.univ.sum fun i => (Th i).M.card)) (Mx ξ))": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mu ξ).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul mfu κ) U) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mr ξ).cast (instHDiv.hDiv (instHMul.hMul κ (instHAdd.hAdd (instHAdd.hAdd (instHSub.hSub C (instHMul.hMul (instHSub.hSub 1 εW) (W ξ))) (Nci.Dampener.wrongCapacity c fun t => wrong t ξ)) ((bad ξ).sum fun b => w b))) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mx ξ).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Verity.Game.prPMFReal (PMF.uniformOfFintype (Ω t)) fun a => wrong t (Function.update ξ t a)) p": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Verity.Game.prPMFReal (PMF.uniformOfFintype (Ω t)) fun a => ∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b)) (instHPow.hPow (instHSub.hSub 1 q) (Finset.filter (fun b => Eq (win b) t) (bad ξ)).card)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Verity.Game.prPMFReal (PMF.uniformOfFintype (Ω t)) fun a => And (Exists fun b => And (SetLike.instMembership.mem (bad ξ) b) (And (Eq (win b) t) (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b))) (∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (detected (Function.update ξ t a)) b))) (ks t)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => wrong t (Function.update ξ t a)) p": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => ∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b)) (instHPow.hPow (instHSub.hSub 1 q) (Finset.filter (fun b => Eq (win b) t) (bad ξ)).card)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => And (Exists fun b => And (SetLike.instMembership.mem (bad ξ) b) (And (Eq (win b) t) (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b))) (∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (detected (Function.update ξ t a)) b))) (ks t)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.Cover.SecurityProofs.CoverTraining": {
-    "Real.instLT.lt (instHMul.hMul α Γ.cast) (instHMul.hMul b D.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Fin c.D.N), instLENat.le (c.D.w g) w₀": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul w₀.cast Γ.cast) (instHMul.hMul α Γ.cast)) (c.D.width c.θ).cast) s.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul α₀ (c.D.size c.D.computed).cast) Mb.P.card.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.Cover.SecurityProofs.CoverTrainingAligned": {
-    "Real.instLT.lt (instHMul.hMul α Γ.cast) (instHMul.hMul b D.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : J), SetLike.instMembership.mem Mb.uses j → ∀ (a : Fin c.D.N), SetLike.instMembership.mem (Aw j) a → instLENat.le f (c.D.w a)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Fin c.D.N), instLENat.le (c.D.w g) w₀": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul w₀.cast Γ.cast) (instHMul.hMul α Γ.cast)) (c.D.width c.θ).cast) s.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul α₀ (c.D.size c.D.computed).cast) Mb.P.card.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.Cover.SecurityProofs.CoverTrainingChained": {
-    "Real.instLT.lt (instHMul.hMul α Γ.cast) (instHMul.hMul cw D.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Fin c.D.N), instLENat.le (c.D.w g) w₀": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul w₀.cast Γ.cast) (instHMul.hMul α Γ.cast)) (c.D.width c.θ).cast) s.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Nci.SecurityProofs.ActivationsBoundOn": {
     "Real.instLE.le (instHMul.hMul α Γ.cast) K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (a : Fin c.D.N), instLENat.le (Finset.filter (fun g => Eq (T.act g) a) T.M).card e": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (a : Fin c.D.N), (L.src a).Nonempty → instLENat.le dd (Finset.image T.act (Finset.filter (fun g => Eq (T.thread (T.act g)) (T.thread a)) (L.src a))).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.ActivationsReads": {
     "∀ (a : Fin c.D.N), instLENat.le (Finset.filter (fun g => Eq (T.act g) a) T.M).card e": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : Fin c.D.N), (L.src a).Nonempty → instLENat.le dd (Finset.image T.act (Finset.filter (fun g => Eq (T.thread (T.act g)) (T.thread a)) (L.src a))).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -15102,30 +15310,6 @@
     "Real.instLE.le (instHMul.hMul α Γ.cast) K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : Fin c.D.N), instLENat.le (Finset.filter (fun g => Eq (T.act g) a) T.M).card e": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : Fin c.D.N), (L.src a).Nonempty → instLENat.le dd (Finset.image T.act (Finset.filter (fun g => Eq (T.thread (T.act g)) (T.thread a)) (L.src a))).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul κ (c.D.size c.D.computed).cast) (instHMul.hMul 2 T.M.card.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": {
-    "∀ (s : Fin 1), instLTFin.lt s t → Eq (ξ s) (ξ' s)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Nci.Guarantees.AcceptAll.win b) t": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin 1), instLEFin.le s t → Eq (ξ s) (ξ' s)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Nci.Guarantees.AcceptAll.idW t) (Nci.Guarantees.AcceptAll.idW t')": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "SetLike.instMembership.mem (Nci.Guarantees.AcceptAll.bad ξ) b": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.LayeredTraining": {
-    "Real.instLT.lt (instHMul.hMul α Γ.cast) (instHMul.hMul (instHAdd.hAdd E 1) b).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul κ (c.D.size c.D.computed).cast) (instHMul.hMul 2 T.M.card.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.ThreadedContainedInfoFmt2": {
-    "∀ (g : Fin c.D.N), Eq (c.D.isInput g) Bool.true → SetLike.instMembership.mem d.θ (M.emb g) → SetLike.instMembership.mem c.θ g": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Fin c.D.N), SetLike.instMembership.mem c.θ g → SetLike.instMembership.mem d.θ (M.emb g) → Eq (BitVec.cast ⋯ (θv (M.emb g))) (θc g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Finset.instPartialOrder.le W d.D.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (d.D.size W) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (Nci.novelInfo d θv W) K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.ThreadedTraining": {
-    "Real.instLE.le (instHMul.hMul κ (c.D.size c.D.computed).cast) (instHMul.hMul 2 T.M.card.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.ThreadedTrainingOn": {
     "Real.instLE.le (instHMul.hMul κ (c.D.size c.D.computed).cast) (instHMul.hMul 2 T.M.card.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256": {
@@ -15153,6 +15337,75 @@
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial": {
     "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.S u": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
     "SetLike.instMembership.mem Accounting.ServingBlocks.Counter.J.V v": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
+   },
+   "Nci.Cover.SecurityProofs.CoverTraining": {
+    "Real.instLT.lt (instHMul.hMul α Γ.cast) (instHMul.hMul b D.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (g : Fin c.D.N), instLENat.le (c.D.w g) w₀": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul w₀.cast Γ.cast) (instHMul.hMul α Γ.cast)) (c.D.width c.θ).cast) s.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (instHMul.hMul α₀ (c.D.size c.D.computed).cast) Mb.P.card.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Nci.Cover.SecurityProofs.CoverTrainingAligned": {
+    "Real.instLT.lt (instHMul.hMul α Γ.cast) (instHMul.hMul b D.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (j : J), SetLike.instMembership.mem Mb.uses j → ∀ (a : Fin c.D.N), SetLike.instMembership.mem (Aw j) a → instLENat.le f (c.D.w a)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (g : Fin c.D.N), instLENat.le (c.D.w g) w₀": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul w₀.cast Γ.cast) (instHMul.hMul α Γ.cast)) (c.D.width c.θ).cast) s.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (instHMul.hMul α₀ (c.D.size c.D.computed).cast) Mb.P.card.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Nci.Cover.SecurityProofs.CoverTrainingChained": {
+    "Real.instLT.lt (instHMul.hMul α Γ.cast) (instHMul.hMul cw D.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (g : Fin c.D.N), instLENat.le (c.D.w g) w₀": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul w₀.cast Γ.cast) (instHMul.hMul α Γ.cast)) (c.D.width c.θ).cast) s.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Nci.SecurityProofs.ActivationsReads": {
+    "∀ (a : Fin c.D.N), instLENat.le (Finset.filter (fun g => Eq (T.act g) a) T.M).card e": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (a : Fin c.D.N), (L.src a).Nonempty → instLENat.le dd (Finset.image T.act (Finset.filter (fun g => Eq (T.thread (T.act g)) (T.thread a)) (L.src a))).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Nci.SecurityProofs.DampenerRemotePeriod": {
+    "Real.instLE.le (Finset.univ.sum fun t => c t) C": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ ξ' : (t : Fin T) → Ω t), (∀ (s : Fin T), instLTFin.lt s t → Eq (ξ s) (ξ' s)) → ∀ (b : β), Eq (win b) t → Iff (SetLike.instMembership.mem (bad ξ) b) (SetLike.instMembership.mem (bad ξ') b)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ ξ' : (t : Fin T) → Ω t), (∀ (s : Fin T), instLEFin.le s t → Eq (ξ s) (ξ' s)) → ∀ (b : β), Eq (win b) t → And (Iff (SetLike.instMembership.mem (drawn ξ) b) (SetLike.instMembership.mem (drawn ξ') b)) (Iff (SetLike.instMembership.mem (detected ξ) b) (SetLike.instMembership.mem (detected ξ') b))": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t t' : Fin T), Eq (idW t) (idW t') → instLTFin.lt t t' → Real.instLT.lt (τw t) (τw t')": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (t : Fin T) → Ω t) (b : β), SetLike.instMembership.mem (bad ξ) b → SetLike.instMembership.mem I (idW (win b))": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (instHMul.hMul Φ H) C": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (t : Fin T) → Ω t) (j : ι) (s : Real), Real.instLE.le ((Finset.filter (fun b => And (Eq (idW (win b)) j) (And (Real.instLE.le s (τw (win b))) (Real.instLE.le (τw (win b)) (instHAdd.hAdd s Δ)))) (bad ξ)).sum fun b => w b) (instHMul.hMul Φ Δ)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (t : Fin T) → Ω t) (b : β), SetLike.instMembership.mem (bad ξ) b → Real.instLE.le (w b) B": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (i : R), Real.instLE.le (instHMul.hMul b_a (Th i).M.card.cast) (instHMul.hMul (instHMul.hMul α ((Th i).bound (instHMul.hMul α Γ.cast) b_w dd e)) ((d i).D.size (d i).D.computed).cast)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (i : R), Real.instLE.le ((Th i).bound (instHMul.hMul α Γ.cast) b_w dd e) Λ": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (Finset.univ.sum fun i => ((d i).D.size (d i).D.computed).cast) C": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (t : Fin T) → Ω t), instLENat.le (M ξ) (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (Mu ξ) (Mr ξ)) (Finset.univ.sum fun i => (Th i).M.card)) (Mx ξ))": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mu ξ).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul mfu κ) U) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mr ξ).cast (instHDiv.hDiv (instHMul.hMul κ (instHAdd.hAdd (instHAdd.hAdd (instHSub.hSub C (instHMul.hMul (instHSub.hSub 1 εW) (W ξ))) (Nci.Dampener.wrongCapacity c fun t => wrong t ξ)) ((bad ξ).sum fun b => w b))) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mx ξ).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Verity.Game.prPMFReal (PMF.uniformOfFintype (Ω t)) fun a => wrong t (Function.update ξ t a)) p": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Verity.Game.prPMFReal (PMF.uniformOfFintype (Ω t)) fun a => ∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b)) (instHPow.hPow (instHSub.hSub 1 q) (Finset.filter (fun b => Eq (win b) t) (bad ξ)).card)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Verity.Game.prPMFReal (PMF.uniformOfFintype (Ω t)) fun a => And (Exists fun b => And (SetLike.instMembership.mem (bad ξ) b) (And (Eq (win b) t) (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b))) (∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (detected (Function.update ξ t a)) b))) (ks t)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => wrong t (Function.update ξ t a)) p": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => ∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b)) (instHPow.hPow (instHSub.hSub 1 q) (Finset.filter (fun b => Eq (win b) t) (bad ξ)).card)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => And (Exists fun b => And (SetLike.instMembership.mem (bad ξ) b) (And (Eq (win b) t) (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b))) (∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (detected (Function.update ξ t a)) b))) (ks t)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": {
+    "∀ (s : Fin 1), instLTFin.lt s t → Eq (ξ s) (ξ' s)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Nci.Guarantees.AcceptAll.win b) t": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Fin 1), instLEFin.le s t → Eq (ξ s) (ξ' s)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Nci.Guarantees.AcceptAll.idW t) (Nci.Guarantees.AcceptAll.idW t')": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "SetLike.instMembership.mem (Nci.Guarantees.AcceptAll.bad ξ) b": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Nci.SecurityProofs.LayeredTraining": {
+    "Real.instLT.lt (instHMul.hMul α Γ.cast) (instHMul.hMul (instHAdd.hAdd E 1) b).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (instHMul.hMul κ (c.D.size c.D.computed).cast) (instHMul.hMul 2 T.M.card.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Nci.SecurityProofs.ThreadedContainedInfoFmt2": {
+    "∀ (g : Fin c.D.N), Eq (c.D.isInput g) Bool.true → SetLike.instMembership.mem d.θ (M.emb g) → SetLike.instMembership.mem c.θ g": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (g : Fin c.D.N), SetLike.instMembership.mem c.θ g → SetLike.instMembership.mem d.θ (M.emb g) → Eq (BitVec.cast ⋯ (θv (M.emb g))) (θc g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Finset.instPartialOrder.le W d.D.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le (d.D.size W) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (Nci.novelInfo d θv W) K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Nci.SecurityProofs.ThreadedTraining": {
+    "Real.instLE.le (instHMul.hMul κ (c.D.size c.D.computed).cast) (instHMul.hMul 2 T.M.card.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Nci.SecurityProofs.ThreadedTrainingOn": {
+    "Real.instLE.le (instHMul.hMul κ (c.D.size c.D.computed).cast) (instHMul.hMul 2 T.M.card.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -19379,6 +19632,13 @@
     "Verity.Advice.saltInput": "a569d0eb1b9698594b64c8adfae3f195e0fbdd0235fb79f091a4a689ec46a75f"
    }
   },
+  "Definitions.Core.Annotation": {
+   "digest": "7709cad1d4985dc3d66e725299e81008451ac5b8e1af06c2ef0f1e02e8b5d061",
+   "definitions": {
+    "Verity.Annotation": "11934c7b4bc82f0c8e0adaaa67ae0be23f5c6d8cafcbba1c259dfb07e20cef2d",
+    "Verity.Annotation.holds": "6299df41fb09a80c810eccf8a70f5706742de18792a3711272d7795252fb5fa9"
+   }
+  },
   "Definitions.Core.Assumptions": {
    "digest": "a6b1940a89d9e1e3257e570c806ade30787f6cc303b568efa4fd90125fead4dd",
    "definitions": {
@@ -19635,7 +19895,7 @@
    }
   },
   "Definitions.Core.Formalism": {
-   "digest": "151c0a151f16ab82cd0a371cd5fb34fc7221bb9fbabe4a3c416ce635c4e4fb82",
+   "digest": "3ad771cbccdcbb493cfd9faf36ebe71dda1303e1241f07b500f24f36d6695949",
    "definitions": {
     "Verity.Circuit.Affine": "07c5e2cd229c4e65ff7121784d37106a206f5bbe952384f97c0004fb1723a144",
     "Verity.Circuit.Boolean": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
@@ -19652,13 +19912,21 @@
     "Verity.Decoder.run": "0d0404da4fae79570ec9d0c60b7a725829f656bdcd665fd20bf0526e45d1f3d1",
     "Verity.Evaluates": "6642b8fa1ffcbdd004e1c91a52abb9c7daa1b2cbc8e32385b6e7a18ebaf1a896",
     "Verity.LDL": "f81389f381a8ab1600a672fd46d11b2796b1149214dd45f29f2b140fb4121a3f",
-    "Verity.Pad": "23be4649e5ca676d316d26794875c10f12be7bc965f0bc5f79fb8e3b381cba3e",
-    "Verity.Partition.IsCK": "87b4741808fe13ef55c92c4f2ea30a647f0eda9918c2d42cdc91f8c9efa55829",
+    "Verity.Partition.IsCK": "7022e53569d6e81aa4d134c8af406a451fc85818d71cf6de766aa7e784f4db68",
     "Verity.RegisteredCircuit.unregistered": "99d38ff7d9f52238feec2653c264c4f41922b3bc933e832ad3811cc57d50f294",
     "Verity.blockProgram": "be0a05cb1a67605e69894b8cc7391406aa9d83d23992c228c63c94a2991bfc29",
     "Verity.creditSize": "d6cd7bdb05c0223c09557d48530d098cfe92bcf1da2dbe1ff8183659e6773938",
     "Verity.indexCode": "216f0f6d0fa5066656396f830b46c8cf48acaf6ba4f14be91df4018037744cc8",
-    "Verity.slowdown": "bcc17fbdb9d4847eb2dad542959451341d0437675065f525f0bb8c86b421ac7b"
+    "Verity.slowdown": "d64093141a53fcff77423fc50157649a143d4f38961afa9055c5b6eb6120bce1"
+   }
+  },
+  "Definitions.Core.Formalism.Instances": {
+   "digest": "664d29773b27beff924b3b33dc09045dea58f14702393910f6ef66a52113dbda",
+   "definitions": {
+    "Verity.Formalism.C": "c0273911dfa0e6f04feaabe2f6804510f162edf17f03562495e86efa131f25c3",
+    "Verity.Formalism.Counter": "00739859b9091d36bebb6caeacf35ede76b3a35b2fec6392a284ff808c76131b",
+    "Verity.Formalism.Honest": "028fcf61a819b8c7548a93797b95b4d9cdd7ee43e0486847333408d2e6887716",
+    "Verity.Formalism.d": "4df78d986b9c5a73c1fd449bda202cdb15f2bea0afb8c32867e500744826da7b"
    }
   },
   "Definitions.Core.Fp32": {
@@ -19828,18 +20096,24 @@
    }
   },
   "Definitions.Core.Guarantees.Formalism": {
-   "digest": "c8ea50c86d88f7641e72b46dc51e3832e6565c6a8346b337a20eeb413e2a8627",
+   "digest": "64ffaa1bd9f2660edd59eba7c6da65a8012cd6ea62128ec6f4a8dbb2e08a4ac7",
    "definitions": {
     "Verity.Guarantees.AndSizeLe": "9350d1ae3f31c74ddd50f1897253f464f1fa16189f0058edb6be6125a78b1aca",
     "Verity.Guarantees.BlockDescription": "2dc39050f76c064b0a468b4dd9472697d47d96f90e6b5e2302e9ab154604302f",
-    "Verity.Guarantees.CKSize": "4d1d1eb563bb6d426812124e3d08a7ed749000461466fc6decbb09b8080cd793",
-    "Verity.Guarantees.Counting": "9ed7eb0a7c73e14fcf19596ee237a1342d40c8ebd8e17da0c90f0be28936c7d0",
+    "Verity.Guarantees.CKSize": "50a78d6ed20409fceb5292e5df612cd2fec1b0d0e109271b206ef248955537a9",
+    "Verity.Guarantees.Counting": "07291f2fde09b03708e7731aa735c20adfe1a1c13d78031cf9f00180f770a76d",
     "Verity.Guarantees.CountingSum": "0a0b8bba8cac0cd66ec998958d7b16614b762c7e3b58e09e82bc841a787c8c76",
     "Verity.Guarantees.CreditSizeLe": "81c434be7e58752682f68665a64e271c48e1cd1eb363ed2a8125ad5e5397d389",
     "Verity.Guarantees.InferenceCap": "8cb66991f9d6bf7a627c1a31de466e777ecae9a79ecc3c0385110eafda097454",
-    "Verity.Guarantees.Padding": "f0b2d9894d21698e51b9a8cb7bf2afc58652a21361cf96664a06af85965eceb1",
     "Verity.Guarantees.ServingBlockSum": "74e9c171e6e3ec1a92eaaab163f8d684ca12f3c9a88ef5a5302969a1686a28cc",
     "Verity.Guarantees.ToCircuitAnd": "4a7cfceeb494bbf0a19ddc5b5cf0ad9d0a5279068b58b11249a05bb5e97a3d73"
+   }
+  },
+  "Definitions.Core.Guarantees.Formalism.Witnesses": {
+   "digest": "86831beac66d4006a72e1ae97986616aab2148b3af8afdcdd2fdee71c9da03d8",
+   "definitions": {
+    "Verity.Guarantees.CKSize_honest": "07a924d841239e97761e0cb68b60865cf6e37d99df68e8830f938ca16529fe20",
+    "Verity.Guarantees.CKSize_nontrivial": "029c0a3984c25e7e074e1426c0f9ff0ed1d098be7fa2dfc944e2028d5e4445a9"
    }
   },
   "Definitions.Core.Guarantees.Game": {
@@ -21367,10 +21641,10 @@
    }
   },
   "Definitions.Nci.Assumptions.CoverTraining": {
-   "digest": "c1911aa16d5d350fd19aa17656e7e84562a68771c589823c585f041406c11739",
+   "digest": "9489b46d1dc775dae58588440b0d2f6523eda0a5f26b707150111c4543048882",
    "definitions": {
-    "Nci.Cover.Assumptions.BlockFits": "ee906bc2d535d5ad6a83af3e953d5cabc91620eb72a0a6901a7a70ab97faaca9",
-    "Nci.Cover.Assumptions.CapBelowDepth": "b6a2e9a44600c3a9661d08320279a30d4f6aaaad8e812302fd44694922c961aa",
+    "Nci.Cover.Assumptions.BlockFits": "6c8a39590d5ed889ee6d76adba07cee9e4ce74f76ad35fd00388552b0cf4a1fd",
+    "Nci.Cover.Assumptions.CapBelowDepth": "4a59a4806a27c95100ab3b95c905c33acb34c61829b50f990a197d9ea06dc17d",
     "Nci.Cover.Assumptions.RegionsAtLeast": "571457fa64718d047ab4532b4ad1a09a2bb59a2ba539b1429359d721bb12a9bd"
    }
   },
@@ -21397,15 +21671,15 @@
    }
   },
   "Definitions.Nci.Assumptions.Dampener": {
-   "digest": "f6f417289c1af5022520a26ea6e858835507ee00af905a5a06c82392e96aaf5c",
+   "digest": "5ce97d80d29d5f4802e8fc7eef7b1bfcc7cb960e4efcb89dfc915997207a42cb",
    "definitions": {
     "Nci.Assumptions.CheatingAtMost": "89add569caacb16556501cbd98787134ad9098307d8b22fc10f53b164cd1ade2",
     "Nci.Assumptions.ResidualAtMost": "1991167745b6c12c20d9486beacd705ed52b382712c938758c6c31fa725299ee",
     "Nci.Assumptions.RunsThrottled": "282e5decba5cc341d15b4c35ae26a9d7a022c3e7ada43034d723497cc3748ca8",
     "Nci.Assumptions.SourcesCover": "1b88f3a9f96ca3119443da4b877d624e82d0da310a960193c81efc048238d7bb",
     "Nci.Assumptions.UnmonitoredAtMost": "a2f3af521431f3a9eb4420c21e04149188f6bcfdb664984c54505a4d514502c2",
-    "Nci.Assumptions.WindowLength": "75fc88ca4a46d35c94a12a39979bd2e18b2b8099c0467558c9f238e28f088144",
-    "Nci.Assumptions.WindowsHold": "4ecb0fe6367123c89e464fb645d8543789989e21aa6e18f491e028d25c08be17",
+    "Nci.Assumptions.WindowLength": "b88a4399e57fec983f33b9108140c60973f74a6c19df53ed3345a650cda9940a",
+    "Nci.Assumptions.WindowsHold": "05d3f99ad636dda34c9d92cc4c56cee029364a7e7adf70614357df19b374e68f",
     "Nci.Assumptions.WithinCompute": "735d0cf81585b0377ce2d2bb7dd63273807df65d48dd77c31592a0710d7ddb57"
    }
   },
@@ -21430,6 +21704,14 @@
     "Nci.Assumptions.WeightsSupportFmt2": "fd77547781d38f131fe8a442633650f281f06b1564ec158e59e960b9803c88ff"
    }
   },
+  "Definitions.Nci.Assumptions.Formalism": {
+   "digest": "7cba0ead3bfd51e064bb08997f64a71e0dbbde2eb6d4f21708d397c2b533056a",
+   "definitions": {
+    "Nci.Formalism.Assumptions.CutCost": "6f7541ca1175cad38a3a58df3032ca71d908a492f15dde825421e128bad8c5b4",
+    "Nci.Formalism.Assumptions.EfficiencyFloor": "10a23be267b3535ede3be1dc5f00a9f08200bcc1a81e1e8488d295e77031d75e",
+    "Nci.Formalism.Assumptions.TokenWork": "d17288db09108dcb49f4caaf63f493763bd14c3f660dbe809178307fec2a498a"
+   }
+  },
   "Definitions.Nci.Assumptions.Info": {
    "digest": "36c3a8d839976b9e1803073cfb3ba6c3e0f93d96c3b9a9f76a198d4e9720efe6",
    "definitions": {
@@ -21439,9 +21721,9 @@
    }
   },
   "Definitions.Nci.Assumptions.Layered": {
-   "digest": "d0826204e6a1cd46ecd0a6f1a5a59690a346aeb99df97f77752bb140aa4ae567",
+   "digest": "b965f05f16622d5bb1552729ffa410f21d9edc364687276d9b86d5b3899e4147",
    "definitions": {
-    "Nci.Assumptions.CapBelowColumns": "262ba2aed142115072e7844249a6590b20774b9b1ce794439419059af36e6a43",
+    "Nci.Assumptions.CapBelowColumns": "aae638ad32224f459cb0a973699c9e18f2a594f1d9c5bdf7d8950250e5a03598",
     "Nci.Assumptions.ReferenceLayered": "44bf4685e681184c35f39fd8f4002a2b0b7cce0cbbf2898b198c83a3f8f94e29"
    }
   },
@@ -21465,13 +21747,13 @@
    }
   },
   "Definitions.Nci.Assumptions.Remote": {
-   "digest": "bbb25b9705db6bca55ffbb22d0aef624eccf445c7f5880f6b5c57f87fc61aeac",
+   "digest": "83aeaf746d7feb2513e70d09be1dc9c01e33cbd9b69fdb36cf8644c3f3e296a0",
    "definitions": {
     "Nci.Assumptions.IdentitySchedule": "f7d502370c0b00f07fc595e4a3f3c837796aa8596c248dffed41b6719df60bfa",
-    "Nci.Assumptions.PouwPerWindow": "a0c7452a234c6c066ada42f4fd69f3611d4879b4959dd4a7fb0cc7e8be4c989f",
+    "Nci.Assumptions.PouwPerWindow": "73c9272c6730698f6165c13cdc251d08c790d55adbdb9688fff024707355941a",
     "Nci.Assumptions.PouwSound": "f1ab2af6035f8383c3a9b0eeadae952029fec217ebcbac4e47f5aafe225de14d",
     "Nci.Assumptions.SampledDetection": "1c23f4c51df5938029b64808c707695c53cefb77f6c46014ce3c9b8144ee8217",
-    "Nci.Assumptions.SampledPerWindow": "b4551085c57fd3e5842a71c3536b642b66b067f48ef4e25eb2784fa717330588",
+    "Nci.Assumptions.SampledPerWindow": "77104bd85c50c8f0996b5b055c8263f036328b6ed9d9730b5ec70e223843542d",
     "Nci.Assumptions.TerminalDetection": "8ed5bc6c9f877e1d994af693541c6e1be76f4708ae20468313c71f656cb2a0b8"
    }
   },
@@ -21701,16 +21983,97 @@
     "Nci.Threading.visits": "e2e891abed2b89accc17842234d46f4f885b59d70d568b371d2a9b20071ee371"
    }
   },
-  "Definitions.Nci.Guarantees": {
-   "digest": "702365760b8616762ae43896951b11b23722f498dbc908f5af54c38b8049c620",
+  "Definitions.Nci.Formalism.Circuits": {
+   "digest": "ddaa8fe4ddcd18061b098c958a2a3887f837181a392af9f07a9d855ce133dabb",
    "definitions": {
+    "Nci.Formalism.GateSet": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e"
+   }
+  },
+  "Definitions.Nci.Formalism.Inference": {
+   "digest": "bebb590cb890b1f2bae1356c67b20eb28767046b3e74406c6568d7f13519c715",
+   "definitions": {
+    "Nci.Formalism.Caps": "341559f3ef65736d8b2f54aba57f2fa4b9b92c503e50d7fd19f28720f35c58c7",
+    "Nci.Formalism.ComputeBlock": "44ae30f84ea2615cc7bb5b8a070c4c218f9e6708ac4afc17f00b92d35f758429",
+    "Nci.Formalism.InferenceBlock": "051d470c6f69d6fa95188b5511f234920621994dbf94255920a2c59f483e776f",
+    "Nci.Formalism.PartitionBound": "0efdf3fb0d8f5335cb985e182b6c341fd479b1ed34be23cac225dc95def769f6",
+    "Nci.Formalism.ReductionBlock": "d65ce4edfe9f2f62361a24ecc9fb8690eb52e13e8dd4c3f6c52a42ecb671bfc4",
+    "Nci.Formalism.ServingFits": "9362c658fc805110812ff7fed480889858ba419e8ac09d892301fc1e6440a7b4",
+    "Nci.Formalism.SessionBlocks": "7a5b062f583e6adef87ad44a6639c7d7e68defa02bca99207acfe26349d472d8",
+    "Nci.Formalism.TrainingBlocks": "e3c33e2b849c3b792833dc2980a0ffe283dd178a0ff9737b5430b7e6fac31936",
+    "Nci.Formalism.TrainingFits": "b708a3fe8eb9aecf99d6e6ee46afc57aee936c361957b2e2c85ad49e028467a7",
+    "Nci.Formalism.UpdateBlock": "02b5539ad1e040e672721891939581ece621fbd438b88b58adb9533c94891733",
+    "Nci.Formalism.instDecidablePredFinsetFinNDInferenceBlock": "a7b4b1db19409f6d0db7ef45ef57867a07ab688cd4e3a19cb034b60afd2191c8",
+    "Nci.Formalism.kindBound": "433cf4dc6fb9a10340a58128e92541f7c68d4d61dfb33be602ae0974f3ac1704",
+    "Nci.Formalism.partitionSlowdown": "b1d70eb079c7880e9e5c56d812e9f6b791873688004b608a64d246804371a9ce",
+    "Nci.Formalism.slowdown": "91c0006d3c102ed51ce26969d57f95fcea448cc1621888473ccac8ddafb9516c"
+   }
+  },
+  "Definitions.Nci.Formalism.Instances": {
+   "digest": "4e99740137df4c601dabae089d039d7c1f26578fe3e797c8f351124eb57cfeab",
+   "definitions": {
+    "Nci.Formalism.Chain.A": "e60017a6c96faf8ec110651091f8bd3a73b92bbbb2370f86051f59effc04eba2",
+    "Nci.Formalism.Chain.C": "de302dab8410acf20b177abc2f195e2930cb7d9d9b8767930318056b9630c180",
+    "Nci.Formalism.Chain.blocks": "a5935e7ad6d6312c5a1a9e083dfc69252dfcfe7254e742e4f854b072be129ea6",
+    "Nci.Formalism.Chain.d": "ee1d360f535b30404a0fef5f86958efc0581b988cc90a85f0ba2e0719f6c75c8",
+    "Nci.Formalism.Chain.entry": "747ef360ab8973a860f8305a48420df508fa42e3345270a86756bca0519c6d75",
+    "Nci.Formalism.Chain.methods": "6444268784cda082f21ed780d6cf9113be72d5e8402d8cf60b8135bca216e023",
+    "Nci.Formalism.Chain.r": "08fbe2cd19d0c9aed8cf708bf0a4f2f886ce9e4a648e75796c2efd829f255406",
+    "Nci.Formalism.Chain.skipping": "8db42eb875930cd0c65d4fa1e2c5b170e756c785a2e53fdaa04c1ca64ea4f016",
+    "Nci.Formalism.Chain.whole": "6771f0879e0cfc5d57ec9883ec65487760e334671e05894c873fc00112192fd0",
+    "Nci.Formalism.Chain.witnesses": "7d146b8363937e7b2bc4cff5e8dc9d6d5b0cdd0978b92539d60ed6d48b607afe",
+    "Nci.Formalism.Honest.C": "4a518890c3e4db1028630a61a6f0f885abaa7a9968cb711e5c46e9ff44c6454a",
+    "Nci.Formalism.Honest.P": "e0afb403d61c8fd832c8b9730a071b7cc142b7efb5b6032d531dd181a97f98a0",
+    "Nci.Formalism.Honest.d": "0208ae265719dfe09d96f811816e25e918ca34186cc456a08b592a462084fc1b",
+    "Nci.Formalism.silent": "e02c3849a1760aa1440ceb52ae868834681699d556697473f6def58b8635c123"
+   }
+  },
+  "Definitions.Nci.Formalism.Runs": {
+   "digest": "0ea05cf60971a7b3f489a4e25eea4585f44b55b3bddb129823452de2e1cc6bcd",
+   "definitions": {
+    "Nci.Formalism.InPeriods": "2e9c8f7af1c83a77da3bc7a6cb8c309403d4e72509733fdede069044836a1e79",
+    "Nci.Formalism.Run": "d6b0b5cde574e7600c33a2a8d9b76511f54e9f8b4e51424d3936f4340b72d6d8",
+    "Nci.Formalism.Run.A": "9f8c6dd0023628b6245d43b843d82e8fec4defc9a683a1ec308e2ba431908cb5",
+    "Nci.Formalism.Run.Among": "d5db13c72b34859a9308ac0ded9b0203e2d3efd37c51faa2a22e3b994542e247",
+    "Nci.Formalism.Run.Reaches": "adc282a207f99fc85220964a134b1487df52085b85deba8bdf0de92dcf2377ef",
+    "Nci.Formalism.Run.Within": "95f913d00b89c636477a1bf3d9c0a83455b5f5f0489aa40c336c351abe977792",
+    "Nci.Formalism.Run.d": "4996a1461fd96caadf14062baddb12db9232ae8f70f030b34bb57808d001ffcc",
+    "Nci.Formalism.Run.inputs": "9dade26231bcf25a2210e2d06f1651007fa8341f230f84e75c9bb88176f17f13",
+    "Nci.Formalism.Run.loss": "39ccafb1765baa83d8e7c5fe5787a233a31195659138156a4d4f5c222dbd9c2f",
+    "Nci.Formalism.Run.numTokens": "4575798aba31e28cee5e4ca4838144aee7452f1aba610a191faefb645454af4e",
+    "Nci.Formalism.honestCost": "1f7b02899b34cd27c6b21c80f98786de6c4e3a3538a6ead0e760ebe7152071ba"
+   }
+  },
+  "Definitions.Nci.Formalism.Training": {
+   "digest": "ec1bb044c5266d66a0ad13f0573af2f47bdf5b76d25ec82ae2e5a6a67bad41c3",
+   "definitions": {
+    "Nci.Formalism.Annotation": "b8e4dcfff78ed12d1b8388e2f81c8f9db82d7a31152f9973984cd7b246278aab",
+    "Nci.Formalism.Annotation.Enters": "95155340e21096b9529a2d5691cc1a89f9bdf1d86261fce2e61b72c3600ccf18",
+    "Nci.Formalism.Annotation.Valid": "cb976b329589b2866775b70a459f1333ed2df278cfc0413164a7d6865955151d",
+    "Nci.Formalism.Annotation.WorkPerBit": "7bdd11c2cba1213609919fd49575d0c00d26f086f9a078736adc80886b5ffde8",
+    "Nci.Formalism.Annotation.blockShared": "4c87e47c8245c25b5e7adb2bc544570bff0c4a04b4a8b30a42f4af3d0fd1217c",
+    "Nci.Formalism.Annotation.entryWork": "b6f85325e096c6ff4e4c6544a582341f96ceffdae2a356742072a294640799de",
+    "Nci.Formalism.Annotation.readsAt": "31f87d9299d56776ebc7b97ef5c5d7019b65a170128cb525c188147590cff073",
+    "Nci.Formalism.Annotation.stateAt": "e9793236413fa1976b0f78c78e08cfa60bdf499aa3ae6df9db861a742e9a108e",
+    "Nci.Formalism.Annotation.stateReads": "e9ff098e0d5a9c619ac5ab1c34a445c76df74d91072fb9ffe3f4b29f4df2248d",
+    "Nci.Formalism.Annotation.tokenGates": "1d784e40ece72a6fa4b77b80edcafe99035246d7b8e8c5379f562a3088598af4",
+    "Nci.Formalism.Annotation.tokens": "5b5f8aeda91652db1afcc14421861ca9beac0e1df577926c4cf3d8cba14ae50e",
+    "Nci.Formalism.Annotation.totalUpdate": "69029442abde3c97ee4e4a24fffaa40309c7631e688726d1b97a8645dd95e144",
+    "Nci.Formalism.Annotation.worksOn": "ce66bb77d0baca701e04f5d0d24db37bbebe5945b1153ed4b15f774560c8f2a9",
+    "Nci.Formalism.Annotation.θ'": "bb662ba254267a14aada6ce1b593999835d97df12b340b70a86f0153776c9558",
+    "Nci.Formalism.PeakAtMost": "d846aaf90484906bcd76942d72dc6be57f5601ddaff436fd6e475ca537f48dce"
+   }
+  },
+  "Definitions.Nci.Guarantees": {
+   "digest": "798a5203106d44d5c112ca1a6cf4c0024667ebcd294eaf9d03ca7fa0ed7d89ab",
+   "definitions": {
+    "Nci.Guarantees.ReadBound": "3f8da9387ea135c793262b83645a55cd35d5137c64586c622ad27f9e34fffed1",
     "Nci.Guarantees.UpdatedMatMul": "19ca98d4838f32e2aba4adae24a217a33de492bc6f19337391354c9c2c004783"
    }
   },
   "Definitions.Nci.Guarantees.Activations": {
-   "digest": "2071b6b46d25a98d3b6d74c1bae5a80bc310bb56d765d625ab0c4d467bafe346",
+   "digest": "aaebdde4b7b02cc4ba05442e1543bd616c7dca022a970eeecf7eb4363ade850b",
    "definitions": {
-    "Nci.Guarantees.ActivationsBoundOn": "9c0001d0b9556d5021b7cbc20a98be019345ed00902fd2c96c43b6e1f8e4243a",
+    "Nci.Guarantees.ActivationsBoundOn": "52d73c34de20918df38710a8f4ca4e7693e66a77cb08af149eeaca56db859bf1",
     "Nci.Guarantees.ActivationsReads": "a8119e6af9916ef6db63c01b659edcd9cfcd3d12c21eea7741e5791a7a780626",
     "Nci.Guarantees.ActivationsTrainingOn": "cd5dfa1a5039640d8f9fe67284ef77a49c1ce8c6894a7f9b0bde4c31e53df8d8"
    }
@@ -21766,9 +22129,9 @@
    }
   },
   "Definitions.Nci.Guarantees.CompliesCK": {
-   "digest": "9306d7b690c88b3cb2364e434d042f41dd8213440129e0d35b51ce52a6efefb9",
+   "digest": "db79cb8d0b290a0f742053e8addb6b33f0ef02f29a9b880b3d1333a459ff00e2",
    "definitions": {
-    "Nci.Guarantees.CompliesCK": "cc5d352a1b132d851304989a1c5bf5a1f1cc6a434be6c41a854725e69fa73a84",
+    "Nci.Guarantees.CompliesCK": "e07f81452f4dcd6ea1c2a1025ecaa7a14928f69efe967b6ca1125232c1bd7590",
     "Nci.Guarantees.ExpandComplies": "79da60b58fcdebe2ece451fb91e86bb38e74d768d1fcc138699740af4f9600a7"
    }
   },
@@ -21788,9 +22151,9 @@
    }
   },
   "Definitions.Nci.Guarantees.CoverChained": {
-   "digest": "cd15295843521e2469c51152df6307b71f92fa5d77ec7656599e2a6f21858cc2",
+   "digest": "91ab411508c45589c52cdca1d06b3fa70b6c25284b8a5f9866043794f4c8ff29",
    "definitions": {
-    "Nci.Cover.Guarantees.CoverTrainingChained": "373258b167c8857dabef2117ab8b64815ca127222a0959aa0f82d452e13f5bdf"
+    "Nci.Cover.Guarantees.CoverTrainingChained": "1f4d92b760dbfbab469eac0a8bdc0659fecc5a4055bb894c80b57421950db71f"
    }
   },
   "Definitions.Nci.Guarantees.CoverFanOut": {
@@ -21821,10 +22184,10 @@
    }
   },
   "Definitions.Nci.Guarantees.CoverTraining": {
-   "digest": "9c6233b29907800f562b522a11d481bdaa45dc46a6dc5f71d8291282fd1cd8fb",
+   "digest": "eb29953640d685eb1e25f9547615e0d680396c4c94f6f70125a391146cccb3f1",
    "definitions": {
-    "Nci.Cover.Guarantees.CoverTraining": "fa9178d3007e65ab5bfb79be3a626c3c8133f7713430d0b33926ae933ea45821",
-    "Nci.Cover.Guarantees.CoverTrainingAligned": "601bdf52c6c90839823fc78c30d68cd0b7234c8de02e595c2d823ae8f0fb989f"
+    "Nci.Cover.Guarantees.CoverTraining": "6d3bc80b024047c213e14ff62c01740da3658fc4183e0d7988cd73c3af42c491",
+    "Nci.Cover.Guarantees.CoverTrainingAligned": "aeef85476504875f21efe8d90751e2ad797a943fe335e126e677ef13218d0fee"
    }
   },
   "Definitions.Nci.Guarantees.Covering": {
@@ -21881,6 +22244,36 @@
     "Nci.Guarantees.ThreadedContainedInfoFmt2": "040122499190a1cbdf77a6158a309d7c40523cc522164ae11d31cbb6f43fe779",
     "Nci.Guarantees.ThreadedOfStateFmt2": "9fddc1480f3c969bc5b805d8843c9771a0c86f132be6cbfa9db8f63b69624f78",
     "Nci.Guarantees.ThreadedReadsInfoFmt2": "d45c20718613ecc4e902bdbadc8cd6081a338b8e6999a6b763b7600542dd00ce"
+   }
+  },
+  "Definitions.Nci.Guarantees.Formalism": {
+   "digest": "3cc6c40f49dfd0668aa33521c88503199eeaee8fe9d65c7ab6d3c049c276f675",
+   "definitions": {
+    "Nci.Formalism.Guarantees.Counting": "6bd4699a74918207e9d5990b92273731ba63b2c12eaeb3ec32c03a688ed3942f",
+    "Nci.Formalism.Guarantees.FitHonestServing": "7bbc297e285fbdfb090f5d33265df645454837b9555e8b424b25f705e105cfb1",
+    "Nci.Formalism.Guarantees.FitServing": "bfb95496fe4f706132d93e0250864147247b75522cfe4fe3cb08ea3e9e45335b",
+    "Nci.Formalism.Guarantees.FitTraining": "ce12a7eb5c2a57636794fc7eee99d87ffda580d4dedd4f735debe271f728478c",
+    "Nci.Formalism.Guarantees.Security": "17d90bf1b40e6834196fab4a8064d9fde0efc2a65f664b4b6f580812a05a24c7",
+    "Nci.Formalism.Guarantees.Slowdown": "df38a7eebe9c0295ca68be7a4228c851c09595d80b77250ba7ffe8189c99753b",
+    "Nci.Formalism.Guarantees.TokenCap": "406c3cd788a324588762e53b979c6bfc0d3ef1ef2db6534a20e861944e6a84a7",
+    "Nci.Formalism.Guarantees.TokenCapClean": "94d6ece5bd4d379243aee330ce2c1bd9452062421f680d8e76994d2c144b2847"
+   }
+  },
+  "Definitions.Nci.Guarantees.Formalism.Witnesses": {
+   "digest": "5907eb1ed607e684684b9b77d1a8865d3013b75fc319c3f6d5d1a455bf30a609",
+   "definitions": {
+    "Nci.Formalism.Guarantees.Counting_honest": "833876764c5ede7154117624ab82e6b3f948f2e639dd6fa00bc6893959bc6976",
+    "Nci.Formalism.Guarantees.Counting_nontrivial": "a35a23985b0b145a0bf3d8ee86685f51dbda8b40c5fd8055e2990c33323c4a44",
+    "Nci.Formalism.Guarantees.FitServing_honest": "fd3a7aae44c5453a705a34b795c998d2186ba49d94e854f8dbf90c2980fbf573",
+    "Nci.Formalism.Guarantees.FitServing_nontrivial": "0cf615a558acf34deeae848a9ca683a1c8a0b638b62a5673cccf8258b4ea53b8",
+    "Nci.Formalism.Guarantees.FitTraining_honest": "96cd6ba6e32e108001ae735a800b5ea5589ddaff3deca7b2a5914c7d640a1b8b",
+    "Nci.Formalism.Guarantees.FitTraining_nontrivial": "65b6c32f20a5f7597fd3fca3f057c6cf3cb604bbc3b6d0a29061e74fb076d4fc",
+    "Nci.Formalism.Guarantees.Security_honest": "a1475997b655e69d74a80337dc938c0808d314bba0e69707023a144cb3d7e998",
+    "Nci.Formalism.Guarantees.Security_nontrivial": "8c49fce71d88ea03309f49b6f0225af0ad4ef58d0512187c3df793451c8fd68f",
+    "Nci.Formalism.Guarantees.Slowdown_honest": "6890bd378eea6ba12bd89f15a0310cb55a54aa7603c2ebd111e0cafbf3619ec4",
+    "Nci.Formalism.Guarantees.Slowdown_nontrivial": "fddeeb7c09a3302cfd27625be5f187c07073ab20ccc97a4f820c0e682d67e759",
+    "Nci.Formalism.Guarantees.TokenCap_honest": "afdfd3a58907ede4ff45e9c96c4ee943ca0fc41cf09b6ed8c91c33a7a90fb88f",
+    "Nci.Formalism.Guarantees.TokenCap_nontrivial": "091ba039e2c4d914897d712f061f3204826e361555afce181e5c8411191c8da1"
    }
   },
   "Definitions.Nci.Guarantees.Info": {
@@ -21959,39 +22352,39 @@
    }
   },
   "Definitions.Nci.Guarantees.Threads": {
-   "digest": "72cb0c10c0b67b28a93e47556f2e15dee264bc19da37a115c14ad9af7503ac02",
+   "digest": "4a91f42f532c02a60f6b62875fa3e2d798bd854f74e10cbdb4e7b0633b53e189",
    "definitions": {
     "Nci.Guarantees.ThreadedReads": "675b964b82a270cc326001eb71da1cc53100c0626c0dbfb1c2adf56ecc7de4fb",
     "Nci.Guarantees.ThreadedReadsSlots": "6caf6c63146d4b82c1cbf24dfdbb34e09527a45c191bbd2c67ab26c4929f8311",
-    "Nci.Guarantees.ThreadedThrottled": "33137ea451b3cca6df0397d11d3088176c63e5fff322734dc4d070954ba3bc64",
-    "Nci.Guarantees.ThreadedThrottledDark": "f8655c7a66a39918d0ce677096fd524839ab024ed3bfce3a10852df96cde45ff",
-    "Nci.Guarantees.ThreadedThrottledDarkSlots": "e9a8786f5edcb14ba66945892d617598e2861bc271ce5d6664eef5d80a189b0e",
-    "Nci.Guarantees.ThreadedThrottledOn": "891eb3cb1ba1fc02a0b8431075ca9d99e87386b81add6c3ddd94580e2be4e2e0",
-    "Nci.Guarantees.ThreadedThrottledOnSlots": "8248d798efe11024dbd32379f639057fa788025ffb39d572d2d56336dcc5be69",
-    "Nci.Guarantees.ThreadedThrottledSlots": "f5be7fc8f9db4702eec6af572d754f32a1de45a809c99c875d03fdcc39dd2136",
+    "Nci.Guarantees.ThreadedThrottled": "4d689b4234522c0319d66d24cc73843f2defb1095dbcc2804f6e206d5d3245e9",
+    "Nci.Guarantees.ThreadedThrottledDark": "987934cf5968d85fd294eb541e13485bd1146a2e67819b0a4715edf602036ddb",
+    "Nci.Guarantees.ThreadedThrottledDarkSlots": "aa5ed81cd05f18d48ab9e8370674b6a3c27a7392e17a83ef863f36076aece2db",
+    "Nci.Guarantees.ThreadedThrottledOn": "344887693a0357381f250906aa9848dd536447d3f501755b91888e2daa7fbddb",
+    "Nci.Guarantees.ThreadedThrottledOnSlots": "e966505d5372671bf0a44106607cae89e8dbe3d5d963bd45215f22bee0640988",
+    "Nci.Guarantees.ThreadedThrottledSlots": "b1ef88da06e28e6d5281f22180abaee17a0295796192a19ba9c10a885c24075f",
     "Nci.Guarantees.ThreadedTraining": "744e3d4c835fe794c5ea902ccab2ae322434aa20c4fbad37a2eb710e32869dbc",
     "Nci.Guarantees.ThreadedTrainingOn": "ff0eeaa3d556e722aa2c75745ab7e858dcaa2cf3c5b2b504f44e05689b7d843b"
    }
   },
   "Definitions.Nci.Guarantees.Training": {
-   "digest": "82d30c7f675a8555843f04fc41e80c8e0907688f41ae29c45997f1903d5c8889",
+   "digest": "755eff651ca1d3fb000542d0f0b7a002649d47d4ccc228c6bedc755e71c8d4e3",
    "definitions": {
     "Nci.Guarantees.ContainedFanOutOn": "2bd065e0bdaf94b8429a26f2151d8f78d08ac02cb41c1cf6ea1eda8516f678fd",
     "Nci.Guarantees.IncompressibleContainedMatMulOn": "409f72a11b6f53940566dbc0b9eaefec40b65cb9dae929ea6cd82eb82c15263c",
     "Nci.Guarantees.IncompressibleContainedTraining": "172dff3aea1ed782279b6deb049a9660cb897df6dc83654b6804272ae2899bc0",
     "Nci.Guarantees.IncompressibleContainedTrainingOn": "d09ae691d4e1cadfe161ee8eb253ae49416a5a7c5ad085f294ea6465ea8ad65f",
-    "Nci.Guarantees.IncompressibleThreadedThrottled": "b1af65a06911ee8fe6308186baf4f6d8a060a187c3f85a1bc5fb10f2565a420c",
-    "Nci.Guarantees.IncompressibleThreadedThrottledOn": "9fbcf570493e6b7fa9cd3fc099031f34d7dc1b63ff991cfaa0cb110572c20680"
+    "Nci.Guarantees.IncompressibleThreadedThrottled": "921f8f74c366b348b0dcd718daadb434fff766f426ae477992de6c6330f6d21a",
+    "Nci.Guarantees.IncompressibleThreadedThrottledOn": "3c4a03f0c536e60bce87eacfe3c904a08d7c5174852aa1840f9094358e1b0a34"
    }
   },
   "Definitions.Nci.Guarantees.Witnesses": {
-   "digest": "e1ea93dac57c017c367b235021d0a001fe2520ef805a9afdbe9d032a05c06bbb",
+   "digest": "f064f487fab66139f741b23f3edfd580d64e7e500837e8252eacf38a75bfb46c",
    "definitions": {
-    "Nci.Cover.Guarantees.CoverTrainingAligned_honest": "6844fa2b38783180e45bad2d5fa0267aff7feb74f68b0f3166b800d34954d77c",
+    "Nci.Cover.Guarantees.CoverTrainingAligned_honest": "19dd1cd8cd86e4bf86f5838a90457ca678b370f57d0e89c6cc38587ea996d118",
     "Nci.Cover.Guarantees.CoverTrainingAligned_nontrivial": "20f0e348bb2d8227e8ed3c912668a552ff186ac5aa68d6b6c74ddfed8a664c99",
-    "Nci.Cover.Guarantees.CoverTrainingChained_honest": "176698c3d5e742d67fed2692d936cf7b447c7156ab230c75f27414d7ef1c674c",
+    "Nci.Cover.Guarantees.CoverTrainingChained_honest": "b560f2a719a35f6182e0543a610f39d1c082ad8e06dbc886c3d8cd04fc5a0ba9",
     "Nci.Cover.Guarantees.CoverTrainingChained_nontrivial": "c9efb59acdc8729f412718f5d5207cd0c46ee8ddbb164a0a56dfb66c96afccf8",
-    "Nci.Cover.Guarantees.CoverTraining_honest": "ff3437bc3c090352d4517ff0438765a0435b2e1c59944b54d8f12e2134815838",
+    "Nci.Cover.Guarantees.CoverTraining_honest": "c2a59080a41702ea2d749677dd7eaeed5cf4aa3a2d516ea285f02a7fde40b8e6",
     "Nci.Cover.Guarantees.CoverTraining_nontrivial": "dfc624db1e5f314458a2996f08b75a353c842a4d40c1f1391dc35552b1cf23d6",
     "Nci.Guarantees.ActivationsBoundOn_honest": "28c41bbc92b7e5b27393e21687049efd8ef8dc95a6b245480676180ee48a89f8",
     "Nci.Guarantees.ActivationsBoundOn_nontrivial": "abe5839f1d82008c25797470ede81044684b6fce6934a133afbc1d81d5574ef2",

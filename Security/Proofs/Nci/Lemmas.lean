@@ -23,14 +23,14 @@ namespace Nci.Guarantees
 open Verity
 open scoped ENNReal
 
-/-- **The read bound**: a declaration that contains the reference circuit `r` (`M`) and complies at `(c, k)`, with its
-registered information free of the reference circuit's fresh input (`ThetaRegistered`), has at least `Reads_c(r) / α`
-gates, at the rate `α = k / c`. Lower bounds on the fresh input a computation reads become lower bounds on size when the
+/-- **The read bound**: a declaration that contains the reference circuit `r` (`M`) and complies at `(Γ, α)`
+(`CompliesRate`), with its registered information free of the reference circuit's fresh input (`ThetaRegistered`), has
+at least `Reads_Γ(r) / α` gates. Lower bounds on the fresh input a computation reads become lower bounds on size when the
 declared circuit computes `r` the way `r` does. -/
 def ReadBound : Prop :=
-  ∀ (c k : ℕ) (r d : RegisteredCircuit) (M : Containment r.D d.D), Complies c k d →
+  ∀ (Γ : ℕ) (α : ℝ) (r d : RegisteredCircuit) (M : Containment r.D d.D), CompliesRate Γ α d →
     Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
-    (Reads c r : ℝ) ≤ (k / c : ℝ) * d.D.size d.D.computed
+    (Reads Γ r : ℝ) ≤ α * d.D.size d.D.computed
 
 /-- **Inference complies as declared**: a Boolean declaration divided into sessions of exactly `c` gates, padding
 included, each reading from outside itself only registered information and its own prompt `prompt u` of at most `k`

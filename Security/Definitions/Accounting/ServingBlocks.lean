@@ -25,9 +25,7 @@ For a circuit `C` and counted operations `J` (`Counted`):
   block and gates outside it.
 
 A block's unregistered input bits are `|in(I) \ θ|` (`Verity.RegisteredCircuit.unregistered`), one bit per gate on a Boolean
-circuit. Blocks here have at most `c` gates. Padding a block to exactly `c` gates (`Verity.Guarantees.Padding`) adds
-only registered gates that read registered gates, so it adds no unregistered input bit and no counted operation: a cap
-at exactly `c` gates, read on the padded circuit, gives the cap at most `c` on the circuit at hand.
+circuit. Blocks here have at most `c` gates, as a `(c, k)`-partition's inference blocks do (`Verity.Partition.IsCK`).
 
 The named premises are `ServingSizes` (each serving block's gates and unregistered input bits), `WeightsAtMost`,
 `PerBlockCap`, `UncertifiedCap`, `OperationBodies` (an operation's gates are unregistered and lead to its representative)
@@ -105,7 +103,7 @@ def Overlap {C : Circuit} (J : Counted C) (μ : ℕ) : Prop :=
   ∀ g, (J.V.filter fun v => g ∈ J.body v).card ≤ μ
 
 /-- **Serving-block sizes** `(c_S, k_S)`: each serving block `u ∈ S` of `P` has at most `cS u` gates and reads at most
-`kS u` unregistered input bits, `Verity.Guarantees.Padding`'s premise. -/
+`kS u` unregistered input bits, the `(c, k)` budgets (`Verity.Partition.IsCK`) at `(c_S, k_S)`. -/
 def ServingSizes (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (S : Finset (Fin B)) (cS kS : Fin B → ℕ) : Prop :=
   ∀ u ∈ S, (P.gates u).card ≤ cS u ∧ (d.unregistered (P.gates u)).card ≤ kS u
 

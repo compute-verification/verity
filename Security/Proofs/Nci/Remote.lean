@@ -283,13 +283,11 @@ theorem residualShare_sub {W C εW ε L θ : ℝ} (hC : 0 < C) :
   linear_combination (ε + L + θ) * hCi
 
 theorem DampenerRemote : Guarantees.DampenerRemote := by
-  intro Ω _ μ N cap wrong p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx c k b_w b_a r d T
-    dd e Mc hp hε hcap0 hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hc hbw hba hdd hcomp
+  intro Ω _ μ N cap wrong p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx Γ α b_w b_a r d T
+    dd e Mc hp hε hcap0 hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hα hbw hba hdd hcomp
     hB hthr hW hsize hM0 hM hu hres hx
-  have hdecl : (T.M.card : ℝ) ≤ C / rhoT (k / c : ℝ) b_a (T.bound k b_w dd e) := by
-    have h := declared_le (Γ := c) (α := (k / c : ℝ)) (by positivity) hbw hba hdd (compliesRate_of_complies hcomp) hB
-      (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc]) hsize
-    rwa [rate_mul _ hc] at h
+  have hdecl : (T.M.card : ℝ) ≤ C / rhoT α b_a (T.bound (α * Γ) b_w dd e) :=
+    declared_le hα hbw hba hdd hcomp hB hthr hW hsize
   refine prob_ge_of_not μ ?_ ((prob_or_le μ (fun ω => ε * C < wrongCapacity cap (wrong ω))
     (fun ω => θ * C < ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b)).trans
       (add_le_add (CertificateSlack Ω μ N cap wrong p ε C hp hε hC hcap0 hcC hsound)
