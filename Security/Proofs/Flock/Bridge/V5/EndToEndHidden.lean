@@ -10,7 +10,7 @@ public import Proofs.Flock.Bridge.EndToEndHiddenC
 
 * `Layout.keyProgP_readsOwn`: `keyProgP`'s proof blocks read only their own gates and input gates (`keyProgP_reads`);
 * `zk_session_soundHJ_custody_escCP`: at flock-verify `--zk --public-inputs`'s acceptance (`zk_headline_exec_tablesA`
-  at `AcceptsZKP I own`, through `decodesZCJH_custodyP` under the registration's law), at `keyProgP` and the binding
+  at `AcceptsZKP I own`, through `decodesZCJH_custodyP` under the draw file's law), at `keyProgP` and the binding
   `rsZHJP`, a set `W` of proof blocks is wrong with probability at most the draw's escape of `W` and the extraction's
   terms (`zk_flock_escapeC_regC`), at any draw `L`;
 * `Flock.Bridge.endToEndHiddenV5_of`: `OpeningsCanonTargetV5` gives `EndToEndHiddenV5`, at the verifier's draw
@@ -112,9 +112,9 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 whose escape of `W` is at most the law's `P_a` of `W` under A3 (`execSel_escape_le`). -/
 theorem endToEndHiddenV5_of (hOC : OpeningsCanonTargetV5) : EndToEndHiddenV5 := by
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope law kd ns hns hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
-    hCust k Rw M hk hRw hM ρ hρ hr t' ht' W τ qF qS L P vb σ Cc Lm rows κ hCR hA2
+    lawF hCust hsz k Rw M hk hRw hM ρ hρ hr t' ht' W τ qF qS L P vb σ Cc Lm rows κ hCR hA2
   have h := Discharge.ZkHidden.zk_session_soundHJ_custody_escCP I own ht (Flock.Desc.parseStmt_stmt hD) hU hpi hpub hscope
-    law kd hdiv dj y₀ wr dg N L hTags hCust (lawOn_size hlaw hCust.2) hk hRw hM hρ hr ht' W
+    lawF kd hdiv dj y₀ wr dg N L hTags hCust hsz hk hRw hM hρ hr ht' W
     (fun g o => canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
     (hOC n Reg I own ht D hD hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀) τ
     (qF := qF) (qS := qS) hCR

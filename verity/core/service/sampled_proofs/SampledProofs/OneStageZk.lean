@@ -38,7 +38,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   roots and their domains and its instance count the record's, else the check refuses, before any session is verified;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
-  (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
+  (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports, domains and roots,
   `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV3` covers, or at a shared-row public file
   `SampledKSLiveV5`'s, `Flock.KsScope.checkOf`), and a session's verdict holds only where the registration's population
   is the circuit file's units in order (`FilePart.check`: its strata over the verifier's program and query, read stratum
@@ -253,33 +253,23 @@ def programDigest (b : ByteArray) : Option String := do
     | x => x
   return Flock.hexOf (Flock.Sha512.hash (← (Flock.canon bare).toOption).toUTF8)
 
-private def headerLine (b : ByteArray) : ByteArray := Id.run do
-  for i in [0:b.size] do
-    if b[i]! == 10 then return b.extract 0 i
-  return b
-
-/-- The public file's header as `HmRow.loadPublic` reads it: parsed, then `Flock.norm`. -/
-private def headerOf (pubB : ByteArray) : V Json := do
-  let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
-  Flock.norm <$> (Flock.JsonParse.parse line).mapError (s!"the public file's header is not JSON: {·}")
-
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the draw): its header's scheme, `frame_v3` roots and their `domain_ids`, and
 `instances` against the record's scheme, roots, domains and population. A refusal names the codes that fail. -/
 def publicHeld (rec : Json) (pubB : ByteArray) : V Unit := do
-  let h ← headerOf pubB
+  let h ← FilePart.header pubB
   let fv := getD h "frame_v3"
   let c := Record.matchesPublic rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids") (getD h "instances")
   if !c.codes.isEmpty then throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
 
-/-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`) of the instances the session's
-record drew (`unit_draw.units`), ascending. -/
+/-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`, as the population check reads
+them: `FilePart.indicesOf` of `FilePart.header`) of the instances the session's record drew (`unit_draw.units`),
+ascending. -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
-  let h ← headerOf pubB
-  let .arr is := getD (getD h "units") "indices" | throw "the public file's header names no units.indices"
+  let is ← FilePart.indicesOf (← FilePart.header pubB)
   let .arr ds := getD (getD (← Flock.JsonParse.parse record) "unit_draw") "units"
     | throw "the record's unit_draw names no units"
-  let units ← ds.mapM fun d => match nat? d >>= fun i => is[i]? >>= nat? with
+  let units ← ds.mapM fun d => match nat? d >>= (is[·]?) with
     | some u => pure u
     | none => throw "the record draws an instance the public file's units.indices does not name"
   return units.qsort (· < ·)

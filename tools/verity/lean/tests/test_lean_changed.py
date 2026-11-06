@@ -692,14 +692,16 @@ def test_the_merge_queues_records_gate_counts_exactly_the_checker_files_a_record
         "`NOT_READ` alone)")
 
 
-@pytest.mark.skipif(not LC.sandboxed(), reason="no `unshare` here")
-def test_the_sandbox_keeps_a_lake_reached_through_a_symlink_writable(tmp_path):
-    """A slot tree reached through a symlink (the check cache on another disk) keeps its `.lake` writable, and only it."""
-    (tmp_path / "real" / ".lake").mkdir(parents=True)
-    (tmp_path / "link").symlink_to(tmp_path / "real")
-    lake = tmp_path / "link" / ".lake"
-    script = f"touch {lake / 'x'} && ! touch {tmp_path / 'real' / 'y'} 2>/dev/null"
-    got = subprocess.run([*LC.UNSHARE, "--", "bash", str(LC.SANDBOX), str(lake), "--", "bash", "-c", script])
-    assert got.returncode == 0 and (tmp_path / "real" / ".lake" / "x").exists(), \
-        "sandbox.sh must keep each RW_DIR writable under its resolved path, the one /proc/self/mountinfo names"
-    assert not (tmp_path / "real" / "y").exists()
+def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp_path, monkeypatch):
+    """A slot tree is a link into the node's cache root, and mountinfo names a mount by its resolved path, which
+    `sandbox.sh` keeps writable: the `.lake` paths (and their `packages`, kept read-only) are the resolved ones."""
+    real = tmp_path / "cache-root" / "build-2"
+    (real / "Sec" / ".lake" / "packages").mkdir(parents=True)
+    (real / "Dep").mkdir()
+    link = tmp_path / "build-2"
+    link.symlink_to(real)
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "Dep"])
+    argv = LC.in_sandbox("Sec", link, ["lake", "build"])
+    box = argv.index(str(LC.SANDBOX))
+    assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
+    assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]

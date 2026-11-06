@@ -24,18 +24,20 @@ files and at the strategy a strategy of the period's game projects to. This modu
   `flock-verify` no recomputation of public input words, so `HmIn.checkOwn` refuses any circuit that names one, and the
   session's ports are `HmIn.parse`'s empty ones. What the period's registration fixes is the session's, not a field:
   the registration the prover sends before the draw is the registration record's digest, which the composite's
-  commitment binds and the draw's coins are released after (`Live.Reg`); the record's draw file is the one
-  `flock-verify draw` prints for the verifier's own draw under the law (`printedDraw`, `Live.dj`), so V5's `hsz` holds
-  at it (`Live.hsz`), each round's digest SHA-512 (`Live.dg`), and the writer one that writes, at a draw's live
-  outcome, a transcript `verify --zk` accepts recording it (`Live.wr`, `wrZP`), so what it writes at the outcome an
-  accepted transcript's files decode to is accepted, and V5's `RecordCustodyZKJPLaw` holds at it under the law with no
-  premise (`Live.hCust`). At the device's bytes as deployed, its one-stage rounds' bytes in order, A3 holds with no
-  premise (`Live.deployed`).
+  commitment binds and the draw's coins are released after (`Live.Reg`); the record's draw file is the `.subset` print
+  of the member's share of the window's draw under the verifier's law `L`, its `kd` units (`printedDraw`, `Live.dj`),
+  so V5's `hsz` holds at it (`Live.hsz`), and the bound comes from v1's window check (`SampledProofs.OneStage.checkAt`,
+  which v2 runs at the window and which derives the draw under the verifier's own law); each round's digest is SHA-512
+  (`Live.dg`); and the writer is one that writes, at a draw's live outcome, a transcript `verify --zk` accepts recording
+  it (`Live.wr`, `wrZP`), so what it writes at the outcome an accepted transcript's files decode to is accepted, and
+  V5's `RecordCustodyZKJPLaw` holds at it under the draw file's law with no premise (`Live.hCust`). At the device's
+  bytes as deployed, its one-stage rounds' bytes in order, A3 holds with no premise (`Live.deployed`).
 * **The draw** (`Live.L`): the law the parameters' selection rule derives over the population (`law`), drawn as
   `SampledProofs.Select.select` draws it, by `SampledProofs.Draw.drawUnits` on the device's one byte stream (`src`); a
   draw that fails draws every unit. It is V5's draw at the session's bytes and law (`Live.L_eq`, `Flock.Bridge.execSel`).
 * **The live audit at the session** (`Live.game`), and V5's simulator and extractor at any strategy of it (`Live.sim`,
-  `Live.Xr`). The simulator and the extractor hold at every law V5 admits (`decodesZCJH_custodyP`).
+  `Live.Xr`), at the draw file's law (`decodesZCJH_custodyP`); the draw and `δ` are the law's (`Live.L`,
+  `Live.drawMiss`).
 * **The claim's transcript at a strategy** (`Live.extract`): V5's trace fixed at registration, opened at the deployed
   commitment and read at the circuit's gates with its constants, on the committed files' circuit. Without public input
   ports V5's key program is the claim's (`keyProgP_empty`), and the files the session reads parse to it
@@ -57,7 +59,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
   recomputation of public input words), the committed circuit and public files and the vocabulary's reading of them,
   the law the draw reads over the population (`lawAt`), the statement's descriptor and the registration's query the
   verifier's program and query, the draw's bytes the coins the coin commitment gives the parameters' challenger family,
-  the claim's share, and a law other than the work law.
+  and the claim's share.
 * **The device's log as v2's check reads it** (`coinsRead`): the releases the signed log in v2's evidence shows, in
   order, each with the bits v2 reads of it, read with v2's own tests. A line `SampledProofs.Challenger.treeLine` passes
   is a coin tree's, its own release, told apart and its tree and stream found by the tests
@@ -116,13 +118,13 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **The session v2 sets up on the parameters and the committed files**: V5's binders, each the value v2's check
-derives (the files' parse, the public file over the circuit's empty public input ports, the circuit's ports named once
-with one domain at each root, the population, the registration's descriptor and query and the population's order, the
-law on the registration's strata and the draw's size), the device's byte stream the draw reads, A3 at those bytes and
-the verify command's tags as fields, and the bound's parameters. The registration, the draw file (the printed one),
-the writer and the rounds' digest are the ones the period's registration fixes (`Live.Reg`, `Live.dj`, `Live.wr`,
-`Live.dg`), and `live-verifier` holds at the writer under the law (`Live.hCust`). The live rounds' count and the tree
-openings the session reads after a digest are its coin tree's (`Live.N`, `Live.rounds`). -/
+derives (the files' parse, the public file over the circuit's empty public input ports, the ports' published domains
+distinct with one domain at each root, the population, the registration's descriptor and query and the population's
+order, the law on the registration's strata and the draw's size), the device's byte stream the draw reads, A3 at those
+bytes and the verify command's tags as fields, and the bound's parameters. The registration, the draw file (the printed
+one), the writer and the rounds' digest are the ones the period's registration fixes (`Live.Reg`, `Live.dj`, `Live.wr`,
+`Live.dg`), and `live-verifier` holds at the writer under the draw file's law (`Live.hCust`). The live rounds' count and
+the tree openings the session reads after a digest are its coin tree's (`Live.N`, `Live.rounds`). -/
 structure Live where
   /-- the population: the public file's proof blocks -/
   n : ℕ
@@ -141,8 +143,8 @@ structure Live where
   pubO : Flock.Public
   hpubO : Flock.HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pubO
   hscope : FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true
-  /-- the circuit names each of its ports once -/
-  hdup : Flock.Registered.dupName D.unroll = none
+  /-- no two of the circuit's ports have one published domain -/
+  hdup : Flock.PortRoots.dupId D.unroll pub = false
   /-- two ports with one root at the public file's leaf map have one domain -/
   hroots : Flock.Bridge.RootFixesDomainL D.unroll (Flock.Bridge.LeafMap.ofPublic D.unroll pub n)
   hn : pub.n = n
@@ -181,7 +183,7 @@ structure Live where
   hM : 1 ≤ M
   ρ : ℝ
   hρ : ρ < 1
-  hr : ∀ S R j, rateZ (planZHJP (Reg := ByteArray) (printedDraw law) y₀ S R) j k ≤ ρ
+  hr : ∀ S R j, rateZ (planZHJP (Reg := ByteArray) (printedDraw (.subset kd)) y₀ S R) j k ≤ ρ
   /-- the claim's share: at most an `ε` share of the proof blocks unbound -/
   ε : ℝ
   /-- one opening's verification, in SHA-512 calls -/
@@ -263,13 +265,16 @@ opens; the device refuses every tree past its caps (`Verity.releases`), so every
 at every session. -/
 noncomputable def hidingTerm (_ : Live) : ℝ≥0∞ := 2 * (maxLeaves : ℝ≥0∞) / 2 ^ 257
 
-/-- **The session's draw file**: at each draw, the one `flock-verify draw` prints for the verifier's own draw under the
-session's law (`printedDraw`). -/
-abbrev dj : Finset (Fin A.n) → Lean.Json := printedDraw A.law
+/-- **The session's draw file**: at each draw, the `.subset` print `flock-verify draw` gives of the session's `kd` units
+(`printedDraw`), the member's share of the window's draw under the verifier's law `L`; `verify --zk` at the session
+admits only a subset draw (`recordDraw_subset`). The bound comes from v1's window check
+(`SampledProofs.OneStage.checkAt`), which v2 runs at the window and which derives the draw under the verifier's own
+law. -/
+abbrev dj : Finset (Fin A.n) → Lean.Json := printedDraw (.subset A.kd)
 
-/-- **V5's `hsz` at the session**: the draw file decodes only to the law's `kd` units (`drawSize_deployed`). -/
+/-- **V5's `hsz` at the session**: the draw file decodes only to `kd` units (`drawSize_deployed`). -/
 theorem hsz : ∀ S ud, Flock.Draw.UnitDraw.ofJson (A.dj S) = .ok ud → ud.units.size = A.kd :=
-  drawSize_deployed A.hlaw
+  drawSize_deployed A.kd
 
 /-- **A round's digest**: SHA-512 of the round's framed bytes, the `msg_sha512` a session's record holds of each
 round. -/
@@ -285,11 +290,11 @@ noncomputable abbrev wr : (S : Finset (Fin A.n)) → (R : A.Reg) →
       FlockSoundness.Discharge.Exec.Transcript :=
   Claims.Bridge.CustodyZkP.wrZP A.I A.own A.dj fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length
 
-/-- **`live-verifier` at the writer under the law**, as V5 reads it, holds with no premise: the record's draw is the
-printed draw under a law V5 admits (`recordCustodyZKJPLaw_deployed`). -/
+/-- **`live-verifier` at the writer under the draw file's law**, as V5 reads it, holds with no premise: the record's draw
+is the `.subset` print of the session's `kd` units (`recordCustodyZKJPLaw_deployed`). -/
 theorem hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPtsOf A.D.unroll.g (A.kd / nTab A.I))
-    A.I A.own A.dj (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr A.law :=
-  recordCustodyZKJPLaw_deployed A.I A.own A.hlaw _
+    A.I A.own A.dj (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr (.subset A.kd) :=
+  recordCustodyZKJPLaw_deployed A.I A.own A.kd _
 
 /-- **The session at the device's bytes as deployed**: the draw reads the device's one-stage rounds
 (`DeployedCoins`), their bytes in order (`deployedSrc`), where A3 holds with no premise
@@ -350,14 +355,14 @@ noncomputable def vb :=
       A.hscope A.hU A.hpi A.hpub)
 
 /-- **V5's simulator at a strategy of the live audit**: the strategy in the compiled batched session at flock-verify
-`--zk`'s acceptance at `own`, through the decoder `RecordCustodyZKJPLaw` and the draw file's size give at the session's
-law. -/
+`--zk`'s acceptance at `own`, through the decoder `RecordCustodyZKJPLaw` and the draw file's size give at the draw
+file's law, the subset law of `kd` units. -/
 noncomputable def sim (τ : FlockSoundness.Game.Strategy A.game) :=
   simZJA execArith hs512 (planZHJP A.dj A.y₀) (AcceptsZKP A.I A.own) A.wr
     (opnAtZHJP (planZHJP A.dj A.y₀) A.I A.own A.dj) A.dg (decAtZJ (planZHJP A.dj A.y₀)) (fun _ _ _ _ => true)
     (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) A.N
-    (decodesZCJH_custodyP A.I A.own A.ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse A.hD)) A.law A.kd
-      A.hdiv A.dj A.y₀ A.wr A.L A.hTags A.hCust A.hsz) τ
+    (decodesZCJH_custodyP A.I A.own A.ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse A.hD)) (.subset A.kd) A.kd A.hdiv A.dj A.y₀ A.wr A.L
+      A.hTags A.hCust A.hsz) τ
 
 /-- **V5's extractor at a strategy of the live audit**: `XplurZC` at the simulator's registration and continuation. -/
 noncomputable def Xr (τ : FlockSoundness.Game.Strategy A.game) :=
@@ -637,9 +642,9 @@ reads over the population (`lawAt`), and the statement's descriptor and the regi
 the coins of the parameters' challenger family, as many as the coin commitment's families give it (`Vocab.families`),
 `COIN_BYTES` bytes each; the statement's tags, one table, no work, stratified or closure input and no recomputation of
 public input words, as `SampledProofs.OneStageZk.inputsOf` hands them; the committed circuit and public files, and the
-vocabulary's reading of the files (`Vocab.read`) as the session's, its lookup tables included; the claim's share,
-the published certificate's; and a law other than the work law, whose draw files `norm` doesn't fix. The device's bytes
-and the bound's parameters are the deployment's session's (`Deployed`). -/
+vocabulary's reading of the files (`Vocab.read`) as the session's, its lookup tables included; and the claim's share,
+the published certificate's. The device's bytes and the bound's parameters are the deployment's session's
+(`Deployed`). -/
 structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Live) : Prop where
   params : ∃ p, ParamsAt θ p ∧ A.I.partition = some p.own.partition ∧ A.I.program = some p.own.program ∧
     lawAt p.base.verifier A.n = .ok A.law ∧
@@ -657,7 +662,6 @@ structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Li
   publicFile : A.I.publicFile = V.publicFile θ F
   read : V.read θ F = A.fileRead
   share : (V.certOf θ).ε = A.ε
-  nowork : ∀ K ws, A.law ≠ .work K ws
 
 /-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the lookup tables as v2 does**: under
 v2's parameters in `θ`, the bytes v2's hex digests of the circuit file and the public file decode to are the

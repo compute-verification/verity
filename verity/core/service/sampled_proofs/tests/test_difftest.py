@@ -955,16 +955,35 @@ def pop_order(j):
     return {"layout": ok, "ranges": ok}
 
 
+def _public_units(public) -> list:
+    """`FilePart.unitIndices`: the public file's ``units.indices`` (``public``, its bytes in hex), off its header as the
+    Python verifier reads it (`proofs._header`: the first line, decoded, ``json.loads``)."""
+    if not (isinstance(public, str) and len(public) % 2 == 0 and re.fullmatch(r"[0-9a-f]*", public)):
+        raise D.Reject("public is not lowercase hex")
+    try:
+        head = json.loads(bytes.fromhex(public).split(b"\n", 1)[0].decode())
+    except ValueError as e:
+        raise D.Reject(f"the public file's header is not JSON: {e}") from None
+    units = head.get("units") if isinstance(head, dict) else None
+    indices = units.get("indices") if isinstance(units, dict) else None
+    if not (isinstance(indices, list) and all(map(_nat, indices))):
+        raise D.Reject("the public file's units.indices is not a list of natural numbers")
+    return indices
+
+
 def file_population(j):
     """`FilePart.why` (`proofs.population_why`): the registration's strata over the program and query
-    (`partition.strata`), against a public file's units (`units.indices`)."""
+    (`partition.strata`), against a public file's units (`units.indices`): given, or read off the public file."""
     j = _json(j)
     if not isinstance(j, dict):
         raise D.Reject("not an object")
     desc = _obj(j.get("program"), "program")
-    indices = j.get("indices")
-    if not (isinstance(indices, list) and all(map(_nat, indices))):
-        raise D.Reject("indices is not a list of natural numbers")
+    if j.get("public") is not None:
+        indices = _public_units(j["public"])
+    else:
+        indices = j.get("indices")
+        if not (isinstance(indices, list) and all(map(_nat, indices))):
+            raise D.Reject("indices is not a list of natural numbers")
     if not desc:
         raise D.Reject("not a program descriptor")
     sha = PO.program_sha512(desc)
@@ -2754,8 +2773,35 @@ def file_populations(draw) -> dict:
     return {"indices": indices, "program": desc, "query": query}
 
 
-FILE_POPULATION = D.Port(PIECES, "file_population", file_population, st.one_of(file_populations(), file_populations(),
-                                                                                  JSON), package=PACKAGE)
+@st.composite
+def file_population_publics(draw) -> dict:
+    """The file_population piece's input with the public file itself (``public``, in hex): a header written as
+    `verity_flock`'s producers write theirs (`json.dumps(head, sort_keys=True)`, a newline, then the body), over
+    `file_populations`' units; else that header cut short, without its units, or after a byte that isn't UTF-8."""
+    j = draw(file_populations())
+    indices = j.pop("indices")
+    n, g = len(indices), draw(st.integers(1, 4))
+    head = {"format": "flock-instances/v3", "statement": "hm96-sha512-rows", "scheme": "hm96-sha512", "set": "eval",
+            "subcircuit": "unit", "range": [0, n], "instances": n, "circuit_sha512": "ab" * 64, "rows": True,
+            "units": {"vus_per_block": g, "units_per_vu": draw(st.integers(1, 2)), "indices": indices,
+                      "blocks": [indices[b:b + g] for b in range(0, n, g)], "classes": ["cd" * 64] * n},
+            "frame_v3": {"roots": {"x": "ef" * 64}, "domain_ids": {"x": "01" * 32}},
+            **draw(st.sampled_from([{}, {"identifier": {"name": "caf\u00e9 \u2603"}}, {"shared_rows": {"x": n}},
+                                    {"registered": {"w": {"value": "w", "positions": [0, 3], "paths": ["a/b"]}}}]))}
+    kind = draw(st.integers(0, 9))
+    if kind == 8:
+        del head["units"]
+    line = json.dumps(head, sort_keys=True).encode()
+    if kind == 7:
+        line = line[:draw(st.integers(0, len(line) - 1))]
+    elif kind == 9:
+        line = b"\xff" + line
+    return {**j, "public": (line + b"\n" + draw(st.binary(max_size=64))).hex()}
+
+
+FILE_POPULATION = D.Port(PIECES, "file_population", file_population,
+                         st.one_of(file_populations(), file_populations(), file_population_publics(),
+                                   file_population_publics(), JSON), package=PACKAGE)
 TABLE_DIGEST = st.one_of(st.sampled_from(sorted(PF.MUFU_SHA512.values())), st.binary(max_size=64).map(bytes.hex))
 TABLES_HELD = D.Port(PIECES, "tables_held", tables_held, st.one_of(
     st.lists(TABLE_DIGEST, max_size=5).map(lambda ds: {"digests": ds}),
@@ -4331,3 +4377,32 @@ def test_the_run_refuses_a_population_out_of_order(pieces):
         else:
             assert (out.get("step"), out.get("codes")) == ("register", ["population-order"]), out
     assert not P.in_order(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)
+
+
+#: The public files C-Flock's producers wrote, recorded in `verity/ml/flock/tests`' fetched fixtures
+#: (`fixtures/artifacts.json`): `verity_flock`'s staging (`json.dumps(sort_keys=True)`), and the selftest's and the
+#: recursive links' (compact, sorted).
+RECORDED = PACKAGE.parents[2] / "ml" / "flock" / "tests" / "fixtures"
+RECORDED_FIXTURES = ("forged-proofs", "public-inputs", "public-inputs-blocks", "rec-coins", "rec-links", "zk-sessions")
+
+
+def _recorded_publics() -> list[Path]:
+    missing = [f"verity/ml/flock/tests/fixtures/{f}" for f in RECORDED_FIXTURES if not (RECORDED / f).is_dir()]
+    assert not missing, f"not fetched: `uv run research data fetch-fixtures {' '.join(missing)}`"
+    return sorted(p for f in RECORDED_FIXTURES for p in (RECORDED / f).rglob("*.bin")
+                  if re.fullmatch(r"(.+\.)?pub(-\d+)?\.bin", p.name))
+
+
+def test_the_recorded_public_files_pass_the_population_check(pieces):
+    """Each public file the producers recorded (`RECORDED`) passes `FilePart.check` against a population of as many units
+    in order as it names, its header read by `FilePart.header` (`Flock.JsonParse.parse`, then `Flock.norm`) as Python's
+    `json.loads` reads it: the check refuses none of them."""
+    files = _recorded_publics()
+    assert len(files) >= 23, files
+    query = P.template_instance_query(MEMBERS[0].id)
+    for p in files:
+        b = p.read_bytes()
+        n = len(json.loads(b.split(b"\n", 1)[0])["units"]["indices"])
+        case = {"program": json.loads(_population(((0, n),))), "query": query, "public": b.hex()}
+        assert file_population(copy.deepcopy(case)) == {"why": None}, p
+        assert D.replay(FILE_POPULATION, case, pieces) == ("output", D.canonical({"why": None})), p

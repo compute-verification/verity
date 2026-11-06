@@ -284,23 +284,21 @@ struct FcTape {
     }
 };
 
-__device__ static inline uint64_t fc_rotr(uint64_t x, int r) { return (x >> r) | (x << (64 - r)); }
-
 __device__ static void fc_sha_compression(FcTape& t, const uint64_t* cv, const uint64_t* msg, uint64_t* out) {
     uint64_t w[80];
     for (int i = 0; i < 16; i++) w[i] = msg[i];
     for (int i = 16; i < 80; i++) {
-        const uint64_t s0 = fc_rotr(w[i - 15], 1) ^ fc_rotr(w[i - 15], 8) ^ (w[i - 15] >> 7);
-        const uint64_t s1 = fc_rotr(w[i - 2], 19) ^ fc_rotr(w[i - 2], 61) ^ (w[i - 2] >> 6);
+        const uint64_t s0 = sx::s0<0>(w[i - 15]);
+        const uint64_t s1 = sx::s1<0>(w[i - 2]);
         w[i] = t.add(t.add(t.add(w[i - 16], s0), w[i - 7]), s1);
     }
     uint64_t a = cv[0], b = cv[1], c = cv[2], d = cv[3], e = cv[4], f = cv[5], g = cv[6], h = cv[7];
     for (int i = 0; i < 80; i++) {
-        const uint64_t s1 = fc_rotr(e, 14) ^ fc_rotr(e, 18) ^ fc_rotr(e, 41);
+        const uint64_t s1 = sx::S1<0>(e);
         t.push(e); t.push(f ^ g);
-        const uint64_t ch = g ^ (e & (f ^ g));
-        const uint64_t t1 = t.add(t.add(t.add(t.add(h, s1), ch), SHA512_K[i]), w[i]);
-        const uint64_t s0 = fc_rotr(a, 28) ^ fc_rotr(a, 34) ^ fc_rotr(a, 39);
+        const uint64_t ch = sx::ch(e, f, g);
+        const uint64_t t1 = t.add(t.add(t.add(t.add(h, s1), ch), sx::K_DEV[i]), w[i]);
+        const uint64_t s0 = sx::S0<0>(a);
         t.push(a ^ c); t.push(b ^ c);
         const uint64_t mj = c ^ ((a ^ c) & (b ^ c));
         const uint64_t t2 = t.add(s0, mj);

@@ -194,7 +194,7 @@ def test_a_published_line_names_no_window_and_counts_none_of_a_windows_own(tmp_p
 def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_public_form(tmp_path):
     """`publish`, once the run is done: a file whose path names a window is held whole in the serve dir's private/out, one
     whose text or JSON names or counts a window is held there in full with its public form left in out/, and the rest,
-    the bench Build's requests by name, a window named ``all`` and a binary file among them, stay byte for byte. Then out/
+    the bench Build's requests by name, a window named ``all`` and the gzipped declared Program, stay byte for byte. Then out/
     names no window and counts none of a window's own, and a second pass holds nothing."""
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
     files = {
@@ -230,6 +230,31 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
     assert (out / "verdicts.txt").read_text() == ("SERVE stopped (exit 0): window(s) closed, sealed\n"
                                                   "COMPOSITE CASE verity/pous/p2/v4/run accept\n")
     assert gzip.decompress((out / "serve" / "h1" / "window-program.json.gz").read_bytes()) == b'{"rows": 512}'
+    assert S.publish(out, private) == []
+
+
+def test_publish_holds_whole_each_file_that_isnt_text_but_the_declared_program(tmp_path, monkeypatch):
+    """`publish` fails closed on a file it can't read as text: bytes that aren't UTF-8, a gzip stream that doesn't
+    decompress, and gzipped JSON, whether or not it names a window, are each held whole in private/out. Only the declared
+    Program (`PUBLIC_FILES`) stays in out/, byte for byte and unread, even past `PUBLISH_MAX`."""
+    monkeypatch.setattr(S, "PUBLISH_MAX", 64)
+    out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    program = gzip.compress(json.dumps({"rows": list(range(256))}).encode())
+    public = gzip.compress(json.dumps({"rows": 512}).encode())
+    files = {"serve/h1/window-program.json.gz": program,
+             "blob.bin": b"\xff\x00window 7",
+             "broken.json.gz": public[:-6],
+             "public.json.gz": public,
+             "named.json.gz": gzip.compress(json.dumps({"window": 7}).encode())}
+    assert len(program) > S.PUBLISH_MAX
+    for rel, body in files.items():
+        (out / rel).parent.mkdir(parents=True, exist_ok=True)
+        (out / rel).write_bytes(body)
+    assert S.publish(out, private) == ["blob.bin", "broken.json.gz", "named.json.gz", "public.json.gz"]
+    assert (out / "serve" / "h1" / "window-program.json.gz").read_bytes() == program
+    assert not (private / "serve" / "h1" / "window-program.json.gz").exists()
+    for rel in ("blob.bin", "broken.json.gz", "named.json.gz", "public.json.gz"):
+        assert not (out / rel).exists() and (private / rel).read_bytes() == files[rel], rel
     assert S.publish(out, private) == []
 
 

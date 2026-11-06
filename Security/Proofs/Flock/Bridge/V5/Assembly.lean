@@ -57,9 +57,10 @@ theorem _root_.Flock.Bridge.constsOfP_isInput {c : Flock.Circuit} {hU : Built c.
 /-- **V5's assembly** (`Bridge.AssemblyTargetV5`). -/
 theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
   intro hT hF hE n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop law kd hlaw hdiv dj S₀ d₀ y₀
-    wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows roots Cd κ r
-    ns δ hTab hLink
+    wr dg N Ω _ _ Lb src hA3 hTags lawF nsF hlawF hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows
+    roots Cd κ r ns δ hTab hLink
   classical
+  have hsz := Bridge.lawOn_size hlawF hCust.2
   have hns : ns.sum = n := Bridge.nsOf_sum hpop
   by_cases hrel : Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots)
       (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr)
@@ -77,8 +78,8 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
     · rintro ⟨u, hu, rfl⟩; exact ⟨hu, u.isLt⟩
     · rintro ⟨hv, hlt⟩; exact ⟨⟨v, hlt⟩, hv, rfl⟩
   rw [Bridge.pa_partOf_window P hns, Bridge.window_zero_filter, ← hW] at hle
-  have hTu := hT n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots law kd hdiv dj S₀ d₀ y₀ wr dg N L hTags
-    hCust (Bridge.lawOn_size hlaw hCust.2) τ
+  have hTu := hT n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots lawF kd hdiv dj S₀ d₀ y₀ wr dg N L hTags
+    hCust hsz τ
   have hκin : ∀ g b, κ g = some b → (Cc.op g).isInput = true := fun g b h =>
     Bridge.constsOfP_isInput (Discharge.Layout.outsOfP D.unroll hU n pi) h
   have hsub : (Finset.univ.filter fun u : Fin n => u.val ∈ F) ⊆ wrongRegZc execArith P (planZHJP dj y₀)
@@ -98,7 +99,8 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
     obtain ⟨-, hbit, hcan⟩ := hop g hg
     exact hbit.symm.trans (hcan.1 b hb)
   have hE' := hE n Reg I own ht D hD hU pi hpi pub hpub hscope law kd ns hns hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3
-    hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' (Finset.univ.filter fun u : Fin n => u.val ∈ F) τ qF qS hTab hLink
+    hTags lawF hCust hsz k Rw M hk hRw hM ρ hρ hr t' ht' (Finset.univ.filter fun u : Fin n => u.val ∈ F) τ qF qS hTab
+    hLink
   refine le_trans (FlockSoundness.Game.prob_mono ?_ _ τ) (hE'.trans ?_)
   · exact fun o ho => ⟨ho.1, hsub⟩
   · exact add_le_add (add_le_add (ENNReal.ofReal_le_ofReal hle) le_rfl) le_rfl

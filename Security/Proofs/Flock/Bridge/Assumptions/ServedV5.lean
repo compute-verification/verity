@@ -3,16 +3,16 @@ module
 public import Flock.Witness
 public import Flock.ProvedScope
 public import Flock.Desc
-public import Flock.Registered
+public import Flock.PortRoots
 
 /-!
 # The served registered session's files parse at public inputs
 
-`SampledKSLiveV5` takes a circuit file that parses to a descriptor `D` in `scopeOkH` whose ports have distinct names, the
-circuit's public input ports `pi` (`HmIn.parse`), and a public file that loads over them (`HmIn.loadPublic`). Whether the
-served files do is a computation on a 56 MB circuit file, which the kernel can't run, so it is one named premise, stated
-with the verifier's own functions on the files `verify --zk` reads, each pinned by its SHA-512, and checked by running
-those functions on them.
+`SampledKSLiveV5` takes a circuit file that parses to a descriptor `D` in `scopeOkH`, the circuit's public input ports
+`pi` (`HmIn.parse`), and a public file that loads over them (`HmIn.loadPublic`) whose ports' published domains are
+pairwise distinct (`PortRoots.dupId`). Whether the served files do is a computation on a 56 MB circuit file, which the
+kernel can't run, so it is one named premise, stated with the verifier's own functions on the files `verify --zk` reads,
+each pinned by its SHA-512, and checked by running those functions on them.
 -/
 
 @[expose] public section
@@ -28,14 +28,14 @@ SHA-512 digests of the served registered `--zk` session
 `verify --zk --statement verity/flock-circuit` sets one session up with (`Witness.zkTags` at the inputs
 `⟨Tags.circuit, cf, pf, 1, [], none, none⟩`: one table, no session tables, and no partition or program, which the tags
 don't read), the circuit file parses to a descriptor `D` (`Desc.parse`), `D` is in the hidden-output headlines' scope
-(`ProvedScope.scopeOkH`), no two of its ports share a name (`Registered.dupName`), its public input ports parse
-(`HmIn.parse`), and the public file loads over them (`HmIn.loadPublic`).
+(`ProvedScope.scopeOkH`), its public input ports parse (`HmIn.parse`), the public file loads over them
+(`HmIn.loadPublic`), and no two of `D`'s ports' published domains are one (`PortRoots.dupId`).
 
-Assumption record. It assumes a computation's result: run `r20261027-025931-f22c` evaluated each conjunct with these
-functions, built from the verifier's source at `main` 0600bab855, on that session's two files (the circuit has no
-public input ports, and the public file loads with 32 instances and its shared-row tables), and run
-`r20261027-114351-93be` evaluated them again at the source this module is checked at. It asks nothing of a hash or of
-the prover; a change to any of these functions or to the files makes it a new premise, to be checked by a new run. -/
+Assumption record. It assumes a computation's result: a run evaluates each conjunct with these functions, built from the
+verifier's source this module is checked at, on that session's two files (the circuit has no public input ports, and
+the public file loads with 32 instances and its shared-row tables); the lock's record of `SampledKSLiveV5Honest` names
+the runs of record. It asks nothing of a hash or of the prover; a change to any of these functions or to the files
+makes it a new premise, to be checked by a new run. -/
 def ServedFilesParseV5 : Prop :=
   ∃ cf pf : ByteArray,
     hexOf (Sha512.hash cf) =
@@ -45,9 +45,9 @@ def ServedFilesParseV5 : Prop :=
       ∃ D : Desc,
         Desc.parse (Witness.zkTags ⟨Tags.circuit, cf, pf, 1, [], none, none⟩) cf [] = .ok D ∧
         ProvedScope.scopeOkH D.unroll = true ∧
-        Registered.dupName D.unroll = none ∧
         ∃ pi : HmIn.Ports, HmIn.parse D.unroll = .ok pi ∧
           ∃ pub : Public,
-            HmIn.loadPublic (Witness.zkTags ⟨Tags.circuit, cf, pf, 1, [], none, none⟩) D.unroll pi pf = .ok pub
+            HmIn.loadPublic (Witness.zkTags ⟨Tags.circuit, cf, pf, 1, [], none, none⟩) D.unroll pi pf = .ok pub ∧
+            PortRoots.dupId D.unroll pub = false
 
 end Flock.Bridge.Assumptions

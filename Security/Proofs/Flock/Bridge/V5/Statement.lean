@@ -22,7 +22,10 @@ holds at every `own`:
   (`All` is `subset n`), or `stratified K` or `work K` over those strata, drawing `kd` proof blocks. The verifier draws
   under it from its own bytes (`Bridge.execSel`, `SampledProofs.Draw.drawUnits` on one stream), and `δ` is that law's own
   miss of a set `B` of proof blocks (`P_a(B)` of `designOf (oneStageOf law)` on `partOf P κ ns`), not a parameter;
-* `live-verifier` at `own` and the law (`Assumptions.Zk.RecordCustodyZKJPLaw`);
+* `live-verifier` at `own` and the draw file's law `lawF` (`Assumptions.Zk.RecordCustodyZKJPLaw`), a law over strata of
+  sizes `nsF` drawing `kd` proof blocks (`Bridge.LawOn`), so its draw files decode to `kd` units (`Bridge.lawOn_size`).
+  The draw file's law need not be the one the verifier draws by: a member's session prints its share of the window's
+  draw under `law` as a `.subset` draw, and `δ` stays `law`'s;
 * the constants `Bridge.constsOfP`: `constsOf`'s constant and zero, and each proof block's public gates at its public input
   words' bits in the population's public file (`HiddenExec.pubBitOf`). The verifier derives the public inputs, so the
   statement fixes them, and a public gate is read with no opening;
@@ -83,7 +86,8 @@ def _root_.Flock.Bridge.OpeningsCanonTargetV5 : Prop :=
 open Classical in
 /-- **`EndToEndHiddenC` at public inputs, under the registration's law**: its bound at flock-verify
 `--zk --public-inputs`'s acceptance, the session at `own` (`planZHJP`, `rsZHJP`, `simZJA`), `live-verifier` at `own`
-and the law, the verifier's draw under `law` on strata of sizes `ns` (`Bridge.execSel`), and "wrong" the proof blocks
+and the draw file's law `lawF`, whose draw files decode to `kd` units, the verifier's draw under `law` on strata of sizes
+`ns` (`Bridge.execSel`), and "wrong" the proof blocks
 wrong on the registration with canonical openings at `constsOfP`: every proof block of `W` is wrong with probability at
 most the law's `P_a` of `W` and the extraction's terms. -/
 def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
@@ -94,7 +98,7 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     -- the registration's law over strata of sizes `ns`, drawing `kd` proof blocks
-    (law : Flock.Draw.Law) (kd : ℕ) (ns : List ℕ) (_hns : ns.sum = n) (hlaw : Bridge.LawOn law ns kd)
+    (law : Flock.Draw.Law) (kd : ℕ) (ns : List ℕ) (_hns : ns.sum = n) (_hlaw : Bridge.LawOn law ns kd)
     (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
@@ -104,9 +108,10 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
     -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, and live-verifier at `own` and the law
-    (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    -- the verify command's tags, live-verifier at `own` and the draw file's law, and the draw file's size
+    (hTags : TagsOkZHJ I) (lawF : Flock.Draw.Law)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr lawF)
+    (hsz : ∀ S ud, Flock.Draw.UnitDraw.ofJson (dj S) = .ok ud → ud.units.size = kd)
     -- the count curve's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
@@ -121,8 +126,7 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
       (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) law kd hdiv dj y₀ wr _ hTags hCust
-        (Bridge.lawOn_size hlaw hCust.2)) τ
+      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) lawF kd hdiv dj y₀ wr _ hTags hCust hsz) τ
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
     let Lm := Bridge.LeafMap.ofPublic D.unroll pub n
     let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
@@ -159,7 +163,7 @@ def _root_.Flock.Bridge.TransportsLiveV5 : Prop :=
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
-    (_hdup : Flock.Registered.dupName D.unroll = none)
+    (_hdup : Flock.PortRoots.dupId D.unroll pub = false)
     (_hroots : Bridge.RootFixesDomainL D.unroll (Bridge.LeafMap.ofPublic D.unroll pub n))
     (law : Flock.Draw.Law) (kd : ℕ) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
@@ -199,9 +203,11 @@ file's leaf map, with probability at most `δ + ε_ks + ε_bind`. `δ` is not a 
 of drawing no proof block of a set `B`, `P_a(B)` of its design on `partOf P κ ns` at the strata `ns` of the
 registration's layout (`nsOf`). At `subset kd` and the first `K₀` proof blocks it is `C(n − K₀, kd)/C(n, kd)`
 (`Bridge.pa_subset_range`), and under `All`, whose law is `subset n`, it is `0` at any `B` holding a proof block
-(`Bridge.pa_all`). Its named assumptions are V2's, with `live-verifier` at `own` and the law (`RecordCustodyZKJPLaw`), and
-the registration's law is on its layout's strata (`Bridge.LawOn`). The link finders are charged `t'` per run (`cTZC`),
-one run's SHA-512 evaluations, the prover's and the verifier's: V2's `t' + v`. -/
+(`Bridge.pa_all`). Its named assumptions are V2's, with `live-verifier` at `own` and the draw file's law `lawF`
+(`RecordCustodyZKJPLaw`), and the registration's law is on its layout's strata and `lawF` on strata of sizes `nsF`, both
+drawing `kd` proof blocks (`Bridge.LawOn`). The draw file's law need not be the registration's: `δ` is the miss of the
+law the verifier draws by. At `lawF = law` and `nsF = nsOf desc qr` it is the registration's. The link finders are
+charged `t'` per run (`cTZC`), one run's SHA-512 evaluations, the prover's and the verifier's: V2's `t' + v`. -/
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
@@ -210,12 +216,12 @@ def SampledKSLiveV5 : Prop :=
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
-    (_hdup : Flock.Registered.dupName D.unroll = none)
+    (_hdup : Flock.PortRoots.dupId D.unroll pub = false)
     (_hroots : Bridge.RootFixesDomainL D.unroll (Bridge.LeafMap.ofPublic D.unroll pub n))
     -- the statement's descriptor, and the registration's query, whose population is the game's n proof blocks in order
     (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     -- the registration's law over the query's strata, drawing kd proof blocks
-    (law : Flock.Draw.Law) (kd : ℕ) (hlaw : Bridge.LawOn law (Bridge.nsOf desc qr) kd) (hdiv : kd % nTab I = 0)
+    (law : Flock.Draw.Law) (kd : ℕ) (_hlaw : Bridge.LawOn law (Bridge.nsOf desc qr) kd) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -224,9 +230,10 @@ def SampledKSLiveV5 : Prop :=
     -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, and live-verifier at `own` and the law
-    (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    -- the verify command's tags, live-verifier at `own` and the draw file's law, a law over strata of sizes `nsF`
+    -- drawing `kd` proof blocks
+    (hTags : TagsOkZHJ I) (lawF : Flock.Draw.Law) (nsF : List ℕ) (hlawF : Bridge.LawOn lawF nsF kd)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr lawF)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
     -- the proof blocks whose miss is `δ`
@@ -241,8 +248,8 @@ def SampledKSLiveV5 : Prop :=
       (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) law kd hdiv dj y₀ wr _ hTags hCust
-        (Bridge.lawOn_size hlaw hCust.2)) τ
+      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) lawF kd hdiv dj y₀ wr _ hTags hCust
+        (Bridge.lawOn_size hlawF hCust.2)) τ
     let Xr := XplurZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw
     -- the deployed commitment's layout: the game's rows, read off the circuit file, at the public file's leaf map
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)

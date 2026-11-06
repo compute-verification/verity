@@ -141,7 +141,7 @@ if [ "$FW" = 1 ] && [ "${H1_WIRE:-0}" = 1 ]; then
     FC_FIREWALL_STATEMENT=verity/flock-circuit+seed-injection \
       $TIME "$OUT/honest/selftest-$c.time" bash -c "exec $SBIN selftest --zk --instances $HD/inst.bin \
       --circuit $HD/circuit.txt --draw subset:$HN --only $c" > "$OUT/honest/selftest-$c.out" 2> "$OUT/honest/selftest-$c.err"
-    grep -q '^NEG.*"pass":true}$' "$OUT/honest/selftest-$c.out" || WIRE=FAIL
+    grep -Eq '^NEG.*"pass":true([,}]|$)' "$OUT/honest/selftest-$c.out" || WIRE=FAIL
     log "$c controls: $(grep -E '^NEG' "$OUT/honest/selftest-$c.out" | cut -c1-300)"
   done
 fi

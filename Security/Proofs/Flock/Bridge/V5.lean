@@ -15,9 +15,9 @@ the targets its assembly takes (stated). `EndToEndHidden`: `endToEndHiddenV5_of`
 `Assembly`: `assemblyTargetV5`. `OpeningsCanon`: `openingsCanonV5`. `Transports`: `transportsLiveV5`. `KSLive`:
 `Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5`, proved. `Honest`:
 `Flock.SecurityProofs.SampledKSLiveV5Honest`, its file hypotheses at the served registered session, from the named
-premise `ServedFilesParseV5`. `Refused`: `verify --zk`'s form check at a shared-row file gives V5's file hypotheses
-`HmIn.parse`, `HmIn.loadPublic` and `RootFixesDomainL` (`v5Files_of_check`). `Accepted`:
+premise `ServedFilesParseV5`. `Refused`: `verify --zk`'s published-roots check gives V5's `RootFixesDomainL`, with or
+without shared rows (`fixesL_of_collidesPub_false`). `Accepted`:
 `Flock.Bridge.sampledKSLiveV5Accepted`, V5 on the event that `verify --zk` accepts the files and the run passes the
-registration's population, without V5's hypotheses on the files' rows, names and roots or on the population order. -/
+registration's population, without V5's hypotheses on the files' rows, domains and roots or on the population order. -/
 
 @[expose] public section
