@@ -104,9 +104,11 @@ def test_a_line_at_zero_is_captioned_and_coincident_lines_plotted_once():
 def test_a_capped_caption_says_what_it_rests_on():
     """The capped sentences name each form's status, the patterns' form only in the appendix, beside every panel's own
     sentences."""
-    caps = f.captions(1.0, boundary_hash_share=1e-7, served=(81000.0, 4500, 18, 3.36e11))
-    assert "Capped (dash-dot; cap lemma in progress): two-stage with each request charged at most the 81,000 bits it " \
-           "serves (4,500 tokens of 18 bits)" in caps["exfiltration"] and "Patterns" not in caps["exfiltration"]
+    caps = f.captions(1.0, boundary_hash_share=1e-7, served=(144000.0, 4500, 32, 3.36e11, 1.5e16))
+    assert "Capped (dash-dot; card_influenceTwo_le_served_min): two-stage with each request charged at most the " \
+           "144,000 bits it serves (4,500 tokens of 32 bits)" in caps["exfiltration"]
+    assert "never above the 1.5e+16 bits the scope serves (card_influenceTwo_le_min)" in caps["exfiltration"]
+    assert "Patterns" not in caps["exfiltration"]
     assert "Patterns (dash-dot-dot; no lemma states it yet)" in caps["exfiltration_appendix"]
     for panel in ("exfiltration", "skipped_work"):
         assert "the token ids, 1e-07 of the scope's compute" in caps[panel], panel
@@ -330,16 +332,18 @@ def test_the_capped_curves_charge_at_most_what_a_request_serves(tmp_path):
     out = f.run("GLM-5.3", 2, ("datacenter week",), designs=("two-stage", "two-stage-capped", "two-stage-patterns"))
     rises_and_falls(out)
     p = out["panels"]["exfiltration"]
-    assert p["capped"] == {"two-stage-capped": {"form": "sets", "status": "cap lemma in progress"},
+    assert p["capped"] == {"two-stage-capped": {"form": "sets", "status": "card_influenceTwo_le_served_min",
+                                                "served": "card_influenceTwo_le_min"},
                            "two-stage-patterns": {"form": "patterns", "status": "no lemma states it yet"}}
     assert p["main"] == ["two-stage", "two-stage-capped"]
     ys = {(s["design"], s["budget"]): s["y"] for s in p["series"]}
+    served = out["scopes"]["datacenter week"]["served_bits"]
     for beta in out["budgets"]:
         for patterns, sets, every in zip(*(ys[d, beta] for d in ("two-stage-patterns", "two-stage-capped",
                                                                   "two-stage"))):
-            assert patterns <= sets * (1 + 1e-3) and sets <= every * (1 + 1e-3)
+            assert patterns <= sets * (1 + 1e-3) and sets <= every * (1 + 1e-3) and sets <= served
     caps = out["scopes"]["datacenter week"]["captions"]
-    assert (f"Capped (dash-dot; cap lemma in progress): two-stage with each request charged at most the "
+    assert (f"Capped (dash-dot; card_influenceTwo_le_served_min): two-stage with each request charged at most the "
             f"{out['inputs']['served_bits']['value']:,.0f} bits it serves") in caps["exfiltration"]
     assert "no lemma states it yet" in caps["exfiltration_appendix"] and "Patterns" not in caps["exfiltration"]
     assert all(path.stat().st_size > 0 for path in render(out, "datacenter week", tmp_path)

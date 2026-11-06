@@ -36,10 +36,10 @@ THIN = {"two-stage-uniform": 1.2, "two-stage-capped": 2.6, "two-stage-capped-uni
         "two-stage-patterns": 2.6, "two-stage-patterns-uniform": 1.2}
 HEADLINE_LW, COMPARISON_LW = 3.2, 1.8
 NAMES = {"two-stage": "Two-stage, width-stratified", "two-stage-uniform": "Two-stage, uniform",
-         "two-stage-capped": "Capped at served bits, width-stratified (cap lemma in progress)",
-         "two-stage-capped-uniform": "Capped at served bits, uniform (cap lemma in progress)",
-         "two-stage-patterns": "Served patterns, width-stratified (no lemma yet)",
-         "two-stage-patterns-uniform": "Served patterns, uniform (no lemma yet)",
+         "two-stage-capped": "Capped at served bits, width-stratified",
+         "two-stage-capped-uniform": "Capped at served bits, uniform",
+         "two-stage-patterns": "Served patterns, width-stratified",
+         "two-stage-patterns-uniform": "Served patterns, uniform",
          "one-stage": "One-stage, dot-product blocks", "request": "Request-level",
          "layer_of_token": "Deferred interiors, a layer of a token"}
 REFERENCE_STYLE = {"solid": "-", "dashed": (0, (4, 3))}
@@ -165,8 +165,10 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, ylabel: str, series: list
         ax.plot(s["x"], [y * scale for y in s["y"]], color=colors[s["budget"]], ls=_style(s["design"], p["headline"]),
                 lw=_width(s["design"], p["headline"]), zorder=4 if headline else 3)
     designs = list(dict.fromkeys(s["design"] for s in series))
+    rests = p.get("capped", {})
     ax.legend([plt.Line2D([], [], color="#333333", ls=_style(d, p["headline"]), lw=THIN.get(d, 2.4)) for d in designs],
-              [NAMES[d] for d in designs], loc="lower left", bbox_to_anchor=(0, 1.01), ncol=min(len(designs), 2),
+              [NAMES[d] + (f" ({rests[d]['status']})" if d in rests else "") for d in designs],
+              loc="lower left", bbox_to_anchor=(0, 1.01), ncol=min(len(designs), 2),
               frameon=False, fontsize=15, handlelength=2.4, columnspacing=1.2, borderaxespad=0)
 
 

@@ -59,8 +59,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
       proof blocks, each charged its own blocks' committed bits, so a wholly incorrect request is charged every bit it
       commits. Beside it (dash-dot) is the same design with each request charged at most the bits it serves, every one
       of its tokens as the token select's 32-bit output word, the `design` card's `token_bytes` (`served_bits`), in
-      `two_stage_exfil`'s sets' form, on a cap lemma in progress, which still counts which of a request's proof blocks
-      are incorrect. `--request workload` sizes a request as the `workload` card's instead of the census's mean. The
+      `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`), which still counts which of a request's proof
+      blocks are incorrect, and never above the scope's served bits (`card_influenceTwo_le_min`). `--request workload` sizes a request as the `workload` card's instead of the census's mean. The
       appendix figure adds the uniform designs (one sample over a request's proof blocks), the patterns' form, which
       no lemma states yet (a request's incorrect sets of more than its served bits count once), and one-stage
       sampling of dot-product proof blocks, in `consumers.exfiltration_bound`'s form (the incorrect proof blocks'
@@ -92,6 +92,7 @@ Limits of the model:
 - The one-stage curves leave serve-time hashing out of the budget.
 - The one-stage certificate counts location bits over every proof block of the scope.
 - The uncapped two-stage bound charges a wholly incorrect request every bit it commits, its interior included, not
-  only what it serves; the capped ones charge at most what it serves, on a lemma in progress or none yet.
+  only what it serves; the capped ones charge at most what it serves, the sets' form on
+  `card_influenceTwo_le_served_min` and the patterns' form on none yet.
 - The served bits count every token of a request as served, as the token select's output word alone: a circuit that
   returns more (logits, state) serves more, and the cap is then too low.
