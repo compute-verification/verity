@@ -2456,6 +2456,60 @@ def test_a_sender_no_route_knows_is_learned_from_its_brief(tmp_path):
     assert widths in w.children, "a worker still sending runs is kept past WORKER_KEEP_S from its learning"
 
 
+def test_a_sender_no_route_knows_is_watched_as_infras_until_a_route_claims_it(tmp_path):
+    """A worker its coordinator never registered, whose brief names no coordinator, was rung to infra once at a run's end and
+    never watched: pous-prf hung for hours unseen. Such a sender is kept as infra's worker (`UNOWNED`), so going IDLE rings
+    infra, while its runs still go to infra as unowned (never resumed or relaunched as infra's). A workers.d entry claims it."""
+    stray = "bc-abababab-abab-abab-abab-abababababab"
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    api.workers[stray] = worker("ACTIVE", W.iso(T0 - 600), "pous-prf: hiding budget per leaf")
+    api.convs[stray] = [("user_message", "You are pous-prf. Read the note and go on.")]
+    w.sweep(lambda r: None)
+    clock.t += 60
+    node_run(roots["vy-nebius-1"], "r20261105-110000-0001", clock.t, by=f"https://cursor.com/agents/{stray}", state="failed", rc=1)
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    (rec,) = [r for r in ended(tmp_path) if r["role"] == "unknown"]
+    assert w.children[stray]["owner"] == W.UNOWNED and stray not in w.awaiting, "unowned: rung to infra, no clock started"
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert w.workers[stray]["handle"] == W.UNOWNED
+    api.workers[stray] = worker("IDLE", W.iso(clock.t), "pous-prf: hiding budget per leaf")
+    for _ in range(W.BURST_S // 60 + 2):                    # a worker's idle is held to join its parent's others (`bursts`)
+        clock.t += 60
+        w.sweep(lambda r: None)
+    idle = [r for r in records(tmp_path) if r["kind"] in ("worker_idle", "workers_failed") and stray in json.dumps(r)]
+    assert idle and idle[-1]["handle"] == W.UNOWNED
+    (tmp_path / "workers.d").mkdir(exist_ok=True)
+    (tmp_path / "workers.d" / f"{stray}.json").write_text(json.dumps({"agent_id": stray, "lane": "vllm", "launched_by": NEW}))
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert stray not in w.children and w.workers[stray]["handle"] == "vllm"
+
+
+def test_a_listed_stray_stays_unowned_and_is_never_resumed_as_infras(tmp_path):
+    """A stray the agent list has (launched through the API) read as infra's owned agent: its next run routed as infra's worker
+    and the watch resumed it. Its owner is infra only for the watch's rings; its runs stay unowned, and nothing resumes it."""
+    stray = "bc-cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd"
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    api._agents.append({"id": stray, "name": "an API-launched agent", "status": "IDLE", "latestRunId": "run-s",
+                        "updatedAt": W.iso(T0 - 1800)})
+    api._runs["run-s"] = dict(FINISHED)
+    api.convs[stray] = [("user_message", "Do the thing.")]
+    w.sweep(lambda r: None)
+    for i in range(2):
+        clock.t += 60
+        node_run(roots["vy-nebius-1"], f"r20261105-11000{i}-000{i}", clock.t, by=f"https://cursor.com/agents/{stray}")
+        clock.t += 5 * 60
+        w.sweep(lambda r: None)
+    assert stray not in w.owners and stray not in w.awaiting
+    assert all(r["role"] == "unknown" for r in ended(tmp_path)), "both runs go to infra as unowned"
+    while clock.t < T0 + 3 * 3600:
+        clock.t += 300
+        w.sweep(lambda r: None)
+    assert not [p for p, _ in api.posts if p == f"/v1/agents/{stray}/runs"], "never resumed"
+
+
 def test_a_relaunched_worker_routes_as_its_lanes_worker_and_the_watch_resumes_it(tmp_path):
     """INF-143: a relaunched worker is an agent the list has, so `watch_workers` drops it from the workers it reads; its runs
     resolved as nobody's. Its workers.d entry (launched by its coordinator) makes it its lane's worker: its run's end routes to
