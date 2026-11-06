@@ -1102,6 +1102,32 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
+/-- **`Flock.zk_server_lean` from the switched prover's zero knowledge**: the deferred release at `swP vs`, from
+`Claims.Flock.ZKAt` at its prover with `refP`'s simulator, at any proof of it (`Flock.zk_deployZk_sw` from the session's
+six Props; `Flock.zk_deployZk_sw_stops` at the session with the frame's stops). -/
+theorem Flock.zk_server_lean_of (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (S : RefSession) (vs : S.SwVals) (t : ℕ) (δ₁ : ENNReal)
+    (hzk : Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) (S.swP vs).prover
+      ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+      (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
+      fun _ => 4 * t * 3 ^ t)
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
+    (hI : L.ItemsRefine H (S.swP vs).prover (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w) {Θ : Type}
+    (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
+    (Ev : List ((Msg × Out) × ℕ) → Prop) :
+    Pr (fun ω : (S.refP.Nonce × S.refP.Rand) × L.toSrv.Chk =>
+        Ev (L.toSrv.timed x (runStar H (L.toSrv.proverD L.fillOf (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk w) Vs x ω θ).msgs)) ≤
+      2 * (Pr (fun c : (leaky1 ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+            (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).C x =>
+          Ev (L.toSrv.timed x ((leaky1 ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+            (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).out H Vs θ x c))) +
+          (8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
+          4 * t * 3 ^ t * (Fork H ((S.swP vs).prover w) Vs θ x).Pr H) := by
+  have h := L.toSrv.zk_deferred L.fillOf H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (S.swP vs).prover _ _ _ _
+    hzk.2 x w hR wk (L.refD H _ _ wk x w hI) Vs θ hk Ev
+  exact h
+
 /-- **The ZK server at `flock-circuit --zk`'s reference session, released by the Lean frame at its own draws**: the
 deployed release `L.toSrv`, whose masks are the frames' draws on the server's tape and whose coin stops and pass decision
 are the frames', and which stops a session only at its `Finish` (`ZkServer.nextD` with the stand-in `LeanRelease.fillOf`; every worker
@@ -1139,10 +1165,8 @@ theorem Flock.zk_server_lean (H : Msg → Msg) (rel : _root_.Flock.Readable.Pars
           Ev (L.toSrv.timed x ((leaky1 ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).out H Vs θ x c))) +
           (8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
-          4 * t * 3 ^ t * (Fork H ((S.swP vs).prover w) Vs θ x).Pr H) := by
-  have h := L.toSrv.zk_deferred L.fillOf H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (S.swP vs).prover _ _ _ _
-    (Flock.zk_deployZk_sw H rel S vs t ht hT1 hδ₁ hS hV hD hc hsc hT).2 x w hR wk
-    (L.refD H _ _ wk x w hI) Vs θ hk Ev
-  exact h
+          4 * t * 3 ^ t * (Fork H ((S.swP vs).prover w) Vs θ x).Pr H) :=
+  Flock.zk_server_lean_of H rel S vs t δ₁ (Flock.zk_deployZk_sw H rel S vs t ht hT1 hδ₁ hS hV hD hc hsc hT) L wk x w
+    hR hI Vs θ hk Ev
 
 end Claims.ZKServer

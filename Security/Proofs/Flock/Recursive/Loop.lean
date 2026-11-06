@@ -4,6 +4,7 @@ public import Proofs.Flock.Recursive.OuterSessionZK
 public import Proofs.Flock.Claims.Sampling.Seq
 public import Proofs.Flock.Claims.Sampling.Draws
 public import Proofs.Flock.Claims.ZK.Blind
+public import Proofs.Flock.Claims.ZK.FrameOuter
 public import Proofs.Flock.SessionLoop.FinishParts
 
 /-!
@@ -24,8 +25,9 @@ values `vs`, one after another, each on its own tape.
   witness.
 * `outerSessionsZK_of`: `OuterSessionsZK` at those statements, with `ε_o` the supremum over contexts of their errors and
   the composed prover's fork term, on V*'s staging (`LoopSessions.Public`, `LoopSessions.Honest`).
-* `loop_zkmalR`: the loop's session is `ZKmalR` at its switched prover, `Flock.zk_deployZk_sw`'s bound under
-  `SessionLoopZKDeployed`'s premises on the deployed tables, which take `SessionsCoined`'s role.
+* `loop_zkmalR`: the loop's session is `ZKmalR` at its switched prover, `Flock.zk_deployZk_sw_stops`'s bound under
+  `SessionLoopZKDeployed`'s premises on the deployed tables, which take `SessionsCoined`'s role: the switched round
+  encoding causal at `Loop.SwOk`'s coins (`SwCausalOn`), where the loop's stops compute (`LeanRelease.stopsOk_swOk`).
 * `outerSessionsZK_loop`: `outerSessionsZK_of` at `loop_zkmalR`.
 * `outerViewZK_loop`: `RecursiveZK`'s `_hOuter` (`OuterViewZK`) at one worker's statements, the simulator their public
   statements'.
@@ -368,14 +370,14 @@ noncomputable abbrev loopRef
 /-- The rounds of one of the loop's sessions: the masked verifier's and the `Finish`. -/
 noncomputable abbrev loopK (x : Claims.Msg) : ℕ := (FlockDeploy.deployZk _root_.Flock.Readable.relation).V.k x + 1
 
-/-- The loop's session's simulator (`Flock.zk_deployZk_sw`'s) at `t` rewinds. -/
+/-- The loop's session's simulator (`Flock.zk_deployZk_sw_stops`'s) at `t` rewinds. -/
 noncomputable abbrev loopSim
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) (t : ℕ) : Claims.Simulator :=
   ((loopRef L₀ src).refP.withSim fun x _ c => (loopRef L₀ src).coinModel x c).simulatorE t (t * 3 ^ t)
 
-/-- The loop's session's error (`Flock.zk_deployZk_sw`'s) at the pinned key's hiding gap and `t` rewinds. -/
+/-- The loop's session's error (`Flock.zk_deployZk_sw_stops`'s) at the pinned key's hiding gap and `t` rewinds. -/
 noncomputable abbrev loopEps
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
@@ -390,45 +392,52 @@ theorem loopEps_nonneg (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Clai
   have h0 := CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash
   exact add_nonneg (add_nonneg (mul_nonneg (by positivity) h0) (mul_nonneg (by positivity) h0)) (by positivity)
 
-/-- **The loop's session is zero knowledge at its switched prover** (`ZKmalR`): `Flock.zk_deployZk_sw` at the loop's
-session (`loopRef`) and the workers' values `vs`, at the pinned key's hiding gap and `t` rewinds (`loopSim`, `loopEps`,
-`4·t·3^t`), `SessionLoopZKDeployed`'s premises on the deployed tables carried over the loop's stops. -/
+/-- **The loop's session is zero knowledge at its switched prover** (`ZKmalR`): `Flock.zk_deployZk_sw_stops` at the
+loop's session (`loopRef`) and the workers' values `vs`, at the pinned key's hiding gap and `t` rewinds (`loopSim`,
+`loopEps`, `4·t·3^t`), under `SessionLoopZKDeployed`'s premises on the deployed tables: the switched round encoding
+causal at `Loop.SwOk`'s coins, where the loop's stops compute (`LeanRelease.stopsOk_swOk`). -/
 theorem loop_zkmalR (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t)
     (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse))
     (hD : Claims.ZKServer.Loop.finS.DummyReg) (hc : Claims.ZKServer.Loop.finS.Causal)
-    (hsc : Claims.ZKServer.Loop.finS.SwCausal vs) (hT : Claims.ZKServer.Loop.finS.TapeOK)
+    (hsc : Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs)
+    (hT : Claims.ZKServer.Loop.finS.TapeOK)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) :
     Claims.ZKmalR Claims.ZKMal.CoinOpen.shaH loopK ((loopRef L₀ src).swP vs).prover
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) (loopSim L₀ src t)
       (loopEps L₀ src t) fun _ => 4 * t * 3 ^ t := by
-  have h := Claims.ZKMal.Flock.zk_deployZk_sw Claims.ZKMal.CoinOpen.shaH _root_.Flock.Readable.relation
-    (loopRef L₀ src) vs t ht (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) ENNReal.ofReal_ne_top
-    (Claims.ZKMal.RefSession.withStops_tables _ _ _ hS) (Claims.ZKMal.RefSession.withStops_complete _ _ _ hV)
-    (Claims.ZKMal.RefSession.withStops_dummyReg _ _ _ hD)
-    (Claims.ZKMal.RefSession.withStops_causal _ _ _ (Claims.ZKServer.LeanRelease.stopsCausal_rfOf _ _ _ _ _) hc)
-    (Claims.ZKMal.RefSession.withStops_swCausal _ _ _ vs (Claims.ZKServer.LeanRelease.stopsCausal_rfOf _ _ _ _ _)
-      hsc)
-    (Claims.ZKMal.RefSession.withStops_tapeOK _ _ _ hT)
+  have h := Claims.ZKMal.Flock.zk_deployZk_sw_stops Claims.ZKMal.CoinOpen.shaH _root_.Flock.Readable.relation
+    Claims.ZKServer.Loop.finS
+    (Claims.ZKServer.LeanRelease.rfOf Claims.ZKServer.Loop.finS
+      (Claims.ZKServer.LeanRelease.ofLoopLink L₀ src (Claims.ZKServer.Loop.realOf src))
+      Claims.ZKServer.Loop.progOf Claims.ZKServer.Loop.freshOf Claims.ZKServer.Loop.readCoins)
+    (Claims.ZKServer.LeanRelease.ofLoopLink L₀ src (Claims.ZKServer.Loop.realOf src)).stop vs
+    (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) t ht (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash)
+    ENNReal.ofReal_ne_top hS hV hD hc (Claims.ZKServer.LeanRelease.stopsCausal_rfOf _ _ _ _ _) hsc
+    (Claims.ZKServer.LeanRelease.stopsOk_swOk Claims.ZKMal.Masked.dataE
+      (Claims.ZKServer.LeanRelease.withFiles (Claims.ZKServer.LeanRelease.withLink L₀ src) src)
+      (Claims.ZKServer.Loop.realOf src)) hT
   rw [ENNReal.toReal_ofReal (CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash)] at h
   exact h.2
 
 /-- **V*'s statements run by the session loop give the committed-coin statements their `_hOuter`** (`OuterSessionsZK`):
 `outerSessionsZK_of` at the loop's session (`loopRef`), each statement run by its switched prover at the workers' values
-`vs` (`(loopRef L₀ src).swP vs`), the simulator and errors `Flock.zk_deployZk_sw`'s at the pinned key's hiding gap and
-`t` rewinds (`loopSim`, `loopEps`, `4·t·3^t`). The view is the switched prover's; what the loop's own prover sends is
-`SessionLoopZKDeployed`'s, which bounds it by twice the simulated view plus its error. `SessionLoopZKDeployed`'s
-premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausal`, `TapeOK`) take
-`SessionsCoined`'s role, with no further obligation on the tables; V*'s staging is `outerSessionsZK_of`'s. -/
+`vs` (`(loopRef L₀ src).swP vs`), the simulator and errors `Flock.zk_deployZk_sw_stops`'s at the pinned key's hiding
+gap and `t` rewinds (`loopSim`, `loopEps`, `4·t·3^t`). The view is the switched prover's; what the loop's own prover
+sends is `SessionLoopZKDeployed`'s, which bounds it by twice the simulated view plus its error.
+`SessionLoopZKDeployed`'s premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`, and
+`SwCausalOn` at `Loop.SwOk`'s coins) take `SessionsCoined`'s role, with no further obligation on the tables; V*'s
+staging is `outerSessionsZK_of`'s. -/
 theorem outerSessionsZK_loop {Ow Prog Wit Rv Ωa Ωp Pub Θ : Type} {nr nh : ℕ}
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t) (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse))
     (hD : Claims.ZKServer.Loop.finS.DummyReg) (hc : Claims.ZKServer.Loop.finS.Causal)
-    (hsc : Claims.ZKServer.Loop.finS.SwCausal vs) (hT : Claims.ZKServer.Loop.finS.TapeOK)
+    (hsc : Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs)
+    (hT : Claims.ZKServer.Loop.finS.TapeOK)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
@@ -457,16 +466,17 @@ theorem outerSessionsZK_loop {Ow Prog Wit Rv Ωa Ωp Pub Θ : Type} {nr nh : ℕ
 messages `msgs` are fixed before the first commitment (the committed-coin case): the view is V*'s statements at the tape
 and the firewall's commitments (`LoopSessions.atWorker`), each run in turn by the loop's switched prover at the workers'
 values `vs`, against `V*` at its tape `θ` of the tape and the commitments; the simulator is their public statements'
-(`LoopSessions.pubStmts`), which reads no witness; and `ε_o` is the statements' error at `Flock.zk_deployZk_sw`'s bound
-(`loop_zkmalR`). It takes `SessionLoopZKDeployed`'s premises on the deployed tables, which take `SessionsCoined`'s role,
-and of V*'s staging `LoopSessions.Honest` and `LoopSessions.Sized`; the public context is the tape and the commitments
-by construction. -/
+(`LoopSessions.pubStmts`), which reads no witness; and `ε_o` is the statements' error at
+`Flock.zk_deployZk_sw_stops`'s bound (`loop_zkmalR`). It takes `SessionLoopZKDeployed`'s premises on the deployed
+tables, which take `SessionsCoined`'s role, and of V*'s staging `LoopSessions.Honest` and `LoopSessions.Sized`; the
+public context is the tape and the commitments by construction. -/
 theorem outerViewZK_loop {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t)
     (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse))
     (hD : Claims.ZKServer.Loop.finS.DummyReg) (hc : Claims.ZKServer.Loop.finS.Causal)
-    (hsc : Claims.ZKServer.Loop.finS.SwCausal vs) (hT : Claims.ZKServer.Loop.finS.TapeOK)
+    (hsc : Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs)
+    (hT : Claims.ZKServer.Loop.finS.TapeOK)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))

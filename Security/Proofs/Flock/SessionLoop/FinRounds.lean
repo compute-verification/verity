@@ -14,7 +14,8 @@ public import Proofs.Flock.Claims.ZK.FrameInner
   the deferred release's own (`ZkServer.OwnHist`), each frame round's message (rounds `2` to `refK x`) is the session's
   switched message at the coins the openings before it open, without its leading domain frame: `LiveRoundEq` at that
   prefix, which is live (`live_take`), takes its coins (`refusesCoins_of_live`) and passes its openings (`allOk_eval`).
-* **`LeanRelease.msg_of_swCausal`**: the same at the opened coins, from the session's causality (`SwCausal`).
+* **`LeanRelease.msg_of_swCausal`**: the same at the opened coins, from the switched causality on `Ok` (`SwCausalOn`)
+  where every prefix of them is `Ok`'s: at the loop, `Loop.SwOk`'s (`Loop.swOk_take_of_finCtx`).
 * **`Loop.msg_runCut`**, **`Loop.runCut_body`**: that message is the cut session's body at the opened coins, which is
   the body the view rep's run sends (`CutPrefix.repCut_cut_agree`, `RepLog.repCut_rounds`).
 * **`LeanRelease.msg_release`**: a frame round's message is a release ending in the squeeze of its coins, fewer than
@@ -199,12 +200,14 @@ theorem msg_of_liveRoundEq (S : RefSession) (vs : S.SwVals)
   simpa [List.getElem_map, List.getElem_take] using this
 
 /-- **Each frame round of a `Finish` `FinishIs` reads is the switched round encoding at the opened coins**, without its
-leading domain frame: `msg_of_liveRoundEq`, whose prefix coins agree with the opened ones below the round
-(`swMsgAt_take`, from `SwCausal`). -/
+leading domain frame: `msg_of_liveRoundEq`, whose prefix coins agree with the opened ones below the round, at values
+causal on `Ok` (`SwCausalOn`) where every prefix of the opened coins, padded, is `Ok`'s (`enc_swCutOf_on`). -/
 theorem msg_of_swCausal (S : RefSession) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg)
-    (w : Flock.Wit) (hE : LiveRoundEq S vs L H wk x w) (hc : S.SwCausal vs) (hlast : L.last x = refK x + 1)
+    (w : Flock.Wit) (hE : LiveRoundEq S vs L H wk x w) (Ok : (x : Msg) → (Fin (refK x) → S.Coin) → Prop)
+    (hc : S.SwCausalOn Ok vs) (hlast : L.last x = refK x + 1)
     (ν : S.Nonce) (t : S.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hlen : ops.length = refK x)
+    (hOk : ∀ k, Ok x (S.pad (K := refK x) ((ops.take k).map fun p => S.decOf p.2)))
     (hl : L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true)
     (hok : ((allOk (S.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true)
     (hown : L.toSrv.OwnHist L.fillOf wk x w (ν, t) κ ((m₀, ρ₀) :: ops)) (j : ℕ) (h2 : 2 ≤ j) (hj : j ≤ refK x) :
@@ -228,7 +231,11 @@ theorem msg_of_swCausal (S : RefSession) (vs : S.SwVals)
           congr 1
           omega
   have hlt : j - 1 < refK x := by omega
-  rw [e, S.swMsgAt_take vs x w ν hc t (S.pad (ops.map fun p => S.decOf p.2)) (j - 1) (by omega), ite_eq_left hlt]
+  rw [e, S.swMsgAt_take_pre x (S.wt x w) (vs x w ν) t (S.pad (ops.map fun p => S.decOf p.2)) (j - 1) hlt]
+  refine S.enc_swCutOf_on vs Ok x w ν hc t _ _ (j - 1) (fun k hk => S.pad_take _ (j - 1) k hk) ?_ ?_
+  · rw [← e]
+    exact hOk (j - 1)
+  · simpa only [List.take_length] using hOk ops.length
 
 /-- Rounds `2` to `refK x` are frame rounds, with the `Finish` one past the last coin. -/
 theorem kindAt_mid {W R : Type} {L : LeanRelease W R} {x : Msg} (hlast : L.last x = refK x + 1) {j : ℕ}
@@ -327,14 +334,28 @@ theorem enc_finS {x : Msg} (c : Fin (refK x) → finS.Coin) {n : ℕ} (hn : n �
       · exact .inr ⟨s, spec, rfl, rfl⟩
       · exact .inl rfl
 
+/-- **At a `Finish` `FinishIs` reads every prefix of the opened coins is `SwOk`'s** (`LeanRelease.swOk_take_of_live`):
+the run is live and its coins unrefused. -/
+theorem swOk_take_of_finCtx {L₀ : LeanRelease Flock.Wit Tp}
+    {src : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
+    {real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+    {wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker} {x : Msg} {w : Flock.Wit} {ν : finS.Nonce}
+    {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src real).toSrv.Chk} {m₀ ρ₀ : Msg} {ops : List (Msg × Msg)}
+    (hF : FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops) (k : ℕ) :
+    SwOk Masked.dataE x (finS.pad (K := refK x) ((ops.take k).map fun p => finS.decOf p.2)) :=
+  LeanRelease.swOk_take_of_live Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real wk x w
+    (ν, t) κ m₀ ρ₀ ops hF.1.le hF.2.1 hF.2.2.2.1 k
+
 /-- **Each frame round of a `Finish` `FinishIs` reads is the cut session's body at the opened coins**: at the deployed
 tables, message `j` (`2 ≤ j ≤ refK x`) is `sessionCut`'s body `j - 1` on the switched cut at the opened coins, stopped
 right after it, tagged `0`, without its leading domain frame. It is a round message (`msg_cons`), so the session did not
 stop before it (`enc_finS`). -/
 theorem msg_runCut (vs : finS.SwVals) (L : LeanRelease Flock.Wit Tp) (H : Msg → Msg) (wk : L.toSrv.Worker)
-    (x : Msg) (w : Flock.Wit) (hE : LeanRelease.LiveRoundEq finS vs L H wk x w) (hc : finS.SwCausal vs)
+    (x : Msg) (w : Flock.Wit) (hE : LeanRelease.LiveRoundEq finS vs L H wk x w)
+    (hc : finS.SwCausalOn (SwOk Masked.dataE) vs)
     (hlast : L.last x = refK x + 1) (ν : finS.Nonce) (t : finS.Tape) (κ : L.toSrv.Chk) (m₀ ρ₀ : Msg)
     (ops : List (Msg × Msg)) (hlen : ops.length = refK x)
+    (hOk : ∀ k, SwOk Masked.dataE x (finS.pad (K := refK x) ((ops.take k).map fun p => finS.decOf p.2)))
     (hl : L.toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true)
     (hok : ((allOk (finS.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval H).1 = true)
     (hown : L.toSrv.OwnHist L.fillOf wk x w (ν, t) κ ((m₀, ρ₀) :: ops)) (j : ℕ) (h2 : 2 ≤ j) (hj : j ≤ refK x) :
@@ -343,7 +364,7 @@ theorem msg_runCut (vs : finS.SwVals) (L : LeanRelease Flock.Wit Tp) (H : Msg �
         dropDom (0 :: (Masked.runCut x (finCoins x ops) (j - 1) spec
           (Masked.tabSrcCut Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
             (finS.swCutOf x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t))).2[j - 1]!) := by
-  have e := LeanRelease.msg_of_swCausal finS vs L H wk x w hE hc hlast ν t κ m₀ ρ₀ ops hlen hl hok hown j h2 hj
+  have e := LeanRelease.msg_of_swCausal finS vs L H wk x w hE _ hc hlast ν t κ m₀ ρ₀ ops hlen hOk hl hok hown j h2 hj
   obtain ⟨b, hb⟩ := LeanRelease.msg_cons L wk x w (ν, t) κ _ hl hown j
     (by simp only [List.length_cons]; omega) (LeanRelease.kindAt_mid hlast h2 hj)
   rcases enc_finS (finCoins x ops) (n := j - 1) (by omega)
@@ -946,7 +967,7 @@ theorem viewRep_rounds (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src real) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs) {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src real).toSrv.Chk}
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src real).toSrv.Chk}
     {m₀ ρ₀ : Msg} {ops : List (Msg × Msg)} (hF : FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops)
     {s0} {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
     {schs : Array (_root_.Flock.Schedule × ℕ)}
@@ -1037,7 +1058,7 @@ theorem viewRep_rounds (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   have hbody := runCut_body vs hsc hR ν t m₀ ρ₀ hA hsx hs hcms hext hpads hk hprev hex hic hl h
     (n := l.size + j) (by omega) (by omega)
   obtain ⟨s1, spec1, hsx1, hmsg⟩ := msg_runCut vs (LeanRelease.ofLoopLink L₀ src real) CoinOpen.shaH wk x w hE hc
-    hlast ν t κ m₀ ρ₀ ops hF.1 hF.2.1 hF.2.2.1 hF.2.2.2.2.2 (l.size + j + 1) (by omega) (by omega)
+    hlast ν t κ m₀ ρ₀ ops hF.1 (swOk_take_of_finCtx hF) hF.2.1 hF.2.2.1 hF.2.2.2.2.2 (l.size + j + 1) (by omega) (by omega)
   rw [hsx] at hsx1
   cases hsx1
   rw [Nat.add_sub_cancel] at hmsg
@@ -1078,7 +1099,7 @@ theorem viewRep_rounds (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   congr 1
 
 /-- **(d) from (a) to (c)**: at a statement in the masked verifier's scope that the loop serves, where the frame rounds
-are the session's (`LiveRoundEq`, `SwCausal`), each rep stream's run from the views has the auditor's rounds
+are the session's (`LiveRoundEq`, `SwCausalOn` at `SwOk`), each rep stream's run from the views has the auditor's rounds
 (`viewRep_rounds`) and ends at the next one's first round (`viewRep_size`), by induction on the stream: the streams
 before it return (c), with their rounds the auditor's. -/
 theorem finRepRounds_of (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
@@ -1088,7 +1109,7 @@ theorem finRepRounds_of (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src real) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs) (hA : FinCommits vs L₀ src real wk x w) (hB : FinPoints L₀ src real wk x w)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) (hA : FinCommits vs L₀ src real wk x w) (hB : FinPoints L₀ src real wk x w)
     (hC : FinRepProofs vs L₀ src real wk x w) : FinRepRounds vs L₀ src real wk x w := by
   intro ν t κ m₀ ρ₀ ops hF s0 spec hsx schs hs cms hcms
   obtain ⟨schs', hs', cms', -, -, hpads⟩ := hA ν t κ m₀ ρ₀ ops hF s0 spec hsx
@@ -1130,7 +1151,7 @@ theorem finishIs_of_abc (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src real) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs) (hA : FinCommits vs L₀ src real wk x w) (hB : FinPoints L₀ src real wk x w)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) (hA : FinCommits vs L₀ src real wk x w) (hB : FinPoints L₀ src real wk x w)
     (hC : FinRepProofs vs L₀ src real wk x w) :
     LeanRelease.FinishIs finS vs (LeanRelease.ofLoopLink L₀ src real) CoinOpen.shaH wk x w :=
   finishIs_of_parts vs L₀ src real wk x w

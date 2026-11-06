@@ -64,8 +64,8 @@ noncomputable def loopReal {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.
 /-- **The simulated view at the session loop** at `c = ((a, u), s)`: the tape `a`; the schedule's transcript `T` with
 `nh` ideal commit strings in its holes (`commitBytes` of a uniform `U` beside a salt's own hash, which read no message),
 and the inner session finished; and the simulator of V*'s public statements (`OuterZK.LoopSessions.pubStmts`:
-statement `j`'s simulator `Flock.zk_deployZk_sw`'s at `t` rewinds, on its coins in `s`) at the tape and the ideal
-commitments' leaves (`idealLeaf`), against `V*` at its tape `θ` of them. It reads nothing of the worker's requests,
+statement `j`'s simulator `Flock.zk_deployZk_sw_stops`'s at `t` rewinds, on its coins in `s`) at the tape and the
+ideal commitments' leaves (`idealLeaf`), against `V*` at its tape `θ` of them. It reads nothing of the worker's requests,
 messages, witnesses, values or randomness. -/
 noncomputable def loopIdeal {Ωa Θ : Type} {nh : ℕ} (t : ℕ)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
@@ -95,8 +95,8 @@ statements' view. The salt bytes are drawn uniformly here; the firewall reads th
 `uniform/io-getrandombytes`).
 
 It takes, each an obligation:
-* `SessionLoopZKDeployed`'s premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausal`,
-  `TapeOK` of the loop's session), which take `SessionsCoined`'s role;
+* `SessionLoopZKDeployed`'s premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK` of
+  the loop's session, and `SwCausalOn` at `Loop.SwOk`'s coins), which take `SessionsCoined`'s role;
 * the worker's requests run through the firewall to the schedule's transcript `T` with the salted commit strings of
   `msgs` in its holes, and finish (`FirewallSends`);
 * the worker's values satisfy V*'s circuits: at every tape, randomness and salts, each statement parses and its witness
@@ -114,7 +114,7 @@ the coins, any further coins `Ωk`, and the witness. Every event of the released
 plus
 $$\varepsilon_V + n_h \cdot \delta_{K^*},$$
 added once: the stop leaks at most `log₂ |St|` bits. `ε_V` is V*'s statements' error (`OuterZK.LoopSessions.err`): the
-supremum over contexts of their errors, `Flock.zk_deployZk_sw`'s at `t` rewinds and the pinned key's hiding gap
+supremum over contexts of their errors, `Flock.zk_deployZk_sw_stops`'s at `t` rewinds and the pinned key's hiding gap
 (`OuterZK.loopEps`), and the composed prover's fork term at `m·4t·3^t`. `δ_{K*}` is the commitments' hiding gap at
 hm96-sha512's pinned key, as in `RecursiveZK`. At `St = Ωk = Unit` and `cut` the identity, this is the whole view's
 bound. -/
@@ -141,7 +141,8 @@ def RecursiveZKLoop : Prop :=
     0 < t →
     Claims.ZKServer.Loop.finS.Tables →
     Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) →
-    Claims.ZKServer.Loop.finS.DummyReg → Claims.ZKServer.Loop.finS.Causal → Claims.ZKServer.Loop.finS.SwCausal vs →
+    Claims.ZKServer.Loop.finS.DummyReg → Claims.ZKServer.Loop.finS.Causal →
+    Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs →
     Claims.ZKServer.Loop.finS.TapeOK →
     FirewallSends (Prog := Unit) (Wit := Unit) (Rr := Unit) s (fun _ _ _ => reqs) (fun _ _ _ => msgs) T →
     (OuterZK.LoopSessions.atWorker m stmt wit).Honest
@@ -219,7 +220,8 @@ theorem loopSent_le {Ωa Ωp Θ : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ω
     (hV : Claims.ZKServer.Loop.finS.Complete
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse))
     (hD : Claims.ZKServer.Loop.finS.DummyReg) (hc : Claims.ZKServer.Loop.finS.Causal)
-    (hsc : Claims.ZKServer.Loop.finS.SwCausal vs) (hT : Claims.ZKServer.Loop.finS.TapeOK)
+    (hsc : Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs)
+    (hT : Claims.ZKServer.Loop.finS.TapeOK)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
