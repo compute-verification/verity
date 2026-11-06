@@ -81,6 +81,7 @@ def test_figure3_without_the_hillclimb_card_is_pending(card_dir, tmp_path):
     assert all(p.stat().st_size > 0 for p in figure3.render(out, tmp_path))
 
 
+@pytest.mark.slow
 def test_figures_writes_every_figure(tmp_path):
     figures.main(["--model", "GLM-5.3", "--out", str(tmp_path), "--points", "2"])
     for n, schema in ((1, figure1.SCHEMA), (2, figure2.SCHEMA), (3, figure3.SCHEMA)):
