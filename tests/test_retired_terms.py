@@ -28,8 +28,8 @@ from __future__ import annotations
 
 import re
 
-from test_lean_packages import RETIRED_NAMES, _held, declarations
 from test_repository import ROOT, _tracked
+from test_lean_packages import RETIRED_NAMES, _held, declarations
 
 #: Each retired term and what to write instead.
 TERMS = {"proof unit": "proof block", "faulty unit": "incorrect proof block", "proof service": "proof system",
