@@ -130,7 +130,8 @@ def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome P
 /-- **The rows form accepts no link-window whose scan's state is not its wired audit's `SCAN_STATE`.** If the check
 accepts a period in the rows form, each link-window's scan's registration has a state entry (`stateEntries`: a `roots`
 port `scan/state` or a `registered` value `verity/certifier/scan-state/v1`), every one at one root and domain, and an
-audit whose slot entries are the scan's `prog` (`wired`) has one, every one at that root and domain; and its `window`'s
+audit whose slot entries are the scan's `prog` (`wired`) has one (`auditStateEntries`: those, or its `window`'s
+`activations.values` entry of that value), every one at that root and domain; and its `window`'s
 `reads` of `scan/state` state ingress unit `t`'s `sin` at leaf `t`, `t` from 1, and its `o1` at leaf `t + 1`, `t` below
 `T − 1`, one run a port (`stateRead`), the reads the scan's verifier of record holds each unit's ports to; and its
 `window`'s `empty` of `scan/state` opens leaf 0 of that root and domain to `W` zero u16 words, `W` at least 1, under a
