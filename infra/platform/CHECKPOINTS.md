@@ -16,3 +16,13 @@ The notes clone refused the push (no lane binding), so the hourly lines live her
   placeholder for the real value at the egress and the sandbox never sees it. A full live deployment isn't possible on
   the reachable account (Hobby, no shared database provisioned, no API token); next is a live harness turn on a throwaway `platform-smoke`
   deployment, then the report.
+- 08:00Z: the live harness turn is blocked: the Vercel MCP lost access to the only scope it reached (403, needs a
+  person to re-authorize), and this VM holds no Vercel token or model key. The deployable one-function smoke is ready
+  (`smoke/live-turn/`). Found and fixed while preparing it: the harness refused to add its model rule beside GitHub rules
+  installed outside its policy manager (now one manager, with a test that reproduces the refusal); a wake right after a
+  roll started a second run; a re-register overwrote the doc (admin writes are now revisions); gateway keys now follow
+  Vercel's documented API (quota at creation, budget changes reach the key). Found reviewing the cutover: sandboxes had
+  no checkout (now cloned once per sandbox, fetched each turn, a worker's on its branch); bot posts were all dropped, so
+  a lead on the platform couldn't hear agents still on Cursor or alerts (now only the platform's own); a bare
+  user-group mention routed nowhere; leads couldn't reach Slack, Linear or Notion beyond their reply (now brokered like
+  GitHub, per lead). Rot check passes against latest; 23 unit and 18 end-to-end tests pass. Next: the report.
