@@ -17,8 +17,8 @@ client closed, and the roots it received (`releasedRootsOf`), which reads past t
 `ChallengerTrees` reads them). A line is refused unless it is its own canonical JSON (`Flock.canon`) in at most
 `MAX_LOG_LINE` characters, so Lean's parser and Python's read every accepted line alike.
 
-The auditor's ledger names the one session each window's coins come from (`auditedSession`, `audited_session`): infra's
-`windows.jsonl`, a line per entry `{body, kind, prev, schema, seq, session, sig}` as the auditor writes it (`ledger_text`,
+The auditor's ledger names the one session each window's coins come from (`auditedSession`, `audited_session`): the
+auditor's `windows.jsonl`, a line per entry `{body, kind, prev, schema, seq, session, sig}` as the auditor writes it (`ledger_text`,
 `PyJson.canonical`), schema v1 or v2 and no v1 after a v2. A reserve records a window's request, its start and its expiry
 (`later`); an open names the window `{root}` (v1's `{commit, period}`), the challenger's host, the SHA-512 of its key's
 public key and in v2 its prover (`for`, else `by`), and after the ledger's first reserve binds its session's reserve
@@ -31,7 +31,7 @@ windows with their outcomes. Each entry is signed under the challenger's key:
 
 The key is the one the window's deployment pins, from outside the ledger: an open or a period-open naming another key's
 SHA-512 is refused before any signature is read, so a ledger signed under its own key can't pin itself. Then the ledger
-is infra's `_verify` (`verifyLedger`): each entry chained (`seq` from 0, `prev` the SHA-512 of the previous line) and
+is the auditor's `_verify` (`verifyLedger`): each entry chained (`seq` from 0, `prev` the SHA-512 of the previous line) and
 signed at strictly increasing leaves (`u32(q)`, the signature's first four bytes), a root and a session opened once, a
 session ended once after its open with its record's leaf between the two and no entry's, and each period's close
 listing exactly its lane's windows, counted at their reserves and at most its cap, a reserve never opened with root
@@ -39,7 +39,7 @@ null. The window's session must be opened under v2 and ended closed,
 naming its record's leaf, commitment and refused hellos and sealing `SEALED_FILES`, so a ledger older than its end is
 refused. The session's files must be that session's (`sessionNamed`): its signed close names the ledger's session id,
 its record the open's host and was signed at that leaf over that commitment, and its release log and refused hellos are
-the ones the end sealed. `ledgerHead` takes infra's published heads: each checked, any two extending one another, the
+the ones the end sealed. `ledgerHead` takes the ledger's published heads: each checked, any two extending one another, the
 longest. A window counts toward its period only when the descriptor of the circuit its sessions prove hashes (SHA-512)
 to the circuit the period's open committed (`creditedSession`, `credited_session`). A session counts as main's code
 only when the host's pins log, whose first lines its open seals (`pins: {lines, sha512}`), pins the open's `pinned`
@@ -197,12 +197,13 @@ def ChallengerClose.toJson (c : ChallengerClose) : Json :=
     ("lines", Lean.toJson c.lines), ("session", Json.str c.session), ("signature", Json.str (Flock.hexOf c.signature))]
 
 /-- A release log line's event: the line, refused unless it is its own canonical JSON in at most `MAX_LOG_LINE`
-characters. -/
+characters. Its objects hold their keys in order (`sortedKeys`), as every parse's do. -/
 def event (line : String) : V Json := do
   unless line.length ≤ MAX_LOG_LINE do throw LOG_MALFORMED
-  let .ok j := Json.parse line | throw LOG_MALFORMED
+  let .ok j := Flock.JsonParse.parse line | throw LOG_MALFORMED
   let .ok text := Flock.canon j | throw LOG_MALFORMED
   unless text == line do throw LOG_MALFORMED
+  unless sortedKeys j do throw LOG_MALFORMED
   pure j
 
 private def pairs : List String → List (String × String)
@@ -215,7 +216,7 @@ private def isTime (j : Json) : Bool := (nat? j).isSome
 `event` is `TREE_EVENT` or `OPEN_EVENT`. -/
 def treeLine (line : String) : Bool :=
   match event line with
-  | .ok j => getD j "event" == Json.str TREE_EVENT || getD j "event" == Json.str OPEN_EVENT
+  | .ok j => jsonStrIs (getD j "event") TREE_EVENT || jsonStrIs (getD j "event") OPEN_EVENT
   | .error _ => false
 
 /-- The roots the challenger received, by family in order. -/
@@ -416,12 +417,14 @@ private def isBodyOf (kind : String) (v2 : Bool) (b : Json) : Bool :=
 
 /-- `_ledger_entry`: a ledger line's entry when it is its own `ledger_text` (`PyJson.canonical`), escapes no surrogate,
 has only integers (`Flock.canon`), in at most `MAX_LEDGER_LINE` characters, is a record entry (`Core.Record.ofJson`)
-and is of the ledger's form: a schema of the ledger's, a session's entry naming its session and a period's none. -/
+and is of the ledger's form: a schema of the ledger's, a session's entry naming its session and a period's none. Its
+objects hold their keys in order (`sortedKeys`), as every parse's do. -/
 def ledgerEntry? (line : Json) : Option LedgerEntry := do
   let .str text := line | none
   guard (text.length ≤ MAX_LEDGER_LINE)
-  let e ← (Json.parse text).toOption
+  let e ← (Flock.JsonParse.parse text).toOption
   guard ((PyJson.canonical e).toOption == some text && !escapesSurrogate text && (Flock.canon e).toOption.isSome)
+  guard (sortedKeys e)
   let r ← (Core.Record.ofJson e).toOption
   let _ ← ledgerTag? r.schema
   guard (4 ≤ r.sig.size)
@@ -689,7 +692,7 @@ def auditedSession (ledger window : Json) (key : ChallengerKey) : V Audited :=
 def extendsHead (published ledger : Array Json) : Bool :=
   published.size ≤ ledger.size && ledger.extract 0 published.size == published
 
-/-- `ledger_head` (module docstring): the auditor's ledger as infra published it, every head of `heads` (each its lines;
+/-- `ledger_head` (module docstring): the auditor's ledger as its operator published it, every head of `heads` (each its lines;
 `null` when the verifier has none) passing `checked` under `key`, any two extending one another, and of them the first
 longest. -/
 def ledgerHead (heads : Json) (key : ChallengerKey) : V Json := do
@@ -759,7 +762,7 @@ def circuitReason (period : Option String) (circuit : Json) (descriptor : ByteAr
 `{commit, main, pinned_utc}`, two commits in 40 lowercase hex and a time `later` holds fixed. -/
 def pinOf? (line : Json) : Option String := do
   let .str text := line | none
-  let e ← (Json.parse text).toOption
+  let e ← (Flock.JsonParse.parse text).toOption
   guard ((PyJson.canonical e).toOption == some text && keys? e == some #["commit", "main", "pinned_utc"])
   guard (isDigest (getD e "commit") 40 && isDigest (getD e "main") 40)
   let .str t := getD e "pinned_utc" | none
@@ -784,13 +787,13 @@ def pinsReason (session : String) (opened pins : Json) : Option String := Id.run
     | return some (s!"the auditor's ledger's open of session {session} seals no pins log (pins: " ++
         "{lines, sha512}): open the window on a host whose gate seals its pins log in each open")
   if ls.size < n then
-    return some s!"the host's pins log has {ls.size} lines, fewer than the {n} the open of session {session} sealed: take infra's newest published pins log"
+    return some s!"the host's pins log has {ls.size} lines, fewer than the {n} the open of session {session} sealed: take the auditor host's operator's newest published pins log"
   let lines := (ls.extract 0 n).toList.map strOf
   unless getD sj "sha512" == Json.str (logDigest lines) do
     return some s!"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were edited or rewritten"
   let pinned := strOf (getD opened "pinned")
   unless (commits.extract 0 n).contains pinned do
-    return some s!"session {session} ran commit {pinned}, which the host's pins log doesn't record as a commit of main's history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the window there"
+    return some s!"session {session} ran commit {pinned}, which the host's pins log doesn't record as a commit of main's history: repin the challenger host to a commit origin/main contains (with its pin command) and rerun the window there"
   return none
 
 /-- `first_parent_reason` (module docstring): why session `session`, run from commit `pinned`, didn't run a tree main's
@@ -807,7 +810,7 @@ def firstParentReason (session pinned : String) (main : Json) : Option String :=
     else some (s!"session {session} ran commit {pinned}, which the host's pins log records but which is not on " ++
       "main's first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit " ++
       "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a commit " ++
-      "on main's first-parent line (vy-challenger-pin) and rerun the window there")
+      "on main's first-parent line (with its pin command) and rerun the window there")
   | _ => some malformed
 
 /-- `pinned_session` (module docstring): `auditedSession`, when the host's pins log `pins` records the open's pin

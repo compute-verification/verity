@@ -224,8 +224,8 @@ The time credit adds the data sheet's rates.
 
 - Remote's rule, the composition's product rule `check`: `Properties.Composition.AcceptMeans`, **proved**. What it
   accepts fits its subprotocols, each accepts its own case, and the commitment binds their digests.
-- Sampled proofs: `Properties.SampledProofs.AcceptMeans`, **proved**, covers v1's `OneStage.check`, remote's one-stage
-  form.
+- Sampled proofs: `Properties.SampledProofs.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
+  form (v2) ends, on its own run's verdicts.
 - PoUW's period credit: `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, `CheckedCreditPeriod`'s conclusion
   at `PouwCheck.Credit.window`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
   (`GUARANTEE`) and refuses every other window form for, **proved** under the premises above.
@@ -412,9 +412,10 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - `ServiceSound` and `PouwSound` are undischarged premises.
   - `JointHorizonLive` isn't instantiated with parts 2 and 3.
   - Today the parts compose by hand.
-- **The verifier's verdicts.** Sampled proofs' one-stage form is v1, which takes the sessions' verdicts as evidence
-  instead of computing them, and the recursive form runs V*'s compiled check; v2 (`verity/sampled-proofs/one-stage/v2`)
-  runs the proof check (`verity verify proof`, today's `flock-verify --zk`) itself, and remote doesn't read v2 yet.
+- **The verifier's verdicts.** Sampled proofs' one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
+  the proof check (`verity verify proof`, today's `flock-verify --zk`) itself, and the recursive form runs V*'s
+  compiled check; v1, which takes the verdicts as evidence, is refused. No Lean statement yet carries v2's acceptance
+  to `SampledKSLiveV3`'s event.
 - **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileDrawIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
