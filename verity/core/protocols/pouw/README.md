@@ -6,7 +6,9 @@ committed, noised checked values. An accepted run establishes a credited size S 
 behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof system registers each execution phase, samples
 its proof blocks with the challenger's coins, proves them in zero knowledge (Flock `--zk`) and verifies them; PoUW
 states what each execution phase commits, the Program each sampled proof block must pass, and what the outcome credits.
-It carries no policy parameter: it surfaces the ε at δ its sample established.
+It carries no policy parameter: it surfaces the ε at δ its sample established. A scheme must leave the useful work at
+least half of the honest prover's GPU effort (AGENTS.md, "PoUW is mostly useful work"): the trivial PoUW, which hashes
+every product, is a reference, not an answer.
 
 ## PoUW in the remote protocol
 
@@ -91,16 +93,16 @@ Guarantees are stated in `Security/Definitions/Pouw` and proved in `Security/Pro
 `Pouw.SecurityProofs.G : Pouw.Guarantees.G`; `Security/lean-audit.json` lists each proved one with what its statement
 reads. Proved:
 
-- **The audit game:** `Pouw.SecurityProofs.Theorem1` (if a scheme's γ holds with error η and the sample misses more than
-  a share ε_s of the reference work with probability at most δ_s, then the verifier accepts while the work done is below
-  (1 − γ)(1 − ε_s)·W with probability at most δ_s + η), `Pouw.SecurityProofs.WorkWeightedSampling`,
-  `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GammaFromTT`.
+- **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GammaFromTT`, through two lemmas in
+  `Security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's γ holds with error η and the sample misses more
+  than a share ε_s of the reference work with probability at most δ_s, then the verifier accepts while the work done is
+  below (1 − γ)(1 − ε_s)·W with probability at most δ_s + η) and work-weighted sampling.
 - **The deadline:** `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline`, `Pouw.SecurityProofs.SpareCapacityAtDeadline` and
   `Pouw.SecurityProofs.PearlCSampledByDeadline`.
 - **The schemes' γ:** NCP's `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1`; Pearl-C's at the served point,
   `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` and its sampled twin
-  `Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192`; the row seed's reduction
-  `Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut`; the barrier `Pouw.SecurityProofs.Barrier.Generic`.
+  `Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192`. The row seed's reduction and the barrier
+  are lemmas, in `Security/Proofs/Pouw/Lemmas/PearlC.lean` and `Security/Proofs/Pouw/Lemmas/Barrier.lean`.
 - **The served credit's relative security:** `Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged` and
   `Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap`.
 - **Compute accounting reads PoUW** through `Accounting.SecurityProofs.ComputeOfPouw`,

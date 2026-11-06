@@ -1,4 +1,4 @@
-"""The proof's identifier v1 (`verity.core.protocols.pouw.identifier`, PROTOCOL.md "The proof's identifier (v1)"): every pinned case
+"""The proof's identifier v1 (`verity.core.protocols.pouw.identifier`): every pinned case
 recomputed from its inputs byte for byte, the vectors cover every named scheme, one field changed changes the bytes, the
 bytes are RFC 8785 (restated here and checked against it, and written out literally once), and bad input is refused by
 name."""

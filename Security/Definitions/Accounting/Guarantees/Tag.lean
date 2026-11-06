@@ -31,6 +31,8 @@ bounds. The proofs are in `Security/Proofs/Accounting/Tag/`.
 
 @[expose] public section
 
+open Verity.Game renaming prPMF → prob
+
 namespace Accounting.Guarantees.Tag
 
 open Accounting.Tag

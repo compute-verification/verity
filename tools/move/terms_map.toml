@@ -286,7 +286,7 @@ scope = "prose"
 "LinkSound" = "BindSound"
 
 # --- the trace (was the transcript, for the values of a run's gates)
-"ExecutionTranscript" = "ExecutionTrace"
+"ExecutionTranscript" = "Trace"
 
 # --- the verifier (was the verifier of record)
 "the verifier of record" = "the verifier"

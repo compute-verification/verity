@@ -135,12 +135,12 @@ open PouwCheck
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **The deployed check accepts the window**: `protocol.check` at the verifier's parameters `p`, on the window's
-registration `c` and the proof service's answer `e`, accepts with some public items and profile. -/
+registration `c` and the proof system's answer `e`, accepts with some public items and profile. -/
 def Accepts (p : Params) (c : Registration) (e : Evidence) : Prop :=
   ∃ (pub : Public) (prof : Core.Integrity), protocol.check p c e = .accept pub prof
 
 /-- **The executions of a period's windows as the check reads them**: on the period's coins `x`, window `w`'s
-registration and the proof service's answer to it, each any function of the coins. -/
+registration and the proof system's answer to it, each any function of the coins. -/
 structure Executions (Ω : Type) (n : ℕ) where
   reg : Paths Ω n → Fin n → Registration
   ev : Paths Ω n → Fin n → Evidence
@@ -233,7 +233,7 @@ def RegisteredBeforeDraw {C Ξ : Type} {m Np n : ℕ} (ws : Executions (Paths C 
 
 /-- **(L) The circuit's work on its live tiles over the windows PoUW's deployed check accepts, live coins.** For every
 declared circuit `Cd` and scheme `Sc` run as a period of at most `n ≥ 1` windows, each window's registration and the
-proof service's answer any function of the period's coins (`Executions`), with the check's parameters `prm`: under
+proof system's answer any function of the period's coins (`Executions`), with the check's parameters `prm`: under
 `CircuitWorkPeriod`'s premises at the period's proofs with the check's verdict (`checkedRun`, `checkedLayer`), its
 `JointSound` replaced by the check's draw being the period's draw coin (`DrawIsCoin`) and the service's soundness
 against the check (`ServiceSound`), with each registration fixed before its window's draw coin

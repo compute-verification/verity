@@ -1,10 +1,15 @@
 module
 
 public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.ENNReal.Basic
 public import Mathlib.Basic.ENNReal.BigOperators
 public import Mathlib.Basic.ENNReal.Inv
+public import Mathlib.Data.Fintype.Card
 public import Mathlib.Order.CompleteLattice.Basic
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Public-coin interactions with live coins, and what it means for one to be sound

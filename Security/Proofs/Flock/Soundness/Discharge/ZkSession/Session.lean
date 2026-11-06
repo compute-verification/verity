@@ -303,7 +303,7 @@ theorem zk_flock_count (hA : A.Correct) (place : ∀ S R u, u ∈ S → UnitPlac
   extraction_audit_count (analysisZK A P planZ tab _ Xc (loweringSoundZK_of_place A P planZ tab place))
     (zk_knowledgeSound A P planZ tab hA _ Xc _) hlink K σ
 
-/-- **The `--zk` count curve at the live draw.** With the units drawn by `Flock.Draw.drawOS`'s stratified law on a
+/-- **The `--zk` count curve at the live draw.** With the units drawn by `Flock.Draw.drawWith`'s stratified law on a
 byte source that A3 makes uniform (`hA3`), as in `Prog.flock_headline`:
 `Pr[accept ∧ at least K wrong units] ≤ miss(K) + ε_ks^zk + δ_link`, with `miss(K)` `Law.stratified`'s count curve. -/
 theorem zk_flock_count_execOS (hA : A.Correct)

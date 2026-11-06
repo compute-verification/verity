@@ -1,7 +1,8 @@
 module
 
-public import Mathlib.Data.Fintype.BigOperators
-public import Mathlib.Data.Rat.Cast.Order
+public import Mathlib.Data.Fintype.Card
+public import Mathlib.Data.Rat.Init
+import Mathlib.Data.Rat.Cast.Order
 
 /-!
 # Aligned exactness: the definitions (trusted)

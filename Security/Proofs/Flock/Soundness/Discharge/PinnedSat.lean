@@ -1,6 +1,8 @@
 module
 
+public import Definitions.Flock.Statement
 public import Proofs.Flock.Soundness.Discharge.Pinned
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # A pinned statement satisfies its statement without Δ's pinned copies

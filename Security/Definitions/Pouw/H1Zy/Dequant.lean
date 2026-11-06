@@ -1,6 +1,8 @@
 module
 
-public import Mathlib.Data.Int.Basic
+public import Mathlib.Data.Int.Notation
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.ToDual
 
 /-!
 # `PouwZyDequant_v1`, the served dequant, on words (trusted)

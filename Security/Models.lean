@@ -3,11 +3,8 @@ module
 public import Definitions.Core.Assumptions
 public import Definitions.Core.Guarantees
 public import Definitions.Nci.Assumptions
-public import Definitions.Nci.Guarantees
-public import Definitions.Nci.Guarantees.Reads
 public import Definitions.Nci.Guarantees.Threads
 public import Definitions.Nci.Guarantees.Layered
-public import Definitions.Nci.Guarantees.Contained
 public import Definitions.Nci.Guarantees.Fit
 public import Definitions.Nci.Guarantees.FitRate
 public import Definitions.Nci.Guarantees.Dampener
@@ -17,7 +14,6 @@ public import Definitions.Nci.Guarantees.Info
 public import Definitions.Nci.Assumptions.Capability
 public import Definitions.Nci.Guarantees.Capability
 public import Definitions.Accounting.Guarantees.Coverage
-public import Definitions.Nci.Guarantees.Fmt
 public import Definitions.Nci.Guarantees.Fmt2
 public import Definitions.Nci.Guarantees.Training
 public import Definitions.Nci.Guarantees.Packed
@@ -36,6 +32,8 @@ public import Definitions.Nci.Guarantees.PartitionCovers
 public import Definitions.Nci.Guarantees.CompliesCK
 public import Definitions.Nci.Guarantees.Ldl
 public import Definitions.Nci.Guarantees.Witnesses
+public import Definitions.Nci.Guarantees.Formalism
+public import Definitions.Nci.Guarantees.Formalism.Witnesses
 public import Definitions.Pous.Assumptions
 public import Definitions.Pous.Guarantees
 public import Definitions.Pouw.Assumptions
@@ -49,11 +47,14 @@ public import Definitions.Accounting.Assumptions.RemoteOutside
 public import Definitions.Accounting.Assumptions.CreditedWords
 public import Definitions.Accounting.Assumptions.RemoteP2
 public import Definitions.Accounting.Assumptions.Parties
+public import Definitions.Accounting.Assumptions.TS.Fixed
 public import Definitions.Accounting.Guarantees
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
+public import Definitions.WeightSecurity.Assumptions
+public import Definitions.WeightSecurity.Guarantees
 
 /-! Each component's named assumptions and guarantee statements. -/
 

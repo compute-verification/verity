@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
-public import Definitions.Pouw.Guarantees.PearlC
 
 /-!
 # The fragment argument: the counting theorem (staging, nothing pinned)

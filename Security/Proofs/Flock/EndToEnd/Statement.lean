@@ -24,10 +24,10 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **C-Flock's one-stage audit, end to end.** The prover registers `R` (its roots); the verifier draws a uniform
-`kd`-subset of the `n` proof units from its operating system's bytes (`Flock.Draw.drawOS`, `Law.execOS` on the byte
-source `src`); one `--zk` session of `J = nTab I` tables proves the drawn units, `kd / J` in each; and the verifier of
-record, `flock-verify verify --zk --session-tables J`, reads the session's record. Then for every live prover `τ`,
+/-- **C-Flock's one-stage audit, end to end.** The prover registers `R` (its roots); the challenger's coins sample a
+uniform `kd`-subset of the `n` proof units (`Flock.Draw.drawWith`, `Law.execOS` on the byte source `src`); one `--zk`
+session of `J = nTab I` tables proves the drawn units, `kd / J` in each; and the verifier of record,
+`flock-verify verify --zk --session-tables J`, reads the session's record. Then for every live prover `τ`,
 $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
 * a unit wrong (`wrongRegZ`) unless it is right against the public file: in the committed transcript fixed at

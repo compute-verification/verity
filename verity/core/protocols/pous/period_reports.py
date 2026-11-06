@@ -2,8 +2,8 @@
 
 As an auditor party with a device identity (`lms.Identity`, the lower key it issued the challenger, `lms.PartyKey`),
 the challenger signs no session alone. `PeriodSigner` is its `memory_challenger.Signer`: each session it closes is the
-next sampling block of the party's certification period, with the session's record (`memory_challenger.message`, 64
-bytes, bound to the session's id and header) the block's one record, and `sign` returns the block's public liveness
+next execution phase of the party's certification period, with the session's record (`memory_challenger.message`, 64
+bytes, bound to the session's id and header) the phase's one record, and `sign` returns the phase's public liveness
 record, the session's one output in the clear, signed before the session's record joins the period. The period's root
 is signed once, at its close (`PeriodSigner.close`), and the closed period (its records, root and the root's signature)
 goes to the prover only, as witness; the signature's lower key and certificate are public, as every liveness record
@@ -31,8 +31,8 @@ PERIOD = "hss-sha512/n64-w1-h20/period-root/v1"
 
 
 class PeriodSigner:
-    """The memory challenger's signer as an auditor party: its sessions are the sampling blocks of `period` (under the
-    party's lower key, `lms.PartyKey`), each with its record the block's one record, and `sign` returns the block's
+    """The memory challenger's signer as an auditor party: its sessions are the execution phases of `period` (under
+    the party's lower key, `lms.PartyKey`), each with its record the phase's one record, and `sign` returns the phase's
     liveness record. `public_key` is the device's identity, the key a session's verifier trusts."""
 
     def __init__(self, period: attest.Period, identity: bytes, scheme: str = PERIOD) -> None:

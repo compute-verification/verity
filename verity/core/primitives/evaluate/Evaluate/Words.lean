@@ -1,7 +1,6 @@
 module
 
 public import Evaluate.Casts
-public import Evaluate.TC.Dots
 
 /-!
 # PoUW's and NCP's word primitives

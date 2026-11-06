@@ -1,4 +1,4 @@
-"""A host's class circuit as network accounting reads it: the rows that cross the host's uplink, and the pins of its loads.
+"""A host's class circuit as network certification reads it: the rows that cross the host's uplink, and the pins of its loads.
 
 A circuit record is one host's: its class's window circuit, every slot's class Program whatever its traffic. Which host
 runs which units, and which request occupies which slot and step, are private: the network certifier on the host's

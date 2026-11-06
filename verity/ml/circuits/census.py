@@ -50,7 +50,7 @@ counters from its rule over its statics instead: that is how a matmul family sta
 its served MACs (m·n·k) apart from its tail atoms (k-steps appended to the same product) and a fold Definition its receipt folds; the
 class's ancestors add up what the rule says. A class of a family `RULED` names is refused while `FAMILY_COUNTS` has no rule for it
 (the family's module registers it when imported, which decoding a Program never does), and so is a Definition carrying a rule
-(`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`.  The s8 family's served MACs are S8-PORT's, whose
+(`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`.  The s8 family's served MACs (`ops.s8`) are those whose
 roles Lean's `Accounting.Gates.roleOf` states: a served product's main chain toward its committed words, which only an `S8Dot`
 or `S8Matmul` has.  `GemmAccumulatorS8` and PoUW's segment dots (`PouwSegDot_v2`, `PouwSegDot0_v2`: an H1 tile's lanes) perform
 their products and serve none (`serves_none`).  `served_macs_by_precision` splits the served MACs by the
@@ -201,7 +201,7 @@ def family(fn: Any) -> str:
 
 def silicon_step(fn: Any, model: Any) -> Any:
     """Bind the tensor-core step `fn` (a word primitive, or the Boolean Definition computing one) to the silicon model it computes
-    (a `verity.ml.circuits.silicon` `GroupSum`, `Pipeline`, `BlockScaledAlignAdd` or `IntegerMma`): `fn.silicon` is `model`, and
+    (a `verity.ml.circuits.silicon` `GroupSum`, `BlockScaledAlignAdd` or `IntegerMma`): `fn.silicon` is `model`, and
     `SILICON` gives its family the precision `model`'s instruction multiplies in (`DTYPE_PRECISION` of its ``executes``, else of
     its operands).  Refused unless `PRODUCTS` counts the family and `PRECISION` gives it its operands' precision.  Returns `fn`."""
     fam = f"{fn.name}_v{fn.version}"
@@ -771,6 +771,18 @@ def _work_json(work: Work | dict[str, list[int]]) -> dict[str, dict[str, int]]:
     return {f: {"gates": g, "and": a} for f, (g, a) in sorted(work.items()) if g}
 
 
+def boolean_gates(fns: Iterable[Any]) -> list[int | str]:
+    """Each of ``fns``' two-input Boolean gates per instance, over every facet, as `census` with ``boolean`` counts a class's
+    work, in order; for one that isn't counted, the id of the first primitive it reaches that is no Boolean gate, constant
+    bit or input. A Definition shared by several is counted once."""
+    w = _Work()
+    out: list[int | str] = []
+    for fn in fns:
+        got = w.of(fn)
+        out.append(got if isinstance(got, str) else sum(g for g, _ in got.values()))
+    return out
+
+
 def _calls_work(post: list, ids: dict[int, str], calls: Iterable[Any], boolean: Any) -> tuple[dict[str, Work], dict[str, str]]:
     """The Boolean work of each class it counts and the Boolean version each root Call class counted through, by descriptor id;
     refused (`NoBooleanWork`) for every root Call it cannot count."""
@@ -1181,4 +1193,4 @@ def step_of(doc: dict) -> Callable[[int], int]:
 
 
 __all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "NoBooleanWork",
-           "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
+           "boolean_gates", "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]

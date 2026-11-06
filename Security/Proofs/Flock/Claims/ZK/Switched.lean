@@ -2,6 +2,45 @@ module
 
 public import Proofs.Flock.Claims.ZK.Deployed
 public import Proofs.Flock.Claims.ZK.WorkerSeen
+public import Proofs.Flock.Soundness.Discharge.ZkView.Fixed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.Flock
+import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
+import Proofs.Flock.Soundness.ZK.Complete
+import Proofs.Flock.Soundness.ZK.GK.Link
+import Proofs.Flock.Soundness.ZK.PadNonvanishing40
+import Proofs.Flock.Soundness.ZK.RealLeaves
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The switched prover at the session's tables
@@ -281,6 +320,12 @@ def leaves01 {J : ℕ} (zs : Fin J → ZkView.Sizes) : ZkView.Leaves zs ≃ Leav
   left_inv l := by rcases l with ⟨j, p | q⟩ <;> rfl
   right_inv l := by rcases l with ⟨j, p⟩ | ⟨j, q⟩ <;> rfl
 
+/-- **The pre-final leaves' pairs at level 0's salts `y0`**: level 0's `(M·y, c(y))` under `y0`, the other leaves' `p1`
+(the ideal-leaf hybrid's). -/
+noncomputable def pairs01 {J : ℕ} {zs : Fin J → ZkView.Sizes} (y0 : Leaves0 zs → ZkView.Salt)
+    (p1 : Leaves1 zs → ZkView.Bits × ByteArray) : ZkView.Leaves zs → ZkView.Bits × ByteArray := fun l =>
+  Sum.elim (fun l0 => (ZkView.My (y0 l0), ZkView.saltHash (y0 l0))) p1 (leaves01 zs l)
+
 theorem leaves01_elim_congr {J : ℕ} {zs : Fin J → ZkView.Sizes} {α γ : Type} (F : (ZkView.Leaves zs → α) → γ)
     (f : ZkView.Leaves zs → α) :
     F (fun l => Sum.elim (fun l0 => f ((leaves01 zs).symm (.inl l0))) (fun l1 => f ((leaves01 zs).symm (.inr l1)))
@@ -503,16 +548,19 @@ noncomputable def TPreModel.swMsgs {W : Type} {G : Proto W} {x : Msg} (M : G.TPr
     (lv : ZkView.Leaves (fun j => (M.C j).z) → ByteArray) : Fin (G.K x + 1) → Msg :=
   M.out a (swCutAt M.C (M.cz a) wt (vs a s) ω lv)
 
-/-- **The switched prover's round encoding reads the answers before each round only**, whatever the workers see and
-each leaf's pair `(M·y, c(y))`, as `TPreModel.Causal` has the honest prover's. -/
+/-- **The switched prover's round encoding reads the answers before each round only**, on one tape: at bases `ω` and
+level 0's salts `y0`, what the workers see of them (`seenAt`) and level 0's leaves' pairs under `y0`, each other leaf's
+pair `p1` arbitrary (`pairs01`), as `TPreModel.Causal` has the honest prover's. -/
 def TPreModel.SwCausal {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x)
     (wt : ∀ j, FlockSoundness.Model.Witness (M.C j).S.m)
     (vs : ∀ a, (∀ j, ZkView.Seen (M.C j).z) → ∀ j, ((M.C j).T (M.cz a j)).tab.Vals) : Prop :=
-  ∀ (ω : ∀ j, ZkView.Base (M.C j).z (M.C j).Hi) (s : ∀ j, ZkView.Seen (M.C j).z)
-    (p : ZkView.Leaves (fun j => (M.C j).z) → ZkView.Bits × ByteArray) (a a' : Fin (G.K x + 1) → Out)
+  ∀ (ω : ∀ j, ZkView.Base (M.C j).z (M.C j).Hi) (y0 : Leaves0 (fun j => (M.C j).z) → ZkView.Salt)
+    (p1 : Leaves1 (fun j => (M.C j).z) → ZkView.Bits × ByteArray) (a a' : Fin (G.K x + 1) → Out)
     (i : Fin (G.K x + 1)), (∀ j, j < i → a j = a' j) →
-    M.swMsgs wt vs ω s a (fun l => ZkView.leafH (swDigOf M.C (M.cz a) wt (vs a s) ω l + (p l).1, (p l).2)) i =
-      M.swMsgs wt vs ω s a' (fun l => ZkView.leafH (swDigOf M.C (M.cz a') wt (vs a' s) ω l + (p l).1, (p l).2)) i
+    M.swMsgs wt vs ω (seenAt M.C ω y0) a (fun l => ZkView.leafH (swDigOf M.C (M.cz a) wt (vs a (seenAt M.C ω y0)) ω l +
+        (pairs01 y0 p1 l).1, (pairs01 y0 p1 l).2)) i =
+      M.swMsgs wt vs ω (seenAt M.C ω y0) a' (fun l => ZkView.leafH
+        (swDigOf M.C (M.cz a') wt (vs a' (seenAt M.C ω y0)) ω l + (pairs01 y0 p1 l).1, (pairs01 y0 p1 l).2)) i
 
 /-- **Before the last coin, the prover's messages on `w` are the switched prover's at values the workers supply** (`vs`,
 read from what every table's workers see before the last coin, `seenOfP`, and never the pads), its round encoding
@@ -575,9 +623,7 @@ theorem TPreModel.runs_close_sw {W : Type} {G : Proto W} {x : Msg} (M : G.TPreMo
       (M.swMsgs (M.wt w) vs q.1 (seenAt M.C q.1 q.2) a)
       (fun l y => ZkView.leafH (swDigOf M.C (M.cz a) (M.wt w) (vs a (seenAt M.C q.1 q.2)) q.1 l + y.1, y.2))
       (fun l0 => (ZkView.My (q.2 l0), ZkView.saltHash (q.2 l0))) p
-    exact (congrFun (k a) i).trans ((hsc q.1 (seenAt M.C q.1 q.2)
-      (fun l => Sum.elim (fun l0 => (ZkView.My (q.2 l0), ZkView.saltHash (q.2 l0))) p (e l)) a a' i h).trans
-      (congrFun (k a') i).symm)
+    exact (congrFun (k a) i).trans ((hsc q.1 q.2 p a a' i h).trans (congrFun (k a') i).symm)
   let S : FlockSoundness.ZK.Strategy (((∀ j, ZkView.Base (M.C j).z (M.C j).Hi) ×
       (Leaves0 (fun j => (M.C j).z) → ZkView.Salt)) × (Leaves1 (fun j => (M.C j).z) → ZkView.Bits × ByteArray))
       Msg Out (G.K x + 1) :=
@@ -665,11 +711,18 @@ theorem TOffModel.close_sw {W : Type} {G : Proto W} {x : Msg} (M : G.TOffModel x
     E
 
 /-- The switched prover's message link at a coin vector: `TabModel.SwLink` at some values the workers supply where
-the prover goes on, `TOffModel.SwLink` where it refuses. -/
+the prover goes on; where it refuses, `TOffModel.SwLink` at some model whose tables the session sets up wherever `M`'s
+are, with at most `M`'s leaves. The simulator reads nothing of the model where the prover refuses
+(`TCoinModel.simAt`), so that model needn't be `M`. -/
 def TCoinModel.SwLink {W : Type} {G : Proto W} {x : Msg} :
     G.TCoinModel x → (Msg → Msg) → G.Nonce → (Fin (G.K x) → G.Coin) → W → Prop
   | .inl M => fun H ν c w => ∃ vs, M.SwLink H ν c w vs
-  | .inr M => M.SwLink
+  | .inr M => fun H ν c w => ∃ M' : G.TOffModel x, M'.SwLink H ν c w ∧ (M.OK → M'.OK) ∧ M'.size ≤ M.size
+
+theorem TCoinModel.swLink_inr {W : Type} {G : Proto W} {x : Msg} (M : G.TOffModel x) (H : Msg → Msg) (ν : G.Nonce)
+    (c : Fin (G.K x) → G.Coin) (w : W) (h : M.SwLink H ν c w) :
+    TCoinModel.SwLink (G := G) (x := x) (.inr M) H ν c w :=
+  ⟨M, h, id, le_rfl⟩
 
 /-- **`SHVZK` of the switched prover at a coin vector, from its model**, for any simulator that is `simAt` on a tape
 read through a map with fibers of one size: the honest prover's simulator, whatever values the workers supply. -/
@@ -683,7 +736,7 @@ theorem TCoinModel.shvzk_sw {W : Type} {G : Proto W} {x : Msg} (H : Msg → Msg)
       have : sim = fun s => M.simOut (ev s) := funext hsim
       subst this
       exact M.shvzk_sw H hT1 hδ₁ ν c w vs hL hOK ev hev hn E
-  | .inr M, ev, _, hev, hsim, hL, hOK, hn => by
+  | .inr M, ev, _, hev, hsim, ⟨M', hL, hOK', hn'⟩, hOK, hn => by
       have hD : ∀ s, sim s = G.dVec H x ν (ev s) c := fun s => by
         rw [hsim s]
         simp only [TCoinModel.simAt, ocSeq_eval, List.map_map]
@@ -692,8 +745,8 @@ theorem TCoinModel.shvzk_sw {W : Type} {G : Proto W} {x : Msg} (H : Msg → Msg)
         simp only [hD]
         exact Pr_comp_fiber ev hev fun r => E (G.dVec H x ν r c)
       rw [e]
-      have hn' : (M.size : ℝ) ≤ n := by exact_mod_cast hn
-      calc _ ≤ 2 * M.size * δ₁.toReal := M.close_sw H hT1 hδ₁ ν c w hL hOK E
+      have hn'' : (M'.size : ℝ) ≤ n := by exact_mod_cast hn'.trans hn
+      calc _ ≤ 2 * M'.size * δ₁.toReal := M'.close_sw H hT1 hδ₁ ν c w hL (hOK' hOK) E
         _ ≤ 2 * n * δ₁.toReal := by gcongr
 
 /-- **`SHVZK` of the simulator the models give, at the switched prover**, within `2·n_B·δ₁`, from the switched message

@@ -2,6 +2,9 @@ module
 
 public import Definitions.Pouw.H1Zy.Combine
 public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Data.Fintype.Basic
+import Mathlib.Algebra.GroupWithZero.Nat
 
 /-!
 # `PouwH1LaneZy_v1{TILE}` on words, at a 32 × 32 leaf over `PouwH1Tile_v1` (trusted)

@@ -5,7 +5,6 @@ The verifier's own program, from its descriptor's bytes (`verity-ir/descriptor/v
 -/
 module
 
-public import Flock.Program
 public import Flock.TemplateQuery
 
 @[expose] public section

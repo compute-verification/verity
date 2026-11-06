@@ -547,7 +547,7 @@ def test_only_record_differences_are_regenerated_and_the_regenerated_record_pass
 
 def test_every_record_difference_code_is_one_update_settles():
     """Each code of `RECORD_DIFFERENCE` comes from a record that differs from the build, and `regenerated` writes the record
-    that then passes: what a train commits is the code set, so a code in it that no case provokes fails here."""
+    that then passes: what drive commits is the code set, so a code in it that no case provokes fails here."""
     pol = recorded()
     group = pol["reads"]["P.Defs"]
     entry = pol["guarantees"]["P.t"]
@@ -585,7 +585,7 @@ def test_every_record_difference_code_is_one_update_settles():
 
 def test_what_settles_is_keyed_on_codes_not_text():
     """A record difference reworded still settles, and a string that reads like one but has no record-difference code (a
-    bare string, or another check's failure) settles nothing: rewording a message changes nothing a train commits."""
+    bare string, or another check's failure) settles nothing: rewording a message changes nothing drive commits."""
     now = facts()
     (unrecorded, *_) = A.judge(POLICY, now, FILES)[0]
     assert unrecorded.code == "guarantees.unrecorded" and unrecorded.entry == "P.t"
@@ -603,7 +603,7 @@ def test_what_settles_is_keyed_on_codes_not_text():
 
 
 def test_reports_list_their_failures_codes_beside_them(tmp_path, monkeypatch):
-    """`report.json`'s and `audit.json`'s packages carry `failure_codes`, one per failure in its order, and a train's
+    """`report.json`'s and `audit.json`'s packages carry `failure_codes`, one per failure in its order, and the Lean check's
     `--regenerate` moves the codes with the failures it settles (`settled_codes`)."""
     a = tmp_path / "a"
     a.mkdir()
@@ -2646,13 +2646,36 @@ def test_an_unnamed_inline_hypothesis_fails_with_the_fix():
         == [], "facts of an older audit tool, without `inline`"
 
 
+def test_update_keeps_a_held_guarantees_inline_entry_while_its_statement_prints_it():
+    """A guarantee a witness entry, an unfrozen property or a generic claim holds keeps through `--update` each
+    `shape.inline` entry its statement still prints, and drops the rest, so the check without `--update` passes on the
+    updated lock, and still does once a merge leaves the guarantee unheld (its witness entry or claim gone, its property
+    frozen). The lock `--update` wrote used to lack them, and every records PR put them back by hand."""
+    why = "inline when the rule came"
+    pol, f = inlined(premise("P.f n = 3", "Eq"), premise("P.k n = 6", "Eq"))
+    inline = {"P.t": {"P.f n = 3": why, "P.k n = 6": why, "P.h n = 5": why}}
+    witness = {"witnesses": {"P.SecurityProofs.u": {"honest": ["P.t"], "nontrivial": "P.n"}}}
+    prop = {"function": "P.f", "outcome": "none"}
+    for lock, unheld in ((pol | witness | {"shape": {"inline": inline}}, lambda p: p | {"witnesses": {}}),
+                         (pol | {"shape": {"properties": {"P.t": prop}, "inline": inline}},
+                          lambda p: p | {"shape": p["shape"] | {"frozen": {"P.t": "frozen: open"}}}),
+                         (pol | {"claims": {"generic": {"P.C": "P.t"}}, "shape": {"inline": inline}},
+                          lambda p: p | {"claims": {}})):
+        fails, out = A.judge(lock, f, FILES, update=True)
+        assert [x for x in fails if "inline" in x.code] == []
+        assert out["shape"]["inline"] == {"P.t": {"P.f n = 3": why, "P.k n = 6": why}}
+        assert inline_codes(out, f) == [] and inline_codes(unheld(out), f) == []
+        assert inline_codes(unheld(lock | {"shape": lock["shape"] | {"inline": {}}}), f) == [
+            "guarantees.inline-hypothesis"]
+
+
 def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
     """`shape.inline` lists the offenders when the rule came, keyed by their text with its whitespace as one space: they
     pass, a new one fails, and `--update` drops each entry whose premise no longer offends (all of a guarantee's, its key
     with them, and the map once empty), keeps those of a guarantee the lock doesn't list yet, and adds none; `--moved`
     carries an entry to its guarantee's new name. A property `shape.properties` holds is the shape rule's; a frozen one
-    is judged here. A witness `witnesses` or `claims.witnesses` names is that rule's, and `--update` drops its entries.
-    An entry with no reason fails."""
+    is judged here. A witness `witnesses` or `claims.witnesses` names is that rule's: it neither fails nor offends, and
+    `--update` keeps its entries while their premises still offend. An entry with no reason fails."""
     why = "inline when the rule came"
     pol, f = inlined(premise("P.f n\n    = 3", "Eq"), premise("P.g n = 4", "Eq"))
     allow = {"P.t": {"P.f n = 3": why, "P.g n = 4": why, "P.h n = 5": why}, "P.ahead": {"x = y": why}}
@@ -2678,7 +2701,7 @@ def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
         "premises": ["P.Assumptions"], "inline": {"P.SecurityProofs.T": allow["P.t"], "P.ahead": allow["P.ahead"]}}}
     for named in ({"witnesses": {"P.SecurityProofs.u": {"honest": ["P.t"], "nontrivial": "P.n"}}},
                   {"claims": {"modules": ["P.Claims"], "witnesses": {"P.C": {"fails": "P.n", "meets": ["P.t"]}}}}):
-        assert A.inline_failures(held | named, grown) == ([], {"P.ahead": {"x = y": why}}, {})
+        assert A.inline_failures(held | named, grown) == ([], {"P.ahead": {"x = y": why}, "P.t": {"P.f n = 3": why}}, {})
     prop = {"function": "P.f", "outcome": "none"}
     assert inline_codes(pol | {"shape": {"properties": {"P.t": prop}}}, grown) == []
     assert inline_codes(pol | {"shape": {"properties": {"P.t": prop}, "frozen": {"P.t": "frozen: open"}}}, grown) == \
@@ -2986,6 +3009,117 @@ def test_a_nontrivial_witness_may_negate_what_the_guarantee_unfolds_to():
     assert witness_codes(*witnessed(g, nontrivial=other)) == ["witnesses.nontrivial-form"]
 
 
+def wnot(inner):
+    """A `¬ P …` conjunct of a statement's conclusion, as `Facts.lean`'s `conclusionOf` reports it."""
+    return {"head": "Not", "defs": [], "refl": False, "assumed": False, "negated": True, "inner": inner}
+
+
+def further(*lemmas, guarantee=None, **over):
+    """(policy, facts) of `witnessed`'s `P.sound` (its premises `P.Hyp` and `P.Compiled`), each part overridden by
+    ``guarantee`` and ``over``, whose `nontrivial` lists `P.sound_nontrivial` and then each of ``lemmas`` ((name, its
+    facts)), every one a listed guarantee."""
+    pol, f = witnessed(guarantee, **over)
+    pins = f["pins"] | {n: fact(hyps=[]) | p for n, p in lemmas}
+    return ({**pol, "guarantees": {n: {"owner": "@lean"} for n in pins},
+             "witnesses": {"P.sound": {"honest": ["P.sound_honest"],
+                                       "nontrivial": ["P.sound_nontrivial", *(n for n, _ in lemmas)]}}},
+            facts(pins=pins, own_modules=sorted(WOWN)))
+
+
+def test_a_guarantee_may_list_further_nontrivial_witnesses_each_dropping_another_premise():
+    """`nontrivial` is one theorem or a list of them (a network guarantee's rows and clock clauses, each with an exclusion
+    lemma and a `Wf` negation). The first is held to the guarantee's kind as ever; each after it, whatever the kind, is in the
+    exclusion form at an explicit instance, (the other premises hold) ∧ ¬ (a named premise) ∧ ¬ (the conclusion), drops
+    a premise no earlier one drops, builds its instance and takes only listed assumptions. Every listed name is a witness,
+    held to neither `shape` nor `four_names`, and a list counts as the `nontrivial` half an `unwitnessed` entry would
+    exempt."""
+    no_compiled = ("P.sound_compiled", {"body": wbody("And", conclusion=[wnot("P.Compiled"), wk("P.Hyp"),
+                                                                          wnot("P.Holds")])})
+    no_hyp = ("P.sound_hyp", {"body": wbody("And", conclusion=[wk("P.Compiled"), wnot("P.Hyp"), wnot("P.Holds")])})
+    pol, f = further(no_compiled, no_hyp)
+    assert A.witness_failures(pol, f, WOWN) == []
+    assert A.claim_witnesses(pol) == {"P.sound_honest", "P.sound_nontrivial", "P.sound_compiled", "P.sound_hyp"}
+    assert [x.entry for x in A.judge({**pol, "four_names": ["P"]}, f, FILES)[0] if x.code == "four-names"] == ["P.sound"]
+    assert witness_codes(*witnessed()) == []
+    assert witness_codes({**witnessed()[0], "witnesses": {"P.sound": {"honest": ["P.sound_honest"],
+                                                                      "nontrivial": ["P.sound_nontrivial"]}}},
+                         witnessed()[1]) == []
+    for bad in ([], ["P.sound_nontrivial", 3], {"P.sound_nontrivial": 1}):
+        shaped = {**pol, "witnesses": {"P.sound": {**pol["witnesses"]["P.sound"], "nontrivial": bad}}}
+        assert A.witness_failures(shaped, f, WOWN) == [
+            "witnesses: witnesses[P.sound] is {honest: [theorem], nontrivial: theorem or [theorem, …], kind: acceptance "
+            "or exclusion (optional)}"]
+
+    accept_all = ("P.sound_again", {"body": wbody("P.Holds", negated=True)})
+    assert A.witness_failures(*further(accept_all), WOWN) == [
+        "witnesses: P.sound_again does not state that P.sound's bound fails at an explicit circuit: one conjunct of its "
+        "conclusion is `¬ C …` with C one of P.Holds, and it negates nothing",
+        "witnesses: P.sound_again drops no premise of P.sound: each further nontrivial lemma states, at an explicit "
+        "circuit, (each other premise holds) ∧ ¬ (the dropped premise) ∧ ¬ (the bound), one conjunct `¬ P …` with P one "
+        "of P.Compiled, P.Hyp; a bare `¬ bound` reads none"]
+    holds = ("P.sound_holds", {"body": wbody("And", conclusion=[wnot("P.Compiled"), wk("P.Hyp")])})
+    assert witness_codes(*further(holds)) == ["witnesses.nontrivial-form"]
+    others = ("P.sound_others", {"body": wbody("And", conclusion=[wnot("P.Compiled"), wnot("P.Holds")])})
+    assert witness_codes(*further(others)) == ["witnesses.nontrivial-premises"]
+
+    again = ("P.sound_compiled2", no_compiled[1])
+    assert A.witness_failures(*further(no_compiled, again), WOWN) == [
+        "witnesses: P.sound_compiled2, P.sound's `nontrivial` witness 3, drops only P.Compiled, already dropped by "
+        "P.sound_compiled: each further nontrivial lemma drops a premise of P.sound that no earlier one drops, so each "
+        "shows another premise matters; drop one of P.Hyp in P.sound_compiled2 instead, or remove it from "
+        "witnesses[P.sound].nontrivial"]
+    assert A.witness_failures(*further(no_compiled, no_hyp, again), WOWN)[0].endswith(
+        "every premise is dropped already, so remove it from witnesses[P.sound].nontrivial")
+    both = ("P.sound_both", {"body": wbody("And", conclusion=[wnot("P.Compiled"), wnot("P.Hyp"), wnot("P.Holds")])})
+    assert witness_codes(*further(no_compiled, both)) == []
+
+    ranges = ("P.sound_ranges", no_compiled[1] | {"body": no_compiled[1]["body"] | {"binders": ["∀"]}})
+    assert witness_codes(*further(ranges)) == ["witnesses.instance-binders"]
+    takes = ("P.sound_takes", no_compiled[1] | {"hypotheses": [{"binder": "hc", "type": "P.Compiled c", "closed": False}]})
+    assert witness_codes(*further(takes)) == ["witnesses.nontrivial-assumes"]
+    unlisted = further(no_compiled)
+    unlisted[0]["guarantees"].pop("P.sound_compiled")
+    assert witness_codes(*unlisted) == ["witnesses.unlisted-witness"]
+
+    h = f["pins"]["P.sound"]["type_sha256"]
+    half = {"type_hash": h, "missing": "nontrivial", "why": "the clock clause's Wf negation"}
+    assert witness_codes({**pol, "unwitnessed": {"P.sound": half}}, f) == []
+    assert A.unwitnessed_kept({**pol, "unwitnessed": {"P.sound": half}}, f, {}) == {}
+    assert A.renamed_witnesses({"witnesses": {"P.a": {"honest": ["P.a_h"], "nontrivial": ["P.a_n", "P.a_m"]}}},
+                               {"P": "Q"}) == {"witnesses": {"Q.a": {"honest": ["Q.a_h"], "nontrivial": ["Q.a_n", "Q.a_m"]}}}
+
+
+def test_an_exclusion_theorems_further_nontrivial_witness_drops_another_premise_than_the_first():
+    """At an exclusion theorem the first `nontrivial` lemma drops a premise too, and a further one that drops only the
+    same premise is a repeat."""
+    cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
+    covers = {"binder": "hc", "type": "P.Covers", "closed": True, "named": "P.Covers", "module": "P.Assumptions"}
+    g = {"reads": [cover], "premises": [COMPILED, {"binder": "hc", "head": "P.Covers", "module": "P.Assumptions"}],
+         "hypotheses": [covers],
+         "body": wbody("LE.le", binders=["∀", "→", "→"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
+    beats = {"body": wbody("And", conclusion=[wk("P.Compiled"), wnot("P.Covers"), wnot("LE.le")])}
+    uncompiled = {"body": wbody("And", conclusion=[wnot("P.Compiled"), wnot("LE.le")]), "hypotheses": [covers]}
+    pol, f = further(("P.sound_uncompiled", uncompiled), guarantee=g, nontrivial=beats)
+    pol["assumptions"] = {**pol["assumptions"], "P.Covers": {"owner": "@network-accounting"}}
+    assert A.witness_failures(pol, f, WOWN) == []
+    pol, f = further(("P.sound_uncovered", beats), guarantee=g, nontrivial=beats)
+    pol["assumptions"] = {**pol["assumptions"], "P.Covers": {"owner": "@network-accounting"}}
+    assert witness_codes(pol, f) == ["witnesses.nontrivial-repeat"]
+    assert "already dropped by P.sound_nontrivial" in A.witness_failures(pol, f, WOWN)[0]
+
+
+def test_a_premise_free_guarantee_lists_no_further_nontrivial_witness():
+    """A premise-free exclusion theorem's one `nontrivial` lemma is the bare `¬ bound`, and a further one drops a premise
+    like any other, so with none to drop it fails."""
+    cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
+    g = {"reads": [cover], "premises": [], "hypotheses": [],
+         "body": wbody("LE.le", binders=["∀", "∀"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
+    bare = {"body": wbody("LE.le", negated=True, conclusion=[wnot("LE.le")])}
+    assert witness_codes(*witnessed(g, nontrivial=bare)) == []
+    assert witness_codes(*further(("P.sound_tighter", bare), guarantee=g, nontrivial=bare)) == \
+        ["witnesses.nontrivial-drops"]
+
+
 def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read
@@ -3228,9 +3362,9 @@ def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
     assert r.stdout.strip() == "1"
 
 
-def test_a_trains_audit_passes_record_differences_and_names_the_records_to_commit(tmp_path, monkeypatch):
-    """`--regenerate` (a train's lean-audit step): a package whose every failure is a record difference, so the audit wrote
-    the record `--update` would, passes, and `audit.json` names that record for the train to commit; one with any other
+def test_the_lean_checks_audit_passes_record_differences_and_names_the_records_to_commit(tmp_path, monkeypatch):
+    """`--regenerate` (the lean-audit step of the Lean check of `next`): a package whose every failure is a record difference,
+    so the audit wrote the record `--update` would, passes, and `audit.json` names that record for drive to commit; one with any other
     failure fails as before, and the packages' own locks are never written."""
     a, b = tmp_path / "a", tmp_path / "b"
     for p in (a, b):

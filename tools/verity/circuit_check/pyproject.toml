@@ -24,7 +24,6 @@ verity-numerical = { workspace = true }
 testpaths = ["tests"]
 markers = [
     "slow: takes over about 5 s; deselect with -m 'not slow'",
-    "circuit_suite: one circuit-check target per test, the checks `circuit-check --all` runs; collected only under -m circuit_suite",
 ]
 
 [tool.verity.tests]
@@ -181,7 +180,7 @@ paths = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_cache_redteam.py", "tests/test_cache_imports_and_moves.py"]
+tests = ["tests/test_cache_redteam.py", "tests/test_cache_imports_and_moves.py", "tests/test_catalog_fixture.py"]
 paths = ["tools/verity/circuit_check/src/circuit_check"]
 
 [[tool.verity.tests.reads]]
@@ -195,18 +194,7 @@ paths = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_moe_fp8_split.py"]
-paths = [
-    "benchmarks/numerical/python/verity_numerical/bench",
-    "integrations/vllm/verity_vllm/program",
-    "tools/verity/circuit_check/src/circuit_check",
-    "verity/core/protocols/certifier",
-    "verity/core/protocols/pous",
-    "verity/ml",
-]
-
-[[tool.verity.tests.reads]]
-tests = ["tests/test_sampling_split_tasks.py", "tests/test_shard.py", "tests/test_split_prims_serve.py"]
+tests = ["tests/test_shard.py", "tests/test_split_prims_serve.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.py",
     "tools/verity/circuit_check/src/circuit_check",

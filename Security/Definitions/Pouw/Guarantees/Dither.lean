@@ -7,7 +7,9 @@ public import Definitions.Pouw.Assumptions.ShaRealize
 /-!
 # The no-fold Dither protocol's work-soundness over a monitoring period (trusted)
 
-The ACCEL program's headline, on the accelerator model of `Definitions.Pouw.Dither`.
+The ACCEL program's headline, on the accelerator model of `Definitions.Pouw.Dither`. The only round protocols the Lean
+defines are the no-fold round's (`noFoldRound`, `ditherSelected`), so none of these guarantees covers Dither v3.2's
+proof block, which no guarantee states yet.
 
 * `WorkSound`: under the accelerator model's device premises (G1, G2, G3, P1, P2) and exactly the program's trust
   base, each a named premise (SAK(matmul), SHA-512's speed, the price of an exchanged bit, the proof system's
@@ -23,8 +25,6 @@ The ACCEL program's headline, on the accelerator model of `Definitions.Pouw.Dith
 * `FleetSound`: a fleet of replicas, each its own period, whose moments are pooled by convexity on every set of
   accepted replicas at once, at `ln(N / (s δ_coin))` of luck rather than the union bound's `ln(N / δ_coin)` a replica,
   under `OwnDither` and `CoinsConfidential` (tier A).
-* `FreedOfFloor`: the rounds' floor at the period's dual price bounds freed compute by `ε C` (weak duality); the step
-  from the floor to `WorkSound`'s conclusion.
 -/
 
 @[expose] public section
@@ -33,9 +33,11 @@ namespace Pouw.Guarantees.Dither
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.MerkleExtract
 
-/-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period** (freed compute). In every accelerator
+/-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period** (freed compute). It is stated over any
+round protocol, and the only ones the Lean defines are the no-fold round (`noFoldRound`) and its selected form
+(`ditherSelected`), so it doesn't cover Dither v3.2's proof block, which no guarantee states yet. In every accelerator
 model `G` of the machine model 𝓜 and for every protocol `P : RoundProto` (the no-fold protocol
-is `noFoldRound` at its knobs, so protocol v1 and v2, or a SYM design's sampling blocks, are instances), every
+is `noFoldRound` at its knobs, so protocol v1 and v2 are instances), every
 sampling block's set `Reg w` of registrable instances (each block's operands are committed in its commit phase, after
 the earlier blocks' coins, so `Reg w` holds every instance a prover may commit for it), every
 service verdict on the transcript and the auditor's devices' readings (`Verdict`, `Readings`), every selection `sel`
@@ -144,7 +146,9 @@ def WorkSound : Prop :=
       (fun A => δ + κS + κx A + κsha A + k * (κdmm (Badv A) + κdsha (Badv A)))
 
 /-- **A replica's moment**: `WorkSound` before its Markov step, which `FleetSound` pools across a fleet's
-replicas. Under `WorkSound`'s premises without `δ` (and without `η > 0`, which only the luck reads), every prover's
+replicas. Like `WorkSound`, it is stated over any round protocol, and the only ones the Lean defines are the no-fold
+round's, so it doesn't cover Dither v3.2's proof block, which no guarantee states yet.
+Under `WorkSound`'s premises without `δ` (and without `η > 0`, which only the luck reads), every prover's
 period is sound in moment at rate `η` (`MomentSound`): its sampling blocks' combined priced shortfall `D` against the
 public bests has `e^{η D}` below their stopped supermartingale, of average at most 1, off the service's `κ_S`, the
 crypto failures `δ_crypto` (`κ_x(A)` of the extraction and `κ_sha(A)` of the oracle) and the degenerate dithers'
@@ -174,6 +178,7 @@ def WorkMoment : Prop :=
       (fun A => κS + κx A + κsha A + k * (κdmm (Badv A) + κdsha (Badv A)))
 
 /-- **The no-fold protocol is `(1 − ε)`-work-sound at one bound for every prover**.
+It is stated for the no-fold round, so it doesn't cover Dither v3.2's proof block, which no guarantee states yet.
 `WorkSound` on the no-fold round `noFoldRound nf`, with commit-and-open's extraction proved from SHA-512 as a random
 oracle (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`) rather than assumed. The oracle is a uniform table
 `eo : nf.Orc ≃ (X → D)` under which the verifier's opening check is the Merkle path check, programs reach it only
@@ -282,19 +287,5 @@ def FleetSound : Prop :=
         (Pd u).Fits ((A u oω.2).timedUse oω.1 (coin oω.2 u)) (z u)) ∧
       ¬ ∃ d : Fin N → ℝ, (∀ u ∈ S, 0 ≤ d u ∧ (Pd u).FreedWithin 1 (z u) (ε u (A u oω.2) + d u / C u) (C u)) ∧
         ∑ u ∈ S, d u ≤ fleetLuck η S δcoin) ≤ δcoin + ∑ u, κmax u
-
-/-- **Freed compute is at most `ε C` at the period's dual price**. On a period's devices (`Period`), let
-`μ ≥ 0` be a dual price for the other work (every job worth at most its use at `μ`) at which an honest strategy
-credited `W` with other work `z'` is optimal (its other work worth exactly the capacity it leaves, at `μ`:
-complementary slackness). Any strategy credited the same `W`, whose credited part uses `X` and whose other work `z`
-fits beside it, and whose credited part meets the work floor at `μ` (`μ · X ≥ (1 − ε) μ · W hon`), frees at most
-`ε C` with `C = μ · W hon`, the credited rounds' honest cost at the dual price. The floor on the whole
-run would not be enough here: it would count the other work `z` toward the credited part's floor. -/
-def FreedOfFloor : Prop :=
-  ∀ (G : Accel) (Pd : Period G) (W ε : ℝ) (X μ : G.Res → ℝ) (z z' : Pd.J → ℝ),
-    (∀ r, 0 ≤ μ r) → (∀ j r, 0 ≤ Pd.needs j r) → (∀ j, Pd.val j ≤ ∑ r, μ r * Pd.needs j r) → 0 ≤ W → 0 ≤ ε →
-    Pd.Fits (fun r => W * Pd.hon r) z' → ∑ j, Pd.val j * z' j = ∑ r, μ r * (Pd.cap r - W * Pd.hon r) →
-    Pd.Fits X z → (1 - ε) * ∑ r, μ r * (W * Pd.hon r) ≤ ∑ r, μ r * X r →
-    Pd.FreedWithin W z ε (∑ r, μ r * (W * Pd.hon r))
 
 end Pouw.Guarantees.Dither

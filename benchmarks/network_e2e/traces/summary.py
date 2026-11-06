@@ -6,6 +6,7 @@ output ids, and where they first differ.
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import json
 import math
@@ -13,6 +14,7 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
+#: the stop ids of a corpus whose meta.json names none (`corpus.stop_ids`)
 EOS = (128001,)
 
 
@@ -107,7 +109,62 @@ def arrival_fields(rid: str, c: dict, accepts: dict, added: dict, wardens: dict)
     return out
 
 
-def join_trace(d: Path, plan: dict[int, dict]) -> dict:
+def busy_cycle(steps: list[dict], reqs: list[dict]) -> dict:
+    """The engine's mean busy cycle over a summarized trace: the time from one step's output to the next's, between
+    consecutive steps that scheduled tokens, where a request was still in the engine (added and not yet freed) when the
+    first's output was back, so that no idle wait counts. The hook stamps a step's output after `update_from_output`,
+    which frees the requests that step finished, so a request's last step doesn't count it. ``cycles`` were counted,
+    ``idle`` left out; ``mean_us`` is None without a cycle."""
+    adds = sorted(r["engine_add_unix"] for r in reqs if r.get("engine_add_unix") is not None and r.get("t_free") is not None)
+    frees = sorted(r["t_free"] for r in reqs if r.get("engine_add_unix") is not None and r.get("t_free") is not None)
+    outs = [s["t_output"] for s in steps if s.get("total_num_scheduled_tokens") and s.get("t_output") is not None]
+    cycles = [b - a for a, b in zip(outs, outs[1:]) if bisect.bisect_right(adds, a) > bisect.bisect_right(frees, a)]
+    return {"cycles": len(cycles), "idle": max(0, len(outs) - 1 - len(cycles)),
+            "mean_us": round(sum(cycles) / len(cycles) * 1e6, 1) if cycles else None}
+
+
+def serving(reqs: list[dict]) -> dict:
+    """What the client saw of the requests that ended: from the first one's send to the last one's end, how many and
+    their output tokens a second, and each one's seconds to its first token and to its end. Under a load the server
+    keeps up with, the span is the arrivals' and the rates are the load's; past it, they are the server's."""
+    done = [r for r in reqs if r.get("send_unix") is not None and r.get("done_s") is not None]
+    if not done:
+        return {"requests": 0}
+    span = max(r["send_unix"] + r["done_s"] for r in done) - min(r["send_unix"] for r in done)
+    tokens = sum(r["output_len"] for r in done)
+    return {"requests": len(done), "output_tokens": tokens, "span_s": round(span, 3),
+            "req_per_s": round(len(done) / span, 3) if span > 0 else None,
+            "output_tok_per_s": round(tokens / span, 1) if span > 0 else None,
+            "ttft_s": stats([r["first_token_s"] for r in done if r.get("first_token_s") is not None]),
+            "e2e_s": stats([r["done_s"] for r in done])}
+
+
+def tick_log(d: Path) -> dict | None:
+    """What the certified tick's gate logged (``raw/tick.PID.jsonl``, `serve_admit.TickGate`), None where it logged
+    nothing: its admissions (``steps``: the engine steps that added any, ``requests``: how many they added) and its events
+    by kind (``unordered``, ``stale``, ``late``, ``skipped``, ``opened``, ... ; none in a run the tick ordered whole)."""
+    recs = raw(d, "tick")
+    if not recs:
+        return None
+    adds = [r for r in recs if "admitted" in r]
+    events = Counter(r["event"] for r in recs if "event" in r)
+    opened = [r.get("why") for r in recs if r.get("event") == "opened"]
+    return {"steps": len(adds), "requests": sum(b - a for a, b in (r["admitted"] for r in adds)), "events": dict(events),
+            "opened": opened[0] if opened else None}
+
+
+def engine_geometry(d: Path) -> dict | None:
+    """The scheduler's KV pool as the hook recorded it (``raw/engine.PID.json``; of more than one engine core, the last pid
+    in `raw`'s order, with ``engine_cores`` their count), copied to ``<trace>/engine.json`` for `replay.read_corpus_trace`."""
+    ps = sorted((d / "raw").glob("engine.*.json"))
+    if not ps:
+        return None
+    rec = json.loads(ps[-1].read_text()) | ({"engine_cores": len(ps)} if len(ps) > 1 else {})
+    (d / "engine.json").write_text(json.dumps(rec) + "\n")
+    return rec
+
+
+def join_trace(d: Path, plan: dict[int, dict], eos: tuple[int, ...] = EOS) -> dict:
     steps, outputs, engine = raw(d, "steps"), raw(d, "outputs"), raw(d, "requests")
     calls = raw(d, "adversary")
     by_call = {c["step"]: c for c in calls}
@@ -140,12 +197,13 @@ def join_trace(d: Path, plan: dict[int, dict]) -> dict:
             "planned_s": c.get("planned_s"), "prompt_ids": e["prompt_ids"], "prompt_len": len(e["prompt_ids"]),
             "prefix": p.get("prefix"), "prefix_len": p.get("prefix_len"), "max_tokens": e["max_tokens"],
             "output_ids": out_ids, "output_len": len(out_ids), "finish_reason": e["finish_reason"],
-            "eos": e["finish_reason"] == "stop" and bool(out_ids) and out_ids[-1] in EOS, "stop_reason": e["stop_reason"],
+            "eos": e["finish_reason"] == "stop" and bool(out_ids) and out_ids[-1] in eos, "stop_reason": e["stop_reason"],
             "cache_hit": e["cache_hit"], "num_preemptions": e["num_preemptions"], "first_step": first.get(e["id"]),
             "last_step": last.get(e["id"]), "t_free": e["t_free"], "first_token_s": c.get("first_token_s"),
             "done_s": c.get("done_s"), "chunks": c.get("chunks"), "client_status": c.get("status"),
             "client_error": c.get("error"), "client_finish_reason": c.get("finish_reason"),
             "client_ids_match": c.get("output_ids") == out_ids if c else None,
+            **({"release": c["release"], "bucket": c["bucket"]} if "release" in c else {}),
             **arrival_fields(e["id"], c, accepts, added, wardens)})
     reqs.sort(key=lambda r: (r["i"] is None, r["i"]))
     with open(d / "requests.jsonl", "w", encoding="utf-8") as f:
@@ -153,7 +211,8 @@ def join_trace(d: Path, plan: dict[int, dict]) -> dict:
             f.write(json.dumps(r, separators=(",", ":")) + "\n")
     w = warden_summary(d)
     return summarize_trace(d, steps, reqs, client) | {"adversary": adversary(d, calls), "warden": w,
-                                                      "arrival_order": arrival_order(reqs, steps, w)}
+                                                      "arrival_order": arrival_order(reqs, steps, w),
+                                                      "engine": engine_geometry(d), "tick": tick_log(d)}
 
 
 def engine_order(steps: list[dict]) -> list[str]:
@@ -461,7 +520,7 @@ def summarize_trace(d: Path, steps: list[dict], reqs: list[dict], client: dict) 
                      "unfinished_at_drain": meta.get("unfinished"),
                      "client_ids_match": sum(1 for r in reqs if r["client_ids_match"]),
                      "finish": dict(finish), "eos_fraction": round(finish["eos"] / len(reqs), 4) if reqs else None},
-        "steps": {"recorded": len(steps), "with_tokens": len(work),
+        "steps": {"recorded": len(steps), "with_tokens": len(work), "busy_cycle": busy_cycle(steps, reqs),
                   "empty_schedule_calls": sum(s["empty_before"] for s in steps),
                   "rows_per_step": stats([len(s["new"]) + len(s["cached"]) for s in work]),
                   "tokens_per_step": stats([s["total_num_scheduled_tokens"] for s in work]),
@@ -490,6 +549,7 @@ def summarize_trace(d: Path, steps: list[dict], reqs: list[dict], client: dict) 
                        "max_per_request": max(preempt.values(), default=0),
                        "resumed_rows": sum(1 for r in rows if r.get("resumed"))},
         "overrun": overrun(steps, reqs),
+        "serving": serving(reqs),
         "hook_errors": hook_errors,
     }
 
@@ -498,18 +558,20 @@ def summarize(root: Path) -> dict:
     root = Path(root)
     plan = {r["i"]: r for r in read_jsonl(root / "plan.jsonl")}
     meta = json.loads((root / "meta.json").read_text())
+    eos = tuple(meta.get("eos_token_ids") or EOS)
     traces = {}
     for name, m in meta.get("traces", {}).items():
         d = root / name
         if (d / "raw").is_dir():
-            traces[name] = join_trace(d, plan)
+            traces[name] = join_trace(d, plan, eos)
             if traces[name]["warden"]:
                 traces[name]["views"] = warden_views(root, name, traces[name]["warden"])
         if m.get("error") or name not in traces:
             traces.setdefault(name, {"trace": name})["error"] = m.get("error", "no records")
     out = {"model_id": meta.get("model_id"), "model": meta.get("model"), "model_what": meta.get("model_what"),
            "variant": meta.get("variant", "greedy"), "sampling": meta.get("sampling", {"name": "greedy", "temperature": 0.0}),
-           "async_scheduling": meta.get("async_scheduling", False),
+           "async_scheduling": meta.get("async_scheduling", False), "engine_env": meta.get("engine_env"),
+           "eos_token_ids": list(eos), "admit": meta.get("admit", "arrival"), "tick": meta.get("tick"),
            "versions": meta.get("versions"), "host": meta.get("host"), "env": meta.get("env"),
            "requests_per_trace": meta.get("requests"), "seed": meta.get("seed"), "traffic": meta.get("traffic"),
            "traces": traces,
@@ -752,8 +814,8 @@ FIELDS = """\
   exponential gap before the request (a trace at rate λ sends request i at Σ_{j≤i} gap_draw_j / λ seconds).
 - `meta.json`, `summary.json`: the run (model, variant, sampling, versions, host, leased GPU) and the statistics below, per
   trace; `summary.json`'s `overrun` per trace counts the rows that sample past a request's last output (async scheduling
-  schedules a step before the previous one's tokens are back), and its `outputs` compares the traces' output ids
-  request by request (`summary.compare`).
+  schedules a step before the previous one's tokens are back), its `serving` per trace is the client's throughput and
+  latency (`summary.serving`), and its `outputs` compares the traces' output ids request by request (`summary.compare`).
 - `<trace>/steps.jsonl`: one line per scheduler step (`Scheduler.schedule()` call) that scheduled a token or reported a
   preempted or finished request, in order:
   - `step` (0, 1, ...), `sched_step` (the scheduler's `current_step`, which counts every call), `t` (unix seconds when
@@ -778,8 +840,9 @@ FIELDS = """\
   trace; corpora made before seeded sampling used `<trace>-<i>`),
   `i` (the plan's index), `arrival` (unix seconds, vLLM's `Request.arrival_time`), `send_unix` and `planned_s` (the
   client's send time and the plan's arrival), `prompt_ids`, `prompt_len`, `prefix`, `prefix_len`, `max_tokens`,
-  `output_ids`, `output_len`, `finish_reason` (`stop` or `length`), `eos` (it stopped on the model's end-of-text, 128001;
-  no stop strings or stop ids are set), `cache_hit` (prefix-cache tokens at its first scheduling), `num_preemptions`,
+  `output_ids`, `output_len`, `finish_reason` (`stop` or `length`), `eos` (it stopped on one of the checkpoint's
+  end-of-text ids, the corpus meta.json's `eos_token_ids`; no stop strings or stop ids are set), `cache_hit` (prefix-cache
+  tokens at its first scheduling), `num_preemptions`,
   `first_step` and `last_step` (the steps that scheduled it first and last), `t_free`, the client's `first_token_s`,
   `done_s` and `chunks` (`[seconds after sending, tokens]` per streamed chunk), and `client_ids_match` (the streamed ids
   equal the engine's). Where the trace recorded them (corpora made before `vllm_accept_stamp` didn't): the API
@@ -788,12 +851,19 @@ FIELDS = """\
   the engine core's `engine_add_unix` and `engine_add_index` (when it handed the request to the scheduler, and its place
   in that order, which FCFS's waiting queue keeps); through the warden, `warden`: its `ordinal` and `outcome` at the
   client, and from the warden's log the buckets it `arrived`, was `admitted` (s) and `released` (a, its last ingress
-  cell's), `ended`, its `ingress_cells` and `egress_cells`, and `failed` (a reason, or null).
+  cell's), `ended`, its `ingress_cells` and `egress_cells`, and `failed` (a reason, or null). Under `--admit tick`,
+  `release` and `bucket`: its number in the stand-in network certifier's release order and its release bucket, counted
+  from the trace meta.json's `tick.origin_unix` in `tick.bucket_us` buckets (`corpus.StandIn`).
+- `<trace>/engine.json`: the scheduler's KV pool as the hook saw it (`block_size`, `num_gpu_blocks`, `kv_cache_groups`),
+  which `replay.read_corpus_trace` takes over the server log's KV cache size.
 - `<trace>/client.jsonl`, `<trace>/raw/`: the client's records as written (with the `seed` each request sent, if any) and
-  the hook's (`raw/steps.PID.jsonl`, `raw/outputs.PID.jsonl`, `raw/requests.PID.jsonl`, `raw/arrivals.PID.jsonl`, and in
-  a hostile trace the adversary's `raw/adversary.PID.jsonl`), and the API server's `raw/accept.PID.jsonl`
-  (`vllm_accept_stamp`); `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings, adversary (seed and
-  prefix-cache mode) and warden (its schedule, where it ran).
+  the hook's (`raw/steps.PID.jsonl`, `raw/outputs.PID.jsonl`, `raw/requests.PID.jsonl`, `raw/arrivals.PID.jsonl`,
+  `raw/engine.PID.json`, and in a hostile trace the adversary's `raw/adversary.PID.jsonl`), the API server's
+  `raw/accept.PID.jsonl` (`vllm_accept_stamp`), and under `--admit tick` the feed `tick_plugin.TickFeed` wrote
+  (`raw/tick-feed.jsonl`) and the gate's log (`raw/tick.PID.jsonl`: each step's admissions and every event);
+  `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings, adversary (seed and prefix-cache mode),
+  warden (its schedule, where it ran) and tick (τ in µs, where τ was calibrated, the origin, the run and the watermark's
+  outcome).
 - `<trace>/warden/`, a warden trace's: what the warden published (`deployment.json`, `requests.records`,
   `responses.records`, an admission-based relay's `fails.records`, `certified.jsonl`, `warden.json` with every
   connection's buckets and outcome), its `serve.log`, the client shim's record of every connection (`client.json`) and
@@ -815,15 +885,24 @@ def sampling_text(s: dict) -> str:
 
 def readme(s: dict) -> str:
     v = s.get("versions") or {}
+    engine = ("batch-invariant eager (the integration's bi-eager engine)"
+              if (s.get("engine_env") or {}).get("VLLM_BATCH_INVARIANT", "1") == "1"
+              else "eager, vLLM's own kernels (not batch invariant)")
+    tick = s.get("tick")
     lines = [
         f"# vLLM V1 scheduler traces under varied traffic: {s.get('model_what')}, {s.get('variant', 'greedy')}", "",
         f"Model `{s.get('model')}` (`{s.get('model_id')}`) on {s.get('host')}, GPU "
         f"`{(s.get('env') or {}).get('CUDA_VISIBLE_DEVICES')}` (`{(s.get('env') or {}).get('GPU_LEASE_UUID')}`); vLLM "
         f"{v.get('vllm')}, torch {v.get('torch')}. Made by `benchmarks/network_e2e/traces/corpus.py` (its docstring and "
-        "`traffic.py`'s say how): plain vLLM's OpenAI server, batch-invariant eager (the integration's bi-eager engine), "
-        f"async scheduling {'on' if s.get('async_scheduling') else 'off'}, Model Runner V2, prefix caching on, at most 256 "
-        "sequences; a scheduler hook (`vllm_trace_plugin.py`) records each step; an async client streams each request at "
-        f"its Poisson arrival, {sampling_text(s)}, `max_tokens` 64 or 256, no stop strings.", "",
+        f"`traffic.py`'s say how): plain vLLM's OpenAI server, {engine}, async scheduling "
+        f"{'on' if s.get('async_scheduling') else 'off'}, Model Runner V2, prefix caching on, at most 256 sequences; a scheduler hook (`vllm_trace_plugin.py`) records each step; an async client streams each request at "
+        f"its Poisson arrival, {sampling_text(s)}, `max_tokens` 64 or 256, no stop strings; a request ends on EOS "
+        f"{s.get('eos_token_ids') or list(EOS)} or its cap.", "",
+        *([f"Admission: the certified tick (`--admit tick`, `verity_vllm.pipeline.serve_admit`), τ_b {tick['bucket_us']} µs, "
+           f"τ_sat {tick['sat_us']} µs, τ_free {tick['free_us']} µs"
+           f"{', calibrated on ' + tick['calibrated_from']['trace'] if tick.get('calibrated_from') else ''}, behind the "
+           "client's stand-in network certifier (`corpus.StandIn`); each trace's gate log is its `tick` in summary.json.",
+           ""] if tick else []),
         f"Every trace serves the same {s.get('requests_per_trace')} requests (`plan.jsonl`, seed {s.get('seed')}) on a "
         "fresh server, so each starts with a cold prefix cache.", "",
         "| trace | rate (req/s) | what | requests freed | steps | rows | rows/step p50 / p90 / max | tokens/step p50 / max | running p50 / max | waiting p90 / max | EOS (share) | length | prefix-hit requests | hit tokens (of prompt tokens) | preemptions (requests) | partial prefill chunks (steps with one) | mixed steps | rows past the last output (EOS / length) |",
@@ -844,6 +923,19 @@ def readme(s: dict) -> str:
             f"{pe['events']} ({pe['requests_preempted']}) | {rw['partial_prefill_chunks']} ({st['with_partial_chunk']}) | "
             f"{st['mixed_prefill_decode']} | {ov['rows']} ({ov['by_finish'].get('eos', 0)} / "
             f"{ov['by_finish'].get('length', 0)}) |")
+    served = {name: t["serving"] for name, t in s["traces"].items() if (t.get("serving") or {}).get("requests")}
+    if served:
+        lines += ["", "## Serving", "",
+                  "What the client saw (`summary.serving`): the requests that ended, from the first send to the last end, "
+                  "their rate and output tokens a second, and each one's seconds to its first token and to its end. Under "
+                  "a load the server keeps up with, the rates are the load's.", "",
+                  "| trace | requests ended | span s | requests/s | output tokens/s | to first token p50 / p90 / p99 s | "
+                  "to the end p50 / p90 / p99 s |", "|---|---|---|---|---|---|---|"]
+        for name, v in served.items():
+            f, e = v["ttft_s"], v["e2e_s"]
+            lines.append(f"| {name} | {v['requests']} | {v['span_s']} | {v['req_per_s']} | {v['output_tok_per_s']} | "
+                         f"{f.get('p50')} / {f.get('p90')} / {f.get('p99')} | {e.get('p50')} / {e.get('p90')} / "
+                         f"{e.get('p99')} |")
     hostile = {name: t["adversary"] for name, t in s["traces"].items() if t.get("adversary")}
     if hostile:
         lines += ["", "## The hostile schedulers", "",
@@ -860,6 +952,15 @@ def readme(s: dict) -> str:
                          f"({h.get('p50')} / {h.get('p90')}) | {a['splits']} ({a['requests_split']}; "
                          f"{a['split_to'].get('p50')}) | {a['hits_seen']} | {a['hits_refused']} | {a['hits_cut']} | "
                          f"{a['errors']} |")
+    gated = {name: t["tick"] for name, t in s["traces"].items() if t.get("tick")}
+    if gated:
+        lines += ["", "## The certified tick's gate", "",
+                  "What each trace's gate logged (`raw/tick.PID.jsonl`, `summary.tick_log`): the steps it added requests "
+                  "before and how many, and its events, none of which a run the tick ordered whole has (a request it "
+                  "didn't order: `unordered`, `stale`, `late`; one it gave up on: `skipped`; the gate opened: `opened`).", "",
+                  "| trace | steps that added | requests added | events | opened |", "|---|---|---|---|---|"]
+        for name, g in gated.items():
+            lines.append(f"| {name} | {g['steps']} | {g['requests']} | {g['events'] or 'none'} | {g['opened'] or '-'} |")
     wardens = {name: t["warden"] for name, t in s["traces"].items() if t.get("warden")}
     if wardens:
         where = {w.get("where") for w in wardens.values()}

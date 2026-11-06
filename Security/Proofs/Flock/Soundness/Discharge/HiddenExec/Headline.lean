@@ -35,11 +35,11 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
 
 /-- **The headline over hidden-output sessions.** Let `I` be a verify command's inputs (one table) under a tag with
 hidden outputs, and let the challenger write draw `S` as the JSON `dj S` (`x₀` one draw it sets up with
-`Stmt.setupHidden`). Let the verifier draw the units with `Flock.Draw.drawOS`'s stratified law on a byte source A3
-makes uniform, and let each draw's session be the challenger's one table (`liveTable`, A6), written out by `wr`.
-Against any live prover `τ`, flock-verify accepts with at least `K` wrong units of the program `p`, at the simulated
-prover's committed values, with probability at most `miss(K) + ε_ks + δ_link`, given the program's places, constant
-and zero columns and binding at the hidden tables (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`) and `hdec`. -/
+`Stmt.setupHidden`). Let the units be sampled with `Flock.Draw.drawWith`'s stratified law on the challenger's coins, a
+byte source A3 makes uniform, and let each draw's session be the challenger's one table (`liveTable`, A6), written out
+by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K` wrong units of the program `p`, at the
+simulated prover's committed values, with probability at most `miss(K) + ε_ks + δ_link`, given the program's places,
+constant and zero columns and binding at the hidden tables (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`) and `hdec`. -/
 theorem flock_headline_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)

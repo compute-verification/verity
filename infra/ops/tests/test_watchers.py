@@ -1,4 +1,4 @@
-"""The control pod's watchers (INF-131): the supervisor (infra/control/watchers.py) restarts a loop that exits, holds one whose need
+"""The control pod's watchers: the supervisor (infra/control/watchers.py) restarts a loop that exits, holds one whose need
 is missing, finishes an extra.d job that exits 0, and writes a heartbeat; the VM stops (infra/control/vm_stop.py) keep h200-idle's
 idle rule and the deadline and lease backstops."""
 import calendar
@@ -104,7 +104,7 @@ def test_a_loop_whose_credential_file_is_missing_waits_and_starts_once_it_is_pla
 
 
 def test_a_watcher_imports_only_the_deployed_tree(tmp_path):
-    """On 19 Oct a hand edit pointed agent-watch-relay's PYTHONPATH at another checkout (/data/infra/fixtures-export-repo), so
+    """A hand edit that points agent-watch-relay's PYTHONPATH at another checkout (/data/infra/fixtures-export-repo), so
     the loop ran code no deploy named."""
     cfg = tmp_path / "w.toml"
     head = f'dir = "{tmp_path}"\nsrc = "{tmp_path}/src"\n[env]\nPYTHONPATH = "{{src}}/tools/research/src"\n'

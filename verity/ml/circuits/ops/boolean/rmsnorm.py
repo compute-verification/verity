@@ -36,9 +36,8 @@ reads x, w and all S chunk sums. Its s is one parameter, so a statement may lay 
 = 16,384, 131 rows in all and so 256 hm96 slots) or several a row, as `RmsSumSqChunks` writes them: C/K chunk sums, chunk i
 `RmsSumSqPart{K}` of words iK to iK + K - 1.
 
-The square root is `f32_sqrt_rn`, ``PouwF32SqrtRn_v1``'s builder (PoUW's `PouwF32SqrtRn_v2` traces it in
-`verity.ml.protocols.pouw.circuit.boolean`, which the catalog can't import): `isqrt` and `f32_sqrt_rn` here are copies of
-it. `ops.boolean.sqrt` holds the same builder, which replaces these copies (``from .sqrt import f32_sqrt_rn``).
+The square root is `ops.boolean.sqrt`'s `f32_sqrt_rn`, ``PouwF32SqrtRn_v1``'s builder, which PoUW's `PouwF32SqrtRn_v2` traces too
+(`verity.ml.protocols.pouw.circuit.boolean`).
 """
 from __future__ import annotations
 
@@ -49,10 +48,10 @@ import numpy as np
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.types import Array
 from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, const_bits, lzc, mux, sub
 
 from .. import fp32 as W
 from .elementwise import bf16_mul_f32, specialized
+from .sqrt import f32_sqrt_rn, isqrt
 
 __all__ = ["F32SumPart", "RmsNormOut", "RmsNormOutSums", "RmsNormRecip", "RmsNormRow", "RmsSumSqChunks", "RmsSumSqPart",
            "f32_bits", "f32_sqrt_rn", "f32_sum", "isqrt", "recip_root", "rms_norm_out", "rms_norm_out_sums", "rms_norm_row",
@@ -63,34 +62,6 @@ F32 = Array(32, BL.BIT)
 ONE_F = 0x3F800000
 _NAN = fp.F32_NAN_PTX
 _F32_MAX = float(np.finfo(np.float32).max)
-
-
-def isqrt(C, n):
-    """⌊√n⌋ of an unsigned word of even width (LSB first), half as wide: one trial subtraction per root bit."""
-    rem, root = [], []
-    for i in range(len(n) // 2 - 1, -1, -1):
-        rem = [n[2 * i], n[2 * i + 1]] + rem
-        trial = [ONE, ZERO] + root
-        w = max(len(rem), len(trial))
-        d, borrow = sub(C, rem, trial, w)
-        bit = NOT(borrow)
-        rem = mux(C, bit, d, rem + [ZERO] * (w - len(rem)))[:len(root) + 2]
-        root = [bit] + root
-    return root
-
-
-def f32_sqrt_rn(C, a):
-    """``PouwF32SqrtRn_v1``: sqrt.rn.f32, √±0 = ±0, √+inf = +inf, a NaN or a negative nonzero operand 0x7FFFFFFF."""
-    A = fp.unpack(C, a)
-    _az, lz = lzc(C, [ZERO] * 8 + A.sig)
-    sig = fp.shl(C, A.sig, lz)                                          # 1.f, the top bit set
-    x = sub(C, add(C, A.e_eff, const_bits(127, 9), width=9), lz, 9)[0]  # e + 254 for the unbiased exponent e
-    m = mux(C, x[0], [ZERO] + sig, sig + [ZERO])                        # e odd: 2 · 1.f and e - 1
-    r = isqrt(C, [ZERO] * 25 + m)                                       # 25 bits, the top one set
-    word = add(C, r[1:24] + x[1:9], [r[0]], width=31) + [ZERO]          # exponent field ⌊e / 2⌋ + 127
-    keep = OR(C, A.zero, C.AND(A.inf, NOT(A.s)))
-    nan = C.AND(NOT(keep), OR(C, A.e_max, A.s))
-    return mux(C, nan, const_bits(_NAN, 32), mux(C, keep, list(a), word))
 
 
 def f32_bits(v: float) -> int:

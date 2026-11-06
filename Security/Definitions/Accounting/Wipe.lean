@@ -2,6 +2,8 @@ module
 
 public import Definitions.Core.Blocks
 public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe on the device model (trusted)

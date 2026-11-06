@@ -135,8 +135,9 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   (`claude-opus-5-5-<effort>`; `inherit` runs it at your own effort), a standing request for every agent here: `max` for
   the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for slightly heavy work, `medium` for routine
   execution, `low` for trivial lookups.
-- **Reach a running subagent** on your VM through its next shell command, since it never rereads a shared file mid-run:
-  `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'`. Agents on other VMs: through their coordinator on Slack.
+- **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
+  `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
+  its shell hook delivers it within about a minute (`--local`: a subagent on your VM, at once).
 - **Stay reachable.** Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a run, end
   your turn naming its id and ETA, and your launcher resumes you. The control pod's agent watch flags a stalled or
   stopped agent and an out-of-memory kill. A worker resumed twice, whose base branch is gone, or silent past the watch's
@@ -172,7 +173,7 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
 - **Parked work gets done.** A lead starts each Backlog or Todo issue worth doing on its own worker and closes the rest
   with a reason. Being busy is no reason to park one. Set more goals, not fewer.
 - **An issue tracks an ask; only its outcome answers it.** Daniel's asks carry `asker:daniel`, have a worker within the
-  hour, and only he parks them (the coordinating skill); the Linear audit rings each that breaks this, hourly, with @top.
+  hour, and only he parks them (the coordinating skill); the Linear audit rings its lane every 12 hours while one breaks this.
   A hand operation done twice, and each incident, gets a class-fix issue filed `--asker daniel` (his standing ask) with
   a worker that hour: the lead builds or staffs the fix rather than repeating the operation.
 - **A ruling rolls out in the change that records it**, as AGENTS.md says; when code must change first, the ruling's
