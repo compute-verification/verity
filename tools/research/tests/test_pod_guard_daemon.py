@@ -449,7 +449,7 @@ def _tar_exiting(tmp_path: Path, monkeypatch, rc: int) -> None:
     bin_dir.mkdir()
     (bin_dir / "tar").write_text(f'#!/bin/sh\n{real} "$@"\necho "tar: ./resources.jsonl: file changed as we read it" >&2\nexit {rc}\n')
     (bin_dir / "tar").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(bin_dir), prepend=os.pathsep)
 
 
 @pytest.mark.parametrize("everything", [False, True])
@@ -463,12 +463,12 @@ def test_fetch_takes_a_file_still_written_at_the_run_end(tmp_path, monkeypatch, 
 
 def test_fetch_still_fails_on_a_fatal_tar_or_a_missing_run_dir(tmp_path, monkeypatch):
     d, local = _fake_machine(tmp_path, monkeypatch, {"status.json": b'{"state": "done", "rc": 0}'})
-    _tar_exiting(tmp_path, monkeypatch, 2)
-    assert remote.fetch(local)["last_fetch_error"]["rc"] != 0
+    with monkeypatch.context() as m:
+        _tar_exiting(tmp_path, m, 2)
+        assert remote.fetch(local)["last_fetch_error"]["rc"] != 0
     rec = json.loads((local / "remote.json").read_text())
     rec["remote_run_dir"] = str(tmp_path / "no-such-run")
     (local / "remote.json").write_text(json.dumps(rec))
-    monkeypatch.setenv("PATH", os.environ["PATH"].split(":", 1)[1])
     assert remote.fetch(local)["last_fetch_error"]["rc"] != 0
 
 
