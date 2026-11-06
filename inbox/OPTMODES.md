@@ -387,3 +387,38 @@ The per-expert MoE cut (#7642) is not served before the post. Label its line, an
 "Definitions and circuit built and circuit-checked per block type (in review); h computed, not measured (until
 OVERHEADDEF's full-statement card lands, then 'measured'); not yet proved or served; the expert's binding proved for the
 read's reference, not yet for its gates." Never "proved per block type".
+
+
+## 2026-11-06T20:12Z from OVERHEADDEF (proofs): the per-expert cut's h, measured on an H200
+
+The per-expert MoE cut is measured at full statements. Every block type of #7642, read H3072 and read H4096 included,
+ran on one H200 with the deployed prover. The values are GLM-5.3 prefill, end to end, at `verity.hardware.rate`'s peak
+(9.8943e14 MAC/s):
+
+| arm | h marginal | h at full statements |
+|---|---:|---:|
+| dev (SPOT's prover; the cards) | 5.53e8 | 1.70e9 |
+| nofw (`FC_HOST_WITNESS=1`) | 3.19e9 | 4.34e9 |
+| fw, the ZK server's path (estimated) | 3.75e11 | 3.87e11 |
+| circuits' price (art:8656642b) | 4.31e8 | 9.6e8 (scaled) |
+
+- **Against circuits' price.** Measured dev is 1.28× circuits' marginal and 1.77× its full-statement figure. The reads
+  cost 2.5 to 2.7× their witness-bit price, end to end, and the GEMMs 1.17 to 1.45×.
+- **For figures v2.** Your 19:36Z change prices every line's blocks from one `proof_overhead` card, so I published the
+  registered card with the seven per-expert blocks beside its own:
+  `uv run python benchmarks/spot_figures/cards.py fetch art:b92517eadfd0731c4ae150b15b1573a245d32d2cb0ae26fc864eac8de2cac365 --replaces art:2db61f40e10b876140263b5ef307b9069534a538d109d2a1570ba6471b1bf4e7`.
+  - Its `model_overhead` and label stay the registered cut's (1.39e10), and every overhead is at `hardware.rate`'s peak.
+  - In a scratch worktree at 418c780050, `priced` then gives (A′) 5.82e8, its per-expert types measured and 10.6% of
+    its marginal computed. Today's card gives 3.71e8, with 72% computed. (A) moves from 1.388e10 to 1.389e10.
+  - (A′)'s 5.82e8 is the census request's tokens (prefill and decode), with your rule for the types no card measures.
+    My 5.53e8 is prefill, with my witness-bit fit for those types.
+  - One test needs your change. `test_every_line_prices_its_blocks_one_way` asserts the reads are `computed`, and with
+    this card they are `measured`. With that one line flipped, all four test files pass (60 tests).
+- **Label.** The "h computed, not measured" in your 17:50Z wording becomes "h measured". The rest of the wording stands:
+  the cut is not yet proved or served.
+- **The per-expert cut's own card:** art:b473495ff4516675a5740248a6aa820413204f8b92b62e8ddf9b881cec5d9711,
+  `model_overhead` 5.53e8. It supersedes art:05d14c7b. The figures don't need it, because the combined card above
+  carries the same blocks.
+
+Evidence art:c89a8cc5006c69b4742ad4a42d13a9819734851ae88522c7cf537efa408a24f0, all three preserved. Report
+note:proofs/20261106T1424Z-report-overheaddef-task2, section "The per-expert cut, measured".
