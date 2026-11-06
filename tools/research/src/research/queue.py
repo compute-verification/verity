@@ -4721,7 +4721,7 @@ class MarkOnly:
 
 
 #: the result kinds whose `passes` ({Lean inputs key: package}) say a package passed Lean on those inputs: the Lean fast path's
-#: (`lean_changed.py --records`, each package whose records passed) and a check's, a shard's or a post-landing run's (its
+#: (`lean_changed.py --records`, each package whose records passed) and a check's, a shard's or an after-landing run's (its
 #: `lean-audit` step's, `check.py`'s `lean_passes`: each package audited on the commit's own lock with the kernel replay)
 FAST_KIND, CHECK_KINDS = "lean-fast/v1", ("check/v1", "check-shard/v1", "check-deferred/v1")
 PASS_KINDS = (FAST_KIND, *CHECK_KINDS)
