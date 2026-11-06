@@ -372,7 +372,7 @@ def tick_args(source: str | None, given_ms: str | None, load: str = "saturated")
     or given as ``SAT,FREE`` ms."""
     C = corpus()
     if not (TICK_PLUGIN.is_file() and hasattr(C, "TICK_BUCKET_MS")):
-        raise SystemExit(f"the tick arms need the certified tick ({TICK_PLUGIN.relative_to(ROOT)} and the trace corpus's "
+        raise SystemExit(f"the tick arms need the certified tick ({TICK_PLUGIN.name} and the trace corpus's "
                          "TICK_* constants), which this tree lacks: run them from a tree that has --admit tick")
     if (source is None) == (given_ms is None):
         raise SystemExit("the tick arms take τ from one of --tick-from STEP_TRACE|RECORD_DIR and --tick-ms SAT,FREE")
