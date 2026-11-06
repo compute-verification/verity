@@ -561,15 +561,14 @@ def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_op
 
 
 def _kept_tables(monkeypatch) -> dict[str, np.ndarray]:
-    """Each step's A table H1 commits, whole, by its name, as the window's served trees register it (`Served._a_rows`)."""
-    kept, a_rows = {}, SV.Served._a_rows
+    """Each step's A table H1 commits, whole, by its name, as the window's served trees register it (`Served._register`)."""
+    kept, register = {}, SV.Served._register
 
-    def spy(self, call, value, mine, codes, scales):
-        whole = a_rows(self, call, value, mine, codes, scales)
-        if whole is not None:
-            kept[value] = whole.copy()
-        return whole
-    monkeypatch.setattr(SV.Served, "_a_rows", spy)
+    def spy(self, run, value, words, *args, **kwargs):
+        if value.startswith(f"{SV.PREFIX}a/"):
+            kept[value] = words.copy()
+        return register(self, run, value, words, *args, **kwargs)
+    monkeypatch.setattr(SV.Served, "_register", spy)
     return kept
 
 
