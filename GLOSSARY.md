@@ -156,7 +156,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "verifier gateway" | the challenger |
 | "batch verifier" (B-Ligero's was another thing) | the verifier |
 | "GPU workers" | workers |
-| "netlist"; C-Flock's `verity/flock-netlist/…` tags and domains and the `flock-netlist/v1` file format of its older statements (`netlist-vectors.patch`) | a private circuit, or the circuit's description |
+| "netlist"; Flock's `verity/flock-netlist/…` tags and domains and the `flock-netlist/v1` file format of its older statements (`netlist-vectors.patch`) | a private circuit, or the circuit's description |
 | "trusted text", in the `layers` reasons of `lean-audit.json` | spec |
 | "horizon" and "accounting period" for the stretch of time a bound is about; the Lean's `*Horizon*` and `*Period*` names (`ComposePeriod`, `CircuitWorkPeriod`), PoUB's ledger's `horizon` field, until renamed | monitoring period (`horizon` is its pooled reading) |
 | "block" for a part of the device graph; `Datacenter.blocks`, `block_of`, `network_sim`'s `--blocks` flag | zone |

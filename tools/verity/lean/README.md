@@ -40,11 +40,12 @@ python tools/verity/lean/unread.py --out DIR --build     the Lean nothing reads;
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 
-The edit loop is `verity lean try FILE`: `lake env lean FILE` in the Lake package that holds FILE (the nearest lakefile above it),
-against its built imports, exiting with lean's status. With `--on NODE`, through `research run`, it runs `lean_changed.py --try
-FILE` on this checkout, uncommitted edits included: in one of the node's `build` Lean slots, on the tree `--records` keeps warm,
-`lake build +MODULE:deps` (only what changed among FILE's imports) and then `lake env lean FILE`. Neither runs this audit or writes
-a record: `--records PKG --update` is for the lock and the mark only (`lean_changed.py`'s docstring).
+The edit loop is `verity lean try FILE`: `lake env lean FILE` in the nearest Lake package above FILE, against its built
+imports, exiting with lean's status, the axiom probe's line last. `--siblings` then imports FILE's build beside each built
+module of its package not importing it, failing on a name two declare (`siblings.py`). With `--on NODE`, through `research
+run`, it runs `lean_changed.py --try FILE` on this checkout's working tree: in a node's `build` Lean slot, on the tree
+`--records` keeps warm, `lake build +MODULE:deps` and then `lake env lean FILE`. Neither runs this audit or writes a record
+(`lean_changed.py`'s docstring).
 
 ## What it checks
 
