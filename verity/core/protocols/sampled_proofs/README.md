@@ -17,7 +17,7 @@ coins held to the challenger's release log, every round its coin server recorded
 every logged opening read (`VStar.Recursive.innerCoinsHeld`, `SampledProofs/ChallengerInnerTrees.lean`), then V*'s
 compiled check, which ends in the one-stage audit's live check on its verdict of record). One-stage v1, whose verdicts
 are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or evidence name no `proofs`). The
-composite accepts only when every subprotocol accepts.
+composite accepts only when every component accepts.
 
 ## Guarantee and assumptions
 
@@ -254,7 +254,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `parties`: `Challenger`, `Firewall`, `Workers` and `Verifier`, `MANIFEST`, `PROTOCOL` (`PROTOCOLS` by id),
-  `params_of`, and `IDS`, the configuration's subprotocol names and their protocol ids.
+  `params_of`, and `IDS`, the configuration's component names and their protocol ids.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's
