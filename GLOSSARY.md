@@ -351,8 +351,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   record means a guarantee now says something else. It protects only the guarantees
   and what they read, though it lists many lemmas too.
 - **Checking and landing** (the team skill, "Landing"):
-  - **Ready mark**: an owner's statement that a PR's head may land, which admits it: its merge onto `next` at drive's sync
-    is the only check before it joins.
+  - **Ready mark**: an owner's statement that a PR's head may land; it admits that head to `next`.
   - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
   - **`next`**: drive's branch of admitted PRs, one merge each, above `main`, which fast-forwards to its reviewed prefix.
   - **Preflight**: `research queue ready`'s checks of a head merged onto `next`, before the mark; the sync runs none.
