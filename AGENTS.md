@@ -119,7 +119,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
   circuit, partitioned into proof blocks, with its public layout of external I/O, registered by digest; for run-time
   choices, a registered compiler (a circuit with a public length cap) and the advice it compiles, a bit string Verity
   never interprets, whose length is charged; the values, committed in a `verity.ml.commitments` scheme and registered
-  before any coin; and on a sample, the sampled proof blocks' openings, to the prover behind the ZK server.
+  before any coin (under a two-stage sampling design, a sampled replay block's interior between its two stages); and on a
+  sample, the sampled proof blocks' openings, to the prover behind the ZK server.
 - **Results are per monitoring period, over all compute.** The time length of interest is the monitoring
   period (Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message, is presented for monitoring periods of one week, one month and one year, and over
@@ -167,7 +168,9 @@ soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alon
 and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate; a red step's culprit is
 reverted on `checked` (how a PR lands: the team skill). A ready mark admits a PR: the sync's own merge onto `next` (a
 conflict, drive.toml's `landing_gates`) is the only check before it joins, and a body naming no live goal draws a warning,
-never a refusal.
+never a refusal. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on
+`checked`'s tip (its lock run), commits the lock records it regenerated there, and checks that commit, so `main` moves only
+to a commit whose records are the regenerated ones and whose gated steps all passed on it.
 
 ## Lean
 
