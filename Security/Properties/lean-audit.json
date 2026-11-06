@@ -9017,6 +9017,29 @@
     "_private.Flock.Canon.0.Flock.hex4": "7c4da174272bc28875627bc5c5f157d6d70a8c1163e8e6e961d111bf7cf9a56c"
    }
   },
+  "Flock.CanonForm": {
+   "digest": "b2cb8c8142462dcd913aeb640f549bee62e370300d395d64d88f5df69d180b45",
+   "definitions": {
+    "Flock.Firewall.Tok": "7801fe6fa7997d4814eecedfaf70355c142426a95503539ad42749b39fad22d5",
+    "Flock.Firewall.Tok.arr": "00a3dd2e8ad2ecff4213dc27682d1400a09a3e9e9562e8ee8c94865bcb7d3bed",
+    "Flock.Firewall.Tok.bool": "5470011b9dec1110a77c35b2d6042a0f3218cfef05896e72a4e6748cad3414c6",
+    "Flock.Firewall.Tok.casesOn": "a6f97a54ac636088bd02d482a12657165e63be294631ef6edbe635a2f6f451d6",
+    "Flock.Firewall.Tok.close": "90e87e86571a5f2d0bbe181832409fbdbe15e54b1e6b855afcad56f33784c49e",
+    "Flock.Firewall.Tok.key": "3b5d9461831a5f54183a0f932dbc6c06275f2ab482a03ffb2a61d566cc0b6a1e",
+    "Flock.Firewall.Tok.null": "1564b3a362a6d66d818fbde4043c7170d59595b84d7a2ae949e113a43cc589e1",
+    "Flock.Firewall.Tok.num": "a584e0aa300e118285cc98ffd8fdfaa7034ba82e94cd30d37cdcb36449573c4e",
+    "Flock.Firewall.Tok.obj": "aa5ab5261c270184ab6fcabf5bbf14d7866bd8dde65e017b879d8b7ec61e613b",
+    "Flock.Firewall.Tok.rec": "b3bc6f3c9762157b4a369676d1363d5d060b18fc77dc34e20dc4ed9d08676b2e",
+    "Flock.Firewall.Tok.str": "8b6b2945a59c0332d7005cebe014cd70bfeb6a8a8d4dbead7936fcb42eb5d048",
+    "Flock.Firewall.canonForm": "5e4d04acb658b64f3c1bdfab1ce66a23c712b59e03997f2b027e17f4ee8ed6bb",
+    "Flock.Firewall.canonFormList._f": "0670dbba36c2797189a5cbf0068ae803467d731baa1cd763844dd838da2dddc7",
+    "Flock.Firewall.canonFormList.match_1": "6060d757dcc26e312cfd4f44a953fda011a0bf0476ccd56d1edd7bafd69e7dd2",
+    "Flock.Firewall.canonFormObj._f": "dcfa8771f01a8b3a90ac124d4ef8adbe90f5625c6bebfdb001bc8e39738088bc",
+    "Flock.Firewall.canonFormObj.match_1": "439e5b2b1212b13743e6043b163fa23016fe7026ee7e990d5fb7252847634378",
+    "Flock.Firewall.instDecidableEqTok": "6db661a2dab25e822a94f73a028373ff9f15ccfefaea45ae804086615cc2104e",
+    "Flock.Firewall.instDecidableEqTok.decEq": "4f4812d6346b68e340092afa1ad4d4f88230866f12550cb37b82cbc9db358c48"
+   }
+  },
   "Flock.Circuit": {
    "digest": "839e2f5a22b807c2541054f37d7610cb1f8f257b793cfeea112acffe4e02b8d4",
    "definitions": {
@@ -11931,7 +11954,7 @@
    }
   },
   "Flock.Tags": {
-   "digest": "7493319a37f9fd1475e272ac144935897377963112ce2a59a675f0194da3cdb7",
+   "digest": "9fc86392b6a918b2a1f7818e0550c9dcb560adba78b6ed85b4f6e344257bfbdd",
    "definitions": {
     "Flock.TablesTags": "616e6a1133659aca6313acb08b641dbdb15f03279404705add3efd103a55fd45",
     "Flock.TablesTags.domainPrefix": "58ccbc9ce507eb6dde62a067432ef3c853a3ec9ab55ec5910f0fd9cdda2dc3c1",
@@ -11994,7 +12017,7 @@
     "Flock.Tags.outRowsV2Identity": "ea6cc1fd879dc34f5a1d6d6179c2d3d54f117a7a5367825d67e881b53a6b2daa",
     "Flock.Tags.pinnedIdentity": "939e34e2ca2baa2308f0356b17f70d94e68fc41607f0b45da2d43ea6a00c681e",
     "Flock.Tags.pinnedLeafScheme": "258373fd740b4a89c171b6b0810912e9f8e676f3cfca8402f5bee05c186b5380",
-    "Flock.Tags.plainLeaves": "235e82d4bd140be773871cbc5b868ffca05829fe916db2380995f836dddf38e3",
+    "Flock.Tags.plainLeaves": "eb03361f93a796c9090a386bda3427c54dd63ac666d35f84115f0ec196b0c675",
     "Flock.Tags.publicCircuitKey": "a28de26401b991f4dd2375960c479d32241293885675d8ae72913e60b7eff642",
     "Flock.Tags.publicFormat": "6a33fa73422924b4e93c9a53caeb775b224d1cdfa3cedcb34329d9bdfcee6be5",
     "Flock.Tags.retainRounds": "7bc6b5d0d88b679d83cf0ae5704f4ec01b1b08bc5f456ba63b96099e9ad8ac4f",
