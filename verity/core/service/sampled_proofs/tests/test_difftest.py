@@ -1961,14 +1961,21 @@ def _sha(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
 
 
-def _public_of(rec: dict, roots: dict | None = None) -> bytes:
+def _public_of(rec: dict, roots: dict | None = None, indices: list | None = None) -> bytes:
     """A public file whose header is `rec`'s as `registration.matches_public` reads one (`OneStageZk.publicHeld`): its
-    scheme, its ``frame_v3`` roots (`roots` in their place) and their ``domain_ids``, and its population as ``instances``.
-    No statement follows it, so a session set up on it is rejected."""
+    scheme, its ``frame_v3`` roots (`roots` in their place) and their ``domain_ids``, its population as ``instances``,
+    and its population's units in order as ``units.indices`` (`indices` in their place). No statement follows it, so a
+    session set up on it is rejected."""
     reg = {r["port"]: r for r in rec["roots"]}
     fv = {"domain_ids": {p: r["domain"] for p, r in reg.items()}, "roots": roots or {p: r["root"] for p, r in reg.items()}}
-    header = {"frame_v3": fv, "instances": rec["population"], "scheme": rec["scheme"]}
+    units = {"indices": list(range(rec["population"])) if indices is None else indices}
+    header = {"frame_v3": fv, "instances": rec["population"], "scheme": rec["scheme"], "units": units}
     return json.dumps(header, sort_keys=True).encode() + b"\nnot a public file"
+
+
+#: `OneStageZk.INDICES_WHY`
+INDICES_WHY = ("public file: its units.indices are not the registration's population units in order "
+               "(instance i is unit i)")
 
 
 #: `OneStageZk.NO_CHALLENGER`
@@ -2021,7 +2028,9 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     for naming verdicts; refused, before any tree is read, with them replaced by proofs naming no session or two (the
     drawn units are proved in one session, `oneSession`); rejected by the session's own verdict when its files are not
     a statement's; refused before the session is verified when its coins are not a tree the challenger logged, or the
-    public file is not the registration's (`publicHeld`, its codes Python's `matches_public`'s); refused when a file it
+    public file is not the registration's (`publicHeld`, its codes Python's `matches_public`'s), or its ``units.indices``
+    are not the population's units in order (`indicesHeld`): a header rewritten after the draw, its pin with it, to
+    credit an honest instance as the drawn unit, or naming none; refused when a file it
     names is in no blob, as the public file the parameters name is when the blobs hold another, or its sessions are not
     the evidence's. The public file is the parameters', committed before any coin: evidence naming one of its own, or
     parameters naming none, are refused. `test_proofs.py` holds the verdicts to `verify`'s on a real session, and
@@ -2091,6 +2100,14 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     assert run(one, blobs_=[circuit.hex(), wrong.hex(), *blobs[2:]],
                p=p2 | {"proofs": {**p2["proofs"], "public": _sha(wrong)}}) == (
         "reject", f"proofs: public file: not the registration's: {', '.join(codes)}")
+    n = rec["population"]
+    head, body = public.split(b"\n", 1)
+    unitless = json.dumps({k: v for k, v in json.loads(head).items() if k != "units"}, sort_keys=True).encode()
+    relabelled = [_public_of(rec, indices=is_) for is_ in ([0, *range(2, n + 1)], [*range(1, n), 0], list(range(n - 1)),
+                                                           list(range(n + 1)))]
+    for f in (*relabelled, unitless + b"\n" + body):
+        assert run(one, blobs_=[circuit.hex(), f.hex(), *blobs[2:]],
+                   p=p2 | {"proofs": {**p2["proofs"], "public": _sha(f)}}) == ("reject", f"proofs: {INDICES_WHY}"), f
     assert run(base | {"proofs": {"public": _sha(public), **proofs(["s"])}, "sessions": ["s"]}) == (
         "reject", "evidence: the keys of the evidence's proofs are not sessions")
     got = run(one, p=p2 | {"proofs": {k: v for k, v in p2["proofs"].items() if k != "public"}})
