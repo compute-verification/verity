@@ -11,6 +11,11 @@ from collections.abc import Mapping, Sequence
 from math import floor, inf, log2, nextafter
 
 from verity.core.protocols.profile import MARGIN, IntegrityProfile
+from verity.core.protocols.sampled_proofs.service import REPLAY
+
+UNPROVED_EXFILTRATION = ("a two-stage design's profile is credited for compute and integrity only: no Lean proof yet "
+                         "bounds what its accepted traces deliver")
+"""`exfiltration_bound`'s refusal of a profile with a level of replay blocks (`service.REPLAY`)."""
 
 
 def location_bits(profile: IntegrityProfile) -> float:
@@ -34,9 +39,11 @@ def infiltration_bound(profile: IntegrityProfile,
     """Infiltration security, in bits: except with probability delta, the outputs of incorrect proof blocks, the committed
     values the prover wrote in place of what the circuit computes, total at most this many bits (`harm_bound` weighted by
     `output_bits`).  Every committed output counts, served or not, so no served output's size caps it; a value no committed
-    output holds is outside it.  What those values can encode, with which proof blocks hold them, is `exfiltration_bound`.
-    `output_bits` is a proof block's output bits: one number for every proof block, or per stratum a number or (bits, proof
-    blocks) pairs."""
+    output holds is outside it.  A two-stage design's profile, with a level of replay blocks (`service.REPLAY`), is read at
+    each replay block's footprint, the fewest incorrect proof blocks of any interior its boundary commitment allows, so there
+    it counts only what the boundaries committed while serving pin down.  What those values can encode, with which proof
+    blocks hold them, is `exfiltration_bound`.  `output_bits` is a proof block's output bits: one number for every proof
+    block, or per stratum a number or (bits, proof blocks) pairs."""
     return profile.harm_bound(output_bits)
 
 
@@ -46,7 +53,11 @@ def exfiltration_bound(profile: IntegrityProfile,
     most 2^b values, so a receiver recovers a uniform l-bit secret with probability at most 2^(b - l), plus delta and
     the proof system's terms.  b is the output bits held by incorrect proof blocks, which the prover chose
     (`infiltration_bound`), plus which proof blocks are incorrect (`location_bits`).  The soundness package's Lean states this
-    bound as `audit_exfiltration`.  `output_bits` is given as `infiltration_bound`'s is."""
+    bound as `audit_exfiltration`.  `output_bits` is given as `infiltration_bound`'s is.  A two-stage design's profile,
+    which has a level of replay blocks, is refused: no Lean proof yet bounds what its accepted traces deliver (the counting
+    bound over footprints), so it is credited for compute and integrity only."""
+    if any(level.name == REPLAY for level in profile.levels):
+        raise ValueError(UNPROVED_EXFILTRATION)
     return infiltration_bound(profile, output_bits) + location_bits(profile)
 
 
@@ -56,4 +67,4 @@ def compute_bound(profile: IntegrityProfile, work: float | Mapping[str, float | 
     return profile.harm_bound(work)
 
 
-__all__ = ["compute_bound", "exfiltration_bound", "infiltration_bound", "location_bits"]
+__all__ = ["UNPROVED_EXFILTRATION", "compute_bound", "exfiltration_bound", "infiltration_bound", "location_bits"]

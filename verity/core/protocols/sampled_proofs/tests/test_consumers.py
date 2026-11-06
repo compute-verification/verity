@@ -6,14 +6,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from fractions import Fraction
 from math import log2
 from pathlib import Path
 
+import pytest
+
 from verity.ml.circuits.partition import Level
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
-from verity.core.protocols.sampled_proofs.consumers import (compute_bound, exfiltration_bound, infiltration_bound,
-                                                            location_bits)
+from verity.core.protocols.sampled_proofs.consumers import (UNPROVED_EXFILTRATION, compute_bound, exfiltration_bound,
+                                                            infiltration_bound, location_bits)
+from verity.core.protocols.sampled_proofs.service import REPLAY
 
 #: A4 P6's layer 0 (one-stage-e2e): six templates, 6,771,765 proof blocks, in canonical order.
 A4_SIZES = {"rms_triton": 287, "gemm2048": 6_171_648, "rope": 11_480, "rms_fused": 287, "silu_mul": 287,
@@ -45,8 +49,7 @@ def test_infiltration_is_the_output_bit_weighted_bound_and_exfiltration_adds_the
     """A4's sampling designs: the incorrect proof blocks' outputs, what the prover wrote in place of the circuit's values,
     total at most 9.40 MiB under the uniform subset:1024, 8.81 MiB with one proof block per template and 1.50 MiB sampling
     in proportion to output bits, each exactly core's `harm_bound` over the sampling design.  Which proof blocks are incorrect
-    adds 0.08, 0.09 and 0.41 MiB (`location_bits`), so the exfiltration bounds are 9.48, 8.89 and 1.91 MiB.  Over two levels
-    infiltration is `worst_case` with utility b m."""
+    adds 0.08, 0.09 and 0.41 MiB (`location_bits`), so the exfiltration bounds are 9.48, 8.89 and 1.91 MiB."""
     segments = [(A4_BITS[name], size) for name, size in A4_SIZES.items()]
     p = one_level(Subset(1024))
     got = infiltration_bound(p, {"unit": segments})
@@ -58,8 +61,6 @@ def test_infiltration_is_the_output_bit_weighted_bound_and_exfiltration_adds_the
         got, out = infiltration_bound(p, A4_BITS), exfiltration_bound(p, A4_BITS)
         assert got == a4_law(ks).harm_bound(A4_BITS, DELTA) and lo < mib(got) < hi
         assert out == got + location_bits(p) and out_lo < mib(out) < out_hi
-    two = IntegrityProfile(("replay", "check"), (512, 4), {"replay": Bernoulli(Fraction(1, 2)), "check": Subset(2)}, 0.01)
-    assert infiltration_bound(two, 16) == two.worst_case(lambda m: 16 * m)
 
 
 def test_the_location_term_bounds_the_number_of_wrong_sets():
@@ -150,6 +151,17 @@ def test_compute_is_the_work_weighted_bound():
     assert compute_bound(two, 1) == two.worst_case(lambda m: m)
     work = {"gemm2048": 2048, "gemm8192": 8192, "rope": 128}
     assert compute_bound(one_level(a4_law(FLOOR)), work) == a4_law(FLOOR).harm_bound(work, DELTA)
+
+
+def test_a_two_stage_profile_is_read_for_compute_and_infiltration_and_refused_for_exfiltration():
+    """A two-stage design's profile, a level of replay blocks (`service.REPLAY`) above the proof blocks: compute and
+    infiltration read it at the footprint (`worst_case` with utility b m), and exfiltration refuses it, since no Lean proof
+    yet bounds what its accepted traces deliver."""
+    two = IntegrityProfile((REPLAY, "unit"), (512, 4), {REPLAY: Bernoulli(Fraction(1, 2)), "unit": Subset(2)}, 0.01)
+    assert compute_bound(two, 1) == two.worst_case(lambda m: m)
+    assert infiltration_bound(two, 16) == two.worst_case(lambda m: 16 * m)
+    with pytest.raises(ValueError, match=re.escape(UNPROVED_EXFILTRATION)):
+        exfiltration_bound(two, 1)
 
 
 def test_an_application_reads_nothing_the_profile_does_not_bound():
