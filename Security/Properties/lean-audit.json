@@ -20436,9 +20436,9 @@
    ]
   },
   "Properties.Accounting.DeclaredCircuit": {
-   "digest": "977f9016c49fb0fc8997ae6a3d5b7db0e3807207a95e51d25c82b99b2a9a76b3",
+   "digest": "8676f7df273c8afdf7e30729914c10b3a3a39de45aaf7819d2f6e3b895983371",
    "definitions": {
-    "Properties.DeclaredCircuit.ScheduledRequirement": "5154eb1080bff4b59306fcdc4c24fec38a718b041aabba484eb12631941be73f"
+    "Properties.DeclaredCircuit.ScheduledRequirement": "0693670a8f68ce5fd7c10252c166940556b570750bad6817537d492aa0d0e354"
    },
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },
@@ -24290,7 +24290,7 @@
    ]
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "9ff6853e63a3b3cc3c33036d37bd54dc799ece988eb1d0aed333a210a3a2198a",
+   "digest": "9fa13c1858128887e5b40ce7c05811ce3c19c38b0dad98f400e659994bee54bb",
    "definitions": {
     "SampledProofs.Challenger.Audited": "159b77cf065dee90e23af320bf78c6c962956fb8dafae7711c47bf9b416a91e0",
     "SampledProofs.Challenger.Audited.circuit": "322482c0ce5792be8e392fd5470dd756d5e44c3af242df1d9f634e383c868c95",
@@ -24398,7 +24398,7 @@
     "SampledProofs.Challenger.laneOf": "89f94029905b9a787a9b6cb67c31561dd1e28d8c6538e861e0f1e0991405fcff",
     "SampledProofs.Challenger.later": "6aa8332f863691e24553bbcfc3c19835da9115c5f053df9d2c7d644722e04267",
     "SampledProofs.Challenger.leafOf": "4712a23a6e2670b893b88edaeeabda556391b612cd99fc324902b4497ec3d224",
-    "SampledProofs.Challenger.ledgerEntry?": "02981d6aaa7f309c0bd18af7aff4b2a63912f1f3261903703fb207f749c09e67",
+    "SampledProofs.Challenger.ledgerEntry?": "46b52b068f4fba027cb24b90737104f8af32b3454b21dbdb813bf08084de845c",
     "SampledProofs.Challenger.ledgerEntry?._sparseCasesOn_1": "b53f656b00c51cba381be3db08bf896f9a10713ceb227229fa341acd5da7097e",
     "SampledProofs.Challenger.ledgerMessage": "ceada06e550102551c8f18e5fa81a6424edc4999a314213e4a2ddc9b198cc938",
     "SampledProofs.Challenger.ledgerTag?": "3a56c57ec82fb0eeda7fa2552b9477c656fabf72be8687c1147e1889a884172c",
@@ -24406,7 +24406,7 @@
     "SampledProofs.Challenger.logDigest": "6d06248e8115e687377bb0f9515d3cdea1ad643c3426b7a06ab0754872b2fecf",
     "SampledProofs.Challenger.pinOf?": "9df124d8f178663d28d45254e88715f07c012c4cb02ed3bd5904483a7b982a7c",
     "SampledProofs.Challenger.pinnedSession": "7f508d9b13dff0dd4f734a3b3a452b08345b2c8d1bdd9b1a463d07e8455682fc",
-    "SampledProofs.Challenger.pinsReason": "60157ef5c06d8b667f812eeeb910cce865471d622c6a989789d93f95d496191d",
+    "SampledProofs.Challenger.pinsReason": "8701044c157f5457455c0c86cd1478c21be7ab23a5cdc0ce344154d6520b409c",
     "SampledProofs.Challenger.releasedRootsOf": "df961c9fb30880f6b6e50e558f60e258c28d58773d89e1a7b84bfb9e9c878563",
     "SampledProofs.Challenger.sessionNamed": "41e3292ca5cbf2ea6250a4961c009341cf55ce7057527246fa6bc138ab7edb92",
     "SampledProofs.Challenger.sessionOf": "acd39d299f1ad17840ce1d6a63786ee3257a663a708702f2135a6014ac64246a",
