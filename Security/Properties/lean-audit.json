@@ -7105,6 +7105,12 @@
     "PouwCheck.Period.windowForm": "a421e213cd7cc3d54959aa21c46c5e0fe44952da4048741484e0b3326b044c90"
    }
   },
+  "Properties.Accounting.DeclaredCircuit": {
+   "digest": "977f9016c49fb0fc8997ae6a3d5b7db0e3807207a95e51d25c82b99b2a9a76b3",
+   "definitions": {
+    "Properties.DeclaredCircuit.ScheduledRequirement": "5154eb1080bff4b59306fcdc4c24fec38a718b041aabba484eb12631941be73f"
+   }
+  },
   "Properties.Composition": {
    "digest": "ce6f705f89d4fac25ee9b82059a92e0a96317aa099b1aae13498990104f16f28",
    "definitions": {
@@ -7595,8 +7601,9 @@
    }
   },
   "VStar.Compose": {
-   "digest": "83ba7b79719717cd7b37d1fe1748f75a8315a60fb4a74d9a942fa1ab312aade8",
+   "digest": "1beaff0ee5610c84699918b4af52d64864596ed801275e56235820df672519cf",
    "definitions": {
+    "VStar.K_MAX": "67f643fdb8c4776343f5fff8b77732a62e1218fd0b80a15541f22fb911106aaf",
     "VStar.emitSections": "ad66c394675eb1d85a4ec0031abc8e0d60fa9c91133d5dcfd0b5efd4aa0b5b80",
     "VStar.metaHead": "3413d0de667b1c881c64bf818ea9fc7f6db835f2f57c3e28d08e5b18787ec059",
     "VStar.rowWires": "8d671528afdbaa8f951c63a71b9aef2636b1936fb1c2c6c64eabe9211fce9b54"
