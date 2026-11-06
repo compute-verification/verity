@@ -15,14 +15,20 @@ for n <= j < L.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 import words as W
 
+if TYPE_CHECKING:
+    import torch
+    from numpy.typing import ArrayLike
+
 LMAX = 32
 
 
-def twin(x: np.ndarray, n) -> dict:
+def twin(x: np.ndarray, n: ArrayLike) -> dict:
     """x (R, L) bf16 words and n (R,) lengths (1 <= n <= L) -> p (R, L) bf16 (0 past n), m (R,) bf16 and r (R,) f32 words."""
     x = np.asarray(x, np.uint16)
     R, L = x.shape
@@ -42,7 +48,8 @@ def twin(x: np.ndarray, n) -> dict:
     return {"p": p, "m": m, "r": r}
 
 
-def gpu(x, lens, heads: int, *, out=None, units: bool = False, parts: dict | None = None, check_lens: bool = True):
+def gpu(x: torch.Tensor, lens: torch.Tensor, heads: int, *, out: torch.Tensor | None = None, units: bool = False,
+        parts: dict | None = None, check_lens: bool = True) -> torch.Tensor | tuple[torch.Tensor, dict]:
     """units_softmax on x (R, 32) bf16, R = B heads, row b heads + h of sequence b at lens[b] (int32 (B,) on the device) ->
     p (R, 32) bf16; with ``units`` (or ``parts``, the caller's tensors for some of them) (p, {"m": int16 (R,), "r": int32
     (R,)}).  ``check_lens`` (default True) refuses lens outside [1, 32] at the price of a device sync."""
