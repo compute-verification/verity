@@ -581,7 +581,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     pending = arm.close(0)
-    host, _rc, dev = committed(R.NAME, {s: _own_leaves(v, R.ROW_BYTES) for s, v in acquired.items()})
+    host, _rc, dev = committed({s: _own_leaves(v, R.ROW_BYTES) for s, v in acquired.items()})
     released: list[Any] = []
 
     def seal() -> None:

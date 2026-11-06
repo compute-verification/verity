@@ -125,7 +125,7 @@ from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.commit import index as IX, row_tables as RTB
+from verity_vllm.commit import index as IX, row_tables as RTB, step_rows
 from verity.ml.windows import interface as IF
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR, ingress_rows as IR
@@ -756,10 +756,9 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  transfer_gates: Sequence[str] = (), weight_values: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
-    under (``commitment``: the reader's committer's, rows-sha512 by default or vllm-v1 by name), the research run ``run``, the row, the
-    committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
-    with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
-    serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
+    under (``commitment``, rows-sha512), the research run ``run``, the row, the committer and the served Programs' ``digests``),
+    ``partition.json``, the index and M0's bodies.  The window is ``served``; with ``stand_in`` (its ``of`` and ``link``), a
+    ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
     loaded its Programs with as ``reuse``.  ``transfer_gates`` are the templates the registered compiler lists as holding transfer
     gates, which the window's law proves whole (`population`); ``weight_values`` (the committer's weights, by registered
     parameter) commit its weight reads by reference, their roots its ``registered_roots`` (`weight_rows.by_reference`).  A
@@ -780,10 +779,9 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     t_read = time.perf_counter()
     c = CS.commit(window, data, row_salt_key=rt.get("key"), segment_roots=rt.get("step_roots"),
                   workers=workers or min(16, os.cpu_count() or 1))
-    prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
+    prov = {"commitment": step_rows.NAME, "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
             **({"tp": dict(tp)} if tp else {}), **(stand_in or {}), **(binding or {}), **({"registered_roots": roots} if roots else {})}
-    prov["commitment"] = getattr(getattr(committed, "com", None), "commit_scheme", prov["commitment"])
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")
