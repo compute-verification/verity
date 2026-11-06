@@ -3133,6 +3133,16 @@
   "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
    "honest": ["Flock.SecurityProofs.RecursiveZKLoopAnySum_honest"],
    "nontrivial": "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial"
+  },
+  "Verity.SecurityProofs.ExpandSize": {
+   "honest": ["Verity.SecurityProofs.ExpandSize_honest"],
+   "nontrivial": "Verity.SecurityProofs.ExpandSize_nontrivial",
+   "kind": "exclusion"
+  },
+  "Verity.SecurityProofs.ExpandAndSize": {
+   "honest": ["Verity.SecurityProofs.ExpandAndSize_honest"],
+   "nontrivial": "Verity.SecurityProofs.ExpandAndSize_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -3451,8 +3461,6 @@
   "Verity.SecurityProofs.BlockDescription": "80baa463fd43086b3ca137b50dc78ace3b4400bfbabdb344ddc3c090d1f6dbeb",
   "Verity.SecurityProofs.Counting": "34e0729bbd40c2fd7311fc30725f7d8bb1f2fb2daed521891c0dada5afd70f77",
   "Verity.SecurityProofs.CountingSum": "1b2f164ab74dfac250ebe357db6363a1d52294716405d3ed10596cb21004e4ef",
-  "Verity.SecurityProofs.ExpandAndSize": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60",
-  "Verity.SecurityProofs.ExpandSize": "ba20fed6329ddf69ec6358b50a84b4245f08fbbd3cd9543a994231dcfd64ab9f",
   "Verity.SecurityProofs.InferenceCap": "0035c5e37498f2d808d066ae0a6d0bd50791b4ad147383f0feba37bf8362c9fc",
   "Verity.SecurityProofs.PrivateOutBitsLe": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
   "Verity.SecurityProofs.RefineWrong": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
@@ -14115,6 +14123,18 @@
    "assumptions": [],
    "type_hash": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60"
   },
+  "Verity.SecurityProofs.ExpandAndSize_honest": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandAndSize_honest : Verity.Guarantees.ExpandAndSize_honest"],
+   "assumptions": [],
+   "type_hash": "a7ff419aad4a9cf8d50732831b3856b9501fdfc57986427ef7bbeb2120bcf3f5"
+  },
+  "Verity.SecurityProofs.ExpandAndSize_nontrivial": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandAndSize_nontrivial : Verity.Guarantees.ExpandAndSize_nontrivial"],
+   "assumptions": [],
+   "type_hash": "89a901361a665320505aa9113c71097e2f44b8489bc0896f6c832b6488acd783"
+  },
   "Verity.SecurityProofs.ExpandBits": {
    "owner": "@lean",
    "signature": ["Verity.SecurityProofs.ExpandBits : Verity.Guarantees.ExpandBits"],
@@ -14138,6 +14158,18 @@
    "signature": ["Verity.SecurityProofs.ExpandSize : Verity.Guarantees.ExpandSize"],
    "assumptions": [],
    "type_hash": "ba20fed6329ddf69ec6358b50a84b4245f08fbbd3cd9543a994231dcfd64ab9f"
+  },
+  "Verity.SecurityProofs.ExpandSize_honest": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandSize_honest : Verity.Guarantees.ExpandSize_honest"],
+   "assumptions": [],
+   "type_hash": "8ca0392c708102f72c1b1e0231296e28a075671b385e3dee15a2ac6567cde84a"
+  },
+  "Verity.SecurityProofs.ExpandSize_nontrivial": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandSize_nontrivial : Verity.Guarantees.ExpandSize_nontrivial"],
+   "assumptions": [],
+   "type_hash": "112a8c90c018aebd4028397748512fca09566c34295f1a1479fc82c38fe3c058"
   },
   "Verity.SecurityProofs.HopperStepComplete": {
    "owner": "@proofs",
@@ -15869,7 +15901,11 @@
    "WeightSecurity.SecurityProofs.TheftTight": "completeness: at the toy instance, the cheating datacenter's view goes through the one-bit channel with ε = 0 and the thief steals the weights with probability 1, Theft's bound 2 · 1/2 + 0: the factor |S| is attained.",
    "Flock.SecurityProofs.RecursiveZKLoop": "frozen (obligation,no-function): It takes the deployed tables' premises (Tables, Complete, DummyReg, Causal, SwCausal and TapeOK of the loop's session), the firewall's sending the schedule's transcript (FirewallSends) and V*'s statements' honesty and simulator coins (LoopSessions.Honest, Sized) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
    "Flock.SecurityProofs.RecursiveZKLoopAnySum": "frozen (obligation,no-function): RecursiveZKLoop at any inner worker, with no FirewallSends: it takes the deployed tables' premises (Tables, Complete, DummyReg, Causal, SwCausal and TapeOK of the loop's session), V*'s statements' honesty where the inner session finished and their simulator coins (LoopSessions.Honest, Sized) and the release's reading no stop where it didn't (ReleaseReadsNoStop) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
-   "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": "frozen (obligation,no-function): RecursiveZKLoopAnySum with Tables, Complete, DummyReg, Causal and TapeOK proved at the deployed tables: it takes SwCausal at the workers' values, V*'s statements' honesty where the inner session finished and their simulator coins (LoopSessions.Honest, Sized) and the release's reading no stop where it didn't (ReleaseReadsNoStop) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512."
+   "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": "frozen (obligation,no-function): RecursiveZKLoopAnySum with Tables, Complete, DummyReg, Causal and TapeOK proved at the deployed tables: it takes SwCausal at the workers' values, V*'s statements' honesty where the inner session finished and their simulator coins (LoopSessions.Honest, Sized) and the release's reading no stop where it didn't (ReleaseReadsNoStop) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
+   "Verity.SecurityProofs.ExpandAndSize_honest": "completeness: ExpandAndSize's honest lemma: at AndPair (as ExpandSize_honest's) the expansion's AND counts are at most the widths of the computed gates and of the unit. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
+   "Verity.SecurityProofs.ExpandAndSize_nontrivial": "lemma: ExpandAndSize's nontrivial lemma: at AndPair both bits of gate 2 are AND gates, each the AND of a bit of gate 0 and one of gate 1, so the expansion's AND count 2 is above the bound's right-hand side lowered by one (gate 2's width 2, less 1), and the bound is tight there. A counterexample at an instance, not a property of a Lean function.",
+   "Verity.SecurityProofs.ExpandSize_honest": "completeness: ExpandSize's honest lemma: at AndPair (Verity.Expand.AndPair, Security/Definitions/Core/Expand/Instances.lean), a declaration whose two-bit input gates 0 and 1 feed a bitwise AND at gate 2, its one unit, with gate 0 registered, its conclusion holds: the expansion's computed bits and its unit's bits are as many as their widths, and its unit's unregistered reads at most the width of the unit's. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
+   "Verity.SecurityProofs.ExpandSize_nontrivial": "lemma: ExpandSize's nontrivial lemma: at AndPair the unit's expansion reads gate 1's two unregistered bits, above the bound's right-hand side lowered by one (gate 1's width 2, less 1), so the bound is tight there. A counterexample at an instance, not a property of a Lean function."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -23178,6 +23214,14 @@
     "Verity.ofBits": "c6c125c5334c5958506129c2975c7a413a89fce593ee3e7023263ef6d82c4520"
    }
   },
+  "Definitions.Core.Expand.Instances": {
+   "digest": "4271299471ede4407f15f48af9e1f5d9ab04d3ef3ab9d6cc6142b540d28f7321",
+   "definitions": {
+    "Verity.Expand.AndPair.C": "623c103c289bc7444a4490de211d76215835bd9a6ebbf45bcb52283e6cc99f45",
+    "Verity.Expand.AndPair.P": "9d6b7de13a801e00bb7e1bdde96252546c66cf1fb9039c8405b4713338735576",
+    "Verity.Expand.AndPair.d": "aedceab34e76fbeb0d45cbd92e33dea063a2b78afbf99912ffe6a9dcd0e94ad5"
+   }
+  },
   "Definitions.Core.Formalism": {
    "digest": "151c0a151f16ab82cd0a371cd5fb34fc7221bb9fbabe4a3c416ce635c4e4fb82",
    "definitions": {
@@ -23354,6 +23398,15 @@
     "Verity.Guarantees.ExpandBoolean": "5adfa5fa82059f088eb8f99a702832076a44a2b079f07334e2d5c72fe8ee7a70",
     "Verity.Guarantees.ExpandEval": "445ffa8931afc75d428b23eae41bf34e5055781ea6274464e00da3437ed805b2",
     "Verity.Guarantees.ExpandSize": "2543d55d80119456b042895f3001fb0c8ad456142f935da9ecd9c2a2480706bf"
+   }
+  },
+  "Definitions.Core.Guarantees.Expand.Witnesses": {
+   "digest": "5103e95bf3a33c6441bf16c83264a135e8377ad27861df2e244bb9c828bff945",
+   "definitions": {
+    "Verity.Guarantees.ExpandAndSize_honest": "d52a4131d19e781bd1a2164f7d052e95a801b153d7fdae35dca75daf4c1f89a2",
+    "Verity.Guarantees.ExpandAndSize_nontrivial": "b6428fe1ba2e9cd120afff2fdd33bf8bb7e594024af4b9e685c3e094f9dd0e60",
+    "Verity.Guarantees.ExpandSize_honest": "25dd69b64ae784cbfa89c3952dc0524122ec9db6a3caab13b4adfc1489d9ca82",
+    "Verity.Guarantees.ExpandSize_nontrivial": "272145232223b83e9fa1ac10afcec4ffadcc61e1e1375baa75e153449fed9d53"
    }
   },
   "Definitions.Core.Guarantees.Formalism": {
