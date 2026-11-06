@@ -754,7 +754,7 @@ theorem sampledProofsRecursive (q : Dep)
   by_cases hreg : V.Registered θ F
   swap
   · rw [show Game.prob (fun o => RecVerdict V k o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ = 0 from
-      prob_play_eq_zero (V.rounds θ) θ F c _ (fun _ _ h => hreg h.1.1) σ]
+      prob_play_eq_zero (V.families θ) θ F c _ (fun _ _ h => hreg h.1.1) σ]
     exact zero_le
   -- more than an `ε` share of the units is unbound in the extracted transcript
   have hU : K₀ ≤ (Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (q.extract V S readX)).card := by

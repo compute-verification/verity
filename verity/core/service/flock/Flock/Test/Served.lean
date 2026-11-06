@@ -1,6 +1,6 @@
 /-
 `ProvedScope.servedForm`, the last of `verify`'s refusals: a session is taken only at `verity/flock-circuit` or
-`verity/flock-circuit+plain-leaves` on live coins. Every other version `Tags.all` knows (the superseded hm96 versions
+`verity/flock-circuit+plain-leaves` on the challenger's keyed coin tree. Every other version `Tags.all` knows (the superseded hm96 versions
 and the selftest builds' `+seed-injection` ones among them) and a plain session on seed coins are refused, each with its
 reason; a version before hm96 rows, or typed, is refused earlier by `ProvedScope.check`, and the version is named first.
 -/
@@ -23,9 +23,8 @@ def why (t : Tags) (c : Coins) : String :=
 def tree : Coins := .tree ⟨#["session", "circuit/rep0", "circuit/rep1"], 9, 512⟩
 
 #guard served == ["verity/flock-circuit", "verity/flock-circuit+plain-leaves"]
-#guard why Tags.circuit .os == ""
 #guard why Tags.circuit tree == ""
-#guard why Tags.circuitPlainLeaves .os == ""
+#guard why Tags.circuitPlainLeaves tree == ""
 #guard why Tags.circuit .seed == SEED_COINS
 #guard why Tags.circuitPlainLeaves .seed == SEED_COINS
 #guard why Tags.circuitSelftest tree == "refused: verity/flock-circuit+seed-injection, a selftest build's statement, " ++
