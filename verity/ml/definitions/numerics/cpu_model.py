@@ -1,4 +1,4 @@
-"""ctypes wrapper of ``cpp/tc_model.cpp``: bulk per-instruction evaluation and the parametrised GEMM model."""
+"""ctypes wrapper of ``cpp/tc_model.cpp``: the parametrised GEMM model."""
 
 from __future__ import annotations
 
@@ -64,29 +64,6 @@ def _dtype_code(dtype: str) -> int:
 
 def _groups(model: TCModel):
     return (ctypes.c_int * len(model.groups))(*model.groups)
-
-
-def tc_records(model: TCModel, acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """``tc_dot`` on ``n`` records: ``acc`` (n,) u32, ``a``/``b`` (n, k) u16 -> (n,) u32."""
-
-    n = len(acc)
-    acc = np.ascontiguousarray(acc, dtype=np.uint32)
-    a = np.ascontiguousarray(a, dtype=np.uint16).reshape(n, model.k)
-    b = np.ascontiguousarray(b, dtype=np.uint16).reshape(n, model.k)
-    d = np.zeros(n, np.uint32)
-    lib().tc_records(
-        _dtype_code(model.dtype),
-        acc.ctypes.data,
-        a.ctypes.data,
-        b.ctypes.data,
-        d.ctypes.data,
-        n,
-        _groups(model),
-        len(model.groups),
-        model.width,
-        model.zero_exponent,
-    )
-    return d
 
 
 @dataclass(frozen=True)

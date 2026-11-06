@@ -431,7 +431,6 @@
     {"file": "verity/ml/definitions/registry/fa2_split.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.refs.tuple_of` imported but unused"},
     {"file": "verity/ml/definitions/registry/fp8.py", "kind": "F401", "symbol": "<module>", "detail": "`types` imported but unused"},
     {"file": "verity/ml/definitions/registry/fp8.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.definitions.registry.prims.I32` imported but unused"},
-    {"file": "verity/ml/definitions/registry/hopper.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.defs.PrimitiveDefinition` imported but unused"},
     {"file": "verity/ml/definitions/registry/lifted.py", "kind": "B008", "symbol": "l_bot", "detail": "Do not perform function call `enc_bot` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable"},
     {"file": "verity/ml/definitions/registry/lifted.py", "kind": "F821", "symbol": "as_program", "detail": "Undefined name `Program`"},
     {"file": "verity/ml/definitions/registry/marlin_moe.py", "kind": "E731", "symbol": "MoeAlignBefore", "detail": "Do not assign a `lambda` expression, use a `def`"},
