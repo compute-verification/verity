@@ -24182,18 +24182,32 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "61808edd5ee5ef21ba70395fd0702faaec715ec8e863f8ae40b885bc340394b9",
+   "digest": "8b960e2505e57b7e266db9a8e1343d0783694a76835c2c1204e45de2f6dbb190",
    "definitions": {
+    "Verity.Signer": "48991158425b68345c8dedd56cd86e65630425e0e497e76a9b36c0fc50952648",
+    "Verity.Signer.draws": "7ff5aca35fcc910387d3ef8c1f1bb0a929964adee8bcd3e643ca375fb1896477",
+    "Verity.Signer.first": "3eb9b8f77b4a486cbd969e6c71b75535afaf9111f20580e9d967ff3766f30479",
+    "Verity.Signer.last": "e331430cd709a2afc35c7c4701c4f44eefade0b26484c095f4e4e973d40c00ed",
+    "Verity.Signer.sign": "0eebb164ba9cd8d441f2e9ba3dfbd10c5841ca4bc495a300d6ec62db907b09a9",
+    "Verity.Signer.signatures": "2cf796a4c70700cdb6a133d0801f9340f6be6e3cba7a8c6c2db1df858bbe0f2b",
+    "Verity.Signer.signs": "62ff9f40c5c2677fdcc3421d64b55aadb5b8ee2cafc502e49111d3e4db6cacc9",
     "Verity.Subprotocol.ofAudit": "5c1dfcd293d5f46c018b3e89a24351dd09db29a097c811cb1082209793537dd4",
+    "Verity.TreeSpecOk": "666190d9707826c4245f369aa14ce49eaef4fc1789e996351240e99eddde8012",
     "Verity.Vocab.Holds": "33004e2c3919034a7748b059fc76200f291de5901515771079bcc42abdef74a6",
     "Verity.Vocab.Opens": "8c2dbb92fed3bc51341915fba1b730320bd0b1ed1f1830d8b78e654ac8457445",
     "Verity.Vocab.declaration": "68198cbacb691dfd2e4baf8097cfb90d6d90761852166319205027979b1afb32",
+    "Verity.Vocab.signer": "7417e965d376db69798e0555ff4d74e0b723ceaa751de9d0ac77977d7efb6cfe",
     "Verity.component": "7afdd94aa076686ad7a2786237cedbc650865afbb1e690965a7fa67c7950cdd1",
     "Verity.componentsOf": "3105ab88ada7396296740344fb1bf77dda9ec3f17298a8aa3aea6c0ad688481b",
+    "Verity.finish": "63a04e5580f3abf7f6ad1080857d568928b24ae6aecdabf2a7adbe5dda7835d6",
+    "Verity.instDecidableTreeSpecOk": "3739d47bebb43a4dcf4ef53a56aaf4df4551cd0e750b54518bcd8e4bcc33a77b",
+    "Verity.maxTreeCoins": "0763ec542244a4ad68b316c0b30cb7dbc49a72468309c705af0b83109bc5575c",
     "Verity.parsedConsts": "f9d2e428528841c9c7316d7f47d7a5d6ff8f2d2ebbe3c3f3cd8e3b75e6acead4",
     "Verity.releases": "691958401cfb43d35f90c329dee1fb38689143aa3fca716259c9590a5c2c279d",
     "Verity.tied": "32c2fac95ce4d5965541eb0d094664ca823980ced97c9e105343b0d1cd7e6389",
     "Verity.ties": "8b33a7cdde19113bf4e28ccf255d691f8583d4392e737b4431dd5302a741aa4b",
+    "Verity.treeCoins": "46c86749aff0a445901f2cea24792f2f832690de2e1cc01dac62d5e656337664",
+    "Verity.treeLines": "39bb67869cc9fb57363eb013300e11d6005d9f0133489fa9d493eb6e493f5b5e",
     "Verity.verifier": "b7fae89e9429a2c64f9a8fa675470db7f9a0c069215ef2d650eef6087188ffda"
    }
   },
