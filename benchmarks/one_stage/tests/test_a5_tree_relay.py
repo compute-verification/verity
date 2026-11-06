@@ -216,9 +216,10 @@ def test_a_tie_failing_after_the_sessions_refuses_the_audit_and_writes_its_summa
                                                                "negatives": {}} == summary
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(not (settings.TREE_FROM and Path(settings.FLOCK_CIRCUIT).is_file()),
                     reason="VERITY_ONE_STAGE_TREE_FROM=1 and FLOCK_CIRCUIT (a release build of flock-circuit) unset: a real "
-                           "serve --zk --tree-from session on RoPE's two captured heads through the relay, about a minute")
+                           "serve --zk --tree-from session on RoPE's two captured heads through the relay, about half a minute")
 def test_a_zk_servers_coin_tree_through_the_relay_holds_its_record_to_the_steps_session(tmp_path, monkeypatch):
     """``flock-circuit serve --zk --tree-from`` (``FLOCK_CIRCUIT``) on RoPE's two captured heads, through the relay as a5
     hands it to the server (`a0.session`'s ``tree_from``): the prover's session is accepted, the server's one coin tree
