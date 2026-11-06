@@ -1,6 +1,35 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
 public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictReplay
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Refine.Opening
+import Proofs.Flock.Soundness.Refine.Plays
+import Proofs.Flock.Soundness.Refine.Zerocheck
 
 /-!
 # A `--zk` rep's inner check holds on its inner openings

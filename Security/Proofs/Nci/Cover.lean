@@ -7,6 +7,8 @@ public import Proofs.Nci.Cover.Bits
 public import Proofs.Nci.Cover.Sum
 public import Proofs.Nci.Cover.Training
 public import Proofs.Nci.Cover.Checked
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Tactic.Measurability.Init
 
 /-!
 # Proofs of the cover theorem

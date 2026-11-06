@@ -1,9 +1,12 @@
 module
 
 public import Proofs.Flock.VBridge.Sparse.Defs
-public import Proofs.Flock.VBridge.Algebra.Build
-public import Proofs.Flock.Soundness.Refine.Arith
-public import Proofs.Flock.Soundness.Refine.Regions
+public import Proofs.Flock.Soundness.Refine.Tapes
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Regions
+import Proofs.Flock.VBridge.Algebra.Build
 
 /-!
 # `RecSparse_v1`'s residuals and verifier row over the model's field

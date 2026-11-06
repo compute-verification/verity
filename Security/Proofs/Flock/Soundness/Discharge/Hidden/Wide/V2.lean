@@ -1,7 +1,31 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Tail
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Binding
+import Proofs.Flock.Soundness.Discharge.Hidden.Committed
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Hidden.Rows
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.Hm.Bc
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
 /-!
 # `sha512/row/v1` or `sha512/row/v2` rows (`OutputsCommittedV2`, `OutputsBindingV2`)

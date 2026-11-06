@@ -1,7 +1,10 @@
 module
 
 public import Definitions.Core.Game.Seq
+public import Definitions.Flock.Game
 public import Definitions.Flock.Game.Expect
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # C-Flock's game vocabulary is Core's: `Seq`
