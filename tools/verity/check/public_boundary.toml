@@ -64,6 +64,8 @@ protocols = [
     "verity/core/primitives/identity",
     "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
     "integrations/vllm/tests/pipeline/test_registration_log.py",
+    # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
+    "Security/Proofs/Pouw/PeriodJ10R/Binding.lean",
 ]
 team = [
     "infra",
