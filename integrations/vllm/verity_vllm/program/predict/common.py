@@ -1,7 +1,7 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
 class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), the
 batch a request's calls run in (`launch_batch`, `_Launch`) or a batch-invariant row's launch context (`launch_rows`, `launch_seqlen_q`) and the
-token select over a row's whole-vocabulary logits (`select_token`)."""
+token select over a row's whole-vocabulary logits (`select_token`), and a wrapper's forwards over a decoder (`drive`)."""
 
 from __future__ import annotations
 
@@ -66,6 +66,29 @@ class _Stochastic:
     S: Any
     temperature_bits: int
     top_p_bits: int
+
+
+def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int | None, T: int | None, policy: _Stochastic | None,
+          batch: list | None, C: int = 0, chunks: tuple[int, ...] = ()) -> list[Coll]:
+    """The wrapper's forwards over `model` -> its samples: a `step`'s M rows at pos0.. and its last row's sample, or a `request`'s
+    prefill of LP rows (rows C.. after a cached prefix of C; in `chunks`, one forward a chunk, each its own launch, the sample after
+    the last), then T decodes, each fed the previous sample."""
+    if wrapper == "step":
+        hid = model.forward(rows, pos0)
+        return [model.sample(hid[-1], 0, pos0 + M - 1, policy)]
+    a = C
+    for j, n in enumerate(chunks or (int(LP) - C,)):
+        if batch is not None:
+            model.launch.step = j
+        hid = model.forward(rows[a:a + n], a)
+        a += n
+    toks = [model.sample(hid[-1], 0, int(LP) - 1, policy)]
+    for s in range(int(T)):
+        if batch is not None:
+            model.launch.step = max(len(chunks), 1) + s
+        hid = model.forward([Coll(Value(32), toks[-1].refs)], int(LP) + s)
+        toks.append(model.sample(hid[-1], s + 1, int(LP) + s, policy))
+    return toks
 
 
 def select_token(call, k, logits: Refs, V: int, target, event: int, pos: int, policy: _Stochastic | None) -> Coll:

@@ -106,13 +106,13 @@ def class_options(options: dict[str, Any]) -> dict[str, Any]:
     from verity_vllm.engine.profiles import engine_classes as EC
     from verity_vllm.errors import Refused
 
-    served = options.get("execution") if options.get("execution") in EC.EXECUTIONS.get(name, {}) else None
-    fixed, most = EC.options(name, served), EC.max_num_seqs(name)
+    execution = options.get("execution") if options.get("execution") in EC.EXECUTIONS.get(name, {}) else None
+    fixed, most = EC.options(name, execution), EC.max_num_seqs(name)
     bad = [f"{k}={options[k]!r}, where the class serves {v!r}" for k, v in fixed.items() if k in options and options[k] != v]
     bad += [f"{k}={options[k]!r}: the class serves the engine profile's" for k in KERNEL_PROFILE_OVERRIDES
             if k not in fixed and options.get(k) is not None]
     if options.get("max_num_seqs", most) > most:
-        bad.append(f"max_num_seqs={options['max_num_seqs']}, over the class's {most}: a step's token budget would cut a prefill")
+        bad.append(f"max_num_seqs={options['max_num_seqs']}, over the class's {most}")
     if bad:
         raise Refused(bad, what=f"engine class {name}")
     return {**fixed, **options, "max_num_seqs": options.get("max_num_seqs", most)}
@@ -200,11 +200,11 @@ class LLM:
       ``"bi-compiled"`` with ``enforce_eager=False``.  An ``enforce_eager`` the label contradicts raises ``ValueError``.
     * ``engine_class`` (str): a registered engine class (`engine.profiles.engine_classes`), such as ``"G"``: the engine runs at
       the class's ``tensor_parallel_size``, an ``execution`` it serves (default its own; class G's ``"compiled"`` at its CUDA
-      graphs' ``compilation_config``), engine limits, ``moe_backend`` and prefix cache off, with
-      ``max_num_seqs`` at most a step's tokens over the prompt limit (its default).  An option that contradicts the class, another
+      graphs' ``compilation_config``), served engine limits, ``moe_backend`` and prefix cache off, with
+      ``max_num_seqs`` at most the class's (its default).  An option that contradicts the class, another
       kernel override, or a checkpoint of another model type raises `errors.Refused` before the engine is built, and so does a
       built engine whose vLLM config doesn't carry the class's settings after it.  The built engine's admission
-      (`engine.class_admission`) refuses a prompt over the class's ``long_prefill_token_threshold``, and
+      (`engine.class_admission`) refuses a prompt over the class's served ``max_model_len``, and
       ``close_window()`` refuses while a request is in flight; a refusal ends the window.  Default none.
     * ``dtype`` (str): served dtype override; default the checkpoint profile's.
     * ``quantization`` (str): vLLM quantization override, such as ``"fp8"``; default the checkpoint's.

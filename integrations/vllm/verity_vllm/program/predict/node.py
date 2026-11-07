@@ -5,7 +5,7 @@
 
 A rank's Program (`build.build_program`) takes the other ranks' partials as Inputs, world - 1 `peers_<k>` per collective, so an
 isolation block over it reads them as novel: 3.1·10¹⁰ bits a GLM-5.3 B1 rank. The node's Program has no
-peer Input. It runs the world's rank forwards, each the one its rank's Program runs (`build.decoder`, `build.drive`), into one
+peer Input. It runs the world's rank forwards, each the one its rank's Program runs (`build.decoder`, `common.drive`), into one
 Builder, one rank at a time in rank order, each up to its next collective. Collective k of every rank then reads every rank's own
 rows at k, in rank order, as `tp_links.json`'s `binding` states the rank's peer Inputs. Joined call by call, the ranks' Programs
 would be a cycle: a rank's collective k reads the other ranks' partials from the middle of their own forwards.
@@ -34,8 +34,8 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Type, Value
 
-from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder, drive
-from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, launch_batch, launch_rows
+from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder
+from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, drive, launch_batch, launch_rows
 from .phi import Phi
 
 

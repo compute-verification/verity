@@ -235,11 +235,12 @@ def test_protocols_install_on_the_built_model_and_close_uninstalls_them(built, m
 
 
 def test_an_engine_class_fills_its_settings():
-    assert L.class_options({"engine_class": "G"}) == {"engine_class": "G", "execution": "eager", "max_num_seqs": 8, **CLASS_G_ARGS}
+    assert L.class_options({"engine_class": "G"}) == {"engine_class": "G", "execution": "eager", "max_num_seqs": 256, **CLASS_G_ARGS}
     assert L.class_options({"engine_class": "G", "max_num_seqs": 4, "seed": 3, "max_model_len": 2048}) == {
         "engine_class": "G", "execution": "eager", "max_num_seqs": 4, "seed": 3, **CLASS_G_ARGS}
     assert L.class_options({"seed": 3}) == {"seed": 3}
-    assert EC.max_num_seqs("G") * EC.prompt_limit("G") == CLASS_G_ARGS["max_num_batched_tokens"]
+    assert EC.max_num_seqs("G") == EC.CLASS_G_LIMITS["max_num_seqs"] == 256
+    assert all(0 < v <= EC.CLASS_G_LIMITS[k] for k, v in EC.CLASS_G_SERVED.items())
 
 
 def test_class_g_serves_compiled_at_its_breakable_graphs():
@@ -265,13 +266,13 @@ def test_class_g_serves_compiled_at_its_breakable_graphs():
 def test_an_option_the_class_contradicts_is_refused_by_name():
     with pytest.raises(Refused) as e:
         L.class_options({"engine_class": "G", "tensor_parallel_size": 4, "long_prefill_token_threshold": 512,
-                         "enable_prefix_caching": True, "execution": "bi-eager", "attention_backend": "FLASH_ATTN", "max_num_seqs": 9})
+                         "enable_prefix_caching": True, "execution": "bi-eager", "attention_backend": "FLASH_ATTN", "max_num_seqs": 257})
     msg = str(e.value)
     assert msg.startswith("engine class G refused: ")
     for part in ("tensor_parallel_size=4, where the class serves 8", "long_prefill_token_threshold=512, where the class serves 256",
                  "enable_prefix_caching=True, where the class serves False", "execution='bi-eager', where the class serves 'eager'",
                  "attention_backend='FLASH_ATTN': the class serves the engine profile's",
-                 "max_num_seqs=9, over the class's 8: a step's token budget would cut a prefill"):
+                 "max_num_seqs=257, over the class's 256"):
         assert part in msg, part
     with pytest.raises(Refused, match=r"engine class 'H' is not registered \(registered: G\)"):
         L.class_options({"engine_class": "H"})
@@ -315,7 +316,7 @@ def built_g(monkeypatch):
 def test_class_g_builds_at_its_settings_and_its_window_refuses_past_its_limits(built_g):
     llm = L.LLM(GLM53[0], revision=GLM53[1], engine_class="G")
     assert built_g["engine_args"] == CLASS_G_ARGS
-    assert (built_g["case"], built_g["max_num_seqs"], built_g["execution"]) == ("GLM53", 8, "eager")
+    assert (built_g["case"], built_g["max_num_seqs"], built_g["execution"]) == ("GLM53", 256, "eager")
     assert llm.engine_record["engine_class"] == "G" and llm.engine_record["engine_overrides"] == {"moe_backend": "triton"}
     sched = handle.scheduler(llm)
     sched.add_request(SimpleNamespace(request_id="a", num_prompt_tokens=256))
@@ -328,10 +329,12 @@ def test_class_g_builds_at_its_settings_and_its_window_refuses_past_its_limits(b
 def test_class_g_refuses_a_prompt_over_its_limit(built_g):
     llm = L.LLM(GLM53[0], revision=GLM53[1], engine_class="G")
     sched = handle.scheduler(llm)
-    with pytest.raises(Refused, match="request r0: a prompt of 257 tokens, over the 256 a class-G window admits"):
-        sched.add_request(SimpleNamespace(request_id="r0", num_prompt_tokens=257))
+    sched.add_request(SimpleNamespace(request_id="long", num_prompt_tokens=257))
+    sched.requests.clear()
+    with pytest.raises(Refused, match="request r0: a prompt of 2049 tokens, over the 2048 a class-G window admits"):
+        sched.add_request(SimpleNamespace(request_id="r0", num_prompt_tokens=2049))
     assert sched.requests == {}
-    with pytest.raises(Refused, match="a prompt of 257 tokens"):
+    with pytest.raises(Refused, match="a prompt of 2049 tokens"):
         llm.close_window()
 
 
@@ -389,7 +392,7 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
     args = {k: v for k, v in L.class_options({"engine_class": "G"}).items() if k in (*L.ENGINE_ARGS, "tensor_parallel_size")}
     assert args == CLASS_G_ARGS
     eng = B.build_engine(cps, case="M", max_num_seqs=EC.max_num_seqs("G"), engine_args=args, execution="eager")
-    assert {k: seen[k] for k in args} == args and (seen["enforce_eager"], seen["max_num_seqs"]) == (True, 8)
+    assert {k: seen[k] for k in args} == args and (seen["enforce_eager"], seen["max_num_seqs"]) == (True, 256)
     assert eng.runner is None and eng.model is None
     assert EC.effective_refusals("G", eng.effective) == []
     assert eng.effective["long_prefill_token_threshold"] == 256 and eng.effective["batch_invariant"] is False
