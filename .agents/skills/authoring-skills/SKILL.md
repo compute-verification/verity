@@ -26,8 +26,8 @@ Put it at the narrowest scope it applies to: work in one package, `<package>/.ag
 
 ## The file
 
-A skill is one `SKILL.md` in a directory of its name, at most 16 KB (`SKILL_SIZE_CAP` in `tests/test_repository.py`; an
-`OVERSIZE_SKILLS` entry there only shrinks). That test admits tracked Markdown only under the maintained basenames
+A skill is one `SKILL.md` in a directory of its name, at most 16 KB (`SKILL_SIZE_CAP` in `tests/test_repository.py`; a
+change over it lands, and drive tells its owner). That test admits tracked Markdown only under the maintained basenames
 (AGENTS.md "Where writing goes"), so a `workflow.md` or `examples.md` beside it fails; a script or `*.template.md` it uses
 may sit there.
 
@@ -55,7 +55,8 @@ and rules as they are now:
 - a rule code enforces is deleted, since the check's failure message says it;
 - a superseded rule is rewritten in place, never kept beside its replacement.
 
-When an edit would push a skill past its cap, compact it by these rules in the same PR.
+When an edit would push a skill past its cap, compact it by these rules in the same PR; one that landed over it is
+compacted in its owner's next PR.
 
 Link detail where it becomes useful, in the place that owns it, rather than copying it: a tool's `README.md` or `--help`,
 a check's failure message, or a `kb/` doc in the notes (`~/.research/notes/kb/`) for facts that change often and anyone

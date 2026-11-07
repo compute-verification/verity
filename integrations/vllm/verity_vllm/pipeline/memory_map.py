@@ -244,7 +244,7 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
         w = np.ascontiguousarray(_operand(index[rid], store, None, rid, int(arrivals[rid]), row.group), dtype=f"<u{rows[rid].word_bytes}")
         return np.ascontiguousarray(w.reshape(2, -1, page.head_words).transpose(1, 0, 2) if page.form == "packed" else w).tobytes()
 
-    layout = MM.Layout(page.block_size, page.pages, tuple(req["firsts"]) if req.get("firsts") is not None else None,
+    layout = MM.KvPool(page.block_size, page.pages, tuple(req["firsts"]) if req.get("firsts") is not None else None,
                        int(req["blocks"]) if req.get("blocks") is not None else None)
     head, steps = MM.record(kv, {r: int(arrivals[r]) for r in rows}, payload, bytes.fromhex(req["registration"]), layout, tables, deferral,
                             producers)

@@ -1,4 +1,4 @@
-"""`verity.ml.circuits.boundary` against the explicit oracle `GateSelection.out` / `GateSelection.in_` on the expanded circuit.
+"""`verity.ml.circuits.boundary` against the explicit oracle `query_ast.oracle_out` / `oracle_in` on the expanded circuit.
 
 Every exact answer must equal the oracle; every bound must be >= the exact `w_out`; every `Unsupported` must be on a
 case named here (produced by tightening the module caps).  The Programs use test-local primitives: a GEMM (a batch of
@@ -11,30 +11,16 @@ import pytest
 
 from verity.ml.circuits import boundary as B
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.layout import FunctionCall, Scope, GateSelection
+from verity.ml.circuits.layout import FunctionCall, Scope
+from verity.ml.circuits.query_ast import oracle_gateset, oracle_in, oracle_out
 from verity.ml.circuits.liveness import Liveness
 from verity.ml.circuits.parts import Limits, Part, Unsupported, n_members
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Tuple, Value
+from verity.ml.circuits.types import Array, Tuple
 
-V16, V32 = Value(16), Value(32)
-A16 = Array(16, V16)
+from test_ir_liveness import V16, V32, Add32, Coord, Dot, Gemm, Mul32, Zero32, prim, comp
 
-
-def prim(name: str, params, ret, fn) -> PrimitiveDefinition:
-    return PrimitiveDefinition(name, 1, tuple(params), ret, fn, register=False)
-
-
-def comp(name: str, params, ret, body) -> CompositeDefinition:
-    return CompositeDefinition(name, 1, (), lambda S: (tuple(params), ret), body, register=False)
-
-
-Add32 = prim("TAdd32", [("a", V32), ("b", V32)], V32, lambda a, b: (a + b) & 0xFFFFFFFF)
-Mul32 = prim("TMul32", [("a", V32), ("b", V32)], V32, lambda a, b: (a * b) & 0xFFFFFFFF)
-Zero32 = prim("TZero32", [], V32, lambda: 0)
-Dot16 = prim("TDot16", [("acc", V32), ("a", A16), ("b", A16)], V32, lambda acc, *ab: acc)
-Cvt16 = prim("TCvt16", [("a", V32)], V16, lambda a: a >> 16)
 Pair16 = prim("TPair16", [("g", V16), ("u", V16)], V16, lambda g, u: g)
 _GATHER: dict[int, PrimitiveDefinition] = {}
 
@@ -45,20 +31,6 @@ def gather(V: int) -> PrimitiveDefinition:
     return _GATHER[V]
 
 
-def _dot(Bd, S, x, w):
-    acc = Bd.call(Zero32)
-    for s in range(S.K // 16):
-        acc = Bd.call(Dot16, acc, x[16 * s:16 * s + 16], w[16 * s:16 * s + 16])
-    return acc
-
-
-Dot = CompositeDefinition("TDot", 1, ("K",), lambda S: ((("x", Array(S.K, V16)), ("w", Array(S.K, V16))), V32), _dot,
-                          register=False)
-Coord = CompositeDefinition("TGemmCoordinate", 1, ("K",), lambda S: ((("x", Array(S.K, V16)), ("wrow", Array(S.K, V16))), V16),
-                            lambda Bd, S, x, wrow: Bd.call(Cvt16, Bd.call(bind(Dot, K=S.K), x, wrow)), register=False)
-Gemm = CompositeDefinition("TGemm", 1, ("K", "N"),
-                           lambda S: ((("x", Array(S.K, V16)), ("w", Array(S.N, Array(S.K, V16)))), Array(S.N, V16)),
-                           lambda Bd, S, x, w: Bd.batch(bind(Coord, K=S.K), x, w, axes=(None, 0)), register=False)
 Pairs = CompositeDefinition("TPairs", 1, ("I",), lambda S: ((("gu", Array(2 * S.I, V16)),), Array(S.I, V16)),
                             lambda Bd, S, gu: Bd.batch(Pair16, gu[0:S.I], gu[S.I:2 * S.I], axes=(0, 0)), register=False)
 Embedding = CompositeDefinition(
@@ -81,9 +53,9 @@ Block = CompositeDefinition("TBlock", 1, ("FIRST",), lambda S: ((("state", V32),
 
 
 class Oracle:
-    """`GateSelection.in_` / `.out` computed from the expanded circuit's operands, cached once per program.  The formula is
-    the oracle's (`layout.py`): out = gates of S consumed by a gate outside S or protected; in = operands of S outside S.
-    `explicit()` re-checks a part against `GateSelection` itself."""
+    """`query_ast.oracle_in` / `oracle_out` computed from the expanded circuit's operands, cached once per program.  The
+    formula is the oracle's: out = gates of S consumed by a gate outside S or protected; in = operands of S outside S.
+    `explicit()` re-checks a part against `oracle_in` / `oracle_out` themselves."""
 
     def __init__(self, program: Program) -> None:
         C = program.circuit
@@ -108,9 +80,9 @@ class Oracle:
         return frozenset(o for g in gates for o in self.ops[g] if o not in gates)
 
     def explicit(self, gates: frozenset[int]) -> None:
-        sub = GateSelection(self.C, sorted(gates))
-        assert frozenset(sub.out) == self.out(gates)
-        assert frozenset(sub.in_) == self.in_(gates)
+        sub = oracle_gateset(self.C, gates)
+        assert frozenset(oracle_out(self.C, sub)) == self.out(gates)
+        assert frozenset(oracle_in(self.C, sub)) == self.in_(gates)
 
 
 def part_gates(part: Part) -> frozenset[int]:
@@ -124,6 +96,11 @@ def body_parts(sc: Scope) -> list[Part]:
 
 def merged(sc: Scope, items) -> Part:
     return Part(sc, frozenset(items))
+
+
+def node_gates(sc: Scope, k: int) -> frozenset[int]:
+    offs = sc.spec.body.offsets
+    return frozenset(range(sc.offset + offs[k], sc.offset + offs[k + 1]))
 
 
 def run_family(family: str, oracle: Oracle, parts: list[Part], *, allow_unsupported: tuple[str, ...] = (),
@@ -152,6 +129,10 @@ def run_family(family: str, oracle: Oracle, parts: list[Part], *, allow_unsuppor
         else:
             assert inn == o_in, (family, sorted(part.items)[:4], sorted(o_in)[:8], sorted(inn)[:8])
             assert not (inn & gates)
+            if part.scope.parent is None:  # skipping a root node removes exactly its gates
+                for k in range(len(part.scope.spec.body.nodes)):
+                    skipped = B.in_gates(part, frozenset({k}))
+                    assert skipped == o_in - node_gates(part.scope, k), (family, sorted(part.items)[:4], k)
         w = B.w_out(part)
         assert w == o_w, (family, sorted(part.items)[:4], w, o_w)
         n_exact += 1
@@ -707,6 +688,34 @@ def test_unsupported_boundary_too_large(monkeypatch):
     assert B.w_out_bound(sq_all) == 8 * 32 and B.w_out_bound(scan_all) == 8 * (32 + 32)  # declared: members; per iteration carry + y
     small = Part(sc, frozenset({(1, 3)}))  # within budget: still exact
     assert B.out_gates(small) == oracle.out(part_gates(small)) and B.in_gates(small) == oracle.in_(part_gates(small))
+
+
+def test_in_gates_skips_the_reads_of_named_root_nodes(monkeypatch):
+    """`in_gates(part, skip_nodes)` is in(part) less the gates of the named root nodes, whose reads it neither charges
+    to `Limits.max_intervals` nor resolves: the GEMM's six coordinates read x (32 leaves each) and their weight rows (32
+    each), 384 leaves charged, so at a budget of 200 the part is Unsupported, and with θ's input node skipped
+    (training's in-bits beyond θ) it is exactly x's gates.  A skip_nodes entry that is not a node of the root body is
+    refused."""
+    P_ = Program(bind(Gemm, K=32, N=6), theta=("w",))
+    oracle = Oracle(P_)
+    sc = P_.circuit.root_scope
+    jb = coordinate_node(sc)
+    whole = merged(sc, {(jb, m) for m in range(6)})
+    o_in = oracle.in_(part_gates(whole))
+    x, w = node_gates(sc, 0), node_gates(sc, 1)
+    assert P_.root.theta == frozenset({1}) and o_in == x | w and len(x) == 32 and len(w) == 6 * 32
+    assert B.in_gates(whole) == B.in_gates(whole, frozenset()) == o_in
+    assert B.in_gates(whole, P_.root.theta) == x and B.in_gates(whole, frozenset({0})) == w
+    assert B.in_gates(whole, frozenset({jb})) == o_in  # the part's own node holds none of the gates it reads
+    monkeypatch.setattr(Limits, "max_intervals", 200)
+    assert B.in_gates(whole).reason == B.in_gates(whole, frozenset()).reason == "boundary_too_large"
+    assert B.in_gates(whole, P_.root.theta) == x and B.in_gates(whole, frozenset({0})) == w
+    assert B.in_gates(whole, frozenset({0, 1})) == frozenset()
+    for bad in ({len(sc.spec.body.nodes)}, {-1}):
+        with pytest.raises(ValueError, match="not nodes of"):
+            B.in_gates(whole, frozenset(bad))
+    with pytest.raises(ValueError, match="not the root activation"):
+        B.in_gates(Part(sc.child(jb, 0), frozenset({(0, 0)})), frozenset({0}))
 
 
 def test_partial_reads_shared_argument_and_scan_xs():

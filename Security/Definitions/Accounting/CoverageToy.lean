@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Accounting.Slowdown
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The floor's toy instance

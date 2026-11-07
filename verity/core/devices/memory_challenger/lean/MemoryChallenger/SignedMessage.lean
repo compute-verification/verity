@@ -1,6 +1,5 @@
 module
 
-public import Lms.Verify
 public import MemoryChallenger.Records
 
 /-!

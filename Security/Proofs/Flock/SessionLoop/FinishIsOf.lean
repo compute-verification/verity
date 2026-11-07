@@ -117,7 +117,7 @@ theorem finFc_of_rows (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     (fun _ _ _ _ i hlo hhi => by
       have e := swSrcE_l0_views L₀ src wk x w vs hsc hR hServe hL0 hE hc hF hsx hs hcms j r hexts hprev hRep hext
         hic hl hlo hhi
-      rw [hg, hexT] at e
+      rw [hg, Masked.l0Clear_ligTab _ _ x w t j _ _ hexT] at e
       exact e)
     hcm0 hicE hrun _ hlt
 

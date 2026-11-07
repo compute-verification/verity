@@ -2,7 +2,11 @@
 behind the difftest harness's line protocol. -/
 module
 
+public import Difftest
 public import Evaluate.Serve
+import Flock.Sizes
+import Std.Data.HashMap
+import Std.Data.TreeMap.Raw.Lemmas
 
 @[expose] public section
 

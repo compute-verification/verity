@@ -43,10 +43,10 @@ at the draws on the server's tape (`LeanRelease.draws`):
   the scheduled round in its place, and the device round passes where it equals the scheduled round byte for byte
   outside the algebraic phase's masked values and the frame takes it. A round that passes leaves as the frame's release
   of it, and one that fails as the frame's release of the scheduled round, as a stopped rep's
-  (`LeanRelease.check_release`). Rust's own checks run first and can only fail a round more (`LeanRelease.cross`), and
-  so can the loop's: at an inner round its finish has not computed, it hands the frame no device round
-  (`Frames.roundStep`). At the inner proof's rounds the scheduled round is the frame's own (`Frame.innerSched`, on the
-  finish's rounds), which Rust relays; relayed as the frame computed it, it is `check`'s against itself (`check_self`).
+  (`LeanRelease.check_release`). Rust's own checks run first and can only fail a round more (`LeanRelease.cross`). At
+  the inner proof's rounds the scheduled round is the frame's own (`Frame.innerSched`, on the finish's rounds), which
+  Rust relays; relayed as the frame computed it, it is `check`'s against itself (`check_self`). The loop refuses an
+  inner round its finish has not computed (`Frames.roundPlace`), so the session stops there.
 
 `LeanRelease.toSrv` is it as a `ZkServer` with one slot per round, of the deployed session's kinds
 (`LeanRelease.kindAt`):
@@ -319,9 +319,8 @@ structure LeanRelease (W R : Type) where
   computed : Msg → W → R → List (Msg × Msg) → _root_.Flock.Firewall.Contract.ReleaseLog
   /-- Rust's own checks on a worker's rep beside the Lean frame's pass decision (`pass`): the worker failing, the
   device's level-0 root, the constraints on the pads, the end check on the returned proof and Rust's masking
-  cross-checks; and the session loop's, at an inner round its finish has not computed (`Frames.roundStep`). Each can
-  only fail a round more, the failed rep's rounds reaching the loop's frame as no device round, which the frame fails:
-  any decision at all -/
+  cross-checks. Each can only fail a round more, the failed rep's rounds reaching the loop's frame as no device round,
+  which the frame fails: any decision at all -/
   cross : Msg → ℕ → W → R → List (Msg × Msg) → Msg → Bool
   /-- the device round the firewall sends in the device's place once a round failed: the skeleton's round with zero
   values in the algebraic phase, the Lean finish's round in the opening, and at the inner proof's rounds the frame's own

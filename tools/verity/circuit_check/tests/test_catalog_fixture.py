@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 PYPROJECT = """[tool.pytest.ini_options]
-markers = ["slow: x", "circuit_suite: x"]
+markers = ["slow: x"]
 
 [tool.verity.tests]
 worker_gb = 32

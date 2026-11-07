@@ -4,6 +4,7 @@ public import Proofs.Flock.SessionLoop.Statement
 public import Proofs.Flock.SessionLoop.FinalC
 public import Proofs.Flock.SessionLoop.TakesTau
 public import Proofs.Flock.SessionLoop.Inner
+public import Proofs.Flock.SessionLoop.InnerWitness
 public import Proofs.Flock.SessionLoop.TakenVals
 public import Proofs.Flock.SessionLoop.LiveInner
 public import Proofs.Flock.Claims.ZK.FrameUnrefused
@@ -16,6 +17,7 @@ public import Proofs.Flock.SessionLoop.FinCommits
 public import Proofs.Flock.SessionLoop.FinPoints
 public import Proofs.Flock.SessionLoop.FinRounds
 public import Proofs.Flock.SessionLoop.TablesSide
+public import Proofs.Flock.SessionLoop.Level0SrcSat
 public import Proofs.Flock.Claims.ZK.FinishBridge
 public import Proofs.Flock.Claims.ZK.FinishTrunc
 public import Proofs.Flock.Claims.ZK.FinHmkLive
@@ -92,8 +94,9 @@ which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`), at the l
 whose `LinkRoundEq` holds in the masked scope where the loop draws the tape's level 0
 (`LeanRelease.linkRoundEq_ofLoopLink`, from `Loop.Src`'s level-0 half, `Loop.Level0Src.linkLevel0`), and whose `FinishIs`
 holds there at `LoopInnerRound0`, `Loop.Src`, `LiveRoundEq` (at the own histories only, `LiveRoundEqOwn`) and
-`SwCausalOn` (`Loop.finishIs`). The switched causality is asked only at `Loop.SwOk`'s coins, and the loop's stop rule
-computes only there (`LeanRelease.stopsOk_swOk`: its frames refuse a zerocheck outer coin `1`,
+`SwCausalOn` (`Loop.finishIsOn`). That level-0 half is satisfiable at every statement (`Loop.level0Src_tapeSrc`,
+`Proofs.Flock.SessionLoop.Level0SrcSat`). The switched causality is asked only at `Loop.SwOk`'s coins, and the loop's
+stop rule computes only there (`LeanRelease.stopsOk_swOk`: its frames refuse a zerocheck outer coin `1`,
 `LeanRelease.rfOf_outer`).
 
 `SessionLoopZKDeployed` is over every worker. Its premises on the worker (`LiveRoundEq`, `FillRoundEq`) read it in the
@@ -160,7 +163,7 @@ theorem SessionLoopZK : Flock.Guarantees.SessionLoopZK := by
 /-- **C-Flock's zero knowledge at the session loop's own frames and link, at the deployed tables**: `SessionLoopZK` at
 `Masked.dataE`, whose tables admit unrefused coins and hold the tables' side but `SwCausalOn` (`Loop.tables_dataE`,
 `complete_dataE`, `dummyReg_dataE`, `causal_dataE`, `tapeOK_dataE`), and the release `withFiles (withLink L₀ src) src`,
-whose `LinkRoundEq` is `linkRoundEq_ofLoopLink` and whose `FinishIs` is `Loop.finishIs`. -/
+whose `LinkRoundEq` is `linkRoundEq_ofLoopLink` and whose `FinishIs` is `Loop.finishIsOn`. -/
 theorem SessionLoopZKDeployed : Flock.Guarantees.SessionLoopZKDeployed := by
   intro vs t ht hsc L₀ src real hreal wk x w hR hServe hL0 hScope hSrc hE hEf Θ Vs θ hk Ev
   subst hreal
@@ -169,6 +172,6 @@ theorem SessionLoopZKDeployed : Flock.Guarantees.SessionLoopZKDeployed := by
     Claims.ZKServer.Loop.tapeOK_dataE
     (Claims.ZKServer.LeanRelease.withFiles (Claims.ZKServer.LeanRelease.withLink L₀ src) src) src _ rfl wk x w hR hServe
     hL0 (Claims.ZKServer.LeanRelease.linkRoundEq_ofLoopLink vs L₀ src _ hScope hR hSrc.1.linkLevel0)
-    (Claims.ZKServer.Loop.finishIs vs L₀ src wk x w hScope hR hServe hL0 hSrc hE.own hsc) hE hEf Vs θ hk Ev
+    (Claims.ZKServer.Loop.finishIsOn vs L₀ src wk x w hScope hR hServe hL0 hSrc hE.own hsc) hE hEf Vs θ hk Ev
 
 end Flock.SecurityProofs
