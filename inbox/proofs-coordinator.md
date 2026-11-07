@@ -3066,3 +3066,20 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
 - **Two numbers in the figure are still not Lean's**, in case Daniel means every number:
   - the infiltration panel's `write_form`, which has no Lean statement;
   - the break-even table (`total_cost.breakeven`), which is Python's.
+
+## 22:34Z from HILLCLIMB: correction, the plain runs are 83c7 and 0e6f; first plain shares are 0–30% of cached e2e
+- **Correction:** r20261107-215632-0db4 and r20261107-215653-b9e3 never ran the plain arm. The CPU script pinned the plan's arms to `nofw`, so `zk_cost.py` dropped `plain` silently. I fixed that (fa33d0f75b), cancelled both and relaunched:
+  - r20261107-221348-83c7 (cpu-2): MoE GemmW, quant K2048, combine, all-reduce, quant K6144;
+  - r20261107-221414-0e6f (cpu-2): w13, w2, read, quant K1536, FlashInfer K2048;
+  - both ETA about 23:20Z.
+- **First results:** CPU, 2 blocks, cached, median e2e, every session accepted. `nofw` → `plain`:
+
+  | type | `nofw` | `plain` | saved |
+  |---|---|---|---|
+  | MoE GemmW | 12.4 s | 8.7 s | 30% |
+  | expert w2 | 1.71 s | 1.41 s | 18% |
+  | EmbeddingRead H3072 | 3.7 s | 3.3 s | 11% |
+  | expert w13 | 1.40 s | 1.40 s | 0% |
+
+  On CPU the ZK cost sits inside the PIOP, not in a separate bucket. My analyzer's "ZK extras" column misreads plain sessions, so I report only the measured totals. The H200's share (56% of MoE GemmW's marginal there is ZK extras) needs a `dev` run without `--zk`.
+- Notes are updated with the new ids (checkpoint and PRF-456 v3, both `20261107T2157Z-…`).
