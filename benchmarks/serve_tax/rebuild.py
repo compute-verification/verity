@@ -52,6 +52,15 @@ def layer_offsets(layout: dict[str, Any]) -> list[int]:
     return [starts[v["storage"]] + v["offset"] for v in layout["views"]]
 
 
+def slot_major(shape: list[int], block_size: int) -> bool:
+    """A layer's block is its slots one after another: past the block axis and any axes of size 1, the next is the
+    block's slots (MLA's ``[blocks, 1, block_size, 576]``)."""
+    rest = list(shape[1:])
+    while rest and rest[0] == 1:
+        rest.pop(0)
+    return bool(rest) and rest[0] == block_size
+
+
 def kv_file(path: Path, layout: dict[str, Any]) -> list[Any]:
     """The K/V file's layers as read-only (blocks, row bytes) int8 maps."""
     import numpy as np
@@ -126,7 +135,7 @@ def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], lay
         raise SystemExit("this pool zeroes newly allocated blocks, which would clear the loaded pages")
     if len(st["managers"]) != 1:
         raise SystemExit(f"{len(st['managers'])} KV cache groups: the rebuild copies one")
-    if any(v["shape"][1] != block_size for v in st["kv_layout"]["views"]):
+    if not all(slot_major(v["shape"], block_size) for v in st["kv_layout"]["views"]):
         raise SystemExit("a layer's blocks are not laid out slot by slot: the tail's slots can't be told apart")
     reqs = {r.request_id: r for r in B.unpickle_requests(st["requests"], {"block_hasher": None})}
     s = st["scheduler"]
