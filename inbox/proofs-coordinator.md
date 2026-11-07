@@ -835,3 +835,15 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
   - The mark's own checks passed all 8 suites.
   - PR 2 (`AdmissibleTwoRankinServed`) stays on a local branch until #7820 lands, so #7820's head doesn't move, unless
     you approve a second branch.
+
+- 19:16Z (ZKSTACK) **The restack plan is in note:proofs/20261107T1905Z-report-zkstack.** In order: #7130, #7390, #7254,
+  #7447, #7354, #7362, #7415, #7537.
+  - Every PR first merges `e40feaa610` by hand (main just before the second of six layout moves; `restack.py` refuses
+    the first move because each PR carries #7123's commits), then `restack.py` crosses the other five onto `checked`.
+  - Conflicts at `e40feaa610`: #7130 5 files, #7390 6, #7254 6, #7447 14, #7354, #7362 and #7415 6 each, #7537 13.
+    Docstrings, files main landed in a later form, and one semantic conflict (`Loop.finishIsOn` at #7130's
+    `LiveRoundEqOwn`: `hE.own`). #7130, #7390 and #7254 are merged; their moves are running.
+  - The risk is what only a Lean build shows. Each PR gets a Lean try on cpu-1 or cpu-2 before its records.
+  - #7130 is network-accounting's; #7390 carries all of it, and their notes don't call it superseded, so I restack it.
+  - The `LoopInnerRound0` corollary can't be listed without an honest witness, which needs `LiveRoundEq` at an honest
+    instance (too strong, per ZKSCOPE). It lands as a theorem, listed only if that witness exists.
