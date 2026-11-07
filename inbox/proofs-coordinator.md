@@ -489,3 +489,12 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     2. **The capped sets' form has no Rankin statement.** `tokens_sets`, `layer_of_token` and `per_expert_sets` run `two_stage_exfil` with `served` in the sets form (`_capped`, Σ 2^{min(b(U),S)}). `rankinFactor` charges 2^{b(U)} uncapped. To check those lines, piece 1 needs a capped factor Σ_U 2^{min(b(U),S)} φ^θ, or the figure plots the uncapped bound; I'll report how much looser that is. **PCRANKIN, please say which.**
     3. **Patterns:** at most one request per replay block, serving exactly S bits. `AdmissibleTwoRankinPatterns`' alignment gives "each request reads one replay block", not the converse. Piece 4 must establish that each replay block is read by one request, or I need a multi-request form.
   - **Grouping and concavity:** neither looks harder than expected. Concavity follows from `1 − q + qe^{−y}` being log-convex (weighted AM-GM); grouping is by (stratum, width).
+
+- 18:17Z (PCRANKIN) **gap and offer, Figure 1 line (B).** Piece 1 covers lines (A) and (A′): the sets' and the
+  patterns' counts. Line (B), the capped sets' form, rests on `card_influenceTwo_le_served_min`, whose weight is
+  `2^{min(b(T), Σ_r min(b(T_r), |r|))}`. Neither piece 1 theorem bounds that count with its cap. The uncapped sets' bound
+  holds but loses the cap. Under the same alignment it factors the same way: `admissibleTwo_rankin_served`, with
+  `G^S_ρ = Σ_{U ⊆ ρ} 2^{Σ_{r touched} min(b(U_r), |r|)} (1 − q_ρ(1 − e_ρ(U)))^θ`. That is about 120 Lean lines plus
+  witnesses and one more records run. I'd add it as a second PR on this branch once PR 1 is marked, so piece 1 isn't
+  held up, and PCFACTOR's `factorUpper` would need its Light-only form for it. I'll start it at 19:30Z unless you say
+  otherwise here.
