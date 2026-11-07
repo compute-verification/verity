@@ -7614,7 +7614,19 @@
   "Properties.SampledProofs.SecurityProofs.boundLnBoundSound": {
    "owner": "@proofs"
   },
+  "Properties.SampledProofs.SecurityProofs.boundLnBoundSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnBoundSound_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.SecurityProofs.boundLnUpperSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnUpperSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnUpperSound_nontrivial": {
    "owner": "@proofs"
   },
   "Properties.SampledProofs.SecurityProofs.designWellFormed": {
@@ -7646,19 +7658,55 @@
   "Properties.SampledProofs.SecurityProofs.expLowerSound": {
    "owner": "@proofs"
   },
+  "Properties.SampledProofs.SecurityProofs.expLowerSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.expLowerSound_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.SecurityProofs.expUpperSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.expUpperSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.expUpperSound_nontrivial": {
    "owner": "@proofs"
   },
   "Properties.SampledProofs.SecurityProofs.lnLowerSound": {
    "owner": "@proofs"
   },
+  "Properties.SampledProofs.SecurityProofs.lnLowerSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnLowerSound_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.SecurityProofs.lnUpperSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnUpperSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnUpperSound_nontrivial": {
    "owner": "@proofs"
   },
   "Properties.SampledProofs.SecurityProofs.powLowerSound": {
    "owner": "@proofs"
   },
+  "Properties.SampledProofs.SecurityProofs.powLowerSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.powLowerSound_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.SecurityProofs.powUpperSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.powUpperSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.powUpperSound_nontrivial": {
    "owner": "@proofs"
   },
   "Properties.SampledProofs.SecurityProofs.secondMisses": {
