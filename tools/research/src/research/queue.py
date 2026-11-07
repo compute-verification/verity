@@ -482,11 +482,38 @@ def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) ->
     if env is IDENTITY:                     # the queue's merges carry the time they're made: a date a caller pins stops `log --since`
         for k in DATES:
             full.pop(k, None)
-    r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
-                       errors="surrogateescape", env=full)
+    with _worktrees_shared(repo, full) if _subcommand(args) == "fetch" else contextlib.nullcontext():
+        r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
+                           errors="surrogateescape", env=full)
     if check and r.returncode:
         raise QueueError(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()[-400:]}")
     return r
+
+
+def _subcommand(args: tuple[str, ...]) -> str:
+    """The git subcommand of ``args``: their first word past the `-c NAME=VALUE` settings."""
+    i = 0
+    while args[i:i + 1] == ("-c",):
+        i += 2
+    return args[i] if i < len(args) else ""
+
+
+#: the clone's worktree lock, in its git directory: `tools/move/restack.py` adds and forgets each scratch worktree holding it
+#: alone, because `git worktree add` writes a placeholder HEAD before the real one, and a fetch, whose connectivity check
+#: reads every worktree's HEAD, holds it shared
+WORKTREES_LOCK = "research-worktrees.lock"
+
+
+@contextlib.contextmanager
+def _worktrees_shared(repo: Path, env: dict[str, str]):
+    common = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=repo, capture_output=True, text=True,
+                            env=env).stdout.strip()
+    if not common:
+        yield
+        return
+    with open(Path(repo, common) / WORKTREES_LOCK, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_SH)
+        yield
 
 
 def _out(repo: Path, *args: str) -> str:
