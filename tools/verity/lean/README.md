@@ -450,12 +450,17 @@ or a policy entry applies. Within a module both sides changed, the definitions m
 recomputed; an older lock's readers and `pins` are read as today's. A guarantee's `owner` merges apart from the rest of
 its entry, so one side's new owner and the other side's restatement both apply.
 
-What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
-`reads` and assumption digests merge as the union or ours' value, named on stderr, and drive's lock run regenerates them
-once the merge lands. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
-conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree. Git runs the driver
-from the worktree you merge into, and one whose rules are older than `origin/main`'s runs `origin/main`'s (`deferred`), so
-fetch `main` before you merge.
+The merge never refuses and never leaves a conflict (Daniel, 6 Nov). What the build determines (a guarantee's record,
+restated on both sides, which the merged statement decides; `reads`; assumption digests) merges as the union or theirs'
+value, and the lock run after landing regenerates it. What a person writes (an owner, an open premise's `issue` or `due`,
+a domain hypothesis's `why`, a reason in `unwitnessed`, `frozen`, `shape.inline` or `except`, the roots, an exemption, a
+dependency) merges as the union of both sides' entries: one both sides changed differently is theirs', and one a side
+removed while the other changed it is the changed one. An entry both sides moved to different sections of an exclusive
+group (a claim's `witnesses`, `not`, `generic`; a premise's `assumptions`, `domain`, `open`) is where theirs put it, and
+`check.py --update` classifies it. Each entry taken from one side where the sides disagree is one warning line on
+stderr naming its key. A side that isn't a record (bad JSON) is the other side's record, with a warning; only when both
+sides are bad does git's text conflict stand. Git runs the driver from the worktree you merge into, and one whose rules
+are older than `origin/main`'s runs `origin/main`'s (`deferred`), so fetch `main` before you merge.
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the
