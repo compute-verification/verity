@@ -32,6 +32,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 public import Properties.NetworkScan.Assumptions
+public import NetworkCheck.Period
+public import Definitions.NetworkCertifier.SampledAudit
 
 /-!
 # The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope

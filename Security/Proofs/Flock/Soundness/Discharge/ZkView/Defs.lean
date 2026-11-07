@@ -3,6 +3,7 @@ module
 public import Definitions.Flock.ZK.RealView
 public import Flock.Zk
 public import Proofs.Flock.Level3.ArithFacts
+public import Proofs.Flock.Soundness.CROnly
 public import Proofs.Flock.Soundness.CROnly.Hm96Defs
 public import Proofs.Flock.Soundness.Discharge.Hm.Hash
 public import Proofs.Flock.Soundness.Discharge.Hm.Mask

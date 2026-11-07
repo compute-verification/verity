@@ -198,6 +198,12 @@ public import Proofs.Flock.Claims.Recursion.VerdictLoop
 public import Proofs.Flock.Claims.KS.PlainOffRd
 public import Proofs.Flock.Claims.KS.PlainR
 public import Proofs.Flock.Claims.Recursion.LastBindsR
+public import Proofs.Flock.Claims.Recursion.SeqCap
+public import Proofs.Flock.Claims.Recursion.SeqKey
+public import Proofs.Flock.Claims.Recursion.SeqDeploy
+public import Proofs.Flock.Claims.Recursion.SeqStop
+public import Proofs.Flock.Claims.Recursion.SeqDeployStop
+public import Proofs.Flock.Claims.Recursion.LastColsE
 public import Proofs.Flock.Claims.Recursion.KSLin2R
 public import Proofs.Flock.Claims.Recursion.RoundSizes
 public import Proofs.Flock.Claims.Recursion.LayoutBAcc

@@ -21,6 +21,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
 import Proofs.Flock.Soundness.Discharge.Hm.Bc
 import Proofs.Flock.Soundness.Discharge.Layout.Outs
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
 
 @[expose] public section
 

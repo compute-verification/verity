@@ -29,5 +29,6 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousSeg
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindInst
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundInst
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousV2
 
 @[expose] public section

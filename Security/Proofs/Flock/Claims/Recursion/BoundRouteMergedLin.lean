@@ -43,6 +43,7 @@ import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
 import Std.Tactic.BVDecide.Normalize.Prop
+public import Proofs.Flock.Claims.Recursion.BoundRouteMerged
 
 /-!
 # `KSBoundLin` at the deployment with no bridge and no `WeightCovers` (route 2B, linearly)

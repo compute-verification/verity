@@ -196,5 +196,7 @@ public import Proofs.Flock.Soundness.CROnly.Registered
 public import Proofs.Flock.Soundness.CROnly.E2EMore
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionLDecisive
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Statements
+public import Proofs.Flock.Soundness.Audit.Harm
+public import Proofs.Flock.Soundness.CROnly
 
 @[expose] public section

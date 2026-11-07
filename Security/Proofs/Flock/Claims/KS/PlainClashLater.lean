@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.KS.PlainClash0
 public import Proofs.Flock.Claims.KS.LevelsAll
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 
 /-!
 # The live self-clash past level 0
