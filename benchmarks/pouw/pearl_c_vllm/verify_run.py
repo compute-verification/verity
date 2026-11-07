@@ -409,7 +409,8 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         scheme, records, c, out["salt"] = p.scheme, p.records, man["commitment"], p.salt
         source = PV.coins(32) if source is None else source
         key = CW.replay_key(CW.RecordedDraw(1, source), p.transcript.commitment.root, bytes.fromhex(man["records_root"]), p.epoch.salt)
-        todo = [(0, pos, tid) for pos, tid in p.tile_ids(CW.draw(scheme, records, key, draws) + CW.exclusion_tiles(scheme, records))]
+        drawn, excluded = CW.draw(scheme, records, key, draws), CW.exclusion_tiles(scheme, records)
+        todo = [(0, pos, tid) for pos, tid in p.tile_ids(drawn + excluded)]
         verdicts, fast = replay([p], todo, jobs, fast, cross_check)
         out["replay"] = "batch" if fast else "scalar"
         differ = [t for _, t, _, _, same in verdicts if same is False]
@@ -424,10 +425,10 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         at = CW.draw_wref(scheme)
         out.update(accepted=ok, scheme=scheme.name, source=source.hex(), tiles=[t for _, t, *_ in verdicts],
                    draw_wref=at.statement if at else "wref",
-                   drawn=draws, exclusion_tiles=len(todo) - draws,
+                   drawn=len(drawn), exclusion_tiles=len(excluded),
                    verdicts=[{"tile": t, "ok": g, "reason": r} for _, t, g, r, _ in verdicts], w_ref=str(w_ref), credit=str(credit))
-        out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({draws} drawn, "
-                       f"{len(todo) - draws} for excluded rows) of {c['count']} over {len(records)} matmuls"
+        out["line"] = (f"{'ACCEPT' if ok else 'REJECT'} {scheme.name} {man['entry']}: clear_work's tiles ({len(drawn)} drawn, "
+                       f"{len(excluded)} for excluded rows) of {c['count']} over {len(records)} matmuls"
                        f"{'' if ok else ' (' + bad + ')'}; transcript root {c['root'][:16]}, records {man['records_root'][:16]}, "
                        f"source {source.hex()[:16]}; transcript {named}; verifier {commit}"
                        f"{'; batch replay, ' + str(len(out['cross_checked'])) + ' tiles cross-checked' if fast else ''}")

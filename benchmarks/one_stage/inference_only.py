@@ -25,7 +25,7 @@ registered before it served.
 
 Nothing in the policy reads the run, and n is no count of it, so the check can fail.
 
-**The gate table** is `block_counts.gate_table`'s, each primitive's two-input gates through its Boolean version, plus
+**The gate table** is `definitions.boolean.gate_table`'s, each primitive's two-input gates through its Boolean version, plus
 `PRICES` for a primitive that has none: `BitAtx{W}_v1` (bit i of a word, 0 outside it), priced by an explicit circuit
 of it (`bit_at_gates`) that this suite evaluates against the primitive, not by a Boolean version circuit-check checks.
 Any other primitive the table can't price leaves the count undecided, and the verdict refuses (`gate-table`).
@@ -163,11 +163,11 @@ PRICES = ("BitAtx{W}_v1", price)
 
 
 def table_of(fns: Sequence[Any]) -> tuple[dict[str, int], dict[str, dict[str, Any]], list[str]]:
-    """The gate table over the primitives ``fns`` reach: `block_counts.gate_table`'s, each primitive it can't price
+    """The gate table over the primitives ``fns`` reach: `definitions.boolean.gate_table`'s, each primitive it can't price
     priced by `price` where it can be, and the keys of the rest."""
-    from verity_vllm.program.predict import block_counts as BC
+    from verity.ml.definitions.boolean import gate_table
 
-    table, unpriced = BC.gate_table(BC.primitives(fns))
+    table, unpriced = gate_table(fns)
     priced, left = {}, []
     for key in unpriced:
         p = price(key)
@@ -236,7 +236,7 @@ def session_row(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: M
         k = BC.fresh(doc, m, pins, roots)
     except (KeyError, TypeError, ValueError) as e:
         raise Undecided(f"the record's fresh bits: {e}") from e
-    return {"definition": PV2.definition_digest(fn), "key": codec.descriptor_id(fn), "slots": m, "positions": positions,
+    return {"definition": PV2.id_digest(fn), "key": codec.descriptor_id(fn), "slots": m, "positions": positions,
             "gates": g, "fresh": k, "table": table, "priced": priced}
 
 
