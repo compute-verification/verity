@@ -22339,7 +22339,7 @@
    }
   },
   "SampledProofs.OneStage": {
-   "digest": "967027e9cd49ab82d07ae54cdfce1b0772c1acea6a8462f7bc110edb860d3dc6",
+   "digest": "8e47dc69d043ad21636017cb2469c45d3d0534380396dbd449bfbacdee0f40f5",
    "definitions": {
     "SampledProofs.OneStage.Commitment": "d744e6fb2fdff36157845bc9fb3224434ff1f62fc26396f87b4393a0af67c01b",
     "SampledProofs.OneStage.Commitment.digest": "8f1997edbf41ef170699331a03a0ea01ec0eeefb3a34a36d521c4eb1673c6f01",
@@ -22372,7 +22372,8 @@
     "SampledProofs.OneStage.coinsReason": "06f595594a26a862521dcb12bf59f4c6ab32602e8a5d0ba12d090ee2dd219929",
     "SampledProofs.OneStage.coinsWhy": "9e4020e0d3e33c40662296c74109dff3a31450e1821626e9dad9eb13c5983f77",
     "SampledProofs.OneStage.commitmentOf": "124a0eb79c0dd6d728fec03c50da31c189e52493604951ab1ba14152710d51de",
-    "SampledProofs.OneStage.drawnFrom": "5f45f7613fc94b625b270bde7b3ba35bcdabc5f11e2f0efe6c775b0e9202b753",
+    "SampledProofs.OneStage.coveredLaw": "75220c7dd374315abc3f1142c7e1575f25b0960b7ebb8b287832d8f29457fbcc",
+    "SampledProofs.OneStage.drawnFrom": "702fc1b9d4299e3f61f2bd4deb99cb66ce9198baf297ecc1bec9813f47c9f000",
     "SampledProofs.OneStage.evidenceOf": "6a88106022c8b07ec26d00d29753dfc81f71cc21756b8a4d32802b44a8f14a00",
     "SampledProofs.OneStage.evidenceParsed": "a449e63206bb91d6d937a037002e302dfd38d6ebe6433f7fcedf051f9cd3d644",
     "SampledProofs.OneStage.paramsOfJson": "eb0d1903ac9d06f34b776012524afbf4238ba55660dce074e9318674830827f9",
