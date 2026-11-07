@@ -79,7 +79,25 @@ def ladder_cell(m: dict) -> dict | None:
                             "fresh_compile": [r["compile"] == "compile" for r in reps]}
     if m.get("alone"):
         cell["alone"] = m["alone"]
+    if m.get("tilings"):
+        cell["tilings"] = m["tilings"]
     return cell
+
+
+def pin_verdicts(cov: dict) -> tuple[list[str], list[str]]:
+    """The models whose unpinned replays kept different tilings or differed from serving (they need the pin), and those
+    whose unpinned replays, with their tilings logged, all kept the same tilings and matched serving."""
+    need, fine = [], []
+    for row in cov["rows"]:
+        c = row["cells"].get("replay_unpinned") or {}
+        if c.get("status") != "measured":
+            continue
+        t = c.get("tilings")
+        if (t and t["distinct"] > 1) or c.get("rows_exact", 1) < 1:
+            need.append(row["model"])
+        elif t:
+            fine.append(row["model"])
+    return need, fine
 
 
 def merge(cov: dict, summaries: list[dict]) -> dict:
@@ -108,10 +126,15 @@ def markdown(cov: dict) -> str:
             cells.append(g)
         lines.append(f"| {row['model']} | {', '.join(row['arch'])} | {params} | {' / '.join(row['precision'])} | "
                      f"{row['gpus']} | " + " | ".join(cells) + " |")
+    need, fine = pin_verdicts(cov)
+    verdict = ""
+    if need or fine:
+        verdict = (f" Unpinned, the replays kept different tilings or differed from serving: {', '.join(need) or 'none'}; "
+                   f"they kept the same tilings and matched: {', '.join(fine) or 'none'}.")
     return ("\n".join(lines) + "\n\n" + f"● measured, ○ representable but not run, — can't represent yet. Replay: share of "
             "output rows exact in the worst replay, serving and replaying with Inductor's reduction tiling pinned "
             "(`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`); unpinned, a fused add + RMSNorm kernel picks one of two tilings "
-            f"per process. vLLM {cov['pin']}, {cov['date']}; each cell's run and art ids are in coverage.json.\n")
+            f"per process.{verdict} vLLM {cov['pin']}, {cov['date']}; each cell's run and art ids are in coverage.json.\n")
 
 
 def render(a: argparse.Namespace) -> int:

@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import functools
 import gzip
+import hashlib
 import json
 import os
 import re
@@ -49,6 +50,8 @@ import serve_tax as S  # noqa: E402
 SCHEMA = "verity-bench/replay-ladder/v0"
 #: the load each model's window is served at, and the one each replay and the alone sample read
 LOAD = "saturated"
+#: the directory a replay's processes log their runtime tiling choices to (log_tilings)
+TILINGS_ENV = "LADDER_TILINGS"
 
 
 @dataclass(frozen=True)
@@ -158,10 +161,60 @@ def serve(a: argparse.Namespace) -> int:
 
 # ----------------------------------------------------------------------------------------------------------- replay
 
+def log_tilings(d: Path) -> None:
+    """Have this process, and every engine process it starts (they inherit the environment and import this module),
+    append each Inductor kernel that benchmarks more than one config on its first launch, with the one it keeps, to
+    ``d/tilings.PID.jsonl``. Processes that keep different configs reduce in different orders: the pin's question."""
+    d.mkdir(parents=True, exist_ok=True)
+    os.environ[TILINGS_ENV] = str(d)
+    patch_autotuner()
+
+
+def patch_autotuner(autotuner: Any = None) -> None:
+    """Wrap Inductor's ``CachingAutotuner.autotune_to_one_config`` (or ``autotuner``'s) to log what log_tilings says."""
+    d = os.environ.get(TILINGS_ENV)
+    if not d:
+        return
+    if autotuner is None:
+        from torch._inductor.runtime.triton_heuristics import CachingAutotuner as autotuner
+
+    real = autotuner.autotune_to_one_config
+    if getattr(real, "ladder", False):
+        return
+
+    def cfg(c: Any) -> dict:
+        return {**c.kwargs, "num_warps": c.num_warps, "num_stages": c.num_stages}
+
+    def autotune_to_one_config(self: Any, *args: Any, **kwargs: Any) -> Any:
+        candidates = [cfg(x.config) for x in self.launchers]
+        out = real(self, *args, **kwargs)
+        rec = {"kernel": self.inductor_meta.get("kernel_name") or self.fn.__name__, "candidates": candidates,
+               "kept": cfg(self.launchers[0].config)}
+        with open(Path(d) / f"tilings.{os.getpid()}.jsonl", "a") as f:
+            f.write(json.dumps(rec) + "\n")
+        return out
+
+    autotune_to_one_config.ladder = True  # type: ignore[attr-defined]
+    autotuner.autotune_to_one_config = autotune_to_one_config
+
+
+def tilings(d: Path) -> dict | None:
+    """A replay's runtime tiling choices (log_tilings): how many kernels chose among configs in its busiest process,
+    and a digest of every process's choices in launch order, equal between two replays that chose alike."""
+    files = sorted(d.glob("tilings.*.jsonl"))
+    if not files:
+        return None
+    procs = sorted(json.dumps([[r["kernel"], r["kept"]] for r in map(json.loads, f.read_text().splitlines())],
+                              sort_keys=True) for f in files)
+    return {"processes": len(procs), "choices": max(len(json.loads(p)) for p in procs),
+            "digest": hashlib.sha512("\n".join(procs).encode()).hexdigest()[:16]}
+
+
 def replay(a: argparse.Namespace) -> int:
     ck = register(a.model)
     R.engine = tp_engine(LADDER[a.model].tp)
     out = Path(a.out)
+    log_tilings(out / f"replay-{a.index}")
     argv = ["--arm-dir", str(out / "record"), "--load", LOAD, "--checkpoint", str(ck), "--out", str(out / f"replay-{a.index}")]
     if a.index > 1:
         argv += ["--against", str(out / "replay-1")]
@@ -262,7 +315,11 @@ def model_row(d: Path) -> dict:
             "token_positions_differing": r["token_positions_differing"],
             "rows_exact_share": 1 - r["token_positions_differing"] / tokens, "bit_exact": r["bit_exact"],
             "against_first_requests_differing": (r.get("against") or {}).get("requests_tokens_differing"),
-            "replay_over_served": r["replay_over_served"], "compile": compile_mode(d / f"{rd.name}.log")})
+            "replay_over_served": r["replay_over_served"], "compile": compile_mode(d / f"{rd.name}.log"),
+            "tilings": tilings(rd)})
+    seen = [x["tilings"] for x in row["replays"] if x.get("tilings")]
+    row["tilings"] = {"replays": len(seen), "distinct": len({t["digest"] for t in seen}),
+                      "choices": max(t["choices"] for t in seen)} if seen else None
     af = d / "alone" / "alone.json"
     if af.is_file():
         x = json.loads(af.read_text())
@@ -274,8 +331,9 @@ def model_row(d: Path) -> dict:
 
 def markdown(rows: list[dict]) -> str:
     head = ("| model | TP | Inductor pin | window: requests, steps, output tokens | replays exact | rows exact (worst replay) | "
-            "requests differing from serving, per replay | requests differing from replay 1 | alone: requests differing |")
-    lines = [head, "|" + "---|" * 9]
+            "requests differing from serving, per replay | requests differing from replay 1 | "
+            "tilings kept at run time: distinct sets over replays (kernels choosing) | alone: requests differing |")
+    lines = [head, "|" + "---|" * 10]
     for r in rows:
         reps = [x for x in r["replays"] if "bit_exact" in x]
         w = reps[0] if reps else {}
@@ -287,8 +345,10 @@ def markdown(rows: list[dict]) -> str:
         al = r["alone"]
         alone_s = f"{al['requests_tokens_differing']} of {al['requests']}" if al else "—"
         win = (f"{w.get('requests', '—')}, {w.get('steps', '—')}, {w.get('tokens_served', '—')}" if w else "—")
+        t = r.get("tilings")
+        tiling = f"{t['distinct']} of {t['replays']} ({t['choices']})" if t else "—"
         lines.append(f"| {r['model']} | {r['tp'] or '—'} | {'yes' if r['pin'] else 'no'} | {win} | {exact} | {worst} | {per} | "
-                     f"{first} | {alone_s} |")
+                     f"{first} | {tiling} | {alone_s} |")
     return "\n".join(lines) + "\n"
 
 
@@ -330,6 +390,8 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     return {"serve": serve, "replay": replay, "alone": alone, "summary": summary}[a.cmd](a)
 
+
+patch_autotuner()  # a spawned engine process imports this module as __mp_main__ and inherits LADDER_TILINGS
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -67,6 +67,58 @@ def test_compile_mode_reads_vllm_s_log(tmp_path):
     assert [L.compile_mode(p) for p in (fresh, load, none, tmp_path / "missing.log")] == ["compile", "load", None, None]
 
 
+class Config:
+    def __init__(self, r0: int):
+        self.kwargs, self.num_warps, self.num_stages = {"XBLOCK": 2, "R0_BLOCK": r0}, 8, 1
+
+
+class Launcher:
+    def __init__(self, r0: int):
+        self.config = Config(r0)
+
+
+class Autotuner:
+    """Inductor's CachingAutotuner as far as the tiling log reads it: a kernel with two candidate tilings keeps one."""
+
+    def __init__(self, keep: int):
+        self.launchers, self.keep = [Launcher(1024), Launcher(512)], keep
+        self.inductor_meta, self.fn = {"kernel_name": "triton_red_fused_add_rms_norm_1"}, None
+
+    def autotune_to_one_config(self, *args, **kwargs):
+        self.launchers = [x for x in self.launchers if x.config.kwargs["R0_BLOCK"] == self.keep]
+
+
+def test_the_tiling_log_records_each_runtime_choice(tmp_path, monkeypatch):
+    class Tuner(Autotuner):
+        pass
+
+    (tmp_path / "replay-1").mkdir()
+    monkeypatch.setenv(L.TILINGS_ENV, str(tmp_path / "replay-1"))
+    L.patch_autotuner(Tuner)
+    L.patch_autotuner(Tuner)
+    Tuner(512).autotune_to_one_config()
+    recs = [json.loads(x) for f in (tmp_path / "replay-1").glob("tilings.*.jsonl") for x in f.read_text().splitlines()]
+    assert recs == [{"kernel": "triton_red_fused_add_rms_norm_1", "kept": {"XBLOCK": 2, "R0_BLOCK": 512, "num_warps": 8,
+                                                                          "num_stages": 1},
+                     "candidates": [{"XBLOCK": 2, "R0_BLOCK": r, "num_warps": 8, "num_stages": 1} for r in (1024, 512)]}]
+
+
+def tiling_log(d: Path, *kept: int) -> None:
+    d.mkdir(parents=True, exist_ok=True)
+    for pid, r0 in enumerate(kept):
+        (d / f"tilings.{pid}.jsonl").write_text(json.dumps({"kernel": "k", "candidates": [], "kept": {"R0_BLOCK": r0}}) + "\n")
+
+
+def test_replays_that_kept_different_tilings_get_different_digests(tmp_path):
+    tiling_log(tmp_path / "a", 512)
+    tiling_log(tmp_path / "b", 512)
+    tiling_log(tmp_path / "c", 1024)
+    tiling_log(tmp_path / "tp", 1024, 512)
+    a, b, c, tp = (L.tilings(tmp_path / n) for n in ("a", "b", "c", "tp"))
+    assert a == b and a["digest"] != c["digest"] and (a["processes"], a["choices"]) == (1, 1)
+    assert tp["processes"] == 2 and L.tilings(tmp_path / "none") is None
+
+
 def replay_json(d: Path, differing: int, against: int | None = None) -> None:
     d.mkdir(parents=True)
     r = {"run_id": "r1", "requests": 4, "steps_served": 10, "rows_served": 40, "steps_differing": 0, "rows_differing": 0,
@@ -92,6 +144,8 @@ def test_summary_reads_a_model_directory(tmp_path):
                                               "window": {"sent": 4, "ok": 4}}))
     replay_json(d / "replay-1", 0)
     replay_json(d / "replay-2", 4, against=1)
+    tiling_log(d / "replay-1", 512)
+    tiling_log(d / "replay-2", 1024)
     (d / "replay-2.log").write_text("Compiling a graph for compile range\n")
     (d / "alone").mkdir()
     (d / "alone" / "alone.json").write_text(json.dumps({"run_id": "r1", "requests": 2, "tokens_served": 20,
@@ -104,4 +158,5 @@ def test_summary_reads_a_model_directory(tmp_path):
     assert row["replays"][1]["compile"] == "compile"
     assert row["alone"]["requests_tokens_differing"] == 1
     md = L.markdown([row])
-    assert "| qwen3-8b | 1 | yes | 4, 10, 40 | 1 of 2 | 90.000000% | 0, 1 (fresh compile) | 1 | 1 of 2 |" in md
+    assert row["tilings"] == {"replays": 2, "distinct": 2, "choices": 1}
+    assert "| qwen3-8b | 1 | yes | 4, 10, 40 | 1 of 2 | 90.000000% | 0, 1 (fresh compile) | 1 | 2 of 2 (1) | 1 of 2 |" in md

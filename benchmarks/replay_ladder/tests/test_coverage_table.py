@@ -69,6 +69,16 @@ def test_the_ladder_fills_each_replay_column_from_its_arm():
     assert cov["rows"][2]["cells"]["replay"]["status"] == "representable"
 
 
+def test_the_footnote_names_the_models_that_need_the_pin():
+    big = ladder_model(False, "r2", [1.0, 1.0]) | {"model": "big", "tilings": {"replays": 2, "distinct": 2, "choices": 1}}
+    mid = ladder_model(False, "r0", [1.0, 1.0]) | {"tilings": {"replays": 2, "distinct": 1, "choices": 1}}
+    cov = copy.deepcopy(COV)
+    cov["rows"][0]["ladder"] = "big"
+    cov = C.merge(cov, [{"models": [big, mid]}])
+    assert C.pin_verdicts(cov) == (["Big"], ["Mid"])
+    assert "differed from serving: Big; they kept the same tilings and matched: Mid." in C.markdown(cov)
+
+
 def test_an_arm_the_ladder_did_not_run_keeps_its_sidecar_cell():
     cov = C.merge(copy.deepcopy(COV), [{"models": [ladder_model(False, "r0", [1.0])]}])
     assert cov["rows"][1]["cells"]["replay"]["status"] == "representable"
