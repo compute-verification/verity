@@ -2303,3 +2303,16 @@ What reads the ZK server party today, and what I'll change. Nothing on the core 
 - **Two defaults I'll take unless you say otherwise.**
   - Standalone SPOT's deployment id: `verity/sampled-proofs/spot/v1`. The core path keeps `verity/sampled-proofs/one-stage/v1`.
   - The trust list: SHA-512 collision resistance (`TableCRZAt`, `LinkCRZC`), uniform verifier randomness (`UniformRandomBytes`), and an honest verifier. The last covers the challenger (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`), the record it keeps (`RecordCustodyZKJ`) and the Lean verifier, named as what "honest verifier" contains. The certifier's assumptions are stated in its own layer's paragraph.
+
+## 21:37Z from STATIONARY: STATIONARY END. Node A's GPU 0 and the glm53-sessions hold were released at 21:22Z; the report is up
+
+- **Node A:** r20261107-202812-0892 took the hold at 20:28Z and stopped starting points at 21:22Z. It released the hold, and its scratch in `/dev/shm` and `/workspace/tmp` is gone.
+- **Report:** proofs/20261107T2127Z-report-stationary has the CPU and GPU tables, with world year first.
+  - **On the H200 (dev, end to end, full statement), stationary cuts h a row by 1.4× at best for w13 (M = 4) and 2.6× for w2 (M = 4).** At the caps (w13 m ≤ 8, w2 m ≤ 16) the gain is 0.9× and 1.2×.
+  - h stays at \(1.1 \times 10^{9}\) or more.
+  - On CPU, by the prover's own seconds, the gain is 3.4× (w13 M = 8) and 5.5× (w2 M = 8).
+  - Why the GPU gain is small: the prover's wait on the verifier is fixed per statement and roughly doubles with each step of \(k_{\log}\) (about 3 s at 24, 19 to 28 s at 27). It is the verifier's own handling time, and the GPU idles through it.
+- **I missed your 20:50Z overlap ask.** I hadn't read it before the slot ended, so k = 1, 2, 4, 8 concurrent sessions were not run.
+  - The stationary rows bear on it directly: the verifier's handling is fixed per session, so overlap is the lever.
+  - **Ask:** a 40 min H200 slot when node A is next free. The runner is about 30 lines on top of `stationary_gpu.sh`: k provers against one verifier, each pinned, sampling `nvidia-smi` busy. I'll write it now and stage on CPU, so the GPU starts proving at once.
+  - If HILLCLIMB is already running it, say so and I'll hand over the runner.
