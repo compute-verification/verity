@@ -51,11 +51,263 @@ structure SessionSteps (D : Deploy Coin Col T) where
   session_refused : ∀ x u (ms : List (Msg × Out)) a, ms.length < pre x → (∀ e ∈ ms, ∃ m, e.2 = .msg m) →
     D.session x u ⟨ms ++ [(a, .rej)], .rej⟩ = some (xR x, ⟨[([], .rej)], .rej⟩)
 
+/-! ## A run's rounds -/
+
+section Rounds
+
+variable {Ω Ω' : Type} (H : Msg → Msg)
+
+/-- **A round answered with a message and no `H` call** appends the prover's message and the answer, and continues. -/
+theorem stepWith_msg (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (n : ℕ) (hist : List (Msg × Msg))
+    (as : List Msg) (t : Trace) (m : Msg) (hv : v (as ++ [((P.next x hist ω).eval H).1]) = .ret (.msg m)) :
+    stepWith H P x ω v (n + 1) hist as t =
+      stepWith H P x ω v n (hist ++ [(((P.next x hist ω).eval H).1, m)]) (as ++ [((P.next x hist ω).eval H).1])
+        ⟨t.msgs ++ [(((P.next x hist ω).eval H).1, .msg m)], t.pLog ++ ((P.next x hist ω).eval H).2, t.vLog,
+          t.out⟩ := by
+  simp only [stepWith, hv, OC.eval, List.append_nil]
+
+/-- **A round refused with no `H` call** appends the prover's message and the refusal, and ends the run. -/
+theorem stepWith_rej (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (n : ℕ) (hist : List (Msg × Msg))
+    (as : List Msg) (t : Trace) (hv : v (as ++ [((P.next x hist ω).eval H).1]) = .ret .rej) :
+    stepWith H P x ω v (n + 1) hist as t =
+      ⟨t.msgs ++ [(((P.next x hist ω).eval H).1, .rej)], t.pLog ++ ((P.next x hist ω).eval H).2, t.vLog, .rej⟩ := by
+  simp only [stepWith, hv, OC.eval, List.append_nil]
+
+/-- **The rounds after a prefix**: rounds against `v`, which at the prefix's messages `as₀` followed by `bs` is `v'` at
+`bs`, of a prover that after the prefix's history `hist₀` plays `P'`, are `P'`'s rounds against `v'` after the prefix's
+transcript `m₀` and calls `p₀`, `l₀`. -/
+theorem stepWith_shift (P : Prover Ω) (P' : Prover Ω') (x x' : Msg) (ω : Ω) (ω' : Ω') (v v' : List Msg → OC Out)
+    (hist₀ : List (Msg × Msg)) (as₀ : List Msg) (m₀ : List (Msg × Out)) (p₀ l₀ : List (Msg × Msg))
+    (hP : ∀ hist, P.next x (hist₀ ++ hist) ω = P'.next x' hist ω')
+    (hv : ∀ bs : List Msg, bs ≠ [] → v (as₀ ++ bs) = v' bs) (n : ℕ) :
+    ∀ (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+      stepWith H P x ω v n (hist₀ ++ hist) (as₀ ++ as) ⟨m₀ ++ t.msgs, p₀ ++ t.pLog, l₀ ++ t.vLog, t.out⟩ =
+        ⟨m₀ ++ (stepWith H P' x' ω' v' n hist as t).msgs, p₀ ++ (stepWith H P' x' ω' v' n hist as t).pLog,
+          l₀ ++ (stepWith H P' x' ω' v' n hist as t).vLog, (stepWith H P' x' ω' v' n hist as t).out⟩ := by
+  induction n with
+  | zero => intro hist as t; rfl
+  | succ n ih =>
+    intro hist as t
+    have hv' : v (as₀ ++ as ++ [((P'.next x' hist ω').eval H).1]) = v' (as ++ [((P'.next x' hist ω').eval H).1]) := by
+      rw [List.append_assoc]
+      exact hv _ (by simp)
+    simp only [stepWith, hP hist, hv']
+    generalize OC.eval H (v' (as ++ [((P'.next x' hist ω').eval H).1])) = vb
+    obtain ⟨o, l⟩ := vb
+    cases o with
+    | msg m =>
+      have := ih (hist ++ [(((P'.next x' hist ω').eval H).1, m)]) (as ++ [((P'.next x' hist ω').eval H).1])
+        ⟨t.msgs ++ [(((P'.next x' hist ω').eval H).1, .msg m)], t.pLog ++ ((P'.next x' hist ω').eval H).2,
+          t.vLog ++ l, t.out⟩
+      simpa only [List.append_assoc] using this
+    | acc => simp only [List.append_assoc]
+    | rej => simp only [List.append_assoc]
+
+/-- **A one-round refusal**: a prover whose first message is `[]`, against a verifier that refuses it with no `H` call,
+shows the refused run `[([], rej)]` in any positive number of rounds. -/
+theorem stepWith_refused (x : Msg) (v : List Msg → OC Out) (hv : v [[]] = .ret .rej) (n : ℕ) (hn : 0 < n) :
+    stepWith H (⟨fun _ _ _ => .ret []⟩ : Prover Unit) x () v n [] [] ⟨[], [], [], .rej⟩ =
+      ⟨[([], .rej)], [], [], .rej⟩ := by
+  obtain ⟨n, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+  exact stepWith_rej H (⟨fun _ _ _ => .ret []⟩ : Prover Unit) x () v n [] [] ⟨[], [], [], .rej⟩ hv
+
+end Rounds
+
+/-- **Coins that agree below `n`** are the same coins at up to `n` messages. -/
+theorem coins_eq {k n m : ℕ} {r r' : Fin k → Coin} (h : ∀ t : Fin k, t.val < n → r' t = r t) (hm : m ≤ n) :
+    (List.range m).map (coinSeq r') = (List.range m).map (coinSeq r) := by
+  apply List.map_congr_left
+  intro i hi
+  rw [List.mem_range] at hi
+  by_cases hk : i < k
+  · simp only [coinSeq, dif_pos hk]
+    exact h ⟨i, hk⟩ (show i < n by omega)
+  · simp only [coinSeq, dif_neg hk]
+
+namespace SessionSteps
+
+variable {D : Deploy Coin Col T} (S : SessionSteps D)
+
+/-- **The rounds after the prefix**, as the rounds of a Flock run with `kS x` of them. -/
+def emb (x : Msg) {k : ℕ} (hk : k = S.kS x) (i : Fin k) : Fin (D.V.k x) :=
+  ⟨S.pre x + i.val, by have := i.isLt; have := S.k_eq x; omega⟩
+
+theorem emb_strictMono (x : Msg) {k : ℕ} (hk : k = S.kS x) : StrictMono (S.emb x hk) :=
+  fun _ _ hij => Nat.add_lt_add_left hij _
+
+/-- **A unit's session rounds are the rounds after the prefix**, each Flock round's once. -/
+theorem mem_rounds_iff (x : Msg) (u : ℕ) {k : ℕ} (hk : k = S.kS x) (t : Fin (D.V.k x)) :
+    t ∈ D.rounds x u ↔ ∃ i, S.emb x hk i = t := by
+  rw [S.rounds_iff]
+  constructor
+  · intro ht
+    have := t.isLt
+    have := S.k_eq x
+    exact ⟨⟨t.val - S.pre x, by omega⟩, Fin.ext (show S.pre x + (t.val - S.pre x) = t.val by omega)⟩
+  · rintro ⟨i, rfl⟩
+    exact Nat.le_add_right _ _
+
+/-- **The prefix's rounds**: from a transcript `ms` of answered rounds of the prefix, `j` more rounds either answer every
+prefix round, reaching a transcript `ms'` of all of it whose statement has the session's `kS x` rounds, or refuse one,
+ending the run; and both, with the transcript and the prover's calls, are the same at every coins `r'` that agree with
+`r` below the prefix. -/
+theorem run_prefix (H : Msg → Msg) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (j : ℕ) :
+    ∀ (ms : List (Msg × Out)) (ps : List (Msg × Msg)), ms.length + j = S.pre x → (∀ e ∈ ms, ∃ m, e.2 = .msg m) →
+      (ms ≠ [] → ∃ m, D.V.next x (ms.map Prod.fst) ((List.range ms.length).map (coinSeq r)) = .ret (.msg m)) →
+      (∃ (ms' : List (Msg × Out)) (ps' : List (Msg × Msg)), ms'.length = S.pre x ∧
+          (∀ e ∈ ms', ∃ m, e.2 = .msg m) ∧ D.flock.V.k (S.stmt x (ms'.map Prod.fst)) = S.kS x ∧
+          ∀ r' : Fin (D.V.k x) → Coin, (∀ t : Fin (D.V.k x), t.val < S.pre x → r' t = r t) →
+            stepWith H P x ω (fun as => D.V.next x as ((List.range as.length).map (coinSeq r'))) (j + S.kS x)
+                (ms.map fun e => (e.1, msgOf e.2)) (ms.map Prod.fst) ⟨ms, ps, [], .rej⟩ =
+              stepWith H P x ω (fun as => D.V.next x as ((List.range as.length).map (coinSeq r'))) (S.kS x)
+                (ms'.map fun e => (e.1, msgOf e.2)) (ms'.map Prod.fst) ⟨ms', ps', [], .rej⟩) ∨
+      (∃ (ms' : List (Msg × Out)) (a : Msg) (ps' : List (Msg × Msg)), ms'.length < S.pre x ∧
+          (∀ e ∈ ms', ∃ m, e.2 = .msg m) ∧
+          ∀ r' : Fin (D.V.k x) → Coin, (∀ t : Fin (D.V.k x), t.val < S.pre x → r' t = r t) →
+            stepWith H P x ω (fun as => D.V.next x as ((List.range as.length).map (coinSeq r'))) (j + S.kS x)
+                (ms.map fun e => (e.1, msgOf e.2)) (ms.map Prod.fst) ⟨ms, ps, [], .rej⟩ =
+              ⟨ms' ++ [(a, .rej)], ps', [], .rej⟩) := by
+  induction j with
+  | zero =>
+    intro ms ps hlen hms hlast
+    have hne : ms ≠ [] := by
+      rintro rfl
+      have := S.pre_pos x
+      simp at hlen
+      omega
+    obtain ⟨m, hm⟩ := hlast hne
+    have hk := S.k_stmt x (ms.map Prod.fst) _ m (by simpa using hlen) (by simp) hm
+    exact Or.inl ⟨ms, ps, by simpa using hlen, hms, hk, fun r' _ => by rw [Nat.zero_add]⟩
+  | succ j ih =>
+    intro ms ps hlen hms _
+    have hle : (ms.map Prod.fst ++ [((P.next x (ms.map fun e => (e.1, msgOf e.2)) ω).eval H).1]).length ≤
+        S.pre x := by
+      simp only [List.length_append, List.length_map, List.length_singleton]
+      omega
+    obtain ⟨o, ho, hacc⟩ := S.next_pre x
+      (ms.map Prod.fst ++ [((P.next x (ms.map fun e => (e.1, msgOf e.2)) ω).eval H).1])
+      ((List.range (ms.map Prod.fst ++ [((P.next x (ms.map fun e => (e.1, msgOf e.2)) ω).eval H).1]).length).map
+        (coinSeq r)) (by simp) hle (by simp)
+    have hco : ∀ r' : Fin (D.V.k x) → Coin, (∀ t : Fin (D.V.k x), t.val < S.pre x → r' t = r t) →
+        D.V.next x (ms.map Prod.fst ++ [((P.next x (ms.map fun e => (e.1, msgOf e.2)) ω).eval H).1])
+          ((List.range (ms.map Prod.fst ++
+            [((P.next x (ms.map fun e => (e.1, msgOf e.2)) ω).eval H).1]).length).map (coinSeq r')) = .ret o := by
+      intro r' hr'
+      rw [coins_eq hr' hle]
+      exact ho
+    have hsucc : j + 1 + S.kS x = (j + S.kS x) + 1 := by omega
+    cases o with
+    | msg m =>
+      have hms' : ∀ e ∈ ms ++ [(((P.next x (ms.map fun e => (e.1, msgOf e.2)) ω).eval H).1, Out.msg m)],
+          ∃ m, e.2 = .msg m := by
+        intro e he
+        rcases List.mem_append.1 he with he | he
+        · exact hms e he
+        · rw [List.mem_singleton] at he
+          exact ⟨m, by rw [he]⟩
+      rcases ih (ms ++ [(((P.next x (ms.map fun e => (e.1, msgOf e.2)) ω).eval H).1, .msg m)])
+          (ps ++ ((P.next x (ms.map fun e => (e.1, msgOf e.2)) ω).eval H).2) (by simp; omega) hms'
+          (fun _ => ⟨m, by simpa using ho⟩) with ⟨ms', ps', h1, h2, h3, h4⟩ | ⟨ms', a, ps', h1, h2, h4⟩
+      · refine Or.inl ⟨ms', ps', h1, h2, h3, fun r' hr' => ?_⟩
+        rw [hsucc, stepWith_msg H P x ω (fun as => D.V.next x as ((List.range as.length).map (coinSeq r')))
+          (j + S.kS x) (ms.map fun e => (e.1, msgOf e.2)) (ms.map Prod.fst) ⟨ms, ps, [], .rej⟩ m (hco r' hr'),
+          ← h4 r' hr']
+        simp [msgOf]
+      · refine Or.inr ⟨ms', a, ps', h1, h2, fun r' hr' => ?_⟩
+        rw [hsucc, stepWith_msg H P x ω (fun as => D.V.next x as ((List.range as.length).map (coinSeq r')))
+          (j + S.kS x) (ms.map fun e => (e.1, msgOf e.2)) (ms.map Prod.fst) ⟨ms, ps, [], .rej⟩ m (hco r' hr'),
+          ← h4 r' hr']
+        simp [msgOf]
+    | rej =>
+      refine Or.inr ⟨ms, ((P.next x (ms.map fun e => (e.1, msgOf e.2)) ω).eval H).1,
+        ps ++ ((P.next x (ms.map fun e => (e.1, msgOf e.2)) ω).eval H).2, by omega, hms, fun r' hr' => ?_⟩
+      rw [hsucc]
+      exact stepWith_rej H P x ω (fun as => D.V.next x as ((List.range as.length).map (coinSeq r')))
+        (j + S.kS x) (ms.map fun e => (e.1, msgOf e.2)) (ms.map Prod.fst) ⟨ms, ps, [], .rej⟩ (hco r' hr')
+    | acc => exact absurd rfl hacc
+
+end SessionSteps
+
 /-- **`SessionRuns` from the step structure**: at coins that check a unit, its session is Flock's run on the rounds after
 the prefix, of the prover that plays the sampled prover's messages after the prefix's transcript (or, where the prefix
 refused, of a prover whose first message Flock refuses at `xR x`), and it decides the run, is the session the run shows,
 and makes only `H` calls the run makes. -/
 theorem sessionRuns_of_steps {D : Deploy Coin Col T} (S : SessionSteps D) (H : Msg → Msg) : SessionRuns H D := by
-  sorry
+  intro x Ω P ω r u _
+  have hrun : ∀ r' : Fin (D.V.k x) → Coin, run H P D.V x ω r' =
+      stepWith H P x ω (fun as => D.V.next x as ((List.range as.length).map (coinSeq r'))) (S.pre x + S.kS x) [] []
+        ⟨[], [], [], .rej⟩ := fun r' => by
+    rw [← S.k_eq]
+    rfl
+  rcases S.run_prefix H x P ω r (S.pre x) [] [] (by simp) (by simp) (by simp) with
+    ⟨ms, ps, hlen, hms, hk, hpre⟩ | ⟨ms, a, ps, hlen, hms, hpre⟩
+  · let P' : Prover Unit := ⟨fun _ hist _ => P.next x (ms.map (fun e => (e.1, msgOf e.2)) ++ hist) ω⟩
+    have hcomp : ∀ r' : Fin (D.V.k x) → Coin, (∀ t : Fin (D.V.k x), t.val < S.pre x → r' t = r t) →
+        run H P D.V x ω r' =
+          ⟨ms ++ (run H P' D.flock.V (S.stmt x (ms.map Prod.fst)) () fun i => r' (S.emb x hk i)).msgs,
+            ps ++ (run H P' D.flock.V (S.stmt x (ms.map Prod.fst)) () fun i => r' (S.emb x hk i)).pLog,
+            (run H P' D.flock.V (S.stmt x (ms.map Prod.fst)) () fun i => r' (S.emb x hk i)).vLog,
+            (run H P' D.flock.V (S.stmt x (ms.map Prod.fst)) () fun i => r' (S.emb x hk i)).out⟩ := by
+      intro r' hr'
+      have h0 := hpre r' hr'
+      simp only [List.map_nil] at h0
+      rw [hrun r', h0, ← hk]
+      have hl : (ms.map Prod.fst).length = S.pre x := by simp [hlen]
+      have := stepWith_shift H P P' x (S.stmt x (ms.map Prod.fst)) ω ()
+        (fun as => D.V.next x as ((List.range as.length).map (coinSeq r')))
+        (fun as => D.flock.V.next (S.stmt x (ms.map Prod.fst)) as
+          ((List.range as.length).map (coinSeq fun i => r' (S.emb x hk i))))
+        (ms.map fun e => (e.1, msgOf e.2)) (ms.map Prod.fst) ms ps [] (fun _ => rfl) (fun bs hbs => by
+          have hlt : S.pre x < (ms.map Prod.fst ++ bs).length := by
+            cases bs with
+            | nil => exact absurd rfl hbs
+            | cons b bs => simp [hlen]
+          show D.V.next x (ms.map Prod.fst ++ bs) ((List.range (ms.map Prod.fst ++ bs).length).map (coinSeq r')) =
+            D.flock.V.next (S.stmt x (ms.map Prod.fst)) bs
+              ((List.range bs.length).map (coinSeq fun i => r' (S.emb x hk i)))
+          have hcs : ((List.range (ms.map Prod.fst ++ bs).length).map (coinSeq r')).length =
+              (ms.map Prod.fst ++ bs).length := by
+            simp
+          have hpre : ((List.range (S.pre x)).map (coinSeq r')).length = S.pre x := by simp
+          rw [S.next_post x (ms.map Prod.fst ++ bs) _ hlt hcs, List.take_left' hl, List.drop_left' hl,
+            List.length_append, hl, List.range_add, List.map_append, List.drop_left' hpre, List.map_map]
+          congr 1
+          apply List.map_congr_left
+          intro i _
+          have hiff : S.pre x + i < D.V.k x ↔ i < D.flock.V.k (S.stmt x (ms.map Prod.fst)) := by
+            rw [S.k_eq, hk]
+            omega
+          show coinSeq r' (S.pre x + i) = coinSeq (fun i => r' (S.emb x hk i)) i
+          by_cases hi : i < D.flock.V.k (S.stmt x (ms.map Prod.fst))
+          · simp only [coinSeq, dif_pos (hiff.2 hi), dif_pos hi]
+            rfl
+          · simp only [coinSeq, dif_neg (mt hiff.1 hi), dif_neg hi])
+        (D.flock.V.k (S.stmt x (ms.map Prod.fst))) [] [] ⟨[], [], [], .rej⟩
+      simp only [List.append_nil, List.nil_append] at this
+      exact this
+    refine ⟨S.stmt x (ms.map Prod.fst), S.emb x hk, P', S.emb_strictMono x hk, S.mem_rounds_iff x u hk,
+      fun r' hr' => ?_, fun r' hr' => ?_⟩
+    · simp only [hcomp r' fun t ht => hr' t (by rw [S.rounds_iff]; omega), iff_self]
+    · rw [hcomp r' fun t ht => hr' t (by rw [S.rounds_iff]; omega) fun i => show t.val < S.pre x + i.val by omega]
+      exact ⟨S.session_pass x u ms _ _ hlen hms, fun _ hq => hq⟩
+  · have hk : D.flock.V.k (S.xR x) = S.kS x := S.k_xR x
+    let P' : Prover Unit := ⟨fun _ _ _ => .ret []⟩
+    have hflock : ∀ c : Fin (D.flock.V.k (S.xR x)) → Coin,
+        run H P' D.flock.V (S.xR x) () c = ⟨[([], .rej)], [], [], .rej⟩ := fun c =>
+      stepWith_refused H (S.xR x)
+        (fun as => D.flock.V.next (S.xR x) as ((List.range as.length).map (coinSeq c))) (S.refuses x (coinSeq c 0))
+        (D.flock.V.k (S.xR x)) (by rw [hk]; exact S.kS_pos x)
+    have hcomp : ∀ r' : Fin (D.V.k x) → Coin, (∀ t : Fin (D.V.k x), t.val < S.pre x → r' t = r t) →
+        run H P D.V x ω r' = ⟨ms ++ [(a, .rej)], ps, [], .rej⟩ := by
+      intro r' hr'
+      have h0 := hpre r' hr'
+      simp only [List.map_nil] at h0
+      rw [hrun r', h0]
+    refine ⟨S.xR x, S.emb x hk, P', S.emb_strictMono x hk, S.mem_rounds_iff x u hk, fun r' hr' => ?_,
+      fun r' hr' => ?_⟩
+    · simp only [hcomp r' fun t ht => hr' t (by rw [S.rounds_iff]; omega), hflock, iff_self]
+    · rw [hcomp r' fun t ht => hr' t (by rw [S.rounds_iff]; omega) fun i => show t.val < S.pre x + i.val by omega,
+        hflock]
+      exact ⟨S.session_refused x u ms a hlen hms, fun _ hq => by simp at hq⟩
 
 end Claims.Sampling

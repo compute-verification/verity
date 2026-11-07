@@ -55,7 +55,7 @@ noncomputable def steps (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
   kS _ := k₀ h
   stmt _ as := as.getD 2 []
   xR _ := h.xS₀
-  pre_pos _ := by omega
+  pre_pos _ := Nat.zero_lt_succ 2
   k_eq _ := rfl
   next_pre x as cs hne hle hcs := by
     change ∃ o, next h x as cs = .ret o ∧ o ≠ .acc
