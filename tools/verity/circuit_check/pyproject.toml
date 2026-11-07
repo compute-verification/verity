@@ -32,8 +32,8 @@ markers = [
 untraced = [
     "tests/test_ambient.py",
     "tests/test_cache.py",
+    "tests/test_cache_imports_and_moves.py",
     "tests/test_cache_redteam.py",
-    "tests/test_cache_redteam_1176.py",
     "tests/test_circuit_check.py",
     "tests/test_metadata_listings.py",
     "tests/test_shard.py",
@@ -178,7 +178,7 @@ paths = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_cache_redteam.py", "tests/test_cache_redteam_1176.py"]
+tests = ["tests/test_cache_redteam.py", "tests/test_cache_imports_and_moves.py"]
 paths = ["tools/verity/circuit_check/src/circuit_check"]
 
 [[tool.verity.tests.reads]]
