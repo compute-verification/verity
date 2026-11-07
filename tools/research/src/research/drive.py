@@ -337,23 +337,35 @@ def authed(auth: tuple[str, ...]):
                 os.environ[k] = v
 
 
+def takes_bookkeeping(repo: Path) -> bool:
+    """Whether ``repo``'s train.sh, which the lock run launches from, takes `--bookkeeping-warn` (Daniel, 6 Nov: the lock run
+    repairs bookkeeping and warns); one that predates it would refuse every lock run."""
+    try:
+        return "--bookkeeping-warn" in (repo / "tools" / "verity" / "check" / "train.sh").read_text()
+    except OSError:
+        return False
+
+
 def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = (),
                  deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
                  detached: bool = False, circuit_cache: bool = False, shard: str | None = None,
                  base: str | None = None, cc_records: bool = False,
                  cc_records_from: str | None = None, shard_plan: str | None = None,
-                 ratchet_base: str | None = None, rank: int | None = None) -> tuple[list[str], str] | dict:
+                 ratchet_base: str | None = None, rank: int | None = None,
+                 bookkeeping_warn: bool = False) -> tuple[list[str], str] | dict:
     """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--ratchet-base RBASE] [--shard [auto:]K/N [--shard-plan-file PLAN]]
     [--cc-records[-from ART@SHA256]]` from the queue's clone (``cc_records``, circuit-check's records step alone): (the run ids it printed,
     its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its
     own path (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record
     `launched` reads.  Git never prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a
-    password at the tty).  ``rank`` is its check's `slot.py --rank` (CHECK_SLOT_RANK), none for an unranked one."""
+    password at the tty).  ``rank`` is its check's `slot.py --rank` (CHECK_SLOT_RANK), none for an unranked one.
+    ``bookkeeping_warn`` (the lock run) has its lean-audit repair the locks' bookkeeping and warn (`--bookkeeping-warn`)."""
     argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--cc-records"] if cc_records else [])]
     if not cc_records:
         argv += [*(["--agreement"] if agreement else []),
                  *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
                  *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else []),
+                 *(["--bookkeeping-warn"] if bookkeeping_warn else []),
                  *(["--base", base] if base else []), *(["--ratchet-base", ratchet_base] if ratchet_base else []),
                  *(["--shard", shard] if shard else []),
                  *(["--shard-plan-file", shard_plan] if shard_plan else []),
@@ -367,6 +379,8 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
 
 
+#: how many bookkeeping warnings of a lock run (`_put_locks`) its post lists; the lock commit lists them all
+BOOKKEEPING_SHOWN = 12
 #: the check slot rank (`slot.py --rank`) of every part of the after-landing run, of its bisects and of the lock run: a ranked
 #: priority waiter takes the next free check slot ahead of the unranked ones, so `main` never waits on a slot for them
 POSTLAND_SLOT_RANK = 0
@@ -1201,7 +1215,8 @@ class Driver:
         #: its check at `POSTLAND_SLOT_RANK`
         self.launch_locks: Callable[[Path, str, str], tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine: train_launch(repo, commit, machine, False, auth=q.auth, deferred=LEAN_STEP,
-                                                        detached=True, rank=POSTLAND_SLOT_RANK))
+                                                        detached=True, rank=POSTLAND_SLOT_RANK,
+                                                        bookkeeping_warn=takes_bookkeeping(repo)))
             if launch is train_launch else (lambda repo, commit, machine: self.launch(repo, commit, machine, False)))
         #: what a detached launch has printed so far (`launched`, `_resolve`)
         self.launched: Callable[[dict], tuple[list[str] | None, str]] = launched
@@ -2946,6 +2961,8 @@ class Driver:
         if self.dry_run or q.shadow:
             q.log(f"research queue drive: would commit the records {rid} regenerated on `{into}` {tip[:12]}")
             return
+        from .merge import REPAIRED
+
         q._drive_only(into, "once", False)
         files: list[str] = []
         scratch = Path(tempfile.mkdtemp(prefix="drive-locks-"))
@@ -2954,7 +2971,8 @@ class Driver:
             if locks and not held:
                 _git(self.repo, "checkout", "-q", "-B", into, tip)
                 for pkg, src in sorted(locks.items()):
-                    dst = f"{pkg}/{LOCK}" if pkg not in ("", ".") else LOCK
+                    dst = pkg if pkg in REPAIRED else f"{pkg}/{LOCK}" if pkg not in ("", ".") else LOCK
+                    (self.repo / dst).parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(src, self.repo / dst)
                     files.append(dst)
                 _git(self.repo, "add", "--", *files)
@@ -2978,14 +2996,22 @@ class Driver:
 
     def _put_locks(self, drive: dict, pl: dict, tip: str, rid: str, files: list[str]) -> str | None:
         """Commit ``files``, the records lock run ``rid`` regenerated, staged on its ``tip``, and push that lock commit onto the
-        landing branch, or its merge onto the branch's tip when the branch moved (`_commit_locks`).  The lock commit; None when
-        the gate refused it (`CI` told once) or the push lost a race (the next tick tries again)."""
+        landing branch, or its merge onto the branch's tip when the branch moved (`_commit_locks`).  The bookkeeping the run
+        repaired (`merge.bookkeeping_warnings`: Daniel, 6 Nov, it warns and the next PR fixes it) is listed in the commit and
+        told to `@lean` and each owner a warning names, once per lock commit.  The lock commit; None when the gate refused it
+        (`CI` told once) or the push lost a race (the next tick tries again)."""
+        from .merge import bookkeeping_warnings
+
         q = self.q
         into, base = q.into, q.base
         prs = " ".join(f"#{x.pr}" for x in self.landed_since(self._fresh(pl, tip), tip)) or f"`{into}` {tip[:12]}"
         subject = f"Lock records regenerated for {prs}"
         checked = f"Checked: {rid} (the lock run of `{into}` {tip[:12]}, passed by regenerating them"
-        _git(self.repo, "commit", "-q", "-m", f"{subject}\n\n{checked})\nRegenerated: {', '.join(files)}\n", env=IDENTITY)
+        warned = bookkeeping_warnings(q.store, rid, self.fetch)
+        repairs = ("Bookkeeping the lock run repaired, each a warning for the next PR to fix:\n" +
+                   "".join(f"  {w}\n" for w in warned) + "\n") if warned else ""
+        _git(self.repo, "commit", "-q", "-m", f"{subject}\n\n{repairs}{checked})\nRegenerated: {', '.join(files)}\n",
+             env=IDENTITY)
         if why := self._unvouched(rid):
             _git(self.repo, "reset", "-q", "--hard", base)
             self.refuse(drive, f"lock-gate:{tip}", f"the lock run {rid} of `{into}` {tip[:12]} passed, but {why}: its records "
@@ -3017,6 +3043,12 @@ class Driver:
         q.log(f"research queue drive: committed the records the lock run {rid} of {tip[:12]} regenerated ({', '.join(files)}) "
               f"as {lock[:12]}" + (f", merged onto `{into}` {now[:12]} with {', '.join(take) or 'none of them'}"
                                    if now != tip else f" on `{into}`"))
+        if warned:
+            owners = sorted({h for w in warned for h in re.findall(r"\(@([\w-]+)\)", w)} - {"lean"})
+            shown = "; ".join(warned[:BOOKKEEPING_SHOWN]) + (f"; and {len(warned) - BOOKKEEPING_SHOWN} more in the commit"
+                                                            if len(warned) > BOOKKEEPING_SHOWN else "")
+            self.tell(drive, [f"bookkeeping:{lock}"], f"the lock run {rid} of `{into}` {tip[:12]} repaired bookkeeping that "
+                      f"{prs} brought, in {lock[:12]}, each a warning for the next PR to fix: {shown}", "lean", *owners)
         return lock
 
     def _chain(self) -> tuple[str, list[Member]]:

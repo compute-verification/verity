@@ -250,6 +250,24 @@ def test_the_inline_list_only_shrinks():
 ROOM = {"INLINE Security": 3, "INLINE Security/Properties": 20, "UNWITNESSED Security": 2, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG Security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT Security": 1, "UNWITNESSED Security/Properties": 3, "OVERLONG verity/core/protocols/pouw/lean/check": 3, "OVERLONG verity/core/service/flock": 4, "IMPORT_ALL_USES Security/Proofs": 1}
 
 
+def test_the_caps_the_lock_run_repairs_are_the_files_drive_commits():
+    """Drive's lock run (`lean_audit.py --bookkeeping warn`) repairs the unread caps and this file's caps on what the locks
+    list, and drive commits them beside the locks (`research.merge.REPAIRED`, which the merge gate holds to the run's copies):
+    the two name the same files, and each cap here is the one-line dict `lean_audit.held_caps` rewrites."""
+    import ast
+
+    def assigned(path: str) -> dict[str, ast.expr]:
+        return {t.id: n.value for n in ast.parse((ROOT / path).read_text()).body if isinstance(n, ast.Assign)
+                for t in n.targets if isinstance(t, ast.Name)}
+    audit, merge = assigned("tools/verity/lean/lean_audit.py"), assigned("tools/research/src/research/merge.py")
+    repaired = {ast.literal_eval(e) for e in merge["REPAIRED"].args[0].elts}
+    assert repaired == {ast.literal_eval(audit["UNREAD_CAPS"]), ast.literal_eval(audit["CAPS_TEST"])}
+    assert ast.literal_eval(audit["CAPS_TEST"]) == _rel(Path(__file__))
+    text = Path(__file__).read_text()
+    for name in ("ROOM", *(k.value for k in audit["LOCK_CAPS"].keys)):
+        assert re.search(rf"^{name} = \{{.*\}}$", text, re.M), f"{name} is no longer one line here: `held_caps` can't hold it"
+
+
 def _rel(p: Path) -> str:
     return str(p.relative_to(ROOT))
 
