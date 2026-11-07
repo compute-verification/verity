@@ -1,5 +1,5 @@
 """A captured step's matrix products as the products term reads them (training_slowdown.formalism), for a step captured
-by capture_step or capture_fn as well as a program recorded from its start (`Trace.region`).
+by capture_step or capture_fn as well as a program recorded from its start (`Capture.region`).
 
 Each GEMM of the measured step is a row (`rows`): its dims and token dims, whether each operand depends on θ′, the
 width each operand is passed at (`_passed_width`), the bits a block pays an entry of it at policy k (`_rates`), whether
