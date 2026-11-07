@@ -140,6 +140,9 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert lean_audit[4].endswith("tools/verity/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
     assert "--regenerate" in lean_audit and "--regenerate" not in CHECK.lean_steps(out, regenerate=False)[2][1]
+    warn = CHECK.lean_steps(out, bookkeeping=True)[2][1]
+    assert "--bookkeeping" not in lean_audit and warn[warn.index("--bookkeeping") + 1] == "warn"
+    assert "--bookkeeping" not in CHECK.lean_steps(out, regenerate=False, bookkeeping=True)[2][1]
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
     assert CHECK.lean_steps(out)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
@@ -1762,6 +1765,34 @@ def test_train_sh_hands_an_auto_shard_its_plan_and_refuses_one_without_it(tmp_pa
                        (["--shard", "auto:0/3", "--shard-plan-file", str(plan)], "--shard needs K/N or auto:K/N")):
         p = train("HEAD", "vy-x", "--deferred", "pytest", *flags)
         assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
+def test_train_sh_hands_the_lock_runs_bookkeeping_flag_to_a_check_that_takes_it(tmp_path):
+    """Drive's lock run (`--deferred lean-audit --bookkeeping-warn`): the flag reaches check.py --record when the commit's
+    check.py takes it, and on a commit whose check.py predates it the run launches without it, saying so; with --no-regenerate,
+    --shard or without --deferred it is refused before anything launches."""
+    git, train, argv = _train_repo(tmp_path)
+    check = tmp_path / "repo" / "tools" / "verity" / "check" / "check.py"
+    check.parent.mkdir(parents=True)
+    check.write_text('BOOKKEEPING = "--bookkeeping-warn"\n')
+    git("add", "tools")
+    git("commit", "-q", "-m", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "lean-audit", "--bookkeeping-warn")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "lean-audit", "--bookkeeping-warn"], (
+        p.stderr, args)
+    check.write_text("\n")
+    git("commit", "-q", "-am", "older")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "lean-audit", "--bookkeeping-warn")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and "--bookkeeping-warn" not in args and "predates --bookkeeping-warn" in p.stdout, (p.stdout, args)
+    argv.unlink()
+    for flags in (["--bookkeeping-warn"], ["--deferred", "lean-audit", "--no-regenerate", "--bookkeeping-warn"],
+                  ["--deferred", "lean-audit", "--shard", "1/3", "--bookkeeping-warn"]):
+        p = train("HEAD", "vy-x", *flags)
+        assert p.returncode == 2 and "train: --bookkeeping-warn refused" in p.stderr and not argv.exists(), (flags, p.stderr)
 
 
 def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):

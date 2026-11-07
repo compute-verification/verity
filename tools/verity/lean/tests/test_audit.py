@@ -721,6 +721,199 @@ def test_what_settles_is_keyed_on_codes_not_text():
     assert json.loads(json.dumps([unrecorded])) == [str(unrecorded)], "a report holds its failures' text"
 
 
+TICKET = {"issue": "LEAN-186", "due": "2026-11-14", "owner": "@lean"}
+
+
+def sounded(owners=("@lean",), **over) -> dict:
+    """Facts of a package whose guarantees (`P.t`, then `P.u`, ... one per owner) take `P.Sound`, a premise in `P.Defs`."""
+    def pin():
+        p = fact(signature="P.t (n : Nat) : P.Guarantees.t n", hyps=[])
+        p["premises"] = [{"binder": "s", "head": "P.Sound", "module": "P.Defs"}]
+        return p
+    names = ["P.t", "P.u", "P.v"][:len(owners)]
+    return facts(pins={n: pin() for n in names},
+                 graph={"P.Defs": {"imports": ["Init"], "olean": "/r/P/.lake/build/lib/lean/P/Defs.olean"}}, **over)
+
+
+def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
+    """{code: (lock, facts)} failing with that code of `BOOKKEEPING`, each repairable by `repaired`."""
+    pol, now = recorded(), sounded()
+    seed = {"P.Defs": {"issue": "LEAN-1", "due": "2026-11-30"}, "Q.Assumptions": {"issue": "LEAN-1", "due": "2026-11-30"}}
+    opol = A.judge({**POLICY, "assumptions": {}, "open_seed": seed}, now, FILES, update=True)[1]
+    sound = opol["open"]["P.Sound"]
+    wpol, wfacts = witnessed(guarantee={"premises": [COMPILED, {"binder": "hx", "head": "Q.X", "module": "Q.Assumptions"}]})
+    wrec = A.judge({**wpol, "open_seed": seed}, wfacts, FILES, update=True)[1]
+    covered = {**wrec, "open": {"Q.X": wrec["open"]["Q.X"]}, "domain": {"P.Compiled": {"why": "the deployed circuits"}}}
+    uncovered = {**wrec, "open": {"P.Compiled": wrec["open"]["P.Compiled"]},
+                 "domain": {"Q.X": {"owner": "@lean", "why": "the deployed circuits"}}}
+    bare = {k: v for k, v in wrec.items() if k != "witnesses"} | {
+        "unwitnessed": {"P.sound": wfacts["pins"]["P.sound"]["type_sha256"]}}
+    frozen = {"frozen": {"P.t": "frozen: open"}}
+
+    def without(rec, key):
+        return {k: v for k, v in rec.items() if k != key}
+    return {
+        "open.unlisted": ({**POLICY, "assumptions": {}}, now),
+        "assumptions.outside-module": ({**opol, "open": {}, "assumptions": {"P.Sound": {"owner": "@lean"}}}, now),
+        "domain.uncovered": (uncovered, wfacts),
+        "open.seed": ({**opol, "open_seed": seed}, now),
+        "witnesses.missing": ({**bare, "unwitnessed": {}}, wfacts),
+        "witnesses.unwitnessed-changed": ({**bare, "unwitnessed": {"P.sound": sha("its statement before")}}, wfacts),
+        "witnesses.stale": ({**wrec, "witnesses": wrec["witnesses"] | {"P.gone": wrec["witnesses"]["P.sound"]}}, wfacts),
+        "witnesses.assumed-stale": ({**wrec, "witnesses_assumed": {"P.Gone": "assumed as it stands"}}, wfacts),
+        "shape.properties-stale": ({**pol, "shape": frozen | {"properties": {"P.gone": {"function": "P.f",
+                                                                                       "outcome": "accept"}}}}, facts()),
+        "shape.frozen-stale": ({**pol, "shape": {"frozen": frozen["frozen"] | {"P.gone": "frozen: open"}}}, facts()),
+        "guarantees.no-owner": ({**pol, "guarantees": {"P.t": without(pol["guarantees"]["P.t"], "owner")}}, facts()),
+        "assumptions.no-owner": ({**pol, "assumptions": {"P.Hyp": without(pol["assumptions"]["P.Hyp"], "owner")}}, facts()),
+        "open.no-owner": ({**opol, "open": {"P.Sound": without(sound, "owner")}}, now),
+        "domain.no-owner": (covered, wfacts),
+    }
+
+
+def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the_flag():
+    """Each code of `BOOKKEEPING` (drive's lock run after a landing repairs the bookkeeping and warns) comes
+    from a lock `repaired` mends, so the policy's checks pass on the lock it writes, and each repair is one warning line naming
+    the entry and its owner. Without `--bookkeeping warn` the same lock fails: no bookkeeping code is a record difference, so
+    `regenerated` settles none of it. A code in the set that no case provokes fails here."""
+    cases = bookkeeping_cases()
+    assert set(cases) == A.BOOKKEEPING and not set(A.BOOKKEEPING) & set(A.RECORD_DIFFERENCE)
+    for code, (policy, now) in cases.items():
+        shaped = (lambda lock: A.shape(lock, now)) if code.startswith("shape.") else (lambda lock: [])
+        fails = A.judge(policy, now, FILES)[0] + shaped(policy)
+        assert code in {f.code for f in fails}, (code, fails)
+        assert A.regenerated(policy, now, FILES, fails) is None, code
+        fixed = A.repaired(policy, now, FILES, fails, TICKET)
+        assert A.judge(fixed, now, FILES)[0] + shaped(fixed) == [], code
+        warned = A.bookkeeping_warnings(fails, fixed, TICKET)
+        for f in (f for f in fails if f.code == code):
+            assert any(w.startswith(f"bookkeeping: {f.entry or 'the lock'} (@lean): ") and w.endswith(f"({code})")
+                       for w in warned), (code, warned)
+        assert len(warned) == sum(map(A.BOOKKEEPING.match, fails)), (code, warned)
+    def fix(code):
+        policy, now = cases[code]
+        return A.repaired(policy, now, FILES, A.judge(policy, now, FILES)[0], TICKET), now
+    fixed, _ = fix("open.unlisted")
+    assert {k: v for k, v in fixed["open"]["P.Sound"].items() if k != "digest"} == {
+        "owner": "@lean", "issue": "LEAN-186", "due": "2026-11-14"}
+    for code in ("witnesses.missing", "witnesses.unwitnessed-changed"):
+        fixed, now = fix(code)
+        assert fixed["unwitnessed"]["P.sound"] == now["pins"]["P.sound"]["type_sha256"], "listed at its hashes now"
+    assert "open_seed" not in fix("open.seed")[0]
+
+
+def test_bookkeeping_files_a_premise_on_the_locks_default_issue_and_its_guarantees_first_owner():
+    """An unlisted premise is filed on the lock's `open_default_issue` when it gives one, else `BOOKKEEPING_ISSUE`, due on the run's date;
+    its owner is its guarantees' (the first, of several), and an entry whose guarantees name no owner gets `BOOKKEEPING_OWNER`."""
+    now = sounded(owners=("@zed", "@amy"))
+    lock = {**POLICY, "assumptions": {}, "guarantees": {"P.t": {"owner": "@zed"}, "P.u": {"owner": "@amy"}},
+            "open_default_issue": "LEAN-200"}
+    ticket = A.bookkeeping_ticket(lock, "2026-11-14")
+    assert ticket == {"issue": "LEAN-200", "due": "2026-11-14", "owner": "@lean"}
+    assert A.bookkeeping_ticket(POLICY, "2026-11-14")["issue"] == "LEAN-186"
+    fails = A.judge(lock, now, FILES)[0]
+    fixed = A.repaired(lock, now, FILES, fails, ticket)
+    assert {k: v for k, v in fixed["open"]["P.Sound"].items() if k != "digest"} == {
+        "owner": "@amy", "issue": "LEAN-200", "due": "2026-11-14"}
+    assert A.judge(fixed, now, FILES)[0] == []
+    assert "bookkeeping: P.Sound (@amy): listed under `open` on LEAN-200, due 2026-11-14 (open.unlisted)" in \
+        A.bookkeeping_warnings(fails, fixed, ticket)
+    ownerless = {**POLICY, "assumptions": {}, "guarantees": {"P.t": {}}}
+    fails = A.judge(ownerless, sounded(), FILES)[0]
+    fixed = A.repaired(ownerless, sounded(), FILES, fails, ticket)
+    assert fixed["guarantees"]["P.t"]["owner"] == fixed["open"]["P.Sound"]["owner"] == "@lean"
+    assert A.judge(fixed, sounded(), FILES)[0] == []
+    for bad in ("", 7, ["LEAN-1"]):
+        assert "open.default-issue-form" in {f.code for f in A.judge(lock | {"open_default_issue": bad}, now, FILES)[0]}
+
+
+def bookkeeping_audit(tmp_path, monkeypatch, lock: dict, now: dict, replayed=()):
+    """A package whose build has ``now`` for facts (its Lean stubbed out), with ``lock`` for its lock, and a function auditing
+    it with `--bookkeeping warn`'s due date or without it."""
+    pkg = tmp_path / "pkg"
+    for rel in FILES.values():
+        (pkg / rel).parent.mkdir(parents=True, exist_ok=True)
+        (pkg / rel).write_text("")
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
+    A.dump(pkg, lock | {"dependencies": {"mathlib": "d1"}})
+    monkeypatch.setattr(A, "facts_of", lambda *a, **k: now | {"oleans": []})
+    monkeypatch.setattr(A, "replay_step", lambda *a: (list(replayed), {"checked": 1, "reused": 0}))
+    monkeypatch.setattr(A, "dependency_scans", lambda *a: ([], 0))
+    monkeypatch.setattr(A, "dependency_digests", lambda *a: {"mathlib": "d1"})
+    for name, value in (("scans", []), ("heartbeats", []), ("anonymous_instances", []), ("run_paths", []),
+                        ("listings", ([], {}, [])), ("read_by_dependents", set()), ("reads_home", {})):
+        monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
+
+    def audit(bookkeeping=None):
+        out = tmp_path / f"out-{bookkeeping}"
+        return A.audit(pkg, out, runs=False, log=lambda *_: None, bookkeeping=bookkeeping), out / "audit-pkg"
+    return pkg, audit
+
+
+def test_an_audit_under_the_flag_writes_the_repaired_lock_and_what_else_fails_still_fails(tmp_path, monkeypatch):
+    """`audit(bookkeeping=DUE)`: a package that fails only on bookkeeping passes with the repaired lock beside its report
+    (`regenerated`, which drive commits) and its warnings (`bookkeeping`), and its own lock untouched; the same package fails
+    without the flag. What the flag never repairs still fails under it: an axiom beyond the standard three (`sorryAx`), a
+    `native_decide` (`Lean.ofReduceBool`), a replay the kernel rejects, and a malformed lock."""
+    lock = {**POLICY, "assumptions": {}, "shape": {"frozen": {"P.t": "frozen: open"}}}
+    pkg, audit = bookkeeping_audit(tmp_path, monkeypatch, lock, sounded())
+    before = (pkg / A.POLICY).read_text()
+    plain, _ = audit()
+    assert "open.unlisted" in A.reported(plain)["failure_codes"] and "regenerated" not in plain
+    rep, work = audit("2026-11-14")
+    assert rep["failures"] and all(A.code_of(f) in set(A.BOOKKEEPING) | set(A.RECORD_DIFFERENCE) for f in rep["failures"]), (
+        "the failures it repaired, which `main` reports as settled", rep["failures"])
+    assert "bookkeeping_left" not in rep
+    assert rep["regenerated"] == str(work / A.POLICY) and (pkg / A.POLICY).read_text() == before
+    fixed = json.loads((work / A.POLICY).read_text())
+    assert fixed["open"]["P.Sound"]["issue"] == "LEAN-186" and fixed["open"]["P.Sound"]["due"] == "2026-11-14"
+    assert "bookkeeping: P.Sound (@lean): listed under `open` on LEAN-186, due 2026-11-14 (open.unlisted)" in rep["bookkeeping"]
+    for name, now, replayed, broken in (
+            ("sorry", sounded(offenders=[{"name": "P.t", "axioms": ["sorryAx"]}]), (), lock),
+            ("native_decide", sounded(offenders=[{"name": "P.t", "axioms": ["Lean.ofReduceBool"]}]), (), lock),
+            ("replay", sounded(), (A.Failure("replay.rejected", None, "replay: the kernel rejected P.t"),), lock),
+            ("malformed", sounded(), (), lock | {"open_default_issue": 7})):
+        sub = tmp_path / name
+        sub.mkdir()
+        _, audit = bookkeeping_audit(sub, monkeypatch, broken, now, replayed)
+        rep, work = audit("2026-11-14")
+        assert rep["failures"] and "regenerated" not in rep and "bookkeeping" not in rep, (name, rep)
+        assert any(A.code_of(f) not in A.BOOKKEEPING for f in rep["failures"]), (name, rep["failures"])
+
+
+def test_the_lock_runs_flag_settles_a_repaired_package_and_lists_its_warnings(tmp_path, monkeypatch):
+    """`--regenerate --bookkeeping warn`: a package whose audit repaired its bookkeeping (`regenerated` beside `bookkeeping`)
+    passes, and audit.json lists each warning under its package's path for drive to ring; the flag goes only with
+    `--regenerate`, and the audit is given the due date seven days from the run's."""
+    a = tmp_path / "a"
+    a.mkdir()
+    (a / A.POLICY).write_text("{}")
+    given = []
+    unlisted = A.Failure("open.unlisted", "P.Sound", "open: P.Sound is unlisted")
+
+    def fake(pkg, out, *args, bookkeeping=None, **_):
+        given.append(bookkeeping)
+        rec = out / f"audit-{pkg.name}" / A.POLICY
+        rec.parent.mkdir(parents=True, exist_ok=True)
+        rec.write_text("{}")
+        warned = ["bookkeeping: P.Sound (@lean): listed under `open` on LEAN-186, due D (open.unlisted)"]
+        return {"package": str(pkg), "seconds": {}, "failures": [unlisted]} | (
+            {"regenerated": str(rec), "bookkeeping": warned} if bookkeeping else {})
+
+    monkeypatch.setattr(A, "audit", fake)
+    out = tmp_path / "out"
+    assert A.main([str(a), "--regenerate", "--out", str(out), "--repo", str(tmp_path)]) == 1 and given == [None]
+    assert "bookkeeping" not in json.loads((out / "audit.json").read_text())
+    assert A.main([str(a), "--regenerate", "--bookkeeping", "warn", "--out", str(out), "--repo", str(tmp_path)]) == 0
+    doc = json.loads((out / "audit.json").read_text())
+    assert doc["bookkeeping"] == ["a: bookkeeping: P.Sound (@lean): listed under `open` on LEAN-186, due D (open.unlisted)"]
+    assert doc["regenerated"] == {"a": str(out / "audit-a" / A.POLICY)} and doc["packages"][0]["settled_codes"] == [
+        "open.unlisted"]
+    assert len(given) == 2 and len(given[1]) == 10 and given[1] > "2026-01-01"
+    with pytest.raises(SystemExit):
+        A.main([str(a), "--bookkeeping", "warn"])
+
+
 def test_reports_list_their_failures_codes_beside_them(tmp_path, monkeypatch):
     """`report.json`'s and `audit.json`'s packages carry `failure_codes`, one per failure in its order, and the Lean check's
     `--regenerate` moves the codes with the failures it settles (`settled_codes`)."""
