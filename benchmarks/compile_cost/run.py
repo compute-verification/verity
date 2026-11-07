@@ -1,5 +1,6 @@
-"""What `predict.steps.compile_steps` costs on a class-G window: GLM-5.3 at TP8 on H200, one rank's request Programs, GP-01 over
-them and the batch rules, by phase, in wall seconds and resident memory.
+"""What `predict.steps.compile_steps` costs on a class-G window, with the one part of `Compiled.summary()` that walks every node
+(`transfer_gates`), as `advice_compile` runs them: GLM-5.3 at TP8 on H200, one rank's request Programs, GP-01 over them and the
+batch rules, by phase, in wall seconds and resident memory.
 
 A window is its requests' (arrival step, prompt length, max_tokens), greedy, scheduled as vLLM V1 schedules them (no preemption,
 no prefix cache) at class G's 2,048 tokens a step and 256-row prefill chunks. A request Program reads only φ and its schedule
@@ -227,6 +228,8 @@ def main() -> int:
         compiled = compile_steps(reg, advice, ingress)
         if prof:
             prof.disable()
+    with m.phase("transfer_gates"):
+        compiled.transfer_gates
     wall = time.perf_counter() - t0
     m.stop.set()
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
