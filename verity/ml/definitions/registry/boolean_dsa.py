@@ -6,15 +6,22 @@ logits' version 4, whose word view is `_v3`.
     DsaUe8m0Scale_v2, DsaUe8m0Quant_v2{N}
     DsaIndexerKRow_v2{D,ROPE,EPS}, DsaIndexerQHead_v2{D,ROPE,NH}, DsaIndexerQ_v2{H,D,ROPE}
     DsaMqaLogit_v4{H,D}, DsaMqaLogits_v4{N,H,D}          the H200's (`DsaMqaLogit_v3`); _v2 is the refuted `_v1` on bits
+    DsaMqaLogitsQ_v1{H,D}, DsaMqaLogitsKey_v1{H,D}      DsaMqaLogit_v4's circuit cut at what a row's keys share; no word view
     DsaTopKShortRow_v2{TOPK}                            traced at its TOPK: slot i's bits are i's, each one bit `len <= i`
 
 The callees are core's Boolean FP32 pieces (`verity.ml.circuits.ops.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
 `gemm.HopperE4m3QgmmaDot32_v2`; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is
 its word Definition on every word, NaN payloads included.  No table or lookup gate.
 
-Each composite is one traced circuit (`flat`): its body over those callees, compiled (`verity.ml.circuits.evaluation.bits.compile`) and its
-gates traced again (`trace.trace`), so a constant operand is folded and a value its calls share (the log2f polynomial's ``t``,
-the scale every quantized element divides by, a row's mean) is computed once (`Q_word`'s no-recompute rule).
+Each composite but `DsaMqaLogits_v4` is one traced circuit (`flat`): its body over those callees, compiled
+(`verity.ml.circuits.evaluation.bits.compile`) and its gates traced again (`trace.trace`), so a constant operand is folded and a
+value its calls share (the log2f polynomial's ``t``, the scale every quantized element divides by, a row's mean) is computed once
+(`Q_word`'s no-recompute rule).  `DsaMqaLogits_v4{N,H,D}` is the one whose description must not grow with N: `DsaMqaLogit_v4{H,D}`'s
+circuit, traced over (qw, k, ks) with qw q's bits then w's, is cut by what its gates read (`EW.shared_specialized`), so
+`DsaMqaLogitsQ_v1{H,D}` is the gates that read only qw and `DsaMqaLogitsKey_v1{H,D}` the rest, from qw, k, ks and that cut's frontier
+qwd.  `DsaMqaLogits_v4` calls the first once and batches the second over its N keys: key n's logit is `DsaMqaLogit_v4{H,D}`'s circuit
+on (q, w, k[n], ks[n]), its gates partitioned between the row's one Call and key n's member, so `DsaMqaLogits_v3{N,H,D}` is its word
+view key by key, and the gates that read only q and w are computed once a row, as one trace of the row would.
 """
 from __future__ import annotations
 
@@ -22,7 +29,7 @@ from collections.abc import Callable, Sequence
 
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.defs import CompositeDefinition, bind, composite
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.boolean import attention as BA
@@ -111,13 +118,9 @@ def replay(c: BS.Compiled, C, args: list) -> list:
     return [W[i] for i in c.ret_idx.tolist()]
 
 
-def flat(name: str, version: int, statics: Sequence[str], signature: Callable, body: Callable, word,
-         lifted: Sequence[str] = ()) -> CompositeDefinition:
-    """The Boolean Definition ``name_v{version}{statics}`` whose circuit is ``body`` (over Boolean Definitions, as `EW.on_bits`
-    takes it, its ``lifted`` statics Boolean Definitions read as their word views) compiled and traced as one circuit per binding
-    (`EW.specialized`), its word view ``word`` at the same statics."""
-    inner = EW.on_bits(name, version, statics, signature, body, word, register=False, lifted=lifted)
-
+def replayed(inner: CompositeDefinition, statics: Sequence[str], signature: Callable) -> Callable:
+    """The builder (`EW.specialized`'s) of ``inner``'s circuit at each binding: ``inner`` compiled and its gates replayed over the
+    leaves of the elements it is given, in order, whatever ``signature`` groups them into."""
     def build(S):
         c = BS.compile(bind(inner, **{k: getattr(S, k) for k in statics}))
         widths = BL.elements(signature(S)[1])
@@ -127,8 +130,17 @@ def flat(name: str, version: int, statics: Sequence[str], signature: Callable, b
             out = replay(c, C, [f for e in elements for f in e])
             return [out[e - w:e] for w, e in zip(widths, ends)]
         return run
+    return build
 
-    return EW.specialized(name, version, statics, build, signature, doc=body.__doc__ or "", word=inner.word)
+
+def flat(name: str, version: int, statics: Sequence[str], signature: Callable, body: Callable, word,
+         lifted: Sequence[str] = ()) -> CompositeDefinition:
+    """The Boolean Definition ``name_v{version}{statics}`` whose circuit is ``body`` (over Boolean Definitions, as `EW.on_bits`
+    takes it, its ``lifted`` statics Boolean Definitions read as their word views) compiled and traced as one circuit per binding
+    (`EW.specialized`), its word view ``word`` at the same statics."""
+    inner = EW.on_bits(name, version, statics, signature, body, word, register=False, lifted=lifted)
+    return EW.specialized(name, version, statics, replayed(inner, statics, signature), signature, doc=body.__doc__ or "",
+                          word=inner.word)
 
 
 def _scale(B, S, amax):
@@ -206,27 +218,50 @@ DsaMqaLogitsV2 = flat(
     _logits, D.DsaMqaLogits)
 
 
+def _logit_sig(S):
+    return ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.D, E4M3)), ("ks", F32)), F32)
+
+
 def _logit_contracted(B, S, q, w, k, ks):
     """`DsaMqaLogit_v3`'s body on bits."""
     return D.mqa_logit(bit_ops(B), S.H, S.D, q, w, k, ks, contracted=True)
 
 
-DsaMqaLogitV4 = flat(
-    "DsaMqaLogit", 4, ["H", "D"],
-    lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.D, E4M3)), ("ks", F32)), F32),
-    _logit_contracted, D.DsaMqaLogitV3)
+DsaMqaLogitV4 = flat("DsaMqaLogit", 4, ["H", "D"], _logit_sig, _logit_contracted, D.DsaMqaLogitV3)
 
 
-def _logits_contracted(B, S, q, w, k, ks):
-    """`DsaMqaLogits_v3`'s body on bits."""
-    return B.batch(bind(DsaMqaLogitV4, H=S.H, D=S.D), q, w, k, ks, axes=(None, None, 0, 0))
+def _qw(S) -> Array:
+    """q's bits, then w's: what a row's keys share."""
+    return Array(S.H * S.D * 8 + S.H * 32, BIT)
 
 
-DsaMqaLogitsV4 = flat(
-    "DsaMqaLogits", 4, ["N", "H", "D"],
-    lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.N, Array(S.D, E4M3))),
-                ("ks", Array(S.N, F32))), Array(S.N, F32)),
-    _logits_contracted, D.DsaMqaLogitsV3)
+def _key_sig(S):
+    return ((("qw", _qw(S)), ("k", Array(S.D, E4M3)), ("ks", F32)), F32)
+
+
+DsaMqaLogitsQ, DsaMqaLogitsKey = EW.shared_specialized(
+    ("DsaMqaLogitsQ", "DsaMqaLogitsKey"), 1, ("H", "D"),
+    replayed(EW.on_bits("DsaMqaLogit", 4, ["H", "D"], _logit_sig, _logit_contracted, D.DsaMqaLogitV3, register=False), ["H", "D"],
+             _key_sig), _key_sig, 0,
+    ("the gates of DsaMqaLogit_v4{H,D}'s circuit that read only q and w (qw: q's bits, then w's), once per row of keys",
+     "DsaMqaLogit_v4{H,D}'s circuit on one key, from qw's own gates (qwd)"))
+
+
+def _logits_sig(S):
+    return ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.N, Array(S.D, E4M3))),
+             ("ks", Array(S.N, F32))), Array(S.N, F32))
+
+
+@composite("DsaMqaLogits", 4, ["N", "H", "D"], _logits_sig, conformance="exact-model-tested")
+def DsaMqaLogitsV4(B, S, q, w, k, ks):
+    """`DsaMqaLogits_v3`'s body on bits: `DsaMqaLogitsQ_v1{H,D}` of qw (q's bits, then w's) once, then `DsaMqaLogitsKey_v1{H,D}` of
+    qw, key n's k and ks, and that frontier, batched over the N keys."""
+    qw = Coll(_qw(S), concat([q.refs, w.refs]))
+    qwd = B.call(bind(DsaMqaLogitsQ, H=S.H, D=S.D), qw)
+    return B.batch(bind(DsaMqaLogitsKey, H=S.H, D=S.D), qw, k, ks, qwd, axes=(None, 0, 0, None))
+
+
+DsaMqaLogitsV4.word = lambda b: bind(D.DsaMqaLogitsV3, N=b["N"], H=b["H"], D=b["D"])  # type: ignore[attr-defined]
 
 
 def _topk(S):
@@ -247,4 +282,5 @@ DsaTopKShortRowV2 = EW.specialized("DsaTopKShortRow", 2, ["TOPK"], _topk, lambda
                                    doc=_topk.__doc__, word=lambda b: bind(D.DsaTopKShortRow, TOPK=b["TOPK"]))
 
 BOOLEAN_DSA = [U32AndV2, I32SubV2, I32ToF32V2, F32CeilFtzV2, DsaUe8m0ScaleV2, DsaUe8m0QuantV2, DsaIndexerKRowV2, DsaIndexerQHeadV2,
-               DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitsV2, DsaMqaLogitV4, DsaMqaLogitsV4, DsaTopKShortRowV2]
+               DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitsV2, DsaMqaLogitV4, DsaMqaLogitsQ, DsaMqaLogitsKey, DsaMqaLogitsV4,
+               DsaTopKShortRowV2]
