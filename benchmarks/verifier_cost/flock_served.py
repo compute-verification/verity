@@ -1,10 +1,11 @@
-"""flock_served.py VALUES KIND WORK [N] [--layout MODE]: one kind of a saved served step (`one_stage/a11.py --save-values`'s
+"""flock_served.py VALUES KIND WORK [N] [--layout MODE [--structural]]: one kind of a saved served step (`one_stage/a11.py --save-values`'s
 directory, or its `.tar.gz`) staged as a11.py stages it: the kind's unit Definition as a flat statement (`CS.UnitStager` with
 no layout, the unit's whole netlist in the circuit file), bound to the population program and partition of that one kind,
 with the kind's first N saved units (a11's ``--per-kind``; all of them without N) under a11's salt key. So the files are
 a11's, byte for byte while the stager is unchanged, and an a11 session over them verifies against them. ``--layout MODE``
 (``iv/hybrid/4``): the same unit as a templated statement (`CS.UnitStager`'s ``layout``, statement
-``verity/flock-circuit/tmpl``), its unit written as the template `tmpl.emit` reads off the flat unit.
+``verity/flock-circuit/tmpl``), its unit written as the template `tmpl.emit` reads off the flat unit; with ``--structural``,
+as `struct_lower`'s template (calls, batch members and scan iterations kept as calls), the flat unit never built.
 
 Writes WORK/circuit.txt, WORK/stmt/{inst-N.bin,pub-N.bin}, WORK/partition.json, WORK/program.json and WORK/build.json (the
 unit's ANDs and nnz, k_log, the circuit's bytes and lines, the size of the Program descriptor the statement could be
@@ -47,6 +48,7 @@ def main() -> None:
     ap.add_argument("work", type=Path)
     ap.add_argument("n", type=int, nargs="?")
     ap.add_argument("--layout")
+    ap.add_argument("--structural", action="store_true")
     a = ap.parse_args()
     work = a.work
     work.mkdir(parents=True, exist_ok=True)
@@ -65,7 +67,7 @@ def main() -> None:
     bound = {"partition": P.digest(part), "program": part["program"]}
     with K.no_cyclic_gc():
         st = CS.UnitStager(defn, f"unit/a11-{K.family(defn.id)}", kv["rows_spec"], K.out_rows(len(kv["outs"])),
-                           circuit=work / "circuit.txt", bind=bound, layout=a.layout)
+                           circuit=work / "circuit.txt", bind=bound, layout=a.layout, structural=a.structural)
     t1 = time.time()
     salt_key = hashlib.sha256(f"verity/one-stage/a11/salts\0{defn.id}".encode()).digest()
     d = work / "stmt"
@@ -75,7 +77,7 @@ def main() -> None:
     with open(work / "circuit.txt", "rb") as f:
         lines = sum(chunk.count(b"\n") for chunk in iter(lambda: f.read(1 << 24), b""))
     desc = encode_program(program)
-    head = {"kind": a.kind, "definition": defn.id, "layout": a.layout, "n": n, "ands": got.get("ands"),
+    head = {"kind": a.kind, "definition": defn.id, "layout": a.layout, "structural": a.structural, "n": n, "ands": got.get("ands"),
             "unit_nnz": got.get("unit_nnz"), "k_log": st.meta.get("k_log"), "vus_per_block": st.meta.get("vus_per_block"),
             "pin": st.pin, "circuit_bytes": (work / "circuit.txt").stat().st_size, "circuit_lines": lines,
             "descriptor_bytes": codec.descriptor_size(desc), "build_seconds": round(t1 - t0, 1),

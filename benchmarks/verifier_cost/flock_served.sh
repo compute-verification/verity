@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
 # The Lean verifier on a served statement: flock_served.py stages one kind of a saved served step as one_stage/a11.py
-# stages it (flat), or with --layout MODE as a templated statement of the same unit. On a flat statement with a session
+# stages it (flat), or with --layout MODE as a templated statement of the same unit (with --structural, struct_lower's
+# template, the flat unit never built). On a flat statement with a session
 # sent, this times `flock-verify archive-put` and `flock-verify verify --zk --partition --program` on it as a0.lean_verify
 # runs them (under `perf record` where the node has perf). With --phases or --layout, flock-served (flock_served/Main.lean)
 # times verify's work on the statement before any session a step at a time, and on a flat one flock-read
 # (flock_read/Main.lean) its parse's phases. Run from a clone (the builds write the verifier's .lake):
 #   research run --as proofs --project verity --on auto --mem-gb 128 --timeout 7200 --source . --cwd clone \
 #     --send values.tar.gz [--send session.tar] -- bash benchmarks/verifier_cost/flock_served.sh KIND [N] [--phases] \
-#     [--layout MODE]
+#     [--layout MODE [--structural]]
 # N: the kind's first N saved units, as a11's --per-kind staged them (the session's population). $OUT gets build.json
 # (flock_served.py's), archive-put.{log,time}, verify.{log,time}, perf.txt and perf-samples.txt.gz, served.jsonl and
 # served.time, and on a flat statement with --phases phases.jsonl and read.time.
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
-kind=${1:?usage: flock_served.sh KIND [N] [--phases] [--layout MODE]}
+kind=${1:?usage: flock_served.sh KIND [N] [--phases] [--layout MODE [--structural]]}
 shift
-n= phases= layout=
+n= phases= layout= structural=
 while [ $# -gt 0 ]; do
   case $1 in
     --phases) phases=1 ;;
     --layout) layout=$2; shift ;;
+    --structural) structural=1 ;;
     *) n=$1 ;;
   esac
   shift
@@ -43,7 +45,7 @@ scratch() { # scratch NAME: NAME's Main.lean in a scratch Lake package against t
 }
 w=$S/w
 /usr/bin/time -v uv run python benchmarks/verifier_cost/flock_served.py "$values" "$kind" "$w" $n ${layout:+--layout "$layout"} \
-  > "$O/stage.out" 2> "$O/stage.err" || { tail -40 "$O/stage.err" >&2; exit 1; }
+  ${structural:+--structural} > "$O/stage.out" 2> "$O/stage.err" || { tail -40 "$O/stage.err" >&2; exit 1; }
 cp "$w/build.json" "$O/build.json"
 cat "$O/build.json"
 stmt=verity/flock-circuit${layout:+/tmpl}
