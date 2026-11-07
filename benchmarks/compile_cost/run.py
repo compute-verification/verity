@@ -171,16 +171,16 @@ class Meter:
 
 
 def instrument(m: Meter) -> None:
-    from verity.ml.circuits import defs
-    from verity_vllm.program import prune, workload
+    from verity.ml.circuits import codec, defs
+
+    # before the integration's modules bind it by name: each streamed digest is a phase, GP-01's (under compile_steps) and
+    # each request Program's (under request_program)
+    m.wrap(codec, "program_digest", "codec.program_digest")
     from verity_vllm.program.predict import batch, build, score, steps
 
     for owner, attrs in ((steps, ("plan_steps", "request_program", "dead_units")),
-                         (build, ("decoder", "drive", "finish_run", "with_checks", "dead_free_form", "Program", "encode_program",
-                                  "program_digest")),
-                         (prune, ("without_dead_units", "swapped", "narrowed")),
+                         (build, ("decoder", "drive", "finish_run", "with_checks", "dead_free_form", "Program")),
                          (score, ("request_component",)),
-                         (workload, ("decode_program", "_canonicalize", "WorkloadProgram")),
                          (batch, ("check_compiled", "separable", "workload_labels", "_solo"))):
         for a in attrs:
             m.wrap(owner, a, f"{owner.__name__.rsplit('.', 1)[-1]}.{a}")
