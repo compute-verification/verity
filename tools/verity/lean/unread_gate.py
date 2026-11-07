@@ -18,7 +18,11 @@ a PR (a ``Queue: #N`` merge), else its merge base with ``MAIN``, as `markdown_ca
 - Otherwise it runs the ratchet on both trees, ``LO``'s and ``HEAD``'s, from the facts the audits of `Security` and
   `Security/Proofs` wrote (`lean_audit.facts_file`, by each package's key): ``LO``'s, else ``MAIN``'s, as this machine keeps them
   (a node's passes, or this gate's cache) or as a recorded check published them in the evidence store: one of that commit
-  (a train's Lean check runs before it lands), else one of the `SCAN` newest. Each area whose wholly unread modules, or their declarations, ``HEAD`` takes above both its cap and ``LO``'s count
+  (a train's Lean check runs before it lands), else one of the `SCAN` newest. When neither's are (a Lean landing's are
+  published once its lock run lands, about an hour after it), it reads stale ones: those of the newest commit below ``LO``
+  along first parents, within `ANCESTORS`, that a recorded check ran at and whose facts are kept or published
+  (`ancestor_facts`). The verdict says so (``--json``: `facts_from`, `stale`) and isn't kept, and the Lean check's ratchet
+  after landing judges what such facts miss. Each area whose wholly unread modules, or their declarations, ``HEAD`` takes above both its cap and ``LO``'s count
   fails, naming each module that went, the mentions that kept it (each at its file and line at ``LO``) and the fix.
 
 It runs ``MAIN``'s `unread.py`, `lean_audit.py` and their helpers (`git archive`, `CODE`), so the change it judges can't change
@@ -26,7 +30,7 @@ how it is judged, and it builds nothing; it runs git under `LOCALE`, so the host
 of `next` again whenever `main` moves, so the gate keeps each verdict by the trees it judged and the code that judged it
 (`gate`), and what the Lean declares by the Lean's tree (`declared`). Before marking a branch, run ``python3 tools/verity/lean/unread_gate.py origin/main
 HEAD``. Exit 0 when it passes, 1 when it fails (``--json``: `{"failures": [{"why", "fix"}]}`, `KIND`), 2 when it can't judge: a
-git error, `MAIN`'s code doesn't load, or neither tree's facts are kept here or stored.
+git error, `MAIN`'s code doesn't load, or neither tree's facts nor an ancestor's are kept here or stored.
 """
 from __future__ import annotations
 
@@ -60,6 +64,12 @@ ANALYSIS_DIR = "Security/"
 CAPS = f"{LEAN_TOOL}unread-caps.json"
 #: how many of the newest recorded checks the store lookup lists the files of
 SCAN = 64
+#: how far below ``LO`` along first parents the gate looks for a commit whose Lean's facts it holds when it holds neither
+#: ``LO``'s nor ``MAIN``'s (a Lean landing's are published once its lock run lands, about an hour after it), and how many of
+#: the commits there a recorded check ran at it tries, the newest first: each costs an archive of the tree (about a second)
+ANCESTORS, ANCESTOR_CHECKS = 300, 8
+#: a recorded check that ended
+ENDED = "state IN ('done', 'failed', 'cancelled')"
 #: how many facts files this gate keeps in its cache, the last used first; how many `declared` sets; how many verdicts (drive
 #: judges each PR of `next` again on every landing)
 KEPT, DECLARED_KEPT, VERDICTS_KEPT = 16, 16, 1024
@@ -326,6 +336,35 @@ def plausible(lo: str, gone: dict[tuple[str, str], list[str]], cache: Path | Non
     return {s: fs for s, fs in gone.items() if could(*s)}
 
 
+_STORE: list = []
+
+
+def evidence_store():
+    """This machine's evidence store, its attempts refreshed once a run: every lookup of one gate's run reads it."""
+    if not _STORE:
+        from research.store.local import LocalStore
+        store = LocalStore()
+        if store.remote is not None:
+            store.refresh(attempts_only=True)
+        _STORE.append(store)
+    return _STORE[0]
+
+
+def checked_commits(line: list[str], recorded: str, store=None) -> tuple[list[str], list[str]]:
+    """The commits of ``line`` a recorded check (``recorded``, `common.RECORDED_CHECKS`) ran at, in ``line``'s order; what
+    kept the store from being read, if anything."""
+    if not line:
+        return [], []
+    try:
+        store = evidence_store() if store is None else store
+        rows = store.index.sql(f"SELECT DISTINCT source_commit FROM attempts WHERE {recorded} AND {ENDED} "
+                               f"AND source_commit IN ({', '.join('?' * len(line))})", tuple(line))
+    except Exception as e:  # noqa: BLE001  (no store here: the gate says it can't judge, naming why)
+        return [], [f"the evidence store can't be read here ({type(e).__name__}: {e})"]
+    ran = {c for (c,) in rows}
+    return [c for c in line if c in ran], []
+
+
 def stored(keys: dict[str, str], cache: Path, recorded: str, store=None, scan: int = SCAN,
            commits: tuple[str, ...] = ()) -> tuple[dict[str, Path], list[str]]:
     """({package: its facts file in ``cache``} for each of ``keys`` ({package: key}) that a recorded check (``recorded``,
@@ -335,12 +374,11 @@ def stored(keys: dict[str, str], cache: Path, recorded: str, store=None, scan: i
     want = {k: p for p, k in keys.items()}
     got: dict[str, Path] = {}
     errors: list[str] = []
-    ended = f"{recorded} AND state IN ('done', 'failed', 'cancelled')"
+    ended = f"{recorded} AND {ENDED}"
     try:
         if store is None:
-            from research.store.local import LocalStore
-            store = LocalStore()
-        if store.remote is not None:
+            store = evidence_store()
+        elif store.remote is not None:
             store.refresh(attempts_only=True)
         rows = [*(store.index.sql(f"SELECT id FROM attempts WHERE {ended} AND source_commit IN ({', '.join('?' * len(commits))}) "
                                   "ORDER BY start_utc DESC", commits) if commits else []),
@@ -371,10 +409,11 @@ def stored(keys: dict[str, str], cache: Path, recorded: str, store=None, scan: i
     return got, errors
 
 
-def facts_of(LA, rev: str, tree: Path, files: list[str], cache: Path, work: Path) -> tuple[dict[str, str], dict[str, Path], list[str]]:
+def facts_of(LA, rev: str, tree: Path, files: list[str], cache: Path, work: Path,
+             scan: int = SCAN) -> tuple[dict[str, str], dict[str, Path], list[str]]:
     """The keys of the packages the ratchet reads the facts of (`lean_audit.UNREAD_FACTS`) on ``tree`` (``rev``'s), and the
-    facts of each that this gate's cache, this machine's Lean check (a node's kept passes) or the store holds, and why the
-    store gave none."""
+    facts of each that this gate's cache, this machine's Lean check (a node's kept passes) or the store holds (a check of
+    ``rev``'s, or of the ``scan`` newest), and why the store gave none."""
     LA.ROOT = tree
     keys = {p: LA.key(p, files, LA.FLAGS) for p in LA.UNREAD_FACTS}
     got: dict[str, Path] = {}
@@ -386,29 +425,59 @@ def facts_of(LA, rev: str, tree: Path, files: list[str], cache: Path, work: Path
             got[p] = f
     errors: list[str] = []
     if missing := {p: k for p, k in keys.items() if p not in got}:
-        more, errors = stored(missing, cache, LA.COMMON.RECORDED_CHECKS, commits=(rev,))
+        more, errors = stored(missing, cache, LA.COMMON.RECORDED_CHECKS, scan=scan, commits=(rev,))
         got |= more
     return keys, got, errors
 
 
+def ancestor_facts(LA, lo: str, cache: Path, work: Path) -> tuple[str | None, dict[str, str], dict[str, Path], list[str]]:
+    """The newest of the commits within `ANCESTORS` below ``lo`` along first parents that a recorded check ran at (a commit
+    none ran at has no facts the store holds), of the `ANCESTOR_CHECKS` newest, whose Lean's facts are all kept here or
+    published: (it, its keys, its facts, why the others gave none); None for it when none is."""
+    line = git_text("rev-list", "--first-parent", f"--max-count={ANCESTORS + 1}", lo).split()[1:]
+    ran, errors = checked_commits(line, LA.COMMON.RECORDED_CHECKS)
+    for c in ran[:ANCESTOR_CHECKS]:
+        tree = work / "ancestor"
+        try:
+            keys, facts, more = facts_of(LA, c, archive(c, tree), tracked(c), cache, work, scan=0)
+        finally:
+            shutil.rmtree(tree, ignore_errors=True)
+        if len(facts) == len(keys):
+            return c, keys, facts, errors
+        errors.append(f"{c[:12]}: " + ("; ".join(more[:2]) or "not all of its Lean's facts are kept or published"))
+    if not ran and not errors:
+        errors.append(f"no recorded check ran at any of the {len(line)} commits below {lo[:12]} along first parents")
+    return None, {}, {}, errors
+
+
 def judge(U, LA, base: str, lo: str, top: str, gone: dict[tuple[str, str], list[str]], work: Path, cache: Path) -> dict:
-    """The ratchet on ``lo``'s and ``top``'s trees from the facts of ``lo``'s Lean, else of ``base``'s: {"failures", "notes",
-    "facts", "facts_of": the commit whose Lean's facts it read}."""
+    """The ratchet on ``lo``'s and ``top``'s trees from the facts of ``lo``'s Lean, else of ``base``'s, else of an ancestor's of
+    ``lo`` (`ancestor_facts`): {"failures", "notes", "facts", "facts_from": the commit whose Lean's facts it read, "stale":
+    whether that is the ancestor's}."""
     files_lo, files_top = tracked(lo), tracked(top)
     tree = archive(lo, work / "tree")
     keys, facts, errors = facts_of(LA, lo, tree, files_lo, cache, work)
-    on_main, notes = False, []
+    source, notes = lo, []
     if len(facts) < len(keys):
         keys_base, facts_base, errors_base = (keys, facts, []) if base == lo else \
             facts_of(LA, base, archive(base, work / "base"), tracked(base), cache, work)
-        if len(facts_base) < len(keys_base):
-            listed = "; ".join(f"{r[:12]}: " + ", ".join(f"{p} {k[:12]}" for p, k in ks.items())
-                               for r, ks in {lo: keys, base: keys_base}.items())
-            raise CantJudge(f"the facts of the Lean of {lo[:12]} and of `main` {base[:12]} aren't all kept here or published "
-                            f"by a recorded check of either or by the {SCAN} newest ({listed})"
-                            + (f": {'; '.join((errors + errors_base)[:3])}" if errors + errors_base else ""))
-        keys, facts, on_main = keys_base, facts_base, True
-        notes.append(f"judged on the facts of `main` {base[:12]}'s Lean: not all of {lo[:12]}'s are kept or stored")
+        if len(facts_base) == len(keys_base):
+            keys, facts, source = keys_base, facts_base, base
+            notes.append(f"judged on the facts of `main` {base[:12]}'s Lean: not all of {lo[:12]}'s are kept or stored")
+        else:
+            at, keys_at, facts_at, errors_at = ancestor_facts(LA, lo, cache, work)
+            if at is None:
+                listed = "; ".join(f"{r[:12]}: " + ", ".join(f"{p} {k[:12]}" for p, k in ks.items())
+                                   for r, ks in {lo: keys, base: keys_base}.items())
+                why = errors + errors_base + errors_at
+                raise CantJudge(f"the facts of the Lean of {lo[:12]} and of `main` {base[:12]} aren't all kept here or "
+                                f"published by a recorded check of either or by the {SCAN} newest ({listed}), nor those of "
+                                f"any of the {ANCESTOR_CHECKS} newest commits a recorded check ran at within {ANCESTORS} "
+                                f"below {lo[:12]} along first parents" + (f": {'; '.join(why[:3])}" if why else ""))
+            keys, facts, source = keys_at, facts_at, at
+            notes.append(f"judged on the stale facts of {at[:12]}'s Lean, below {lo[:12]} along first parents: neither "
+                         f"{lo[:12]}'s nor `main` {base[:12]}'s are kept or published yet (a Lean landing's are once its "
+                         "lock run lands), and the ratchet of the Lean check after landing judges what they miss")
     F = U.Facts(*(facts[p] for p in LA.UNREAD_FACTS))
     t_lo = U.Tree(tree, files_lo)
     rep_lo = U.analyse(t_lo, F, full=False)
@@ -444,20 +513,23 @@ def judge(U, LA, base: str, lo: str, top: str, gone: dict[tuple[str, str], list[
             "why": f"{area} would have {got['modules']} wholly unread modules ({got['declarations']} declarations), above its cap "
                    f"of {cap['modules']} ({cap['declarations']} declarations) in {CAPS} and up from {had['modules']} "
                    f"({had['declarations']}) at {lo[:12]}: " + "; ".join(each) + (f"; and {len(new) - 6} more" if len(new) > 6 else "")
-                   + (f" (on the facts of `main` {base[:12]}'s Lean)" if on_main else ""),
+                   + (f" (on the facts of `main` {base[:12]}'s Lean)" if source == base != lo else
+                      f" (on the stale facts of {source[:12]}'s Lean)" if source not in (lo, base) else ""),
             "fix": [f"delete {' and '.join(new[:3])}{' ...' if len(new) > 3 else ''} (its file, and its import where another "
                     "module imports it): nothing reads it",
                     "or seed it again: keep a mention of it outside Lean in code that reads it (its dotted name or its file's "
                     f"path in a {', '.join(U.MODULE_CITED_BY)} file, or the full name of a declaration of it in a "
                     f"{', '.join(U.CITED_BY)} file), or name it in a lock's text"]})
-    return {"failures": failures, "notes": notes, "facts": {p: k for p, k in keys.items()}, "facts_of": base if on_main else lo}
+    return {"failures": failures, "notes": notes, "facts": {p: k for p, k in keys.items()}, "facts_from": source,
+            "stale": source not in (lo, base)}
 
 
 def gate(base: str, top: str) -> dict:
     """The verdict on ``top``'s change: one kept for the same trees (``LO``'s and ``top``'s) by the same code (this script,
     ``base``'s `CODE_TREES`), and for one on `main`'s facts the same `main` Lean, else `judged` and kept (`verdicts/K.json`).
     Drive judges every PR of `next` again when `main` moves, and a PR whose members below are the same has the same trees.
-    A gate that can't judge raises, and keeps nothing."""
+    A verdict on stale facts isn't kept, so a later run reads the facts of the Lean it judges once they are published; a gate
+    that can't judge raises, and keeps nothing."""
     base, top = (git_text("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))
     lo = below(base, top)
     with tempfile.TemporaryDirectory(prefix="unread-gate-") as d:
@@ -470,7 +542,8 @@ def gate(base: str, top: str) -> dict:
             return was | {"base": base, "top": top, "below": lo, "notes": [
                 *was["notes"], f"kept: the verdict of {was['below'][:12]}..{was['top'][:12]}, the same trees, by the same code"]}
         doc = judged(base, lo, top, code, cache, Path(d))
-    keep(f, {"doc": doc, "main_lean": lean_tree(base) if doc.get("facts_of") not in (None, lo) else None}, VERDICTS_KEPT)
+    if not doc.get("stale"):
+        keep(f, {"doc": doc, "main_lean": lean_tree(base) if doc.get("facts_from") not in (None, lo) else None}, VERDICTS_KEPT)
     return doc
 
 
