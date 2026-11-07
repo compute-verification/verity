@@ -192,6 +192,8 @@ def register(program_dir: str | None, checkpoint_dir: str, key: bytes, blocks: M
     manifest = checkpoints_manifest or WR._default_manifest()
     ckargs = {"checkpoints_manifest": manifest, "model": model, "revision": revision}
     ck = WR.CheckpointIndex(checkpoint_dir, **ckargs, verify_shards=verify_shards)
+    if verify_shards and (bad := sorted(fn for fn, s in ck.pin["shards"].items() if s.get("pinned") is not True)):
+        raise ValueError(f"{checkpoint_dir}: {len(bad)} of {len(ck.shards)} shards not pinned by the checkpoints.json entry, e.g. {bad[0]}")
     entry = (manifest_entry(manifest, checkpoint_dir, model, revision) if manifest else None) or {}
     repo, rev = model or entry.get("repo"), revision or entry.get("revision")
     if not repo or not rev:

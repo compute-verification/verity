@@ -165,6 +165,14 @@ def test_layers_and_refusals(ckpt, regs):
         ET.committer(regs[0], KEY[:16])
 
 
+def test_a_shard_the_manifest_does_not_pin_refuses(ckpt, tmp_path):
+    man = json.loads(open(ckpt["man"]).read())
+    man["checkpoints"][0]["files"]["model.safetensors"]["sha256"] = "00" * 32
+    (tmp_path / "checkpoints.json").write_text(json.dumps(man))
+    with pytest.raises(ValueError, match="shards not pinned"):
+        ET.register(ckpt["progs"][0], ckpt["dir"], KEY, BLOCKS, checkpoints_manifest=str(tmp_path / "checkpoints.json"))
+
+
 def test_without_a_build_the_served_parameters_name_the_tables_and_pin_the_bytes(ckpt, tmp_path):
     """From a capture's ``params.json`` (vLLM's names, shapes, dtypes and SHA-512s) in place of a rank Program, the tables are
     registered under the served names at the root the committer commits for them, and a weight whose served SHA-512 is not the
