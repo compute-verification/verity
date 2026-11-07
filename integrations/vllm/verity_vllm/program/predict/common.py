@@ -252,6 +252,20 @@ def launch_batch(phi, LP: int, T: int) -> list | None:
     return batch
 
 
+def in_launch(model, batch: list | None, model_class: str, chunks: tuple[int, ...] = (), T: int = 0, note: str = "") -> None:
+    """`model`'s calls run in `batch` (`_Launch.with_batch`) where its request has one; `Unexpressible` for a decoder whose kernel
+    choices read its own rows only (`reads_launch`), or for prefill `chunks` that aren't one a step of `batch` before its T decodes."""
+    if batch is not None:
+        if not getattr(model, "reads_launch", False):
+            raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance{note}), whose kernel "
+                                f"choices the {model_class} decoder reads at its own rows")
+        model.launch = model.launch.with_batch(batch)
+    if chunks and (batch is None or len(batch) != len(chunks) + int(T)):
+        raise Unexpressible(f"vocabulary cannot express: a prefill in {len(chunks)} chunks " + (
+            f"at a launch batch of {len(batch)} steps, not one a chunk and one a decode ({len(chunks) + int(T)})" if batch is not None else
+            "without a launch batch (on a batch-invariant target a chunked prefill is the request wrapper's Program)"))
+
+
 def graph_capture_sizes(phi) -> tuple[int, ...]:
     """The capture sizes of φ's breakable CUDA graphs (`TargetProfile.graph_capture_sizes`); () for an execution without them."""
     return phi.target_profile().graph_capture_sizes()
