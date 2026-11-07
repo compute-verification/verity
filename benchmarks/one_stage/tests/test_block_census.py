@@ -40,6 +40,11 @@ def test_a_unit_fits_or_says_why_not(e, why):
     assert B.misfit(e) == why
 
 
+def test_a_unit_holding_the_top_p_keep_word_names_the_word_gate_form():
+    why = B.misfit(unit("GumbelTopPTokenSelectSharedGreedy_v1{V=154880}", unpieced=["TopPMaskWordx154880_v1"]))
+    assert why.startswith("C-Flock has no piece for TopPMaskWordx154880_v1: ") and "TopPKeepWord_v2{V,S}" in why
+
+
 def test_a_parts_rows_slots_are_its_parts_each_whole_then_finer():
     q, g, g1 = (unit(s) for s in ("Fp8GroupQuantUe8m0_v1{K=8}", "ScaledMmFp8BlockSharedScale_v1{K=8,N=4}",
                                   "ScaledMmFp8BlockSharedScale_v1{K=8,N=1}"))

@@ -11,7 +11,7 @@ its word).
     InductorSiluMulElem_v2, InductorSiluMul_v2{I}, InductorRoPEHead_v2{D}, InductorRoPE_v2{NHEADS,D}
     InductorQKNormRoPEHead_v2{D,EPS,XBLOCK,R0_BLOCK,NUM_WARPS}, InductorQKNormRoPE_v2{NHEADS,D,EPS,XBLOCK,R0_BLOCK,NUM_WARPS}
     Fa3AttentionHeadSplit_v2{T,NS,D,BN,DOT,INV,MASKED_FROM}, Fa3AttentionSplit_v2{T,NS,NH,KVH,D,BN,DOT,INV,MASKED_FROM}
-    RouterArgmaxStep_v2, MoeRouterTopK_v2{E,TOPK,VPT}, MoeRouterTopKNorm_v2{E,TOPK,VPT}
+    ArgmaxStepF32_v2, MoeRouterTopK_v2{E,TOPK,VPT}, MoeRouterTopKNorm_v2{E,TOPK,VPT}
     MoeExpertRow_v2{E,K}, MoeExpertCoordinate_v3{E,K,DOT}, MoeExpertCoordinateW_v3{E,K,DOT}
     MoeExpertGemm_v3{E,K,N,DOT}, MoeExpertGemmW_v3{E,K,N,DOT}
     MoeAlignRanks_v2{E,P,BM}, MoeAlignBlocks_v2{P,BM} and the align steps they Call, each _v2
@@ -25,15 +25,15 @@ word body and its callees' Boolean versions fix it; circuit-check pins each one'
 from __future__ import annotations
 
 from verity.ml.definitions.boolean import sigma_lift
-from verity.ml.definitions.registry import b1, b1_tp2, inductor as I, marlin_moe as MM, mhc, moe, tp_allreduce as TA
+from verity.ml.definitions.registry import b1, b1_tp2, inductor as I, marlin_moe as MM, mhc, moe, ref_prims as R, tp_allreduce as TA
 
-__all__ = ["AllGather", "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "DotBf16", "EmbeddingShard", "Fa3AttentionHeadSplit",
-           "Fa3AttentionSplit", "Gemm", "GemmCoordinate", "InductorAdd2RMSNorm", "InductorAdd2RMSNormFinal", "InductorAddRMSNorm",
-           "InductorQKNormRoPE", "InductorQKNormRoPEHead", "InductorRMSNorm", "InductorRoPE", "InductorRoPEHead",
+__all__ = ["AllGather", "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "ArgmaxStepF32", "DotBf16", "EmbeddingShard",
+           "Fa3AttentionHeadSplit", "Fa3AttentionSplit", "Gemm", "GemmCoordinate", "InductorAdd2RMSNorm", "InductorAdd2RMSNormFinal",
+           "InductorAddRMSNorm", "InductorQKNormRoPE", "InductorQKNormRoPEHead", "InductorRMSNorm", "InductorRoPE", "InductorRoPEHead",
            "InductorSiluMul", "InductorSiluMulElem", "MhcFusedPostPre", "MoeAlignBefore", "MoeAlignBelow", "MoeAlignBlockOf",
            "MoeAlignBlocks", "MoeAlignPar", "MoeAlignRank", "MoeAlignRankStart", "MoeAlignRanks", "MoeAlignStart",
            "MoeExpertCoordinate", "MoeExpertCoordinateW", "MoeExpertGemm", "MoeExpertGemmW", "MoeExpertRow", "MoeRouterTopK",
-           "MoeRouterTopKNorm", "ResidualAdd", "RmsNormMnnvl", "RouterArgmaxStep"]
+           "MoeRouterTopKNorm", "ResidualAdd", "RmsNormMnnvl"]
 
 ResidualAdd = sigma_lift(b1.ResidualAdd, 2)
 DotBf16 = sigma_lift(b1.DotBf16, 4)
@@ -59,7 +59,7 @@ InductorQKNormRoPE = sigma_lift(I.InductorQKNormRoPE, 2)
 Fa3AttentionHeadSplit = sigma_lift(I.Fa3AttentionHeadSplit, 2)
 Fa3AttentionSplit = sigma_lift(I.Fa3AttentionSplit, 2)
 
-RouterArgmaxStep = sigma_lift(moe.RouterArgmaxStep, 2)
+ArgmaxStepF32 = sigma_lift(R.ArgmaxStepF32, 2)
 MoeRouterTopK = sigma_lift(moe.MoeRouterTopK, 2)
 MoeRouterTopKNorm = sigma_lift(moe.MoeRouterTopKNorm, 2)
 MoeExpertRow = sigma_lift(moe.MoeExpertRow, 2)
