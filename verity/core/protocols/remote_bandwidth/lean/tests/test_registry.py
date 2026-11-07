@@ -1,7 +1,7 @@
 """`audit.Registry` held to the verifier's registry in Lean (`RemoteAudit.Registry`, the definition, served by
 `remote-audit-difftest`): at most one live registration a node, a second refused and counted, sessions over the live
 one as its k-th, their events, `close` counting each session as it stands, R (`drawn`), and `registry/v0` written and
-read back. Drawn cases are calls over a few nodes from an empty registry or one read back, with now and then a field
+read back. Sampled cases are calls over a few nodes from an empty registry or one read back, with now and then a field
 either side refuses; recorded ones run a recorded session (`ra_cases.SCENARIOS`) through the registry, so that `close`
 counts the outcome the definition gives it."""
 
@@ -71,8 +71,8 @@ def event_op(draw, n: str) -> dict:
 
 
 def session_op(draw, index: int | None) -> dict:
-    """A session over the registration drawn `index`-th in the case, or over one given in full that no registry drew;
-    now and then its two windows drawn on one openings coin (`groups_per_coin` 2)."""
+    """A session over the registration sampled `index`-th in the case, or over one given in full that no registry drew;
+    now and then its two windows sampled on one openings coin (`groups_per_coin` 2)."""
     windows = draw(st.integers(1, 2))
     pace = {"k": draw(st.integers(1, 2)), "window_ns": 5} if windows == 2 and rare(draw, 4) else None
     g = 2 if windows == 2 and rare(draw, 3) else 1
@@ -137,7 +137,7 @@ def script(draw, n: str, k: int) -> list[dict]:
 def registry_inputs(draw) -> dict:
     """Calls over the nodes: most often a registration with a session over it and a few of its events, else one call
     alone. The strategy keeps which nodes are live, so that a session names a registration sampled in the case by its
-    place among those drawn."""
+    place among those sampled."""
     registry = read_back(draw) if draw(st.integers(0, 2)) == 0 else None
     live = {n: (None, 0) for n in (registry or {}).get("live", ())}
     ops, drawn = [], []
@@ -175,8 +175,8 @@ def test_registry(server) -> None:
 
 
 def recorded(name: str, cut: int | None = None) -> dict:
-    """Scenario `name`'s session, its first `cut` events, run through the registry: its registration drawn as the
-    scenario's store was (`ra_cases.SOURCE`, a zero nonce), a second refused, the first closed, and a third drawn."""
+    """Scenario `name`'s session, its first `cut` events, run through the registry: its registration sampled as the
+    scenario's store was (`ra_cases.SOURCE`, a zero nonce), a second refused, the first closed, and a third sampled."""
     case, _ = M.recorded(name)
     reg = case["registration"]
     register = {"op": "register", "nonce": ZERO} | {k: reg[k] for k in (

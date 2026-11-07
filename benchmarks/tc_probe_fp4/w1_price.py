@@ -42,7 +42,7 @@ labelled ``locked-F`` only with ``--locked-mhz F`` and every sample and every la
 2,100 MHz reads 2,092), else ``unlocked``; a container can't lock clocks, so RunPod runs are ``unlocked``.
 
 Honest notes.  Operands are uniform random codes (every E2M1 code, finite E4M3 bytes, UE4M3 scales 0x30..0x47, UE8M0 124..131),
-a GEMM's data rather than zeros; an attacker's zeros could draw less power, which is not measured here.  The K=32 rows take
+a GEMM's data rather than zeros; an attacker's zeros could sample less power, which is not measured here.  The K=32 rows take
 E2M1 in 8-bit containers, so a GEMM that stores packed nibbles pays an unpack this instruction-level rate leaves out.  The
 throughput is an upper bound on any kernel built from the instruction, not a GEMM rate.
 """

@@ -459,7 +459,7 @@ def _acc_words(rng: np.random.Generator, n: int, regime: np.ndarray) -> np.ndarr
     return out.astype(np.uint32)
 
 
-#: The special operand words `sample_tc` draws, per 8-bit format: zeros, NaNs, the largest finite, the least subnormal (and E5M2's infinities).
+#: The special operand words `sample_tc` samples, per 8-bit format: zeros, NaNs, the largest finite, the least subnormal (and E5M2's infinities).
 _FP8_SPECIALS = {"e4m3": (0x00, 0x80, 0x7F, 0xFF, 0x7E, 0x01), "e5m2": (0x00, 0x80, 0x7C, 0xFC, 0x7D, 0xFF, 0x7B, 0x01)}
 
 

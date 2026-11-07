@@ -13,7 +13,7 @@ windows of window `t`'s own). Three events carry the failure:
 
 * PoUW's wrong windows hold more than `ε' C`: `CertificateSlack` at the period's law, each window's marginal from its
   per-window bound, at most `p/ε'`;
-* some window draws a faulty block and detects none: the union over the windows (`prob_exists_le`), at most `∑_t ks t`;
+* some window samples a faulty block and detects none: the union over the windows (`prob_exists_le`), at most `∑_t ks t`;
 * no window does, and some identity has more than `K` escaped blocks: `escape_tail`, over the identities, at most
   `J (1 − q)^(K+1)`. Up to its first detection an identity's windows each miss all their faulty blocks, so the escaped
   blocks are the faulty blocks of windows that missed them; counted at a weight fixed before each window's coins, that
@@ -24,7 +24,7 @@ Outside them, `VerdictLag` and the escape share bound the faulty blocks' skipped
 sources.
 
 The witnesses, `DampenerRemotePeriod_honest` and `DampenerRemotePeriod_nontrivial`, are at constructed instances of one
-window with no faulty proof block and no declared run, where each event holds on every run or on none. The `example` at
+window with no incorrect proof block and no declared run, where each event holds on every run or on none. The `example` at
 the end applies `DampenerRemotePeriod` to the nontrivial lemma's conjuncts, so they are its premises as it states them.
 -/
 
@@ -155,7 +155,7 @@ theorem truncated_sum_ge {T : ℕ} (x : Fin T → ℕ) (K : ℕ) (hx : K + 1 ≤
       _ ≤ _ := Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
 
 /-- **The escape tail, one identity.** Under `DampenerRemotePeriod`'s sampled-proofs legs, the runs where no window
-draws a faulty block without detecting one, and identity `j` has more than `K` escaped blocks (faulty, and accepted
+samples a faulty block without detecting one, and identity `j` has more than `K` escaped blocks (faulty, and accepted
 before its first detection), have probability at most `(1 − q)^(K+1)`. Up to its first detection, the identity's windows
 each miss all their faulty blocks, which, at a weight fixed before each window's coins (its faulty blocks while the
 identity is undetected and has at most `K` escaped so far), is `prCoin_forall_sum_le_pow`. -/
@@ -335,7 +335,7 @@ end Coords
 
 /-- **The remote overhead bound over a monitoring period.** Three events of the period's coins carry the failure:
 PoUW's wrong windows hold more than `ε' C` (`CertificateSlack` on the run's law, each window's marginal from its
-per-window bound, `prob_le_of_update`: at most `p/ε'`); some window draws a faulty block and detects none (the union
+per-window bound, `prob_le_of_update`: at most `p/ε'`); some window samples a faulty block and detects none (the union
 over windows: at most `∑_t ks t`); or no window does and some identity has more than `K` escaped blocks
 (`escape_tail`, over the identities: at most `J (1 − q)^(K+1)`). Outside them the wrong windows hold at most `ε' C`,
 each identity's escaped blocks skip at most `K B`, so `VerdictLag` puts the faulty blocks' skipped work at most
@@ -352,7 +352,7 @@ theorem DampenerRemotePeriod : Guarantees.DampenerRemotePeriod := by
   obtain ⟨hthr, hbound⟩ := hRT
   have hrate : (0 : ℝ) ≤ k / c := div_nonneg hk (Nat.cast_nonneg c)
   set μ := PMF.uniformOfFintype ((t : Fin T) → Ω t)
-  -- window `t` draws a faulty block and detects none
+  -- window `t` samples a faulty block and detects none
   let Bad : Fin T → ((t : Fin T) → Ω t) → Prop := fun t ξ =>
     (∃ b ∈ bad ξ, win b = t ∧ b ∈ drawn ξ) ∧ ∀ b ∈ bad ξ, win b = t → b ∉ detected ξ
   -- no window does, and identity `j` has more than `K` escaped blocks
@@ -448,7 +448,7 @@ theorem prob_uniform_le_one {α : Type} [Fintype α] [Nonempty α] (E : α → P
 
 /-- **`DampenerRemotePeriod`'s premises hold where its conclusion says something** (`DampenerRemotePeriod_honest`): one
 window run by one identity, its certificate right (`wrong` empty) at capacity `C = 2`, all of the monitored compute
-certified (`W_cert = 2`), no faulty proof block and no declared run, and the run's one counted multiplication on its
+certified (`W_cert = 2`), no incorrect proof block and no declared run, and the run's one counted multiplication on its
 unmonitored compute `U = 2` at `MFU₀ = 1/2`, `κ = 2`, at `p = 3 · 2⁻⁴⁰`, `ε' = 2p/10⁻⁶`, `q = 1` and `K = 0`. Then
 `δ = 1/(2 · 10⁶)`, and the overhead bound on the hardware multiple is `1/(1/2 + ε' + 1/100)`, in `(1, 2]`, the run's
 own multiple being 2. -/

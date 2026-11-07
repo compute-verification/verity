@@ -9,9 +9,9 @@ import Mathlib.Basic.ENNReal.Real
 import Proofs.Flock.Soundness.Game.Basic
 
 /-!
-# C-Flock's game library is Core's: `Union`
+# Flock's game library is Core's: `Union`
 
-Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Union`, so C-Flock's soundness proofs
+Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Union`, so Flock's soundness proofs
 and every other protocol's read one game library.
 -/
 

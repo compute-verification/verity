@@ -1,10 +1,10 @@
-# Named premises the training classes cite (rho/classes.py, premise_status): where each stands and up to what block
-# size it is credible. A premise has its `standing` for blocks of at most `credible_bits` novel bits
+# Assumptions the training classes cite (rho/classes.py, premise_status): where each stands and up to what block
+# size it is credible. An assumption has its `standing` for blocks of at most `credible_bits` novel bits
 # and its `beyond` above. Standings: supported (measured evidence for it), assumed (stated, no evidence either way),
 # contested (evidence against it at the scale, or a construction it hasn't answered), refuted (a measured execution
 # breaks it). `lean` is the cited name: a Lean assumption from a lock, or a `draft:` id of E1's premises.
 #
-# The weight premises' scale is one optimizer step's data at Kimi K2's batch, 6.7e7 tokens x 17 bits: a block that reads
+# The weight assumptions' scale is one optimizer step's data at Kimi K2's batch, 6.7e7 tokens x 17 bits: a block that reads
 # it replays the step from the registered weights (E1, Lemma 9 and precondition P0), so they fail for the first
 # min(k/u, C/F) steps after each registration.
 

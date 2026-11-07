@@ -1071,12 +1071,12 @@ theorem printedRun_length (s : RunSetup) (log : List Release) : (printedRun s lo
 def pubOf (θ : ByteArray) : ByteArray := ((Binding.keyOf θ).map (·.pub)).getD .empty
 
 /-- **A deployment of the device**, at each of the parameters `θ`, from what a play fixed: the prover's request `a`,
-the device's log, the bytes `b` the prover's close left to the device and its draw `ρ` at the close. `run` is the
+the device's log, the bytes `b` the prover's close left to the device and its sample `ρ` at the close. `run` is the
 run's setup but for its key, its layout and its ledger lines, which `setupAt` sets: its session's id and host, its
 coins and salts by position where the play released none, how it ended and each line's time. `opens` are the auditor's
 ledger lines it signs before any coin, which the request fixes (the ledger's reserve and open, and the period's open),
 and `closes` the ones it signs at the close (the ledger's end and the period's close), at most `ledgerLines θ` of
-them in a play (`ledger_le`). `draws` are the bits it draws at the close, and `sign θ i m` its signature on `m` as its
+them in a play (`ledger_le`). `draws` are the bits it samples at the close, and `sign θ i m` its signature on `m` as its
 `i`-th in the play.
 
 A deployment opens only the auditor's live window: the window its ledger's open names (`OpensOn`'s `w`) is the one the

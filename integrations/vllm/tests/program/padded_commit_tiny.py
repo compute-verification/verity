@@ -17,7 +17,7 @@ the evaluator IS the execution; the Match column is n/a by construction), and th
      derived entry; |leaves| == |R(P,Q)|) + `fold_levels` to ONE root, with ONE binding map (leaf -> identity) whose digest is on the record;
   4. the s6 five quantities as FIELDS: total_population / active_population / inactive_population (a VU is inactive iff every word of its
      out(V) is bot by enablement) / total_samples / samples_on_active / samples_on_inactive;
-  5. sampled picks (a verifier challenge -> seed = sha256(challenge || root); the SAME draw count on the padded Program and on its
+  5. sampled picks (a verifier challenge -> seed = sha256(challenge || root); the SAME sample count on the padded Program and on its
      active-reference twin) with ORIGINAL-ROOT OPENINGS of every out word of the picked VU verified against the one root (`fold_path`), and
      REPLAY BY RELATION: the VU's gates re-evaluated from its committed in(V) words by the registered lifted relations and compared bit for
      bit with the committed out(V) words -- for an inactive pick that is `enable = 0 -> bot`, checked, never assumed;

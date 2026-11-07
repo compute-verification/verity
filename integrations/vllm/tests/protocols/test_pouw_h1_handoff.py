@@ -128,7 +128,7 @@ def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_r
 @pytest.mark.slow
 def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --close-from` on a handed-off window and the record its serving phase left: the window closed,
-    measured and released on the challenge phase's stream, its draw's challenge phase opened through ``--gate``, and the
+    measured and released on the challenge phase's stream, its sample's challenge phase opened through ``--gate``, and the
     record (``pouw_h1_gpu.json``) completed with its commitment, the challenge phase closed and each call's A table under
     its round's root."""
     from tests.protocols import pouw_h1_gpu as GPU
