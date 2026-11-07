@@ -1066,6 +1066,10 @@
   "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
    "honest": ["Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound_honest"],
    "nontrivial": "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_nontrivial"
   }
  },
  "unwitnessed": {
@@ -7837,6 +7841,15 @@
    },
    "type_hash": "39ca6de2fab8b7a231cadcdf11fa2885a02274d917f6c45308920aa4068b8853"
   },
+  "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
    "owner": "@proofs"
   },
@@ -10470,6 +10483,10 @@
    },
    "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
     "function": "SampledProofs.FactorUpper.lnFactorUpperPatterns",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound": {
+    "function": "SampledProofs.FactorUpper.lnFactorUpperCapped",
     "outcome": "accept"
    }
   },

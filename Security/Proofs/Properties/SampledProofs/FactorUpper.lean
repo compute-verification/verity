@@ -1,17 +1,18 @@
 module
 
-public import Proofs.Properties.SampledProofs.FactorUpper.Patterns
+public import Proofs.Properties.SampledProofs.FactorUpper.Capped
 
 /-!
 # Rankin's factor is below `factorUpper`
 
-`Properties.SampledProofs.FactorUpperSound` (the sets' form, `FactorUpper/Sets.lean`) and `FactorUpperPatternsSound`
-(the patterns' form over requests, `FactorUpper/Patterns.lean`), on the arithmetic of `FactorUpper/Bounds.lean`.
+`Properties.SampledProofs.FactorUpperSound` (the sets' form, `FactorUpper/Sets.lean`), `FactorUpperPatternsSound`
+(the patterns' form over requests, `FactorUpper/Patterns.lean`) and `FactorUpperCappedSound` (each set's bits capped,
+`FactorUpper/Capped.lean`), on the arithmetic of `FactorUpper/Bounds.lean`.
 
 Each honest witness (`_honest`) concludes its guarantee's premises at a replay block of two one-bit proof blocks
 (`pairStmt`, `pairDesign`), where the bound returns, and the kernel's evaluation returns the bound at a deployed-shaped
 replay block too. Each conclusion fails for a bound that returns `−1` whatever it reads: at a replay block with no proof
-blocks both factors are `1` (`_nontrivial`).
+blocks each factor is `1` (`_nontrivial`).
 -/
 
 @[expose] public section
@@ -26,6 +27,9 @@ theorem factorUpperSound : FactorUpperSound := FactorUpperProof.factorUpper_soun
 
 /-- **`lnFactorUpperPatterns` is above Rankin's patterns' factor.** -/
 theorem factorUpperPatternsSound : FactorUpperPatternsSound := FactorUpperProof.factorUpperPatterns_sound
+
+/-- **`lnFactorUpperCapped` is above Rankin's capped factor.** -/
+theorem factorUpperCappedSound : FactorUpperCappedSound := FactorUpperProof.factorUpperCapped_sound
 
 section Witnesses
 
@@ -56,6 +60,10 @@ theorem emptyPart_rankinFactorPatterns (q θ : ℝ) (ρ : ℕ) :
   rw [iSup_one_of_mem (x := ∅) ?_]
   · simp [lightOf, lightBits]
   · simp [hE]
+
+theorem emptyPart_rankinFactorCapped (S : ℕ) (q θ : ℝ) (ρ : ℕ) :
+    rankinFactorCapped emptyStmt emptyPart emptyDesign S q θ ρ = 1 := by
+  simp [rankinFactorCapped, blocksIn, emptyPart, Partition.strata, Design.Two.passes, Design.Two.esc, bitsOf]
 
 theorem exp_neg_one_lt_one : Real.exp (-1) < 1 :=
   calc Real.exp (-1) < Real.exp 0 := Real.exp_lt_exp.2 (by norm_num)
@@ -137,6 +145,21 @@ no proof blocks is `1`. -/
 theorem factorUpperPatternsSound_nontrivial :
     ¬ rankinFactorPatterns emptyStmt emptyPart emptyDesign (fun _ => ()) (1 / 2) 1 0 ≤ Real.exp (-1) := by
   rw [emptyPart_rankinFactorPatterns, not_le]
+  exact exp_neg_one_lt_one
+
+/-- **`FactorUpperCappedSound`'s honest witness**: `pairCells` covers `pairDesign`'s replay block, and the bound returns
+there with each set's bits capped at 1, below its 2, and at the deployed-shaped replay block capped at 64, below its
+1,024. -/
+theorem factorUpperCappedSound_honest :
+    Covers pairStmt pairPart pairDesign 0 pairCells ∧ (lnFactorUpperCapped pairCells 1 honestParams).isSome = true ∧
+      (lnFactorUpperCapped honestCells 64 honestParams).isSome = true :=
+  ⟨pair_covers, by decide +kernel, by decide +kernel⟩
+
+/-- **`FactorUpperCappedSound`'s conclusion fails** for a bound of `−1`: the capped factor of a replay block with no
+proof blocks is `1`. -/
+theorem factorUpperCappedSound_nontrivial :
+    ¬ rankinFactorCapped emptyStmt emptyPart emptyDesign 64 (1 / 2) 1 0 ≤ Real.exp (-1) := by
+  rw [emptyPart_rankinFactorCapped, not_le]
   exact exp_neg_one_lt_one
 
 end Witnesses
