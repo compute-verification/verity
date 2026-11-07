@@ -3,11 +3,11 @@ working draft's §8).
 
 An envelope `𝒜_a` narrows the physical model's class `𝒜_phys` if its verifier accepts, except with probability `δ_a`
 summed over serving blocks. Each one here carries its parameters, the slack it leaves (shares of capacity by route, the
-uncertified gates `U` no inference block constrains) and its `delta`, split into the coins' draws and the
+uncertified gates `U` no inference block constrains) and its `delta`, split into the coins' samples and the
 cryptography's advantage:
 
 * `Pouw`: the certified declared gates were evaluated, `|A[X,J] ∩ W_cert| ≥ (1 − ε_W)|W_cert|`. Its slack is `undecl`
-  (monitored capacity running no certified registered work: the host CPUs, the GPUs outside the floor credit `residual`
+  (monitored capacity running no gate of `W_cert`: the host CPUs, the GPUs outside the floor credit `residual`
   and the clock above the credited one, together the audited residual `r̂`) and `skip` (its deficit `ε_W` and the
   certificate slack `ε'`).
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
@@ -119,7 +119,7 @@ class Pouw:
     #: `ε'`: the share of capacity whose certificates may be wrong (Markov over the windows)
     eps_agg: float
     #: a window's certificate is wrong with probability `p = δ_s + δ_bind + δ_ks` (`PouwSound`): `δ_s` from the coins'
-    #: draw, `δ_bind + δ_ks` from the cryptography (commitment binding, the proof system's knowledge soundness)
+    #: sample, `δ_bind + δ_ks` from the cryptography (commitment binding, the proof system's knowledge soundness)
     window_delta_coin: float = 0.0
     window_delta_crypto: float = 0.0
     #: the GPUs' capacity above the clock PoUW credits, as a share
@@ -156,8 +156,8 @@ class Detection:
     identities: float
     lag_s: float
     sampled: bool = False
-    #: the sampled proofs' compute share, proving cost per unit of step work, replay cost per drawn step, work and
-    #: output bits per step, failure probability `δ`, luck factor, and steps drawn at a floor of one
+    #: the sampled proofs' compute share, proving cost per unit of step work, replay cost per sampled step, work and
+    #: output bits per step, failure probability `δ`, luck factor, and steps sampled at a floor of one
     proof_share: float = math.nan
     overhead: float = math.nan
     replay: float = math.nan
@@ -312,7 +312,7 @@ class Certifier:
     `Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`; the egress at the same requests). The
     bound is stated per link-window, so the rate is too: this package never cites less than the bound states. This is
     its honest-δ form, at a δ where only the empty incorrect set is possible. An incorrect ingress unit adds
-    `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is drawn. The
+    `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is sampled. The
     bound is a draft until Lean proves it, so `declared_x` keeps the line rate as the ingress's upper end: the ingress
     is `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is below the prompt rate of
     the serving credited at the location can't feed that serving, so `declared` is off by default until a deployment
@@ -388,7 +388,7 @@ class Certifier:
     @property
     def faulty_unit_bits(self) -> float:
         """Bits an incorrect ingress unit adds, which the honest-δ form excludes and which are 0 when every ingress unit is
-        drawn: its bucket's whole row, `8 B lanes r`, and two requests more a lane, its forged state's own and one
+        sampled: its bucket's whole row, `8 B lanes r`, and two requests more a lane, its forged state's own and one
         admission its reset allows (`faultyIngressBits`)."""
         return 8 * self.cell_bytes * self.lanes * self.cell_rate + 2 * self.lanes * self.request_in
 
@@ -537,7 +537,7 @@ class Onsite(Remote):
     #: `Windows` as proved: memory and line rate, on the physical annotation's four constraints
     LINKS = ("Accounting.Guarantees.Actual.Windows", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
              "Accounting.Placed.Memory", "Accounting.Placed.Links")
-    #: `WindowsAt` at the wipes, its state term from the wipe and its link term from the certifier's ingress, which
+    #: `WindowsAt` at the wipes, its state term from the wipe and its binding error from the certifier's ingress, which
     #: bounds information where `WindowsAt` reads width at line rate: the information form is a draft
     SERVING = ("Accounting.Guarantees.Actual.WindowsAt", "Accounting.Placed.Causal", "Accounting.Placed.ComputeRate",
                "Accounting.Placed.Links", "draft:windows-information-form")

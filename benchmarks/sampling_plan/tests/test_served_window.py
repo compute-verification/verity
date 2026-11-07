@@ -1,7 +1,7 @@
 """The served window's two modes (`served_window.py`): every rung covers the window's work, the fused rungs and wide tiles
-exceed C-Flock's block and no fitting rung has a proof block past it, proving alone picks the finest rung, the commitment moves the work optimum coarser as the pooled
+exceed Flock's block and no fitting rung has a proof block past it, proving alone picks the finest rung, the commitment moves the work optimum coarser as the pooled
 period grows and along √(w β h C/(o Λ)), and leaves the exfiltration optimum where it was; a code-based commitment
-hashes 1/ρ the bytes and no row in circuit, and no rung's fit turns on hm96's slots; the replay re-runs each drawn
+hashes 1/ρ the bytes and no row in circuit, and no rung's fit turns on hm96's slots; the replay re-runs each sampled
 request and moves no optimum."""
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def test_the_fused_rungs_and_wide_tiles_exceed_c_flocks_block_and_the_dot_level_
 
 
 def test_no_fitting_rung_has_a_proof_block_past_c_flocks_block(out):
-    """Every proof block of a fitting rung sits in a C-Flock block of k_log <= `K_MAX` at the composer's occupancy
+    """Every proof block of a fitting rung sits in a Flock block of k_log <= `K_MAX` at the composer's occupancy
     (`inputs.cap`), its statement's share that cap; a query head's whole row doesn't, so attention is key blocks, the most
     keys that fit."""
     for name, rung in out["rungs"].items():
@@ -93,7 +93,7 @@ def test_the_leak_optimum_is_the_same_in_both_modes(out):
 
 
 def test_a_code_commitment_hashes_1_over_rho_the_bytes_and_no_row_in_circuit(out):
-    """At each rate ρ every rung commits 1/ρ hm96's bytes' hashing, with the same draws, and proves cheaper by its rows'
+    """At each rate ρ every rung commits 1/ρ hm96's bytes' hashing, with the same samples, and proves cheaper by its rows'
     in-circuit hashing."""
     codes = [r for r in out["results"] if r["scheme"] != "hm96"]
     assert {r["rate"] for r in codes} == set(S.RATES)
@@ -107,8 +107,8 @@ def test_a_code_commitment_hashes_1_over_rho_the_bytes_and_no_row_in_circuit(out
 
 
 def test_the_replay_reruns_each_drawn_request_and_moves_no_optimum(out):
-    """Serving keeps no values, so each request a drawn proof block lies in is re-run from its prompt: at one window every
-    request of the step (the draws far outnumber them), one stock step; pooled over a period about one request a draw; and
+    """Serving keeps no values, so each request a sampled proof block lies in is re-run from its prompt: at one window every
+    request of the step (the samples far outnumber them), one stock step; pooled over a period about one request a sample; and
     the cheapest fitting rung is the one it is without the replay."""
     step, sequences = S.IN["step_s"].value, S.IN["sequences"].value
     for r in out["results"]:
@@ -123,7 +123,7 @@ def test_the_replay_reruns_each_drawn_request_and_moves_no_optimum(out):
 
 
 def test_no_rungs_fit_turns_on_the_hm96_and_sha512_slots(out):
-    """A rung that misses C-Flock's block misses it on a proof block's own slot (its ANDs and rows' bits) and the mask, or
+    """A rung that misses Flock's block misses it on a proof block's own slot (its ANDs and rows' bits) and the mask, or
     on its width, so the code-based commitment, which drops hm96's slots, fits the same rungs."""
     for name, rung in out["rungs"].items():
         if not rung["fits"]:

@@ -24,7 +24,7 @@ The report gives:
   lane handles, dates, names);
 * the known residue (`public_boundary.toml`'s `[[residue]]`), each entry's sites, and the change that removes it;
 * the third-party code DEST pins: the Lean packages its manifests pin, the Python distributions its lock resolves, and the
-  Rust upstream C-Flock patches;
+  Rust upstream Flock patches;
 * with `--build`, each Lake package's `lake build` and the workspace's `uv sync` (a node's work: `research run`), and the
   licenses of what they fetched and of the Rust upstream at its pin.
 """
@@ -344,11 +344,10 @@ def rewrite_pyproject(text: str, here: str, copied: set[str], dists: set[str], w
     return _checked("".join(out), expect, _norm(here, "pyproject.toml")), dropped
 
 
-#: the lists whose entries name the tree's paths, by their path from the directory holding their `tests/`: a lint
+#: the lists whose entries name the tree's paths, by their path inside the `tests/` directory holding them: a lint
 #: allowlist's `file`s, and the dead-code census's roots (a shell, a directory or a dotted module a line) and its keep-list's
 #: modules
-PATH_LISTS = {"tests/lint/allowlists/*.json": "allowlist", "tests/census_roots.txt": "roots",
-              "tests/dead_code_keep.json": "keep"}
+PATH_LISTS = {"lint/allowlists/*.json": "allowlist", "census_roots.txt": "roots", "dead_code_keep.json": "keep"}
 
 
 def path_list(f: str) -> tuple[str, str] | None:
@@ -356,7 +355,7 @@ def path_list(f: str) -> tuple[str, str] | None:
     base, sep, rest = f.rpartition("tests/")
     if sep and (not base or base.endswith("/")):
         for pattern, kind in PATH_LISTS.items():
-            if fnmatch.fnmatchcase(sep + rest, pattern):
+            if fnmatch.fnmatchcase(rest, pattern):
                 return kind, base.rstrip("/")
     return None
 
@@ -402,17 +401,20 @@ def rewrite_path_list(text: str, f: str, tracked: set[str], copied: set[str]) ->
         return text, []
 
     def item(line: str) -> object:
+        """The entry ``line`` holds, or, for a line holding none (a bracket, another key), its decode error, which no
+        dropped entry equals."""
         s = line.strip().rstrip(",")
         try:
             return json.loads(s if kind == "allowlist" else "{" + s + "}")
-        except json.JSONDecodeError:
-            return None
+        except json.JSONDecodeError as e:
+            return e
 
     new = re.sub(r",(\s*\n\s*[\]}])", r"\1", "".join(line for line in lines if item(line) not in drop))
     try:
         same = json.loads(new) == expect
-    except json.JSONDecodeError:
-        same = False
+    except json.JSONDecodeError as e:
+        raise ValueError(f"public_export: the rewrite of {f} isn't JSON ({e}); lay that list out one entry a line, or "
+                         "teach the rewrite its layout") from e
     if not same:
         raise ValueError(f"public_export: the rewrite of {f} reads as more than the old list less the entries it drops; "
                          "lay that list out one entry a line, or teach the rewrite its layout")

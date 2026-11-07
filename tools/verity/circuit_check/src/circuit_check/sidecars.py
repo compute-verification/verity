@@ -5,7 +5,8 @@
                               `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries; a Program
                               root too large to build whole goes in ``_by_calls_roots``, checked by its calls (`by_calls`)
     fp8.circuit-check.json    its pins (`checks`' lowering counts and circuit digest, ``type``, by kind: ``definitions``,
-                              ``pieces``, ``units``; and a gated Definition's circuit digest, ``digests``)
+                              ``pieces``, ``units``; and the circuit digest of a gated Definition or of one bound at
+                              served statics over `targets.MAX_GATES`, ``digests``, which keeps it in ``--all``)
 
 A module's bindings bind the Definitions it defines (a template module's, its templates), and its pins are the lowerings of its
 Definitions (`owner`; a template's subcircuits for the template module), each the one its pin's key names alone (`pin_owner`),

@@ -29,5 +29,6 @@ TEMPLATE_PARAMS = {
     "scaled-mm-fp8-block-coordinate": [{"K": 256, "G": 128}],
     "ingress-prompt": [{"MODEL": "m", "LP": 3, "V": 1000}, {"MODEL": "served-model", "LP": 16, "V": 128256}],
     "token-select-chunk": [{"C": 64}],
-    "token-select-combine": [{"V": 200, "C": 64}, {"V": 128256, "C": 64}],
+    # and GLM-5.3's served vocabulary
+    "token-select-combine": [{"V": 200, "C": 64}, {"V": 128256, "C": 64}, {"V": 154880, "C": 64}],
 }

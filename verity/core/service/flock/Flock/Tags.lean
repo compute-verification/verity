@@ -48,7 +48,7 @@ structure Tags where
   coinScheme : String
   /-- when set, META `leaf_scheme` must be this object (canonical JSON), not only carry the id -/
   pinnedLeafScheme : Option Json := none
-  /-- the coin server retains every round's bytes (`Hello`'s `rounds`; every recorded round carries `msg`, `Flock.Transcript`) -/
+  /-- the challenger's live-coin part retains every round's bytes (`Hello`'s `rounds`; every recorded round carries `msg`, `Flock.Transcript`) -/
   retainRounds : Bool := false
   /-- the circuit prover from `eb90718f`: serving rows are `hm96-sha512/row/v1` leaves proved in the circuit (`Flock.HmRow`), and every
   identity and binding digest is SHA-512 (the circuit pin, the public digest, the statement digest, Σ, the record's) -/
@@ -66,7 +66,7 @@ structure Tags where
   `hm96-sha512/row/v1` row per output port hashed in the circuit, and the public file has no output word -/
   hiddenOutputs : Bool := false
   /-- the prover after verity `cec3e347`: every random value it uses is the OS's bytes, which the
-  `--zk` identity's `hooks` name (`Flock.Zk.hooks`); before, the pads and every table's draws were ChaCha20 streams of the
+  `--zk` identity's `hooks` name (`Flock.Zk.hooks`); before, the pads and every table's samples were ChaCha20 streams of the
   prover's seed -/
   osMasks : Bool := false
   /-- the plain proof files are upstream's form, which end after `consistency_batch_grinding_nonces` (`flock-verify
@@ -165,7 +165,7 @@ def leafSchemeSha512 : Json :=
       ("key_sha512", s (hexOf (Sha512.hash Hm96.sha512.keyFromLabel)))])]
 
 /-- `verity/flock-circuit` on SHA-512 trees (the circuit prover at `631567f7`): every Ligerito level's Merkle
-tree on SHA-512 (64-byte digests), the SHA-512 coin commitment, and the coin server retaining every round's bytes. -/
+tree on SHA-512 (64-byte digests), the SHA-512 coin commitment, and the challenger's live-coin part retaining every round's bytes. -/
 def circuit631567f7 : Tags :=
   { circuit19c7269a with
     name := "verity/flock-circuit@631567f7", merkleLeaf := "flock-leaf/sha512-unsalted", coinScheme := "coin-commit/sha512",
@@ -188,7 +188,7 @@ def leafSchemeHm96 : Json :=
     ("key", s "default_key, a statement constant for every tree"), ("key_sha512", s (hexOf (Sha512.hash Hm96.Default512.key)))]
 
 /-- META `leaf_scheme` after verity `b3727bd9`: `leafSchemeHm96` with its salts named as
-the prover draws them, the OS's own bytes, every leaf's 192 read with its tree's (`zk_hooks::LeafSalts`). -/
+the prover samples them, the OS's own bytes, every leaf's 192 read with its tree's (`zk_hooks::LeafSalts`). -/
 def leafSchemeHm96Os : Json :=
   Json.mkObj [("id", s "hm96-sha512/v1"), ("inner", s "sha512 column digest"), ("salt_bytes", n 192),
     ("salt_source", s "os bytes (getrandom), 192 per leaf, each tree's read once, never reused or stored"),
@@ -253,7 +253,7 @@ def pinnedIdentity (id : Json) : Json :=
   else id
 
 /-- `verity/flock-circuit` (the circuit prover from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
-every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. -/
+every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit sample is live. -/
 def circuitEb90718f : Tags :=
   { circuit631567f7 with
     name := "verity/flock-circuit@eb90718f", publicCircuitKey := "circuit_sha512", merkleLeaf := "hm96-sha512/v1",
@@ -350,8 +350,8 @@ def circuitTypesB3727bd9Selftest : Tags :=
     name := "verity/flock-circuit/types@b3727bd9+seed-injection", identity := identityHidden true "verity/flock-circuit/types" }
 
 /-- `verity/flock-circuit` (`HmOut`) up to verity `cec3e347`: `b3727bd9`'s statement with META's leaf salts
-named as the prover draws them (`leafSchemeHm96Os`), in the identity and the pinned leaf scheme; its `--zk` identity names
-the pads and every table's draws ChaCha20 streams of the prover's seed. -/
+named as the prover samples them (`leafSchemeHm96Os`), in the identity and the pinned leaf scheme; its `--zk` identity names
+the pads and every table's samples ChaCha20 streams of the prover's seed. -/
 def circuitCec3e347 : Tags :=
   { circuitB3727bd9 with
     name := "verity/flock-circuit@cec3e347", identity := identityHidden false (leafScheme := leafSchemeHm96Os),
@@ -387,7 +387,7 @@ def circuitTypesSelftest : Tags :=
   { circuitTypesCec3e347Selftest with name := "verity/flock-circuit/types+seed-injection", osMasks := true }
 
 /-- META `leaf_scheme` of a recursive session's inner statement (upstream's `leaf_scheme_plain`,
-`verity_flock.circuit.LEAF_SCHEME_PLAIN`): plain SHA-512 leaves and no salt, since the firewall commits every tree top under
+`verity_flock.circuit.LEAF_SCHEME_PLAIN`): plain SHA-512 leaves and no salt, since the ZK server commits every tree top under
 a salt of its own. -/
 def leafSchemePlain : Json :=
   Json.mkObj [("id", s "flock-leaf/sha512-unsalted"), ("inner", s "sha512 column digest"), ("salt_bytes", n 0),

@@ -170,6 +170,34 @@ def test_a_rerun_that_goes_missing_leaves_no_stale_case(tmp_path):
     assert [f.name for f in out.iterdir()] == ["missing.json"]
 
 
+def test_a_served_period_is_its_windows_session_then_its_samples(tmp_path):
+    """The period's close lists the served window's session and then its sample's (``--cap 2``), and credit reads the
+    sample from the sample's session: a record naming no sample session, or a close listing other sessions, is
+    missing with why."""
+    sid, dsid, serve, pouw = "s-window", "s-sample", tmp_path / "serve", tmp_path / "pouw"
+    (serve / "h1/w0").mkdir(parents=True)
+    _lines(serve / "windows.jsonl", [json.dumps({"window": 0, "pouw_h1": {"session": {"session": sid, "period": "p"}}})])
+    _json(serve / "period.json", {"name": "p", "close": {}})
+    for s in (sid, dsid):
+        (pouw / "session" / s / "out").mkdir(parents=True)
+    (pouw / "session" / sid / "out" / "key.json").write_text("{}")
+    _lines(pouw / "pins.jsonl", [])
+    args = (serve, 0, pouw, "00" * 64, tmp_path / "main.txt", None, None)
+
+    def say(record: dict, listed: list[str]) -> str:
+        _json(serve / "h1/w0/pouw-h1-calls.json", {"commitment": record})
+        _lines(pouw / "ledger.jsonl", [json.dumps({"kind": "period-close", "body": {
+            "period": "p", "windows": [{"session": s} for s in listed]}})])
+        with pytest.raises(P.Missing) as e:
+            P.period_inputs(*args)
+        return str(e.value)
+
+    assert "names no sample session" in say({"session": {"session": sid}}, [sid])
+    both = {"session": {"session": sid}, "draw_session": {"session": dsid}}
+    assert f"lists the sessions ['{sid}'], and this piece is built for a period" in say(both, [sid])
+    assert "no declared window Program" in say(both, [sid, dsid])
+
+
 def test_a_window_the_run_lacks_is_missing(tmp_path):
     assert "has no window 3" in P.v1_missing(SERVED, 3)
     assert "has no windows.jsonl" in P.period_missing(tmp_path, 0)

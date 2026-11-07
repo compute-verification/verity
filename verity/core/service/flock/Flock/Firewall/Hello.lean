@@ -2,13 +2,13 @@
 # The session's `Hello`, made in Lean (live PROTOCOL.md §9, §10)
 
 A `--zk` session's first message is the prover's `Hello`: the verifier's own session parameters (`Stmt.helloOf`, at the
-session's statement after the verifier's draw) with the prover's fresh coin-tree nonce in `coins.nonce`, the text R7
-compares byte for byte (`CoinTree.checkHello`). Under the firewall that message is made here, from the statement's own
+session's statement after the verifier's sample) with the prover's fresh coin-tree nonce in `coins.nonce`, the text R7
+compares byte for byte (`CoinTree.checkHello`). Under the ZK server that message is made here, from the statement's own
 files, and never by the prover's workers.
 
 * `json`: the `Hello` at a nonce's hex, canonical (`canon`); a session without a coin tree, its own.
 * `frame`: `Req::Hello`'s frame of it: tag `1`, `u32le` of its UTF-8 length, its UTF-8 bytes. `msg` is both.
-* `cmd`: `flock-firewall hello`, served on stdin and stdout, which draws each session's nonce from the operating system.
+* `cmd`: `flock-firewall hello`, served on stdin and stdout, which samples each session's nonce from the operating system.
 
 The analysis holds these to the coin layer's `Hello` (`Claims.ZKMal.CoinLayer.helloD`, `Claims/ZK/HelloLean.lean`).
 -/
@@ -46,7 +46,7 @@ def msg (spec : SessionSpec) (nonce : ByteArray) : List UInt8 :=
 /-- The bytes of a coin-tree nonce. -/
 def NONCE_BYTES : Nat := 32
 
-/-- A request's draw: the verifier's answer to `Register`, JSON text, `null` where it drew none. -/
+/-- A request's sample: the verifier's answer to `Register`, JSON text, `null` where it drew none. -/
 def drawOf (text : String) : Except String (Option Json) :=
   match JsonParse.parse text with
   | .ok Json.null => .ok none
@@ -60,7 +60,7 @@ def nonceOf (hex : String) : Except String ByteArray :=
 
 /-- The verifier's own draw-law inputs, as `flock-verify verify` reads them: `--work K` with `--work-table F`
 (`Draw.workTableOfJson`), `--stratified K` and `--closure F` (`Draw.closureMapOfJson`), each optional. A stratified or work
-draw sets up only on them (`Stmt.setupTables`, U2), so they are the session's statement's as much as its files are. -/
+sample sets up only on them (`Stmt.setupTables`, U2), so they are the session's statement's as much as its files are. -/
 def lawOf (args : List String) :
     IO (Except String (Option (Nat × Array (String × Nat × Nat)) × Option Nat × Option (Std.HashMap Nat (Array Nat)))) := do
   let nat : String → Except String (Option Nat) := fun flag => match Witness.argOf args flag with
@@ -83,7 +83,7 @@ def lawOf (args : List String) :
     pure (work, ← nat "--stratified", ← closure)
 
 /-- A firewalled statement's `Hello` inputs, read once: `flock-verify verify --zk`'s statement of its files
-(`Witness.Inputs`) and the draw law's inputs (`lawOf`). -/
+(`Witness.Inputs`) and the sampling design's inputs (`lawOf`). -/
 structure Setup where
   I : Witness.Inputs
   work : Option (Nat × Array (String × Nat × Nat))
@@ -113,7 +113,7 @@ def Setup.ofArgs (usage : String) (args : List String) : IO (Except String Setup
   let tables ← Witness.readTables args
   return .ok { I := { tags, circuitFile, publicFile, count, tables, partition, program }, work, stratified, closure }
 
-/-- The session's spec and its tables' statements at the verifier's draw `draw` (`Stmt.setupTables`, `setup_eq`; the public
+/-- The session's spec and its tables' statements at the verifier's sample `draw` (`Stmt.setupTables`, `setup_eq`; the public
 file the verifier's own, without rows), its circuit parsed with each net's rows in tasks (`HmOut.parseCommitFast`). -/
 def Setup.setup (S : Setup) (draw : Option Json) : V (SessionSpec × Array Stmt) :=
   Stmt.setupTablesOf (HmOut.parseCommitFast (Witness.zkTags S.I) S.I.circuitFile S.I.tables) (Witness.zkTags S.I) S.I.circuitFile
@@ -127,7 +127,7 @@ theorem Setup.setup_eq (S : Setup) (draw : Option Json) :
 /-- The session's spec at `draw`. -/
 def Setup.spec (S : Setup) (draw : Option Json) : V SessionSpec := (S.setup draw).map (·.1)
 
-/-- The key a draw's statement is set up once under: its canonical text, `null` without one. -/
+/-- The key a sample's statement is set up once under: its canonical text, `null` without one. -/
 def drawKey (draw : Option Json) : String := (draw.map fun d => (canon d).toOption.getD "").getD "null"
 
 /-- The `Hello` text at the set-up statement `spec` and the nonce `nonce` (`json`), or why there is none: a statement the
@@ -139,7 +139,7 @@ def textAt (spec : V SessionSpec) (nonce : ByteArray) : Except String String :=
     if spec.coinTree.isNone then .error "the session has no coin tree"
     else json spec (hexOf nonce)
 
-/-- The statements set up so far, by `drawKey`: one process sets each draw's statement up once. -/
+/-- The statements set up so far, by `drawKey`: one process sets each sample's statement up once. -/
 abbrev Specs := IO.Ref (Array (String × V (SessionSpec × Array Stmt)))
 
 /-- The spec and statements at `draw` (`Setup.setup`), set up on first use. -/
@@ -159,11 +159,11 @@ def Setup.specAt (S : Setup) (specs : Specs) (draw : Option Json) : IO (V Sessio
 /-- `flock-firewall hello [--statement ID] --circuit F --public F [--tables DIR] [--session-tables J] [--partition F]
 [--program F] [--stratified K] [--work K --work-table F] [--closure F]`: each session's `Hello`, served on stdin and stdout,
 at `flock-verify verify --zk`'s statement of those files (`Setup`).
-`draw LEN` followed by the `LEN` bytes of the session's draw (`drawOf`) is answered `ok N` followed by the `N` bytes of
-the session's `Hello` (`json`), at a nonce of 32 bytes this command draws from the operating system; `draw LEN NONCE`
+`draw LEN` followed by the `LEN` bytes of the session's sample (`drawOf`) is answered `ok N` followed by the `N` bytes of
+the session's `Hello` (`json`), at a nonce of 32 bytes this command samples from the operating system; `draw LEN NONCE`
 takes the nonce's 64 hex digits instead, for a simulator's rewinds, which restart a session after its `Hello`. Each
-draw's statement is set up once. A statement the setup refuses, or one without a coin tree, is answered `refused WHY`,
-and the session goes on; anything else (a malformed line, a draw that is not JSON) is answered `err WHY` and ends it. -/
+sample's statement is set up once. A statement the setup refuses, or one without a coin tree, is answered `refused WHY`,
+and the session goes on; anything else (a malformed line, a sample that is not JSON) is answered `err WHY` and ends it. -/
 def cmd (args : List String) : IO UInt32 := do
   let S ← match ← Setup.ofArgs s!"usage: flock-firewall hello {FLAGS}" args with
     | .ok S => pure S

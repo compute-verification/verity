@@ -46,7 +46,7 @@ a lane, it is proved from the circuits computing their pieces' compositions
 (`Accounting.TS.Lanes.groupRealizes_lanes32`). At another shape nothing in Lean states the shape's Definitions yet
 (`Pouw.H1Zy.laneOk` and `chunkOk` are at a 32 × 32 leaf), so it is assumed there, backed by circuit-check and
 `h1zy`'s tests. Like `Accounting.Assumptions.TS`'s other session premises it reads `RowsSession`, in the proofs package,
-so it sits here until C-Flock's spec is extracted.
+so it sits here until Flock's spec is extracted.
 -/
 
 @[expose] public section

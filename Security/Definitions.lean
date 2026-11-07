@@ -38,7 +38,7 @@ public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.Period
 public import Definitions.Accounting.Sheets
 public import Definitions.Accounting
-public import Definitions.Population
+public import Definitions.SampledProofs
 public import Definitions.Claims
 public import Definitions.Claims.Recursion
 public import Definitions.Claims.RecursionGeneric
@@ -46,6 +46,8 @@ public import Definitions.Claims.RecursionLin
 public import Definitions.Claims.Sampling
 public import Definitions.Claims.SamplingGeneric
 public import Definitions.Claims.SamplingTwo
+public import Definitions.Claims.SamplingServed
+public import Definitions.Claims.Guarantees.SamplingTwo
 public import Definitions.Claims.ZKOut
 public import Definitions.Hash
 public import Definitions.Flock

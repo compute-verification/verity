@@ -203,7 +203,7 @@ open FlockSoundness.Discharge.Tables Claims.Bridge.Live
 open Lean (Json)
 
 open Classical in
-/-- **A simulator of each prover at the verdict at the draw, at `leafPlain`**: `PlainSimWrPAtD` with its decoders, live self-clash and fork advantage at `leafPlain`. -/
+/-- **A simulator of each prover at the verdict at the sample, at `leafPlain`**: `PlainSimWrPAtD` with its decoders, live self-clash and fork advantage at `leafPlain`. -/
 def PlainSimWrPAtDU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)])
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
@@ -252,7 +252,7 @@ def PlainSimWrPAtDU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : table
             Claims.Flock.forkSlack sha512 (V false) P x δ (plainJ (tables_head_one h) hsch r ℓ).val ω)
 
 open Classical in
-/-- **A simulator at the verdict at the draw gives the plain table bound at a statement, at `leafPlain`**: `plain_tableBoundθAt_of_simD`'s proof, at `plain_le_sessionsEU`. -/
+/-- **A simulator at the verdict at the sample gives the plain table bound at a statement, at `leafPlain`**: `plain_tableBoundθAt_of_simD`'s proof, at `plain_le_sessionsEU`. -/
 theorem plain_tableBoundθAt_of_simDU {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
     {h : tables false x = [(spec, st)]} {L : Layout st} {m k0 : ℕ} {l₀ l₁ : Accounting.Level}
     {rest : List Accounting.Level} {ext : ℕ} {hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩}
@@ -309,7 +309,7 @@ theorem plain_tableBoundθAt_of_simDU {x : Claims.Msg} {ins : Ins} {spec : Sessi
         (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) N dg w sha512 P' x (ω, u)) hσ) hsc'))
 
 open Classical in
-/-- **The concrete simulator at the verdict at the draw, from its clash and its fork bound, at `leafPlain`**: `plainSimWrPAtD_of_parts`'s proof. -/
+/-- **The concrete simulator at the verdict at the sample, from its clash and its fork bound, at `leafPlain`**: `plainSimWrPAtD_of_parts`'s proof. -/
 theorem plainSimWrPAtD_of_partsU {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}

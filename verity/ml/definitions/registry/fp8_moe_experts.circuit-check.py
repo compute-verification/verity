@@ -5,14 +5,30 @@ from __future__ import annotations
 from typing import Any, Callable
 
 
+#: GLM-5.3's served (SWAP, DOT) on one TP8 rank of the H200, by the tuned tile vLLM takes (`enable_swap_ab`, `fp8_moe.sm90_dot`):
+#: 8x32 below 4 tokens, 8x64 at 4 to 6, 16x64 and 16x128 at 7 to 768, 64x128 past 768
+SERVED_GLM53_H200 = (("nonswap-mmav2", False, "HopperE4m3MmaV2Dot32"), ("swap-mmav2", True, "HopperE4m3MmaV2Dot32"),
+                     ("swap-qgmma", True, "HopperE4m3QgmmaDot32"), ("nonswap-qgmma", False, "HopperE4m3QgmmaDot32"))
+
+
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
-    leaf families they do not reach, at small statics."""
+    leaf families they do not reach, at small statics.  Then GLM-5.3's served expert GEMMs (``served-``): the w13 launch
+    (K = 6144, N = 512) and the routed w2 launch (K = 256, N = 6144) of one TP8 rank's 256 experts at each served (SWAP, DOT)
+    (`SERVED_GLM53_H200`), which verity-vllm's `test_moe_fp8_served` holds to the compiler's tile rule.  Each is over
+    `targets.MAX_GATES`, so ``--all`` checks it at its served statics only through the callees it reaches; its whole
+    served-statics check is named."""
     from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import prims
     from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
     from verity.ml.definitions.registry import fp8_moe_experts
 
-    return [
+    served = [(f"{name}/served-{label}", lambda d=d, K=K, N=N, swap=swap, dot=dot: bind(d, E=256, K=K, N=N, G=128, KB=128, SWAP=swap,
+                                                                                        DOT=getattr(prims, dot)))
+              for name, d, K, N in (("MoeExpertFp8Gemm_v1", fp8_moe_experts.MoeExpertFp8Gemm, 6144, 512),
+                                    ("MoeExpertFp8GemmW_v1", fp8_moe_experts.MoeExpertFp8GemmW, 256, 6144))
+              for label, swap, dot in SERVED_GLM53_H200]
+    return served + [
         # the expert-indexed pair forms the derive rule and the fold bind: Qwen3-235B-A22B's 128 experts at the served w2 coordinate,
         # and pairs over a whole and a partial weight block
         ("MoeExpertFp8CoordinateW_v1", lambda: bind(fp8_moe_experts.MoeExpertFp8CoordinateW, E=128, K=192, G=64, KB=32, SWAP=False,
