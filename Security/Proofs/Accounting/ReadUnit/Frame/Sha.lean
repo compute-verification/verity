@@ -155,7 +155,7 @@ def msgData (tag : List UInt8) (parts : List (List Byte)) : List Byte :=
   constBytes (FRAME ++ beBytes 4 tag.length ++ tag) ++ parts.flatMap fun p => constBytes (beBytes 8 p.length) ++ p
 
 theorem message_eq (tag : List UInt8) (parts : List (List Byte)) :
-    message tag parts = wordsB (msgData tag parts ++ constBytes (padTail (msgData tag parts).length)) := rfl
+    message tag parts = wordsB (msgData tag parts ++ constBytes (Frame.padTail (msgData tag parts).length)) := rfl
 
 theorem bytesV_flatMap {α : Type} (z : Var → Bool) (f : α → List Byte) (l : List α) :
     bytesV z (l.flatMap f) = l.flatMap fun a => bytesV z (f a) := by
@@ -182,8 +182,8 @@ theorem bytes8_msgData (tag : List UInt8) {parts : List (List Byte)} (h : ∀ p 
     Bytes8 (msgData tag parts) :=
   bytes8_append (bytes8_constBytes _) (bytes8_flatMap fun p hp => bytes8_append (bytes8_constBytes _) (h p hp))
 
-theorem length_padTail (len : ℕ) : (padTail len).length = 17 + (128 - (len + 17) % 128) % 128 := by
-  simp only [padTail, beBytes, List.length_cons, List.length_append, List.length_replicate, List.length_map,
+theorem length_padTail (len : ℕ) : (Frame.padTail len).length = 17 + (128 - (len + 17) % 128) % 128 := by
+  simp only [Frame.padTail, beBytes, List.length_cons, List.length_append, List.length_replicate, List.length_map,
     List.length_range]
   omega
 
@@ -201,8 +201,8 @@ theorem length_message (tag : List UInt8) (parts : List (List Byte)) :
 
 /-- **A framed message's words** hold the frame's bytes and SHA-512's padding. -/
 theorem holds_message (z : Var → Bool) (tag : List UInt8) {parts : List (List Byte)} (h : ∀ p ∈ parts, Bytes8 p) :
-    HoldsBytes z (message tag parts) (bytesV z (msgData tag parts) ++ padTail (msgData tag parts).length) := by
-  have := holds_wordsB z (data := msgData tag parts ++ constBytes (padTail (msgData tag parts).length))
+    HoldsBytes z (message tag parts) (bytesV z (msgData tag parts) ++ Frame.padTail (msgData tag parts).length) := by
+  have := holds_wordsB z (data := msgData tag parts ++ constBytes (Frame.padTail (msgData tag parts).length))
     (bytes8_append (bytes8_msgData tag h) (bytes8_constBytes _))
     (by rw [List.length_append, length_constBytes, length_padTail]; omega)
   rwa [bytesV_append, bytesV_constBytes] at this
@@ -217,9 +217,9 @@ theorem lenBytes_eq (len : ℕ) : lenBytes len = beBytes 16 (8 * len) := by
   norm_num
 
 /-- SHA-512's padded message is the message and `padTail`. -/
-theorem padData_toList (m : List UInt8) : (padData ⟨m.toArray⟩).data.toList = m ++ padTail m.length := by
+theorem padData_toList (m : List UInt8) : (padData ⟨m.toArray⟩).data.toList = m ++ Frame.padTail m.length := by
   have hs : (⟨m.toArray⟩ : ByteArray).size = m.length := by simp [ByteArray.size]
-  rw [padData_data, hs, lenBytes_eq, zeroPad, padTail,
+  rw [padData_data, hs, lenBytes_eq, zeroPad, Frame.padTail,
     show (240 - (m.length + 1) % 128) % 128 = (128 - (m.length + 17) % 128) % 128 by omega]
   simp
 
@@ -262,7 +262,7 @@ theorem sound_chain (ws : List Word) : ∀ (k i : ℕ) (st : List Word),
       (by rw [length_of_map_bv hv'', length_toBV, size_chain]) hv''
     exact ⟨h1, h2, by rw [h3, show i + 1 + k = i + (k + 1) by omega]⟩
 
-theorem blockHolds_of_holds {z : Var → Bool} {ws : List Word} {m : List UInt8} (h : HoldsBytes z ws (m ++ padTail m.length))
+theorem blockHolds_of_holds {z : Var → Bool} {ws : List Word} {m : List UInt8} (h : HoldsBytes z ws (m ++ Frame.padTail m.length))
     {b : ℕ} (hb : 16 * b + 16 ≤ ws.length) : BlockHolds z ws (padData ⟨m.toArray⟩) b := by
   obtain ⟨hw, hlen, hbits⟩ := h
   have hl : ((ws.drop (16 * b)).take 16).length = 16 := by
@@ -287,7 +287,7 @@ theorem bitL_eq (l : List UInt8) (k q : ℕ) (hq : q < 8) : (l.getD k 0).toNat.t
 /-- **SHA-512 of a padded message**: on words holding `m` and SHA-512's padding, the chain of compressions from the IV
 returns 8 words holding `m`'s SHA-512. -/
 theorem sound_sha512W (ws : List Word) : Sound (sha512W ws) fun z out => ∀ m : List UInt8,
-    HoldsBytes z ws (m ++ padTail m.length) → Shaped 8 out ∧ wordsDigest z out = Verity.sha512 m := by
+    HoldsBytes z ws (m ++ Frame.padTail m.length) → Shaped 8 out ∧ wordsDigest z out = Verity.sha512 m := by
   unfold sha512W
   rw [List.range_eq_range']
   refine Sound.mono (sound_chain ws _ 0 ivW) fun z out h m hm => ?_
@@ -313,7 +313,7 @@ theorem sound_sha512W (ws : List Word) : Sound (sha512W ws) fun z out => ∀ m :
     rw [← getD_toBV, ← h3]
     simp [List.getD_eq_getElem?_getD, hi]
   change FlockSoundness.Discharge.Hm.bit z (out.getD i []) p = _
-  rw [eb, bitL_eq _ _ _ (Nat.mod_lt _ (by norm_num)), hash_eq, bitL_digestOf _ ht, hwb, wbit,
+  rw [eb, bitL_eq _ _ _ (Nat.mod_lt _ (by norm_num)), FlockSoundness.Discharge.Hm.hash_eq, bitL_digestOf _ ht, hwb, wbit,
     show (64 * i + p) / 64 = i by omega, show (64 * i + p) % 64 = p by omega, getD_toBV, ← e1]
   exact bit_eq_getLsbD (h1.getD hi).le p
 
