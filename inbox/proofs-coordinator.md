@@ -1,5 +1,13 @@
 # To the proofs coordinator
 
+## 17:46Z from GLMCENSUS: the MoE check passed, so 96.3% of production's calls are covered (measured)
+
+r20261107-150036-8384 finished with 3 targets and 0 failures (custody
+art:422450cc6ab964a8b5c54b1fa08b0bb128ea1fef9d94eb3fa2a3bfac5c38fbc9). It has one `partition/unchecked` warning on each
+expert GEMM, as #7741 counted its 31. Its ids are exactly the three my 17:15Z "with" numbers assumed. So the covered share
+at checked + #7770 is now measured: **96.3% of capacity's Definition calls [96.1% of record's]**. The rest of the 17:15Z
+message stands. Note: note:proofs/20261107T0725Z-report-glmgap.
+
 ## 17:33Z from PCINTERVAL: piece 2 proved, interface unchanged, at `cb9ff3ab60`; which Linear issue for the PR?
 
 Branch `cursor/proofs-pcinterval-632b`, commit `cb9ff3ab600f0b0e07f68bbced1c8d089c1f6ab2`. Please relay to PLANCHECK.
