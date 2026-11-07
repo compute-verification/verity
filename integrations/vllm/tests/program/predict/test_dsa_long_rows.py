@@ -6,6 +6,7 @@ INDEX_TOPK to 4, so a few rows reach past it without the 2,048 keys of the serve
 
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter
 
@@ -14,13 +15,18 @@ import pytest
 from verity.ml.circuits.refs import runs
 from verity.ml.circuits.types import Array, Tuple as TupleT, Value
 from verity.ml.definitions.registry.dsa_topk import waksman_apply, waksman_switches
+from verity_vllm.check.batch import own
+from verity_vllm.program import workload as W
+from verity_vllm.program.predict.batch import workload_labels
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.common import Unexpressible
 from verity_vllm.program.predict.dsa import run_bits, run_field
 from verity_vllm.program.predict.node import build_node_program
 from verity_vllm.program.predict.phi import Phi
+from verity_vllm.program.predict.score import request_component
 from tests.program.predict.test_node import _first_layers
 from tests.program.predict.test_predict import GLM53, _row_phi
+from tests.program.predict.test_steps import GREEDY, HF_CONFIG_DIR, _class_g, _session
 
 TOPK = 4
 I32 = Value(32)
@@ -112,3 +118,40 @@ def test_run_bits_route_each_served_order(phi):
 def test_a_node_program_past_index_topk_is_refused(phi):
     with pytest.raises(Unexpressible, match=re.escape("a node Program whose rows read more than INDEX_TOPK keys")):
         build_node_program(phi, "step", M=6, pos0=0, with_desc=False)
+
+
+@pytest.mark.slow
+def test_gp01_composes_rank_programs_that_read_run_and_holds_it_to_its_request(phi):
+    """At TP8 a request past INDEX_TOPK has `run` before its weights and one that isn't doesn't, so the weights sit at different
+    positions; GP-01 composes them, `run` request-local, and R1's labels hold each request's `run` to it."""
+    canon: dict = {}
+    comps = [request_component(build_program(phi, "request", LP=lp, T=0), canon) for lp in (5, 3)]
+    assert "run" in comps[0].groups and "run" not in comps[1].groups
+    wl = W.WorkloadProgram([W.WorkloadRequest(f"r{i}", i, lp, 1, 0, c, T=0) for i, (lp, c) in enumerate(zip((5, 3), comps))], lag=1)
+    assert not wl.shared_positions_uniform
+    params, ret = wl.fn.signature()
+    assert ret == TupleT(TupleT(Array(1, I32), Array(3, BIT)), Array(1, I32))
+    labels, _ = workload_labels(wl)
+    held = {n: lab for (n, _), lab in zip(params, labels) if ".run" in n}
+    assert held and all(n.startswith("request[r0].run") for n in held) and set(held.values()) == {own(0)}
+
+
+@pytest.mark.slow
+def test_class_g_compiles_a_prompt_past_index_topk_at_its_launch_context(tmp_path):
+    """Class G (about 15 s): a prompt of 10 tokens prefilled in two chunks beside a short request, then decoded, its rows past
+    INDEX_TOPK from position 4. The step compiler builds each request's Program at its launch context (R1, R2 and R3 hold), the
+    long one reading `run` and returning its checks, and that Program is `build_program`'s at the unit's launch batch and chunks.
+    The fast tests build each Program alone; this one holds the batch rules to a Program that reads `run`."""
+    hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
+    reg = _class_g(tmp_path, model={"hf_config": hf})
+    from verity_vllm.program.predict.steps import compile_steps
+    advice, ingress = _session([(10, 3, {**GREEDY, "max_tokens": 3}), (3, 2, {**GREEDY, "max_tokens": 2})],
+                               [[(0, 0, 6)], [(0, 6, 4), (1, 0, 3)], [(0, 10, 1), (1, 3, 1)], [(0, 11, 1)]])
+    c = compile_steps(reg, advice, ingress)
+    long, short = c.requests
+    assert (long.LP, long.T, long.chunks, short.LP, short.chunks) == (10, 2, (6, 4), 3, ())
+    sigs = sorted(("run" in [n for n, _ in ps], str(ret)) for ps, ret in (p.fn.signature() for p in c.programs.values()))
+    assert sigs == [(False, str(Array(2, I32))), (True, str(TupleT(Array(3, I32), Array(24, BIT))))]
+    alone = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": long.policy}), "request", LP=10, T=2, dead_free=True,
+                          batch=long.batch(), chunks=long.chunks)
+    assert alone.digest in c.programs
