@@ -25,6 +25,12 @@ def test_client_ids_come_out_of_engine_ids_with_or_without_a_random_suffix():
         T.client_id("cmpl-other-3-0")
 
 
+def test_the_served_trace_is_the_one_under_serves_server_directory(tmp_path):
+    (tmp_path / "server").mkdir()
+    (tmp_path / "server" / "step_trace.7.jsonl").write_text('{"kind": "header"}\n{"kind": "step", "i": 0}\n')
+    assert T.served_trace(tmp_path) == [{"kind": "header"}, {"kind": "step", "i": 0}]
+
+
 def test_the_arrivals_between_two_edges_carry_their_prompts_and_sampling():
     recs = [arrive(1, 0), arrive(2, 3, temperature=1.0, top_p=0.95), arrive(3, 5), arrive(4, 7)]
     plan = {i: {"i": i, "prompt_ids": [i] * 3} for i in range(1, 5)}

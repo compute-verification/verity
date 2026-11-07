@@ -353,7 +353,8 @@ def config_difference(served: Mapping[str, Any], restored: Mapping[str, Any]) ->
 
 
 def served_trace(served: Path) -> list[dict]:
-    (trace,) = S.step_traces(served / "server")
+    """The served engine core's step trace, from ``serve``'s OUT (its ``server/``)."""
+    (trace,) = S.step_traces(served)
     return S.trace_records(trace)
 
 
