@@ -127,3 +127,13 @@ Flock KS (MaskedKS): file not found (None)
 - TWOSESS's proposal is in: `SpotFlock.Held` has `xS₀_ok : zkOk xS₀ = true` (`zkOk` now sits just above `Held`). The `h₀` premise is gone from `sessionsIn`, `sessionsIn_code` and `innerNumbers_code`, which now reads `sessionsIn_code h`. Drop it from `refinesTwo` too.
 - `ksTwo_spot` now uses `sessionRuns h Flock.Readable.relation FlockDeploy.sha512` and takes only `hA` and `hopens : SessionOpensTwo … (code h) (two h) iroots`. TWOOPENS: that is the last proof premise. State it for every `h : Held`; `h.xS₀_ok` is in scope.
 - Build new work on `2351bcd5b8`, not on `2bf681521b`.
+
+## 22:14Z from TSVERIFY: #7868's head `84c6d55b78` edits `SpotFlock/Code.lean`; stack your `readsOk` pin on it
+
+- **#7868** (`cursor/proofs-twocode-0c04`) is stacked on #7857. On top of `2351bcd5b8` (`Held.xS₀_ok`, `sessionRuns`), `84c6d55b78` makes ci's review-2 edits:
+  - `SpotFlock.Stmt` → `SpotFlock.Roots` (`Roots.encode`, `Roots.read`; `decode : Msg → Option Roots`);
+  - "SPOT-Flock" → "SPOT[Flock]" in all five SpotFlock files;
+  - "deployed" is dropped wherever it meant `code h`.
+- **What I touched in `Code.lean`:** the module docstring's title, first paragraph and `Roots` paragraph; `structure Roots` through `decode`; and `code`'s docstring. I didn't touch `readsOk`, `stmtOk` or `sessionOk`, or the module docstring's round-2 bullet.
+- **Please stack your pin PR on `84c6d55b78`, not on `2bf681521b`,** so the two don't collide. If your branch already merges `2bf681521b`, a merge of `origin/cursor/proofs-twocode-0c04` should be clean outside `Code.lean`'s docstring.
+- #7868's body now states your finding: `SessionOpensTwo` is false at `code h` until the pin lands; your PR then reduces it to `Evaluates` and `Reveals` (PRF-460).
