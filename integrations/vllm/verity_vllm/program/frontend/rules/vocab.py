@@ -472,9 +472,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_indexer_q": lambda H, D, ROPE: ir_bind(_dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE),
            "dsa_mqa_logits": lambda N, H, D: ir_bind(_dsa.DsaMqaLogitsV3, N=N, H=H, D=D),
            "dsa_topk_short_row": lambda TOPK: ir_bind(_dsa.DsaTopKShortRow, TOPK=TOPK),
-           # a row past TOPK keys (registry.dsa_topk): the order the run's Waksman settings route, checked against the top-TOPK set,
-           # and the rows the same settings read
-           "dsa_topk_order": lambda N, TOPK: ir_bind(_dsa_topk.DsaTopKOrder, N=N, TOPK=TOPK),
+           # a row past TOPK keys (registry.dsa_topk): the order the run's Waksman settings route, checked to be the top-TOPK set
+           # in ascending index order, and the rows the same settings read
+           "dsa_topk_long_row": lambda N, TOPK: ir_bind(_dsa_topk.DsaTopKLongRow, N=N, TOPK=TOPK),
            "dsa_waksman_order": lambda N, TOPK: ir_bind(_dsa_topk.DsaWaksmanOrder, N=N, TOPK=TOPK),
            "dsa_waksman_rows": lambda N, TOPK, W: ir_bind(_dsa_topk.DsaWaksmanRows, N=N, K=TOPK, W=W, E=16),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
@@ -625,9 +625,9 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                              "HopperE4m3QgmmaDot32 steps, relu x weight summed per quad lane (the first two heads contracted), x the slot's scale",
            "dsa_topk_short_row": "DsaTopKShortRow_v1{TOPK}: the top-k of a row of at most TOPK keys (top_k_per_row_prefill, cooperative_topk) "
                                  "-- slot i = i < len ? i : -1",
-           "dsa_topk_order": "DsaTopKOrder_v1{N,TOPK}: the selection relation of a row of N > TOPK keys (cooperative_topk's "
-                             "histogram_4096_topk) -- 1 when a TOPK-slot order is a permutation of the top-TOPK set of the "
-                             "logits by convert_to_uint32_v2 key descending, then index ascending",
+           "dsa_topk_long_row": "DsaTopKLongRow_v1{N,TOPK}: the canonical row of N > TOPK keys (VERITY_DSA_TOPK=canonical's "
+                                "rewrite of the top-k kernels' row) -- 1 when a TOPK-slot order is the top-TOPK set of the logits by "
+                                "convert_to_uint32_v2 key descending, then index ascending, listed in ascending index order",
            "dsa_waksman_order": "DsaWaksmanOrder_v1{N,TOPK}: the order a Waksman network of N rows reads its first TOPK outputs in at "
                                 "the run's settings (the indices 0..N-1 routed through it)",
            "dsa_waksman_rows": "DsaWaksmanRows_v1{N,K=TOPK,W,E=16}: the W-word bf16 rows a Waksman network of N rows routes to its "

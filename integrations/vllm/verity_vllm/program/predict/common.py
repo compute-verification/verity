@@ -1,7 +1,7 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
 class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), the
 batch a request's calls run in (`launch_batch`, `_Launch`) or a batch-invariant row's launch context (`launch_rows`, `launch_seqlen_q`) and the
-token select over a row's whole-vocabulary logits (`select_token`)."""
+token select over a row's whole-vocabulary logits (`select_token`), and a wrapper's forwards over a decoder (`drive`)."""
 
 from __future__ import annotations
 
@@ -57,6 +57,45 @@ def _ptypes(spec) -> tuple:
     return tuple(t for _, t in params)
 
 
+def reads_run(net, keys: int) -> bool:
+    """Whether `net`'s rows of up to `keys` keys read a value the served run decides (a DSA row past TOPK: `dsa.Net.reads_run`)."""
+    return bool(getattr(net, "reads_run", None) and net.reads_run(keys))
+
+
+def wrapper_keys(wrapper: str, M: int, LP: int | None, T: int | None) -> int:
+    """The most keys a row of the wrapper reads: a step's M rows attend among themselves, a request's last decode its LP + T."""
+    return int(M) if wrapper == "step" else int(LP) + int(T)
+
+
+def run_input(net, params: list, keys: int):
+    """`derive`'s `run` parameter (`registration.RunInputs`), declared at the end of `params`, where `net`'s rows of up to `keys`
+    keys read a value the served run decides (`reads_run`), else None."""
+    if not reads_run(net, keys):
+        return None
+    from verity_vllm.program.frontend.registration import RunInputs
+    return RunInputs.declare(params)
+
+
+def finish_run(run, params: tuple, B) -> tuple:
+    """The parameters once `run`'s record holds every field the forward read (`RunInputs.finish`), the Builder's too."""
+    if run is None:
+        return params
+    run.finish(final := list(params))
+    B.params = tuple(final)
+    return B.params
+
+
+def with_checks(model, out: Coll) -> tuple[Coll, dict | None]:
+    """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
+    verifier requires to be 1), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks)."""
+    from verity.ml.circuits.types import Tuple
+    checks = getattr(model, "checks", None)
+    if not checks:
+        return out, None
+    ret = Coll(Tuple(out.type, Array(len(checks), Value(1))), concat([out.refs, *[c.refs for c, _ in checks]]))
+    return ret, {"output": 1, "accept": 1, "of": [w for _, w in checks]}
+
+
 @dataclass(frozen=True)
 class _Stochastic:
     """The row's stochastic policy as the select reads it: the seed (and, for several requests, the `splits`) Inputs, the f32 bits of
@@ -66,6 +105,29 @@ class _Stochastic:
     S: Any
     temperature_bits: int
     top_p_bits: int
+
+
+def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int | None, T: int | None, policy: _Stochastic | None,
+          batch: list | None, C: int = 0, chunks: tuple[int, ...] = ()) -> list[Coll]:
+    """The wrapper's forwards over `model` -> its samples: a `step`'s M rows at pos0.. and its last row's sample, or a `request`'s
+    prefill of LP rows (rows C.. after a cached prefix of C; in `chunks`, one forward a chunk, each its own launch, the sample after
+    the last), then T decodes, each fed the previous sample."""
+    if wrapper == "step":
+        hid = model.forward(rows, pos0)
+        return [model.sample(hid[-1], 0, pos0 + M - 1, policy)]
+    a = C
+    for j, n in enumerate(chunks or (int(LP) - C,)):
+        if batch is not None:
+            model.launch.step = j
+        hid = model.forward(rows[a:a + n], a)
+        a += n
+    toks = [model.sample(hid[-1], 0, int(LP) - 1, policy)]
+    for s in range(int(T)):
+        if batch is not None:
+            model.launch.step = max(len(chunks), 1) + s
+        hid = model.forward([Coll(Value(32), toks[-1].refs)], int(LP) + s)
+        toks.append(model.sample(hid[-1], s + 1, int(LP) + s, policy))
+    return toks
 
 
 def select_token(call, k, logits: Refs, V: int, target, event: int, pos: int, policy: _Stochastic | None) -> Coll:
