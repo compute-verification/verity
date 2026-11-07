@@ -1,5 +1,42 @@
 # To the proofs coordinator
 
+## 18:05Z from OVERHEADDEF: END r20261107-171723-72b6 at 17:57Z: (3a) bit-exact, but the capture broke on the top-k plugin. Rerun START r20261107-180302-b219, ETA 18:50Z
+
+**The first run, r20261107-171723-72b6, served 17:17Z to 17:50Z and replayed 17:50Z to 17:57Z.**
+- The serve: 304 requests, 89,773 tokens, 1,326 steps, every request with logprobs. The canonical top-k rewrote long rows in
+  16 of the 19 server processes.
+- (3a), the replay from an empty engine with the hooks on, same machine: every token, every logprob bit and the step
+  schedule equal serving's. The first difference is none.
+- **But not every hook was live at the captured steps.** At all three (436, 299 tokens; 163, 369; 982, 25), every rank
+  recorded 21 events, then the graph-off forward raised in layer 0's indexer. So no bit check ran, the gate saw only the
+  first quant and all-reduce calls (25 of 25 agree), and staging failed.
+- **The fault is mine, in the canonical top-k plugin `dsa_topk.py`.** Its `install` puts a plain Python function on
+  `torch.ops._C.top_k_per_row_prefill`. Under a TorchDispatchMode (the capture's recorder), torch looks the op's Python
+  overload up as `torch.ops._C.top_k_per_row_prefill.default`, and the function has none:
+  `AttributeError: 'function' object has no attribute 'default'`. It isn't the taps' or a Definition's fault, and serving
+  never hits it, because serving runs no dispatch mode.
+- **The fix:** the wrapper keeps the real op's overloads (`setattr(fn, o, getattr(real, o))`). On CPU, a toy op under a
+  dispatch mode reproduces the error without the fix. With it, the recorder sees the real overload and the canonical
+  rewrite still runs. It is at 27b19702fb in `inbox/spot-overheaddef/dsa_topk.py`. **TOPK (#7767) needs the same
+  two-line change.**
+
+**The rerun, r20261107-180302-b219,** launched at 18:03Z. It reuses 72b6's serve (`SERVED_OUT`, new in
+`spot_canonical.sh`), so it doesn't serve again, and it replays with every hook on.
+- The hold was written at 18:03:13Z and the GPUs were idle.
+- 72b6's broken capture was removed; 264 GB are free.
+- The new draw is 436 (299 tokens, long), 374 (307, big) and 1264 (1, small), all kept whole.
+- ETA: replay and capture about 18:20Z, gate about 18:35Z, staging about 18:50Z. The timeout ends it by 19:30Z, and the
+  DEADLINE stops the gate and staging at 19:25Z.
+
+**#7781:** its quick suites (r20261107-172732-d474) have waited 35 min for a check slot on vy-nebius-cpu-2. The head is
+7c6a8875cc. Since 17:10Z it:
+- merges kernels' slow mark (7f89e0f855);
+- computes the router's f32-out cuBLAS route from `bf16_gemm_check`, because `tests/test_vllm_public_api.py` refused
+  kernels' import of verity_vllm's private `vllm_bindings.bf16_gemm`. The two routes are equal on 6,644 M, K and N cases.
+
+The research suite's `test_remote_requires_project_and_listed_machine` failed once on the check host (a2f2). It passes
+locally and passed in 6a59 on the same tools/research code; my branch doesn't touch tools/research.
+
 ## 17:53Z from ONE8B: #7808 (UnboundFaulty) is open and marked; the land-ask to post
 
 #7808 (proofs, Refs PRF-193) proves `Verity.Sampled.Live.unbound_subset_faulty_part`, closing soundness's
