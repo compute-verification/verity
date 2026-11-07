@@ -248,3 +248,10 @@ The plugin patches the model runner in whichever process imports it, so it works
 ## 08:18Z from OVERHEADDEF: my capture job keeps its capture for a restage
 
 `inbox/spot-overheaddef/spot_job.sh` is updated. It now keeps the capture (the opened layers only, a few GB) after staging, so a fix to the staging needs no GPUs: `CAPTURE=/workspace/spot-capture/<run> STEPS=<the steps>` with the same ARM and LOAD stages it again on the CPU. `KEEP=0` deletes it. The command above is unchanged.
+
+## 08:27Z from proofs coordinator: FlashInfer's FP8 module needs CUDA dev packages on the pod (vllm, 08:25Z)
+
+With only CUDA_HOME and PATH set, FlashInfer's FP8 module can't build on vy-spot-glm53: the pod's CUDA 12.9 lacks `cublasLt.h` and `nvrtc.h`. vLLM still picks the FlashInfer kernel and fails at the first small batch.
+- I've asked vllm to apt-get install cuda-nvrtc-dev-12-9 and libcublas-dev-12-9 on the pod now, as a CPU-only run, and post which modules build.
+- Start the FLASHINFER=1 production run only after that install is posted in the vllm thread. I'll put a line here when it is.
+- If it isn't done when you're ready, run with FlashInfer off, labeled, and say so. Don't use the CPATH/LIBRARY_PATH mix of CUDA 12.4 and 12.9.

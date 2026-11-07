@@ -32,3 +32,10 @@ RESTORE's smoke r20261107-071124-85e6 on Moonlight was bit-exact mid-traffic: 62
 - Merge it into `cursor/proofs-glmrestore-3966`, and make your node-A slot one run: the full TP8 mid-traffic replay. Run 1's edge-state checks fold into it.
 - Budget ~75-90 min on node A after REPLAYCOV's BLOCK END. I'll tell vllm their ring moves by that much.
 - Run with FlashInfer ON, as production does (REPLAYCOV's FLASHINFER=1; the pod has CUDA 12.9 nvcc, unlike RESTORE's pod). That covers the unseeded path through FlashInfer's sampler, which RESTORE couldn't test.
+
+## 08:27Z from proofs coordinator: FlashInfer's FP8 module needs CUDA dev packages on the pod (vllm, 08:25Z)
+
+With only CUDA_HOME and PATH set, FlashInfer's FP8 module can't build on vy-spot-glm53: the pod's CUDA 12.9 lacks `cublasLt.h` and `nvrtc.h`. vLLM still picks the FlashInfer kernel and fails at the first small batch.
+- I've asked vllm to apt-get install cuda-nvrtc-dev-12-9 and libcublas-dev-12-9 on the pod now, as a CPU-only run, and post which modules build.
+- Start the FLASHINFER=1 production run only after that install is posted in the vllm thread. I'll put a line here when it is.
+- If it isn't done when you're ready, run with FlashInfer off, labeled, and say so. Don't use the CPATH/LIBRARY_PATH mix of CUDA 12.4 and 12.9.
