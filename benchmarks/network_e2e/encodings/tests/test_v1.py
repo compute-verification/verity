@@ -205,8 +205,8 @@ def test_the_batch_order_is_recovered_from_later_steps(smallkv):
 
 def test_every_hit_is_the_replays_past_the_bound_too(smallkv):
     """Past the pool bound, where the replay evicts, every hit is still its block pool's: the residual sends none and
-    the string decodes back to the advice. Under a book with room for hits, a string that sends one, the 0 or 1 block
-    shortfall v1 used to send at any window, is refused by name."""
+    the string decodes back to the advice. Under a book with room for hits, a string that sends one, a shortfall of 0
+    or 1 block at any window, is refused by name."""
     t, rec, adv, reg = smallkv
     life = sum(-(-(q.prompt_len + q.output_len) // t.engine.block_size) for q in adv.requests)
     assert life > t.engine.num_gpu_blocks - 1 and any(x.cache_hit for st in adv.steps for x in st.rows)

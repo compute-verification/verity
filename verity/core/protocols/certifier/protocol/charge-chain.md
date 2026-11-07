@@ -81,15 +81,13 @@ window: two rows, the charging proof block's two reads (each a frame-v3 path of 
 ## The whole window (`window_charge`)
 
 `ChargeCount_v1{N}` codes `code_v1`'s four other counts (n_hits, n_resumes, n_order, n_lag) as 0 (`ZERO_COUNTS`), so it
-charges only a window that sends decisions alone. Advice v1 sends two of them:
-- **n_hits** counts the hits sent past the pool bound: one shortfall, in hit units, for each lookup the replay reads.
-- **n_order** counts the order entries: one for each arrival that deviates from release order, under the client's
-  ingress.
+charges only a window that sends decisions alone. Advice v1 sends one of them, **n_order**, the order entries: one for
+each arrival that deviates from release order, under the client's ingress.
 
-The other two are always 0 under v1. The replay derives preemptions and the certified O forces each lag row, so the
-advice code (`advice_code.codec`) refuses a window that sends resumes or lag bits. `ChargeCount_v2{N, H, O}` charges the
-whole window, its decisions and both counts with their values, as one `window_code` segment with one count and one
-finish. With H = O = 0 its charge, counts
+The other three are always 0 under v1. Every hit is the replay's block pool's, past the pool bound too, the replay
+derives preemptions and the certified O forces each lag row, so the advice code (`advice_code.codec`) refuses a window
+that sends hits, resumes or lag bits. `ChargeCount_v2{N, H, O}` charges the whole window, its decisions and the hits'
+and order entries' counts with their values, as one `window_code` segment with one count and one finish. With H = O = 0 its charge, counts
 and run are `ChargeCount_v1{N}`'s; the tests check this on the fixture's windows and on random ones.
 
 **The symbols**, in `window_code.code_window`'s order. Each is a (cum, freq, total) step of code.py's 32-bit `ArithEncoder`,
@@ -194,13 +192,13 @@ The Lean definitions (`Security/Definitions/NetworkCertifier/WindowCharge.lean`)
 and the window difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
 (`CodeChargesWhole`), gives what `reference_window` gives on 4,000 random instances (`lean/scripts/window_vectors.py`).
 
-**The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its windows send no
-hits and no order entries. It keeps `ChargeLink_v1{D}` over `replay-charge` as above, and nothing in its wiring changes.
-A class whose windows send hits or order entries does the following:
+**The slice.** The compile slice's class runs with the network certifier's ingress, so its windows send no order entries,
+and v1's windows send no hits. It keeps `ChargeLink_v1{D}` over `replay-charge` as above, and nothing in its wiring changes.
+A class whose windows send order entries (or a code's that sends hits) does the following:
 - It calls `window_charge.build_link(C, N, H, O, book, row_in, row_out, en, bits, hen, short, oen, p, r)` over
   `window-charge`'s rows (`window_charge.reads()`), in place of `charge_chain.build_link` over `replay-charge`'s.
-- Its `hen` and `oen` are the replay's, as `en` is (en_i = i < `count`): a hit slot for each lookup past the pool
-  bound, an order slot for each arrival out of release order, enabled slots first, never the prover's. Nothing reads a
+- Its `hen` and `oen` are the replay's, as `en` is (en_i = i < `count`): a hit slot for each hit the code sends (none
+  under v1), an order slot for each arrival out of release order, enabled slots first, never the prover's. Nothing reads a
   disabled slot's value: the charge counts only enabled slots, so a slot arrangement or a disabled value the prover
   chose would pass log2(C(H, h) · C(O, o)) bits and those values uncharged (`test_network_certifier_window_charge_slots.py`:
   every arrangement and disabled values past every cap give one charge and one carry).

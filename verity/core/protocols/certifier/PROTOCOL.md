@@ -1273,8 +1273,9 @@ preemptions. It needs one decision per open step: whether the next request had a
 gives the batch order (Model Runner V2's stable sort by n), I1's numbering by first row, `kind`, the canonical
 `sources`, and the request records (`prompt_len`, `output_len`, `finish`). While the cumulative pool bound holds (sync
 scheduling, and ⌈(P + O)/B⌉ blocks for each request admitted through the step, that step's included, at most
-NB − 1), nothing has been evicted, and every hit is the longest cached prefix, at 0 bits. The resumes and the new
-requests' order that the walk would otherwise read are the replay's.
+NB − 1), nothing has been evicted, and every hit is the longest cached prefix. Past it, every hit is the replay's block
+pool's, which the compile slice's pool derives (`CacheStep_v2`). The hits, the resumes and the new requests' order that
+the walk would otherwise read are the replay's, at 0 bits.
 
 **The arrival order**, recovered from the advice's rows (`v1.arrival_order`). FCFS admits new requests in arrival
 order, so arrivals go by first step, and within a step by the scheduler's order. Under the scheduler's row order that
@@ -1296,12 +1297,12 @@ the order is the topological one that:
   (p, (r,)): positions gap-coded and increasing, ranks zigzag-coded, `order_len` registered at 1 (`v1.CAPS`). The sum
   of the ranks is the inversion count. The decoder (`v1._arrival`) refuses rank 0, a position or rank past the
   requests left, and a repeated position.
-- *The hits past the bound.* Past the bound, eviction may shorten a hit, so the hit is the prover's choice, and v1
-  sends it. It sends every prefix-cache lookup the replay's scheduler reads at a step past the bound, in the order it
-  reads them. Those are each waiting candidate its loop reaches (the one whose allocation ends the loop included) and
-  the next arrival `would_admit` checks before a decision is asked. Each goes as its shortfall: the longest prefix a
-  cache that never evicts holds, less the hit, in blocks. That is 0 unless the replay evicted. Every lookup is then
-  derived or sent, so no prover choice goes uncharged, and the encoding is injective on the whole schedule.
+
+*Not sent: the hits.* Past the bound, eviction may shorten a hit, and the replay's pool (`pool.BlockPool`, vLLM's
+LRU) fixes it, so no hit is the prover's choice. v1's caps hold the hits, the resumes and the lag bits at 0
+(`v1.CAPS`), so their counts code in 0 bits, and the decoder refuses a window that sends one. Every value the schedule
+reads is then replayed, derived or sent, so the encoding is injective on the whole schedule. Under the certified tick
+the registered caps hold no count, so every window codes nothing and is charged 0 bits.
 
 *Not sent: the KV pool.* `num_gpu_blocks` is public and registered before the run, in `Registered.engine`, never in
 the string. It used to be a header the prover set, about 20 bits, and that undercharged: a bigger declared pool keeps
@@ -1317,7 +1318,6 @@ refuses honest traffic wherever the engine's order isn't the network certifier's
 when none follows): the first window whose rows a value read at step s can change. Arrival i's ingress window is the
 earliest of ⌊a_j / T⌋ over it and every later arrival j. That never decreases, even where the arrivals deviate from
 release order.
-- A sent hit at step s goes to step s's window.
 - A decision about arrival i at step k goes to the earlier of step k's window and i's ingress window.
 - An order entry for arrival p goes to the earlier of p's ingress window and the window of the first step that reads
   p: a decision about it, a lookup of it, or its admission.
@@ -1335,8 +1335,8 @@ release order.
   canonical JSON) is registered before the first window.
 - `decode` runs `code_v1.decode`, which takes only the canonical segments, then the order entries' inverse, then the
   replay, which consumes the decisions in order. It refuses the string unless its windows are the replay's residual
-  (every hit, and every value's window) and its order is the one `arrival_order` recovers from the advice it decodes
-  to.
+  (no hit, resume or lag bit, and every value in its window) and its order is the one `arrival_order` recovers from
+  the advice it decodes to.
 
 The compile slice's proof block commits the values themselves, not this string, and the string's segments are only their
 charge (the composition below): what the bound counts is the charge, not the committed length.
@@ -1350,16 +1350,18 @@ charge (the composition below): what the bound counts is the charge, not the com
 **Composition**, all in one ZK proof under the advice's hiding root:
 1. *The values are the committed advice.* The advice's hiding rows hold each window's residual raw, as
    `replay_chain`'s window row: its decisions as bits in the scan's order, at most D a window (4,391 on the corpus'
-   largest), in `dec` with their count `left`; its sent shortfalls, at most H, in `hits` with `hleft` ("The rows"
-   below); and its order entries (position, rank). No decoder runs in the circuit: the scan reads each field at a
-   private head of the chain's (`dh`, `hh`).
+   largest), in `dec` with their count `left`; its `hits` group ("The rows" below), which v1 leaves empty; and its
+   order entries (position, rank). No decoder runs in the circuit: the scan reads each field at a private head of the
+   chain's (`dh`, `hh`).
 2. The scan of `ReplayStep_v1` over the session's steps, from the empty engine. The window row holds a queue of the
    next Q released requests not yet arrived, in (a, ordinal) order, Q a public cap like H, and arrival p takes the one
    at its order entry's rank (0 where none names p; a rank of Q or more is refused). Q = 128 holds the network certifier's traces'
    largest, 75 (heavy; p50 7) and 2 (small KV). The chain fills the step's A arrival slots from the queue, each
-   `arr_id` its arrival ordinal, so `ReplayStep_v1` needs no change for the ranks. The decisions are the scan's bits,
-   and each lookup's hit is h* less the committed shortfall. The chain reads every committed value and none past
-   them, so the values are exactly the asks, the deviations and, past the bound, the lookups. Under async scheduling
+   `arr_id` its arrival ordinal, so `ReplayStep_v1` needs no change for the ranks. The decisions are the scan's bits.
+   While the bound holds each lookup's hit is h*. Past it, `CacheStep_v1`'s table, which never evicts, can't give the
+   pool's hit and v1 sends none, so the session needs `CompileSlice_v2`, whose pool (`CacheStep_v2`) derives each
+   one. The chain reads every committed value and none past them, so the values are exactly the asks and the
+   deviations. Under async scheduling
    (AS) the certified O forces each lag row, at no decision (`ReplayStep_v1`'s "Async scheduling").
 3. *The charge.* The registered code runs forward over the same values: per window, `code_v1`'s window over
    the values charged to it, in `code_v1._window`'s order, on the encoder ("The encoder in the circuit"
@@ -1383,7 +1385,7 @@ charge (the composition below): what the bound counts is the charge, not the com
   and no segment is compared. `encode` is injective on the values and its strings are prefix-free, so at most 2^c value
   lists are accepted at a charge of c or less ("The bound" above).
 - *A window's run*, in `code_v1._window`'s order: n_arrived = `left`; each decision slot j < D at context min(run, 2),
-  its (f0, f1) from `BookKT_v1{3}`, coded by `ArithCountStep_v1{18, 1, 20}`; n_hits = `hleft` and each shortfall;
+  its (f0, f1) from `BookKT_v1{3}`, coded by `ArithCountStep_v1{18, 1, 20}`; n_hits = `hleft` (0 under v1);
   n_resumes (0 under v1); n_order and each order entry's position gap and rank step; n_lag (0 under v1); then
   `ArithCountFinish_v1{20}`. Slots past a count run with en = 0. A refusal (a symbol
   code.py refuses, more than K scalings, a count past 2^20, a charge past c_w) fails the proof block, and K = 18 never
@@ -1469,8 +1471,9 @@ in `ReplayStep_v1`'s scheduling order:
     hold every unit computed: 149,212 bits of table a state row at smallkv's (511, 16, 17, 10).
 - *Past the bound.* The table never evicts, so it holds every unit the session computed, not NB − 1: 961 units on
   corpus-smallkv's fixture, whose pool is 100 blocks. An evicting cache never hits past what a cache that never evicts
-  holds, so a shortfall is at least 0, and v1's encoder refuses a replay hit past h*. `CacheStep_v1`'s own `sent` = 1
-  mode, a hit checked only as a cached prefix, is then unused.
+  holds, so a shortfall is at least 0. v1 sends none: past the bound each hit is the pool's, which `CacheStep_v2`
+  derives, so the window row's `hits` group and `CacheStep_v1`'s own `sent` = 1 mode, a hit checked only as a cached
+  prefix, are unused.
 - *Cost* (`cache_step.size`): a call walks ⌈L / U⌉ units at about N·(2·(U·TW + EW) + 2·RW) ANDs each. That is 5,856
   ANDs at (N, U, TW, RW, L) = (8, 4, 8, 4, 32), and 38.4M at smallkv's (511, 16, 17, 10, 2048): about 1.1G a step at
   (R, W, A) = (4, 8, 4), where `ReplayStep_v1` is 12,235. The linear table is a slice's size class, and its difftest
@@ -1509,8 +1512,8 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   each, 2.2e8 ANDs for the session, plus a 5.7M-AND pass: some 35,000 times less than the linear table. At 2.9M ANDs a
   layer (E/2 comparators), it fits as 91 layer proof blocks or as one proof block, whichever size class the service
   runs.
-- *The block pool, in the same records.* The same mechanism replays the pool's LRU, which the circuit doesn't run
-  yet:
+- *The block pool, in the same records.* The same mechanism replays the pool's LRU, which `CacheStep_v2` runs as a
+  linear table:
   - The free queue becomes a doubly linked list over block ids, a node per block holding prev, next and its reference
     count, about 50 bits a record keyed by BW = bitlen(NB) bits.
   - The hash map becomes the table above, with a delete record when a block is evicted. An entry's id is the time of
@@ -1520,26 +1523,21 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
     and at most 1,247 deletes, 9,473 in all.
   - That is two sorts at 2^14: about 5.3e8 ANDs for the hash records and 0.9e8 for the nodes, about 6.2e8 for the
     session, 2.8 times the never-evicting table's.
-  - It buys the hits. Each hit past the bound becomes the real pool's, derived at 0 bits, and v1 stops sending
-    shortfalls. On the smallkv traces, almost all of v1's charge is shortfalls.
-- *The gap it closes* (the phase-7 attack's second case). Past the bound the scan holds a hit only to the never-evicting table: the
-  hit is h* less the sent shortfall. So any hit up to the longest donor prefix passes, whatever the real pool evicted.
-  The attack's probe holds this: a hit no donor computed is refused, and a shorter one is accepted. v1's decoder holds
-  each shortfall to the replay's LRU, and the circuit can't, so the circuit accepts strings v1 refuses. The choice is
-  charged (each shortfall is sent), so the leak bound holds. But the schedule the circuit accepts needn't be the one
-  vLLM's pool gives, and the shortfalls are most of smallkv's charge. Replaying the pool makes the circuit's hit the
-  replay's.
+  - Each hit past the bound is the real pool's, derived at 0 bits, as v1 takes it.
+- *The gap the pool closes* (the phase-7 attack's second case). Past the bound the never-evicting table holds a hit
+  only to h*, so any hit up to the longest donor prefix passes, whatever the real pool evicted. The attack's probe
+  holds this: a hit no donor computed is refused, and a shorter one is accepted. So `CompileSlice_v1` past the bound
+  would need a sent shortfall, and the schedule it accepts needn't be the one vLLM's pool gives. v1 sends none: its
+  decoder holds each hit to the replay's pool, and `CompileSlice_v2` holds the circuit's to `CacheStep_v2`'s.
 
 **Open.**
 - *The charge's pieces* (composition item 3, "The encoder in the circuit").
   - The counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`).
-    Lowering an integer (the window's counts, each order entry and each shortfall) to its `Binned` symbols in
-    the book's public tables isn't built, so the circuit charges the decisions only.
-- `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
-  The hits are fixed: `CacheStep_v1` derives them while the no-eviction bound holds, and past it each is the longest
-  cached prefix less v1's sent, charged shortfall. The evictable counts and the returns stay bounded witness. A
-  reference count per entry in the table would fix both while the bound holds. Past it they need the replay's LRU
-  block pool in the circuit (offline memory checking's block pool, above), which also closes the hit's gap.
+    Lowering an integer (the window's counts and each order entry) to its `Binned` symbols in the book's public
+    tables isn't built, so the circuit charges the decisions only.
+- In `CompileSlice_v1`, `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns)
+  as witness it bounds, and `CacheStep_v1` derives the hits only while the no-eviction bound holds. `CompileSlice_v2`
+  derives all three from `CacheStep_v2`'s pool, past the bound too.
 - Past the bound the table holds the session's units, so the scan at a whole session's size needs offline memory
   checking (above).
 - *The order's floor.* A server that admitted in release order at the next bucket boundary, a change to vLLM's
