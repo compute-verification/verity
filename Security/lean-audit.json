@@ -3752,6 +3752,7 @@
    "Claims.SamplingGeneric.CompiledTwo.Scope": "a helper the claims read: the two-stage scope on the statement's bytes, which `CompiledTwo.KS` reads",
    "Claims.SamplingGeneric.CompiledTwo.Sessions": "a helper the claims read: the two-stage compiler's contract, the code facts `CompilerKSTwo` takes of a compiled two-stage verifier",
    "Claims.Sampling.InScopeTwo": "a helper the claims read: the programs, partitions and two-stage designs the two-stage scope takes",
+   "Claims.Sampling.Prog.Reads": "a helper the claims read: a gate reads a wire through the gates between, which `blocksTo` reads",
    "Claims.Sampling.Design.Two.WellFormed": "a helper the claims read: a well-formed two-stage design, a well-formed first stage and one `k ≥ 1` per stratum",
    "Claims.RecGeneric.AccAt": "a helper the claims read: some run of the compiled verifier accepts the statement, which gates the contract's two V* facts",
    "Claims.RecGeneric.Comp.Replays": "a helper the claims read: the contract's code fact that E_O gives witnesses only on accepted runs, which `CompositionKS` reads",
@@ -3789,6 +3790,8 @@
    "Claims.ZKOutLeak": "Claims.zkOutLeak",
    "Claims.SamplingGeneric.CompilerKSTwo": "Claims.SamplingGeneric.compilerKSTwo",
    "Claims.SamplingGeneric.CompilerExfilTwo": "Claims.SamplingGeneric.compilerExfilTwo",
+   "Claims.Sampling.AdmissibleTwoRankin": "Claims.Sampling.admissibleTwo_rankin",
+   "Claims.Sampling.AdmissibleTwoRankinPatterns": "Claims.Sampling.admissibleTwo_rankin_patterns",
    "Claims.RecGeneric.CompositionKS": "Claims.RecGeneric.compositionKS",
    "Claims.RecGeneric.CompilerKS": "Claims.RecGeneric.compilerKS"
   }
@@ -4024,6 +4027,14 @@
   "Claims.SamplingGeneric.compilerExfilTwo": {
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerExfilTwo_nontrivial"
+  },
+  "Claims.Sampling.admissibleTwo_rankin": {
+   "honest": ["Claims.Witness.SamplingGeneric.rankinTwo_honest"],
+   "nontrivial": "Claims.Witness.SamplingGeneric.rankinTwo_nontrivial"
+  },
+  "Claims.Sampling.admissibleTwo_rankin_patterns": {
+   "honest": ["Claims.Witness.SamplingGeneric.rankinTwoPatterns_honest"],
+   "nontrivial": "Claims.Witness.SamplingGeneric.rankinTwoPatterns_nontrivial"
   },
   "WeightSecurity.SecurityProofs.Theft": {
    "honest": ["WeightSecurity.SecurityProofs.TheftHonest"],
@@ -11219,6 +11230,12 @@
    },
    "type_hash": "7e486479b31d0cb8c8a2441bf3b7130dc9945d9a0bf4e5ae34a772da377e4760"
   },
+  "Claims.Sampling.admissibleTwo_rankin": {
+   "owner": "@proofs"
+  },
+  "Claims.Sampling.admissibleTwo_rankin_patterns": {
+   "owner": "@proofs"
+  },
   "Claims.Sampling.decoder_meets_plain": {
    "owner": "@proofs",
    "signature": [
@@ -12663,6 +12680,18 @@
     "reads": []
    },
    "type_hash": "6deaa2f679a24c3e983314b73278ba6b91df81a6813529f8e2bba55a970830e1"
+  },
+  "Claims.Witness.SamplingGeneric.rankinTwoPatterns_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.SamplingGeneric.rankinTwoPatterns_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.SamplingGeneric.rankinTwo_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.SamplingGeneric.rankinTwo_nontrivial": {
+   "owner": "@proofs"
   },
   "Claims.Witness.SamplingGeneric.twoOpenCalls_meets": {
    "owner": "@proofs",
