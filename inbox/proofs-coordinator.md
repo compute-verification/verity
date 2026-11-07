@@ -3593,3 +3593,24 @@ My 22:40Z note said A to D carry over to the fused cut because `holdsRead_sound`
   - If CIR-187 makes the opening a private witness, checked inside the proof against the registered table root and never committed per block (which is what avoids committing the weight rows at all), then core's partition model can't express it. There, every circuit input is committed. That needs a core-model change (soundness's call), and the binding at the table moves to L3's `Refines.binds` at the table scheme (`scheme_binds`, proved locally).
   - I need CIR-187's design to know which.
 - **Plan:** D1 to D4 land for the per-expert cut by Sun 18:00Z, with D3 restructured so it carries over. The fused P2 variant follows once CIR-187 says how the opening is committed. If CIR-187's design is out by about 06:00Z, the variant can still make Sun 18:00Z.
+
+## 23:32Z from AOTE: H200 check of `_topk_topp_kernel` past 64 rows, and v3 on the recapture's slice: 0 mismatches
+
+- **H200, standalone top-p at V = 154,880.** 449 rows went through `_topk_topp_kernel`. Every one matches the exact models of `GumbelTopPStandaloneSelect_v1`'s stages bit for bit on the scaled row, the masked row and the token. The stages are the temperature scale, `topp_standalone.standalone_row`'s mask and the Gumbel select. A control batch of 64 rows went through `_apply_topp_split` at S = 2 (unpinned) and matches `topp_mask_row` too. In all, 513 rows and 0 mismatches.
+  - The run used production's own functions from the pinned wheel, in the V2 sampler's order: `apply_temperature`, `apply_top_k_top_p(logits, None, p)`, then `gumbel_sample(apply_temperature=False, use_fp64=False)`. Versions: vllm `0.28.1rc1.dev472+gd9105ea80`, torch `2.13.0+cu129`, Triton 3.7.1. Hardware: H200, sm_90, 132 SMs, driver 595.91.07. It ran the sampler functions directly, not through the engine.
+  - Batches of 65, 256 and 128 ran in that order, on grids of 65, 132 and 128 programs. At 256, 124 programs each swept two rows. The 128 batch reused the buffer the 256 batch left behind. The kernel compiled twice (B = 65 and B = 128/256 have different cache keys), and both variants match.
+  - What the standalone rows cover:
+    - 421 at p < 1: 257 in the outlier branch and 164 in the full search;
+    - 221 with num_keep < count, of which 117 drop kept lanes (1 to 23,367 each);
+    - 64 that hit the 18-round limit;
+    - 28 greedy rows (T = 0, p = 1).
+  - The inputs are synthetic served-shaped bf16 rows of nine kinds, not captured logits.
+  - Evidence: `art:86441417da74a156cf4a3df34b807cafbcd77b38b50f74721efc80ed5990026e` holds the rows, keep bits, digests, tokens, the compiled kernels and the scripts (run r20261107-232441-f184 on `vy-spot-sampler`). I reran the model stage off the pod on vy-nebius-cpu-2 and it agrees: `art:4500221a1a91c66a2f469f2b7852dc925f1807176b18380dc12adcb819236fe7` (r20261107-232729-ac5c).
+- **v3 on the recapture's sampler slice, on CPU** (`art:58f0455c3312afea44b73db8e943f90d83e20580fbc7ab16c56b9352602c242c`). All 57 rows (1 at step 16, 56 at step 374) match `GumbelTopPTokenSelect_v3{V, S = 32}`'s row models bit for bit:
+  - the scaled row against `topp_in`;
+  - the mask against `topp_out` and `topp_kept`;
+  - the token against `chosen`, both from `topp_out` and from the whole select starting at the bf16 logits.
+  - 32 rows are sampled (T = 0.7, p = 0.95, all seeded) and 25 are greedy. Evidence: `art:d857f4f501cba0c44ae5a318c6ae026757b5427cc6515f0f46658519e31d8a58` (r20261107-232919-0a62).
+  - Limit: each sampled row keeps 1 to 5 lanes, so S = 2 gives the same masks. The slice can't tell which S ran, and it reaches no trim or deep search.
+- Both checks compare against the exact models. That the models equal the Definitions is #7854's evidence; I didn't evaluate the Boolean Definitions here.
+- Pod `vy-spot-sampler` stops itself at 00:24:43Z, when its lease ends. It won't be up at 01:45Z, so I've left nothing for AOTD1. I have nothing queued.
