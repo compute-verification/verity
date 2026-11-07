@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SamplingGeneric.Masked
-public import Proofs.Flock.Claims.Sampling.OpensTwo
+public import Proofs.Flock.SamplingGeneric.OpensTwo
 import Proofs.Flock.Masked
 import Proofs.Flock.SamplingGeneric
 import Proofs.Flock.SamplingGeneric.Two

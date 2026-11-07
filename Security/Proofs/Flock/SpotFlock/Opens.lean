@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.Code
-public import Proofs.Flock.Claims.Sampling.OpensTwo
+public import Proofs.Flock.SamplingGeneric.OpensTwo
 public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Claims.Sampling.ProgReads
 
