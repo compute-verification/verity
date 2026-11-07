@@ -13,7 +13,8 @@ Quality: each arm's per-window NLL (qat.py's `window_nll`, `loss70b.load`) from 
 NAME of QUALITY (`research data fetch RUN's run_record --path 'out/*' --to DIR/NAME`), as ratios to bf16 paired window
 by window over WikiText-2's 141 windows and FineWeb-Edu's first 32 (and its 512 where both sides have them).
 Credit: `tables.load`'s book (the defence's records at a = 4, tables.SOURCES), with layers 40-79's design-U records
-replaced by LEVERS' at a; the exact rule reads each matrix's least exact route, the generous rule each q and k at
+replaced by LEVERS' at a (`research fetch RUN --all --on NODE`; a record the node evicted comes back with
+`research data fetch` of the run's record, as its run-files.evicted.json says); the exact rule reads each matrix's least exact route, the generous rule each q and k at
 min(its credit, its generous least / 1.05) as HT-GENEROUS's revised point (`generous.revised`), and at a = 3 or 2 every
 matrix of layers 40-79 at min(1, min(exact, generous least) / 1.05).
 """
@@ -193,6 +194,22 @@ def main(argv=None) -> int:
     print()
     print(f"bf16: {', '.join(QUALITY[n] for n in BF16)}; pricing at a = 4: tables.SOURCES; at a = 3 and 2: "
           f"{', '.join(sorted({r for r, _p in LEVERS}))}")
+    print()
+    print("Each lever against the point it changes, paired window by window (ratio − 1 ± paired SE), and the credit "
+          "it costs (exact rule):")
+    print()
+    print("| arm | against | WikiText-2 | FineWeb-Edu, first 32 | credit lost |")
+    print("|---|---|---|---|---|")
+    by = {r["arm"]: r for r in rows}
+    rec_arm, a_arm = next(iter(ARMS)), list(ARMS)[1]
+    for arm, (smap, spec, _n, a, head) in ARMS.items():
+        for vs in ([rec_arm] if arm != rec_arm else []) + ([a_arm] if head and a != 4 else []):
+            vmap, vspec = ARMS[vs][:2]
+            cells = [pct(window_ratio(data.get((smap, spec, s), {}), data.get((vmap, vspec, s), {}), n))
+                     for s, n in (("wikitext2", WT_WINDOWS), ("fineweb_val", FW_FIRST))]
+            ce, cv = by[arm]["credit"]["exact"], by[vs]["credit"]["exact"]
+            lost = f"{100 * (cv['share'] - ce['share']):.3f} points" if ce and cv else "–"
+            print(f"| {arm} | {vs} | {cells[0]} | {cells[1]} | {lost} |")
     rec_fw = data.get(("70b-defl", "e2:F", "fineweb_val"), {})
     if all(i in rec_fw and i in bf16["fineweb_val"] for i in range(FW_ALL)):
         cpu = {k: sum(v[i] for i in range(FW_ALL)) / FW_ALL for k, v in (("bf16", bf16["fineweb_val"]), ("e2:F", rec_fw))}
