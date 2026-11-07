@@ -39,6 +39,8 @@ def main(argv=None) -> None:
 
     one = total_cost.run(args.model, request=args.request, workers=args.workers)
     one["at_budgets"] = total_cost.at_budgets(one)
+    one["breakeven"] = total_cost.breakeven(args.model, request=args.request, workers=args.workers)
+    (args.out / "breakeven.txt").write_text(total_cost.breakeven_table(one["breakeven"]))
     write(one, args.out / "figure1.json")
     for name in one["scopes"]:
         total_cost.render(one, name, args.out)

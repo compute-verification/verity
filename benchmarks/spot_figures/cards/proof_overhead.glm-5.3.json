@@ -4,7 +4,7 @@
  "model": "GLM-5.3",
  "status": "measured",
  "provisional": true,
- "source": "GLM-5.3's proof blocks (benchmarks/served_units/stage.py's types at TP8) proved on one H200 by flock-circuit prove --zk --gpu, warm, full 2^35-bit statements (benchmarks/one_stage/zk_cost.py overhead, arm dev, e2e); priced per census stratum on the census's workload card by fig1_glm.py, each stratum by the staged Definition of its kind and K (the evidence's out/figure1-glm.json names it); the strata no measured type prices (under 1% of the price) are left pending. Model h, prefill, end to end: as registered (today's circuit) dev 1.4e+10 marginal, 1.3e+11 at full statements; per expert (the design point, needs the per-expert Definitions registered) dev 4.6e+08 marginal, 1.1e+09 at full statements. The other arms: nofw (FC_HOST_WITNESS=1) 1.1e+11 marginal, 2.3e+11 at full statements registered, 2.9e+09 marginal, 3.6e+09 at full statements per expert; fw (FC_HOST_WITNESS=1 FC_FIREWALL=1, the ZK server's path; its send check fitted on drawn sessions and extrapolated to 2^35 bits) 1.7e+13 marginal, 2e+13 at full statements registered, 4.5e+11 marginal, 4.6e+11 at full statements per expert. SPOT's prover is the dev arm. Beside them, the seven block types of GLM-5.3's MoE cut per expert, under the per-expert partition card's names, so that a line on that cut prices them measured: Each per-expert block type's proving time measured on one H200 SXM (RunPod) with the deployed prover, flock-circuit prove --zk --gpu, at its partition-card statics and staged k_log, at full and half statements (2^35 witness bits at full; the k_log 25 reads also at a quarter), every block drawn, one warm process and two or three timed sessions each. Lean flock-verify checked one session a type and arm at its largest statement: each passed every check, then was refused only for lacking the Program, which these statements are staged without. h is proving GPU-seconds over the MACs' seconds at 9.8943e+14 MAC/s (verity.hardware.rate, the H200's e4m3). model_overhead and the label stay the registered cut's; the per-expert cut's own is 5.53e+08 marginal end to end, 1.7e+09 at full statements. Every block's overhead is at verity.hardware.rate's peak, 9.8943e+14 MAC/s (the registered blocks' rescaled from the data sheet's 9.8945e+14).",
+ "source": "GLM-5.3's proof blocks (benchmarks/served_units/stage.py's types at TP8) proved on one H200 by flock-circuit prove --zk --gpu, warm, full 2^35-bit statements (benchmarks/one_stage/zk_cost.py overhead, arm dev, e2e); priced per census stratum on the census's workload card by fig1_glm.py, each stratum by the staged Definition of its kind and K (the evidence's out/figure1-glm.json names it); the strata no measured type prices (under 1% of the price) are left pending. Model h, prefill, end to end: as registered (today's circuit) dev 1.4e+10 marginal, 1.3e+11 at full statements; per expert (the design point, needs the per-expert Definitions registered) dev 4.6e+08 marginal, 1.1e+09 at full statements. The other arms: nofw (FC_HOST_WITNESS=1) 1.1e+11 marginal, 2.3e+11 at full statements registered, 2.9e+09 marginal, 3.6e+09 at full statements per expert; fw (FC_HOST_WITNESS=1 FC_FIREWALL=1, the ZK server's path; its send check fitted on drawn sessions and extrapolated to 2^35 bits) 1.7e+13 marginal, 2e+13 at full statements registered, 4.5e+11 marginal, 4.6e+11 at full statements per expert. SPOT's prover is the dev arm. Beside them, the seven block types of GLM-5.3's MoE cut per expert, under the per-expert partition card's names, so that a line on that cut prices them measured: Each per-expert block type's proving time measured on one H200 SXM (RunPod) with the deployed prover, flock-circuit prove --zk --gpu, at its partition-card statics and staged k_log, at full and half statements (2^35 witness bits at full; the k_log 25 reads also at a quarter), every block drawn, one warm process and two or three timed sessions each. Lean flock-verify checked one session a type and arm at its largest statement: each passed every check, then was refused only for lacking the Program, which these statements are staged without. h is proving GPU-seconds over the MACs' seconds at 9.8943e+14 MAC/s (verity.hardware.rate, the H200's e4m3). model_overhead and the label stay the registered cut's; the per-expert cut's own is 5.53e+08 marginal end to end, 1.7e+09 at full statements. Every block's overhead is at verity.hardware.rate's peak, 9.8943e+14 MAC/s (the registered blocks' rescaled from the data sheet's 9.8945e+14). Beside them, 14 registered types of the census that no earlier card measured (the all-reduces, FlashInfer's and cuBLAS's GEMMs, the FP8 group quantization, the norms, SparseMLA's split part and combine and the residual add, under the census's names), so that the planner prices their blocks measured: each a whole Definition bound from its census name (serving_rows.template) on one bf16-row a port, staged on N(0, 1) words, its proving time measured on one H200 SXM (RunPod) with the deployed prover, flock-circuit prove --zk --gpu, at statements of 2 and 64 blocks (the planner proves one to three of these a statement, so the fixed seconds at small statements is what it charges), every block drawn, one warm process and two timed sessions each; statement_blocks is the 2^35-bit cap at the staged k_log. Lean flock-verify checked the newest session of each type and arm at its largest statement. The nofw arm (FC_HOST_WITNESS=1) was measured at 2 blocks on 7 of these types, within session noise of dev, which stands in for it on the rest; fw is nofw plus the send-check law (3.02 us a slot bit once a statement, 0.0669 us a proved bit), which direct fw sessions at 2 blocks on 2 of these types put at 2.64-3.39x the law's increment: at 2 blocks their once-a-statement term is 9.39 us a slot bit, and the evidence's census.json prices fw with it beside the law. Statements of 2 and 64 blocks resolve a marginal of a few ms a block at best: 11 of these types fitted one below the earlier blocks' computed rule (their median seconds a witness bit, 1.05e-10 s, times 2^k_log), or were proved at 2 blocks only, so each takes that rule's marginal and its statement's fixed seconds from its 2-block median.",
  "runs": [
   "r20261106-074634-13c4",
   "r20261106-074918-e6ff",
@@ -16,7 +16,13 @@
   "r20261106-175304-1b29",
   "r20261106-175708-e992",
   "r20261106-181146-ca23",
-  "r20261106-191000-820d"
+  "r20261106-191000-820d",
+  "r20261106-213258-bdac",
+  "r20261106-213355-3086",
+  "r20261106-213402-b177",
+  "r20261106-213405-83ed",
+  "r20261106-214637-9722",
+  "r20261106-214641-c99f"
  ],
  "owner": "@proofs",
  "value": {
@@ -1231,10 +1237,206 @@
      "r20261106-175304-1b29"
     ],
     "overhead": 542556055.9111817
+   },
+   {
+    "block": "AllReduceMultimem_v1{WORLD=8,SIZE=3072,TREES=[[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7]],FTZ=false}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 49152,
+    "seconds_per_block": 0.01412833402864582,
+    "fixed_seconds": 42.646137872442715,
+    "statement_blocks": 256,
+    "k_log": 27,
+    "runs": [
+     "r20261106-213402-b177"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "ResidualAdd_v1{N=6144}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 98304,
+    "seconds_per_block": 0.031966113169354854,
+    "fixed_seconds": 16.8681319716613,
+    "statement_blocks": 512,
+    "k_log": 26,
+    "runs": [
+     "r20261106-213258-bdac"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "Fp8GroupQuantUe8m0_v1{K=2048,G=128}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 16896,
+    "seconds_per_block": 0.0017660417535807274,
+    "fixed_seconds": 47.83382283749284,
+    "statement_blocks": 2048,
+    "k_log": 24,
+    "runs": [
+     "r20261106-214641-c99f"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "Fp8GroupQuantUe8m0_v1{K=1536,G=128}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 12672,
+    "seconds_per_block": 0.0017660417535807274,
+    "fixed_seconds": 39.57621399099284,
+    "statement_blocks": 2048,
+    "k_log": 24,
+    "runs": [
+     "r20261106-213258-bdac"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "DsaRMSNorm_v1{N=2048,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 32768,
+    "seconds_per_block": 0.003532083507161455,
+    "fixed_seconds": 24.227444505985677,
+    "statement_blocks": 1024,
+    "k_log": 25,
+    "runs": [
+     "r20261106-213402-b177"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "SparseMlaCombine_v1{NSPLIT=5,DV=512,INV={\"fn\":\"Fa3InvSum_v1\"}}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 8192,
+    "seconds_per_block": 0.19434398847580667,
+    "fixed_seconds": 42.69018349454839,
+    "statement_blocks": 1024,
+    "k_log": 25,
+    "runs": [
+     "r20261106-213355-3086"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "AllReduceResidualMnnvl_v1{WORLD=8,N=3072,SHOT=1}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 49152,
+    "seconds_per_block": 0.01412833402864582,
+    "fixed_seconds": 59.406123501442714,
+    "statement_blocks": 256,
+    "k_log": 27,
+    "runs": [
+     "r20261106-213355-3086"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "DsaRMSNorm_v1{N=512,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 8192,
+    "seconds_per_block": 0.0008830208767903637,
+    "fixed_seconds": 11.63019364174642,
+    "statement_blocks": 4096,
+    "k_log": 23,
+    "runs": [
+     "r20261106-213258-bdac"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "RmsNormMnnvl_v1{N=6144,SHOT=1,CLUSTER=8,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},FMA=true}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 98304,
+    "seconds_per_block": 0.01412833402864582,
+    "fixed_seconds": 90.1913521004427,
+    "statement_blocks": 256,
+    "k_log": 27,
+    "runs": [
+     "r20261106-214637-9722"
+    ],
+    "overhead": null
+   },
+   {
+    "block": "CublasSplitKGemmF32Out_v1{K=6144,N=1,SPLIT_K=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+    "stands_in": false,
+    "macs": 6144,
+    "out_bits": 32,
+    "seconds_per_block": 0.003532083507161455,
+    "fixed_seconds": 10.341967043985678,
+    "statement_blocks": 1024,
+    "k_log": 25,
+    "runs": [
+     "r20261106-214641-c99f"
+    ],
+    "overhead": 2195242638.895091
+   },
+   {
+    "block": "BatchedGemm_v1{B=1,K=512,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+    "stands_in": false,
+    "macs": 512,
+    "out_bits": 16,
+    "seconds_per_block": 0.002707933612903227,
+    "fixed_seconds": 1.1829673557741938,
+    "statement_blocks": 8192,
+    "k_log": 22,
+    "runs": [
+     "r20261106-213405-83ed"
+    ],
+    "overhead": 5512087699.103867
+   },
+   {
+    "block": "ScaledMmFp8BlockSharedScale_v1{K=1536,N=1,G=128}",
+    "stands_in": false,
+    "macs": 1536,
+    "out_bits": 16,
+    "seconds_per_block": 0.0008830208767903637,
+    "fixed_seconds": 2.2099662887464198,
+    "statement_blocks": 4096,
+    "k_log": 23,
+    "runs": [
+     "r20261106-213405-83ed"
+    ],
+    "overhead": 916358457.6219169
+   },
+   {
+    "block": "FlashInferFp8Linear_v1{K=256,N=1}",
+    "stands_in": false,
+    "macs": 256,
+    "out_bits": 16,
+    "seconds_per_block": 0.00044151043839518186,
+    "fixed_seconds": 12.63343825862321,
+    "statement_blocks": 8192,
+    "k_log": 22,
+    "runs": [
+     "r20261106-213405-83ed"
+    ],
+    "overhead": 7666836874.903714
+   },
+   {
+    "block": "Fp8GroupQuantUe8m0_v1{K=256,G=128}",
+    "stands_in": false,
+    "macs": 0,
+    "out_bits": 2112,
+    "seconds_per_block": 0.00044151043839518186,
+    "fixed_seconds": 5.18106952912321,
+    "statement_blocks": 8192,
+    "k_log": 22,
+    "runs": [
+     "r20261106-213405-83ed"
+    ],
+    "overhead": null
    }
   ],
   "model_overhead": 13900000000.0,
   "label": "Measured on an H200, GLM-5.3's proof blocks as registered (provisional)"
  },
- "art": "art:b92517eadfd0731c4ae150b15b1573a245d32d2cb0ae26fc864eac8de2cac365"
+ "art": "art:ed20cbaa160701d757cd17f1e71516ee16cca638388efe91b82a7f132ab78e60"
 }
