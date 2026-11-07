@@ -6,7 +6,8 @@
 # fixed seconds; a type the prover refuses (past Flock's range) is logged as refused and the rest go on.
 # Run from the verity tree in a proofs slot:
 #   bash benchmarks/one_stage/stationary_cpu.sh ST_UNITS="pe-w13 st-w13:M=8" ST_COUNTS=2,8
-# env: ST_UNITS (stage.py's type specs)  ST_COUNTS=2,8  ST_RUNS=2
+# env: ST_UNITS (stage.py's type specs, each with its own counts as SPEC@C1,C2)  ST_COUNTS=2,8  ST_RUNS=2
+# The prover pads a statement to at least 2^27 dense bits, so both counts of a type should be past that: 8,32 at k_log 24.
 # Kept in $OUT: per type and count its stage.json and the sessions' prove.out, prove.err and serve.log, and the records;
 # never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -28,12 +29,13 @@ sha256sum "$BIN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc) RUST_MIN_STACK=$((64 << 20)) FC_PHASE_TIMES=1 FLOCK_PHASE_TIMES=1
 Z=$W/zk; mkdir -p "$Z/records"; echo '[]' > "$Z/plan.json"
-COUNTS=${ST_COUNTS:-2,8}; rc=0
+rc=0
 keep() {
   (cd "$Z" && find . -type f -size -64M ! -name circuit.txt ! -name '*.bin' ! -path '*/sessions/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} "$O/")
 }
-for u in ${ST_UNITS:?}; do
+for spec in ${ST_UNITS:?}; do
+  u=${spec%@*}; COUNTS=${ST_COUNTS:-2,8}; [ "$u" = "$spec" ] || COUNTS=${spec#*@}
   t=$(echo "$u" | tr ':,=' '---' | tr -d '-' ); sd=$Z/$t; mkdir -p "$sd"
   log "$u: stage $COUNTS"
   for c in ${COUNTS//,/ }; do mkdir -p "$sd/c$c/stage"; done
