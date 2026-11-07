@@ -1,0 +1,21 @@
+# The route capture (README.md). Not a package: its runs use a node's pinned vLLM venv; the suite runs the plugin on
+# stand-ins for V1's and V2's model runners (the methods it wraps, as vLLM d9105ea80 has them) and torch's profiler, and
+# reads back what it wrote (routes.py).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# the plugin patches through the integration's hooks, routes.py reads traces with its kernel_trace, and settings.py is
+# built on verity_config's registry
+inputs = [
+    "tools/config/verity_config",
+    "verity/__init__.py",
+    "verity/settings.py",
+    "integrations/vllm/verity_vllm/__init__.py",
+    "integrations/vllm/verity_vllm/engine/__init__.py",
+    "integrations/vllm/verity_vllm/engine/hooks.py",
+    "integrations/vllm/verity_vllm/observe/__init__.py",
+    "integrations/vllm/verity_vllm/observe/kernel_trace.py",
+]
