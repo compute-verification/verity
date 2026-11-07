@@ -1,7 +1,20 @@
 module
 
+public import Definitions.Nci.Assumptions.Cover
+public import Definitions.Nci.Assumptions.CoverFanOut
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Data.Fintype.Basic
 public import Proofs.Nci.Cover.FanOutWalk
 public import Proofs.Nci.Cover.Witness
+import Mathlib.Data.Finset.Powerset
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Nci.Cover.Additive
+import Proofs.Nci.Cover.Paths
 
 /-!
 # The fan-out bounds: their hypotheses can hold together

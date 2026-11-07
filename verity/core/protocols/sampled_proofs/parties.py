@@ -1,5 +1,6 @@
 """Sampled proofs' parties on the deployment layer (`verity.core.deploy`): the challenger, the firewall, the workers and the
-verifier, the roles `verity run CONFIG --party ROLE` runs, and their table (`PROTOCOL`; `PROTOCOLS` by id).
+verifier, as roles and channels a deployment configuration declares (`MANIFEST`), and their table (`PROTOCOL`;
+`PROTOCOLS` by id), which the deployment layer's runtime runs (`verity.core.deploy.runtime.run`).
 
 ~~~text
 challenger -> verifier    Challenger {address, pin}: where its host answers the verifier's open and finish of a session
@@ -66,8 +67,9 @@ from verity.core.wire import Body, Hex, Int, Message, Schema, Str
 from .one_stage import registration as R
 
 ID = R.PROTOCOL
-#: sampled proofs as both composites compose it (`VStar.Recursive.Sampled`): `ID`'s audit or the recursive audit, as its
-#: params' and evidence's ``form`` names it
+#: sampled proofs as both composites compose it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the
+#: verdicts the verifier's own run of the proof check) or the recursive audit, as its params' and evidence's ``form``
+#: names it; `ID`'s own audit, whose verdicts are the evidence's, is refused
 COMPOSED = "verity/sampled-proofs/v1"
 VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"

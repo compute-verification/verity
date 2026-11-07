@@ -1,4 +1,4 @@
-"""V*'s outer statements (hiding model architectures, lane rec-v0): the inner session's Ligerito openings, one C-Flock
+"""V*'s outer statements (hiding model architectures): the inner session's Ligerito openings, one C-Flock
 statement per level, each instance a `RecOpen` of one opening, the top node it climbs to and its running sum read from the
 prover's registrations of them.
 
@@ -7,7 +7,7 @@ is one template, ``RecOpen{LANES, H}``, and one statement over that level's open
 (M0 proves one template per statement). Its program is `population_program` of the template over the level's openings, its
 partition that program's ``Q_template_instance`` v0. Every instance reads seven registered rows: the opened row ``row`` and
 its ``aux`` (its siblings: `rec_open.pack`), its coefficients ``coef`` and the position's low bits ``dirs``, which the
-verifier registers itself, ``out``, ``acc`` in and ``acc_out`` out (§16.13). The statement has no public input.
+verifier registers itself, ``out``, ``acc`` in and ``acc_out`` out (`HmOut`). The statement has no public input.
 
 **The verifier's values** (`COEF_VALUE`, `DIRS_VALUE`). The verifier computes each opening's ``coef`` (`coefficients`) and
 ``dirs`` (`rec_open.dirs_words` of the position its own query coins give) and registers each as a value of the level's
@@ -15,12 +15,12 @@ statement program, row i instance i's, under public salts (`rec_residuals.verifi
 inner session's public record, and the prover's rows and salts are the same registration's.
 
 **The tops** (`TopValue`). Neither side sees a tree's top in the clear: the ZK server committed each node as a registered row
-(`verity_flock.rec_live.top_rows`) under a fresh salt of its own, and the coin server recorded only the nodes' ``b || c``
+(`verity_flock.rec_live.top_rows`) under a fresh salt of its own, and the challenger recorded only the nodes' ``b || c``
 (`verity_flock.rec_vstar.tops`). The prover registers the tops a level's openings climb to (level 0's ``root_B``, both reps'
 one tree, else rep 0's top then rep 1's) as the value ``rec-top-L<level>`` under the V* session's program and those very salts;
 the verifier builds its own entry of that value from the recorded ``b || c`` alone (`rec_residuals.commits_entry`), and its
 reads file puts instance ``i``'s output at the row of the top node its position names (rep ``r``'s first row plus
-``pos >> H``; PROTOCOL.md §16.13 "Registered reads", `verity.core.protocols.sampled_proofs.one_stage.registered`). An
+``pos >> H``; `HmOut` "Registered reads", `verity.core.protocols.sampled_proofs.one_stage.registered`). An
 instance is satisfiable only if its private rows climb, by the verifier's ``dirs``, to that registered row, whose ``b || c``
 the ZK server committed: the statement holds only if every opening climbs to the committed top node its coin names.
 
@@ -141,7 +141,7 @@ def top_value_name(level: int) -> str:
 @dataclass
 class TopValue:
     """A level's tops as one registered value (`top_value_name`): the prover's registration (``reg``, the top rows under the
-    ZK server's salts), the verifier's own entry from the coin server's ``b || c`` alone (``own``), and each rep's first row."""
+    ZK server's salts), the verifier's own entry from the challenger's ``b || c`` alone (``own``), and each rep's first row."""
 
     reg: object
     own: dict

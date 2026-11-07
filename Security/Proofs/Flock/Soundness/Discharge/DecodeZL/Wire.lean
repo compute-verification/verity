@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
 public import Proofs.Flock.Soundness.Discharge.Exec.Shape
 public import Proofs.Flock.Soundness.Discharge.Exec.Decode
+public import Proofs.Flock.Soundness.Discharge.Exec.Emit
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The per-Kind decoder (R11b)

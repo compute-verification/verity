@@ -1,12 +1,11 @@
 /-
-`Arith.Correct.xhat_poly` (§13.1, §13.4): the novel basis. `s_0 = X`, `s_{j+1} = s_j² + s_j(β_j)·s_j` over `β_j = x^j`
+`Arith.Correct.xhat_poly` (`Flock.Ligerito`): the novel basis. `s_0 = X`, `s_{j+1} = s_j² + s_j(β_j)·s_j` over `β_j = x^j`
 (monic, degree `2^j`); `Ŵ_i = s_i · s_i(β_i)⁻¹`; `X̂_c = Π_{i ∈ bits c} Ŵ_i` is a polynomial of degree exactly `c`, so the
 `X̂_c`, `c < 2^L`, are linearly independent. The executable's `sIter` and `svTable` compute these values, and the kernel
 checks `s_i(β_i) ≠ 0` for `i < 40` on `svTable 40`.
 -/
 module
 
-public import Proofs.Flock.Level3.Nodes
 public import Flock.Ligerito
 public import Mathlib.Algebra.Polynomial.Sequence
 public import Proofs.Flock.Level3.NovelBasis.Steps0
@@ -18,6 +17,11 @@ public import Proofs.Flock.Level3.NovelBasis.Steps31
 public import Proofs.Flock.Level3.NovelBasis.Steps34
 public import Proofs.Flock.Level3.NovelBasis.Steps37
 import all Init.Data.Array.Basic
+public import Proofs.Flock.Level3.GF128Field
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Mathlib.RingTheory.LocalRing.Basic
+import Proofs.Flock.Level3.Nodes
 
 @[expose] public section
 

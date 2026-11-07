@@ -47,13 +47,12 @@ SOURCE_SUFFIXES = frozenset({".py", ".rs", ".toml", ".sh", ".cu", ".c", ".h", ".
 
 MD_SIZE_CAP = 48 * 1024
 PROTOCOL_SIZE_CAP = 256 * 1024
+#: The Glossary's "Older names" table is the list `tests/test_retired_terms.py` scans the tree for, so it grows by a row
+#: with each retired name and no row can go while its term is retired.
+GLOSSARY_SIZE_CAP = 64 * 1024
 #: A skill is loaded into an agent's context whole, so it states the current procedure and rules, never their history
 #: (`.agents/skills/authoring-skills/`).
 SKILL_SIZE_CAP = 16 * 1024
-#: Skills over SKILL_SIZE_CAP when it was set, each capped at its size then (the largest at any open PR's head, rounded up,
-#: plus 1 KiB for PRs queued against it). An entry only shrinks, and goes once its skill is under SKILL_SIZE_CAP; its owner
-#: compacts it.
-OVERSIZE_SKILLS: dict[str, int] = {}
 BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code (CODE_SUFFIXES), ALLOWLIST and audit records
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
@@ -94,6 +93,11 @@ def test_tracked_markdown_is_maintained_documentation() -> None:
         "tracked markdown that is not a maintained document (reports, handoffs and drafts belong in ~/.research/notes):\n"
         + "\n".join(offenders)
     )
+
+
+def test_no_root_readme() -> None:
+    assert "README.md" not in _tracked(), (
+        "the root has no README: an agent starts at AGENTS.md and ARCHITECTURE.md; put what it says in one of them")
 
 
 def test_no_report_genre_basenames() -> None:
@@ -140,10 +144,14 @@ def split_dir(path: str) -> str | None:
 
 
 def markdown_cap(path: str) -> int:
-    """The markdown file ``path``'s cap in bytes.  The merge queue's landing gate (`tools/verity/check/gates/markdown_caps.py`)
-    reads it and `markdown_over_cap` from this file at `main`, so keep both importable with the standard library alone."""
+    """The markdown file ``path``'s cap in bytes.  A cap is a warning, never a failure: the merge queue's warn gate
+    (`tools/verity/check/gates/markdown_caps.py`) names a change that puts a file over its cap, the change lands, and its owner
+    trims the file in their next PR.  The gate reads this and `markdown_over_cap` from this file at `main`, so keep both
+    importable with the standard library alone."""
     if os.path.basename(path) == "SKILL.md":
-        return OVERSIZE_SKILLS.get(path, SKILL_SIZE_CAP)
+        return SKILL_SIZE_CAP
+    if path in ROOT_ONLY_MD:
+        return GLOSSARY_SIZE_CAP
     return PROTOCOL_SIZE_CAP if os.path.basename(path) == "PROTOCOL.md" else MD_SIZE_CAP
 
 
@@ -159,9 +167,11 @@ def markdown_over_cap(path: str, size: int) -> str | None:
     return f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; move detail to {where}"
 
 
-def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -> None:
+def test_markdown_over_cap_says_by_how_much_and_where_detail_goes() -> None:
     soundness = "Security/Proofs/Flock/Soundness/"
     assert markdown_over_cap("README.md", MD_SIZE_CAP) is None and markdown_over_cap("a/PROTOCOL.md", MD_SIZE_CAP + 1) is None
+    assert markdown_over_cap("GLOSSARY.md", MD_SIZE_CAP + 1) is None
+    assert markdown_over_cap("GLOSSARY.md", GLOSSARY_SIZE_CAP + 3).endswith(", 3 bytes over; move detail to the notes store (cite it by note:<id>)")
     assert markdown_over_cap("a/README.md", MD_SIZE_CAP + 100) == (
         "a/README.md: 48 KB > 48 KB, 100 bytes over; move detail to the notes store (cite it by note:<id>)")
     for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
@@ -173,31 +183,6 @@ def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP) is None
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP + 5).startswith(
         ".agents/skills/x/SKILL.md: 16 KB > 16 KB, 5 bytes over; compact it")
-    big, cap = ".agents/skills/x/SKILL.md", SKILL_SIZE_CAP + 1024
-    monkeypatch.setitem(OVERSIZE_SKILLS, big, cap)
-    assert markdown_over_cap(big, cap) is None and "1 bytes over" in markdown_over_cap(big, cap + 1)
-
-
-def test_oversize_skills_only_shrink() -> None:
-    """An OVERSIZE_SKILLS entry names a skill that exists and is still over SKILL_SIZE_CAP; once it's under, the entry goes,
-    so the list only shrinks."""
-    stale = [f"{p}: {'missing' if not (ROOT / p).exists() else f'{os.path.getsize(ROOT / p)} bytes, under the cap'}"
-             for p in OVERSIZE_SKILLS if not (ROOT / p).exists() or os.path.getsize(ROOT / p) <= SKILL_SIZE_CAP]
-    assert not stale, "delete these OVERSIZE_SKILLS entries in tests/test_repository.py:\n" + "\n".join(stale)
-
-
-def test_markdown_size_caps() -> None:
-    offenders = []
-    for p in _tracked():
-        if not p.endswith(".md"):
-            continue
-        try:
-            size = os.path.getsize(ROOT / p)
-        except FileNotFoundError:  # tracked but deleted in the working tree
-            continue
-        if why := markdown_over_cap(p, size):
-            offenders.append(why)
-    assert not offenders, "maintained documents are small:\n" + "\n".join(offenders)
 
 
 #: Test files that need torch, a GPU or cargo, and were never part of `check`.

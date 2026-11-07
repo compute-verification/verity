@@ -1,9 +1,47 @@
 module
 
-public import Proofs.Flock.SessionLoop.InnerSlot
-public import Proofs.Flock.SessionLoop.LiveInner
-public import Proofs.Flock.SessionLoop.CutPiopLive
-public import Proofs.Flock.Claims.ZK.FrameZK
+public import Proofs.Flock.SessionLoop.Inner
+public import Proofs.Flock.SessionLoop.TakenVals
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Claims.ZK.FrameBeta
+import Proofs.Flock.Claims.ZK.FrameOuter
+import Proofs.Flock.Claims.ZK.FrameRankFault
+import Proofs.Flock.Claims.ZK.FrameRho
+import Proofs.Flock.Claims.ZK.FrameTaken
+import Proofs.Flock.SessionLoop.CutPiopLive
+import Proofs.Flock.SessionLoop.InnerSlot
+import Proofs.Flock.SessionLoop.LiveInner
 
 /-!
 # The loop's frames refuse every coin fault shown below the inner proof's rounds
@@ -163,9 +201,7 @@ theorem innerAt_unrefused
     (hI : Loop.InnerAt (real x w (ν, t)) x (ops.map fun p => CoinLayer.rd p.2)) :
     ¬ Masked.Refused x ((CoinLayer.session Loop.loopNr Masked.dataE).pad (K := refK x)
       (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) ops.length := by
-  have hk : 0 < refK x := by omega
-  have hc0 : 0 < (ops.map fun p => CoinLayer.rd p.2).length := by rw [List.length_map]; exact h0
-  have hsch := (schedOf_eq_none_iff (real := real x w (ν, t)) hk hc0).mpr hI
+  have hsch := schedOf_none_of_innerAt hI
   obtain ⟨s0, spec, sts, q, k, i, tr, hr', rsched, hxs, hq, hloc, hreal, hrs, hle⟩ := hI
   have hq1 : ops.length = q + 1 := by rw [← hq, List.length_map]
   obtain ⟨jf, rf, -, -, hslot, hb0, hb1, -, -, -⟩ := Loop.innerAt_slot hx hSv hxs hq (by rw [List.length_map]; exact hlt)

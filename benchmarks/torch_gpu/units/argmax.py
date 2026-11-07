@@ -13,9 +13,14 @@ Integers only.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 import words as W
+
+if TYPE_CHECKING:
+    import torch
 
 CHUNK = 128
 
@@ -44,7 +49,8 @@ def twin(x: np.ndarray) -> dict:
     return {"token": (k & 0xFFFF).astype(np.uint16), "best": best, "idx": idx}
 
 
-def gpu(x, *, out=None, units: bool = False, parts: dict | None = None):
+def gpu(x: torch.Tensor, *, out: torch.Tensor | None = None, units: bool = False,
+        parts: dict | None = None) -> torch.Tensor | tuple[torch.Tensor, dict]:
     """units_argmax on x (R, V) bf16 -> token (R,) int16; with ``units`` (or ``parts``, the caller's tensors for some of
     them) (token, {"best", "idx"}), int16 (R, nch)."""
     import torch

@@ -8,7 +8,7 @@ public import Std.Data.HashSet
 `Accounting.Requirement` (`Security/Definitions/Accounting/Requirement.lean`) on one instance: a declared circuit's
 wiring, one scheduled execution of it and a layout of its values (`Instance`), the audit's store (`Store`), and a
 placement of the execution on devices (`Placement`), whose regions, ingress and credits are PoUW's over the placed
-execution (`Definitions/Accounting/Guarantees/RequirementPouw.lean`). A step is always an engine step, never a device tick.
+execution (`Proofs/Accounting/Lemmas/RequirementPouw.lean`). A step is always an engine step, never a device tick.
 This is code, so it requires nothing of `Security/`: `Properties.Accounting.Requirement` states that each function here
 is the definition it computes, on the wiring, execution, layout, store and placement an instance denotes, and
 `Proofs.Properties.Accounting.Requirement` proves it. `requirement-difftest` serves these functions to the difftest, which
@@ -50,12 +50,12 @@ structure Instance where
   step : Array (Option Nat)
   /-- each value, as its bits (`Execution.value`) -/
   value : Array Nat
-  /-- each value's block, a store index (`Layout.block`) -/
+  /-- each value's block, a store index (`Store.Placement.block`) -/
   block : Array Nat
-  /-- each value's first bit in its block (`Layout.offset`) -/
+  /-- each value's first bit in its block (`Store.Placement.offset`) -/
   offset : Array Nat
-  /-- each block's first encoded read, by store index (`Layout.encoded`): 0, as past its end, for a block encoded once
-  complete -/
+  /-- each block's first encoded read, by store index (`Store.Placement.encoded`): 0, as past its end, for a block
+  encoded once complete -/
   encoded : Array Nat := #[]
 
 /-- The audit's store (`Accounting.Requirement.Store`): the registered blocks, the fresh indices each step wrote and those

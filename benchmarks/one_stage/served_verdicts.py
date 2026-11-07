@@ -8,9 +8,11 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py period close SERVE_DIR [--gate CMD]
     served_verdicts.py program OUT [--model M] [--rows T] [--steps S] [--like SERVE_DIR]
     served_verdicts.py pieces --serve-run DIR --window K --out DIR [--node NAME] [--only COMPONENT]... [--skip COMPONENT]...
+                              [--product P]
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
+                              [--product P]
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
@@ -18,10 +20,11 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py publish OUT --private DIR
 
 What leaves the node names no window and counts none of a window's own: no window's number, no count of the windows closed,
-sealed or refused, and no engine step, request count or user of one. ``public-lines`` prints each line of stdin in its
-published form (`public_line`), the line in full appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and
-``publish`` holds each file of OUT, once the run is done, in full under DIR where it names or counts a window (`publish`),
-its public form in its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
+sealed or refused, and no engine step, request count or user of one; nor a load's tokens or span (`OWN_AT`), whose tokens
+count its blocks. ``public-lines`` prints each line of stdin in its published form (`public_line`), the line in full
+appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and ``publish`` holds each file of OUT, once the run
+is done, in full under DIR where it names or counts a window or holds a load's own field (`publish`), its public form in
+its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
 registration (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
@@ -47,6 +50,9 @@ leaves it missing; no verdict is made for a piece that didn't run. A development
 that audited another server than the node it ran on says so in ``DIR/served.json`` (`SERVED`: ``{server, source}``,
 ``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there leaves its answer about
 the node it ran on. ``--only`` and ``--skip`` (a component each, repeatable) run those pieces alone, or all but those.
+``--product`` (default onsite; served_verdicts.sh passes its PRODUCT) is the product the run composes (`block_record.PRODUCTS`): onsite's
+every subprotocol, remote's sampled proofs and PoUW alone. A piece the product drops isn't run, whatever its command,
+and prints a ``DROPPED`` line naming it.
 
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
 (``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
@@ -94,12 +100,16 @@ an answer that names no server isn't carried. An accepted answer whose outputs a
 (`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
 where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written; it is
 ``accept`` only when every subprotocol accepted here.
+Those are the subprotocols of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
+product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and composed into no
+verdict, so remote's verdict is ``accept`` when sampled proofs and PoUW accepted here, whatever the onsite pieces.
 The report's ``composed`` and the block record's ``composed.onsite`` give that verdict with its reason (`said`), one clause
 a subprotocol: its verdict and, unless it accepted here, why; an accept here with what it holds beyond its verdict
 (`terms`: when its weights were held and their share of the checkpoint, where its profile says, and each δ of the block
 record's at which its quantity is not established); PoUW's development piece reads ``development run, credits nothing``
-with core's refusal of the window's credit. Prints one ``RECORD`` line, naming each subprotocol's verdict (the
-development piece's `DEV_VERDICT`), each missing one and why, each rejecting one, each one elsewhere, and the reason.
+with core's refusal of the window's credit. Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
+(the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
+elsewhere, and the reason.
 """
 from __future__ import annotations
 
@@ -241,6 +251,11 @@ OWN = frozenset({"windows", "users", "engine_steps", "every_slot", "population",
 #: requests' count, the windows refused. A window named ``all``, the bench Build's requests by name and a refusal's reason
 #: stay.
 NUMBERED = frozenset({"window", "steps", "requests", "refused"})
+#: A load's own fields, held by path as (parent, key), the parent the nearest key above the field through lists: the
+#: tokens of each load of `served_overhead.py metrics`' aggregate, which over a block's outputs are the exact block
+#: count, and its span. Held by path, not as bare keys, so the inference-only policy's ``n_inputs.span_s`` stays as
+#: written, and with it the policy digest its verdict cites.
+OWN_AT = frozenset({("loads", "tokens"), ("loads", "span_s")})
 #: A window's number, step range or count in text, each with what the published text says in its place
 WINDOW_TEXT = (
     (re.compile(r'\\?"(?:%s)\\?": ?(?:-?\d+(?:\.\d+)?|\[[^\]]*\]|\{[^{}]*\}|true|false)(?:, ?)?'
@@ -256,10 +271,22 @@ WINDOW_TEXT = (
 NAMED = re.compile(r"(?<![A-Za-z0-9])w\d+(?![A-Za-z0-9])")
 _OPEN = re.compile(r'\{\s*"')
 _FIELD = re.compile(r'\\?"(?:%s)\\?":' % "|".join(sorted(OWN | NUMBERED)))
-#: what a published line says in place of a JSON object cut short that names a window's field
+_AT_KEYS = {p: "|".join(sorted(k for q, k in OWN_AT if q == p)) for p in sorted({p for p, _ in OWN_AT})}
+#: An `OWN_AT` field in text, by parent: the parent's list opening, and each of its keys holding a number inside that list
+AT_TEXT = tuple((re.compile(r'\\?"%s\\?": ?\[' % re.escape(p)),
+                 re.compile(r'\\?"(?:%s)\\?": ?-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?(?:, ?)?' % keys))
+                for p, keys in _AT_KEYS.items())
+_BRACKET = re.compile(r"[\[\]]")
+#: an `OWN_AT` field in a JSON object cut short: its parent's key, then one of its keys
+_AT_FIELD = re.compile("|".join(r'\\?"%s\\?":.*?\\?"(?:%s)\\?":' % (re.escape(p), keys) for p, keys in _AT_KEYS.items()))
+#: what a published line says in place of a JSON object cut short that names a window's or a load's own field
 CUT = "{…} (cut short; in full in the serve dir's private/verdicts.txt)"
 #: a file `publish` reads larger than this is held whole
 PUBLISH_MAX = 256 << 20
+#: The files under the published dir that `publish` leaves as they are, unread: the serve dir's declared Program, the
+#: window's class Program, which is public structure. Its JSON runs to hundreds of MB, beyond what `PUBLISH_MAX` lets
+#: `publish` read.
+PUBLIC_FILES = frozenset({"serve/h1/window-program.json.gz"})
 
 
 def _numbered(v: Any) -> bool:
@@ -274,38 +301,59 @@ def _numbered(v: Any) -> bool:
     return isinstance(v, list) and any(_numbered(x) for x in v)
 
 
-def _held(key: Any, value: Any) -> bool:
+def _held(key: Any, value: Any, parent: Any = None) -> bool:
+    if (parent, key) in OWN_AT:
+        return True
     if key == "refused":
         return not isinstance(value, str)
     return key in OWN or (key in NUMBERED and _numbered(value))
 
 
-def public_text(s: str) -> str:
-    """``s`` with each window number, step range and window count `WINDOW_TEXT` finds in its published form."""
-    for pat, sub in WINDOW_TEXT:
-        s = pat.sub(sub, s)
+def _at_text(s: str) -> str:
+    """``s`` with no `OWN_AT` field in the list its parent's key opens (to the text's end where the list is cut short)."""
+    for opening, field in AT_TEXT:
+        out, i = [], 0
+        while m := opening.search(s, i):
+            end, depth = len(s), 1
+            for b in _BRACKET.finditer(s, m.end()):
+                depth += 1 if b.group() == "[" else -1
+                if not depth:
+                    end = b.end()
+                    break
+            out += [s[i:m.end()], field.sub("", s[m.end():end])]
+            i = end
+        s = "".join(out) + s[i:]
     return s
 
 
-def public_json(o: Any) -> Any:
-    """``o`` with no field of a window's own (`OWN`, `NUMBERED`) and each string in its `public_text` form."""
+def public_text(s: str) -> str:
+    """``s`` with each window number, step range and window count `WINDOW_TEXT` finds in its published form, and no load's
+    own field (`OWN_AT`)."""
+    for pat, sub in WINDOW_TEXT:
+        s = pat.sub(sub, s)
+    return _at_text(s)
+
+
+def public_json(o: Any, parent: Any = None) -> Any:
+    """``o`` with no field of a window's own (`OWN`, `NUMBERED`) or of a load's (`OWN_AT`, by ``parent``, the key ``o``
+    is under) and each string in its `public_text` form."""
     if isinstance(o, Mapping):
-        return {public_text(k) if isinstance(k, str) else k: public_json(v) for k, v in o.items() if not _held(k, v)}
+        return {public_text(k) if isinstance(k, str) else k: public_json(v, k) for k, v in o.items() if not _held(k, v, parent)}
     if isinstance(o, list):
-        return [public_json(v) for v in o]
+        return [public_json(v, parent) for v in o]
     return public_text(o) if isinstance(o, str) else o
 
 
 def public_line(line: str) -> str:
     """A verdict line as the run publishes it: each JSON object in it in its `public_json` form, one cut short that names a
-    window's field replaced by `CUT` to the line's end, and the rest in its `public_text` form."""
+    window's or a load's own field replaced by `CUT` to the line's end, and the rest in its `public_text` form."""
     dec, out, i = json.JSONDecoder(), [], 0
     while (j := line.find("{", i)) >= 0:
         out.append(public_text(line[i:j]))
         try:
             obj, end = dec.raw_decode(line, j)
         except ValueError:
-            if _OPEN.match(line, j) and _FIELD.search(line, j):
+            if _OPEN.match(line, j) and (_FIELD.search(line, j) or _AT_FIELD.search(line, j)):
                 out.append(CUT + ("\n" if line.endswith("\n") else ""))
                 return "".join(out)
             out.append("{")
@@ -340,7 +388,7 @@ def public_lines(src: Any, dst: Any, private: Path | None) -> None:
 
 def public_doc(text: str) -> str:
     """A published file's text in its public form: a JSON document's `public_json`, else each line's `public_line`; ``text``
-    itself where nothing in it names or counts a window."""
+    itself where nothing in it names or counts a window or holds a load's own field."""
     try:
         doc = json.loads(text)
     except ValueError:
@@ -351,14 +399,16 @@ def public_doc(text: str) -> str:
 
 def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
-    `PUBLISH_MAX` or its encoding keeps from being read as text, held whole, and one whose text names or counts a window
-    (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. Binary
-    files stay. The paths held, in order."""
+    `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window or holds a load's own
+    field (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. A
+    file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
             continue
         rel = p.relative_to(out).as_posix()
+        if rel in PUBLIC_FILES:
+            continue
         dst = private / rel
         private.mkdir(mode=0o700, parents=True, exist_ok=True)
         dst.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -369,6 +419,8 @@ def publish(out: Path, private: Path) -> list[str]:
             continue
         text = data.decode(errors="replace")
         if text.encode() != data:
+            shutil.move(p, dst)
+            held.append(rel)
             continue
         pub = public_doc(text)
         if pub != text:
@@ -425,16 +477,33 @@ def _unset(comp: str, what: str) -> str:
     return f"{comp.upper()}_CMD unset: {what}"
 
 
+def dropped_row(key: str, product: str) -> dict[str, Any]:
+    """The row of a subprotocol ``product`` drops (`block_record.PRODUCTS`, its legs being the components): not run."""
+    from verity_e2e_demo import block_record as BR
+
+    by_leg = {"integrity": NAMES["integrity"], **{v[1]: v[0] for v in PIECES.values()}, "wipe": WIPE[0]}
+    return {"verdict": "dropped", "owner": PIECES.get(key, WIPE)[2],
+            "why": f"not run: the {product} product composes {' and '.join(by_leg[x] for x in BR.PRODUCTS[product])} alone"}
+
+
 def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | None = None,
-           node: str | None = None, only: Sequence[str] | None = None, skip: Sequence[str] = ()) -> dict[str, dict[str, Any]]:
+           node: str | None = None, only: Sequence[str] | None = None, skip: Sequence[str] = (),
+           product: str = "onsite") -> dict[str, dict[str, Any]]:
     """Each piece of `PIECES` run where ``<COMPONENT>_CMD`` names it, under `timeout` at its limit, else named missing;
     one line each on stdout, its verdict the one `piece` gives the record. ``only`` and ``skip`` name components: those
-    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the certifier's early)."""
+    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the certifier's early).
+    A piece ``product`` drops isn't run, whatever its command (`dropped_row`)."""
+    from verity_e2e_demo import block_record as BR
+
     env = dict(os.environ if env is None else env)
     node = node or socket.gethostname()
     got: dict[str, dict[str, Any]] = {}
     for key, (name, comp, owner, what) in PIECES.items():
         if (only is not None and comp not in only) or comp in skip:
+            continue
+        if comp not in BR.PRODUCTS[product]:
+            got[comp] = {k: v for k, v in dropped_row(key, product).items() if k != "owner"}
+            print(f"DROPPED {name} ({owner}): {got[comp]['why']}", flush=True)
             continue
         cmd = env.get(f"{comp.upper()}_CMD")
         if not cmd:
@@ -887,6 +956,8 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
         v, server = r.get("verdict"), at[k][0]
         if v == "missing":
             s = r.get("why") if "development" in r else f"missing: {r.get('why')}"
+        elif v == "dropped":
+            s = f"dropped, {r.get('why')}"
         elif server not in (None, node):
             s = f"{v} about {server}, another server: carried, not composed"
         elif v == "accept":
@@ -899,16 +970,19 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
 
 
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
-           run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None
+           run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite"
            ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
-    rejected, erred or was undecided), and the ``RECORD`` line's summary. ``servers``: each piece's `piece_server`, by
-    runner name; sampled proofs' answer is about ``node``, and a piece's that names no server isn't carried."""
+    rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
+    drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; sampled proofs'
+    answer is about ``node``, and a piece's that names no server isn't carried."""
     from verity_e2e_demo import block_record as BR
 
     legs = {v: k for k, v in BR.RUNNER_KEYS.items()} | {"wipe": "wipe"}
-    at = {k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
-    rows = {k: dict(r) for k, r in rows.items()}
+    drops = [k for k in rows if legs[k] not in BR.PRODUCTS[product]]
+    at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
+          | {k: (None, "real") for k in drops})
+    rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
     built: dict[str, dict[str, Any]] = {}
     for k, r in rows.items():
         if r.get("verdict") == "accept" and at[k][0] is not None:
@@ -923,13 +997,15 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                 for k, r in rows.items()}
     missing = {NAMES[k]: r.get("why") for k, r in rows.items() if r.get("verdict") == "missing"}
     elsewhere = {NAMES[k]: at[k][0] for k in rows if at[k][0] not in (None, node)}
-    unserved = sorted(NAMES[k] for k, r in rows.items() if r.get("verdict") != "missing" and at[k][0] is None)
+    unserved = sorted(NAMES[k] for k, r in rows.items()
+                      if r.get("verdict") not in ("missing", "dropped") and at[k][0] is None)
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
     dev = dev if dev["development"] else {}
-    named = {"verdicts": verdicts, "missing": missing, "elsewhere": elsewhere, **({"unserved": unserved} if unserved else {}),
-             **dev}
+    named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere,
+             **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
+             **({"unserved": unserved} if unserved else {}), **dev}
     bad = sorted(NAMES[k] for k, r in rows.items()
-                 if r.get("verdict") not in ("accept", "missing") and NAMES[k] not in elsewhere)
+                 if r.get("verdict") not in ("accept", "missing", "dropped") and NAMES[k] not in elsewhere)
     if bad:
         composed = "reject" if any(rows[k].get("verdict") in ("reject", "error") for k in rows
                                    if NAMES[k] in bad) else "pending"
@@ -940,7 +1016,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     extra = {legs[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
-    rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra)
+    rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra, product=product)
     report["composed"] = rec["composed"]["onsite"] = {"protocol": REPORT_FORMAT, "verdict": rec["composed"]["verdict"],
                                                       "reason": said(rows, at, node, built)}
     line = {"composed": rec["composed"]["verdict"], **named, "reason": report["composed"]["reason"],
@@ -1013,7 +1089,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--out", type=Path, required=True)
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
+        q.add_argument("--product", default="onsite")
     a = ap.parse_args(argv)
+    if a.cmd in ("pieces", "record"):
+        from verity_e2e_demo import block_record as BR
+
+        if a.product not in BR.PRODUCTS:
+            ap.error(f"--product {a.product!r}: not one of {sorted(BR.PRODUCTS)}")
     if a.cmd == "public-registration":
         print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
         return 0
@@ -1100,15 +1182,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "pieces":
         a.out.mkdir(parents=True, exist_ok=True)
-        got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip)
-        return 0 if all(g["verdict"] in ("accept", "missing") for g in got.values()) else 1
+        got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip, product=a.product)
+        return 0 if all(g["verdict"] in ("accept", "missing", "dropped") for g in got.values()) else 1
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
     got = {k: piece(k, a.pieces, run) for k in keys}
     rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
-                               servers={k: at for k, (_, at) in got.items()})
+                               servers={k: at for k, (_, at) in got.items()}, product=a.product)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:

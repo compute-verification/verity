@@ -1,8 +1,46 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FrameBeta
-import all Init.Data.String.Defs
+public import Proofs.Flock.Claims.ZK.FrameProg
+public import Proofs.Flock.Claims.ZK.FrameZK
+public import Proofs.Flock.Claims.ZK.Refusals
 import all Init.Data.Array.Basic
+import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.ZK.FrameInner
+import Proofs.Flock.Claims.ZK.FrameTaken
 
 /-!
 # The frames refuse an outer coin `1` (`FrameUnrefused`'s outer fault)
@@ -122,7 +160,7 @@ theorem zcTail_sim {io : Asks M} {L : Lift io} (m : ℕ) (lay : _root_.Flock.Zk.
     exact sim_pure rfl
 
 /-- A squeeze of `n ≠ 0` coins on the recording: its framed bytes recorded with their count. -/
-theorem sampleVecP_rec {n : ℕ} (h0 : n ≠ 0) (hn : n < 2 ^ 64) (t : Transcript) (rs : Array (ByteArray × ℕ)) (k : ℕ) :
+theorem sampleVecP_rec {n : ℕ} (h0 : n ≠ 0) (hn : n < 2 ^ 64) (t : Flock.Transcript) (rs : Array (ByteArray × ℕ)) (k : ℕ) :
     sampleVecP recAsks n t (rs, k) =
       .ok (((Array.range n).map fun i => _root_.Flock.Firewall.Skeleton.coin (k + i + 1),
           { t with pending := ByteArray.empty, k := t.k + 1,
@@ -156,9 +194,9 @@ theorem skel_two (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (ca
     RelV (fun a b => RecPre [(zcPend st.digest cap root dom ++ header 4 2 6, 6),
         (framed (skelT8 (zcPend st.digest cap root dom ++ header 4 2 6)) 2 (st.m - 13), st.m - 13)] a.2 b.2)
       (((repPiop recAsks st lay cap root #[] fun _ => 0) >>= fun _ => pure () : TMW RecM Unit).run'
-        (Transcript.init #[] dom) |>.run (#[], 0))
+        (Flock.Transcript.init #[] dom) |>.run (#[], 0))
       (((repPiop recAsks st lay cap root #[] fun _ => 0) >>= fun _ => pure () : TMW RecM Unit).run'
-        (Transcript.init #[] dom) |>.run (#[], 0)) := by
+        (Flock.Transcript.init #[] dom) |>.run (#[], 0)) := by
   have hcnt : (_root_.Flock.u64OfLE (zcPend st.digest cap root dom ++ header 4 2 6)
       ((zcPend st.digest cap root dom ++ header 4 2 6).size - 8)).toNat = 6 :=
     count_header _ 2 6 (by decide)

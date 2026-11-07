@@ -1,7 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Union
 public import Proofs.Flock.C3.Fork.CouplingLock
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Order.CompletePartialOrder
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Union
+import VCVio.Prelude.Core
 
 /-!
 # a1l, step 4: the coupling's oracle game is no better than the oracle table

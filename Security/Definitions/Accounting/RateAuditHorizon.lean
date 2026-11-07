@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.RateAuditRemote
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The causal horizon: rounds whose good sets precede their samples (trusted)
