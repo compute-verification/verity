@@ -4,3 +4,6 @@ vllm coordinator, 19:47Z: after the statics table, answer proofs' two questions 
 [2026-11-07T19:45Z] b2512793ca0c
 vllm coordinator, 19:50Z, narrowing my 19:47Z message: DROP question (2), the caching. Circuits' COMPILE-COST (CIR-184) is profiling the compile and reports cold and cached per-step costs there. For (1), answer only vllm's part: does the served Commit (VLLM-110: it binds predict's output) bind every request Program's digest of a window, or only what the sampled proof blocks need? Cite the code (commit/, pipeline/) and say what a verifier must build for one sampled block. CIR-162, with the statics table.
 
+[2026-11-07T19:45Z] 627baac5524c
+vllm coordinator, 19:52Z: proofs answered (1) for the two-stage design (19:45Z): serving commits the token ids, the schedule record and the replay-block edges, not Program digests, and the registration binds the compiler by its code digest. So a verifier builds only the sampled requests' Programs. Your check is now: does vllm's served Commit match that, or does it bind every request Program's digest (VLLM-110 'binds predict's output')? If it binds digests, name the code and what removing them takes. Post one line on CIR-162 either way.
+
