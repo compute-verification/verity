@@ -17,7 +17,7 @@ and nothing is scheduled meanwhile, so nothing is on the GPU and the host has ev
   hash map and each block's cached hashes;
 - the model runner (`runner_leaves`): the per-slot request state, block tables, sampling state and the rest of its
   state objects' tensors and plain values;
-- the process's random generators (`rng_state`), which unseeded requests draw from.
+- the process's random generators (`rng_state`), which unseeded requests sample from.
 
 `restore` puts each back into a fresh engine core. `dump` renders the live state, and more (every attribute the walk
 reaches, captured or not), as comparable leaves, so that what a restore missed shows in `diff`. `save_edge` and
@@ -410,9 +410,9 @@ def capture(core: Any, runner: bool = True) -> dict[str, Any]:
 
 
 def rng_state() -> dict[str, Any]:
-    """The process's random generators a step can draw from: numpy's global one (Model Runner V2 draws an unseeded
+    """The process's random generators a step can sample from: numpy's global one (Model Runner V2 samples an unseeded
     request's seed from it when the request reaches the runner), Python's, torch's and each CUDA device's (FlashInfer's
-    sampler, which an unseeded batch takes, draws from the current device's)."""
+    sampler, which an unseeded batch takes, samples from the current device's)."""
     import importlib.util
     import random
 

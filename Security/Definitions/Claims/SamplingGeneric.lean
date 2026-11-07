@@ -76,7 +76,7 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    their bounds on `Arg`'s `γ` per round (`γb` over the shape's rounds; a session's fork finder is the compiled
    verifier's `B` at a round guess among `k(x)`); `ε_bind = Pr[B_ext]`.
 5. **The contract** (`Compiled.Sessions`): the code facts the compiler theorems read, the generic forms of those
-   `Claims.Sampling`'s proofs take at Flock: the second stage draws the sample by the design (`draws`), in at most
+   `Claims.Sampling`'s proofs take at Flock: the second stage samples the sample by the design (`draws`), in at most
    `n_PU` slots (`slots`); the verifier refuses what is out of scope (`refuses`); the interior roots precede the second
    stage (`interior`); the sample precedes its sessions (`fixed`); each sampled proof block's session, at the block's
    shape and within its error bounds, accepts whenever the run does and is a run of a prover against `Arg`'s verifier
@@ -548,7 +548,7 @@ noncomputable def εreg (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : 
 
 /-- **KS, the committed form** (the registered form of `Claims.Sampling`'s period bounds, generic), on the statements in
 scope, at every prover: the run accepts with a sampled proof block in the committed trace's incorrect set (`Freg`, which
-the prover's tape fixes before the window's coins) with probability at most `ε_reg` (`εreg`); so, by the draw, it
+the prover's tape fixes before the window's coins) with probability at most `ε_reg` (`εreg`); so, by the sample, it
 accepts with that set outside `M_δ` with probability at most `δ + ε_reg`, at every `δ ≥ 0`. The sampling term is the
 acceptance probability of a set fixed before the coins, `P_a(Freg)`, as a monitoring period's pooling reads it.
 
@@ -572,7 +572,7 @@ def Complete (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
 
 /-- **The completeness contract** at `H`, over `A`'s honest prover `PA` on tapes `Ω`, the statements it serves
 (`ScopeA`) and its error `δA`: the generic forms of the facts `Claims.Sampling`'s completeness reads of the deployed
-record's reference prover (named in brackets). On a statement in scope, at a witness with no faulty proof block:
+record's reference prover (named in brackets). On a statement in scope, at a witness with no incorrect proof block:
 
 * `honest` (`HonestSessions`): at coins that sample `u`, `u`'s session is the run of `A`'s honest prover, at a statement
   `A` serves, with as many rounds as the session, and a witness in `A`'s relation, on the session's coins (`coinsOf`),

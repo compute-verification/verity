@@ -146,7 +146,7 @@ theorem mem_rdAtW {W : Claims.Verifier Coin} {lc : Claims.Msg â†’ Claims.Seen â†
 /-! ## The table bound from what it reads -/
 
 open Classical in
-/-- **The table bound at the abort law, linearly, at `CpDep`, at any plain record with `V false`'s rounds**, from the
+/-- **The table bound at the abort distribution, linearly, at `CpDep`, at any plain record with `V false`'s rounds**, from the
 reader's bound at one tape (`hall`), the top level's emptiness (`htop`), each cap position's read sets (`hcap`) and
 the verifier's four refuser code facts: `plain_tableBoundAbortLin`'s proof. Where no run accepts, the term `0`;
 elsewhere, on each tape, the chance that the run as it aborts ties a collision among its own calls and, at each cap

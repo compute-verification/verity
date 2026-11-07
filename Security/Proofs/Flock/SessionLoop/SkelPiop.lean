@@ -68,7 +68,7 @@ open FlockComplete (PS asksCut)
 /-- A round's coin count, read off its squeeze header as `recAsks` reads it. -/
 def cntOf (c : ByteArray) : ℕ := (_root_.Flock.u64OfLE c (c.size - 8)).toNat
 
-/-- The coins drawn over the recorded rounds `rs`. -/
+/-- The coins flipped over the recorded rounds `rs`. -/
 def cntSum (rs : List (ByteArray × ℕ)) : ℕ := (rs.map Prod.snd).sum
 
 /-- A recording as `recAsks` keeps it: each round with its coin count, and their total. -/
@@ -160,7 +160,7 @@ theorem asksRel_skel (fin : Array (ByteArray × ℕ)) (n : ℕ) (hn : fin.size �
         simp only [skelCoin, hsz, ht, ← hk]
       · simp [recLog, hl, Array.toList_push]
 
-/-- The cut's sends as the firewall's `Asks`. -/
+/-- The cut's sends as the ZK server's `Asks`. -/
 def skelIO (fin : Array (ByteArray × ℕ)) (n : ℕ) : Asks PS :=
   ⟨(asksCut (skelCoin fin) n).link, (asksCut (skelCoin fin) n).round⟩
 

@@ -53,7 +53,7 @@ meets the contract where the record meets the frozen hypotheses `KS_of` reads (`
 record `deployOf F c` (`SamplingDeploy.compiled`), four of those are facts about the sampled verifier's code
 (`Code.DrawLaw`, `Code.Refuses`, `Code.InteriorFixed`, `Code.DrawFixed`), and the compiler's KS and committed form
 there take exactly them, Flock's KS at `F`, the commitment's binding and the sessions' runs, numbers and openings
-(`SamplingDeploy.ks_compiled`, `SamplingDeploy.ksReg_compiled`). At C-Flock's masked record and SHA-512, Flock's KS,
+(`SamplingDeploy.ks_compiled`, `SamplingDeploy.ksReg_compiled`). At Flock's masked record and SHA-512, Flock's KS,
 the decoder's list bound and the commitment's binding are proved (`SamplingGeneric/Masked.lean`: `ks_masked`,
 `ksReg_masked`, and `SamplingDeploy.ks_masked` at the deployed record).
 
@@ -73,7 +73,7 @@ and the server's error, under the premises `Claims.ZKServer.Flock.zk_server_lean
 at most its session's error, the session's coins being uniform once the coins off its rounds are fixed, and a union
 bound over the first `K` slots gives the compiled error.
 
-At a two-stage design whose first stage draws a uniform `Q`-subset of the population's `N` replay blocks, its `P̄_a` is
+At a two-stage design whose first stage samples a uniform `Q`-subset of the population's `N` replay blocks, its `P̄_a` is
 at most the product a Bernoulli(Q/N) replay level gives, `∏_{ρ<N} (1 − Q/N + (Q/N)·e_ρ)` (`SamplingGeneric/TwoBernoulli.lean`:
 `Design.Two.Pa_le_bernoulli_pop`), the integrity profile's acceptance.
 -/

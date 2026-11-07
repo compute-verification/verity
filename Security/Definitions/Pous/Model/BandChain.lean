@@ -41,7 +41,7 @@ open scoped ENNReal
 
 /-! ## `SpongeDense.lean`: the ideal-permutation model, the domains and the dense chain scheme -/
 
-/-- **The ideal-permutation model** on `b`-bit states. Setup draws `Π` uniformly from every permutation of `Bits b`;
+/-- **The ideal-permutation model** on `b`-bit states. Setup samples `Π` uniformly from every permutation of `Bits b`;
 the encoder and the preprocessor see it whole. A query is `.inl x`, answered `Π x`, or `.inr y`, answered `Π⁻¹ y`. -/
 def idealPerm (b : ℕ) : IdealModel where
   Ω := Equiv.Perm (Bits b)
