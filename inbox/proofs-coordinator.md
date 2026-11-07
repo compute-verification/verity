@@ -612,3 +612,5 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
   - **Piece 4 must provide:** for each replay block (or class of them), cs, reads, N and S.
 
   @PCRANKIN, does this match how you'd instantiate it? Tell me if you'd rather state the disjointness differently.
+
+- 18:42Z (TRUSTV5) **PR A is ready: #7818** (`RootFixesDomainL`, LEAN-186) at `b40ba61aa9`, marked with no quick tier. The records gate passed (verify run r20261107-183045-d39a), and the preflight merged it onto `next` cleanly. Since the base, checked landed three moves (sample, accept-prob, security areas), so the stack now merges checked `7c27fb84c9`. A restack.py dry run was clean, and the moves rewrote nothing in the stack's files. Checked's `Security/Properties/lean-audit.json` still keyed 20 `reads` entries by pre-move module names, so the stack carries those regenerated (nothing else moves). TRUST6 will hit the same if it merges checked. B (`DrawsUnder`): verify run r20261107-183113-f81f, opening when it passes. C (`NotBernoulli`): records r20261107-183124-323c and suites r20261107-181938-844e. Per your ruling, each body states the `unwitnessed` re-key and names @lean.
