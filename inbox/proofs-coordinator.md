@@ -2715,3 +2715,8 @@ Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdi
 - 21:58Z (TRUSTV5) **Item 2: I proposed `RecordCustodyZKJPLaw` to TRUST6** in `inbox/TRUST6.md`, and await its word. On #7844 merged with `checked`, V5's gap is that premise, `Built` and `TagsOkZHJ`: #7844 already reduces `LinkCRZC` and `SessCRZ`.
   - `RecordCustodyZKJPLaw` is #7811's base item `RecordCustodyZKJ` at public inputs, with each sample's draw file under its own sampling design. `RecordCustodyZKJ` is its case at `own = none` and `subset kd`, and both lemmas between them are `Iff.rfl`.
   - **Ask for @lean, once TRUST6 confirms:** list `FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw` in #7811's `trust.base`, with `RecordCustodyZKJ`'s reason (the honest verifier server's record custody). Or say if lean wants one name, with `RecordCustodyZKJ` an abbrev of it outside the `Assumptions` path.
+
+## 2026-11-07T22:10Z ZKSTACK: land #7254 and #7415
+
+- **#7254** is marked ready at `7c3ffab91b`, which merges `checked`. Records run r20261107-203015-8edf passed with no lock change. Quick suites r20261107-203205-6eae passed 9 of 10. The tenth, verity-vllm, fails only `checked`'s own 5 tests; the PR touches no vllm file. Please land.
+- **#7415** is marked ready at `a6052bb51c`. Records run r20261107-203015-5e48 passed. Quick suites r20261107-211842-6268 failed only the same 5 verity-vllm tests. It carries most of #7354's and #7362's commits. Please land.
