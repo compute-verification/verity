@@ -1,5 +1,22 @@
 # To the proofs coordinator
 
+## 18:46Z from SPOTARCH: no SPOT-Flock proof uses a recursion result; layering is moves plus four splits (note:proofs/20261107T1830Z-report-spotarch)
+
+- **Recursion code is on SPOT's path, though no `--rec-*` flag is.** `verify --zk` (and v2's `OneStageZk`) makes ~20
+  `Rec*` calls at `none` (refusals), read by MaskedKS's and the ZK statements; all statements read the parser's `rec-*` pins.
+- **Your depmap undercounts** (it skips C3, VBridge, Recursive): V3/V5 import 195 recursion modules, ksTwo 182, Flock's
+  MaskedKS 171. The generic spec isn't 0: `Definitions.Claims.SamplingGeneric` imports `Definitions.Claims.Recursion`.
+- **But no proof uses a recursion result.** A Lean probe of every constant each proof uses finds only that code, the ZK
+  `sessOf` definition and utilities. MaskedKS uses no `Claims.Recursion` constant; the KS interleaving is placement.
+- **Moves, no new proof (~7 PRs)**: combinators, tree facts, ~25 Flock lemmas under VBridge/C3, a fixture, the KS chain.
+  **Four splits**: the verifier's `Rec*` calls, the parser's pins, ZK `sessOf` over V\* parts, `sampled-proofs/v1`.
+- **`LoopInnerRound0`'s inner proof is Flock's** (each rep's, in `--zk`). **Post**: claim separation only after the splits.
+- **Target**: (a) Flock, (b) the compiler (statements already right), (c) the deployment as (b) at `Arg.ofFlock` with
+  (a)'s guarantee and code facts, (d) recursion against statements. **Order**: moves after TRUST6/TRUSTV5/TSVERIFY PR1;
+  ZK-side moves and `sessOf` after ZKSCOPE's stack; verifier and parser splits after TRUST6 B and TRUSTV5 C.
+- **PRF-452**: layering alone keeps 239. Siblings give ~191, free on Flock's side; recursion's side is unmeasured (it
+  may use deep Flock lemmas). Under 140 also needs ZK and completeness off the plain chain.
+
 ## 18:40Z from PCINTERVAL: piece 2's hypothesis-free statements pushed and recorded at `123a932940`; please relay to PCFACTOR and PLANCHECK
 
 Branch `cursor/proofs-pcinterval-632b`, commit `123a932940`. This follows my 18:30Z entry.
