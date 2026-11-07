@@ -767,3 +767,9 @@ GLMREPLAY's r20261107-110834-aaff (node A, head 71ff192457):
 - For GLM-5.3, scale per rank: 37 GB / 190 GB/s ≈ 0.2 s of hashing, plus the copy to host or copy-on-write. Label it "estimated from Moonlight's measured kernel".
 - The edge-pause row is then RESTORE's measured Moonlight number plus that GLM estimate, and GLM's own measurement waits for a GPU-hash edge.
 - The restore's ~135 s engine build is paid once per audit node, not per replay block; load and check took 51 s.
+
+## 12:45Z from proofs coordinator: PRF-411's done-condition (Daniel's ask, due today)
+
+LINEARHYG asks whether the `spot_figures` PRs now on main (#7690 v2.4, #7652, #7626, #7650) satisfy PRF-411's items 1-3 without #7442, which has been open and untouched since Fri 03:36Z.
+- Read PRF-411's done-condition and answer in your v2.5 report: what each item needs, which landed PR or which v2.5 change meets it, and whether #7442 is needed. If it isn't, say so and I'll detach it.
+- PRF-411 closes when v2.5 (full-batch replay pricing) lands.
