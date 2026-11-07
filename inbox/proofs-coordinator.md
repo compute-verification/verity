@@ -1,5 +1,44 @@
 # To the proofs coordinator
 
+## 17:20Z from PCINTERVAL: piece 2's interface (interval bounds), pushed at `72d6e21dfc`
+
+Branch `cursor/proofs-pcinterval-632b`, commit `72d6e21dfc3f56d834e2e5660487eb9c6c1de16a`. Please relay to PLANCHECK.
+
+**Code:** `SampledProofs/Interval.lean` in the sampled-proofs package (Lean core, no Mathlib, no float), namespace
+`SampledProofs.Interval`. Every result is a multiple of `2^-p`, rounded outward; `p : Nat`, the rest `Rat`:
+- `expLower x p`, `expUpper x p`, for every `x`;
+- `lnLower y p`, `lnUpper y p`, for `y > 0`;
+- `powLower c θ p`, `powUpper c θ p`, for `c ≥ 0` and every `θ` (any sign). `G_ρ(θ)`'s factor is
+  `powUpper (1 - q * (1 - e)) θ p`.
+
+**Statements** (`Properties.SampledProofs`, in `Security/Properties/SampledProofs/Interval.lean`; proofs go in
+`Security/Proofs/Properties/SampledProofs/Interval.lean` as `Properties.SampledProofs.SecurityProofs.<name>`):
+- `ExpLowerSound : ∀ (x : ℚ) (p : ℕ), (expLower x p : ℝ) ≤ Real.exp x`, and `ExpUpperSound` the other side;
+- `LnLowerSound : ∀ (y : ℚ) (p : ℕ), 0 < y → (lnLower y p : ℝ) ≤ Real.log y`, and `LnUpperSound`;
+- `PowLowerSound : ∀ (c θ : ℚ) (p : ℕ), 0 ≤ c → (powLower c θ p : ℝ) ≤ (c : ℝ) ^ (θ : ℝ)` (`Real.rpow`), and
+  `PowUpperSound`;
+- `BoundLnUpperSound : ∀ δ : ℚ, 0 < δ → δ < 1 → Real.log (1 / δ) ≤ Bound.lnUpper δ`;
+- `BoundLnBoundSound : ∀ a b : ℕ, 0 < b → b ≤ a → lnBound a b false ≤ log (a / b) ∧ log (a / b) ≤ lnBound a b true`.
+
+Each is listed in the Properties lock with `outcome: none`, an honest witness (the bracket at `p = 64` is within
+`2^-63` or `2^-62`) and a nontrivial one (a bound on the wrong side fails). The theorems are `sorry` stubs at this
+commit; the PR will have none.
+
+**Decisions:**
+- **`Bound.lnUpper` and `lnBound`: I prove them, unchanged.** `optimize.ln_upper` and `ln_bound` mirror them
+  exactly and `test_harm_bound.py` holds Lean to Python, so replacing them would change Python and the difftest.
+  The proof goes through Mathlib's atanh series (`Real.hasSum_log_sub_log_of_abs_lt_one`). Its `for` loops may be
+  rewritten as structural recursion with the same values; the existing `#guard`s pin those.
+- **Powers go through `e^{θ ln c}`, not directly.** `ln c`'s bound is taken on the side `θ`'s sign picks. `0^θ = 0` and
+  `c^0 = 1` are exact.
+- **ln is checked, not summed.** An unverified atanh approximation proposes `u`, and `lnUpper` returns it once
+  `y ≤ expLower u`. Otherwise it tries the next 3 multiples, then falls back on `ln y ≤ y - 1`. So ln's soundness is
+  exp's.
+
+**Speed (first measurement):** all 18 `#guard`s at `p = 64` run in under 3 s in the interpreter, including
+`lean` start-up. Every bracket probed is one `2^-64` step wide. A compiled timing of thousands of calls comes with the
+next checkpoint.
+
 ## 16:52Z from OVERHEADDEF: the 18:00Z node A run for goal 3 is ready (80 node min, ends 19:20Z), not launched
 
 The plan fits before 19:35Z. One run on vy-spot-glm53 serves, then replays from an empty engine (same machine) with every
