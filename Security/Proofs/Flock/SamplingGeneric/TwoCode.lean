@@ -4,6 +4,7 @@ public import Proofs.Flock.SamplingGeneric.Two
 public import Proofs.Flock.SamplingGeneric.TwoDeployed
 public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 public import Proofs.Flock.Claims.Sampling.Select
+public import Proofs.Flock.Claims.Sampling.Reg
 
 /-!
 # The two-stage sampled verifier's code from its Lean samples
@@ -46,53 +47,6 @@ namespace SamplingDeploy
 
 open Claims Claims.Sampling Finset Properties.SampledProofs Properties.SampledProofs.SecurityProofs
 open Lean (Json)
-
-/-! ## The registration and its samples -/
-
-/-- **A two-stage registration as the samples of record read it**: the boundary registration the first stage samples on
-(`first`), the proof blocks in each replay block (`n`) and the second stage's count in each (`k`), the statement's
-proof block at position `p` of replay block `ρ` (`blockOf ρ p`), and the proof blocks checked whatever the stages sample
-(`always`). -/
-structure RegTwo where
-  first : Reg
-  n : ℕ
-  k : ℕ
-  blockOf : ℕ → ℕ → ℕ
-  always : ℕ → Bool
-
-/-- **The replay sample** on the bytes `src`: the units the first stage proves (`Select.select`'s), which `Run.run`
-hands the second stage; none where it is refused. -/
-def RegTwo.sample (g : RegTwo) (src : ByteArray) : Array ℕ :=
-  match SampledProofs.Select.select g.first.rule g.first.program g.first.query g.first.table g.first.closure src with
-  | .ok (_, proved, _) => proved
-  | .error _ => #[]
-
-/-- Interior unit `j`'s proof block: position `j % n` of replay block `sample[j / n]`. -/
-def RegTwo.blockAt (g : RegTwo) (sample : Array ℕ) (j : ℕ) : ℕ := g.blockOf (sample.getD (j / g.n) 0) (j % g.n)
-
-/-- **The checked proof blocks** below `N`, at first-stage bytes `src₁` and second-stage bytes `src₂`: those the second
-stage proves (`Select.selectSecond` on the replay sample) and those always checked; all of them where the second stage
-is refused. -/
-def RegTwo.checked (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) : List ℕ :=
-  match SampledProofs.Select.selectSecond (g.sample src₁) g.n g.k src₂ with
-  | .ok (draw, _) => (List.range N).filter fun v =>
-      g.always v || (SampledProofs.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v
-  | .error _ => List.range N
-
-/-- **The two-stage sampled verifier's code with its Lean samples**: `c` with `checked` the two stages' on the
-registration `reg x`, over the bytes `bytes₁ x` and `bytes₂ x` of the coins. -/
-def codeTwo (c : Code) (reg : Msg → Option RegTwo) (L₁ L₂ : Msg → ℕ)
-    (bytes₁ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₁ x) → Fin 256)
-    (bytes₂ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256) : Code :=
-  { c with
-    checked := fun x r =>
-      ((reg x).map fun g => g.checked (units c x) (bytesOf (bytes₁ x r)) (bytesOf (bytes₂ x r))).getD [] }
-
-/-- **The replay sample of record**: the first stage's checked slots on the replay layout (`Reg.checked`). -/
-def replayTwo (c : Code) (reg : Msg → Option RegTwo) (L₁ : Msg → ℕ)
-    (bytes₁ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₁ x) → Fin 256) (x : Msg)
-    (r : Fin (c.V.k x) → FlockDeploy.Coin) : List ℕ :=
-  ((reg x).map fun g => g.first.checked (bytesOf (bytes₁ x r))).getD []
 
 theorem RegTwo.checked_length_le (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) :
     (g.checked N src₁ src₂).length ≤ N := by

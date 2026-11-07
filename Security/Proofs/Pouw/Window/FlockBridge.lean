@@ -33,7 +33,7 @@ the table's own terms and `rateZ = N₀/(ek) < 1`. So `FlockKnowledgeSound` hold
 `g S R τ = ⨆_j ofReal (ksBoundAccZ_j / (1 − rateZ_j))` at `zcStrat τ`, the state's collision finders' advantages, and
 these are the `κ_c` and `g_c` `WindowEps` reads through `ofFlock_knowledgeSound`: the relative term sits in the
 denominator, not in `κ`. `ksJoint_le` (`Proofs/Flock/Soundness/Audit/FlockCompiled.lean`, `κ = 2^logLen/(e·Kr)`) is the
-non-ZK plain-leaf table's, which main's window doesn't run. The binding error `δlink_c` stays `LinkSoundIn`, Flock's link
+non-ZK plain-leaf table's, which main's window doesn't run. The binding error `δlink_c` stays `BindSoundIn`, Flock's link
 finder at the window's state.
 -/
 

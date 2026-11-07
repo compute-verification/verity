@@ -41,8 +41,8 @@ from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, drive, kind, launch_batch, launch_rows, launch_seqlen_q,
-                     select_token, served_class)
+from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, finish_run, in_launch, kind, launch_batch,
+                     launch_rows, launch_seqlen_q, request_passes, run_input, select_token, served_class, with_checks, wrapper_keys)
 from .domain import check_phi
 from .phi import Phi
 
@@ -413,6 +413,8 @@ class BuildResult:
     n_root_nodes: int
     timings: dict = field(default_factory=dict)
     named: Any = None     # what a `build_program` `finish` says beside the Program (`naming.Named`)
+    run: dict | None = None      # its `run` parameter's layout (`RunInputs.layout`), where a row reads a value the served run decides
+    checks: dict | None = None   # its checks output, as `derive`'s provenance states it (`common.with_checks`)
 
     def summary(self) -> dict:
         return {"wrapper": self.wrapper, "function": self.function, "digest": self.digest,
@@ -450,8 +452,9 @@ class _Model:
         self.lp_of: dict[int, int] = {}
         self.plus_one: dict[int, Coll] = {}
 
-    def open_with(self, prefix: Coll, C: int) -> None:
+    def open_with(self, prefixes: list[Coll], C: int) -> None:
         """Every layer's history opens with its rows of `prefix` (`rules.vllm_bindings.kv_prefix`: bf16 [NL, 2, C, KVH*D], keys then values)."""
+        prefix, = prefixes
         rl = self.C.KVH * self.C.D
         for L, (kh, vh) in enumerate(self.hist):
             kh += [prefix.refs.slice(((2 * L) * C + j) * rl, ((2 * L) * C + j + 1) * rl) for j in range(C)]
@@ -671,6 +674,10 @@ class _Decoder:
         layer = ([(r, R.NH * R.D), (r, R.KVH * R.D)] if R.qk_norm == "all" else []) + [(r, C.H)] * 2
         return [(r, C.H)] + layer * C.NL + [(1, C.V // self.world)]
 
+    def prefix_params(self, C: int) -> list[tuple[str, Type]]:
+        """The Input a request's history of its first C positions opens with (`vllm_meta.prefix_input`): every layer's key and value rows."""
+        return [("prefix", _arr((self.C.NL, 2, C, self.C.KVH * self.C.D), 16))]
+
     def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
         return _Model(B, self.specs, W, self.specs.C, peers)
 
@@ -680,9 +687,12 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                   batch: list | None = None, chunks: tuple[int, ...] | None = None) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
-    first C prompt rows are a prefix-cache hit (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`) whose every layer's key and
-    value rows a `prefix` input holds after the request's own; the prefill computes rows C..LP-1. A request on one rank drops its dead
-    units (`program.prune`, as the Build's derive does): the last layer's rows before the prefill's last, which no sample reads.
+    request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
+    (`prefix_params`): a prefix-cache hit (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`) whose prefill computes rows
+    C..LP-1, or on the sparse-attention decoder also a request a Commit window carries in at decode C >= LP, its first decode fed
+    the `last_token` Input (`common.request_passes`); on that decoder either's SRC config holds `{"history": C}`, and no Build
+    traces it yet. A request on one rank drops its dead units (`program.prune`, as the Build's derive does): the last layer's rows
+    before the prefill's last, which no sample reads.
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
     `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
     `BuildResult.named`), as `naming.named_program` names a request Program. `batch`: the request's launch batch (`common._Launch`,
@@ -697,21 +707,14 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     world, rank, C = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0)), int(C)
-    if C and (wrapper, kind, world, type(net)) != ("request", "greedy", 1, _Decoder):
+    dense = type(net) is _Decoder
+    if C and (wrapper != "request" or not hasattr(net, "prefix_params") or (dense and (kind, world) != ("greedy", 1))):
         raise Unexpressible(f"vocabulary cannot express: a cached prefix on a {kind} {wrapper} at TP{world} of the {net.model_class} decoder "
-                            f"(the cached greedy request on one rank of the dense or fused-MoE decoder only)")
-    if C and not 0 < C < int(LP):
-        raise Unexpressible(f"vocabulary cannot express: a cached prefix of {C} rows for a prompt of {LP} (0 < C < LP)")
-    chunks = tuple(int(c) for c in chunks or ())
-    if chunks and (wrapper != "request" or min(chunks) < 1 or sum(chunks) != int(LP) - C):
-        raise Unexpressible(f"vocabulary cannot express: prefill chunks {list(chunks)} of a {wrapper} (a request's chunks are its "
-                            f"{int(LP or 0) - C} prefill rows in turn, each at least one)")
-    chunks = chunks if len(chunks) > 1 else ()
+                            f"(a request's, greedy on one rank of the dense or fused-MoE decoder, or on the sparse-attention decoder)")
+    resumed, chunks, passes, sampled = request_passes(wrapper, LP, T, M, C, chunks, dense)
     wrec = RecordType(*net.leaves())
     n = M if wrapper == "step" else int(LP)
-    events = 1 if wrapper == "step" else int(T) + 1
-    passes = [*(chunks or [n]), *[1] * (events - 1)]
-    sampled = [False] * (len(chunks) - 1) + [True] * events if chunks else [True] * events
+    events = sum(sampled)
     params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
     if kind == "stochastic":
         params.append(("seed", Array(1, I64)))
@@ -720,21 +723,27 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     words = sum(net.schedule_words(r) for r in passes) if hasattr(net, "schedule_words") else 0
     if words:
         params.append(("schedule", Array(words, I32)))       # `vllm_meta.ScheduledWithPeers`
+    history = len(params)
     if C:
-        params.append(("prefix", _arr((net.C.NL, 2, C, net.C.KVH * net.C.D), 16)))   # `vllm_meta.prefix_input`
+        params += net.prefix_params(C)   # `vllm_meta.prefix_input`
+    if resumed:
+        params.append(("last_token", Array(1, I32)))
     n_user = len(params)
     if world > 1:
         # `vllm_meta.WithPeers`: world - 1 peer Inputs per collective of each forward pass, in call order; a pass that samples
         # nothing gathers no logits, the last of `peer_shapes`
         shapes = [s for r, smp in zip(passes, sampled) for s in net.peer_shapes(r)[:None if smp else -1] for _ in range(world - 1)]
         params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
+    n_peers, run = len(params) - n_user, run_input(net, params, wrapper_keys(wrapper, M, LP, T))
     params.append(("weights", wrec))
     params = tuple(params)
     B = Builder(params, Value(1))
     ids = Coll(params[0][1], Affine("p", 0, 0, n))
     W = Coll(wrec, Affine("p", len(params) - 1, 0, wrec.leaves))
-    schedule = Coll(params[n_user - 1][1], Affine("p", n_user - 1, 0, words)) if words else None
-    peers = _Peers([Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[n_user:-1], start=n_user)], world, rank, schedule)
+    user = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[:n_user])]
+    schedule = user[history - 1] if words else None
+    peers = _Peers([Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[n_user:n_user + n_peers], start=n_user)],
+                   world, rank, schedule)
     policy = None
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
@@ -742,24 +751,20 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=Coll(params[2][1], Affine("p", 2, 0, events)) if s["splits"] == "derived" else None,
                              S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
     model = net.model(B, W, peers)
-    if (batch := (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None) is not None:
-        if not getattr(model, "reads_launch", False):
-            raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance), whose kernel "
-                                f"choices the {net.model_class} decoder reads at its own rows")
-        model.launch = _Launch(batch)
-    if chunks and (batch is None or len(batch) != len(chunks) + int(T)):
-        raise Unexpressible(f"vocabulary cannot express: a prefill in {len(chunks)} chunks " + (
-            f"at a launch batch of {len(batch)} steps, not one a chunk and one a decode ({len(chunks) + int(T)})" if batch is not None else
-            "without a launch batch (on a batch-invariant target a chunked prefill is the request wrapper's Program)"))
+    model.run = run
+    batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
+    in_launch(model, batch, net.model_class, chunks, T)
     if wrapper == "request" and isinstance(model, _Model):
         model.ctx = launch_rows(phi, LP, T, C)
     if C:
-        model.open_with(Coll(params[n_user - 1][1], Affine("p", n_user - 1, 0, params[n_user - 1][1].leaves)), C)
+        model.open_with(user[history:n_user - resumed], C)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
-    toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch, C=C, chunks=chunks)
+    toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch, C=C, chunks=chunks,
+                 last=user[n_user - 1] if resumed else None)
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     if peers.n != len(peers.inputs) or peers.k != words:
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
+    params, (out, checks) = finish_run(run, params, B), with_checks(model, out)
     B.ret_type = out.type
     body, names = B.finish(out), None
     if finish is not None:
@@ -767,12 +772,14 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     elif wrapper == "request" and (world == 1 or dead_free):
         body = dead_free_form(body)[0]
     t_body = time.time()
-    src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C else WRAPPERS[(wrapper, kind)]
+    src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C and dense else WRAPPERS[(wrapper, kind)]
     if world > 1:
         src_class = f"verity-vllm/{'scheduled-with-peers' if words else 'with-peers'}/v1[{src_class}]"
     name = f"{derive_name}[{net.model_class}]"
-    src_static = {"class": src_class, "mode": "profile", "profile": phi.profile, "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
-                  "config_sha256": hashlib.sha256(canonical_json({"chunks": list(chunks)} if chunks else {})).hexdigest()[:16]}
+    src_static = {"class": src_class, "mode": "profile", "profile": phi.profile,
+                  "inputs": [list(_arr_shape(t)) for nm, t in params[:-1] if nm != "run"],
+                  "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}),
+                                                                  **({"history": C} if C and not dense else {})})).hexdigest()[:16]}
     from verity.ml.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="derived: predicted, a switched row's, checked by its trace (predict.aot)",
@@ -788,5 +795,5 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         digest = program_digest(desc)
         timings["encode_digest_s"] = round(time.time() - t2, 3)
     timings["total_s"] = round(time.time() - t0, 3)
-    return BuildResult(wrapper=wrapper, program=program, digest=digest or "", desc=desc, function=sd.id,
-                       n_root_nodes=len(program.fn.body.nodes) if hasattr(program.fn, "body") else -1, timings=timings, named=names)
+    return BuildResult(wrapper=wrapper, program=program, digest=digest or "", desc=desc, function=sd.id, timings=timings, named=names,
+                       n_root_nodes=len(program.fn.body.nodes) if hasattr(program.fn, "body") else -1, run=run and run.layout(), checks=checks)
