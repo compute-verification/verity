@@ -180,10 +180,11 @@ def dedup : List Nat → List Nat
   | [] => []
   | x :: xs => if xs.contains x then dedup xs else x :: dedup xs
 
-/-- **A group**: `n` proof blocks committing `b` bits each, in a cell whose second stage samples each at rate `rate`,
-`none` when it samples the cell whole; with the logarithms its sums read, computed once: `lnNLo ≤ ln n ≤ lnN`, and at
-`m = ⌊S/b⌋`, `lm ≥ ln m` and `lf ≤ ln m!`. -/
+/-- **A group**: `n` proof blocks committing `b` bits each, in stratum `t`, whose second stage samples each at rate
+`rate`, `none` when it samples the cell whole; with the logarithms its sums read, computed once: `lnNLo ≤ ln n ≤ lnN`,
+and at `m = ⌊S/b⌋`, `lm ≥ ln m` and `lf ≤ ln m!`. -/
 structure Group where
+  t : Nat
   n : Nat
   b : Nat
   rate : Option Rat
@@ -193,22 +194,28 @@ structure Group where
   lf : Rat
   deriving Repr, Inhabited
 
-/-- The group of `n` proof blocks of `b` bits at `rate`, its logarithms at `S` and precision `p`. -/
-def Group.of (n b : Nat) (rate : Option Rat) (S p : Nat) : Group :=
-  ⟨n, b, rate, lnUpper n p, lnLower n p, lnUpper (S / b) p, lnFactLower (S / b) p⟩
+/-- The group's rate, `0` when its cell is sampled whole. -/
+def Group.r (g : Group) : Rat := g.rate.getD 0
 
-/-- The groups of `parts` at `rate`, one per width, each nonempty. -/
-def groupsAt (parts : List (Nat × Nat)) (rate : Option Rat) (S p : Nat) : List Group :=
-  ((dedup (parts.map Prod.snd)).filter fun b => 0 < countIn parts b).map fun b =>
-    Group.of (countIn parts b) b rate S p
+/-- The group's stratum and width. -/
+def Group.key (g : Group) : Nat × Nat := (g.t, g.b)
+
+/-- The `(stratum, width)` pairs of `reads`, `reads[t]`'s `(count, bits)` in stratum `t` of the cells `cs`, with a
+proof block or more, each once. -/
+def keysOf (cs : List Cell) (reads : List (List (Nat × Nat))) : List (Nat × Nat) :=
+  (List.range cs.length).flatMap fun t =>
+    ((dedup ((reads.getD t []).map Prod.snd)).filter fun b => 0 < countIn (reads.getD t []) b).map (t, ·)
+
+/-- **The groups of `reads`** at the rates of the cells `cs`, one per `(stratum, width)`, its logarithms at `S` and
+precision `p`. -/
+def readGroups (cs : List Cell) (reads : List (List (Nat × Nat))) (S p : Nat) : List Group :=
+  (keysOf cs reads).map fun k =>
+    let n := countIn (reads.getD k.1 []) k.2
+    ⟨k.1, n, k.2, (cs.getD k.1 default).rate, lnUpper n p, lnLower n p, lnUpper (S / k.2) p,
+      lnFactLower (S / k.2) p⟩
 
 /-- The replay block's groups. -/
-def groupsOf (cs : List Cell) (S p : Nat) : List Group := cs.flatMap fun c => groupsAt c.parts c.rate S p
-
-/-- The groups of what one request reads, `reads[t]`'s `(count, bits)` in stratum `t`, at the rates of the replay
-block's cells. -/
-def readGroups (cs : List Cell) (reads : List (List (Nat × Nat))) (S p : Nat) : List Group :=
-  (cs.zip reads).flatMap fun x => groupsAt x.2 x.1.rate S p
+def groupsOf (cs : List Cell) (S p : Nat) : List Group := readGroups cs (cs.map Cell.parts) S p
 
 /-! ## The parameters -/
 
@@ -311,9 +318,9 @@ def lightPatterns (L : Ln2) (gs : List (Group × Rat)) (S p : Nat) : Option Rat 
         ((S : Rat) * L.up + ·))
     | _, _ => prod
 
-/-- The groups sampled at a rate, each with its rate, and the groups sampled whole. -/
-def split (gs : List Group) : List (Group × Rat) × List Group :=
-  (gs.filterMap fun g => g.rate.map (g, ·), gs.filter fun g => g.rate.isNone)
+/-- The groups sampled at a rate, and the groups sampled whole. -/
+def split (gs : List Group) : List Group × List Group :=
+  (gs.filter fun g => g.rate.isSome, gs.filter fun g => g.rate.isNone)
 
 /-! ## Rankin's factor -/
 
@@ -326,40 +333,39 @@ def lnFactorUpper (cs : List Cell) (P : Params) : Option Rat :=
     let (fin, inf) := split (groupsOf cs 0 P.p)
     let whole := if inf.isEmpty then none
       else oadd (lnPassWhole P.q P.θ P.p) ((Fac.prod (inf.map (wholeFac L · 0 P.p)) P.p).l.map
-        ((Fac.prod (fin.map fun x => wholeFac L x.1 0 P.p) P.p).f + ·))
-    bound P (fun s => lightSets L (fin.map fun x => (x.1, -(P.θ * s * x.2))) P.p) whole
+        ((Fac.prod (fin.map (wholeFac L · 0 P.p)) P.p).f + ·))
+    bound P (fun s => lightSets L (fin.map fun g => (g, -(P.θ * s * g.r))) P.p) whole
   else none
 
 /-! ## The patterns' factor -/
 
 /-- The least `y` of a request's heavy set avoiding the cells sampled whole, `y_S = min_g r_g max(1, S/b_g)` over the
 groups (of nonzero bits, when `S > 0`); `none` when the groups hold fewer than `S` bits, so that there is none. -/
-def heavyY (fin : List (Group × Rat)) (S : Nat) : Option Rat :=
-  if (fin.map fun x => x.1.n * x.1.b).sum < S then none
+def heavyY (fin : List Group) (S : Nat) : Option Rat :=
+  if (fin.map fun g => g.n * g.b).sum < S then none
   else
-    match fin.filterMap fun x => if x.1.b = 0 ∧ 0 < S then none else some (x.2 * max 1 ((S : Rat) / (x.1.b : Rat))) with
+    match fin.filterMap fun g => if g.b = 0 ∧ 0 < S then none else some (g.r * max 1 ((S : Rat) / (g.b : Rat))) with
     | [] => none
     | y :: ys => some (ys.foldl min y)
 
 /-- **A request's factor at slope `s`**, `θs = θ s`: `1 + Σ_{A light} 2^{b(A)} e^{−θ s y(A)} + 2^S e^{−θ s y_S}`, over
 its classes avoiding the cells sampled whole: none, light, heavy. -/
-def requestFac (L : Ln2) (fin : List (Group × Rat)) (yS : Option Rat) (θs : Rat) (S p : Nat) : Fac :=
-  let light := lightPatterns L (fin.map fun x => (x.1, -(θs * x.2))) S p
+def requestFac (L : Ln2) (fin : List Group) (yS : Option Rat) (θs : Rat) (S p : Nat) : Fac :=
+  let light := lightPatterns L (fin.map fun g => (g, -(θs * g.r))) S p
   let l := lse ([light, yS.map fun y => (S : Rat) * L.up - θs * y].filterMap id) p
   ⟨lnOnePlus l p, l⟩
 
 /-- At least `ln` of the patterns' count meeting a cell sampled whole, `N` requests in all: with `T` a request's classes
 meeting one (`2^S` heavy, the light sets meeting one `∏_{F} (1 + L_g) (∏_{I} (1 + L_g) − 1)`) and `A` all its classes,
 the lesser of `N T A^{N−1}` (one of the requests meets one) and `A^N`. -/
-def touchCount (L : Ln2) (fin : List (Group × Rat)) (inf : List Group) (yS : Option Rat) (N S p : Nat) :
-    Option Rat :=
+def touchCount (L : Ln2) (fin inf : List Group) (N S p : Nat) : Option Rat :=
   if N = 0 then none
   else
-    let finF := Fac.prod (fin.map fun x => cappedFac L x.1 0 S p) p
+    let finF := Fac.prod (fin.map (cappedFac L · 0 S p)) p
     let infF := Fac.prod (inf.map (cappedFac L · 0 S p)) p
     let heavy : Option Rat :=
-      if ((fin.map Prod.fst ++ inf).map fun g => g.n * g.b).sum < S then none else some ((S : Rat) * L.up)
-    let lA := (lse ([some (finF.f + infF.f), heavy, yS.map fun _ => (S : Rat) * L.up].filterMap id) p).getD 0
+      if ((fin ++ inf).map fun g => g.n * g.b).sum < S then none else some ((S : Rat) * L.up)
+    let lA := (lse ([some (finF.f + infF.f), heavy].filterMap id) p).getD 0
     (lse ([infF.l.map (finF.f + ·), heavy].filterMap id) p).map fun lT =>
       min (lnUpper N p + lT + (N - 1 : Nat) * lA) (N * lA)
 
@@ -376,7 +382,7 @@ def lnFactorUpperPatterns (cs : List Cell) (reads : List (List (Nat × Nat))) (N
     let (fin, inf) := split (readGroups cs reads S P.p)
     let yS := heavyY fin S
     let lnN := lnUpper N P.p
-    let whole := if inf.isEmpty then none else oadd (lnPassWhole P.q P.θ P.p) (touchCount L fin inf yS N S P.p)
+    let whole := if inf.isEmpty then none else oadd (lnPassWhole P.q P.θ P.p) (touchCount L fin inf N S P.p)
     let P' := match yS with
       | some y => if ({ P with ys := insertY y P.ys } : Params).valid then { P with ys := insertY y P.ys } else P
       | none => P
