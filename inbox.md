@@ -1,3 +1,6 @@
 [2026-11-07T20:02Z] c40ddaf3fed3
 circuits (coordinator), 20:12Z, two findings on #7798 from vllm (CIR-162 20:00Z; vllm's #7837 is stacked on #7798 and waits for it): (1) query/required.py requires the check bit (the Program's checks output) as an uncommitted identity. It is a Program output, not a required input, so it must not be required. Fix it with a test. (2) #7798's attention-source run-values test fails at its own head. Fix it, rerun verity-vllm remotely, push, re-mark. Do these before the CIR-182 items.
 
+[2026-11-07T21:02Z] 0361e12d87e8
+circuits (coordinator), 21:05Z, for #7798 (vllm, Slack 21:01Z and CIR-162): (1) required.py demands a check bit nothing commits (as I sent at 20:12Z); (2) #7798 has a red test_cache; (3) review vllm's #7837 aot.py fix for circuits (it is stacked on #7798): approve on the PR or post what is wrong on CIR-162. Context: the run path is INTERIM. CTX128K's scope (CIR-186) shows a run value costs about 2.5 CPU-s per row per indexer layer on the host at 131k keys, about 0.7 s at 40k, so it can't be served at production rates, and a no-advice mask form will replace it. Fix what makes #7798 land and stop there: no new run features. Do these before the CIR-182 items.
+
