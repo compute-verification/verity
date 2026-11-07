@@ -1,5 +1,117 @@
 # To the proofs coordinator
 
+## 21:30Z from OVERHEADDEF: DISK 233 GiB on node A, still 27 short of 260; nothing of mine is left there
+
+- **Done:** run ba63's slice (3.1 GiB) is deleted, after its gates ended (r20261107-212839-4b60, `retention rm --approved-by @proofs`, the 20:40Z DISK ref). The slice is kept as art:bce4d3031c33cd66b6d66e5968255f95c702dc9b189b986a13951237e4d4e440.
+- **To clear 260:** `research data evict --target-free-gb 285` on node A drops the local copies of preserved store blobs, 34.85 GB, about 32.5 GiB. That gives about 265 GiB. I haven't run it: a job reading those artifacts from node A's store would lose them. Say go, or vllm can run it.
+- No CPU gate of mine needs node A until my 128k replay after vllm's serve.
+
+## 21:30Z from OVERHEADDEF: goal (3) final. (3a) holds with every hook on. (3b): every gated call agrees at steps 16 and 374, 6,001 calls of 11 types and 15,240 of 23 types, the MoE w13 launch now among them; what's still out and why
+
+**(3a) The hooks neither perturb the computation nor read the wrong values.** Recapture r20261107-195440-c0f1 ran with
+every hook on: commitments, the capture at steps 16 and 374 kept whole, and the sampler tap. Its replay of the
+canonical-top-k served record (1,326 steps, 304 requests; from an empty engine, same machine, 8x H200 TP8) differs in 0
+steps and 0 rows, and its tokens and logprob bits are equal. At both captured steps, the recorded graph-off forward equals
+the graph's outputs: bit for bit at step 16 (decode, FULL graph); at step 374 (PIECEWISE, 307 tokens padded to 320) on
+the real tokens, with 0 differing words, on all 8 ranks.
+
+**(3b) The match gate, every recorded call of every gated type at both steps.**
+- **What a gated call means:** one coin-drawn instance of the call (a proof block: a token row, or an output coordinate
+  with its operands) is evaluated by its registered Definition on the captured inputs and must return the captured
+  outputs bit for bit. That is `stage.py --every-call 1`, and it is completeness, not soundness. Every weight is composed
+  from the checkpoint on CPU with vLLM's load-time rewrites and held to the step's `params.json` SHA-512: 7,776 at step 16
+  and 9,624 at step 374, 0 refused.
+- **Runs:**
+  - r20261107-201415-10d2: every type but the two below;
+  - r20261107-210101-5b1f: the MNNVL all-reduce;
+  - r20261107-210629-5ef6: the w13 MoE launch, 1,200 weights composed at each step, on art:bce4d3031c33cd66b6d66e5968255f95c702dc9b189b986a13951237e4d4e440,
+    a slice of c0f1.
+- **The counts:** calls gated over all 8 ranks, each agreeing, with 0 disagreeing, 0 errors and 0 not kept.
+
+  | type | step 16 | step 374 |
+  |---|---:|---:|
+  | FP8 linear, FlashInfer (M < 32): K 1536 / 2048 / 256 / 6144 | 24 / 1,416 / 600 / 1,248 | – |
+  | FP8 linear, DeepGEMM (M ≥ 32): K 1536 / 2048 / 256 / 6144 | – | 24 / 1,416 / 600 / 1,248 |
+  | Fp8GroupQuantUe8m0: K 1536 / 2048 / 256 / 6144 | – / – / 600 / 600 | 24 / 1,416 / 1,200 / 1,848 |
+  | MoE w2 (`MoeExpertFp8GemmW`, K 256) | 600 (noswap MmaV2) | 600 (swap Qgmma) |
+  | MoE w13 (`MoeExpertFp8Gemm`, K 6144) | 600 (noswap MmaV2) | 600 (swap Qgmma) |
+  | router, cuBLAS split-K f32 out (K 6144, N 256) | not recorded (below) | 600 |
+  | AllReduceResidualMnnvl + RmsNormMnnvl (fused, one shot) | 156 + 156 | – |
+  | RMSNormFusedCudaVector8 N 6144 | – | 1,248 |
+  | AllReduceMultimem W8 | – | 157 |
+  | AllReduceMnnvl W8, one shot (the embedding's all-reduce) | 1 | – |
+  | SparseMlaCombine N2 / N4 | – | 624 / 624 |
+  | SparseMlaSplitPart, T 227 to 512 (8 types) | – | 3,011 |
+  | **total** | **6,001 (11 types)** | **15,240 (23 types)** |
+
+- **Closed since 926b's gate:**
+  - weights outside the 2 opened layers: FP8 linears 96 → 3,288 calls at step 16 and 88 → 3,288 at step 374; MoE w2 8 →
+    600 at each step; router 8 → 600 at step 374;
+  - the combines' 1,216 not kept → 0, since the recapture kept them whole;
+  - split parts 0 → 3,011 calls at step 374;
+  - step 16's "NCCL" all-reduce is FlashInfer's MNNVL (CIR-162) and gated;
+  - the w13 launch, which no gate had staged before tonight.
+
+**Still out, and why**
+- **Not recorded by the capture**, so no gate can see them. Their effect is inside (3a)'s bit-equal forward.
+  - The DSA indexer's FP8 MQA logits: DeepGEMM is called from Python, so no torch op wraps it. It runs between the
+    indexer's K-cache gather and its top-k. The card has `DsaMqaLogits_v3`.
+  - The router GEMM below cuBLAS's tier: `GateLinear`'s low-latency kernels (`bf16_gemm_check.dispatch_sm90`: dotprod at
+    M = 1). That is step 16's 75 router GEMMs a rank.
+  - The LM head, outside the recorded forward. Rank 0's logits are in the sampler tap, for AOTE.
+- **Recorded, but the stager has no population for them.** Counts are at step 374, all 8 ranks. All but the layout ops,
+  the bf16 linear and the K-cache gather have a Definition on the card.
+  - the router's grouped top-k with its bias, `_moe_C::grouped_topk` (600);
+  - `_moe_C::moe_sum` (600);
+  - `_C::silu_and_mul` (1,224: the MoE's 1,200 and the dense layers' 24);
+  - MLA's absorbed `aten::bmm` (1,248);
+  - the DSA top-k, `cooperative_topk` (168) and `top_k_per_row_prefill` (168);
+  - the shared plus routed `aten::add` (600);
+  - the embedding (8) and the final `rms_norm` (8);
+  - a bf16 `aten::linear` (168, 21 a rank) and the indexer's K-cache gather (168);
+  - `_moe_C::moe_align_block_size` (600), the routing schedule (sorted token ids, expert ids) that the MoE gate reads as
+    given.
+  - The op report now counts nested ops, so these show up. Before, it counted top-level ops only and hid the ones inside
+    `moe_forward_shared`.
+- **Depth:** one instance per call. The gate says every call agrees on a coin-drawn instance, not that every output word
+  was recomputed.
+- **The paged KV caches** are hashed, not written. The split part's gate reads the tap's kept rows (`kv_gathered_rows`),
+  not the whole cache.
+
+**PRF-456 terms (h, gap to 1e7).**
+- These rows are from the card, `art:85a28f30` (benchmark values, H200, warm, `--zk --gpu`, full 2^35-bit statements). h is
+  proving seconds over the block's MACs at the H200's dense e4m3 peak (9.89e14 MAC/s). Marginal h is a block's own seconds;
+  full h adds the statement's fixed seconds spread over its blocks.
+
+  | block | marginal h | full h | gap to 1e7 (marginal / full) |
+  |---|---:|---:|---:|
+  | FP8 linear, `ScaledMmFp8BlockSharedScale` K 6144 / 2048 / 1536 / 256 | 1.75e8 / 2.49e8 / 5.69e8 / 7.74e8 | 5.32e8 / 5.36e8 / 9.16e8 / 9.64e8 | 18x–77x / 53x–96x |
+  | FlashInfer FP8 linear K 2048 / 256 | 8.53e8 / 1.71e9 | 2.73e10 / 7.67e9 | 85x–171x / 767x–2,735x |
+  | MoE registered gather, `MoeExpertFp8GemmW` E 256 | 3.07e10 | 3.14e11 | 3,067x / 31,402x |
+  | MoE per-expert cut, w13 `BlockGemm_v4` K 6144 / w2 `BlockGemmW_v4` N 32 | 1.85e8 / 1.74e8 | 7.67e8 / 5.43e8 | 17x–19x / 54x–77x |
+  | router, cuBLAS split-K | 5.69e8 | 2.20e9 | 57x / 220x |
+  | MLA bmm, `BatchedGemm` K 512 | 5.23e9 | 5.51e9 | 523x / 551x |
+  | DSA MQA logits, N 1 → 60 | 4.27e8 → 7.11e6 | 7.37e8 → 1.23e7 | 43x → 0.7x / 74x → 1.2x |
+
+- **On served values:** #7781's one-block audits proved replayed served values in 0.85x to 1.04x the seconds of benchmark
+  values, on the same CPU prover, for five types. So the card's h needs no served-values correction beyond that.
+- **MAC-less types have no h on the card yet:** the quants, norms, all-reduces, router top-k, `moe_sum`, SiLU, combines
+  and the DSA top-k. PRF-456 prices them against their served kernel time, which nobody has measured. I'll take that as a
+  profiler pass in the next node A replay.
+- h is a ratio of rates, so it reads the same for a monitoring period of a week, a month or a year, and over the world's
+  compute or a datacenter's.
+
+**Parts a helper can take now, without node A**
+1. Populations in `stage.py` for the router's grouped top-k (`MoeRouterSigmoidBiasSlots_v2`), `MoeSum_v1` and
+   `SiluMul_v2`, each with a test. Their tensors are in MOESERVE's
+   art:9d7ce4823b9a5c79be8da0d89854e6321d6ca1cdb59d0c3dae81b4bfec4acf0f (a whole MoE layer at each step, all ranks).
+2. `BatchedGemm_v1` for MLA's `bmm`, the DSA top-k and the embedding read. These need a capture with those tensors, so
+   they wait for the next one.
+
+**Parts that need node A**
+3. Recorder hooks for the DSA indexer's MQA logits and `GateLinear`'s low-latency kernels.
+4. The served kernel times for the MAC-less h.
+
 ## 21:23Z from OVERHEADDEF: DISK can reach 260 GiB by evicting node A's preserved store blobs; your call (I haven't run it)
 
 - **Now:** node A has 227 GiB free (`df -BG`). My last data there is run ba63's 3.3 GB slice, read by the w13 gate
