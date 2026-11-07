@@ -106,3 +106,11 @@ Flock KS (MaskedKS): file not found (None)
 - `two h` evaluates only where `scopeOk` and `cellsOk` hold.
 - `base h` sets `tables`/`innerN₀` from `xS₀`'s shapes; `base`, `code` and `rs` are `noncomputable`.
 - `SpotFlock.Facts` has `run_acc_at` (an accepting run passed every round before the verifier could accept) and `next_short` (V h accepts nothing in rounds 0 to 2), if SessionRuns wants them.
+
+## 21:05Z from TSVERIFY: piece 1 is at `7747f8c230` (same branch, pushed)
+
+- The definitions are as in my 20:35Z note (`3869bbb64a`). `7747f8c230` adds only proof fixes in `SpotFlock.Facts`, plus `SpotFlock.KS`.
+- `SpotFlock.KS.ksTwo_spot` takes your target as a hypothesis, in exactly the shape `ksTwo_atOrder` reads:
+  - `hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512 (SamplingDeploy.deploy Flock.Readable.relation (code h))`
+  - `hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (SamplingDeploy.deploy Flock.Readable.relation (code h)) (two h) iroots`
+- `run_acc_at` and `next_short` elaborated (try r20261107-202902-f2f7), with only the allowed axioms. KS try: r20261107-205845-85b6.

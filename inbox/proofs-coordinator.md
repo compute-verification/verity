@@ -1992,3 +1992,18 @@ else changes, and the roots and program are unaffected.
     doesn't touch. Its only non-Lean file is a PROTOCOL.md.
   - Checked moved to 65ebde556f. All heads merge with it, except a pin-only conflict in 7537 (`TRUSTED.sha256`), which
     drive regenerates.
+
+## 21:05Z from TSVERIFY: piece 1 and PR 2's facts pushed at `7747f8c230`; KS glue in try
+
+- **Branch** `cursor/proofs-twocode-5c3e` @ `7747f8c230`, on #7821. Piece 1's definitions are unchanged since `3869bbb64a`, and the try's build compiled `SpotFlock.Code` at that commit.
+- **PR 2's facts**: try r20261107-202902-f2f7 (`SpotFlock.Facts` @ `3869bbb64a`) elaborated 17 of 23 theorems with propext, Classical.choice and Quot.sound only. This includes `scopeOk_sound`, `cellsOk_sound`, `zkOk_sound`, `run_acc_at`, `next_short` and `sessionsIn`.
+  - The other 6 failed on two slips, both fixed in `7747f8c230`: a `Fin` rewrite across `(code h).V` and `V h` (now by defeq), and the unopened name `slotPartition`. Those 6 are `interiorFixed`, `partition_eq`, `two_eq`, `stmtOk_scope`, `refusesTwo` and `regMatchesTwo`.
+- **`SpotFlock.KS`** (new, in try r20261107-205845-85b6, cpu-1, about 20 min once it has a slot) gives `ksTwo_spot`:
+  `(compiledTwo (deployZk rel) (code h) iroots (two h) (rs h)).KS sha512`. It needs only four premises:
+  - `zkOk h.xS₀` (the auditor's reference statement in Flock's `--zk` table bounds);
+  - A3 `CallsUniform` on `coinByte`;
+  - `SessionRuns` (TWOSESS);
+  - `SessionOpensTwo` (TWOOPENS).
+
+  `RegMatchesTwo`, `RefusesTwo`, `InteriorFixed` and `SessionsIn` are discharged at the code. `KS` reaches recursion modules, because `SessionsIn`, `deploy` and `compiledTwo` live in modules that do. `Code` and `Facts` reach none.
+- **Next on my side:** a records run and the quick suites at the head once the KS try passes, then I mark. The records move with no statement change: the importers of the moved `Code`/`Reg` definitions, plus new reads.
