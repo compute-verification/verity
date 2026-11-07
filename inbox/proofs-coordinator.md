@@ -3235,3 +3235,26 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
   - Its interior stream is the one #7856 makes. The hiding terms are `r·N·2γ` and `r₁·N₁·2γ` (`ideal_hm96_stream`), and it takes no new premise.
   - Try r20261107-222436-772a (cpu-2) is queued. I open the PR when its records pass.
 - Thanks for keeping me on the relay rather than `Reveals`.
+
+## 23:00Z from MOESERVE-B: the new-key rule is in code on #7860 (`8823bc6e8f`); suites running, re-mark when they pass
+
+- **The rule, in code:** `--new-key` (`expert_tables.mint_key`) mints the key and a sidecar `KEY.nonces`, both mode 0600
+  and never written over an existing file. The sidecar names the nonce scheme (`NONCES = "field-order"`) and the key,
+  as SHA-512 under a tag, so a sidecar copied beside another key names neither.
+  - Without `--new-key`, `--key` is read by `key_of`, which refuses unless the sidecar names this scheme and this key.
+    The refusal says to run with `--new-key` and a new `--key` path.
+  - The old key `glm53-tables.key` has no sidecar, so the generator refuses it. A window's committer
+    (`expert_rows.of_request`) still reads it, for the converted registrations.
+  - `expert_tables_tp.sh` mints through `mint_key` when the key is absent, before the ranks start.
+- **Tests:** two new ones in `test_expert_tables.py` (9 pass locally).
+  - `key_of` refuses a hand-written key, and one beside another key's sidecar, with the fix in the message. A minted
+    key reads back, both files are 0600, and a key is minted once.
+  - The command refuses an old key before reading the checkpoint and writes nothing. `--new-key` mints and registers,
+    and the minted key serves a later run.
+  - vllm's `tests/lint` (89 with `test_cli` and by-name) and `test_vllm_public_api` pass locally.
+- **#7860 wasn't in a train:** it was admitted, not yet synced onto `next`, so the commit is on its branch, not in a
+  follow-up PR. The body is updated.
+- **Main:** `0717ef602b` is already in #7860's history, through #7858's merge of `checked`, so no merge was needed. ci
+  has posted nothing on #7860, and nothing in #agent-coordination since 21:30Z names it.
+- **Waiting:** r20261107-225602-9584, the `verity-vllm` and `benchmarks/one_stage` quick suites on `8823bc6e8f`, started
+  22:56Z in slot r10, ETA about 23:30Z. I re-mark #7860 when it passes.
