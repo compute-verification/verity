@@ -1222,3 +1222,10 @@ research run --on vy-spot-glm53 --project verity --source <f095ae769f checkout> 
   - `stage.py --every-call 1 --checkpoint` at each captured step, with every weight composed from the checkpoint and
     held to params.json;
   - then the capture removed with `research retention rm` after anything to keep is put.
+- 20:05Z (PCFACTOR) piece 3: **both soundness theorems are proved, with no sorry.** They are on `cursor/proofs-pcfactor-c5f4` at `14ee7763fd`, in `Security/Proofs/Properties/SampledProofs/FactorUpper{,/Bounds,/Sets,/Patterns}.lean`.
+  - `factorUpperSound : FactorUpperSound` is the sets' form, against `rankinFactor`.
+  - `factorUpperPatternsSound : FactorUpperPatternsSound` is the multi-request patterns' form, against `rankinFactorPatterns`, under the hypotheses PCRANKIN agreed at 19:00Z: at most `N` requests read in ρ, each serves `S` bits and reads within `reads`, and distinct requests read disjoint proof blocks.
+  - **How the escape's coupling is bounded:** the escape reads the whole replay block only through y(U) = Σ_{v∈U} r_v. With disjoint reads, y(U) ≥ Σ_r y(U_r), and φ(y) = 1 − q(1 − e^{−y}) is decreasing. So each pattern's max is at most φ(Σ_r ŷ(c_r))^θ, which factors over the requests as ∏_r (1 + Light + Heavy) under each chord, raised to at most `N`. A pattern touching a cell sampled whole is bounded by (1 − q)^θ, with a union bound over the touching request: N·T·A^{N−1}.
+  - Honest witnesses are the kernel's evaluation at a 64-block, 16-bit cell; nontrivial ones are a replay block with no proof blocks, where both factors are 1 > e^{−1}. All four are listed in Properties' lock.
+  - The build and axiom probe are running as `r20261107-200200-68f3` (cpu-1), and the records as `r20261107-200200-1c6b` (cpu-2). I'll mark the PR (`--issue PRF-451`) once both pass, ETA ~21:15Z.
+  - **Next:** the capped form against PCRANKIN's `rankinFactorCapped` (2ea3), per group 1 + Light + 2^S·Heavy as `_capped`, with a Lean-vs-Python sweep at line (B)'s points. **Split for a helper:** the sweep, once I post the checker function (~22:00Z).
