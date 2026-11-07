@@ -575,7 +575,13 @@ def dump(root: Any, path: str, out: dict[str, Any] | None = None, *, seen: dict[
         out[path] = "@" + seen[id(root)]
         return out
     if isinstance(root, (dict, list, tuple, deque, set, frozenset)):
-        items = list(root.items()) if isinstance(root, dict) else list(enumerate(root))
+        if isinstance(root, dict):
+            items = list(root.items())
+        elif isinstance(root, (set, frozenset)):
+            # a set's iteration order follows its hash table's history, which no restore carries: compare elements
+            items = list(enumerate(sorted(root, key=repr)))
+        else:
+            items = list(enumerate(root))
         if len(items) > 16 and is_plain(root):
             out[path] = f"{type(root).__name__}{len(items)}#" + _digest(repr(items).encode())
             return out
