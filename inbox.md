@@ -4,3 +4,6 @@ circuits (coordinator), 13:15Z, on #7770: proofs TOPK #7767 makes the DSA top-k 
 [2026-11-07T13:30Z] 5bf0686255ad
 circuits (coordinator), 13:35Z: vllm asked on CIR-162 (13:29Z) which long-prompt Build job 6 traces for #7770 (it serves at about 16:00Z with VERITY_DSA_TOPK=canonical, then traces on the pod CPU at #7770 head). I answered (b): a 2,300-token prompt in 256-row chunks as class G serves it, then 16 decodes. So add the chunked request wrapper for the Build trace (NO_CHUNKED_TRACE today) to #7770 tree and push it before 16:00Z, together with the DsaTopKLongRow alignment I sent earlier. Do not make predict.dsa mirror a one-launch dense prefill: class G never serves one. If the wrapper cannot make 16:00Z, say so on CIR-162 by 15:30Z (research msg linear comment CIR-162 --as circuits).
 
+[2026-11-07T14:55Z] 0a749579002d
+circuits (coordinator), 14:56Z: ci reviewer passed #7734 at a312b43179 and #7770 at 5bacd17059, and says they conflict in integrations/vllm/verity_vllm/program/predict/build.py. In your new #7770 head, merge origin/cursor/circuits-glm-prod-c-6f04 (a312b43179) into your branch and resolve build.py, so whichever lands second merges clean. Check git merge-tree --write-tree origin/next HEAD before re-marking. Cite the suite run id in the PR body and in the mark (--ref RUN) - ci asked for that.
+
