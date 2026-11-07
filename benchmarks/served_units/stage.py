@@ -190,11 +190,13 @@ def _log_f32(rng: np.random.Generator, lo: float, hi: float, n: int) -> np.ndarr
     return np.exp(rng.uniform(np.log(lo), np.log(hi), n)).astype(np.float32)
 
 
-def _template_draw(S: dict, n: int, rng: np.random.Generator, fn) -> dict[str, np.ndarray]:
-    """Random words for each of a per-expert GEMM's or the router's parameters by name: e4m3 operands (no NaN code), log-uniform
-    f32 scales, a routed weight in (0, 1), N(0, 2) logits and N(0, 0.01) biases."""
+def _template_draw(S: dict, n: int, rng: np.random.Generator, fn, skip: tuple = ()) -> dict[str, np.ndarray]:
+    """Random words for each of a per-expert GEMM's or the router's parameters by name (but ``skip``): e4m3 operands (no NaN
+    code), log-uniform f32 scales, a routed weight in (0, 1), N(0, 2) logits and N(0, 0.01) biases."""
     out = {}
     for p, w in WI.layout(fn).rows:
+        if p in skip:
+            continue
         if p in ("xq", "w"):
             b = rng.integers(0, 256, (n, 2 * w), dtype=np.uint8)
             b[(b & 0x7F) == 0x7F] ^= 1
@@ -209,6 +211,35 @@ def _template_draw(S: dict, n: int, rng: np.random.Generator, fn) -> dict[str, n
             raise SystemExit(f"stage.py: no draw for {fn.id}'s parameter {p!r}")
         out[p] = np.ascontiguousarray(v).view("<u2").reshape(n, w)
     return out
+
+
+def _fused_draw(S: dict, n: int, rng: np.random.Generator, fn):
+    """A fused read-GEMM's ports: its `READ` opening a table of 256 random e4m3 rows of N K / 2 words (one an expert, registered
+    as `_read_draw` registers its table) at a random tok, then the GEMM's operands as `_template_draw` draws them. The twin
+    holds only the read's verdict, ok = 1."""
+    V, H = 256, S["N"] * S["K"] // 2
+    b = rng.integers(0, 256, (V, 2 * H), dtype=np.uint8)
+    b[(b & 0x7F) == 0x7F] ^= 1
+    table = b.view("<u2")
+    dom = CommitmentDomain(rng.bytes(64), -2, RangeIndexedDomain(0, V), hash="sha512")
+    salts = [rng.bytes(EMB.SALT_BYTES) for _ in range(V)]
+    tree = RT.commit(dom, [bit_row((r.tolist(), 16)) for r in table], salts)
+    names = [p for p, _ty in EMB.read(V, H).signature()[0]]
+    rows: dict[str, list] = {p: [] for p in names}
+    for t in rng.integers(0, V, n):
+        p = tree.path(int(t))
+        args = EMB.arguments(V, int(t), tree.root, dom.domain_id, table[t].tolist(), salts[t], [p[k:k + 64] for k in range(0, len(p), 64)])
+        for name, bits in zip(names, args):
+            rows[name].append(_bits_words(bits))
+    out = {p: np.stack(v) for p, v in rows.items()}
+    return {**out, **_template_draw(S, n, rng, fn, skip=tuple(names))}, {"o1": np.ones((n, 1), np.uint16)}
+
+
+def _fused(gemm, dot, defaults: dict) -> Unit:
+    """A per-expert GEMM with its weight-row read fused in (`MoeExpertFp8ReadGemm(W)_v1`, READ = EmbeddingRead_v1{V=256, H=N K/2})."""
+    def definition(S):
+        return bind(gemm, READ=EMB.read(256, S["N"] * S["K"] // 2), **S, DOT=dot)
+    return Unit(definition, (), lambda S, n, rng: _fused_draw(S, n, rng, definition(S)), defaults, lambda S: S["K"] * S["N"])
 
 
 def _window(definition: Callable[[dict], object], defaults: dict, macs: Callable[[dict], int] | None = None) -> Unit:
@@ -228,6 +259,8 @@ UNITS: dict[str, Unit] = {
                       {"K": 6144, "N": 1, **_GEMM_ST, "SWAP": False}, lambda S: S["K"] * S["N"]),
     "pe-w2": _window(lambda S: bind(BM.MoeExpertFp8BlockGemmWV4, **S, DOT=BG.HopperE4m3QgmmaDot32),
                      {"K": 256, "N": 32, **_GEMM_ST, "SWAP": True}, lambda S: S["K"] * S["N"]),
+    "pe-fw13": _fused(BM.MoeExpertFp8ReadGemmV1, BG.HopperE4m3MmaV2Dot32, {"K": 6144, "N": 1, **_GEMM_ST, "SWAP": False}),
+    "pe-fw2": _fused(BM.MoeExpertFp8ReadGemmWV1, BG.HopperE4m3QgmmaDot32, {"K": 256, "N": 32, **_GEMM_ST, "SWAP": True}),
 }
 
 _EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'

@@ -78,7 +78,7 @@ S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, SHA512_ANDS, 116_240
 MAX_BITS = 1 << 35
 #: the served types whose proof block is one output coordinate of a dot product, K MACs, and their operands' format
 DOT = {"fp8-coord": "e4m3", "s8-coord": "s8", "moe-w13": "e4m3", "moe-w2": "e4m3", "moe-chunk": "e4m3", "moe-gemmw": "e4m3",
-       "s8-linear": "s8", "pe-w13": "e4m3", "pe-w2": "e4m3"}
+       "s8-linear": "s8", "pe-w13": "e4m3", "pe-w2": "e4m3", "pe-fw13": "e4m3", "pe-fw2": "e4m3"}
 STAGE_PY = REPO / "benchmarks" / "served_units" / "stage.py"
 
 
