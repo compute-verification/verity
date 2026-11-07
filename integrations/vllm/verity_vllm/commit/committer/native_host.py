@@ -738,7 +738,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         self.hash_threads = int(hash_threads)
         self.retain_values = retain_values
         self.run_id = run_id
-        self.program_digest = program_digest
+        self.program_digest = program_digest or hashlib.sha256(b"cmt-integ/no-program-digest/" + run_id.encode()).digest()
         self.acquire_classes = acquire_classes or ACQUIRE_CLASSES
         self.spans = Spans(step_rows.NAME)
         self.gc_pauses = GcPauses()
@@ -832,8 +832,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             if self.arena is not None and self.arena_explicit:
                 self.arena.prealloc()               # auto mode preallocates in size_arena() once the envelope is known
         else:
-            self._geo_digest = geo_digest or (step_rows.offline_geo_digest(run_id) if self.rows else
-                                              hashlib.sha256(b"cmt-integ/offline-geo/" + run_id.encode()).digest())
+            self._geo_digest = geo_digest or hashlib.sha256(b"cmt-integ/offline-geo/" + run_id.encode()).digest()
             self._modules = []
 
     def size_arena(self, envelope: dict[str, Any], *, hidden_m1: bool | None = None, margin_bytes: int = 1 << 30) -> dict[str, Any]:
@@ -967,8 +966,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         doc["repo"] = self.engine.cp.get("repo")
         doc["revision"] = self.engine.cp.get("revision")
         doc["chunk"] = self.chunk
-        if self.rows:
-            return step_rows.geo_digest(doc)
         return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).digest()
 
     def _ctx_digest(self, step: int) -> bytes:
@@ -1049,10 +1046,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         mods = dict(self.model.named_modules())
         return [(n, mods[n]) for n in sorted(wanted) if n not in selected and n in mods]
 
-    def layout_digest(self, metas: list[TensorMeta]) -> bytes:
+    @staticmethod
+    def layout_digest(metas: list[TensorMeta]) -> bytes:
         # NOTE: packed mode adds stream_off (>= 0); per-tensor mode leaves it at -1 -> the two layouts never collide
-        if self.rows:
-            return step_rows.layout_digest(metas)
         doc = [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves, m.stream_off] for m in metas]
         return hashlib.sha256(json.dumps(doc, separators=(",", ":")).encode()).digest()
 

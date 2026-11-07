@@ -52,14 +52,15 @@ from __future__ import annotations
 
 import bisect
 import functools
+import hashlib
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from functools import reduce
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from verity.ml.circuits import partition_object as PO
-from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by
+from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by, required_values
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, runtime_rows
@@ -539,7 +540,7 @@ def query_header(profile: str, *, return_slots: bool, query: str = QUERY_OF_RECO
          ", neither of which is a Call lowered to no runtime tensor whose Values nothing reads" if return_slots else "") + \
         "; unreturned = the Calls whose Values nothing reads, the Program does not return and the policy does not require, listed by identity" + \
         f"; profile = {profile}"
-    return {"query_id": query, "query_id_digest": fmt.query_id_digest(text), "query_text": text,
+    return {"query_id": query, "query_id_digest": hashlib.sha256(text.encode()).hexdigest(), "query_text": text,
             **({"partition": dict(partition)} if word and partition else {}),
             "engine": "q-word" if word else "v2-query", "boundary": "call" if word else "module-body", "profile": profile,
             "required_families": ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights"] +

@@ -440,7 +440,7 @@ class DumpedStore(NativeRangeOpenings):
 
     name = "dumped-store"
     retain = "host"
-    layout_digest = NativeHostCommitter.layout_digest
+    layout_digest = staticmethod(NativeHostCommitter.layout_digest)
     _block_holds = staticmethod(NativeHostCommitter._block_holds)
     _ctx_digest = NativeHostCommitter._ctx_digest
 

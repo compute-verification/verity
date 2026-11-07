@@ -12,6 +12,7 @@ shared-scale Call gets no identity and an unchanged header.  The Match record ho
 """
 from __future__ import annotations
 
+import hashlib
 from collections import Counter
 from functools import lru_cache
 from typing import Any, Callable, Mapping
@@ -19,8 +20,6 @@ from typing import Any, Callable, Mapping
 from verity.ml.definitions.registry import fp8
 from verity.ml.definitions.registry import fp8_vocab
 from verity.ml.definitions.registry import prims as P
-
-from verity_vllm.query.manifest.format import query_id_digest
 
 FAMILY = "scale_products"
 MEMBER = "scale_products"
@@ -100,7 +99,7 @@ def header(q: dict[str, Any], stats: Mapping[str, Any] | None) -> dict[str, Any]
     if stats is None:
         return q
     text = f"{q['query_text']}; {POLICY_TEXT}"
-    out = dict(q, query_text=text, query_id_digest=query_id_digest(text),
+    out = dict(q, query_text=text, query_id_digest=hashlib.sha256(text.encode()).hexdigest(),
                required_families=[*q.get("required_families", []), FAMILY])
     out["scale_products"] = {"family": FAMILY, "member": MEMBER, "definitions": sorted(SHARED), "layout": "nb major, kb minor", **stats}
     return out
