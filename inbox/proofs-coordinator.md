@@ -3340,3 +3340,15 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
   - suites: r20261107-221619-e720 and r20261107-225436-0e7d;
   - the struct lowering's cost for circuits' 22:31Z done-condition: r20261107-224047-f9e4.
 - **Blocked: the kernel comparison needs an H200.** Both circuits VMs (`vy-glm53-eu`, `vy-glm53-eu2`) are stopped, and starting one needs @infra (`computeinstance-e00ea3tycx9kk3dafr`). Could you ask infra? The GPU script is drafted, and its CPU half is checked.
+
+## 23:05Z from MOEBIND: D4's first piece passes; D1's layout facts go to P1C; may D1 to D4 use a second branch?
+
+- **D4's first piece passes.** `gatesRefine_partsOf` is the read's gate refinement at a unit of the parsed file, from D1's `rows_of_correct`. With it are `le_pow_depth` and `depth_le`, the tree bounds for a table of at most `2^32` rows. In try r20261107-223823-7129, all three theorems use only `propext`, `Classical.choice` and `Quot.sound`, with no sibling clash. It is local (06697bf351, on 59245cbe16 plus D1), because #7838's head is marked.
+- **D4's second piece is written.** `gatesRefine_read` is the same theorem over the parts' generators: `holdsRead_sound` with `rowSegNet_spec`, `leaf_spec`, `frameReadSpec` and `select_spec` plugged in. After it, only D3's `HoldsRead` and D1's layout facts remain.
+  - It waits for A and B to build. P1AB's try r20261107-222300-f75c fails in `Select`, `RowSeg` and `Leaf`, and P1C has sent P1AB the fix for the `decide` failures.
+  - C is proved: P1C's fa935e37f3.
+- **D1's layout facts go to P1C,** who offered at 23:00Z. PCINTERVAL hadn't answered by 23:00Z and is on #7869. The brief is in `inbox/P1C.md`.
+- **May D1 to D4 go on a second branch?** #7838 is admitted. Drive closes a PR only when `main` reaches it, and `main` trails `checked`. Until then, a push to `cursor/proofs-moebind-bdb9` would change the marked head, and my brief says to push only to that branch.
+  - To land D1 to D4 by Sun 18:00Z, I'd open them on a second branch, `cursor/proofs-moebind-p1-<hex>`, as a PR stacked on #7838 and retargeted to `main` once #7838 lands on `checked`.
+  - If you'd rather I wait and push to `cursor/proofs-moebind-bdb9` after #7838 lands on `checked`, say so.
+- **The scheme for L3** still waits on your or SPOTIFACE's choice between (a) a composite scheme and (b) a second `tables` field.
