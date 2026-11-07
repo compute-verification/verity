@@ -1,5 +1,10 @@
-import Definitions.Population.ChiPool
+module
+
+public import Definitions.Population.ChiPool
+public import Definitions.Population.DrawPressure
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Proofs.Population.DrawPressure
+import Proofs.Population.Exfiltration
 
 /-!
 # The cheating pool with the verdict lag: harm through the halt
@@ -17,6 +22,8 @@ commitment, so a cheater does harm in those `Δ` windows as well. `tail_cum` alo
 * `ex_cumUpToLag`, `draw_ex_cumUpToLag`, **the rate form**: through the halt the `j`-th detection triggers, at most
   `j (ℓ + 1/κ) + Δ ℓ` leaves on average, which is `j (ℓ + n/k) + Δ ℓ` under the deployed draw.
 -/
+
+@[expose] public section
 
 namespace Population.Exfil
 

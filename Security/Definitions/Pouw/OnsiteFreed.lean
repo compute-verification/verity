@@ -1,4 +1,6 @@
-import Definitions.Pouw.Dither
+module
+
+public import Definitions.Pouw.Dither
 
 /-!
 # The onsite PoUW protocol's verdict on a monitoring period (trusted)
@@ -6,7 +8,7 @@ import Definitions.Pouw.Dither
 The onsite protocol (`Core.Onsite.components`: the network certifier's period check beside PoUW's) accepts a
 monitoring period when both its checks do:
 
-* **the work check** `vw`: the proof service's verdict on the transcript alone (the sampling blocks' instances,
+* **the work check** `vw`: the proof system's verdict on the transcript alone (the sampling blocks' instances,
   commitments and answers), which reads no device: the served check, whose remote form is
   `Definitions.Pouw.Assumptions.OnsiteFreed.RemoteWorkFloor`;
 * **the network certifier's check** `vn`: its verdict on the transcript and the certifier's signed readings of the
@@ -17,6 +19,8 @@ monitoring period when both its checks do:
 bit with a machine outside them. `Definitions.Pouw.Guarantees.OnsiteFreed` bounds what an accepted onsite period
 frees.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dither
 

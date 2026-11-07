@@ -23,8 +23,8 @@ from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.pouw.circuit import plan
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import plan
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -105,7 +105,7 @@ WINDOW_EXPECT = {
     "not-window": ("layout", Cr.NOT_WINDOW), "template": ("layout", "is not h1window's"),
     "tile-ks": ("layout", "h1window binds one template per K"), "body": ("layout", Cr.BODY),
     "layout-form": ("layout", Cr.LAYOUT_FORM), "record-layout": ("layout", "which is no linear of the window"),
-    "alt-layout": ("layout", Cr.BODY), "tile-k": ("tile-k", TILE_K),
+    "alt-layout": ("layout", Cr.BODY), "reinterpret": ("layout", Cr.DESCRIPTOR_FORM), "tile-k": ("tile-k", TILE_K),
     "credit-changed": ("coin", NO_DRAW_SESSION), "credit-no-draw": ("draw", Cr.NO_DRAW),
     "credit-forged-ledger": ("coin", "the draw's session is not trusted"),
     "credit-branch-pin": ("coin", OFF_MAIN),
@@ -575,6 +575,18 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix, unit
                                                "weights once")
 
 
+def test_a_word_read_at_another_width_refuses():
+    """A descriptor whose template's A or B row of bits reads the root's 16-bit input words is one C-Flock's decoder
+    refuses (``E_REINTERPRET``), so `credit.layout_of` refuses it as no descriptor (`credit.DESCRIPTOR_FORM`), and
+    accepts the same window wired at each leaf's own width; the difftest's ``reinterpret`` cases hold the Lean to it."""
+    for seed in SEEDS:
+        rng = random.Random(f"reinterpret/{seed}")
+        lay = cases.layout(rng)
+        assert Cr.layout_of(bytes.fromhex(cases.descriptor(rng, lay)))[1] is None
+        assert Cr.layout_of(bytes.fromhex(cases._break_desc(rng, lay, "reinterpret"))) == (
+            None, ("layout", Cr.DESCRIPTOR_FORM))
+
+
 def test_an_alternative_layout_with_the_same_descriptor_refuses():
     """The layout is the committed circuit's, never the window's evidence: a window presenting a layout beside its
     descriptor is not a window's evidence; a compiled descriptor whose record names another layout (another slot,
@@ -812,7 +824,7 @@ def test_the_live_program_is_read_from_its_compiled_descriptor():
     without annotations, the bytes its program digest hashes), its unit the one template its query draws, unit s round
     s's; the cases' stand-in descriptor (`live_program`) reads the same. The v1 Program, whose units don't bind each
     request's cap to its public max_tokens, is no live Program credit reads."""
-    from verity.core.protocols.pouw.circuit import live as LV
+    from verity.ml.protocols.pouw.circuit import live as LV
 
     def raw(prog):
         return codec.canonical_json({k: v for k, v in codec.encode_program(prog).items() if k != "annotations"})

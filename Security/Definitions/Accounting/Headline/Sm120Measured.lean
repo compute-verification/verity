@@ -1,4 +1,6 @@
-import Definitions.Accounting.Headline.Sm120
+module
+
+public import Definitions.Accounting.Headline.Sm120
 
 /-!
 # sm_120's measured headline instance: VF3s-16 and H1 + fx1 (trusted; generated)
@@ -20,6 +22,8 @@ file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 * `piStar`, `wStarKind`: π*, the facet (JI3t_0) the machine model's LP certificate sits on at
   q* = 9/8, and the writer kind (honest's IMMA16832) that is the cheapest word route there.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Headline.Sm120Measured
 

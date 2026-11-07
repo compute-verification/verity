@@ -1,8 +1,14 @@
-import Properties.Pous.Wipe
-import Proofs.Pous.StreamedWipe.Family
+module
+
+public import Properties.Pous.Wipe
+public import Mathlib.Algebra.Group.End
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.Sanity
-import Mathlib.Tactic.SplitIfs
-import Mathlib.Tactic.DefEqTransformations
+import Proofs.Pous.StreamedWipe.Family
 
 /-!
 # Proof that an accepted wipe meets the survivor bound it publishes (`Properties.Pous.Wipe`)
@@ -36,6 +42,8 @@ import Mathlib.Tactic.DefEqTransformations
   PRF advantage and `δ_net` are 0 (`not_survivorBound_cheat`, on any device whose store holds the content). The
   segment's `ratio 2152 = 24` and its declared `2^28` bits are the kernel's to evaluate (`segment_foreign_le`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties.SecurityProofs
 

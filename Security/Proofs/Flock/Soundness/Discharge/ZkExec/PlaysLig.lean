@@ -1,5 +1,23 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # The hiding Ligerito's runs
@@ -11,6 +29,8 @@ coins of the right sizes (`foldRoundsC_any`, `foldRoundsZK_any`, `drawKs_any`, `
 recursive round records a query. What the executable gives is the coins: every round it consumes issued the number of
 coins the model draws there (`fold_coins`, `lane_coins`, `queryLevel0_bind`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -332,6 +352,8 @@ theorem queryLevel0_bind {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Lev
 
 /-! ## Ligerito under `--zk` -/
 
+-- one proof of several hundred lines down `Zk.ligerito`'s unfolded levels, a `*_bind` step per bind and `rw` and
+-- `omega` on the round indices
 set_option maxHeartbeats 4000000 in
 theorem zk_ligerito_plays : ZkLigeritoPlays := by
   intro ms sch T cap p basisAt zl t t' rec hdim hlv hα1 hk0 hwf h

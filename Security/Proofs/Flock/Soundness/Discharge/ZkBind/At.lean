@@ -1,7 +1,26 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
+public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Place
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hm.Site
+import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
-import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
-import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 
 /-!
 # The sites, the layout and the rows at the `--zk` tables
@@ -23,6 +42,8 @@ table of a `DrawSetupZK` at the challenger's draw `dj S`, a refused table otherw
 None of them takes a draw premise: like `tablesAtZK` they are defined at every draw. `sitesZAt_at` reads the draw's own
 `DrawSetupZK`, which item 3 gives from `AcceptsZK` and `DrawOkZK I dj mPts S` at the session's own draw `S`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 

@@ -1,7 +1,27 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.Bind
-import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Bind
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+import all Init.Data.Array.Basic
+public import Proofs.Flock.Soundness.Registered.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.QSort
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
 
 /-!
 # The registered check at an accepted `--zk --registered` outcome
@@ -16,6 +36,8 @@ instance's row of each of `own`'s ports at the position `own` gives for its unit
 instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`), whose leaf is the layout's
 registered leaf at `(u, q)`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

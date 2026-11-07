@@ -1,5 +1,24 @@
+module
+
+public import Proofs.Flock.C3.RegLevels.OutRegs
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.Recursive.ValueSrc
+public import Proofs.Flock.VBridge.Family.Opened
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.ValueTie
-import Proofs.Flock.C3.RegLevels.OutRegs
+import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 
 /-!
 # `opensTopAt_of_regs`' `hT` at R's levels `ℓ ≥ 1`, from a root over the cap's rows
@@ -16,6 +35,8 @@ By the read's leaf instead (`hT_of_leaf`): at an accepted session the registrant
 `LeafColl`'s event); where that digest is a node's commit string under the held salts (`TopOf`), `salt_tie` gives the
 node's row, or `saltFinder`'s pair collides.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

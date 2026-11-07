@@ -1,6 +1,49 @@
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Proofs.Flock.Claims.ZK.FinishLane
+public import Proofs.Flock.Claims.ZK.FinishRep
+public import Proofs.Flock.Claims.ZK.Worker
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FinishStop
 import Proofs.Flock.Claims.ZK.FinishStopAt
-import Proofs.Flock.Claims.ZK.FinishTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
+import Proofs.Flock.Claims.ZK.FinishTau
+import Proofs.Flock.Claims.ZK.InnerTauLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # A worker's rows from the firewall's own run
@@ -17,6 +60,8 @@ values that are the worker's clear values plus `h`, the worker's rows hold (`row
 * **`rowsAt_of_fw`**: where, at each rep, constraints on the layout's length that are the first seven rows on the
   clear values plus pads `h` (`h_ab = h_a·h_b`, `h_w = h_x·h_y`) don't fail on `h`, the rows hold.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.Masked
 

@@ -1,9 +1,41 @@
-import Proofs.Accounting.TS.Session.Checked.Layer
-import Proofs.Accounting.TS.Session.Held.Layer
-import Proofs.Flock.Recursive.Registrants
-import Flock.KnownRead
-import PouwWindow.OwnPorts
-import PouwWindow.FullDraw
+module
+
+public import Proofs.Accounting.TS.Session.Held.Layer
+public import Proofs.Flock.Recursive.Registrants
+public import Flock.KnownRead
+public import PouwWindow.OwnPorts
+public import PouwWindow.FullDraw
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # A leaf's proof layer through its 33 linked C-Flock sessions (option A)
@@ -59,6 +91,8 @@ Words are integers as `Accounting.Served` reads them (codes s8, z s32, scales an
 receipt words are `BitVec 32`. These definitions sit beside the checked layer's, under `reads_exempt`'s
 `Proofs.Accounting.TS.Session`.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

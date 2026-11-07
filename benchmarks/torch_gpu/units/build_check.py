@@ -24,9 +24,13 @@ import re
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import types
 
 
-def _harness():
+def _harness() -> types.ModuleType:
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[2] / "pouw" / "harness" / "sass_gate.py")

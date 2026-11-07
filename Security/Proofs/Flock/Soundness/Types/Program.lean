@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Types.Units
-import Proofs.Flock.Soundness.Lowering
+module
+
+public import Proofs.Flock.Soundness.Types.Units
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # A program of units over circuit types: its rows circuit, its Boolean circuit, and `RowsL1` between them (phase 1, S4c)
@@ -19,6 +22,8 @@ Every unit output is an output of both circuits. `pairs` gives one `UnitPair` pe
 `one`, every unit wrong on the Boolean circuit is wrong on its rows. It carries `E2E.lean`'s theorems, which are about the
 rows circuit, to the Boolean circuit (`UProg.flock_e2e_count`, `Types/ProgramE2E.lean`).
 -/
+
+@[expose] public section
 
 open Flock Flock.DeriveAll
 

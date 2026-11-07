@@ -1,4 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkBind.At
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
 /-!
 # The soundness half of one `--zk` sampled session
@@ -22,9 +40,11 @@ one table (no `--session-tables`), `TagsOk I` and `I.tags.typed = false` hold by
 `flock-verify verify --statement verity/flock-circuit@967b8d06 --zk` sessions of one table.
 
 flock-verify refuses every statement failing one of its hypotheses on the statement's form (`I.tags.typed = false`, the
-parse and load, `pub.tables = none`, `scopeOk`, retained rounds and `hm96-sha512/v1` leaves: PROTOCOL.md §16.15), so
+parse and load, `pub.tables = none`, `scopeOk`, retained rounds and `hm96-sha512/v1` leaves: `Flock.ProvedScope`), so
 `FailClosed.zk_session_sound` states this bound over what it accepts (`LiveVerifiesZK`) without them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

@@ -1,6 +1,22 @@
-import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.C3.Fork.CouplingProb
-import Proofs.Flock.C3.Fork.CouplingInh
+module
+
+public import Proofs.Flock.C3.Fork.CouplingInh
+public import Proofs.Flock.C3.Fork.CouplingProb
+public import Proofs.Flock.Recursive.HoloExec
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Recursive.CompileRuns
 
 /-!
 # Piece (a), the coupling: candidate 3's compiled table against its oracle table
@@ -13,6 +29,8 @@ run of `W` opens it off `w` (`RegClash`). It needs `CompiledL`'s lockstep (`lock
 `bad_zero_of_fixed`) with R's stream as a third table, whose level 0 is fixed rather than sent, and `regPhase` between
 the reps and the openings.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

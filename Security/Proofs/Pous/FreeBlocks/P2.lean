@@ -1,4 +1,26 @@
-import Proofs.Pous.FreeBlocks.Audit
+module
+
+public import Definitions.Pous.Accounting.LemmaA
+public import Definitions.Pous.Guarantees.P2
+public import Proofs.Pous.FreeBlocks.Audit
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Pous.P2.Domain
 import Proofs.Pous.P2.Margin
 
 /-!
@@ -9,6 +31,8 @@ blocks enter the 1% term only: `((g − 1 + ⌊B/100⌋)/B)^k ≤ (c + 1/100)^k 
 state, `⌊ρ·(99/100)·|C|⌋ + 128·B`, is below `(18/19)·16448·B`, so the row is the `λ = 0` one, with a margin of 146
 bits per block.
 -/
+
+@[expose] public section
 
 namespace Pous.FreeBlocks
 

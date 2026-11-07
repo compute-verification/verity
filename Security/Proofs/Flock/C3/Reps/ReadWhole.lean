@@ -1,4 +1,20 @@
-import Proofs.Flock.C3.Reps.ResRead
+module
+
+public import Proofs.Flock.C3.Reps.ResRead
+public import Proofs.Flock.VBridge.ResLayer
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The checks' whole reads: `RsReadCol` and `ResReadCol`
@@ -18,6 +34,8 @@ rows read.
 This file imports no session, so the sessions read these directly: `RsReadCol` is `rsReadCol` (`RsFacts`, from
 `readCol_rsAt`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps.ReadWhole
 

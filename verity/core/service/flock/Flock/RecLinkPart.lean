@@ -1,5 +1,7 @@
-import Flock.RecCoins
-import Flock.RecLinkRef
+module
+
+public import Flock.RecCoins
+public import Flock.RecLinkRef
 
 /-!
 # The link table's V* part (`verity_flock.rec_link`)
@@ -31,6 +33,8 @@ to the one table (`RecCompose.checkForm`). On an accepted run whose extracted wi
 link finder reads collide (`Flock.Guarantees.LinksBindDeployed`), which is the extra term of the recursion's knowledge
 soundness at the linked relation (`Flock.Guarantees.RecursiveKSLinkAt`).
 -/
+
+@[expose] public section
 
 namespace Flock
 namespace RecLinkPart

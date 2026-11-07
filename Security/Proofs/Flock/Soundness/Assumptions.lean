@@ -1,8 +1,10 @@
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Proofs.Flock.Soundness.Game.Expect
-import Randomness
-import Definitions.Flock.Arith
-import Definitions.Claims.Hm96
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Proofs.Flock.Soundness.Game.Expect
+public import Randomness
+public import Definitions.Flock.Arith
+public import Definitions.Core.Hm96
 
 /-!
 # Named assumptions
@@ -34,6 +36,8 @@ Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is 
 Merkle binding is proved too (VCVio's binding theorem, `Merkle`): a conflict of two verifying openings is a collision, which
 is what lets each finder's success be read as a collision of SHA-512.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions
 
@@ -86,21 +90,24 @@ def SHA512CRExpected {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Str
     expect cost g s / 2 ^ (256 : ℝ)
 
 /-- **Assumption 3 (`uniform/io-getrandombytes`): the operating system's randomness is independent uniform bytes**, for
-the verifier's unit draw and the proof system's epoch salt (`Stream.salt`). Its per-test form,
+the challenger's coins the unit sample reads and the proof system's epoch salt (`Stream.salt`). Its per-test form,
 `UniformRandomBytesTest`, is the one the zero-knowledge theorems take.
 
-The verifier draws the units it audits from `IO.getRandomBytes`: `Flock.Draw.drawOS` is `Flock.Draw.drawWith` with every
-stream's bytes from it. To Lean's logic an `IO` action is a function of the world, and `IO.getRandomBytes` an opaque
-constant, so a `Prop` saying its bytes are random would be refutable, and every theorem taking it vacuous. At run time,
-Lean v4.34.0's runtime implements it as `lean_io_get_random_bytes` (`src/runtime/io.cpp`), which reads `/dev/urandom`
-on Unix and calls `BCryptGenRandom` on Windows. A3 is stated instead of a byte source: a finite probability space `Ω` (`prCoin` weighs its outcomes evenly) and, on outcome `ω`, the
-bytes `t ω i` that stream `i` returns, its first `L i`. The source is uniform when every event about those bytes has the
-probability it has for independent uniform bytes.
+The verifier has no randomness of its own: the unit sample reads the challenger's coins from its log, and the challenger
+flips them from `IO.getRandomBytes` on its own host (`sampled-proofs-verifier`'s `coins`). To Lean's logic an `IO`
+action is a function of the world, and `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random
+would be refutable, and every theorem taking it vacuous. At run time, Lean v4.34.0's runtime implements it as
+`lean_io_get_random_bytes` (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on
+Windows. A3 is stated instead of a byte source: a finite probability space `Ω` (`prCoin` weighs its outcomes evenly)
+and, on outcome `ω`, the bytes `t ω i` that stream `i` returns, its first `L i`. The source is uniform when every event
+about those bytes has the probability it has for independent uniform bytes.
 
-What A3 assumes of the operating system is that the verifier's calls to `IO.getRandomBytes` while it draws its units or
-its epoch salt are such a source, every call's bytes independent of every earlier call's, for every `L`. The step from
-`IO` to the model rests on `drawWith` being generic in its monad, together with A3: the theorems read `drawWith` on a
-model byte source, and `drawOS` runs the same `drawWith` on `IO.getRandomBytes` (`drawOS_def`).
+What A3 assumes of the operating system is that the challenger's calls to `IO.getRandomBytes` for the coins a unit
+sample reads, and for the epoch salt, are such a source, every call's bytes independent of every earlier call's, for
+every `L`. That the challenger releases those coins only after the registration they sample is recorded rests on
+`trusted-host`, not on A3. The step from `IO` to the model rests on `drawWith` being generic in its monad, together with
+A3: the theorems read `drawWith` on a model byte source, the unit sample runs it on the challenger's coins read in order
+(`SampledProofs.Draw.drawUnits`), and `drawOS` runs it on `IO.getRandomBytes` (`drawOS_def`).
 
 The CSPRNG is idealized as exactly uniform here, for every event. That is refutable at the deployed source: Linux's CRNG
 (5.18 and later, `drivers/char/random.c`) answers a read past 32 bytes with a ChaCha20 stream under one 256-bit key, so
@@ -220,7 +227,7 @@ def HmRowComputes {W : Type} (H : List UInt8 → List UInt8) (saltPrefix : List 
 theorem prENNReal_eq_prCoin {α : Type} [Fintype α] (p : α → Prop) : Claims.PrENNReal p = prCoin p := rfl
 
 /-- **Zero knowledge's T1 (`hash-derived-key`), read in `prCoin`'s terms**: the spec's `Claims.Hm96Hiding`
-(`Definitions/Claims/Hm96.lean`; `docs/zk-proof-public.md` §1.2, §1.5 HDK, §4.1 T1), applied to one test.
+(`Definitions/Core/Hm96.lean`; `docs/zk-proof-public.md` §1.2, §1.5 HDK, §4.1 T1), applied to one test.
 
 `My y` is `M(K*)·y` for the pinned key `K*`, and `c y` the salt's own hash `H(sp ‖ y)`. An ideal leaf replaces `b` by a
 fresh uniform `U`. It is a statement about uniform salts, and it needs no computational property of SHA-512. At
@@ -243,7 +250,7 @@ theorem hm96Hiding_of {Y B C : Type} [Fintype Y] [Fintype B] {My : Y → B} {c :
     Claims.Hm96Hiding My c δ₁ :=
   h
 
-/-- **`hash-derived-key`: the pinned hm96 key hides at `2^-193`** (ruling F). `Claims.Hm96Hiding My c (2^-193)` for the keyed
+/-- **`hash-derived-key`: the pinned hm96 key hides at `2^-193`**. `Claims.Hm96Hiding My c (2^-193)` for the keyed
 hash `My` of the pinned key `K*` and the salt hash `c`: hm96 §3 shows it fails for at most `2^-64` of the keys
 (`hm96_sha512_bad_keys`), and that the pinned key is not among them is the assumption. It is instantiated at
 hm96-sha512's `ZkView.My` and `ZkView.saltHash`.
@@ -260,10 +267,10 @@ committed coins' bound at a fresh uniform key already is (`ZkCoins.CommittedLeHm
 def HashDerivedKey {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) : Prop :=
   Claims.Hm96Hiding My c ((2 : ℝ≥0∞) ^ (-193 : ℤ))
 
-/-- **Zero knowledge's `X_L + κ ≠ 0` on the level-0 domain** (`docs/zk-proof-public.md` §1.2, gap 12).
+/-- **Zero knowledge's `X_L + κ ≠ 0` on the level-0 domain** (`docs/zk-proof-public.md` §1.2).
 
 M1 pads a level-0 lane with `(X_L + κ)·μ`, where `X_L = Ŵ_cols` and `κ` is the element `PAD_C`. On the domain `X_L(ω_q)` is
-bit `cols` of `q`, so it is 0 or 1, and `κ` lies outside GF(2); so `X_L + κ` is `κ` or `1 + κ`, never 0. M1's lane checked it
+bit `cols` of `q`, so it is 0 or 1, and `κ` lies outside GF(2); so `X_L + κ` is `κ` or `1 + κ`, never 0. It was checked
 on upstream's NTT. It is a fact about the concrete arithmetic that `Arith.Correct` doesn't list, stated here for the
 `2^(cols+1)` positions of a level-0 codeword; `ZK.padOnto_M1` takes it for Lemma B's row (ii). -/
 def PadNonvanishing {F K : Type} [Field F] [Field K] (A : Model.Arith F K) (cols : ℕ) (κ : F) : Prop :=

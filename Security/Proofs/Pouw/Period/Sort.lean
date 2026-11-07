@@ -1,5 +1,8 @@
+module
+
+public import Proofs.Properties.RemoteAudit.Sort
 import Batteries.Tactic.OpenPrivate
-import Proofs.Properties.RemoteAudit.Sort
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # `Array.qsort` sorts strings
@@ -10,6 +13,8 @@ the proof of `Proofs.Properties.Nci.ReadsExact.qsort_sorted` (a sort by a `Nat` 
 `qsort_perm` it gives `qsort_eq_of_perm`, that the sort of a list depends only on its elements, and
 `qsort_of_sorted`, that it leaves a sorted list as it is.
 -/
+
+@[expose] public section
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
 
@@ -60,7 +65,7 @@ theorem within_ite_swap {n : Nat} (as : Vector String n) (b : Bool) {lo hi i j :
 
 /-- `qpartition`'s loop: below `i` the elements are below the pivot, from `i` to `k` not, the pivot at `hi`; it ends
 with the pivot at its result, below `hi` when some element from `i` is not below it. -/
-theorem qpartition_loop_spec {n : Nat} {lo hi : Nat} (hhi : hi < n) (pivot : String) :
+private theorem qpartition_loop_spec {n : Nat} {lo hi : Nat} (hhi : hi < n) (pivot : String) :
     ∀ (d : Nat) (as : Vector String n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (∀ t (h : t < n), lo ≤ t → t < i → as[t] < pivot) →
       (∀ t (h : t < n), i ≤ t → t < k → pivot ≤ as[t]) →
@@ -148,7 +153,7 @@ theorem median_le {n : Nat} (as : Vector String n) (i j : Nat) (hi : i < n) (hj 
   · rename_i hc
     exact String.not_lt.1 fun h => hc (decide_eq_true h)
 
-theorem qpartition_core {n : Nat} (as as3 : Vector String n) (lo hi : Nat) (w : lo ≤ hi) (hhi : hi < n)
+private theorem qpartition_core {n : Nat} (as as3 : Vector String n) (lo hi : Nat) (w : lo ≤ hi) (hhi : hi < n)
     (hlh : lo < hi) (hmid : (lo + hi) / 2 < n) (hW : Within as as3 lo hi) (hmed : as3[hi] ≤ as3[(lo + hi) / 2]) :
     let r := Array.qpartition.loop (fun x y => decide (x < y)) lo hi hhi as3[hi] as3 lo lo (Nat.le_refl _)
       (Nat.le_refl _) w
@@ -181,7 +186,7 @@ theorem qpartition_spec {n : Nat} (as : Vector String n) (lo hi : Nat) (w : lo �
   · exact median_le _ _ _ _ _
 
 /-- `qsort`'s `sort` of `[lo, hi]` sorts it, changing only it, to elements it held. -/
-theorem sort_spec {n : Nat} :
+private theorem sort_spec {n : Nat} :
     ∀ (d : Nat) (as : Vector String n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       Within as (Array.qsort.sort (fun x y => decide (x < y)) as lo hi w hlo hhi) lo hi ∧
       ∀ i j (hi' : i < n) (hj : j < n), lo ≤ i → i ≤ j → j ≤ hi →

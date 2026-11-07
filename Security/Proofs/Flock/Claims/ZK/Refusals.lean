@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.ExeLayout
+module
+
+public import Proofs.Flock.Claims.ZK.ExeLayout
 
 /-!
 # The masked session's last round where a table refuses its coins
@@ -18,6 +20,8 @@ executable refuses at each:
 `Flock.zk_deployZk_masked_exe_stop_gap` is `Flock.zk_deployZk_masked_exe_gap` at a stopping plan with it in place of
 `HonestOffOn`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -53,13 +57,6 @@ noncomputable def withOuter {P : Composed.LigProver}
   fun x c j => { cz x c j with
     rest := ({ ((cz x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) with
       rOuter := fun r i => outerAt c j.val r.val i.val } : Composed.RestOf (zkTab x j).table (stAt x j)) }
-
-theorem outerReads_withOuter {P : Composed.LigProver}
-    (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) :
-    OuterReads (withOuter cz) := by
-  intro x c j r y hy
-  obtain ⟨i, rfl⟩ := List.mem_ofFn.1 hy
-  exact ⟨i.val, i.isLt, rfl⟩
 
 /-- **The coins `refK x` openings open**: opening `k`'s, read as its coin (`rd`); the session's `pad`. -/
 def padOps {x : Msg} (ops : List (Msg × Msg)) : Fin (refK x) → FlockDeploy.Coin :=

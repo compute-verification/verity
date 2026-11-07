@@ -1,14 +1,7 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
+module
+
+public import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
 
 /-!
 # Report Theorem 1(ii), untimed: a proof of `Pous.Guarantees.Theorem1ii`
@@ -24,6 +17,8 @@ The basic compression argument (report §3, proof of Theorem 1(ii)). Fix `W`, `A
    expander decodes the message and returns the patched block where there is one, else `A₂`'s answer. On `E` it
    rebuilds `C`, so `Pr[E] ≤ π` by `INC(β, π)`.
 -/
+
+@[expose] public section
 
 namespace PousThm1ii
 

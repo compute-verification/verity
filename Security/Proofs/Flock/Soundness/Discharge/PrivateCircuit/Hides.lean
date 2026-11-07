@@ -1,4 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Hiding, from events to tests
@@ -6,6 +23,8 @@ import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
 `Hides.avg_le`: a registration that hides every event up to `ε` hides every test with values in `[0, 1]` up to `ε`: at
 the set `A` of views more likely at `p` than at `p'`, the test's gain is at most `Pr_p[A] - Pr_{p'}[A]`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PrivateCircuit
 

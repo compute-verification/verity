@@ -1,6 +1,8 @@
-import Flock.Canon
-import RemoteAudit.Unboxed
-import RemoteAudit.Window
+module
+
+public import Flock.Canon
+public import RemoteAudit.Unboxed
+public import RemoteAudit.Window
 
 /-!
 # The store binding's decision: `store.py`
@@ -37,6 +39,10 @@ safetensors headers and the tensors' bytes), the arena's layout from config.json
 `arena`), and the weights blocks' digests (`weight_digests`, `codec.digest` over the arena's bytes). `bind` and `hold`
 take the arena as its digests, 64 bytes a block.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Store
 

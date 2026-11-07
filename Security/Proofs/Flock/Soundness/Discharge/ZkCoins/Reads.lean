@@ -1,4 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The session on committed coins opens each round at most once
@@ -9,6 +12,8 @@ interactions on pairwise disjoint rounds the union of all, and a stream (`tagRep
 in order. So `sessionZKC` is `Distinct` (`distinct_sessionZKC`): the link points read the session stream's round 0,
 and table `j`'s rep `r` reads only the rounds of its own stream.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkCoins
 

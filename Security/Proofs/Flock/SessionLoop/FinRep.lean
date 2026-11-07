@@ -1,8 +1,49 @@
-import Proofs.Flock.SessionLoop.FinishParts
-import Proofs.Flock.Claims.ZK.FinishBridge
-import Proofs.Flock.Claims.ZK.FinishTrunc
-import Proofs.Flock.Claims.ZK.FrameReal
+module
+
+public import Proofs.Flock.Claims.ZK.FinishRep
+public import Proofs.Flock.Claims.ZK.FinishTrunc
+public import Proofs.Flock.SessionLoop.FinishParts
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.RepRounds
 import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.Scope.Check
+import Proofs.Flock.Claims.Scope.Sizes
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.VBridge.Family.Lig
 
 /-!
 # `FinishParts`' (c), the reps' proof files, in parts
@@ -31,6 +72,8 @@ the table's `m`, its schedule and the extra claims are small enough (`Loop.finRe
 * **(c.2) `Loop.FinRepPads`**: the rep's table commits under `hm96-sha512`, and the request's pads have the layout's
   length, `h_ab = h_a·h_b` and `w = x·y` (`repFw_eq`'s premises). It holds in the masked scope (`Loop.finRepPads`).
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

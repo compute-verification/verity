@@ -315,8 +315,8 @@ def _q(st: M.Steps, KW: int, q_nope, q_rope):
     return Coll(Array(KW, st.bf16), concat([q_rope.refs, q_nope.refs]))
 
 
-def split_part(st: M.Steps, T: int, BN: int, KW: int, block_of, end, q, kv, b0: int, b1: int):
-    """One split: blocks [b0, b1) of ``kv``'s T keys last to first (``block_of(nvis, first)``, its first visited one FIRST, the
+def split_part(st: M.Steps, T: int, BN: int, KW: int, tile_of, end, q, kv, b0: int, b1: int):
+    """One split: blocks [b0, b1) of ``kv``'s T keys last to first (``tile_of(nvis, first)``, its first visited one FIRST, the
     keys' last block zero-padded), then ``end``: the split's (o_partial, lse)."""
     B = st.B
     m = l = o = None
@@ -327,13 +327,13 @@ def split_part(st: M.Steps, T: int, BN: int, KW: int, block_of, end, q, kv, b0: 
             row = Coll(Array(KW, st.bf16), concat([st.zero16().refs] * KW))
             kvb = Coll(Array(BN, Array(KW, st.bf16)), concat([kvb.refs] + [row.refs] * (BN - hi + lo)))
         first = b == b1 - 1
-        r = B.call(block_of(hi - lo, True), q, kvb) if first else B.call(block_of(hi - lo, False), q, kvb, m, l, o)
+        r = B.call(tile_of(hi - lo, True), q, kvb) if first else B.call(tile_of(hi - lo, False), q, kvb, m, l, o)
         m, l, o = r[0], r[1], r[2]
     return B.call(end, m, l, o)
 
 
-def head_split(st: M.Steps, S, block_of, unsplit, end, combine_of, q_nope, q_rope, kv):
-    """`SparseMlaHeadSplit`'s body: ``unsplit`` the token's head when NS = 1; else each split's `split_part` (``block_of(nvis,
+def head_split(st: M.Steps, S, tile_of, unsplit, end, combine_of, q_nope, q_rope, kv):
+    """`SparseMlaHeadSplit`'s body: ``unsplit`` the token's head when NS = 1; else each split's `split_part` (``tile_of(nvis,
     first)``, ``end``) and ``combine_of(nsplit)``."""
     B, T, NS, DR, DV, BN = st.B, S.T, S.NS, S.DR, S.DV, S.BN
     check_split_statics(T, NS)
@@ -343,18 +343,18 @@ def head_split(st: M.Steps, S, block_of, unsplit, end, combine_of, q_nope, q_rop
     q = _q(st, KW, q_nope, q_rope)
     lses, parts = [], []
     for b0, b1 in split_blocks(T, NS, BN):
-        e = split_part(st, T, BN, KW, block_of, end, q, kv, b0, b1)
+        e = split_part(st, T, BN, KW, tile_of, end, q, kv, b0, b1)
         parts.append(e[0])
         lses.append(e[1])
     return B.call(combine_of(len(parts)), array_of(lses), array_of(parts))
 
 
-def part(st: M.Steps, S, block_of, end, q_nope, q_rope, kv):
+def part(st: M.Steps, S, tile_of, end, q_nope, q_rope, kv):
     """`SparseMlaSplitPart`'s body: `split_part` over all of its T keys."""
     if S.T < 1:
         raise ValueError(f"SparseMlaSplitPart: T={S.T} keys")
     KW = S.DR + S.DV
-    return split_part(st, S.T, S.BN, KW, block_of, end, _q(st, KW, q_nope, q_rope), kv, 0, -(-S.T // S.BN))
+    return split_part(st, S.T, S.BN, KW, tile_of, end, _q(st, KW, q_nope, q_rope), kv, 0, -(-S.T // S.BN))
 
 
 # --- the Definitions --------------------------------------------------------------------------------------------------------
@@ -376,7 +376,7 @@ def _part_type(S, bf16=BF16, f32=F32):
 
 
 def part_blocks(S, block):
-    """``block``'s binding for `split_part`'s ``block_of(nvis, first)``."""
+    """``block``'s binding for `split_part`'s ``tile_of(nvis, first)``."""
     return lambda nvis, first: bind(block, DR=S.DR, DV=S.DV, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, SCALE=S.SCALE)
 
 
@@ -410,11 +410,11 @@ def SparseMlaHeadSplit(B, S, q_nope, q_rope, kv):
     """One query head over T selected KV rows in NS splits (`split_blocks`): `SparseMlaHead_v1` at NS = 1; else each split's
     `SparseMlaBlock_v1`s last to first (its first visited one FIRST, the token's last block zero-padded), its
     `SparseMlaSplitEnd_v1`, and `SparseMlaCombine_v1` over the non-empty splits."""
-    def block_of(nvis, first):
+    def tile_of(nvis, first):
         return bind(M.SparseMlaBlock, DR=S.DR, DV=S.DV, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, SCALE=S.SCALE)
     unsplit = bind(M.SparseMlaHead, T=S.T, DR=S.DR, DV=S.DV, BN=S.BN, DOT=S.DOT, INV=S.INV, SCALE=S.SCALE)
     end = bind(SparseMlaSplitEnd, DV=S.DV, INV=S.INV, SCALE=S.SCALE)
-    return head_split(word_steps(B), S, block_of, unsplit, end, lambda n: bind(SparseMlaCombine, NSPLIT=n, DV=S.DV, INV=S.INV),
+    return head_split(word_steps(B), S, tile_of, unsplit, end, lambda n: bind(SparseMlaCombine, NSPLIT=n, DV=S.DV, INV=S.INV),
                       q_nope, q_rope, kv)
 
 

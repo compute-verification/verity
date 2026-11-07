@@ -6,13 +6,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from fractions import Fraction
 from math import log2
 from pathlib import Path
 
+import pytest
+
 from verity.ml.circuits.partition import Level
 from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
-from verity.core.protocols.sampled_proofs.consumers import compute_bound, exfiltration_bound, location_bits
+from verity.core.protocols.sampled_proofs.consumers import (UNCERTIFIED_COMPUTE, compute_bound, exfiltration_bound,
+                                                            infiltration_bound, location_bits)
+from verity.core.protocols.sampled_proofs.service import REPLAY
 
 #: A4 P6's layer 0 (one-stage-e2e): six templates, 6,771,765 proof blocks, in canonical order.
 A4_SIZES = {"rms_triton": 287, "gemm2048": 6_171_648, "rope": 11_480, "rms_fused": 287, "silu_mul": 287,
@@ -25,6 +30,7 @@ FLOOR = {"rms_triton": 1, "gemm2048": 905, "rope": 2, "rms_fused": 1, "silu_mul"
 BY_BITS = {"rms_triton": 10, "gemm2048": 104, "rope": 12, "rms_fused": 20, "silu_mul": 39, "gemm8192": 10}
 ROOT = Path(__file__).resolve().parents[5]
 LEAN_VECTORS = Path(__file__).parent / "fixtures" / "exfiltration_lean.json"
+LEAN_TWO_VECTORS = Path(__file__).parent / "fixtures" / "exfiltration_two_lean.json"
 
 
 def a4_law(ks: dict) -> Stratified:
@@ -40,19 +46,22 @@ def mib(bits: float) -> float:
     return bits / 8 / 2 ** 20
 
 
-def test_exfiltration_is_the_output_bit_weighted_bound_plus_the_location_term():
-    """A4's sampling designs: the output bits in incorrect proof blocks reach 9.40 MiB under the uniform subset:1024, 8.81 MiB with one proof block per
-    template and 1.50 MiB sampling in proportion to output bits, each exactly core's `harm_bound` over the sampling design.  Which proof blocks
-    are incorrect adds 0.08, 0.09 and 0.41 MiB (`location_bits`), so the bounds are 9.48, 8.89 and 1.91 MiB."""
+def test_infiltration_is_the_output_bit_weighted_bound_and_exfiltration_adds_the_location_term():
+    """A4's sampling designs: the incorrect proof blocks' outputs, what the prover wrote in place of the circuit's values,
+    total at most 9.40 MiB under the uniform subset:1024, 8.81 MiB with one proof block per template and 1.50 MiB sampling
+    in proportion to output bits, each exactly core's `harm_bound` over the sampling design.  Which proof blocks are incorrect
+    adds 0.08, 0.09 and 0.41 MiB (`location_bits`), so the exfiltration bounds are 9.48, 8.89 and 1.91 MiB."""
     segments = [(A4_BITS[name], size) for name, size in A4_SIZES.items()]
-    uniform = Stratified.uniform(sum(A4_SIZES.values()), 1024)
     p = one_level(Subset(1024))
-    got = exfiltration_bound(p, {"unit": segments})
-    assert got == uniform.harm_bound({"unit": segments}, DELTA) + location_bits(p) and 9.48 < mib(got) < 9.49
-    for ks, lo, hi in ((FLOOR, 8.88, 8.90), (BY_BITS, 1.90, 1.92)):
+    got = infiltration_bound(p, {"unit": segments})
+    assert got == Stratified.uniform(sum(A4_SIZES.values()), 1024).harm_bound({"unit": segments}, DELTA)
+    out = exfiltration_bound(p, {"unit": segments})
+    assert 9.39 < mib(got) < 9.41 and out == got + location_bits(p) and 9.48 < mib(out) < 9.49
+    for ks, lo, hi, out_lo, out_hi in ((FLOOR, 8.80, 8.82, 8.88, 8.90), (BY_BITS, 1.49, 1.51, 1.90, 1.92)):
         p = one_level(a4_law(ks))
-        got = exfiltration_bound(p, A4_BITS)
-        assert got == a4_law(ks).harm_bound(A4_BITS, DELTA) + location_bits(p) and lo < mib(got) < hi
+        got, out = infiltration_bound(p, A4_BITS), exfiltration_bound(p, A4_BITS)
+        assert got == a4_law(ks).harm_bound(A4_BITS, DELTA) and lo < mib(got) < hi
+        assert out == got + location_bits(p) and out_lo < mib(out) < out_hi
 
 
 def test_the_location_term_bounds_the_number_of_wrong_sets():
@@ -134,20 +143,80 @@ def test_the_lean_vectors_were_generated_from_this_tree():
     assert not stale, f"changed since the vectors were generated, rerun verity/core/protocols/sampled_proofs/tests/lean/generate.sh: {stale}"
 
 
+def test_the_two_stage_vectors_were_generated_from_this_tree():
+    """The two-stage vectors record the sha256 of their exporter (`lean/ExfiltrationTwoVectors.lean`) and of the files they
+    read: the two-stage design (`Claims/SamplingTwo.lean`), its count `card_influenceTwo_le_uniform`
+    (`SamplingGeneric/TwoCount.lean`), its table (`SamplingGeneric/TwoTable.lean`), and the toolchain and Mathlib pins.  A
+    change to any of them fails here until the vectors are regenerated."""
+    recorded = json.loads(LEAN_TWO_VECTORS.read_text())["inputs"]
+    soundness = "Security/Proofs/"
+    assert set(recorded) == {"verity/core/protocols/sampled_proofs/tests/lean/ExfiltrationTwoVectors.lean",
+                             "Security/Definitions/Claims/SamplingTwo.lean",
+                             *(soundness + f for f in ("Flock/SamplingGeneric/TwoCount.lean",
+                                                       "Flock/SamplingGeneric/TwoTable.lean",
+                                                       "lake-manifest.json", "lean-toolchain"))}
+    stale = [p for p, h in recorded.items() if hashlib.sha256((ROOT / p).read_bytes()).hexdigest() != h]
+    assert not stale, f"changed since the vectors were generated, rerun verity/core/protocols/sampled_proofs/tests/lean/generate.sh: {stale}"
+
+
 def test_compute_is_the_work_weighted_bound():
     """A TOY profile over coarse proof blocks of 4 fine ones each: 64 fine proof blocks of skipped work, exactly `worst_case` with utility 4m; over two
     levels, `worst_case` too; under a stratified sampling design, the work-weighted `harm_bound`."""
-    toy = IntegrityProfile(("replay",), (512,), {"replay": Bernoulli(Fraction(1, 4))}, 0.01)
+    toy = IntegrityProfile(("coarse",), (512,), {"coarse": Bernoulli(Fraction(1, 4))}, 0.01)
     assert compute_bound(toy, 4) == toy.worst_case(lambda m: 4 * m) and round(compute_bound(toy, 4), 1) == 64.0
-    two = IntegrityProfile(("replay", "check"), (512, 4), {"replay": Bernoulli(Fraction(1, 2)), "check": Subset(2)}, 0.01)
+    two = IntegrityProfile(("group", "check"), (512, 4), {"group": Bernoulli(Fraction(1, 2)), "check": Subset(2)}, 0.01)
     assert compute_bound(two, 1) == two.worst_case(lambda m: m)
     work = {"gemm2048": 2048, "gemm8192": 8192, "rope": 128}
     assert compute_bound(one_level(a4_law(FLOOR)), work) == a4_law(FLOOR).harm_bound(work, DELTA)
 
 
+def test_a_two_stage_profile_is_read_for_infiltration_and_exfiltration_and_refused_for_compute():
+    """A two-stage design's profile, a level of replay blocks (`service.REPLAY`) above the proof blocks: infiltration reads
+    it at the footprint (`worst_case` with utility b m), exfiltration adds which proof blocks are incorrect
+    (`card_influenceTwo_le_uniform`), and compute refuses it, since its relation reads no interior and takes a trace whose
+    interiors were never computed (`deferred_not_credited`).  A replay level that is the checked level is a one-stage
+    design's, and compute reads it."""
+    two = IntegrityProfile((REPLAY, "unit"), (512, 4), {REPLAY: Bernoulli(Fraction(1, 2)), "unit": Subset(2)}, 0.01)
+    assert infiltration_bound(two, 16) == two.worst_case(lambda m: 16 * m)
+    assert exfiltration_bound(two, 1) == two.worst_case(lambda m: m) + location_bits(two)
+    with pytest.raises(ValueError, match=re.escape(UNCERTIFIED_COMPUTE)):
+        compute_bound(two, 1)
+    one = IntegrityProfile((REPLAY,), (512,), {REPLAY: Bernoulli(Fraction(1, 4))}, 0.01)
+    assert compute_bound(one, 1) == one.worst_case(lambda m: m)
+
+
+def test_the_two_stage_bound_is_at_least_the_footprint_count_evaluated_in_lean():
+    """`fixtures/exfiltration_two_lean.json` (`lean/ExfiltrationTwoVectors.lean`, `gridTwo_influence`): R replay blocks of N
+    proof blocks each, the first stage at rate num/den, k of each sampled replay block's proof blocks drawn, at
+    delta = 2^-e with b bits per proof block.  Lean takes the largest
+    product of the replay blocks' acceptance factors at each total count, in exact integers, and the kernel checks that
+    every count past K escapes with probability at most delta, so the served outputs at any inputs number at most
+    2^H admissible, H = b K and admissible = sum_{j <= K} C(R N, j).  Core's acceptance factor is Lean's; its count bound,
+    the linear relaxation, is at least K and below K + N, and K itself when every replay block is replayed and the replay
+    blocks are strata; so `exfiltration_bound` is at least log2 of the numerator."""
+    data = json.loads(LEAN_TWO_VECTORS.read_text())
+    assert data["statement"] == "Claims.Sampling.card_influenceTwo_le_uniform" and len(data["vectors"]) == 22
+    for v in data["vectors"]:
+        R, N, k, (num, den) = v["replay_blocks"], v["n_rho"], v["k"], v["rate"]
+        K, H, b, admissible, delta = v["K"], v["H"], v["bits"], v["admissible"], 2.0 ** v["delta_log2"]
+        p = IntegrityProfile((REPLAY, "unit"), (R, N), {REPLAY: Bernoulli(Fraction(num, den)), "unit": Subset(k)}, delta)
+        assert [p.accept(m) for m in range(N + 1)] == [Fraction(a, v["accept_den"]) for a in v["accept"]]
+        assert p.count("unit") == R * N and H == b * K
+        assert K <= p.bound() < K + N and H <= p.harm_bound(b) < H + b * N
+        if num == den:
+            assert Stratified(tuple(Stratum(f"r{i}", N, k) for i in range(R))).count_bound(delta) == K
+        loc = location_bits(p)
+        if 2 * K >= R * N:
+            assert loc == R * N and admissible <= 2 ** (R * N)
+        else:
+            assert log2(admissible) <= loc
+        assert exfiltration_bound(p, b) >= H + log2(admissible)
+
+
 def test_an_application_reads_nothing_the_profile_does_not_bound():
-    """Weighting every proof block 1 reads the profile's own count (from above, within one proof block), for every sampling design; exfiltration
-    adds the location term to it."""
+    """Weighting every proof block 1 reads the profile's own count (from above, within one proof block), for every sampling design;
+    infiltration reads the same count, and exfiltration adds the location term to it."""
     for p in (one_level(Subset(1024)), one_level(a4_law(FLOOR)), one_level(a4_law(BY_BITS))):
         assert p.bound() <= compute_bound(p, 1) < p.bound() + 1 + 1e-6 * p.bound()
+        assert infiltration_bound(p, 1) == compute_bound(p, 1)
         assert exfiltration_bound(p, 1) == compute_bound(p, 1) + location_bits(p)

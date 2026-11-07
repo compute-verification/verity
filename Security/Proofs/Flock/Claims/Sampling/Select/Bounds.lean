@@ -1,6 +1,50 @@
-import Proofs.Flock.Claims.Sampling.Select.Steps
-import Proofs.Flock.Claims.Sampling.Escape
-import Proofs.Flock.Claims.Sampling.ExecBernoulli
+module
+
+public import Proofs.Flock.Claims.Sampling.Escape
+public import Proofs.Flock.Claims.Sampling.ExecBernoulli
+public import Proofs.Flock.Claims.Sampling.Select.Layout
+public import Proofs.Flock.Claims.Sampling.Select.Steps
+public import Proofs.Flock.Claims.Sampling.Select.Take
+public import Properties.SampledProofs.Draw
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The draw `drawUnits` makes misses a set of units no more often than its law's `P_a`
@@ -15,6 +59,8 @@ bound (`seqMiss_le`) multiplies them.
 * `strata_bound`: a stratified or work draw misses the units of its strata at the slots of `W` with probability at most
   `strataPa` of its strata's sizes and draws.
 -/
+
+@[expose] public section
 
 open SampledProofs
 

@@ -1,8 +1,41 @@
-import Proofs.Flock.Claims.Recursion.DeployOuter
-import Proofs.Flock.Claims.Recursion.Scope
-import Proofs.Flock.Claims.Complete.Zk.Honest
-import Proofs.Flock.Claims.Complete.Zk.Coins
-import Definitions.Claims.Recursion
+module
+
+public import Mathlib.Data.UInt
+public import Proofs.Flock.Claims.Complete.Zk.Coins
+public import Proofs.Flock.Claims.Recursion.DeployOuter
+public import Proofs.Flock.Claims.Recursion.Scope
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The compiled verifier in public-coin form (`RecDeploy.V`) and its record (`deployRec`)
@@ -72,6 +105,8 @@ the inner session's plain `δc` (`FlockComplete.δc`) plus each V* session's mas
 `FlockComplete.δcZk`'s bad coins at `setupO`), at the V* statements `nums` reads, and `1` wherever one of them cannot
 be accepted (`readyRec`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -303,9 +338,9 @@ theorem readX_of_pre {x : Claims.Msg} {r : XR} (h : readXPre x = some r) {vs : A
   simp [h, hvs, hp, Except.toOption]
 
 /-- How Flock's plain verifier is told to set the inner statement `w` up, as each staged V* statement hands it to the
-verifier (`--rec-inner-statement`, `--rec-inner-statement-coins`, `--rec-inner-tables`, `--rec-inner-draw`): its
-`--statement`, `--coins`, lookup tables and draw. -/
-def innerFormOf (w : Raw) : RecCoins.InnerForm := ⟨w.statement, w.osCoins, w.tables, w.draw⟩
+verifier (`--rec-inner-statement`, `--rec-inner-tables`, `--rec-inner-draw`): its `--statement`, lookup tables and
+draw. -/
+def innerFormOf (w : Raw) : RecCoins.InnerForm := ⟨w.statement, w.tables, w.draw⟩
 
 /-- The inner statement's files as each staged V* statement hands them to check 5 (`--rec-inner-circuit`,
 `--rec-inner-public`, `--rec-inner-partition`), with how the inner statement is set up (`innerFormOf`), its program
@@ -405,7 +440,6 @@ def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Cla
   transcript := some (st.transcript x ms)
   registration := r.w.registration
   innerStatement := some r.innerRaw.statement
-  innerStatementCoins := some r.innerRaw.osCoins
   innerTables := some r.innerRaw.tables
   innerDraw := r.innerRaw.draw
   recLinks := r.w.links

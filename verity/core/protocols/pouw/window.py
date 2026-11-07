@@ -44,8 +44,7 @@ is its tiles, the filler covers the rest, every call's -h3 root is the pass's, t
 disjoint, and the registered level is `bucket` of the real tiles; given the records and the side rows' indices it also
 holds those to the entries.  It is not proved yet: no Program states it.
 
-**The layout for gates** is specified in PoUW's PROTOCOL.md,
-"The served audit window": the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the dense side trees of 2^D
+**The layout for gates** is the Lean's (`PouwWindow.Entry`, `PouwWindow.Side`, `PouwWindow.Inputs`): the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the dense side trees of 2^D
 leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`,
 `side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
 `public_inputs`); `tests/vectors/window.json` pins them.
@@ -360,7 +359,7 @@ ROW_STEP = 16
 
 @dataclass(frozen=True)
 class Entry:
-    """One entry of the window root, as its committed bit row holds it (PROTOCOL.md's layout): its kind, its tile range
+    """One entry of the window root, as its committed bit row holds it (Lean `PouwWindow.Entry`): its kind, its tile range
     [lo, hi), each side's row count and root, its pass's -h3 tile-tree root, a call's record's SHA-512, and where the call
     sits in its pass: its first tile there `tile0`, its tile columns `cols` = ⌈n/64⌉ and its rows `m`.  `row` and
     `from_row` encode any values that fit the row's fields; `layout_problem` holds them to the layout."""
@@ -687,7 +686,7 @@ def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes
 
 # ---- the tile instances' public inputs ------------------------------------------------------------------------------------
 
-#: C-Flock's format of the verifier's own ``--public-inputs`` file (its PROTOCOL.md §16.10, Lean's ``HmIn.checkOwn``)
+#: C-Flock's format of the verifier's own ``--public-inputs`` file (Lean's ``HmIn.checkOwn``, in ``Flock.HmRow``)
 PUBLIC_INPUTS_FORMAT = domains.FLOCK_PUBLIC_INPUTS
 #: a tile instance's public input ports, in order, as its circuit's META ``public_inputs`` must name them: each port's u16
 #: words (whole 128-bit words, so no row leaf shares one), the public datum it is recomputed from and its rule.  t is a
@@ -701,7 +700,7 @@ PUBLIC_PORTS = (
     {"port": "domain_b", "words": 32, "seed": "registration", "derivation": domains.POUW_PERIOD_SIDE_DOMAIN_B},
     {"port": "domain_h3", "words": 32, "seed": "pass", "derivation": domains.POUW_PERIOD_DOMAIN_H3},
 )
-#: C-Flock's largest session: m = k_log + nbl <= 35, nbl = max(3, ⌈log2 blocks⌉) (its PROTOCOL.md §16.5, `shape_in_range`)
+#: C-Flock's largest session: m = k_log + nbl <= 35, nbl = max(3, ⌈log2 blocks⌉) (its Lean ``Flock.Schedule``, `shape_in_range`)
 M_MAX = 35
 
 

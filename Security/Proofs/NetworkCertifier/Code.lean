@@ -1,13 +1,15 @@
-import Definitions.NetworkCertifier
-import Definitions.NetworkCertifier.AdviceV1
-import Definitions.NetworkCertifier.WindowCharge
-import NetworkCertifier.Ingress
-import NetworkCertifier.Schedule
-import NetworkCertifier.AdviceV1
-import NetworkCertifier.WindowCharge
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Finset.Dedup
+module
+
+public import Definitions.NetworkCertifier
+public import Definitions.NetworkCertifier.AdviceV1
+public import Definitions.NetworkCertifier.WindowCharge
+public import NetworkCertifier.Ingress
+public import NetworkCertifier.Schedule
+public import NetworkCertifier.AdviceV1
+public import NetworkCertifier.WindowCharge
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Finset.Dedup
 
 /-!
 # The certifier program agrees with the reference definitions
@@ -37,6 +39,8 @@ Each statement relates the two sides by their fields rather than by a transport,
 definitions. The transports (`frameRef`, `syncRef`, `syncSetRef`, `syncSetCode`, `tallyRef`, `carryRef`, `tableRef`,
 `bookRef`, `wcarryRef`, `windowRef`) are the proofs' own.
 -/
+
+@[expose] public section
 
 namespace NetTiming.SecurityProofs
 
@@ -156,8 +160,8 @@ theorem code_ingressUpTo {L K S : ℕ} {In : Type} (op : ℕ → List (NetworkCe
 
 /-- `Accepted` agrees on observations with the same rows and complete statuses when the two Programs predict the same
 rows from the same ingress. -/
-theorem code_accepted {L K S : ℕ} {In Adv Adv' : Type} (P : NetworkCertifier.Program L S In Adv) (P' : Program L S In Adv')
-    (a : Adv) (a' : Adv') (hP : ∀ t ins, P.rows t ins a = P'.rows t ins a')
+theorem code_accepted {L K S : ℕ} {In Adv Adv' : Type} (P : NetworkCertifier.EgressPrediction L S In Adv)
+    (P' : Program L S In Adv') (a : Adv) (a' : Adv') (hP : ∀ t ins, P.rows t ins a = P'.rows t ins a')
     (op : ℕ → List (NetworkCertifier.Obs L K S) → In) (op' : ℕ → List (Obs L K S) → In)
     (k : ℕ) (o : List (NetworkCertifier.Obs L K S)) (o' : List (Obs L K S))
     (hlen : o.length = o'.length)

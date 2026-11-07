@@ -1,4 +1,7 @@
-import Definitions.Core.TC.Gadgets
+module
+
+public import Definitions.Core.TC.Gadgets
+public import Definitions.Core.TC.Relation
 
 /-!
 # The range and is-zero gadgets hold exactly when their predicates do
@@ -9,6 +12,8 @@ relation states (`Relation.RANGE`, `Relation.ISZERO`):
 * `range_gadget`: `Census.RANGE x bits`'s chunks hold exactly when `0 ≤ x < 2^bits`.
 * `iszero_gadget`: `Census.ISZERO x bits z`'s chunks and flags hold exactly when `x` is in range and `z = [x = 0]`.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Gadgets
 

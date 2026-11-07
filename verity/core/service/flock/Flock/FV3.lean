@@ -20,9 +20,11 @@ with `"pad"` leaves and hashes `"node"`s level by level up to its root.
   `sibs`, `climb`, `leafAs`), which `Flock.Registered` exports.
 * `FV3.Sha256`: the same domain API under SHA-256, for PoUW's SHA-256 frames (Pearl-C's `h0`).
 -/
-import Flock.Hash
-import Flock.Bytes
-import Flock.Net
+module
+
+public import Flock.Net
+
+@[expose] public section
 
 namespace Flock
 namespace FV3

@@ -1,5 +1,10 @@
-import Proofs.Pouw.Milestone
-import Proofs.Pouw.QTree
+module
+
+public import Proofs.Pouw.M1
+public import Proofs.Pouw.Milestone
+public import Proofs.Pouw.QTree
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # Satisfiability witnesses and non-vacuity
@@ -8,6 +13,8 @@ import Proofs.Pouw.QTree
 * `honestComplete`: the honest reference is correct on every unit and does not win at `T = W`.
 * `gameCanBeLost`: the honest program at budget 0 (free model) or `W_mm` (witness model) wins with probability 1.
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

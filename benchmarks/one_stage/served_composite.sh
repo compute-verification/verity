@@ -24,7 +24,8 @@
 # case's evidence, is OUT/composite/PRODUCT. OUT/verdicts.txt gets each case's protocol and verdict (the CASE lines),
 # each case not written by its protocol, and each product's NOT_ESTABLISHED and VERDICT lines, headed COMPOSITE, and
 # nothing else. Without served_case.sh or composite.py in the tree it says so and exits 1, since no product's Lean
-# answered. It makes no verdict: exit 0 when each product's Lean answered, else 1.
+# answered. It makes no verdict: exit 0 when each product's Lean answered, else 1. PRODUCT=remote (`served_verdicts.sh`'s)
+# writes neither PoUS's case nor the wipe's, needs no served_case.sh, and runs remote's Lean alone.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -34,7 +35,13 @@ TPY=${TPY:-$TREE/.venv/bin/python}
 [ -x "$TPY" ] || TPY=$PY
 P=$D/private/composite
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
-for f in benchmarks/pous/served_case.sh benchmarks/one_stage/composite.py; do
+PRODUCT=${PRODUCT:-onsite}
+case $PRODUCT in
+  onsite) products=(remote onsite) need=(benchmarks/pous/served_case.sh benchmarks/one_stage/composite.py) ;;
+  remote) products=(remote) need=(benchmarks/one_stage/composite.py) ;;
+  *) say "COMPOSITE: not run, PRODUCT is onsite or remote, not $PRODUCT"; exit 1 ;;
+esac
+for f in "${need[@]}"; do
   [ -f "$f" ] || { say "COMPOSITE: not run, this tree has no $f"; exit 1; }
 done
 mkdir -p "$P" && chmod 700 "$D/private" "$P"
@@ -47,7 +54,7 @@ scope=()
 command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1 \
   && scope=(systemd-run --user --scope --quiet --collect -p "MemoryMax=${COMPOSITE_MEM_GB:-170}G" -p MemorySwapMax=0 --)
 
-if POUS_EXE=$(exe pous-run-protocol verity/core/protocols/pous/check) \
+if [ "$PRODUCT" = onsite ] && POUS_EXE=$(exe pous-run-protocol verity/core/protocols/pous/check) \
   && WIPE_EXE=$(exe wipe-protocol verity/core/devices/memory_challenger/lean); then
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-composed} LEASE_MIN=${CASE_LEASE_MIN:-60} MEM_GB=${CASE_MEM_GB:-170} PY=$PY \
     POUS_EXE=$POUS_EXE WIPE_EXE=$WIPE_EXE timeout -k 1m "${CASE_TIMEOUT:-90m}" bash benchmarks/pous/served_case.sh \
@@ -77,7 +84,7 @@ for line in sys.stdin:
 fi
 
 bad=0
-for x in remote onsite; do
+for x in "${products[@]}"; do
   e=$(exe "$x" "verity/core/protocols/$x") || { bad=1; continue; }
   cases=()
   while IFS= read -r c; do cases+=(--cases "$c"); done < <("$TPY" - "$D/private" "$P" "$x" <<'EOF'

@@ -1,5 +1,9 @@
-import CoreProtocol.Cli
-import PouwCheck.Credit
+module
+
+public import CoreProtocol.Cli
+public import PouwCheck.Credit
+meta import CoreProtocol.Cli
+meta import PouwCheck.Credit
 
 /-!
 # A PoUW period as a `Core.Protocol`: `verity/pouw/period/v1`
@@ -41,6 +45,8 @@ What it doesn't check: each drawn unit's statement and each round's live stateme
 carries as the verifier of record's verdicts (`PouwCheck.Verified` and `PouwCheck.LiveVerified` judge them, with
 C-Flock's Lean verifier run outside).
 -/
+
+@[expose] public section
 
 namespace PouwCheck.Period
 

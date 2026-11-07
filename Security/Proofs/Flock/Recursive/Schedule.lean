@@ -1,6 +1,10 @@
-import Proofs.Flock.Recursive.Defs
+module
+
+public import Proofs.Flock.Recursive.Defs
+public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.ExecDraw
-import Proofs.Flock.Soundness.Refine.LiveSim
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Recursion: an inner protocol on a fixed schedule
@@ -18,6 +22,8 @@ each of one of the types `T i`, and then draws a coin of type `CT k`; round `r` 
 * `sched_sound`: the schedule's verifier is as sound as the game. Against every prover it accepts with probability at
   most the game's `value`, the best any prover achieves when the game draws its own coins.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

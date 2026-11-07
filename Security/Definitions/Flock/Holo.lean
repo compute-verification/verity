@@ -1,5 +1,9 @@
-import Definitions.Flock.Sparse
-import Definitions.Flock.Session
+module
+
+public import Definitions.Flock.Sparse
+public import Definitions.Flock.Session
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The holographic table: two reps with hidden units, then the registered opening
@@ -19,6 +23,8 @@ order is the record's: running the sparse phase before the rep's opening would c
 The registered table stacks the types' tables `R(t, p, k)` as bit `k + 2^ν·(p + 2^pLog·t)`, so the registered claim's
 point is `(r_k, ζ_p, ρ_t)` in that order (`RegClaim.toClaim`): skip weights `eq(point[0…6], ·)`, `x = point[6 …]`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 

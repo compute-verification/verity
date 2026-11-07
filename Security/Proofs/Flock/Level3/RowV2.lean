@@ -5,8 +5,13 @@ padding): the block `P(ℓ)` (`Flock.HmRow.rowPrefixV2`), then the bits least si
 carries `ℓ` as a u64, and `ℓ` fixes how many bits the bytes after it hold. The soundness package's v2 `HmRows` takes its
 `enc_inj` from here.
 -/
-import Flock.HmRow
-import Mathlib.Data.List.Basic
+module
+
+public import Flock.HmRow
+public import Mathlib.Data.List.Basic
+import all Init.Data.String.Defs
+
+@[expose] public section
 
 open Flock.HmRow
 
@@ -40,9 +45,6 @@ theorem prefix_length (l : ℕ) : (rowPrefixV2 l).data.toList.length = 128 := by
   rw [prefix_data]
   simp only [List.length_append, Array.length_toList, ByteArray.size_data, tag_size, digits_size, List.length_cons,
     List.length_nil, List.length_replicate]
-
-theorem prefix_size (l : ℕ) : (Flock.HmRow.rowPrefixV2 l).size = 128 := by
-  rw [← ByteArray.size_data, ← Array.length_toList, prefix_length]
 
 theorem packBits_length (bs : List Bool) : (Flock.HmRow.packBits bs).length = (bs.length + 7) / 8 := by
   simp [packBits]

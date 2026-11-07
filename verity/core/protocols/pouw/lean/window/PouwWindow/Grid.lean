@@ -1,3 +1,5 @@
+module
+
 /-!
 # The grid a window's tile count is padded to (`window.py`, "The grid")
 
@@ -5,6 +7,8 @@ The grid of `s` bits is the positive integers with at most `s + 1` significant b
 registers one level ℓ, the largest point `g_ℓ ≤ real`, is credited `g_ℓ` tiles and pads to `g_(ℓ+1)` (`bucket`).
 Python's `n >> e << e` and `1 << b` are `n / 2 ^ e * 2 ^ e` and `2 ^ b` here.
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 

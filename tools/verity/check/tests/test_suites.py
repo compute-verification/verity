@@ -52,6 +52,32 @@ def test_a_tree_is_discovered_and_keyed_from_gits_view_of_it(tmp_path, monkeypat
     assert S.object_ids(S.worktree(), ["pkg"])["pkg"] != before["pkg"]
 
 
+def test_a_clone_another_step_has_not_checked_out_yet_is_left_out_of_the_tree(tmp_path, monkeypatch):
+    (tmp_path / "a.py").write_text("a = 1\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    before = S.object_ids(S.worktree(), ["a.py", "clone"])
+    (tmp_path / "clone").mkdir()
+    _git(tmp_path / "clone", "init", "-q")                     # a clone in flight: no commit checked out yet
+    (tmp_path / "a.py").write_text("a = 2\n")
+    after = S.object_ids(S.worktree(), ["a.py", "clone"])
+    assert after["clone"] == "absent" and after["a.py"] != before["a.py"], "the rest of the tree is still read"
+
+
+def test_any_other_error_of_git_add_is_raised_with_its_message(tmp_path, monkeypatch):
+    (tmp_path / "a.py").write_text("a = 1\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    (tmp_path / ".git" / "objects").chmod(0o500)
+    try:
+        if os.access(tmp_path / ".git" / "objects", os.W_OK):
+            pytest.skip("this user writes through read-only modes (root)")
+        with pytest.raises(RuntimeError, match=r"git add -A.*\n.*"):
+            S.worktree()
+    finally:
+        (tmp_path / ".git" / "objects").chmod(0o700)
+
+
 def test_a_tree_that_is_not_a_checkout_is_refused(tmp_path, monkeypatch, capsys):
     (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = []\n')
     S = _suites(monkeypatch, tmp_path)
@@ -855,6 +881,44 @@ def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_sto
     (custody / "store.toml").write_text("[remote]\n")
     (custody / "cred.json").write_text("{}")
     p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "WANT_C": str(custody.resolve()), "WANT_R": "1"})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
+def test_inside_a_research_run_the_fixture_fetch_gets_its_custody_key_and_fetches_a_fixture_only_the_store_has(tmp_path):
+    """A run carries no store config, so the runner's own fetch read the public export alone, and a fixture registered since it
+    was made failed its suite before any test, though the tests reach the store with the run's custody key.  The fetch gets
+    that key too, and the fixture comes from the store."""
+    import json
+
+    from research.store import fixtures as F
+    from research.store.local import LocalStore, manifest_key, object_key
+    from research.store.remote import FsRemote
+
+    origin, remote = LocalStore(tmp_path / "origin"), FsRemote(tmp_path / "remote")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "big.proof").write_bytes(b"in the store alone\n")
+    art = origin.put_artifact(F.FIXTURE_KIND, {}, None, file=tmp_path / "src" / "big.proof")
+    for h, _ in origin.get_manifest(art).blobs():
+        remote.put(object_key(h), origin.object_path(h))
+    remote.put(manifest_key(art.split(":", 1)[1]), origin.manifest_path(art.split(":", 1)[1]))
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": "from pathlib import Path\n\ndef test_reads_it():\n    assert (Path(__file__).parent / 'fixtures' / "
+                                 "'big.proof').read_bytes() == b'in the store alone\\n'\n"})
+    (root / "fixtures").mkdir()
+    (root / "fixtures" / "artifacts.json").write_text(json.dumps({art: "pkg/tests/fixtures/big.proof"}))
+    (root / ".gitignore").write_text("pkg/tests/fixtures/big.proof\n")                  # as the root's lists each fetched entry
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "registered")
+    run, custody = tmp_path / "research" / "runs" / "r1", tmp_path / "research" / "requests" / "r1" / "custody"
+    run.mkdir(parents=True)
+    custody.mkdir(parents=True)
+    extra = {"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(run), "RESEARCH_STORE_CONFIG": "", "RESEARCH_PUBLIC_URL": "",
+             "HOME": str(tmp_path / "home")}
+    p = _run_suite(root, tmp_path, "--fresh", extra=extra)
+    assert p.returncode == 1 and "its fixtures could not be fetched: pkg/tests/fixtures/big.proof" in p.stdout, p.stdout + p.stderr
+    (custody / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "remote"}"\n')
+    (custody / "cred.json").write_text("{}")
+    p = _run_suite(root, tmp_path, "--fresh", extra=extra)
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 

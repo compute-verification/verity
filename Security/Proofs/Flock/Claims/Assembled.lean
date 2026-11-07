@@ -1,14 +1,44 @@
+module
+
+public import Proofs.Flock.Claims.Complete.WalkPacked
+public import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
+public import Proofs.Flock.Claims.DeployEfficient
+public import Proofs.Flock.Claims.KS.PlainAcc
+public import Proofs.Flock.Claims.ZK.Hypotheses
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Bits
-import Proofs.Flock.Claims.ERepCost
-import Proofs.Flock.Claims.KS.PlainAcc
-import Proofs.Flock.Claims.KS.ZkTauSlot
-import Proofs.Flock.Claims.DeployEfficient
-import Proofs.Flock.Claims.Complete.WalkPacked
 import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
-import Proofs.Flock.Claims.ZK.Hypotheses
-import Proofs.Flock.Claims.Complete.Coins
-import Proofs.Flock.Claims.Complete.Zk.Coins
-import Proofs.Flock.Soundness.CompiledSound
+import Proofs.Flock.Claims.KS.ZkTauSlot
 
 /-!
 # Flock's claims at the deployed records, with what remains as hypotheses
@@ -85,6 +115,8 @@ prover: as an argument, or from the record. `Claims.Complete` stays folded: with
 `δc H` and `ZkTables.δc H` are `1`, so `Complete` asks nothing, where `ready H` and `ZkTables.ready H` fail. ZK and
 `Complete` read one reference prover, `ZkTables.honestPR`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.Assembled
 

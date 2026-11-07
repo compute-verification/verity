@@ -1,4 +1,16 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+module
+
+public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Setup
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # A draw flock-verify accepts sets up
@@ -19,6 +31,8 @@ draw `D`, and a `DrawSetup` whenever `D` proves `S` and the statement's link poi
 then `tableAt`'s table at `S` is `stmtOf` of the statement flock-verify accepted. The link points are setupH's
 `PT_LOCAL + nbl`, a function of `|D.proved|` and `c.g` (e2e-exec's `Exec.setupH_mPts_drawn`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Integrate
 
@@ -67,6 +81,7 @@ theorem g_pos {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteAr
   · rw [h0, Nat.zero_mul] at hp; omega
   · exact h0
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **setupH's instances and blocks**: `n` is the (drawn) public file's, and `nbl = max 3 (log2ceil ⌈n / c.g⌉)`. -/
 theorem setupH_n {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}

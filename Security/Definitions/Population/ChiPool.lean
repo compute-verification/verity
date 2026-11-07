@@ -1,4 +1,11 @@
-import Definitions.Population.Exfiltration
+module
+
+public import Definitions.Population.Exfiltration
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
 
 /-!
 # The cheating pool with the verdict lag
@@ -15,6 +22,8 @@ those windows; `Strategy.cumLag Δ` counts them.
   window's commitment.
 * `Strategy.cumLag Δ` is the first-detection case, `j = 1`.
 -/
+
+@[expose] public section
 
 namespace Population.Exfil
 

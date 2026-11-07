@@ -1,4 +1,13 @@
-import Proofs.Flock.VBridge.Sparse.Plays
+module
+
+public import Proofs.Flock.VBridge.Sparse.Plays
+public import Proofs.Flock.VBridge.Sparse.Residuals
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Refine.Arith
+import VCVio.Prelude.Core
 
 /-!
 # `RecSparse_v1` accepts exactly when the rep's sparse phase does
@@ -11,6 +20,8 @@ in characteristic 2: H2's `c₂ + ŵ·v₂`, H3's `c₄ + Ũ·Φ`, then with `T 
 the claim against `Σ_t eq(ρ_t, t)·vt_t`, else the claim against the batch. The type-selected weights read the types'
 low `T_LOG` bits, which are the types themselves when the tail is zero.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

@@ -1,4 +1,7 @@
-import Properties.Pouw
+module
+
+public import Properties.Pouw
+import Std.Data.DTreeMap.Internal.Balancing
 
 /-!
 # Proofs of the grid's properties (`Properties.Pouw`, "The grid")
@@ -7,6 +10,8 @@ On Lean core: `Nat.log2`'s bounds give a number's bit length, and so its shift; 
 `2 ^ shift` (`isPoint_iff`); `point` steps by `2 ^ gap ℓ` (`point_succ`), so it is strictly increasing, and `level`
 inverts it. The floor point, the pad, the bucket and the levels follow.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Window
 

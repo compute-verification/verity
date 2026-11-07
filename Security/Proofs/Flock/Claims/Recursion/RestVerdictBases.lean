@@ -1,7 +1,40 @@
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.Claims.Recursion.NextShaDec
-import Proofs.Flock.Claims.Recursion.DeployChecked
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictParts
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.JsonNorm
+import Proofs.Flock.Claims.Recursion.DeployChecked
 
 /-!
 # `hrest`'s base checks: the verdict's other checks hold off any witnesses
@@ -30,6 +63,8 @@ refuses proofs that are not shaped. `DrawTied` is a statement fact: the session'
 At several tables the setup sets it to the draw; at one table it is read back from the public file's parsed header,
 which the parser makes a well-formed tree (`FlockComplete.JsonRT.parse_wf`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

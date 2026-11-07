@@ -1,7 +1,8 @@
-import Definitions.Population.Dataflow
-import Mathlib.Basic.Real.Basic
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Data.Fintype.BigOperators
+module
+
+public import Definitions.Population.Dataflow
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 
 /-!
 # The IOP's sampling certificate, and what each policy needs of it
@@ -34,6 +35,8 @@ For a program (`DynPopulation`):
 * `rangeFlow D R`: the static dataflow in which unit `u` reads the public bound `R u`, the range a computed address is
   confined to.
 -/
+
+@[expose] public section
 
 namespace Population.Iop
 

@@ -66,10 +66,10 @@ may also name an output row ``o<j>``: that row's words are the parameter's leave
 server sends out, its response or a wire to another server). It fills no input row, and wires may read the row too.
 
 The circuit's blocks (`Blocks`, ``verity/blocks/v1``, the record's ``blocks``) are stated per template and step, never per
-unit: ``proof``, the partition into proof units (its units and partition digest, which the verifier holds to the record's,
+unit: ``proof``, the partition into proof blocks (its units and partition digest, which the verifier holds to the record's,
 and the planner's ``plan`` digest, carried and never read); ``inference``, the slot and step of every unit (`InferenceEntry`:
 the entries tile each template's units exactly once, a slot digit's radix is the class's S and every step is below its T);
-and network accounting's ``server``, ``server_time`` and ``transfers``, carried as given for its own check. Of those the
+and network certification's ``server``, ``server_time`` and ``transfers``, carried as given for its own check. Of those the
 members read only the servers' unit ranges: a template's units are cut where a server's begin or end, so each statement's
 units sit on one server. Blocks name units, ports, steps and row patterns, never a value.
 
@@ -114,7 +114,7 @@ LABEL_KEYS = ("step", "slot", "form")
 BLOCKS = "verity/blocks/v1"
 #: what an inference entry's digit is: the unit's slot, its step past the entry's ``step``, or neither
 AXES = ("slot", "step", "-")
-#: network accounting's keys of the blocks, carried as given for its check; the members read the servers' unit ranges
+#: network certification's keys of the blocks, carried as given for its check; the members read the servers' unit ranges
 NETWORK = ("server", "server_time", "transfers")
 #: what a table's supplied values hold (`supplied`): its root, its domain id, and 1, what an opening's verdict reads
 SUPPLIED = ("root", "domain", "opened")
@@ -173,6 +173,9 @@ def _static(v: Any) -> Any:
         return tuple(_static(x) for x in v)
     return v
 
+
+# A walk of its own, not the registry's `catalog.load(scope="ops")`: `ml.windows` may not import `ml.definitions`
+# (`ALLOWED` in tests/test_boundaries.py).
 
 @functools.cache
 def _load_catalog() -> None:
@@ -285,9 +288,9 @@ def unit_rows(fn: Any, cuts: Mapping[str, int] | None = None) -> tuple[list[tupl
     return [(p, V2, 16 * w, ps) for p, w, ps in lay.cut(cuts)], [(V2, (j,)) for j in range(len(lay.outs))]
 
 
-#: C-Flock's composer's sizes (`verity_flock.circuit`, which ``verity`` may not import; the windows tests hold them to
-#: its own): a C-Flock block of at most 2^K_MAX bits and at least 2^K_MIN, the sha512x3 and hm96 slots of 2^SLOT_LOG bits,
-#: PER_SLOT compressions a sha512x3 slot, the mask's 2^MASK_LOG
+#: C-Flock's composer's sizes, which `verity_flock.circuit` and the benchmarks read from here: a C-Flock block of at most
+#: 2^K_MAX bits and at least 2^K_MIN, the sha512x3 and hm96 slots of 2^SLOT_LOG bits, PER_SLOT compressions a sha512x3
+#: slot, the mask's 2^MASK_LOG
 K_MAX, K_MIN, SLOT_LOG, PER_SLOT, MASK_LOG = 27, 20, 18, 3, 14
 #: the row bytes a row's last SHA-512 block holds beside the padding's 17: a longer row has a compression before it
 LAST_BLOCK_BYTES = 111
@@ -872,10 +875,10 @@ class Blocks:
             raise ValueError(f"a plan's digest is SHA-256 or SHA-512 in hex, not {self.plan!r}")
         if self.network is not None:
             if not isinstance(self.network, Mapping) or set(self.network) != set(NETWORK):
-                raise ValueError(f"network accounting's blocks are {list(NETWORK)}, all of them, not {self.network!r}")
+                raise ValueError(f"network certification's blocks are {list(NETWORK)}, all of them, not {self.network!r}")
             net = json.loads(json.dumps(dict(self.network)))
             if not all(isinstance(net[k], list) for k in NETWORK):
-                raise ValueError(f"network accounting's {list(NETWORK)} are lists")
+                raise ValueError(f"network certification's {list(NETWORK)} are lists")
             object.__setattr__(self, "network", net)
 
     def check(self, units: Mapping[str, int]) -> dict[str, tuple[int, ...]]:
@@ -941,7 +944,7 @@ class Blocks:
         their total and that digest, refused (ValueError) unless well-formed and `check`ed. -> (the blocks, the server ends)."""
         if not isinstance(d, Mapping) or d.get("format") != BLOCKS or not {"format", "proof", "inference"} <= set(d) \
                 or not set(d) <= {"format", "proof", "inference", *NETWORK}:
-            raise ValueError(f"a circuit's blocks are a {BLOCKS} object of its proof and inference, and network accounting's "
+            raise ValueError(f"a circuit's blocks are a {BLOCKS} object of its proof and inference, and network certification's "
                              f"{list(NETWORK)}")
         proof, inf = d["proof"], d["inference"]
         if not isinstance(proof, Mapping) or not {"units", "partition"} <= set(proof) <= {"units", "partition", "plan"}:
@@ -960,7 +963,7 @@ class Blocks:
 def server_ends(network: Mapping[str, Any] | None, units: Mapping[str, int]) -> dict[str, tuple[int, ...]]:
     """Each template's unit indices where a server's units begin or end (the servers' ``units``, ``"all"`` or ``[template,
     at, n]`` ranges), refused (ValueError) where a range isn't among its template's units. That the servers partition the
-    units is network accounting's check."""
+    units is network certification's check."""
     if not network:
         return {}
     servers, ends = network["server"], {}
@@ -1778,7 +1781,7 @@ class _Recorded:
 @dataclass
 class Window:
     """One window of an integration's values: ``circuit``'s units under ``run`` (the record's run root, hex) and ``law`` (the
-    proof service's law of the window, as its draw parses it), in members of at most ``cap`` units, with ``advice`` its
+    proof system's law of the window, as its draw parses it), in members of at most ``cap`` units, with ``advice`` its
     compiler and advice (`advice_binding`) when the circuit depends on run-time choices, and ``registered`` the values its
     registered reads read (`committed_reads`), by parameter: each committed once, before the run, as core's
     ``one_stage.registered.Registered`` (rows of the reading port's words, its salts the prover's; a table's in its

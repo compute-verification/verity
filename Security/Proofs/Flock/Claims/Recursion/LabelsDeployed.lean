@@ -1,13 +1,53 @@
-import Proofs.Flock.Claims.Recursion.CopySiteDeployed
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.DeployMargin
-import Proofs.Flock.Claims.Recursion.CoinPos
+module
+
+public import Proofs.Flock.Claims.Recursion.CopySiteDeployed
+public import Proofs.Flock.Claims.Recursion.DeployPremises
+public import Proofs.Properties.Nci.ReadsExact
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.Soundness.Discharge.Layout.QSort
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Claims.Recursion.CoinPos
+import Proofs.Flock.Claims.Recursion.DeployMargin
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Properties.Nci.ReadsExact
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Refine.Walk
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -49,6 +89,7 @@ theorem not_mem_of_any {cs us : Array ℕ} (h : ¬ (cs.any us.contains) = true) 
   intro u hu hm
   exact h (Array.any_eq_true'.2 ⟨u, hu, Array.contains_iff_mem.2 hm⟩)
 
+-- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A draw's units ascend, and so does its closure, which holds no drawn unit**: `UnitDraw.ofJson` refuses any other. -/
 theorem ofJson_asc {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) :
@@ -136,6 +177,7 @@ theorem asc_of_any {a : Array ℕ} {n : ℕ} {b : Bool}
   by_contra hge
   exact this hj0 (Nat.le_of_not_lt hge)
 
+-- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **A registered population's labels ascend, one per instance**: `loadPublic` refuses any other. -/
 theorem loadPublic_asc {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Public}
@@ -155,6 +197,7 @@ theorem loadPublic_asc {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Pub
 
 /-! ## The staged table's public file -/
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 theorem setupH_none {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}

@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.Property
-import Proofs.Flock.Recursive.Private
-import Proofs.Flock.Recursive.FirewallZK
-import Proofs.Flock.Recursive.Loads
-import Proofs.Flock.Recursive.ForkInnerC
+module
+
+public import Proofs.Flock.Recursive.Property
+public import Proofs.Flock.Recursive.Private
+public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Recursive.Loads
+public import Proofs.Flock.Recursive.ForkInnerC
 
 /-!
 # The recursive audit's property: its proof and what it rests on
@@ -33,23 +35,14 @@ files parse to `Vs` (`VStarParses`, until gap 4), and the obligation on our code
 tags their name names (`TagsFound`, `_hF`), which with refusal (5)'s name equation makes them V*'s (`find?_circuit`).
 -/
 
+@[expose] public section
+
 namespace Flock.SecurityProofs
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
-
-/-- **V*'s staging reads only the inner statement's shape**: two statements of one shape (`shapeOf`: their regions'
-bytes aside) give V* as many outer statements, over one class with as many regions (`execClassAt_shape`). -/
-theorem outerStatementsAt_shape {st st' : Flock.Stmt} (h : shapeOf st = shapeOf st') :
-    Flock.Guarantees.outerStatementsAt st = Flock.Guarantees.outerStatementsAt st' := by
-  obtain ⟨hc, hl, -⟩ := execClassAt_shape h
-  show Flock.Guarantees.outerParts (execClassAt st).cls.m (execClassAt st).cls.kLog
-      (2 + 2 * (execClassAt st).regs.length) =
-    Flock.Guarantees.outerParts (execClassAt st').cls.m (execClassAt st').cls.kLog
-      (2 + 2 * (execClassAt st').regs.length)
-  rw [hl, hc]
 
 /-- **A statement of the registration's rows reads a list's first `rt.leaves` commit strings only.** -/
 theorem readsBelow_stmtAt {Ω H : Type} (rt : Flock.Registered.Port) (stmt : (Fin rt.leaves → ByteArray) → Ω → H) :

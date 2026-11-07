@@ -1,6 +1,24 @@
-import Proofs.Flock.C3.RegLevels.SrcOpenRel
-import Proofs.Flock.C3.RegLevels.SrcUnits
-import Proofs.Flock.C3.Opening.SrcCover
+module
+
+public import Proofs.Flock.C3.Opening.SrcCover
+public import Proofs.Flock.C3.Opening.SrcOpening
+public import Proofs.Flock.C3.RegLevels.SrcOpenRel
+public import Proofs.Flock.C3.RegLevels.SrcUnits
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.RegLevels.SrcRun
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # n7's levels: `hR`'s `OpenRel` from R's opening's run
@@ -13,6 +31,8 @@ is the term `wt` at the first of them (`valO`), `tOf` of those elements (`decode
 `hR_of_units` are `levelTie_of_run`'s and `levelTie_of_units`' (so `levelTie_of_reads`') `hR` with that conjunct given
 and the others left; at the units' messages `hT` holds and `OpenTie` is `hmsg`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

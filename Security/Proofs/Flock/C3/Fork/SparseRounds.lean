@@ -1,7 +1,18 @@
-import Proofs.Flock.Soundness.RepSound
-import Definitions.Flock.Holo
-import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.Push
+module
+
+public import Definitions.Flock.Holo
+public import Definitions.Core.Game
+public import Mathlib.Algebra.Polynomial.Degree.Defs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.Rounds
+import Proofs.Flock.Soundness.ZerocheckPhase
+import VCVio.Prelude.Core
 
 /-!
 # The sparse phase's rounds, one coin at a time
@@ -18,6 +29,8 @@ The two coin bounds `sparse_sound` (`C3/Fork/Sparse.lean`) chains, and the algeb
 `cube G` is `G`'s sum over `{0,1}^n` (bit `j` of `b` is coordinate `j`, as in `eqAt`), and a function of degree one in
 each variable is its multilinear extension (`sum_eqAt_mul`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork.SparseCount
 

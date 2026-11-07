@@ -1,7 +1,41 @@
-import Proofs.Flock.Claims.Recursion.VStarParts
-import Proofs.Flock.Claims.Recursion.DeployReg
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarParts
+public import Proofs.Flock.Claims.Recursion.DeployReg
+public import Proofs.Flock.VBridge.Sparse.Laid
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.VBridge.OpeningUnit
-import Proofs.Flock.VBridge.Sparse.Laid
 import Proofs.Flock.VBridge.Sparse.Unit
 
 /-!
@@ -38,8 +72,8 @@ lemma. Which template each part uses:
   `ResReadsAt` (an algebra part at either flag, M's `ResReads` body), `OpeningReadsAt`, `SparseCopyAt`; `PartKindAt` is
   their disjunction. `PartsLinks s` asks it wherever part `s`'s outer relation holds with true recorded calls and its
   coins are shown; `PartsLinksOr s` allows `PartChecks`' fallback instead, a collision among the part's recorded calls
-  (`findColl`) or a tie with the setup's out-of-oracle evaluations at `xO` (`SetupColl`, which `Br` finds: card
-  f93bbff1). `partChecks_of_partsLinks` and `partChecks_of_partsLinksOr` give `PartChecks s` at any shape;
+  (`findColl`) or a tie with the setup's out-of-oracle evaluations at `xO` (`SetupColl`, which `Br`
+  finds). `partChecks_of_partsLinks` and `partChecks_of_partsLinksOr` give `PartChecks s` at any shape;
   `partChecks_holo` at every part of the holo shape. M's dense links are instances (`partsLinks_of_reads`,
   `partsLinks_of_open`).
 * **`PartLogs`** (`partLogs_of_shown_nil`, `partLogs_of_logLinks`, `partLogs_holo`): the algebra, opening and sparse
@@ -52,12 +86,14 @@ lemma. Which template each part uses:
   climbs from different values collide, at `Br`'s setup evaluations or among the recorded calls.
 * **At the holo shape**: `vstarAccepts_holo_of_links` (`VStarAcceptsR`), and the bundles `vstarParts_holo_of_links` and
   `vstarPartsStaging_holo_of_links`, what `codeFacts_of_parts`, `ksA_deployed_parts` and `KS_of_parts` read, with each
-  part a holo part (`HoloPart`, the counterpart of M's `DensePart`: `PartsLinksOr`, and `LogsNil` or `PartsLogLinks`;
+  part a holo part (`HoloPart`: `PartsLinksOr`, and `LogsNil` or `PartsLogLinks`;
   `holoPart_of_open` from M's level links, `holoPart_of_nil` at a part without calls). At
   `deployRec` over the outer record `deployZkRec relation` (`vstarAccepts_holo_deployRec`, `vstarParts_holo_deployRec`,
   `vstarPartsStaging_holo_deployRec`), the outer record parses at `parseOf relation readOfO` by definition, and
   `deployRec` at the layout's readers reads through them (`RecDeploy.readsThrough_deployRec`).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 
@@ -332,7 +368,7 @@ def PartsLinks (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T
 /-- **Part `s`'s links, or a collision the finders charge** (`PartsLinks` with `PartChecks`' fallback): at each
 accepted witness with true recorded calls, either some kind of part's links hold at every coins `xO` shows for part
 `s`, or two of the part's recorded calls collide (`findColl`), or one of them ties with an evaluation the setup makes at
-`xO` outside the oracle (`SetupColl`, which `Br` finds at the run: card f93bbff1). The registration ties (`v`, the zero
+`xO` outside the oracle (`SetupColl`, which `Br` finds at the run). The registration ties (`v`, the zero
 output rows, the levels' `coef`, `dirs` and top) are where a link can fail off a recorded collision. -/
 def PartsLinksOr (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T)
     (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
@@ -543,7 +579,7 @@ theorem partOpens_holo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Co
 
 /-! ## A part at the holo shape -/
 
-/-- **Part `s` at the holo shape** (the holo counterpart of M's `DensePart`): its links for its check or a collision
+/-- **Part `s` at the holo shape**: its links for its check or a collision
 the finders charge (`PartsLinksOr`, any kind of part), and for its calls either none where its coins are shown (the
 algebra, opening and sparse parts, `LogsNil`) or a level's links for them (`PartsLogLinks`). -/
 def HoloPart (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T)

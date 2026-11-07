@@ -1,7 +1,12 @@
-import Proofs.Pouw.PearlC.DeviceCapGamma
-import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
-import Definitions.Pouw.Guarantees.PearlC
-import Proofs.Pouw.PearlC.TTOutW1Variants
+module
+
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.DeviceCapGamma
+public import Proofs.Pouw.PearlC.TTOutW1Variants
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceRev1Gamma
+import Proofs.Pouw.Prob
 
 /-!
 # TT_OUT over U alone: it asserts more than the (C̃, U) row, and γ from it
@@ -16,6 +21,8 @@ Staged; nothing pinned.
 * `gammaU_implies_gamma`: `G_γ^U` gives `G_γ`, since a unit the (C̃, U) verifier accepts is one the U-only verifier
   accepts.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

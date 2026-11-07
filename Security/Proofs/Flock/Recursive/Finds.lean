@@ -1,5 +1,23 @@
-import Proofs.Flock.Recursive.Transfer
-import Proofs.Flock.Recursive.Multi
+module
+
+public import Proofs.Flock.Recursive.Transfer
+public import Proofs.Flock.Recursive.Multi
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # Recursion: forks, the runs of the prover's own strategy that find a SHA-512 collision
@@ -22,6 +40,8 @@ strings.
   (`ksAvgStrictZ_zero`, `linkBoundZC_zero`, `regTermZC_zero`);
 * `ExAt`: a property at some leaf the recursive prover reaches; with none, its negation at every leaf (`allAt_of_not_exAt`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

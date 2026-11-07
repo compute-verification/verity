@@ -1,6 +1,7 @@
-import Mathlib.Data.Matrix.ColumnRowPartitioned
-import Batteries.Data.List.Basic
-import Definitions.Pouw.Fp8Atom.Fp32
+module
+
+public import Mathlib.Data.Matrix.ColumnRowPartitioned
+public import Definitions.Pouw.Fp8Atom.Fp32
 
 /-!
 # Pearl-C's Π (trusted definitions)
@@ -31,6 +32,8 @@ Shapes: `A` and `A′` are `m × k`, `B` and `B̃` are `n × k`, `C̃` and `U` a
 (`m × r`), `F_A` (`k × r`), `E_B` (`n × r`) and `F_B` (`k × r`). Per-row scales are functions of the row index, so the
 scalar `β` of the doc's formulas is a constant function.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

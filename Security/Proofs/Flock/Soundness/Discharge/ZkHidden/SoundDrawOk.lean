@@ -1,5 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
@@ -18,6 +35,8 @@ first half is custody (`DrawFileZK`) and the second is flock-verify's own arithm
   `Law.execOS`, at `mPtsOf c.g (∑ s, ks s)`: `ZkLink.drawOkZK_of_exec`'s proof at setupHidden. `drawOkZKH_of_execG` is
   it at any `g` every session has, and `drawOkZKH_of_execSt` at the statement circuit's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

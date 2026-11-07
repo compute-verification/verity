@@ -1,8 +1,27 @@
-import Proofs.Flock.VBridge.Family.Assembly
-import Proofs.Flock.VBridge.Family.Lig
-import Proofs.Flock.VBridge.Algebra.Sim
-import Proofs.Flock.VBridge.Algebra.LigeritoConverse
-import Proofs.Flock.VBridge.Family.Names
+module
+
+public import Proofs.Flock.VBridge.Family.Assembly
+public import Proofs.Flock.VBridge.Family.Lig
+public import Proofs.Flock.VBridge.Family.Names
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.VBridge.Algebra.Lincheck
+import Proofs.Flock.VBridge.Algebra.RingSwitch
+import Proofs.Flock.VBridge.Algebra.RunSkel
 
 /-!
 # The inner statement's setup, from the hidden statement
@@ -24,6 +43,8 @@ executable statement `Stmt` stands behind it, so the setup the table files are r
 * `vbridgeRead_model`: `vbridgeRead_assembled` at `innerSetup`, without `hne`: with no history and registration,
   `VBridgeRead`'s first two conjuncts are vacuous.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -527,7 +548,7 @@ variable (spec : SessionSpec)
 `ShapeIs`, `FoldsOk` and `CoinsAgree` follow from `ShapeAt`, and `HOpenName` and `HUnitName` from the circuit files'
 emit/parse round trip (`hOpenName_of`, `hUnitName_of`). Without a history and registration
 (`¬ Nonempty (Reg × L.Ω × Reg₂)`), `VBridgeRead`'s first two conjuncts quantify over none and its last two are the
-lanes' (`vDecodesRead_of`, `vFullRead_of`), so `hne` is not needed. -/
+parts' (`vDecodesRead_of`, `vFullRead_of`), so `hne` is not needed. -/
 theorem vbridgeRead_model
     (hshape : F.ShapeAt) (hcount : F.HPartCount)
     (hv : (F.assembled dg N k Rw spec F.innerSetup cap lig own sel bc).HVCoins dg N k Rw)

@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Live
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Soundness.Discharge.Exec.Retained
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Live
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Retained
 
 /-!
 # The target statements of flock-verify `--zk`'s acceptance and its refinement
@@ -25,12 +27,14 @@ Each statement is a `Prop` here; its theorem (`theorem … : G`) is in the file 
 * `AcceptsZKRetained`: under tags that retain rounds, every stream of the accepted record retained every round's bytes.
 
 **Refinement** (one table, against the compiled `--zk` table `G, out, acc` named in `Live.lean`):
-* `ExecRefinesZKOne`: R11 at `--zk`: against any live prover, flock-verify `--zk`'s acceptance is no likelier than the
-  compiled table's acceptance against the simulated prover `simAuditZK … τ`, with `bad = ⊥`, given `DecodesZK`.
+* `ExecRefinesZKOne`: the refinement at `--zk`: against any live prover, flock-verify `--zk`'s acceptance is no likelier
+  than the compiled table's acceptance against the simulated prover `simAuditZK … τ`, with `bad = ⊥`, given `DecodesZK`.
 * `ZkHeadlineExecOne`: the `--zk` headline at flock-verify's acceptance, carried from any bound `B` on the compiled
   audit's `Pr[accept ∧ Q]` at the simulated prover, for any event `Q` of that prover (at least `K` wrong units of its
   committed values): `Pr[flock-verify --zk accepts ∧ Q] ≤ B`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -165,8 +169,8 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {P Cp Op Out : Finset (Fin n) → R
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ) (L : Law n)
 
-/-- **R11 at `--zk`, one table**: against any live prover `τ` of the live audit (`liveTable` written out by `wr`),
-flock-verify `--zk`'s acceptance is no likelier than the compiled `--zk` table's acceptance against the simulated
+/-- **The refinement at `--zk`, one table**: against any live prover `τ` of the live audit (`liveTable` written out by
+`wr`), flock-verify `--zk`'s acceptance is no likelier than the compiled `--zk` table's acceptance against the simulated
 prover `simAuditZK … τ`, with no live event added, whenever every rep's game has a strategy (`hinh`) and the decoder is
 right on accepted sessions (`DecodesZK`). -/
 def ExecRefinesZKOne : Prop :=

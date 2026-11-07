@@ -1,5 +1,8 @@
-import Definitions.Accounting.BoundSketch
-import Mathlib.Analysis.Real.Sqrt
+module
+
+public import Definitions.Accounting.BoundSketch
+public import Mathlib.Analysis.Real.Sqrt
+public import Mathlib.Data.Nat.Prime.Defs
 
 /-!
 # The deployed bound receipt's sketch: what a relay must exchange (trusted)
@@ -14,6 +17,8 @@ independent with given guessing probabilities, which is the ideal tile and the i
 * `BoundSketchRelay`: the same for the deployed sketch of a tile, `r` vectors of `m` bytes against `r` columns of
   `m` bytes: the sketch's trace is that inner product, at `n = r·m`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

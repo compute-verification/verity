@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Prover.Piop
-import Proofs.Flock.Claims.Complete.Zk.Tape
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Piop
+public import Flock.Zk
 
 /-!
 # The masked prover's zerocheck and lincheck
@@ -11,6 +13,8 @@ masked, so its coins are the verifier's. `final_c` is sent masked and absorbed o
 the masked proof part and the true `ZcOut`, `LcOut`, from which the ring switch's claims are drawn (their points are
 the coins', their values unused).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

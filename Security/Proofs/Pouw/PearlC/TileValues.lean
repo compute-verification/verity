@@ -1,6 +1,11 @@
-import Proofs.Pouw.PearlC.TileCircuit
-import Proofs.Pouw.PearlC.PeelExactProofsP
-import Definitions.Pouw.PearlC.Device
+module
+
+public import Proofs.Pouw.PearlC.TileCircuit
+public import Proofs.Pouw.PearlC.PeelExactProofsP
+public import Definitions.Pouw.PearlC.Device
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
 # The tile unit computes the ticket and the useful value (proofs)
@@ -19,6 +24,8 @@ the ticket's value `Accum.chainAt p 4` and `U_ij`'s the useful value `peelExactV
   NaN or an infinity (`k16Step_nonfin`), so their word reads back as `uWord?`'s, `none` once a step leaves the finite
   range, as the useful value does.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TileCircuit
 

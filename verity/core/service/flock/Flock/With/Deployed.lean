@@ -10,11 +10,21 @@ Every table the deployed verifier sets up has the registry's Merkle scheme of it
 `Returns x P` (`Flock.With.Returns`): every value `x` returns satisfies `P`. `returns_walk` (`Flock.With.ReturnsWalk`)
 proves it by walking `x`'s do block with reducible steps only, so a setup is never unfolded past its binds.
 -/
-import Flock.With.ReturnsWalk
-import Flock.HmRow
-import Flock.Witness
-import Flock.With.Eq
-import Flock.With.ZkEq
+module
+
+public import Flock.HmRow
+public import Flock.With.Eq
+public import Flock.With.Returns
+public import Flock.With.ReturnsWalk
+public import Flock.With.Zk
+public import Flock.With.ZkEq
+public import Flock.Witness
+import Flock.Sizes
+import Std.Data.HashMap
+import Std.Data.HashSet
+import Std.Data.TreeMap.Raw.Lemmas
+
+@[expose] public section
 
 namespace Flock.With
 

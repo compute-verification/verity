@@ -1,6 +1,24 @@
-import Proofs.Flock.C3.PubRows.Honest
-import Proofs.Flock.C3.VStarList.Shape
-import Proofs.Flock.VBridge.Sparse.Unit
+module
+
+public import Proofs.Flock.C3.PubRows.Honest
+public import Proofs.Flock.C3.VStarList.Shape
+public import Proofs.Flock.VBridge.Sparse.Unit
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.VBridge.Family.Structure
 import Proofs.Flock.VBridge.Pinned
 
 /-!
@@ -25,6 +43,8 @@ injective, and candidate 3's statements after RecSparse are R's levels and openi
   of their statement (`OwnIn` at `ownAt`), by `checkOwn`'s second and third loops (`checkOwn_ok`,
   `ownIn_of_checkStmt`); `ownIn_checked` is it at the checked family.
 -/
+
+@[expose] public section
 
 namespace FlockC3.PubRows
 

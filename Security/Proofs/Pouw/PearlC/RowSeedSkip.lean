@@ -1,7 +1,10 @@
-import Definitions.Pouw.Assumptions.PearlC.RowSeedAssumptions
-import Proofs.Pouw.PearlC.RowSeedFragment
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.RowSeedAssumptions
+public import Proofs.Pouw.PearlC.RowSeedFragment
+public import Proofs.Pouw.QTree
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
-import Proofs.Pouw.QTree
 
 /-!
 # The fragment corollary: the union bound and `ttOutRowSeed_skipClass` (staging, nothing pinned)
@@ -25,6 +28,8 @@ supporting line: no statement those proofs read is proved here. It takes no TT_O
 * **`rowDrawn_satisfiable`**: (C6) holds on a finite oracle domain, so the corollary's `[Fintype Q]` doesn't make it
   vacuous. (C6) asks for an injective key only on the unit's rows and their 32-bit words, the rows the corollary reads.
 -/
+
+@[expose] public section
 
 namespace Pouw.QTree
 

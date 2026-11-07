@@ -1,4 +1,6 @@
-import PouwCheck
+module
+
+public import PouwCheck.Protocol
 
 /-!
 # PoUW's window check: what its Lean code (`PouwCheck.protocol`) does
@@ -16,6 +18,8 @@ checks first, and what the other verdicts mean. That the check accepts every suc
 What the window's draw guarantees (`Properties.Pouw.Window.DrawMisses`) is the window's property, not the check's: the
 check establishes that the service drew exactly `K′ = kPrime ε δ` distinct units of the registered `N`, all passed.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Check
 

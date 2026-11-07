@@ -1,4 +1,20 @@
-import Proofs.Flock.Soundness.Assumptions.ZkP
+module
+
+public import Proofs.Flock.Soundness.Assumptions.ZkP
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
 
@@ -37,6 +53,8 @@ At the verifier's acceptance at its public inputs `own` (`ZkHidden.AcceptsZKP I 
 The writer takes an accepted record rather than printing one from the outcome: `Json.parse`, which `Record.decode` and
 `recordDraw` read the record through, is a `partial def`, so no proof reads what it returns on a printed record.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.CustodyZkP
 

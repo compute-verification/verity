@@ -1,10 +1,15 @@
-import Proofs.Pouw.Theorem1
-import Proofs.Pouw.Exact
-import Proofs.Pouw.M1
+module
+
+public import Proofs.Pouw.Theorem1
+public import Proofs.Pouw.Exact
+public import Proofs.Pouw.M1
+public import Proofs.Pouw.Lemmas.Game
 
 /-!
 # (d′) §3.3's requirement at the milestone, in budget form
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

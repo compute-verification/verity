@@ -1,4 +1,6 @@
-import Definitions.Core.TC.Pipeline
+module
+
+public import Definitions.Core.TC.Pipeline
 
 /-!
 # The step semantics: `verity.ml.tc.total.tc_dot_total` on BF16 pipelines
@@ -9,6 +11,8 @@ A transcription of `term.py` (`Term`, `bf16_product`, `fp32_term`, `pack_fp32`),
 BF16 words below `2^16`, `k` operand pairs. The Python raises outside it; the theorems take the domain as hypotheses.
 Words are natural numbers and the bit operations are Python's (`>>>` is `>>`, `&&&` is `&`, `|||` is `|`, `^^^` is `^`).
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Spec
 

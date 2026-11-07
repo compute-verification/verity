@@ -1,10 +1,29 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.LiveStatements
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRun
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.LiveStatements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
 import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 import Proofs.Flock.Soundness.Discharge.Exec.Retained
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRun
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsCut
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
 # `RunsZC` at the live `--zk` tables, from `TablesAtZKLive`
@@ -15,6 +34,8 @@ table at `tablesAtZK` (`DrawSetupZK.table`, at the executable's dimensions, pads
 each rep's run (`zk_verifyRep_ok`), `zk_rep_run_plays` makes each run a `RepRun` for `decAtZ` at the result it plays on
 the proof's messages, and `zk_table_verdict` makes the table's verdict accept at the two results.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

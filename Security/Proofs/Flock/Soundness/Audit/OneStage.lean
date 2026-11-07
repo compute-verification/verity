@@ -1,6 +1,14 @@
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Audit.Circuit
+module
+
+public import Definitions.Flock.Audit.Law
+public import Definitions.Flock.Circuit
+public import Definitions.Flock.Game.Prob
+public import Proofs.Flock.Soundness.Audit.Circuit
+public import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.Game.Prob
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # The one-stage audit and its integrity profile
@@ -31,6 +39,8 @@ $$\Pr[\text{accept} \wedge E(X, S)] \le \Pr_S[E(X, S) \wedge S \cap \mathrm{wron
 Its corollaries are the integrity profile (`audit_profile`), the count curve
 `δ(K) = miss K + ε_ks + δ_link` (`audit_count`), and the drawn units (`audit_drawn`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

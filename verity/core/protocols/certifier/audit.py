@@ -22,7 +22,7 @@ set, or other than the unit's, is an `advice` violation in its own window only. 
 its own and earlier windows (`schedule.expected_grids`), so such a sync never changes an earlier window's verdict.
 
 A record may come raw or committed (`commitment`: its digest, with padding elided). A committed record's grid check
-compares its digest with the digest of the Program's grid, which is exact up to a SHA-256 collision.
+compares its digest with the digest of the Program's grid, which is exact up to a SHA-512 collision.
 
 A record may also come certified (`certificate`): the record head, the certifier's salt for it and the network
 certificate, which signs the head's digest under that salt; the head and the salt are witness. The audit checks that

@@ -1,8 +1,26 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Coined
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lane
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.RingSwitch
-import Proofs.Flock.Soundness.ExecSetup
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lane
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.RingSwitch
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckGlue
+public import Proofs.Flock.Soundness.Refine.Setup
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # `innerOf_holds`: the honest prover's pads satisfy the inner proof's constraint at the draw
@@ -11,6 +29,8 @@ import Proofs.Flock.Soundness.ExecSetup
 `hFull` (`h_ab = h_fa·h_fb`, `h_tw = h_tx·h_ty`). By `batch_eval` it holds once every row vanishes at the pads by layout
 index (`batch_of_rows`). The triple's three rows vanish at the honest `(ρ_in, σ_in)` (`triple_rows_zero`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

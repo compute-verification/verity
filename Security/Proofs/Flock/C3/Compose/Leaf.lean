@@ -1,4 +1,19 @@
-import Proofs.Flock.VBridge.Family.Commits
+module
+
+public import Proofs.Flock.VBridge.Family.Commits
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The decoder's last round, read from σ's leaf
@@ -9,6 +24,8 @@ decoder's mask: stage `i`'s commit strings (`skOf`) at the committed rounds `i +
 last. At the committed rounds its mask is `skOf`'s (`maskOf_skLeaf`), so `MsgsReadC3` reads those rounds from their
 commit strings and the last from every read wire of the layers; `vDecodesR_wmsgLeaf` is `VBridgeC`'s decoding at it.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

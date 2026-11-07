@@ -4,8 +4,13 @@ registration and to that law (`checkDraw`), and the proved statement's units hel
 their rules, the law object and the samplers are C-Flock's (`Flock.Draw`). The check samples nothing: the draw comes from
 the challenger's coins, raw bytes with no derivation, which `drawFirst` reads as `coins.draw_first` does.
 -/
-import Flock.Draw
-import SampledProofs.Partition
+module
+
+public import SampledProofs.Partition
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Draw
 
@@ -31,7 +36,7 @@ def deriveLaw (p : Program) (query law : Json) (table : Option Json) : V (Option
 def derive (p : Program) (query law : Json) (table : Option Json) : V Json :=
   return ((← deriveLaw p query law table).map (·.toJson)).getD law
 
-/-- `draw.same_law`: the same canonical bytes. -/
+/-- `draw.same_design`: the same canonical bytes. -/
 def sameLaw (a b : Json) : Bool := jeq a b
 
 /-- `draw.law_of`: the law a draw names. -/

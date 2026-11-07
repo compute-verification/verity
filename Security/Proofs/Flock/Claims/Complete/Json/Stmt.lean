@@ -1,9 +1,56 @@
-import Proofs.Flock.Claims.Complete.Json.Session
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Decode
+public import Proofs.Flock.Claims.Complete.Json.Parse
+public import Proofs.Flock.Claims.Complete.Skeleton
+public import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
+import Batteries.Tactic.OpenPrivate
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Discharge
+import Proofs.Flock.Claims.JsonNorm
+import Proofs.Flock.Claims.Scope.Check
+import Proofs.Flock.Claims.Scope.Sizes
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Claims.Complete.Json.Parse
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Refine.Walk
+import Std.Data.TreeMap.Raw.Lemmas
+import Std.Data.TreeMap.Raw.WF
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # What the record needs of the statement, from its setup
@@ -13,7 +60,7 @@ to the statement's instances (`DrawOk`), and the statement's draw is the one it 
 setup alone, with no premise on the JSON library: the verifier keeps what it parsed rebuilt (`Flock.norm`), and the coin
 tree its coins name.
 
-* The plain verifier's coins are the OS's or a seed's (`Raw.ins`: only `--zk` keys a coin tree), and the statement
+* The plain verifier's coins are a seed's (`Raw.ins`: only `--zk` keys a coin tree), and the statement
   keeps the coins' tree (`Stmt.coinTree`, `setupOne_stmt`), so it names none (`tree?_none`). The scope check
   (`ProvedScope.check`) reads no coins, so it is `Raw.ins`, not the scope, that keeps a keyed coin tree out of the plain
   verifier's statements.
@@ -26,6 +73,8 @@ tree its coins name.
   printable.
 -/
 
+@[expose] public section
+
 namespace FlockComplete.JsonRT
 
 open Flock FlockDeploy
@@ -36,10 +85,9 @@ open private stratumOfJson from Flock.Draw
 
 /-! ## The statement's inputs -/
 
-/-- What `Raw.ins` reads: the masked verifier or not, the plain verifier's coins (the OS's or a seed's), and the
-draw. -/
+/-- What `Raw.ins` reads: the masked verifier or not, the plain verifier's coins (a seed's), and the draw. -/
 theorem Raw.ins_read {w : Raw} {s : Ins} (h : w.ins = .ok s) :
-    s.read.zk = w.zk ∧ (w.zk = false → s.read.I.coins = .os ∨ s.read.I.coins = .seed) ∧
+    s.read.zk = w.zk ∧ (w.zk = false → s.read.I.coins = .seed) ∧
       ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
   refine ⟨Raw.ins_zk h, ?_, Raw.ins_draw h⟩
   unfold Raw.ins at h
@@ -326,10 +374,10 @@ theorem good_arr_strs (a : Array String) : Good (Json.arr (a.map Json.str)) :=
     obtain ⟨y, -, rfl⟩ := Array.mem_map.1 hx
     exact .str _
 
-/-- **The plain verifier's coins name no coin tree**: the OS's coins or a seed's (`Coins.tree?`), which the statement
-keeps as its `coinTree`. -/
-theorem tree?_none {coins : Coins} (hc : coins = .os ∨ coins = .seed) : coins.tree? = none := by
-  rcases hc with rfl | rfl <;> rfl
+/-- **The plain verifier's coins name no coin tree**: a seed's (`Coins.tree?`), which the statement keeps as its
+`coinTree`. -/
+theorem tree?_none {coins : Coins} (hc : coins = .seed) : coins.tree? = none := by
+  subst hc; rfl
 
 /-! ## A stratified draw that decodes is printable -/
 

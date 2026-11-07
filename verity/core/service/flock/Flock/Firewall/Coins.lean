@@ -18,9 +18,12 @@ coin it hands on: the session's `Hello` (the spec, the link points' count and th
 the key), then each opening in the order the prover asks for them. The first refusal ends the session: nothing after it
 is checked, so no coin after a refused opening is handed on.
 -/
-import Flock.CoinTree
-import Flock.Hm96
-import Flock.JsonParse
+module
+
+public import Flock.CoinTree
+public import Flock.Hm96
+
+@[expose] public section
 
 namespace Flock.Firewall.Coins
 

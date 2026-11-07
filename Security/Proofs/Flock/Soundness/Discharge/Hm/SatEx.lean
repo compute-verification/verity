@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.ExecTyped
-import Proofs.Flock.Soundness.ExecTemplatePlace
+module
+
+public import Proofs.Flock.Soundness.ExecTemplatePlace
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 /-!
 # Satisfaction off a set of rows
@@ -13,6 +17,8 @@ of the `sha512x3` and `hm96` slots, the pin and the regions only, so they hold a
 * `UnitIn c x`: `x` is an input row of a unit slot, the rows `SatEx` leaves out at public inputs;
 * `CopyRow.block_eq_ex`, `ZeroRow.block_eq_ex`: `CopyRow.block_eq` and `ZeroRow.block_eq` at a row off `D`.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

@@ -1,4 +1,23 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # An output row's shape
@@ -9,6 +28,8 @@ A `sha512/row/v1` row is the first (`out_rows_v1`), so its output rows are one p
 `outGroup_single`) and whole blocks (`ParseFacts.portWords`). `HmRow.rowPorts` derives a bit row's words and compressions
 from its length in bits (`rowPorts_v2`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

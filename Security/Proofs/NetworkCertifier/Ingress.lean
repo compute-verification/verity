@@ -1,4 +1,10 @@
-import Proofs.NetworkCertifier.Advice
+module
+
+public import Proofs.NetworkCertifier.Advice
+public import Definitions.NetworkCertifier.Ingress
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.NetworkCertifier.Counting
+import Proofs.NetworkCertifier.Occupancy
 
 /-!
 # The ingress timing bound
@@ -8,6 +14,8 @@ import Proofs.NetworkCertifier.Advice
 the wire. On runs whose statuses are complete and whose frames follow the prescribed content, a record sequence is
 determined by its occupancy counts and its jitter classes.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

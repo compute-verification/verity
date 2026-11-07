@@ -1,9 +1,25 @@
-import Proofs.Accounting.Tag.Basic
-import Proofs.Accounting.Tag.PolyHash
-import Proofs.Accounting.Tag.PartialRead
-import Proofs.Accounting.Tag.Signs
-import Proofs.Accounting.Tag.LittlewoodOfford
-import Proofs.Accounting.Tag.SketchExact
+module
+
+public import Proofs.Accounting.Tag.Basic
+public import Proofs.Accounting.Tag.PolyHash
+public import Proofs.Accounting.Tag.PartialRead
+public import Proofs.Accounting.Tag.Signs
+public import Proofs.Accounting.Tag.LittlewoodOfford
+public import Proofs.Accounting.Tag.SketchExact
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The block tags' guarantees
@@ -18,6 +34,8 @@ Each statement of `Definitions/Accounting/Guarantees/Tag.lean` and `Definitions/
 * `Tag/SketchExact.lean`: the ±1 sketch on sm_120's E4M3 tensor cores is exact, and so collides as rarely;
 * `Tag/LittlewoodOfford.lean`: Erdős's anti-concentration bound for one row under partial reads.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Tag
 

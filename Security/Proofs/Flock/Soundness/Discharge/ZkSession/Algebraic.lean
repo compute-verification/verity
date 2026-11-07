@@ -1,6 +1,17 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Level0
-import Proofs.Flock.Soundness.OpeningPhase
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Level0
+public import Proofs.Flock.Soundness.OpeningPhase
+public import Mathlib.RingTheory.Henselian
+public import Mathlib.RingTheory.RegularLocalRing.Defs
+public import Mathlib.RingTheory.SimpleRing.Principal
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
 import Proofs.Flock.Soundness.Game.Union
+import VCVio.Prelude.Core
 
 /-!
 # C-Flock ZK's masked algebraic phase (live/PROTOCOL.md §1, §2, §4)
@@ -24,6 +35,8 @@ clear rep's (`Model.repPad`) acceptance probability (`repMaskedZK_couple`). Unma
 strategy into a clear one; the forms evaluate at `h` to the clear values, and a row vanishing at `h` is the clear check it
 replaces (characteristic 2).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 

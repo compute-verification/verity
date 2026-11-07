@@ -1,20 +1,23 @@
-import Std.Data.HashMap
-import Flock.Keccak
-import Flock.Program
-import Flock.RegKnown
-import PouwCommit.Frame
-import PouwCheck.Chunks
-import PouwCheck.Json
-import PouwCheck.Opening
-import PouwCheck.Pass
-import PouwCheck.Rounds
-import PouwWindow.Draw
-import PouwWindow.Rounds
-import SampledProofs.ChallengerCoins
-import SampledProofs.ChallengerSession
-import SampledProofs.PyJson
-import SampledProofs.Registered
-import Identity.Domains
+module
+
+public import Std.Data.HashMap
+public import Flock.Bytes
+public import Flock.Hash
+public import Flock.Program
+public import Flock.RegKnown
+public import PouwCommit.Frame
+public import PouwCheck.Chunks
+public import PouwCheck.Json
+public import PouwCheck.Opening
+public import PouwCheck.Pass
+public import PouwCheck.Rounds
+public import PouwWindow.Draw
+public import PouwWindow.Rounds
+public import SampledProofs.ChallengerCoins
+public import SampledProofs.ChallengerSession
+public import SampledProofs.PyJson
+public import SampledProofs.Registered
+public import Identity.Domains
 
 /-!
 # A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`)
@@ -113,6 +116,10 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
 
 Every refusal is (code, why), the first rule the input breaks, with Python's words.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwCheck.Credit
 
@@ -1051,11 +1058,14 @@ def OK_VALUE : String := "ok"
 /-- `core_check.OK_ROW`: the ok row the verifier accepts, a unit's one output bit, 1, in its one word (h1_prove's). -/
 def OK_ROW : Array Nat := #[1]
 /-- `core_check.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's). -/
-def OK_SALT_TAG : ByteArray := "verity/pouw/h1-prove/ok-row-salt/v0".toUTF8.push 0
+def OK_SALT_TAG : ByteArray := Domains.POUW_H1_OK_ROW_SALT.toUTF8.push 0
 
-/-- `core_check.ok_salt`: SHAKE-256 of `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position), `PouwCheck.saltBytes` bytes. -/
+/-- `core_check.ok_salt`: `PouwCheck.saltBytes` bytes of SHA-512 in counter mode, `SHA-512(msg ‖ u32be c)` for
+`c < PouwCheck.saltBytes / 64`, each output whole, over msg = `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position). -/
 def okSalt (context : String) (position : Nat) : ByteArray :=
-  Flock.Keccak.shake256 ((OK_SALT_TAG ++ context.toUTF8).push 0 ++ PouwCommit.be8 position) PouwCheck.saltBytes
+  let msg := (OK_SALT_TAG ++ context.toUTF8).push 0 ++ PouwCommit.be8 position
+  (List.range (PouwCheck.saltBytes / 64)).foldl (fun acc c => acc ++ Flock.Sha512.hash (msg ++ Flock.be32 c.toUInt32))
+    ByteArray.empty
 
 /-- `core_check.public_words`: `PouwCheck.publicRow` as a `row/v2` row of 16-bit leaves, word w its bytes 2w (low) and
 2w + 1. -/
@@ -2265,7 +2275,6 @@ example : ROUND_TAG = Domains.POUW_H1_ROUND_A := rfl
 example : COMMIT_TAG = Domains.POUW_H1_COMMIT.toUTF8.push 0 := rfl
 example : COMMIT_FORMAT = Domains.REGISTRATION := rfl
 example : SCHEMA = Domains.IR_DESCRIPTOR := rfl
-example : OK_SALT_TAG = Domains.POUW_H1_OK_ROW_SALT.toUTF8.push 0 := rfl
 example : REQUESTS_IDS_TAG = Domains.POUW_H1_REQUEST_IDS := rfl
 example : WEIGHTS_TAG = Domains.POUW_H1_WEIGHTS := rfl
 

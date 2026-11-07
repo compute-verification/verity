@@ -1,4 +1,32 @@
-import Proofs.Flock.Soundness.Discharge.PlainJ.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainJ.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Reps
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Proofs.Flock.Soundness.Discharge.Tables.Accepts
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The decoder is right at a plain session of `J` tables
@@ -14,6 +42,8 @@ outcome flock-verify accepts, at table `j`:
 * `accepts_reps_at` gives each rep's run and rounds and the salted verdict; `repRun_at` makes each run a `RepRun` for
   `decJ`, and `playsT_of_repRun` a run on its tape.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainJ
 
@@ -67,6 +97,7 @@ private theorem stmtOf_congr {a b : Flock.Stmt} (h : a = b) (ha : StmtWF a) (hb 
 variable {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
   {d₀ : Lean.Json} (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
 
+-- one proof down the opened statement's decode (`opnPJ`), a bind step per value it reads and `rw` on each
 set_option maxHeartbeats 4000000 in
 /-- **The decoder is right at a plain session of `J` tables** (R11b at `--plain-tables --session-tables J`): given the
 tags, `wr` the challenger's record and the challenger's draws setting each table up at `mPts` link points, `DecodesOnJ`

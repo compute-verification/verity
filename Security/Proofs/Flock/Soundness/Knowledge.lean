@@ -1,5 +1,10 @@
-import Proofs.Flock.Soundness.CompiledTable
-import Proofs.Flock.Soundness.Extract
+module
+
+public import Definitions.Flock.Extract
+public import Proofs.Flock.Soundness.CompiledTable
+public import Proofs.Flock.Soundness.Extract
+public import Proofs.Flock.Soundness.Game.Runs
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # Knowledge soundness of one table (README.md §1.3)
@@ -25,6 +30,8 @@ chosen from `ε` and `adv₀`; the joint form is best at `K = √(N₀/(e·adv�
 `K·adv₀ + N₀/(eK) = 2√(N₀·adv₀/e)`. An efficient extractor, as recursion's proof of knowledge needs,
 doubles `K` until a satisfying witness is found, a decidable stop.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

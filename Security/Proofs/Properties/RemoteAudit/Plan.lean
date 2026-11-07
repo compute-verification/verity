@@ -1,7 +1,9 @@
+module
+
+public import Proofs.Properties.RemoteAudit.Bisect
+public import Proofs.Properties.RemoteAudit.Sort
+public import Properties.RemoteAudit
 import Batteries.Tactic.OpenPrivate
-import Properties.RemoteAudit
-import Proofs.Properties.RemoteAudit.Bisect
-import Proofs.Properties.RemoteAudit.Sort
 
 /-!
 # A pass's plan reads distinct blocks (`PlanReadsDistinct`, `ChangedReadsDistinct`)
@@ -13,6 +15,10 @@ survives the sort's permutation back to the runs as given. Two positions in one 
 two in different runs can't share a block (`readsDistinct_of`). `Plan.changed` returns `Plan.make?` of the runs it
 builds, or `none` (`changed_make`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open RemoteAudit
 

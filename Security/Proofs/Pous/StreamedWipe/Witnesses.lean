@@ -1,6 +1,9 @@
+module
+
+public import Definitions.Pous.Claims.StreamedWipeServer
+public import Proofs.Pous.StreamedWipe.Honest
+import Mathlib.Basic.ENNReal.Inv
 import Mathlib.Data.Fintype.BigOperators
-import Definitions.Pous.Claims.StreamedWipeServer
-import Proofs.Pous.StreamedWipe.Honest
 
 /-!
 # The streamed-label wipe per server: each claim's honest and nontrivial lemmas
@@ -25,6 +28,8 @@ bound (`keepNothing_within`, `honest_within`). The PRF term is the advantage of 
 at `Accepts`, `wipeDistinguisherBy` and `winRealBy` are `StreamedWipe.wipeDistinguisher P` and `StreamedWipe.winReal`
 (`wipeDistinguisherBy_accepts`, `winRealBy_accepts`).
 -/
+
+@[expose] public section
 
 namespace Pous.Claims
 

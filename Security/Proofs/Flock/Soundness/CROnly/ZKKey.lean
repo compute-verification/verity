@@ -1,4 +1,16 @@
+module
+
+public import Definitions.Core.Game
+public import Definitions.Flock.ZK.Cut
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+public import Proofs.Flock.Soundness.ZK.Adaptivity
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.CROnly.Hm96Sha512
 import Proofs.Flock.Soundness.CROnly.ZK
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Lemma C at a uniform hm96 key
@@ -11,6 +23,8 @@ salt hashes under key `κ`. Here the key is drawn uniformly, first and independe
 `H(leaf_prefix(key) ‖ ·)` with `leaf_prefix(key) = leaf tag ‖ H(key)` (`hm96/PROTOCOL.md` §2). So Lemma C needs of the
 key only that it is uniform.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

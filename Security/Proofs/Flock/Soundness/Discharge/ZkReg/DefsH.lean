@@ -1,4 +1,14 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+module
+
+public import Flock.Registered
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import VCVio.Prelude.Core
 
 /-!
 # The registered reads of a hidden-output `verify --zk --registered F` session
@@ -8,6 +18,8 @@ hidden outputs too (`Stmt.setupHidden`, the default `--statement`), as `AcceptsZ
 differs is the drawn statement: setupHidden's is `HmOut.drawn c pub d`, `HmRow.drawn` at the circuit without its output
 words. `OwnReadsH` and `regPathsH` are `OwnReads` and `regPaths` at that drawn statement.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

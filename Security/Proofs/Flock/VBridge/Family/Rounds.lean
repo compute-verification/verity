@@ -1,4 +1,20 @@
-import Proofs.Flock.VBridge.Family.Commits
+module
+
+public import Proofs.Flock.VBridge.Family.Commits
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # The family's reads files, round map and round commitments
@@ -27,6 +43,8 @@ The tops (`rec-top-L<l>`) are no commit strings: a RecOpen instance reads its le
 the verifier's query coins draw after the cap's round, so no digest the round's commitment fixes is registered at a top
 row and `VCommits` cannot hold there.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

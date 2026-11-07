@@ -1,5 +1,11 @@
+module
+
+public import Definitions.Pouw.PearlC.DeviceFp4Hot
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Definitions.Pouw.PearlC.DeviceFp4Issue
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.TileGamma
-import Definitions.Pouw.PearlC.DeviceFp4Hot
 
 /-!
 # Pearl-C4 v2's price twins, at any FP32 price and scale path (staged)
@@ -17,6 +23,8 @@ import Definitions.Pouw.PearlC.DeviceFp4Hot
 Held, as the rest of the FP4 delta is: `tt-out/fp4-sm120` is rated D until the base-split fix, and TT_OUT at the v2
 protocol is its T1 form.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -1,6 +1,12 @@
-import Definitions.Pouw.PearlC.Tile4Circuit
+module
+
+public import Definitions.Pouw.PearlC.Tile4Circuit
+public import Proofs.Pouw.PearlC.PeelFp4Proofs
+public import Proofs.Pouw.PearlC.TileCircuit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Circuit
 import Proofs.Pouw.PearlC.TileValues
-import Proofs.Pouw.PearlC.PeelFp4Proofs
 
 /-!
 # Pearl-C4's tile unit computes `C̃` and `U` (proofs)
@@ -20,6 +26,8 @@ is correct carries them (`tile4_correct`), and they read back as the record `dev
   reconcile, and the ticket reads back directly (`tile4_ticket`).
 * **U** (`tile4Val_uFold`): the four K16 steps from `C̃`'s word, as in `pc8`'s tile (`TileCircuit.uFold`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TileCircuit
 

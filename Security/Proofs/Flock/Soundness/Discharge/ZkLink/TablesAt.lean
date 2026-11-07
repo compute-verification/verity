@@ -1,11 +1,34 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
-import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
-import Proofs.Flock.Soundness.Discharge.ZkSession.Session
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
-import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
+module
+
+public import Mathlib.Tactic.ENatToNat
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
+public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+import all Init.Data.Nat.Power2.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The `--zk` table at each draw, from flock-verify's setup (statements)
@@ -32,6 +55,8 @@ witness satisfies (as `tableAt`'s `refusedC`).
   the m check (`schedule_zk`), the inner code's length (`innerN_pow`) and its query positions' uniformity
   (`prCoin_innerPos_le`), and the table the same at every `DrawSetupZK` of a draw (`tableZK_eq`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

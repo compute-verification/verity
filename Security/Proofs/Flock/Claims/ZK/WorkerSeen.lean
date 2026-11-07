@@ -1,4 +1,22 @@
-import Proofs.Flock.Claims.ZK.Worker
+module
+
+public import Proofs.Flock.Claims.ZK.Worker
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Rewinding
+import Proofs.Flock.Soundness.ZK.Adaptivity
+import Proofs.Flock.Soundness.ZK.Blocks
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.RealLeaves
+import Proofs.Flock.Soundness.ZK.SHVZK
+import Proofs.Flock.Soundness.ZK.Session
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # Lemma B at values read from what the workers see
@@ -23,6 +41,8 @@ stays (`swView_fix`), elsewhere it is `shift`. Then level 0's hidden leaves go i
 * `mix_shvzk_hm96`, `fam_sw_shvzk_hm96`: Lemma B in that order, for one table and jointly at `J` tables, whose values
   read every table's seen randomness.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.Table
 

@@ -1,4 +1,21 @@
-import Proofs.Flock.VBridge.Family.Rep
+module
+
+public import Proofs.Flock.VBridge.Family.Rep
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.VBridge.Algebra.BitsOk
 
 /-!
 # VBridge G at V*'s family: the openings' rows, `α` and `rec-acc`'s running sums
@@ -26,6 +43,8 @@ level climbs (`H ≥ 1`). This file reads the openings from the layers themselve
   registration's `rec-acc` (`HAccRows`). `hReads_of`: `HReads`, from `HAccRows` and the algebra reading `V` at the reps'
   ends (`HEnds`, which `readsEnds_of_regBits` gives).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

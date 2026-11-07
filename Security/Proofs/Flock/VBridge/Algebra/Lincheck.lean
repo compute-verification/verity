@@ -1,5 +1,16 @@
-import Proofs.Flock.VBridge.Algebra.Zerocheck
-import Proofs.Flock.Soundness.Refine.Lincheck
+module
+
+public import Flock.Statement
+public import Proofs.Flock.Soundness.Refine.Lincheck
+public import Proofs.Flock.VBridge.Algebra.Eval
+public import Proofs.Flock.VBridge.Algebra.Zerocheck
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Level3.Folded
+import Proofs.Flock.Soundness.Refine.Arith
+import VCVio.Prelude.Core
 
 /-!
 # V*'s lincheck residual is zero only when the lincheck's checks pass
@@ -14,6 +25,8 @@ the verifier's `CircuitFold.folded` at `lincheck`'s fold points. The rounds are 
 `lincheck_coins` says which rounds `lincheck` draws its points from, `lincheck_of_residuals_dec` is the stage at a rep,
 and `lincheck_of_residuals` is it at a plain shape, where the comb w holds is the comb.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

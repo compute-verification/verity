@@ -7,6 +7,7 @@ defaultTargets = ["Proofs"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "Arklib"
@@ -47,8 +48,9 @@ path = "../Properties"
 
 [[lean_lib]]
 name = "Proofs"
-roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.NetworkCertifier", "Proofs.Flock",
-  "Proofs.Accounting", "Proofs.Hash", "Proofs.Population", "Proofs.Properties.Pouw", "Proofs.Properties.Pouw.Check",
+roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.NetworkCertifier",
+  "Proofs.Flock", "Proofs.Accounting", "Proofs.Hash", "Proofs.Population", "Proofs.WeightSecurity",
+  "Proofs.Properties.Pouw", "Proofs.Properties.Pouw.Check",
   "Proofs.Properties.Pouw.Commit", "Proofs.Properties.Pouw.LiveSalt", "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon", "Proofs.Properties.Pouw.LiveSalt.Coin", "Proofs.Properties.Pouw.Strata",
   "Proofs.Properties.Nci", "Proofs.Properties.CertifierDevice", "Proofs.Properties.Pous",
@@ -60,17 +62,45 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Nci.Walk", "Proofs.Properties.Nci.Resolve", "Proofs.Properties.Nci.BodiesOk",
   "Proofs.Properties.Nci.Width", "Proofs.Properties.Nci.Novel", "Proofs.Properties.Nci.BaselineSteps",
   "Proofs.Properties.Nci.Baseline", "Proofs.Properties.Nci.OperandsResolve", "Proofs.Properties.Nci.Agrees",
-  "Proofs.Properties.SampledProofs", "Proofs.Properties.SampledProofs.Halt", "Proofs.Properties.Evaluate",
+  "Proofs.Properties.SampledProofs", "Proofs.Properties.SampledProofs.Halt",
+  "Proofs.Properties.SampledProofs.Bits", "Proofs.Properties.Evaluate",
   "Proofs.Properties.NetworkRecords", "Proofs.Properties.NetworkPeriod", "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.NetworkScan", "Proofs.Properties.RemoteAudit",
   "Proofs.Properties.RemoteAudit.Coins", "Proofs.Properties.RemoteAudit.Frozen", "Proofs.Properties.RemoteAudit.Order",
   "Proofs.Properties.RemoteAudit.Pooled", "Proofs.Properties.Accounting.Served", "Proofs.Properties.RemoteAudit.Line",
   "Proofs.Properties.RemoteAudit.Schedule", "Proofs.Properties.RemoteAudit.Shared",
   "Proofs.Properties.RemoteAudit.SharedLink", "Proofs.Properties.RemoteAudit.Live",
-  "Proofs.Properties.RemoteAudit.Component", "Proofs.Flock.Claims.Bridge.CustodyZkP", "Proofs.Properties.Verity.SampledCoins",
+  "Proofs.Properties.RemoteAudit.Subprotocol", "Proofs.Flock.Claims.Bridge.CustodyZkP", "Proofs.Properties.Verity.SampledCoins",
+  "Proofs.Properties.Verity.Sampled.Deployed",
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.Nci.ReadsExact",
-  "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Pous.WipeSigned",
-  "Proofs.Properties.Challenger", "Proofs.Properties.Firewall", "Proofs.Properties.Core.Site",
-  "Proofs.Properties.Nci.Protocol", "Proofs.Properties.Verity.Soundness", "Proofs.Properties.Remote",
-  "Proofs.Properties.Remote.Honest", "Proofs.Properties.Verity.Recursive", "Proofs.Properties.Verity.Recursive.Target",
-  "Proofs.Properties.Verity.Recursive.Refusals"]
+  "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Challenger.Limits",
+  "Proofs.Properties.Challenger.Session", "Proofs.Properties.Challenger.CanonRead",
+  "Proofs.Properties.Challenger.Window", "Proofs.Properties.Challenger.Coins", "Proofs.Properties.Core.Site",
+  "Proofs.Properties.Nci.Protocol", "Proofs.Properties.Verity.Soundness", "Proofs.Properties.Verity.Sampled",
+  "Proofs.Properties.Verity.Sampled.Binding", "Proofs.Properties.Verity.Sampled.Device",
+  "Proofs.Properties.Verity.Sampled.Messages", "Proofs.Properties.Verity.Sampled.Walk",
+  "Proofs.Properties.Verity.Sampled.Coupling", "Proofs.Properties.Verity.Sampled.Project",
+  "Proofs.Properties.Verity.Sampled.CoinMap", "Proofs.Properties.Verity.Sampled.Moves",
+  "Proofs.Properties.Verity.Sampled.Accepts", "Proofs.Properties.Verity.Sampled.Assembled",
+  "Proofs.Properties.Verity.Sampled.Decoders", "Proofs.Properties.Verity.Sampled.DigestTie",
+  "Proofs.Properties.Verity.Sampled.Layout", "Proofs.Properties.Verity.Sampled.RecordRounds",
+  "Proofs.Properties.Verity.Sampled.ParseBridge", "Proofs.Properties.Verity.Sampled.Link",
+  "Proofs.Properties.Verity.Sampled.LinkTrees", "Proofs.Properties.Verity.Sampled.LinkRead",
+  "Proofs.Properties.Verity.Sampled.LinkPts", "Proofs.Properties.Verity.Sampled.RecordDraw",
+  "Proofs.Properties.Verity.Sampled.Readings", "Proofs.Properties.Verity.Sampled.Stops",
+  "Proofs.Properties.Verity.Sampled.OpenEmpty", "Proofs.Properties.Verity.Sampled.OpenGap",
+  "Proofs.Properties.Verity.Sampled.TreeMask", "Proofs.Properties.Verity.Sampled.TreeGap",
+  "Proofs.Properties.Verity.Sampled.Counts", "Proofs.Properties.Verity.Sampled.RoundsRead",
+  "Proofs.Properties.Verity.Sampled.SpecTie", "Proofs.Properties.Verity.Sampled.MovesReach",
+  "Proofs.Properties.Verity.Sampled.RootB", "Proofs.Properties.Verity.Sampled.LinkFirst",
+  "Proofs.Properties.Verity.Sampled.MovesLayout", "Proofs.Properties.Verity.Sampled.Held",
+  "Proofs.Properties.Verity.Sampled.SampleNamed", "Proofs.Properties.Verity.Sampled.Digest",
+  "Proofs.Properties.Verity.Sampled.MovesReachAt", "Proofs.Properties.Verity.Sampled.OpenErr",
+  "Proofs.Properties.Verity.Sampled.LeafErr", "Proofs.Properties.Verity.Sampled.Charge",
+  "Proofs.Properties.Verity.Sampled.CouplingAt", "Proofs.Properties.Verity.Sampled.CountsLayout",
+  "Proofs.Properties.Verity.SampledDraw", "Proofs.Properties.Verity.SampledLog", "Proofs.Properties.Verity.SampledRead",
+  "Proofs.Properties.Remote", "Proofs.Properties.Remote.Honest", "Proofs.Properties.Verity.Recursive",
+  "Proofs.Properties.Verity.Recursive.Target", "Proofs.Properties.Verity.Recursive.Refusals",
+  "Proofs.Properties.Verity.Subprotocols", "Proofs.Properties.Verity.Coupling", "Proofs.Properties.Pous.WipeSigned",
+  "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine", "Proofs.Properties.Challenger.Drawn",
+  "Proofs.Properties.Firewall"]

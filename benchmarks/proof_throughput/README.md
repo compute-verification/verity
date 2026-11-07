@@ -24,7 +24,9 @@ stratified sampling design the Lean verifier's soundness covers:
    `flock-circuit` with CUDA for sm_120, stages the whole population (the same staged statement for every B) and checks its
    instances against the manifest outside any GPU lease, then proves `WARM` warm and `RUNS` timed sessions on one GPU taken
    by `gpu-lease` (the kernel-engineering skill's sharing rule), with live coins from a loopback `flock-circuit serve`
-   (`FC_COINS=os`). The server samples each session's B units at its Register by the verifier's law (`serve --draw-law`,
+   on the challenger's keyed coin tree (`FC_COINS=tree`, `serve --tree-from`: `70-class-sweep.sh` gives the server its own
+   challenger and accepts the point only if the challenger's audit holds every session's record to its release log, which the
+   bundle carries). The server samples each session's B units at its Register by the verifier's law (`serve --draw-law`,
    `law.json`: core's `one_stage.draw.derive` of `stratified:B` over the population's program and its
    `Q_template_instance` partition), and the session proves those units only. ZK is off. The statement gives every
    coordinate its own rows (`FLOCK_OWN_ROWS=1`), x included: the verifiers refuse a plain statement whose public file shares
@@ -33,7 +35,7 @@ stratified sampling design the Lean verifier's soundness covers:
    the public file and every session in the evidence store as one bundle (`out/bundle.json`) and writes the contract
    result with the live verdicts only.
 2. **Verifier run** (`verify.sh`, a `research run --on vy-nebius-cpu-3` or `-cpu-2` job, tool `proof_throughput_verifier`):
-   builds the compiled Lean verifier (`flock-verify`, `verity/core/service/flock/`), runs `flock-verify verify --coins os
+   builds the compiled Lean verifier (`flock-verify`, `verity/core/service/flock/`), runs `flock-verify verify --coins tree
    --program P --stratified B --partition F` on every session of the bundle one at a time under `/usr/bin/time`, with its
    own copies of the population's program and of the `verity/partition/v1` object the circuit binds (derived from the
    workload, checked against the circuit's META, not taken from the bundle). The verifier derives the stratified sampling design for B
@@ -43,7 +45,7 @@ stratified sampling design the Lean verifier's soundness covers:
 
 **Counted sessions.** A session counts toward throughput only if the Lean verifier accepts it. A sweep that proves the
 whole staged set with no sample passes every check, and the verifier refuses it under D12
-(`verity/ml/flock/verifier/PROTOCOL.md` §16.15). Such runs are labelled "checks pass, refused under D12 (no sample)", a result of that kind fails with that label in its detail (`verify.lean_drawless`),
+(`Flock.ProvedScope`). Such runs are labelled "checks pass, refused under D12 (no sample)", a result of that kind fails with that label in its detail (`verify.lean_drawless`),
 and `table` and `baseline` read none of them.
 
 ## The result contract
@@ -80,7 +82,8 @@ the sweep's results, `table --baseline` renders it, and a candidate is `compare`
 
 R_native is the H200's dense peak for the workload's number format. The census has no H200 line, and the H200 has the
 H100 SXM5's tensor cores and clocks (it differs in memory), so the profiles' anchors are the H100 SXM5's dense peaks:
-`bf16-hopper-mma-draft/2026-09-22` (989.4 TFLOPS bf16) and `fp8-hopper-wgmma-draft/2026-09-22` (1978.9 TFLOPS e4m3).
+the frozen bf16 and fp8 Hopper input sets, `workloads.BF16` (989.4 TFLOPS bf16) and `workloads.FP8` (1978.9 TFLOPS
+e4m3).
 
 ## The verifier's profile
 

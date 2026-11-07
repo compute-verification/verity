@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.LockRep
-import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.LockRep
+public import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Merkle
 
 /-!
 # Where a bad compiled `--zk` run goes wrong
@@ -17,6 +21,8 @@ something else. Each committed kind has its openings by position:
 Every clash, and every pair of runs opening one position of one cap, root or commitment two ways, is a collision of `H`
 (`SelfClashZ.collision`, `opOfW_conflict_collision`, `opPadsAtZ_conflict_collision`, `opTauZ_conflict_collision`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

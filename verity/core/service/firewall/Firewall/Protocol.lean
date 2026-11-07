@@ -20,10 +20,14 @@ The record events the session appends (its `slot`, a dead holder's stop, a refus
 `Outcome` carries a verdict and a reason, and nothing of the firewall's state after it. `Firewall.Loop` records them on
 the firewall's state directory.
 -/
-import CoreProtocol.Cli
-import Flock.Firewall.Contract
-import Flock.Hash
-import Firewall.Release
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Protocol
+public import Firewall.Release
+public import Flock.Firewall.Contract
+
+@[expose] public section
 
 namespace Core.Firewall
 

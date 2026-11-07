@@ -1,7 +1,8 @@
-import PouwWindow.Entry
-import Identity.Tagged
-import PouwCommit.Py
-import Identity.Domains
+module
+
+public import PouwWindow.Entry
+public import PouwCommit.Py
+public import Identity.Domains
 
 /-!
 # The side trees (`window.py`, "The side trees")
@@ -12,6 +13,8 @@ depth})`, owner −1, positions `0 … 2^D − 1`. A side row is its operand row
 in one 128-bit word (`sideRow?`, `sideIndex?`). `sideLevels?` builds a tree's levels over its first leaves and `sidePath`
 reads a leaf's siblings from them, each node past them a node over pad leaves only (`padNode`).
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 

@@ -1,3 +1,10 @@
+module
+
+public import Definitions.Core.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Data.Finset.Max
+import Proofs.Core.Game.Basic
 import Proofs.Core.Game.Prob
 
 /-!
@@ -13,6 +20,8 @@ on that position's game (`InducedAt`), the one that fixes each coin of the other
 * `prob_batch_getD_le_induced`, `prob_batch_getD_le_of_induced`: one position of a batch, by induction on the games
   before it.
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

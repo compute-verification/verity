@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.General
-import Proofs.Flock.Soundness.Discharge.Tables.Headline
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.General
+public import Proofs.Flock.Soundness.Discharge.Tables.Headline
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -49,7 +53,7 @@ def streams : DrawDesign n → ℕ
   | @stratified _ m _ _ _ => m
   | subset _ _ => 1
 
-/-- The executable law the live draw runs (`Flock.Draw.drawOS`'s). -/
+/-- The executable law the live draw runs (`Flock.Draw.drawWith`'s). -/
 def law : DrawDesign n → Flock.Draw.Law
   | stratified St Kd _ => .stratified Kd (Array.ofFn St)
   | subset kd _ => .subset kd

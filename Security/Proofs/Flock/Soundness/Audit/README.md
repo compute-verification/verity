@@ -51,11 +51,10 @@ $S$ of $N$ units and a block $B$, conditioned on $|S \cap B| = j$ the share $S \
 (`share_uniform`, `share_cond`), the share size is hypergeometric (`share_card`), and $W \subseteq B$ escapes at share
 size $j$ with that size's probability times the member's own $\binom{|B|-|W|}{j}/\binom{|B|}{j}$ (`share_escape`,
 `share_escape_total`). **The pooled escape** (`Audit/Pooled.lean`): over $T$ periods, each a fresh uniform
-$kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier draws
-escapes every draw with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`horizon_escape`), at most
-$\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`horizon_escape_prod`); at $\delta$, the escaped total
-reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$ (`pooled_escape_log`, in `Claims.Pr`, which is outside the audit layer:
-`Claims/Sampling/PooledPr.lean`).
+$kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier samples
+escapes every sample with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`pooled_escape`), at most
+$\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`pooled_escape_prod`), both in `prCoin`; at $\delta$, the
+escaped total reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$, which no theorem states.
 These are instances of **the monitoring-period step** (`Audit/Periods.lean`, `FlockSoundness.Audit.Periods`): $T$
 periods of independent uniform coins, any coin space per period, and an event of period $t$ that may read the periods
 up to $t$ with probability at most $p_t$ given any history (`avg_prod_le`, the one induction). It holds in at least
@@ -107,7 +106,7 @@ $\mathrm{miss}(\sum_s a_s) = \prod_s \binom{n_s - a_s}{k_s}/\binom{n_s}{k_s}$. A
 is `Stratified.miss` and discharges `audit_exfiltration`'s `hk` for a stratified sampling design.
 
 **Theorems, the work sampling design** (`Audit/Work.lean`, the default sampling design's second version;
-`../../PROTOCOL.md` §7.3): `Law.work σ w f K` is `Law.stratified` with stratum $s$ sampling
+`Flock.Draw`): `Law.work σ w f K` is `Law.stratified` with stratum $s$ sampling
 $k_s = \min(n_s, \max(f_s, \lceil K w_s n_s / W \rceil))$, where $w_s$ is the PoUW work of each of its units,
 $W = \sum_s w_s n_s$ and $f_s \ge 1$ its floor, set per stratum in the verifier's work table; every stratified and
 one-stage theorem holds of it as stated, and the theorems below hold for every such $f$. `floor_le_workK`, **the
@@ -161,7 +160,7 @@ It fixes each audit's sampling design in advance by its index, over one $n$; `ha
 choose the design. For cumulative harm this replaces the union bound of `audits_seq`: $e^{-\lambda H}$ is paid once for
 the whole run.
 
-**Theorems, closure samples** (`Audit/Closure.lean`; `../../PROTOCOL.md` §7.3): `Law.closure L cl` is `L` widened on its coins
+**Theorems, closure samples** (`Audit/Closure.lean`; `Flock.Draw`): `Law.closure L cl` is `L` widened on its coins
 by the verifier's closure map, each sampled proof block proved with its closure. `closure_escape`: its acceptance probability is
 the base sampling design's acceptance probability of $B \cup \mathrm{unsound}(B)$, $\mathrm{unsound}(B)$ being the units
 whose closure meets $B$, so an incorrect proof block that is never sampled on its own is charged to the units above it. `unsoundWork`
@@ -200,8 +199,8 @@ context.
   probability
   $e_{\text{eff}}(B) = \mathbb E_{S_1}\big[\prod_{u \in B \cap S_1} \max_{v \subseteq u}(1 - \pi_{L_2 u}(v))\big]$, with
   $\varepsilon_{ks}$ and $\delta_{link}$ at the fine level;
-- `effEscape_full`, `twoStage_full_profile`: **(b1) is one-stage over the coarse partition** ($e_{\text{eff}} = e_{L_1}$);
-- `effEscape_bernoulli_prod`: with a Bernoulli first stage, $e_{\text{eff}}(B) = \prod_{u \in B}\big(1 - p + p\,m_u\big)$ for
+- `effAcceptProb_full`, `twoStage_full_profile`: **(b1) is one-stage over the coarse partition** ($e_{\text{eff}} = e_{L_1}$);
+- `effAcceptProb_bernoulli_prod`: with a Bernoulli first stage, $e_{\text{eff}}(B) = \prod_{u \in B}\big(1 - p + p\,m_u\big)$ for
   any second stage, $m_u$ the largest second-stage acceptance probability inside $u$;
 - `Partition.two_stage_a_coarse`: **(a) is one-stage over the fine partition**, and its curve bounds coarse counts;
 - `Partition.Refines.exists_wrong_fine`: an incorrect coarse unit has an incorrect fine unit under every interior, the lemma
@@ -261,7 +260,7 @@ fine unit per gate, with a uniform `k₂`-subset of each sampled chain's gates i
 - `late_interior_insecure`: with the interior committed after the fine sample (`twoStageLate`), an incorrect chain is accepted
   with probability 1.
 
-- `effEscape_bernoulli`: **(b2) is one-stage over the coarse partition, thinned.** With a Bernoulli($p$) first stage,
+- `effAcceptProb_bernoulli`: **(b2) is one-stage over the coarse partition, thinned.** With a Bernoulli($p$) first stage,
   the effective acceptance probability of any set of chains is its acceptance probability under the one-stage
   Bernoulli($p\,k_2/n_v$) sample, $(1 - p\,k_2/n_v)^{|B|}$ (`Law.bernoulli_escape`, `Law.bernoulli_avg_prod`).
 
@@ -306,8 +305,9 @@ The hypotheses are the lowerings.
 **The audit's circuit `C`** is abstract in these theorems. For a program it is the rows the verifier parses
 (`Prog.circuit`, `Lowering.lean`, `../README.md` §1.5): each unit an instance of its template's `Rows`, one `Op.row` gate per
 computed row. No hypothesis relates those rows to another circuit (the circuit is chosen on the untrusted side,
-and the lowering does no optimizing); what a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`,
-`../Certificate.lean`; `../ASSUMPTIONS.md`). The decoder is **per sampled proof block**: two sampled proof blocks that share a wire hold it in their own columns, and only
+and the lowering does no optimizing); what a correct unit computes beyond its rows is outside these theorems: rows
+derived from a gate circuit carry its outputs (`GateRows.rows_sound`), and no theorem carries that to a unit's committed
+values (`../ASSUMPTIONS.md`). The decoder is **per sampled proof block**: two sampled proof blocks that share a wire hold it in their own columns, and only
 the link makes the readings agree.
 
 The compiled layer's named hypotheses are stated there too.

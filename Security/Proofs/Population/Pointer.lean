@@ -1,5 +1,11 @@
-import Proofs.Population.Egress
-import Mathlib.Tactic.DeriveFintype
+module
+
+public import Mathlib.Tactic.DeriveFintype
+public import Definitions.Population.Dataflow
+public import Mathlib.Data.Fintype.Option
+public import Mathlib.Data.Fintype.Sum
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Tactic.Bound.Init
 
 /-!
 # Value-dependent reads: the VM pointer
@@ -22,6 +28,8 @@ slot) is a checked population (`vmStatic_checked`) whose egress has every secret
 the checker sees the secret in the egress's cone and refuses to certify it, which is what `card_egress_le` needs. A
 circuit does not stop a value from selecting what is read; its public wiring makes the selection visible.
 -/
+
+@[expose] public section
 
 namespace Population
 

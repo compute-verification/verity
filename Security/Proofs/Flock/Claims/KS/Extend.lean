@@ -1,6 +1,41 @@
-import Proofs.Flock.Claims.KS.JointJ
-import Proofs.Flock.Claims.GS.Decode
-import Proofs.Flock.Claims.DecodeFamily
+module
+
+public import Proofs.Flock.Claims.KS.JointJ
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.GS.Johnson
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # A table with unopened positions extends, at any code
@@ -25,6 +60,8 @@ the fact at its code, and the rest is one argument:
   few by Johnson's bound (`Claims.GS.card_lane0_le`), when the family's lengths summed stay below the field's size.
   `Claims.GS.reg_of_rate` gives Johnson's regime at rate at least `1/2` and `n ≥ 2^10`, which both Flock codes meet.
 -/
+
+@[expose] public section
 
 namespace Claims.GS
 

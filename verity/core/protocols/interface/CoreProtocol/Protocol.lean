@@ -12,9 +12,14 @@ audit, the composition).
 parameters, runs the check, and turns every decoding failure into a rejection, so every input gets a verdict.
 `Answer.toJson` is the outcome's one canonical form, the one the difftests compare and a composition reads.
 -/
-import Lean.Data.Json
-import Flock.Bytes
-import Flock.Canon
+module
+
+public import Flock.Canon
+public import Lean.Data.Json.Parser
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core
 

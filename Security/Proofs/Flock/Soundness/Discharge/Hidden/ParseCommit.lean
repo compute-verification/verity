@@ -1,5 +1,23 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.ParseStmt
+module
+
+public import Flock.HmRow
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.ExecPlacement
+public import Proofs.Flock.Soundness.ParseStmt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.ExecCircuit
 
 /-!
 # The committed circuit and the statement circuit
@@ -9,6 +27,8 @@ template), and its statement circuit (`HmOut.parseStmt`) is that circuit unrolle
 committed circuit itself for a flat file. A session-side consumer takes `HmOut.parseCommit … = .ok st.c` where it took
 `HmOut.parse … = .ok st.c`; a statement-side one reads `HmOut.unrolled st.c`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

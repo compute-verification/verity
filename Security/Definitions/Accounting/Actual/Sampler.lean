@@ -1,4 +1,7 @@
-import Definitions.Pous.Model.M1p
+module
+
+public import Definitions.Pous.Model.M1p
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The deployed uniform sampler on one word (trusted)
@@ -11,6 +14,8 @@ each step of its partial Fisher–Yates by it.
 * `wordIndex`: the sampler on one word `u`: `u mod N` when `u < 2^w − (2^w mod N)`, none when it rejects `u`. The word's
   value is `Pous.bitsVal u` (bit `k` with weight `2^k`), the big-endian integer of the stream's bytes.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

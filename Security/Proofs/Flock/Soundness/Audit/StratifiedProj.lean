@@ -1,4 +1,9 @@
-import Proofs.Flock.Soundness.Audit.HarmBound
+module
+
+public import Proofs.Flock.Soundness.Audit.HarmBound
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The stratified law, one stratum at a time
@@ -15,6 +20,8 @@ them, stratum `s`'s at `ω s`. With `n_s = |stratum σ s|` and `m_s = |B.filter 
   exactly, is the sum of its strata's exact risks, each at least its stratum's term `k_s m_s / n_s` of the closed form
   (`le_stratumRisk`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

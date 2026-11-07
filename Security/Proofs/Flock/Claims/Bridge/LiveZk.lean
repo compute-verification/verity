@@ -1,7 +1,42 @@
-import Proofs.Flock.Claims.Bridge.Live
-import Proofs.Flock.Claims.DeployOC
+module
+
+public import Proofs.Flock.Claims.Bridge.Live
+public import Proofs.Flock.Claims.DeployOC
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
 import Flock.With.Deployed
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Game.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The live `--zk` session decided by flock-verify, and the old transfer
@@ -26,6 +61,8 @@ of `x` only where that draw is. `Deploy.V`'s checks pin the record's draw to the
 is another value (its `unitDraw` is the record's draw), and its digests agree only through `canon`.
 -/
 
+@[expose] public section
+
 namespace Claims.Bridge.LiveZk
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Tables
@@ -33,7 +70,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.
 
 /-- **flock-verify `--zk`'s verdict as an oracle program**: `AcceptsZK`'s setup and shape checks, then the verifier over
 `OC`. -/
-def verdictZK (I : Inputs) (t : Transcript) : OC Bool :=
+def verdictZK (I : Inputs) (t : Exec.Transcript) : OC Bool :=
   match setupOf (zkInputs I) t.record with
   | .error _ => .ret false
   | .ok (spec, sts) =>
@@ -46,7 +83,7 @@ def verdictZK (I : Inputs) (t : Transcript) : OC Bool :=
           | .error _ => false)
 
 /-- **Against `H`, it is `Zk.verifyWith (hOf H)`'s verdict.** -/
-theorem verdictZK_eval (H : Msg → Msg) (I : Inputs) (t : Transcript) :
+theorem verdictZK_eval (H : Msg → Msg) (I : Inputs) (t : Exec.Transcript) :
     ((verdictZK I t).eval H).1 = true ↔ ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧
       sts.forM Flock.Zk.shapeOk = .ok () ∧
       Flock.Zk.verifyWith (hOf H) spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok () := by
@@ -78,7 +115,7 @@ theorem hOf_shaH : hOf shaH = Flock.Sha512.hash := by
   simp [hOf, shaH]
 
 /-- **Against SHA-512, it is flock-verify `--zk`'s acceptance.** -/
-theorem verdictZK_sha (I : Inputs) (t : Transcript) : ((verdictZK I t).eval shaH).1 = true ↔ AcceptsZK I t := by
+theorem verdictZK_sha (I : Inputs) (t : Exec.Transcript) : ((verdictZK I t).eval shaH).1 = true ↔ AcceptsZK I t := by
   rw [verdictZK_eval, hOf_shaH]
   unfold AcceptsZK
   refine exists_congr fun spec => exists_congr fun sts => and_congr_right fun h1 => and_congr_right fun _ => ?_
@@ -88,7 +125,7 @@ open Classical in
 /-- **Acceptance with an event of the outcome, at flock-verify `--zk`**: `Pr_r[run = acc ∧ Q(outcome)]` against SHA-512
 is `liveSession`'s probability that flock-verify `--zk` accepts the written transcript and `Q` holds. -/
 theorem Pr_acc_zk (nMax : ℕ) (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)
-    (w : (x : Msg) → Wire nMax (J x) (mPts x)) (I : Msg → Inputs) (wr : (x : Msg) → LiveOutJ (J x) (mPts x) → Transcript)
+    (w : (x : Msg) → Wire nMax (J x) (mPts x)) (I : Msg → Inputs) (wr : (x : Msg) → LiveOutJ (J x) (mPts x) → Exec.Transcript)
     {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (Q : LiveOutJ (J x) (mPts x) → Prop) :
     Pr (fun r : Fin ((liveV nMax J mPts N dg w fun x o => verdictZK (I x) (wr x o)).k x) → LCoin nMax =>
         (run shaH P (liveV nMax J mPts N dg w fun x o => verdictZK (I x) (wr x o)) x ω r).out = .acc ∧
@@ -107,7 +144,7 @@ at most the compiled session's acceptance against the simulated strategy of `liv
 theorem Pr_acc_zk_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (nMax : ℕ) (mPts N : Msg → ℕ) (ts : (x : Msg) → List (ZkSession.TabZK FlockLevel3.GF128 (mPts x)))
     (dg : ByteArray → ByteArray) (w : (x : Msg) → Wire nMax (ts x).length (mPts x)) (I : Msg → Inputs)
-    (wr : (x : Msg) → LiveOutJ (ts x).length (mPts x) → Transcript) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    (wr : (x : Msg) → LiveOutJ (ts x).length (mPts x) → Exec.Transcript) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (Q : LiveOutJ (ts x).length (mPts x) → Prop) (A : Model.Arith FlockLevel3.GF128 K)
     (Hs : ZkLink.Hashes FlockLevel3.GF128 D Sl) (opn : Array ByteArray → Fin (ts x).length → ZkLink.OpensZ FlockLevel3.GF128 D Sl)
     (dec : Fin (ts x).length → ℕ → ByteArray → List FlockSoundness.Game.Msg) (one : Fin (ts x).length → ℕ → Bool)

@@ -1,5 +1,32 @@
-import Proofs.Flock.Soundness.Discharge.PlainHJ.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # The decoder is right at a plain session of `J` hidden-output tables
@@ -16,6 +43,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
   each rep's run and rounds and the salted verdict; `repRun_at` makes each run a `RepRun` for `decJ`, and
   `playsT_of_repRun` a run on its tape.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainHJ
 

@@ -1,8 +1,10 @@
-import Definitions.Accounting.Guarantees.TS.Receipt
-import Proofs.Accounting.TS.Rounds
-import Proofs.Accounting.TS.ReceiptLi
-import Proofs.Accounting.TS.ReceiptDuoCP
-import Proofs.Pouw.Receipt.Fx1
+module
+
+public import Proofs.Accounting.TS.Rounds
+public import Proofs.Accounting.TS.ReceiptLi
+public import Proofs.Accounting.TS.ReceiptDuoCP
+public import Proofs.Pouw.Receipt.Fx1
+public import Proofs.Accounting.Lemmas.TS.Receipt
 
 /-!
 # (I7) from the receipt: proofs
@@ -25,13 +27,17 @@ The operand luck at ¾ for degree-2 operands (`operandLuck_cube`): conditioned o
 round's error is a nonzero degree-2 function, which vanishes at uniform bits with probability at most ¾ (`luck_quad`).
 -/
 
+@[expose] public section
+
+open Claims renaming Ex → expect
+
 namespace Accounting.SecurityProofs.TS
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity Pouw.Receipt
 
 namespace ReceiptLemmas
 
-theorem prob_and_add_and_not {Ω : Type*} [Fintype Ω] (p q : Ω → Prop) :
+theorem prob_and_add_and_not {Ω : Type} [Fintype Ω] (p q : Ω → Prop) :
     prob (fun ω => p ω ∧ q ω) + prob (fun ω => ¬p ω ∧ q ω) = prob q := by
   classical
   rw [prob_eq_expect, prob_eq_expect, prob_eq_expect q, ← Rounds.expect_add]

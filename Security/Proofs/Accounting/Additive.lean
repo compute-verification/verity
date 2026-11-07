@@ -1,8 +1,9 @@
-import Definitions.Accounting.Guarantees.Additive
-import Proofs.Core.Accel.Model
-import Mathlib.Algebra.BigOperators.Intervals
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Algebra.Order.Ring.NNRat
+module
+
+public import Definitions.Accounting.Guarantees.Additive
+public import Proofs.Core.Accel.Model
+import Mathlib.Data.Nat.SuccPred
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Compute additivity's capacity from the machine model 𝓜: proofs
@@ -10,6 +11,8 @@ import Mathlib.Algebra.Order.Ring.NNRat
 `Accounting.Guarantees.AccelRate` and `AccelAdditive`. The one step that reads 𝓜 is that units add over runs back to
 back: a period's stream is its runs' instructions one after another (`stream_cons`, `Machine.units_append`).
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

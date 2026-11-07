@@ -1,19 +1,51 @@
-import Definitions.NetworkCertifier.Guarantees.SampledCharge
-import Definitions.NetworkCertifier.Period
-import Definitions.NetworkCertifier.Tap
-import Definitions.Core.Assumptions
-import Mathlib.Data.Set.Card
-import Mathlib.Algebra.BigOperators.Fin
+module
+
+public import Definitions.Core.Assumptions
+public import Definitions.NetworkCertifier.Guarantees.SampledCharge
+public import Definitions.NetworkCertifier.Period
+public import Definitions.NetworkCertifier.Tap
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits
 
 A monitoring period is `n` windows, each audited by the sampled verifier at a statement it registered (`sw i`, with its
 partition `Pw i` and the values `ρ i` the registration commits at its registered inputs). The network certifier is one
-device on the server's uplink, and it functions as an active warden (`Definitions.NetworkCertifier.Tap`): one run of its
-code gives the cells the client receives and the observations the audits read, its record of those cells, so on every
-schedule its record format holds the client's view reads back from the observations. The network certifier registers its records at the transfer gates: its
-openings `tops s` under the statement's roots, its signed root for the window, so they vary with what the server did
+device on the server's uplink, and it functions as an active network certifier (`Definitions.NetworkCertifier.Tap`): one
+run of its code gives the cells the client receives and the observations the audits read, its record of those cells, so
+on every schedule its record format holds the client's view reads back from the observations. The network certifier
+registers its records at the transfer gates: its openings `tops s` under the statement's roots, its signed root for the
+window, so they vary with what the server did
 (`TapOpens`). `PeriodLeakAccepted` composes the sampled leak bound at the network certifier's rows (`RLeakTap`, with the
 prover's registered inputs pinned: `AsReg`) with that read-back, so the content term of the bound comes from the
 audits, not from a premise:
@@ -34,6 +66,8 @@ with the secret. The first part covers an extracted trace that leaves them outsi
 transfer gate is opened; the count charges a faulty proof block's rows through the Program, from the free inputs, the
 faulty sets, their committed bits and the timing. A proof block the sample missed is in the faulty set.
 -/
+
+@[expose] public section
 
 namespace NetTiming.Guarantees
 

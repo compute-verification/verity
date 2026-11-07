@@ -1,7 +1,51 @@
-import Batteries.Tactic.OpenPrivate
-import Proofs.Flock.Claims.CanonEq
-import Proofs.Flock.Soundness.ExecDraw
-import Proofs.Flock.Claims.Complete.Json.Spec
+module
+
+public import Aesop.BuiltinRules
+public import Batteries.Tactic.OpenPrivate
+public import Definitions.Claims.Json
+public import Flock.Canon
+public import Mathlib.Tactic.ToAdditive
+public import Proofs.Flock.Claims.CanonEq
+public import Proofs.Flock.Claims.Complete.Json.Spec
+public import Proofs.Flock.Claims.Complete.Json.Value
+public import Proofs.Flock.Claims.JsonEq
+public import Proofs.Flock.Soundness.ExecDraw
+import all Init.Data.Int.Repr
+import all Init.Data.Repr
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Data.TreeMap.Raw.Lemmas
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # What completeness reads of `canon`, proved
@@ -13,6 +57,10 @@ integer, so the one refusal never fires, and `canon_ascii`: `canonStr` writes ev
 as a `\u` escape, `escU`). The round trips through the verifier's parser `Flock.JsonParse.parse` (the printer's and
 `canon`'s) are proved too (`RoundTrip.lean`), and the parser's trees are well formed (`Parse.lean`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockComplete.JsonRT
 

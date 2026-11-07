@@ -1,7 +1,10 @@
-import Definitions.Accounting.BoundReceipt
-import Definitions.Pouw.Assumptions.Game
-import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+module
+
+public import Definitions.Accounting.BoundReceipt
+public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Receipts bound to the matmul: co-location and the link relay (trusted)
@@ -30,6 +33,8 @@ PoUW's game (`TileUnpredictable`), from PoUW's named assumptions.
 * `TileUnpredictablePearlCOfTTOut`: an assumption of Pearl-C's `TT_OUT` shape at W1, at any Pearl-C protocol, gives the
   same hypothesis in Pearl-C's game at W1 (`TileUnpredictablePearlC` at `W1.w1Priced`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

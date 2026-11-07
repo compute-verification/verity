@@ -1,4 +1,16 @@
-import Proofs.Flock.Soundness.ExecFlatCopies
+module
+
+public import Proofs.Flock.Level3.Placed
+public import Properties.Flock.Circuit.Keys
+public import Properties.Flock.Circuit.Rows
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.ExecSetup
+import Proofs.Flock.Soundness.SparseRows
+import VCVio.Prelude.Core
 
 /-!
 # The unit net's rows at its input port bits and past its useful rows
@@ -9,6 +21,8 @@ Two facts about the unit net that the forced-zero rows and the input copies read
 - `portBits_nodup`, `port_self`: a built net's input port bits are distinct columns (its groups ascend, `Net.inputsOk`,
   and each group's ports fit its words), and each is a self row `[x]·[x]` (`Net.inputsOk`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

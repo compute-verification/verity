@@ -1,3 +1,6 @@
+module
+
+public import Definitions.Population.Dataflow
 import Proofs.Population.Determinacy
 
 /-!
@@ -15,6 +18,8 @@ The counterexamples, each a choice of Boolean unit functions:
   unit `false`; then "all `false`" and "`true` on the component's writes" are both correct (`cycle_two_fixed_points`):
   a self-consistent wrong fixed point, with no faulty proof block.
 -/
+
+@[expose] public section
 
 namespace Population.Dataflow
 

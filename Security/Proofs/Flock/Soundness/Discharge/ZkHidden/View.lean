@@ -1,5 +1,31 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Headline
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.Composed.Headline
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.RegWords
+import Proofs.Flock.Soundness.Discharge.Composed.Setup
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
+import Proofs.Flock.Soundness.Discharge.ZkView.Fixed
+import Proofs.Flock.Soundness.ZK.Complete
+import Proofs.Flock.Soundness.ZK.PadNonvanishing40
+import Proofs.Flock.Soundness.ZK.RealLeaves
+import Proofs.Flock.Soundness.ZK.Session
 
 /-!
 # Zero knowledge of production's `--zk` session: hidden outputs, `J` tables
@@ -19,6 +45,8 @@ with its own coin vector.
 output rows' Δ pairs and regions as at a `setupH` one. Registered reads (`checkRegistered`) add no prover message: they
 hold the statement to the verifier's own files and only shrink the accepting event.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 
@@ -88,10 +116,12 @@ section Nonempty
 
 variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B] [AddCommGroup Salt] [AddCommGroup Hi]
 
+-- `Nonempty` of `Table.Rand`, a product of up to fifteen factors
 set_option synthInstance.maxHeartbeats 1000000 in
 theorem rand_nonempty (T : FlockSoundness.ZK.Table F K W Salt (B × Salt) D Hi VL) : Nonempty T.Rand := by
   unfold FlockSoundness.ZK.Table.Rand; infer_instance
 
+-- `Nonempty` of `Table.SimRand`, a product of up to fifteen factors
 set_option synthInstance.maxHeartbeats 1000000 in
 theorem simRand_nonempty (T : FlockSoundness.ZK.Table F K W Salt (B × Salt) D Hi VL) : Nonempty T.SimRand := by
   unfold FlockSoundness.ZK.Table.SimRand; infer_instance
@@ -99,6 +129,7 @@ theorem simRand_nonempty (T : FlockSoundness.ZK.Table F K W Salt (B × Salt) D H
 end Nonempty
 
 set_option maxRecDepth 8000 in
+-- `prCoin` over the product of `J` tables' randomness and salts, each table's bound composed by `prCoin_pi_close`
 set_option maxHeartbeats 4000000 in
 /-- **Zero knowledge at `J` `CoinedSetup`s from their facts**: Lemma B (`table_shvzk_hm96`) at each table, their leaves'
 hiding at any hm96 hiding bound `δ₁` (`hT1`), row (ii) `padOnto_M1`'s from `PadNonvanishing` (`ZK.padNonvanishing40`), composed over the tables' independent

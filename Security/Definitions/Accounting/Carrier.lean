@@ -1,8 +1,10 @@
-import Definitions.Accounting.RateAuditSketchDeployed
-import Definitions.Accounting.RateAuditDeployed
-import Definitions.Accounting.Gates.Codec
-import Definitions.Accounting.Requirement
-import Mathlib.Data.ENat.Lattice
+module
+
+public import Definitions.Accounting.RateAuditSketchDeployed
+public import Definitions.Accounting.RateAuditDeployed
+public import Definitions.Accounting.Gates.Codec
+public import Definitions.Accounting.Requirement
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Carriers: device memory whose post-seed contents are a circuit's values (trusted)
@@ -87,6 +89,8 @@ own window's signs, and the window's earlier passes. Pass `j`'s store is the app
 prefix: a block appended after a pass's seed is in no plan of that pass, so a pass's store doesn't depend on its own
 coins.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

@@ -1,4 +1,13 @@
-import Proofs.Properties.NetworkCertifier.Tree
+module
+
+public import Proofs.Properties.NetworkCertifier.Tree
+import Mathlib.Algebra.Order.Group.Nat
+import Mathlib.Algebra.Order.Sub.Basic
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.List.Basic
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.SetLike
+import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # A record head determines its grid
@@ -7,6 +16,8 @@ import Proofs.Properties.NetworkCertifier.Tree
 grid's rows are determined by their real frames and their counts (`grid_inj`). With the frame tree's binding
 (`Tree.framesRoot_inj`), two grids with one head are one (`recordHead_grid_inj`).
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check

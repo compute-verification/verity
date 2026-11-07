@@ -1,5 +1,15 @@
+module
+
+public import Flock.TmplSplit
+public import Proofs.Flock.Level3.GF128Field
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Level3.Nodes
 import Proofs.Flock.Soundness.TmplFoldClassOk
-import Flock.TmplSplit
+import Proofs.Flock.Soundness.TmplFoldDef
+import Proofs.Flock.Soundness.TmplFoldRef
+import Std.Data.HashMap.Lemmas
 
 /-!
 # The split fold's tables, valued
@@ -12,6 +22,8 @@ weight `f` is `hsum`: each entry's value times its key's weight.
 - `fold_val`: a fold over a table whose every step adds a known term adds their sum.
 - `eqHalf_at`, `eqTail_split_at`: the `eq` tables `walk` reads, split at a chunk boundary.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 

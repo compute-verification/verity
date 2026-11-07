@@ -1,5 +1,19 @@
-import Proofs.Flock.VBridge.ResLayer
-import Proofs.Flock.Verifier.HmNets
+module
+
+public import Proofs.Flock.VBridge.ResLayer
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The opening unit reads its row and sibling columns (`ReadCol`)
@@ -17,6 +31,8 @@ rows are `Rows.ofNet`'s:
   direction bit `h` (an input bit, as `H ≤ 32`) with `cur ⊕ s`, whose support holds sibling bit `i`, since `cur` reads
   no sibling of level `h`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

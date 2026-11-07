@@ -31,7 +31,7 @@ in `benchmarks/numerical/tests/bench/test_census_data.py` check that.
   target name it was known by, and `fidelity_notes` record known gaps from what serving runs. An input set's id is its dataset, slugged, for example `bench-instances-fp8-ada-v1`. Every
   other id is kebab-case, for example `dc-1ms-100gbps`.
 - The census holds workloads, subcircuit templates and subcircuits, input sets, hardware, networks, deployments and the adversary resource model. It never encodes replay or proof
-  units, which applications choose per run.
+  blocks, which applications choose per run.
 - Ids are stable. Renders cite them, and sites build history over them. A changed quantity gets a new entry with a new
   id, and an id that has been cited is never renamed or reused.
 
@@ -47,7 +47,7 @@ Each subcircuit template carries a `work_model`: the arithmetic operations per i
 integer expression over its bound parameters, for example `2*K` for `gemm-coordinate` and `3*N` plus one rsqrt for
 `rmsnorm-triton`. An FMA counts as 2 ops, and special functions are counted apart in `special_per_input`. `variables`
 names per-input quantities that are not parameters, such as an attention head's key count `T`. `version` is the one the
-tables' native N uses (`work-model/v0`), `source` cites the IR definition or kernel, and `basis` says what is counted.
+tables' native N uses (`work-model/v0`), `source` cites the Definition or kernel, and `basis` says what is counted.
 Weighting a workload's template mix by these counts gives its real work. Counting proof blocks or inputs does not.
 
 A memory-bound template also carries `bytes_per_input`, the bytes read and written per input over its ports, with
@@ -73,7 +73,7 @@ renderer switch counts it.
 A workload is a served configuration: today the vLLM regression rows that record a replay partition. Its `template_mix`
 counts the proof blocks per family (`vu_family`) and bound parameters (`replay_partition.strata`), the complete counts of
 the run. This is the mix that weights backend overheads into a per-workload headline (the frozen tables' "Workload headline"). Every family maps to a census
-subcircuit template bound from its IR Definition, with the number of the template's subcircuits one proof block holds (`subcircuits_per_vu`):
+subcircuit template bound from its Definition, with the number of the template's subcircuits one proof block holds (`subcircuits_per_vu`):
 - `Gemm_v1` and `Gemm_v2` are N `gemm-coordinate`, on Ampere-class mma or Hopper wgmma;
 - `Attention_v3`, `Attention_v2` and `Attention_v4` are NH `attention-head` (FA2, or FA3; `Attention_v4` is FA3 under its per-iteration `Check_inf` construction, whose `MASKED_FROM` names the first masked key block);
 - `RoPE_v1` is NHEADS `rope-head`;

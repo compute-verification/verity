@@ -1,9 +1,15 @@
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Lazy
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Leaf
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Leaf
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Weights
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.CROnly.Hm96Sha512
 import Proofs.Flock.Soundness.CROnly.ZKKey
+import Proofs.Flock.Soundness.Discharge.ZkCoins.Lazy
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Committed coins against live coins: a hybrid over committed rounds
@@ -26,6 +32,8 @@ The bound is `value`, the optimal adaptive prover's against live coins, for ever
 costs `δ` per committed round, added once, and whatever `value` satisfies (the table bound's square, from
 `value_interleave_le`) carries over.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkCoins
 

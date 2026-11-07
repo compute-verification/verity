@@ -1,7 +1,12 @@
-import Proofs.Flock.Soundness.ZK.SHVZK
-import Proofs.Flock.Soundness.ZK.Masking
-import Proofs.Flock.Soundness.Assumptions
-import Definitions.Flock.LigeritoPad
+module
+
+public import Definitions.Flock.Defs
+public import Definitions.Flock.LigeritoPad
+public import Definitions.Flock.ZK.Table
+public import Proofs.Flock.Soundness.Assumptions
+public import Proofs.Flock.Soundness.ZK.Masking
+import Proofs.Flock.Soundness.NovelBasis
+import VCVio.Prelude.Core
 
 /-!
 # Zero knowledge: the reference prover is complete, and C-Flock ZK's level-0 padding is onto
@@ -24,6 +29,8 @@ What masking adds to a table keeps the verifier accepting:
 What the clear protocol needs for completeness (the zerocheck, lincheck and ring-switch rounds, Ligerito from `y₁'` on) is
 the unmasked protocol's own completeness, which masking doesn't change and this file doesn't prove.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

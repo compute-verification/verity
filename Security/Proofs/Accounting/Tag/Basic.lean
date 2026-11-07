@@ -1,8 +1,10 @@
-import Mathlib.Algebra.Polynomial.Roots
-import Mathlib.NumberTheory.LucasLehmer
-import Mathlib.Probability.Distributions.Uniform
-import Mathlib.Data.List.GetD
-import Definitions.Accounting.Tag.PolyHash
+module
+
+public import Mathlib.Algebra.Polynomial.Roots
+public import Mathlib.NumberTheory.LucasLehmer
+public import Mathlib.Probability.Distributions.Uniform
+public import Mathlib.Data.List.GetD
+public import Definitions.Accounting.Tag.PolyHash
 
 /-!
 # Shared lemmas for the tag proofs
@@ -10,6 +12,10 @@ import Definitions.Accounting.Tag.PolyHash
 `p = 2^31 − 1` is prime (Lucas–Lehmer, Mathlib's `norm_num` extension), so `ZMod P` is a field; probabilities under a
 uniform draw are counts; and a nonzero sparse polynomial of degree at most `d` vanishes at at most `d` points.
 -/
+
+@[expose] public section
+
+open Verity.Game renaming prPMF → prob
 
 namespace Accounting.TagProofs
 

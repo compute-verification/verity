@@ -1,4 +1,6 @@
-import PouwWindow.Grid
+module
+
+public import PouwWindow.Grid
 
 /-!
 # The draw (`window.py`, "The draw"; L3)
@@ -9,6 +11,8 @@ bounds that round down and up, at a precision that doubles until they decide; `k
 bisection, since `q^K` falls with `K` for `0 ≤ q < 1`. Python's `k_prime` starts from a binary64 estimate and steps with
 the same exact comparison; the difftest holds the two to one answer.
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 

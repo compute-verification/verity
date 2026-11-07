@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Zk.MaskRank
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.MaskRank
 
 /-!
 # The rank bound's dual side
@@ -16,6 +18,8 @@ where some `μ` of support `S` survives (`card_deficient_le`).
   `E[min(1, |F|^|S| / |π_S U_Xs|^(|Ys| + 1))]`, the span `U_Xs` over the other coordinates.
 * `card_deficient_le`: the bound summed over the supports, one choice of `Xs` per support.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.MaskRank
 
@@ -349,8 +353,6 @@ variable {ι F : Type} [Fintype ι] [DecidableEq ι] [Field F] [Fintype F] [Deci
 /-- **The span over the coordinates `Xs`**: the eq-vectors' products over `Xs` only. -/
 def spanX (c : Fin D → ι → F) (Xs : Finset (Fin D)) : AddSubgroup (ι → F) :=
   AddSubgroup.closure (Set.range fun x : Fin D → Bool => ∏ t ∈ Xs, if x t then c t else 1 + c t)
-
-theorem spanX_univ (c : Fin D → ι → F) : spanX c univ = span c := rfl
 
 theorem spanX_congr {c c' : Fin D → ι → F} {Xs : Finset (Fin D)} (h : ∀ t ∈ Xs, c t = c' t) :
     spanX c Xs = spanX c' Xs := by

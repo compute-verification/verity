@@ -1,31 +1,35 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Statements
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
-import Proofs.Flock.Soundness.Discharge.HiddenExec.CopiesP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.PlacedP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
-import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
-import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteHP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyHP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Headline
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
-import Proofs.Flock.Soundness.Discharge.HiddenExec.TablesP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.SitesP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.RowsAtHP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.LiveOnP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExecP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.CopiesP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Headline
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExecP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyHP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.LiveOnP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.PlacedP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.RowsAtHP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteHP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SitesP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Statements
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.TablesP
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
 # flock-verify's acceptance under hidden outputs, and the headline over hidden-output sessions
@@ -67,3 +71,5 @@ headline (`Discharge/Integrate`) are about `Stmt.setupH`'s statements (`hh : I.t
 * `SetupP`: what a setup at `own` establishes (its tags, leaf scheme, well-formedness and drawn public file, the
   session's rounds and link points), and `drawSetupHP_of_setupHiddenI`.
 -/
+
+@[expose] public section

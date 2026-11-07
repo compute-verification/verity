@@ -1,5 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Coined
-import Proofs.Flock.Soundness.ZK.Abort
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+public import Proofs.Flock.Soundness.ZK.Abort
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # One `--zk` session at every coin vector: what the prover sends and what the simulator outputs
@@ -22,13 +37,15 @@ randomness:
   draw's coins.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.ZkEveryCoin
 
 open Game Composed ZkView Model Flock
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- The table's guarded messages sent before the session's first failing check, at coin vector `c`. -/
 noncomputable def sentAt (C : CoinedSetup) (c : CoinsZK C.Rest) : (C.T c).tab.Sent :=

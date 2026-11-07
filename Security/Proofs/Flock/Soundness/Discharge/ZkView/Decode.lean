@@ -1,5 +1,25 @@
-import Proofs.Flock.Soundness.Discharge.ZkView.Statements
-import Proofs.Flock.Soundness.Refine.Frames
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkView.Statements
+public import Proofs.Flock.Soundness.Refine.Frames
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import VCVio.Prelude.Core
 
 /-!
 # `Zk.decode` inverts `encZk`
@@ -10,6 +30,8 @@ stops after the last byte of `b`. `Reads.bind` composes it, so the proof walks `
 from the `Shape`, or any length with a minimum element size), the per-level openings and loops, the level-0 messages and
 the inner proof. `reads_reader` is the whole file; `decode_encode` starts it at offset 0 with nothing around it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 

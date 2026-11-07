@@ -30,10 +30,10 @@ import tiers as T  # noqa: E402
 RANGES = {
     "unmonitored": (0.0, 0.1, "guess: none, to a tenth of the fleet's compute hidden"),
     "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.323 at the locked clock, 0.213 attested (C7 dossier, its eps left to eps_w); nothing credited today 1"),
-    "eps_w": (6e-4, 0.00917, "best plausible design 0.06% (C7 dossier); CircuitCredit's closed 0.744%, 0.681-0.917% over r = 1-4 (draft #2638)"),
+    "eps_w": (6e-4, 0.00917, "best plausible design 0.06% (C7 dossier); CircuitCredit's closed 0.744%, 0.681-0.917% over r = 1-4"),
     "host_share": (0.0, 0.14, "without the hosts assumption (hosts carry no compute sets it to 0), against the card table's FP8 peak: two EPYC 9015s without matrix units 0.22%; Xeon 6776P INT8 AMX 12.6%, 14.0% at fused maximum clocks"),
     "eps_agg": (1e-6, 1e-3, "1e-6 needs per-window failure about 3 x 2^-47 for the same delta; 1e-3 lets delta fall tenfold"),
-    "clock_share": (0.0, 0.2, "0: PoUW credits the card table's 2,430 MHz, the SKU's maximum (CMP-165, run r20261027-032043-e2d1); 0.2 the C4 dossier's adversarial phi = 1.25, a card whose SKU or firmware reaches past its table (unattested)"),
+    "clock_share": (0.0, 0.2, "0: PoUW credits the card table's 2,430 MHz, the SKU's maximum; 0.2 the C4 dossier's adversarial phi = 1.25, a card whose SKU or firmware reaches past its table (unattested)"),
     "pous_rounds": (20.0, 74000.0, "low a guess; deployed 111; 74,000 with streamed labels (C8 dossier)"),
     "unfilled_gb": (3.05, 150.0, "on-chip alone 3.05; measured gaps 51 plus 7 of DPU, BMC and flash; high a guess"),
     "sigma": (10.0, 1e6, "guess: a shielded rack, to a loud channel"),
@@ -41,7 +41,7 @@ RANGES = {
     "b_a": (1.0, 8.0, "b_a.activation/boundary-training: 1, 4, 8"),
     "f": (0.5, 0.99, "guess"),
     "pous_delta": (1e-6, 0.1, "guess, around today's 1/100"),
-    "pous_floor": (0.0, 0.985, "0 when the slack counts it (MEM-51); 0.985 under the broken reference permutation (C8)"),
+    "pous_floor": (0.0, 0.985, "0 when the slack counts it (streamed labels); 0.985 under the broken reference permutation (C8)"),
     "disk_gb": (0.0, 8000.0, "unplugged; 8 TB of NVMe left in place (dark-compute red team)"),
     "t_read": (1e-4, 1e-2, "guess, around today's 1 ms"),
     "wipe_s": (60.0, 6.048e5, "guess: every minute to weekly"),
@@ -145,7 +145,7 @@ def eta(p: dict, tier: str) -> float:
 
 
 def intake(p: dict) -> float:
-    """lambda_in under network accounting, bits/s: side channels, certified timing and the declared novel intake."""
+    """lambda_in under network certification, bits/s: side channels, certified timing and the declared novel intake."""
     return p["sigma"] + p["tau"] + p["intake_x"] * p["K"] / p["Gamma"] * p["node_flops"]
 
 

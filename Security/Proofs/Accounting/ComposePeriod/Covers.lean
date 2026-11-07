@@ -1,12 +1,15 @@
-import Proofs.Accounting.Compose.ServiceCovers
-import Proofs.Accounting.Compose.CircuitWork
-import Definitions.Accounting.ComposePeriod
+module
+
+public import Proofs.Accounting.Compose.ServiceCovers
+public import Proofs.Accounting.Compose.CircuitWork
+public import Definitions.Accounting.ComposePeriod
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The period layer's covers: `ServiceCovers` with a window index
 
-`PeriodCoversStmt` is the one piece of `CircuitWorkPeriod`'s proof (`Proofs.Accounting.ComposePeriod`) stated here,
-and proved here as `periodCovers`. The assembly reads it as a hypothesis (`ComposePeriod.circuitWorkPeriod_of_covers`).
+`PeriodCoversStmt` is the one piece of `CircuitWorkMonitoringPeriod`'s proof (`Proofs.Accounting.ComposePeriod`) stated here,
+and proved here as `periodCovers`. The assembly reads it as a hypothesis (`ComposePeriod.circuitWorkMonitoringPeriod_of_covers`).
 
 It is `CoversProof.serviceCovers`' argument with a window index. Every position, cut and writer of window `w` of the
 period layer (`Declared.periodLayer`) is window `w`'s, so a late edge (`DrawnLayer.Late`) stays in its window and
@@ -21,6 +24,8 @@ positions, cuts, coins and writers are that layer's tagged by `w`, so a late edg
 layer's inside its window (`CoversProof.late_one`), and `Compose.CoversProof.reaches_of_rtg` and
 `Compose.WorkProof.writerReads`, which read only the static half, give the cone and the writers.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.ComposePeriod
 

@@ -6,8 +6,31 @@ every slot's rows hold and the slots' inputs carry what Δ copies into them (`Hm
 block from the constants, the data bytes at `msgCol`, `HmRow.rowWires`' chain), the hm96 slot outputs the row's commit
 string (`row_commit`).
 -/
-import Flock.HmRow
-import Proofs.Flock.Soundness.Discharge.Hm.Commit
+module
+
+public import Flock.HmRow
+public import Proofs.Flock.Soundness.Binding.Leaf
+public import Proofs.Flock.Soundness.Discharge.Hm.Commit
+public import Proofs.Flock.Soundness.Discharge.Hm.Slot
+import all Init.Data.String.Defs
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 
