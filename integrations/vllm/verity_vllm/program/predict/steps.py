@@ -39,7 +39,8 @@
   launch) share one Program. Its Program reads every launch its rows ran in, so a recompute after preemption, a cache hit, and a
   request a Commit window carries in or leaves with outputs to keep (its other launches are another window's advice) have no
   Program there. A launch the kernels' captured statics don't cover is the build's refusal, by name: today a step of more than
-  2,048 tokens (the all-reduce and cuBLAS captures) and a row of more than 2,048 keys (`dsa`'s top-k selection).
+  2,048 tokens (the all-reduce and cuBLAS captures). A row of more than INDEX_TOPK keys reads its top-k order from the Program's
+  `run` input (`dsa.run_field`), its own (`batch`'s R1), and the Program returns the checks that order is the top-k set.
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
@@ -704,9 +705,6 @@ def _label(policy: dict) -> str:
     return "greedy" if policy["kind"] == "greedy" else f"t{policy['temperature']:g}-p{policy['top_p']:g}"
 
 
-NO_CHUNKED_TRACE = "no trace: the Build has no chunked request wrapper (`vllm_meta` prefills a request in one launch)"
-
-
 def trace_dir(u: RequestUnit | dict) -> str:
     """The derive dir name of a request Program's trace: `build_request_<prefix_plan.shape_name>_<policy>`, in class G then `_l` and
     the first 12 hex digits of the SHA-256 of its launch context's compact JSON (with its chunks, `{"batch": …, "chunks": …}`)."""
@@ -719,25 +717,28 @@ def trace_dir(u: RequestUnit | dict) -> str:
 
 def trace_commands(summary: dict, registered: Registered, root: str, *, max_model_len: int = 2048) -> list[list[str]]:
     """One `verity-vllm build --wrapper request` per distinct request Program of a compilation (`Compiled.summary()`), on the pinned
-    vLLM (CPU, on meta), each writing `<root>/<trace_dir>`; at tensor-parallel world W, φ's rank's (`--tp W --rank r --dead-free`);
-    in class G at the unit's launch context (`--launch-context '{"batch": ...}'`). A Program with prefill chunks has none: the Build
-    has no chunked request wrapper (`NO_CHUNKED_TRACE`), so `compare` counts it `no_trace`."""
+    vLLM (CPU, on meta), each writing `<root>/<trace_dir>` at a `max_model_len` of at least its LP + T, under φ's GPU's name where
+    φ states one (`--device-name`: the tuned kernel configs a GPU-free host reads); at tensor-parallel world W, φ's rank's
+    (`--tp W --rank r --dead-free`); in class G at the unit's launch context (`--launch-context '{"batch": ...}'`), with its prefill chunks there when it has them
+    (`'{"batch": ..., "chunks": ...}'`: the Build's chunked request wrapper, `vllm_meta.ChunkedGreedyRequest`)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     phi, seen, cmds = registered.phi, set(), []
-    target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
+    target, device = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}, phi.target.get("device_name")
     world = int(phi.tp.get("world", 1))
     tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
     for u in summary["requests"]:
-        if u is None or u.get("chunks") or (d := trace_dir(u)) in seen:
+        if u is None or (d := trace_dir(u)) in seen:
             continue
         seen.add(d)
-        pol = u["policy"]
+        pol, ctx = u["policy"], {"batch": u.get("launch"), **({"chunks": list(u["chunks"])} if u.get("chunks") else {})}
         sampling = "greedy" if pol["kind"] == "greedy" else json.dumps({k: pol[k] for k in ("temperature", "top_p", "top_k")}, sort_keys=True)
         cmds.append(["verity-vllm", "build", "--out", os.path.join(root, d), "--wrapper", "request", "--LP", str(u["LP"]), "--T", str(u["T"]),
                      *(["--cached", str(u["C"])] if u.get("C") else []),
-                     *(["--launch-context", json.dumps({"batch": u["launch"]}, separators=(",", ":"))] if u.get("launch") else []),
-                     "--model", phi.model["repo"], "--revision", phi.model["revision"], "--max-model-len", str(max_model_len),
-                     "--target", json.dumps(target, sort_keys=True), "--profile", phi.profile, "--sampling", sampling, *tp])
+                     *(["--launch-context", json.dumps(ctx, separators=(",", ":"))] if u.get("launch") else []),
+                     "--model", phi.model["repo"], "--revision", phi.model["revision"],
+                     "--max-model-len", str(max(max_model_len, int(u["LP"]) + int(u["T"]))),
+                     "--target", json.dumps(target, sort_keys=True), *(["--device-name", device] if device else []),
+                     "--profile", phi.profile, "--sampling", sampling, *tp])
     return cmds
 
 
@@ -751,7 +752,7 @@ def compare(summary: dict, root: str) -> dict:
         res = Path(root, d, "result.json")
         doc = json.loads(res.read_text()) if res.exists() else {}
         traced = (doc.get("program") or {}).get("digest")
-        why = NO_CHUNKED_TRACE if u.get("chunks") and not doc else str(doc.get("message") or doc.get("unsupported"))[:400] if doc else None
+        why = str(doc.get("message") or doc.get("unsupported"))[:400] if doc else None
         out.append({"unit": d, "compiled": u["digest"], "traced": traced,
                     "outcome": "no_trace" if not traced else ("equal" if traced == u["digest"] else "different"),
                     **({} if traced or why is None else {"trace_error": why})})

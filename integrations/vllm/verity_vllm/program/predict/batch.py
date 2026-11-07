@@ -30,7 +30,11 @@ request's Program is built at its launch context, which the advice fixes, and th
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
   separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a `prefix` behind no checked
   hit included). A tensor-parallel rank's `peers_*` are its request's own: this rests on the node binding each to the same
-  request's partial on the other rank, which the cross-rank transfer must hold request by request.
+  request's partial on the other rank, which the cross-rank transfer must hold request by request. Its `run` (the Waksman
+  settings of each row past INDEX_TOPK, `dsa.run_field`) is its own too: each field routes the request's own key indices, and its
+  checks (`DsaTopKLongRow`) hold the routed order to the top-INDEX_TOPK set of the request's own logits in ascending index order,
+  the one order those logits fix, so each field is a function of the request's own inputs. No order a kernel or a prover picks
+  passes: a row past INDEX_TOPK is served under `VERITY_DSA_TOPK=canonical` (`dsa.Net` refuses an engine without it).
 """
 
 from __future__ import annotations
@@ -77,15 +81,17 @@ def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tup
     """GP-01's parameters by holder: its shared Input batches `SHARED`; each request's own groups (`OWN_GROUPS`) held by its index,
     and its `prefix` too when its hit's tokens are checked equal (``checked``, R2); a tensor-parallel rank's `peers_<k>` held by its
     index too, since the node binds each to the same request's partial of collective k on the other rank (`tp_links.json`; GP-01's
-    `request[<id>].peers_<k>`), a value of that request's own inputs on every rank; any other request-local group (`splits`, an
-    unchecked `prefix`, `schedule`, or one unknown here) `BATCH`. Its return: each request's outputs held by its index."""
+    `request[<id>].peers_<k>`), a value of that request's own inputs on every rank, and its `run` (R1 of the module docstring); any
+    other request-local group (`splits`, an unchecked `prefix`, `schedule`, or one unknown here) `BATCH`. Its return: each request's
+    outputs held by its index."""
     labels: list[Any] = [SHARED] * len(wl.shared_by_request[0])
     for r, sh in zip(wl.requests, wl.shared_by_request):
         groups = r.component.groups
         if len(groups) != len(r.component.params):
             raise BatchDependent(f"request {r.index}: its component names no group for some Input (provenance unknown)")
         mine = OWN_GROUPS + ("prefix",) * (r.index in checked)
-        labels += [own(r.index) if g in mine or g.startswith("peers_") else BATCH for j, g in enumerate(groups) if j not in set(sh)]
+        labels += [own(r.index) if g in mine or g == "run" or g.startswith("peers_") else BATCH
+                   for j, g in enumerate(groups) if j not in set(sh)]
     return tuple(labels), Fields(tuple(own(r.index) for r in wl.requests))
 
 
