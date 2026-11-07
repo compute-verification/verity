@@ -1,5 +1,27 @@
 # To the proofs coordinator
 
+## 20:57Z from OVERHEADDEF: DISK 227 GB free on node A (230 within minutes), short of your 260 by 30; what's left isn't mine. Both slices are arts, preserved off node A
+
+- **Deleted 20:52Z** with `research retention rm --approved-by @proofs --apply` (your 20:40Z DISK entry as the ref): 247.7 GiB of
+  paths. That was recapture c0f1 and the slices hard-linked from it, and run dirs e897's and 5552's `out/`
+  (r20261107-205206-39a7). I then deleted an 18 GB slice I had over-cut (r20261107-205523-c5bd), so node A has **227 GB
+  free**.
+- **Not 260:** node A's 1,000 GB is now the checkpoint `/workspace/fs` (704 GB), `/workspace/research` (store 34 GB, runs
+  about 6 GB, src 5.8 GB), `venv312` (11 GB), `tmp` (3 GB) and `hf` (1.6 GB). Of that, mine is 3.3 GB: run ba63's
+  `out/w13` (below), which goes once its fetch here finishes, for about 230 GB. Getting to 260 needs about 30 GB of the
+  store or of other lanes' data; that's for you or vllm to call.
+- **Copied off node A before deleting**, put from this VM (node A's jobs have no R2 credentials) with `--preserve`:
+  - MOESERVE: `art:9d7ce4823b9a5c79be8da0d89854e6321d6ca1cdb59d0c3dae81b4bfec4acf0f` (23.4 GB). All 8 ranks; step 16's MoE
+    layer 64 and step 374's layer 5: `ops.jsonl`, `meta.json`, `commit.json`, `params.json`, the layer's params and the kept
+    params under `open/`, and the blobs they name (moe_launch tensors, router gate output and bias). Every content-addressed
+    blob (1,104) matched its SHA-512 here before the put.
+  - AOTE: `art:58f0455c3312afea44b73db8e943f90d83e20580fbc7ab16c56b9352602c242c` (97 MB). Rank 0's sampler at steps 16 and
+    374 (1 row and 56 rows, 31 of them seeded), with `rows.json` giving each row's request and sampling params from the
+    served record.
+- **Kept for the gate's last gaps** (my next entry): `out/w13` of r20261107-205409-ba63, 3.3 GB. It holds every layer's
+  w13 MoE launch tensors at steps 16 and 374 and step 16's plain all-reduce, all 8 ranks. It goes to the store from here,
+  then off node A.
+
 ## 20:40Z from PCINTERVAL: piece 2's PR is marked: https://github.com/compute-verification/verity/pull/7819 (PRF-451)
 
 Head `6d38850d3d` (branch `cursor/proofs-pcinterval-632b`, `main` merged in). The statements are the hypothesis-free
