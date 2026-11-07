@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -68,58 +67,23 @@ def test_compile_mode_reads_vllm_s_log(tmp_path):
     assert [L.compile_mode(p) for p in (fresh, load, none, tmp_path / "missing.log")] == ["compile", "load", None, None]
 
 
-class Config:
-    def __init__(self, r0: int):
-        self.kwargs, self.num_warps, self.num_stages = {"XBLOCK": 2, "R0_BLOCK": r0}, 8, 1
-
-
-class Launcher:
-    def __init__(self, r0: int):
-        self.config = Config(r0)
-
-
-class Autotuner:
-    """Inductor's CachingAutotuner as far as the tiling log reads it: a kernel with two candidate tilings keeps one."""
-
-    def __init__(self, keep: int):
-        self.launchers, self.keep = [Launcher(1024), Launcher(512)], keep
-        self.inductor_meta, self.fn = {"kernel_name": "triton_red_fused_add_rms_norm_1"}, None
-        self.heuristic_type = SimpleNamespace(name="REDUCTION")
-
-    def autotune_to_one_config(self, *args, **kwargs):
-        self.launchers = [x for x in self.launchers if x.config.kwargs["R0_BLOCK"] == self.keep]
-
-
-def test_the_tiling_log_records_each_runtime_choice(tmp_path, monkeypatch):
-    class Tuner(Autotuner):
-        pass
-
-    (tmp_path / "replay-1").mkdir()
-    monkeypatch.setenv(L.TILINGS_ENV, str(tmp_path / "replay-1"))
-    L.patch_autotuner(Tuner)
-    L.patch_autotuner(Tuner)
-    Tuner(512).autotune_to_one_config()
-    recs = [json.loads(x) for f in (tmp_path / "replay-1").glob("tilings.*.jsonl") for x in f.read_text().splitlines()]
-    assert recs == [{"kernel": "triton_red_fused_add_rms_norm_1", "heuristic": "REDUCTION",
-                     "kept": {"XBLOCK": 2, "R0_BLOCK": 512, "num_warps": 8, "num_stages": 1},
-                     "candidates": [{"XBLOCK": 2, "R0_BLOCK": r, "num_warps": 8, "num_stages": 1} for r in (1024, 512)]}]
-
-
-def tiling_log(d: Path, *kept: int, xblock: int = 1024) -> None:
+def tiling_log(d: Path, *kept: int, xblock: int = 1024, first: str = "k") -> None:
     d.mkdir(parents=True, exist_ok=True)
     for pid, r0 in enumerate(kept):
-        recs = [{"kernel": "k", "heuristic": "REDUCTION", "candidates": [], "kept": {"R0_BLOCK": r0}},
+        recs = [{"kernel": "j", "heuristic": "REDUCTION", "candidates": [], "kept": {"R0_BLOCK": 2048}},
+                {"kernel": "k", "heuristic": "REDUCTION", "candidates": [], "kept": {"R0_BLOCK": r0}},
                 {"kernel": "p", "heuristic": "POINTWISE", "candidates": [], "kept": {"XBLOCK": xblock}}]
+        recs.sort(key=lambda r: r["kernel"] != first)
         (d / f"tilings.{pid}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
 
 
-def test_replays_that_kept_different_tilings_get_different_digests(tmp_path):
+def test_runs_that_kept_different_tilings_get_different_digests(tmp_path):
     tiling_log(tmp_path / "a", 512)
-    tiling_log(tmp_path / "b", 512, xblock=512)
+    tiling_log(tmp_path / "b", 512, xblock=512, first="j")
     tiling_log(tmp_path / "c", 1024)
     tiling_log(tmp_path / "tp", 1024, 512)
     a, b, c, tp = (L.tilings(tmp_path / n) for n in ("a", "b", "c", "tp"))
-    assert a == b and a["digest"] != c["digest"] and (a["processes"], a["choices"]) == (1, 1)
+    assert a == b and a["digest"] != c["digest"] and (a["processes"], a["choices"]) == (1, 2)
     assert tp["processes"] == 2 and L.tilings(tmp_path / "none") is None
 
 
@@ -143,11 +107,11 @@ def test_only_a_reductions_choice_can_change_a_sum():
 
 def test_the_pin_is_read_from_the_environment(monkeypatch):
     monkeypatch.delenv("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", raising=False)
-    monkeypatch.delenv("TORCHINDUCTOR_DETERMINISTIC", raising=False)
+    monkeypatch.delenv(L.P.PIN, raising=False)
     assert L.pin() == "unpinned"
     monkeypatch.setenv("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", "0")
     assert L.pin() == "rblock"
-    monkeypatch.setenv("TORCHINDUCTOR_DETERMINISTIC", "1")
+    monkeypatch.setenv(L.P.PIN, "1")
     assert L.pin() == "pinned" and set(L.PIN_ENV) == {"pinned", "rblock", "unpinned"}
 
 
@@ -159,6 +123,7 @@ def test_summary_reads_a_model_directory(tmp_path):
                                               "window": {"sent": 4, "ok": 4}}))
     replay_json(d / "replay-1", 0)
     replay_json(d / "replay-2", 4, against=1)
+    tiling_log(d / L.SERVING_TILINGS, 512)
     tiling_log(d / "replay-1", 512)
     tiling_log(d / "replay-2", 1024)
     (d / "replay-2.log").write_text("Compiling a graph for compile range\n")
@@ -173,9 +138,10 @@ def test_summary_reads_a_model_directory(tmp_path):
     assert row["replays"][1]["compile"] == "compile"
     assert row["alone"]["requests_tokens_differing"] == 1
     md = L.markdown([row])
-    assert row["tilings"] == {"replays": 2, "distinct": 2, "choices": 1}
-    assert ("| qwen3-8b | 1 | TORCHINDUCTOR_DETERMINISTIC=1 TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 | 4, 10, 40 | 1 of 2 | "
-            "90.000000% | 0, 1 (fresh compile) | 1 | 2 of 2 (1) | 1 of 2 |") in md
+    assert row["serve_tilings"]["digest"] == row["replays"][0]["tilings"]["digest"]
+    assert row["tilings"] == {"runs": 3, "distinct": 2, "choices": 2}
+    assert ("| qwen3-8b | 1 | LADDER_PIN=1 | 4, 10, 40 | 1 of 2 | "
+            "90.000000% | 0, 1 (fresh compile) | 1 | 2 of 3 (2) | 1 of 2 |") in md
     for legacy, arm in ((True, "rblock"), (False, "unpinned"), (None, "unpinned")):
         (d / "serve.json").write_text(json.dumps({"model": "qwen3-8b", "inductor_pin": legacy}))
         assert L.model_row(d)["pin"] == arm

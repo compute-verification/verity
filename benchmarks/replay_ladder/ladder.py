@@ -21,9 +21,12 @@ engine: vLLM's own OpenAI server, compiled with CUDA graphs, chunked prefill, pr
 - ``alone`` serves an evenly spaced sample of the window's requests one at a time, each on an empty prefix cache, in the
   same compiled engine, and compares their tokens with serving's: how far a request's tokens depend on its batch, which
   is why the replay needs the recorded schedule.
-- ``summary`` reads each model's directory into summary.json and summary.md, one row per model and arm (the Inductor
-  environment it served and replayed in, `pin`). A row of output is one request's token at one position; its share
-  exact is the window's output tokens less those that differ, over the window's output tokens.
+- ``summary`` reads each model's directory into summary.json and summary.md, one row per model and arm (how Inductor
+  chose in the processes that served and replayed it, `pin`). A row of output is one request's token at one position; its
+  share exact is the window's output tokens less those that differ, over the window's output tokens.
+
+Serving and every replay pin and log Inductor's on-device choices as the environment says (`inductor_pin`); the capacity
+server and each replay's processes log the configs they kept at run time.
 """
 from __future__ import annotations
 
@@ -45,13 +48,14 @@ ROOT = HERE.parents[1]
 SERVE_TAX = ROOT / "benchmarks/serve_tax"
 CHECKPOINTS = ROOT / "integrations/vllm/manifests/checkpoints.json"
 sys.path.insert(0, str(SERVE_TAX))
+import inductor_pin as P  # noqa: E402 (beside this file, on sys.path when it runs and when its tests import it)
 import replay as R  # noqa: E402 (serve_tax's, put on sys.path above)
 import serve_tax as S  # noqa: E402
 SCHEMA = "verity-bench/replay-ladder/v0"
 #: the load each model's window is served at, and the one each replay and the alone sample read
 LOAD = "saturated"
-#: the directory a replay's processes log their runtime tiling choices to (log_tilings)
-TILINGS_ENV = "LADDER_TILINGS"
+#: where the capacity server's processes log the configs they keep at run time
+SERVING_TILINGS = "serving"
 
 
 @dataclass(frozen=True)
@@ -113,18 +117,16 @@ def tp_engine(tp: int) -> Any:
 
 # ------------------------------------------------------------------------------------------------------------ serve
 
-#: each arm's Inductor environment, which run.sh sets and `pin` reads back
-PIN_ENV = {"pinned": "TORCHINDUCTOR_DETERMINISTIC=1 TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0",
-           "rblock": "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0", "unpinned": "none"}
+#: each arm's environment, which run.sh sets and `pin` reads back
+PIN_ENV = {"pinned": f"{P.PIN}=1", "rblock": "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0", "unpinned": "none"}
 
 
 def pin() -> str:
-    """The arm whose Inductor environment this process runs in. Unpinned, a reduction with more than one candidate
-    config benchmarks them on its first launch in each process and keeps the faster, so two processes can sum in
-    different orders. ``pinned`` (`TORCHINDUCTOR_DETERMINISTIC=1`) gives every reduction one config; ``rblock``
-    (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`) only drops the halved-R0_BLOCK candidate, leaving a reduction's static
-    candidates to the benchmark."""
-    if os.environ.get("TORCHINDUCTOR_DETERMINISTIC") == "1":
+    """The arm this process runs in. Unpinned, a kernel with more than one candidate config times them on its first launch
+    in each process and keeps the fastest, so two processes can sum in different orders. ``pinned`` (`inductor_pin`)
+    keeps Inductor's first candidate everywhere; ``rblock`` (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`) only drops the
+    halved-R0_BLOCK candidate, leaving a reduction's static candidates to the timing."""
+    if os.environ.get(P.PIN) == "1":
         return "pinned"
     return "rblock" if os.environ.get("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK") == "0" else "unpinned"
 
@@ -147,10 +149,14 @@ def serve(a: argparse.Namespace) -> int:
     traffic.BOS, traffic.BLANK_LINE = native_tokens(AutoTokenizer.from_pretrained(str(ck), trust_remote_code=True))
     out = Path(a.out)
     cap = out / "capacity"
+    real_site = S.plugin_site
+    S.plugin_site = lambda site, tick: P.site(real_site(site, tick))
     base = ["--model-id", a.model, "--checkpoint", str(ck), "--c4", a.c4, "--docs", str(a.docs), "--reps", "1",
             "--warm-s", "10"]
+    os.environ[P.TILINGS] = str(out / SERVING_TILINGS)
     if S.main(["run", "--arm", "compiled", *base, "--rates", "burst=1000", "--requests", str(a.burst), "--out", str(cap)]):
         return 1
+    del os.environ[P.TILINGS]
     burst = S.arm_metrics(cap)["loads"]["burst"][0]
     capacity = burst["req_per_s"]
     rate = round(a.over * capacity, 2)
@@ -170,44 +176,6 @@ def serve(a: argparse.Namespace) -> int:
 
 # ----------------------------------------------------------------------------------------------------------- replay
 
-def log_tilings(d: Path) -> None:
-    """Have this process, and every engine process it starts (they inherit the environment and import this module),
-    append each Inductor kernel that benchmarks more than one config on its first launch, with the one it keeps, to
-    ``d/tilings.PID.jsonl``. Processes that keep different configs reduce in different orders: the pin's question."""
-    d.mkdir(parents=True, exist_ok=True)
-    os.environ[TILINGS_ENV] = str(d)
-    patch_autotuner()
-
-
-def patch_autotuner(autotuner: Any = None) -> None:
-    """Wrap Inductor's ``CachingAutotuner.autotune_to_one_config`` (or ``autotuner``'s) to log what log_tilings says."""
-    d = os.environ.get(TILINGS_ENV)
-    if not d:
-        return
-    if autotuner is None:
-        from torch._inductor.runtime.triton_heuristics import CachingAutotuner as autotuner
-
-    real = autotuner.autotune_to_one_config
-    if getattr(real, "ladder", False):
-        return
-
-    def cfg(c: Any) -> dict:
-        return {**c.kwargs, "num_warps": c.num_warps, "num_stages": c.num_stages}
-
-    def autotune_to_one_config(self: Any, *args: Any, **kwargs: Any) -> Any:
-        candidates = [cfg(x.config) for x in self.launchers]
-        out = real(self, *args, **kwargs)
-        rec = {"kernel": self.inductor_meta.get("kernel_name") or self.fn.__name__,
-               "heuristic": getattr(getattr(self, "heuristic_type", None), "name", None), "candidates": candidates,
-               "kept": cfg(self.launchers[0].config)}
-        with open(Path(d) / f"tilings.{os.getpid()}.jsonl", "a") as f:
-            f.write(json.dumps(rec) + "\n")
-        return out
-
-    autotune_to_one_config.ladder = True  # type: ignore[attr-defined]
-    autotuner.autotune_to_one_config = autotune_to_one_config
-
-
 def sums(rec: dict) -> bool:
     """Whether a logged choice can change the order of a sum: a reduction's, never a pointwise kernel's (logs written
     before the heuristic was recorded: a reduction block among the candidates, or a reduction's kernel name)."""
@@ -218,13 +186,14 @@ def sums(rec: dict) -> bool:
 
 
 def tilings(d: Path) -> dict | None:
-    """A replay's runtime choices among reduction configs (log_tilings): how many reductions chose in its busiest
-    process, and a digest of every process's choices in launch order, equal between two replays that chose alike."""
+    """The run-time choices among reduction configs that serving's or a replay's processes logged (`inductor_pin`): how
+    many reductions chose in the busiest process, and a digest of every process's choices, equal between two runs whose
+    processes chose alike."""
     files = sorted(d.glob("tilings.*.jsonl"))
     if not files:
         return None
-    procs = sorted(json.dumps([[r["kernel"], r["kept"]] for r in map(json.loads, f.read_text().splitlines()) if sums(r)],
-                              sort_keys=True) for f in files)
+    procs = sorted(json.dumps(sorted([r["kernel"], r["kept"]] for r in map(json.loads, f.read_text().splitlines())
+                                     if sums(r)), sort_keys=True) for f in files)
     return {"processes": len(procs), "choices": max(len(json.loads(p)) for p in procs),
             "digest": hashlib.sha512("\n".join(procs).encode()).hexdigest()[:16]}
 
@@ -233,7 +202,8 @@ def replay(a: argparse.Namespace) -> int:
     ck = register(a.model)
     R.engine = tp_engine(LADDER[a.model].tp)
     out = Path(a.out)
-    log_tilings(out / f"replay-{a.index}")
+    os.environ[P.TILINGS] = str(out / f"replay-{a.index}")
+    P.apply()
     argv = ["--arm-dir", str(out / "record"), "--load", LOAD, "--checkpoint", str(ck), "--out", str(out / f"replay-{a.index}")]
     if a.index > 1:
         argv += ["--against", str(out / "replay-1")]
@@ -338,8 +308,9 @@ def model_row(d: Path) -> dict:
             "against_first_requests_differing": (r.get("against") or {}).get("requests_tokens_differing"),
             "replay_over_served": r["replay_over_served"], "compile": compile_mode(d / f"{rd.name}.log"),
             "tilings": tilings(rd)})
-    seen = [x["tilings"] for x in row["replays"] if x.get("tilings")]
-    row["tilings"] = {"replays": len(seen), "distinct": len({t["digest"] for t in seen}),
+    row["serve_tilings"] = tilings(d / SERVING_TILINGS)
+    seen = [t for t in (row["serve_tilings"], *(x.get("tilings") for x in row["replays"])) if t]
+    row["tilings"] = {"runs": len(seen), "distinct": len({t["digest"] for t in seen}),
                       "choices": max(t["choices"] for t in seen)} if seen else None
     af = d / "alone" / "alone.json"
     if af.is_file():
@@ -353,7 +324,8 @@ def model_row(d: Path) -> dict:
 def markdown(rows: list[dict]) -> str:
     head = ("| model | TP | Inductor pin | window: requests, steps, output tokens | replays exact | rows exact (worst replay) | "
             "requests differing from serving, per replay | requests differing from replay 1 | "
-            "tilings kept at run time: distinct sets over replays (kernels choosing) | alone: requests differing |")
+            "tilings kept at run time: distinct sets over serving and replays (kernels choosing) | "
+            "alone: requests differing |")
     lines = [head, "|" + "---|" * 10]
     for r in rows:
         reps = [x for x in r["replays"] if "bit_exact" in x]
@@ -367,7 +339,7 @@ def markdown(rows: list[dict]) -> str:
         alone_s = f"{al['requests_tokens_differing']} of {al['requests']}" if al else "—"
         win = (f"{w.get('requests', '—')}, {w.get('steps', '—')}, {w.get('tokens_served', '—')}" if w else "—")
         t = r.get("tilings")
-        tiling = f"{t['distinct']} of {t['replays']} ({t['choices']})" if t else "—"
+        tiling = f"{t['distinct']} of {t['runs']} ({t['choices']})" if t else "—"
         lines.append(f"| {r['model']} | {r['tp'] or '—'} | {PIN_ENV[r['pin']]} | {win} | {exact} | {worst} | {per} | "
                      f"{first} | {tiling} | {alone_s} |")
     return "\n".join(lines) + "\n"
@@ -412,7 +384,7 @@ def main(argv: list[str] | None = None) -> int:
     return {"serve": serve, "replay": replay, "alone": alone, "summary": summary}[a.cmd](a)
 
 
-patch_autotuner()  # a spawned engine process imports this module as __mp_main__ and inherits LADDER_TILINGS
+P.apply()  # a spawned engine process imports this module as __mp_main__ and inherits the environment
 
 if __name__ == "__main__":
     sys.exit(main())
