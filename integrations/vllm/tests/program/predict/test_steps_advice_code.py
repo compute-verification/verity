@@ -7,7 +7,6 @@ from __future__ import annotations
 import pytest
 from verity_vllm.pipeline.advice_code import codec as V1
 from verity_vllm.pipeline.advice_code import schedule as SC
-from verity_vllm.pipeline.advice_code import window_code as CV
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.steps import Registered, compile_steps, plan_steps
 
@@ -21,15 +20,16 @@ TICK = SC.Tick(bucket_us=1000, sat_us=1000, free_us=1000)
 CAP = 1 << 13
 
 
-def _v1_session() -> tuple[V1.Record, V1.Registered, I1.Advice, bytes, dict]:
-    """Three greedy requests of 6 prompt tokens and 4 outputs each under the certified tick with no prefix cache, so the replay
-    fixes every step and v1 sends nothing but its windows' frames: the honest advice is the one W empty windows decode to, and
-    its v1 string is that advice's encoding. With the record, the code's registration, and the certified bodies."""
+def _v1_session(tick: bool = True) -> tuple[V1.Record, V1.Registered, I1.Advice, bytes, dict]:
+    """Three greedy requests of 6 prompt tokens and 4 outputs each with no prefix cache. Under the certified tick the replay
+    fixes every step and v1 sends nothing: the honest advice is the one the empty string decodes to. Without the tick
+    (`tick=False`) the same advice's string sends the replay's decisions. With the record, the code's registration, the
+    advice's v1 string under it, and the certified bodies."""
     reqs = tuple(V1.Request(f"q{k}", tuple(_prompt(k, 6)), 4, (5, 6, 7, 8), end, (end + 2, end + 3, end + 4, end + 5))
                  for k, end in enumerate((0, 0, 2)))
-    record, code = V1.Record(reqs), V1.Registered(ENGINE, (EOS,), T=3, tick=TICK)
-    empty = CV.encode([CV.Window()] * V1.windows(record, code.T), CV.Book.uniform(V1.TICK_CAPS)).bitlist()
-    advice = V1.decode_bits(empty, record, code)
+    record, ticked = V1.Record(reqs), V1.Registered(ENGINE, (EOS,), T=3, tick=TICK)
+    advice = V1.decode_bits([], record, ticked)
+    code = ticked if tick else V1.Registered(ENGINE, (EOS,), T=3)
     ingress = {q.id: {**GREEDY, "prompt": list(q.prompt), "model": "m", "user": q.id} for q in reqs}
     return record, code, advice, V1.encode(advice, record, code), ingress
 
@@ -39,21 +39,22 @@ def _coded(code: V1.Registered, cap_bits: int = CAP) -> Registered:
 
 
 def test_a_v1_string_compiles_to_the_compilation_of_the_i1_it_carries():
-    """The string and the I1 v0 bytes of one session compile alike, every request's Program and every step's rows, while the
-    string is a tenth of I1's bits."""
-    record, code, advice, data, ingress = _v1_session()
-    assert [[(r.request, r.start, r.n) for r in st.rows] for st in advice.steps][:2] == [[(0, 0, 2), (1, 0, 6)], [(1, 6, 1), (0, 2, 4)]]
-    coded = compile_steps(_coded(code), data, ingress, record=record)
-    plain = compile_steps(_registered(cap_bits=CAP), I1.encode(advice), ingress)
-    assert coded.summary() == plain.summary() and len(coded.programs) == 1 and coded.batch_rule is None
-    assert plan_steps(_coded(code), data, ingress, record=record).steps == plan_steps(_registered(), advice, ingress).steps
-    assert 10 * 8 * len(data) < 8 * len(I1.encode(advice))
+    """The string and the I1 v0 bytes of one session compile alike, every request's Program and every step's rows: under the
+    certified tick the string is empty, and without it, where it sends the decisions, it is a tenth of I1's bits."""
+    for tick in (True, False):
+        record, code, advice, data, ingress = _v1_session(tick)
+        assert [[(r.request, r.start, r.n) for r in st.rows] for st in advice.steps][:2] == [[(0, 0, 2), (1, 0, 6)], [(1, 6, 1), (0, 2, 4)]]
+        coded = compile_steps(_coded(code), data, ingress, record=record)
+        plain = compile_steps(_registered(cap_bits=CAP), I1.encode(advice), ingress)
+        assert coded.summary() == plain.summary() and len(coded.programs) == 1 and coded.batch_rule is None
+        assert plan_steps(_coded(code), data, ingress, record=record).steps == plan_steps(_registered(), advice, ingress).steps
+        assert data == b"" if tick else 0 < 10 * 8 * len(data) < 8 * len(I1.encode(advice))
 
 
 def test_the_cap_bounds_the_v1_strings_bits():
     """ℓ is held to the string's bits before any of it is read: at its length the string compiles, a bit below it is refused, and
     at that ℓ a registration that selects no code refuses the session's I1 bytes."""
-    record, code, advice, data, ingress = _v1_session()
+    record, code, advice, data, ingress = _v1_session(tick=False)
     n = 8 * len(data)
     assert compile_steps(_coded(code, n), data, ingress, record=record).cap_bits == n
     with pytest.raises(Unexpressible, match=f"the advice is {n} bits, over the registered cap ℓ = {n - 1} bits"):
@@ -63,11 +64,11 @@ def test_the_cap_bounds_the_v1_strings_bits():
 
 
 def test_a_corrupted_v1_string_is_refused_by_name():
-    """Every prefix, every one-bit change and an extension of the string: v1 refuses each (the tick and the record leave one
-    string), the same way twice, and the compiler names it ill-formed v1 advice."""
+    """Under the certified tick the record leaves one string, the empty one: every string of one byte, and two zero bytes, v1
+    refuses, the same way twice, and the compiler names it ill-formed v1 advice."""
     record, code, _, data, ingress = _v1_session()
-    flips = [bytes(b ^ (1 << (7 - j % 8)) if i == j // 8 else b for i, b in enumerate(data)) for j in range(8 * len(data))]
-    for x in [data[:k] for k in range(len(data))] + flips + [data + b"\0"]:
+    assert data == b""
+    for x in [bytes([b]) for b in range(256)] + [b"\0\0"]:
         why = []
         for _ in range(2):
             with pytest.raises(Unexpressible, match="^ill-formed v1 advice: ") as e:
