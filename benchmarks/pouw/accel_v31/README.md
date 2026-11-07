@@ -1,15 +1,15 @@
 # accel_v31: Dither's no-fold call on the GPU
 
 The GPU prover of one Dither call, the binding that runs it a call at a time, and the CPU reference and verifier checks
-that judge its output bit for bit. The call is `verity/core/protocols/pouw/circuit/dither.py`'s:
+that judge its output bit for bit. The call is `verity/ml/protocols/pouw/circuit/dither.py`'s:
 
 - m rows of A against n rows of B, at contraction K;
 - HYB noise in noise tiles of L′ inner indices;
 - the prefix sums T_s after each segment of L inner indices (S = ⌈K / L⌉ segments);
 - and, for a served call, its output O mod 2^32.
 
-The call's values are committed as hm96 rows (hiding leaves) in one frame-v3-sha512 tree, before the check coin. The
-verifier then opens the proof blocks that the check coin draws. A served call commits T_1 .. T_{S−1} and O, since O
+The call's values are committed under hiding commitments (hiding leaves) in one frame-v3-sha512 tree, before the check
+coin. The verifier then opens the proof blocks that the check coin samples. A served call commits T_1 .. T_{S−1} and O, since O
 implies T_S. A filler call commits T_1 .. T_S over its pad. `benchmarks/pouw/highutil` runs its periods through this
 binding.
 

@@ -3,7 +3,9 @@ module
 public import Definitions.Accounting.Guarantees.Joint
 public import Proofs.Accounting.Device
 public import Proofs.Accounting.Prob
-public import Mathlib.Tactic.Linarith
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # Proof of the joint guarantee and its covert residual

@@ -14,9 +14,8 @@ parameters, runs the check, and turns every decoding failure into a rejection, s
 -/
 module
 
-public import Lean.Data.Json
-public import Flock.Bytes
 public import Flock.Canon
+public import Lean.Data.Json.Parser
 
 @[expose] public section
 set_option backward.privateInPublic true

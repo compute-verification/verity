@@ -1,12 +1,12 @@
 """The reference for V*'s hashing (hiding model architectures): every inner Ligerito opening's leaf climbs to
-the node of its tree's top that its coin-derived position names, every top opens the salted commitment the coin server
+the node of its tree's top that its coin-derived position names, every top opens the hiding commitment the coin server
 received, and every message row opens its commitment.
 
 V* (the outer statement) checks an inner session of `verity_flock.rec_live` without seeing the inner statement or a tree's
 top. Its hashing part, which this module states over plain Python:
 
 * **Tops** (`tops`). Each tree's top (its Ligerito cap, ``2^c`` nodes) is the prover's (``private.json``); the coin server
-  received each node's salted commitment (`verity_flock.rec_live.commit_top`): level 0's at ``Commit`` (``root_B``, the one
+  received each node's hiding commitment (`verity_flock.rec_live.commit_top`): level 0's at ``Commit`` (``root_B``, the one
   tree both reps share), level ``l >= 1``'s in the round that absorbed it. A top whose nodes and salts do not open those
   commitments is refused (``FIREWALL-REFUSED: tree top``). The stacked table R has no root at ``Commit``: its level 0 is
   its binding round's top, which must be the top registered at staging (`registered`: the ``stacked`` entry of the
@@ -19,7 +19,7 @@ top. Its hashing part, which this module states over plain Python:
   inner proof's and the top's nodes the prover's (V*'s witness); the positions and depths are public. A proof with
   ``hm96-sha512/v1`` leaves (``SHA-512(leaf_prefix || b || c)`` for ``x = SHA-512(row)`` under the opening's 192-byte
   salt: rec-step2's sessions and the fixture) decodes and climbs too; the RecOpen gadgets open plain leaves alone.
-* **Message rows**: each round's free message rows open the ``b || c`` the coin server recorded for them before it flipped the
+* **Message rows**: each round's free message rows open the ``b || c`` the challenger recorded for them before it flipped the
   round's coins (`verity_flock.rec_live.commit_rows`).
 
 `check` runs all three over a finished inner session (``public.json``, ``private.json`` and the proofs); `queries` lists the
@@ -227,7 +227,7 @@ def query_rounds(public: dict, stream: str, qs: list[int]) -> list[dict]:
 @dataclass(frozen=True)
 class Top:
     """A tree's top as the ZK server committed it: its nodes and their salts (the prover's, ``private.json``) and each node's
-    ``b || c`` (the coin server's record, public)."""
+    ``b || c`` (the challenger's record, public)."""
 
     nodes: tuple[bytes, ...]
     salts: tuple[bytes, ...]
@@ -235,7 +235,7 @@ class Top:
 
 
 def opened_top(opening: dict, bcs: list[str], what: str) -> Top:
-    """The prover's ``opening`` of a top (its nodes and salts), when they open ``bcs``, the ``b || c`` a node the coin server
+    """The prover's ``opening`` of a top (its nodes and salts), when they open ``bcs``, the ``b || c`` a node the challenger
     received; refused by name otherwise."""
     nodes = [bytes.fromhex(x) for x in opening["nodes"]]
     salts = [bytes.fromhex(x) for x in opening["salts"]]
@@ -246,7 +246,7 @@ def opened_top(opening: dict, bcs: list[str], what: str) -> Top:
 
 
 def tops(public: dict, private: dict, stream: str, table: str = "circuit") -> list[Top]:
-    """Each Ligerito level's top of a rep's stream, opened (`opened_top`) against the coin server's record: level 0's the
+    """Each Ligerito level's top of a rep's stream, opened (`opened_top`) against the challenger's record: level 0's the
     table's ``root_B`` from ``Commit`` (for a table with none there, the stacked table R, its binding round's salted top),
     then each later salted top in the order the stream's rounds absorbed them. A round's copies of a level-0 top
     (``level0``: the binding round's, Ligerito's first absorb) are not levels of their own."""

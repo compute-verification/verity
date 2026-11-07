@@ -181,7 +181,7 @@ def dots : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
 
 private def quaternary (f : Nat → Nat → Nat → Nat → Nat) : Array Nat → Nat := fun xs => f xs[0]! xs[1]! xs[2]! xs[3]!
 
-/-- PoUW's and NCP's word primitives by id (`verity.core.protocols.pouw.circuit.words`, the vLLM integration's
+/-- PoUW's and NCP's word primitives by id (`verity.ml.protocols.pouw.circuit.words`, the vLLM integration's
 `pouw_rows`), with the signatures the registry holds for them. -/
 def words : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
   open Words in
@@ -252,8 +252,8 @@ def mufu : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
 signatures the registry holds for them. -/
 def decimals : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
   open Decimal in
-  [("F32ExpRn_v1", #[("x", f32)], f32, unary f32ExpRn), ("F32ErfRn_v1", #[("x", f32)], f32, unary f32ErfRn),
-   ("F32TanhRn_v1", #[("x", f32)], f32, unary f32TanhRn)]
+  [("F32ExpRn_v1", #[("x", f32)], f32, unary f32ExpRn), ("F32LogRn_v1", #[("x", f32)], f32, unary f32LogRn),
+   ("F32ErfRn_v1", #[("x", f32)], f32, unary f32ErfRn), ("F32TanhRn_v1", #[("x", f32)], f32, unary f32TanhRn)]
 
 /-- The activations and RoPE's outputs by id (the vLLM integration's `prims`, `act` and `dense`), with the signatures the
 registry holds for them. -/

@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Accounting.Tag.Basic
 public import Definitions.Accounting.Guarantees.Tag
+import Mathlib.NumberTheory.LucasLehmer
 
 /-!
 # A partially read block's words

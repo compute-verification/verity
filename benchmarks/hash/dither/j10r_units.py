@@ -29,8 +29,8 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity_vllm.protocols.pouw.h1 import receipts as RC
 
 CALL_SEED_TAG = b"verity/pouw/call-seed/v1".ljust(24, b"\0")
@@ -95,7 +95,7 @@ def lean_vectors() -> dict:
                             "h1_seeds_c": _kernel_seed(data, 0, 40)},
            "receiptSeed_vec": {"seeds.receipt_seed": SD.receipt_seed(salt, 46, ra, rb),
                                "h1_seeds_c": _kernel_seed(data, 1, 46)},
-           "noiseBlock_vec": {"_stream": _stream(sc, np.array([24]))[0].astype(">u4").tobytes()}}
+           "noiseChunk_vec": {"_stream": _stream(sc, np.array([24]))[0].astype(">u4").tobytes()}}
     doc: dict = {"file": str(path.relative_to(path.parents[4])), "bad": 0}
     for name, by in got.items():
         want = lean.get(name)

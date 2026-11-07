@@ -1,0 +1,22 @@
+# The SPOT post's figures and their tests. Not a package: `figures.py` writes Figures 1-3's JSON and renders from the
+# cards (`cards.py`), and the card schema, the workload card's generator, the cost model, the curves' bisection and
+# the renders run here as a suite (`uv run tools/verity/check/suites.py benchmarks/spot_figures`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# figure1.py plans with the sampled-proofs planner (optimize.py, which reads the integrity profile and the one-stage
+# partition's size classes); the monitoring periods are core's `wipe_monitoring`'s, whose imports span PoUS, the deploy
+# and wire layers, and the ml units PoUS reads; the world (the census and rho's world fleet, its locations' GPUs), the
+# datacenter (the census), the H200's peak (the census), the output cap and the references (rho's reference), a
+# MAC's AND gates (the FP8 MoE coordinate's circuit-check pin).
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/record.py", "verity/core/protocols/profile.py",
+          "verity/core/protocols/sampled_proofs", "verity/core/claims", "verity/core/protocols/pous",
+          "verity/core/deploy", "verity/core/wire", "verity/ml/__init__.py", "verity/ml/circuits",
+          "verity/ml/kernels", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
+          "benchmarks/census/adversary.json", "benchmarks/census/deployments.json", "benchmarks/census/hardware.json",
+          "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml",
+          "verity/ml/definitions/registry/boolean_fp8_moe.circuit-check.json"]

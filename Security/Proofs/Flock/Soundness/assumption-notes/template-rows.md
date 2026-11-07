@@ -1,18 +1,18 @@
 # A template's rows compute its gates: the evidence, and the general proof
 
 This is not a hypothesis of the end-to-end theorem: the theorem is about the circuit of
-the statement's rows, and what a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`,
-`../Certificate.lean`; `../ASSUMPTIONS.md`, The circuit and the certificate). The certificate's premises
-are that a unit's rows are `GateRows.rows G L` for its gate circuit `G`, and that `G` computes the unit's definition. This
-file is the evidence for those premises.
+the statement's rows. What a correct unit computes beyond them needs that a unit's rows are `GateRows.rows G L` for its
+gate circuit `G`, and that `G` computes the unit's definition (`../ASSUMPTIONS.md`, The circuit and the certificate);
+rows that are `GateRows.rows G L` carry `G`'s outputs (`GateRows.rows_sound`). This file is the evidence for those
+premises.
 
-- **Evidence for every template:** the IR comparison tests in `verity/ml/flock/tests/test_ir_lowering.py`, on sampled
+- **Evidence for every template:** the lowering comparison tests in `verity/ml/flock/tests/test_ir_lowering.py`, on sampled
   inputs.
-  - They evaluate the pinned rows against the IR's primitives:
+  - They evaluate the pinned rows against the primitive circuits:
     - RoPE on 8000 inputs (`test_rope_unit_matches_its_primitives`);
     - SiLU on every gate word and 8000 more (`test_silu_unit_covers_the_whole_table`);
     - both on the captured slices (`test_captured_slices`).
-  - They evaluate the pieces the rows are built from, as gate circuits, against the IR's primitives, on 6000 inputs
+  - They evaluate the pieces the rows are built from, as gate circuits, against the primitive circuits, on 6000 inputs
     each (`test_pieces_match_the_ir_primitives`, `test_bf16_adds_match_the_ir_primitives`).
   - A test in the same file mutates one row and checks that the comparison catches it.
 

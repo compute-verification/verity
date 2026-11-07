@@ -1,10 +1,40 @@
 module
 
 public import Proofs.Flock.Claims.ZK.L0PinFlags
-public import Proofs.Flock.Claims.ZK.L0PinFrame
-public import Proofs.Flock.Claims.ZK.FrameRounds
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The ring switch's rounds, and the PIOP's last transcript
@@ -35,7 +65,7 @@ open FlockComplete.Replay (afterSq bind_go liftTM_ok)
 
 /-! ## A loop whose steps' states are left open -/
 
-theorem forIn_go_ex {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Transcript) (B : ℕ → Claims.Msg)
+theorem forIn_go_ex {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Flock.Transcript) (B : ℕ → Claims.Msg)
     (L n : ℕ)
     (hbody : ∀ i < n, ∀ (s : σ) (l : Array Claims.Msg), l.size = L + i →
       ∃ s', ((body i s).run (T i)).go l = (.ok (.yield s', T (i + 1)), l.push (B i)))
@@ -63,12 +93,12 @@ theorem forIn_go_ex {σ : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T
 
 /-- **A loop, then a continuation**: what holds of the continuation's run from every state the loop may end in holds
 of the whole. -/
-theorem forIn_bind_go {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Transcript)
-    (B : ℕ → Claims.Msg) (L n : ℕ) {t₀ : Transcript} (hT : T 0 = t₀)
+theorem forIn_bind_go {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Flock.Transcript)
+    (B : ℕ → Claims.Msg) (L n : ℕ) {t₀ : Flock.Transcript} (hT : T 0 = t₀)
     (hbody : ∀ i < n, ∀ (s : σ) (l : Array Claims.Msg), l.size = L + i →
       ∃ s', ((body i s).run (T i)).go l = (.ok (.yield s', T (i + 1)), l.push (B i)))
     (s₀ : σ) (f : σ → TMW PS β) (l : Array Claims.Msg) (hl : l.size = L)
-    (P : Except String (β × Transcript) × Array Claims.Msg → Prop)
+    (P : Except String (β × Flock.Transcript) × Array Claims.Msg → Prop)
     (hf : ∀ s, P (((f s).run (T n)).go (l ++ ((List.range n).map B).toArray))) :
     P (((forIn [:n] s₀ body >>= f).run t₀).go l) := by
   obtain ⟨s, hs⟩ := forIn_go_ex body T B L n hbody s₀ l hl
@@ -78,23 +108,23 @@ theorem forIn_bind_go {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ
 /-! ## The ring switch, round by round -/
 
 /-- The transcript after the opening's label. -/
-def pcsT (t : Transcript) : Transcript :=
+def pcsT (t : Flock.Transcript) : Flock.Transcript :=
   { t with pending := t.pending ++ header 2 0 "flock-pcs-open-batch-v0".toUTF8.size ++
       padded "flock-pcs-open-batch-v0".toUTF8 }
 
 /-- The transcript of the switch's round `i` before its squeeze: the ring switch's label and `sv i` absorbed. -/
-def rsPre (sv : ℕ → Array F128) (i : ℕ) (t : Transcript) : Transcript :=
+def rsPre (sv : ℕ → Array F128) (i : ℕ) (t : Flock.Transcript) : Flock.Transcript :=
   let p := t.pending ++ header 2 0 "flock-ring-switch-v0".toUTF8.size ++ padded "flock-ring-switch-v0".toUTF8 ++
     header 3 2 (sv i).size
   { t with pending := (sv i).foldl F128.pushBytes p }
 
 /-- The transcript of the switch's loop from `t₀`: round `i` squeezes `7` coins at body `L + i`. -/
-def rsLoopT (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Transcript) : ℕ → Transcript
+def rsLoopT (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Flock.Transcript) : ℕ → Flock.Transcript
   | 0 => t₀
   | i + 1 => afterSq (rsPre sv i (rsLoopT sv coin L t₀ i)) 2 7 (coin (L + i))
 
 /-- The body the switch's round `i` sends. -/
-def rsLoopB (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Transcript) (i : ℕ) : Claims.Msg :=
+def rsLoopB (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Flock.Transcript) (i : ℕ) : Claims.Msg :=
   Claims.toMsg (framed (rsPre sv i (rsLoopT sv coin L t₀ i)) 2 7)
 
 /-- **The switch's bodies** after the pending bytes `P`, of `N` claims: round `i < N` the ring switch's label, the
@@ -105,13 +135,13 @@ def rsBody (sv : ℕ → Array F128) (N : ℕ) (P : List UInt8) (i : ℕ) : Clai
       encs [.label "flock-ring-switch-v0".toUTF8, .vec (sv i).toList] ++ (Frame.sq 2 7).enc
   else (Frame.sq 2 N).enc
 
-theorem rsLoopB_eq (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Transcript) (i : ℕ) :
+theorem rsLoopB_eq (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Flock.Transcript) (i : ℕ) :
     rsLoopB sv coin L t₀ i = (rsLoopT sv coin L t₀ i).pending.data.toList ++
       encs [.label "flock-ring-switch-v0".toUTF8, .vec (sv i).toList] ++ (Frame.sq 2 7).enc := by
   simp only [rsLoopB, Claims.toMsg, framed_enc, rsPre, absorbSlice_enc, label_enc, encs, List.flatMap_cons,
     List.flatMap_nil, List.append_nil, List.append_assoc]
 
-theorem rsLoopB_map (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t : Transcript) (N : ℕ) :
+theorem rsLoopB_map (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t : Flock.Transcript) (N : ℕ) :
     (List.range N).map (rsLoopB sv coin L (pcsT t)) = (List.range N).map (rsBody sv N t.pending.data.toList) := by
   refine List.map_congr_left fun i hi => ?_
   rw [List.mem_range] at hi
@@ -124,7 +154,7 @@ theorem rsLoopB_map (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L :
     rw [if_neg (Nat.succ_ne_zero j)]
     simp only [rsLoopT, afterSq, empty_toList, List.nil_append]
 
-theorem rsLast (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Transcript) {N : ℕ} (hN : N ≠ 0)
+theorem rsLast (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ) (t₀ : Flock.Transcript) {N : ℕ} (hN : N ≠ 0)
     (P : List UInt8) : Claims.toMsg (framed (rsLoopT sv coin L t₀ N) 2 N) = rsBody sv N P N := by
   obtain ⟨j, rfl⟩ : ∃ j, N = j + 1 := ⟨N - 1, by omega⟩
   rw [rsBody, if_neg (lt_irrefl _)]
@@ -133,7 +163,7 @@ theorem rsLast (sv : ℕ → Array F128) (coin : ℕ → ℕ → F128) (L : ℕ)
 /-- **The cut ring switch, answered by `asksCut` with room for its asks**: from `l`, with `claims.size + 1` asks before
 round `n`, it returns, having sent `rsBody` after `t`'s pending bytes, and leaves nothing pending. -/
 theorem ringSwitchCut_bodies (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128)
-    (claims : Array _root_.Flock.Claim) (hN : claims.size ≠ 0) (t : Transcript) (l : Array Claims.Msg)
+    (claims : Array _root_.Flock.Claim) (hN : claims.size ≠ 0) (t : Flock.Transcript) (l : Array Claims.Msg)
     (hl : l.size + claims.size + 1 ≤ n) :
     ∃ res t' L', ((ringSwitchCut (asksCut coin n) sv claims).run t).go l = (.ok (res, t'), L') ∧
       L'.toList = l.toList ++ (List.range (claims.size + 1)).map (rsBody sv claims.size t.pending.data.toList) ∧
@@ -200,7 +230,7 @@ theorem endE_ret {α β : Type} {p : TMW OpenM α} {g : α → TMW OpenM β} (hp
   exact hp t got x hx
 
 /-- The transcript after a squeeze of `n` coins of `kind` from `t`, answered by `coin`. -/
-def sqT (t : Transcript) (kind : UInt8) (n : ℕ) (coin : ℕ → F128) : Transcript :=
+def sqT (t : Flock.Transcript) (kind : UInt8) (n : ℕ) (coin : ℕ → F128) : Flock.Transcript :=
   { t with
     pending := ByteArray.empty
     k := t.k + 1
@@ -214,7 +244,7 @@ theorem endE_squeezeP (io : _root_.Flock.Firewall.Finish.Asks OpenM) (kind : UIn
     simp only [_root_.Flock.Firewall.Finish.squeezeP, StateT.run, hn, ite_false, sqT] <;> rfl
   rw [e, StateT.run_bind] at h
   obtain ⟨x, -, hx⟩ := step_done_inv h
-  have e2 : (pure ((Array.range n).map x.1, sqT t kind n x.1) : OpenM (Array F128 × Transcript)).run x.2 =
+  have e2 : (pure ((Array.range n).map x.1, sqT t kind n x.1) : OpenM (Array F128 × Flock.Transcript)).run x.2 =
       Step.done r := hx
   have e3 := Step.done.inj e2
   subst e3
