@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -155,6 +154,11 @@ def serve_capacity_only(tmp_path, monkeypatch) -> tuple[Path, list[Path]]:
     return out, sites
 
 
+def served_env(site: Path) -> dict[str, str]:
+    """The environment serve_tax starts a server with, after its plugin site."""
+    return L.S.server_env(L.S.ARMS["compiled"], site.parent, site, None, 1.0, 1.0)
+
+
 def test_serving_loads_the_pin_and_the_capacity_server_logs(tmp_path, monkeypatch):
     monkeypatch.setenv("LADDER_ARM", "pinned")
     monkeypatch.delenv("LADDER_ROUTE_CAPTURE", raising=False)
@@ -163,7 +167,7 @@ def test_serving_loads_the_pin_and_the_capacity_server_logs(tmp_path, monkeypatc
     assert json.loads((sites[0] / L.P.CONFIG).read_text()) == {"pin": True, "tilings": str(out / L.SERVING_TILINGS)}
     assert L.S.plugin_site(out / "record" / ".site", False) == out / "record" / ".site"
     assert json.loads((out / "record" / ".site" / L.P.CONFIG).read_text()) == {"pin": True, "tilings": None}
-    assert not (sites[0] / "route_capture_plugin.py").exists() and "ROUTECAP_OUT" not in os.environ
+    assert not (sites[0] / "route_capture_plugin.py").exists() and "ROUTECAP_OUT" not in served_env(sites[0])
 
 
 def test_serving_with_the_route_capture_loads_it_in_each_server_writing_its_own_capture(tmp_path, monkeypatch):
@@ -174,12 +178,12 @@ def test_serving_with_the_route_capture_loads_it_in_each_server_writing_its_own_
     monkeypatch.setenv("LADDER_ROUTE_CAPTURE", str(src))
     monkeypatch.setenv("ROUTECAP_OUT", "")  # so that the test's end unsets what serve sets
     out, sites = serve_capacity_only(tmp_path, monkeypatch)
-    assert os.environ["ROUTECAP_OUT"] == str(out / "capacity" / "route_capture")
+    assert served_env(sites[0])["ROUTECAP_OUT"] == str(out / "capacity" / "route_capture")
     entry = (sites[0] / "verity_route_capture-0.0.dist-info" / "entry_points.txt").read_text()
     assert entry == "[vllm.general_plugins]\nverity_route_capture = route_capture_plugin:register\n"
     assert {f.name for f in sites[0].glob("*.py")} >= {"route_capture_plugin.py", "settings.py", "inductor_pin.py"}
-    L.S.plugin_site(out / "record" / ".site", False)
-    assert os.environ["ROUTECAP_OUT"] == str(out / "record" / "route_capture")
+    site = L.S.plugin_site(out / "record" / ".site", False)
+    assert served_env(site)["ROUTECAP_OUT"] == str(out / "record" / "route_capture")
 
 
 def test_summary_reads_a_model_directory(tmp_path):
