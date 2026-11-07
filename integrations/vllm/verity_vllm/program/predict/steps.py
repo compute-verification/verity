@@ -108,7 +108,7 @@ from verity.ml.definitions.registry.topp_geometry import registered_splits
 
 from .build import Unexpressible, build_program, model_shape
 from .phi import Phi
-from .segment import Rows, launch_of, segment_of
+from .segment import launch_of, segment_of
 
 SCHEMA = "verity-vllm/compiled-steps/v2"
 #: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
@@ -357,6 +357,7 @@ def check_sources(s: int, row: I1.Row, prompts: Mapping[int, tuple[int, ...]]) -
         at = end
 
 
+Rows = list[tuple[int, int, I1.Row]]  # a request's rows as (step, index in the step, row), in step order
 Placed = tuple[tuple[int, int, int] | None, list[tuple[int, int]]]  # a row's part its Program holds, and its parts none holds
 
 

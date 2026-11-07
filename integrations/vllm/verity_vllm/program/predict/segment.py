@@ -1,18 +1,17 @@
 """A class-G request's rows in a Commit window (`steps`): where its history ends and its Program begins (`segment_of`), and the
-prefill chunks and launches its Program reads (`launch_of`)."""
+prefill chunks and launches its Program reads (`launch_of`). A request's rows are `steps.Rows`, (step, index in the step, advice
+row) in step order."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
-from verity.core.protocols.certifier import advice as I1
 from verity_vllm.pipeline import window_advice as WA
 
 from .build import Unexpressible
 
-Rows = list[tuple[int, int, I1.Row]]  # a request's rows as (step, index in the step, row), in step order
 
-
-def segment_of(i: int, LP: int, T: int, rows: Rows, carry: WA.Carried | None, left: bool) -> tuple[int, int]:
+def segment_of(i: int, LP: int, T: int, rows: Sequence[tuple[int, int, Any]], carry: WA.Carried | None, left: bool) -> tuple[int, int]:
     """Request `i`'s (C, T) in class G, where its Program is its rows in the window alone: C its history, the positions it reads
     and doesn't compute (its prefix-cache hit, or where a request the window carries in continues: its carried `computed`), and
     positions to LP + T - 1 (its live decode rows; for a request the window leaves with outputs to keep, as far as its rows reach).
@@ -27,7 +26,7 @@ def segment_of(i: int, LP: int, T: int, rows: Rows, carry: WA.Carried | None, le
     return C, T
 
 
-def launch_of(i: int, LP: int, T: int, C: int, rows: Rows, steps: Any) -> tuple[tuple[int, ...], tuple]:
+def launch_of(i: int, LP: int, T: int, C: int, rows: Sequence[tuple[int, int, Any]], steps: Any) -> tuple[tuple[int, ...], tuple]:
     """Request `i`'s prefill chunks and launch context in class G: when C < LP its prefill rows C..LP-1 in turn, each the rows one
     launch prefilled (one chunk for a prefill in one launch), and per step of its Program in the window (each chunk, then a decode
     a position up to LP + T - 1) every row of the advice step that row ran in as (n, start), in the step's batch order. Refused
