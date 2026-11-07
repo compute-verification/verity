@@ -631,11 +631,14 @@ def test_class_g_plans_a_long_prompt_as_its_prefill_chunks_each_at_the_launch_it
                                                          (33, 64, 4)]
     summary = {"compiler": "c", "requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch(),
                                               "chunks": list(u.chunks), "digest": f"d{u.request}"} for u in plan.requests]}
+    (long,) = trace_commands({"requests": [{**summary["requests"][0], "LP": 2300, "T": 16}]}, reg, "/t")
+    assert long[long.index("--max-model-len") + 1] == "2316"
     cmds = trace_commands(summary, reg, str(tmp_path))
     assert [c[c.index("--out") + 1] for c in cmds] == [str(tmp_path / trace_dir(u)) for u in plan.requests]
     assert trace_dir(plan.requests[2]) == trace_dir(summary["requests"][2]) != trace_dir({**summary["requests"][2], "chunks": []})
     for u, c in zip(plan.requests, cmds):
         assert c[c.index("--device-name") + 1] == reg.phi.target["device_name"] == "NVIDIA H200"
+        assert c[c.index("--max-model-len") + 1] == str(max(2048, u.LP + u.T))
         ctx = parse_launch_context(c[c.index("--launch-context") + 1])
         assert (ctx.get("chunks", []), len(ctx["batch_by_step"])) == (list(u.chunks), len(u.launch))
         assert LC.bad_chunks(ctx, "request", u.LP, u.T, u.C) is None
