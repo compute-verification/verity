@@ -2,11 +2,13 @@
 Sampled proofs' one-stage audit on the proofs themselves (`verity/sampled-proofs/one-stage/v2`), a `Core.BlobProtocol`: the
 v1 audit (`OneStage`) with the verdicts computed here, from the statement's files, rather than read from the evidence.
 
-* **params**: v1's, plus `proofs`, exactly `{"circuit", "public", "registered"}`: the SHA-512s the auditor committed for
-  the circuit and public files (lowercase hex of 64 bytes) and the verifier's own registered file (`flock-verify
-  --registered`'s object, or null for a program that reads no registered value). The partition must not be null: the
-  sessions are verified against the verifier's own partition object; and v1's `challenger`, with its `window_root`, must
-  be named (`NO_CHALLENGER`);
+* **params**: v1's, plus `proofs`, exactly `{"circuit", "public", "registered"}` and optionally `"members"`: the
+  SHA-512s the auditor committed for the circuit and public files (lowercase hex of 64 bytes), the verifier's own
+  registered file (`flock-verify --registered`'s object, or null for a program that reads no registered value), and
+  the verifier's own layout of a window (`layoutOf`): `[[key, n], ...]`, its members in unit order, member `key`'s ports
+  registered as `key/<port>`, its units the `n` after those of the members before it. Without `members` the whole
+  registration is one member, its ports bare. The partition must not be null: the sessions are verified against the
+  verifier's own partition object; and v1's `challenger`, with its `window_root`, must be named (`NO_CHALLENGER`);
 * **commitment**: v1's (the registration record);
 * **evidence**: v1's without `verdicts`, plus `proofs`, exactly `{"sessions"}`: for each of v1's `sessions` in order,
   `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and `{file: SHA-512}` naming at least each rep
@@ -25,10 +27,18 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   program's proof blocks read stratum by stratum must be the record's `population` units in order (`Slots.popOk`), as
   the service's run refuses at registration (`Run.run`, `population-order`), else the check refuses, before any session
   is verified. v1's R2 holds only their count, and the session's knowledge soundness reads slot `u` as proof block `u`;
-* **public** (`publicHeld`): the public file's header held to the registration (`Record.matchesPublic`): its scheme,
-  roots and their domains and its instance count the record's, and its `units.indices` the population's units in
-  order (`indicesHeld`, `indicesHeld_of_publicHeld`), so no header written after the draw relabels an instance as
-  another unit; else the check refuses, before any session is verified;
+* **member** (`memberOf`): the member the session's statement is, found from the draw: the layout's member whose units
+  `[base, base + n)` hold every unit the draw proves (`Draw.proved`, which v1's `checkAt` holds to the challenger's
+  coins), never a member the case names. The layout's counts must sum to the record's population, a draw that proves
+  units of two members, or of none, refuses, and so does a member whose units are not within one template's units
+  under the verifier's program and query, keyed by that template (`memberInProgram`), before any session is verified;
+* **public** (`publicHeld`): the public file's header held to that member's slice of the commitment's registration
+  (`sliceOf`, `memberCodes`, `Record.matchesPublic`'s codes on it): its scheme the record's, its ports exactly the
+  registered ports under `key/`, matched by whole path segment and named without that prefix, with their roots and
+  domains, none missing and none extra, its instance count the member's `n`, and its `units.indices` the member's units
+  in order, `base + i` for instance `i` (`indicesHeld`, `indicesHeld_of_publicHeld`), so no header written after the
+  draw relabels an instance as another unit, and the instances the session proves are the drawn units less `base`;
+  else the check refuses, before any session is verified;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
@@ -46,6 +56,7 @@ import SampledProofs.ChallengerTrees
 import SampledProofs.Slots
 import SampledProofs.PopOrder
 import Flock
+import Std.Data.HashMap
 
 namespace SampledProofs.OneStageZk
 
@@ -70,9 +81,19 @@ structure Own where
   pub : String
   registered : Option Json
 
+/-- A member of the registered window as the verifier lays it out (module docstring, **params**, **member**): the key
+its ports are registered under, its first unit and its unit count. -/
+structure Member where
+  key : String
+  base : Nat
+  n : Nat
+  deriving BEq, Repr
+
 structure Params where
   base : OneStage.Params
   own : Own
+  /-- The verifier's layout of the window (`layoutOf`); none when the whole registration is one member. -/
+  members : Option (Array Member) := none
 
 structure RunFiles where
   name : String
@@ -125,19 +146,52 @@ private def committedOf (pr : Json) : V (String × String × Option Json) := do
     | _ => throw "proofs: registered is not the verifier's registered file (an object) or null"
   pure (circuit, pub, registered)
 
+/-- The refusal of a `proofs.members` that is not a layout (`layoutOf`). -/
+def MEMBERS_WHY : String :=
+  "proofs: members is not the verifier's layout of the window ([[key, n], ...] in unit order: each key non-empty, " ++
+    "distinct and not another's whole-segment prefix, each n positive)"
+
+/-- `key`'s prefixes that end before one of its `/`s: a member keyed so would hold `key`'s ports (`sliceOf`). -/
+private def segmentPrefixes (key : String) : List String :=
+  let cs := key.toList
+  (List.range cs.length).filterMap fun i => if cs[i]? == some '/' then some (String.ofList (cs.take i)) else none
+
+/-- The verifier's own layout of the window (module docstring, **params**): `[[key, n], ...]` in unit order, each
+member's base the sum of the counts before it; a refusal (`MEMBERS_WHY`) unless every key is non-empty, distinct and no
+other's whole-segment prefix, so no port is two members', and every `n` is positive. -/
+def layoutOf (j : Json) : V (Array Member) := do
+  let .arr ms := j | throw MEMBERS_WHY
+  let mut out : Array Member := #[]
+  let mut base := 0
+  for x in ms do
+    let some (key, n) := (match x with
+      | .arr a => if a.size != 2 then none else match a[0]!, nat? a[1]! with
+        | .str k, some n => some (k, n)
+        | _, _ => none
+      | _ => none) | throw MEMBERS_WHY
+    if key.isEmpty || n == 0 then throw MEMBERS_WHY
+    out := out.push { key, base, n }
+    base := base + n
+  let keys : Std.HashMap String Unit := out.foldl (fun s m => s.insert m.key ()) {}
+  if keys.size != out.size || out.any (fun m => (segmentPrefixes m.key).any keys.contains) then throw MEMBERS_WHY
+  pure out
+
 def paramsOfJson (j : Json) : V Params := do
   let some pr := field? j "proofs"
     | throw ("the parameters name no proofs (the auditor's circuit and public files' digests and the verifier's " ++
       "registered reads)")
-  exactly pr #["circuit", "public", "registered"] "proofs"
+  let layout := field? pr "members"
+  exactly pr (#["circuit", "public", "registered"] ++ if layout.isSome then #["members"] else #[]) "proofs"
   let (circuit, pub, registered) ← committedOf pr
+  let members ← layout.mapM layoutOf
   let rest := Json.mkObj (without j "proofs")
   let base ← OneStage.paramsOfJson rest
   if base.challenger.isNone then throw NO_CHALLENGER
   let some partition := base.verifier.partition
     | throw "partition is null: the sessions are verified against the verifier's own partition object"
   let programJ := getD rest "program"
-  pure { base, own := { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, pub, registered } }
+  pure { base, members,
+         own := { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, pub, registered } }
 
 /-- The `verdicts` command's own inputs: exactly `{"circuit", "partition", "program", "public", "registered"}`, the
 program and partition objects. -/
@@ -218,39 +272,108 @@ private def headerOf (pubB : ByteArray) : V Json := do
   let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
   Flock.norm <$> (Json.parse line).mapError (s!"the public file's header is not JSON: {·}")
 
-/-- The refusal of a public file whose instances are not the registration's population units in order (`indicesHeld`). -/
+/-- The refusal of a draw that proves units of more than one member (`memberOf`): the case verifies one member's
+session. -/
+def ONE_MEMBER : String :=
+  "the draw proves units outside one member of the layout: the case verifies one member's session"
+
+/-- The member the draw lands in (module docstring, **member**): the layout `members`' member whose units
+`[base, base + n)` hold every unit the draw proves (`Draw.proved`), which v1's `checkAt` holds to the challenger's
+coins; the record's whole population as one unkeyed member when the parameters lay out none. A refusal when the
+record names no population, the layout's counts are not it, or the draw proves no unit or units outside one member. -/
+def memberOf (members : Option (Array Member)) (record draw : Json) : V Member := do
+  let some pop := nat? (getD record "population") | throw "the record names no population"
+  match members with
+  | none => pure { key := "", base := 0, n := pop }
+  | some ms =>
+    let total := ms.foldl (fun t m => t + m.n) 0
+    if total != pop then
+      throw s!"the layout's members count {total} units, not the record's population {pop}"
+    let us := Draw.proved draw
+    let inM := fun (m : Member) (v : Int) => decide ((m.base : Int) ≤ v ∧ v < m.base + m.n)
+    let some u := us[0]? | throw "the draw proves no unit: no member to verify"
+    let some m := ms.find? (inM · u) | throw s!"{ONE_MEMBER}: it proves unit {u}, in no member"
+    match us.find? (!inM m ·) with
+    | some v =>
+      let other := ((ms.find? (inM · v)).map (s!"member {·.key}")).getD "no member"
+      throw s!"{ONE_MEMBER}: it proves unit {u} of member {m.key} and unit {v} of {other}"
+    | none => pure m
+
+/-- Member `m` held to the verifier's program `v` (module docstring, **member**): its units lie in one template's units
+under the verifier's query (`Partition.evaluate`, whose ranges `popHeld` holds to the record's population), and its key
+is that template's or one of its chunks', `<template>/...`; the unkeyed member, the whole registration, holds. -/
+def memberInProgram (v : Registration.Verifier) (m : Member) : V Unit := do
+  if m.key.isEmpty then return
+  let rs ← (Partition.evaluate v.program v.query).mapError (s!"the program's ranges: {·}")
+  let named := fun (t : String) => m.key == t || (t ++ "/").toList.isPrefixOf m.key.toList
+  if !rs.any fun r => r.first ≤ m.base && m.base + m.n ≤ r.first + r.count && named r.template then
+    throw (s!"member {m.key}'s units [{m.base}, {m.base + m.n}) are not one template's units under the program's " ++
+      "query, keyed by that template")
+
+/-- The registration `rec`'s roots under member `key` (module docstring, **public**): each port registered as `key/p`,
+named `p`, with its last root (`Record.byPort`'s); every port, as named, for the unkeyed member `""`. The prefix ends at
+its `/`, so a slice takes whole path segments: member `T/c24` holds none of `T/c2436`'s ports. One pass over the roots. -/
+def sliceOf (rec : Json) (key : String) : Std.HashMap String Json :=
+  let pre := if key.isEmpty then [] else key.toList ++ ['/']
+  (match getD rec "roots" with | .arr rs => rs | _ => #[]).foldl (init := {}) fun acc r =>
+    match getD r "port" with
+    | .str p =>
+      let cs := p.toList
+      if cs.take pre.length == pre then acc.insert (String.ofList (cs.drop pre.length)) r else acc
+    | _ => acc
+
+/-- `Record.matchesPublic`'s codes on member `m`'s slice of the registration `rec` (`sliceOf`), in its order: the
+header's `scheme` not the record's; the slice empty, or the header's `frame_v3` `roots` not exactly its ports with their
+roots (one missing, one extra, or one's root another); its `domain_ids` not exactly those ports with their domains;
+its `instances` not the member's count `n`. -/
+def memberCodes (rec : Json) (m : Member) (scheme roots domains instances : Json) : Array String := Id.run do
+  let s := sliceOf rec m.key
+  let rs := entries roots
+  let mut out := #[]
+  if !jeq scheme (getD rec "scheme") then out := out.push "scheme"
+  if s.isEmpty || !(rs.size == s.size && rs.all fun (p, v) => (s.get? p).any fun r => jeq (getD r "root") v) then
+    out := out.push "roots"
+  if !((entries domains).size == s.size && s.toArray.all fun (p, r) => jeq (getD domains p) (getD r "domain")) then
+    out := out.push "domains"
+  if nat? instances != some m.n then out := out.push "population"
+  return out
+
+/-- The refusal of a public file whose instances are not its member's units in order (`indicesHeld`). -/
 def INDICES_WHY : String :=
-  "public file: its units.indices are not the registration's population units in order (instance i is unit i)"
+  "public file: its units.indices are not its member's units in order (instance i is unit base + i)"
 
-/-- The header `h`'s `units.indices` are the registration `rec`'s population units in order, `[0, population)`: the unit
-v1 credits for an instance a session proves (`provedUnits`) is that instance's slot, which the session's knowledge
-soundness reads (`popHeld`), fixed by the registration before any coin rather than by a header written after it. -/
-def indicesHeld (rec h : Json) : Bool :=
-  match nat? (getD rec "population"), getD (getD h "units") "indices" with
-  | some n, .arr is => is.size == n && (List.range n).all fun i => (is[i]? >>= nat?) == some i
-  | _, _ => false
+/-- The header `h`'s `units.indices` are member `m`'s units in order, `[base, base + n)`: the unit v1 credits for an
+instance a session proves (`provedUnits`) is that instance's slot in the window, which the session's knowledge
+soundness reads (`popHeld`), fixed by the layout and the registration before any coin rather than by a header written
+after it. -/
+def indicesHeld (m : Member) (h : Json) : Bool :=
+  match getD (getD h "units") "indices" with
+  | .arr is => is.size == m.n && (List.range m.n).all fun i => (is[i]? >>= nat?) == some (m.base + i)
+  | _ => false
 
-/-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
-one-stage drivers hold theirs before the draw): its header's scheme, `frame_v3` roots and their `domain_ids`, and
-`instances` against the record's scheme, roots, domains and population, a refusal naming the codes that fail; then its
-`units.indices` the population's units in order (`indicesHeld`). -/
-def publicHeld (rec : Json) (pubB : ByteArray) : V Unit := do
+/-- The public file held to member `m` of the registration `rec` (module docstring, **public**;
+`registration.matches_public` on the member's slice): its header's scheme, `frame_v3` roots and their `domain_ids`,
+and `instances` against the record's scheme and the slice's roots and domains and the member's count (`memberCodes`), a
+refusal naming the codes that fail; then its `units.indices` the member's units in order (`indicesHeld`). -/
+def publicHeld (rec : Json) (m : Member) (pubB : ByteArray) : V Unit := do
   let h ← headerOf pubB
   let fv := getD h "frame_v3"
-  let c := Record.matchesPublic rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids") (getD h "instances")
-  if !c.codes.isEmpty then throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
-  if !indicesHeld rec h then throw INDICES_WHY
+  let codes := memberCodes rec m (getD h "scheme") (getD fv "roots") (getD fv "domain_ids") (getD h "instances")
+  let whose := if m.key.isEmpty then "" else s!" for member {m.key}"
+  if !codes.isEmpty then throw s!"public file: not the registration's{whose}: {", ".intercalate codes.toList}"
+  if !indicesHeld m h then throw INDICES_WHY
 
-/-- `publicHeld` passes only on a public file whose header's `units.indices` are the registration's population units in
-order (`indicesHeld`): the unit `provedUnits` credits for instance `i` is `i`, fixed by the registration before any coin. -/
-theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} (h : publicHeld rec pubB = .ok ()) :
-    ∃ hd, headerOf pubB = .ok hd ∧ indicesHeld rec hd = true := by
+/-- `publicHeld` passes only on a public file whose header's `units.indices` are member `m`'s units in order
+(`indicesHeld`): the unit `provedUnits` credits for instance `i` is `base + i`, fixed by the layout and the registration
+before any coin. -/
+theorem indicesHeld_of_publicHeld {rec : Json} {m : Member} {pubB : ByteArray} (h : publicHeld rec m pubB = .ok ()) :
+    ∃ hd, headerOf pubB = .ok hd ∧ indicesHeld m hd = true := by
   unfold publicHeld at h
   cases hh : headerOf pubB with
   | error e => simp [hh, bind, Except.bind] at h
   | ok hd =>
     refine ⟨hd, rfl, ?_⟩
-    cases hi : indicesHeld rec hd
+    cases hi : indicesHeld m hd
     · simp only [hh, hi, bind, Except.bind, Bool.not_false, ↓reduceIte, throw, throwThe, MonadExceptOf.throw] at h
       split at h <;> simp_all
     · rfl
@@ -504,16 +627,19 @@ def popHeld (v : Registration.Verifier) (record : Json) : V Unit :=
 
 /-- The check at the coins `ξ` (module docstring, **check**): the evidence's one session (`oneSession`), its coins held
 to the trees the challenger logged (`treesOf`, `treesHeld`), the registration's population held to the program
-(`popHeld`), the parameters' public file held to the registration (`publicHeld`), then the session's verdict on the
-blobs, then v1's `checkAt` at `ξ` on it. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own
-`all` says it again, so an acceptance reads the run rather than the verdicts' JSON. -/
+(`popHeld`), the member the draw lands in (`memberOf`) held to the program (`memberInProgram`), the parameters' public
+file held to that member's slice of the registration (`publicHeld`), then the session's verdict on the blobs, then v1's
+`checkAt` at `ξ` on it. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own `all` says it
+again, so an acceptance reads the run rather than the verdicts' JSON. -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   let r : V Run := do
     oneSession e.sessions
     treesHeld (← treesOf p e) e bs
     popHeld p.base.verifier c.record
-    publicHeld c.record (← bs.get p.own.pub "public file")
+    let m ← memberOf p.members c.record e.base.draw
+    memberInProgram p.base.verifier m
+    publicHeld c.record m (← bs.get p.own.pub "public file")
     run p.own e.sessions (some e.base.provedUnits) bs
   match r with
   | .error err => .reject s!"proofs: {err}"
@@ -601,21 +727,97 @@ private def refusal : V Unit → String
   | .error e => e
   | .ok () => ""
 
-#guard refusal (publicHeld heldRecord
+private def whole : Member := { key := "", base := 0, n := 2 }
+
+#guard (memberOf none heldRecord .null).toOption == some whole
+#guard refusal (publicHeld heldRecord whole
   ("{\"frame_v3\":{\"domain_ids\":{\"x\":\"dd\"},\"roots\":{\"x\":\"aa\"}},\"instances\":2,\"scheme\":\"s\"," ++
     "\"units\":{\"indices\":[0,1]}}\nrest").toUTF8) == ""
-#guard [("[1,0]" : String), "[0,2]", "[0]", "[0,1,2]", "[\"0\",1]"].all fun is => refusal (publicHeld heldRecord
+#guard [("[1,0]" : String), "[0,2]", "[0]", "[0,1,2]", "[\"0\",1]"].all fun is => refusal (publicHeld heldRecord whole
   ("{\"frame_v3\":{\"domain_ids\":{\"x\":\"dd\"},\"roots\":{\"x\":\"aa\"}},\"instances\":2,\"scheme\":\"s\"," ++
     "\"units\":{\"indices\":" ++ is ++ "}}").toUTF8) == INDICES_WHY
-#guard refusal (publicHeld heldRecord
+#guard refusal (publicHeld heldRecord whole
   "{\"frame_v3\":{\"domain_ids\":{\"x\":\"dd\"},\"roots\":{\"x\":\"aa\"}},\"instances\":2,\"scheme\":\"s\"}".toUTF8) ==
   INDICES_WHY
-#guard refusal (publicHeld heldRecord
+#guard refusal (publicHeld heldRecord whole
   "{\"frame_v3\":{\"domain_ids\":{\"x\":\"dd\"},\"roots\":{\"x\":\"ab\"}},\"instances\":2,\"scheme\":\"s\"}".toUTF8) ==
   "public file: not the registration's: roots"
-#guard refusal (publicHeld heldRecord
+#guard refusal (publicHeld heldRecord whole
   "{\"frame_v3\":{\"domain_ids\":{\"x\":\"de\"},\"roots\":{\"x\":\"aa\",\"y\":\"bb\"}},\"instances\":3,\"scheme\":\"s\"}".toUTF8) ==
   "public file: not the registration's: roots, domains, population"
-#guard (refusal (publicHeld heldRecord "not a public file".toUTF8)).startsWith "the public file's header is not JSON: "
+#guard (refusal (publicHeld heldRecord whole "not a public file".toUTF8)).startsWith "the public file's header is not JSON: "
+
+private def js (s : String) : Json := (Json.parse s).toOption.getD .null
+
+/-- A window of three members, `T/c24`'s units `[0, 2)`, `T/c2436`'s `[2, 5)` and `U/c0`'s `[5, 6)`, beside a row table's
+port no member holds. -/
+private def windowRecord : Json := js (r#"{"population":6,"scheme":"s","roots":[
+  {"domain":"d1","port":"T/c24/x","root":"a1"},{"domain":"d1","port":"T/c24/y","root":"a2"},
+  {"domain":"d2","port":"T/c2436/x","root":"b1"},{"domain":"d2","port":"T/c2436/y","root":"b2"},
+  {"domain":"d3","port":"U/c0/x","root":"c1"},{"domain":"d4","port":"row-table/0/w","root":"e1"}]}"#)
+
+private def windowLayout : Array Member :=
+  ((layoutOf (js r#"[["T/c24",2],["T/c2436",3],["U/c0",1]]"#)).toOption).getD #[]
+
+private def c24 : Member := { key := "T/c24", base := 0, n := 2 }
+private def c2436 : Member := { key := "T/c2436", base := 2, n := 3 }
+
+private def memberRefusal (draw : String) : String :=
+  match memberOf (some windowLayout) windowRecord (js draw) with
+  | .error e => e
+  | .ok m => m.key
+
+private def header (roots domains : String) (instances : Nat) (indices : String) : ByteArray :=
+  (s!"\{\"frame_v3\":\{\"domain_ids\":{domains},\"roots\":{roots}},\"instances\":{instances},\"scheme\":\"s\"," ++
+    s!"\"units\":\{\"indices\":{indices}}}\nrest").toUTF8
+
+#guard windowLayout == #[c24, c2436, { key := "U/c0", base := 5, n := 1 }]
+#guard (layoutOf (js r#"[["T/c2",1],["T/c24",1]]"#)).toBool
+#guard [r#"[["T",1],["T/c1",1]]"#, r#"[["T/c1",1],["T/c1",2]]"#, r#"[["",1]]"#, r#"[["T/c1",0]]"#, r#"[["T/c1",-1]]"#,
+    r#"[["T/c1"]]"#, r#"[[1,1]]"#, r#"{"T/c1":1}"#].all fun l => refusal ((fun _ => ()) <$> layoutOf (js l)) == MEMBERS_WHY
+
+-- The member comes from the draw: the one whose units hold every unit it proves, its closure's too.
+#guard memberRefusal r#"{"units":[3]}"# == "T/c2436"
+#guard memberRefusal r#"{"units":[2,4]}"# == "T/c2436"
+#guard memberRefusal r#"{"units":[0],"closure":[1]}"# == "T/c24"
+-- A drawn member the case doesn't verify: the draw proves units of two members, or of none.
+#guard memberRefusal r#"{"units":[1,3]}"# ==
+  s!"{ONE_MEMBER}: it proves unit 1 of member T/c24 and unit 3 of member T/c2436"
+#guard memberRefusal r#"{"units":[2],"closure":[5]}"# ==
+  s!"{ONE_MEMBER}: it proves unit 2 of member T/c2436 and unit 5 of member U/c0"
+#guard memberRefusal r#"{"units":[6]}"# == s!"{ONE_MEMBER}: it proves unit 6, in no member"
+#guard memberRefusal r#"{"units":[]}"# == "the draw proves no unit: no member to verify"
+#guard (match memberOf (some (windowLayout.extract 0 2)) windowRecord (js r#"{"units":[3]}"#) with
+  | .error e => e | .ok _ => "") == "the layout's members count 5 units, not the record's population 6"
+
+-- A slice is the ports under its key by whole path segment, its prefix stripped: `T/c24` holds none of `T/c2436`'s.
+#guard (sliceOf windowRecord "T/c24").size == 2 && ((sliceOf windowRecord "T/c24").get? "y").isSome
+#guard ((sliceOf windowRecord "T/c24").get? "x").any fun r => jeq (getD r "root") (.str "a1")
+#guard (sliceOf windowRecord "T/c2").size == 0
+#guard (sliceOf windowRecord "").size == 6
+
+#guard refusal (publicHeld windowRecord c2436
+  (header r#"{"x":"b1","y":"b2"}"# r#"{"x":"d2","y":"d2"}"# 3 "[2,3,4]")) == ""
+-- A member with no registered port holds no public file, an empty one neither.
+#guard refusal (publicHeld windowRecord { key := "V/c0", base := 0, n := 1 } (header "{}" "{}" 1 "[0]")) ==
+  "public file: not the registration's for member V/c0: roots"
+-- The wrong member: `T/c24`'s public file where the draw landed in `T/c2436`.
+#guard refusal (publicHeld windowRecord c2436 (header r#"{"x":"a1","y":"a2"}"# r#"{"x":"d1","y":"d1"}"# 2 "[0,1]")) ==
+  "public file: not the registration's for member T/c2436: roots, domains, population"
+-- A port outside the member's key, one missing, or one under its registered name rather than the member's.
+#guard refusal (publicHeld windowRecord c24
+  (header r#"{"x":"a1","y":"a2","36/x":"b1"}"# r#"{"x":"d1","y":"d1"}"# 2 "[0,1]")) ==
+  "public file: not the registration's for member T/c24: roots"
+#guard refusal (publicHeld windowRecord c2436 (header r#"{"x":"b1"}"# r#"{"x":"d2","y":"d2"}"# 3 "[2,3,4]")) ==
+  "public file: not the registration's for member T/c2436: roots"
+#guard refusal (publicHeld windowRecord c2436
+  (header r#"{"T/c2436/x":"b1","T/c2436/y":"b2"}"# r#"{"x":"d2","y":"d2"}"# 3 "[2,3,4]")) ==
+  "public file: not the registration's for member T/c2436: roots"
+#guard refusal (publicHeld windowRecord c2436
+  (header r#"{"x":"b1","y":"b2"}"# r#"{"x":"d2","y":"d2","z":"d2"}"# 3 "[2,3,4]")) ==
+  "public file: not the registration's for member T/c2436: domains"
+-- Its instances are the member's units in order, never the window's from 0.
+#guard ["[0,1,2]", "[2,3]", "[3,4,5]", "[2,4,3]"].all fun is => refusal (publicHeld windowRecord c2436
+  (header r#"{"x":"b1","y":"b2"}"# r#"{"x":"d2","y":"d2"}"# 3 is)) == INDICES_WHY
 
 end SampledProofs.OneStageZk

@@ -152,11 +152,15 @@ def sha512_hex(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
 
 
+#: the window's layout as `pin_of` pins it, θ's proofs.members
+LAYOUT = [["m0", 1]]
+
+
 def pin_of(public: bytes) -> dict:
-    """a5's pin at staging (`a5.public_pin`) of a window whose one member's public file is ``public``."""
+    """a5's pin at staging (`a5.public_pin`) of a window whose one member, of one unit, has public file ``public``."""
     body = sha512_hex(public.partition(b"\n")[2])
     return {"format": "verity/public-pin/v1", "leaf_layer": sha512_hex(canonical_json({"m0": body})),
-            "members": {"m0": {"k": 0, "file": sha512_hex(public), "body": body}}}
+            "members": {"m0": {"k": 0, "n": 1, "file": sha512_hex(public), "body": body}}}
 
 
 def registration_of(pin: dict) -> str:
@@ -177,7 +181,7 @@ def sampled_case(out: Path, proofs: dict | None = None, evidence: dict | None = 
         b.write_bytes(data)
     pin.write_text(json.dumps(pin_of(FILES_REGISTERED[1])))
     proofs = {"circuit": sha512_hex(FILES_REGISTERED[0]), "public": sha512_hex(FILES_REGISTERED[1]),
-              "registered": None} if proofs is None else proofs
+              "registered": None, "members": LAYOUT} if proofs is None else proofs
     f.write_text(json.dumps({"params": {"form": "one-stage", "proofs": proofs},
                              "commitment": registration_of(pin_of(FILES_REGISTERED[1])),
                              "evidence": json.dumps((evidence or {}) | {"form": "one-stage"}).encode().hex(),
@@ -2053,6 +2057,10 @@ NOT_PINNED = ("the public file the case registers isn't, by SHA-512, one --publi
      "--public-pin's bodies aren't, by their leaf layer, those the registration the case commits to holds (R4)"),
     ("no pin", "the run gave no --public-pin, the public file's SHA-512 pinned at staging before the draw"),
     ("another commitment", "the case's commitment isn't the one each composite that reads the case states"),
+    ("θ naming another layout", "θ's layout (proofs.members) isn't the one --public-pin fixed before the draw: its member "
+                                "0 is ['m0', 2], the pin's ['m0', 1]"),
+    ("θ naming no layout", "θ names no layout (proofs.members), so the drawn member isn't held to the one --public-pin "
+                           "fixed"),
 ])
 def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_only_where_each_file_is_the_one_theta_names(
         tmp_path, how, why):
@@ -2067,8 +2075,9 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
     `test_a_completed_public_file_is_held_to_its_members_staged_body`). A public file changed after the draw, θ naming
     the changed one, isn't the pin's, nor is one beside a completed entry of another file, a completed entry whose body
     isn't its member's staged body or one on a member with no staged entry, and a pin rewritten to it isn't, by its
-    bodies' leaf layer, the registration's the case commits to, which the coins committed to. Where a file isn't θ's
-    (the circuit file or the public file), θ isn't the one the composite states, the run
+    bodies' leaf layer, the registration's the case commits to, which the coins committed to. θ's layout is the one the
+    pin fixed before the draw (`onsite_record.layout_pinned`): θ naming another or none doesn't hold. Where a file isn't
+    θ's (the circuit file or the public file), θ isn't the one the composite states, the run
     gave no case or a file it registers is gone, the public file isn't the pinned one, or the run gave no pin or its
     case commits to a registration the composite doesn't state, auditor-listing doesn't hold: the network certifier's
     verdict, the composite of record's and sampled proofs', its leg there, are not established, each its Lean accept
@@ -2082,7 +2091,10 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
         sampled_case(out, {"circuit": circuit, "registered": None}, evidence={"proofs": {"public": public}})
     elif changed or completed:
         kept = COMPLETED if completed and not how.endswith("not the staged body") else CHANGED
-        sampled_case(out, {"circuit": circuit, "public": sha512_hex(kept), "registered": None})
+        sampled_case(out, {"circuit": circuit, "public": sha512_hex(kept), "registered": None, "members": LAYOUT})
+    elif how.startswith("θ naming"):
+        sampled_case(out, {"circuit": circuit, "public": public, "registered": None}
+                     | ({"members": [["m0", 2]]} if how.endswith("another layout") else {}))
     with_composite(out, "remote-network-no-pouw", WITHOUT, WITHOUT_IDS)
     with_onsite(out)
     case = auditor_args(out)["sampled_case"]
@@ -2159,6 +2171,8 @@ RELAY_NOT = ("--public-pin's completed file for m0 isn't completed from its stag
     ("completed, another body re-laid", True, "another re-laid", RELAY_NOT),
     ("completed, re-laid, a ref not the identity's", True, "a ref off", RELAY_NOT),
     ("completed, its staged body, the member re-laid", True, "staged", RELAY_NOT),
+    ("completed, re-laid, its header naming no instances", True, "re-laid",
+     "--public-pin's completed file for m0 isn't completed from its staged one: its header names no instances: KeyError"),
     ("completed, re-laid, the member not re-laid", False, "re-laid",
      "--public-pin's completed file for m0 isn't completed from its staged one: its body isn't the staged body"),
     ("completed, the pin not saying whether it re-lays", None, "re-laid",
@@ -2184,7 +2198,8 @@ def test_a_completed_public_file_is_held_to_its_members_staged_body(tmp_path, ho
     public = tmp_path / "pub-4.bin"
     public.write_bytes(staged)
     if done is not None:
-        public.write_bytes(b'{"instances": 4, "completed": true}\n' + bodies[done])
+        head = b'{"completed": true}\n' if how.endswith("naming no instances") else b'{"instances": 4, "completed": true}\n'
+        public.write_bytes(head + bodies[done])
         entry["completed"] = {"file": sha512_hex(public.read_bytes()), "body": sha512_hex(bodies[done])}
     if how.endswith("no staged entry"):
         entry = {"k": 0, "completed": entry["completed"]}
@@ -2193,6 +2208,42 @@ def test_a_completed_public_file_is_held_to_its_members_staged_body(tmp_path, ho
     (tmp_path / "public-pin.json").write_text(json.dumps(pin))
     reg = registration_of(pin)
     assert OR.pinned(tmp_path / "public-pin.json", reg, {reg}, public) == why
+
+
+MOVED = "θ's layout (proofs.members) isn't the one --public-pin fixed before the draw: its member {}"
+
+
+@pytest.mark.parametrize("members, why", [
+    ([["T/c0", 2], ["T/c1", 3]], None),
+    ([["T/c0", 3], ["T/c1", 2]], MOVED.format("0 is ['T/c0', 3], the pin's ['T/c0', 2]")),
+    ([["T/c0", 1], ["T/c1", 4]], MOVED.format("0 is ['T/c0', 1], the pin's ['T/c0', 2]")),
+    ([["T/c1", 3], ["T/c0", 2]], MOVED.format("0 is ['T/c1', 3], the pin's ['T/c0', 2]")),
+    ([["T/c0", 2]], MOVED.format("1 is none, the pin's ['T/c1', 3]")),
+    ([["T/c0", 2], ["T/c1", 3], ["U/c0", 1]], MOVED.format("2 is ['U/c0', 1], the pin's none")),
+    (None, "θ names no layout (proofs.members), so the drawn member isn't held to the one --public-pin fixed"),
+])
+def test_thetas_layout_is_held_to_the_one_a5_pinned_before_the_draw(tmp_path, members, why):
+    """θ's layout (proofs.members), by which v2 finds the drawn member, is the one a5 pinned at staging: each member's
+    key and ``n`` in unit order (`a5.pin_layout`, by ``k``). A boundary moved by one unit either way, two members
+    swapped, a member left out or one added, or no layout, is refused, naming the first member that differs."""
+    pin = tmp_path / "public-pin.json"
+    pin.write_text(json.dumps({"members": {"T/c1": {"k": 1, "n": 3}, "T/c0": {"k": 0, "n": 2}}}))
+    assert OR.layout_pinned(pin, members) == why
+
+
+@pytest.mark.parametrize("entries, why", [
+    ({"T/c0": {"k": 0}}, "its member T/c0 states no int k and positive int n"),
+    ({"T/c0": {"k": 0, "n": 0}}, "its member T/c0 states no int k and positive int n"),
+    ({"T/c0": {"k": 1, "n": 2}}, "its members' k aren't 0 to the member count"),
+])
+def test_a_pin_stating_no_layout_holds_no_theta(tmp_path, entries, why):
+    """A pin from before a5 pinned each member's ``n``, or whose members' ``k`` aren't 0 to the member count, states no
+    layout, so no θ's is held to it."""
+    pin = tmp_path / "public-pin.json"
+    pin.write_text(json.dumps({"members": entries}))
+    assert OR.layout_pinned(pin, [["T/c0", 2]]) == (
+        "--public-pin states no layout of the window at staging (each member's k and n), which θ's proofs.members is "
+        f"held to: ValueError: {why}")
 
 
 @pytest.mark.parametrize("audit, credited, not_credited, missing", [
@@ -2318,6 +2369,7 @@ def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_poo
                   census_line("deployments.json", "gpus_per_machine")]}
     text, line = (out / "record" / "onsite.json").read_text(), capsys.readouterr().out.strip()
     assert SV.public_doc(text) == text and SV.public_line(line) == line
+    assert (g["member"], json.loads(line[7:])["open_in_lean"]) == (OR.MEMBER_OPEN, [OR.MEMBER_OPEN])
     line = json.loads(line[7:])["sampled_proofs"]
     assert line["per_window"] == {"epsilon": "15/16", "delta": str(DELTA), "units": N, "law": {"subset": 1}}
     assert line["pooled"] == {"incorrect_at_most": 443, **{

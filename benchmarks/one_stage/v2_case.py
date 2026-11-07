@@ -9,10 +9,11 @@ the circuit file, its template's ``compose.log`` (its own, or its template's fir
 ``session-m<k>/sessions/*/`` with each session's ``session.json`` and ``*.bin``, the drawn member the one whose sessions
 the window kept, and the challenger's release
 of the draw's coins (``release.json``, `a5.RELEASE`) where the audit drew on a challenger's session. The case is a5.py's
-`case_v2` of those: v1's params with the partition, ``proofs: {circuit, public, registered: null}`` (``public`` the
-drawn member's public file's SHA-512 as a5 pinned it, ``public-pin.json``, `a5.PIN`: as completed once the tie held, the
-file its session proved, else as staged before the draw; never the kept file's read after the draw, which is refused
-where it isn't the pinned one, as a window with no pin is), the
+`case_v2` of those: v1's params with the partition, ``proofs: {circuit, public, registered: null, members}`` (``public``
+the drawn member's public file's SHA-512 as a5 pinned it, ``public-pin.json``, `a5.PIN`: as completed once the tie held,
+the file its session proved, else as staged before the draw; never the kept file's read after the draw, which is refused
+where it isn't the pinned one, as a window with no pin is; ``members`` the window's layout as the pin fixed it before the
+draw, `layout_of`), the
 challenger and the release's window root, v1's commitment, the evidence with the sessions' proofs and the release's
 coins, and the blobs' paths. The challenger's key
 is the auditor's own record's (``--challenger-key``, challenger-key/v1, `Ch.key_of_record`), never the one the release
@@ -116,6 +117,18 @@ def drawn_member(window: Path) -> int:
     return ks[0]
 
 
+def layout_of(window: Path) -> list[list]:
+    """The verifier's layout of the window as a5 pinned it at staging, before the draw (`a5.pin_layout` of
+    ``public-pin.json``): each member's key and unit count in unit order, the layout the onsite record holds θ's to
+    (`onsite_record.layout_pinned`), never ``summary.json``'s, written after the draw. A window whose pin states none,
+    such as one pinned before a5 pinned each member's ``n``, is refused (`Refused`)."""
+    try:
+        return a5.pin_layout(json.loads((window / a5.PIN).read_text()))
+    except (OSError, AttributeError, KeyError, TypeError, ValueError) as e:
+        raise Refused(f"the window's {a5.PIN} states no layout at staging (each member's k and n), the one v2 finds the "
+                      f"drawn member by: {type(e).__name__}: {e}") from None
+
+
 def compose_log(window: Path, k: int) -> Path:
     """Member `k`'s ``compose.log``: its own, or, where a5 composed its template's circuit once at the template's first
     member (`a5.audit`), that member's, by the window's ``summary.json`` ``members``. None kept is refused."""
@@ -171,7 +184,7 @@ def case(window: Path, scratch: Path, key: Ch.ChallengerKey | None = None) -> tu
     circuit, how = (kept[0], "kept") if kept else rebuild(c, scratch)
     circuit = circuit or window / f"m{k}" / "circuit.txt"
     v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], public=public,
-                    registered=None, tables=[], drawn=drawn)
+                    registered=None, tables=[], drawn=drawn, members=layout_of(window))
     return v2, how, len(sessions), challenger
 
 

@@ -60,6 +60,22 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
     assert got["evidence"] == RP.DT.canonical(e).encode().hex()
     assert got["blobs"] == [str(p) for p in (tmp_path / "circuit.txt", tmp_path / "pub-4.bin", s / "session.json",
                                              s / "rep-0.bin", table)]
+    keyed = a5.case_v2(case, evidence["sessions"], proof=PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub-4.bin", (s,)),
+                       circuit="cc" * 64, public=sha(tmp_path / "pub-4.bin"), registered=None, tables=[table],
+                       members=(("T/c0", 2), ("T/c1", 3)))
+    assert keyed["params"]["proofs"] == got["params"]["proofs"] | {"members": [["T/c0", 2], ["T/c1", 3]]}
+
+
+def test_the_layout_is_the_bindings_members_keys_and_counts_in_unit_order():
+    """`layout`: what v2 finds the drawn member by (`OneStageZk.layoutOf`), each member's key (its chunk's name, else its
+    template) and unit count, in the binding's order, the layout a5's pin at staging states (`public_pin`, `pin_layout`)."""
+    ms = [types.SimpleNamespace(key="T/c0", n=2), types.SimpleNamespace(key="T/c1", n=3),
+          types.SimpleNamespace(key="U", n=1)]
+    assert a5.layout(types.SimpleNamespace(members=ms)) == [["T/c0", 2], ["T/c1", 3], ["U", 1]]
+    staged = [{"k": k, "m": types.SimpleNamespace(key=m.key, n=m.n, tables=()), "st": {"public": "aa"}}
+              for k, m in enumerate(ms)]
+    pin = a5.public_pin(staged, {m.key: b"body" for m in ms})
+    assert a5.pin_layout(pin) == a5.layout(types.SimpleNamespace(members=ms))
 
 
 EV = {"key": {"W": 4, "H": 5, "public": "aa" * 32}, "ledger": ["{}"], "main": ["cc" * 20], "pins": ["{}"],
@@ -144,7 +160,7 @@ def test_a_drawn_members_completed_public_file_is_pinned_once_the_tie_holds_and_
     a5.pin_completed(tmp_path, [(mm, [0])])
     after = json.loads((tmp_path / a5.PIN).read_text())
     assert after["leaf_layer"] == pin["leaf_layer"]
-    assert {k: {x: m[x] for x in ("k", "file", "body", "relaid")} for k, m in after["members"].items()} == pin["members"]
+    assert {k: {x: m[x] for x in ("k", "n", "file", "body", "relaid")} for k, m in after["members"].items()} == pin["members"]
     assert "completed" not in after["members"]["m0-key"]
     assert after["members"]["m1-key"]["completed"] == {"file": hashlib.sha512(completed).hexdigest(),
                                                       "body": hashlib.sha512(completed_body).hexdigest()}
