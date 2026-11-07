@@ -27,10 +27,13 @@ unset NCCL_P2P_DISABLE
 if [ -n "${DEEP_GEMM:-}" ]; then export VLLM_USE_DEEP_GEMM=$DEEP_GEMM; else unset VLLM_USE_DEEP_GEMM; fi
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 ARMS=${ARMS:-pinned unpinned}
+# the arms whose engines also run at TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 (rblock always does; never unpinned)
+RBLOCK0_ARMS=${RBLOCK0_ARMS:-rblock}
 REPLAYS=${REPLAYS:-3}; FRESH=${FRESH:-1}; ALONE=${ALONE:-64}; UNPINNED_REPLAYS=${UNPINNED_REPLAYS:-3}
 [ $# -gt 0 ] || { echo "replay-ladder: name the models (ladder.py's LADDER)"; exit 2; }
 [ -f "$C4" ] || { echo "replay-ladder: no C4 shard (--send it, or C4=PATH)"; exit 2; }
 for arm in $ARMS; do case $arm in pinned|rblock|unpinned) ;; *) echo "replay-ladder: ARMS takes pinned, rblock and unpinned, not $arm"; exit 2 ;; esac; done
+for arm in $RBLOCK0_ARMS; do case $arm in pinned|rblock) ;; *) echo "replay-ladder: RBLOCK0_ARMS takes pinned and rblock, not $arm"; exit 2 ;; esac; done
 v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
 case $v in *+gd9105ea8*) ;; *) echo "replay-ladder: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
 mkdir -p "$OUT"
@@ -38,6 +41,8 @@ for k in VLLM_USE_DEEP_GEMM VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME CUDA_VISIBLE_D
 "$CUDA_HOME/bin/nvcc" --version 2>/dev/null | tail -1 >> "$OUT/engine_env.txt"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total,clocks.max.sm,driver_version --format=csv | tee "$OUT/gpus.csv"
 rc=0
+# the FlashInfer autotune caches a process left (tactics its warmup chose by timing), by digest, after each process
+autotune() { find "$cache" "$HOME/.cache/flashinfer" -type f -iname '*autotun*' -exec sha256sum {} + 2>/dev/null | sed "s|^|$1 |" >> "$d/autotune.sha256"; }
 for m in "$@"; do
   for arm in $ARMS; do
     d=$OUT/$arm/$m; mkdir -p "$d"
@@ -46,16 +51,16 @@ for m in "$@"; do
     unset TORCHINDUCTOR_DETERMINISTIC TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK
     export LADDER_ARM=$arm
     replays=$UNPINNED_REPLAYS; fresh=0; alone=0
-    case $arm in
-      pinned) replays=$REPLAYS; fresh=$FRESH; alone=$ALONE ;;
-      rblock) export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 ;;
-    esac
-    echo "== $m $arm serve $(date -u +%FT%TZ)"
+    [ "$arm" = pinned ] && { replays=$REPLAYS; fresh=$FRESH; alone=$ALONE; }
+    case " $RBLOCK0_ARMS rblock " in *" $arm "*) export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 ;; esac
+    echo "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=${TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK-unset}" > "$d/arm_env.txt"
+    echo "== $m $arm serve $(date -u +%FT%TZ) $(cat "$d/arm_env.txt")"
     if ! "$PY" "$here/ladder.py" serve --model "$m" --c4 "$C4" --out "$d" ${SPAN_S:+--span-s "$SPAN_S"} ${OVER:+--over "$OVER"} \
         ${BURST:+--burst "$BURST"} > "$d/serve.log" 2>&1; then
       tail -n 40 "$d/serve.log"; rc=1; rm -rf "$cache"; continue
     fi
     grep '^\[ladder\]' "$d/serve.log"
+    autotune serve
     for i in $(seq 1 $((replays + fresh))); do
       echo "== $m $arm replay $i $(date -u +%FT%TZ)"
       if [ "$i" -gt "$replays" ]; then
@@ -67,6 +72,7 @@ for m in "$@"; do
         "$PY" "$here/ladder.py" replay --model "$m" --out "$d" --index "$i" > "$d/replay-$i.log" 2>&1 || { tail -n 40 "$d/replay-$i.log"; rc=1; }
       fi
       grep '^{"mode"' "$d/replay-$i.log" | tail -n 1
+      autotune "replay-$i"
     done
     if [ "$alone" -gt 0 ]; then
       echo "== $m $arm alone $(date -u +%FT%TZ)"

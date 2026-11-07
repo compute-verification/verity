@@ -79,6 +79,7 @@ LADDER = {
     "qwen3-30b-a3b-fp8": Rung("QWEN3_30B_A3B_FP8", "qwen3-30b-a3b-fp8"),
     "llama31-70b": Rung("LLAMA31_70B", "llama-3.1-70b", tp=2),
     "qwen3-235b-a22b-fp8": Rung("QWEN3_235B_A22B_FP8", "qwen3-235b-a22b-fp8", tp=4),
+    "glm53": Rung("GLM53", "glm-5.3", tp=8),
 }
 
 

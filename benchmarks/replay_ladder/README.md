@@ -2,7 +2,7 @@
 
 Does replaying a served window under its recorded schedule give the served tokens on models other than the one it was
 first measured on? On each model of a ladder of pinned checkpoints (`ladder.LADDER`: dense, MoE and FP8 MoE at one GPU,
-a dense model at TP2 and an FP8 MoE at TP4), `ladder.py` serves one saturated window with the scheduler's step trace,
+a dense model at TP2, an FP8 MoE at TP4 and GLM-5.3, an FP8 MoE with DeepSeek sparse attention, at TP8), `ladder.py` serves one saturated window with the scheduler's step trace,
 replays it several times on compiled vLLM at the integration's pin (d9105ea80), and serves a sample of its requests alone.
 It runs `benchmarks/serve_tax`'s `record` arm and `replay.py` unchanged, so every model sees the same server, workload
 and replay.
@@ -55,8 +55,11 @@ python benchmarks/replay_ladder/coverage_table.py render COVERAGE.json --ladder 
 ~~~
 
 `run.sh` takes `ARMS` (`pinned unpinned`; `rblock` too on request), `REPLAYS` (3), `FRESH` (1) and `ALONE` (64) for the pinned arm,
-`UNPINNED_REPLAYS` (3) for each other arm, and `SPAN_S`, `OVER` and `BURST` for the window
-(`ladder.py serve --docs` caps the shard's documents a plan takes prompts from). A TP2 or TP4
-model needs a node with that many GPUs. FP8 models run DeepGEMM, which JIT-compiles with the newest CUDA toolkit under
+`UNPINNED_REPLAYS` (3) for each other arm, `RBLOCK0_ARMS` (`pinned` to run the pinned arm at
+`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0` too, as the integration's engines do; each arm's `arm_env.txt` records it), and
+`SPAN_S`, `OVER` and `BURST` for the window (`ladder.py serve --docs` caps the shard's documents a plan takes prompts
+from). Each arm's `autotune.sha256` holds the digest of every FlashInfer autotune cache after serving and after each
+replay. A TP2, TP4 or TP8 model needs a node with that many GPUs. GLM-5.3's window stays inside 2,048 tokens of
+context (the plan's longest request is 1,024 + 256), where its sparse attention's top-k keeps every key. FP8 models run DeepGEMM, which JIT-compiles with the newest CUDA toolkit under
 `/usr/local` (12.8 or newer; a RunPod image's 12.4 can't, so install `cuda-nvcc-12-9 cuda-cudart-dev-12-9 cuda-cccl-12-9`
 first), unless `DEEP_GEMM=0`; `engine_env.txt` records the choice.
