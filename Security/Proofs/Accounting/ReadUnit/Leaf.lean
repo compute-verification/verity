@@ -190,12 +190,6 @@ theorem leafPrefix_data :
     show Flock.Hm96.sha512.leafTag = "verity/hm96-sha512/leaf/v1".toUTF8.push 0 from rfl, push_zero_data,
     Hash.Hm96.leafPrefix, hk] <;> rfl
 
-theorem size_saltPrefix : Flock.Hm96.Default512.saltPrefix.size = 128 := by
-  rw [size_of_data saltPrefix_data, Hash.Hm96.saltPrefix, length_padTo]
-  have : (Hash.cstr "verity/hm96-sha512/salt/v1").length = 27 := by decide +kernel
-  rw [this]
-  norm_num
-
 theorem size_leafPrefix : Flock.Hm96.Default512.leafPrefix.size = 128 := by
   rw [size_of_data leafPrefix_data, Hash.Hm96.leafPrefix, length_padTo]
   have : (Hash.cstr "verity/hm96-sha512/leaf/v1").length = 27 := by decide +kernel
@@ -227,14 +221,14 @@ theorem leaf_spec : Hm96LeafSpec pinnedKey Flock.ReadNet.leaf := by
   obtain ⟨hb1, hb2⟩ := hb fun _ _ => trivial
   have hbl : b.length = 8 := by rw [length_of_map_bv hb2]; simp
   obtain ⟨c1, c2, c3⟩ := hc (length_midstate _) (words64_midstate _)
-    (by simp [hy.1, length_constWords, length_padTail, zeroPad]) (hy.2.append (words64_constWords _))
+    (by simp [hy.1, length_constWords, length_padTail, zeroPad]) (Words64.append hy.2 (words64_constWords _))
   obtain ⟨l1, l2, l3⟩ := hlf (length_midstate _) (words64_midstate _)
     (by simp [hbl, c1, length_constWords, length_padTail, zeroPad]) ((hb1.append c2).append (words64_constWords _))
   have hdrop : (b ++ c ++ lf).drop 16 = lf := List.drop_left' (by simp [hbl, c1])
   refine ⟨⟨by simp [hbl, c1, l1], (hb1.append c2).append l2⟩, ?_⟩
   have hcs := commitString_eq z hx hy hb2 c3
   have hcl : (Hash.Hm96.commitString Verity.sha512 pinnedKey (wordsDigest z x) (wordsBytes z y)).length = 128 := by
-    rw [hcs, length_bytesBE, List.length_map, List.length_append, hbl, c1]
+    rw [hcs, length_bytesBE, List.length_map, List.length_append, hbl, c1] <;> rfl
   rw [hdrop, ← Hash.BindingProofs.bytes_inj, wordsDigest_bytes z ⟨l1, l2⟩, l3, map_bv_midstate, List.map_append,
     map_bv_constWords, Hash.Hm96.leaf, ← leafPrefix_data, hash_mid isSha512_sha512 size_leafPrefix, hcl, hcs,
     wordsBE_append] <;> rfl
