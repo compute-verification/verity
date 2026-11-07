@@ -2383,9 +2383,15 @@ class Queue:
         now = self.now()
         self._restacking[key] = {**detach(self.workdir, argv, _script_env()), "out": out, "of": of, "map": mv.map, "at": now,
                                  "since": now if since is None else since, "tries": tries}
+        self._save_restacks()
         self.log(f"research queue: restacking {head[:12]} across the move {mv.commit[:12]} ({mv.map}) in the background"
                  + (f", try {tries}" if tries > 1 else ""))
         return True
+
+    def _save_restacks(self) -> None:
+        """The restack jobs running and the results read (the state's `restacking` and `restacks`) saved at once, as drive saves
+        its launches: a sync that fails after starting or reading one neither starts it again nor loses its result."""
+        self.save_state({**self.load_state(), "restacks": self._restacks, "restacking": self._restacking})
 
     def _restacking_why(self, key: str, mv: Move) -> str:
         """Why the PR whose restack is ``key`` waits off `next` (`RESTACKING`)."""
@@ -2402,9 +2408,11 @@ class Queue:
         """Read each restack job that ended (`restack_end`) into `_restacks`, dropping its result once its PR's head is none of
         ``wanted``.  A job that ended with no result (it died, or ran past `RESTACK_WAIT_S`) runs once more, and then that is
         the restack's failure."""
+        ended = False
         for key, job in list(self._restacking.items()):
             if (end := restack_end(job, self.now())) is None:
                 continue
+            ended = True
             del self._restacking[key]
             (head, move), (said, how) = key.split(":"), end
             if job["of"] not in wanted or not self._has(head):
@@ -2418,6 +2426,8 @@ class Queue:
                 self._launch_restack(head, Move(move, job["map"]), job["of"], job["tries"] + 1, job["since"])
             else:
                 self._restacks[key] = {"why": f"{RESTACK} failed ({how})"}
+        if ended:
+            self._save_restacks()
 
     def _has(self, commit: str) -> bool:
         return not _git(self.workdir, "cat-file", "-e", f"{commit}^{{commit}}", check=False).returncode

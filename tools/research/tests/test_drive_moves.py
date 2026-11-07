@@ -238,6 +238,24 @@ def test_a_restack_job_that_ends_with_no_result_runs_once_more_and_then_its_fail
     assert len(jobs) == 2, world.logs                             # the failure is cached: no job starts again
 
 
+def test_a_restack_job_is_saved_as_it_starts_so_a_sync_that_fails_after_starting_it_leaves_no_second(world, monkeypatch, jobs):
+    """A job is in the state from its start, as drive's launches are: the sync that started it fails before its own save (here
+    at its last step), and the next finds the job running and starts no second `restack.py` for the head."""
+    h = Review(world, monkeypatch, land_into="checked")
+    _move_pr(world, 1)
+    world.gh.put(2, head := world.change({"old_proto/x.py": "X = 2\n"}))
+    monkeypatch.setattr(h.q, "_keep_merges", None)
+    with pytest.raises(TypeError):
+        h.tick()
+    assert [j.head for j in jobs] == [head], world.logs
+    del h.q._keep_merges
+    h.tick()
+    assert [j.head for j in jobs] == [head] and world.on_next(h.q) == [1], world.logs
+    jobs[0].run()
+    h.tick()
+    assert world.on_next(h.q) == [1, 2], world.logs
+
+
 def test_a_restacks_result_for_a_head_its_pr_has_left_is_dropped_and_the_new_head_restacked(world, monkeypatch, jobs):
     """The owner pushed a new head while the old one was restacked: the old one's result is read and dropped, never merged,
     and the new head gets a restack of its own."""
