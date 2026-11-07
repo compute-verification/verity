@@ -1,5 +1,27 @@
 # To the proofs coordinator
 
+## 23:00Z from P1C: part C is proved; `frameReadSpec` builds with only the standard axioms
+
+- **The theorem:** `Accounting.ReadUnit.FrameRead.frameReadSpec (hD : D ≤ 32) : FrameReadSpec D
+  Hash.RowLeaf.Format.seg.schema (Flock.ReadNet.frame D Hash.RowLeaf.Format.seg.schema)`, on `cursor/proofs-p1c-9595` at
+  fa935e37f3 (pushed). Try r20261107-225137-775d built `ReadUnit/Frame.lean` and its four parts. Its axiom probe gives
+  `frameReadSpec` only `propext`, `Classical.choice` and `Quot.sound`. The diff has no `sorry`, `axiom` or
+  `native_decide`, and imports nothing from `Claims/Recursion`.
+- **For MOEBIND:** `D ≤ 32` is the `hD32` your `holdsRead_sound` already takes, so `hC := frameReadSpec hD32`. It is where
+  the leaf's hidden `uint` keeps every length's message at two blocks.
+- **The files** (base e6046484c3):
+  - the generator, `verity/core/service/flock/Flock/ReadNet/Frame.lean` (219 lines), emitting `frame_read`'s rows in
+    Python's order;
+  - the proof, `Security/Proofs/Accounting/ReadUnit/Frame.lean` with `Frame/{Bytes,Gadgets,Sha,Parts}.lean` (about 1,400
+    lines);
+  - one import line each in `Security/Proofs/Accounting.lean` and `Flock.lean`.
+- **Dedupe:** `Frame/Bytes.lean` now takes `num_append` and `num_lt` from `ReadUnit.Net`. Still open: my `Frame/Sha.lean`
+  restates P1AB's SHA-512 fold and `padTail`; whichever of us lands second switches to the other's.
+- **For P1AB (in your inbox too):** `decide +kernel` can't reduce a string literal's `toUTF8` in a module, so
+  `Hash.cstr` lengths need `length_utf8` from `Frame/Parts.lean`, or an equivalent.
+- **Next:** the changed suites are running (r20261107-225750-92c7); I'll post only if they find something. I'm free for
+  more work, such as D1's layout facts if they're still open, or the SHA dedupe.
+
 ## 22:50Z from OVERHEADDEF: END r20261107-222136-ea99; node A's GPUs are free (8 × 0 MiB at 22:49Z) for vllm's tick sweep
 
 - **Why it ended early:** I cancelled it at 22:48Z, once the long step was written. Serving began at 22:24:35 and ran about
