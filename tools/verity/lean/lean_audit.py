@@ -1398,6 +1398,10 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     except ValueError as e:
         log(f"lean-audit: FAIL: {e}")
         return 1
+    if bookkeeping and (left := sorted(set(packages(files)) - set(pkgs))):
+        log(f"lean-audit: FAIL: --bookkeeping warn holds the caps to every package's lock, and --package leaves out "
+            f"{', '.join(left)}: drive's lock run audits every package")
+        return 1
     comps = {p: components(p, files, FLAGS) for p in pkgs}
     keys = {p: key_of(c) for p, c in comps.items()}
     out.mkdir(parents=True, exist_ok=True)
@@ -1636,11 +1640,11 @@ def main(argv: list[str]) -> int:
                     "with it repaired; an unread area above its cap, and a cap of `tests/test_lean_packages.py` the locks "
                     "left break (UNWITNESSED, INLINE), is raised or lowered to the count in a copy under --out's "
                     "`repaired/`, which audit.json's `repaired` names for drive to commit; each repair is a warning in "
-                    "audit.json's `bookkeeping`. Not with --package: the caps count every package")
+                    "audit.json's `bookkeeping`. Every package is audited (`--package` may name them all, as check.py's parts do): the "
+                    "caps count every package")
     a = ap.parse_args(argv)
-    if a.bookkeeping and (not a.regenerate or a.package):
-        ap.error("--bookkeeping warn goes with --regenerate and without --package: drive's lock run, which audits every "
-                 "package and commits the locks it regenerates")
+    if a.bookkeeping and not a.regenerate:
+        ap.error("--bookkeeping warn goes with --regenerate: drive's lock run, which commits the locks it regenerates")
     urls = json.loads(a.urls.read_text()) if a.urls and a.urls.is_file() else None
     return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export, only=a.package,
                regenerate=a.regenerate, bundle=a.bundle, bookkeeping=bool(a.bookkeeping))

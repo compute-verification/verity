@@ -215,16 +215,18 @@ def test_the_lock_runs_audit_repairs_bookkeeping_and_the_caps_the_repaired_locks
     """`--bookkeeping warn` (drive's lock run) reaches check.py: a package that fails only on bookkeeping passes on its
     repaired lock, and a cap of `tests/test_lean_packages.py` that lock breaks is set to its count in a copy under `repaired/`,
     which audit.json's `repaired` names for drive to commit, with every warning under `bookkeeping`. Without the flag the
-    package fails and nothing is repaired; the flag goes only with --regenerate and without --package."""
+    package fails and nothing is repaired. The flag goes only with --regenerate, over every package: `--package` naming
+    each, as check.py's `lean-audit:PKG` parts of a deferred run do, is every package, and one that leaves a package out
+    fails."""
     caps = 'UNWITNESSED = {"pkg/b": 1}\n\nINLINE = {}\n\nROOM = {"UNWITNESSED pkg/a": 2}\n'
     root = _tree(tmp_path, monkeypatch, {LA.CAPS_TEST: caps})
     (root / "tools/verity/lean/check.py").write_text(BOOK_AUDIT)
     (root / "pkg/b/lean-audit.json").write_text(json.dumps({"unlisted": True}))
     cache, deps = tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps"
 
-    def go(n: int, bookkeeping: bool) -> tuple[int, dict]:
+    def go(n: int, bookkeeping: bool, only: list[str] | None = None) -> tuple[int, dict]:
         out = tmp_path / f"out{n}"
-        rc = LA.run(out, cache, deps, log=lambda s: None, regenerate=True, bookkeeping=bookkeeping)
+        rc = LA.run(out, cache, deps, log=lambda s: None, regenerate=True, bookkeeping=bookkeeping, only=only)
         return rc, json.loads((out / "audit.json").read_text())
     rc, doc = go(1, False)
     assert rc == 1 and doc["failed"] == ["pkg/b"] and "repaired" not in doc and "bookkeeping" not in doc
@@ -236,9 +238,15 @@ def test_the_lock_runs_audit_repairs_bookkeeping_and_the_caps_the_repaired_locks
     assert doc["bookkeeping"] == [
         "pkg/b: bookkeeping: P.Sound (@lean): listed under `open` on LEAN-186, due D (open.unlisted)",
         f"bookkeeping: UNWITNESSED['pkg/b'] in {LA.CAPS_TEST} (@lean): 1 -> 2, the count its lock has"]
-    for argv in (["--bookkeeping", "warn"], ["--regenerate", "--bookkeeping", "warn", "--package", "pkg/b"]):
-        with pytest.raises(SystemExit):
-            LA.main(["--out", str(tmp_path / "out3"), *argv])
+    every = sorted(LA.packages(LA.COMMON.tracked_files(root)))
+    assert "pkg/b" in every and len(every) > 1
+    rc, named = go(3, True, every)
+    assert rc == 0 and named["repaired"].keys() == doc["repaired"].keys() and named["bookkeeping"] == doc["bookkeeping"]
+    logged: list[str] = []
+    assert LA.run(tmp_path / "out4", cache, deps, log=logged.append, regenerate=True, bookkeeping=True, only=["pkg/b"]) == 1
+    assert any("--package leaves out" in s for s in logged), logged
+    with pytest.raises(SystemExit):
+        LA.main(["--out", str(tmp_path / "out5"), "--bookkeeping", "warn"])
 
 
 def test_held_caps_sets_each_broken_cap_to_its_count_and_leaves_the_rest():
