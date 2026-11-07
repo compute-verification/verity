@@ -858,7 +858,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         return summary, False
     want = CS.expected_ports(mine)
     summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta, "firewall": a.firewall,
-                    "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
+                    "members": [{"k": k, "key": m.key, "template": m.template, "n": m.n, "base": m.base}
+                                for k, m in enumerate(mine.members)]})
     if plain(a):
         summary.update(firewall=None, plain={"scope": PLAIN_SCOPE, "coins": "os", "firewall": PLAIN_FIREWALL})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
@@ -1112,7 +1113,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part)
+                   served=sorted(served_units), v2=v2_proof(done, not plain(a), members=layout(mine)), partition=part)
     else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -1134,7 +1135,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a), drawn), partition=part, tied=tie(a))
+                   served=given["served"], v2=v2_proof(done, not plain(a), drawn, layout(mine)), partition=part,
+                   tied=tie(a))
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -1262,16 +1264,24 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
         (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
 
+def layout(binding) -> list[list]:
+    """The verifier's layout of `binding`'s window as v2 reads it (`OneStageZk.layoutOf`): each member's key and unit
+    count, in unit order."""
+    return [[m.key, m.n] for m in binding.members]
+
+
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
-            tables: Sequence[Path], drawn: dict | None = None) -> dict:
+            tables: Sequence[Path], drawn: dict | None = None, members: Sequence[Sequence] | None = None) -> dict:
     """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
     public file's as the audit pinned it, completed from the one staged before the draw, once the tie held (`PIN`'s
-    ``completed``, `pin_completed`), and the verifier's registered file), the evidence with its
+    ``completed``, `pin_completed`), the verifier's registered file, and with ``members`` the verifier's layout of the
+    window, `layout`), the evidence with its
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
     the paths of the files those name and of the pinned lookup tables, which onsite reads after the evidence
-    (`compose.onsite_check`). v2 holds the public file's header to the registration (`registration.matches_public`, and
-    its ``units.indices`` the population's units in order), so it refuses a windowed registration, whose ports are its
-    members' (``<member>/<port>``). With ``drawn`` (`drawn_by`),
+    (`compose.onsite_check`). v2 finds the drawn member from the layout and the draw (`OneStageZk.memberOf`) and holds
+    the public file's header to that member's slice of the registration, whose ports are ``<member>/<port>``, and its
+    ``units.indices`` to the member's units (`OneStageZk.publicHeld`); without ``members`` it holds the header to the
+    whole registration, so it refuses a window's. With ``drawn`` (`drawn_by`),
     the params name the auditor's challenger and its window root and the evidence carries the draw's coins; without, the
     case names no challenger, which v2 refuses (`OneStageZk.NO_CHALLENGER`)."""
     import replay as RP
@@ -1281,10 +1291,12 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     drawn = drawn or {"params": {}, "evidence": {}}
     evidence = ({k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"}
                 | drawn["evidence"] | {"proofs": pr})
+    proofs = {"circuit": circuit, "public": public, "registered": registered}
+    if members is not None:
+        proofs["members"] = [list(m) for m in members]
     return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(),
-            "params": {**case["params"], **drawn["params"],
-                       "proofs": {"circuit": circuit, "public": public, "registered": registered}}}
+            "params": {**case["params"], **drawn["params"], "proofs": proofs}}
 
 
 def drawn_by(ev: dict | None, window_root: str) -> dict | None:
@@ -1298,10 +1310,11 @@ def drawn_by(ev: dict | None, window_root: str) -> dict | None:
             "evidence": {"coins": {k: v for k, v in ev.items() if k != "key"}}}
 
 
-def v2_proof(done: Sequence[dict], zk: bool, drawn: dict | None = None) -> dict | str:
-    """`case_v2`'s files from the drawn members' sessions (`member_checks`'s) and the draw's coins ``drawn``
-    (`drawn_by`), or why the audit has no v2 case: v2 verifies one table's one `--zk` session on its circuit and public
-    file, on a draw from the auditor's challenger's coins."""
+def v2_proof(done: Sequence[dict], zk: bool, drawn: dict | None = None, members: Sequence[Sequence] | None = None
+             ) -> dict | str:
+    """`case_v2`'s files from the drawn members' sessions (`member_checks`'s), the draw's coins ``drawn`` (`drawn_by`)
+    and the window's layout ``members`` (`layout`), or why the audit has no v2 case: v2 verifies one table's one `--zk`
+    session on its circuit and public file, on a draw from the auditor's challenger's coins."""
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     if not zk:
@@ -1317,7 +1330,7 @@ def v2_proof(done: Sequence[dict], zk: bool, drawn: dict | None = None) -> dict 
     return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
                               tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
             "circuit": mm["pin"], "public": st["public"], "registered": json.loads(reads.read_text()) if reads else None,
-            "tables": tables, "drawn": drawn}
+            "tables": tables, "drawn": drawn, "members": members}
 
 
 def streamed(a: argparse.Namespace) -> bool:

@@ -116,6 +116,27 @@ def drawn_member(window: Path) -> int:
     return ks[0]
 
 
+def layout_of(window: Path) -> list[list]:
+    """The verifier's layout of the window (`a5.layout`) from its ``summary.json`` ``members``, in unit order: each
+    member's key and unit count, the key as a5 recorded it or, in a summary from before a5 recorded keys, as
+    `interface._members` names a template's chunks (``<template>/c<j>``, ``j`` counting that template's members from 0).
+    v2 holds the layout to the record's population and the drawn member's public file to its key's slice of the
+    registration, so a wrong key refuses. Members that don't tile the window from unit 0 are refused (`Refused`)."""
+    try:
+        rows = sorted((m["base"], m["k"], m["n"], m["template"], m.get("key"))
+                      for m in json.loads((window / "summary.json").read_text())["members"])
+    except (OSError, KeyError, TypeError, ValueError):
+        raise Refused("the window's summary.json names no members, the layout v2 finds the drawn member by") from None
+    at, seen, out = 0, {}, []
+    for base, k, n, template, key in rows:
+        if base != at:
+            raise Refused(f"the window's summary.json members don't tile it: m{k} starts at unit {base}, not {at}")
+        j = seen[template] = seen.get(template, -1) + 1
+        out.append([key or f"{template}/c{j}", n])
+        at += n
+    return out
+
+
 def compose_log(window: Path, k: int) -> Path:
     """Member `k`'s ``compose.log``: its own, or, where a5 composed its template's circuit once at the template's first
     member (`a5.audit`), that member's, by the window's ``summary.json`` ``members``. None kept is refused."""
@@ -171,7 +192,7 @@ def case(window: Path, scratch: Path, key: Ch.ChallengerKey | None = None) -> tu
     circuit, how = (kept[0], "kept") if kept else rebuild(c, scratch)
     circuit = circuit or window / f"m{k}" / "circuit.txt"
     v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], public=public,
-                    registered=None, tables=[], drawn=drawn)
+                    registered=None, tables=[], drawn=drawn, members=layout_of(window))
     return v2, how, len(sessions), challenger
 
 

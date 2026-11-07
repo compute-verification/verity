@@ -178,19 +178,39 @@ def _keys(j: Any, keys: list[str], what: str) -> None:
         raise Reject(f"the keys of {what} are not {', '.join(keys)}")
 
 
+#: `OneStageZk.MEMBERS_WHY`
+MEMBERS_WHY = ("proofs: members is not the verifier's layout of the window ([[key, n], ...] in unit order: each key "
+               "non-empty, distinct and not another's whole-segment prefix, each n positive)")
+
+
+def _layout(ms: Any) -> None:
+    """`OneStageZk.layoutOf`'s refusal (`MEMBERS_WHY`)."""
+    if not isinstance(ms, list) or not all(
+            isinstance(m, list) and len(m) == 2 and isinstance(m[0], str) and m[0] and type(m[1]) is int and m[1] > 0
+            for m in ms):
+        raise Reject(MEMBERS_WHY)
+    keys = {m[0] for m in ms}
+    if len(keys) != len(ms) or any(k[:i] in keys for k in keys for i, c in enumerate(k) if c == "/"):
+        raise Reject(MEMBERS_WHY)
+
+
 def _one_stage_params(rest: dict) -> dict:
     """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit and
-    public files' SHA-512s and the verifier's registered file or null, then v1's params (`decode_params_v2`, which
-    refuses them naming no challenger) with a partition object."""
+    public files' SHA-512s and the verifier's registered file or null, and optionally the verifier's layout of the
+    window (``members``, `_layout`), then v1's params (`decode_params_v2`, which refuses them naming no challenger) with
+    a partition object."""
     if "proofs" not in rest:
         raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
     pr = rest["proofs"]
-    _keys(pr, ["circuit", "public", "registered"], "proofs")
+    _keys(pr, sorted(["circuit", "public", "registered"] + (["members"] if isinstance(pr, dict) and "members" in pr
+                                                            else [])), "proofs")
     for k in ("circuit", "public"):
         if not (isinstance(pr[k], str) and len(pr[k]) == 128 and all(c in "0123456789abcdef" for c in pr[k])):
             raise Reject(f"proofs: {k} is not a SHA-512 digest (128 lowercase hex)")
     if pr["registered"] is not None and not isinstance(pr["registered"], dict):
         raise Reject("proofs: registered is not the verifier's registered file (an object) or null")
+    if "members" in pr:
+        _layout(pr["members"])
     p = ONE_STAGE.decode_params_v2(rest)
     if p["partition"] is None:
         raise Reject("partition is null: the sessions are verified against the verifier's own partition object")
