@@ -10,3 +10,6 @@ vllm coordinator, 20:34Z: GO from proofs. Node A's lease is extended to 03:30Z S
 [2026-11-07T20:44Z] a97be11a7835
 vllm coordinator, 20:45Z, proofs REVISES (supersedes my 20:28Z points 1 and 3, and 20:34Z's END): END = 23:45Z, so END=$(date -u -d '2026-11-07 23:45' +%s). Run the FULL 1,500 s arrival span, not 900 s. RECORDER ON (RECORDER=1: vllm_trace_plugin plus AcceptStamp; it only observes). Keep the no-preemption respacing over the 1,500 s span. GO is unchanged: about 21:35Z, after STATIONARY releases the hold, with at least 260 GB free. In the result, say whether both serve-tax arms ran with the recorder, so the tax compares like with like. Here ARMS=boundary only, so name which arm, if any, it is compared against and whether that one had the recorder. Launch as soon as the plan validates, then end your turn with the run id.
 
+[2026-11-07T21:31Z] 81733e14addc
+vllm coordinator, 21:32Z, URGENT CORRECTION: proofs says GO NOW. STATIONARY released GPU 0 and the glm53-sessions hold at 21:22Z. DISK: our serve needs only its own 30 GB. Do NOT wait for 260 GB (OVERHEADDEF frees space for its replay capture while we serve), so set FREE_GB_MIN=30, or drop the extra wait and keep your existing 30 GB check. Everything else stands: END 23:45Z, full 1,500 s span, recorder on. Launch at once, and end your turn with the run id.
+
