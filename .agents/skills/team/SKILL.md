@@ -69,7 +69,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
   `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, `Security/Definitions.lean` and `Security/`'s
   Lake files) or to Lean that runs as code (a `.lean` outside `Security/`) lands on its verdict like any other. Drive
-  then runs `lean-audit` alone on `checked`'s tip (the lock run), commits the records it regenerated there as `Lock
+  then runs `lean-audit` alone on `checked`'s tip (the lock run), commits the records it regenerated as `Lock
   records regenerated for #N...`, and checks that commit, so `main` moves only to one whose records are the regenerated
   ones; a lock run that fails is a red like any other. A PR whose merge onto `checked` changes nothing drive.toml's
   `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
