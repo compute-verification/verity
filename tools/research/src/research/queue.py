@@ -3317,9 +3317,9 @@ def restack_end(job: dict, now: float) -> tuple[dict | None, str] | None:
 
     if (end := _job_end(job, RESTACK_OUT)) is None and now - job["at"] <= RESTACK_LOST_S:
         return None
-    if end is None:
+    if not isinstance(end, tuple):
         shutil.rmtree(job["dir"], ignore_errors=True)
-        end = f"no exit written {RESTACK_LOST_S // 60} min after its start"
+        end = end or f"no exit written {RESTACK_LOST_S // 60} min after its start"
     try:
         (x,) = json.loads(Path(job["out"], RESTACK_OUT).read_text())
         said = ({"result": x["result"]} if x["status"] in ("clean", "up-to-date") else

@@ -238,6 +238,26 @@ def test_a_restack_job_that_ends_with_no_result_runs_once_more_and_then_its_fail
     assert len(jobs) == 2, world.logs                             # the failure is cached: no job starts again
 
 
+def test_a_restack_job_whose_process_is_gone_with_no_exit_runs_once_more_and_leaves_nothing(world, monkeypatch, jobs):
+    """A restart of the pod leaves a job with no exit and no process: the next sync runs it once more and removes the lost
+    job's directories."""
+    h = Review(world, monkeypatch, land_into="checked")
+    _move_pr(world, 1)
+    world.gh.put(2, head := world.change({"old_proto/x.py": "X = 2\n"}))
+    h.tick()
+    gone = subprocess.Popen(["true"])
+    gone.wait()
+    state = h.q.load_state()
+    (lost,) = state["restacking"].values()
+    lost["pid"] = gone.pid
+    h.q.save_state(state)
+    h.tick()
+    assert [j.head for j in jobs] == [head, head] and world.on_next(h.q) == [1], world.logs
+    assert any(f"the restack of {head[:12]} across the move {_member(world, 1)[:12]} ended with no result (its process is gone "
+               "with no exit written" in x for x in world.logs), world.logs
+    assert not Path(lost["dir"]).exists() and not Path(lost["out"]).exists()
+
+
 def test_a_restack_job_is_saved_as_it_starts_so_a_sync_that_fails_after_starting_it_leaves_no_second(world, monkeypatch, jobs):
     """A job is in the state from its start, as drive's launches are: the sync that started it fails before its own save (here
     at its last step), and the next finds the job running and starts no second `restack.py` for the head."""
