@@ -81,8 +81,9 @@ def fetch_run(run: str, pkg: Path) -> tuple[Path, Path, Path]:
     tree = shown.get("outputs", {}).get("run_files")
     if not tree:
         raise SystemExit(f"trusted_size: {run} has no run_files in the store")
-    *facts, lock, report = [f"lean-audit/audit-{pkg.name}/{f}"
-                            for f in (C.FACTS, "facts.json", C.POLICY, "report.json")]
+    at = pkg.resolve()
+    tag = re.sub(r"[^A-Za-z0-9]+", "_", str(at.relative_to(ROOT)) if at.is_relative_to(ROOT) else pkg.name)
+    *facts, lock, report = [f"lean-audit/audit-{tag}/{f}" for f in (C.FACTS, "facts.json", C.POLICY, "report.json")]
     out = Path(tempfile.mkdtemp(prefix="trusted-size-"))
     paths = [x for w in (*facts, lock, report) for x in ("--path", w)]
     subprocess.run(["research", "data", "fetch", tree, "--to", str(out), *paths], check=True, cwd=ROOT,

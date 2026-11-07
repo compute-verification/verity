@@ -543,7 +543,7 @@ def test_the_record_follows_a_statement_through_the_modules_the_trees_except(tmp
     class Read(Exception):
         pass
 
-    def facts_of(q, qpol, work, moved=None):
+    def facts_of(q, qpol, work, moved=None, keep=True):
         scopes.append(A.record_scope(qpol))
         raise Read
     monkeypatch.setattr(A, "facts_of", facts_of)
@@ -817,6 +817,87 @@ def test_the_facts_are_kept_only_gzipped_as_the_program_wrote_them(tmp_path, mon
     assert facts["pins"]["C.g"]["reads"][0]["sha256"] == hashlib.sha256(b"d").hexdigest()
     (tmp_path / "facts.json").write_bytes(written)
     assert A.stored_facts(tmp_path / "facts.json") == doc, "an older run's plain facts.json still reads"
+
+
+def test_the_program_writes_the_facts_outside_the_audit_s_output_and_they_are_kept_only_when_asked(tmp_path, monkeypatch):
+    """`Facts.lean` writes its document and canonical forms (hundreds of MB for `Security`) in a directory of their own
+    outside the work directory a recorded run publishes, under `SCRATCH` when it is set (`lean_changed.records`' sandbox
+    shows only the package's `.lake`), and that directory is gone once they are read, or the program failed. Without
+    ``keep`` the work directory keeps no document, and none an earlier run left there, gzipped or plain."""
+    work, wrote, failing = tmp_path / "work", [], []
+
+    def program(argv, cwd, log):
+        config = json.loads(Path(argv[3]).read_text())
+        out, canon = Path(config["out"]), Path(config["canon"])
+        wrote.append(out.parent)
+        if failing:
+            return 1, "a root that was not built"
+        out.write_text(json.dumps({"pins": {}, "modules": ["C"]}))
+        canon.write_text("")
+        return 0, ""
+
+    monkeypatch.setattr(A, "facts_program", lambda pkg: "facts")
+    monkeypatch.setattr(A, "run", program)
+    work.mkdir()
+    for stale in (A.FACTS, "facts.json", "canon.jsonl"):
+        (work / stale).write_text("an earlier run's")
+    assert A.facts_of(tmp_path, {"roots": ["C"]}, work, keep=False)["modules"] == ["C"]
+    assert sorted(p.name for p in work.iterdir()) == ["facts-config.json"]
+    failing.append(True)
+    with pytest.raises(RuntimeError, match="Facts.lean"):
+        A.facts_of(tmp_path, {"roots": ["C"]}, work)
+    assert len(wrote) == 2 and not any(d.is_relative_to(work) or d.exists() for d in wrote)
+    failing.clear()
+    monkeypatch.setattr(A, "SCRATCH", tmp_path / "scratch")
+    (tmp_path / "scratch").mkdir()
+    A.facts_of(tmp_path, {"roots": ["C"]}, work)
+    assert wrote[-1].parent == tmp_path / "scratch" and not any((tmp_path / "scratch").iterdir())
+    assert sorted(p.name for p in work.iterdir()) == ["facts-config.json", A.FACTS]
+
+
+@pytest.mark.parametrize("flags,kept", [([], {"a": "all", "b": "all"}), (["--facts", "named"], {"a": "own", "b": "none"}),
+                                        (["--facts", "none"], {"a": "none", "b": "none"})])
+def test_facts_says_which_audits_keep_their_facts_document(tmp_path, monkeypatch, flags, kept):
+    """A check run keeps every audit's facts and its provers' (`status_export.py --facts` reads them); a records run's PKG
+    (`--facts named`) keeps only its own (`trusted_size.py --run`), not those of the prover audited beside it; `none`
+    keeps none."""
+    a, b = tmp_path / "a", tmp_path / "b"
+    for p in (a, b):
+        p.mkdir()
+    (a / A.POLICY).write_text(json.dumps({"proved_in": ["../b"]}))
+    (b / A.POLICY).write_text("{}")
+    got = {}
+
+    def fake(pkg, out, *args, built=lambda: None, kept_facts="all", **_):
+        built()
+        got[pkg.name] = kept_facts
+        return {"package": str(pkg), "seconds": {}, "failures": []}
+
+    monkeypatch.setattr(A, "audit", fake)
+    assert A.main([str(a), *flags, "--out", str(tmp_path / "out"), "--repo", str(tmp_path)]) == 0
+    assert got == kept
+
+
+@pytest.mark.parametrize("kept_facts,keeps", [("all", [True, True]), ("own", [True, False]), ("none", [False, False])])
+def test_an_audit_keeps_the_package_s_and_its_provers_facts_as_kept_facts_says(tmp_path, monkeypatch, kept_facts, keeps):
+    pkg = tmp_path / "s"
+    pkg.mkdir()
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["S"], "proved_in": ["../p"]}))
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+    seen = []
+
+    def facts_of(q, policy, work, moved=None, keep=True):
+        seen.append(keep)
+        return {"modules": [], "oleans": [], "pins": {}}
+
+    def proved(q, policy, facts, work, moved=None, ready=None, keep=True):
+        seen.append(keep)
+        raise RuntimeError("stop after the provers' facts")
+
+    monkeypatch.setattr(A, "facts_of", facts_of)
+    monkeypatch.setattr(A, "proved", proved)
+    rep = A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, kept_facts=kept_facts)
+    assert seen == keeps and rep["failures"] == ["lean: stop after the provers' facts"]
 
 
 SHAPE_SPEC = """namespace Control
@@ -4216,7 +4297,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
                 order.append(getattr(args[0], "__name__", str(args[0])))
             return super().submit(fn, *args, **kw)
 
-    def proved(pkg, policy, facts, work, moved, ready):
+    def proved(pkg, policy, facts, work, moved, ready, keep=True):
         order.append("proved")
         return [], facts | {"pins": {"P.g": {"kind": "theorem", "reads": []}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
 
@@ -4228,7 +4309,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
         return f
 
     monkeypatch.setattr(A, "ThreadPoolExecutor", Recording)
-    monkeypatch.setattr(A, "facts_of", lambda *a: own)
+    monkeypatch.setattr(A, "facts_of", lambda *a, keep=True: own)
     monkeypatch.setattr(A, "proved", proved)
     monkeypatch.setattr(A, "replay_step", stub("replay_step", ([], {"checked": 1, "reused": 0})))
     monkeypatch.setattr(A, "dependency_scans", stub("dependency_scans", ([A.Failure("unchecked.dependency", None, "unchecked: a hit")], 7)))
