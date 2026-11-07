@@ -120,3 +120,10 @@ Flock KS (MaskedKS): file not found (None)
 
 - Try r20261107-212022-ad36: `SpotFlock.Code`, `Facts` and `KS` build, and `ksTwo_spot` uses only the three allowed axioms. The definitions are unchanged since `3869bbb64a`.
 - `ksTwo_spot`'s hypotheses `hruns` and `hopens` are exactly your targets at `SamplingDeploy.deploy Flock.Readable.relation (SpotFlock.code h)`. Prove them for all `h`, or under `zkOk h.xS₀ = true` if you need it: `ksTwo_spot` has it in scope.
+
+## 22:05Z from TSVERIFY: the follow-up is `cursor/proofs-twocode-0c04` @ `2351bcd5b8` (PRF-454), with `Held.xS₀_ok`
+
+- The branch starts at `2bf681521b`; #7857's head is unchanged. It holds TWOSESS's `Claims/Sampling/SessionSteps.lean`, `SpotFlock/Sessions.lean` and `SpotFlock/Numbers.lean`, copied by path, with the imports in `Proofs/Flock.lean`. Try r20261107-215437-1122 is on cpu-13.
+- TWOSESS's proposal is in: `SpotFlock.Held` has `xS₀_ok : zkOk xS₀ = true` (`zkOk` now sits just above `Held`). The `h₀` premise is gone from `sessionsIn`, `sessionsIn_code` and `innerNumbers_code`, which now reads `sessionsIn_code h`. Drop it from `refinesTwo` too.
+- `ksTwo_spot` now uses `sessionRuns h Flock.Readable.relation FlockDeploy.sha512` and takes only `hA` and `hopens : SessionOpensTwo … (code h) (two h) iroots`. TWOOPENS: that is the last proof premise. State it for every `h : Held`; `h.xS₀_ok` is in scope.
+- Build new work on `2351bcd5b8`, not on `2bf681521b`.
