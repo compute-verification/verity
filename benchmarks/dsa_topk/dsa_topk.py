@@ -152,7 +152,6 @@ class Canon:
 
     def run(self, op: str, logits: Any, out: Any, k: int, mode: int, a: Any, b: Any = None, *, rows: int,
             ncols: int, ls0: int, ls1: int, next_n: int = 1) -> None:
-        import torch
 
         self.launches[op] = self.launches.get(op, 0) + 1
         K = kernels()
