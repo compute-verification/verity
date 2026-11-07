@@ -31,7 +31,8 @@ from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import UsageError, option
 from verity_vllm.pipeline.expert_rows import table_param, table_words
 
-__all__ = ["FORMAT", "TABLES_NONCE", "committer", "entries", "nonces", "of_request", "program", "register", "tables_of"]
+__all__ = ["FORMAT", "TABLES_NONCE", "committer", "entries", "nonces", "of_request", "program", "register", "served_fields",
+           "tables_of"]
 
 FORMAT = "verity-vllm/expert-tables/v1"
 #: the salt nonces of the tables under the committer's key start here, a rank's 2^32 apart (`nonces`): above every weight
@@ -39,6 +40,7 @@ FORMAT = "verity-vllm/expert-tables/v1"
 TABLES_NONCE = 3 << 61
 LAYER_RE = re.compile(r"(?:^|\.)layers\.(\d+)\.")
 PARAM_RE = re.compile(r"^weights/(.+)@\d+/b(\d+)/table$")
+BITS = {"float8_e4m3fn": 8, "uint8": 8, "bfloat16": 16, "float16": 16, "float32": 32}
 KINDS = {("w13", "weight"): 0, ("w13", "weight_scale_inv"): 1, ("w2", "weight"): 2, ("w2", "weight_scale_inv"): 3}
 
 
@@ -134,32 +136,58 @@ def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequen
             for b, param, what, n in tables}
 
 
+def served_fields(path: str) -> tuple[list[tuple[str, list[int], int]], dict[str, str]]:
+    """A capture's served parameters, ``params.json``'s ``{name: {shape, dtype, sha512}}`` (or a ``commit.json``'s ``opened``), as
+    weight fields named as vLLM names them, ``(name, shape, bits)``, and each one's SHA-512 over its served bytes."""
+    doc = json.loads(Path(path).read_text())
+    fields, digests = [], {}
+    for name, e in sorted(doc.get("opened", doc).items()):
+        if (bits := BITS.get(str(e.get("dtype")).removeprefix("torch."))) is not None:
+            fields.append((name, [int(x) for x in e["shape"]], bits))
+            digests[name] = str(e["sha512"])
+    return fields, digests
+
+
 def _commit(job: tuple[dict[str, Any], dict[str, Any], str, list[tuple[str, list[int], int]], dict[str, list], str, bytes,
-                       dict[str, int]]) -> tuple[dict[str, dict[str, Any]], list[str]]:
-    """One worker's tables: its fields composed as `weights_of_record` composes them for the rank, each table committed; and why
-    each field it left unresolved was."""
-    prog, ckargs, prefix, fields, tables, digest, key, nonce = job
+                       dict[str, int], dict[str, str]]) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """One worker's tables: its fields composed as `weights_of_record` composes them for the rank, each held to its served SHA-512
+    where one is given and each table committed; and why each field it left unresolved was."""
+    prog, ckargs, prefix, fields, tables, digest, key, nonce, served = job
     shapes, out = {f: s for f, s, _b in fields}, {}
 
     def on_field(label: str, words: np.ndarray) -> None:
+        want = served.get(label)
+        if want and hashlib.sha512(np.ascontiguousarray(words).reshape(-1).view(np.uint8)).hexdigest() != want:
+            raise ValueError(f"{label}: the checkpoint composed for the rank is not the served tensor (SHA-512 {want[:16]}..)")
         out.update(entries(digest, words, shapes[label], tables[label], key, nonce))
 
     rec = WR.weights_of_record(prog, WR.CheckpointIndex(**ckargs), prefix=prefix, fields=fields, on_field=on_field)
     return out, [f"{f['field']}: {f.get('why')}" for f in rec["fields"] if not f.get("digest")]
 
 
-def register(program_dir: str, checkpoint_dir: str, key: bytes, blocks: Mapping[str, int], *, layers: Sequence[int] | None = None,
+def register(program_dir: str | None, checkpoint_dir: str, key: bytes, blocks: Mapping[str, int], *, served: str | None = None,
+             world: int | None = None, rank: int | None = None, layers: Sequence[int] | None = None,
              checkpoints_manifest: str | None = None, model: str | None = None, revision: str | None = None,
              verify_shards: bool = True, workers: int = 1) -> dict[str, Any]:
     """The rank's registration (module docstring) of the tables of the Program at ``program_dir`` (a rank Program of the Build:
     its weights struct and its TP world and rank), its expert weights composed from ``checkpoint_dir`` (pinned by
     ``checkpoints_manifest``) under ``key``, each projection's weight in blocks of ``blocks`` rows; ``layers``: only those
-    layers' tables; ``workers``: processes, a layer's fields each."""
+    layers' tables; ``workers``: processes, a layer's fields each.  Without a Program, ``served``: a capture's served
+    parameters at TP ``world`` and ``rank`` (`served_fields`), the tables named as vLLM names the weights and each composed
+    weight refused unless its SHA-512 is the served one."""
     from verity_vllm.check.checkpoint_index import manifest_entry
     from verity_vllm.check.component_programs import load_program_head
 
-    prog = load_program_head(program_dir)
-    tp = (prog.get("result") or {}).get("tp") or {}
+    if (program_dir is None) == (served is None) or (served is not None and (world is None or rank is None)):
+        raise ValueError("a rank Program dir, or a capture's served parameters with their TP world and rank")
+    sha: dict[str, str] = {}
+    if served is not None:
+        prog = {"instances": {"params": [], "rows": []}, "result": {"tp": {"world": int(world), "rank": int(rank)}}, "dir": None}
+        all_fields, sha = served_fields(served)
+    else:
+        prog = load_program_head(program_dir)
+        all_fields = WR.program_weight_fields(prog["instances"])
+    tp = prog["result"].get("tp") or {}
     world, rank = int(tp.get("world") or 1), int(tp.get("rank") or 0)
     manifest = checkpoints_manifest or WR._default_manifest()
     ckargs = {"checkpoints_manifest": manifest, "model": model, "revision": revision}
@@ -168,12 +196,11 @@ def register(program_dir: str, checkpoint_dir: str, key: bytes, blocks: Mapping[
     repo, rev = model or entry.get("repo"), revision or entry.get("revision")
     if not repo or not rev:
         raise ValueError(f"{checkpoint_dir}: no checkpoints.json entry names its repo and revision; give --model and --revision")
-    prefix = _prefix(prog, ck)
-    fields = [f for f in WR.program_weight_fields(prog["instances"])
-              if layers is None or ((m := LAYER_RE.search(f[0])) is not None and int(m.group(1)) in set(layers))]
+    prefix = "" if served is not None else _prefix(prog, ck)
+    fields = [f for f in all_fields if layers is None or ((m := LAYER_RE.search(f[0])) is not None and int(m.group(1)) in set(layers))]
     tables = tables_of(fields, blocks)
     if not tables:
-        raise ValueError(f"no expert weights of {sorted(blocks)} among the Program's weights" + (f" of layers {list(layers)}" if layers else ""))
+        raise ValueError(f"no expert weights of {sorted(blocks)} among the weights" + (f" of layers {list(layers)}" if layers else ""))
     digest = program(repo, rev, world, rank, prefix)
     nonce = nonces([p for ts in tables.values() for _b, p, _w, _n in ts], rank)
     by_layer: dict[str, list[tuple[str, list[int], int]]] = {}
@@ -181,7 +208,7 @@ def register(program_dir: str, checkpoint_dir: str, key: bytes, blocks: Mapping[
         if f[0] in tables:
             by_layer.setdefault((m := LAYER_RE.search(f[0])) and m.group(1) or "", []).append(f)
     jobs = [(prog, {"ckpt_dir": checkpoint_dir, **ckargs, "verify_shards": False}, prefix, fs, {f[0]: tables[f[0]] for f in fs}, digest,
-             key, nonce) for fs in by_layer.values()]
+             key, nonce, {f[0]: sha[f[0]] for f in fs if f[0] in sha}) for fs in by_layer.values()]
     values: dict[str, dict[str, Any]] = {}
     why: list[str] = []
     with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as ex:
@@ -197,8 +224,12 @@ def register(program_dir: str, checkpoint_dir: str, key: bytes, blocks: Mapping[
 @dataclass(frozen=True, kw_only=True)
 class Options:
     """verity-vllm tp-register-tables --program-dir D --checkpoint-dir C --key K --block w13=1 --block w2=32 --out F [--layers 3,40]:
-    the committer's registration of a TP rank's per-expert tables (`register`), written to ``F`` for the verifier to pin."""
-    program_dir: str = option("--program-dir", help="a rank Program of the Build (its weights struct, its TP world and rank)")
+    the committer's registration of a TP rank's per-expert tables (`register`), written to ``F`` for the verifier to pin.  Without
+    a Build: ``--served params.json --world W --rank R`` in place of ``--program-dir``."""
+    program_dir: str | None = option("--program-dir", default=None, help="a rank Program of the Build (its weights struct, TP world and rank)")
+    served: str | None = option("--served", default=None, help="a capture's params.json for the rank, in place of a Program")
+    world: int | None = option("--world", type=int, default=None, help="with --served: the TP world")
+    rank: int | None = option("--rank", type=int, default=None, help="with --served: the TP rank")
     checkpoint_dir: str = option("--checkpoint-dir", help="the checkpoint of record")
     key: str = option("--key", help="the committer's 32-byte secret key file (the one its windows commit the tables under)")
     block: list[str] = option("--block", action="append", default=[], help="PROJ=n: w13's or w2's weight in blocks of n rows")
@@ -221,13 +252,15 @@ def main(o: Options) -> int:
         blocks[proj] = int(n)
     if not blocks:
         raise UsageError("give each projection's block rows: --block w13=n --block w2=n")
+    if (o.program_dir is None) == (o.served is None) or (o.served is not None and (o.world is None or o.rank is None)):
+        raise UsageError("give --program-dir, or --served with --world and --rank")
     if o.new_key:
         if Path(o.key).exists():
             raise UsageError(f"--new-key: {o.key} exists; a committer's key is written once")
         fd = os.open(o.key, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "wb") as f:
             f.write(os.urandom(32))
-    doc = register(o.program_dir, o.checkpoint_dir, Path(o.key).read_bytes(), blocks,
+    doc = register(o.program_dir, o.checkpoint_dir, Path(o.key).read_bytes(), blocks, served=o.served, world=o.world, rank=o.rank,
                    layers=[int(x) for x in o.layers.split(",")] if o.layers else None, checkpoints_manifest=o.checkpoints_manifest,
                    model=o.model, revision=o.revision, verify_shards=not o.no_verify_shards, workers=o.workers)
     Path(o.out).write_text(json.dumps(doc, indent=1) + "\n")

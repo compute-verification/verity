@@ -5,6 +5,7 @@ root; the two ranks are distinct values; and a registration's file is the commit
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 
 import numpy as np
@@ -89,12 +90,12 @@ class _Plan:
     """The parts of `expert_rows.Plan` `commit_tables` reads, for one GEMM row a projection of each layer: its weight template
     (``("w", n)``) and its scale template (``("ws", G)``), each block of rows a unit, its table named as `Plan.tables` names it."""
 
-    def __init__(self, blocks: dict[str, int]):
+    def __init__(self, blocks: dict[str, int], wrap: str):
         self.what, self.of, self.family, self.units, self._tables = {}, {}, {}, {}, {}
         I_r = I // WORLD
         for L in LAYERS:
             for proj, family, (N, K) in (("w13", "MoeExpertFp8Gemm_v1", (2 * I_r, H)), ("w2", "MoeExpertFp8GemmW_v1", (H, I_r))):
-                c = f"{WRAP}model.layers.{L}.mlp.experts.{proj}"
+                c = f"{wrap}model.layers.{L}.mlp.experts.{proj}"
                 w, ws = ER.ARGS[family][2], ER.ARGS[family][3]
                 row = ("rid", None, {"i": 0, "args": {w: f"{c}_weight", ws: f"{c}_weight_scale_inv"}},
                        {"statics": {"E": E, "N": N, "K": K, "G": G}})
@@ -109,8 +110,9 @@ class _Plan:
         return self._tables[t]
 
 
-def _commit(served: dict[str, np.ndarray], doc, key=KEY):
-    return ER.commit_tables(_Plan(BLOCKS), None, None, None, lambda _pi, _s, _w, _rid, _a, label: [served[label]],
+def _commit(served: dict[str, np.ndarray], doc, key=KEY, wrap=WRAP):
+    """`commit_tables` over ``served``, the plan's tables named under ``wrap`` and ``served`` keyed by the same names."""
+    return ER.commit_tables(_Plan(BLOCKS, wrap), None, None, None, lambda _pi, _s, _w, _rid, _a, label: [served[label]],
                             ET.committer(doc, key))
 
 
@@ -161,6 +163,28 @@ def test_layers_and_refusals(ckpt, regs):
         ET.register(ckpt["progs"][0], ckpt["dir"], KEY, BLOCKS, layers=[7], checkpoints_manifest=ckpt["man"])
     with pytest.raises(ValueError, match="32-byte key"):
         ET.committer(regs[0], KEY[:16])
+
+
+def test_without_a_build_the_served_parameters_name_the_tables_and_pin_the_bytes(ckpt, tmp_path):
+    """From a capture's ``params.json`` (vLLM's names, shapes, dtypes and SHA-512s) in place of a rank Program, the tables are
+    registered under the served names at the root the committer commits for them, and a weight whose served SHA-512 is not the
+    checkpoint's composition for the rank refuses."""
+    served = {f.removeprefix(WRAP): a for f, a in _served(ckpt, 1).items()}
+    dtype = {1: "torch.float8_e4m3fn", 4: "torch.float32"}
+    params = {n: {"shape": list(a.shape), "dtype": dtype[a.dtype.itemsize], "sha512": hashlib.sha512(a.tobytes()).hexdigest()}
+              for n, a in served.items()} | {"model.norm.weight": {"shape": [H], "dtype": "torch.bfloat16", "sha512": "00" * 64}}
+    (tmp_path / "params.json").write_text(json.dumps(params))
+    doc = ET.register(None, ckpt["dir"], KEY, BLOCKS, served=str(tmp_path / "params.json"), world=WORLD, rank=1,
+                      checkpoints_manifest=ckpt["man"])
+    assert (doc["prefix"], doc["rank"]) == ("", 1) and all(p.startswith("weights/model.layers.") for p in doc["values"])
+    assert {p: r.entry() for p, r in _commit(served, doc, wrap="").items()} == doc["values"]
+    n = "model.layers.2.mlp.experts.w2_weight_scale_inv"
+    (tmp_path / "params.json").write_text(json.dumps(params | {n: {**params[n], "sha512": "ab" * 64}}))
+    with pytest.raises(ValueError, match="not the served tensor"):
+        ET.register(None, ckpt["dir"], KEY, BLOCKS, served=str(tmp_path / "params.json"), world=WORLD, rank=1,
+                    checkpoints_manifest=ckpt["man"])
+    with pytest.raises(ValueError, match="TP world and rank"):
+        ET.register(None, ckpt["dir"], KEY, BLOCKS, served=str(tmp_path / "params.json"), checkpoints_manifest=ckpt["man"])
 
 
 def test_of_request_reads_the_ranks_file(tmp_path, regs):
