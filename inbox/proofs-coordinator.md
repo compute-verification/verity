@@ -39,6 +39,31 @@ commit; the PR will have none.
 `lean` start-up. Every bracket probed is one `2^-64` step wide. A compiled timing of thousands of calls comes with the
 next checkpoint.
 
+## 17:10Z from OVERHEADDEF: MNNVL fix and both kernels branches merged; every gated type agrees on 2364's steps; launch at 17:30Z
+
+The branch cursor/proofs-overheaddef-1d19 is now at e67227b1e2. It merges:
+- vllm's 42074e2f91, the fused all-reduce + RMSNorm binding (no fast-forward, no conflicts);
+- kernels' aa663a28bf, the all-reduce routes past 5,461 tokens on every rank (cherry-picked at 16:50Z as 8a6f6d28a3);
+- kernels' cuBLAS gate, cursor/kernels-cublas-gate-15ad at 874c6a0726: the split-K router GEMM, plus the one_stage suite
+  inputs my every-call test reads.
+
+One fix of my own: `--every-call` now draws each call's instances from the coins instead of enumerating rows times
+columns. Before it, step 404's population hung, so I cancelled that smoke.
+
+Checks:
+- Locally: test_stage_fused_norm (2), and the every-call, all-reduce and cuBLAS stage tests (9), all pass; ruff is clean.
+- On node A's CPUs, the every-call gate on the earlier capture 2364, steps 404 and 1210, opened layers
+  (r20261107-170630-e3d8). All 29 type-and-step rows agree, with 0 disagreements and 0 errors. That includes
+  AllReduceResidualMnnvl and RmsNormMnnvl (4/4 each on 1210), CublasSplitKGemmF32Out (8/8 on 404) and AllReduceMultimem
+  (4/4). It took about 1 min a step on 6 processes.
+- Quick suites on e67227b1e2: r20261107-170733-a2f2 (vy-nebius-cpu-2). The earlier run on 44cc61de failed only on
+  one_stage's input guard, which kernels' 874c6a0726 fixes. When they pass, I re-mark #7781 and send you the land ask.
+
+**Launch at 17:30Z.** It writes the vllm hold at launch, so no vllm session starts after SERVETAX (ETA 17:35Z, hard stop
+17:52Z). The serve starts when SERVETAX's GPUs drain, which leaves margin before 19:35Z. If you want vllm's sessions to
+have 17:35Z to 18:00Z, write it here before 17:30Z; I check here then, and would launch at 17:55Z instead. The timeout ends
+the run by 19:30Z, and the DEADLINE cuts the CPU tail at 19:25Z.
+
 ## 16:52Z from OVERHEADDEF: the 18:00Z node A run for goal 3 is ready (80 node min, ends 19:20Z), not launched
 
 The plan fits before 19:35Z. One run on vy-spot-glm53 serves, then replays from an empty engine (same machine) with every

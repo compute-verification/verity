@@ -4,8 +4,8 @@
     python benchmarks/spot_proved/stage.py --capture DIR --step S --out DIR --every-call N [--jobs J] [--deadline T]
 
 ``--every-call`` stages nothing: it runs the match gate on N instances of every recorded call of every type, over every layer
-of a step the capture kept whole (``--keep all``, whose ``kept_params`` hold every layer's norm weights; FP8 linears and MoE
-launches only in the opened layers, whose weights are written), and writes ``gate.json``: per type its calls, agreements,
+of a step the capture kept whole (``--keep all``, whose ``kept_params`` hold every layer's norm weights; FP8 linears, MoE
+launches and cuBLAS GEMMs only in the opened layers, whose weights are written), and writes ``gate.json``: per type its calls, agreements,
 disagreements, errors and first failures, and the recorded ops no type reads.
 
 * **Commitment.** Each rank's ``ops.jsonl`` and ``params.json`` are hashed again and held to its ``meta.json``'s rank root,
@@ -14,8 +14,11 @@ disagreements, errors and first failures, and the recorded ops no type reads.
 * **Population.** A proof block type's instances are the recorded calls of its kernel in the opened layers, on every rank,
   over the step's real tokens: a group quant's token row, a FlashInfer FP8 linear's (token, output column) when the call has
   fewer than 32 rows (the op's FlashInfer branch), a routed MoE w2 launch's (slot, output column), a fused allreduce + RMSNorm's
-  token for its residual half-rows and its norm, a plain allreduce's (token, half-row), and FA3's split combine per
-  (token, head). Instances are drawn from it by the capture's coins, ``--per-type`` of each type.
+  token for its residual half-rows and its norm, a plain allreduce's (token, half-row) on symm-mem's multimem route (its
+  received row the same on every rank; a call on NCCL's route is counted, not staged), an unbiased bf16 cuBLAS GEMM's token
+  row (``aten::mm`` against a bf16 weight's transposed view) at the route its call's M rows take (a call past
+  ``CUBLAS_ROUTES["m_max"]`` is counted, not staged), and FA3's split combine per (token, head). Instances are drawn from it
+  by the capture's coins, ``--per-type`` of each type.
 * **Match gate.** Each drawn instance's Definition is evaluated on the captured inputs and must return the captured outputs
   bit for bit (completeness, not soundness: an instance that disagrees is reported and not staged).
 * **Out.** ``values.json``, ``units.json``, ``<label>.npz`` (a11's saved-values format), ``kinds.json`` (a11's table of the
@@ -93,6 +96,7 @@ class Capture:
         self.layers = sorted(x for v in c0["layers"].values() for x in v)
         self.whole = all(self.commit[r].get("kept") == "every recorded tensor" for r in self.ranks)
         self.every = False
+        self.per_call = 0
         self._params: dict = {}
 
     def tensor(self, r: int, ref: dict) -> np.ndarray:
@@ -133,6 +137,13 @@ class Capture:
         """Whether a call's values are here: an opened layer's, or (`every`, a step kept whole) any layer's call that reads
         no weights past the kept small parameters."""
         return e.get("layer") in self.layers or (self.every and not weights)
+
+    def cells(self, label: str, call: tuple, *dims: int):
+        """A call's instance indices over ``dims``: every one, or with `per_call` set (``--every-call``) that many drawn by
+        the coins, so a gate over every call never enumerates a call's rows times its columns."""
+        n = int(np.prod(dims, dtype=np.int64)) if dims else 1
+        for i in (draw(self.coins, f"cells/{label}/{call}", n, self.per_call) if self.per_call else range(n)):
+            yield tuple(int(x) for x in np.unravel_index(i, dims))
 
     def tokens(self, r: int) -> int:
         return sum(self.meta[r]["scheduled"].values())
@@ -189,13 +200,12 @@ def flashinfer_linear_instances(cap: Capture):
                 continue
             N = a["weight"]["shape"][0]
             block = f"FlashInferFp8Linear_v1{{K={K},N=1}}"
-            for t in range(cap.real_rows(r, M)):
-                for col in range(N):
-                    yield (f"FlashInferFp8Linear_K{K}", block, (r, e["seq"], t, col),
-                           lambda r=r, e=e, t=t, col=col: [cap.tensor(r, e["in"]["input"])[t],
-                                                           cap.tensor(r, e["in"]["weight"])[col:col + 1],
-                                                           cap.tensor(r, e["in"]["weight_scale"])[col // 128:col // 128 + 1]],
-                           lambda r=r, e=e, t=t, col=col: [cap.tensor(r, e["out"]["ret0"])[t, col:col + 1]])
+            for t, col in cap.cells("FlashInferFp8Linear", (r, e["seq"]), cap.real_rows(r, M), N):
+                yield (f"FlashInferFp8Linear_K{K}", block, (r, e["seq"], t, col),
+                       lambda r=r, e=e, t=t, col=col: [cap.tensor(r, e["in"]["input"])[t],
+                                                       cap.tensor(r, e["in"]["weight"])[col:col + 1],
+                                                       cap.tensor(r, e["in"]["weight_scale"])[col // 128:col // 128 + 1]],
+                       lambda r=r, e=e, t=t, col=col: [cap.tensor(r, e["out"]["ret0"])[t, col:col + 1]])
 
 
 def moe_w2_instances(cap: Capture, profile):
@@ -218,11 +228,10 @@ def moe_w2_instances(cap: Capture, profile):
             topk = a["topk_weights"]["shape"][1]
             dot = re.search(r"DOT=(\w+?)Dot", spec.id)
             label = f"MoeExpertFp8GemmW_K{K}_{'swap' if swap else 'noswap'}_{dot[1] if dot else 'dot'}"
-            for j in range(cap.real_rows(r, S)):
-                for col in range(N):
-                    yield (label, spec, (r, e["seq"], j, col),
-                           lambda r=r, e=e, j=j, col=col: moe_args(cap, r, e, j, col),
-                           lambda r=r, e=e, j=j, col=col, topk=topk: [cap.tensor(r, e["out"]["C"]).reshape(-1, topk, N)[j // topk, j % topk, col:col + 1]])
+            for j, col in cap.cells("MoeExpertFp8GemmW", (r, e["seq"]), cap.real_rows(r, S), N):
+                yield (label, spec, (r, e["seq"], j, col),
+                       lambda r=r, e=e, j=j, col=col: moe_args(cap, r, e, j, col),
+                       lambda r=r, e=e, j=j, col=col, topk=topk: [cap.tensor(r, e["out"]["C"]).reshape(-1, topk, N)[j // topk, j % topk, col:col + 1]])
 
 
 def moe_args(cap: Capture, r: int, e: dict, j: int, col: int) -> list:
@@ -248,32 +257,65 @@ def aligned(cap: Capture, op: str):
         yield {r: per[r][i] for r in cap.ranks}
 
 
+def fused_ar_norm_outputs(e: dict) -> tuple[dict, dict]:
+    """The recorded buffers holding a ``vllm::flashinfer_trtllm_fused_allreduce_norm`` call's (new residual, normed rows) after it
+    ran. vLLM d9105ea80's op hands FlashInfer ``residual_out=allreduce_in`` when ``norm_out`` is given (`fused_allreduce_rms_norm`'s
+    path), else ``residual_out=residual`` and ``norm_out=allreduce_in``. Given ``norm_out``, ``residual`` is only FlashInfer's
+    ``residual_in`` and holds the old residual after the call, though the op's schema marks it written."""
+    if e["in"].get("norm_out") is None:
+        return e["out"]["residual"], e["out"]["allreduce_in"]
+    return e["out"]["allreduce_in"], e["out"]["norm_out"]
+
+
 def fused_ar_norm_instances(cap: Capture):
-    from verity.ml.definitions.registry.tp_allreduce import mnnvl_shot
+    from verity.ml.definitions.registry.tp_allreduce import mnnvl_grid, mnnvl_shot
     W = len(cap.ranks)
+    r0 = cap.ranks[0]
     for calls in aligned(cap, "vllm::flashinfer_trtllm_fused_allreduce_norm"):
-        e0 = calls[cap.ranks[0]]
+        e0 = calls[r0]
         T, H = e0["in"]["allreduce_in"]["shape"]
         half = H // 2
-        shot = mnnvl_shot(T, H, W)
-        for t in range(cap.real_rows(cap.ranks[0], T)):
+        shot, cluster = mnnvl_shot(T, H, W), mnnvl_grid(T, H)[1]
+        new_res, normed = fused_ar_norm_outputs(e0)
+        for t in range(cap.real_rows(r0, T)):
             for c in range(2):
                 sl = slice(c * half, (c + 1) * half)
                 yield (f"AllReduceResidualMnnvl_W{W}_S{shot}", f"AllReduceResidualMnnvl_v1{{WORLD={W},N={half},SHOT={shot}}}",
                        (e0["seq"], t, c),
                        lambda calls=calls, t=t, sl=sl: [np.stack([cap.tensor(r, calls[r]["in"]["allreduce_in"])[t, sl] for r in cap.ranks]),
-                                                        cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["in"]["residual"])[t, sl]],
-                       lambda calls=calls, t=t, sl=sl: [cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["residual"])[t, sl]])
+                                                        cap.tensor(r0, calls[r0]["in"]["residual"])[t, sl]],
+                       lambda new_res=new_res, t=t, sl=sl: [cap.tensor(r0, new_res)[t, sl]])
             eps = e0["in"]["rms_eps"]
-            yield (f"RmsNormMnnvl_W{W}_S{shot}", f'RmsNormMnnvl_v1{{N={H},SHOT={shot},CLUSTER={W},EPS={{"f64":"{float(eps).hex()}"}},FMA=true}}',
+            yield (f"RmsNormMnnvl_W{W}_S{shot}",
+                   f'RmsNormMnnvl_v1{{N={H},SHOT={shot},CLUSTER={cluster},EPS={{"f64":"{float(eps).hex()}"}},FMA=true}}',
                    (e0["seq"], t),
-                   lambda calls=calls, t=t: [cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["residual"])[t],
-                                             cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["in"]["rms_gamma"])],
-                   lambda calls=calls, t=t: [cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["norm_out"])[t]])
+                   lambda calls=calls, new_res=new_res, t=t: [cap.tensor(r0, new_res)[t], cap.tensor(r0, calls[r0]["in"]["rms_gamma"])],
+                   lambda normed=normed, t=t: [cap.tensor(r0, normed)[t]])
 
 
-def allreduce_instances(cap: Capture):
+def allreduce_route(cap: Capture, e0: dict) -> str:
+    """The communicator a plain allreduce ran on, from what the recorder saw inside it: symm-mem's multimem op, else one no
+    dispatcher sees (pynccl's NCCL call, past `tp_allreduce.SYMM_MEM_MAX_BYTES`)."""
+    kids = {x["op"] for x in cap.events[cap.ranks[0]] if x.get("parent") == e0["seq"]}
+    return "symm_mem_comm" if any("multimem" in k for k in kids) else "pynccl_comm"
+
+
+def same_on_every_rank(cap: Capture, calls: dict, t: int, sl: slice) -> np.ndarray:
+    """Rank 0's received row, once every rank's equals it: each rank's view of the allreduce is its own output."""
+    want = cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["ret0"])[t, sl]
+    for r in cap.ranks[1:]:
+        got = cap.tensor(r, calls[r]["out"]["ret0"])[t, sl]
+        if not np.array_equal(got, want):
+            raise LookupError(f"rank {r} received other words than rank {cap.ranks[0]} (seq {calls[r]['seq']}, token {t})")
+    return want
+
+
+def allreduce_instances(cap: Capture, unstaged: dict | None = None):
+    """A plain allreduce's (token, half-row) on symm-mem's multimem route. A call on another route is counted in
+    ``unstaged`` under its label, with why, and the step's other calls are still staged."""
+    from verity.ml.definitions.registry import tp_allreduce as AR
     W = len(cap.ranks)
+    unstaged = {} if unstaged is None else unstaged
     for calls in aligned(cap, "vllm::all_reduce"):
         e0 = calls[cap.ranks[0]]
         shape = e0["in"]["tensor"]["shape"]
@@ -281,16 +323,81 @@ def allreduce_instances(cap: Capture):
             continue
         T, H = shape
         half = H // 2
-        kids = sorted({x["op"] for x in cap.events[cap.ranks[0]] if x.get("parent") == e0["seq"]})
-        if not any("multimem" in k for k in kids):
-            raise LookupError(f"vllm::all_reduce (seq {e0['seq']}, {T}x{H}) ran {kids}, not symm-mem's multimem all-reduce")
+        route, rows = allreduce_route(cap, e0), cap.real_rows(cap.ranks[0], T)
+        if route != "symm_mem_comm":
+            rec = unstaged.setdefault(f"AllReduceNccl_W{W}", {"population": 0, "calls": [], "why": (
+                f"vllm::all_reduce on {route}: no Definition models NCCL's all-reduce at world {W} on this GPU "
+                f"(`tp_allreduce.covered` names no {route} entry at world {W})")})
+            rec["population"] += 2 * rows
+            rec["calls"].append({"seq": e0["seq"], "rows": T, "cols": H, "bytes": T * H * 2})
+            continue
+        if AR.covered("defaults", H, route, T) is None:
+            past = unstaged.setdefault(f"AllReduceMultimem_W{W}", {"past_captured": []})
+            past["past_captured"].append({"seq": e0["seq"], "rows": T})
         trees = multimem_trees(W)
-        for t in range(cap.real_rows(cap.ranks[0], T)):
+        for t in range(rows):
             for c in range(2):
                 sl = slice(c * half, (c + 1) * half)
                 yield (f"AllReduceMultimem_W{W}", f"AllReduceMultimem_v1{{WORLD={W},SIZE={half},TREES={trees},FTZ=false}}", (e0["seq"], t, c),
                        lambda calls=calls, t=t, sl=sl: [np.stack([cap.tensor(r, calls[r]["in"]["tensor"])[t, sl] for r in cap.ranks])],
-                       lambda calls=calls, t=t, sl=sl: [cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["ret0"])[t, sl]])
+                       lambda calls=calls, t=t, sl=sl: [same_on_every_rank(cap, calls, t, sl)])
+
+
+def cublas_route(M: int, K: int, N: int, f32: bool) -> tuple[str, dict] | str:
+    """The role and statics the Program binds an unbiased bf16 GEMM of M rows against a [N, K] weight at, cuBLAS's captured
+    vLLM-default route at those M (`bf16_gemm.f32out_route` for f32 out, the linear's `default_cublas_route` for bf16 out), or
+    why it has none."""
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.program.frontend.rules.vllm_bindings import bf16_gemm as BG
+    if f32:
+        got = BG.f32out_route(M, K, N)
+        return got if isinstance(got, str) else (got[1], got[2])
+    route = BC.default_cublas_route("linear", M, K, N)
+    if route is None:
+        return f"no captured vLLM-default cuBLAS linear route for M={M}, K={K}, N={N}"
+    return ("cublas_splitk_gemm" if route[0] == "splitk" else "gemm_dot"), route[1]
+
+
+def cublas_instances(cap: Capture, profile, unstaged: dict | None = None):
+    """An unbiased bf16 GEMM's token row on cuBLAS: ``aten::mm`` of the activation rows against a bf16 weight's transposed view
+    (GLM-5.3's router gate past the ll_bf16 tier, f32 out; its indexer's wk + weights projection, bf16 out), at the Definition
+    the Program binds each row's call to at the M rows cuBLAS saw, in the opened layers (the weights are past the kept small
+    parameters). A call whose M has no captured route, and any other ``aten::mm``, is counted in ``unstaged`` under its label,
+    with why, and the step's other calls are still staged."""
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.program.frontend import targets as T
+    from verity_vllm.program.predict.common import kind
+    unstaged = {} if unstaged is None else unstaged
+    dot = T.tensor_core_dot(profile)
+    for r in cap.ranks:
+        for e in cap.events[r]:
+            if e["op"] != "aten::mm" or not cap.opened(e, weights=True):
+                continue
+            x, w, y = e["in"].get("self"), e["in"].get("mat2"), e["out"].get("ret0")
+            shaped = all(isinstance(v, dict) and len(v.get("shape", ())) == 2 for v in (x, w, y)) and "param" in w
+            K = x["shape"][1] if shaped else None
+            if not shaped or (x["dtype"], w["dtype"]) != ("torch.bfloat16",) * 2 or w["shape"][0] != K or w.get("stride") != [1, K]:
+                rec = unstaged.setdefault("AtenMm_other", {"population": 0, "calls": [], "why": (
+                    "an aten::mm that is no bf16 activation against a bf16 weight's transposed view: no population reads it")})
+                rec["population"] += 1
+                rec["calls"].append({"rank": r, "seq": e["seq"]})
+                continue
+            (M, K), N = x["shape"], w["shape"][1]
+            f32 = y["dtype"] == "torch.float32"
+            rows, route = cap.real_rows(r, M), cublas_route(M, K, N, f32)
+            if isinstance(route, str):
+                rec = unstaged.setdefault(f"CublasGemm{'F32Out' if f32 else 'Bf16'}_K{K}_N{N}", {"population": 0, "calls": [], "why": (
+                    f"{route} (`bf16_gemm_check.CUBLAS_ROUTES` maps M to {BC.CUBLAS_ROUTES['m_max']})")})
+                rec["population"] += rows
+                rec["calls"].append({"rank": r, "seq": e["seq"], "rows": M})
+                continue
+            role, statics = route
+            spec = kind(role, K=K, N=N, DOT=dot, **statics)
+            label = f"{spec.id.split('{')[0]}_K{K}_N{N}" + (f"_S{statics['SPLIT_K']}" if "SPLIT_K" in statics else "")
+            for t in range(rows):
+                yield (label, spec, (r, e["seq"], t),
+                       lambda r=r, e=e, t=t: [cap.tensor(r, e["in"]["self"])[t], np.ascontiguousarray(cap.tensor(r, e["in"]["mat2"]).T)],
+                       lambda r=r, e=e, t=t: [cap.tensor(r, e["out"]["ret0"])[t]])
 
 
 def fused_add_rms_norm_instances(cap: Capture):
@@ -346,7 +453,7 @@ def mla_combine_instances(cap: Capture):
             ns = len(SP.split_blocks(valid[t], nss[t]))
             if ns < 2:
                 continue
-            for h in range(H):
+            for (h,) in cap.cells(f"SparseMlaCombine/{t}", (r, e["seq"]), H):
                 yield (f"SparseMlaCombine_N{ns}", f'SparseMlaCombine_v1{{NSPLIT={ns},DV={DV},INV={{"fn":"Fa3InvSum_v1"}}}}',
                        (r, e["seq"], t, h),
                        lambda r=r, e=e, t=t, h=h, ns=ns: [cap.tensor(r, e["out"]["ret3"])[:ns, h, t],
@@ -369,17 +476,17 @@ def mla_split_part_instances(cap: Capture):
             splits = SP.split_blocks(valid[t], nss[t])
             if len(splits) < 2:
                 continue
-            for s, (b0, b1) in enumerate(splits):
+            for s, h in cap.cells(f"SparseMlaSplitPart/{t}", (r, e["seq"]), len(splits), H):
+                b0, b1 = splits[s]
                 lo, hi = b0 * BN, min(b1 * BN, valid[t])
                 block = (f'SparseMlaSplitPart_v1{{T={hi - lo},DR={DR},DV={DV},BN={BN},DOT={{"fn":"HopperBF16WgmmaDot16_v1"}},'
                          f'INV={{"fn":"Fa3InvSum_v1"}},SCALE={{"f64":"{scale}"}}}}')
-                for h in range(H):
-                    yield (f"SparseMlaSplitPart_T{hi - lo}", block, (r, e["seq"], t, h, s),
-                           lambda r=r, e=e, tap=tap, t=t, h=h, lo=lo, hi=hi: [
-                               cap.tensor(r, tap["in"]["q_v"])[t, h], cap.tensor(r, tap["in"]["q"])[t, h],
-                               cap.tensor(r, tap["in"]["kv_gathered"])[t, lo:hi]],
-                           lambda r=r, e=e, t=t, h=h, s=s: [cap.tensor(r, e["out"]["ret2"])[s, h, t, :],
-                                                            cap.tensor(r, e["out"]["ret3"])[s, h, t:t + 1]])
+                yield (f"SparseMlaSplitPart_T{hi - lo}", block, (r, e["seq"], t, h, s),
+                       lambda r=r, e=e, tap=tap, t=t, h=h, lo=lo, hi=hi: [
+                           cap.tensor(r, tap["in"]["q_v"])[t, h], cap.tensor(r, tap["in"]["q"])[t, h],
+                           cap.tensor(r, tap["in"]["kv_gathered"])[t, lo:hi]],
+                       lambda r=r, e=e, t=t, h=h, s=s: [cap.tensor(r, e["out"]["ret2"])[s, h, t, :],
+                                                        cap.tensor(r, e["out"]["ret3"])[s, h, t:t + 1]])
 
 
 # ---- draw, gate, stage ---------------------------------------------------------------------------------------------------
@@ -420,7 +527,7 @@ def gate_instance(spec, key, args_of, want_of, full_gates: int) -> tuple[dict, d
 #: the recorded ops some population reads; every other recorded op is listed by ``--every-call`` as not gated
 GATED_OPS = {"_C::per_token_group_fp8_quant", "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm", "moe_launch",
              "vllm::flashinfer_trtllm_fused_allreduce_norm", "vllm::all_reduce", "_C::fused_add_rms_norm", "_vllm_fa3_C::fwd",
-             "fa3_sparse_mla"}
+             "fa3_sparse_mla", "aten::mm"}
 _EVERY: dict = {}
 
 
@@ -516,13 +623,15 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     cap = Capture(Path(a.capture), a.step)
-    cap.every = bool(a.every_call) and cap.whole
+    cap.every, cap.per_call = bool(a.every_call) and cap.whole, a.every_call
     profile = TargetProfile(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
     report: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "coins": cap.coins.hex(),
                     "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {}}
     pops: dict[str, list] = {}
+    unstaged: dict[str, dict] = {}
     sources = [quant_instances(cap), flashinfer_linear_instances(cap), moe_w2_instances(cap, profile),
-               fused_ar_norm_instances(cap), allreduce_instances(cap), fused_add_rms_norm_instances(cap),
+               fused_ar_norm_instances(cap), allreduce_instances(cap, unstaged), cublas_instances(cap, profile, unstaged),
+               fused_add_rms_norm_instances(cap),
                mla_combine_instances(cap), mla_split_part_instances(cap)]
     for src in sources:
         try:
@@ -530,15 +639,20 @@ def main() -> int:
                 pops.setdefault(inst[0], []).append(inst)
         except Exception as ex:  # noqa: BLE001
             report.setdefault("population_errors", []).append(f"{type(ex).__name__}: {ex}"[:400])
+    for label, rec in unstaged.items():
+        if "why" in rec:
+            report["types"][label] = {**rec, "staged": False}
     if a.every_call:
         rep = every_call(cap, pops, a)
         rep["population_errors"] = report.get("population_errors", [])
+        rep["unstaged"] = unstaged
         rep["seconds"] = round(time.time() - t0, 1)
         (out / "gate.json").write_text(json.dumps(rep, indent=1, sort_keys=True, default=str))
         for label, rec in rep["types"].items():
             print(f"gate {label}: {rec.get('agree', 0)} agree, {rec.get('disagree', 0)} disagree, {rec.get('errors', 0)} errors "
                   f"over {rec.get('calls_gated', 0)}/{rec.get('calls', 0)} calls {rec.get('why', '')}", flush=True)
-        print(f"gate: not gated ops {rep['not_gated_ops']}; population errors {rep['population_errors']}", flush=True)
+        print(f"gate: not gated ops {rep['not_gated_ops']}; not modelled {sorted(k for k, v in unstaged.items() if 'why' in v)}; "
+              f"population errors {rep['population_errors']}", flush=True)
         return 0
     for family, prefer in FAMILIES.items():
         members = sorted((k for k in pops if k.startswith(family)), key=lambda k: (k != prefer, int(k[len(family):]), k))
@@ -550,7 +664,7 @@ def main() -> int:
     for label, insts in sorted(pops.items()):
         if wanted and label not in wanted:
             continue
-        rec: dict = {"population": len(insts)}
+        rec: dict = {"population": len(insts), **unstaged.get(label, {})}
         report["types"][label] = rec
         try:
             spec = insts[0][1] if not isinstance(insts[0][1], str) else block_fn(insts[0][1])
