@@ -5,7 +5,7 @@
   "nodes": 63
  },
  "moe-experts-fp8-ue8m0-h200": {
-  "digest": "0e1ecadc1c3de5dc565f99b193b86e56ece695369de7c222389ed565d9a82e4f4b5487f5a55e6e305d43a70eda3a7e5ba35097d4806e6c354a1b45d09a647674",
+  "digest": "ba8a54ca1e224c53a0b21748f1637010ac74c8632af3993e91fad0d1df3c6ad227374dd19f9df62f88a6906c81b60706bf3f915ab77d2db1f01957d13c9e1e1c",
   "gates": 623574,
   "nodes": 16
  },

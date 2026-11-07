@@ -227,6 +227,19 @@ def test_dump_and_diff_find_what_a_restore_missed_and_set_clock_readings_apart()
     assert d["patterns"] == {"sched.requests[*].num_computed_tokens": 1, "sched.requests[*].tokens": 1}
 
 
+def test_dump_renders_a_set_by_its_elements_not_its_iteration_order():
+    ids = [f"cmpl-{i}" for i in range(40)]
+    a, b = Scheduler(Request(5, 1.0)), Scheduler(Request(5, 1.0))
+    a.finished_req_ids, b.finished_req_ids = set(ids[:3]), set()
+    for x in ids[3:]:
+        b.finished_req_ids.add(x)
+    b.finished_req_ids.clear()
+    b.finished_req_ids.update(reversed(ids[:3]))
+    da, db = B.dump(a, "sched"), B.dump(b, "sched")
+    assert B.diff(da, db)["differing"] == 0
+    assert [da[f"sched.finished_req_ids[{i}]"] for i in range(3)] == sorted(ids[:3])
+
+
 def test_diff_sets_paths_on_one_side_apart_and_dump_leaves_out_the_harness():
     s = Scheduler(Request(5, 1.0))
     a = B.dump(s, "sched")
