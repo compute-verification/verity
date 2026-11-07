@@ -16,7 +16,7 @@ session loop's stop (`Frames.Sessions.stopped`) is stated in:
   only device rounds the frame fails, they decide nothing beside it.
 * `LeanRelease.toSrv_pass_frame`, `toSrv_pass_own`, `toSrv_pass_recomp`: below the `Finish`, the server's pass at a
   frame round is Rust's checks' and the frame's pass decision on the worker's device round; at the `Hello` it passes;
-  at the link it passes where the worker's value is the firewall's own.
+  at the link it passes where the worker's value is the ZK server's own.
 * **`LeanRelease.nextD_frame_stop`**: so at a frame round below the `Finish` the deferred release is the Lean frame's
   release of the device round where no earlier round failed (`b`, the stop bit) and it passes, else of the scheduled
   round as a stopped rep's; **`stop_frame_snoc`**: and one round on, the stop bit is again whether a round failed.
@@ -138,7 +138,7 @@ theorem toSrv_pass_own {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) 
   unfold ZkServer.check
   rw [show L.toSrv.kind x h.length 0 = .own from hk]
 
-/-- **The link passes where the worker's value is the firewall's own**, below the `Finish`. -/
+/-- **The link passes where the worker's value is the ZK server's own**, below the `Finish`. -/
 theorem toSrv_pass_recomp {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : R)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .recomputed) (hlt : h.length < L.last x)
     (hv : wk x w ρ h 0 = some (L.ownMsg x w ρ h, false)) : L.toSrv.pass wk x w ρ κ h = true := by

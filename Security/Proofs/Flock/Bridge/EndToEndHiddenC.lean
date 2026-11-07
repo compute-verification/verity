@@ -62,8 +62,8 @@ open scoped ENNReal
 variable {n : ℕ} {Reg : Type}
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is sound against the registration with canonical
-openings.** `zk_session_soundHJ_custody_reg` with "wrong" `wrongRegZc canon`, under `OpeningsCanon` at `canon`: a drawn
-unit's satisfying witnesses open each of its committed wires canonically. -/
+openings.** `zk_session_soundHJ_custody_reg` with "wrong" `wrongRegZc canon`, under `OpeningsCanon` at `canon`: a sampled
+proof block's satisfying witnesses open each of its committed wires canonically. -/
 theorem zk_session_soundHJ_custody_regC
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)

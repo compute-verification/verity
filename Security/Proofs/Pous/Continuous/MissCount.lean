@@ -10,8 +10,8 @@ import Proofs.Pous.Sanity
 /-!
 # The counting step of the continuous audit
 
-Pure probability, about no scheme. Round `j` draws `I j` uniformly from a finite `α`, independently of the rounds
-before; `X h a` says that round `|h|` misses when the history is `h` and the draw is `a`, and `q h` is a lower bound on
+Pure probability, about no scheme. Round `j` samples `I j` uniformly from a finite `α`, independently of the rounds
+before; `X h a` says that round `|h|` misses when the history is `h` and the sample is `a`, and `q h` is a lower bound on
 that round's conditional miss probability, `q h ≤ Pr_a[X h a]`, fixed by the history. Then for every `θ > 0`
 
   `Pr[#misses ≤ f ∧ s ≤ Σ_j q_j] ≤ exp(θ·f − (1 − e^−θ)·s)`   (`pr_misses_le`),
@@ -22,7 +22,7 @@ and at `s` just above `G(f) = inf_{θ > 0} (θ·f + ln(1/β)) / (1 − e^−θ)`
 
 The proof is the exponential supermartingale `exp(−θ·#misses + (1 − e^−θ)·Σ q)`: one round multiplies its mean by
 `e^{(1 − e^−θ) q}·(1 − (1 − e^−θ)·p) ≤ 1` when `q ≤ p` (`sum_exp_le`), and Markov's inequality does the rest. A history
-`h` is the list of earlier draws, oldest first, so round `j`'s is `(List.ofFn I).take j`. `q` may take any real values,
+`h` is the list of earlier samples, oldest first, so round `j`'s is `(List.ofFn I).take j`. `q` may take any real values,
 and `q h` and `X h` may be any functions of `h`: the bound holds for every adapted choice.
 -/
 

@@ -108,7 +108,7 @@ theorem planJ_length (T₀ : TabSpec mPts) (dj : Finset (Fin n) → Json) (S : F
     (planJ ht T₀ dj S R).length = I.count :=
   List.length_ofFn
 
-/-- **Table `j` where flock-verify sets it up**: `tableJ` at a draw with a `SetupJ` is the `SetupJ.spec` of one with
+/-- **Table `j` where flock-verify sets it up**: `tableJ` at a sample with a `SetupJ` is the `SetupJ.spec` of one with
 the same statement. -/
 theorem tableJ_of {T₀ : TabSpec mPts} {d : Json} {j : ℕ} (x : SetupJ I mPts j (partJson d I.count j)) :
     ∃ y : SetupJ I mPts j (partJson d I.count j), y.st = x.st ∧ tableJ ht T₀ d j = y.spec ht := by

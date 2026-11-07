@@ -1,7 +1,8 @@
 # Drive's policy over what the runners (suites.py, circuit-check, check.py's steps) report: what of it gates and what may stay red
 # (`research.policy` reads it). Drive reads it at the commit it judges, so an allowance lands with the tip it lets pass; `research merge` reads
-# `off_gate` at the commit it merges; the quick tier's judge reads it at the tier's base on `main`. ci owns this file;
-# `tests/test_drive_policy.py` holds it to the parse and to ci.toml's jobs.
+# `off_gate` at the commit it merges; the quick tier's judge reads it at the tier's base on `main`. Its owner is the handle
+# whose `owns` in .agents/skills/using-slack/registry.json covers it; `tests/test_drive_policy.py` holds it to the parse and
+# to ci.toml's jobs.
 schema = "policy/v0"
 
 # The ci.toml jobs off the merge gate. A recorded check, whole or a shard, leaves them out (`check.py`'s

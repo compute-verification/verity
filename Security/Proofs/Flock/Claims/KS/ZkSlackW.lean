@@ -332,7 +332,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **The masked weight's room for one more event per round**: at a statement whose tables `st j` are C-Flock ZK's,
+/-- **The masked weight's room for one more event per round**: at a statement whose tables `st j` are Flock ZK's,
 when each table's pads' weight is at most its deployed pads' domain and only level 0's event of a table is at round
 `0`, the fork of weight `k` and the joined escapes, round `0`'s charged twice, leave every table's level caps' and pads
 roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's weight pays for its events
@@ -384,7 +384,7 @@ theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.M
 
 end Gen
 
-/-- **The masked weight's room for one more event per round**: at a statement whose tables `st j` are C-Flock ZK's,
+/-- **The masked weight's room for one more event per round**: at a statement whose tables `st j` are Flock ZK's,
 when each table's pads' weight is at most its deployed pads' domain and only level 0's event of a table is at round
 `0`, the fork of weight `k` and the joined escapes, round `0`'s charged twice, leave every table's level caps' and pads
 roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's weight pays for its events
@@ -410,7 +410,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The merged escapes fit the deployed masked weight with the fork event of weight `k`, counted per round**, at a
-statement whose tables `st j` are C-Flock ZK's, when each table's pads' weight is at most its deployed pads' domain,
+statement whose tables `st j` are Flock ZK's, when each table's pads' weight is at most its deployed pads' domain,
 only level 0's event of a table is at round `0` and the slack fits the room (`zk_fork_room`,
 `Claims.Flock.slackEscW_fitsForkR`). -/
 theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
@@ -438,7 +438,7 @@ theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω
 end Gen
 
 /-- **The merged escapes fit the deployed masked weight with the fork event of weight `k`, counted per round**, at a
-statement whose tables `st j` are C-Flock ZK's, when each table's pads' weight is at most its deployed pads' domain,
+statement whose tables `st j` are Flock ZK's, when each table's pads' weight is at most its deployed pads' domain,
 only level 0's event of a table is at round `0` and the slack fits the room (`zk_fork_room`,
 `Claims.Flock.slackEscW_fitsForkR`). -/
 theorem slackEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)

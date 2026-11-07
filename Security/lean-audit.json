@@ -25,6 +25,11 @@
   }
  },
  "domain": {
+  "Claims.Complete": {
+   "owner": "@proofs",
+   "digest": "a2f9ca8ead083d11f9937e2fd80dc649424b2019e285152d33872bba4df794f4",
+   "why": "The proof system for proof blocks is complete: `CompilerComplete` is stated for such a system and says the compiled verifier inherits its completeness. (met by `compilerComplete_honest`)"
+  },
   "Claims.Flock.R": {
    "owner": "@proofs",
    "digest": "39a998376610568bb4825338378d4b880a8a4bc958af68b35bb563d2f1715826",
@@ -39,6 +44,11 @@
    "owner": "@proofs",
    "digest": "3721109897c7352486ba0cc4c2d6a6c330af86f384b982fe0bb34b397ca8e748",
    "why": "Binding as a deterministic reduction to an explicit collision, a property of the scheme; the deployed scheme meets it. (met by `NetTiming.binds_deployOf`)"
+  },
+  "Claims.SamplingGeneric.Compiled.CompleteSessions": {
+   "owner": "@proofs",
+   "digest": "6edc0d0e31ec54ed1428046b3dc6f3cdf5a3495f8256fe8267104ebd072be4a2",
+   "why": "The compiled verifiers whose sampled sessions are the proof system's honest runs among the first `K` slots, at an error covering theirs: the ones `CompilerComplete` is stated for. (met by `compilerComplete_honest`)"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
@@ -3679,6 +3689,10 @@
     "fails": "Claims.SamplingGeneric.ZkCompiled.ZK_fails",
     "meets": ["Claims.Sampling.masked_meets_zk", "Claims.Witness.SamplingGeneric.echo_meets"]
    },
+   "Claims.SamplingGeneric.Compiled.Complete": {
+    "fails": "Claims.SamplingGeneric.Compiled.Complete_fails",
+    "meets": ["Claims.Sampling.scope_meets", "Claims.Witness.SamplingGeneric.twoComplete_meets"]
+   },
    "Claims.SamplingGeneric.CompiledTwo.KS": {
     "fails": "Claims.SamplingGeneric.CompiledTwo.KS_fails",
     "meets": [
@@ -3739,7 +3753,6 @@
    "Claims.Json.Ascii": "a helper: a text of ASCII without DEL, which every text `Flock.canon` prints is",
    "Claims.Sampling.CommitmentScheme.Binds": "a helper the claims read: a commitment scheme's binding, which `Binding` reads",
    "Claims.Recursion.DrawRecord.Full": "a V* session's draw record that takes every unit, a clause of the readable scope (`InScope`), no claim",
-   "Claims.Sampling.Prog.Unread": "a helper the claims read: an input no gate reads and the program doesn't return, which `Partition.Partitions` leaves out",
    "Claims.SamplingGeneric.Compiled.Scope": "a helper the claims read: the sampling scope on the statement's bytes, which `KS`, `KSCount` and `KSReg` read",
    "Claims.SamplingGeneric.Compiled.Sessions": "a helper the claims read: the compiler's contract, the code facts the compiler's statements take of a compiled verifier",
    "Claims.SamplingGeneric.FlockArgKS": "proved of every Flock record and decoder (`Claims.SamplingGeneric.flockArgKS`)",
@@ -3747,6 +3760,8 @@
    "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)",
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
    "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
+   "Claims.SamplingGeneric.Compiled.CompleteSessions": "a helper the claims read: the compiler's completeness contract, the code facts `CompilerComplete` takes of a compiled verifier over the proof system's honest prover",
+   "Claims.Sampling.Prog.Unread": "a helper the claims read: an input no gate reads and the program doesn't return, which `Partition.Partitions` leaves out",
    "Claims.ZKmalRLeak": "proved of every prover from `ZKmalRx` and `CutsOf` (`Claims.zkmalRLeak_of_cuts`), not of a deployment: a guarantee concludes it at a release's stop positions (`Verity.recZK_leak`, `Verity.zkStop_leak`), and no deployed record's claim reads it",
    "Claims.CutsOf": "a premise of `ZKmalRLeak`'s derivation (`Claims.zkmalRLeak_of_cuts`) on the released prover: its run is the reference prover's cut at a public position, a condition on the prover like `decOK`, no claim",
    "Claims.SamplingGeneric.CompiledTwo.Scope": "a helper the claims read: the two-stage scope on the statement's bytes, which `CompiledTwo.KS` reads",
@@ -3787,6 +3802,7 @@
    "Claims.SamplingGeneric.CompilerEfficient": "Claims.SamplingGeneric.compilerEfficient",
    "Claims.SamplingGeneric.CompilerZK": "Claims.SamplingGeneric.compilerZK",
    "Claims.ZKOutLeak": "Claims.zkOutLeak",
+   "Claims.SamplingGeneric.CompilerComplete": "Claims.SamplingGeneric.compilerComplete",
    "Claims.SamplingGeneric.CompilerKSTwo": "Claims.SamplingGeneric.compilerKSTwo",
    "Claims.SamplingGeneric.CompilerExfilTwo": "Claims.SamplingGeneric.compilerExfilTwo",
    "Claims.RecGeneric.CompositionKS": "Claims.RecGeneric.compositionKS",
@@ -3906,6 +3922,10 @@
   "Claims.zkOutLeak": {
    "honest": ["Claims.Witness.SamplingGeneric.zkOutLeak_honest"],
    "nontrivial": "Claims.Witness.SamplingGeneric.zkOutLeak_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerComplete": {
+   "honest": ["Claims.SamplingGeneric.compilerComplete_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerComplete_nontrivial"
   },
   "Verity.SecurityProofs.RegisteredLeakage": {
    "honest": ["Verity.SecurityProofs.RegisteredLeakage_honest"],
@@ -11328,6 +11348,21 @@
    },
    "type_hash": "8b4447eafda61dd5722e06a5b51506edd2ae4c1dbe18221a1857effe96a1ff55"
   },
+  "Claims.SamplingGeneric.Compiled.Complete_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.Compiled.Complete_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] :",
+    "  Exists fun H => Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.Compiled.Complete H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Out64", "Claims.Sampling.Rhon", "Claims.SamplingGeneric.Compiled.Scope"],
+    "reads": []
+   },
+   "type_hash": "8b87fb521a3b7261bdd9c11e53098bb77e0abc43a6fbb3c13e837235c8023859"
+  },
   "Claims.SamplingGeneric.Compiled.Efficient_fails": {
    "owner": "@proofs",
    "signature": [
@@ -11498,6 +11533,65 @@
     "reads": []
    },
    "type_hash": "5f1392987eae7a0f888368b92c32e59035b9f4b88177f2c17f3c6c2c7918ab1e"
+  },
+  "Claims.SamplingGeneric.compilerComplete": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerComplete : Claims.SamplingGeneric.CompilerComplete"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Complete", "Claims.SamplingGeneric.Compiled.CompleteSessions"],
+    "open": [
+     "Claims.Out64",
+     "Claims.Sampling.Rhon",
+     "Claims.SamplingGeneric.Compiled.Scope",
+     "Claims.SamplingGeneric.Compiled.Sessions"
+    ],
+    "reads": []
+   },
+   "type_hash": "b74211d9e42d5b10ce2652afafb6dc7a58002db50d567e9bc00c16858c3b1cf1",
+   "unfolded_hash": "16ccf9c49c39775babf91a2e3472da065e2862d4321fe3830b1f967029bed7ac"
+  },
+  "Claims.SamplingGeneric.compilerComplete_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerComplete_honest :",
+    "  And",
+    "    (Claims.Complete FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoA Bool).V (fun x => Claims.Witness.silentP)",
+    "      (Claims.Witness.SamplingGeneric.twoA Bool).R (fun x => True) fun x => 0)",
+    "    (And (Claims.SamplingGeneric.Compiled.Sessions FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoL Bool))",
+    "      (And",
+    "        (Claims.SamplingGeneric.Compiled.CompleteSessions FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoL Bool)",
+    "          (fun x => Claims.Witness.silentP) (fun x => True) (fun x => 0) fun x => 2)",
+    "        (And ((Claims.Witness.SamplingGeneric.twoL Bool).Scope List.nil)",
+    "          (Claims.Sampling.Rhon FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoL Bool).commit",
+    "            (Claims.Witness.SamplingGeneric.twoL Bool).parse (Claims.Witness.SamplingGeneric.twoL Bool).partition",
+    "            List.nil Claims.Witness.SamplingGeneric.twoWit))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Out64"],
+    "reads": []
+   },
+   "type_hash": "6914e60be61acde2a4348ebcecce6dc55a8ca23089e983ec78edc5cc4d809d3b"
+  },
+  "Claims.SamplingGeneric.compilerComplete_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerComplete_nontrivial :",
+    "  Not",
+    "    (Claims.SamplingGeneric.Compiled.Complete Claims.CompleteFails.zeroHash (Claims.Witness.SamplingGeneric.rejL Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Out64", "Claims.Sampling.Rhon", "Claims.SamplingGeneric.Compiled.Scope"],
+    "reads": []
+   },
+   "type_hash": "7d02cea545b9bc05b02208e2ef67ff6cbf97bf9bd06dccbad486f1fc84b83934"
   },
   "Claims.SamplingGeneric.compilerEfficient": {
    "owner": "@proofs",
@@ -12663,6 +12757,32 @@
     "reads": []
    },
    "type_hash": "6deaa2f679a24c3e983314b73278ba6b91df81a6813529f8e2bba55a970830e1"
+  },
+  "Claims.Witness.SamplingGeneric.twoComplete_meets": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.SamplingGeneric.twoComplete_meets {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  And",
+    "    (Claims.Complete H (Claims.Witness.SamplingGeneric.twoA Coin).V (fun x => Claims.Witness.silentP)",
+    "      (Claims.Witness.SamplingGeneric.twoA Coin).R (fun x => True) fun x => 0)",
+    "    (And (Claims.SamplingGeneric.Compiled.Sessions H (Claims.Witness.SamplingGeneric.twoL Coin))",
+    "      (And",
+    "        (Claims.SamplingGeneric.Compiled.CompleteSessions H (Claims.Witness.SamplingGeneric.twoL Coin)",
+    "          (fun x => Claims.Witness.silentP) (fun x => True) (fun x => 0) fun x => 2)",
+    "        (And ((Claims.Witness.SamplingGeneric.twoL Coin).Scope List.nil)",
+    "          (Claims.Sampling.Rhon H (Claims.Witness.SamplingGeneric.twoL Coin).commit",
+    "            (Claims.Witness.SamplingGeneric.twoL Coin).parse (Claims.Witness.SamplingGeneric.twoL Coin).partition",
+    "            List.nil Claims.Witness.SamplingGeneric.twoWit))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Out64"],
+    "reads": []
+   },
+   "type_hash": "7edfdcde1fb744dfb19d5ade9a26dd85a21345d0b5ea26c9260b0dfaca8d8a33"
   },
   "Claims.Witness.SamplingGeneric.twoOpenCalls_meets": {
    "owner": "@proofs",
@@ -30394,7 +30514,7 @@
    }
   },
   "Definitions.Claims.SamplingGeneric": {
-   "digest": "0bc97067584fc591ed8b1f7ddf2ebe264e9e2df93c0209187bbefce7d2a45bc2",
+   "digest": "481bbdbe92afd4ef42e7a52f7818182e781c9e2de70089e36d92c19926a127d1",
    "definitions": {
     "Claims.SamplingGeneric.Arg": "a3523e27db94bc0fc6aa14e539db934e8b8be4d90fc860bd46115063083b28bf",
     "Claims.SamplingGeneric.Arg.E": "af0ca8a8061e3a89bb9774829557e74a7af338ec04da1c21cfd55abc0da27f8e",
@@ -30422,6 +30542,8 @@
     "Claims.SamplingGeneric.Compiled.Bconf": "b98d5f14469666f10fc45fcbb66432161bf825e5f87dcf73f6b0ba01e477a7ef",
     "Claims.SamplingGeneric.Compiled.Bits": "a5614b5261d320b5eea83a35573aed21907a188a68f6996f58ef6bcffa5524a6",
     "Claims.SamplingGeneric.Compiled.BlockEC": "4340886298e4e90cfd88a740710174a5bedcaadb72a6ad81944b7ebf2d3368c7",
+    "Claims.SamplingGeneric.Compiled.Complete": "9d07f35912ff694b1d32bb3f4639f1e01e522052e9f215bbcc7b8c7bece1339c",
+    "Claims.SamplingGeneric.Compiled.CompleteSessions": "6edc0d0e31ec54ed1428046b3dc6f3cdf5a3495f8256fe8267104ebd072be4a2",
     "Claims.SamplingGeneric.Compiled.E": "d6fb476ceef6742355df22420bb39aefe4b26f74ba5da3cd9d3caac80ca036ee",
     "Claims.SamplingGeneric.Compiled.ECoins": "34cbb608f6dbc649a0515e740757063367a5df7e8a60578471566f454c0b5a5d",
     "Claims.SamplingGeneric.Compiled.Efficient": "99f067b1e70867ac86d97f47b0f667fd06de22993c022cd73dbbe99661116801",
@@ -30466,12 +30588,14 @@
     "Claims.SamplingGeneric.Compiled.γ": "008585514aa21b37e8dd18aabf17408ae4b1237700fcb1d176e911eedccc9e4e",
     "Claims.SamplingGeneric.Compiled.γb": "5c7a214028e1fb48003af269b5e77dccbb8b80d60d59dd986ae8917f1f83b6d2",
     "Claims.SamplingGeneric.Compiled.γs": "fe5bf6b026e23611a0f7bbb6bfd3f6de5e7654d9e557eacca1438ab4a824a552",
+    "Claims.SamplingGeneric.Compiled.δc": "383b3602eb73f715732b02bf50f70eeec5b06db8ea2fb55303be40122b4a4cca",
     "Claims.SamplingGeneric.Compiled.εreg": "319db40121955316d771a9abeb026ceab37238c8205b1864e4324da841c18ed3",
     "Claims.SamplingGeneric.Compiled.κ": "ac01743b990f0fff2cbda9fa5c9a41b92df1f3079ede83be74b3ba3ff293506f",
     "Claims.SamplingGeneric.Compiled.κb": "a56f97768830ec102f69bcfecfc923f65c01344afac98a865a109cbc01dfffb1",
     "Claims.SamplingGeneric.Compiled.κs": "febf751edb3d8ac654777c3253f8af6172ea659553c5530f7762215eae25d51c",
     "Claims.SamplingGeneric.Compiled.ρs": "dad68d287ec75731a88864a01230590e35fe24fc0e7af5cde7210617c5471152",
     "Claims.SamplingGeneric.CompilerBits": "ca5f96ca277d07e733687a677633f987ead39eabd5c3b5c4a6727862ded8c4a3",
+    "Claims.SamplingGeneric.CompilerComplete": "be007f40e6ddc84c2c0496cd849b7f0ec18485f7ae679bf8538945cc3e7b500d",
     "Claims.SamplingGeneric.CompilerEfficient": "5ead15ea840f602d6fb3b4e1637efc63d7790c87710fd8cc4cb6e3cd285d208e",
     "Claims.SamplingGeneric.CompilerKS": "c6e15e44a0608903a9c285dd431fae65ce69996998cd4327f388dce95454d970",
     "Claims.SamplingGeneric.CompilerKSCount": "e15d555b4209363f8cd8ae63a3b92d8bacb599c777f228120167a8fae91c6161",
@@ -43930,6 +44054,12 @@
     "FlockComplete.layerOf": "497a19d45295f6ec128f55d64717ec7b727f8f0b218d2b8b87dcfc8d419a55ce"
    }
   },
+  "Proofs.Flock.Claims.CompleteFails": {
+   "digest": "a4e09a6e471d340e1647b1142168cea5b7ac5530190ecbcb3d178e10a0f2c32f",
+   "definitions": {
+    "Claims.CompleteFails.zeroHash": "533694a41a57977d4bd948be0fa8d4c5c36949610a68f7fbe27995b25bfbdee4"
+   }
+  },
   "Proofs.Flock.Claims.Decode": {
    "digest": "adeff4663841219c3bccb8b89d4e1e71f8c0ff9da0ff86af0d503b21f49ff1eb",
    "definitions": {
@@ -45564,6 +45694,13 @@
     "Claims.Witness.SamplingGeneric.twoSession": "4d3a2315dc59dfd21e2a74bb89c251338ccbae0609600c931348e44c269af1de",
     "Claims.Witness.SamplingGeneric.twoStmt": "7f3696fb44d8a7a618b79e78df3c3879de14f5aae6528553de4b5261f5cb6543",
     "Claims.Witness.SamplingGeneric.twoV": "b559718ed1bb931849c185dc6087110864d481b8704b2721dc089593d58f80d1"
+   }
+  },
+  "Proofs.Flock.Claims.Witnesses.SamplingGenericComplete": {
+   "digest": "04455448c1e833ee2d8eb31232a952810dfc34f15f0da326675f424d015d619c",
+   "definitions": {
+    "Claims.Witness.SamplingGeneric.rejL": "ddf3f6db0374aea54c7bbf1161b7b3c6178b941b084ee03957d96886ca725deb",
+    "Claims.Witness.SamplingGeneric.twoWit": "b47f4efab08dcb601c6caa305b2005ef78d4da4ca8989d35341392e2fdd6af9d"
    }
   },
   "Proofs.Flock.Claims.Witnesses.SamplingGenericCost": {
@@ -52982,7 +53119,7 @@
    }
   },
   "VStarRecursive.Protocol": {
-   "digest": "9deece932f7af84685308c8bd96a15a696c4275b1ad65e95e055c16775deb3ae",
+   "digest": "c7ce0e049b257534be1296ca75f548d53fc45b4d4996e096281522bf2d137d41",
    "definitions": {
     "VStar.Recursive.Evidence": "a17492dffbdb429d61649d16045eb6fdd665be45ec350cfce4d689ea194aed47",
     "VStar.Recursive.Evidence.base": "ba0fe67895d453c2a8624e80ec2f8cce8a0a5d278e76f5e1abd614b4d334daf5",
@@ -53004,6 +53141,7 @@
     "VStar.Recursive.Own.program": "402eb05f034b89f904a0ae804d9153429a63294ea1b83a5bdc11719a486eff1a",
     "VStar.Recursive.Own.pub": "6e065fd248540f5546728a5b055af1db43c8259a2fdd67f2ba837a5a5cb643a1",
     "VStar.Recursive.Own.registration": "517d9b9b4a2f51dddf9606c7265f9dac1dc9bb39a0753a3a40dde370348f1a0d",
+    "VStar.Recursive.PROTOCOL": "9d943c4be2ddd7e6503b4b54185fe3b9c34b6aeb1a0de06720f8db2221f15939",
     "VStar.Recursive.Params": "8e69a5f95eecd48b47968b23cc651696d6cdee0ee66ccde309327cd6345f8204",
     "VStar.Recursive.Params.base": "b1e90e92745c91abc1533c169d9195a812b7244a819cec649153259bae0aa531",
     "VStar.Recursive.Params.own": "22671db69954dd4fb354c3165737685ca4b94f54a0372d91710fb794a66a4332",
@@ -53037,8 +53175,6 @@
     "VStar.Recursive.lineEnd": "08f3f8a6ca79ec9bca18488856b517e63e59d445c0c104326b8a1e6e81bb0634",
     "VStar.Recursive.metaOf": "b1cd47a27ca618b941c7a55749e37e8fc56eed12c7ef8d76c4aa12f9c9f9fe81",
     "VStar.Recursive.need": "e7bbdffdbbf61828d6e4cae5344342cf93a279518aabe5cc4bd6bd9c1156ce99",
-    "VStar.Recursive.ownOf": "e9c5f487957ab06baa7790fec82c4a6fca8be39ee840152bd3783e43380187a7",
-    "VStar.Recursive.paramsOfJson": "0ce3bbac96b75e63a7e99533d757da428435261fa0fbf9efaca4b1f81e125469",
     "VStar.Recursive.partJson": "452868b110da42c2a36e59b70306043f4419be7f0168553f4b3e15d6a62ae991",
     "VStar.Recursive.partSize": "bba29da2eb4498c27560023d6477c2156c8d12efbab323ce500575ffed313d4e",
     "VStar.Recursive.partVerdict": "62b8bc46c0a61b8fe7722abdb0e5debf39a7d0a867656ff2dbd17244e2cf19c4",
@@ -53054,28 +53190,25 @@
     "VStar.Recursive.unitsOf": "1ac56180a10b3f59a7a09fd66c857197d7d0f96081cd0bf29a99269ba5c857be",
     "VStar.Recursive.verdictJson": "36196006852daa8ae850e68a0972813fb8100fd755dc7d86ddfac3c3b54cfb7a",
     "VStar.Recursive.verdicts": "106e3052b4f3b605e3c0d310cf1a45264809cea5a3bf4bb6dbba260780601117",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.digest?": "e4effda05fb899cdbeac0022a7a62680bc0da32178cd4bb5eb8c0311a504e4bd",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.digestOf": "f46d435b2fde345172ee5bea4d6948dec6ce2e8c96f420b7330c0ad7e5bb128f",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.exactly": "e08bfee7bc64d3f15f227341e36a8d587f03604c5f07411fa29b7db8e4757b67",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.jsonBlob": "6f8e9fb8ffa84e5477f396939d92ce6a6e9341e213e26df3718b14b136b1d9ba",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.objOrNull": "0e719dbf38d6f6d012f16cd6d54d6643495cf92ba92637719777a62741c7a4dc",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.partOwnOf": "4dffda17f37c43ab28616023ba798292103f2c7308219f9a51c229a2a4c90e51",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.partProofOf": "92d9f050ca81c6bb47119cdfc2623535f5bc24e214f17f0a632cbb3d12a4b60b",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.without": "e2879b3c2871574cfbe19031f9caeece45e8e1bd54ea26ae2049eaa9af1cb652"
    }
   },
   "VStarRecursive.Sampled": {
-   "digest": "042884269b08f982528e2e6c15575831825da93ddcd15bb06bf7b8c69e1f38a1",
+   "digest": "b5a5083726a7527c3374fb6f49c33fcdd87f2a57595b4967039e896acc52c4a1",
    "definitions": {
     "VStar.Recursive.Sampled.Evidence": "773222f174c37c1a8da5a8a315176d9bf1de857ca1bab671afff8aa526efb36a",
     "VStar.Recursive.Sampled.ONE_STAGE": "38de5ee291b3ce3bc8d92944644a4311dc9b5c9c7af11099f319cedb5e1c63c4",
     "VStar.Recursive.Sampled.PROTOCOL": "864b6227a733d9017c62194051f38742936289e55ac9dca64a27de2a06d978f2",
     "VStar.Recursive.Sampled.Params": "726b5a58f298d6c8fa1c639f2df84f6fdce45463f56cbc9ad3a1d1d25079a255",
     "VStar.Recursive.Sampled.RECURSIVE": "0e0f5176c046495c1e5c505a4aafca31c82848dd35b65af82d5b2b79a1a02fbf",
-    "VStar.Recursive.Sampled.V1_REFUSED": "40b96b16e756c26560aaf0e1c6e46088f059a46508f12a97188c6077e49545d6",
+    "VStar.Recursive.Sampled.RECURSIVE_REFUSED": "a1868671be3991355c7045f8afa7d51c4c6aa5e335c99fd70e97020cb7b49364",
+    "VStar.Recursive.Sampled.V1_REFUSED": "0dad753025e3f977b4a0adbb41fb98a91f60216860a7195583fe92ee97c0ff61",
     "VStar.Recursive.Sampled.checkBlobs": "474842daf760fb18672b94479839ebc4f51afc86fa1132dca3f47717cf671dd5",
     "VStar.Recursive.Sampled.evidenceOf": "88bd2c64e1baa85d0faa51caf939fa621c22747b8f714328bfb10a7d221a1c25",
-    "VStar.Recursive.Sampled.paramsOfJson": "ca29ef89fd6cdf6f01156870c4ecc7309f8c617c4df0f77077998f73b2aecdf3",
+    "VStar.Recursive.Sampled.paramsOfJson": "0bb0c39e892e96fa21a082a73481f67850802ce698afcf9cc395bf5e0bda1b17",
     "VStar.Recursive.Sampled.protocol": "a1cd446b5b7abc0706b1b18ae82358f15591b7b19b7daa20fbe34bf334b7c46b",
     "_private.VStarRecursive.Sampled.0.VStar.Recursive.Sampled.split": "6762f31881ea4bfd9c522b84bfc6c8127b65d4b14476b95bbf176923c5929528"
    }

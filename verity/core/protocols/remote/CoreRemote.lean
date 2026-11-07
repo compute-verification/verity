@@ -4,10 +4,10 @@ subprotocols are the inference-only policy (`NciCheck.Protocol.protocol`, `verit
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the registered circuit
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
 (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's windows credited all or nothing), onsite's work
-subprotocol, and integrity by sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the
-form its params name: one-stage v2's audit on the proofs themselves, or the recursive audit, V*'s compiled check run on
-the recursive session's parts, each on the blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, is
-refused). `Core.Composition.tiedSameB` composes them on the caller's blobs: every
+subprotocol, and integrity by sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: one-stage
+v2's audit on the proofs themselves, on the blobs the caller hands in; one-stage v1, whose verdicts are the evidence's,
+and the recursive audit, which sampled proofs' soundness doesn't cover, are refused). `Core.Composition.tiedSameB`
+composes them on the caller's blobs: every
 subprotocol accepts or remote doesn't, and any one's rejection rejects remote whatever the others answer. The policy's
 commitment and sampled proofs' are the run's record, and both must commit to the same one; every window of the period
 must name that record as its Commit record (`windows`). Two records reject remote whatever the subprotocols answer.
@@ -229,7 +229,7 @@ private def readsFile : Json := Json.mkObj [("format", Flock.Registered.FORMAT),
     ("leaves", x.getObjValD "leaves"), ("reads", Json.arr #[Json.null]), ("root", x.getObjValD "root"),
     ("value", x.getObjValD "value"), ("words", x.getObjValD "words")])))]
 
-/-- The auditor's challenger, whose signed release the draw's coins come in: an LMS key over SHA-512 at `Lms.deployed`'s
+/-- The auditor's challenger, whose signed release the sample's coins come in: an LMS key over SHA-512 at `Lms.deployed`'s
 parameters, the only ones v2 reads a challenger's signatures under (`OneStageZk.KEY_PARAMS`). -/
 private def challenger : Json := Json.mkObj [("key", Json.mkObj [("H", 20), ("W", 1),
   ("public", String.join (List.replicate 80 "c1"))]), ("label", "draw")]
@@ -306,7 +306,7 @@ private def grantedOf (rec : Json) (e : SampledProofs.OneStageZk.Evidence) : Arr
   e.sessions.map fun s => (s!"flock-verify/{s.name}", Json.mkObj [("accepted", true), ("of_record", true),
     ("registered", Json.mkObj reads), ("session", s.name)])
 
-/-- Sampled proofs with its draw's coins and its sessions' proofs granted: `VStar.Recursive.Sampled.protocol`'s decoders
+/-- Sampled proofs with its sample's coins and its sessions' proofs granted: `VStar.Recursive.Sampled.protocol`'s decoders
 and digest, and in the one-stage form the check `OneStageZk.checkBlobsAt` ends in, v1's `check` on the verdicts the
 sessions' run gives (`grantedOf`); the recursive form refused. -/
 private def proved : Core.Protocol where
