@@ -37,7 +37,7 @@ server replace it (`verity/ml/flock/`, `verity/core/service/flock/`). Everything
 ## (a) The lifecycle as run
 
 Every party is a sans-IO party of the deployment layer (`verity/core/deploy/`), run by `runtime.run` in simulated mode:
-in one process, on seeded coin sources and virtual clocks, with the manifest's channels and latencies. The model is two
+in one process, on seeded coins and virtual clocks, with the manifest's channels and latencies. The model is two
 4x4 int8 matmuls (`forward`: y = sat(W2 relu(W1 x) >> 7) >> 7) with a 16-bit running state; one request is one proof
 block, the Boolean Definition `LifecycleRequest` (5,200 AND gates), and an execution block is `LifecycleBlock(N)`: N units
 chained through the state wire. The monitoring period is three execution phases of 3, 4 and 2 requests.
