@@ -960,6 +960,8 @@
 "MoeExpertFp8GemmW_v2",
 "MoeExpertFp8Gemm_v1",
 "MoeExpertFp8Gemm_v2",
+"MoeExpertFp8ReadGemmW_v1",
+"MoeExpertFp8ReadGemm_v1",
 "MoeExpertFp8Row_v1",
 "MoeExpertFp8Row_v2",
 "MoeExpertFp8ScaleRow_v1",
