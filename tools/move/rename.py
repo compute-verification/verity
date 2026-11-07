@@ -559,11 +559,12 @@ def lock_moves(root: Path, words: Words, files: list[str]) -> dict[str, str]:
     where it is declared (a read definition in its module's file, a guarantee in its lock), its first renamed prefix, and
     the full name too when that prefix alone would rename it otherwise; none implied by another. A prefix with such a name
     under it is listed as its names in full instead, since `check.py --moved` reads no move under another move's new name
-    that maps back elsewhere (its `move_errors`)."""
+    that maps back elsewhere (its `move_errors`). A lock under a `tests/fixtures/` directory is a test's data, in whatever
+    form its test needs, and no package's record, so it is not read: `check.py --update --moved` re-records packages."""
     want: dict[str, str] = {}
     where = module_files(files)
     for p in files:
-        if posixpath.basename(p) != POLICY or words.excluded(p):
+        if posixpath.basename(p) != POLICY or words.excluded(p) or "/tests/fixtures/" in f"/{p}":
             continue
         d = json.loads((root / p).read_text())
         names = dict.fromkeys(d.get("guarantees", {}), p)
