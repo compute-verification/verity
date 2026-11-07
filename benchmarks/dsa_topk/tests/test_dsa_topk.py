@@ -260,7 +260,7 @@ def test_kernels_canonicalize_in_interpreter(monkeypatch, dist, seg_min_keys):
     ref = dsa_topk.reference_rows(x, lo, n, k)
     assert sum(m > k for m in n) >= rows // 3
     for how in ("atomic", "dup", "wrong", "garbage"):
-        canon = dsa_topk.Canon(seg_min_keys=seg_min_keys, block=16)
+        canon = dsa_topk.Canon(seg_min_keys=seg_min_keys, block=32)
         canon._sms[x.device] = 64
         assert (canon.segments(x.device, rows, cols) > 1) == (seg_min_keys < cols)
         out = fast_selection(torch, x, lo, n, k, how, rng)
@@ -289,7 +289,7 @@ def test_kernels_decode_rows_in_interpreter(monkeypatch, mode, sms):
     lo = [0] * rows
     ref = dsa_topk.reference_rows(x, lo, n.tolist(), k)
     out = fast_selection(torch, x, lo, n.tolist(), k, "atomic", rng)
-    canon = dsa_topk.Canon(seg_min_keys=16, block=16)
+    canon = dsa_topk.Canon(seg_min_keys=16, block=32)
     canon._sms[x.device] = sms
     assert (canon.segments(x.device, rows, cols) > 1) == (sms > 1)
     canon.run("top_k_per_row_decode", x, out, k, mode, seq, rows=rows, ncols=cols, ls0=cols, ls1=1, next_n=next_n)

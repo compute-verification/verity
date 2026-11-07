@@ -10,19 +10,20 @@ every row a function of its logits.
 
 ## The canonical row
 
-For a row of `n` keys with float32 logits `v[0..n)`:
+For a row of `n` keys with float32 logits `v[0..n)`, the canonical row is the registered selection relation's
+(`verity.ml.definitions.registry.dsa_topk`: `topk_set`, which `DsaTopKOrder` checks) in ascending order:
 
-- **Key.** `key(v)` is the float's 32 bits as a signed integer made order-preserving: a NaN becomes `-inf`'s bits, both
-  zeros become `+0`, then `b` if `b >= 0` else `b ^ 0x7FFFFFFF`. Keys order exactly as the floats do, with `-0 == +0` and
-  every NaN below every number.
-- **Selection.** For `n > k`, the `k` largest pairs `(key(v[i]), i)` in lexicographic order: keys above the k-th key
-  are all selected, and a tie at the k-th key goes to the larger indices.
+- **Key.** `key(v)` is `convert_to_uint32_v2` of the float's 32 bits, the key the pin's kernels rank by: `~b` for a
+  negative word, `b | 2^31` otherwise. Keys order as the floats do, with `-0` below `+0`, a positive NaN above `+inf`
+  and a negative NaN below `-inf`. `dsa_topk.ordered` is the same key less `2^31`, as a signed integer.
+- **Selection.** For `n > k`, the first `k` indices under (key descending, index ascending): keys above the k-th key
+  are all selected, and a tie at the k-th key goes to the smaller indices.
 - **Output.** The selected indices in ascending order, `k` of them, each relative to the row's first key. For `n <= k`,
   vLLM's row is unchanged: `0..n-1`, then `-1` up to `k`.
 
-This is upstream vLLM's deterministic selector (its batch-invariant op library's `top_k_per_row_prefill_index_order`)
-with one difference: that selector writes `-1` for a selected key whose logit is `-inf`, and this one keeps the index,
-so that its set is the pin's set up to ties. `dsa_topk.reference` is the definition in Python, and
+Where the pin's kernels are deterministic they select this set, in another order. Upstream vLLM's deterministic
+selector (its batch-invariant op library's `top_k_per_row_prefill_index_order`) also writes ascending indices, under
+another key and tie rule. `dsa_topk.reference` is the definition in Python, held to `topk_set` by the tests, and
 `dsa_topk.reference_rows` the same in torch.
 
 ## How it runs
@@ -30,10 +31,12 @@ so that its set is the pin's set up to ties. `dsa_topk.reference` is the definit
 `dsa_topk.register` is a vLLM general plugin. With `VERITY_DSA_TOPK=canonical` it wraps the four ops on
 `torch.ops._C` in every process. Each wrapper runs vLLM's kernel, then, when a row of the call can be longer than `k`,
 a Triton pass (`dsa_topk_kernels.py`) that rewrites only the rows longer than `k`, on the device, before attention
-reads them. The pass reads the fast kernel's selection for a candidate k-th key, checks it against the whole row's
-counts, and writes the canonical row from it; a row whose candidate fails the check is selected again by bisection over
-the keys. So the output never depends on what the fast kernel wrote. The indexer runs eagerly between CUDA-graph
-pieces (vLLM's `eager_break_during_capture`), so the wrappers run on every call. A `cooperative_topk` call whose
+reads them. The pass reads the fast kernel's selection for a candidate k-th key and checks it against the whole row's
+counts. When exactly `k` keys reach the candidate and the selection is `k` distinct indices, it writes the selection
+sorted; when a tie straddles the k-th key, it writes the row from the counts; a row whose candidate fails the check is
+selected again by bisection over the keys. So the output never depends on what the fast kernel wrote. GLM-5.3's indexer
+runs eagerly between CUDA-graph pieces (vLLM's `eager_break_during_capture`), so the wrappers run on every call; under a
+plain CUDA graph the pass is captured with the op, and what the wrappers decide on the host reads only shapes. A `cooperative_topk` call whose
 `max_seq_len` is at most `k` launches nothing: vLLM passes the batch's longest sequence there.
 
 `python dsa_topk.py site DIR` writes the plugin's entry point into `DIR`; a server or replay with `DIR` on its

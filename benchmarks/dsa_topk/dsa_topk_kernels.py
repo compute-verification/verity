@@ -2,7 +2,8 @@
 that `dsa_topk` imports without Triton and Triton resolves the helpers through this module's globals.
 
 A block's two counts ride in one int32 (``gt + (eq << 16)``), so one prefix sum and one reduction a block serve both;
-``BLOCK`` must stay below 2**15. A row's counts accumulate per lane and reduce once."""
+``BLOCK`` must stay below 2**15, and canon_row reads it as 32-key words. A row's counts accumulate per lane and
+reduce once."""
 import triton
 import triton.language as tl
 
@@ -99,35 +100,54 @@ def _bisect(row, orow, n, ls1, K: tl.constexpr, BLOCK: tl.constexpr):
 
 
 @triton.jit
+def _popc(x):
+    u = x.to(tl.uint32, bitcast=True)
+    u = u - ((u >> 1) & 0x55555555)
+    u = (u & 0x33333333) + ((u >> 2) & 0x33333333)
+    u = (u + (u >> 4)) & 0x0F0F0F0F
+    return ((u * 0x01010101) >> 24).to(tl.int32)
+
+
+@triton.jit
 def canon_row(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
               K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr):
-    # one program a row: the row's counts against the fast kernel's smallest selected key, one read with no scan. When
-    # that key is the k-th with no tie across it and the selection is k distinct indices of the row, the selection is
-    # the canonical set and is written sorted; otherwise the row is emitted from the counts, or bisected
+    # one program a row, one read: the keys at or above the fast kernel's smallest selected key, in ascending order,
+    # each at its rank (the words before it, then its word's bits below it: no scan over keys); then the row's
+    # counts decide: no tie across the k-th key leaves the row as written, a tie has it written again from the
+    # counts, and a candidate that isn't the k-th key has it bisected
     r = tl.program_id(0)
     lo, n = _bounds(r, A, B, ncols, next_n, MODE)
     if n > K:
         row = logits + r.to(tl.int64) * ls0 + lo.to(tl.int64) * ls1
         orow = out + r.to(tl.int64) * os0
-        offs = tl.arange(0, KP2)
-        sel = tl.load(orow + offs, mask=offs < K, other=-1)
-        ok = (sel >= 0) & (sel < n)
-        x = tl.load(row + tl.where(ok, sel, 0).to(tl.int64) * ls1, mask=ok, other=0.0)
-        tau = tl.min(tl.where(ok, _ordered(x), 2147483647), axis=0)
-        n_ok = tl.sum(ok.to(tl.int32), axis=0)
-        n_gt, n_eq = _count(row, 0, n, tau, ls1, BLOCK)
+        tau, _gt = _hint(row, orow, n, ls1, K, KP2)
+        W: tl.constexpr = BLOCK // 32
+        lane = tl.arange(0, 32).to(tl.uint32)[None, :]
+        below = (tl.full([1, 32], 1, tl.uint32) << lane) - 1
+        c_gt = tl.zeros([W, 32], dtype=tl.int32)
+        c_eq = tl.zeros([W, 32], dtype=tl.int32)
+        kept = n * 0
+        for b in range(0, n, BLOCK):
+            idx = b + tl.arange(0, W)[:, None] * 32 + tl.arange(0, 32)[None, :]
+            m = idx < n
+            key = _ordered(tl.load(row + idx.to(tl.int64) * ls1, mask=m, other=0.0))
+            gt = m & (key > tau)
+            eq = m & (key == tau)
+            c_gt += gt.to(tl.int32)
+            c_eq += eq.to(tl.int32)
+            ge = (gt | eq).to(tl.uint32)
+            words = tl.sum(ge << lane, axis=1)
+            cnt = _popc(words)
+            pos = kept + (tl.cumsum(cnt, axis=0) - cnt)[:, None] + _popc(words[:, None] & below)
+            tl.store(orow + pos, idx, mask=(ge != 0) & (pos < K))
+            kept += tl.sum(cnt, axis=0)
+        n_gt = tl.sum(tl.sum(c_gt, axis=1), axis=0)
+        n_eq = tl.sum(tl.sum(c_eq, axis=1), axis=0)
         tl.atomic_add(stats + 0, 1)
+        tl.debug_barrier()
         if (n_gt < K) & (n_gt + n_eq >= K):
             if n_gt + n_eq > K:
                 tl.atomic_add(stats + 1, 1)
-            emit = 1
-            if (n_gt + n_eq == K) & (n_ok == K):
-                s = tl.sort(tl.where(offs < K, sel, 2147483647))
-                tl.store(orow + offs, s, mask=offs < K)
-                tl.debug_barrier()
-                nxt = tl.load(orow + offs + 1, mask=offs + 1 < K, other=-1, cache_modifier=".cg")
-                emit = tl.sum(((offs + 1 < K) & (nxt == s)).to(tl.int32), axis=0)
-            if emit:
                 _emit(row, orow, 0, n, tau, K - n_gt, n * 0, n * 0, ls1, BLOCK)
         else:
             tl.atomic_add(stats + 2, 1)

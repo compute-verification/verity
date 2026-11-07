@@ -48,7 +48,8 @@ OPS = ("top_k_per_row_prefill", "top_k_per_row_decode", "persistent_topk", "coop
 STATS = ("rows_long", "rows_tied", "rows_bisected")
 #: a segment of a row (a call of few rows splits each over programs) is at least this many keys
 SEG_MIN_KEYS = 8192
-#: keys a program reads at a time (below 2**15: dsa_topk_kernels packs two block counts in an int32), and its warps
+#: keys a program reads at a time (32 to 2**14: canon_row reads 32-key words, and two block counts share an int32), and
+#: its warps
 BLOCK = 2048
 NUM_WARPS = 8
 #: programs a multiprocessor should get before a row is split
@@ -123,8 +124,8 @@ class Canon:
 
     def __init__(self, seg_min_keys: int = SEG_MIN_KEYS, block: int = BLOCK, num_warps: int = NUM_WARPS,
                  fill: int = FILL) -> None:
-        if not 0 < block < 1 << 15 or block & (block - 1):
-            raise ValueError(f"block: a power of two below 2**15, not {block}")
+        if not 32 <= block < 1 << 15 or block & (block - 1):
+            raise ValueError(f"block: a power of two from 32 to 2**14, not {block}")
         self.seg_min_keys, self.block, self.num_warps, self.fill = seg_min_keys, block, num_warps, fill
         self.calls = {op: 0 for op in OPS}
         self.launches: dict[str, int] = {op: 0 for op in OPS}
