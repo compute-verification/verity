@@ -28,9 +28,10 @@
   kept output. This rests on the target computing a position's row bit for bit alike however its prefill is chunked or
   recomputed; where it doesn't, the committed row isn't the Program's and the proof fails visibly.
 - Off batch invariance the compiler serves class G alone (`launch_class`, `engine.profiles.engine_classes.CLASS_G`: GLM-5.3 at
-  TP8, eager, on H200, under a registration of at most `CLASS_G_LIMITS`: steps of at most 8,192 tokens and 256 sequences,
-  positions at most 32,768, prefill chunks of at most 256 rows, the prefix cache stated on or off), whose token-count-dependent
-  kernel choices read the whole launch. There a request's Program is its rows in the window alone: the request wrapper after a
+  TP8, eager or compiled at breakable CUDA graphs, on H200, under a registration of at most `CLASS_G_LIMITS`: steps of at most
+  8,192 tokens and 256 sequences, positions at most 32,768, prefill chunks of at most 256 rows, the prefix cache stated on or
+  off), whose token-count-dependent kernel choices read the whole launch, padded to its capture size where it runs in a captured
+  graph. There a request's Program is its rows in the window alone: the request wrapper after a
   history of C positions, at its launch context (`RequestUnit.launch`, `common._Launch`): per step of its Program, each of its
   prefill chunks and then its decodes, every row that step's forward ran as (n, start), in the advice's batch order, a refused
   request's rows and discarded rows included, since they ran. A prefill the engine ran over several steps is the chunked request
@@ -49,7 +50,8 @@
   the chunks are the advice's schedule, never a batch-mate's value; requests of one (LP, T, C, policy, chunks, launch, edge)
   share one Program. Its Program reads every launch its rows ran in, so a recompute after preemption has no Program there. A
   launch the kernels' captured statics don't cover is the build's refusal, by name: today a step of more than 2,048 tokens (the
-  all-reduce and cuBLAS captures) and a row of more than 2,048 keys (`dsa`'s top-k selection).
+  all-reduce and cuBLAS captures). A row of more than INDEX_TOPK keys reads its top-k order from the Program's `run` input
+  (`dsa.run_field`), its own (`batch`'s R1), and the Program returns the checks that order is the top-k set.
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
@@ -103,7 +105,7 @@ from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
-from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_LIMITS
+from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.prune import dead_units
@@ -428,12 +430,18 @@ def producers_of(i: int, s: int, row: I1.Row, bs: int) -> tuple[int, ...]:
 
 def launch_class(phi: Phi) -> None:
     """Refuse a registration without batch invariance outside class G (`CLASS_G`), naming each fact of it outside: the model,
-    world, execution and device, and the engine limits, each stated and within `CLASS_G_LIMITS`, and the prefix cache stated on or
+    world and device, an execution the class doesn't serve (`CLASS_G_EXECUTIONS`) or a target compilation other than the one it
+    serves that execution at, and the engine limits, each stated and within `CLASS_G_LIMITS`, and the prefix cache stated on or
     off (vLLM's default is on)."""
     eng = dict(phi.engine or {})
     facts = [f"{k} {v!r}, not {CLASS_G[k]!r}" for k, v in (("model_type", str(phi.hf_config.get("model_type", "")).lower()),
-                                                        ("world", int((phi.tp or {}).get("world", 1))), ("execution", phi.execution),
+                                                        ("world", int((phi.tp or {}).get("world", 1))),
                                                         ("device_name", (phi.target or {}).get("device_name"))) if v != CLASS_G[k]]
+    if phi.execution not in CLASS_G_EXECUTIONS:
+        facts.append(f"execution {phi.execution!r}, not one of {', '.join(map(repr, CLASS_G_EXECUTIONS))}")
+    elif (phi.target or {}).get("compilation") != CLASS_G_EXECUTIONS[phi.execution]:
+        facts.append(f"target compilation {(phi.target or {}).get('compilation')!r} at execution {phi.execution!r}, not "
+                     f"{CLASS_G_EXECUTIONS[phi.execution]!r}")
     facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {cap}" for k, cap in CLASS_G_LIMITS.items()
               if type(eng.get(k)) is not int or not 0 < eng[k] <= cap]
     if type(eng.get("enable_prefix_caching")) is not bool:
@@ -728,7 +736,6 @@ def _label(policy: dict) -> str:
     return "greedy" if policy["kind"] == "greedy" else f"t{policy['temperature']:g}-p{policy['top_p']:g}"
 
 
-NO_CHUNKED_TRACE = "no trace: the Build has no chunked request wrapper (`vllm_meta` prefills a request in one launch)"
 NO_EDGE_TRACE = "no trace: the Build's request wrapper returns its samples alone, never a window's edge rows"
 
 
@@ -744,25 +751,30 @@ def trace_dir(u: RequestUnit | dict) -> str:
 
 def trace_commands(summary: dict, registered: Registered, root: str, *, max_model_len: int = 2048) -> list[list[str]]:
     """One `verity-vllm build --wrapper request` per distinct request Program of a compilation (`Compiled.summary()`), on the pinned
-    vLLM (CPU, on meta), each writing `<root>/<trace_dir>`; at tensor-parallel world W, φ's rank's (`--tp W --rank r --dead-free`);
-    in class G at the unit's launch context (`--launch-context '{"batch": ...}'`). A Program with prefill chunks or a window's edge
-    rows has none (`NO_CHUNKED_TRACE`, `NO_EDGE_TRACE`), so `compare` counts it `no_trace`."""
+    vLLM (CPU, on meta), each writing `<root>/<trace_dir>` at a `max_model_len` of at least its LP + T, under φ's GPU's name where
+    φ states one (`--device-name`: the tuned kernel configs a GPU-free host reads); at tensor-parallel world W, φ's rank's
+    (`--tp W --rank r --dead-free`); in class G at the unit's launch context (`--launch-context '{"batch": ...}'`), with its prefill chunks there when it has them
+    (`'{"batch": ..., "chunks": ...}'`: the Build's chunked request wrapper, `vllm_meta.ChunkedGreedyRequest`). A Program with a
+    window's edge rows has none (`NO_EDGE_TRACE`), so `compare` counts it `no_trace`."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     phi, seen, cmds = registered.phi, set(), []
     target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
+    # the target's GPU name, which vLLM's get_device_name answers on any host (its tuned fused-MoE configs' key)
+    device = ["--device-name", str(phi.target["device_name"])] if phi.target.get("device_name") else []
     world = int(phi.tp.get("world", 1))
     tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
     for u in summary["requests"]:
-        if u is None or u.get("chunks") or u.get("edge") or (d := trace_dir(u)) in seen:
+        if u is None or u.get("edge") or (d := trace_dir(u)) in seen:
             continue
         seen.add(d)
-        pol = u["policy"]
+        pol, ctx = u["policy"], {"batch": u.get("launch"), **({"chunks": list(u["chunks"])} if u.get("chunks") else {})}
         sampling = "greedy" if pol["kind"] == "greedy" else json.dumps({k: pol[k] for k in ("temperature", "top_p", "top_k")}, sort_keys=True)
         cmds.append(["verity-vllm", "build", "--out", os.path.join(root, d), "--wrapper", "request", "--LP", str(u["LP"]), "--T", str(u["T"]),
                      *(["--cached", str(u["C"])] if u.get("C") else []),
-                     *(["--launch-context", json.dumps({"batch": u["launch"]}, separators=(",", ":"))] if u.get("launch") else []),
-                     "--model", phi.model["repo"], "--revision", phi.model["revision"], "--max-model-len", str(max_model_len),
-                     "--target", json.dumps(target, sort_keys=True), "--profile", phi.profile, "--sampling", sampling, *tp])
+                     *(["--launch-context", json.dumps(ctx, separators=(",", ":"))] if u.get("launch") else []),
+                     "--model", phi.model["repo"], "--revision", phi.model["revision"],
+                     "--max-model-len", str(max(max_model_len, int(u["LP"]) + int(u["T"]))),
+                     "--target", json.dumps(target, sort_keys=True), *device, "--profile", phi.profile, "--sampling", sampling, *tp])
     return cmds
 
 
@@ -776,8 +788,7 @@ def compare(summary: dict, root: str) -> dict:
         res = Path(root, d, "result.json")
         doc = json.loads(res.read_text()) if res.exists() else {}
         traced = (doc.get("program") or {}).get("digest")
-        why = (NO_EDGE_TRACE if u.get("edge") else NO_CHUNKED_TRACE if u.get("chunks") else None) if not doc else \
-            str(doc.get("message") or doc.get("unsupported"))[:400]
+        why = str(doc.get("message") or doc.get("unsupported"))[:400] if doc else (NO_EDGE_TRACE if u.get("edge") else None)
         out.append({"unit": d, "compiled": u["digest"], "traced": traced,
                     "outcome": "no_trace" if not traced else ("equal" if traced == u["digest"] else "different"),
                     **({} if traced or why is None else {"trace_error": why})})

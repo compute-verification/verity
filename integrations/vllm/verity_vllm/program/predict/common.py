@@ -6,7 +6,7 @@ token select over a row's whole-vocabulary logits (`select_token`), and a wrappe
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from verity.ml.circuits.refs import Coll, Refs, concat
@@ -55,6 +55,45 @@ def _arr_shape(t: Type) -> tuple[int, ...]:
 def _ptypes(spec) -> tuple:
     params, _ = spec.signature()
     return tuple(t for _, t in params)
+
+
+def reads_run(net, keys: int) -> bool:
+    """Whether `net`'s rows of up to `keys` keys read a value the served run decides (a DSA row past TOPK: `dsa.Net.reads_run`)."""
+    return bool(getattr(net, "reads_run", None) and net.reads_run(keys))
+
+
+def wrapper_keys(wrapper: str, M: int, LP: int | None, T: int | None) -> int:
+    """The most keys a row of the wrapper reads: a step's M rows attend among themselves, a request's last decode its LP + T."""
+    return int(M) if wrapper == "step" else int(LP) + int(T)
+
+
+def run_input(net, params: list, keys: int):
+    """`derive`'s `run` parameter (`registration.RunInputs`), declared at the end of `params`, where `net`'s rows of up to `keys`
+    keys read a value the served run decides (`reads_run`), else None."""
+    if not reads_run(net, keys):
+        return None
+    from verity_vllm.program.frontend.registration import RunInputs
+    return RunInputs.declare(params)
+
+
+def finish_run(run, params: tuple, B) -> tuple:
+    """The parameters once `run`'s record holds every field the forward read (`RunInputs.finish`), the Builder's too."""
+    if run is None:
+        return params
+    run.finish(final := list(params))
+    B.params = tuple(final)
+    return B.params
+
+
+def with_checks(model, out: Coll) -> tuple[Coll, dict | None]:
+    """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
+    verifier requires to be 1), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks)."""
+    from verity.ml.circuits.types import Tuple
+    checks = getattr(model, "checks", None)
+    if not checks:
+        return out, None
+    ret = Coll(Tuple(out.type, Array(len(checks), Value(1))), concat([out.refs, *[c.refs for c, _ in checks]]))
+    return ret, {"output": 1, "accept": 1, "of": [w for _, w in checks]}
 
 
 @dataclass(frozen=True)
@@ -177,17 +216,23 @@ class _Peers:
 class _Launch:
     """The batch a request's calls run in (`pipeline.launch_context.request_launch_batch`, parsed as `targets.parse_launch_context`
     parses the Build's `--launch-context`): per request step, every sequence the engine step schedules as (rows, start).  `step` is
-    the request step being written; without a batch a call is its own launch."""
+    the request step being written; without a batch a call is its own launch.  `capture_sizes`: the breakable CUDA graphs'
+    (`graph_capture_sizes`), whose captured kernels run at the step's padded tokens."""
 
-    def __init__(self, batch: list | None = None) -> None:
+    def __init__(self, batch: list | None = None, capture_sizes: tuple[int, ...] = ()) -> None:
         from verity_vllm.program.frontend import targets as TG
         self.ctx, self.step = TG.parse_launch_context({"batch": batch}) if batch else None, 0
+        self.capture_sizes = tuple(capture_sizes)
+
+    def with_batch(self, batch: list) -> _Launch:
+        """This launch's graphs over the request's batch."""
+        return _Launch(batch, self.capture_sizes)
 
     def tokens(self, own: int, sampled: bool = False) -> int:
         """The rows of the launch `own` rows run in (`targets.launch_tokens`); after the logits selection (`sampled`), its sequences."""
         from verity_vllm.program.frontend import targets as TG
         try:
-            return TG.launch_tokens(own, self.step, self.ctx, sampled=sampled)
+            return TG.launch_tokens(own, self.step, self.ctx, sampled=sampled, capture_sizes=self.capture_sizes)
         except ValueError as e:
             raise Unexpressible(f"request step {self.step}: {e}") from None
 
@@ -218,21 +263,23 @@ def launch_batch(phi, LP: int, T: int) -> list | None:
     return batch
 
 
-def open_launch(model, model_class: str, phi, wrapper: str, LP: int | None, T: int | None, batch: list | None,
-                chunks: tuple[int, ...]) -> list | None:
-    """A `request`'s launch batch (`batch`, else `launch_batch`'s), set on `model` (`_Launch`), which must read it; its prefill
-    `chunks` need one: a step of it a chunk and one a decode."""
-    if (batch := (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None) is not None:
+def in_launch(model, batch: list | None, model_class: str, chunks: tuple[int, ...] = (), T: int = 0, note: str = "") -> None:
+    """`model`'s calls run in `batch` (`_Launch.with_batch`) where its request has one; `Unexpressible` for a decoder whose kernel
+    choices read its own rows only (`reads_launch`), or for prefill `chunks` that aren't one a step of `batch` before its T decodes."""
+    if batch is not None:
         if not getattr(model, "reads_launch", False):
-            raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance), whose kernel "
+            raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance{note}), whose kernel "
                                 f"choices the {model_class} decoder reads at its own rows")
-        model.launch = _Launch(batch)
-    steps = len(chunks) + max(int(T or 0), 0)
-    if chunks and (batch is None or len(batch) != steps):
+        model.launch = model.launch.with_batch(batch)
+    if chunks and (batch is None or len(batch) != len(chunks) + int(T)):
         raise Unexpressible(f"vocabulary cannot express: a prefill in {len(chunks)} chunks " + (
-            f"at a launch batch of {len(batch)} steps, not one a chunk and one a decode ({steps})" if batch is not None else
+            f"at a launch batch of {len(batch)} steps, not one a chunk and one a decode ({len(chunks) + int(T)})" if batch is not None else
             "without a launch batch (on a batch-invariant target a chunked prefill is the request wrapper's Program)"))
-    return batch
+
+
+def graph_capture_sizes(phi) -> tuple[int, ...]:
+    """The capture sizes of φ's breakable CUDA graphs (`TargetProfile.graph_capture_sizes`); () for an execution without them."""
+    return phi.target_profile().graph_capture_sizes()
 
 
 def launch_rows(phi, LP: int, T: int, C: int = 0) -> dict | None:
@@ -261,3 +308,21 @@ def launch_seqlen_q(ctx: dict, own_rows: int, step: int, tp, accepted: bool) -> 
         return own_rows
     except TG.LaunchContextInvalid as e:
         raise Unexpressible(f"vocabulary cannot express: request step {step}: {e}") from None
+
+
+@dataclass
+class BuildResult:
+    wrapper: str
+    program: Any
+    digest: str
+    desc: dict | None
+    function: str
+    n_root_nodes: int
+    timings: dict = field(default_factory=dict)
+    named: Any = None     # what a `build_program` `finish` says beside the Program (`naming.Named`)
+    run: dict | None = None      # its `run` parameter's layout (`RunInputs.layout`), where a row reads a value the served run decides
+    checks: dict | None = None   # its checks output, as `derive`'s provenance states it (`common.with_checks`)
+
+    def summary(self) -> dict:
+        return {"wrapper": self.wrapper, "function": self.function, "digest": self.digest,
+                "n_root_nodes": self.n_root_nodes, "gates": getattr(self.program, "gates", None), "timings": self.timings}
