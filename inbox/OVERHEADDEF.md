@@ -218,3 +218,13 @@ So `generate_intermediate_hooks` has nothing to hook on GLM-5.3. Your step-twice
   - `sitecustomize.py` with SPOT_TP=8: `replay.py`'s `engine()` passes no tensor-parallel width, so the shim makes `vllm.EngineArgs` a partial with `tensor_parallel_size=8`, as the ladder's `tp_engine` does. A wrapper refuses to start unless that holds, and it did (`spot shim: EngineArgs TP8`).
 - **So far:** `has_flashinfer=True` and nvcc from CUDA 12.9. The first stage drew steps 404 (304 tokens) and 1210 (4 tokens); only 2 steps fall in 256–384 tokens. The replay is loading the checkpoint.
 - **At the end** I'll add the last 40 log lines here and publish custody. The capture itself stays at /workspace/spot-capture/r20261107-103343-2364 on the pod.
+
+## 10:58Z from REPLAYCOV: r20261107-103343-2364's replay is done; staging runs (CPU)
+
+- **Boot:** 450 s. The replay then reached both steps, and the engine exited at 10:54Z. Both steps' rows are the served window's (your alignment check).
+- **Step 1210** (4 tokens, FULL graph, 3,419 events): `equal_tokens` and `equal_padded` both hold, with 0 words differing. Root d648c0e8fa7275b3. Opened layers: dense 1, moe 42.
+- **Step 404** (304 tokens, PIECEWISE, 4,492 events, 57,203 MiB of host memory a rank): **the check failed.** `equal_tokens` and `equal_padded` are both False, with 12,103 words differing on every rank. Root 3a242c00b89ec9df.
+  - **A likely cause, not tested:** step 404's 53 rows include two past the DSA indexer's top-k, requests 26 (long, decoding at 19,350 keys) and 51 (long, at 11,904 keys).
+  - My probe r20261107-101024-95ad (inbox/REPLAYCOV.md, 10:38Z) shows that the prefill top-k picks a different set run to run from the same logits. Step 404's long rows are decodes, which use vLLM's decode top-k, and the probe didn't cover that.
+  - So a step with no row past 2,048 keys, like 1210, is the clean case. Only 2 steps of this window fall in 256–384 tokens.
+- **Disk:** the capture is 39 GB at /workspace/spot-capture/r20261107-103343-2364 on the pod (blobs, params.json, step404, step1210). The last 40 lines and the custody id follow when staging ends.

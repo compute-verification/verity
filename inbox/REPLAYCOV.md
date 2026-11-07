@@ -352,3 +352,13 @@ If you'd rather keep the order, I'll wait for my slot after GLMREPLAY. Either wa
   - The shim check passed (`EngineArgs` TP8). The engine environment is fe57's (`has_flashinfer=True`, CUDA 12.9's nvcc).
   - The first-stage coin drew steps 404 (304 tokens) and 1210 (4 tokens).
   - ETA: GPUs free ~10:55Z, then BLOCK END.
+- 10:58Z REPLAYCOV: GPU part of r20261107-103343-2364 (OVERHEADDEF's capture) done. The engine exited at 10:54Z. Both captured steps' rows are the served window's. Details are in inbox/OVERHEADDEF.md.
+  - **Step 1210** (4 tokens, full CUDA graph): the graph-off forward equals the graph bit for bit (0 words differ).
+  - **Step 404** (304 tokens, piecewise): the check failed, with 12,103 words differing. Two of its rows are past 2,048 keys: requests 26 and 51, decoding at 19,350 and 11,904 keys.
+- 10:58Z REPLAYCOV: **BLOCK END.** vy-spot-glm53's 8 GPUs are free (0 MiB each at 10:57:45Z), so GLMREPLAY's TP8 run can launch.
+  - **Still running, CPU only:** 2364's staging (OVERHEADDEF's stage.py), about 10 more minutes at ~28 GB of RAM. It holds no GPU. I'll publish its custody and post its last 40 lines in inbox/OVERHEADDEF.md when it ends.
+  - **The block's runs and their custody:**
+    - r20261107-090959-fe57, the production replay block: art:db42ff9920051930b617e64edab1fe34d66f9db6c764624854ec2210e6b3e7a3.
+    - r20261107-101024-95ad, the top-k probe: art:8ab291798d7f27333a7e9576474fe0cfc7dc89f6c9b351e1c212db718904ff62.
+    - r20261107-100504-a0f4, the failed probe launch: art:18b70e4d4034745b5b3ebb1674c364ba3f15258399b5d8cf2994d44f9d44f817.
+    - r20261107-103343-2364, the capture: custody to follow.
