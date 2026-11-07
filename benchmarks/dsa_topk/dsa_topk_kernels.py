@@ -6,6 +6,7 @@ A block's two counts ride in one int32 (``gt + (eq << 16)``), so one prefix sum 
 reduce once."""
 import triton
 import triton.language as tl
+from triton.language.extra import libdevice
 
 
 @triton.jit
@@ -100,7 +101,10 @@ def _bisect(row, orow, n, ls1, K: tl.constexpr, BLOCK: tl.constexpr):
 
 
 @triton.jit
-def _popc(x):
+def _popc(x, HW: tl.constexpr):
+    # HW: the device's popcount (Triton's interpreter has none)
+    if HW:
+        return libdevice.popc(x.to(tl.int32, bitcast=True))
     u = x.to(tl.uint32, bitcast=True)
     u = u - ((u >> 1) & 0x55555555)
     u = (u & 0x33333333) + ((u >> 2) & 0x33333333)
@@ -110,7 +114,7 @@ def _popc(x):
 
 @triton.jit
 def canon_row(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
-              K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr):
+              K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, HW: tl.constexpr):
     # one program a row, one read: the keys at or above the fast kernel's smallest selected key, in ascending order,
     # each at its rank (the words before it, then its word's bits below it: no scan over keys); then the row's
     # counts decide: no tie across the k-th key leaves the row as written, a tie has it written again from the
@@ -137,8 +141,8 @@ def canon_row(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
             c_eq += eq.to(tl.int32)
             ge = (gt | eq).to(tl.uint32)
             words = tl.sum(ge << lane, axis=1)
-            cnt = _popc(words)
-            pos = kept + (tl.cumsum(cnt, axis=0) - cnt)[:, None] + _popc(words[:, None] & below)
+            cnt = _popc(words, HW)
+            pos = kept + (tl.cumsum(cnt, axis=0) - cnt)[:, None] + _popc(words[:, None] & below, HW)
             tl.store(orow + pos, idx, mask=(ge != 0) & (pos < K))
             kept += tl.sum(cnt, axis=0)
         n_gt = tl.sum(tl.sum(c_gt, axis=1), axis=0)

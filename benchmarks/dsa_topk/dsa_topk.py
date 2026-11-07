@@ -16,11 +16,11 @@ The canonical row's selection is the registered relation's top-k set (`verity.ml
   the smaller indices;
 - the output is the selection in ascending index order, ``k`` indices, each relative to its row's first key.
 
-The device pass reads the fast kernel's selection for a candidate k-th key ``tau``, which it checks against the whole
-row's counts (``#{key > tau} < k <= #{key >= tau}``). When ``#{key >= tau} == k`` and the selection is ``k`` distinct
-indices of the row, it is the canonical set and is written sorted; when a tie straddles the k-th key, the row is
-written from the counts; a row whose candidate fails (a fast kernel that missed a larger key) is selected again by
-bisection over the keys. Every way the output is the row's canonical one. Rows of
+The device pass reads the fast kernel's selection only for a candidate k-th key ``tau``. Reading the row once, it
+writes the keys at or above ``tau`` in ascending order and counts them, then checks the candidate
+(``#{key > tau} < k <= #{key >= tau}``): with no tie across the k-th key the row stands as written; with one, the row
+is written again from the counts; a row whose candidate fails (a fast kernel that missed a larger key) is selected
+again by bisection over the keys. Every way the output is the row's canonical one. Rows of
 ``n > k`` keys are a prefill's (``top_k_per_row_prefill``: keys ``[start, end)`` of the gathered row) or a decode's (the
 three decode selectors: keys ``[0, length)``).
 
@@ -172,7 +172,7 @@ class Canon:
         args = (logits, ls0, ls1, out, out.stride(0), a, b, ncols, next_n)
         const = dict(K=k, KP2=next_pow2(k), BLOCK=self.block, MODE=mode, num_warps=self.num_warps)
         if seg == 1:
-            K["canon_row"][(rows,)](*args, stats, **const)
+            K["canon_row"][(rows,)](*args, stats, HW=os.environ.get("TRITON_INTERPRET") != "1", **const)
             return
         ws = self.workspace(dev, rows * (2 * seg + 1))
         K["count_seg"][(rows, seg)](*args, ws, seg, **const)

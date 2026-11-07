@@ -31,10 +31,10 @@ another key and tie rule. `dsa_topk.reference` is the definition in Python, held
 `dsa_topk.register` is a vLLM general plugin. With `VERITY_DSA_TOPK=canonical` it wraps the four ops on
 `torch.ops._C` in every process. Each wrapper runs vLLM's kernel, then, when a row of the call can be longer than `k`,
 a Triton pass (`dsa_topk_kernels.py`) that rewrites only the rows longer than `k`, on the device, before attention
-reads them. The pass reads the fast kernel's selection for a candidate k-th key and checks it against the whole row's
-counts. When exactly `k` keys reach the candidate and the selection is `k` distinct indices, it writes the selection
-sorted; when a tie straddles the k-th key, it writes the row from the counts; a row whose candidate fails the check is
-selected again by bisection over the keys. So the output never depends on what the fast kernel wrote. GLM-5.3's indexer
+reads them. The pass takes the fast kernel's smallest selected key as a candidate k-th key and reads the row once,
+writing the keys at or above it in ascending order and counting them. With no tie across the k-th key the row stands;
+with one, the row is written again from the counts; a row whose candidate fails the count check is selected again by
+bisection over the keys. So the output never depends on what the fast kernel wrote. GLM-5.3's indexer
 runs eagerly between CUDA-graph pieces (vLLM's `eager_break_during_capture`), so the wrappers run on every call; under a
 plain CUDA graph the pass is captured with the op, and what the wrappers decide on the host reads only shapes. A `cooperative_topk` call whose
 `max_seq_len` is at most `k` launches nothing: vLLM passes the batch's longest sequence there.
