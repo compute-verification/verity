@@ -34,8 +34,9 @@ passes, each boundary message at `AuditRun.next_boundary_ns`, WINDOWS stretches 
 `--pace-pass-ms` pass and a closing stretch, and γ declared per fixed T, so the record has a time-held memory line
 (`ledger.memory`); `paced_line`'s per-stretch line stays beside it as a diagnostic. A group is sampled at its k-th
 root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
-fixes each group's end there, and `auditor_line.py` reads the line on the challenger's clock from it. A boundary due by
-then leaves right behind the close, so its coin, after the same root, is asked for in the same round trip, second
+fixes each group's end there, and `benchmarks/remote_session/auditor_line.py` reads the line on the challenger's clock
+from it. A boundary due by then leaves right behind the close, so its coin, after the same root, is asked for in the
+same round trip, second
 (`coins.SessionCoins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.  At F = 1 a group's
 boundary is due at its k-th root, so its coin is asked for first, after that root, and the close second, and the
 prover waits a round trip on each coin.
@@ -59,8 +60,9 @@ subtrees on `--layout-workers` threads), `Binding.hold` beside it as the referen
 the two computing their roots at once on the same cores and the hello decided once both have answered, and a hello on
 which the two differ is refused as `disagreement`. The regions
 are then the binding's, and verifier.json keeps the binding (`binding`: the pin's name and checkpoint_sha512, the
-store's shape, both roots, the Lean's answer and `bound`), which `auditor_line.py` credits on. A process takes one
-hello, so its sessions share the one root it held; another process's payload key is fresh, so its root is another.
+store's shape, both roots, the Lean's answer and `bound`), which `benchmarks/remote_session/auditor_line.py` credits
+on. A process takes one hello, so its sessions share the one root it held; another process's payload key is fresh, so
+its root is another.
 
 The verdicts are the Lean verifier's, the process `remote-audit-verifier` (`lean_verifier.py`): it holds
 the registry and every session, and each registration, session, event and window goes to it and to `audit.AuditRun`
@@ -100,16 +102,20 @@ the Lean's session, which holds only the append coins released, otherwise.
 
 Openings are checked in the clear: zero-knowledge proof blocks are not in this harness (PROTOCOL.md §8).
 
-    python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
-                       [--registry REGISTRY.json] [--lean-exe PATH]
-                       [--paced K:T_MS:DRAWS:WINDOWS[:F] ...] [--transcript DIR]
-                       [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
-                       [--groups-per-coin G]
-                       [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
-                        --challenger-period P --challenger-main FILE [--challenger-minutes M]]
-                       [--model ROLE --checkpoint DIR --pin FILE --arena-blocks A [--engines E]]
-    python verifier.py --registry REGISTRY.json --close NODE_HEX
-    python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
+Its process is `benchmarks/remote_session/verifier_process.py`, which hands `main` what a verifier imports none of:
+the LMS verify a served or gate session's signatures are checked with, and the challenger's process `--challenger
+serve` starts.
+
+    python verifier_process.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
+                               [--registry REGISTRY.json] [--lean-exe PATH]
+                               [--paced K:T_MS:DRAWS:WINDOWS[:F] ...] [--transcript DIR]
+                               [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
+                               [--groups-per-coin G]
+                               [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
+                                --challenger-period P --challenger-main FILE [--challenger-minutes M]]
+                               [--model ROLE --checkpoint DIR --pin FILE --arena-blocks A [--engines E]]
+    python verifier_process.py --registry REGISTRY.json --close NODE_HEX
+    python verifier_process.py --memory-of VERIFIER_JSON [--host-bytes N]
 """
 from __future__ import annotations
 
@@ -125,24 +131,22 @@ import secrets
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1]))
+from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, timing
+from verity.core.protocols.remote_bandwidth import store as rstore
+from verity.core.protocols.sampled_proofs.challenger import Verify
 
-from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, timing  # noqa: E402
-from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
-
-import challengers  # noqa: E402
-import lean_verifier as lv  # noqa: E402
-import wire  # noqa: E402
-from checks import Checks  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import challengers
+from verity.core.protocols.remote_bandwidth.session import lean_verifier as lv
+from verity.core.protocols.remote_bandwidth.session import wire
+from verity.core.protocols.remote_bandwidth.session.checks import Checks
 
 CHECK_BATCH = 1024
 """Openings a Lean thread checks at once (`checkWindowChunked`)."""
+#: One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`).
 GPU_HBM_BYTES = 96 * 2 ** 30
-"""One RTX PRO 6000's memory, 96 GiB (`benchmarks/census/hardware.json`)."""
 HBM_BYTES = timing.GPUS * GPU_HBM_BYTES
 DISK_BYTES_PER_S = 4.4e9
 """The node's disks' read ceiling, each disk's highest second summed (4.311e9) and rounded up:
@@ -494,8 +498,8 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
     block.  `ingress_per_ns`, those routes' read ceiling in blocks a ns, is charged with the rebuilds at
     `rebuild_per_ns` in both forms, and `burst_bytes` (B, `ingress_bursts`) beyond them: `SquaringCeiling`, `Disks`
     and `Links` hold as rate·length + burst, and a burst of 0 states the rate down to one nanosecond.  This is the
-    verifier's diagnostic; the line of record (`recorded_line`, `auditor_line.py`) charges each form its own rates and
-    bursts.
+    verifier's diagnostic; the line of record (`recorded_line`, `benchmarks/remote_session/auditor_line.py`) charges
+    each form its own rates and bursts.
 
     Both forms need every pass to read every registered block, so a session any of whose passes leaves one out (a
     group's least pass, `memory`'s `held`, short of the store) is refused (`line.Refused`)."""
@@ -1518,7 +1522,10 @@ def save_registry(path: Path | None, registry: audit.Registry | dict) -> None:
         tmp.replace(path)
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, serve: Sequence[str] | None = None) -> int:
+    """The verifier's process on `argv` (the command line's by default). A served or gate session's signatures are
+    checked with `verify`, and `--challenger serve` starts the challenger's process `serve`, which the process's entry
+    hands in (`benchmarks/remote_session/verifier_process.py`): without them, those two refuse the run."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=7781)
@@ -1627,7 +1634,7 @@ def main() -> int:
     ap.add_argument("--layout-workers", type=int, default=len(os.sched_getaffinity(0)),
                     help="processes hashing the pinned files and recomputing the expected payload root, and the Lean "
                          "verifier's threads recomputing it at the same time")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
         print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, host_bytes=a.host_bytes)} | (
@@ -1664,8 +1671,9 @@ def main() -> int:
                  f"{challengers.GATE_PORTS.stop - 1}), which this machine's certifier coin link binds")
     try:
         challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params,
-                                    ssh=a.challenger_ssh, peer=a.challenger_peer, pin=a.challenger_pin,
-                                    period=a.challenger_period, main=a.challenger_main, minutes=a.challenger_minutes)
+                                    verify=verify, serve=serve, ssh=a.challenger_ssh, peer=a.challenger_peer,
+                                    pin=a.challenger_pin, period=a.challenger_period, main=a.challenger_main,
+                                    minutes=a.challenger_minutes)
     except ValueError as e:
         ap.error(str(e))
     binding = None
@@ -1777,7 +1785,3 @@ def main() -> int:
     (a.out / "verifier.json").write_text(json.dumps(out, indent=1))
     print(f"verifier: cpu {json.dumps(out['cpu'])}", flush=True)
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

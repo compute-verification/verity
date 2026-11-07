@@ -37,8 +37,9 @@ Commit's session is `CommitSession`: the binder on its engine from the build, th
 Commit's instrumented run (`Lockstep`: each pass's engine step is the run's next step, so the memory map's steps are
 the steps the Commit commits), its store's encode on the GPU by kv.cu (`KvDevice`).
 
-`benchmarks/remote_session` is not a package: `session_module` loads its ``prover.py`` (and ``verifier.py``, for a
-local verifier) from the source tree (`config.REMOTE_SESSION`).
+`benchmarks/remote_session` is not a package: `session_module` loads its ``prover.py`` from the source tree
+(`config.REMOTE_SESSION`), and `prove` takes the wire from it. The verifier's side, the wire among it, is
+`verity.core.protocols.remote_bandwidth.session`.
 """
 from __future__ import annotations
 
@@ -74,7 +75,7 @@ def address(value: str) -> tuple[str, int]:
 
 
 def session_module(name: str, directory: str | Path = config.REMOTE_SESSION) -> ModuleType:
-    """``benchmarks/remote_session``'s module ``name`` (``prover``, ``verifier``, ``wire``), loaded once from its file,
+    """``benchmarks/remote_session``'s module ``name`` (``prover``, ``device``, ``inplace``), loaded once from its file,
     as its own scripts import it."""
     if name in sys.modules:
         return sys.modules[name]
@@ -513,7 +514,8 @@ def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: by
     verifier's reason if it refuses the registration.  A prover that fails drops the connection, so the verifier sees
     the session end there."""
     host, port = address(verifier)
-    prover, wire = session_module("prover"), session_module("wire")
+    prover = session_module("prover")
+    wire = prover.wire
     conn = wire.connect(host, port)
     try:
         p = prover.ProverSide(conn, backend, node, prover.parse_plan(plan), log=log, **kw)
