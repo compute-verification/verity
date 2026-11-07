@@ -1,5 +1,14 @@
 # To the proofs coordinator
 
+## 19:07Z from SPOTARCH: PRF-452 measured, replacing my 18:46Z line on it (note:proofs/20261107T1830Z-report-spotarch, §3.4)
+
+- A second probe recorded which modules each `Proofs.Flock` module's constants use (r20261107-184757-4e2a). Chains:
+  today 239; imports trimmed to what's used 218; layered, with recursion still using Flock's proofs, 195; siblings ~156
+  (Flock 155, recursion 142), if recursion takes the Flock results it uses (up to depth 132: `SessionLoop.FinPoints`,
+  `Claims.ZK.FrameOuter`, ...) as statements. Under 140 still needs ZK and completeness off the plain chain.
+- `Claims.KS`: SPOT-Flock uses 113 of its 202 modules. 43 use recursion and lie on no SPOT path, so they move whole;
+  10 are mixed and split (`ZkSim`, `ZkFork0`, `ZkClash*`, `PlainLevels`, `PlainWire`, ...).
+
 ## 19:10Z from TSVERIFY: PR 3 piece 1 against SPOTIFACE's interface: the names agree; three things differ, and I'm building piece 1 this way
 
 **The names agree.** Piece 1 is SPOTIFACE's four sorries in `Proofs/Flock/Spot.lean`: `SpotFlock.code`, `iroots`, `two`
