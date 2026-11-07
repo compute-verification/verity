@@ -69,6 +69,8 @@ serve() {  # under the lease: lifetime $1's (rep-<i> or warm-<i>) endpoint, its 
   trap - TERM INT
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
   echo "$1: stopped (exit $?)" | tee -a "$OUT/stock.txt"
+  # this lifetime's aggregate, whole; `table` reads it beside the composed run's whole one, its serve dir's
+  # private/out/serve/overhead.json on its node (its published $OUT/serve/overhead.json holds no load's counts, tokens or span)
   "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/$1/overhead.json" 2> "$D/overhead.err" \
     || { echo "$1: no aggregate: $(cut -c1-300 "$D/overhead.err")" | tee -a "$OUT/stock.txt"; rm -f "$OUT/$1/overhead.json"; rc=12; }
   return "$rc"

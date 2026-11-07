@@ -93,7 +93,8 @@ negatives.
   the certifier's piece reads. Each
   step's verdict line is in `out/verdicts.txt`. The network certifier's piece, the longest, starts as soon as the window is
   picked. No line counts a window's requests: the serve dir's request lists, serve-openai's log and the load's records,
-  timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate.
+  timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate, less the load's counts,
+  tokens and span, which `publish` holds in the serve dir's private/out.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
@@ -189,7 +190,8 @@ negatives.
   table` compares the composed run with it on two clocks, each the same code in both runs: the client's
   (`serve_load.py --varied`'s timings files) and the engine's step trace (`advice_trace.jsonl`). The trace and the load's
   records stay in the serve dir on the node, where `served_overhead.py metrics` reads them, and each run publishes only
-  that aggregate (`overhead.json`), which `table` reads. It reports time per output
+  that aggregate (`overhead.json`), the composed run's less its load's counts, tokens and span. `table` reads the full
+  ones: the stock runs' files and, on the node, the composed run's private/out/serve/overhead.json. It reports time per output
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
 - `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
