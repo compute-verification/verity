@@ -1,8 +1,8 @@
 """`stage.py`'s MoE and plain all-reduce populations, and the step's op coverage, on an in-memory capture: the w13 launch is
 staged beside the routed w2 one, each pair reading its own A row (the w13 launch its token's); a plain all-reduce with no
 multimem op inside it is FlashInfer's MNNVL one within 0.5 MiB, at its shot, and NCCL's past it; a multimem one binds the
-node's reduction tree, which capture.py's settings carry; an op inside an ungated op is listed as not gated, and one inside a
-gated op is not."""
+node's reduction tree, which capture.py's settings carry; the router's grouped top-k, ``silu_and_mul`` and ``moe_sum`` are gated
+per row; an op inside an ungated op is listed as not gated, and one inside a gated op is not."""
 from __future__ import annotations
 
 import importlib.util
@@ -151,11 +151,83 @@ def test_capture_site_writes_the_nodes_tree_into_its_settings(tmp_path, monkeypa
         cap.reduction_tree("((0,2),2)")
 
 
+def _bf16(f) -> np.ndarray:
+    u = np.asarray(f, np.float32).view(np.uint32).astype(np.uint64)
+    return ((u + 0x7FFF + ((u >> 16) & 1)) >> 16).astype(np.uint16)
+
+
+def _f32(b) -> np.ndarray:
+    return (np.asarray(b, np.uint16).astype(np.uint32) << 16).view(np.float32)
+
+
+ROUTER = 'MoeRouterSigmoidBias_v1{E=256,TOPK=2,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}'
+
+
+def _moe_ops_cap(stage, scoring_func: int = 1) -> tuple[_Cap, np.ndarray]:
+    """grouped_topk, silu_and_mul and moe_sum on 2 token rows: the router's outputs its Definition's, the others' numpy models
+    of vLLM's kernels. Returns the capture and numpy's top-2 experts of each row."""
+    import a11
+    rng = np.random.default_rng(3)
+    t: dict = {}
+    E, K, Hd, Id = 256, 2, 8, 8
+    logits = rng.standard_normal((2, E)).astype(np.float32)
+    bias = (rng.standard_normal(E) * 0.01).astype(np.float32)
+    sig = (1 / (1 + np.exp(-logits.astype(np.float64)))).astype(np.float32)
+    top = np.argsort(-(sig + bias), axis=1, kind="stable")[:, :K]
+    spec = stage.block_fn(ROUTER)
+    out = np.stack([np.asarray([int(x) for x in a11.evaluate_units(spec, spec, [stage.words(lg), stage.words(bias)], 1,
+                                                                   4_000_000)["call_out"]], np.uint32) for lg in logits])
+    w, ids = out[:, :K].view(np.float32), out[:, K:].view(np.int32)
+    gu = _bf16(rng.standard_normal((2 * K, 2 * Id)).astype(np.float32) * 3)
+    g, u = _f32(gu[:, :Id]), _f32(gu[:, Id:])
+    act = _bf16(_f32(_bf16(g / (np.float32(1) + np.exp(-g)))) * u)
+    y = _bf16(rng.standard_normal((2, K, Hd)).astype(np.float32))
+    acc = np.zeros((2, Hd), np.float32)
+    for k in range(K):
+        acc = (acc + _f32(y[:, k])).astype(np.float32)
+    ev = [{"seq": 0, "op": "_moe_C::grouped_topk", "parent": None, "layer": 5,
+           "in": {"scores": _ref(t, 0, "logits", logits), "bias": {**_ref(t, 0, "bias", bias), "dtype": "torch.float32"},
+                  "n_group": 1, "topk_group": 1, "topk": K, "renormalize": True, "routed_scaling_factor": 2.5,
+                  "scoring_func": scoring_func},
+           "out": {"ret0": _ref(t, 0, "w", w), "ret1": _ref(t, 0, "ids", ids)}},
+          {"seq": 1, "op": "_C::silu_and_mul", "parent": None, "layer": 5,
+           "in": {"input": {**_ref(t, 0, "gu", gu), "dtype": "torch.bfloat16"}}, "out": {"result": _ref(t, 0, "act", act)}},
+          {"seq": 2, "op": "_moe_C::moe_sum", "parent": None, "layer": 5,
+           "in": {"input": {**_ref(t, 0, "y", y), "dtype": "torch.bfloat16"}, "expert_map": None},
+           "out": {"output": _ref(t, 0, "sum", _bf16(acc))}}]
+    ev[0]["in"]["scores"]["dtype"] = "torch.float32"
+    return _Cap([0], {0: ev}, t, cells=((1,),)), top
+
+
+def test_the_router_top_k_silu_and_mul_and_moe_sum_are_gated_per_row(monkeypatch) -> None:
+    stage = _stage(monkeypatch)
+    cap, top = _moe_ops_cap(stage)
+    insts = [*stage.router_instances(cap), *stage.silu_mul_instances(cap), *stage.moe_sum_instances(cap)]
+    assert [(i[0], i[2]) for i in insts] == [("MoeRouterSigmoidBias_E256_TOPK2_block", (0, 0, 1)), ("SiluMul_I8", (0, 1, 1)),
+                                             ("MoeSum_TOPK2_H8", (0, 2, 1))]
+    assert insts[0][1] == ROUTER and insts[0][4]()[1].tolist() == top[1].tolist()
+    for label, block, key, args_of, want_of in insts:
+        g, _ = stage.gate_instance(stage.block_fn(block), key, args_of, want_of, 4_000_000)
+        assert g["agree"] is True, (label, g)
+    cap.t[(0, "sum")] = cap.t[(0, "sum")].copy()
+    cap.t[(0, "sum")][1, 3] ^= 1
+    _, block, key, args_of, want_of = insts[2]
+    assert stage.gate_instance(stage.block_fn(block), key, args_of, want_of, 4_000_000)[0]["first_diff"] == 3
+
+
+def test_a_router_off_the_sigmoid_one_group_form_is_counted_not_staged(monkeypatch) -> None:
+    stage = _stage(monkeypatch)
+    cap, _ = _moe_ops_cap(stage, scoring_func=0)
+    unstaged: dict = {}
+    assert list(stage.router_instances(cap, unstaged)) == []
+    assert unstaged["MoeRouter_E256"]["population"] == 2 and unstaged["MoeRouter_E256"]["calls"][0]["args"][3] == 0
+
+
 def test_op_coverage_lists_ops_inside_an_ungated_op_and_not_inside_a_gated_one(monkeypatch) -> None:
     stage = _stage(monkeypatch)
-    ev = [{"seq": 0, "op": "vllm::moe_forward_shared", "parent": None}, {"seq": 1, "op": "_moe_C::grouped_topk", "parent": 0},
+    ev = [{"seq": 0, "op": "vllm::moe_forward_shared", "parent": None}, {"seq": 1, "op": "_moe_C::moe_align_block_size", "parent": 0},
           {"seq": 2, "op": "moe_launch", "parent": 0}, {"seq": 3, "op": "vllm::all_reduce", "parent": None},
           {"seq": 4, "op": "symm_mem::multimem_all_reduce_", "parent": 3}, {"seq": 5, "op": "aten::copy_", "parent": 4}]
     gated, other = stage.op_coverage(_Cap([0, 1], {0: ev, 1: ev}, {}))
     assert gated == {"moe_launch": 2, "vllm::all_reduce": 2}
-    assert other == {"_moe_C::grouped_topk": 2, "vllm::moe_forward_shared": 2}
+    assert other == {"_moe_C::moe_align_block_size": 2, "vllm::moe_forward_shared": 2}
