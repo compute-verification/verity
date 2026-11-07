@@ -167,7 +167,6 @@
     {"file": "tools/research/tests/test_oom_order.py", "count": 6},
     {"file": "tools/research/tests/test_pod_guard_daemon.py", "count": 1},
     {"file": "tools/research/tests/test_pods_part.py", "count": 1},
-    {"file": "tools/research/tests/test_queue_drive.py", "count": 5},
     {"file": "tools/research/tests/test_record_result.py", "count": 1},
     {"file": "tools/research/tests/test_remote_cwd.py", "count": 1},
     {"file": "tools/research/tests/test_remote_local.py", "count": 7},
