@@ -4,7 +4,7 @@ A unit is one node of a body: a Call, a primitive, a batch or a scan. It is live
 or a live unit's arguments do; a unit no live unit or return reads is dead, whatever its gates compute. This is the unit level of
 circuit-check's dead-gates property (`verity.ml.circuits.liveness`, transitive), which also counts the gates no output reads inside
 a live unit. `without_dead_units` drops the dead units and renumbers the references to the rest, each reference kept in its form
-(an `Affine` stays an `Affine`, a `Concat` keeps its parts), so that equal bodies stay equal.
+(an `Affine` stays an `Affine`, a `Concat` keeps its parts, a cut of a `PartLog` stays a cut), so that equal bodies stay equal.
 
 `dead_free` also swaps each Call of a Definition with dead gates inside it for its version without them (`dead_free_versions`,
 `registry.dead_free`): the same statics, signature and function, so only the node's gates change. And it narrows each linear
@@ -15,21 +15,60 @@ under the Build's `--dead-free` (`build_program(dead_free=True)`): the registere
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 from functools import cache
+from itertools import chain, islice
 from typing import Any
 
 from verity.ml.circuits.defs import Body, Node, bind
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided
+from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided
 
 
-def _read(r: Refs, out: set[int]) -> None:
+def _parts(r: Concat, done: dict[int, list]) -> Iterable[Refs]:
+    """The parts of `r` a walk that accumulates (a union, idempotent) has yet to visit: for a `Concat` cut from a `PartLog`, the
+    log's parts past the longest cut of it the walk has visited (`done`, by log), then its own. An attention's key sequence is the
+    one before it plus a row, so a walk over a layer's cuts visits each of its parts once, not once per row."""
+    if r.prefix is None:
+        return r.parts
+    log, j = r.prefix
+    d = done.get(id(log))
+    if d is None or d[0] is not log:
+        d = done[id(log)] = [log, 0]
+    lo, d[1] = d[1], max(d[1], j)
+    return chain(islice(log.parts, lo, j), r.parts[j:])
+
+
+def _mapped(r: Concat, f: Callable[[Refs], Refs], logs: dict[int, list]) -> Refs:
+    """`Concat` of `f` of each part of `r`, or `r` itself when `f` changes none. A `Concat` cut from a `PartLog` stays a cut, of the
+    log of the log's parts under `f` (`logs`, by log), which maps each part once; a plain `Concat` keeps its parts as they are."""
+    if r.prefix is None:
+        parts = [f(p) for p in r.parts]
+        return r if all(p is q for p, q in zip(parts, r.parts)) else Concat(parts)
+    log, j = r.prefix
+    st = logs.get(id(log))
+    if st is None or st[0] is not log:
+        st = logs[id(log)] = [log, PartLog(), None]   # the log, its parts under f, the first part f changes
+    sub = st[1]
+    for i in range(len(sub), j):
+        p = log.parts[i]
+        q = f(p)
+        if q is not p and st[2] is None:
+            st[2] = i
+        sub.append(q)
+    tail = [f(p) for p in r.parts[j:]]
+    if (st[2] is None or st[2] >= j) and all(p is q for p, q in zip(tail, r.parts[j:])):
+        return r
+    return sub.raw_cut(j, tail)
+
+
+def _read(r: Refs, out: set[int], done: dict[int, list]) -> None:
     if isinstance(r, (Affine, Strided)):
         if r.space == "n" and r.count:
             out.add(r.idx)
     elif isinstance(r, Concat):
-        for p in r.parts:
-            _read(p, out)
+        for p in _parts(r, done):
+            _read(p, out, done)
     elif isinstance(r, Explicit):
         out.update(i for s, i, _ in r.items if s == "n")
     else:
@@ -38,13 +77,13 @@ def _read(r: Refs, out: set[int]) -> None:
 
 def live_units(body: Body) -> list[bool]:
     """Per node of `body`, whether the return reads it through live nodes (a node reads only earlier nodes)."""
-    live, read = [False] * len(body.nodes), set()
-    _read(body.ret, read)
+    live, read, done = [False] * len(body.nodes), set(), {}
+    _read(body.ret, read, done)
     for k in range(len(body.nodes) - 1, -1, -1):
         if k in read:
             live[k] = True
             for a in body.nodes[k].args:
-                _read(a.refs, read)
+                _read(a.refs, read, done)
     return live
 
 
@@ -53,7 +92,7 @@ def dead_units(body: Body) -> list[int]:
     return [k for k, v in enumerate(live_units(body)) if not v]
 
 
-def _renumbered(r: Refs, new: list[int], memo: dict[int, Refs]) -> Refs:
+def _renumbered(r: Refs, new: list[int], memo: dict[int, Refs], logs: dict[int, list]) -> Refs:
     if (hit := memo.get(id(r))) is not None:
         return hit
     if isinstance(r, Affine):
@@ -62,8 +101,7 @@ def _renumbered(r: Refs, new: list[int], memo: dict[int, Refs]) -> Refs:
         out = (Strided("n", new[r.idx], r.base, r.inner, r.outer_stride, r.inner_stride, r.count)
                if r.space == "n" and r.count and new[r.idx] != r.idx else r)
     elif isinstance(r, Concat):
-        parts = [_renumbered(p, new, memo) for p in r.parts]
-        out = r if all(p is q for p, q in zip(parts, r.parts)) else Concat(parts)
+        out = _mapped(r, lambda p: _renumbered(p, new, memo, logs), logs)
     elif isinstance(r, Explicit):
         items = tuple((s, new[i] if s == "n" else i, j) for s, i, j in r.items)
         out = r if items == r.items else Explicit(items)
@@ -82,9 +120,10 @@ def without_dead_units(body: Body) -> tuple[Body, list[int]]:
     for i, k in enumerate(kept):
         new[k] = i
     memo: dict[int, Refs] = {}
+    logs: dict[int, list] = {}
 
     def coll(a: Coll) -> Coll:
-        r = _renumbered(a.refs, new, memo)
+        r = _renumbered(a.refs, new, memo, logs)
         return a if r is a.refs else Coll(a.type, r)
 
     nodes, offsets = [], [0]
@@ -92,7 +131,7 @@ def without_dead_units(body: Body) -> tuple[Body, list[int]]:
         n = body.nodes[k]
         nodes.append(replace(n, args=tuple(coll(a) for a in n.args)))
         offsets.append(offsets[-1] + n.gates)
-    return Body(body.params, body.ret_type, nodes, _renumbered(body.ret, new, memo), offsets), kept
+    return Body(body.params, body.ret_type, nodes, _renumbered(body.ret, new, memo, logs), offsets), kept
 
 
 @cache
@@ -125,7 +164,7 @@ def _widen(span: list[int], lo: int, hi: int) -> None:
     span[0], span[1] = min(span[0], lo), max(span[1], hi)
 
 
-def _reach(r: Refs, spans: dict[int, list[int]], full: dict[int, int], seen: set[int]) -> None:
+def _reach(r: Refs, spans: dict[int, list[int]], full: dict[int, int], seen: set[int], done: dict[int, list]) -> None:
     """Widen `spans[k]` ([least, past the greatest) leaf read) by the leaves `r` reads of each node k it holds."""
     if id(r) in seen:
         return
@@ -141,8 +180,8 @@ def _reach(r: Refs, spans: dict[int, list[int]], full: dict[int, int], seen: set
             last = [r.count - 1] + ([(r.count - 1) // r.inner * r.inner - 1] if r.count > r.inner else [])
             _widen(spans[r.idx], r.base, max(r[j][2] for j in last) + 1)
     elif isinstance(r, Concat):
-        for p in r.parts:
-            _reach(p, spans, full, seen)
+        for p in _parts(r, done):
+            _reach(p, spans, full, seen, done)
     elif isinstance(r, Explicit):
         for s, i, j in r.items:
             if s == "n" and i in spans:
@@ -151,7 +190,7 @@ def _reach(r: Refs, spans: dict[int, list[int]], full: dict[int, int], seen: set
         raise TypeError(f"a reference sequence of an unknown form, {type(r).__name__}")
 
 
-def _shifted(r: Refs, by: dict[int, int], memo: dict[int, Refs]) -> Refs:
+def _shifted(r: Refs, by: dict[int, int], memo: dict[int, Refs], logs: dict[int, list]) -> Refs:
     """`r` with each leaf of a node k in `by` moved down by `by[k]`, each reference kept in its form."""
     if (hit := memo.get(id(r))) is not None:
         return hit
@@ -161,8 +200,7 @@ def _shifted(r: Refs, by: dict[int, int], memo: dict[int, Refs]) -> Refs:
         out = (Strided("n", r.idx, r.base - by[r.idx], r.inner, r.outer_stride, r.inner_stride, r.count)
                if r.space == "n" and r.count and r.idx in by else r)
     elif isinstance(r, Concat):
-        parts = [_shifted(p, by, memo) for p in r.parts]
-        out = r if all(p is q for p, q in zip(parts, r.parts)) else Concat(parts)
+        out = _mapped(r, lambda p: _shifted(p, by, memo, logs), logs)
     elif isinstance(r, Explicit):
         items = tuple((s, i, j - by[i]) if s == "n" and i in by else (s, i, j) for s, i, j in r.items)
         out = r if items == r.items else Explicit(items)
@@ -181,10 +219,11 @@ def narrowed(body: Body) -> tuple[Body, dict[int, tuple[int, int]]]:
     full = {k: n.out.leaves for k, n in cand.items()}
     spans = {k: [full[k], 0] for k in cand}
     seen: set[int] = set()
+    done: dict[int, list] = {}
     for n in body.nodes[min(cand) + 1:]:
         for a in n.args:
-            _reach(a.refs, spans, full, seen)
-    _reach(body.ret, spans, full, seen)
+            _reach(a.refs, spans, full, seen, done)
+    _reach(body.ret, spans, full, seen, done)
     cols, by, nodes = {}, {}, list(body.nodes)
     for k, n in cand.items():
         N = n.fn.bindings["N"]
@@ -201,15 +240,16 @@ def narrowed(body: Body) -> tuple[Body, dict[int, tuple[int, int]]]:
     if not cols:
         return body, {}
     memo: dict[int, Refs] = {}
+    logs: dict[int, list] = {}
     for k in range(min(cols) + 1, len(nodes)):
         n = nodes[k]
-        args = tuple(Coll(c.type, r) if (r := _shifted(c.refs, by, memo)) is not c.refs else c for c in n.args)
+        args = tuple(Coll(c.type, r) if (r := _shifted(c.refs, by, memo, logs)) is not c.refs else c for c in n.args)
         if any(x is not y for x, y in zip(args, n.args)):
             nodes[k] = replace(n, args=args)
     offsets = [0]
     for n in nodes:
         offsets.append(offsets[-1] + n.gates)
-    return Body(body.params, body.ret_type, nodes, _shifted(body.ret, by, memo), offsets), cols
+    return Body(body.params, body.ret_type, nodes, _shifted(body.ret, by, memo, logs), offsets), cols
 
 
 def _dead_free(body: Body) -> tuple[Body, list[int], dict[int, tuple[int, int]]]:

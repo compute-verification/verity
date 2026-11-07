@@ -20,7 +20,7 @@ from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops.prims import BF16
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Strided
+from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided
 from verity.ml.circuits.types import Array
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
@@ -113,7 +113,7 @@ def test_each_reference_is_renumbered_in_its_own_form():
     s = Strided("n", 4, 1, 2, 8, 1, 6)
     e = Explicit((("n", 4, 0), ("p", 4, 1), ("n", 2, 3)))
     c = Concat([Affine("n", 0, 0, 2), Concat([s, e])])
-    got = {k: _renumbered(r, new, memo) for k, r in {"a": a, "p": p, "empty": empty, "s": s, "e": e, "c": c}.items()}
+    got = {k: _renumbered(r, new, memo, {}) for k, r in {"a": a, "p": p, "empty": empty, "s": s, "e": e, "c": c}.items()}
     assert got["p"] is p and got["empty"] is empty
     assert got["a"].to_json() == Affine("n", 1, 5, 3).to_json()
     assert type(got["s"]) is Strided and got["s"].to_json() == Strided("n", 2, 1, 2, 8, 1, 6).to_json()
@@ -121,11 +121,33 @@ def test_each_reference_is_renumbered_in_its_own_form():
     assert type(got["c"]) is Concat and type(got["c"].parts[1]) is Concat and got["c"].parts[0] is c.parts[0]
     assert got["c"].parts[1].parts == [got["s"], got["e"]]
     unchanged = Concat([Affine("n", 0, 0, 2), p])
-    assert _renumbered(unchanged, new, memo) is unchanged
+    assert _renumbered(unchanged, new, memo, {}) is unchanged
     read: set[int] = set()
-    _read(c, read)
-    _read(empty, read)
+    _read(c, read, {})
+    _read(empty, read, {})
     assert read == {0, 2, 4}
+
+
+def test_an_attentions_key_sequences_renumber_as_cuts_of_one_renumbered_log():
+    """The cuts of one `PartLog` (an attention's key rows, each call's one row longer) renumber as cuts of one log of the renumbered
+    parts, each part renumbered once and each cut with the parts a plain `Concat`'s renumbering has; a cut none of whose parts
+    moves is itself. Liveness reads a log's parts once over all its cuts."""
+    log = PartLog()
+    for k in (0, 2, 4, 6):
+        log.append(Affine("n", k, 0, 2))
+    cuts = [log.cut(j) for j in (2, 3, 4)] + [log.cut(3, [Affine("n", 7, 0, 1)])]
+    assert all(c.prefix is not None for c in cuts)
+    new = [0, 1, 2, 3, 3, 4, 5, 6]  # node 3 dead: 4, 6 and 7 become 3, 5 and 6
+    memo, logs = {}, {}
+    got = [_renumbered(c, new, memo, logs) for c in cuts]
+    assert got[0] is cuts[0] and got[1].prefix[0] is got[2].prefix[0] is got[3].prefix[0] is not log
+    assert got[1].parts[0] is log.parts[0] and got[3].parts[2] is got[2].parts[2]
+    for c, g in zip(cuts, got):
+        assert [p.to_json() for p in g.parts] == [p.to_json() for p in _renumbered(Concat(list(c.parts)), new, {}, {}).parts]
+    read, done = set(), {}
+    for g in reversed(got):
+        _read(g, read, done)
+    assert read == {0, 2, 3, 5, 6}
 
 
 DOT = G.GEMM_HOPPER["DOT"]
