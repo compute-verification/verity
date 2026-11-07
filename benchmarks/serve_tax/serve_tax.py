@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import json
 import math
 import os
@@ -57,6 +58,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -81,6 +83,15 @@ class Arm:
     args: tuple[str, ...] = ()
     plugin: tuple[str, ...] = ()
     tick: bool = False
+    #: the corpus's sampling (`corpus.SAMPLING`) and whether each request asks for its sampled tokens' logprobs
+    sampling: str = "greedy"
+    logprobs: bool = False
+    #: a replay block's boundary state taken at each of ``--edges-s`` (`servetax_plugin.edges_of`), whether each edge
+    #: also dumps every leaf of the engine core's state for the restore's check (`boundary.dump_core`), and whether each
+    #: step's GPU busy time is timed for the replay's comparison (`boundary.Busy`)
+    edges: bool = False
+    edge_dump: bool = True
+    edge_busy: bool = True
 
 
 ARMS = {
@@ -92,7 +103,22 @@ ARMS = {
     "tokens": Arm("tick", "+ each window's tokens committed (rows-sha512)", plugin=("record", "tokens"), tick=True),
     "kv": Arm("tokens", "+ the paged KV cache hashed in place at each window edge", plugin=("record", "tokens", "kv"),
               tick=True),
+    "restore-base": Arm("record", "+ seeded sampling, each sampled token's logprob returned", plugin=("record",),
+                        sampling="seeded", logprobs=True),
+    "restore-pause": Arm("restore-base", "+ a replay block's boundary state taken at each edge (drained, copied, hashed, "
+                         "kept), as a server would: no leaf dump, no per-step timing", plugin=("record",), sampling="seeded",
+                         logprobs=True, edges=True, edge_dump=False, edge_busy=False),
+    "restore": Arm("restore-base", "+ a replay block's boundary state taken at each edge (drained, copied, hashed, kept) "
+                   "and every leaf of the engine core's state dumped there for the restore's check",
+                   plugin=("record",), sampling="seeded", logprobs=True, edges=True),
+    "restore-unseeded": Arm("restore", "the restore arm with requests that carry no seed",
+                            plugin=("record",), sampling="unseeded", logprobs=True, edges=True),
 }
+#: what every request's body adds to the corpus's (`corpus`), set by `run` from its arm
+BODY_EXTRA: dict = {}
+#: the corpus's seeded sampling without the request's seed, as production clients send it: vLLM then draws each
+#: request's seed from the engine's numpy generator when the request reaches the model runner
+UNSEEDED = "unseeded"
 
 
 @dataclass(frozen=True)
@@ -128,10 +154,18 @@ def corpus():
     import corpus as C
 
     if not getattr(C, "_serve_tax", False):
-        body = C.request_body
-        C.request_body = lambda served, r, rid, sampling: {**body(served, r, rid, sampling), "ignore_eos": True}
+        C.request_body = functools.partial(serve_body, C.request_body)
         C._serve_tax = True
     return C
+
+
+def serve_body(body: Callable[..., dict], served: str, r: dict, rid: str, sampling: str) -> dict:
+    """The corpus's request body (``body``) as the serve tax sends it: decoding to its cap, with `BODY_EXTRA`, and under
+    `UNSEEDED` the seeded sampling's parameters without the request's seed."""
+    b = body(served, r, rid, "seeded" if sampling == UNSEEDED else sampling)
+    if sampling == UNSEEDED:
+        b.pop("seed", None)
+    return {**b, "ignore_eos": True, **BODY_EXTRA}
 
 
 # --------------------------------------------------------------------------------------------------------- the server
@@ -148,19 +182,21 @@ def plugin_site(site: Path, tick: bool) -> Path:
     return site
 
 
-def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int) -> list[str]:
+def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blocks: int | None = None) -> list[str]:
     return [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(checkpoint), "--served-model-name",
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *BASE_ARGS, *arm.args,
+            *(["--num-gpu-blocks-override", str(num_gpu_blocks)] if num_gpu_blocks else []),
             *(["--middleware", TICK_MIDDLEWARE] if arm.tick else [])]
 
 
-def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float) -> dict[str, str]:
+def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
+               edges: dict | None = None) -> dict[str, str]:
     env = dict(os.environ, VLLM_SERVER_DEV_MODE="1",
                PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
                                            *SHARED.PYTHONPATH]))
     if arm.plugin:
         env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s, "kv_window_s": kv_window_s,
-                                      **{k: True for k in arm.plugin}})
+                                      **{k: True for k in arm.plugin}, **(edges if arm.edges and edges else {})})
     if arm.tick:
         if tick is None:
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
@@ -262,7 +298,7 @@ def parse_rates(text: str) -> dict[str, float]:
 # ------------------------------------------------------------------------------------------------------------ run
 
 def drive_load(port: int, served: str, plan: list[dict], rate: float, span_s: float, tag: str, d: Path, drain_s: float,
-               tick: dict | None, requests: int | None = None) -> dict:
+               tick: dict | None, requests: int | None = None, sampling: str = "greedy") -> dict:
     """One load: the plan's first requests under Poisson arrivals at ``rate`` for ``span_s`` (or ``requests`` of them),
     sent by `corpus.drive`; its client records in d/client.jsonl."""
     C = corpus()
@@ -272,7 +308,7 @@ def drive_load(port: int, served: str, plan: list[dict], rate: float, span_s: fl
     reqs, arr = plan[:k], arr[:k]
     ids = [f"{tag}-{r['i']:05d}" for r in reqs]
     t = time.monotonic()
-    got = asyncio.run(C.drive(port, served, reqs, arr, ids, d / "client.jsonl", drain_s, "greedy",
+    got = asyncio.run(C.drive(port, served, reqs, arr, ids, d / "client.jsonl", drain_s, sampling,
                               *([tick["bucket_us"] / 1e6] if tick else [])))
     meta = {"tag": tag, "rate": rate, "span_s": span_s, "requests": k, "arrivals_span_s": round(arr[-1], 3),
             "wall_s": round(time.monotonic() - t, 3), **got}
@@ -317,30 +353,42 @@ def run(a: argparse.Namespace) -> int:
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm.tick)
     port = corpus().free_port()
-    argv = server_argv(arm, model, checkpoint, port)
+    argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks)
+    BODY_EXTRA.clear()
+    BODY_EXTRA.update({"logprobs": 0} if arm.logprobs else {})
+    edges = None
+    if arm.edges:
+        if not a.edges_s:
+            raise SystemExit(f"arm {a.arm} takes the boundary state at --edges-s S,S,...")
+        edges = {"edges_s": [float(x) for x in a.edges_s.split(",")], "edge_tag": f"-{next(iter(rates))}1-",
+                 "save_kv": [int(x) for x in a.save_kv.split(",")], "kv_dir": str(Path(a.kv_dir) / a.arm) if a.kv_dir else None,
+                 "dump": arm.edge_dump, "busy": arm.edge_busy}
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "plugin": list(arm.plugin), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
-            "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "versions": versions(), "host": os.uname().nodename,
+            "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "sampling": arm.sampling, "logprobs": arm.logprobs, "edges": edges,
+            "versions": versions(), "host": os.uname().nodename,
             "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "open_files": nofile, "loads": []}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     t = time.monotonic()
     with open(srv / "server.log", "wb") as log:
-        server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=server_env(arm, srv, site, tick, a.window_s, a.kv_window_s),
-                                  start_new_session=True)
+        server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT,
+                                  env=server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, edges), start_new_session=True)
     rc = 0
     try:
         wait_ready(server, port, a.startup_s)
         meta["startup_s"] = round(time.monotonic() - t, 1)
         print(f"[serve-tax] {a.arm}: up in {meta['startup_s']} s", flush=True)
         if a.warm_s > 0:
-            w = drive_load(port, model.served, plan, min(rates.values()), a.warm_s, "warm", out / "warm", a.drain_s, tick)
+            w = drive_load(port, model.served, plan, min(rates.values()), a.warm_s, "warm", out / "warm", a.drain_s, tick,
+                           sampling=arm.sampling)
             print(f"[serve-tax] warm-up: {w['requests']} requests, unfinished {w['unfinished']}", flush=True)
         for rep in range(1, a.reps + 1):
             for name, rate in rates.items():
                 ok = reset_prefix_cache(port)
                 d = out / name / f"rep-{rep}"
-                m = drive_load(port, model.served, plan, rate, a.span_s, f"{name}{rep}", d, a.drain_s, tick, a.requests)
+                m = drive_load(port, model.served, plan, rate, a.span_s, f"{name}{rep}", d, a.drain_s, tick, a.requests,
+                               arm.sampling)
                 m |= {"load": name, "rep": rep, "prefix_cache_reset": ok}
                 (d / "meta.json").write_text(json.dumps(m, indent=1))
                 meta["loads"].append({k: m[k] for k in ("load", "rep", "rate", "requests", "unfinished", "wall_s", "t0_unix")})
@@ -474,6 +522,37 @@ def load_metrics(recs: list[dict], slo: tuple[float, float]) -> dict:
             "tpot_p99_s": pct(tpots, 0.99)}
 
 
+def edge_cost(recs: list[dict], windows: list[tuple[float, float]], before_s: float = 10.0) -> list[dict]:
+    """What a load's client saw around each of ``windows`` (an edge's start and pause, in the load's seconds; a record's
+    chunk times count from its send): the requests streaming across it (sent before it, done after it) and the longest
+    gap between consecutive chunks that overlaps it, each request's; and the TTFT of the requests sent from ``before_s``
+    before it to its end. Given another arm's records and the same windows, the same requests at the same moments without
+    the edge."""
+    ok = served_records(recs)
+    out = []
+    for t, pause in windows:
+        gaps = []
+        for r in ok:
+            if r["send_s"] < t < r["send_s"] + r["done_s"]:
+                ts = [r["send_s"], *(r["send_s"] + c[0] for c in r["chunks"])]
+                gaps.append(max((b - a for a, b in zip(ts, ts[1:]) if b >= t and a <= t + pause), default=0.0))
+        ttft = [r["first_token_s"] for r in ok
+                if t - before_s <= r["send_s"] <= t + pause and r.get("first_token_s") is not None]
+        out.append({"t_s": t, "pause_s": pause, "in_flight": len(gaps), "gap_p50_s": pct(gaps, 0.5),
+                    "gap_max_s": max(gaps, default=None), "sent": len(ttft), "ttft_p50_s": pct(ttft, 0.5),
+                    "ttft_p99_s": pct(ttft, 0.99), "ttft_max_s": max(ttft, default=None)})
+    return out
+
+
+def edge_windows(arm_dir: Path, load: str, rep: int = 1) -> list[tuple[float, float]]:
+    """A restore arm's edges as `edge_cost` windows in ``load``'s rep ``rep``'s seconds: each from its drain's end, as
+    long as its pause."""
+    t0 = json.loads((arm_dir / load / f"rep-{rep}" / "meta.json").read_text())["t0_unix"]
+    recs = [json.loads(x) for f in sorted((arm_dir / "server").glob("edges.*.jsonl"))
+            for x in f.read_text().splitlines() if x.strip()]
+    return [(r["drained_unix"] - t0, r["pause_s"]) for r in sorted((r for r in recs if "next_step" in r), key=lambda r: r["edge"])]
+
+
 def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
     """An arm's run dir: its meta and each load's metrics by rep."""
     meta = json.loads((d / "meta.json").read_text())
@@ -601,6 +680,10 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--tick-from", metavar="STEP_TRACE|RECORD_DIR", help="τ for the tick arms (ignored by the others)")
     r.add_argument("--tick-ms", metavar="SAT,FREE")
+    r.add_argument("--num-gpu-blocks", type=int, help="the KV pool's blocks (vLLM's --num-gpu-blocks-override)")
+    r.add_argument("--edges-s", metavar="S,S,...", help="the restore arms' edges, seconds after the first load's first request")
+    r.add_argument("--save-kv", default="0", metavar="K,...", help="the edges whose KV bytes and state a restore arm keeps")
+    r.add_argument("--kv-dir", help="where a restore arm keeps them, in a directory named for the arm (default: its server/edges)")
     r.add_argument("--out", required=True)
     pl = sub.add_parser("plan", help="make the plan a job's arms share, before any GPU is held")
     for flag in ("--model-id", "--checkpoint", "--c4", "--rates", "--out"):
@@ -619,7 +702,20 @@ def main(argv: list[str] | None = None) -> int:
     k = sub.add_parser("tick")
     k.add_argument("source", metavar="STEP_TRACE|RECORD_DIR")
     k.add_argument("--load", default="saturated")
+    e = sub.add_parser("edges", help="each edge of a restore arm as its client saw it, beside other arms at the same moments")
+    e.add_argument("arm", type=Path)
+    e.add_argument("others", nargs="*", type=Path)
+    e.add_argument("--load", default="medium")
+    e.add_argument("--rep", type=int, default=1)
     a = ap.parse_args(argv)
+    if a.cmd == "edges":
+        windows = edge_windows(a.arm, a.load, a.rep)
+        for d in (a.arm, *a.others):
+            f = d / a.load / f"rep-{a.rep}" / "client.jsonl"
+            recs = [json.loads(x) for x in f.read_text().splitlines() if x.strip()]
+            for k_, row in enumerate(edge_cost(recs, windows)):
+                print(json.dumps({"arm": d.name, "edge": k_, **row}))
+        return 0
     if a.cmd == "run":
         return run(a)
     if a.cmd == "plan":
