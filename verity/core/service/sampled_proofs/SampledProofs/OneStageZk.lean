@@ -29,8 +29,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   is verified. v1's R2 holds only their count, and the session's knowledge soundness reads slot `u` as proof block `u`;
 * **member** (`memberOf`): the member the session's statement is, found from the draw: the layout's member whose units
   `[base, base + n)` hold every unit the draw proves (`Draw.proved`, which v1's `checkAt` holds to the challenger's
-  coins), never a member the case names. The layout's counts must sum to the record's population, and a draw that
-  proves units of two members, or of none, refuses, before any session is verified;
+  coins), never a member the case names. The layout's counts must sum to the record's population, a draw that proves
+  units of two members, or of none, refuses, and so does a member whose units are not within one template's units
+  under the verifier's program and query, keyed by that template (`memberInProgram`), before any session is verified;
 * **public** (`publicHeld`): the public file's header held to that member's slice of the commitment's registration
   (`sliceOf`, `memberCodes`, `Record.matchesPublic`'s codes on it): its scheme the record's, its ports exactly the
   registered ports under `key/`, matched by whole path segment and named without that prefix, with their roots and
@@ -271,7 +272,8 @@ private def headerOf (pubB : ByteArray) : V Json := do
   let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
   Flock.norm <$> (Json.parse line).mapError (s!"the public file's header is not JSON: {·}")
 
-/-- The refusal of a draw that proves units of more than one member (`memberOf`): the case verifies one member's session. -/
+/-- The refusal of a draw that proves units of more than one member (`memberOf`): the case verifies one member's
+session. -/
 def ONE_MEMBER : String :=
   "the draw proves units outside one member of the layout: the case verifies one member's session"
 
@@ -297,6 +299,17 @@ def memberOf (members : Option (Array Member)) (record draw : Json) : V Member :
       throw s!"{ONE_MEMBER}: it proves unit {u} of member {m.key} and unit {v} of {other}"
     | none => pure m
 
+/-- Member `m` held to the verifier's program `v` (module docstring, **member**): its units lie in one template's units
+under the verifier's query (`Partition.evaluate`, whose ranges `popHeld` holds to the record's population), and its key
+is that template's or one of its chunks', `<template>/...`; the unkeyed member, the whole registration, holds. -/
+def memberInProgram (v : Registration.Verifier) (m : Member) : V Unit := do
+  if m.key.isEmpty then return
+  let rs ← (Partition.evaluate v.program v.query).mapError (s!"the program's ranges: {·}")
+  let named := fun (t : String) => m.key == t || (t ++ "/").toList.isPrefixOf m.key.toList
+  if !rs.any fun r => r.first ≤ m.base && m.base + m.n ≤ r.first + r.count && named r.template then
+    throw (s!"member {m.key}'s units [{m.base}, {m.base + m.n}) are not one template's units under the program's " ++
+      "query, keyed by that template")
+
 /-- The registration `rec`'s roots under member `key` (module docstring, **public**): each port registered as `key/p`,
 named `p`, with its last root (`Record.byPort`'s); every port, as named, for the unkeyed member `""`. The prefix ends at
 its `/`, so a slice takes whole path segments: member `T/c24` holds none of `T/c2436`'s ports. One pass over the roots. -/
@@ -310,15 +323,15 @@ def sliceOf (rec : Json) (key : String) : Std.HashMap String Json :=
     | _ => acc
 
 /-- `Record.matchesPublic`'s codes on member `m`'s slice of the registration `rec` (`sliceOf`), in its order: the
-header's `scheme` not the record's; its `frame_v3` `roots` not exactly the slice's ports with their roots (one missing,
-one extra, or one's root another); its `domain_ids` not exactly those ports with their domains; its `instances` not
-the member's count `n`. -/
+header's `scheme` not the record's; the slice empty, or the header's `frame_v3` `roots` not exactly its ports with their
+roots (one missing, one extra, or one's root another); its `domain_ids` not exactly those ports with their domains;
+its `instances` not the member's count `n`. -/
 def memberCodes (rec : Json) (m : Member) (scheme roots domains instances : Json) : Array String := Id.run do
   let s := sliceOf rec m.key
   let rs := entries roots
   let mut out := #[]
   if !jeq scheme (getD rec "scheme") then out := out.push "scheme"
-  if !(rs.size == s.size && rs.all fun (p, v) => (s.get? p).any fun r => jeq (getD r "root") v) then
+  if s.isEmpty || !(rs.size == s.size && rs.all fun (p, v) => (s.get? p).any fun r => jeq (getD r "root") v) then
     out := out.push "roots"
   if !((entries domains).size == s.size && s.toArray.all fun (p, r) => jeq (getD domains p) (getD r "domain")) then
     out := out.push "domains"
@@ -614,16 +627,19 @@ def popHeld (v : Registration.Verifier) (record : Json) : V Unit :=
 
 /-- The check at the coins `ξ` (module docstring, **check**): the evidence's one session (`oneSession`), its coins held
 to the trees the challenger logged (`treesOf`, `treesHeld`), the registration's population held to the program
-(`popHeld`), the member the draw lands in (`memberOf`), the parameters' public file held to that member's slice of the
-registration (`publicHeld`), then the session's verdict on the blobs, then v1's `checkAt` at `ξ` on it. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own
-`all` says it again, so an acceptance reads the run rather than the verdicts' JSON. -/
+(`popHeld`), the member the draw lands in (`memberOf`) held to the program (`memberInProgram`), the parameters' public
+file held to that member's slice of the registration (`publicHeld`), then the session's verdict on the blobs, then v1's
+`checkAt` at `ξ` on it. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own `all` says it
+again, so an acceptance reads the run rather than the verdicts' JSON. -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   let r : V Run := do
     oneSession e.sessions
     treesHeld (← treesOf p e) e bs
     popHeld p.base.verifier c.record
-    publicHeld c.record (← memberOf p.members c.record e.base.draw) (← bs.get p.own.pub "public file")
+    let m ← memberOf p.members c.record e.base.draw
+    memberInProgram p.base.verifier m
+    publicHeld c.record m (← bs.get p.own.pub "public file")
     run p.own e.sessions (some e.base.provedUnits) bs
   match r with
   | .error err => .reject s!"proofs: {err}"
@@ -782,6 +798,9 @@ private def header (roots domains : String) (instances : Nat) (indices : String)
 
 #guard refusal (publicHeld windowRecord c2436
   (header r#"{"x":"b1","y":"b2"}"# r#"{"x":"d2","y":"d2"}"# 3 "[2,3,4]")) == ""
+-- A member with no registered port holds no public file, an empty one neither.
+#guard refusal (publicHeld windowRecord { key := "V/c0", base := 0, n := 1 } (header "{}" "{}" 1 "[0]")) ==
+  "public file: not the registration's for member V/c0: roots"
 -- The wrong member: `T/c24`'s public file where the draw landed in `T/c2436`.
 #guard refusal (publicHeld windowRecord c2436 (header r#"{"x":"a1","y":"a2"}"# r#"{"x":"d1","y":"d1"}"# 2 "[0,1]")) ==
   "public file: not the registration's for member T/c2436: roots, domains, population"
