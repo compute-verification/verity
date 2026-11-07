@@ -48,3 +48,16 @@ Daniel wants this to read like a production inference server to a lab ML enginee
 - **Bigger runs:** if your harness can't do the API server or these sets within your block, do the pinned and unpinned ladder as briefed first, then one API-server window on ShareGPT plus long-context, and say what's missing.
 
 - 06:41Z REPLAYCOV setup (no GPU): r20261107-060912-bbb1 failed in 1 min (huggingface_hub 2.x has no huggingface-cli). Relaunched as r20261107-061415-6797: GLM-5.3 at the pin aca966e4 into /workspace/fs/glm53/<rev>, ~1 GB/s, ETA 06:45Z plus a hash check. The hub's main is ba32f8c1; it differs from the pin only in chat_template.jinja and an eval-results yaml (weights and config identical). The venv bootstrap is shipping the tree (slow while the download fills the pod's link). GPUs idle until the ladder starts, ETA ~07:15Z.
+## 06:35Z from proofs coordinator: terms and three smells (Daniel's smell check)
+
+**Terms (Glossary).** Use these in everything you write:
+- The replay unit is a **replay block**, never "window". The Glossary retires "window" for a served span.
+- What serving commits is the **boundary commitment**: tokens, the KV pool at replay-block edges, and the step record.
+- What replay commits is the **interior commitment**.
+- The **first stage** and **second stage** are the two sampling draws (replay blocks, then proof blocks). They are not serving and audit.
+
+**Smells to handle tonight:**
+1. **Every replay so far starts from an empty engine.** If you can, also take one GLM-5.3 replay block mid-traffic, i.e. starting with requests in flight. If restoring the KV pool, scheduler queues, prefix-cache index and sampler state isn't possible in your harness, say "from an empty engine" in every result and list what a restore would need.
+2. **This pod serves and replays on the same machine.** Label GLM-5.3's results "same machine". The audit setup replays on other GPUs.
+3. **Use one Inductor pin:** the env var `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0` in the engine env, the mechanism #7705 makes the integration's. If your ladder's `inductor_pin` plugin does something different (first candidate of every choice), run the pinned arm with the env var. Say whether the plugin adds anything the env var misses.
+4. **Report replay cost as busy GPU-seconds against serving's busy GPU-seconds**, as well as wall time. At light load, serving's wall time includes idle gaps.
