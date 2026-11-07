@@ -190,7 +190,7 @@ from verity.ml.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, bit_row, 
                                            sha512_row_seg_digest)
 from verity.ml.crypto import lms  # noqa: E402
 from verity.ml.protocols.certifier import egress as EG, ingress_scan as IS  # noqa: E402
-from verity.core.protocols.certifier import io_tie as IT, warden as W  # noqa: E402
+from verity.core.protocols.certifier import blocks as BK, io_tie as IT, warden as W  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, id_request  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
@@ -721,20 +721,20 @@ def _v3c_refused(window: Path, why: str) -> SystemExit:
 
 
 def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
-    """V3c's `SCAN_STATE` (`ingress_scan.SCAN_STATE`): its entry in its registration's window activations (the
+    """V3c's `SCAN_STATE` (`blocks.SCAN_STATE`): its entry in its registration's window activations (the
     ``window`` provenance window-commit writes: ``activations.values``), its rows and salts the prover's
     `SCAN_STATE_FILE`, under the domain that provenance gives (the window circuit's program and the window's run root,
     `registered.domain`), held to the entry's root and domain and to the scan's ``states``."""
     prov = rec.get("window") or {}
     acts = prov.get("activations") or {}
-    e = (acts.get("values") or {}).get(IS.SCAN_STATE)
-    if not e or e.get("value") != IS.SCAN_STATE:
-        raise _v3c_refused(window, f"its registration's window activations register no {IS.SCAN_STATE}")
+    e = (acts.get("values") or {}).get(BK.SCAN_STATE)
+    if not e or e.get("value") != BK.SCAN_STATE:
+        raise _v3c_refused(window, f"its registration's window activations register no {BK.SCAN_STATE}")
     n, W = int(e["leaves"]), int(e["words"])
     if n != len(states) or 16 * W != len(states[0]):
-        raise _v3c_refused(window, f"its {IS.SCAN_STATE} is {n} rows of {16 * W} bits, not the scan's {len(states)} "
+        raise _v3c_refused(window, f"its {BK.SCAN_STATE} is {n} rows of {16 * W} bits, not the scan's {len(states)} "
                                    f"of {len(states[0])}")
-    dom = REG.domain(acts.get("program", ""), IS.SCAN_STATE, W, n, window=prov.get("run"))
+    dom = REG.domain(acts.get("program", ""), BK.SCAN_STATE, W, n, window=prov.get("run"))
     data = (window / SCAN_STATE_FILE).read_bytes()
     if len(data) != n * (2 * W + ADV.INST.salt_bytes):
         raise _v3c_refused(window, f"{SCAN_STATE_FILE} is {len(data)} bytes, not {n} rows of {W} words and their salts")
@@ -743,9 +743,9 @@ def v3c_state(window: Path, rec: dict, states: list[list[int]]) -> Held:
                 tuple(data[at + step * t:at + step * (t + 1)] for t in range(n)))
     if (held.root.hex(), dom.domain_id.hex()) != (e["root"], e["domain"]):
         raise _v3c_refused(window, f"{SCAN_STATE_FILE} under its provenance's domain isn't its registered "
-                                   f"{IS.SCAN_STATE}'s root and domain")
+                                   f"{BK.SCAN_STATE}'s root and domain")
     if bad := [t for t in range(n) if words[t] != _words(states[t])]:
-        raise _v3c_refused(window, f"its {IS.SCAN_STATE} rows {bad[:4]} aren't the scan's (row t S_(t-1) from the "
+        raise _v3c_refused(window, f"its {BK.SCAN_STATE} rows {bad[:4]} aren't the scan's (row t S_(t-1) from the "
                                    "empty state of link-window 0): it scanned another warden run or link-window")
     return held
 

@@ -37,7 +37,7 @@ def v3c_window(d: Path, states: list[list[int]], entries: list[list[list[int]]])
     ``entries`` as its `SelectEntry_v1` chunk j's o0."""
     d.mkdir(parents=True)
     words = [sz._words(r) for r in states]
-    st = sz.REG.Registered.commit(PROGRAM, sz.IS.SCAN_STATE, words, schema=V2, window=RUN)
+    st = sz.REG.Registered.commit(PROGRAM, sz.BK.SCAN_STATE, words, schema=V2, window=RUN)
     (d / sz.SCAN_STATE_FILE).write_bytes(np.asarray(words, "<u2").tobytes() + b"".join(st.salts))
     members, roots = [{"k": 0, "name": "ScanSlots_v2{x}/c0", "template": "ScanSlots_v2{x}", "n": 1}], []
     for j, lane in enumerate(entries):
@@ -57,7 +57,7 @@ def v3c_window(d: Path, states: list[list[int]], entries: list[list[list[int]]])
         roots.append({"port": f"{name}/o0", "root": got["o0"].hex(), "leaves": n, "domain": dom.domain_id.hex()})
     (d / "window.json").write_text(json.dumps({"members": members}))
     (d / "registration.json").write_text(json.dumps({"roots": roots, "window": {
-        "kind": "served", "run": RUN, "activations": {"program": PROGRAM, "values": {sz.IS.SCAN_STATE: st.entry()}}}}))
+        "kind": "served", "run": RUN, "activations": {"program": PROGRAM, "values": {sz.BK.SCAN_STATE: st.entry()}}}}))
     return d
 
 
@@ -75,7 +75,7 @@ def scanned(tmp_path_factory):
 def test_the_scan_reads_v3cs_trees_at_its_roots_and_proves_no_block_round(tmp_path, scanned):
     window = scanned["window"]
     rec = json.loads((window / "registration.json").read_text())
-    state, roots = rec["window"]["activations"]["values"][sz.IS.SCAN_STATE], {r["port"]: r for r in rec["roots"]}
+    state, roots = rec["window"]["activations"]["values"][sz.BK.SCAN_STATE], {r["port"]: r for r in rec["roots"]}
     h = sz.host(tmp_path / "host", setup=S, v3c=window)
     assert set(h.rounds) == scanned["rounds"] - {"block"} and "block" in scanned["rounds"]
     trees = h.at.trees
@@ -114,15 +114,15 @@ def test_a_v3c_window_that_isnt_the_scans_is_refused_by_name(tmp_path, scanned, 
     w = v3c_window(tmp_path / "window", states, entries)
     if case == "state root":
         _rewrite(w, "registration.json",
-                 lambda d: d["window"]["activations"]["values"][sz.IS.SCAN_STATE].update(root="ee" * 64))
+                 lambda d: d["window"]["activations"]["values"][sz.BK.SCAN_STATE].update(root="ee" * 64))
     if case == "entry root":
         _rewrite(w, "registration.json", lambda d: d["roots"][2].update(root="ee" * 64))
     if case == "chunks":
         _rewrite(w, "window.json", lambda d: d["members"].pop())
     if case == "body":
         (w / "m2-private.bin").write_bytes((w / "m2-private.bin").read_bytes()[:-1])
-    why = {"state row": f"its {sz.IS.SCAN_STATE} rows [3] aren't the scan's",
-           "state root": f"isn't its registered {sz.IS.SCAN_STATE}'s root and domain",
+    why = {"state row": f"its {sz.BK.SCAN_STATE} rows [3] aren't the scan's",
+           "state root": f"isn't its registered {sz.BK.SCAN_STATE}'s root and domain",
            "entry row": f"{TID}/c1's o0 rows [1] aren't the scan's lane 1 slot entries",
            "entry root": f"isn't the root and domain its registration names for {TID}/c2/o0",
            "chunks": "not one template's 4 chunks of 2 proof blocks, a lane each",

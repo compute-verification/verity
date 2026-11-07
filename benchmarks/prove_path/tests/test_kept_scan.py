@@ -30,7 +30,7 @@ from typing import Any
 import pytest
 
 from verity.ml.protocols.certifier import ingress_scan as IS
-from verity.core.protocols.certifier import warden as W
+from verity.core.protocols.certifier import blocks as BK, warden as W
 from verity.core.protocols.certifier.active import id_request
 from verity.core.protocols.certifier.certificate import Issuer, LmsSigner
 from verity.ml.crypto import lms
@@ -148,7 +148,7 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     value = WRS.state_value(WC.NAME, CLASS, rows, hashlib.sha512(b"committer").digest()[:32], 0, window=run)
     path = PP.scan_state_opening(value, tmp_path)
     assert path == tmp_path / SZ.SCAN_STATE_FILE and path.stat().st_mode & 0o777 == 0o600
-    rec = {"window": {"run": run, "activations": {"program": WC.NAME, "values": {IS.SCAN_STATE: value.entry()}}}}
+    rec = {"window": {"run": run, "activations": {"program": WC.NAME, "values": {BK.SCAN_STATE: value.entry()}}}}
     held = SZ.v3c_state(tmp_path, rec, [list(r) for r in rows])
     assert (held.root.hex(), held.domain.domain_id.hex()) == (value.entry()["root"], value.entry()["domain"])
     late, _ = PP.kept_scan(serve_dir, CLASS, USERS[3:])

@@ -106,7 +106,7 @@ def test_a_debug_setting_is_refused_on_a_run_of_record(monkeypatch: pytest.Monke
 
 
 def test_check_refuses_an_unknown_name_a_value_that_doesnt_parse_and_a_debug_setting_on_a_run_of_record() -> None:
-    r = S.Registry("x.py", ("X_",), S.Setting("X_TRACE", str, None, S.DEBUG, "a trace file"),
+    r = S.EnvSettings("x.py", ("X_",), S.Setting("X_TRACE", str, None, S.DEBUG, "a trace file"),
                    S.Setting("X_N", int, 3, S.VALUE, "a number"), schema=S.RECORD_SCHEMA)
     r.check({"X_TRACE": "/t"}, of_record=False)
     r.check({"X_TRACE": ""}, of_record=True)

@@ -3,7 +3,7 @@ by the network certifier on the host's uplink as it crosses, never by the prover
 pins each load's root from that certificate alone (`blocks.pins`), so every unit's row of a load is a registered read
 opened against the certifier's signed root by the Lean verifier's registered reads (`flock-verify --registered`,
 `Flock.Registered.checkPort`), which don't change. Every other row into the host is the scan's state
-(`ingress_scan.SCAN_STATE`), which the scan places inside the zero-knowledge proof, and its egress the scan's egress
+(`blocks.SCAN_STATE`), which the scan places inside the zero-knowledge proof, and its egress the scan's egress
 side's (`egress`): no request, response or value one host sends another has a head of its own.
 
 **The commitment** is a registered value's (`one_stage.registered`), as the prover would commit it, under the
