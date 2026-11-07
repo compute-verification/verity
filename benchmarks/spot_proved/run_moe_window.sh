@@ -20,9 +20,10 @@ set -uo pipefail
 SRC=$(pwd)
 OUT=${RESEARCH_RUN_DIR:?}/out
 mkdir -p "$OUT"
+export SP_CACHE=${SP_CACHE:-$HOME/.cache/verity-hz}   # the builds, kept between runs by the job user
 SP_MODE=build bash benchmarks/spot_proved/run_audit.sh > "$OUT/builds.log" 2>&1 || { tail -40 "$OUT/builds.log"; exit 7; }
 export PATH="$HOME/.elan/bin:$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
-export HZ_CONFIGS=spot HZ_MEM_GB=${SP_MEM_GB:-400} HZ_CACHE=${SP_CACHE:-/workspace/spot-cache}
+export HZ_CONFIGS=spot HZ_MEM_GB=${SP_MEM_GB:-400} HZ_CACHE=$SP_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
 setup > /dev/null
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
