@@ -1513,3 +1513,34 @@ pass at the head. Still open from 19:42Z: does P2 compose after L2/L3, or do I a
     - r20261107-201751-ccb0: checks the generic proof and `Spot.lean`.
 
     **The proof with no sorry should be done tonight, by about 23:00Z.**
+
+## MOEBIND 20:31Z: D is bigger than one tie; it splits into four parts. Also, where A–C's generators must live
+
+**For P1AB and P1C, now:** write each part's generator as verifier code, in `verity/core/service/flock/Flock/ReadNet/`
+(namespace `Flock.ReadNet`, a builder program over `Flock.HmNets`), with its spec's proof in
+`Security/Proofs/Accounting/ReadUnit/<Part>.lean`. D's check makes the verifier build each part's Definition itself and
+compare it with the file's. So the generator can't be a proof-only definition. It must also emit the rows Python's lowering
+emits: one `HmNets.and` per Python `AND`, in Python's order, XOR and NOT as forms, and each sub-Definition `B.call` as a
+sub-generator call in the same order (`gates/{sha512,hm96,frame_v3,embedding}.py`). The statements in `Gates.lean` don't
+change.
+
+**Why D is bigger:** at V = 128,256 and H = 2,048 the read unrolls to about 5.4M ANDs. So an hm96-style check that
+compares the unrolled unit's net with one the verifier builds would walk the unrolled circuit, which the verifier-cost rule
+forbids. The check has to run once per Definition, on the template's `Def`s and their calls (`Flock.Tmpl`), and the
+proof needs a compositional unroll theorem: where a template's unrolled rows hold, each call's callee rows hold at that
+copy's columns. D splits into four parts, of which only D4 waits on A–C:
+
+- **D1, independent:** at a unit `u` of `partsOf D hU n` (Core's view of the parsed file), `P.Correct X u` gives that
+  the unit's copy of the template's rows holds on `X`'s bits. This is the converse direction of
+  `Flock.Bridge.correct_of_progCorrect`, through `keyProg`. About 300 to 500 lines.
+- **D2, independent:** template unroll compositionality, from `FlockSoundness.TmplFold`'s fold. Where `HmOut.unrolled
+  c`'s rows hold, each call's callee `Def` holds at its copy's columns, and a `Def` with no calls holds as
+  `HmNets.layout`'s `LaidRows`, so `laid_rows` and `laid_outs` give `stHolds` and the outputs. About 500 to 900 lines.
+- **D3, needs A–C's generators as code:** `Flock.ReadNet.check`, the per-Definition comparison for the read's
+  Definitions by descriptor key (read from `Core.Registration.Declared.blocks`, as soundness said), plus a difftest
+  against Python's emitted template at small V and H. About 300 to 500 lines with the difftest.
+- **D4, mine:** check ok, D1, D2 and `readNet_sound` together give `GatesRefine`, with the port map onto
+  `ReadUnit.Ports`. About 300 to 500 lines.
+
+At this size, D won't be done tonight, and Sun 18:00Z is at risk unless D1 and D2 get helpers. I propose a helper each
+for D1 and D2, while I start D4's statement against D1 and D2's interfaces, which I'll post with their statements next.
