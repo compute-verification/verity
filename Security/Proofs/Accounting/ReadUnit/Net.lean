@@ -83,8 +83,8 @@ theorem evs_take (z : Var → Bool) (l : List Lin) (k : ℕ) : evs z (l.take k) 
 theorem length_evs (z : Var → Bool) (l : List Lin) : (evs z l).length = l.length := by
   simp [evs]
 
-theorem length_bytesOf (bs : List Bool) : (bytesOf bs).length = bs.length / 64 * 8 := by
-  simp [bytesOf, List.length_flatMap, List.map_const', List.sum_replicate, smul_eq_mul]
+theorem length_readBytes (bs : List Bool) : (ReadUnit.bytesOf bs).length = bs.length / 64 * 8 := by
+  simp [ReadUnit.bytesOf, List.length_flatMap, List.map_const', List.sum_replicate, smul_eq_mul]
 
 theorem length_flatten_of_shaped {k : ℕ} {ws : List Word} (h : Shaped k ws) : ws.flatten.length = k * 64 := by
   obtain ⟨hk, hw⟩ := h
@@ -95,6 +95,10 @@ theorem length_flatten_of_shaped {k : ℕ} {ws : List Word} (h : Shaped k ws) : 
     simp only [List.flatten_cons, List.length_append, List.length_cons, hw w List.mem_cons_self,
       ih fun v hv => hw v (List.mem_cons_of_mem _ hv)]
     ring
+
+theorem length_wordsBytes (z : Var → Bool) {k : ℕ} {ws : List Word} (h : Shaped k ws) :
+    (wordsBytes z ws).length = k * 8 := by
+  rw [wordsBytes, length_readBytes, length_evs, length_flatten_of_shaped h, Nat.mul_div_cancel _ (by norm_num : 0 < 64)]
 
 theorem shaped_drop {k : ℕ} {ws : List Word} (h : Shaped k ws) (j : ℕ) : Shaped (k - j) (ws.drop j) :=
   ⟨by rw [List.length_drop, h.1], fun w hw => h.2 w (List.mem_of_mem_drop hw)⟩
@@ -155,7 +159,7 @@ theorem readNet_sound (key : Hash.Msg) {V H D : ℕ} (hD : D = Hash.Tree.depth V
         rw [length_evs, hrow]
         exact hH
       · show (wordsBytes z salt).length = Hash.Hm96.SALT_BYTES
-        rw [wordsBytes, length_bytesOf, length_evs, length_flatten_of_shaped hsalt]
+        rw [length_wordsBytes z hsalt]
         rfl
       · show (path.map (wordsDigest z)).length = Hash.Tree.depth V
         rw [List.length_map, hpath, hD]

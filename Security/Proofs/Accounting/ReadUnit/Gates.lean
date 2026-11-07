@@ -52,9 +52,8 @@ net computes whenever its rows hold (`FlockSoundness.Discharge.Hm.Sound`), again
 Each statement takes its part's generator as a parameter, so a generator that mirrors the part's Python lowering is
 proved against it, and `readNet` composes the four as `EmbeddingRead_v1`'s body does. Each holds of every input, with
 the inputs' shapes premises of what it concludes, as `FlockSoundness.Discharge.Hm`'s gadgets' statements do, so that
-`Sound.bind'` composes them. A digest or a byte string is held
-in 64-bit words of forms in leaf order, each word's bits least significant first and its bytes big-endian
-(`Accounting.ReadUnit.bytesOf`), as a read unit's ports hold them.
+`Sound.bind'` composes them. A digest or a byte string is held in 64-bit words of forms in leaf order, each word's bits
+least significant first and its bytes big-endian (`Accounting.ReadUnit.bytesOf`), as a read unit's ports hold them.
 -/
 
 @[expose] public section
@@ -71,10 +70,10 @@ def Shaped (k : ℕ) (ws : List Word) : Prop := ws.length = k ∧ ∀ w ∈ ws, 
 def evs (z : Var → Bool) (fs : List Lin) : List Bool := fs.map (ev z)
 
 /-- The byte string the words `ws` hold under `z`, in leaf order. -/
-def wordsBytes (z : Var → Bool) (ws : List Word) : Hash.Msg := bytesOf (evs z ws.flatten)
+def wordsBytes (z : Var → Bool) (ws : List Word) : Hash.Msg := ReadUnit.bytesOf (evs z ws.flatten)
 
 /-- The digest the 8 words `ws` hold under `z`, in leaf order. -/
-def wordsDigest (z : Var → Bool) (ws : List Word) : Verity.Digest := digestOf (evs z ws.flatten)
+def wordsDigest (z : Var → Bool) (ws : List Word) : Verity.Digest := ReadUnit.digestOf (evs z ws.flatten)
 
 /-- **Part A: the row-seg digest.** On a row of `n` forms, the net of `gen` returns 8 words that hold the row's
 `sha512/row-seg/v1` digest whenever its rows hold. -/
