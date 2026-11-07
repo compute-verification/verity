@@ -2,11 +2,14 @@
 
     python benchmarks/spot_proved/stage.py --capture DIR --step S --out DIR [--per-type 8] [--types T,...]
     python benchmarks/spot_proved/stage.py --capture DIR --step S --out DIR --every-call N [--jobs J] [--deadline T]
+        [--rows T,... | --rows-past-keys K]
 
 ``--every-call`` stages nothing: it runs the match gate on N instances of every recorded call of every type, over every layer
 of a step the capture kept whole (``--keep all``, whose ``kept_params`` hold every layer's norm weights; FP8 linears, MoE
 launches and cuBLAS GEMMs only in the opened layers, whose weights are written), and writes ``gate.json``: per type its calls, agreements,
-disagreements, errors and first failures, and the recorded ops no type reads.
+disagreements, errors and first failures, and the recorded ops no type reads. ``--rows`` cuts every population to some token
+rows, and ``--rows-past-keys 2048`` to the rows attending to more than 2,048 keys (DSA's long rows), read off the indexer's
+top-k inputs (`long_rows`).
 
 * **Commitment.** Each rank's ``ops.jsonl`` and ``params.json`` are hashed again and held to its ``meta.json``'s rank root,
   the ranks' roots to the step root every rank's ``commit.json`` names, and the coins to one value on every rank. Every blob
@@ -132,6 +135,8 @@ class Capture:
         self.tree: dict | None = trees[self.ranks[0]] if trees else None
         self.every = False
         self.per_call = 0
+        #: with ``--rows`` / ``--rows-past-keys``, the token rows every population is cut to (each with its keys, or None)
+        self.only: dict[int, int | None] | None = None
         self.checkpoint: str | None = None
         self._params: dict = {}
         self._composers: dict = {}
@@ -208,15 +213,30 @@ class Capture:
         no weights past the kept small parameters."""
         return e.get("layer") in self.layers or (self.every and (not weights or self.checkpoint is not None))
 
-    def cells(self, label: str, call: tuple, *dims: int):
+    def cells(self, label: str, call: tuple, *dims: int, slots: int = 1):
         """A call's instance indices over ``dims``: every one, or with `per_call` set (``--every-call``) that many sampled by
-        the coins, so a gate over every call never enumerates a call's rows times its columns."""
+        the coins, so a gate over every call never enumerates a call's rows times its columns. With `only` set, the first
+        dimension is cut to those tokens' rows (``slots`` rows a token, token-major)."""
+        firsts = None
+        if self.only is not None and dims:
+            firsts = [t * slots + k for t in sorted(self.only) for k in range(slots) if t * slots + k < dims[0]]
+            dims = (len(firsts), *dims[1:])
         n = int(np.prod(dims, dtype=np.int64)) if dims else 1
         for i in (draw(self.coins, f"cells/{label}/{call}", n, self.per_call) if self.per_call else range(n)):
-            yield tuple(int(x) for x in np.unravel_index(i, dims))
+            idx = tuple(int(x) for x in np.unravel_index(i, dims))
+            yield idx if firsts is None else (firsts[idx[0]], *idx[1:])
 
     def tokens(self, r: int) -> int:
         return sum(self.meta[r]["scheduled"].values())
+
+    def rows(self, r: int, rows: int) -> list[int]:
+        """A call's real rows of one token each (`real_rows`), cut to `only`'s tokens when set."""
+        return [t for t in range(self.real_rows(r, rows)) if self.only is None or t in self.only]
+
+    def slots(self, r: int, rows: int) -> int:
+        """Rows a token in a call of ``rows`` rows: the MoE's (token, slot) rows run token-major, a row a slot."""
+        n, real = self.tokens(r), self.real_rows(r, rows)
+        return real // n if n and real % n == 0 else 1
 
     def real_rows(self, r: int, rows: int) -> int:
         """Of a call's ``rows``, those of the step's real tokens: the forward's padded rows (or a multiple of them, one per
@@ -226,6 +246,27 @@ class Capture:
         if padded and rows % padded == 0:
             return n * (rows // padded)
         return min(rows, n) if rows >= n else rows
+
+
+def long_rows(cap: Capture, keys: int) -> dict[int, int]:
+    """The step's token rows attending to more than ``keys`` keys, each with its keys, read off the DSA indexer's top-k inputs
+    on the first rank: the decode rows, which lead the batch (``_C::cooperative_topk``'s ``lengths``), and the prefill
+    rows, which end it (``_C::top_k_per_row_prefill``'s ``rowEnds - rowStarts``)."""
+    r = cap.ranks[0]
+    n = cap.tokens(r)
+    dec = next((e for e in cap.events[r] if e["op"] == "_C::cooperative_topk"), None)
+    pre = next((e for e in cap.events[r] if e["op"] == "_C::top_k_per_row_prefill"), None)
+    if dec is None and pre is None:
+        raise SystemExit(f"step {cap.step}: no DSA indexer top-k was recorded, so no row's keys are known")
+    m = int(pre["in"]["numRows"]) if pre is not None else 0
+    out: dict[int, int] = {}
+    if dec is not None:
+        lengths = cap.tensor(r, dec["in"]["lengths"]).reshape(-1).astype(np.int64)
+        out |= {t: int(lengths[t]) for t in range(min(len(lengths), n - m)) if lengths[t] > keys}
+    if pre is not None:
+        span = cap.tensor(r, pre["in"]["rowEnds"]).astype(np.int64) - cap.tensor(r, pre["in"]["rowStarts"]).astype(np.int64)
+        out |= {n - m + i: int(span[i]) for i in range(m) if span[i] > keys}
+    return dict(sorted(out.items()))
 
 
 def words(a) -> np.ndarray:
@@ -253,7 +294,7 @@ def quant_instances(cap: Capture):
                 continue
             K = a["input"]["shape"][-1]
             block = f"Fp8GroupQuantUe8m0_v1{{K={K},G=128}}"
-            for t in range(cap.real_rows(r, a["input"]["shape"][0])):
+            for t in cap.rows(r, a["input"]["shape"][0]):
                 yield (f"Fp8GroupQuantUe8m0_K{K}", block, (r, e["seq"], t),
                        lambda r=r, e=e, t=t: [cap.tensor(r, e["in"]["input"])[t]],
                        lambda r=r, e=e, t=t: [cap.tensor(r, e["out"]["output_q"])[t], cap.tensor(r, e["out"]["output_s"])[t]])
@@ -310,7 +351,7 @@ def moe_instances(cap: Capture, profile):
             dot = re.search(r"DOT=(\w+?)Dot", spec.id)
             kind = "MoeExpertFp8GemmW" if routed else "MoeExpertFp8Gemm"
             label = f"{kind}_K{K}_{'swap' if swap else 'noswap'}_{dot[1] if dot else 'dot'}"
-            for j, col in cap.cells(kind, (r, e["seq"]), cap.real_rows(r, S) * (1 if routed else topk), N):
+            for j, col in cap.cells(kind, (r, e["seq"]), cap.real_rows(r, S) * (1 if routed else topk), N, slots=topk):
                 yield (label, spec, (r, e["seq"], j, col),
                        lambda r=r, e=e, j=j, col=col: moe_args(cap, r, e, j, col),
                        lambda r=r, e=e, j=j, col=col, topk=topk, N=N: [cap.tensor(r, e["out"]["C"]).reshape(-1, topk, N)[j // topk, j % topk, col:col + 1]])
@@ -376,7 +417,7 @@ def silu_mul_instances(cap: Capture):
             if x["dtype"] != "torch.bfloat16" or y["shape"][-1] != I:
                 raise LookupError(f"silu_and_mul (seq {e['seq']}): input {x['dtype']} {x['shape']}, result {y['shape']}")
             label = f"SiluMul_I{I}"
-            for (t,) in cap.cells(label, (r, e["seq"]), cap.real_rows(r, x["shape"][0])):
+            for (t,) in cap.cells(label, (r, e["seq"]), cap.real_rows(r, x["shape"][0]), slots=cap.slots(r, x["shape"][0])):
                 yield (label, f"SiluMul_v2{{I={I}}}", (r, e["seq"], t),
                        lambda r=r, x=x, t=t: [cap.tensor(r, x)[t]], lambda r=r, y=y, t=t: [cap.tensor(r, y)[t]])
 
@@ -426,7 +467,7 @@ def fused_ar_norm_instances(cap: Capture):
         half = H // 2
         shot, cluster = mnnvl_shot(T, H, W), mnnvl_grid(T, H)[1]
         new_res, normed = fused_ar_norm_outputs(e0)
-        for t in range(cap.real_rows(r0, T)):
+        for t in cap.rows(r0, T):
             for c in range(2):
                 sl = slice(c * half, (c + 1) * half)
                 yield (f"AllReduceResidualMnnvl_W{W}_S{shot}", f"AllReduceResidualMnnvl_v1{{WORLD={W},N={half},SHOT={shot}}}",
@@ -481,7 +522,7 @@ def allreduce_instances(cap: Capture, unstaged: dict | None = None):
         route, rows = allreduce_route(cap, e0), cap.real_rows(cap.ranks[0], T)
         if route == "fi_ar_comm":
             shot = AR.mnnvl_shot(T, H, W)
-            for t in range(rows):
+            for t in cap.rows(cap.ranks[0], T):
                 for c in range(2):
                     sl = slice(c * half, (c + 1) * half)
                     yield (f"AllReduceMnnvl_W{W}_S{shot}", f"AllReduceMnnvl_v1{{WORLD={W},N={half},SHOT={shot}}}", (e0["seq"], t, c),
@@ -499,7 +540,7 @@ def allreduce_instances(cap: Capture, unstaged: dict | None = None):
             past = unstaged.setdefault(f"AllReduceMultimem_W{W}", {"past_captured": []})
             past["past_captured"].append({"seq": e0["seq"], "rows": T})
         trees = multimem_trees(W, cap.tree["tree"] if cap.tree else None)
-        for t in range(rows):
+        for t in cap.rows(cap.ranks[0], T):
             for c in range(2):
                 sl = slice(c * half, (c + 1) * half)
                 yield (f"AllReduceMultimem_W{W}", f"AllReduceMultimem_v1{{WORLD={W},SIZE={half},TREES={trees},FTZ=false}}", (e0["seq"], t, c),
@@ -563,7 +604,7 @@ def cublas_instances(cap: Capture, profile, unstaged: dict | None = None):
             role, statics = route
             spec = kind(role, K=K, N=N, DOT=dot, **statics)
             label = f"{spec.id.split('{')[0]}_K{K}_N{N}" + (f"_S{statics['SPLIT_K']}" if "SPLIT_K" in statics else "")
-            for t in range(rows):
+            for t in cap.rows(r, M):
                 yield (label, spec, (r, e["seq"], t),
                        lambda r=r, e=e, t=t: [cap.tensor(r, e["in"]["self"])[t], np.ascontiguousarray(cap.tensor(r, e["in"]["mat2"]).T)],
                        lambda r=r, e=e, t=t: [cap.tensor(r, e["out"]["ret0"])[t]])
@@ -579,7 +620,7 @@ def fused_add_rms_norm_instances(cap: Capture):
             T, N = a["input"]["shape"]
             eps = float(a["epsilon"]).hex()
             block = f'RMSNormFusedCudaVector8_v1{{N={N},EPS={{"f64":"{eps}"}},BLOCK={launch_block(T, N, fused=True)}}}'
-            for t in range(cap.real_rows(r, T)):
+            for t in cap.rows(r, T):
                 yield (f"RMSNormFusedCudaVector8_N{N}", block, (r, e["seq"], t),
                        lambda r=r, e=e, t=t: [cap.tensor(r, e["in"]["input"])[t], cap.tensor(r, e["in"]["residual"])[t],
                                               cap.tensor(r, e["in"]["weight"])],
@@ -618,6 +659,8 @@ def mla_combine_instances(cap: Capture):
     for r, e, _, valid, nss in fa3_calls(cap):
         bound, H, T, DV = e["out"]["ret2"]["shape"]
         for t in range(min(cap.tokens(r), T)):
+            if cap.only is not None and t not in cap.only:
+                continue
             from verity.ml.definitions.registry import sparse_mla_split as SP
             ns = len(SP.split_blocks(valid[t], nss[t]))
             if ns < 2:
@@ -643,7 +686,7 @@ def mla_split_part_instances(cap: Capture):
         scale = float(tap["in"]["softmax_scale"]).hex()
         kept = tap["in"].get("kv_gathered_rows") or list(range(int(tap["in"]["kv_gathered_tokens"])))
         for i, t in enumerate(kept):
-            if t >= min(cap.tokens(r), T):
+            if t >= min(cap.tokens(r), T) or (cap.only is not None and t not in cap.only):
                 continue
             splits = SP.split_blocks(valid[t], nss[t])
             if len(splits) < 2:
@@ -747,7 +790,7 @@ def every_call(cap: Capture, pops: dict, a) -> dict:
     import random
     rep: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "whole": cap.whole,
                  "layers": "every layer" if cap.whole else cap.layers, "weight_layers": "every layer (--checkpoint)" if cap.checkpoint else cap.layers, "per_call": a.every_call,
-                 "types": {}}
+                 "rows": "every real row" if cap.only is None else cap.only, "types": {}}
     specs: dict = {}
     tasks: list[tuple[str, int]] = []
     for label, insts in sorted(pops.items()):
@@ -834,6 +877,10 @@ def main() -> int:
     ap.add_argument("--allreduce-tree", default=None, metavar="TREE",
                     help=f"the node's multimem reduction tree, replacing the capture's {TREE_FILE} (default: that file's, "
                          "else the registry's GLM53_H200_TREE, which is another node's)")
+    ap.add_argument("--rows", default=None, metavar="T,...", help="cut every population to these token rows")
+    ap.add_argument("--rows-past-keys", type=int, default=0, metavar="K",
+                    help="cut every population to the token rows attending to more than K keys (the DSA indexer's top-k "
+                         "inputs say which: 2048 gives the long rows)")
     a = ap.parse_args()
     import a11
     import a11_kinds as K
@@ -849,10 +896,16 @@ def main() -> int:
     cap.checkpoint = a.checkpoint
     if a.allreduce_tree:
         cap.tree = {"tree": parse_tree(a.allreduce_tree, len(cap.ranks)), "source": "--allreduce-tree"}
+    if a.rows:
+        cap.only = {int(t): None for t in a.rows.split(",")}
+    elif a.rows_past_keys:
+        cap.only = long_rows(cap, a.rows_past_keys)
+        print(f"rows past {a.rows_past_keys} keys (token: keys): {cap.only}", flush=True)
     profile = TargetProfile(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
     report: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "coins": cap.coins.hex(),
                     "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {},
-                    "allreduce_tree": cap.tree or "the registry's GLM53_H200_TREE, not read off this node"}
+                    "allreduce_tree": cap.tree or "the registry's GLM53_H200_TREE, not read off this node",
+                    "rows": "every real row" if cap.only is None else cap.only}
     pops: dict[str, list] = {}
     unstaged: dict[str, dict] = {}
     sources = [quant_instances(cap), fp8_linear_instances(cap), moe_instances(cap, profile),
