@@ -4,8 +4,8 @@
     python benchmarks/spot_proved/stage.py --capture DIR --step S --out DIR --every-call N [--jobs J] [--deadline T]
 
 ``--every-call`` stages nothing: it runs the match gate on N instances of every recorded call of every type, over every layer
-of a step the capture kept whole (``--keep all``, whose ``kept_params`` hold every layer's norm weights; FP8 linears and MoE
-launches only in the opened layers, whose weights are written), and writes ``gate.json``: per type its calls, agreements,
+of a step the capture kept whole (``--keep all``, whose ``kept_params`` hold every layer's norm weights; FP8 linears, MoE
+launches and cuBLAS GEMMs only in the opened layers, whose weights are written), and writes ``gate.json``: per type its calls, agreements,
 disagreements, errors and first failures, and the recorded ops no type reads.
 
 * **Commitment.** Each rank's ``ops.jsonl`` and ``params.json`` are hashed again and held to its ``meta.json``'s rank root,
@@ -15,8 +15,10 @@ disagreements, errors and first failures, and the recorded ops no type reads.
   over the step's real tokens: a group quant's token row, a FlashInfer FP8 linear's (token, output column) when the call has
   fewer than 32 rows (the op's FlashInfer branch), a routed MoE w2 launch's (slot, output column), a fused allreduce + RMSNorm's
   token for its residual half-rows and its norm, a plain allreduce's (token, half-row) on symm-mem's multimem route (its
-  received row the same on every rank; a call on NCCL's route is counted, not staged), and FA3's split combine per
-  (token, head). Instances are drawn from it by the capture's coins, ``--per-type`` of each type.
+  received row the same on every rank; a call on NCCL's route is counted, not staged), an unbiased bf16 cuBLAS GEMM's token
+  row (``aten::mm`` against a bf16 weight's transposed view) at the route its call's M rows take (a call past
+  ``CUBLAS_ROUTES["m_max"]`` is counted, not staged), and FA3's split combine per (token, head). Instances are drawn from it
+  by the capture's coins, ``--per-type`` of each type.
 * **Match gate.** Each drawn instance's Definition is evaluated on the captured inputs and must return the captured outputs
   bit for bit (completeness, not soundness: an instance that disagrees is reported and not staged).
 * **Out.** ``values.json``, ``units.json``, ``<label>.npz`` (a11's saved-values format), ``kinds.json`` (a11's table of the
@@ -329,6 +331,63 @@ def allreduce_instances(cap: Capture, unstaged: dict | None = None):
                        lambda calls=calls, t=t, sl=sl: [same_on_every_rank(cap, calls, t, sl)])
 
 
+def cublas_route(M: int, K: int, N: int, f32: bool) -> tuple[str, dict] | str:
+    """The role and statics the Program binds an unbiased bf16 GEMM of M rows against a [N, K] weight at, cuBLAS's captured
+    vLLM-default route at those M (`bf16_gemm.f32out_route` for f32 out, the linear's `default_cublas_route` for bf16 out), or
+    why it has none."""
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.program.frontend.rules.vllm_bindings import bf16_gemm as BG
+    if f32:
+        got = BG.f32out_route(M, K, N)
+        return got if isinstance(got, str) else (got[1], got[2])
+    route = BC.default_cublas_route("linear", M, K, N)
+    if route is None:
+        return f"no captured vLLM-default cuBLAS linear route for M={M}, K={K}, N={N}"
+    return ("cublas_splitk_gemm" if route[0] == "splitk" else "gemm_dot"), route[1]
+
+
+def cublas_instances(cap: Capture, profile, unstaged: dict | None = None):
+    """An unbiased bf16 GEMM's token row on cuBLAS: ``aten::mm`` of the activation rows against a bf16 weight's transposed view
+    (GLM-5.3's router gate past the ll_bf16 tier, f32 out; its indexer's wk + weights projection, bf16 out), at the Definition
+    the Program binds each row's call to at the M rows cuBLAS saw, in the opened layers (the weights are past the kept small
+    parameters). A call whose M has no captured route, and any other ``aten::mm``, is counted in ``unstaged`` under its label,
+    with why, and the step's other calls are still staged."""
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.program.frontend import targets as T
+    from verity_vllm.program.predict.common import kind
+    unstaged = {} if unstaged is None else unstaged
+    dot = T.tensor_core_dot(profile)
+    for r in cap.ranks:
+        for e in cap.events[r]:
+            if e["op"] != "aten::mm" or not cap.opened(e, weights=True):
+                continue
+            x, w, y = e["in"].get("self"), e["in"].get("mat2"), e["out"].get("ret0")
+            shaped = all(isinstance(v, dict) and len(v.get("shape", ())) == 2 for v in (x, w, y)) and "param" in w
+            K = x["shape"][1] if shaped else None
+            if not shaped or (x["dtype"], w["dtype"]) != ("torch.bfloat16",) * 2 or w["shape"][0] != K or w.get("stride") != [1, K]:
+                rec = unstaged.setdefault("AtenMm_other", {"population": 0, "calls": [], "why": (
+                    "an aten::mm that is no bf16 activation against a bf16 weight's transposed view: no population reads it")})
+                rec["population"] += 1
+                rec["calls"].append({"rank": r, "seq": e["seq"]})
+                continue
+            (M, K), N = x["shape"], w["shape"][1]
+            f32 = y["dtype"] == "torch.float32"
+            rows, route = cap.real_rows(r, M), cublas_route(M, K, N, f32)
+            if isinstance(route, str):
+                rec = unstaged.setdefault(f"CublasGemm{'F32Out' if f32 else 'Bf16'}_K{K}_N{N}", {"population": 0, "calls": [], "why": (
+                    f"{route} (`bf16_gemm_check.CUBLAS_ROUTES` maps M to {BC.CUBLAS_ROUTES['m_max']})")})
+                rec["population"] += rows
+                rec["calls"].append({"rank": r, "seq": e["seq"], "rows": M})
+                continue
+            role, statics = route
+            spec = kind(role, K=K, N=N, DOT=dot, **statics)
+            label = f"{spec.id.split('{')[0]}_K{K}_N{N}" + (f"_S{statics['SPLIT_K']}" if "SPLIT_K" in statics else "")
+            for t in range(rows):
+                yield (label, spec, (r, e["seq"], t),
+                       lambda r=r, e=e, t=t: [cap.tensor(r, e["in"]["self"])[t], np.ascontiguousarray(cap.tensor(r, e["in"]["mat2"]).T)],
+                       lambda r=r, e=e, t=t: [cap.tensor(r, e["out"]["ret0"])[t]])
+
+
 def fused_add_rms_norm_instances(cap: Capture):
     from verity.ml.definitions.registry.cuda_rmsnorm import launch_block
     for r in cap.ranks:
@@ -456,7 +515,7 @@ def gate_instance(spec, key, args_of, want_of, full_gates: int) -> tuple[dict, d
 #: the recorded ops some population reads; every other recorded op is listed by ``--every-call`` as not gated
 GATED_OPS = {"_C::per_token_group_fp8_quant", "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm", "moe_launch",
              "vllm::flashinfer_trtllm_fused_allreduce_norm", "vllm::all_reduce", "_C::fused_add_rms_norm", "_vllm_fa3_C::fwd",
-             "fa3_sparse_mla"}
+             "fa3_sparse_mla", "aten::mm"}
 _EVERY: dict = {}
 
 
@@ -559,7 +618,8 @@ def main() -> int:
     pops: dict[str, list] = {}
     unstaged: dict[str, dict] = {}
     sources = [quant_instances(cap), flashinfer_linear_instances(cap), moe_w2_instances(cap, profile),
-               fused_ar_norm_instances(cap), allreduce_instances(cap, unstaged), fused_add_rms_norm_instances(cap),
+               fused_ar_norm_instances(cap), allreduce_instances(cap, unstaged), cublas_instances(cap, profile, unstaged),
+               fused_add_rms_norm_instances(cap),
                mla_combine_instances(cap), mla_split_part_instances(cap)]
     for src in sources:
         try:
