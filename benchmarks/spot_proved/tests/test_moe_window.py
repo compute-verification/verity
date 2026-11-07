@@ -171,12 +171,12 @@ def test_the_cuts_tables_are_the_ones_expert_tables_registers(MW, captured):
     prefixed = MW.labels({"up": ("model.layers.3.mlp.experts.w13_weight", "model.layers.3.mlp.experts.w13_weight_scale_inv")},
                          [f"weights/language_model.{p[len('weights/'):]}" for p in registered])
     assert prefixed["up"]["w"] == "language_model.model.layers.3.mlp.experts.w13_weight"
-    T = S
-    assert circuit.units == {MW.descriptor_id(fns["router"]): T,
-                             plan["up"]["rows"][0]: 4 * TOPK * T, plan["up"]["scales"][0]: 2 * TOPK * T,
-                             MW.descriptor_id(fns["up"]): 4 * TOPK * T,
-                             plan["down"]["rows"][0]: 4 * TOPK * T, plan["down"]["scales"][0]: 1 * TOPK * T,
-                             MW.descriptor_id(fns["down"]): 4 * TOPK * T}
+    want: dict[str, int] = {MW.descriptor_id(fns["router"]): S}
+    for p, B, NBG in (("up", 4, 2), ("down", 4, 1)):
+        for tid, n in ((plan[p]["rows"][0], B), (plan[p]["scales"][0], NBG), (MW.descriptor_id(fns[p]), B)):
+            want[tid] = want.get(tid, 0) + n * TOPK * S
+    assert plan["up"]["scales"][0] == plan["down"]["scales"][0] and plan["down"]["scales"][3] == 2 * TOPK * S
+    assert circuit.units == want and len(want) == 6
     lays = circuit.layouts
 
     def bits(fn, ports) -> int:

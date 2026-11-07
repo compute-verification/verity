@@ -3,7 +3,7 @@
 
     python benchmarks/spot_proved/moe_window.py --capture DIR --step S --layer L --out DIR --key FILE
         (--tables FILE | --self-register) [--rank 0] [--tokens 1] [--cap 2048] [--law stratified:1] [--forge w13]
-        [--bench SEED] [--circuit-only] [--full-gate]
+        [--bench SEED] [--circuit-only] [--full-gate] [--checkpoint DIR]
 
 * **The cut.** `expert_rows`' cut of one layer on one TP rank at T of the step's tokens, as a stated circuit (the form of
   `test_fp8_moe_per_expert._cut`): the router's slots (`MoeRouterSigmoidBiasSlots_v2`, a unit a token), each slot's
@@ -245,28 +245,35 @@ def templates(v: dict, scale: float, kernel: str, blocks: dict) -> dict:
 
 
 def cut(v: dict, fns: dict, lab: dict, blocks: dict, name: str) -> tuple[WI.Circuit, dict]:
-    """The layer's cut at T tokens (module docstring) and its plan: per projection its read templates, blocks and tables."""
+    """The layer's cut at T tokens (module docstring) and its plan: per projection its blocks, and its weight and scale reads'
+    template, tables, Definition and first unit (a read template two projections' tables share holds the first's units, then
+    the second's)."""
     from verity_vllm.pipeline.expert_rows import table_param
 
     T, topk, E = len(v["tokens"]), v["topk"], v["up"]["E"]
     rid = descriptor_id(fns["router"])
-    tmpls: list[tuple[object, int]] = [(fns["router"], T)]
+    units: dict[str, list] = {rid: [fns["router"], T]}
     wires: list[WI.Wire] = []
     params, tables, roots, openings, plan = {}, [], [], [], {}
 
-    def read(label: str, H: int, B: int) -> tuple[str, list[str], object]:
+    def add(fn, n: int) -> tuple[str, int]:
+        tid = descriptor_id(fn)
+        at = units.setdefault(tid, [fn, 0])[1]
+        units[tid][1] += n
+        return tid, at
+
+    def read(label: str, H: int, B: int) -> tuple[str, list[str], object, int]:
         fn = EMB.read(E, H)
-        tid, mine = descriptor_id(fn), []
-        tmpls.append((fn, B * topk * T))
+        (tid, base), mine = add(fn, B * topk * T), []
         for b in range(B):
-            at, param = b * topk * T, table_param(label, H, b)
+            at, param = base + b * topk * T, table_param(label, H, b)
             params[param] = H * E
             mine.append(param)
             tables.append(WI.Table(param, param, 0, H, E))
             roots.extend(WI.TableRead(tid, p, param, p, at, topk * T) for p in ("root", "domain"))
             openings.append(WI.Opening(tid, param, "tok", ("row", "salt", "path"), "o1", at, topk * T))
             wires.extend(WI.Wire(tid, "tok", rid, f"o{topk + k}", at + k * T, (T,), 0, (1,)) for k in range(topk))
-        return tid, mine, fn
+        return tid, mine, fn, base
 
     for proj, blk in (("up", "w13"), ("down", "w2")):
         S, n = v[proj], blocks[blk]
@@ -274,20 +281,18 @@ def cut(v: dict, fns: dict, lab: dict, blocks: dict, name: str) -> tuple[WI.Circ
         if N % n or G % n:
             raise ValueError(f"{proj}: blocks of {n} rows don't divide its {N} rows and G = {G}")
         B, NBG, per = N // n, -(-N // G), G // n
-        (rows, wt, wfn), (scales, st, sfn) = read(lab[proj]["w"], n * K // 2, B), read(lab[proj]["ws"], 2 * K // G, NBG)
-        gemm = fns[proj]
-        gid = descriptor_id(gemm)
-        tmpls.append((gemm, B * topk * T))
+        w, ws = read(lab[proj]["w"], n * K // 2, B), read(lab[proj]["ws"], 2 * K // G, NBG)
+        gid, g0 = add(fns[proj], B * topk * T)
         if proj == "up":
-            wires += [WI.Wire(gid, "w", rows, "o0", 0, (B * topk * T,), 0, (1,)),
-                      WI.Wire(gid, "ws", scales, "o0", 0, (NBG, per, topk * T), 0, (topk * T, 0, 1))]
+            wires += [WI.Wire(gid, "w", w[0], "o0", g0, (B * topk * T,), w[3], (1,)),
+                      WI.Wire(gid, "ws", ws[0], "o0", g0, (NBG, per, topk * T), ws[3], (topk * T, 0, 1))]
         else:
-            wires += [WI.Wire(gid, "w", rows, "o0", 0, (topk, B, T), 0, (T, topk * T, 1)),
-                      WI.Wire(gid, "ws", scales, "o0", 0, (topk, NBG, per, T), 0, (T, topk * T, 0, 1))]
-            wires += [WI.Wire(gid, "g", rid, f"o{k}", k * B * T, (B, T), 0, (0, 1)) for k in range(topk)]
-        plan[proj] = {"n": n, "B": B, "NBG": NBG, "rows": (rows, wt, wfn), "scales": (scales, st, sfn), "gemm": gid}
+            wires += [WI.Wire(gid, "w", w[0], "o0", g0, (topk, B, T), w[3], (T, topk * T, 1)),
+                      WI.Wire(gid, "ws", ws[0], "o0", g0, (topk, NBG, per, T), ws[3], (T, topk * T, 0, 1))]
+            wires += [WI.Wire(gid, "g", rid, f"o{k}", g0 + k * B * T, (B, T), 0, (0, 1)) for k in range(topk)]
+        plan[proj] = {"n": n, "B": B, "NBG": NBG, "rows": w, "scales": ws, "gemm": gid}
     reg = WI.Registered(params, tuple(tables), (), tuple(roots), tuple(openings))
-    return WI.Circuit(name, tuple(tmpls), wires=tuple(WI.coalesce(wires)), registered=reg), plan
+    return WI.Circuit(name, tuple((fn, n) for fn, n in units.values()), wires=tuple(WI.coalesce(wires)), registered=reg), plan
 
 
 # ---- the tables and the window -----------------------------------------------------------------------------------------------
@@ -300,7 +305,7 @@ def commit_tables(v: dict, plan: dict, committer: dict) -> dict:
     out = {}
     for proj, W, WS in (("up", "W13", "WS13"), ("down", "W2", "WS2")):
         S, p = v[proj], plan[proj]
-        for what, stack, (_tid, params, _fn) in (("w", v[W], p["rows"]), ("ws", v[WS], p["scales"])):
+        for what, stack, (_tid, params, _fn, _at) in (("w", v[W], p["rows"]), ("ws", v[WS], p["scales"])):
             for b, param in enumerate(params):
                 if param not in committer["nonces"]:
                     raise LookupError(f"{param}: the registration names no such table")
@@ -329,7 +334,7 @@ def record(win: WI.Window, v: dict, fns: dict, plan: dict, tables: dict, forge: 
     for proj in ("up", "down"):
         p = plan[proj]
         n = p["n"]
-        for part, (_tid, params, fn) in (("w", p["rows"]), ("ws", p["scales"])):
+        for part, (_tid, params, fn, _at) in (("w", p["rows"]), ("ws", p["scales"])):
             rows, salts, paths = [], [], []
             for param in params:
                 tb = tables[param]
@@ -393,6 +398,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scale", type=float, default=2.5, help="the router's routed scaling factor (GLM-5.3's 2.5)")
     ap.add_argument("--kernel", default="block", help="the router Definition's KERNEL")
     ap.add_argument("--cc", default="9.0")
+    ap.add_argument("--checkpoint", help="a parameter the capture didn't open is composed from this checkpoint, held to the "
+                    "SHA-512 its params.json commits (`stage.Capture.from_checkpoint`)")
     ap.add_argument("--forge", choices=["w13"], help="flip bit 0 of every w13 GEMM unit's output after the gate")
     ap.add_argument("--bench", type=int, metavar="SEED", help="benchmark values of the same shapes (module docstring)")
     ap.add_argument("--circuit-only", action="store_true")
@@ -407,6 +414,7 @@ def main(argv: list[str] | None = None) -> int:
     t0, out = time.time(), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     cap = ST.Capture(Path(a.capture), a.step)
+    cap.checkpoint = a.checkpoint
     if a.rank not in cap.ranks:
         raise SystemExit(f"rank {a.rank} recorded no step {a.step}")
     if a.layer not in cap.layers:
