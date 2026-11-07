@@ -15,11 +15,11 @@ Every rounding is to the bound's side (`floorTo_le`, `le_ceilTo`). The exponenti
 `Real.exp_bound'`'s remainder (`series_true`); rounded squarings keep each side (`squares_false`, `squares_true`), and a
 negative argument goes through `e^x = 1/e^{-x}`. A logarithm is whatever candidate its exponential bounds confirm
 (`firstAbove_some`, `firstBelow_some`), else `ln y ≤ y − 1` or `1 − 1/y ≤ ln y`, at `|y|` since `ln y = ln |y|`
-(`abs_arg`). A power is `e^{θ ln c}`, which brackets `Real.rpow`'s `e^{θ ln c} cos(πθ)` at `c < 0`.
-`Bound`'s series is the partial sum of `ln((1+t)/(1−t)) = 2 Σ t^{2k+1}/(2k+1)` (`Real.hasSum_log_sub_log_of_abs_lt_one`),
-below it with every term nonnegative and above it with the tail bounded by a geometric series (`atanh_partial_le`,
-`atanh_le_partial`), after scaling by the `2^j` both helpers pick (`scale_le`), on their ranges (`boundLnUpper_le`,
-`lnBound_brackets`).
+(`abs_arg`). A power is `e^{θ ln c}`, `Real.rpow`'s value at `c > 0`, and `±e^{θ ln c}` brackets its
+`e^{θ ln c} cos(πθ)` at `c < 0`. `Bound`'s series is the partial sum of `ln((1+t)/(1−t)) = 2 Σ t^{2k+1}/(2k+1)`
+(`Real.hasSum_log_sub_log_of_abs_lt_one`), below it with every term nonnegative and above it with the tail bounded by
+a geometric series (`atanh_partial_le`, `atanh_le_partial`), after scaling by the `2^j` both helpers pick
+(`scale_le`), on their ranges (`boundLnUpper_le`, `lnBound_brackets`).
 
 Each bound passes at a deployed precision, one step of `2^-p` wide or less (`_honest`), and each conclusion fails at a
 bound on the wrong side (`_nontrivial`).
@@ -167,7 +167,8 @@ theorem expNonneg_true {x : ℚ} (hx : 0 ≤ x) (w : ℕ) : Real.exp x ≤ ((exp
     have hq : ∑ i ∈ range n, r ^ i / (i.factorial : ℚ) + r ^ n / (n.factorial : ℚ) * ((n + 1 : ℕ) : ℚ) / (n : ℚ) ≤
         (series true r w n).1 + (series true r w n).2 * ((n + 1 : ℕ) : ℚ) / (n : ℚ) := by
       gcongr
-    have hR : ((∑ i ∈ range n, r ^ i / (i.factorial : ℚ) + r ^ n / (n.factorial : ℚ) * ((n + 1 : ℕ) : ℚ) / (n : ℚ) : ℚ) : ℝ) =
+    have hR : ((∑ i ∈ range n, r ^ i / (i.factorial : ℚ) + r ^ n / (n.factorial : ℚ) * ((n + 1 : ℕ) : ℚ) / (n : ℚ) :
+        ℚ) : ℝ) =
         ∑ m ∈ range n, (r : ℝ) ^ m / (m.factorial : ℝ) + (r : ℝ) ^ n * (n + 1) / (n.factorial * n) := by
       push_cast; ring
     calc Real.exp r ≤ _ := hb
@@ -735,7 +736,8 @@ theorem powLowerSound_nontrivial : ¬ ((1 : ℚ) : ℝ) ≤ ((1 / 2 : ℚ) : ℝ
   norm_num
 
 /-- At `p = 64`, `(1/2)^(1/2)`'s bounds are within `2^-62`. -/
-theorem powUpperSound_honest : powUpper (1 / 2) (1 / 2) 64 - powLower (1 / 2) (1 / 2) 64 ≤ 1 / 2 ^ 62 := by decide +kernel
+theorem powUpperSound_honest : powUpper (1 / 2) (1 / 2) 64 - powLower (1 / 2) (1 / 2) 64 ≤ 1 / 2 ^ 62 := by
+  decide +kernel
 
 /-- `0` is not above `(1/2)^1`. -/
 theorem powUpperSound_nontrivial : ¬ ((1 / 2 : ℚ) : ℝ) ^ ((1 : ℚ) : ℝ) ≤ ((0 : ℚ) : ℝ) := by
@@ -745,7 +747,8 @@ theorem powUpperSound_nontrivial : ¬ ((1 / 2 : ℚ) : ℝ) ^ ((1 : ℚ) : ℝ) 
 
 /-- `Bound.lnUpper (1/100)` is within `2^-63` of `ln 100` from above: `Bound.lnBound 100 1 false` is below it. -/
 theorem boundLnUpperSound_honest :
-    _root_.SampledProofs.Bound.lnUpper (1 / 100) - _root_.SampledProofs.Bound.lnBound 100 1 false < 1 / 2 ^ 63 := by decide +kernel
+    _root_.SampledProofs.Bound.lnUpper (1 / 100) - _root_.SampledProofs.Bound.lnBound 100 1 false < 1 / 2 ^ 63 := by
+  decide +kernel
 
 /-- `0` is not at least `ln 2 = ln(1/(1/2))`. -/
 theorem boundLnUpperSound_nontrivial : ¬ Real.log (1 / ((1 / 2 : ℚ) : ℝ)) ≤ ((0 : ℚ) : ℝ) := by
@@ -756,7 +759,8 @@ theorem boundLnUpperSound_nontrivial : ¬ Real.log (1 / ((1 / 2 : ℚ) : ℝ)) �
 
 /-- `Bound.lnBound 100 1`'s two sides are within `2^-100`. -/
 theorem boundLnBoundSound_honest :
-    _root_.SampledProofs.Bound.lnBound 100 1 true - _root_.SampledProofs.Bound.lnBound 100 1 false < 1 / 2 ^ 100 := by decide +kernel
+    _root_.SampledProofs.Bound.lnBound 100 1 true - _root_.SampledProofs.Bound.lnBound 100 1 false < 1 / 2 ^ 100 := by
+  decide +kernel
 
 /-- `1` is not below `ln(2/1)`. -/
 theorem boundLnBoundSound_nontrivial : ¬ ((1 : ℚ) : ℝ) ≤ Real.log (((2 : ℕ) : ℝ) / ((1 : ℕ) : ℝ)) := by

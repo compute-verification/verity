@@ -92,7 +92,8 @@ def atanhTerms (t2 : Rat) (w : Nat) : Nat → Nat → Rat → Rat → Rat
   | 0, _, _, acc => acc
   | n + 1, i, pw, acc => atanhTerms t2 w n (i + 1) (floorTo (pw * t2) w) (acc + 2 * pw / ((2 * i + 1 : Nat) : Rat))
 
-/-- About `ln((1 + t)/(1 − t)) = 2 atanh t` for `|t| ≤ 1/3`, within about `2^-(w - 4)`: its series to `w/3 + 2` terms. -/
+/-- About `ln((1 + t)/(1 − t)) = 2 atanh t` for `|t| ≤ 1/3`, within about `2^-(w - 4)`: its series to `w/3 + 2`
+terms. -/
 def twoAtanh (t : Rat) (w : Nat) : Rat := atanhTerms (floorTo (t * t) w) w (w / 3 + 2) 0 (floorTo t w) 0
 
 /-- About `ln y` for `y > 0`, within about `2^-(w - 8)`; no bound rests on it. With `y = 2^j z`, `1/2 < z < 2`, it is
@@ -120,7 +121,7 @@ def firstBelow (y : Rat) (p w : Nat) : Nat → Rat → Option Rat
   | 0, _ => none
   | k + 1, l => if expUpper l w ≤ y then some l else firstBelow y p w k (l - 1 / 2 ^ p)
 
-/-- A multiple of `2^-p` at least `ln y`. Below `y > 0` it follows `Real.log`: `ln 0 = 0` and `ln y = ln (−y)`. -/
+/-- A multiple of `2^-p` at least `ln y`. At `y ≤ 0` it takes `Real.log`'s values: `ln 0 = 0` and `ln y = ln (−y)`. -/
 def lnUpper (y : Rat) (p : Nat) : Rat :=
   if y = 0 then 0
   else
@@ -128,7 +129,7 @@ def lnUpper (y : Rat) (p : Nat) : Rat :=
     let w := lnPrec a p
     (firstAbove a p w lnTries (ceilTo (lnApprox a w) p)).getD (ceilTo (a - 1) p)
 
-/-- A multiple of `2^-p` at most `ln y`. Below `y > 0` it follows `Real.log`: `ln 0 = 0` and `ln y = ln (−y)`. -/
+/-- A multiple of `2^-p` at most `ln y`. At `y ≤ 0` it takes `Real.log`'s values: `ln 0 = 0` and `ln y = ln (−y)`. -/
 def lnLower (y : Rat) (p : Nat) : Rat :=
   if y = 0 then 0
   else
@@ -180,8 +181,10 @@ def powLower (c θ : Rat) (p : Nat) : Rat :=
 #guard lnUpper (1 / 10 ^ 30) 64 - lnLower (1 / 10 ^ 30) 64 ≤ 1 / 2 ^ 62
 #guard lnLower (10 ^ 30) 64 < 69.07755278982137052053974364 && 69.07755278982137052053974364 < lnUpper (10 ^ 30) 64
 #guard lnUpper (10 ^ 30) 64 - lnLower (10 ^ 30) 64 ≤ 1 / 2 ^ 62
-#guard powLower (1 / 2) 2 64 ≤ 1 / 4 && 1 / 4 ≤ powUpper (1 / 2) 2 64 && powUpper (1 / 2) 2 64 - powLower (1 / 2) 2 64 ≤ 1 / 2 ^ 62
-#guard powLower (1 / 2) (1 / 2) 64 < 0.707106781186547524400844 && 0.707106781186547524400844 < powUpper (1 / 2) (1 / 2) 64
+#guard powLower (1 / 2) 2 64 ≤ 1 / 4 && 1 / 4 ≤ powUpper (1 / 2) 2 64 &&
+  powUpper (1 / 2) 2 64 - powLower (1 / 2) 2 64 ≤ 1 / 2 ^ 62
+#guard powLower (1 / 2) (1 / 2) 64 < 0.707106781186547524400844 &&
+  0.707106781186547524400844 < powUpper (1 / 2) (1 / 2) 64
 #guard powLower 2 (-1) 64 ≤ 1 / 2 && 1 / 2 ≤ powUpper 2 (-1) 64 && powUpper 2 (-1) 64 - powLower 2 (-1) 64 ≤ 1 / 2 ^ 62
 #guard powLower 0 3 64 == 0 && powUpper 0 3 64 == 0 && powLower 0 0 64 == 1 && powUpper (1 / 7) 0 64 == 1
 #guard lnLower 0 64 == 0 && lnUpper 0 64 == 0
