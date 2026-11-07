@@ -536,10 +536,9 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
 
 - **What the figures mean.** Each figure is the hardware multiple over the reference training algorithm at its MFU,
   MFU₀ (`Nci.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
-- **Their status.** Draft, premises contested. `output-premise` (`draft:E1-Prop6b`) sets them, and
-  `reference-remote-h200-pouw`'s and `reference-remote-h200-sampled`'s, at inference blocks of 2·10⁷ fresh bits, where
-  its premise `draft:E1-output-premise` (assumed to 7.2·10⁶ bits) is contested. `cover` sets
-  `reference-remote-h200-elementary`'s 1, contested via `output-premise`.
+- **Their status.** Draft. `output-premise` (`draft:E1-Prop6b`) sets them, `reference-remote-h200-pouw`'s and
+  `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, contested at its premise
+  `draft:E1-output-premise`. `cover` sets `reference-remote-h200-elementary`'s 1, contested via `output-premise`.
 - **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to
   98%).
 - **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all
