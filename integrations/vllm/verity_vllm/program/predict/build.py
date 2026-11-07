@@ -55,7 +55,10 @@ WRAPPERS = {("step", "greedy"): ("verity-vllm/engine-step/v1", "vLLMStep"),
             ("request", "greedy"): ("verity-vllm/greedy-request/v1", "vLLMRequest"),
             ("step", "stochastic"): ("verity-vllm/stochastic-engine-step/v1", "vLLMStep"),
             ("request", "stochastic"): ("verity-vllm/stochastic-request/v1", "vLLMRequest")}
-CACHED_SRC = "verity-vllm/cached-greedy-request/v1"  # `vllm_meta.CachedGreedyRequest.DERIVE_SOURCE`, with a cached prefix
+#: a request wrapper's source after a history of C rows: C < LP, a cached prefix (`vllm_meta.CachedGreedyRequest.DERIVE_SOURCE`,
+#: `CachedStochasticRequest`'s); C >= LP, a request resumed at decode C, which no Build wrapper traces yet
+CACHED_SRC = {"greedy": "verity-vllm/cached-greedy-request/v1", "stochastic": "verity-vllm/cached-stochastic-request/v1"}
+RESUMED_SRC = {"greedy": "verity-vllm/resumed-greedy-request/v1", "stochastic": "verity-vllm/resumed-stochastic-request/v1"}
 I64 = Value(64)
 
 
@@ -450,8 +453,9 @@ class _Model:
         self.lp_of: dict[int, int] = {}
         self.plus_one: dict[int, Coll] = {}
 
-    def open_with(self, prefix: Coll, C: int) -> None:
+    def open_with(self, prefixes: list[Coll], C: int) -> None:
         """Every layer's history opens with its rows of `prefix` (`rules.vllm_bindings.kv_prefix`: bf16 [NL, 2, C, KVH*D], keys then values)."""
+        prefix, = prefixes
         rl = self.C.KVH * self.C.D
         for L, (kh, vh) in enumerate(self.hist):
             kh += [prefix.refs.slice(((2 * L) * C + j) * rl, ((2 * L) * C + j + 1) * rl) for j in range(C)]
@@ -671,24 +675,33 @@ class _Decoder:
         layer = ([(r, R.NH * R.D), (r, R.KVH * R.D)] if R.qk_norm == "all" else []) + [(r, C.H)] * 2
         return [(r, C.H)] + layer * C.NL + [(1, C.V // self.world)]
 
+    def prefix_params(self, C: int) -> list[tuple[str, Type]]:
+        """The Input a request's history of its first C positions opens with (`vllm_meta.prefix_input`): every layer's key and value rows."""
+        return [("prefix", _arr((self.C.NL, 2, C, self.C.KVH * self.C.D), 16))]
+
     def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
         return _Model(B, self.specs, W, self.specs.C, peers)
 
 
 def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int | None, T: int | None, policy: _Stochastic | None,
-          batch: list | None, C: int = 0) -> list[Coll]:
+          batch: list | None, C: int = 0, last: Coll | None = None) -> list[Coll]:
     """The wrapper's forwards over `model` -> its samples: a `step`'s M rows at pos0.. and its last row's sample, or a `request`'s
-    prefill of LP rows (rows C.. after a cached prefix of C), then T decodes, each fed the previous sample."""
+    positions C..LP+T-1 after a history of C: its prefill of rows C..LP-1 and its sample, then a decode at each position from LP on,
+    each fed the previous sample; a history reaching LP or past it (C >= LP) resumes at decode C, fed `last`, the token there.
+    The request's step k (its launch step, `_Launch.step`) samples its event k."""
     if wrapper == "step":
         hid = model.forward(rows, pos0)
         return [model.sample(hid[-1], 0, pos0 + M - 1, policy)]
-    hid = model.forward(rows[C:], C)
-    toks = [model.sample(hid[-1], 0, int(LP) - 1, policy)]
-    for s in range(int(T)):
+    LP, T = int(LP), int(T)
+    toks: list[Coll] = []
+    if C < LP:
+        hid = model.forward(rows[C:], C)
+        toks.append(model.sample(hid[-1], 0, LP - 1, policy))
+    for p in range(max(C, LP), LP + T):
         if batch is not None:
-            model.launch.step = s + 1
-        hid = model.forward([Coll(I32, toks[-1].refs)], int(LP) + s)
-        toks.append(model.sample(hid[-1], s + 1, int(LP) + s, policy))
+            model.launch.step = len(toks)
+        hid = model.forward([Coll(I32, (toks[-1] if toks else last).refs)], p)
+        toks.append(model.sample(hid[-1], len(toks), p, policy))
     return toks
 
 
@@ -697,8 +710,11 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                   batch: list | None = None) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
-    first C prompt rows are a prefix-cache hit (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`) whose every layer's key and
-    value rows a `prefix` input holds after the request's own; the prefill computes rows C..LP-1. A request on one rank drops its dead
+    request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
+    (`prefix_params`): C < LP, a prefix-cache hit (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`), whose prefill computes
+    rows C..LP-1; on the sparse-attention decoder also C >= LP, a request resumed at decode C (a Commit window carrying it in), its
+    first decode fed the `last_token` Input, its samples the LP + T - C of decodes C..LP+T-1, each of its steps one launch of
+    `batch`. On that decoder the Build traces neither yet (its rules seed no history). A request on one rank drops its dead
     units (`program.prune`, as the Build's derive does): the last layer's rows before the prefill's last, which no sample reads.
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
     `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
@@ -710,15 +726,18 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     world, rank, C = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0)), int(C)
-    if C and (wrapper, kind, world, type(net)) != ("request", "greedy", 1, _Decoder):
+    dense = type(net) is _Decoder
+    if C and (wrapper != "request" or not hasattr(net, "prefix_params") or (dense and (kind, world) != ("greedy", 1))):
         raise Unexpressible(f"vocabulary cannot express: a cached prefix on a {kind} {wrapper} at TP{world} of the {net.model_class} decoder "
-                            f"(the cached greedy request on one rank of the dense or fused-MoE decoder only)")
-    if C and not 0 < C < int(LP):
-        raise Unexpressible(f"vocabulary cannot express: a cached prefix of {C} rows for a prompt of {LP} (0 < C < LP)")
+                            f"(a request's, greedy on one rank of the dense or fused-MoE decoder, or on the sparse-attention decoder)")
+    if C and not 0 < C < (int(LP) if dense else int(LP) + int(T)):
+        raise Unexpressible(f"vocabulary cannot express: a history of {C} rows for a prompt of {LP}" +
+                            (" (0 < C < LP)" if dense else f" and {T} decodes (0 < C < LP + T)"))
     wrec = RecordType(*net.leaves())
     n = M if wrapper == "step" else int(LP)
-    events = 1 if wrapper == "step" else int(T) + 1
-    passes = [n] + [1] * (events - 1)
+    resumed = wrapper == "request" and C >= int(LP)
+    passes = [M] if wrapper == "step" else [1] * (int(LP) + int(T) - C) if resumed else [int(LP) - C] + [1] * int(T)
+    events = len(passes)
     params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
     if kind == "stochastic":
         params.append(("seed", Array(1, I64)))
@@ -727,8 +746,11 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     words = sum(net.schedule_words(r) for r in passes) if hasattr(net, "schedule_words") else 0
     if words:
         params.append(("schedule", Array(words, I32)))       # `vllm_meta.ScheduledWithPeers`
+    history = len(params)
     if C:
-        params.append(("prefix", _arr((net.C.NL, 2, C, net.C.KVH * net.C.D), 16)))   # `vllm_meta.prefix_input`
+        params += net.prefix_params(C)   # `vllm_meta.prefix_input`
+    if resumed:
+        params.append(("last_token", Array(1, I32)))
     n_user = len(params)
     if world > 1:
         # `vllm_meta.WithPeers`: world - 1 peer Inputs per collective of each forward pass, in call order
@@ -739,7 +761,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     B = Builder(params, Value(1))
     ids = Coll(params[0][1], Affine("p", 0, 0, n))
     W = Coll(wrec, Affine("p", len(params) - 1, 0, wrec.leaves))
-    schedule = Coll(params[n_user - 1][1], Affine("p", n_user - 1, 0, words)) if words else None
+    user = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[:n_user])]
+    schedule = user[history - 1] if words else None
     peers = _Peers([Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params[n_user:-1], start=n_user)], world, rank, schedule)
     policy = None
     if kind == "stochastic":
@@ -756,9 +779,10 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if wrapper == "request" and isinstance(model, _Model):
         model.ctx = launch_rows(phi, LP, T, C)
     if C:
-        model.open_with(Coll(params[n_user - 1][1], Affine("p", n_user - 1, 0, params[n_user - 1][1].leaves)), C)
+        model.open_with(user[history:n_user - resumed], C)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
-    toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch, C=C)
+    toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch, C=C,
+                 last=user[n_user - 1] if resumed else None)
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     if peers.n != len(peers.inputs) or peers.k != words:
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
@@ -769,7 +793,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     elif wrapper == "request" and (world == 1 or dead_free):
         body = dead_free_form(body)[0]
     t_body = time.time()
-    src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C else WRAPPERS[(wrapper, kind)]
+    src_class, derive_name = ((RESUMED_SRC if resumed else CACHED_SRC)[kind], WRAPPERS[(wrapper, kind)][1]) if C else WRAPPERS[(wrapper, kind)]
     if world > 1:
         src_class = f"verity-vllm/{'scheduled-with-peers' if words else 'with-peers'}/v1[{src_class}]"
     name = f"{derive_name}[{net.model_class}]"

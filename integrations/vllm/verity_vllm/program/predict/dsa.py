@@ -6,6 +6,9 @@ launch (`common._Launch`: the batch a request's calls run in without batch invar
 and all-reduce routes (`registry.bf16_gemm_check`, `registry.tp_allreduce`), vLLM's tuned fused-MoE tile for the device
 (`engine.profiles.devices`) and FA3's split count (`registry.sparse_mla_split`).  The configuration is the generic profile's
 (`generic.derive_config` at the rank) and the weights record its map (`generic._mla_weight_field`) in the family's module order.
+A request after a history of C positions (`build.build_program`'s C: a prefix-cache hit, or where a Commit window carries it in)
+reads each layer's history as Inputs (`Net.prefix_params`): every layer's latent rows and every indexer layer's keys and scales,
+which open its layers' logs (`_Model.open_with`) before its first call.
 
 Vocabulary: EmbeddingShard and the embedding's all-reduce; RMSNorm (layer 0's input norm); per layer the block-FP8 linears (FlashInfer
 below 32 rows, else DeepGEMM), DsaRMSNorm of q_c and kv_c, the interleaved RoPE of k_pe and of each head's q_pe, the latent absorptions
@@ -25,7 +28,7 @@ from verity.ml.circuits.defs import Builder
 from verity.ml.circuits.refs import Coll, PartLog, Refs, concat, strided_view
 from verity.ml.circuits.types import Type, Value
 
-from .common import Unexpressible, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
+from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
 from .phi import Phi
 
 
@@ -121,6 +124,14 @@ class Net:
         H = int(self.C["H"])
         return [(r, H)] * (1 + 2 * self.NL) + [(1, int(self.C["V"]))]
 
+    def prefix_params(self, C: int) -> list[tuple[str, Type]]:
+        """The Inputs a request's history of its first C positions opens with (`_Model.open_with`), as `vllm_dsa` keeps it: every
+        layer's latent rows `prefix` (bf16 [NL, C, KV_LORA + QK_ROPE]: the normed kv_c, then the roped k_pe), and the indexer
+        layers', in layer order, index-K slots `prefix_ik` (e4m3 [NI, C, INDEX_HEAD_DIM]) and their scales `prefix_iks` (f32 [NI, C])."""
+        NI, row = len(self.indexers), int(self.C["KV_LORA"]) + int(self.C["QK_ROPE"])
+        return [("prefix", _arr((self.NL, C, row), 16)), ("prefix_ik", _arr((NI, C, int(self.C["INDEX_HEAD_DIM"])), 8)),
+                ("prefix_iks", _arr((NI, C), 32))]
+
     def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
         return _Model(self, B, W, peers)
 
@@ -147,6 +158,21 @@ class _Model:
 
     def call(self, fn, *refs: Refs) -> Coll:
         return self.B.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), refs)))
+
+    def open_with(self, prefix: list[Coll], C: int) -> None:
+        """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the latent rows, then the indexer layers'
+        index-K slots and scales), read and never computed: the request's own rows follow at positions C.."""
+        latent, ik, iks = prefix
+        for L in range(self.net.NL):
+            logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
+            if len(logs["latent"]):
+                raise AssertionError(f"layer {L}'s history opens once, before its first call")
+            for j in range(C):
+                logs["latent"].append(latent[L][j].refs)
+        for n, L in enumerate(sorted(self.net.indexers)):
+            for j in range(C):
+                self.logs[L]["ik"].append(ik[n][j].refs)
+                self.logs[L]["iks"].append(iks[n][j].refs)
 
     def forward(self, toks: list[Coll], pos0: int) -> list[Refs]:
         """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""
