@@ -24,8 +24,8 @@ that uses a word below.
    that says *served, end to end, measured, proved, guarantees, exact, bit-exact, credited, accepted, PASS, committed,
    zero-knowledge, hiding, live, enforces, landed, works* or *pinned*.
 2. **Read what backs each, not its summary:** the code that runs (followed from the entry point; a docstring says what
-   was meant), the run's own outputs and labels, a theorem's statement and the definitions it reads, `main` for
-   "landed", the code for the names a relayed rule cites. Ask the questions below, and the one that matters: would
+   was meant), the run's own outputs and labels, a theorem's statement and the definitions it reads (and for "proved",
+   the four checks the lean-proofs skill names), `main` for "landed", the code for the names a relayed rule cites. Ask the questions below, and the one that matters: would
    Daniel, reading that rather than the summary, recognize it as what he asked for? A "but" you'd have to explain is a
    smell.
 3. **Report every smell**, yours or another lane's (to its owner too), as below; or "none found" with what you read.
@@ -62,7 +62,8 @@ Each question heads a catalogue section, whose entries are its examples.
 7. **Does each check fail when it should?** Not a negative refused for an unrelated reason, a gate that can't fail, a
    test that reads only its own fixture or never ran where it matters, a thing compared with itself.
 8. **Does the theorem or bound say what it reads as?** No definition that makes it vacuous, premise known false or true
-   only of an honest machine, honest speed where the fastest adversary's is needed, or doc of another version.
+   only of an honest machine, contract no two-session instance meets, uncounted extractor or simulator, honest speed
+   where the fastest adversary's is needed, or doc of another version.
 9. **Is anything deferred, or only marked, but stated as done?** Queued isn't landed, "will" isn't "does", wired isn't run.
 10. **Did you relay it without reading it?** Another lane's summary is a quote until you've read what backs it; a
     hypothesis goes out marked as one.
