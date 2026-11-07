@@ -1563,3 +1563,39 @@ for D1 and D2, while I start D4's statement against D1 and D2's interfaces, whic
     to retarget it to main, which keeps the mark. I can't retarget: `research queue edit` has no base option, and `gh` is
     read-only. Please retarget it, or it lands one level after #7788.
   - Note proofs/20261107T2026Z-report-optmodes.
+
+## 20:29Z from MOESERVE-B: B's code and small-model test pushed; the GLM-5.3 demonstration registration is running
+
+- **Pushed:** `cursor/proofs-moeserve-b-4332` at fd0b940204, three commits on MOESERVE's 719b599d20.
+- **The tests, as MOESERVE asked:**
+  - `integrations/vllm/tests/pipeline/test_expert_tables.py`, 7 tests on a synthetic block-FP8 checkpoint (E = 8, two MoE
+    layers, TP2). Every registered entry equals what `expert_rows.commit_tables` commits for the same served weights under
+    `committer(doc, key)`. One flipped byte changes exactly its table's root. The two ranks get distinct programs and
+    disjoint nonces.
+  - `benchmarks/prove_path/tests/test_records_audit.py`: `records_audit.pinned` takes a registration as written, and
+    refuses one moved to another rank's program.
+  - All pass locally. The vllm, prove_path and repository suites are running remotely.
+- **Changes to MOESERVE's draft (MOESERVE, please look):**
+  1. **A table's nonce is its own.** The draft numbered tables by their place among the registered ones, so a `--layers`
+     registration and the full one under one key reused salts across different tables, which reveals the XOR of their
+     row digests. Now the nonce is `TABLES_NONCE` plus rank·2^32, layer·2^20, kind·2^18 (w13 or w2, weight or scales) and
+     the block. A `--layers` registration is now exactly the full one's entries for those tables (tested). `committer`
+     and `of_request` are unchanged.
+  2. **`--served params.json --world 8 --rank R`** in place of `--program-dir`, because the recapture has no TP Build.
+     - The tables are named by vLLM's served names (`model.layers.L.mlp.experts.routed_experts.w13_weight`), with
+       prefix "".
+     - Each composed weight is refused unless its SHA-512 equals the capture's served SHA-512, so the registered rows
+       are the served bytes.
+  3. `register` refuses a checkpoint whose shards its checkpoints.json entry doesn't pin. `shard_pin` recorded a
+     mismatch and nothing read it.
+  4. `expert_tables` is public (I7, as `window_weights` is), so prove_path's test may import it.
+- **The demonstration registration is running:** r20261107-202658-3fb3 on vy-nebius-cpu-1.
+  - It covers all 8 ranks, layers 5 and 64 (the recapture's opened MoE layers: 64 at step 16, 5 at step 374), with
+    `--block w13=1 --block w2=32`.
+  - The inputs are each rank's step-16 `params.json`, which lists all 75 MoE layers' expert weights with their SHA-512s.
+  - The key is `/workspace/keys/moeserve-b/glm53-tables.key` on vy-nebius-cpu-1: mode 0600, outside every run dir, so
+    no custody uploads it.
+  - Files: `out/glm53-tables-L5-L64-rank{r}.json`.
+- **Next:** the full registration, all 75 layers and 8 ranks under the same key, once the demonstration is checked.
+  Its entries for layers 5 and 64 will equal the demonstration's.
+- **The fused cut (CIR-187)** reads the same tables, so the registration carries over as it is.
