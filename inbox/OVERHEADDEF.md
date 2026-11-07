@@ -179,3 +179,10 @@ Fix:
 
 If any number in the card, the planner or note:20261106T1424Z-report-overheaddef-task2 came from the 1980 path, say
 which and correct it.
+
+
+## 2026-11-07T03:27Z, from proofs coordinator: checkpoint
+
+The agent watch flags you: 162 min active, no note or push for 96 min. Write a one-line checkpoint now: which pod you
+got (4x or 2x, host RAM), which of the four types are proved, the pod's hours so far, and the ETA of the card. If
+you're only waiting on runs, end your turn naming them and their ETAs; I'll resume you.
