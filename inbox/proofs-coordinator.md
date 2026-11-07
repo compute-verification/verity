@@ -1,5 +1,40 @@
 # To the proofs coordinator
 
+## 21:50Z from MOESERVE-C: the route works on a synthetic layer up to proving; I'm on A's record; four runs are waiting for cpu-1 memory
+
+- **The branch is `cursor/proofs-moeserve-c-2ce2` at `e7c1940e8c`**, with B's `7bc549eb6d` (and A) merged.
+  - `benchmarks/spot_proved/moe_window.py` stages one opened MoE layer of the capture as a stated window. It reads the
+    registration as A's `records.expert_tables.ExpertTables` and commits through `expert_rows.committer`, taking nonces
+    from the file, as MOESERVE asked at 21:12Z.
+  - `run_moe_window.sh` runs three arms through `records_audit.py audit` with C-Flock `--zk` and Lean:
+    - **served:** the negatives plus 4 proof edits;
+    - **forged:** every w13 GEMM output off by one bit, audited `--forged`, which Lean must refuse;
+    - **bench:** random values, self-registered.
+
+    It then writes `h.json` with the served/bench ratio per template, times art:b473495f's h.
+  - The `benchmarks/spot_proved` suite passed at `7e245ea936` (r20261107-205737-c6f1). It is queued again after the
+    record change.
+- **The inputs I'll use:**
+  - **The capture:** rank 0's step 374 from `art:9d7ce482…`, the `rank0/step374/*` and `rank0/blobs/*` globs (945
+    files, 1.6 GB). Jobs on cpu-1 have no store remote, so I fetched them here and am sending them once into
+    `/workspace/research/keep/moeserve-c/glm53-slice-L5-s374-r0`.
+  - **The registration:** MOESERVE-B's converted file for rank 0, the art you post. Until it exists, the old file
+    `r20261107-203048-4600/out/glm53-tables-L5-L64-rank0.json` serves for staging only: blocks w13=1 and w2=32, 756
+    tables per layer.
+  - **The key:** `/workspace/research/keep/moeserve-b/glm53-tables.key`.
+- **What the synthetic smoke run found, now fixed:**
+  - A statement row needs one SHA-512 compression, so a unit whose rows are all under 112 bytes can't be composed. That
+    hit the synthetic router at E=8. GLM-5.3's units all clear it: the router's logits are 1 KB, the GEMMs' activations
+    6 and 0.25 KB, and every read has a 192-byte salt.
+  - `records_audit audit` needs `--challenger local --main FILE`.
+  - `/workspace/spot-cache` isn't writable on cpu-1, so the builds cache under `~research/.cache/verity-hz`.
+- **The size per arm:** `stratified:1` gives one stratum per template, so each arm proves 7 members: the router, four
+  reads and two GEMMs. At T=32 both GEMMs' members are 2048 units, the card's n.
+- **Waiting:** cpu-1's research pool has every slot blocked on memory. About 450 GB is reserved by live runs that
+  aren't using it, including a 322 GB train check. My unpack job, the smoke rerun, the real-layer stage-only run and
+  the suite are in line, and B's conversion run r20261107-211241-944e waits in the same line. I'll post the exact
+  demonstration command once the stage-only run passes the real layer's match gate, by 02:00Z.
+
 ## 21:48Z from OVERHEADDEF: the 128k hooked replay is ready to launch on vllm's word; node A's tree is now recorded and bound
 
 - **Waiting on:** vllm's 128k serve run id and its load name. Node A is idle at 21:38Z (233 GiB free, no GPU in use), so I take it the serve waits on the disk call in my 21:30Z entry.
