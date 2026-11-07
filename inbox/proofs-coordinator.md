@@ -2488,3 +2488,27 @@ What reads the ZK server party today, and what I'll change. Nothing on the core 
 - This is lever 2a in the PRF-456 table v2 (note `20261107T2134Z-report-hillclimb-prf456`). It's on branch `cursor/proofs-provesplit-4c1e` @ a20293b342, off by default, and a PR is possible tonight if you want it.
 - mla-combine and all-reduce in the same run land by about 21:55Z.
 - To ask kernels for the H200 run: add `FC_STMT_CACHE=1` beside FC_PHASE_TIMES, `dev` arm, quant K2048 and MoE GemmW.
+
+## 21:40Z from TWOSESS: `InnerNumbers` at the deployed two-stage code is written and pushed, its check queued; it needs nothing PR 2 is still writing, only `zkOk h.xS₀`
+
+- **The theorem.** `SpotFlock.innerNumbers_code h h₀ rel : Claims.Sampling.InnerNumbers (SamplingDeploy.deploy rel (code h))`, where `h₀ : zkOk h.xS₀ = true`.
+  - Its proof is one line: `SamplingDeploy.innerNumbers_deploy rel (code h) (sessionsIn_code h h₀)`.
+  - It has no `sorry` and no named premise. By grep, nothing it reads has a `sorry`, `axiom` or `native_decide`.
+- **Where.** `cursor/proofs-twosess-64af` @ `96a206a2b6`, stacked on TSVERIFY's head `2bf681521b`.
+  - It adds one file, `Security/Proofs/Flock/SpotFlock/Numbers.lean`, and one line, `public import Proofs.Flock.SpotFlock.Numbers`, in `Security/Proofs/Flock.lean`, after `…SpotFlock.KS`.
+  - To copy it: `git checkout origin/cursor/proofs-twosess-64af -- Security/Proofs/Flock/SpotFlock/Numbers.lean`, then add that line.
+- **Check.** Run `r20261107-212742-16ee` (cpu-2, proofs pool) runs `verity lean try` with the axiom probe on `Numbers.lean`.
+  - It holds check slot p10, but it is waiting for a Lean build slot: all three are taken and five audits are ahead of it.
+  - ETA about 22:20Z. I'll post its verdict here.
+- **The dependency, stated precisely.** It needs no fact PR 2 is still writing.
+  - It reads only `sessionsIn_code` (`SpotFlock/KS.lean`, proved at `7747f8c230`) and that lemma's premise `h₀ : zkOk h.xS₀ = true`, which `ksTwo_spot` already takes.
+  - `ksTwo_spot` doesn't need this theorem: `ksTwo_atOrder` derives `InnerNumbers` from `SessionsIn` itself.
+  - It is for `refinesTwo` in `Spot.lean`. Its seventh argument to `sessionsTwo_compiled`, the `hnum` after `sessionRuns`, becomes `(innerNumbers_code h h₀ _root_.Flock.Readable.relation)`. `deployOf Flock.Spot.D (code h)` is `deploy relation (code h)` by definition, as with `sessionRuns`.
+- **Why `h₀` can't be dropped at an arbitrary `Held`.** `session` gives `h.xS₀`'s statement at every transcript refused before its session, and such a transcript always exists (the empty one).
+  - So, at `code h`, `InnerNumbers` comes down to its two bounds at `h.xS₀`: Flock's `ε_table` at most `tables · 2^-205`, and its weight at most `tables · 2^33`, where `tables = (shapeOf h.xS₀).length`. `N₀` agrees by definition.
+  - Those are `tableErr_zk_le`'s bound and the weight's bound, and they hold only for tables in the masked range (`25 ≤ m ≤ 35`, `InRange`), which is what `zkOk` decides. If `h.xS₀` sets up out of range, nothing bounds them.
+  - Accepted sessions need nothing more: `sessionOk` already puts them in scope, with `h.xS₀`'s shapes.
+- **A proposal, TSVERIFY's call since `Code.lean` is its file.** `Held` could carry `xS₀_ok : zkOk xS₀ = true`.
+  - Then `sessionsIn_code`, `ksTwo_spot`, `innerNumbers_code` and `refinesTwo` all drop `h₀`.
+  - Otherwise, `refinesTwo` takes `h₀`, as `ksTwo_spot` does.
+- **Next.** I'm free for whichever of PR 2's code facts TSVERIFY hands me. `inbox/TWOSESS.md` had none at 21:37Z, and I'll check it at each checkpoint.
