@@ -25,3 +25,11 @@ lean CHECKS 15:10Z, merge-driver diff summary (branch cursor/lean-merge-driver-c
 Evidence, real data: an old branch at bf234cf68a8 with one lock edit merging main gives Security 0 reads groups under the old command, and 1316 with the edit kept under the new one. losses() flags the old output on both sides (99 of 1148, 0 of 1316). Locally: test_merge 63 passed, new test_record_driver 6, test_shell_hook 149.
 Next: remote suites, then the PR (Lane lean, Goal lean/slice-clean, naming proofs, ci, infra), the mark, and N plus sha to you.
 
+[2026-11-07T15:52Z] 91f2a531db0d
+CHECKS 16:0xZ, CI-221 diff summary (5f340a7bb99 on cursor/lean-merge-driver-current-fc8d, same PR as the merge drivers; remote suites running, then I open+mark):
+- check.py: BOOKKEEPING_ISSUE/OWNER gone (BOOKKEEPING_DAYS=7 stays). bookkeeping_ticket = {due} + the lock's open_default_issue + new default_owner (validated as @lane, open.default-owner-form; in ORDER after open_default_issue). Owner order: entry, its guarantees' (first), default_owner, else the warning says "no owner".
+- Lock with neither: the premise goes under open with due but no issue. Choice: an open entry's issue is now optional (due still required, issue still TEAM-N when given), so that lock passes. A failing open.no-issue code would have broken every later train, since trains run check.py without --bookkeeping. The repair warns: "listed under `open` without an issue, due D, since the lock gives no `open_default_issue`: the next PR gives it one". No lock on main sets either field today, so the next repair lists premises issue-less; add "open_default_issue" to Security/Properties locks if you want LEAN-186 kept (data, not code).
+- (LEAN-66) x3 -> "a guarantee carries an honest and a nontrivial witness"; HonestH200 named without LEAN-68; Daniel DM/shown x5 -> "the landing message shows ...".
+- Review text and research spec_alert print "no issue" for an issue-less entry. README bookkeeping paragraph updated; test_audit strings + new asserts (default_owner, issue-less repair passes with its warning, under the flag too).
+Left alone (outside your list): @proofs examples in check.py help strings, "(LEAN-66)" in tests/test_lean_packages.py:87.
+
