@@ -1,7 +1,10 @@
 module
 
-public import Mathlib.Data.Fintype.BigOperators
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
 public import Proofs.Pouw.Dimension.H100WProofs
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGap
 
 /-!

@@ -2,6 +2,12 @@ module
 
 public import Proofs.Pouw.PearlC.TileCheck4
 public import Proofs.Pouw.PearlC.Block4Sem
+public import Definitions.Pouw.PearlC.TileCheck4
+public import Proofs.Pouw.PearlC.PeelFp4Proofs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.Tile4Circuit
 public import Proofs.Pouw.PearlC.TileGap
 
 /-!

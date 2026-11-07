@@ -1,7 +1,9 @@
-import Definitions.Pouw.Guarantees.Advantage
-import Proofs.Pouw.Game
-import Proofs.Pouw.NCP
-import Proofs.Pouw.PearlC
+module
+
+public import Definitions.Pouw.Guarantees.Advantage
+public import Proofs.Pouw.Game
+public import Proofs.Pouw.NCP
+public import Proofs.Pouw.PearlC
 
 /-!
 # The advantage form
@@ -11,6 +13,8 @@ import Proofs.Pouw.PearlC
 `Pouw.PearlC.gε_iff_gGap`). Theorem 1 in ε form (`theorem1Eps`), and each guarantee of
 `Definitions.Pouw.Guarantees.Advantage` from its gap form: `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

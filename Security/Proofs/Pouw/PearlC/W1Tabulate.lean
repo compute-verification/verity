@@ -2,7 +2,8 @@ module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.PearlC.W1Stop
-public import Proofs.Pouw.Prob
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # A cheap winning W1 program refutes TT_OUT at W1, and W1 charges only the branch a run takes

@@ -2,6 +2,8 @@ module
 
 public import Flock.Zk
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Zerocheck
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 /-!
 # The masked zerocheck's forms evaluate to the clear replay

@@ -1,5 +1,11 @@
 module
 
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
+public import Mathlib.Tactic.Continuity
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 public import Proofs.Pouw.PearlC.RowSeedGap
 
 /-!

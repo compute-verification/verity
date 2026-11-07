@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pouw.PearlC.Tile
-public import Definitions.Pouw.PearlC.Accum
 public import Definitions.Pouw.PearlC.PeelExactP
 public import Definitions.Pouw.PearlC.SkipP
 public import Definitions.Pouw.PearlC.FormingPDefs

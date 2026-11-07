@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Properties.Challenger
 public import Proofs.Properties.SampledProofs
-public import VStarRecursive
+public import VStarRecursive.Protocol
+import Proofs.Properties.Challenger
 
 /-!
 # A step of `acc_of_accepts`: what the compiled recursive component's acceptance unfolds to
@@ -150,6 +150,7 @@ theorem parts_of_accepts {p : VStar.Recursive.Params} {c : OneStage.Commitment} 
     split at hacc
     · cases hacc
     · next vs hv =>
+      have hv := VStar.Recursive.heldVerdicts_ok hv
       have hacc := _root_.Properties.Challenger.oneStage_check_of_accept (p := p.base) (c := c)
         (e := { e.base with verdicts := vs }) hacc
       obtain ⟨law, d, n, -, -, -, hva, -⟩ := _root_.Properties.SampledProofs.acceptMeans _ _ _ _ _ hacc

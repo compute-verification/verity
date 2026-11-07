@@ -1,7 +1,9 @@
-import Definitions.Pouw.Advantage
-import Definitions.Pouw.Guarantees.Game
-import Definitions.Pouw.Guarantees.NCP
-import Definitions.Pouw.Guarantees.PearlC
+module
+
+public import Definitions.Pouw.Advantage
+public import Definitions.Pouw.Guarantees.Game
+public import Definitions.Pouw.Guarantees.NCP
+public import Definitions.Pouw.Guarantees.PearlC
 
 /-!
 # PoUW's guarantees in ε form (trusted)
@@ -11,6 +13,8 @@ Each is a gap guarantee restated at the adversary's advantage `ε = g/(1 − g)`
 ncp-v1 (`GapFromTTNCP_U_v1`), Pearl-C's served point (`GapSm120v1LoopCast8p72Rev1Cap1000_8192`) and Pearl-C4's
 headline at 8192³ (`GapFp4Sm120_8192`). Its proof is the theorem `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees
 

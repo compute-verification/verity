@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Accounting.Confidence
 public import Definitions.Accounting.Physical
 public import Definitions.Accounting.CostModel
 public import Definitions.Pouw.Assumptions.Game

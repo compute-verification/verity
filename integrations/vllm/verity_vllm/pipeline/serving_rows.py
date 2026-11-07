@@ -85,11 +85,12 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    its all-reduce and residual add in column blocks as ``COLS`` (``in0`` the partials, ``in1``
                                    the residual -> ``out.<member>``, the row's r), its norm whole (``in0`` the row's committed r,
                                    ``in1`` the weight -> ``out.<member>``, the row's normed output); one index entry per row
-  ``Fp8GroupQuantUe8m0_v1{..}``, ``ScaledMmFp8BlockSharedScale_v1{N=1,..}``  the parts of every ``DeepGemmFp8Linear_v1`` row
-                                   (``PARTS``, at G = 128, ``PART_STATICS``): its quantisation whole (``in0`` the row's x ->
-                                   ``out.<member>``, its q and s; packed ports, `part_rows.read_part`), its GEMM in coordinates as
-                                   ``COORDS`` (``in0``, ``in1`` the row's committed q and s, ``in2``, ``in3`` ``w[n]`` and
-                                   ``ws[n // 128]`` -> ``out.<member>``, its y word n); one index entry per row
+  ``Fp8GroupQuantUe8m0_v1{..}``/``FlashInferFp8Quant1x128_v1{..}``, ``ScaledMmFp8BlockSharedScale_v1{N=1,..}``  the parts of every
+                                   ``DeepGemmFp8Linear_v1``/``FlashInferFp8Linear_v1`` row (``PARTS``, at G = 128): its quantisation
+                                   whole (``in0`` x -> its q and s: DeepGEMM's committed ``out.<member>``, FlashInfer's intermediates
+                                   ``o0``, ``o1``, `part_rows.MIDS`), its GEMM in coordinates as ``COORDS`` (``in0``, ``in1`` q and s,
+                                   committed or wired to ``o0``, ``o1``, `part_rows.wire`; ``in2``, ``in3`` ``w[n]``, ``ws[n // 128]``
+                                   -> ``out.<member>``, its y word n); packed ports (`part_rows`); one index entry per row
   ``Gemm_v2{N=1,..}``, ``BatchedGemm_v1{B=1,N=1,..}``, ..  every slice of the rows of that Definition at any extents along its
                                    axes (``SLICES``): ``in<g>`` per argument group, its element along each axis it carries and
                                    whole along the others (a GEMM coordinate: ``x`` whole, ``w[n]``) -> ``out.<member>``, the
@@ -124,16 +125,16 @@ from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.commit import index as IX, row_tables as RTB
+from verity_vllm.commit import index as IX, row_tables as RTB, step_rows
 from verity.ml.windows import interface as IF
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR, ingress_rows as IR
-from verity_vllm.pipeline import kchunk_rows as KC
+from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline import split_rows as SP, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
-from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, SLICES, SPLITS,  # noqa: F401
-                                                    Template, _bind, part, template, unit_templates)
+from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS, SLICES,  # noqa: F401
+                                                    SPLITS, Template, _bind, part, template, unit_templates)
 from verity_vllm.program.compact import runs_from_file_items
 
 #: the layouts whose units are bit rows as Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
@@ -299,7 +300,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             params, ret = template(t).fn.signature()
             p = part(template(t).word, r["spec"])
             m = CS.Member(t, tuple((f"in{g}", sum(ty.leaf_widths()) // 16) for g, (_n, ty) in enumerate(params)),
-                          tuple((f"out.{d['members'][j][0]}", sum(ty.leaf_widths()) // 16)
+                          tuple((f"out.{PR.output_name(d, j)}", sum(ty.leaf_widths()) // 16)
                                 for j, ty in zip(p[2] if p else (0,), getattr(ret, "fields", None) or (ret,), strict=True)), n, base)
         else:
             ins = [sum(int(sl[3]) - int(sl[2]) for sl in runs_from_file_items(grp)) for grp in r["args"]]
@@ -426,6 +427,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     scope = partition.get("scope") or {}
     rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"), reuse)
     ms = SP.wire(KC.wire(members(tmpls, rows, counts, partition.get("chunk_cap") or {}), tmpls, rows), tmpls, rows)
+    ms = PR.wire(ms, tmpls, rows, row_units)
     ms = WT.cut(ms, WT.reads(ms, rows, row_units))
     tables: tuple[CS.RowTable, ...] = ()
     if partition.get("row_tables"):
@@ -476,7 +478,6 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     operand and output its rows' columns [jw, jw + w) in order, under one index entry.  A part of the row (``PARTS``) reads the
     row's argument groups and committed outputs it names, in its order, and returns, and names in its entry, its outputs.  A
     ``cols`` row whose blocks are not its columns (`cols_refused`) is refused in blocks."""
-    from verity_vllm.pipeline import part_rows as PR
     from verity_vllm.pipeline.serving_templates import cols_refused
     from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -755,10 +756,9 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  transfer_gates: Sequence[str] = (), weight_values: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
-    under (``commitment``: the reader's committer's, rows-sha512 by default or vllm-v1 by name), the research run ``run``, the row, the
-    committer and the served Programs' ``digests``), ``partition.json``, the index and M0's bodies.  The window is ``served``;
-    with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
-    serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
+    under (``commitment``, rows-sha512), the research run ``run``, the row, the committer and the served Programs' ``digests``),
+    ``partition.json``, the index and M0's bodies.  The window is ``served``; with ``stand_in`` (its ``of`` and ``link``), a
+    ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
     loaded its Programs with as ``reuse``.  ``transfer_gates`` are the templates the registered compiler lists as holding transfer
     gates, which the window's law proves whole (`population`); ``weight_values`` (the committer's weights, by registered
     parameter) commit its weight reads by reference, their roots its ``registered_roots`` (`weight_rows.by_reference`).  A
@@ -779,10 +779,9 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     t_read = time.perf_counter()
     c = CS.commit(window, data, row_salt_key=rt.get("key"), segment_roots=rt.get("step_roots"),
                   workers=workers or min(16, os.cpu_count() or 1))
-    prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
+    prov = {"commitment": step_rows.NAME, "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
             **({"tp": dict(tp)} if tp else {}), **(stand_in or {}), **(binding or {}), **({"registered_roots": roots} if roots else {})}
-    prov["commitment"] = getattr(getattr(committed, "com", None), "commit_scheme", prov["commitment"])
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")

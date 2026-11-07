@@ -297,7 +297,7 @@ def attention_call(
 
 MEASURED = {
     # what AttentionFA3@1 (= this arithmetic) was measured bit-exact against: the H100 production capture of the
-    # standard workload, request 917b9faa (prompt 512 + 16 decode), layers 0/1/13/27 (hopper-profile.md)
+    # standard workload, request 917b9faa (prompt 512 + 16 decode), layers 0/1/13/27
     "arch": ("sm_90",),
     "head_dim": (128,),
     "heads_kv_heads": ((12, 2),),

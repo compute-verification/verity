@@ -12,6 +12,7 @@ public import Proofs.Pouw.PearlC.UOnlyGap
 public import Proofs.Pouw.PearlC.TTOutW1
 public import Proofs.Pouw.PearlC.TTOutFp4W1
 public import Proofs.Pouw.PearlC.TTOutW1Item1
+public import Proofs.Pouw.Lemmas.PearlC
 
 /-!
 # Proofs of Pearl-C's guarantees

@@ -21,7 +21,7 @@ signed-permutation `R`, int7 `A` and `B`, `E₁` and `F₁` in `[−31, 31]` and
 stacked product (inner depth `τ ≤ 3k`) is in int32. Blocks 1 and 2 give at most `2·95²·k`; in block 3 the running sum
 is `A·B` minus the rest of block 3, at most `64²·k + 126²·k`. The checked values are taken mod `2^32` (NA2), so
 completeness does not use it. -/
-def ThreeBlock : Prop :=
+def ThreeSegment : Prop :=
   ∀ (k : ℕ) (A B E1 F1 R : Mat) (i j τ : ℕ), k ≤ 107524 → SignedPerm k R →
     (∀ l < k, InInt7 (A i l)) → (∀ l < k, InInt7 (B l j)) →
     (∀ l < k, InSmall (E1 i l)) → (∀ l < k, InSmall (F1 l j)) → τ ≤ 3 * k →
@@ -33,7 +33,7 @@ def LastChecked : Prop :=
   ∀ (Q R S : Type) (P : Params Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) (i j : ℕ), 0 < P.d →
     (U.layout.shape u).k ≤ 2 ^ 19 - 1 → (∀ l < (U.layout.shape u).k, InInt7 (A i l)) →
     (∀ l < (U.layout.shape u).k, InInt7 (U.fixed (U.layout.fixedId u) l j)) →
-    P.Y H s U u A (D1.nBlocks P.d (3 * (U.layout.shape u).k) - 1) i j
+    P.Y H s U u A (D1.nSegments P.d (3 * (U.layout.shape u).k) - 1) i j
       = mm (U.layout.shape u).k A (U.fixed (U.layout.fixedId u)) i j
 
 /-- **NCP's honest reference is complete** on the lead's domain, for every noise and every `R`: its int32

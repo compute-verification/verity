@@ -17,9 +17,9 @@ and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 | C, \|C\|, C(x) | A circuit: gates in topological order, each holding one value. \|C\| is its size, the number of its operation (non-input) gates. C(x) is the value of its output gates on the fresh input x. | `Verity.Circuit`, `Circuit.computed`, `Circuit.size`, `Circuit.eval` |
 | in(S), out(S) | For a set S of gates: the gates outside S with a wire into S; the gates of S read outside it, and its output gates. in(C) is C's input gates and out(C) its output gates. | `Circuit.into`, `Circuit.exits`; `Circuit.isInput`, `Circuit.outputs` |
 | annotation α | The gates α(ℓ) each label ℓ of a circuit holds; blocks, placements, covers and selections are annotations, each a predicate on α. | `Verity.Annotation`, `Annotation.IsPartition`, `Partition.toAnnotation` |
-| θ, x | The registered information's input gates (weights, programs, the circuit builder), fixed before the period and the same in every circuit compared; the fresh input, x : in(C) ∖ θ → values (prompts, request inputs, network bits, what the memory wipe leaves). | `Verity.Declaration.θ`; x is the input part of `Circuit.eval`'s argument |
-| D, R = (θ, D, 𝓘) | The declared circuit, what the developer claims it computed: its registered programs on its committed inputs (the one use of "declared"). R commits it once: θ's values, D and 𝓘, its private (c, k)-partition into inference blocks, checked from D and θ alone (the inference-only policy). | `Verity.Declaration.D`, `Verity.Committed`; 𝓘 is a `Verity.Partition`; the policy, `Nci.Complies` in an older form |
-| (c, k), 𝒞_{c,k} | A partition's budgets per block: gate budget c, exactly (padded), and fresh-input budget k, at most; \|I\| = c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the set of circuits with such a partition. | `Verity.Partition`, `Partition.gates`; the (c, k) condition `Partition.IsCK` not yet in Lean |
+| θ, x | The registered information's input gates (weights, programs, the circuit builder), fixed before the period and the same in every circuit compared; the fresh input, x : in(C) ∖ θ → values (prompts, request inputs, network bits, what the memory wipe leaves). | `Verity.RegisteredCircuit.θ`; x is the input part of `Circuit.eval`'s argument |
+| D, R = (θ, D, 𝓘) | The declared circuit, what the developer claims it computed: its registered programs on its committed inputs (the one use of "declared"). R commits it once: θ's values, D and 𝓘, its private (c, k)-partition into inference blocks, checked from D and θ alone (the inference-only policy). | `Verity.RegisteredCircuit.D`, `Verity.Committed`; 𝓘 is `Verity.RegisteredCircuit.𝓘`, the registered compiler's output, with its proof blocks `Verity.RegisteredCircuit.P`; the policy, `Nci.Complies` |
+| (c, k), 𝒞_{c,k} | A partition's budgets per block, each at most: gate budget c and fresh-input budget k; \|I\| ≤ c and \|in(I) ∖ θ\| ≤ k. 𝒞_{c,k} is the set of circuits with such a partition. | `Verity.Partition`, `Partition.gates`, `Partition.IsCK` |
 | A, x(g), t(g) | The actual circuit: everything the hardware computed in the period, hidden work included, each gate g placed at a device x(g) and a tick t(g). | `Accounting.Placed`, `Accounting.Placed.x`, `Accounting.Placed.t` |
 | A[X, J], Φ_X | The operation gates of A placed in the location X (a set of devices) during the ticks J; X's capacity in gates per second, \|A[X, J]\| ≤ Φ_X·\|J\|. Φ_s is a server's, Φ_total the fleet's, and M_s a server's memory in bits. | `Accounting.Placed.region`, `Accounting.Placed.ComputeRate`, `Accounting.Placed.Memory` |
 | V(X, J), U(X, J) | The verified compute at X during J (below), as gate occurrences; the free gates, \|A[X, J]\| − \|A[X, J] ∩ V(X, J)\|. | the share 1 − V/C: `Nci.Dampener.residualShare`; the sets not yet in Lean |
@@ -30,7 +30,7 @@ and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 | Symbol | Meaning | Lean |
 |---|---|---|
 | 𝓜, ρ | The ACCEL model (below), each resource's rate ρ a ceiling no program exceeds, at the firmware maximum; the card files `verity/hardware/cards/<sku>.toml` hold them. | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ`, `Verity.Accel.H200.card`, `Verity.Accel.Sm120.card` |
-| H, a, Λ | The fleet's fixed transition dynamics, its chosen initial state, and the chosen-state budget: A is H unrolled from a over the period (programs and data in a or the inputs, never the circuit's structure), and Λ bounds a, attached to the physical region it bounds. | `Accounting.Device`; `Verity.Device`, `FixedMachine` and `InitialBudget` not yet in Lean |
+| H, a, Λ | The fleet's fixed transition dynamics, its chosen initial state, and the chosen-state budget: A is H unrolled from a over the period (programs and data are in a or the inputs, never in the circuit's structure), and Λ bounds a, attached to the physical region it bounds. | `Accounting.Device`; `Verity.Device`, `FixedMachine` and `InitialBudget` not yet in Lean |
 | k_exfil(Y), k_infil(Y) | Block Y's exfiltration capacity log2\|O_Y\|, O_Y the observable output behaviours (values, and timing, lengths and routing where an observer can tell them apart) Y can produce and still be accepted; the information reaching Y that its fresh-input budget does not already count. | not yet in Lean |
 | HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a memory wipe clears. INV is the inventory's: coverage, unregistered hardware's bound, and the honesty of certifiers, challengers and their hosts (`trusted-host`). | `Accounting.Hardware`, `Accounting.Placed.Links`, `Accounting.Placed.Causal`; `Accounting.Covered`, `Accounting.TrustedUnits` |
 
@@ -38,16 +38,16 @@ and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| 𝓕 | The feasible set: the computations, pairs (C, x), the hardware can run under HW from the developer's initial state a; unregistered hardware included. | `Accounting.Slowdown.physClass`, a set of computations an `Accounting.Slowdown.Class`, both renamed later |
+| 𝓕 | The feasible set: the computations, pairs (C, x), the hardware can run under HW from the developer's initial state a; unregistered hardware included. | `Accounting.Slowdown.physClass`, a set of computations being an `Accounting.Slowdown.Class`, both renamed later |
 | 𝒜_p, δ_p | Protocol p's admissible set, the computations it accepts, and its failure bound: Pr[accept ∧ (A, x) ∉ 𝒜_p] ≤ δ_p. | `Accounting.Slowdown.envelope`, renamed later; `Verity.Sound`; `Verity.Soundness`, not yet in Lean |
 | 𝒜 | The admissible set, 𝓕 ∩ ⋂_p 𝒜_p, which every accepted run lies in except with probability Σ_p δ_p and the cryptographic terms. | `Accounting.Slowdown.restricted`, renamed later |
 | τ, b | A prover strategy; a server block (below). | `Verity.Game.Strategy`; b as `Verity.Block` |
 | δ_coin, δ_crypto | Probability bounds from the samples live coins select, under uniform coins; advantage bounds for SHA-512's binding, knowledge soundness and pseudorandomness, against a stated adversary. | `Verity.Sound`'s δ; `Security/Definitions/Hash/` |
-| ε, δ | The adversary's advantage in every protocol: at cost T, credit at most (1 + ε)·T, except with failure probability δ. | `Pouw.Gε`, `Pouw.PearlC.Gε`, `Pouw.AuditGε`, `Pouw.PearlC.δPearlC` |
-| g (PoUW) | The gap, how PoUW's proofs carry ε: G_g is G_ε at ε = g/(1 − g); an adversary of cost T wins when its correct units' honest work exceeds T/(1 − g). | `Pouw.GGap`, `Pouw.Wins`, `Pouw.Proofs.gGap_iff_gε` |
+| ε, δ | ε, the adversary's advantage, in every protocol: at cost T it earns credit at most (1 + ε)·T, except with failure probability δ. | `Pouw.Gε`, `Pouw.PearlC.Gε`, `Pouw.AuditGε`, `Pouw.PearlC.δPearlC` |
+| g (PoUW) | The gap, how PoUW's proofs carry ε: G_g at g is G_ε at ε = g/(1 − g); an adversary of cost T wins when its correct units' honest work exceeds T/(1 − g). | `Pouw.GGap`, `Pouw.Wins`, `Pouw.Proofs.gGap_iff_gε` |
 | γ | The honest overhead: honest busy SM-time ≤ (1 + γ)·(fastest stock time for the same MACs) at the served shapes, pooled over the served mix; γ ≤ 10 at each operating point (C compute-bound, L memory-bound, swept per card). | `Pouw.RelativeSecurity.Efficient`; operating points not yet in Lean |
-| fixed operand B_w | A GEMM operand fixed before the salt and reused across units, by id, such as model weights. | `Pouw.Layout.fixedId`, `Pouw.Workload.fixed`, `Pouw.PearlC.Workload.FixedOK` |
-| inert work, ι | A tile's operations whose omission leaves its output bit-identical (an FP32 add rounding discards, an add into zero). The inert-work bound: the verifier computes it exactly on each sampled tile and credits nothing to one with more than ι of its credit inert (1/400 on the H100, 1/1,000 on the RTX PRO 6000). Sampling bounds incorrect work separately. | `Pouw.PearlC.Skip`; `capOK`, `debitOf` until renamed |
+| fixed operand B_w | A GEMM operand fixed before the salt and reused across units, by id; model weights are its usual instance. | `Pouw.Layout.fixedId`, `Pouw.Workload.fixed`, `Pouw.PearlC.Workload.FixedOK` |
+| inert work, ι | A tile's operations that don't affect its output: left out, the output is bit-for-bit unchanged (an FP32 add that rounding discards, an add into zero). The inert-work bound: on each sampled tile, the verifier computes it exactly and requires at most ι of the tile's credit (1/400 on the H100, 1/1,000 on the RTX PRO 6000); a sampled tile over it is credited nothing. Incorrect work, which sampling bounds, is separate. | `Pouw.PearlC.Skip`; `capOK`, `debitOf` until renamed |
 | Break, B^τ, 𝒟_b^τ | The event that the fixed finder exhibits a SHA-512 collision, or the fixed forger a valid LMS signature under a device's registered key on a message the device's log never signed, charged as f(Pr[B^τ collides]) + Pr[the forger succeeds] and never assumed away; B^τ and 𝒟_b^τ are the finder and the distinguisher at server block b built from τ, Adv_PRF(𝒟_b^τ) the PRF term. | not yet in Lean |
 | ε_Wipe,b | The streamed wipe's failure bound at server block b, 2^-128 + Adv_PRF. | `StreamedWipeMeetsServer5GB`, not yet in Lean |
 
@@ -67,7 +67,7 @@ denominator, an overlap counted once:
 | Symbol | Meaning | Lean |
 |---|---|---|
 | registered hardware, L_unreg | Hardware in the auditors' inventory; unregistered hardware is the rest, its devices L_unreg. | not yet in Lean |
-| registered information, fresh input | θ and x (above). A block can read any amount of registered information; its fresh-input budget caps the fresh input it takes in. | `Verity.Declaration.θ`; the budget not yet in Lean |
+| registered information, fresh input | θ and x (above). A block can read any amount of registered information; its fresh-input budget caps the fresh input it takes in. | `Verity.RegisteredCircuit.θ`; the budget, `Partition.IsCK.reads` |
 | verified compute, utilization | V (above), the part of the actual circuit proved to match the registered circuit: served inference and the protocols' own work at the public best's cost, prover overhead γ ≤ 10 allowed. Utilization, the registered programs' operations per second over the card's ceiling (their MFU), and γ are the honest developer's costs, not shares of a bound. | its share V/C is 1 − `Nci.Dampener.residualShare`; utilization not yet in Lean |
 | free compute | Everything else in the actual circuit, U (above): one number with three sources, ε_undecl, ε_skip and ε_unreg (below); ε_undecl + ε_skip, its part on registered hardware, is driven to 0. | the part on registered hardware: `Nci.Dampener.residualShare`; the whole not yet in Lean |
 | ε_undecl | Registered hardware not running proved work, a share of the registered capacity C_X: idle or uncredited pipes, host CPUs, the clock above the credited one, filler, and the honest implementation's excess over the public best. C_X is the location's capacity in 𝓜's resources at each SKU's ceiling, as counted operations (Φ_X stays for the partition and c_S). | with ε_skip, `Nci.Dampener.residualShare`; alone not yet in Lean |
@@ -79,10 +79,10 @@ denominator, an overlap counted once:
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| server block S, c_S, k_S | The actual circuit's gates on one registered server between two memory wipes. Its gate budget is c_S = ⌊Φ_s·Δ_wipe⌋ (padded); its fresh-input budget k_S = k_wipe + (r_in + r_side)·Δ_wipe is what the memory wipe leaves of M_s (≤ 4×10^10 bits plus egress) plus the network bits entering during it. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe`; the sum over server blocks not yet in Lean |
+| server block S, c_S, k_S | The actual circuit's gates on one registered server between two memory wipes. Its gate budget is c_S = ⌊Φ_s·Δ_wipe⌋; its fresh-input budget k_S = k_wipe + (r_in + r_side)·Δ_wipe is what the memory wipe leaves of M_s (≤ 4×10^10 bits plus egress) plus the network bits entering during it. | `Verity.Block`, `Verity.Blocks`, `Verity.Wipe`; the sum over server blocks not yet in Lean |
 | inference block I, c, k | A block of 𝓘 (above; "(c, k)-block" only in technical detail). In verified compute 𝓘 refines the server blocks. | 𝓘 is a `Verity.Partition`, nested by `Verity.Partition.Refines`; the nesting not yet in Lean |
 | N | The necessary subcomputation: what every successful training run must compute (the P_α above), N counted objects of a kind we choose: products (weight × activation multiplies), products with their partial sums, or outputs the update can be recovered from. | not yet in Lean |
-| pricing argument, bounding strategy | How much of a block's fresh-input budget one counted object needs, which gives the yields (HeldRate is one, for products); a bounding strategy is a choice of necessary subcomputation and a pricing argument for it, and the bound takes the strongest that applies. | `Nci.Guarantees.ThreadedReads`, `Nci.Guarantees.ContainedTraining`; strategies not yet in Lean |
+| pricing argument, bounding strategy | Fresh-input bits per counted object, giving the yields (HeldRate prices products). A bounding strategy: a necessary subcomputation and its pricing argument; the bound takes the strongest that applies. | `Nci.Guarantees.ThreadedReads`, `Nci.Guarantees.IncompressibleContainedTraining`; strategies not yet in Lean |
 | q_S, q(c, k) | The server-block yield, the most counted objects one server block can complete within its budgets; the inference-block yield, the same for one inference block. | not yet in Lean |
 | straddle term | The counted objects computed partly in verified and partly in free compute inside one block, bounded by the bits crossing between them. | not yet in Lean |
 | T_min, T_ref, slowdown lower bound | The least GPU-hours that can fit N; those of the reference training algorithm, the best known way to train with no protocol, which bound T_𝒢(η; 𝓕); the result, T_min/T_ref ≤ slowdown(𝒢, 𝒜, η) (below). | T_min, T_ref not yet in Lean; the result `Nci.Guarantees.Dampener`, `Nci.Guarantees.DampenerRemote`, renamed later |
@@ -92,7 +92,8 @@ denominator, an overlap counted once:
 Credit and all reporting are in circuit size (tentative).
 
 - **Size** is a circuit's or a region's AND-gate count, what Flock pays for, in place of work, FLOPs, MAC-times and
-  pricing; U/s_× (above) replaces κ/2.
+  pricing.
+  U/s_× (above) replaces κ/2.
 - **Credit** is of two kinds (ASK-166 A). Sampled proofs' is declared size, values certified: an accepted run credits
   S, and Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤
   δ_coin + δ_crypto, with no algorithmic premise. Dither's compute credit also needs values that read live noise and SAK
@@ -104,23 +105,24 @@ Credit and all reporting are in circuit size (tentative).
   server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free compute can
   do), unregistered hardware works at the hardware's rate, and the straddle term covers objects split between the two.
   Onsite q_S is the smaller term (the fresh-input budget is small); remotely the other is: inference blocks yield
-  little, and free compute sets the number. It is the one place 𝓜's resources appear (gates can't measure a device's
-  capacity), and its result is in counted operations, each labelled with its canonical AND count, never "ANDs of
+  little, and free compute sets the number. It is the one place 𝓜's resources appear, because gates can't measure a
+  device's capacity. Its result is in counted operations, each labelled with its canonical AND count, never "ANDs of
   hidden work" (that would need a vacuous ceiling on ANDs per resource unit over all programs).
 - **What counts every gate.** The (c, k)-partitions (inference blocks, a server block's c_S) and the Lean's counting
   results (`Circuit.size`) count every gate, so a report that reads one converts it explicitly (`Circuit.andSize` beside
   `Circuit.size`, and credit as `Verity.creditSize`: not yet in Lean). In Credit, S is the AND count of the
   registered circuit under one public lowering pinned at registration, never the prover's own.
-- **Not yet restated** (Older names, "work"): the Lean's device-model audits (`Accounting.Run.ComputeSound`; the
-  covert residual F·T − V is one device's free compute) and Dither's `PROTOCOL.md`.
+- **Not yet restated.** The Lean's device-model audits still price work per op (`Accounting.Run.ComputeSound` at a
+  `Price`, and the covert residual F·T − V, one device's free compute), and Dither's `PROTOCOL.md` credits at
+  pub(μ°) against W_reg.
 
 Anyone who finds a reason this is wrong says so at once.
 
 ## Workload
 
-A **workload** is `ARCHITECTURE.md`'s, inference and training alike. vLLM's workload files
-(`integrations/vllm/workloads/*.json`, `verity-vllm/workload/v2`) each state one with the runtime that serves it
-(engine, target, execution).
+A **workload** (`ARCHITECTURE.md`'s Glossary) covers inference and training alike, and workloads
+run side by side are one workload. vLLM's workload files (`integrations/vllm/workloads/*.json`,
+`verity-vllm/workload/v2`) each state one with the runtime that serves it (engine, target, execution).
 
 ## Older names
 
@@ -128,21 +130,21 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 
 | Old name, where it stays | Term |
 |---|---|
-| "Candidate A", "Candidate B"; the `candidate` feature and label keys, `CandidateA`, `CandidateB`, `account_candidate_a` | the archived proof systems A-GKR, B-Ligero |
-| the `candidate` label values `SP1` and `C` (`research.store.vocab.CANDIDATES`); "Candidate C" and "Candidate V" in older notes | D-SP1, and the VOLE candidate, QuickSilver's, since deleted (not Flock) |
+| "Candidate A", "Candidate B"; the `candidate` feature and label keys | the archived proof systems A-GKR, B-Ligero |
+| the `candidate` label values `SP1` and `C` (`research.store.vocab.CANDIDATES`) | D-SP1, and the VOLE candidate (not Flock) |
 | "C-Flock"; the stored candidate label `C-Flock`, backend ids `C-interactive`, `C-fs` | Flock (Succinct's is "upstream Flock") |
 | `verity.ml.circuits.targets.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
 | `Target.family`, `FAMILY_DIGEST`, a gate family such as `veritor.tc-ampere-bf16@1` | the semantics parameter's gate set |
 | "backend", "backend family", "configured backend" for Flock; `backends/` (Flock's old directory), `verity_flock.backend`, `BACKENDS` | the proof system |
 | "IR", "Verity IR", "IR primitives", "IR evaluator"; `verity.ir` | circuit, Program; `verity.ml.circuits` |
-| "instance", "instance set"; the `bench-instances/*` datasets and `fixtures/bench-instances/`, the fingerprint's `instances` (`contract.instances_ref`) and its tier (`vu-k1536`, …), the `instance-equiv/v1` and `vllm-vu-set/v1` kinds, the `instances_dataset` / `instances_tier` labels, `instances_per_second` | input, input set |
+| "instance", "instance set"; the `bench-instances/*` datasets and `fixtures/bench-instances/`, the fingerprint's `instances` (`contract.instances_ref`) and its tier (`vu-k1536`, …), the `instance-equiv/v1` and `vllm-vu-set/v1` kinds, the `instances_dataset` / `instances_tier` labels, until a format version | input, input set |
 | "configuration" meaning a backend with a scheme; `drilldown.Variant`, `VARIANTS`; `views.Configuration`, `CONFIGURATIONS` | a proof system and a statement |
 | `verity_sp1.proofs.statement.Statement` (statement formats 2 and 3 on the wire), its `KindProgram` and "kind" | the SP1-era wire encoding of a batch of proof-block obligations, not a statement in this sense; a kind is a subcircuit |
 | "pin", "pinned theorem", "pinned statement"; `pins` in a `lean-audit.json` written before the rename (read as `guarantees`, rewritten by its next `--update`) and in `tools/verity/lean/Facts.lean`'s facts | guarantee |
 | "law", "draw law"; `law` identifiers and record keys (`parse_law`, `same_law`, `law_object`, a registration's `law`), the Lean's `Law` | sampling design |
-| "escape", "escape probability"; the Lean's `*_escape` theorems and `effEscape` | acceptance probability (P_a; `effEscape` is P̄_a) |
+| "escape", "escape probability"; the Lean's `*_escape` theorems and `effEscape` | acceptance probability (P_a; `effEscape` is P̄_a at footprint 1) |
 | "proof unit", "unit class", and "unit" alone meaning one; `unitClasses`, `verity.ml.circuits.parts`, the audit record's `wrong_units` and `proved_units`, `LinkWindows.proof_unit`, the `"proof-unit"` kind of Flock's Boolean export, a `Spec`'s public-item reasons (its digest hashes them), and the `vu_*` names (below) | proof block; a unit class is a size class, or Flock's proof-block class |
-| "wrong unit", "incorrect unit", "faulty unit", "faulty proof block", "faulty set"; the Lean's `wrong`, the audit record's `wrong_units` | incorrect proof block (and correct); the incorrect set F |
+| "wrong unit", "incorrect unit", "faulty unit", "faulty proof block", "faulty set"; the Lean's `wrong` | incorrect proof block (and correct); the incorrect set F |
 | "transcript", "committed values" and "the circuit's values" for the values of a run's gates; `ExecutionTranscript` | trace |
 | "verifier of record" | the verifier, whose verdict counts and which the guarantees are proved about; other checking code is named for what it is: the Rust cross-check, a Python mirror, or a Python verifier until its Lean one replaces it |
 | "δ_link", "the link term"; the Lean's `LinkSound` and `δlink` | ε_bind, the binding error |
@@ -150,19 +152,19 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "M0"; its first statement id, in the Lean verifier's `Flock/Tags.lean` | Flock's circuit prover: module `verity_flock.circuit`, CLI `flock-circuit`, statement `verity/flock-circuit` |
 | "M1", "M2" (elsewhere in the code also unrelated things) | Flock ZK |
 | `hm96-sha256/v1`, until it is deleted | the hiding leaf `hm96-sha512/v1` |
-| "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the challenger's live-coin part |
-| "network transparency"; the `network-transparency/` paths in network accounting's project store that the `NetworkCertifier` Lean cites | network accounting |
+| "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean`, until a format version | the challenger's live-coin part |
+| "network transparency"; the `network-transparency/` paths the `NetworkCertifier` Lean cites | network accounting |
 | "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
 | "remote bandwidth audit", "remote bandwidth", "remote audit", "proof of useful bandwidth" | PoUB |
-| "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`) | the memory challenger |
+| "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`), until a format version | the memory challenger |
 | "prover gateway", "gateway"; one recorded statement string of recursive sessions | the ZK server |
 | "verifier gateway" | the challenger |
 | "batch verifier" (B-Ligero's was another thing) | the verifier |
 | "GPU workers" | workers |
-| "netlist"; C-Flock's `verity/flock-netlist/…` tags and domains and the `flock-netlist/v1` file format of its older statements (`netlist-vectors.patch`) | a private circuit, or the circuit's description |
+| "netlist"; Flock's `verity/flock-netlist/…` tags and domains and the `flock-netlist/v1` file format of its older statements (`netlist-vectors.patch`) | a private circuit, or the circuit's description |
 | "trusted text", in the `layers` reasons of `lean-audit.json` | spec |
-| "horizon" and "accounting period" for the stretch of time a bound is about; the Lean's `*Horizon*` and `*Period*` names (`HorizonSampling`, `RateHorizon`, `ComposePeriod`, `CircuitWorkPeriod`), PoUB's ledger's `horizon` field, until renamed | monitoring period (`horizon` is its pooled reading) |
-| "block" for a part of the device graph; `datacenter.physical.Block`, `block_of`, `network_sim`'s `--blocks` flag | zone |
+| "horizon" and "accounting period" for the stretch of time a bound is about; the Lean's `*Horizon*` and `*Period*` names (`ComposePeriod`, `CircuitWorkPeriod`), PoUB's ledger's `horizon` field, until renamed | monitoring period (`horizon` is its pooled reading) |
+| "block" for a part of the device graph; `Datacenter.blocks`, `block_of`, `benchmarks/network_sim`'s `--blocks` flag | zone |
 | "block", "thread block" for CUDA's unit of a launch; CUDA's `blockIdx`, `blockDim` | CTA |
 | "block" for a kernel's tile of a tensor; the Definitions `AttnBlock_v*`, `AttnBlockSoftcap_v*`, `AttnBlockFA3_v1`, `SparseMlaBlock_v1`, `TritonBlockRMSNorm_v1`, `MoeAlignBlocks_v1`, Triton's `BLOCK_*` | tile |
 | "block", "message block" for a hash's compression input; the Lean's `Hm96.block`, `HmRow.blockBit`, `ROW_BLOCK`, `shaBlock`, `NetworkCheck.block`, until renamed; BLAKE3's own terms | chunk (a compression's 1024 bits) |
@@ -173,19 +175,22 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "block" for a range of a GEMM's inner dimension; the Lean's `D1.nBlocks`, `ThreeBlock` | segment |
 | "block" for a page of vLLM's KV cache, and its block pool; vLLM's `block_size`, `block_table`, `num_gpu_blocks` | KV page, page pool |
 | "block" for a section of a record ("the workload record's sampling block") | section |
-| "block" for a model's transformer layer; the model's `blocks.N` module paths, the tap family `moe_block_stream` | layer |
+| "block" for a model's transformer layer; the model's `blocks.N` module paths, the tap family `moe_block_stream`, until a format version | layer |
 | "block" for G of the certifier's served rows; the Definition `CompileSliceBlocks_v1` | row group |
 | "compile unit" | the compile slice's proof block |
 | "isolation unit" (IU), "isolation block", "certified block" | inference block |
 | "novel communication intensity" (NCI); "baseline" for θ; `Nci*`, `nci-*`, `ius` and the `nci` directories, until renamed | the inference-only policy; the registered information θ |
-| "replay unit" (RU) | proof block (optimizer: replay block) |
+| "replay unit" (RU), `ReplayUnit`, `n_v`; "audit block"; "coarse unit" and "chain" in the Lean's older two-stage audit | replay block (n_ρ, its count of proof blocks) |
+| "replay domain"; the planner's `ReplayDomain`, `Candidate.replay` and `per_replay`, until renamed | replay grain; n_ρ |
+| "clustered" sampling, "commit-after-draw"; "deferred interior"; "inner rule", "inner sample", "the second draw", "stage 2"; "the first draw", "stage 1" | a two-stage design; the interior commitment; the second stage; the first stage |
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; the all-protocols runner's legs, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
-| "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
+| "stage", outside a sampling design's stages (one-stage, two-stage, the first and second stage) and a pipeline stage; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
 | "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in Dither's docs until restated in AND gates; the Lean's `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_×. "Work" stays for resources spent in 𝓜, the slowdown lower bound's unit, so `WorkSound` (freed compute in 𝓜's resources) keeps its name |
 | "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | an execution phase's transfer blocks |
 | "window" for a span of time; `Verity.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: an execution phase, a certification period (`NetworkCheck.Period`), or T ticks |
+| "timestep" (for `every` buckets) | slot stride: `every` buckets (`every` stays until a format version) |
 | "Commit window", for the steps one Commit covers | Commit period |
 | "session"; code and records' `session` (`session_id`, `core-firewall session`, the challenger's gate session), until a format version | by sense: a run (one execution of a subprotocol); a release (the ZK server's one outer proof per statement); a certifier's attachment to a link (its 32-byte id); a run's challenge phase (the live challenger's gate session) |
 | "deploy", `verity deploy`, "deployment file", "deployment configuration" for running Verity's roles | `verity run CONFIG --party ROLE`; the configuration |
@@ -200,22 +205,22 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | ε for one GPU, "the uncertified share": model slack, idle pipe, ε_skip and exchanged bits | the free compute at that GPU, ε_undecl + ε_skip; the exchanged bits are fresh input (k_S's r_in and r_side), reported beside it in bits |
 | 𝒜_phys, "physical class", "the physical model's class"; "envelope" for 𝒜_p, "subprotocol application" for p; 𝒜′, "restricted class", "monitored class", "training class", "faithfulness" for 𝒜′; "class" for a set of computations; "initial information" for what both sides start from; the Lean's `Accounting.Overhead.physClass`, `envelope`, `restricted` and `Class` and `benchmarks/rho`'s, until renamed | the feasible set 𝓕; protocol p's admissible set 𝒜_p; the admissible set 𝒜; set; the initial state a |
 | "server-time" for the cost, "threshold" for T_𝒢(η; S); the Lean's `Accounting.Overhead.serverTime` (to count each server's GPUs) and `threshold`, until renamed | GPU-hours; the training cost T_𝒢(η; S) |
-| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until renamed | server block; the slowdown lower bound's sum over server blocks |
+| "server-time block", "serving block", "server-window", "physical block", and "window" for a server's gates between two memory wipes; "the serving-block bound"; the module docs of `Verity.Block` and `benchmarks/rho`'s `ServingBlock`, until they are renamed | server block; the slowdown lower bound's sum over server blocks |
 | "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
 | "coverage", "materialization" and "work requirement" for what every successful training run must compute; η_cov's subscript | necessary subcomputation (the covering bounds and the inventory's coverage keep their names) |
 | "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", q, q_T(c, k), and `benchmarks/rho`'s `Cap`, until renamed | the slowdown lower bound; the server-block yield q_S, and the inference-block yield q(c, k) |
-| "registered computation" | the registered circuit |
+| "registered computation", "registered work" | the registered circuit |
 | "training class" for a premise set and the yield it gives; "allowance", "tier", "route" and "application" for a proof of the yields; `benchmarks/rho`'s `CLASSES` and `Allowance`, until renamed | pricing argument (`benchmarks/nci`'s tiers are mechanism sets, `benchmarks/rho`'s routes free-compute sources) |
 | "reference construction", "reference run", "reference circuit" | the reference training algorithm |
 | "dark" (compute, fleet, leaves), "unmonitored", "undeclared hardware", ε_dark, L_dark, and the Lean's `Nci.Dampener.unmonitoredShare` and `benchmarks/rho`'s `eps_dark` until renamed; "monitored" (compute, hardware, a server) | unregistered hardware, ε_unreg, L_unreg; registered hardware (the monitoring period keeps its name) |
-| "certified work", "credited work", "accounted compute", "declared compute", W_acc, W_cert for compute; W_cert in the Lean (`Nci.Dampener.residualShare`, `Accounting.Run.ComputeSound`) and the block record (`verity/block-record/v1`), `w_cert`, until renamed; "certified share", "declared utilization" | verified compute, V ("certified" stays for what a certifier certifies); utilization |
-| "slack", "uncertified capacity", "uncertified gates", "unaccounted" (share, compute, gates), "undeclared compute", "skippable work", "residual compute", "monitored residual" (r, r̂) | free compute, U. "Slack" keeps its other senses |
+| "certified work", "credited work", "accounted compute", "declared compute", W_acc, W_cert for compute; W_cert in the Lean (`Nci.Dampener.residualShare`, `Accounting.Run.ComputeSound`) and the block record (`verity/block-record/v2`), `w_cert`, until renamed; "certified share", "declared utilization" | verified compute, V ("certified" stays for what a certifier certifies); utilization |
+| "slack", "uncertified capacity", "uncertified gates", "unaccounted" (share, compute, gates), "undeclared compute", "skippable work", "residual compute", "monitored residual" (r, r̂) | free compute, U (its registered part is ε_undecl + ε_skip). "Slack" keeps its other senses |
 | "unregistered input", "unregistered input bits", "unregistered information", "novel information" | fresh input, fresh input bits (in(I) ∖ θ stays as notation) |
 | a for the protocol index: 𝒜_a, δ_a | p: 𝒜_p, δ_p (a is the initial state) |
 | G for the target or the acceptable outputs | 𝒴, and the task 𝒢 |
 | θ for a card's numbers | the card table (θ is the registered inputs) |
-| "envelope ISA", "envelope op"; `machine_model`'s `cover` command and its `envelope` key, until renamed | the ACCEL ops (𝒜_p is the admissible set) |
-| "coverage premise", "coverage table"; `machine_model/data/cover/`, until renamed | the card premise, the opcode table (coverage is the inventory's) |
+| "envelope ISA", "envelope op"; `machine-model cover` and its `envelope` key, until renamed | the ACCEL ops (𝒜_p is the admissible set) |
+| "coverage premise", "coverage table"; `machine_model/data/cover/`, until renamed | the card assumption, the opcode table (coverage is the inventory's) |
 | "words" for Dither's committed 16-bit sums | prefix sums |
 | "staging", "the staging decode" for copying a stored model's bytes into GPU memory and decoding them to the served weights; `benchmarks/torch_gpu/p2_stage`, until renamed | the store's load |
 | "post-landing run", "postland" | after-landing run |
@@ -226,17 +231,20 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | `flock-verify`, `remote check` for the verifiers, until renamed | `verity verify proof`, `verity verify remote` |
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
 | "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, registered work; execution block, execution phase |
-| a served span: "window", `IntegrityPeriod`, PoUW's "commit period" and `window`, "sampling block", until renamed | execution phase |
+| a served span: "window", `IntegrityPeriod`, "commit period" for PoUW's span and `window`, "sampling block", until renamed | execution phase |
 | "sampling period" for work plus its audit | an execution phase and its verification phase |
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
 | "proof service" | proof system |
 | "audit coin"; "the audit" as a step | challenger's coins; verification phase |
+| "prover" for the party: "the prover's node, machine, host or site", "a machine the prover doesn't control", "nothing the prover runs or hosts", "prover-controlled", "prover hardware", "the prover system" | the developer: the developer's node, machine, host or site, a machine the developer doesn't control, the developer's hardware ("prover" stays for the proving side of a proof: Flock's prover, a proof's messages, a cheating prover in a soundness statement) |
+| "deployment" for onsite or remote, "onsite deployment", "remote deployment" (a datacenter running Verity, a deployment record and `verity.core.deploy` keep the word) | composite protocol: onsite or remote, the Lean's `Composite` |
+| "named premise", and "premise" for a named `Prop`: "the card premise" | assumption, or a proposed assumption until a lock lists it: the card assumption ("premise" stays for a theorem's hypothesis) |
 | "before that period's coins exist"; "rejection dominates", "reject dominance" | before any coins are flipped; any rejection rejects |
 | tick(g) | t(g) |
 | D for the chosen-state budget | Λ (D is the registered circuit) |
 | D_b^τ for the PRF distinguisher | 𝒟_b^τ |
-| γ for PoUW's gap ("the γ-gap game", G_γ, the Lean's `Gγ*`, `gammaOf`, `*Gamma*`, `Params.γ0`); η, and ε in TT_OUT and TT_NCP, for a failure probability (`εPearlC`, `WindowEps`, `epsL5e`); "weights" for a fixed operand (`Layout.wid`, `Workload.weight`, `weightOK`, `WeightsOK`); Pearl's δ for its noise scale (`Params.δ`). In older records and pins, the wire names `weights_root` and `verity/pouw/h1/weights/v1`, the JSON keys `gamma` and `gamma0` and the claim id `pouw-gamma-per-coin` | the gap g (`GGap*`, `gapOf`, `*Gap*`, `Params.gap0`); the failure probability δ (`δPearlC`, `WindowDelta`, `deltaL5e`); the fixed operand (`fixedId`, `fixed`, `fixedOK`, `FixedOK`); the noise scale σ (`Params.σ`) |
-| Pearl's "debit", "debited element", "unneeded" element, "cap", "cap check", "over-cap" tile; `pearl_c_debit`, `debit_units`, `forming_elements`, `Rule.debitUnits`, `debitOf`, `tileDebitRev1`, `capOK`, `Device.cap`, `CAP`, until renamed | inert work; an inert element; the inert-work share ι; the inert-work bound; a tile over it |
+| γ for PoUW's gap ("the γ-gap game", G_γ, the Lean's `Gγ*`, `gammaOf`, `*Gamma*`, `reductionGamma`, `Params.γ0`); η, and ε in TT_OUT and TT_NCP, for a failure probability (`εPearlC`, `WindowEps`, `epsL5e`); "weights" for a fixed operand (`Layout.wid`, `Workload.weight`, `weightOK`, `WeightsOK`); Pearl's δ for its noise scale (`Params.δ`). They stay in records and pins stored before the rename (`price_twins.py` reads both spellings), the wire names `weights_root` and `verity/pouw/h1/weights/v1`, Python's `gamma` and `gamma0` fields and the claim id `pouw-gamma-per-coin` | the gap g, with advantage ε = g/(1 − g) (`GGap*`, `gapOf`, `*Gap*`, `reductionGap`, `Params.gap0`); the failure probability δ (`δPearlC`, `WindowDelta`, `deltaL5e`); the fixed operand (`fixedId`, `fixed`, `fixedOK`, `FixedOK`); the noise scale σ (`Params.σ`) |
+| Pearl's "debit" and "cap": "debit", "debited element", "unneeded" element, "cap", "cap check", "over-cap" tile; `pearl_c_debit`, `debit_units`, `forming_elements`, `Rule.debitUnits`, `debitOf`, `tileDebitRev1`, `capOK`, `Device.cap`, `CAP`, until renamed | inert work; an inert element; the inert-work share ι; the inert-work bound; a tile over the inert-work bound |
 
 The `veritor.*` gate families (`verity/ml/circuits/targets/target.py`) keep their spelling, which `*_FAMILY_DIGEST`
 pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_frozen_families.py`).
@@ -249,27 +257,29 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - **The card table** is one SKU's numbers at its firmware maximum: its per-resource rates ρ, stores, formats and clock
   ceiling (`benchmarks/pouw/machine_model/`'s data).
 - **The ACCEL ops** are the ACCEL model's six instruction kinds (`Accel.Op`), each priced by a card's rates.
-- **The card premise** (`CardWithinAccel`): anything the card computes in time T, the ACCEL machine computes within T at
-  the card's rates. Its evidence is **the opcode table**, which places every opcode of the card on the ACCEL ops.
+- **The card assumption** (`CardWithinAccel`): anything the card computes in time T, the ACCEL machine computes within
+  T at the card's rates. Its evidence is **the opcode table**, which places every opcode of the card on the ACCEL ops.
 - **Segment**: L consecutive inner indices of one output cell, between two committed prefix sums. A Dither proof block is
   one segment of one cell.
-- **Noise period** L′: the period of Dither's noise along K; a segment is t = L/L′ noise periods.
+- **Noise period** L′: the period of Dither's noise along K, a length, not a time (Period); a segment is t = L/L′
+  noise periods.
 - **Prefix sums** T_s: Dither's committed running sums along a segment, stored as 16-bit elements.
 - **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md` while
-  experimental; the Lean's `Pouw.Dither`), proved over the ACCEL model. The served PoUW moves to it, and
-  `SharedNoiseLucks` (the served H1 and J10-R folds') has no place in it.
+  experimental). Its Lean covers the no-fold round (`Pouw.Dither`), not v3.2's proof block. Its receipt: each segment's
+  noised prefix sums are committed in 16 KiB SHA-512 hiding commitments before the check coin, and the sampled cells
+  opened after it. The served PoUW moves to it; `SharedNoiseLucks` (the H1 and J10-R folds') has no place in it.
 
 ## Narrower senses
 
-- A protocol's **ε_skip**, in Dither's `PROTOCOL.md` and the Credit statement, is its own skipped share of what it
-  credits, ε_W; the fleet's is ε_skip (Notation).
-- `verity.ml.circuits`'s `Circuit` is a Program's canonical gate layout, a `GateSelection` a selected set of its gates and its query `Family` an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object (`verity_sp1.proofs.typed_obligation.Subcircuit`) are its shared gate bodies, and a sampled-proofs obligation's JSON `subcircuit` key holds its gate selection; both names are serialized and stay. `verity.ml.circuits`'s gates and the Lean model's (`Verity.Circuit`) are word-level, each outputting one `Value<w>` of w bits; the Boolean profile is width 1.
+- A protocol's **ε_skip**, in Dither's `PROTOCOL.md` and the Credit statement, is that protocol's own skipped share of
+  what it credits, the Notation's ε_W; the fleet's ε_skip is ε_W(1 − ε_undecl) plus the wrong certificates.
+- `verity.ml.circuits`'s `Circuit` is a Program's canonical gate layout and a `query_ast.GateSet` is a set of its gates; its query `Family` is an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object are its shared gate bodies; the name is serialized and stays. `verity.ml.circuits`'s gates are word-level: each outputs one `Value<w>` of w bits, not one bit, and so are the gates of the Lean model in `Security/Definitions/Core/` (`Verity.Circuit`), whose Boolean profile is width 1.
 - A **template instance** (the queries `Q_template_instance` and `Q_template_instances`) is one occurrence of a subcircuit template in a program, and in a claim id `property/instance`, such as `cr/sha-512`, the instance is the primitive an assumption is about; neither is an input.
 - A **universal unit** (`verity.ml.private_circuits.universal.UniversalUnit`) is a public Boolean Definition, one per size class, that
   runs any **private circuit** of the class, whose description is given as a value. Circuit hiding is
   recursion (Flock's `--hide`), not the universal unit.
 - A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
-- Flock's statement layout (`verity/ml/flock/verifier/PROTOCOL.md` §16) nests three levels inside one proof:
+- Flock's statement layout (`Flock.Statement`, `Flock.HmRow`, in `verity/core/service/flock/`) nests three levels inside one proof:
   - a **unit copy** is one copy of the statement's unit circuit in one slot of the unit range (the spec's "unit",
     `units_per_vu` ≥ 1 of them per VU);
   - a **VU** is one instance's share of the witness: the slots that lay out one sampled proof block, with its rows' digests,
@@ -280,23 +290,28 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     and m_pts ≤ 64): a proof block whose unit circuit doesn't fit in one R1CS block can't be proved as one.
 
   An R1CS block is never a proof block; `units_per_vu`, `vus_per_block` and `blocks_real` keep their names.
+- "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend, since deleted, not Flock.
 - A **pipeline stage** is one buffered step of a CTA's software pipeline, the operands it loads ahead of the tensor cores
   (CUTLASS's `Stages`, Triton's `num_stages`).
 - In a kernel, a **warp** is CUDA's 32 threads that issue together, and a **lane** is one thread's index among them.
 - A **sliding window** is a model's term: the span of positions a layer's attention reads (a model config's
   `sliding_window`).
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (its README's vocabulary).
-- Five words still carry two senses in the code:
+- Six words still carry two senses in the code:
+  - **Footprint**: a replay block's is where sampled proofs read harm (Two-stage design, below). An HBM footprint
+    (`Accounting.BoundReceipt.footprint`) and a theorem's (its hypotheses, in Flock's `ASSUMPTIONS.md`) keep the word.
   - **Row**: a commitment row, the bits one leaf hashes (`hm96` rows, the `*/row/*` leaf schemes, the row-form
-    statements). A matrix's row stays plain English; the other senses are retired (Older names).
-  - **Transcript**: the messages of a proof or a session, what its verifier sees (C-Flock's, PoUS's transcript hash).
-    The values of a run's gates are its trace (Older names); `evaluate_call`'s `transcript` argument keeps the word until renamed.
-  - **Stage**: to stage a statement is to fix and write it before any coin draws (the firewall's staged statements).
+    statements). A matrix's row stays plain English. A workload or a server block is never a row (Older names).
+  - **Transcript**: the messages of a proof or a session, what its verifier sees (Flock's, PoUS's transcript hash).
+    The values of a run's gates are its trace (`evaluation.reference.Trace`); the Python and Lean evaluators'
+    shared refusal text keeps the old word.
+  - **Stage**: to stage a statement is to fix and write it before any coins are flipped (the ZK server's staged
+    statements).
     A step of a run is a phase (Older names); a stage of a Boolean lowering is a level; a pipeline stage keeps its
     sense (above).
   - **Window**: the code's windows (`verity.ml.windows`, a served window circuit and its window record, PoUW's window and
-    its salt) are one period's served steps, and keep the word until renamed; its other senses are in Older names,
-    and a sliding window is a model's term (above).
+    its salt) are one period's served steps, and keep the word until renamed. A span of time is a period, a
+    server's gates between two memory wipes are a server block, and a sliding window is a model's term (above).
   - **Escape**: an incorrect proof block's chance to be accepted is its acceptance probability (Older names); the
     integrity profile's `escape` method keeps the old word. In vLLM's Program frontend, a host escape
     (`E_OPAQUE_HOST`) is a value read on the host, such as `.item()`, which the frontend refuses.
@@ -321,11 +336,18 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. The proof system proves subcircuits.
 - **Input** and **input set**: one assignment of values to a subcircuit's input gates, with the chip's output beside
   it; an input set is a batch of them for one subcircuit, with provenance (captured or synthetic).
+- **Two-stage design** (`ARCHITECTURE.md`'s Glossary, "Sampling design"): serving commits only the values read across
+  replay-block boundaries (the *boundary commitment*, in the registration); the *first stage* samples replay blocks (the
+  *replay sample*); the prover replays each sampled one from its boundary values and the registered information and
+  commits its *interior*, the other values its proof blocks read and write (the *interior commitment*, in the *interior
+  registration*); the *second stage* samples k of its n_ρ proof blocks (or k per template stratum) on fresh coins, and
+  misses every incorrect one with probability at most C(n_ρ − w(ρ), k)/C(n_ρ, k) (stratified, the product over strata).
+  Harm is read at ρ's *footprint* w(ρ), the fewest incorrect proof blocks of any interior its boundary commitment allows.
 - **Cell**: one benchmark result: a proof system (or an archived one's backend id) × statement × input set × prover
   hardware.
 - **Input block** (`INPUT_UNIT` in `verity.ml.circuits.partition`): the part of a partition that holds every input gate.
   It is certified by checking each input's commitment root against its external
-  anchor (the declared weights root, the client's request commitment, the randomness source), always, never sampled.
+  anchor (the registered weights root, the client's request commitment, the randomness source), always, never sampled.
 - **Pinned**, as an instruction's status (`verity.ml.circuits.silicon.instructions`): its silicon model matched every
   hardware probe, at the level `benchmarks/tc_probe/trust.py` computed and a trust dossier records (else hypothesis or
   unprobed). A pinned value or root is one fixed before the run, which a check compares to.
@@ -347,26 +369,33 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   32-byte id) is one key and schedule on it across many periods.
 - **Lemma**: any proved statement that isn't a guarantee. A package keeps its lemmas in `SecurityProofs`, outside its spec,
   and they change freely while every guarantee proves the same statement.
-- **Spec**: a Lean package's trusted text, all a reader must trust to read its guarantees (`AGENTS.md`, "Lean").
+- **Spec**: all of a Lean package that a reader must trust to read its guarantees (`AGENTS.md`, "Lean").
 - **Lock**: a package's guarantee records in its `lean-audit.json` (`AGENTS.md`, "Lean"). A changed
   record means a guarantee now says something else. It protects only the guarantees
   and what they read, though it lists many lemmas too.
 - **Checking and landing** (the team skill, "Landing"):
-  - **Ready mark**: an owner's statement that a PR's head may land; drive admits only marked heads.
+  - **Ready mark**: an owner's statement that a PR's head may land; it admits that head to `next`.
   - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
   - **`next`**: drive's branch of admitted PRs, one merge each, above `main`, which fast-forwards to its reviewed prefix.
-  - **Preflight**: `research queue ready`'s checks of a head merged onto `next`, before the mark and at the sync that admits it.
+  - **Preflight**: `research queue ready`'s checks of a head merged onto `next`, before the mark; the sync runs none.
   - **Landing gate**: a script at `main` that every PR's merge onto `next` must pass.
+  - **Warn gate**: a script run as a landing gate is, whose failure keeps no PR out: drive lands it and tells its owner.
+  - **Warn step**: a step of the after-landing run whose red is never reverted (drive.toml's `warn_steps`: ratchet-gate):
+    drive rings each culprit's lane, which fixes it forward in its next PR.
   - **Low-risk lane**: drive landing a PR on `checked` on its ready mark alone, when its merge changes nothing drive.toml's
     `lowrisk_excludes` names (no Lean, lock or soundness-path change).
-  - **Lean check**: a run of every Lake package's audit (`lean-audit`) on a commit of `next`. A PR that changes a lock, or
-    Lean that runs as code, lands only on a passed Lean check at or above it.
+  - **Lock run**: drive's run of `lean-audit` alone on `checked`'s tip after a landing that changes Lean, a lock or the spec,
+    which lands on its verdict like any other; drive commits the lock records it regenerated there (`Lock records regenerated
+    for #N...`), and the after-landing run checks that commit.
   - **After-landing run**: the full check of `checked`'s tip after each landing; `main` moves only to tips that passed every step on the merge gate.
+  - **Culprit**: the one landing whose change touches what a red's failure names, never found by bisecting; its lane fixes
+    it forward within 2 h, or drive reverts it on `checked`, unless the red is a warn step's.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
     lands from `next` on its review, regenerated by drive on the tip below it and certified there.
 - **Running jobs** (`tools/research`, `infra/`):
-  - **Attempt**: the evidence store's record of one run, completed or failed, with its outputs, made by `research run`.
+  - **Attempt**: the evidence store's record of one run, completed or failed, with its outputs; `research run` is the
+    command that makes one.
   - **Pool**: a node's named set of run slots (`research run --pool NAME`; `research` is any lane's, where
     `--on auto` spills). Not a "line" or a "queue".
   - **Node lease** and **GPU lease**: a node lease (`~/.research/lease`) is the node's own deadline, after which it stops

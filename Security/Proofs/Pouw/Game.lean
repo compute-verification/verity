@@ -4,6 +4,7 @@ public import Definitions.Pouw.Guarantees.Game
 public import Proofs.Pouw.Sampling
 public import Proofs.Pouw.Theorem1
 public import Proofs.Pouw.Reduction
+public import Proofs.Pouw.Lemmas.Game
 
 /-!
 # Proofs of the game's guarantees

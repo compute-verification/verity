@@ -1,7 +1,7 @@
 #!/bin/sh
 # the steward service: restarted if it exits; the lease (--lease --standby) makes any second copy stand by.
-# --reap judges staleness from origin's lane/* tips, so it needs the read-only deploy key (/data/state/secrets/verity-deploy)
-# that `--fetch` uses: if watch.log shows FETCH-FAILED, take --reap out until the fetch works again.
+# --reap judges staleness from origin's lane/* tips, which `--fetch` reads over https with the clone's local credential.helper
+# (gh_app_token.sh, verity-drive's App token): if watch.log shows FETCH-FAILED, take --reap out until the fetch works again.
 cd /workspace/steward/verity
 PY=/data/uv/python/cpython-3.12-linux-x86_64-gnu/bin/python3.12
 export PYTHONPATH="$(PYTHONPATH=tools/research/src "$PY" -m research env --source . | sed -n 's/^export PYTHONPATH=//p')"

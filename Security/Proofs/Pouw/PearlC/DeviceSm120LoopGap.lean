@@ -1,5 +1,16 @@
 module
 
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
+public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.CapLoopGap
+import Proofs.Pouw.PearlC.ChainCapLoopGap
+import Proofs.Pouw.PearlC.UOnlyLoopGap
 public import Proofs.Pouw.PearlC.DeviceSm120Gap
 public import Proofs.Pouw.PearlC.CapLoopGap
 public import Proofs.Pouw.PearlC.ChainCapLoopGap

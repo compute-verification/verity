@@ -19,17 +19,19 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
 -/
 module
 
+public import CoreProtocol.Profile
+public import Flock.WindowRecord
 public import SampledProofs.Bound
 public import SampledProofs.Draw
 public import SampledProofs.PyJson
-public import Flock.WindowRecord
-public import CoreProtocol.Profile
 public import Std.Data.HashMap
+import Lean.Data.Json.Parser
+import Std.Data.HashMap.Lemmas
+meta import CoreProtocol.Profile
+meta import Flock.WindowRecord
 meta import SampledProofs.Bound
 meta import SampledProofs.Draw
 meta import SampledProofs.PyJson
-meta import Flock.WindowRecord
-meta import CoreProtocol.Profile
 meta import Std.Data.HashMap
 
 @[expose] public section
@@ -424,7 +426,7 @@ private def sameCanon (j : Json) : Bool :=
   pyCanonical j && (Flock.canon j).toOption == py && (Flock.WindowRecord.digestHex j).toOption ==
     py.map fun t => sha512Hex ((Flock.WindowRecord.tagOf j).toUTF8 ++ ByteArray.mk #[0] ++ t.toUTF8)
 
-private def parsed (s : String) : Json := (Json.parse s).toOption.getD .null
+private def parsed (s : String) : Json := (Flock.JsonParse.parse s).toOption.getD .null
 
 private def PRINTABLE : String := String.ofList ((List.range 0x7f).map Char.ofNat)
 

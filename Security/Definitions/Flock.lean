@@ -28,12 +28,14 @@ public import Definitions.Flock.Compiled
 public import Definitions.Flock.HoloCompiled
 public import Definitions.Flock.Game.Lock
 public import Definitions.Flock.Game.Seq
+public import Definitions.Flock.Game.Tape
 public import Definitions.Flock.Game.Prob
 public import Definitions.Flock.Game.Batch
 public import Definitions.Flock.ZK.Table
 public import Definitions.Flock.ZK.Cut
 public import Definitions.Flock.ZK.RealView
 public import Definitions.Flock.ZK.SHVZK
+public import Definitions.Flock.ZK.AnyValues
 
 /-!
 # C-Flock's definitions

@@ -6,6 +6,7 @@ public import Proofs.Pouw.NCP.GameProofs
 public import Proofs.Pouw.NCP.RelationWitness
 public import Proofs.Pouw.NCP.RouteUProofs
 public import Proofs.Pouw.NCP.RouteUWordProofs
+public import Proofs.Pouw.Lemmas.NCP
 
 /-!
 # Proofs of NCP's guarantees

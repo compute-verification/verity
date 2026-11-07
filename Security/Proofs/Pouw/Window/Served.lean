@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.Window
+public import Proofs.Core.Game.Prob
 
 /-!
 # PoUW's reading of the window: its bound plus the tie to what's served, and its collision term at counted queries
@@ -22,39 +23,6 @@ namespace Pouw.Window
 
 open scoped ENNReal
 
-variable {α : Type}
-
-theorem prob_mono {p q : α → Prop} (h : ∀ a, p a → q a) : ∀ (g : Game α) (s : Strategy g), prob p g s ≤ prob q g s
-  | .ret a, _ => by
-    classical
-    simp only [prob]
-    split_ifs with hp hq
-    · exact le_rfl
-    · exact absurd (h a hp) hq
-    · exact zero_le
-    · exact le_rfl
-  | .send _ k, s => prob_mono h (k s.1) s.2
-  | @Game.coin _ C iF _ k, s => by
-    change ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * prob p (k c) (s c) ≤
-      ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * prob q (k c) (s c)
-    exact Finset.sum_le_sum fun c _ => mul_le_mul_right (prob_mono h (k c) (s c)) _
-
-theorem prob_or_le (p q : α → Prop) :
-    ∀ (g : Game α) (s : Strategy g), prob (fun a => p a ∨ q a) g s ≤ prob p g s + prob q g s
-  | .ret a, _ => by
-    classical
-    simp only [prob]
-    split_ifs <;> simp_all
-  | .send _ k, s => prob_or_le p q (k s.1) s.2
-  | @Game.coin _ C iF _ k, s => by
-    change ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * prob (fun a => p a ∨ q a) (k c) (s c) ≤
-      ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * prob p (k c) (s c) +
-        ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * prob q (k c) (s c)
-    rw [← Finset.sum_add_distrib]
-    exact Finset.sum_le_sum fun c _ => by
-      rw [← mul_add]
-      exact mul_le_mul_right (prob_or_le p q (k c) (s c)) _
-
 /-- **PoUW's reading of the window**: if the window accepts with its committed transcript's wrong units in `𝓑` with
 probability at most `b` (`WindowDelta`'s bound) and the tie to what's served holds (`ServedTie`, against the served pass
 `P`), then it accepts while its committed transcript is not anchored, served and with its wrong units outside `𝓑` with
@@ -70,7 +38,8 @@ theorem window_served_le {Reg Tr : Type} {C : ℕ} {n : Fin C → ℕ} {Lw : Reg
     prob (fun o => o.1 = true ∧ ¬ (Anchored U P (committed (reg σ) (cont σ)) ∧
         Served U P (committed (reg σ) (cont σ)) ∧ ¬ 𝓑 (U.wrong (committed (reg σ) (cont σ)))))
       (auditReg Lw (windowSession sess)) σ ≤ b + δin (reg σ) (cont σ) := by
-  refine le_trans (prob_mono (fun o h => ?_) _ σ) (le_trans (prob_or_le _ _ _ σ) (add_le_add hW (hTie σ)))
+  refine le_trans (Verity.Game.prob_mono (fun o h => ?_) _ σ)
+    (le_trans (Verity.Game.prob_or_le _ _ _ σ) (add_le_add hW (hTie σ)))
   by_cases hB : 𝓑 (U.wrong (committed (reg σ) (cont σ)))
   · exact Or.inl ⟨h.1, hB⟩
   · exact Or.inr ⟨h.1, fun hAS => h.2 ⟨hAS.1, hAS.2, hB⟩⟩

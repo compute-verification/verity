@@ -3,6 +3,7 @@ module
 public import Definitions.Accounting.Pouw
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.Assumptions.Game
+public import Mathlib.Data.Fintype.Sigma
 
 /-!
 # PoUW's guarantee as a joint run's compute guarantee (trusted)

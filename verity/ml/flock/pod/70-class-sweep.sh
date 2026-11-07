@@ -30,11 +30,15 @@
 #      for a prover in another pod that runs with FC_VERIFIERS=DIR; give SM)  SERVE_POINTS=1 (with SERVE_ONLY: that many provers'
 #      sessions, one prover after another, on the same verifier processes)
 #      BUILD_ONLY=1 (build, print BINARY= and SELFTEST_BINARY= and stop; give SM without a GPU)
-#      FC_COINS=os (M0's sessions on per-round OS coins: no seed, no PRF; seed: the binary's default, M0's step-0 seed). A verifier
-#      pod runs this script too, so both sides agree; a selftest build seeds whatever it says
+#      FC_COINS=tree (M0's sessions on the keyed coin tree; empty: M0's step-0 seed, which the Lean verifier refuses). A
+#      verifier pod runs this script too, so both sides agree; a selftest build seeds whatever it says
+#      FLOCK_CHALLENGER=1 (with FC_COINS=tree or FLOCK_ZK=1, the default: each verifier process takes its sessions' coin trees
+#      from its own challenger, pod/challenger.sh, and its records are held to the challenger's release log; class_statement's
+#      record names each challenger's exit and audit, and a point passes only if they all do)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
-export FC_COINS=${FC_COINS:-os}
+export FC_COINS=${FC_COINS:-tree}
+if [ "$FC_COINS" = tree ] || [ "${FLOCK_ZK:-0}" = 1 ]; then export FLOCK_CHALLENGER=${FLOCK_CHALLENGER:-1}; else export FLOCK_CHALLENGER=0; fi
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/fcs}/out}; W=${FLOCK_WORK:-/workspace}/flock-circuit; mkdir -p $O $W
 G=${GPU:-1}
 SM=${SM:-$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d .)}; SM=${SM:-89}
@@ -79,6 +83,12 @@ if [ -z "${PYBIN:-}" ]; then
   PYBIN=$W/py/bin/python3
 fi
 export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
+# the challengers' Lean, where this pod serves sessions (not a staging run, nor a prover whose verifier is another pod's)
+if [ "$FLOCK_CHALLENGER" = 1 ] && [ "${STAGE_ONLY:-0}" != 1 ] && [ -z "${FC_VERIFIERS:-}" ]; then
+  export CHALLENGER_REPO=$REPO CHALLENGER_PY=$PYBIN CHALLENGER_WORK=$O/challenger-build
+  . verity/ml/flock/pod/challenger.sh
+  challenger_build; challenger_built || exit 1
+fi
 [ -x /usr/bin/time ] || { apt-get install -y -qq time >/dev/null 2>&1 || { apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq time >/dev/null 2>&1; }; }   # the prover's own peak memory
 nvidia-smi -L 2>/dev/null | tee $O/host.txt; lscpu | grep -E 'Model name|^CPU\(s\)' | tee -a $O/host.txt; free -g | tee -a $O/host.txt
 G_=; [ $G = 1 ] && G_=--gpu

@@ -1,6 +1,8 @@
-import Definitions.Pouw.Game.Defs
-import Definitions.Pouw.NCP.RouteU
-import Definitions.Pouw.PearlC.Game
+module
+
+public import Definitions.Pouw.Game.Defs
+public import Definitions.Pouw.NCP.RouteU
+public import Definitions.Pouw.PearlC.Game
 
 /-!
 # The advantage form (trusted)
@@ -11,6 +13,8 @@ except with probability `δ`, which is `GGap`'s property at the gap `g = ε/(1 +
 `AuditGε` is the audit's statement in ε form, `Protocol.WrefWithin` the bound `Ω_max` the reduction from TT reads,
 and `Pouw.NCP.Params.InstanceU` route U's instance conditions.
 -/
+
+@[expose] public section
 
 namespace Pouw
 

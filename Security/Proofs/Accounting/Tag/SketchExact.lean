@@ -1,8 +1,24 @@
 module
 
-public import Mathlib.Data.Nat.Bitwise
-public import Mathlib.Tactic
-public import Proofs.Accounting.Tag.Signs
+public import Definitions.Accounting.Guarantees.Sketch
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Accounting.Tag.Signs
 
 /-!
 # Exactness of integer ±1 sketches on sm_120's E4M3 tensor cores

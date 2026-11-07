@@ -218,9 +218,7 @@ class NativeDrainArm(RootsArm):
 
 
 class RowsArm(NativeDrainArm):
-    """`NativeDrainArm` committing under rows-sha512, COMMIT-GPU's leaves and trees on the windowed worker."""
-
-    commit_scheme = "rows-sha512"
+    """`NativeDrainArm` committing under rows-sha512, `benchmarks/pouw/commit_gpu/`'s leaves and trees on the windowed worker."""
 
 
 class RowsBaseArm(RowsArm):
@@ -263,9 +261,9 @@ class Rows4kArm(RowsArm):
 
     def ready(self, target: Any) -> None:
         from verity_vllm.commit import step_rows
-        from verity_vllm.commit.committer import host_retention, native_collect, native_host
+        from verity_vllm.commit.committer import host_retention, native_host
 
-        step_rows.ROW_BYTES = native_host.GPU_CHUNK_BYTES = native_collect.GPU_CHUNK_BYTES = host_retention.GPU_CHUNK_BYTES = self.row_bytes
+        step_rows.ROW_BYTES = native_host.GPU_CHUNK_BYTES = host_retention.GPU_CHUNK_BYTES = self.row_bytes
         super().ready(target)
 
 
@@ -344,12 +342,6 @@ class HiPrioArm(NativeDrainArm):
             del os.environ["VERITY_HI_PRIO"]
 
 
-class RowsHiPrioArm(HiPrioArm):
-    """`HiPrioArm` committing under rows-sha512."""
-
-    commit_scheme = "rows-sha512"
-
-
 SERVED_COMMIT_ROWS = RowsArm("served-commit-rows", retain="none")
 SERVED_COMMIT_ROWS_BASE = RowsBaseArm("served-commit-rows-base", retain="none")
 SERVED_COMMIT_ROWS_BATCH = RowsBatchArm("served-commit-rows-batch", retain="none")
@@ -362,5 +354,5 @@ SERVED_COMMIT_ROWS_LAYER = RowsLayerArm("served-commit-rows-layer", retain="none
 SERVED_COMMIT_ROWS_LAYER_4K = RowsLayer4kArm("served-commit-rows-layer-4k", retain="none")
 SERVED_COMMIT_ROWS_4K_CAP = Rows4kCapArm("served-commit-rows-4k-cap", retain="none")
 SERVED_COMMIT_ROWS_LAYER_CAP = RowsLayerCapArm("served-commit-rows-layer-cap", retain="none")
-SERVED_COMMIT_ROWS_HIPRIO = RowsHiPrioArm("served-commit-rows-hiprio", retain="none")
+SERVED_COMMIT_ROWS_HIPRIO = HiPrioArm("served-commit-rows-hiprio", retain="none")
 STOCK_PROF = StockProfArm("stock-prof")

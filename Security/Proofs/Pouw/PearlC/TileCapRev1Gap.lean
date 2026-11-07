@@ -1,5 +1,14 @@
 module
 
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.KernelWrefGap
+import Proofs.Pouw.PearlC.TileGap
+import Proofs.Pouw.PearlC.UOnlyGap
+import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
 
 /-!

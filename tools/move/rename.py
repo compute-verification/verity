@@ -23,8 +23,9 @@ branch across it):
    Lake manifest's digest in a JSON pin of `tools/verity/check/pins.py`: a move changes a manifest only in where its path
    packages sit, which no pinned output reads (a pin of any other file the move changes is left for its command);
 5. appends its renamed paths to research's `moves.json` once, as `layout.py` does, each moved path up to the end of each
-   run of renamed parts (`.../warden/`, not each file under it, and `.../warden/tests/test_warden.py` besides), so that a
-   branch carried across the move appends the same entry unless it adds a path that renames a part below a renamed one.
+   run of renamed parts (`.../warden/`, not each file under it, and `.../warden/tests/test_warden.py` besides; a directory
+   only when it moves whole, else the file), so that a branch carried across the move appends the same entry unless it
+   adds a path that renames a part below a renamed one.
 It refuses a dirty worktree, and a second run changes nothing.
 
 A map with `scope = "prose"` renames only prose, the part of a move `tools/verity/check/move_check.py` certifies without a
@@ -32,6 +33,9 @@ build: a word that stands as a word in a comment, a docstring or Markdown's text
 code, a string literal, a data file, backticks, a name, a path or a constant's name, nor in a file a JSON pin records (its
 command regenerates the pin). Such a move moves no path, renames no declaration (`--moves` prints `{}`) and leaves every
 lock and pin as it was.
+
+Every mode refuses a map whose [[words_in]] files, [keep_in] or [keep_paths] name a path or glob that no tracked file
+matches (`Words.unmatched`), naming each, rather than skip the renames or keeps it holds for a file since moved or deleted.
 """
 from __future__ import annotations
 
@@ -419,7 +423,7 @@ class Words:
         self._patterns: dict[tuple[tuple[int, ...], tuple[int, ...]], tuple[re.Pattern, list[str]]] = {}
 
     def excluded(self, path: str) -> bool:
-        return any(_match(path, g) for g in self.exclude)
+        return path == MOVES or any(_match(path, g) for g in self.exclude)
 
     def rules(self, path: str, text: str) -> tuple[re.Pattern, list[str]]:
         """The words for file `path`: those of each [[words_in]] whose files match it (whole words, first), then [words],
@@ -498,6 +502,16 @@ class Words:
             self.keep.append(re.compile(r"(?<![\w./-])(?:" + "|".join(map(re.escape, sorted(names, key=len, reverse=True)))
                                         + r")(?![\w/-])"))
         return held
+
+    def unmatched(self, files: list[str]) -> list[str]:
+        """The paths and globs of [[words_in]]'s files, [keep_in] and [keep_paths] that match none of `files`, each after its
+        table. Each names files the map renames or keeps apart, so one that matches none (a file since moved or deleted) is
+        a rename or a keep the move would skip; [rewrite] exclude may name what a tree lacks (`archive/**`, a file that
+        lands later), since it only leaves files as they are."""
+        named = [("[[words_in]] files", g) for globs, _ in self.scoped for g in globs]
+        named += [(t, g) for t, held in (("[keep_in]", self.keep_in), ("[keep_paths]", self.keep_paths)) for g in held]
+        tracked = set(files)
+        return [f"{t}: {g}" for t, g in dict.fromkeys(named) if g not in tracked and not any(_match(p, g) for p in files)]
 
     def name(self, n: str, path: str = "") -> str:
         """A Lean or Python dotted name, as it is renamed where it stands in file `path`: not where [keep] keeps it (a
@@ -641,11 +655,14 @@ def repin_manifests(root: Path, words: Words, pin: str, key: str, under: str, te
     return None if new == text else new
 
 
-def renamed_paths(moves: list[tuple[str, str]]) -> dict[str, str]:
+def renamed_paths(moves: list[tuple[str, str]], present: list[str] = ()) -> dict[str, str]:
     """Each moved path up to the end of each of its runs of renamed parts ({old: new}; a directory ends in "/"), so that
     every file under one renamed directory gives the same entries, a path below it that renames another part
     (`warden/tests/test_warden.py`) is recorded besides, since `move_check.py` and research's `tools_registry` read the
-    longest entry that holds a path, and a swap (`Properties/Proofs/` to `Proofs/Properties/`) is recorded whole."""
+    longest entry that holds a path, and a swap (`Properties/Proofs/` to `Proofs/Properties/`) is recorded whole. A
+    directory in which a file of ``present`` that no longer entry holds stays, or lands elsewhere than below its new path,
+    didn't move whole (a word that names one file: `identity/Identity/Domains.lean`): the files that moved out of it are
+    recorded instead, as `move_check.py`'s `moves_change` reads the entry."""
     out: dict[str, str] = {}
     for o, n in moves:
         a, b = o.split("/"), n.split("/")
@@ -661,17 +678,27 @@ def renamed_paths(moves: list[tuple[str, str]]) -> dict[str, str]:
         for old, new in spans:
             if out.setdefault(old, new) != new:
                 raise SystemExit(f"{old} would move to both {out[old]} and {new}")
+    dest = dict(moves)
+
+    def holder(f: str) -> str | None:
+        return max((k for k in out if f == k or (k.endswith("/") and f.startswith(k))), key=len, default=None)
+    while part := next((d for d in out if d.endswith("/") and any(
+            holder(f) == d and dest.get(f, f) != out[d] + f[len(d):] for f in present if f.startswith(d))), None):
+        del out[part]
+        for o, n in moves:
+            if o.startswith(part) and ((h := holder(o)) is None or out[h] + o[len(h):] != n):
+                out[o] = n
     return dict(sorted(out.items()))
 
 
-def record(root: Path, moves: list[tuple[str, str]]) -> str | None:
+def record(root: Path, moves: list[tuple[str, str]], present: list[str] = ()) -> str | None:
     """research's `moves.json` with this move's `renamed_paths` appended, or None when it holds them already or nothing
     moves."""
     if not moves:
         return None
     if not (root / MOVES).is_file():
         raise SystemExit(f"{MOVES}: research's record of the moves is missing")
-    doc, entry = json.loads((root / MOVES).read_text()), {"paths": renamed_paths(moves)}
+    doc, entry = json.loads((root / MOVES).read_text()), {"paths": renamed_paths(moves, present)}
     if entry in doc["moves"]:
         return None
     doc["moves"].append(entry)
@@ -689,6 +716,9 @@ def main(argv: list[str] | None = None) -> int:
     root = (a.root or Path(L.git(HERE, "rev-parse", "--show-toplevel").strip())).resolve()
     words = Words(tomllib.loads(a.map.read_text()))
     files = [p for p in L.git(root, "ls-files", "-z").split("\0") if p]
+    if missing := words.unmatched(files):
+        raise SystemExit(f"{a.map}: it names paths no tracked file matches, whose renames or keeps the move would skip; point "
+                         "each at its file's path on this tree, or drop it:\n  " + "\n  ".join(missing))
     words.hold(files)
     if a.moves:
         print(json.dumps({} if words.scope else lock_moves(root, words, files), indent=1))
@@ -726,12 +756,12 @@ def main(argv: list[str] | None = None) -> int:
     tracked = set(present)
     pins |= {p: t for p, key, under in json_pins(root)
              if p in tracked and (t := repin_manifests(root, words, p, key, under, texts)) is not None}
-    recorded = {MOVES: t} if (t := record(root, moves)) is not None else {}
+    recorded = {MOVES: t} if (t := record(root, moves, present)) is not None else {}
 
     print(f"rename move at {L.git(root, 'rev-parse', 'HEAD').strip()}{' (dry run)' if a.dry_run else ''}")
     print(f"  files rewritten: {len(texts)}, files moved: {len(moves)}, pins repinned: {len(pins)}")
     if recorded:
-        print(f"  {MOVES}: the renamed paths recorded, {len(renamed_paths(moves))} of them")
+        print(f"  {MOVES}: the renamed paths recorded, {len(renamed_paths(moves, present))} of them")
     for (w, new), n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
         print(f"    {n:5d}  {w!r} -> {new!r}")
     if kept:
@@ -743,7 +773,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    move {o} -> {n}")
         for p in sorted(pins):
             print(f"    repin {p}")
-        for o, n in renamed_paths(moves).items() if recorded else ():
+        for o, n in renamed_paths(moves, present).items() if recorded else ():
             print(f"    record {o} -> {n}")
         return 0
     for p, t in {**texts, **pins, **recorded}.items():

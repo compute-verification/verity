@@ -1,9 +1,9 @@
 module
 
-public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
-public import Definitions.Pouw.NCP.Witness
 public import Definitions.Pouw.Assumptions.NCP.Assumptions
+public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
 public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.NCP.Witness
 
 /-!
 # NCP's game instance on route U: pinned statements (trusted)

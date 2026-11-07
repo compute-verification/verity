@@ -169,6 +169,34 @@ def GGapSampledU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostM
           T < (1 - g) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + δ q U.layout.N
 
+open Classical in
+/-- The tiles of the units `τ` commits whose inert work (the replayed debit) exceeds its bound: the tolerant audit
+accepts a sampled one and credits it nothing. -/
+noncomputable def overCapTiles (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) : Finset ℕ :=
+  (range (TR.tiling U.layout).NT).filter fun g =>
+    ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ ¬ TR.capOK H s U g c.act
+
+/-- **The gap property under the tolerant sampled audit.** Write `S` for the credit (the claimed work, the credited
+rows' `W_ref`; a number, where the type `S` is the salt's), `T` for the budget, `g` for the gap (the statement's `γ`),
+and `1 + ε_a = 1/(1 − g)`. As `GGapSampled`, for every miss-bound table `u` at `δ` (`MissBound`), the audit accepts (every
+sampled tile is good, of a blank unit, or over its inert-work bound) while `S > (1 + ε)·T` with probability at
+most `δ + η(q, N)`, the failure probability. Here `1 + ε = (1 + ε_a)/(1 − ε_s)` is the advantage and
+`ε_s = u(X_O)·W/S` is the sampling tolerance: the share of `S` an accepted run may hold in incorrect work. `W` is the
+layout's work, and `X_O` the number of samples on tiles over their bound. `GGapSampled` is its case `u 0 = ε_s`,
+`u x = 1` otherwise. -/
+def GGapSampledTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
+    (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+  ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
+    ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →
+    ∀ (t : ℕ) (u : ℕ → ℝ) (δ : ℝ), MissBound t u δ →
+      pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
+          AuditAcceptsTol (goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
+              blankTiles TR U (A.transcript U x.1 x.2.1))
+            (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          T < (1 - γ) * (claimedWref TR U (A.transcript U x.1 x.2.1) -
+            u (drawsIn (overCapTiles TR U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2) * tileWrefTotal TR U.layout))
+        ≤ δ + η q U.layout.N
+
 /-! ## Pearl-C's tiles -/
 
 open Classical in

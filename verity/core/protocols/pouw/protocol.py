@@ -3,8 +3,8 @@
 A scheme turns one declared matmul's committed operand rows into the checked values of each tile, the tile's
 transcript leaf and the useful output.  Everything else (commitments, the salt, the sample, the openings, the profile) is
 the protocol's, in `audit`, and is the same for every scheme.  Like `verity.ml.commitments.scheme.CommitmentScheme`, a
-scheme is a named, versioned object: its ``name`` is what `verity.core.protocols.pouw.schemes.get` looks up, and its spec section in
-``PROTOCOL.md`` and its pinned vectors under ``tests/vectors`` carry the same string.
+scheme is a named, versioned object: its ``name`` is what `verity.ml.protocols.pouw.schemes.get` looks up, and its module's docstring and its
+pinned vectors under ``tests/vectors`` carry the same string.
 
 Operands are committed as rows along k: ``A`` is ``m x k`` and the weight ``B`` is stored as its ``n`` rows, so a matmul
 computes ``A·Bᵀ`` and a tile (rows of A, rows of B) reads only its own strips.  Each scheme fixes its row encoding.
@@ -100,8 +100,9 @@ class Certificate:
     `gapFromTTNCP`), ``eps = gap/(1 − gap)`` the adversary's advantage ε it carries (Lean `Pouw.Gε`, `EndToEndEps`),
     and ``gap0`` the conjecture's target gap.  A scheme whose conjecture names no target has ``gap0 = None``, and no gap
     or ε.  ``claims`` are `verity.core.claims` ids, or ids in the same format that no render cites yet; ``theorems`` are
-    pinned Lean declarations; ``allowances`` are gaps the scheme admits by design; ``parameters`` are the values the
-    theorems are instantiated at, including the domain bounds their gap holds on."""
+    the Lean theorems it rests on, guarantees the lock pins and the lemmas their proofs use; ``allowances`` are gaps the
+    scheme admits by design; ``parameters`` are the values the theorems are instantiated at, including the domain bounds
+    their gap holds on."""
 
     conjecture: str
     gap0: Fraction | None
@@ -124,7 +125,7 @@ class Certificate:
 
 @runtime_checkable
 class PoUWScheme(Protocol):
-    #: The scheme's registered name; its spec section and pinned vectors carry the same string.
+    #: The scheme's registered name; its module's docstring and pinned vectors carry the same string.
     name: str
     #: What an accepted audit's guarantee rests on.
     certificate: Certificate

@@ -1,5 +1,13 @@
 module
 
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.PearlC.DevicePrices
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.ServedMixedRev1Gap
+import Proofs.Pouw.PearlC.ServedRev1Gap
+import Proofs.Pouw.PearlC.UOnlyGap
 public import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 
 /-!

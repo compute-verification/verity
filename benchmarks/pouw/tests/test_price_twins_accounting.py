@@ -16,11 +16,11 @@ from pathlib import Path
 import pytest
 
 from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_debit as D
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 sys.path.insert(0, str(Path(__file__).parents[1] / "clear"))
@@ -47,7 +47,7 @@ H100_PINS = {f"Pouw.SecurityProofs.PearlC.{kind}H100Rev1_{n}": n
 def scheme_of(twin: dict) -> C.PearlC:
     """The twin's device record as a scheme: v1's G = 4 or v2's no promotion, at the twin's prices and cap."""
     d = DEVICES[twin["statement"]]
-    return C.PearlC(forming="v1", device=replace(d, cap=Fraction(twin["cap"]), prices=PRICES[Fraction(twin["fadd"])][0]))
+    return C.PearlC(forming="v1", device=replace(d, cap=Fraction(twin["cap"]), prices=PRICES[Fraction(twin["fadd"])][0]), hashing="h0")
 
 
 def cast_offset(twin: dict) -> Fraction:

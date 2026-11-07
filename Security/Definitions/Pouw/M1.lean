@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.D1
-public import Mathlib.Data.Fintype.Sum
 
 /-!
 # `D1.m1`: the named milestone instance (trusted; §3.2's derivation, tt-attacks §4, working decisions W4 and W6)

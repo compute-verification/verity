@@ -47,11 +47,11 @@ Fa2CombineV2 = flat("Fa2Combine", 2, ["NS", "D"], lambda S: W._combine_type(S, B
 def _head_split(B, S, q, k, v):
     """`Fa2AttentionHeadSplit_v1`'s body on bits over `AttnBlock_v8`, `AttentionHead_v8` (NS = 1), `Fa2SplitEnd_v2` and
     `Fa2Combine_v2`."""
-    def block_of(nvis, first, check):
+    def tile_of(nvis, first, check):
         return bind(BAT.AttnBlockV8, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, CHECK=check)
     unsplit = bind(BAT.AttentionHeadV8, T=S.T, D=S.D, BN=S.BN, DOT=S.DOT, INV=S.INV, MASKED_FROM=S.MASKED_FROM)
     end = bind(Fa2SplitEndV2, D=S.D, INV=S.INV, SCALE=S.D ** -0.5)
-    return W.head_split(BSS.bit_steps(B), S, block_of, unsplit, end, bind(Fa2CombineV2, NS=S.NS, D=S.D), q, k, v)
+    return W.head_split(BSS.bit_steps(B), S, tile_of, unsplit, end, bind(Fa2CombineV2, NS=S.NS, D=S.D), q, k, v)
 
 
 _HEAD = ["T", "NS", "D", "BN", "DOT", "INV", "MASKED_FROM"]

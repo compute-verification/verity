@@ -2,6 +2,13 @@ module
 
 public import Proofs.Pouw.PearlC.UOnlyGap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.PearlC.DevicePrices
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.TileGap
+import Proofs.Pouw.PearlC.UOnlyGap
+import Proofs.Pouw.Prob
 
 /-!
 # TT_OUT over U alone per audit tile: it asserts more than the (C̃, U) tile row, and g from it

@@ -1,11 +1,10 @@
 module
 
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Data.Finset.Powerset
-public import Mathlib.Data.Fintype.BigOperators
-public import Mathlib.Data.Fintype.Pi
-public import Mathlib.Data.Fintype.Sigma
 public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Data.Finset.Powerset
+import Mathlib.Data.Fintype.BigOperators
 
 /-!
 # The streamed-label wipe: the counting argument

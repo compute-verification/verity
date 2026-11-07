@@ -15,10 +15,11 @@ comparison to each verdict, which decides nothing.
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
   `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
   against a stub endpoint that answers at once (certifier-serve's tests' run), honest, extra and late, with fresh keys.
-  Or, with ``--warden-run``, an active warden's run (`warden_serve.py`'s, or the gate's ``warden-rehearse``'s), read by
-  `warden_chain`: its own certified records under its key and session, on the warden link (`service.WardenProfile`:
-  both heads at the warden's grid and parameters digest, no sync declared or charged), a certifier rehearsal's run
-  refused by name; its members are honest and tampered, the tampered head failing its signed digest alone.
+  Or, with ``--warden-run``, an active network certifier's run (`warden_serve.py`'s, or the gate's
+  ``warden-rehearse``'s), read by `warden_chain`: its own certified records under its key and session, on the network
+  certifier link (`service.WardenProfile`: both heads at the network certifier's grid and parameters digest, no sync
+  declared or charged), a certifier rehearsal's run refused by name; its members are honest and tampered, the tampered
+  head failing its signed digest alone.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
   with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates
   still the certifier's; with ``--extra``, certifier-serve's ``extra`` run (the shim wrote one event more and the
@@ -32,7 +33,7 @@ comparison to each verdict, which decides nothing.
   stream's δ, on the Lean verifier of record's sample. ``tampered`` then changes every window (`every_count`), which any
   draw refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
   window accepted, which the network verdict refuses by name (``period-draw``).
-* **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_unit` lowered once (the registered unit with each
+* **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_block` lowered once (the registered unit with each
   gate the Definition its pinned digest names), bound to the registered partition and Program. Each execution phase is a
   statement of its own with one instance, proof block 0: rows ``pub`` and ``wit`` (`LinkWindows.layout`,
   `LinkWindows.row`) and the output row ``o0``, the verdict and deadline bits. The lowering evaluates every instance at
@@ -139,9 +140,9 @@ def link(run: Path) -> tuple[LinkWindows, dict]:
 
 
 def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
-    """A warden run's link (`warden_chain.link`: the active warden's own records, its key and session, no sync), the
-    plan it stands for (its windows, no syncs), its certified records by (direction, window) and the signer's
-    refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
+    """A network certifier run's link (`warden_chain.link`: the active network certifier's own records, its key and
+    session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
+    the signer's refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
     import warden_chain as WC
 
     lw, dep, _ = WC.link(run)
@@ -157,8 +158,8 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
     the proof block's output word by the gates' references (`LinkWindows.outputs`); and the certifier's certificates,
     which the verifier receives from the certifier. ``edit(lw, w, pair)``: the records the prover commits in place of
     the certified ones. ``expect``: the verdict the verifier of record should reach on an honest proof of the opening.
-    With ``warden``, ``run`` is an active warden's run (`warden_link`), its records and certificates the warden's own
-    and no sync declared.
+    With ``warden``, ``run`` is an active network certifier's run (`warden_link`), its records and certificates the
+    network certifier's own and no sync declared.
 
     With ``clock``, for a report on runs nothing is proved for (network_e2e), also on N2's stream as certifier-serve's
     check takes it: each execution phase registered (``digest``), selected (Selection All) and decided before the next
@@ -356,7 +357,7 @@ def _one_stage():
 
 
 def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
-    """The one circuit: `LinkWindows.proof_unit` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
+    """The one circuit: `LinkWindows.proof_block` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
     to the registered partition and Program, which are written beside it as the verifier's own. Its ports are
     `service.PORTS`, each the length the verifier opens (`LinkWindows.bits`)."""
     rows = [(r, M.V2, lw.bits(r), list(lw.layout[r])) for r in SVC.ROWS]
@@ -367,7 +368,7 @@ def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
     t, was = time.time(), gc.isenabled()
     gc.disable()
     try:
-        st = M.CS.UnitStager(lw.proof_unit, "unit/n2-link-window", rows, [(M.V2, (0,))], circuit=out / "circuit.txt",
+        st = M.CS.UnitStager(lw.proof_block, "unit/n2-link-window", rows, [(M.V2, (0,))], circuit=out / "circuit.txt",
                              bind=bound)
         st.pin
     finally:
@@ -657,10 +658,10 @@ def prove(a) -> int:
     M.PF.executable = lambda: Path(a.lean)
     _record_lean_runs(M.PF)
     sg = stager(M, lw0, out / "stager")
-    summary["stager"] = {"unit": lw0.proof_unit.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
+    summary["stager"] = {"unit": lw0.proof_block.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
                          "circuit_sha512": sg.circuit_sha512, "bits": {p: lw0.bits(p) for p in SVC.PORTS},
                          "ands": sg.st.low.layout.counts["ands"]}
-    log(f"stager: {lw0.proof_unit.id}, {sg.lower_s} s, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, "
+    log(f"stager: {lw0.proof_block.id}, {sg.lower_s} s, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, "
         f"pin {sg.st.pin[:16]}")
     summary["staging"] = stage(M, sg, members, os.urandom(32), out)
     log(f"staged: {summary['staging']}")
@@ -718,7 +719,7 @@ def main(argv=None) -> int:
                                      "record")
     run = p.add_mutually_exclusive_group(required=True)
     run.add_argument("--run", type=Path, help="the honest run's directory")
-    run.add_argument("--warden-run", type=Path, help="an active warden's run (warden_serve.py's, or the gate's "
+    run.add_argument("--warden-run", type=Path, help="an active network certifier's run (warden_serve.py's, or the gate's "
                      "warden-rehearse's): its own certified records, no certifier rehearsal (warden_chain)")
     p.add_argument("--extra", type=Path, help="certifier-serve's extra run of the same plan")
     p.add_argument("--late", type=Path, help="certifier-serve's late run of the same plan")

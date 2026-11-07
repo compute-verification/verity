@@ -38,7 +38,7 @@ structure Params (Q R S : Type) where
   Wref : Layout → ℕ → ℕ
 
 /-- The number of checked blocks, `⌈k/d⌉` (`0` when `d = 0`). -/
-def nBlocks (d k : ℕ) : ℕ := (k + d - 1) / d
+def nSegments (d k : ℕ) : ℕ := (k + d - 1) / d
 
 /-- Block `t` ends at inner index `min ((t + 1)·d, k)`. -/
 def blockEnd (d k t : ℕ) : ℕ := min ((t + 1) * d) k
@@ -69,7 +69,7 @@ def Y (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Checked :=
 
 /-- The compared entries: blocks `t < ⌈k/d⌉`, rows `i < m`, columns `j < n`. -/
 def checkIdx (sh : Shape) : Finset (ℕ × ℕ × ℕ) :=
-  range (nBlocks P.d sh.k) ×ˢ range sh.m ×ˢ range sh.n
+  range (nSegments P.d sh.k) ×ˢ range sh.m ×ˢ range sh.n
 
 /-- `H_ref`'s noised activations in int32: `wrap32 (A + E_L·E_R)`. -/
 def refAct (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) : Mat :=
