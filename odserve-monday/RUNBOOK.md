@@ -15,14 +15,14 @@ another head unless `WANT` names it: a later head only on the coordinator's word
 | follow-on node | vy-nebius-cpu-12, 81.85.1.89 (`FOLLOW_NODE`; vy-nebius-cpu-11, 81.85.4.136, is the fallback): 645 GB, one 30 h job |
 | network certifier | vy-auditor-2 (`research@vy-auditor-2`, its gate pinned at `701c8c0073a6`); trust in it is `trusted-host` |
 | challenger gate | `research@204.12.178.84`, pinned at `f0c4b1355fb7`, lane network-accounting |
-| settings | `settings/settings-monday.env`, sha256 prefix `6aad3a169d17598f`, installed as `/workspace/research/lanes/network-accounting/onsite/settings-monday.env` |
+| settings | `settings/settings-monday.env`, sha256 prefix `b610e7e37a9bc461`, installed as `/workspace/research/lanes/network-accounting/onsite/settings-monday.env` |
 
 Monday's settings: V3c class `8,32,4,4,16` (CLASSES too), `OF_RECORD=1`, `PRODUCT=remote-network-no-pouw` untied
 (`H1_TIE=`) at `V3C_LAW=subset:1`, `POUW_CMD=` (empty), `H1_GATE` on lane network-accounting's key with
 `H1_LANE=network-accounting`, `MIN_FREE_INODES=500000`, and the follow-on's caps `V3C_AUDIT_TIMEOUT=13h`,
-`CERTIFIER_TIMEOUT=4h`, `CERTIFIER_PERIOD_TIMEOUT=1h`, `COMPOSITE_TIMEOUT=12h`, which together fill its job's
-`--timeout 108000` (30 h). At 9068 `certifier_piece.py` takes no `--case-only`, so the period step runs in full, inside
-its 1 h cap.
+`CERTIFIER_TIMEOUT=4h`, `CERTIFIER_PERIOD_TIMEOUT=1h`, `COMPOSITE_TIMEOUT=6h`: 24 h together inside its job's
+`--timeout 108000` (30 h), which leaves about 6 h for the copy and the record. At 9068 `certifier_piece.py` takes no
+`--case-only`, so the period step runs in full, inside its 1 h cap.
 
 ## Rules for the run
 
@@ -86,14 +86,14 @@ Expect `GPU 0: NVIDIA H200 ...` and `EXIT 0`.
 bash settings/settings_job_launch.sh
 ~~~
 
-Expect `FILE settings-monday.env 6aad3a169d17598f`, `SETTINGS JOB r... exit 0`, `STATE done`, and the job's lines:
+Expect `FILE settings-monday.env b610e7e37a9bc461`, `SETTINGS JOB r... exit 0`, `STATE done`, and the job's lines:
 
 ~~~text
 REMOTE SETTINGS: readable, sets 2 of SLOTS and MAX_TOKENS
 COST LOAD: remote's first load (REQUESTS, SLOTS by default) is the front's group's size: yes
 settings-monday.env: INSTALLED /workspace/research/lanes/network-accounting/onsite/settings-monday.env (600)
 settings-monday.env: FRONT: the tree's front takes its counts (...)
-settings-monday.env: OF RECORD: untied remote-network-no-pouw at subset:1, COMPOSITE unset, V3C_TIMEOUT 120m, WC_TIMEOUT 60m, CLASSES holding V3C_CLASS; the follow-on's caps: audit 13h, chain 4h, period 1h, composite 12h
+settings-monday.env: OF RECORD: untied remote-network-no-pouw at subset:1, COMPOSITE unset, V3C_TIMEOUT 120m, WC_TIMEOUT 60m, CLASSES holding V3C_CLASS; the follow-on's caps: audit 13h, chain 4h, period 1h, composite 6h
 settings-monday.env: V3C: deferred with remote-network-no-pouw's composite to the follow-on on research@vy-nebius-cpu-11 research@vy-nebius-cpu-12: class 8,32,4,4,16, law subset:1 untied, ...
 settings-monday.env: CAP: unset …
 COPY PATH: rsync to research@vy-nebius-cpu-11 wrote probe-.../ (...)
@@ -129,7 +129,7 @@ bash probe.sh
 
 Expect `PROBE r... exit 0`, the probe's lines `DIGEST S 1 48b859c923dc29eb...` (rr/circuit.txt's),
 `PREDICT-ROW exit 0: ...`, `PREDICT-COMPARE against r20261102-233856-d4d6 exit 0`,
-`SETTINGS /workspace/research/lanes/network-accounting/onsite/settings-monday.env 6aad3a169d17598f`, then `PROBE: PASS`
+`SETTINGS /workspace/research/lanes/network-accounting/onsite/settings-monday.env b610e7e37a9bc461`, then `PROBE: PASS`
 and `PREFLIGHT launch exit 0: r...`. A probe still running at 20 minutes: `PROBE_RID=r... bash probe.sh` once it ends.
 When the preflight has ended (a few minutes):
 
@@ -150,7 +150,7 @@ refuses with less than 4 h left.
 END=2026-11-09T15:00:00Z bash serve.sh 2>&1 | tee -a ~/odserve-monday-logs/serve.txt
 ~~~
 
-Expect `TREE 9068336929e (= cursor/onsite-push1b-061a), settings-monday.env 6aad3a169d17598f, main.txt 4887 commits
+Expect `TREE 9068336929e (= cursor/onsite-push1b-061a), settings-monday.env b610e7e37a9bc461, main.txt 4887 commits
 from f0c4b1355fb, TIMEOUT ...`, the run's id `RID` on a line of its own, and `research: run RID launched on vy-dc-h200-2`.
 Check on it (`bash runlog.sh h200-2 RID serve`) every half hour or so. When it has ended, expect:
 
@@ -203,8 +203,8 @@ bash follow.sh RID 2>&1 | tee -a ~/odserve-monday-logs/follow.txt
 Expect:
 
 ~~~text
-CAPS .../settings/settings-monday.env 6aad3a169d17598f
-TREE 9068336929e0... (= cursor/onsite-push1b-061a), NODE vy-nebius-cpu-12, D /workspace/incoming/netacct/RID, main.txt ... commits from ... (holds f0c4b1355fb), REPROOF 0, HOLD netacct-inf458-thu.json, caps V3C_AUDIT_TIMEOUT=13h CERTIFIER_TIMEOUT=4h CERTIFIER_PERIOD_TIMEOUT=1h COMPOSITE_TIMEOUT=12h
+CAPS .../settings/settings-monday.env b610e7e37a9bc461
+TREE 9068336929e0... (= cursor/onsite-push1b-061a), NODE vy-nebius-cpu-12, D /workspace/incoming/netacct/RID, main.txt ... commits from ... (holds f0c4b1355fb), REPROOF 0, HOLD netacct-inf458-thu.json, caps V3C_AUDIT_TIMEOUT=13h CERTIFIER_TIMEOUT=4h CERTIFIER_PERIOD_TIMEOUT=1h COMPOSITE_TIMEOUT=6h
 HOLD on vy-nebius-cpu-12: /workspace/ramlock/netacct-inf458-thu.json: ... removed      (or: absent)
 SHIM: the workload syncs the tree's venv before reproof_follow.sh
 research: run FRID launched on vy-nebius-cpu-12 ...

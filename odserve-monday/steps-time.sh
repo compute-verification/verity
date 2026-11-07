@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Read-only: each step's wall time in a run, from its files' times alone (none is read): every log, record and answer
 # under the run dir and the serve dir (depth 4), with its creation and last write, oldest first, and the span between. A
-# step's log is created as it starts and last written as it ends; set against the follow-on's caps (13h, 4h, 1h, 12h).
+# step's log is created as it starts and last written as it ends; set against the follow-on's caps (13h, 4h, 1h, 6h).
 # Names only, no contents.
 #   bash steps-time.sh h200-2 RID          # the served run: its run dir and SERVE_ROOT/RID
 #   bash steps-time.sh follow RID FRID     # the follow-on FRID on FOLLOW_NODE: its run dir and NETACCT/RID
