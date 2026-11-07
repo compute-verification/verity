@@ -215,10 +215,10 @@ def test_the_lse_is_the_rows_logsumexp_within_rounding(T, ns) -> None:
 
 def test_the_lse_heads_refuse_as_the_heads_do() -> None:
     with pytest.raises(ValueError, match="AttentionHeadLse: MASKED_FROM 3 outside blocks"):
-        bind(F.AttentionHeadLse, T=40, D=16, BN=16, MASKED_FROM=3, **FA3).body
+        _ = bind(F.AttentionHeadLse, T=40, D=16, BN=16, MASKED_FROM=3, **FA3).body
     T = 16 * W.LANES + 1
     with pytest.raises(ValueError, match="AttentionHeadSplitLse: 33 splits, the combine's warp holds 32"):
-        bind(F.AttentionHeadSplitLse, T=T, D=16, BN=16, MASKED_FROM=0, PER=1, **FA3).body
+        _ = bind(F.AttentionHeadSplitLse, T=T, D=16, BN=16, MASKED_FROM=0, PER=1, **FA3).body
 
 
 # --- the vocabulary -------------------------------------------------------------------------------------------------------------
