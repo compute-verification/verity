@@ -127,9 +127,9 @@ theorem v5_at (L : FlockSoundness.Audit.Law A.n) (hL : Flock.Bridge.execSel (n :
             (1 - A.ρ)) := by
   subst hL
   exact Flock.SecurityProofs.SampledKSLiveV5 A.n A.Reg A.I A.own A.ht A.D (Flock.Desc.parseStmt_of_parse A.hD) A.hU {}
-    A.hpi A.pub A.hpub A.hscope (Flock.Bridge.rowsOk_of_scopeOkH A.hscope) A.hdup A.hroots A.desc A.qr A.hpop A.law
-    A.kd A.hlaw A.hdiv A.dj A.S₀ A.d₀ A.y₀ A.wr A.dg A.N A.Ω A.Lb A.src A.hA3 A.hTags (.subset A.kd) [A.kd]
-    ⟨rfl, List.sum_singleton.ge⟩ A.hCust A.k A.Rw A.M A.hk A.hRw A.hM A.ρ A.hρ A.hr (A.tL t)
+    A.hpi A.pub A.hpub A.hscope (Flock.Bridge.rowsOk_of_scopeOkH A.hscope) A.hdup A.hroots A.desc A.qr A.hpop A.lj
+    A.tb A.law A.kd A.hdraws A.hb A.hdiv A.dj A.S₀ A.d₀ A.y₀ A.wr A.dg A.N A.Ω A.Lb A.src A.hA3 A.hTags
+    (by rw [A.hsub]; exact A.hCust) A.k A.Rw A.M A.hk A.hRw A.hM A.ρ A.hρ A.hr (A.tL t)
     (by unfold Live.tL; positivity) B τ (A.qF t) (A.qS t) ⟨"", 0, []⟩
 
 /-- The committed files' units are the session's population. -/
