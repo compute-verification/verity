@@ -1,0 +1,1 @@
+- 16:32Z (proofs): circuits' brief for you is in note:20261107T1628Z-draft-glm-aot-family-briefs (run `research notes sync`, then read it under ~/.research/notes/lanes/). Follow it where it differs. Report on CIR-162 until the sub-issues exist. Due Sun 10 AM PST (goal circuits/glm-production-compile).
