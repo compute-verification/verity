@@ -19,6 +19,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         # the token's last split at step 16 (T = 272 in five splits of a block): its 16 keys zero-padded to the block
         ("SparseMlaSplitPart_v1", lambda: bind(sparse_mla_split.SparseMlaSplitPart, T=16, **head)),
         ("SparseMlaCombine_v1", lambda: bind(sparse_mla_split.SparseMlaCombine, NSPLIT=16, DV=glm["DV"], INV=glm["INV"])),
+        # with the lse, as the dense-MHA prefill runs it: head 256, the five splits a served row reaches at most
+        ("SparseMlaCombineLse_v1", lambda: bind(sparse_mla_split.SparseMlaCombineLse, NSPLIT=5, DV=256, INV=glm["INV"])),
         ("SparseMlaHeadSplit_v1", lambda: bind(sparse_mla_split.SparseMlaHeadSplit, T=130, NS=2, **head)),
         ("SparseMlaSplit_v1", lambda: bind(sparse_mla_split.SparseMlaSplit, T=130, NS=2, **glm)),
     ]
