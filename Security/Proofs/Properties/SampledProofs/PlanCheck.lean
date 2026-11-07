@@ -215,9 +215,10 @@ theorem leakCheckSound : LeakCheckSound := by
   split_ifs at h with hc
   obtain ⟨hden, hnum, hrate⟩ := hc
   obtain rfl := Option.some.inj h
-  have : NeZero d.den := ⟨hden⟩
-  refine ⟨inferInstance, FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.bern_certifies hnum
-    (rateCovers_sound hden hnum hrate) ?_⟩
+  have hesc := rateCovers_sound hden hnum hrate
+  obtain ⟨k, hk⟩ : ∃ k, d.den = k + 1 := ⟨d.den - 1, by omega⟩
+  rw [hk] at hnum hesc
+  refine ⟨k, hk, FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.bern_certifies hnum hesc ?_⟩
   have := locBits_le_upper d.units d.count
   push_cast
   linarith
@@ -248,8 +249,10 @@ theorem leakCountSound : LeakCountSound := by
   unfold leakBound at h
   split_ifs at h with hc
   obtain ⟨hden, hnum, hrate⟩ := hc
-  have : NeZero d.den := ⟨hden⟩
-  exact ⟨inferInstance, bern_miss_lt hnum (rateCovers_sound hden hnum hrate)⟩
+  have hesc := rateCovers_sound hden hnum hrate
+  obtain ⟨k, hk⟩ : ∃ k, d.den = k + 1 := ⟨d.den - 1, by omega⟩
+  rw [hk] at hnum hesc
+  exact ⟨k, hk, bern_miss_lt hnum hesc⟩
 
 /-! ## The work check -/
 
@@ -303,12 +306,13 @@ theorem workCheckSound : WorkCheckSound := by
   intro d h
   simp only [checkWork, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at h
   obtain ⟨⟨⟨⟨⟨hden, hC⟩, hδ0⟩, -⟩, hall⟩, hlam⟩ := h
-  have : NeZero d.den := ⟨hden⟩
-  refine ⟨inferInstance, fun n σ hσ B hB => ?_⟩
+  obtain ⟨k, hk⟩ : ∃ k, d.den = k + 1 := ⟨d.den - 1, by omega⟩
+  refine ⟨k, hk, fun n σ hσ B hB => ?_⟩
   have hst : ∀ u, (σ u).num ≤ d.den ∧ 0 ≤ (σ u).work := fun u => by simpa using hall _ (hσ u)
   have hD : (0 : ℝ) < d.den := by exact_mod_cast Nat.pos_of_ne_zero hden
   have hCR : (0 : ℝ) < d.target := by exact_mod_cast hC
-  rw [FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal.bern_escape_toReal (fun u => (hst u).1)]
+  rw [FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal.bern_escape_toReal (num := fun u => (σ u).num)
+    (den := k + 1) (fun u => by rw [← hk]; exact (hst u).1), ← hk]
   have hfac0 : ∀ u, 0 ≤ 1 - ((σ u).num : ℝ) / d.den := fun u => by
     rw [sub_nonneg, div_le_one hD]; exact_mod_cast (hst u).1
   by_cases hfull : ∃ u ∈ B, (σ u).num = d.den
@@ -368,7 +372,7 @@ theorem leakCheckSound_honest :
 
 /-- No design certifies `−1` bits: the conclusion fails where a check accepting everything would return `−1`. -/
 theorem leakCheckSound_nontrivial :
-    ∀ h : NeZero (1 : ℕ), ¬ CertifiesLeak (@Law.bernoulli 1 0 1 h) (fun _ => 0) ((1 / 2 : ℚ) : ℝ) ((-1 : ℚ) : ℝ) := by
+    ∀ k : ℕ, ¬ CertifiesLeak (Law.bernoulli 1 0 (k + 1)) (fun _ => 0) ((1 / 2 : ℚ) : ℝ) ((-1 : ℚ) : ℝ) := by
   intro _ ⟨H, K, _, _, hℓ⟩
   have h0 : 0 ≤ locBits 1 K := by
     unfold locBits
@@ -384,10 +388,10 @@ theorem leakCountSound_honest :
 
 /-- A unit never sampled always escapes: the count's conclusion fails where a check accepting everything would pass. -/
 theorem leakCountSound_nontrivial :
-    ∀ h : NeZero (1 : ℕ), ¬ (@Law.bernoulli 1 0 1 h).miss (0 + 1) < ENNReal.ofReal ((1 / 2 : ℚ) : ℝ) := by
-  intro _ h
-  have he := Law.escape_le_miss (Law.bernoulli 1 0 1) (K := 0 + 1) (B := {0}) (by simp)
-  have h1 : ((Law.bernoulli 1 0 1).escape {0}).toReal = 1 := by
+    ∀ k : ℕ, ¬ (Law.bernoulli 1 0 (k + 1)).miss (0 + 1) < ENNReal.ofReal ((1 / 2 : ℚ) : ℝ) := by
+  intro k h
+  have he := Law.escape_le_miss (Law.bernoulli 1 0 (k + 1)) (K := 0 + 1) (B := {0}) (by simp)
+  have h1 : ((Law.bernoulli 1 0 (k + 1)).escape {0}).toReal = 1 := by
     rw [FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.bern_escape_toReal (Nat.zero_le _)]
     simp
   have hlt := lt_of_le_of_lt he h
@@ -402,7 +406,7 @@ theorem workCheckSound_honest :
 
 /-- A stratum never sampled doesn't meet a target: its one unit, doing all the work, always escapes. -/
 theorem workCheckSound_nontrivial :
-    ∀ h : NeZero (1 : ℕ), ¬ MeetsTarget (@Law.bernoulliOf 1 (fun _ => 0) 1 h) (fun _ => ((1 : ℚ) : ℝ))
+    ∀ k : ℕ, ¬ MeetsTarget (Law.bernoulliOf (n := 1) (fun _ => 0) (k + 1)) (fun _ => ((1 : ℚ) : ℝ))
       ((1 : ℚ) : ℝ) ((1 / 2 : ℚ) : ℝ) := by
   intro _ h
   have := h {0} (by simp)

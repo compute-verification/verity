@@ -28,24 +28,24 @@ namespace Properties.SampledProofs
 open FlockSoundness.Audit FlockSoundness.Audit.Partitioning
 open _root_.SampledProofs.PlanCheck (Leak Rate Work leakBound checkWork)
 
-/-- **The leak check is sound**: a design `leakBound` certifies at `v` bits has `den > 0`, and its Bernoulli sampling
-certifies at most `v` bits at `delta`. -/
+/-- **The leak check is sound**: a design `leakBound` certifies at `v` bits has `den = k + 1` for some `k`, and its
+Bernoulli sampling certifies at most `v` bits at `delta`. -/
 def LeakCheckSound : Prop :=
   ∀ (d : Leak) (v : ℚ), leakBound d = some v →
-    ∃ _ : NeZero d.den, CertifiesLeak (Law.bernoulli d.units d.num d.den) (fun _ => d.width) d.delta v
+    ∃ k : ℕ, d.den = k + 1 ∧ CertifiesLeak (Law.bernoulli d.units d.num (k + 1)) (fun _ => d.width) d.delta v
 
-/-- **The leak check certifies its count**: a design `leakBound` answers has `den > 0`, and more than `count` incorrect
-units escape its Bernoulli sampling with probability below `delta`, the count a write bound of `width · count` bits
-reads. -/
+/-- **The leak check certifies its count**: a design `leakBound` answers has `den = k + 1` for some `k`, and more than
+`count` incorrect units escape its Bernoulli sampling with probability below `delta`, the count a write bound of
+`width · count` bits reads. -/
 def LeakCountSound : Prop :=
   ∀ (d : Leak) (v : ℚ), leakBound d = some v →
-    ∃ _ : NeZero d.den, (Law.bernoulli d.units d.num d.den).miss (d.count + 1) < ENNReal.ofReal d.delta
+    ∃ k : ℕ, d.den = k + 1 ∧ (Law.bernoulli d.units d.num (k + 1)).miss (d.count + 1) < ENNReal.ofReal d.delta
 
-/-- **The work check is sound**: a design `checkWork` accepts has `den > 0`, and however `n` units are assigned to its
-strata, sampling each with its stratum's probability meets the target `target` at `delta`. -/
+/-- **The work check is sound**: a design `checkWork` accepts has `den = k + 1` for some `k`, and however `n` units are
+assigned to its strata, sampling each with its stratum's probability meets the target `target` at `delta`. -/
 def WorkCheckSound : Prop :=
   ∀ d : Work, checkWork d = true →
-    ∃ _ : NeZero d.den, ∀ (n : ℕ) (σ : Fin n → Rate), (∀ u, σ u ∈ d.strata) →
-      MeetsTarget (Law.bernoulliOf (fun u => (σ u).num) d.den) (fun u => ((σ u).work : ℝ)) d.target d.delta
+    ∃ k : ℕ, d.den = k + 1 ∧ ∀ (n : ℕ) (σ : Fin n → Rate), (∀ u, σ u ∈ d.strata) →
+      MeetsTarget (Law.bernoulliOf (fun u => (σ u).num) (k + 1)) (fun u => ((σ u).work : ℝ)) d.target d.delta
 
 end Properties.SampledProofs
