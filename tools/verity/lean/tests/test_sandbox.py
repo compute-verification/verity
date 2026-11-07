@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 SANDBOX = Path(__file__).resolve().parents[1] / "sandbox.sh"
+CONTROL = Path(__file__).resolve().parent / "fixtures" / "control"
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 
 FAKE = {
@@ -129,3 +130,73 @@ def test_inside_the_sandbox_a_read_only_tmpdir_is_replaced_by_a_private_writable
     assert not any(job.iterdir())
     assert not Path(r.stdout.strip()).exists()
 
+
+LAKEFILES = {
+    "b": 'name = "b"\ndefaultTargets = ["B"]\n\n[[lean_lib]]\nname = "B"\n',
+    "a": 'name = "a"\ndefaultTargets = ["A"]\n\n[[require]]\nname = "b"\npath = "../b"\n\n[[lean_lib]]\nname = "A"\n',
+}
+needs_lake = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+
+
+def slot_tree(tmp: Path) -> tuple[Path, Path, list[str]]:
+    """Package `a` requiring `b` by path, in a tree reached through a link as a slot tree is: (the tree, the link, the
+    sandbox prefix with both packages' `.lake` writable, spelled through the link)."""
+    real, link = tmp / "root" / "build-0", tmp / "build-0"
+    for p in ("a", "b"):
+        (real / p).mkdir(parents=True)
+        (real / p / "lakefile.toml").write_text(LAKEFILES[p])
+        shutil.copy(CONTROL / "lean-toolchain", real / p / "lean-toolchain")
+    (real / "b" / "B.lean").write_text("def B.x : Nat := 1\n")
+    (real / "a" / "A.lean").write_text("import B\ndef A.y : Nat := B.x + 1\n")
+    link.symlink_to(real)
+    return real, link, [*UNSHARE, "--", "bash", str(SANDBOX), str(link / "a" / ".lake"), str(link / "b" / ".lake")]
+
+
+@needs_unshare
+@needs_lake
+def test_a_sandboxed_build_in_a_slot_tree_replaces_a_path_dependencys_outputs_and_links_with_a_read_only_tmpdir(tmp_path):
+    """The two things a sandboxed build on a node does that a probe doesn't: Lake removes a path dependency's outputs
+    before rebuilding it (in the dependency's own `.lake`, reached through the slot tree's link), and `leanc` compiles and
+    links a C file in one step, as `facts` is built, which writes a temporary object under TMPDIR."""
+    real, link, sandbox = slot_tree(tmp_path)
+    job = tmp_path / "jobtmp"
+    job.mkdir()
+    (real / "a" / "x.c").write_text("int main(void) { return 0; }\n")
+    env = {**os.environ, "LAKE_ARTIFACT_CACHE": "false"}
+    subprocess.run(["lake", "build"], cwd=link / "a", env=env, check=True, capture_output=True)
+    olean = real / "b" / ".lake" / "build" / "lib" / "lean" / "B.olean"
+    before = olean.read_bytes()
+    (real / "b" / "B.lean").write_text("def B.x : Nat := 2\n")
+    for argv in (["lake", "build"], ["lake", "env", "leanc", "x.c", "-o", ".lake/x"]):
+        r = subprocess.run([*sandbox, "--", *argv], cwd=link / "a", env={**env, "TMPDIR": str(job)},
+                           capture_output=True, text=True)
+        assert r.returncode == 0, r.stdout + r.stderr
+    assert olean.read_bytes() != before
+    assert (real / "a" / ".lake" / "x").exists() and not any(job.iterdir())
+
+
+@needs_unshare
+@needs_lake
+def test_a_sandboxed_build_restores_from_a_read_only_artifact_cache_and_leaves_it_as_it_was(tmp_path):
+    """As `check.py`'s build steps run it (`--ro` the cache, `LAKE_CACHE_DIR` set, `LAKE_ARTIFACT_CACHE` unset): Lake
+    copies each artifact out of the cache (a hard link across the sandbox's mounts fails) and writes nothing into it, so
+    the cache needs no write access."""
+    real, link, sandbox = slot_tree(tmp_path)
+    cache = tmp_path / "cache"
+    env = {k: v for k, v in os.environ.items() if k != "LAKE_ARTIFACT_CACHE"} | {"LAKE_CACHE_DIR": str(cache)}
+    subprocess.run(["lake", "build"], cwd=link / "a", env={**env, "LAKE_ARTIFACT_CACHE": "true"}, check=True,
+                   capture_output=True)
+
+    def contents() -> dict[str, bytes]:
+        return {str(f.relative_to(cache)): f.read_bytes() for f in sorted(cache.rglob("*")) if f.is_file()}
+
+    kept = contents()
+    assert any(name.endswith(".olean") for name in kept)
+    for p in ("a", "b"):
+        shutil.rmtree(real / p / ".lake" / "build")
+    r = subprocess.run([*sandbox, "--ro", str(cache), "--", "lake", "build", "-v"], cwd=link / "a", env=env,
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "restored artifact from cache" in r.stdout + r.stderr
+    assert (real / "b" / ".lake" / "build" / "lib" / "lean" / "B.olean").stat().st_nlink == 1
+    assert contents() == kept
