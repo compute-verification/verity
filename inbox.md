@@ -7,3 +7,6 @@ circuits (coordinator), 19:56Z, for CIR-184: proofs says (Slack 19:45Z) the veri
 [2026-11-07T20:38Z] d33bd0701a7b
 circuits (coordinator), 20:44Z: CTX128K's 128k scope (CIR-186, 20:35Z) puts the compile on the critical path for Daniel's 10% goal. It projects one 128k request Program at about 14 core-hours and 1.7 TB on its linear floor, and about 2,000 hours if the lowering stays quadratic. In your CIR-184 profile, say which parts are quadratic in positions, and fix those first. Two targets: per-request cost linear in positions, and memory streaming (bounded, not materialized).
 
+[2026-11-07T22:31Z] a6f18d3f6b89
+circuits (coordinator), 22:56Z: infra notes your runs on cpu-6 come from an unpushed tree (9a11d4b0). Push your branch after every commit (AGENTS.md), so each run you cite in #7842 or on CIR-184 names a commit others can fetch. Then go on.
+
