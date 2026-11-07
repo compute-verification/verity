@@ -303,8 +303,9 @@ def restore(a: argparse.Namespace) -> int:
     e1, e2 = meta["edges"][0], meta["edges"][1]
     edge1, edge2 = Path(e1["dir"]), Path(e2["dir"])
     rec1, rec2 = (json.loads((d / "edge.json").read_text()) for d in (edge1, edge2))
-    os.environ.update(PINS | {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "PYTHONPATH": os.pathsep.join(
-        [str(HERE), str(ROOT / "integrations/vllm"), str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])])})
+    sys.path.insert(0, str(ROOT / "integrations/vllm"))
+    os.environ.update(PINS | {"VLLM_ENABLE_V1_MULTIPROCESSING": "0",
+                              "PYTHONPATH": os.pathsep.join(dict.fromkeys([str(HERE), *filter(None, sys.path)]))})
     recs = served_trace(served)
     header = recs[0]
     client = {c["id"]: c for c in (json.loads(x) for x in (served / "load" / "client.jsonl").read_text().splitlines() if x)}
@@ -314,7 +315,6 @@ def restore(a: argparse.Namespace) -> int:
     res: dict[str, Any] = {"schema": SCHEMA, "served": str(served), "edge1": rec1["edge"], "edge2": rec2["edge"],
                            "trace_steps": [s1, s2], "fill": not a.no_fill, "loader": a.loader}
 
-    sys.path.insert(0, str(ROOT / "integrations/vllm"))
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
     from vllm.usage.usage_lib import UsageContext

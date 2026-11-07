@@ -21,8 +21,8 @@ workers have them, the CPU tests stand in.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
-import os
 import random
 import re
 import socket
@@ -183,20 +183,18 @@ def set_rng_ranked(worker: Any, rngs: Mapping[Any, Mapping[str, Any]], seeds: bo
 
 def rank_record(worker: Any) -> dict[str, Any]:
     """Where this rank runs: its global, tensor-parallel and local ranks, its device (index, UUID, PCI bus), the host,
-    ``CUDA_VISIBLE_DEVICES`` and the all-reduce backends its tensor-parallel group enabled, in dispatch order."""
-    rec: dict[str, Any] = {"rank": int(getattr(worker, "rank", 0)), "local_rank": int(getattr(worker, "local_rank", 0)),
-                           "host": socket.gethostname(), "visible": os.environ.get("CUDA_VISIBLE_DEVICES")}
-    try:
-        import torch
+    and the all-reduce backends its tensor-parallel group enabled, in dispatch order (outside a vLLM install, as in the
+    CPU tests, no group)."""
+    import torch
 
-        if torch.cuda.is_available():
-            dev = torch.cuda.current_device()
-            p = torch.cuda.get_device_properties(dev)
-            rec["device"] = {"index": dev, "uuid": str(getattr(p, "uuid", "")), "name": p.name,
-                             "pci": [getattr(p, k, None) for k in ("pci_domain_id", "pci_bus_id", "pci_device_id")]}
-    except ImportError:
-        pass
-    try:
+    rec: dict[str, Any] = {"rank": int(getattr(worker, "rank", 0)), "local_rank": int(getattr(worker, "local_rank", 0)),
+                           "host": socket.gethostname()}
+    if torch.cuda.is_available():
+        dev = torch.cuda.current_device()
+        p = torch.cuda.get_device_properties(dev)
+        rec["device"] = {"index": dev, "uuid": str(getattr(p, "uuid", "")), "name": p.name,
+                         "pci": [getattr(p, k, None) for k in ("pci_domain_id", "pci_bus_id", "pci_device_id")]}
+    if importlib.util.find_spec("vllm") is not None:
         from vllm.distributed.parallel_state import get_tp_group
 
         g = get_tp_group()
@@ -205,8 +203,6 @@ def rank_record(worker: Any) -> dict[str, Any]:
         rec["allreduce"] = [name for attr, name in (("fi_ar_comm", "FLASHINFER"), ("ca_comm", "CUSTOM"),
                                                     ("symm_mem_comm", "SYMM_MEM"), ("pynccl_comm", "PYNCCL"))
                             if getattr(comm, attr, None) is not None and not getattr(getattr(comm, attr), "disabled", False)]
-    except Exception:  # noqa: BLE001 - outside a vLLM worker (the CPU tests) there is no group to read
-        pass
     return rec
 
 
@@ -224,19 +220,15 @@ def rng_state(worker: Any) -> dict[str, Any]:
     generator and torch's CPU generator (hex), Python's (version, words, cached Gaussian), and under V2 each request's
     seed and whether the request set it (``seeds``: request id -> [seed, explicit])."""
     import numpy as np
+    import torch
 
     kind, key, pos, has_gauss, gauss = np.random.get_state()
     out: dict[str, Any] = {"runner": "v1", "numpy": [kind, [int(x) for x in key], int(pos), int(has_gauss), float(gauss)]}
     ver, words, pg = random.getstate()
     out["python"] = [ver, list(words), pg]
-    try:
-        import torch
-
-        out["torch_cpu"] = bytes(torch.get_rng_state().tolist()).hex()
-        if torch.cuda.is_available():
-            out["cuda"] = bytes(torch.cuda.get_rng_state().tolist()).hex()
-    except ImportError:
-        pass
+    out["torch_cpu"] = bytes(torch.get_rng_state().tolist()).hex()
+    if torch.cuda.is_available():
+        out["cuda"] = bytes(torch.cuda.get_rng_state().tolist()).hex()
     got = _seed_states(runner_of(worker))
     if got is not None:
         states, sampling = got
@@ -291,20 +283,15 @@ def set_rng(worker: Any, rng: Mapping[str, Any], seeds: bool = False) -> dict[st
     again, rather than restoring the runner's rows) install a `SeedHook` for their V2 seeds. Returns the state's digest
     as this rank now has it (the seeds excluded)."""
     import numpy as np
+    import torch
 
     kind, key, pos, has_gauss, gauss = rng["numpy"]
     np.random.set_state((kind, np.asarray(key, dtype=np.uint32), pos, has_gauss, gauss))
     ver, words, pg = rng["python"]
     random.setstate((ver, tuple(words), pg))
-    try:
-        import torch
-
-        if "torch_cpu" in rng:
-            torch.set_rng_state(torch.tensor(list(bytes.fromhex(rng["torch_cpu"])), dtype=torch.uint8))
-        if "cuda" in rng and torch.cuda.is_available():
-            torch.cuda.set_rng_state(torch.tensor(list(bytes.fromhex(rng["cuda"])), dtype=torch.uint8))
-    except ImportError:
-        pass
+    torch.set_rng_state(torch.tensor(list(bytes.fromhex(rng["torch_cpu"])), dtype=torch.uint8))
+    if "cuda" in rng and torch.cuda.is_available():
+        torch.cuda.set_rng_state(torch.tensor(list(bytes.fromhex(rng["cuda"])), dtype=torch.uint8))
     runner = runner_of(worker)
     if seeds and rng.get("seeds"):
         runner._verity_seed_hook = SeedHook(runner, {rid: s for rid, (s, _) in rng["seeds"].items()})
