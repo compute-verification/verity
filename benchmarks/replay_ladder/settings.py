@@ -13,4 +13,8 @@ REGISTRY = Registry(
       "(inductor_pin), rblock runs with TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0, unpinned with neither"),
     S("LADDER_TILINGS", str, None, WHERE, "the directory a replay's engine processes log Inductor's run-time choices to "
                                           "(ladder.py sets it for the processes a replay starts)"),
+    S("LADDER_ROUTE_CAPTURE", str, None, WHERE,
+      "a directory holding the route capture's plugin (route_capture_plugin.py and its settings.py): ladder.py serve then "
+      "loads it in both servers, each writing its capture under its own route_capture/ (ROUTECAP_OUT); replays never "
+      "load it"),
 )

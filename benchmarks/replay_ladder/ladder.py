@@ -36,6 +36,7 @@ import gzip
 import json
 import os
 import re
+import shutil
 import sys
 import time
 from dataclasses import dataclass
@@ -165,6 +166,17 @@ def max_model_len(args: tuple[str, ...], n: int) -> tuple[str, ...]:
     return (*args[:i + 1], str(n), *args[i + 2:])
 
 
+def route_capture_site(d: Path, src: Path) -> None:
+    """Add the route capture's plugin, copied from ``src`` with the settings registry it reads beside it, to the site
+    directory ``d`` as a vLLM general plugin. It writes nothing unless ROUTECAP_OUT is set."""
+    info = d / "verity_route_capture-0.0.dist-info"
+    info.mkdir(parents=True, exist_ok=True)
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-route-capture\nVersion: 0.0\n")
+    (info / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_route_capture = route_capture_plugin:register\n")
+    for f in ("route_capture_plugin.py", "settings.py"):
+        shutil.copy(src / f, d / f)
+
+
 def serve(a: argparse.Namespace) -> int:
     ck = register(a.model)
     from transformers import AutoTokenizer
@@ -187,9 +199,14 @@ def serve(a: argparse.Namespace) -> int:
     real_site = S.plugin_site
 
     def plugin_site(site: Path, tick: bool) -> Path:
-        """serve_tax's plugins and inductor_pin, whose log the capacity server's processes write."""
-        return P.site(real_site(site, tick), pin=pin() == "pinned",
-                      tilings=str(out / SERVING_TILINGS) if site.parent == cap else None)
+        """serve_tax's plugins and inductor_pin, whose log the capacity server's processes write, and the route capture's
+        plugin when LADDER_ROUTE_CAPTURE names it (serve_tax builds the server's environment after its site)."""
+        d = P.site(real_site(site, tick), pin=pin() == "pinned",
+                   tilings=str(out / SERVING_TILINGS) if site.parent == cap else None)
+        if ENV.LADDER_ROUTE_CAPTURE:
+            route_capture_site(d, Path(ENV.LADDER_ROUTE_CAPTURE))
+            os.environ["ROUTECAP_OUT"] = str(site.parent / "route_capture")
+        return d
 
     S.plugin_site = plugin_site
     base = ["--model-id", a.model, "--checkpoint", str(ck), "--c4", a.c4, "--docs", str(a.docs), "--reps", "1",

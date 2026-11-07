@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -131,9 +132,9 @@ def test_the_arm_is_read_from_the_ladder_s_settings(monkeypatch):
         L.pin()
 
 
-def test_serving_loads_the_pin_and_the_capacity_server_logs(tmp_path, monkeypatch):
+def serve_capacity_only(tmp_path, monkeypatch) -> tuple[Path, list[Path]]:
+    """`serve` for qwen3-8b with its capacity server failing at once: the sites serve_tax would have built."""
     out = tmp_path / "qwen3-8b"
-    monkeypatch.setenv("LADDER_ARM", "pinned")
     monkeypatch.setattr(L.S, "plugin_site", lambda site, tick: site)
     sites = []
 
@@ -151,9 +152,34 @@ def test_serving_loads_the_pin_and_the_capacity_server_logs(tmp_path, monkeypatc
     a = SimpleNamespace(model="qwen3-8b", c4="c4.json.gz", out=str(out), docs=10, burst=8, over=1.45, span_s=60.0, plan=None,
                         max_model_len=None)
     assert L.serve(a) == 1
+    return out, sites
+
+
+def test_serving_loads_the_pin_and_the_capacity_server_logs(tmp_path, monkeypatch):
+    monkeypatch.setenv("LADDER_ARM", "pinned")
+    monkeypatch.delenv("LADDER_ROUTE_CAPTURE", raising=False)
+    monkeypatch.delenv("ROUTECAP_OUT", raising=False)
+    out, sites = serve_capacity_only(tmp_path, monkeypatch)
     assert json.loads((sites[0] / L.P.CONFIG).read_text()) == {"pin": True, "tilings": str(out / L.SERVING_TILINGS)}
     assert L.S.plugin_site(out / "record" / ".site", False) == out / "record" / ".site"
     assert json.loads((out / "record" / ".site" / L.P.CONFIG).read_text()) == {"pin": True, "tilings": None}
+    assert not (sites[0] / "route_capture_plugin.py").exists() and "ROUTECAP_OUT" not in os.environ
+
+
+def test_serving_with_the_route_capture_loads_it_in_each_server_writing_its_own_capture(tmp_path, monkeypatch):
+    src = tmp_path / "route_capture"
+    src.mkdir()
+    (src / "route_capture_plugin.py").write_text("def register():\n    pass\n")
+    (src / "settings.py").write_text("")
+    monkeypatch.setenv("LADDER_ROUTE_CAPTURE", str(src))
+    monkeypatch.setenv("ROUTECAP_OUT", "")  # so that the test's end unsets what serve sets
+    out, sites = serve_capacity_only(tmp_path, monkeypatch)
+    assert os.environ["ROUTECAP_OUT"] == str(out / "capacity" / "route_capture")
+    entry = (sites[0] / "verity_route_capture-0.0.dist-info" / "entry_points.txt").read_text()
+    assert entry == "[vllm.general_plugins]\nverity_route_capture = route_capture_plugin:register\n"
+    assert {f.name for f in sites[0].glob("*.py")} >= {"route_capture_plugin.py", "settings.py", "inductor_pin.py"}
+    L.S.plugin_site(out / "record" / ".site", False)
+    assert os.environ["ROUTECAP_OUT"] == str(out / "record" / "route_capture")
 
 
 def test_summary_reads_a_model_directory(tmp_path):

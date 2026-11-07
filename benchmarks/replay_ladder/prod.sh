@@ -5,7 +5,8 @@
 #                     differing requests down by kind (kinds.json).
 # run.sh's variables pass through (ARMS, RBLOCK0_ARMS, REPLAYS, FRESH, ALONE, UNPINNED_REPLAYS, LOGPROBS, SPAN_S, OVER, BURST,
 # and FLASHINFER, here 1 unless set: vLLM's defaults with FlashInfer available); N (8000) and SEED (0) set the plan,
-# MAX_MODEL_LEN (40960) the servers' context limit.
+# MAX_MODEL_LEN (40960) the servers' context limit. LADDER_ROUTE_CAPTURE=DIR (route_capture_plugin.py and its settings.py,
+# sent) has both servers capture their routes too, under capacity/route_capture and record/route_capture.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
