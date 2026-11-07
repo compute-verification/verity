@@ -198,12 +198,35 @@ def test_step_outputs_are_read_between_two_edges_and_compared_per_sampling_class
     assert T.class_outputs(served, replayed, {"tpr-00001": "seeded", "tpr-00002": "greedy"}) == {
         "greedy": {"requests": 1, "tokens": 1, "differing": 0}, "seeded": {"requests": 1, "tokens": 2, "differing": 1}}
     plan = {1: {"kind": "long", "prompt_ids": [0] * 9}, 2: {"kind": "sharegpt", "prompt_ids": [0]}}
-    assert T.differing_requests(served, replayed, plan) == [{"id": "tpr-00001", "kind": "long", "prompt_len": 9}]
-    assert T.differing_requests(served, served, plan) == []
+    first = {a: {"prompt": 9, "output": 3, "computed": 11, "state": "decoding", "blocks": [1, 2]}}
+    assert T.differing_requests(served, replayed, plan, {"tpr-00001": 13}, first) == [
+        {"id": "tpr-00001", "kind": "long", "prompt_len": 9, "keys": 13, "held": "decoding"}]
+    assert T.differing_requests(served, served, plan, {}, first) == []
     p = tmp_path / "outputs.jsonl"
     p.write_text("".join(json.dumps({"step": s, "out": {a: [[s], None]}}) + "\n" for s in range(2, 7)))
     assert T.read_outputs(p, 3, 5) == {3: {a: [[3], None]}, 4: {a: [[4], None]}}
     assert T.read_outputs(tmp_path / "none.jsonl", 0, 9) == {}
+
+
+def test_requests_fall_at_most_or_past_the_indexers_top_k_by_the_most_keys_they_attend_over():
+    held, done, new, waiting = "cmpl-tpr-00001-0", "cmpl-tpr-00002-0", "cmpl-tpr-00003-0", "cmpl-tpr-00004-0"
+    k = T.TOPK_KEYS
+    served = {3: {held: [[5], None], done: [[6], None], new: [[7], None]}, 4: {done: [[8], None], new: [[9], None]},
+              5: {done: [[10], None]}}
+    first = {held: {"prompt": k - 3, "output": 2, "computed": k - 2, "state": "decoding", "blocks": [1]},
+             done: {"prompt": k - 3, "output": 2, "computed": k - 2, "state": "decoding", "blocks": [2]},
+             waiting: {"prompt": 9 * k, "output": 0, "computed": 0, "state": "waiting", "blocks": []}}
+    far = {held: {"prompt": k - 3, "output": 3, "computed": k - 1, "state": "decoding", "blocks": [1, 3]},
+           new: {"prompt": 4 * k, "output": 2, "computed": 4 * k + 1, "state": "decoding", "blocks": [3, 4]},
+           waiting: first[waiting]}
+    plan = {3: {"prompt_ids": [0] * (4 * k)}}
+    keys = T.max_keys(served, first, far, plan)
+    assert keys == {"tpr-00001": k - 1, "tpr-00002": k + 1, "tpr-00003": 4 * k + 1, "tpr-00004": 0}
+    by = {c: T.keys_class(n) for c, n in keys.items()}
+    assert by == {"tpr-00001": "keys<=2048", "tpr-00002": "keys>2048", "tpr-00003": "keys>2048", "tpr-00004": "keys<=2048"}
+    assert T.held_classes(first, by) == {"keys<=2048": {"prefilling": 0, "decoding": 1, "waiting": 1},
+                                         "keys>2048": {"prefilling": 0, "decoding": 1, "waiting": 0}}
+    assert T.block_classes([1, 3, 4, 9], far, by) == {"free": 1, "keys<=2048": 2, "keys>2048": 2}
 
 
 def test_a_snapshots_bytes_are_its_kv_dump_its_state_and_each_ranks_rows():

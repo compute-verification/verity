@@ -132,6 +132,23 @@ def in_flight(sched: Any) -> dict[str, int]:
     return {"prefilling": pre, "decoding": len(sched.running) - pre}
 
 
+def held(sched: Any) -> dict[str, dict[str, Any]]:
+    """The requests at the edge by engine id: their prompt and output tokens, the tokens in their KV (``computed``) and
+    the blocks holding it, and their state, running (``prefilling`` or ``decoding``, as `in_flight` counts them) or
+    ``waiting`` (no blocks)."""
+    kvm = sched.kv_cache_manager
+
+    def one(r: Any, state: str) -> dict[str, Any]:
+        blocks = [] if state == "waiting" else sorted({b for g in kvm.get_block_ids(r.request_id) for b in g})
+        return {"prompt": r.num_prompt_tokens, "output": len(r.output_token_ids), "computed": r.num_computed_tokens,
+                "state": state, "blocks": blocks}
+
+    got = {r.request_id: one(r, "prefilling" if r.num_computed_tokens < r.num_prompt_tokens else "decoding")
+           for r in sched.running}
+    got.update((r.request_id, one(r, "waiting")) for r in (*sched.waiting, *sched.skipped_waiting))
+    return got
+
+
 def scheduler_step(core: Any) -> int:
     return core.scheduler.current_step
 
@@ -238,7 +255,7 @@ class Edges:
         rec = {"edge": edge, "current_step": sched.current_step, "trace_step": trace_step(sched),
                "sched_step_seq": sched.sched_step_seq,
                "running": len(sched.running), "in_flight": in_flight(sched), "waiting": len(sched.waiting),
-               "pool": pool_counts(pool), "ids": ids,
+               "requests": held(sched), "pool": pool_counts(pool), "ids": ids,
                "check": check, "rank_map": rank_map(recs), "layers": recs[0]["layers"],
                "ranks": [{k: r[k] for k in ("layer_digests", "rng_digest", "rng")} | {"rank": r["rank"]["rank"]}
                          for r in sorted(recs, key=lambda r: r["rank"]["rank"])],

@@ -111,6 +111,14 @@ def test_equal_ranks_digest_equal_and_the_first_differing_block_is_found(tmp_pat
     assert S.first_difference(b"x" * 16 * 12, b"x" * 16 * 12, a["layers"], ids) is None
     with pytest.raises(ValueError, match="expected 192"):
         S.first_difference(b"x", b"x", a["layers"], ids)
+    tensors(w)[2][0, 0, 0] += 1
+    tensors(w)[0][5, 0, 0] += 1
+    S.digest(w, ids, str(tmp_path))
+    assert S.differing_blocks((tmp_path / "digests.rank0.bin").read_bytes(), (tmp_path / "digests.rank2.bin").read_bytes(),
+                              a["layers"], ids) == [0, 5]
+    assert S.differing_blocks(b"x" * 16 * 12, b"x" * 16 * 12, a["layers"], ids) == []
+    with pytest.raises(ValueError, match="expected 192"):
+        S.differing_blocks(b"x", b"x", a["layers"], ids)
 
 
 def test_rng_state_puts_back_every_generator(monkeypatch):

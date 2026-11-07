@@ -224,11 +224,15 @@ def test_a_snapshot_checks_the_ranks_dumps_one_copy_and_records_the_edge(tmp_pat
         return [fn(w, *args) for w in workers]
 
     core = Core(work=0)
+    blocks = {"a": ([3, 1], [1, 5]), "b": ([7], [])}
     core.scheduler.kv_cache_manager = NS(block_pool=Pool([Block(0, 1, is_null=True)] +
                                                          [Block(i, i % 2, f"h{i}" if i % 3 else None)
-                                                          for i in range(1, T.BLOCKS)]))
-    core.scheduler.running = [NS(num_computed_tokens=5, num_prompt_tokens=9), NS(num_computed_tokens=12, num_prompt_tokens=9)]
-    core.scheduler.waiting = [3]
+                                                          for i in range(1, T.BLOCKS)]),
+                                         get_block_ids=blocks.__getitem__)
+    core.scheduler.running = [NS(request_id="a", num_computed_tokens=5, num_prompt_tokens=9, output_token_ids=[]),
+                              NS(request_id="b", num_computed_tokens=12, num_prompt_tokens=9, output_token_ids=[4, 4, 4, 4])]
+    core.scheduler.waiting = [NS(request_id="c", num_computed_tokens=0, num_prompt_tokens=30, output_token_ids=[])]
+    core.scheduler.skipped_waiting = []
     core.model_executor = NS(collective_rpc=collective_rpc)
     saved = []
     edges = E.Edges(tmp_path, steps=[5], savers=[lambda c, d: saved.append(d.name) or {"state": 7}],
@@ -237,6 +241,10 @@ def test_a_snapshot_checks_the_ranks_dumps_one_copy_and_records_the_edge(tmp_pat
     assert got["check"] == {"ranks": [0, 1, 2], "layers_equal": True, "kv_equal": True, "rng_equal": True}
     assert got["ids"] == [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11] and got["pool"]["cached_free"] == 4
     assert got["in_flight"] == {"prefilling": 1, "decoding": 1} and got["waiting"] == 1
+    assert got["requests"] == {
+        "a": {"prompt": 9, "output": 0, "computed": 5, "state": "prefilling", "blocks": [1, 3, 5]},
+        "b": {"prompt": 9, "output": 4, "computed": 12, "state": "decoding", "blocks": [7]},
+        "c": {"prompt": 30, "output": 0, "computed": 0, "state": "waiting", "blocks": []}}
     assert [w["rank"] for w in got["dump"]] == [0] and saved == ["edge-000005"] and got["saved"] == [{"state": 7}]
     assert json.loads((tmp_path / "edge-000005" / "edge.json").read_text())["ids"] == got["ids"]
     assert got["seconds"] == {"drain": 0, "digest": 1, "dump": 1, "savers": 1, "outputs": 1, "pause": 4}

@@ -33,9 +33,11 @@ flight then are recorded with the tokens they streamed.
 - steps the engine core to the second edge, drained as served, adding each request that arrived after the first edge
   right before the step it arrived before in the served step trace;
 - writes ``restore.json``: bit-exact or not, with the first step whose scheduled rows differ, the first step and
-  request whose sampled tokens or logprob bits differ (`boundary.outputs_diff`, and per sampling class), the first
-  request position whose client token differs, and the first layer and block whose bytes differ at the second edge,
-  with each edge's KV root (`kv_root`), the requests held at the first edge and the snapshot's bytes.
+  request whose sampled tokens or logprob bits differ (`boundary.outputs_diff`, and per sampling class, plan kind
+  and keys class: at most or past GLM-5.3's indexer top-k, `TOPK_KEYS`), the first request position whose client token
+  differs, and the first layer and block whose bytes differ at the second edge, with the differing blocks per keys
+  class of the requests holding them, each edge's KV root (`kv_root`), the requests held at the first edge (per keys
+  class too) and the snapshot's bytes.
 """
 from __future__ import annotations
 
@@ -51,7 +53,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -460,17 +462,74 @@ def class_outputs(served: Mapping[int, Mapping[str, list]], replayed: Mapping[in
     return out
 
 
+TOPK_KEYS = 2048
+"""GLM-5.3's DSA indexer's top-k: a query over at most this many keys attends to every one of them, so the order and
+ties of the indexer's selection don't enter (past it, a replay from the start differs too)."""
+
+
+def keys_class(keys: int) -> str:
+    return f"keys<={TOPK_KEYS}" if keys <= TOPK_KEYS else f"keys>{TOPK_KEYS}"
+
+
+def max_keys(served: Mapping[int, Mapping[str, list]], first: Mapping[str, Mapping[str, Any]],
+             far: Mapping[str, Mapping[str, Any]], plan: Mapping[int, Mapping[str, Any]]) -> dict[str, int]:
+    """By client id, the most keys each request attends over by the far edge: its prompt and every token it produced but
+    the last, or the tokens in its KV if more (a prefill part done). ``first`` and ``far`` are the two edges' requests
+    (`tp_edge.held`): the far one's counts are a held request's own, the first one's its tokens before the step
+    outputs start."""
+    def keys(h: Mapping[str, Any], more: int = 0) -> int:
+        out = h["output"] + more
+        return max(h["computed"], h["prompt"] + out - 1) if out else h["computed"]
+
+    at1, at2 = ({client_id(r): h for r, h in e.items()} for e in (first, far))
+    n = {client_id(r): len(t) for r, (t, _) in by_request(served).items()}
+    got = {}
+    for cid in sorted(set(at1) | set(at2) | set(n)):
+        if cid in at2:
+            got[cid] = keys(at2[cid])
+            continue
+        prompt = len(plan.get(int(cid.split("-")[1]), {}).get("prompt_ids", ()))
+        got[cid] = keys(at1.get(cid) or {"prompt": prompt, "output": 0, "computed": 0}, n.get(cid, 0))
+    return got
+
+
+def held_classes(held: Mapping[str, Mapping[str, Any]], classes: Mapping[str, str]) -> dict[str, dict[str, int]]:
+    """An edge's requests (`tp_edge.held`) per class (by client id), by state."""
+    out: dict[str, dict[str, int]] = {}
+    for rid, h in held.items():
+        k = out.setdefault(classes.get(client_id(rid), "unknown"), {"prefilling": 0, "decoding": 0, "waiting": 0})
+        k[h["state"]] += 1
+    return out
+
+
+def block_classes(blocks: Iterable[int], held: Mapping[str, Mapping[str, Any]], classes: Mapping[str, str]) -> dict[str, int]:
+    """``blocks`` by the classes of the edge's requests holding them (`tp_edge.held`; a block requests of two classes
+    share counts in both), the rest as ``free``: cached blocks no request holds."""
+    owner: dict[int, set[str]] = {}
+    for rid, h in held.items():
+        for b in h["blocks"]:
+            owner.setdefault(b, set()).add(classes.get(client_id(rid), "unknown"))
+    out: dict[str, int] = {}
+    for b in blocks:
+        for k in owner.get(b, {"free"}):
+            out[k] = out.get(k, 0) + 1
+    return dict(sorted(out.items()))
+
+
 def differing_requests(served: Mapping[int, Mapping[str, list]], replayed: Mapping[int, Mapping[str, list]],
-                       plan: Mapping[int, Mapping[str, Any]]) -> list[dict[str, Any]]:
-    """The requests whose step outputs differ, by client id, each with its plan kind and prompt length (a prompt past
-    GLM-5.3's DSA indexer top-k is the kind a replay from the start differs in too)."""
+                       plan: Mapping[int, Mapping[str, Any]], keys: Mapping[str, int],
+                       first: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """The requests whose step outputs differ, by client id, each with its plan kind, prompt length, most keys
+    (`max_keys`) and state at the first edge (None if it arrived after it)."""
     a, b = by_request(served), by_request(replayed)
+    state = {client_id(r): h["state"] for r, h in first.items()}
     got = []
     for rid in sorted(set(a) | set(b)):
         if a.get(rid) != b.get(rid):
             cid = client_id(rid)
             r = plan.get(int(cid.split("-")[1]), {})
-            got.append({"id": cid, "kind": r.get("kind", "plain"), "prompt_len": len(r.get("prompt_ids", ()))})
+            got.append({"id": cid, "kind": r.get("kind", "plain"), "prompt_len": len(r.get("prompt_ids", ())),
+                        "keys": keys.get(cid), "held": state.get(cid)})
     return got
 
 
@@ -658,14 +717,23 @@ def restore(a: argparse.Namespace) -> int:
     classes_file = served / "load" / "classes.json"
     classes = json.loads(classes_file.read_text()) if classes_file.exists() else {}
     kinds = {f"{ID}-{i:05d}": r.get("kind", "plain") for i, r in plan.items()}
+    keys = max_keys(served_outs, rec1["requests"], rec2["requests"], plan)
+    by_keys = {cid: keys_class(k) for cid, k in keys.items()}
+    res["held"]["keys"] = held_classes(rec1["requests"], by_keys)
     res["outputs"] = B.outputs_diff(served_outs, replayed_outs) | {
         "recorded": bool(served_outs), "classes": class_outputs(served_outs, replayed_outs, classes),
         "kinds": class_outputs(served_outs, replayed_outs, kinds),
-        "differing": differing_requests(served_outs, replayed_outs, plan)}
+        "keys": class_outputs(served_outs, replayed_outs, by_keys),
+        "differing": differing_requests(served_outs, replayed_outs, plan, keys, rec1["requests"])}
     rep2_dir = scratch / "replay" / f"edge-{edges.taken[0]['edge']:06d}"
-    res["edge2"] = {"blocks": len(rec2["ids"]), "first_difference": edge_difference(rec2, rep2, edge2, rep2_dir),
+    first2 = edge_difference(rec2, rep2, edge2, rep2_dir)
+    res["edge2"] = {"blocks": len(rec2["ids"]), "first_difference": first2,
                     "kv_root": {"served": kv_root(rec2), "replayed": kv_root(rep2)}, "replay_check": rep2["check"],
-                    "replay_seconds": rep2["seconds"]}
+                    "replay_seconds": rep2["seconds"], "held": held_classes(rec2["requests"], by_keys)}
+    if first2 and "layer" in first2:
+        res["edge2"]["differing_by_keys"] = block_classes(
+            tp_state.differing_blocks((edge2 / "digests.rank0.bin").read_bytes(), (rep2_dir / "digests.rank0.bin").read_bytes(),
+                                      rec2["layers"], rec2["ids"]), rec2["requests"], by_keys)
     res["bit_exact"] = (res["steps"]["first_difference"] is None and res["tokens"]["first_difference"] is None
                         and res["outputs"]["recorded"] and res["outputs"]["first"] is None
                         and res["edge2"]["first_difference"] is None)
@@ -673,7 +741,8 @@ def restore(a: argparse.Namespace) -> int:
     verdict.write_text(json.dumps(res, indent=1))
     print(f"[tp-restore] {res['verdict']}: steps {res['steps']['first_difference']}, outputs {res['outputs']['first']} "
           f"(recorded {res['outputs']['recorded']}), tokens {res['tokens']['first_difference']}, edge 2 "
-          f"{res['edge2']['first_difference']}", flush=True)
+          f"{res['edge2']['first_difference']}; requests differing by keys {res['outputs']['keys']}, far-edge blocks "
+          f"{res['edge2'].get('differing_by_keys')}", flush=True)
     return 0 if res["bit_exact"] else 1
 
 

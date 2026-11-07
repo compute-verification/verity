@@ -314,3 +314,18 @@ def first_difference(a: bytes, b: bytes, layers: Sequence[Mapping[str, Any]], id
             return {"layer": li, "name": spec["name"], "block": int(ids[differ[0]]), "index": differ[0],
                     "blocks_differing": len(differ)}
     return None
+
+
+def differing_blocks(a: bytes, b: bytes, layers: Sequence[Mapping[str, Any]], ids: Sequence[int]) -> list[int]:
+    """The blocks of ``ids`` whose digests differ in any layer between two `digest` files, ascending."""
+    n = len(ids) * BLOCK_DIGEST
+    if len(a) != len(b) or len(a) != n * len(layers):
+        raise ValueError(f"tp_state.differing_blocks: digest files of {len(a)} and {len(b)} bytes, expected "
+                         f"{n * len(layers)} ({len(layers)} layers of {len(ids)} blocks)")
+    got: set[int] = set()
+    for li in range(len(layers)):
+        x, y = a[li * n:(li + 1) * n], b[li * n:(li + 1) * n]
+        if x != y:
+            got.update(int(ids[i]) for i in range(len(ids))
+                       if x[i * BLOCK_DIGEST:(i + 1) * BLOCK_DIGEST] != y[i * BLOCK_DIGEST:(i + 1) * BLOCK_DIGEST])
+    return sorted(got)
