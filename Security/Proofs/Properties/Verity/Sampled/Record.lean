@@ -26,18 +26,19 @@ public-coin form (`V`), with what the sampling claims read of it (`code`, `recor
   statement, so the verifier holds the session's round count and `N₀` to those at a reference draw file (`d₀`, one
   whose session sets up one table of `A.kd` units: `RefOk`), and refuses a draw file that sets the session up at
   others.
-* **What the claims read** (`code`): the statement's audit statement and partition are V5's at `A` (`Flock.Bridge.stmtOf`,
-  `Flock.Bridge.partOf`); the draw precedes the session (`stage2` and every unit's `rounds` are the session's rounds);
-  the checked units are the coins' draw (`checked`); every unit's session is the one session (`sessionOf`, with a
-  refusing view where the draw file was refused); the commitment is `A`'s deployed one (`LayoutIsL`'s fields at `A`); one
-  session of one table. What a session's witness reveals and the reference prover's framing are the record's
-  parameters (`Ext`).
 * **v2's slots over the lowered program** (`partSlots`, `designSlots`, `stmtSlots`): v2's two classes and two rules
   (`Slots.layout`, `slotDesign`) at the gates of the program the statement reads, the population in the registration's
-  strata, slot `u` unit `u`'s lowered gates, then one slot per input gate of the lowered program, drawn `all`.
-  `slotPartition` of the layout itself numbers the descriptor's gates, not the lowered program's, so it covers none of a
-  unit's lowered gates. `PartSlotsTarget` states that `partSlots` partitions the lowered program where each unit has a
-  gate and commits at most `unitClassMax` bits; `ScopeSlotsOk` is `ScopeOk` at these slots.
+  strata, slot `u` unit `u`'s lowered gates, then one slot per input gate of the lowered program (`inputSlots`), drawn
+  `all`. `slotPartition` of the layout itself numbers the descriptor's gates, not the lowered program's, so it covers
+  none of a unit's lowered gates. `PartSlotsTarget` states that `partSlots` partitions the lowered program where each
+  unit has a gate and commits at most `unitClassMax` bits; `ScopeSlotsOk` is the rest of the statement's scope.
+* **What the claims read** (`code`): the statement's audit statement is V5's at `A` (`Flock.Bridge.stmtOf`) at v2's
+  design (`stmtSlots`), and its partition v2's slots (`partSlots`); the draw precedes the session (`stage2` and every
+  unit's `rounds` are the session's rounds); the checked slots are the coins' draw, then every input slot (`checked`):
+  an input block passes the check that charges an input at its readers (`inputOk`), so listing it asks nothing of the
+  session; every unit's session is the one session (`sessionOf`, with a refusing view where the draw file was
+  refused); the commitment is `A`'s deployed one (`LayoutIsL`'s fields at `A`); one session of one table. What a
+  session's witness reveals and the reference prover's framing are the record's parameters (`Ext`).
 -/
 
 @[expose] public section
@@ -175,10 +176,6 @@ noncomputable def sessionOf (A : Live) (o : Own) (v : Seen) : Msg × Seen :=
 noncomputable def stmtA (A : Live) : AuditStatement :=
   Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.SampledProofs.oneStageOf A.law) A.desc ⟨"", 0, []⟩ A.roots
 
-/-- The statement's partition: V5's at the session's population. -/
-noncomputable def partA (A : Live) : Claims.Sampling.Partition :=
-  Flock.Bridge.partOf A.P A.κ (Flock.Bridge.nsOf A.desc A.qr)
-
 /-- **The statement's partition in v2's slots**: the population in the registration's strata (`nsOf`), slot `u` unit
 `u`'s lowered gates (`unitGates`), then the input class of the lowered program (`InputSlot.withInputs`), each input
 gate a proof block of its own. -/
@@ -186,6 +183,10 @@ noncomputable def partSlots (A : Live) : Claims.Sampling.Partition :=
   InputSlot.withInputs
     ⟨[(Flock.Bridge.nsOf A.desc A.qr).splitLengths ((List.finRange A.n).map (Flock.Bridge.unitGates A.P))]⟩
     (Flock.Bridge.progOf A.Cc A.κ)
+
+/-- **The input slots of `partSlots`**: slot `A.n + i` for the lowered program's `i`th input gate. -/
+noncomputable def inputSlots (A : Live) : List ℕ :=
+  (List.range (InputSlot.inputsAt (Flock.Bridge.progOf A.Cc A.κ)).length).map (A.n + ·)
 
 /-- **v2's design** (`slotDesign`'s two rules): the law's one-stage rule over the population, then every input slot. -/
 def designSlots (A : Live) : Claims.Sampling.Design :=
@@ -202,9 +203,10 @@ def PartSlotsTarget : Prop :=
     (∀ u, Claims.Sampling.committed (stmtSlots A).prog (Flock.Bridge.unitGates A.P u) ≤ Claims.Sampling.unitClassMax) →
       (partSlots A).Partitions (stmtSlots A).prog
 
-/-- **The statement is in scope at v2's slots** (`ScopeOk` at `partSlots` and `designSlots`): `partSlots` partitions
-the lowered program, and the law's one-stage rule is well formed over the population's strata. The input class's rule,
-`all`, is well formed at every class. -/
+/-- **What `Live` doesn't give of the record's scope** (`InScope` at `partSlots` and `stmtSlots`): `partSlots`
+partitions the lowered program into nonempty proof blocks whose committed values fit their public size classes, and the
+law's one-stage rule is well formed over the population's strata. The program's order is the lowering's own
+(`Flock.Bridge.topological_progOf`), and the input class's rule, `all`, is well formed at every class. -/
 def ScopeSlotsOk (A : Live) : Prop :=
   (partSlots A).Partitions (stmtSlots A).prog ∧
     (_root_.Properties.SampledProofs.oneStageOf A.law).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
@@ -222,11 +224,11 @@ open Classical in
 /-- **One-stage v2's code at the session**, as the sampling record reads it. -/
 noncomputable def code (A : Live) (o : Own) (e : Ext) : SamplingDeploy.Code where
   V := V A o
-  parse x := if x = xOf A o then some (stmtA A) else none
-  scopeCheck x := decide (x = xOf A o ∧ InScope (partA A) (stmtA A))
-  partition _ := some (partA A)
+  parse x := if x = xOf A o then some (stmtSlots A) else none
+  scopeCheck x := decide (x = xOf A o ∧ InScope (partSlots A) (stmtSlots A))
+  partition _ := some (partSlots A)
   stage2 _ := after _
-  checked x r := if x = xOf A o then drawn A (drawBytes (coinsAt r)) else []
+  checked x r := if x = xOf A o then drawn A (drawBytes (coinsAt r)) ++ inputSlots A else []
   rounds _ _ := after _
   session x _ v := if x = xOf A o then some (sessionOf A o v) else none
   reveal := e.reveal
@@ -263,7 +265,7 @@ theorem record_stage2 (x : Msg) : (record A o e).stage2 x = after _ := rfl
 theorem record_rounds (x : Msg) (u : ℕ) : (record A o e).rounds x u = after _ := rfl
 
 theorem record_checked (x : Msg) (r : Fin ((V A o).k x) → FlockDeploy.Coin) :
-    (record A o e).checked x r = if x = xOf A o then drawn A (drawBytes (coinsAt r)) else [] := rfl
+    (record A o e).checked x r = if x = xOf A o then drawn A (drawBytes (coinsAt r)) ++ inputSlots A else [] := rfl
 
 theorem V_k_xOf : (V A o).k (xOf A o) = DRAW_ROUNDS + 1 + kS A o := by
   simp only [V, ↓reduceIte]

@@ -21,7 +21,10 @@ the code side's.
 3. **Relation** (`R δ`): the set of faulty units of the committed trace is in the confidence set
    `M_δ = {B : P_a(B) > δ}`. A unit is faulty when its committed outputs differ from its gates applied to its committed
    inputs, or a value it reads or writes is unopened: one is faulty unless some interior makes it correct, which on a
-   topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`).
+   topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`). At a check on each
+   proof block (`BlockCheck`), a protocol's in place of correctness (`correctOk`), the incorrect set (`incorrectBy`)
+   holds the units no interior makes pass it, and `RBy` is the relation at that set; at `correctOk` they are `faulty`
+   and `R`. `inputOk` passes every input block and holds every other to `correctOk`, so an input counts at its readers.
 4. **Scope** (`Scope`, `InScope`, `ScopeMatches`): a statement that parses, whose query evaluates; a topologically
    ordered program; a partition of all its gates but constants and unread inputs into proof units, each a set of gates
    whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`unitClasses`: powers of two from 16 to
@@ -37,7 +40,8 @@ the code side's.
    parameters (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`, and the masked deployment
    `ZkDeploy`: the reference prover's tape as a finite nonce and rest, and the simulator).
 6. **Claims**, on the statements in scope: `KS` at every `δ ≥ 0`, with error `δ + ε_ks + ε_bind`, `ε_ks` Flock's at
-   the units' sessions and `ε_bind = Pr[B_ext]`; its count form `KSCount`; `Binding`; `Universal`; `FaultyBoundary`;
+   the units' sessions and `ε_bind = Pr[B_ext]`; `KSBy`, `KS` at a check on each proof block, which is `KS` at
+   `correctOk`; its count form `KSCount`; `Binding`; `Universal`; `FaultyBoundary`;
    `Complete`; `ScopeMatches`; `ZK`, of the masked deployment's reference prover and simulator, relative to the trace's
    published leaf layer; `Bits`; `Efficient`; and `Nontrivial`.
 7. **Assumptions used**: `StrictBirthday` (for `B`), `ExpectedCR` (for `Bext`), and `trustedBase`. `ZK` gives the
@@ -372,6 +376,43 @@ evaluates on its program, descriptor and gates (`partition`, the verifier's own)
 def R (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
     (δ : ℝ) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ RelS H Cm δ s P w
+
+/-- **A check on a proof block** `u` of the statement, on the committed values `val` the witness opens and interior
+values `ι`: what a protocol asks of a drawn proof block. It reads only the statement, the proof block and those values.
+`correctOk` is sampling's own. -/
+abbrev BlockCheck := AuditStatement → List ℕ → (ℕ → Option Bool) → (ℕ → Bool) → Prop
+
+/-- **The proof block is correct** on `ref_ι` (`Prog.Correct`), the check `Faulty` reads. -/
+def correctOk : BlockCheck := fun s u val ι => s.prog.Correct (s.prog.refIn u val ι) u
+
+/-- **An input block** of `C`: a proof block that is one input gate, as the deployed verifier lays each input gate
+after the population. -/
+def Prog.InputBlock (C : Prog) (u : List ℕ) : Prop := ∃ g, u = [g] ∧ C.gates[g]? = some .input
+
+/-- **The check that charges an input at its readers**: an input block passes, and every other proof block is correct
+(`correctOk`). An input row is opened only through a drawn unit that reads it, so an input's check is its consistency
+with the commitment at each drawn unit that reads it, which is that reader's own: `Prog.Correct` asks every value a
+proof block reads from outside it to be opened under the statement's roots (`val`), and its committed outputs computed
+from those values. An input no drawn unit reads imposes nothing, and an input's harm counts at its readers' footprint. -/
+def inputOk : BlockCheck := fun s u val ι => s.prog.InputBlock u ∨ correctOk s u val ι
+
+/-- **An incorrect unit at the check `Ok`**, at slot `v` of `P` under `w`: its proof block passes `Ok` at no interior
+values, on the committed values `w` opens. At `correctOk` it is `Faulty`. -/
+def IncorrectBy (Ok : BlockCheck) (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition)
+    (w : Wit) (v : ℕ) : Prop :=
+  ¬ ∃ u, P.blocks[v]? = some u ∧ ∃ ι : ℕ → Bool, Ok s u (w.val H Cm s) ι
+
+open Classical in
+/-- **The incorrect set at the check `Ok`**: the slots that fail `Ok` (`IncorrectBy`). At `correctOk` it is `faulty`. -/
+noncomputable def incorrectBy (Ok : BlockCheck) (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement)
+    (P : Partition) (w : Wit) : Finset ℕ :=
+  (Finset.range P.blocks.length).filter (IncorrectBy Ok H Cm s P w)
+
+/-- **The sampling relation at the check `Ok`**, at `δ`: the statement parses, its query evaluates, and the incorrect
+set at `Ok` is in `M_δ`. At `correctOk` it is `R`. -/
+def RBy (Ok : BlockCheck) (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
+    (partition : AuditStatement → Option Partition) (δ : ℝ) : Rel Wit :=
+  fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ incorrectBy Ok H Cm s P w ∈ s.design.M P δ
 
 /-- The count form: fewer than `t` units are faulty. -/
 def RCount (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
@@ -728,6 +769,17 @@ extraction checks disagree). -/
 def KS (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ (δ : ℝ) decode, 0 ≤ δ → Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
     KSLinOn H D.V (Scope D) (R H D.commit D.parse D.partition δ) (E D decode) (κ D δ) (γ D) (fun _ => 1)
+      (Bext H D.V (E D decode))
+
+/-- **Sampling: KS at a check on each proof block** (`Ok`, a `BlockCheck`): `KS` with the incorrect set at `Ok` in
+place of the faulty set (`RBy`). On the statements in scope, at every `δ ≥ 0`, at the sampling extractor and every
+decoder that lists every trace within Flock's radius, `Pr[acc ∧ incorrectBy Ok ∉ M_δ] ≤ δ + ε_ks + ε_bind`, at `KS`'s
+errors. `Ok` reads only the statement, the proof block and the values the witness opens, so a protocol that asks more
+of a drawn proof block than that it is correct states its guarantee at its own check. It holds where each drawn proof
+block's session reveals openings that pass `Ok`. At `correctOk` it is `KS`. -/
+def KSBy (H : Msg → Msg) (D : Deploy Coin Col T) (Ok : BlockCheck) : Prop :=
+  ∀ (δ : ℝ) decode, 0 ≤ δ → Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
+    KSLinOn H D.V (Scope D) (RBy Ok H D.commit D.parse D.partition δ) (E D decode) (κ D δ) (γ D) (fun _ => 1)
       (Bext H D.V (E D decode))
 
 /-- **Sampling: KS, the count form** (a corollary of `KS` at `δ = max(0, miss(t))`, `missAt`), on the statements in

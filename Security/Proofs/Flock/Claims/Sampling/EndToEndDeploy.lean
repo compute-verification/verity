@@ -19,8 +19,8 @@ At a `SubsetDesign` over one class of `n` proof blocks (`EndToEndDraw`'s hypothe
 
 The deployed sampled verifier's statements are not of that shape. At `deployOf F (SamplingDeploy.code c reg …)` under
 `RegMatches` (`deployOf_shape`), the design is `slotDesign`'s two rules, the population's first stage and the input
-class drawn `all`, and the partition is `Slots.layout`'s two classes, the population and the input class (empty, or one
-stratum). So `SubsetDesign` and a one-class partition fail there (`deployOf_not_subsetDesign`,
+class drawn `all`, and the partition is two classes, a population of the strata sizes of `Slots.layout`'s and the
+program's input class (empty, or one stratum). So `SubsetDesign` and a one-class partition fail there (`deployOf_not_subsetDesign`,
 `deployOf_not_oneClass`). At a population drawn `subset kd` (`SubsetInputsDesign`), with `N` population slots:
 
 * `Pa_subsetInputs`: `P_a(B)` is `C(N − |B ∩ [0, N)|, kd)/C(N, kd)` when `B` misses the input class, else `0`.
@@ -162,31 +162,6 @@ theorem slotDesign_rules {rule : _root_.SampledProofs.Select.Rule} {p : _root_.S
     obtain rfl := (Except.ok.inj h).symm
     exact ⟨_, rfl, (fun h => by cases h), fun _ => ⟨_, rfl⟩⟩
 
-/-- `Slots.layout`'s classes: the population, then the input class, empty or one stratum. -/
-theorem layout_classes {p : _root_.SampledProofs.Program} {q : Lean.Json} {l : _root_.SampledProofs.Slots.Layout}
-    (h : _root_.SampledProofs.Slots.layout p q = .ok l) :
-    ∃ pop ins, l.classes = #[pop, ins] ∧ (ins = #[] ∨ ∃ st, ins = #[st]) := by
-  unfold _root_.SampledProofs.Slots.layout at h
-  obtain ⟨_, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
-  obtain ⟨_, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
-  dsimp only at h
-  obtain ⟨pop, -, h⟩ := _root_.Properties.SampledProofs.SecurityProofs.bind_eq_ok.1 h
-  obtain rfl := (Except.ok.inj h).symm
-  refine ⟨pop, _, rfl, ?_⟩
-  split
-  · exact Or.inl rfl
-  · exact Or.inr ⟨_, rfl⟩
-
-theorem slotPartition_classes {l : _root_.SampledProofs.Slots.Layout}
-    {pop ins : Array (Array _root_.SampledProofs.Slots.ProofBlock)}
-    (h : l.classes = #[pop, ins]) (hins : ins = #[] ∨ ∃ st, ins = #[st]) :
-    ∃ c ic, (_root_.Properties.SampledProofs.slotPartition l).classes = [c, ic] ∧ (ic = [] ∨ ∃ st, ic = [st]) := by
-  unfold _root_.Properties.SampledProofs.slotPartition
-  rw [h]
-  rcases hins with rfl | ⟨st, rfl⟩
-  · exact ⟨_, _, rfl, Or.inl rfl⟩
-  · exact ⟨_, _, rfl, Or.inr ⟨_, rfl⟩⟩
-
 section Deployed
 
 variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (c : SamplingDeploy.Code)
@@ -202,11 +177,13 @@ theorem deployOf_shape (hreg : SamplingDeploy.RegMatches c reg) {x : Msg} {s : A
     (hp : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).partition s = some Pt) :
     ∃ first pop ins, s.design.rules = [first, .all] ∧ Pt.classes = [pop, ins] ∧
       (ins = [] ∨ ∃ st, ins = [st]) := by
-  obtain ⟨g, l, -, -, hl, rfl, hd⟩ := hreg x s Pt hx hp
+  obtain ⟨g, _, pop, -, -, -, rfl, -, hd⟩ := hreg x s Pt hx hp
   obtain ⟨first, hr, -⟩ := slotDesign_rules hd
-  obtain ⟨pop, ins, hc, hins⟩ := layout_classes hl
-  obtain ⟨c', ic, hc', hic⟩ := slotPartition_classes hc hins
-  exact ⟨first, c', ic, hr, hc', hic⟩
+  refine ⟨first, pop, InputSlot.inputClass s.prog, hr, rfl, ?_⟩
+  unfold InputSlot.inputClass
+  split
+  · exact Or.inl rfl
+  · exact Or.inr ⟨_, rfl⟩
 
 theorem deployOf_not_subsetDesign (hreg : SamplingDeploy.RegMatches c reg) {x : Msg} {s : AuditStatement} {Pt : Partition}
     (hx : (SamplingDeploy.deployOf F (SamplingDeploy.code c reg L bytes sr sess)).parse x = some s)
@@ -231,12 +208,6 @@ end Deployed
 
 /-- The deployed design at a population drawn `subset kd`: that, then the input class drawn `all`. -/
 def SubsetInputsDesign (d : Design) (kd : ℕ) : Prop := d.rules = [.subset kd, .all]
-
-theorem all_Pa_of_empty {ns : List ℕ} {W : Finset ℕ} (h : W = ∅) : OneStage.Pa ns .all W = 1 := by
-  simp [OneStage.Pa, h]
-
-theorem all_Pa_of_ne {ns : List ℕ} {W : Finset ℕ} (h : W ≠ ∅) : OneStage.Pa ns .all W = 0 := by
-  simp [OneStage.Pa, h]
 
 theorem blocks_length_two {P : Partition} {c ic : List (List (List ℕ))} (hP : P.classes = [c, ic]) :
     P.blocks.length = c.flatten.length + ic.flatten.length := by

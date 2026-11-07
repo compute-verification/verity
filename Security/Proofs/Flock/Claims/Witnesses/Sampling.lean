@@ -530,6 +530,9 @@ theorem KS_fails (H : Msg → Msg) : ¬ Claims.Sampling.KS H (sksD Coin) := by
   | exact hb (h1 [] Unit silentP)
   | exact hb (h1 [] (sksD_scope []) Unit silentP)
 
+/-- **The sampling `KSBy` fails** at `sksD`, at sampling's own check `correctOk`, where it is `KS`. -/
+theorem KSBy_fails (H : Msg → Msg) : ¬ Claims.Sampling.KSBy H (sksD Coin) correctOk := fun h => KS_fails (Coin := Coin) H h
+
 set_option linter.unreachableTactic false in
 set_option linter.unusedTactic false in
 /-- **The sampling `KSCount` fails** at `sksD`, at `t = 1`. -/

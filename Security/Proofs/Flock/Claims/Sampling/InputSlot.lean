@@ -47,6 +47,9 @@ through a drawn unit that reads it.
 * `faulty_input_iff`: at a slot whose proof block is `[p]`, `p` an input gate, the slot is faulty exactly when the
   witness opens no value at `p`. An input's computed value is its committed value, so an opened input
   is correct under every interior, and an unopened one under none.
+* `inputOk`, which passes every input block: no input slot is incorrect at it (`not_incorrectBy_inputOk`), any other
+  slot is incorrect at it exactly when faulty (`incorrectBy_inputOk_iff`), so its incorrect set is in the faulty set
+  (`incorrectBy_inputOk_subset`).
 * `withInputs P C`: `P`'s classes, then the input class of `C` (`inputClass`). `P`'s slots keep their indices
   (`withInputs_getElem?_of_lt`), slot `|P| + i` is the `i`th input gate's (`withInputs_getElem?_input`), and it is
   faulty exactly when that gate's value is unopened (`faulty_withInputs_iff`).
@@ -95,6 +98,37 @@ theorem faulty_input_iff {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : Aud
     rw [hv] at hu
     obtain rfl := Option.some.inj hu
     exact (hcorr ι).1 hι hnone
+
+/-- **No input slot is incorrect at `inputOk`.** -/
+theorem not_incorrectBy_inputOk {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition}
+    {w : Wit} {v p : ℕ} (hv : P.blocks[v]? = some [p]) (hp : s.prog.gates[p]? = some .input) :
+    ¬ IncorrectBy inputOk H Cm s P w v := by
+  have hin : s.prog.InputBlock [p] := ⟨p, rfl, hp⟩
+  unfold IncorrectBy
+  exact fun h => h ⟨[p], hv, fun _ => false, Or.inl hin⟩
+
+/-- **At any other slot, incorrect at `inputOk` is faulty.** -/
+theorem incorrectBy_inputOk_iff {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition}
+    {w : Wit} {v : ℕ} {b : List ℕ} (hv : P.blocks[v]? = some b) (hb : ¬ s.prog.InputBlock b) :
+    IncorrectBy inputOk H Cm s P w v ↔ Faulty H Cm s P w v := by
+  unfold IncorrectBy Faulty
+  constructor
+  · rintro h ⟨u, hu, ι, hι⟩
+    exact h ⟨u, hu, ι, Or.inr hι⟩
+  · rintro h ⟨u, hu, ι, hι⟩
+    rw [hv] at hu
+    obtain rfl := Option.some.inj hu
+    exact h ⟨_, hv, ι, Or.resolve_left hι hb⟩
+
+/-- **The incorrect set at `inputOk` is in the faulty set.** -/
+theorem incorrectBy_inputOk_subset {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition}
+    {w : Wit} : incorrectBy inputOk H Cm s P w ⊆ faulty H Cm s P w := by
+  classical
+  intro v hv
+  unfold incorrectBy at hv
+  unfold faulty
+  obtain ⟨hlt, hf⟩ := Finset.mem_filter.1 hv
+  exact Finset.mem_filter.2 ⟨hlt, fun ⟨u, hu, ι, hι⟩ => hf ⟨u, hu, ι, Or.inr hι⟩⟩
 
 /-- The input gates of `C`, in gate order. -/
 def inputsAt (C : Prog) : List ℕ := (List.range C.gates.length).filter fun g => decide (C.gates[g]? = some .input)

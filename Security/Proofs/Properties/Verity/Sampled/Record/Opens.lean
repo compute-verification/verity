@@ -10,12 +10,14 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 import all Init.Data.Array.QSort.Basic
 
 /-!
-# A checked unit's Flock witness opens its proof block correct (`SessionOpens`)
+# A checked slot's Flock witness passes `inputOk` (`SessionOpensBy`)
 
 At the record's statement every checked unit's session is the one flock-verify `--zk` session at the statement the
 draw file sets up (`sessionOf`). A Flock witness in that session's relation satisfies its one table (`tableLowers`),
 which is V5's drawn table for the unit (`tabOfZHJP_one`), so the message packing it (`packZ`) reveals openings that
-make the unit's proof block correct wherever the values carry those that open (`correct_of_revealV5`).
+make the unit's proof block with its owned inputs correct wherever the values carry those that open
+(`correct_of_revealV5`), and so its lowered gates, its slot in v2's slots (`partSlots`). A checked input slot is an
+input block, which `inputOk` passes.
 
 * **What a witness reveals** (`revealRec`, the record's `Ext.reveal`): at unit `u` of the run's draw file, V5's
   openings (`revealV5`) of the message packing the witness's bits at the session's table, set up at that draw file and
@@ -33,7 +35,7 @@ make the unit's proof block correct wherever the values carry those that open (`
   * one table: `SetsUp`'s, as `SampledProofs.OneStageZk.inputsOf` hands v2's inputs;
   * the record's commitment the deployed one (`A.Cd`), which `record_commit` gives at a circuit of `sha512/row/v2`
     rows: the record's commitment hashes each row as a `sha512/row/v2` row.
-* `sessionOpens`: `SessionOpens` at SHA-512, at any interior roots: an accepted run kept its draw file
+* `sessionOpens`: `SessionOpensBy` at `inputOk` at SHA-512, at any interior roots: an accepted run kept its draw file
   (`accepted_draw`), whose session's witness satisfies the session's one table (`session_lowers`), the table V5 sets
   up at each drawn unit (`session_table`). The statement stays a variable equal to `xOf A o` throughout (`parse_at`,
   `checked_at`, `session_at`).
@@ -248,19 +250,18 @@ section Fields
 
 variable (o : Own) (e : Ext)
 
-theorem parse_at {x : Msg} (hx : x = xOf A o) : (record A o e).parse x = some (stmtA A) :=
+theorem parse_at {x : Msg} (hx : x = xOf A o) : (record A o e).parse x = some (stmtSlots A) :=
   (record_parse_eq A o e x).trans (ite_eq_left hx)
 
 theorem checked_at {x : Msg} (hx : x = xOf A o) (r : Fin ((record A o e).V.k x) → FlockDeploy.Coin) :
-    (record A o e).checked x r = drawn A (drawBytes (coinsAt r)) := by
-  have h : (record A o e).checked x r = if x = xOf A o then drawn A (drawBytes (coinsAt r)) else [] := rfl
-  exact h.trans (ite_eq_left hx)
+    (record A o e).checked x r = drawn A (drawBytes (coinsAt r)) ++ inputSlots A :=
+  (record_checked A o e x r).trans (ite_eq_left hx)
 
 theorem session_at {x : Msg} (hx : x = xOf A o) (u : ℕ) (v : Seen) :
     (record A o e).session x u v = some (sessionOf A o v) :=
   (record_session A o e x u v).trans (ite_eq_left hx)
 
-theorem record_partition (s : AuditStatement) : (record A o e).partition s = some (partA A) := rfl
+theorem record_partition (s : AuditStatement) : (record A o e).partition s = some (partSlots A) := rfl
 
 theorem record_reveal : (record A o e).reveal = e.reveal := rfl
 
@@ -429,14 +430,16 @@ theorem correct_revealAt (hc1 : A.I.count ≤ 1) {u : Fin A.n} {J : Json} {kd : 
     (Flock.Bridge.packZ (unitTab A u J y) (Flock.Readable.zOf 1 wF 0 (unitTab A u J y).S.m))
     (Eq.mpr (congrArg (fun z => (unitTab A u J y).S.Satisfies z) h2) hM) val ι hval
 
-/-- **`SessionOpens` at the record**, at SHA-512: on an accepted run, a checked unit's session's Flock witness reveals
-(`revealRec`) openings such that values carrying those that open under the statement's roots make the unit's proof block
-correct, whatever its interior values. At a session v2 sets up (`SetsUp`, one table among its inputs): where v2 reads
-`A`'s and `o`'s inputs (`Names`, with v2's reads and partition object), flock-verify reads the session as `A`'s
-(`sessionIns_of`); where the public file's `units.indices` are the population's units in order, as v2 holds them
-(`units_of_checkBlobsAt`), the kept draw file proves every drawn unit (`provedIn_of_range`); and where the record's
-commitment is the deployed one (`hcd`; `record_commit` at a circuit of `sha512/row/v2` rows), an opening under it is
-one under `A`'s. -/
+/-- **`SessionOpensBy` at the record at `inputOk`**, at SHA-512: on an accepted run, a checked unit's session's Flock
+witness reveals (`revealRec`) openings such that values carrying those that open under the statement's roots make the
+unit's lowered gates correct, whatever its interior values; a checked input slot is an input block, which `inputOk`
+passes. The openings make the unit's proof block with its owned inputs correct (`correct_revealAt`), which is its
+lowered gates correct with every owned input opened (`Flock.Bridge.correct_blockOf`, `Flock.Bridge.ref_blockOf`). At a
+session v2 sets up (`SetsUp`, one table among its inputs): where v2 reads `A`'s and `o`'s inputs (`Names`, with v2's
+reads and partition object), flock-verify reads the session as `A`'s (`sessionIns_of`); where the public file's
+`units.indices` are the population's units in order, as v2 holds them (`units_of_checkBlobsAt`), the kept draw file
+proves every drawn unit (`provedIn_of_range`); and where the record's commitment is the deployed one (`hcd`;
+`record_commit` at a circuit of `sha512/row/v2` rows), an opening under it is one under `A`'s. -/
 theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A)
     {p : _root_.SampledProofs.OneStageZk.Params} {bs : Core.Blobs}
@@ -446,31 +449,38 @@ theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι}
     (hidx : _root_.SampledProofs.FilePart.indicesOf A.pub.header = .ok (Array.range A.n))
     (hcd : (record A o e).commit = A.Cd)
     (he : e.reveal = revealRec A)
-    (iroots : Msg → Seen → ℕ → List Msg) : SessionOpens FlockDeploy.sha512 (record A o e) iroots := by
+    (iroots : Msg → Seen → ℕ → List Msg) : SessionOpensBy FlockDeploy.sha512 (record A o e) iroots inputOk := by
   have hc1 := hsu.count
   have hpr := provedIn_of_range A o hidx
-  intro x s Pt Ω P ω r u xS vS wF hs hPt _ hacc hu hsess hchk
+  refine sessionOpensBy_inputOk _ _ _ fun x s Pt Ω P ω r u xS vS wF hs hPt _ hacc hu hsess hchk => ?_
   obtain ⟨⟨i, hi⟩, hq⟩ := hu
   have hx := eq_xOf_of_nPU A o e (Nat.lt_of_le_of_lt (Nat.zero_le i) hi)
-  obtain rfl : s = stmtA A := Option.some.inj (hs.symm.trans (parse_at A o e hx))
-  obtain rfl : Pt = partA A := Option.some.inj (hPt.symm.trans (record_partition A o e _))
-  obtain ⟨d, hdOk, hl⟩ := accepted_draw A o e hx P ω r hacc
+  obtain rfl : s = stmtSlots A := Option.some.inj (hs.symm.trans (parse_at A o e hx))
+  obtain rfl : Pt = partSlots A := Option.some.inj (hPt.symm.trans (record_partition A o e _))
   rw [checked_at A o e hx] at hq
-  have hud : u ∈ drawn A (drawBytes (coinsAt r)) := List.mem_of_getElem? hq
-  rw [session_at A o e hx, sessionOf_kept A o hl hdOk.2] at hsess
-  obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj hsess)
-  rw [record_flockParse] at hchk
-  obtain ⟨J, hJ, st, hst, hshape, hsat⟩ :=
-    session_lowers A o hc1 (sessionIns_of hn hpl hrd hc1 hpart) hdOk hchk
-  obtain ⟨hun, hne, hy⟩ := session_table A o hc1 hpr hdOk hJ hst hshape hud
-  refine ⟨Flock.Bridge.blockOf A.P A.κ ⟨u, hun⟩,
-    Flock.Bridge.blocks_partOf_getElem? A.P (Flock.Bridge.nsOf_sum A.hpop) ⟨u, hun⟩, fun val ι hval => ?_⟩
-  have hrev : (record A o e).reveal (stmtA A) u (run FlockDeploy.sha512 P (record A o e).V x ω r).seen wF =
-      revealAt A ⟨u, hun⟩ (Flock.norm J) (Classical.choice hne).2 wF := by
-    rw [record_reveal, he]
-    exact revealRec_eq A hun (drawOf_of hl) hJ hne _ wF
-  refine correct_revealAt A (by omega) (Classical.choice hne).2
-    (table_satisfies A (Classical.choice hne).2 (hy (Classical.choice hne)) hsat) val ι fun q hq ho hr => ?_
-  exact (hval q (by rw [hrev]; exact hq) (by rw [hcd, sha512_msg]; exact ho)).1 hr
+  rcases List.mem_append.1 (List.mem_of_getElem? hq) with hud | hui
+  · obtain ⟨d, hdOk, hl⟩ := accepted_draw A o e hx P ω r hacc
+    rw [session_at A o e hx, sessionOf_kept A o hl hdOk.2] at hsess
+    obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj hsess)
+    rw [record_flockParse] at hchk
+    obtain ⟨J, hJ, st, hst, hshape, hsat⟩ :=
+      session_lowers A o hc1 (sessionIns_of hn hpl hrd hc1 hpart) hdOk hchk
+    obtain ⟨hun, hne, hy⟩ := session_table A o hc1 hpr hdOk hJ hst hshape hud
+    refine ⟨Flock.Bridge.unitGates A.P ⟨u, hun⟩, partSlots_getElem?_unit A ⟨u, hun⟩, fun _ val ι hval => ?_⟩
+    have hrev : (record A o e).reveal (stmtSlots A) u (run FlockDeploy.sha512 P (record A o e).V x ω r).seen wF =
+        revealAt A ⟨u, hun⟩ (Flock.norm J) (Classical.choice hne).2 wF := by
+      rw [record_reveal, he]
+      exact revealRec_eq A hun (drawOf_of hl) hJ hne _ wF
+    have hc := correct_revealAt A (by omega) (Classical.choice hne).2
+      (table_satisfies A (Classical.choice hne).2 (hy (Classical.choice hne)) hsat) val ι fun q hq ho hr =>
+        (hval q (by rw [hrev]; exact hq) (by rw [hcd, sha512_msg]; exact ho)).1 hr
+    rw [Flock.Bridge.ref_blockOf] at hc
+    exact ((Flock.Bridge.correct_blockOf A.P ⟨u, hun⟩ _).1 hc).1
+  · unfold inputSlots at hui
+    obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hui
+    obtain ⟨g, hg⟩ : ∃ g, (InputSlot.inputsAt (Flock.Bridge.progOf A.Cc A.κ))[j]? = some g :=
+      ⟨_, List.getElem?_eq_getElem (List.mem_range.1 hj)⟩
+    exact ⟨[g], partSlots_getElem?_input A hg,
+      fun hnot => (hnot ⟨g, rfl, InputSlot.mem_inputsAt.1 (List.mem_of_getElem? hg)⟩).elim⟩
 
 end Verity.Sampled.Record

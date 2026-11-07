@@ -201,8 +201,9 @@ theorem popCount_regMatches {c : SamplingDeploy.Code} {reg : Claims.Msg → Opti
     {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) :
     popCount Pt = popCount (partOf P κ ns) := by
-  obtain ⟨g, l, hg, hd, hl, hPt, -⟩ := hreg x s Pt hx hP
-  rw [hPt]
-  exact popCount_partOf (hpop g hg) hd hl P κ hns
+  obtain ⟨g, l, pop, hg, hd, hl, rfl, hsz, -⟩ := hreg x s Pt hx hP
+  show pop.flatten.length = _
+  exact (Claims.Sampling.popLength_of_sizes hsz).trans
+    ((popCount_slotPartition l).symm.trans (popCount_partOf (hpop g hg) hd hl P κ hns))
 
 end Flock.Bridge

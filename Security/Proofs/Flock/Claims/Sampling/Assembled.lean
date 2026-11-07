@@ -83,8 +83,9 @@ hash `H`, the conjunction of the sampling claims below but `ZK`, reading of `F` 
   the Flock verifier's `H` calls among the sampled verifier's; the inner numbers are Flock's at each session. The Lean
   sampled-proofs verifier, the verifier of record, with the Python held to it by difftest.
 * `DrawSlots` (`Sampling.Select.DrawLaw`): on every statement that parses and whose query evaluates, the partition and
-  design are the verifier's own: the partition has the shape of its layout, and the design is the one `Slots.select`
-  draws, from uniform bytes of the coins, every slot checked where it is refused; the Lean sampled-proofs verifier's
+  design are the verifier's own: the partition is a population of its layout's population's strata sizes, then the
+  program's input class, and the design is the one `Slots.select` draws, from uniform bytes of the coins, checking the
+  draw's population slots (every one where it is refused) and every input slot; the Lean sampled-proofs verifier's
   run, which builds `D`.
 * `SessionOpens`, `InteriorFixed` (`Sampling.KS`): the same verifier.
 * `ProgramScope`, `ChecksScope` (`Sampling.Select.Scope`): the scope check is the readable scope's program part (a

@@ -78,22 +78,13 @@ units. -/
 def CheckedLe (D : Deploy Coin Col T) : Prop := ∀ x, Scope D x → ∀ r, (D.checked x r).length ≤ nPU D x
 
 omit [Nonempty Coin] [Inhabited Coin] in
-/-- **The deployed draw checks at most the proof units**: `Slots.select`'s checked units are among the layout's, and a
-refused draw checks each once (`size_checked_le`, `size_allSlots`). -/
+/-- **The deployed draw checks at most the proof units**: the population slots it checks are the population's, and the
+input slots the program's (`length_checkedSlots_le`). -/
 theorem checkedLe_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : CheckedLe D := by
   rintro x ⟨s, Pt, hx, hP, -⟩ r
-  obtain ⟨rule, d, query, table, cm, l, L, bytes, -, hl, hshape, -, -, hch⟩ := h x s Pt hx hP
-  have hnPU : nPU D x = (slotPartition l).blocks.length := by
-    simp [nPU, hx, Deploy.part, hP, Partition.blocks_length_of_shape hshape]
-  rw [hch r, hnPU, Array.length_toList]
-  unfold drawChecked
-  split
-  · rename_i c hs
-    obtain ⟨hl', draw, proved, read, -, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs
-    rw [hl] at hl'
-    obtain rfl := Except.ok.inj hl'
-    exact size_checked_le l proved
-  · exact (size_allSlots l).le
+  obtain ⟨rule, d, query, table, cm, l, pop, L, bytes, -, -, rfl, hpop, -, -, hch⟩ := h x s Pt hx hP
+  rw [hch r, nPU_withInputs hx hP, popLength_of_sizes hpop]
+  exact length_checkedSlots_le _ _ _
 
 /-- **At the reference prover, a checked unit's session is Flock's reference prover's run**: on a statement in scope,
 at a witness with no faulty unit and coins `r` that check `u`, a statement `xS` in Flock's scope, a witness `wF` in its

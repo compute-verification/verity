@@ -137,6 +137,11 @@ theorem Sampling.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabite
     ∃ D : Claims.Sampling.Deploy Coin Unit Unit, ¬ Claims.Sampling.KS H D :=
   ⟨_, Witness.Sampling.KS_fails H⟩
 
+/-- **The sampling `KSBy` fails** at some record, at sampling's own check `correctOk`. -/
+theorem Sampling.KSBy_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
+    ∃ D : Claims.Sampling.Deploy Coin Unit Unit, ¬ Claims.Sampling.KSBy H D Claims.Sampling.correctOk :=
+  ⟨_, Witness.Sampling.KSBy_fails H⟩
+
 /-- **The sampling `KSCount` fails** at some record. -/
 theorem Sampling.KSCount_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) :
     ∃ D : Claims.Sampling.Deploy Coin Unit Unit, ¬ Claims.Sampling.KSCount H D :=

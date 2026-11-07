@@ -40,9 +40,10 @@ def ProgramScope (D : Deploy Coin Col T) : Prop :=
 def ChecksScope [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P D.V x ω r).out = .acc → D.scopeCheck x = true
 
-/-- **The readable scope is the verifier's**: where its statements are its own layout and design (`DrawSlots`) and its
-scope check is the program part (`ProgramScope`), the design is well formed on the partition (`designWellFormed`), so
-the scope check is the whole readable scope. -/
+/-- **The readable scope is the verifier's**: where its statements are its own layout's population, then the program's
+input class, and its design (`DrawSlots`), and its scope check is the program part (`ProgramScope`), the design is well
+formed on the layout's partition (`designWellFormed`), so on the statement's (`wellFormed_withInputs`), and the scope
+check is the whole readable scope. -/
 theorem scopeMatches_of [Fintype Coin] (D : Deploy Coin Col T) (hslots : DrawSlots D) (hprog : ProgramScope D) :
     ScopeMatches D := by
   intro x
@@ -51,9 +52,13 @@ theorem scopeMatches_of [Fintype Coin] (D : Deploy Coin Col T) (hslots : DrawSlo
   · rintro ⟨s, Pt, hx, hP, htop, hpart, -⟩
     exact ⟨s, Pt, hx, hP, htop, hpart⟩
   · rintro ⟨s, Pt, hx, hP, htop, hpart⟩
-    obtain ⟨rule, d, query, table, -, l, -, -, -, hl, hshape, hds, -, -⟩ := hslots x s Pt hx hP
-    exact ⟨s, _, hx, hP, htop, hpart,
-      (Design.wellFormed_of_shape _ hshape).2 (designWellFormed rule d query table l s.design hl hds)⟩
+    obtain ⟨rule, d, query, table, -, l, pop, -, -, -, hl, rfl, hpop, hds, -, -⟩ := hslots x s Pt hx hP
+    obtain ⟨first, hfirst⟩ := slotDesign_two hds
+    have hwf := designWellFormed rule d query table l s.design hl hds
+    rw [hfirst] at hwf
+    refine ⟨s, _, hx, hP, htop, hpart, ?_⟩
+    rw [hfirst]
+    exact wellFormed_withInputs s.prog hpop hwf
 
 /-- **The verifier refuses what is out of scope**: an accepted run's statement passed the scope check (`ChecksScope`),
 which is the readable scope (`ScopeMatches`). -/
