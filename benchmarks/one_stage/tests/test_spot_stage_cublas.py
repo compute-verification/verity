@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from verity.ml.definitions.registry import bf16_gemm_check as BC
 
@@ -124,6 +125,7 @@ def _profile():
     return TargetProfile(compute_capability=(9, 0), batch_invariant=False)
 
 
+@pytest.mark.slow
 def test_the_router_gate_and_wk_stage_per_token_row_at_the_programs_definitions(tmp_path):
     S = _stage()
     fake_capture(tmp_path, [(GATE, 256, M), (WK, 160, M)])
@@ -139,6 +141,7 @@ def test_the_router_gate_and_wk_stage_per_token_row_at_the_programs_definitions(
         assert _gate(S, inst), label
 
 
+@pytest.mark.slow
 def test_a_flipped_output_word_fails_the_match_gate(tmp_path):
     S = _stage()
     fake_capture(tmp_path, [(WK, 160, M)], flip=0)
@@ -161,6 +164,7 @@ def test_a_call_past_the_route_table_is_counted_and_the_step_still_stages_its_ot
     assert f"maps M to {BC.CUBLAS_ROUTES['m_max']}" in rec["why"]
 
 
+@pytest.mark.slow
 def test_every_call_gates_each_cublas_call_and_names_any_other_mm(tmp_path, monkeypatch):
     spec = importlib.util.spec_from_file_location("spot_stage_cublas_every", ROOT / "benchmarks" / "spot_proved" / "stage.py")
     S = importlib.util.module_from_spec(spec)
