@@ -74,10 +74,12 @@ def client_id(engine_id: str) -> str:
 
 def sampling_params(sampling: Mapping[str, Any]) -> Any:
     """The request's SamplingParams from every field the step trace recorded of the served one (the server's
-    generation-config defaults applied), detokenizing nothing."""
+    generation-config defaults applied), detokenizing nothing, its outputs as a streaming server's."""
     from vllm import SamplingParams
+    from vllm.sampling_params import RequestOutputKind
 
-    return SamplingParams(**{k: v for k, v in sampling.items() if v is not None and k != "n"}, n=1, detokenize=False)
+    return SamplingParams(**{k: v for k, v in sampling.items() if v is not None and k != "n"}, n=1, detokenize=False,
+                          output_kind=RequestOutputKind.DELTA)
 
 
 def edge_site(site: Path) -> Path:

@@ -174,12 +174,13 @@ def test_a_snapshot_checks_the_ranks_dumps_one_copy_and_records_the_edge(tmp_pat
     core.scheduler.waiting = [3]
     core.model_executor = NS(collective_rpc=collective_rpc)
     saved = []
-    edges = E.Edges(tmp_path, steps=[5], savers=[lambda c, d: saved.append(d.name)], clock=iter(range(100)).__next__)
+    edges = E.Edges(tmp_path, steps=[5], savers=[lambda c, d: saved.append(d.name) or {"state": 7}],
+                    clock=iter(range(100)).__next__)
     got = edges.snapshot(core, 5)
     assert got["check"] == {"ranks": [0, 1, 2], "layers_equal": True, "kv_equal": True, "rng_equal": True}
     assert got["ids"] == [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11] and got["pool"]["cached_free"] == 4
     assert got["in_flight"] == {"prefilling": 1, "decoding": 1} and got["waiting"] == 1
-    assert [w["rank"] for w in got["dump"]] == [0] and saved == ["edge-000005"]
+    assert [w["rank"] for w in got["dump"]] == [0] and saved == ["edge-000005"] and got["saved"] == [{"state": 7}]
     assert json.loads((tmp_path / "edge-000005" / "edge.json").read_text())["ids"] == got["ids"]
     assert got["seconds"] == {"digest": 1, "dump": 1, "savers": 1} and got["trace_step"] is None
     core.scheduler._verity_servetax = [object(), NS(scheduled=41)]

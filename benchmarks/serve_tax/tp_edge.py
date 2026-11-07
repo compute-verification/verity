@@ -207,8 +207,7 @@ class Edges:
             ranks = [0] if check["kv_equal"] else check["ranks"]
             wrote = [w for w in _rpc(core)(tp_state.dump, args=(str(d), ids, ranks)) if w]
         t2 = self.clock()
-        for save in self.savers:
-            save(core, d)
+        saved = [save(core, d) for save in self.savers]
         t3 = self.clock()
         rec = {"edge": edge, "current_step": sched.current_step, "trace_step": trace_step(sched),
                "sched_step_seq": sched.sched_step_seq,
@@ -217,9 +216,9 @@ class Edges:
                "check": check, "rank_map": rank_map(recs), "layers": recs[0]["layers"],
                "ranks": [{k: r[k] for k in ("layer_digests", "rng_digest", "rng")} | {"rank": r["rank"]["rank"]}
                          for r in sorted(recs, key=lambda r: r["rank"]["rank"])],
-               "dump": wrote, "seconds": {"digest": round(t1 - t0, 3), "dump": round(t2 - t1, 3),
-                                          "savers": round(t3 - t2, 3)}}
-        (d / "edge.json").write_text(json.dumps(rec))
+               "dump": wrote, "saved": saved, "seconds": {"digest": round(t1 - t0, 3), "dump": round(t2 - t1, 3),
+                                                          "savers": round(t3 - t2, 3)}}
+        (d / "edge.json").write_text(json.dumps(rec, default=repr))
         self.taken.append({k: rec[k] for k in ("edge", "running", "waiting", "pool", "check", "seconds")})
         return rec
 

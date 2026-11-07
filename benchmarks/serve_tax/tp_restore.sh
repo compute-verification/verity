@@ -3,7 +3,7 @@
 # on one node under `research run`, from the shipped tree's root, the C4 shard sent with --send (or C4=PATH):
 #   [MODEL_ID=glm53] [RATE=10] [SPAN_S=240] [EDGES_AT=150,210] [SAMPLING=production] [LONG_SHARE=0.03]
 #     [MAX_MODEL_LEN=40960] [FLASHINFER=0]
-#     [SAVER=MODULE:FUNCTION] [LOADER=MODULE:FUNCTION] [PERMUTE=1] [KEEP=1] [MAX_MIN=150]
+#     [SAVER=boundary:save_edge] [LOADER=boundary:load_edge] [PERMUTE=1] [KEEP=1] [MAX_MIN=150]
 #     bash benchmarks/serve_tax/tp_restore.sh
 # The plan (OUT/plan.jsonl) is made before the GPUs are held, LONG_SHARE of its requests then given prompts of 8k-32k
 # tokens (tp_restore.lengthen, into OUT/serve/plan.jsonl); then one server lifetime serves it with the edges into
@@ -30,6 +30,9 @@ export PATH="$VENV/bin:$PATH"
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 RATE=${RATE:-10}; SPAN_S=${SPAN_S:-240}; EDGES_AT=${EDGES_AT:-150,210}; SAMPLING=${SAMPLING:-production}
 LONG_SHARE=${LONG_SHARE:-0.03}; MAX_MODEL_LEN=${MAX_MODEL_LEN:-40960}
+# the scheduler's, block pool's and each rank's runner state at an edge, and its restore (boundary.py); LOADER= (empty)
+# restores only the blocks and generators and replays nothing
+SAVER=${SAVER-boundary:save_edge}; LOADER=${LOADER-boundary:load_edge}
 DOCS=${DOCS:-45000}; MAX_MIN=${MAX_MIN:-150}; PLAN=$OUT/plan.jsonl
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 [ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
