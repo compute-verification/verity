@@ -87,7 +87,7 @@ def test_seed_and_pos_are_inputs_not_structure():
     toks = {select(x, s, p, 1.0) for s, p in [(1, 0), (2, 0), (1, 1), (3, 5), (2**40, 0)]}
     assert len(toks) >= 4
     assert bind(S.GumbelTokenSelect, V=1024).id == bind(S.GumbelTokenSelect, V=1024).id
-    # deterministic: the same (seed, pos) draws the same noise
+    # deterministic: the same (seed, pos) samples the same noise
     assert select(x, 1, 0, 1.0) == select(x, 1, 0, 1.0)
     assert S.stream_key(1, 0) != S.stream_key(2, 0) != S.stream_key(1, 1)
 

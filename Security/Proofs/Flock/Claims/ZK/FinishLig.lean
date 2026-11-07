@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Claims.ZK.FinishPiop
 
 /-!
-# The firewall's Ligerito is the masked prover's
+# The ZK server's Ligerito is the masked prover's
 
 `Flock.Firewall.Finish.ligeritoPZk` is `FlockComplete.ligeritoPZk` word for word on the port's own state, commitment
 and sends (`LigState`, `Commit`, `Asks`, each the analysis's fields), its levels ≥ 1 committed by its argument `commit`
@@ -208,7 +208,7 @@ theorem ligConj_queryP (io : Asks M) (nonce : ℕ → ℕ → UInt64) (ms : Merk
   simp only [FlockComplete.queryP, queryP, ligConj_bind, ligConj_liftT, ligConj_powP, ligConj_pure]
   rfl
 
-/-- **The firewall's masked Ligerito is the analysis's** where its levels ≥ 1 commit as `FlockComplete.commitP hs ms`
+/-- **The ZK server's masked Ligerito is the analysis's** where its levels ≥ 1 commit as `FlockComplete.commitP hs ms`
 does. -/
 theorem ligeritoPZk_eq (io : Asks M) (commit : Level → Array F128 → (ℕ → ByteArray) → M Commit) (hs : Hashes M)
     (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout)

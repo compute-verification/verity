@@ -454,7 +454,7 @@ def table_probe(fn: Any) -> Any:
 
 
 #: the parameters over `checks.Options.input_budget` leaves that are operands, not a registered table, by the id of their
-#: Definition without statics: each takes the vectors' edge and random words like any other parameter, drawn one vector at a
+#: Definition without statics: each takes the vectors' edge and random words like any other parameter, sampled one vector at a
 #: time and read lazily (`checks._wide_correspondence`, `vectors.wide_words`); a wide parameter in neither this nor
 #: `TABLE_PROBES` fails ``correspondence/unprobed-table``
 LAZY_OPERANDS: dict[str, tuple[str, ...]] = {

@@ -27,7 +27,7 @@ set_option Elab.async false
 For any live prover `τ` of a hidden-output plain session of `J ≥ 1` tables
 (`flock-verify verify --plain-tables --session-tables J`, no `--zk`, `J = nTab I`),
 `Pr[flock-verify accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, each unit read at its site in the table
-it is drawn into (`sitesPHJI`, `tabPHJ`) and bound to the rows it commits, outputs included, at the simulated prover
+it is sampled into (`sitesPHJI`, `tabPHJ`) and bound to the rows it commits, outputs included, at the simulated prover
 `simAuditJ … τ` in the batched session of the `J` tables `planPHJ`:
 
 * `plain_session_soundHJ`, where the wires feed neither the unit nor the outputs: the units the unit's key program's
@@ -37,8 +37,8 @@ it is drawn into (`sitesPHJI`, `tabPHJ`) and bound to the rows it commits, outpu
   (`hpr`), and `wiresAcyclic` passed (`hw`).
 
 Each is `PlainJ.plain_session_soundJ` with the hidden-output tables and rows in place of the public ones
-(`Prog.flock_headline_live_tables_subset_missX`). The tags, the record and the draws are `TagsOkZHJ` (hidden outputs,
-retained rounds, `hm96-sha512/v1` leaves), `DecodeZLJ.RecordsLiveJ` and `DrawOkPHJ`, the coin server's draw setting each
+(`Prog.flock_headline_live_tables_subset_missX`). The tags, the record and the samples are `TagsOkZHJ` (hidden outputs,
+retained rounds, `hm96-sha512/v1` leaves), `DecodeZLJ.RecordsLiveJ` and `DrawOkPHJ`, the challenger's live-coin part's sample setting each
 table up with setupHidden at its part.
 
 The assumptions are `flock_headline_exec`'s: A3 (`hA3`), `cr/sha-512` for the knowledge finders (`hKS`) and
@@ -69,12 +69,12 @@ theorem plain_session_soundHJ
     -- the session's circuit and public file, and the circuit condition
     {c : Flock.Circuit} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the verify command's tags and the coin server's record of the live session
+    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -129,12 +129,12 @@ theorem plain_session_soundHJI
     {c : Flock.Circuit} (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hrf : Hidden.Any.RowsFitS c)
     {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub)
     (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the verify command's tags and the coin server's record of the live session
+    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)

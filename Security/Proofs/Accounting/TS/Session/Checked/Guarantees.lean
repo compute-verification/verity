@@ -36,18 +36,18 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A checked unit's proof layer is sound through its C-Flock sessions (the statement)
+# A checked unit's proof layer is sound through its Flock sessions (the statement)
 
 `Accounting.Guarantees.TS.CheckedSessionSound`: the realization `Accounting.Served`'s docstring asks of a proof layer
 for a value-checked `zTree` window, at `Accounting.Guarantees.TS.SessionSoundAt`'s premises, for the checked layer
 `Accounting.TS.Checked.checkedLayer` (its unit `PouwH1TileZy_v1`, its check word `ok`). Of `SessionSoundAt`'s four
-premises on the layer, it proves three and the window's law stays a premise:
+premises on the layer, it proves three and the window's sampling design stays a premise:
 
 * `AcceptedLive`: the layer accepts exactly where flock-verify `--zk --registered` accepts;
 * `ServedChecksHold`: the relation, the unit's Definition with `ok` registered, holds at the session's value layer
-  wherever its drawn units are right (`RowsSession.RowsAt` is the circuit's evaluation there);
-* `ServedRootsLinked` at `δs = 0`: under full checking (`kd = n`) every outcome of the session's game draws every unit,
-  and `Flock.SecurityProofs.ServedRowsLinked` puts the registered rows at the value layer on each drawn unit, where
+  wherever its sampled proof blocks are right (`RowsSession.RowsAt` is the circuit's evaluation there);
+* `ServedRootsLinked` at `δs = 0`: under full checking (`kd = n`) every outcome of the session's game samples every unit,
+  and `Flock.SecurityProofs.ServedRowsLinked` puts the registered rows at the value layer on each sampled proof block, where
   every unit's served roots are registered (`RowsSession.ServedRegistered`);
 
 and so `pf.SoundAt δ`. It sits in the proofs package because the sessions do (`reads_exempt`).
@@ -67,12 +67,12 @@ open Accounting.TS Accounting.TS.Checked Flock.SoundAtBridge
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
-/-- **A checked unit's proof layer is sound at `δ` through its C-Flock sessions, fully checked.** For any window whose
-proof `i` of round `w` on the path `x` is the C-Flock session `sess x w i` (a `RowsSession`) with outcome
+/-- **A checked unit's proof layer is sound at `δ` through its Flock sessions, fully checked.** For any window whose
+proof `i` of round `w` on the path `x` is the Flock session `sess x w i` (a `RowsSession`) with outcome
 `out x w i`, and the checked layer `checkedLayer sess out ok right` (accepted where flock-verify `--zk --registered`
 accepts, opening the committed rows at the registered reads, its relation the unit's Definition with the port `ok`
 registered): given `Flock.Guarantees.EndToEndRegisteredRows`' named assumptions at every session and every unit's
-opening (`RowsSession.CR`), the window's law (`Accounting.Assumptions.TS.WindowLaw`), and at every session full
+opening (`RowsSession.CR`), the window's sampling design (`Accounting.Assumptions.TS.WindowLaw`), and at every session full
 checking (`kd = n`), every unit's served roots registered as ports of `own`
 (`RowsSession.ServedRegistered`) and a port named `ok` in the circuit and in `own`, and `δ ≥ 0` with
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta$$
