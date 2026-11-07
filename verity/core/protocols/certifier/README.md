@@ -365,7 +365,7 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   (r20261026-104647-c07b, r20261026-105654-6220). Each has ten controls: nine that both reject, among them another
   network certifier's digest, and `unread`, a sync off Σ_sync that changes neither verdict.
 - the Python keeps running beside the Lean as the reference.
-- the Lean's verdict has its property in `Security/Properties/NetworkCertifier/LinkWindow.lean`
+- the Lean's verdict has its property in `Security/Properties/NetworkCertifier/Check/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, certified on both ends and synced within Σ_sync (a network certifier link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
