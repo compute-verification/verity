@@ -532,7 +532,7 @@ conditions it places on its inputs and setup, which the lock also lists, are lef
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
 | Network certification | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, `Claims.Flock.ListWithin`, and sampled proofs' `Claims.Sampling.KS` and `Claims.Sampling.CommitmentScheme.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
-| PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/RemoteAudit/Line.lean` | Inside protocol soundness: its P2 audit (`RemoteAudit.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, so `Verity.soundness_of_subprotocols` at `.onsite` covers it through its target, `BandwidthAuditSound`. This guarantee, in its own form, is proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
+| PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/Accounting/Remote/Line.lean` | Inside protocol soundness: its P2 audit (`RemoteAudit.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, so `Verity.soundness_of_subprotocols` at `.onsite` covers it through its target, `BandwidthAuditSound`. This guarantee, in its own form, is proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
 
 PoUW has other guarantees, outside protocol soundness.
 
@@ -568,7 +568,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   before it at most as often as the sampling design allows (`Verity.Guarantees.SampleAfterRecorded`, proved); none of
   remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network certifiers and memory
   challengers are onsite's.
-- **Not the remote composite.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB
+- **Not the remote composite.** `Accounting.Remote` and `Properties.Accounting.Remote` are PoUB
   (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
   different protocol from the remote composite, and a subprotocol of onsite only.
 

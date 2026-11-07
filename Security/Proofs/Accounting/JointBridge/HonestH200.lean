@@ -70,7 +70,7 @@ import Proofs.Pouw.Receipt
 import Proofs.Properties.Pouw.Check
 import Proofs.Properties.Pouw.Draw
 import Proofs.Properties.Pouw.Grid
-import Proofs.Properties.RemoteAudit.Sort
+import Proofs.Properties.Accounting.Remote.Sort
 import SampledProofs.Record
 
 /-!
