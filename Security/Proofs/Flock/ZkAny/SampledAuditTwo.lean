@@ -128,8 +128,10 @@ theorem ideal_hm96_stream {K S Ys B C D V O T R : Type} [Fintype S] [Nonempty S]
     exact (prCoin_congr_equiv e _).symm
   rw [hv v, hv v₀]
   refine leaves_hybrid (fun (a : V × V) (y : Fin N → Ys) => sv.out a.1 y) (fun a y => sv.out a.2 y)
-    (δ := N * (2 * ENNReal.ofReal (CROnly.hidingGap My c))) (fun x G => ?_) r (fun _ i => (v i, v₀ i))
-    (fun ω os => A fun i => if i ∈ P then none else some ((i : ℕ), m i, ((ω i).1, os i, (ω i).2.1), (ω i).2.2))
+    (δ := N * (2 * ENNReal.ofReal (CROnly.hidingGap My c))) (fun x G => ?_) r
+    (fun (_ : Fin r → S × T × R) i => (v i, v₀ i))
+    (fun (ω : Fin r → S × T × R) (os : Fin r → O) => A fun i => if i ∈ P then none
+      else some ((i : ℕ), m i, ((ω i).1, os i, (ω i).2.1), (ω i).2.2))
   simp only [hout]
   exact leaves_swap_values My c H N (fun ω i => dig (x ω).1 i) (fun ω i => dig (x ω).2 i) (fun ω ls => G ω (g ls))
 
@@ -226,7 +228,9 @@ theorem SampledAuditTwoAny : Flock.Guarantees.SampledAuditTwoAny := by
         refine add_le_add (Finset.sum_le_sum fun d _ => ?_) ?_
         · rw [avg_add]
           exact add_le_add le_rfl (hc δ)
-        · rw [avg_prod_split fun q : X₁ × X₂ × Ωs => sv.streamForgeAdvantage (v q.1) (st q.1 k₀ (v q.1))]
-          exact avg_mono fun χ₁ => hc _
+        · calc avg (fun q : X₁ × X₂ × Ωs => sv.streamForgeAdvantage (v q.1) (st q.1 k₀ (v q.1)))
+              = avg (fun χ₁ : X₁ => avg fun _ : X₂ × Ωs => sv.streamForgeAdvantage (v χ₁) (st χ₁ k₀ (v χ₁))) :=
+                avg_prod_split _
+            _ ≤ avg (fun χ₁ => sv.streamForgeAdvantage (v χ₁) (st χ₁ k₀ (v χ₁))) := avg_mono fun χ₁ => hc _
 
 end Flock.SecurityProofs
