@@ -255,3 +255,8 @@ def test_a_snapshot_checks_the_ranks_dumps_one_copy_and_records_the_edge(tmp_pat
     assert got["check"]["kv_first_difference"] == {2: {"layer": 2, "name": "model.layers.10.self_attn.attn", "block": 7,
                                                        "index": 6, "blocks_differing": 1}}
     assert sorted(w["rank"] for w in got["dump"]) == [0, 1, 2]
+
+    got = E.Edges(tmp_path, steps=[8], whole_pool=True).snapshot(core, 8)
+    assert got["dumped_blocks"] == T.BLOCKS and got["ids"] == [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11]
+    dumped = json.loads((tmp_path / "edge-000008" / "kv.rank0" / "layers.json").read_text())["ids"]
+    assert dumped == list(range(T.BLOCKS))

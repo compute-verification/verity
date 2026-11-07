@@ -24,8 +24,9 @@ The snapshot, through ``collective_rpc`` on every rank (`tp_state`), runs in fiv
 `install` puts `Edges` on an engine core in this process (the restored engine's, in-process). `register`, a vLLM general
 plugin, puts it on every engine core a ``vllm serve`` process builds, configured by ``VERITY_TPEDGE`` (JSON: ``out``;
 ``steps`` or ``at_s``; ``dump``, how many of the first edges write their blocks, 1 by default; ``savers``, each a
-``module:function`` the snapshot calls with the engine core and the edge's directory; ``outputs``, true to record each
-step's sampled tokens and logprob bits from the first edge to the last, `record_outputs`).
+``module:function`` the snapshot calls with the engine core and the edge's directory; ``whole_pool``, true to dump
+every block of the pool (`Edges`); ``outputs``, true to record each step's sampled tokens and logprob bits from the
+first edge to the last, `record_outputs`).
 """
 from __future__ import annotations
 
@@ -139,17 +140,20 @@ class Edges:
     """The drained edges of one engine core, each snapshotted under ``out/edge-<step>``: at scheduler steps ``steps``
     (a replay, which knows the served edges' steps), or at the first step ``at_s`` seconds after the engine's first
     scheduled step (serving, which doesn't). Steps count as ``counter`` counts them: the scheduler's ``current_step``,
-    or a replay's step trace (`trace_step`). The first ``dump`` edges taken also write their blocks."""
+    or a replay's step trace (`trace_step`). The first ``dump`` edges taken also write their blocks: the live ones, or
+    with ``whole_pool`` every block of the pool, so that a restore starts from the served pool's bytes, the slots no
+    token has written yet included (a block a request takes after the edge keeps them until it fills)."""
 
     def __init__(self, out: str | Path, steps: Iterable[int] = (), at_s: Iterable[float] = (), dump: int = 1,
                  savers: Sequence[Callable[[Any, Path], Any]] = (), clock: Callable[[], float] = time.monotonic,
-                 counter: Callable[[Any], int] = scheduler_step):
+                 counter: Callable[[Any], int] = scheduler_step, whole_pool: bool = False):
         self.out = Path(out)
         self.pending: list[int] = sorted(set(int(s) for s in steps))
         self.times: list[float] = sorted(float(t) for t in at_s)
         if not self.pending and not self.times:
             raise ValueError("tp_edge.Edges: no edge (give steps or at_s)")
         self.dump = int(dump)
+        self.whole_pool = bool(whole_pool)
         self.savers = list(savers)
         self.clock = clock
         self.counter = counter
@@ -217,9 +221,11 @@ class Edges:
         t1 = self.clock()
         check = agree(recs, d, ids)
         wrote: list[Any] = []
+        dumped: list[int] = []
         if len(self.taken) < self.dump:
             ranks = [0] if check["kv_equal"] else check["ranks"]
-            wrote = [w for w in _rpc(core)(tp_state.dump, args=(str(d), ids, ranks)) if w]
+            dumped = sorted(b.block_id for b in pool.blocks) if self.whole_pool else ids
+            wrote = [w for w in _rpc(core)(tp_state.dump, args=(str(d), dumped, ranks)) if w]
         t2 = self.clock()
         saved = [save(core, d) for save in self.savers]
         t3 = self.clock()
@@ -236,7 +242,7 @@ class Edges:
                "check": check, "rank_map": rank_map(recs), "layers": recs[0]["layers"],
                "ranks": [{k: r[k] for k in ("layer_digests", "rng_digest", "rng")} | {"rank": r["rank"]["rank"]}
                          for r in sorted(recs, key=lambda r: r["rank"]["rank"])],
-               "dump": wrote, "saved": saved, "seconds": {"drain": round(drain, 3), "digest": round(t1 - t0, 3),
+               "dump": wrote, "dumped_blocks": len(dumped) if wrote else 0, "saved": saved, "seconds": {"drain": round(drain, 3), "digest": round(t1 - t0, 3),
                                                           "dump": round(t2 - t1, 3), "savers": round(t3 - t2, 3),
                                                           "outputs": round(t4 - t3, 3),
                                                           "pause": round(drain + t4 - t0, 3)}}
@@ -305,7 +311,8 @@ def register() -> None:
         if getattr(core, "_verity_edges", None) is not None:
             return
         edges = install(core, Edges(cfg["out"], cfg.get("steps", ()), cfg.get("at_s", ()), cfg.get("dump", 1),
-                                    [resolve(n) for n in cfg.get("savers", ())]))
+                                    [resolve(n) for n in cfg.get("savers", ())],
+                                    whole_pool=bool(cfg.get("whole_pool"))))
         if cfg.get("outputs"):
             record_outputs(core, edges)
 

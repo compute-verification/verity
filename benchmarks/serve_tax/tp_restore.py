@@ -245,7 +245,7 @@ def serve(a: argparse.Namespace) -> int:
     srv.mkdir(exist_ok=True)
     env = S.server_env(arm, srv, site, None, 600.0, 600.0) | PINS | {AUTOTUNE_ENV: str(scratch / "autotune")}
     env[E.ENV] = json.dumps({"out": str(scratch / "edges"), "at_s": a.edges_at, "dump": 1, "savers": a.saver,
-                             "outputs": True})
+                             "outputs": True, "whole_pool": True})
     meta: dict[str, Any] = {"schema": SCHEMA, "model_id": a.model_id, "model": f"{model.repo}@{model.revision}",
                             "checkpoint": str(checkpoint), "plan": str(plan_file), "plan_base": str(base),
                             "plan_file": a.plan_file, "unseeded_share": a.unseeded_share,
@@ -529,7 +529,8 @@ def restore(a: argparse.Namespace) -> int:
                            "trace_steps": [s1, s2], "fill": not a.no_fill, "loader": a.loader,
                            "held": {k: rec1[k] for k in ("running", "in_flight", "waiting")},
                            "edge_seconds": [e["seconds"] for e in meta["edges"]],
-                           "snapshot_bytes": snapshot_bytes(file_bytes(edge1))}
+                           "snapshot_bytes": snapshot_bytes(file_bytes(edge1)) | {
+                               "kv_live": len(rec1["ids"]) * sum(x["block_bytes"] for x in rec1["layers"])}}
 
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
