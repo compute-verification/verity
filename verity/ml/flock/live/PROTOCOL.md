@@ -1,4 +1,4 @@
-# verity/flock-circuit: the masked protocol (M1) and its coin commitment (M2)
+# verity/flock-circuit: Flock ZK, its masking and its coin tree
 
 What `flock-circuit --zk` sends, where every mask comes from, and what the verifier checks. This is the layout the Lean
 reference prover must reproduce byte for byte (soundness DESIGN.md §6: a deterministic function of statement, witness,
@@ -6,9 +6,9 @@ prover seed and verifier coins), and the statement its zero-knowledge theorem is
 
 Code:
 - `src/zk_veil.rs`: masking, replay, constraints, the inner proof, the simulator's pieces.
-- `src/bin/flock-circuit.rs`: `prove_cpu_zk`, `zk_constraints`, `verify_zk_with`, `simulate_full`, `zkstat`, `zkaudit`; M2's
+- `src/bin/flock-circuit.rs`: `prove_cpu_zk`, `zk_constraints`, `verify_zk_with`, `simulate_full`, `zkstat`, `zkaudit`; the coin tree's
   `VStar`, `gk_simulate`, `rewind`, `zkrewind`.
-- `src/coin_tree.rs` (M2): the verifier's coin commitment and the prover's check of every opening.
+- `src/coin_tree.rs` (the coin tree): the verifier's coin commitment and the prover's check of every opening.
 - `../flock-zk-b684b12.patch`: Ligerito level 0's hiding in upstream Flock (`pcs::ligerito::zk`, `commit::commit_zk`, the F256
   split prover and verifier), and the CPU prover's 64-bit nonzero offsets (`lincheck::CscCircuit`, `r1cs::flatten_csr`), so
   one matrix may hold more than 2^32 nonzeros. The GPU prover's are 32-bit: `--gpu` refuses a circuit past them
@@ -17,7 +17,7 @@ Code:
 **Claim.** Every message a session sends is masked, committed or public, and the audit (`zkaudit`) attributes every
 byte. The target notion is VEIL's special honest-verifier zero knowledge for the whole session (both repetitions),
 meaning one simulator for every fixed coin sequence (DESIGN.md §11), statistical in the common-reference-string model
-under the assumptions of §7. Malicious-verifier zero knowledge is M2's, from its coin commitment and single rewind (§9).
+under the assumptions of §7. Malicious-verifier zero knowledge is the coin tree's, from its coin commitment and single rewind (§9).
 The prover refuses the degenerate coins (`β = 0`, a mask slot of deficient rank, dependent `ρ`, a zerocheck outer coin
 `r_j = 1`) as they open, before it sends anything that depends on them. Each rep has its own pair of level 0's extra
 lanes (§7). The proof class stays `NON_ZK_PROOF` until the Lean proof covers it.
@@ -30,13 +30,13 @@ value upstream's prover computed, `h` a pad, and `v' = v + h`. `m` is the dense 
 
 ## 1. Order of one repetition
 
-Everything below is on the rep's live stream (`circuit/rep{r}`), in this order. Items marked M1 are new; the rest is
+Everything below is on the rep's live stream (`circuit/rep{r}`), in this order. Items marked ZK are Flock ZK's; the rest is
 M0 and upstream Flock.
 
 ~~~text
 bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (level-0 tree, 68 lanes)
 zerocheck           label flock-zerocheck-v0
-  M1                label verity-flock-zk-pads-v0 · bytes pads root (64)
+  ZK                label verity-flock-zk-pads-v0 · bytes pads root (64)
                     squeeze r_skip (6) · squeeze r_outer (m-13)
                     slice round1_ab' (64) · slice round1_c' (64) · squeeze z
                     per j < m-6: scalar G_j(1)' · scalar G_j(∞)' · squeeze ρ_j
@@ -48,20 +48,20 @@ opening             label flock-pcs-open-batch-v0                         (the a
                     per claim: label flock-ring-switch-v0 · slice s_hat_v (128) · squeeze r'' (7)
                     squeeze γ (claims)
 Ligerito level 0    label flock-ligerito-basis-f256-split-v0 · scalar target · bytes cap
-  M1                label verity-flock-zk-l0-open-v0                      (level 0's masking begins)
+  ZK                label verity-flock-zk-l0-open-v0                      (level 0's masking begins)
                     per OOD sample: squeeze z (log_n) · scalar y' · bytes nonce · squeeze β
                     msg_0' (u_0 slice 2, u_2 slice 2)
                     per j < initial_k: squeeze r_j (F256) · msg_{j+1}' for j+1 < initial_k
-  M1                slice e_0' (2) · slice e_1' (2) (rep r's pair) · squeeze ρ_0, ρ_1 (F256)
-  M1                label verity-flock-zk-l0-close-v0                     (level 0's masking ends)
-  M1                slice T' (2) · slice ybar (2 t_pad)
+  ZK                slice e_0' (2) · slice e_1' (2) (rep r's pair) · squeeze ρ_0, ρ_1 (F256)
+  ZK                label verity-flock-zk-l0-close-v0                     (level 0's masking ends)
+  ZK                slice T' (2) · slice ybar (2 t_pad)
                     code-switch message · cap_1 · ... levels 1+, unchanged ...
-M1 inner proof      label verity-flock-zk-inner-v0 · scalar final_c' · squeeze ε · slice [ρ, σ] · squeeze γ (10)
-  M2                bytes τ's commitment (64) · squeeze β · slice Y (s+192) · squeeze queries (168)
+ZK inner proof      label verity-flock-zk-inner-v0 · scalar final_c' · squeeze ε · slice [ρ, σ] · squeeze γ (10)
+  ZK                bytes τ's commitment (64) · squeeze β · slice Y (s+192) · squeeze queries (168)
 proof bytes         bincode (Commitment, R1csProofLigerito with the masked fields, InnerProof)
 ~~~
 
-Upstream never absorbs `final_c'`; M1 absorbs it first in the inner proof (§5). The claim order in the opening is ab, then
+Upstream never absorbs `final_c'`; Flock ZK absorbs it first in the inner proof (§5). The claim order in the opening is ab, then
 c, then the region claims (region-major, then the two link points).
 
 ## 2. The pads
@@ -174,14 +174,14 @@ It proves `⟨c, h⟩ = t` for the batched constraint, where `(c, t)` comes from
    failing row. `ε` ← V. P sends `ρ = ε h_fa + h_tx` and `σ = h_fb + h_ty`.
 2. `γ` (10) ← V. Both sides form `(c, t)`. P checks `⟨c, h⟩ = t` on its pads and stops otherwise, before it sends anything
    more. P computes `τ = ⟨c, mu⟩` and sends its commitment
-   `hm96::leaf(SHA-512("verity/flock-zk/tau/v1\0" ‖ τ), salt)` with a fresh 192-byte salt (`tau_commitment`, M2).
+   `hm96::leaf(SHA-512("verity/flock-zk/tau/v1\0" ‖ τ), salt)` with a fresh 192-byte salt (`tau_commitment`, §9).
 3. `β` ← V. P refuses `β = 0`. P sends `Y = (h + β mu ‖ pad_h + β pad_mu)`.
 4. 168 query words ← V, reduced to `j = lo mod N`. P opens `(C_h[j], C_mu[j])` with salts and paths. The proof carries
    `τ` and its salt.
 5. V checks that `τ` opens its commitment, `⟨c, Y[..s]⟩ = t + β τ`, `C(Y)_j = C_h[j] + β C_mu[j]` at every query, and each
    path to the pads root.
 
-`τ` in the clear before `β` (M1's first version) would let a verifier test `⟨c, Y⟩ = t + βτ` as soon as `Y` arrives,
+`τ` in the clear before `β` (masking's first version) would let a verifier test `⟨c, Y⟩ = t + βτ` as soon as `Y` arrives,
 before the last coin; §9's extraction run needs every message before the last coin masked, committed or public.
 
 **The prover checks before it speaks** (step 2, `zk_veil::SelfCheck`). On a failing constraint, `⟨c, Y[..s]⟩ + t + βτ`
@@ -323,15 +323,15 @@ is the minimum.
   - the pinned key outside the `2^-64` fraction of bad keys: the common-reference-string step under `hash-derived-key`.
     The distance is then about `N·2^-192`, with `N` every leaf ever committed under the key (an `m = 25` session commits
     about 2^14.4), so a lifetime of `2^64` leaves stays within `2^-128`.
-- **So M1 is statistical special honest-verifier zero knowledge for one session**, in the common-reference-string model,
+- **So masking is statistical special honest-verifier zero knowledge for one session**, in the common-reference-string model,
   with distance about `N·2^-192`. The claim ids are `statistical-hiding`, `common-reference-string` and `hash-derived-key`.
   No random oracle is involved.
 - **No premise on a stream generator.** Every pad, mask, padding coefficient and extra lane (`ProverRng`) and every leaf
   salt (`LeafSalts`) is the OS's own bytes, so the claim is statistical with the OS
   generator's output as the uniform prover randomness it assumes, and nothing rests on ChaCha20 as a PRG. (A test
   harness's injected seed expands all of them with ChaCha20, so its proofs repeat; a proving build has no injected seed.)
-- **Collision resistance** (`cr/sha-512`) enters only soundness (binding of the prover's trees) and M2's binding of the
-  verifier's coin commitment (§9), not M1's hiding.
+- **Collision resistance** (`cr/sha-512`) enters only soundness (binding of the prover's trees) and the coin tree's binding of the
+  verifier's coin commitment (§9), not masking's hiding.
 - **Refused coins.** The prover's refusals are exactly the ones the argument uses: `β = 0` (the inner proof),
   `ρ^r_0, ρ^r_1` dependent over F128 (`W^r` invertible), mask-slot weights of rank `< 128·(claim points)` (§6), and a
   zerocheck outer coin `r_j = 1` (the replay's round `j` divides by zero there, and the honest pads miss the inner proof's
@@ -390,7 +390,7 @@ the statistics' relation classes.
 The prover's own replay takes its lincheck's folded `comb` as an argument (`LincheckProof::comb_partial`, never
 serialized), never from a proof.
 
-## 9. M2: the verifier's coin commitment and the single-rewind simulator
+## 9. The coin tree: the verifier's coin commitment and the single-rewind simulator
 
 The design for malicious-verifier zero knowledge for one batched session, in the model of ASSUMPTIONS.md §2 and §6 and
 DESIGN.md §11.1: the verifier commits to every coin before the prover's first message, then opens them round
@@ -414,7 +414,7 @@ degenerate coins as they open (the Claim above).
 - Under `serve --tree-from HOST:PORT` (`src/tree_from.rs`) the challenger, on a host the prover doesn't control, samples
   the tree instead, under the prover's nonce, and opens each round itself after what it follows: the link points after
   `SHA-512(root_F ‖ each root_B in table-name order)`, every other round after its message's SHA-512 (the record's
-  `msg_sha512`). The coin server checks every opening against the tree before it answers, so the record is the one a tree
+  `msg_sha512`). The challenger checks every opening against the tree before it answers, so the record is the one a tree
   drawn here would give; a refused, broken or bad opening ends the challenger's session, and no coin is drawn again.
 - Every answer is the round's `n` coins, `T_n`, the salt and the path (`Spec::opening_words(n)`), so an opening reveals only
   the coins the round uses. The prover checks every opening against the root before it uses a coin (`coin_tree::Checked`,
@@ -424,7 +424,7 @@ degenerate coins as they open (the Claim above).
   rank, dependent `ρ`, an outer coin `r_j = 1`) stay functions of committed coins.
 - **Two properties, two roles.** *Hiding* of the unopened coins is what soundness uses: statistical in the standard model
   (hm96 `PROTOCOL.md` §3), since every block and salt comes from `/dev/urandom`; no random oracle. *Binding* is the one
-  assumption M2's zero knowledge adds: collision resistance of `x ↦ SHA-512(ν ‖ x)` under the session's nonce
+  assumption the coin tree's zero knowledge adds: collision resistance of `x ↦ SHA-512(ν ‖ x)` under the session's nonce
   (`cr/sha-512`), so a collision in V*'s auxiliary input, made before `ν` existed, opens nothing. It holds whatever
   salts V* chooses (hm96 §4 holds for every key), so a rewound V* cannot open another coin. Against quantum verifiers
   the commitment must be collapse-binding (ASSUMPTIONS.md §6).
@@ -442,7 +442,7 @@ degenerate coins as they open (the Claim above).
    (probability `p`), so it costs `t` runs in expectation.
 4. **Rewinds**, at most `4t/p̃ = 4·runs`, each to just after the coin commitment and each with a **fresh dummy opening**
    for the extracted coins (`fresh_dummy`: the honest prover on the dummy witness with fresh masks, level-0 padding, extra
-   lanes and salts, against a local coin server that commits to those coins; no interaction with V*). So the rewinds are
+   lanes and salts, against a local challenger that commits to those coins; no interaction with V*). So the rewinds are
    independent trials, each succeeding with V*'s completion probability `p`. Each rewind is V* from the start of the
    session, answered by a scripted prover whose messages are the per-rep SHVZK simulations (`simulate_full` on that fresh
    opening, §8, each rep with its own pair). A `RecordingChallenger` recovers each round's message by replaying the
@@ -453,7 +453,7 @@ degenerate coins as they open (the Claim above).
 **The parameter `t` grows with the security parameter:** `t = Θ(λ)`, so that `p̃ ∈ [p/2, 2p]` except with probability
 `2^-Ω(λ)`, and then all `4t/p̃ ≥ 2t/p` rewinds fail with probability at most `e^-2t`. A fixed `t` would leave a failure
 probability that is noticeable against some V*. The tests run at `t = 4` (`zkrewind --gk-t`); that
-is a test's λ, not a bound for any production claim.
+is a test's λ, not a bound for any served claim.
 
 Against the theorem's statement (ASSUMPTIONS.md §6): one extraction run of the honest prover on a dummy witness (step 1,
 with the estimation's fresh repeats of it); rewinding only to just after the coin commitment (step 4, the one rewind point,
@@ -513,14 +513,14 @@ relations as their own classes, and fails any value that table j shares with tab
 ## 10. The ZK server's send check: nothing leaves the GPU that the ZK server did not fix
 
 In a recursive session the developer runs a **ZK server** it trusts between its workers, which nobody trusts, and the
-auditor (the coin server and the verifier). The workers may run any kernel; the question is what they can make leave. A
+auditor (the challenger and the verifier). The workers may run any kernel; the question is what they can make leave. A
 **free choice** is any bit a worker can vary that reaches the auditor, or the proof bytes, without the ZK server having either
 computed it itself or held it to a relation that leaves the worker nothing to choose. The send check is the rule, per
 message kind, by which the ZK server removes every free choice.
 
 Where the boundary runs:
 - **Inner phase** (`rec/inner-transcript/v1`, ZK off): the whole M0 prover is the worker, and `verity_flock.rec_live`'s
-  proxy is the ZK server, its send check Lean's `flock-firewall live` (`rec_live --lean`). The coin server receives only the
+  proxy is the ZK server, its send check Lean's `flock-firewall live` (`rec_live --lean`). The challenger receives only the
   public schedule and salted hashes (§10.3).
 - **Outer phase** (`flock-circuit prove --zk --gpu`): the device (`flock_cuda_prove_circuit`) is the worker; the host side
   of `flock-circuit` (the masking challenger, the live stream, the send check, and the session's Lean finish it relays) is the ZK server. The
@@ -530,7 +530,7 @@ Where the boundary runs:
   the trees it builds (level 0's and levels 1+'s, which the host hands it tree by tree), but never the pads `h`, `mu`, their
   padding, the pads tree's salts or the inner proof's randomness, which the rep's Lean frame samples and keeps (§10.4:
   neither the device nor `flock-circuit`'s host side receives them). Holding the salts it does fixes nothing it sends:
-  every salted leaf and path that leaves is the recheck's or a recomputed tree's (§10.1), and the pads tree is the ZK
+  every hiding leaf and path that leaves is the recheck's or a recomputed tree's (§10.1), and the pads tree is the ZK
   server's own.
 
 ### 10.1 The rule, outer phase (one rep, in §1's order)
@@ -583,7 +583,7 @@ item leaves:
 - in the opening, the loop's own opening round, the ZK server's computation (an honest device's round);
 - at `Commit`, the recheck's root;
 - for the returned proof, the ZK server's own (the passed values and the Lean finish's opening, as on any rep), and the inner
-  proof speaks on schedule without its self-check (§5), as M1's simulator's does.
+  proof speaks on schedule without its self-check (§5), as masking's simulator's does.
 
 A device that sends more rounds than the statement has gets coins back and nothing leaves; one that returns early has the
 rest of the schedule released by the ZK server itself. A failed rep's rounds from its failure on reach the loop as no
@@ -736,15 +736,15 @@ runs them all under one).
 | item | rule | why the M0 prover has no free choice |
 |---|---|---|
 | `Hello` | constant | the ZK server compares the prover's, Σ aside, with the pinned schedule's as canonical JSON (`rec_live.canonical`: sorted keys, no spaces, so `2` and `2.0` differ) and forwards the schedule's own, never the prover's text or object |
-| `Commit`'s level-0 roots | salted | each 64-byte node of each root reaches the coin server as a registered row's `b ‖ c` (`rec_live.top_rows`: its 32 u16 words, then 32 zero words; `hm96-sha512/row/v1`) under its own fresh 192-byte salt; the roots and salts stay in `private.json` |
+| `Commit`'s level-0 roots | salted | each 64-byte node of each root reaches the challenger as a registered row's `b ‖ c` (`rec_live.top_rows`: its 32 u16 words, then 32 zero words; `hm96-sha512/row/v1`) under its own fresh 192-byte salt; the roots and salts stay in `private.json` |
 | `Commit`'s tables and their order | constant | the pinned schedule's `roots`, each with its node count, in the schedule's order (their names, sorted: `Flock.Firewall.Schedule.tables`); the ZK server refuses any other order, so the order carries nothing of the prover's |
 | a round's caps (its `BYTES` frames that commit a tree) | salted, or counted | a fresh top as the roots, one fresh salt per node; a copy of a level-0 top committed at `Commit` (the rep's binding round's cap, which must be `root_B`, and Ligerito's first absorb) is counted (`level0`), never committed again. Copies are by position, never by value: the round's first `level0` caps, as the schedule names them, must each be its table's top committed at `Commit`, and every other cap is a fresh top, whatever its value (`Flock.Firewall.copiesOf`) |
 | a round's free message | salted | `c_k`, its one row committed under a fresh salt (as before) |
-| `Register` | constant | the ZK server answers it itself with the verifier's sample, every unit of the population (`rec_live --draw FILE`, `rec_live.full_draw`: the stratified law at `K = N`, so each stratum's `k` is its size), and the record holds that sample as `unit_draw` from the session's start; `verify --stratified N --program --partition` derives the same sample and refuses any other |
+| `Register` | constant | the ZK server answers it itself with the verifier's sample, every unit of the population (`rec_live --draw FILE`, `rec_live.full_draw`: the stratified sampling design at `K = N`, so each stratum's `k` is its size), and the record holds that sample as `unit_draw` from the session's start; `verify --stratified N --program --partition` derives the same sample and refuses any other |
 | statement digest, labels, domain, nonces | dropped | public constants or functions of the hidden statement; never forwarded |
 | `Link`'s `y` | constant `0` | the schedule fixes its length (`link.y` elements of 16 bytes); the ZK server refuses any other byte length, and any nonzero byte |
-| the order of `Hello`, `Commit`, `Link` and `Finish` | constant | the ZK server itself refuses a `Commit` before `Hello` or after the first, a `Link` before `Commit` or after the first, and a `Finish` before the schedule's last round (counted from its own streams, never by reading the coin server), each before any call on the coin server: a request out of its place reaches the coin server as a plain stop at the same point |
-| stream names, `Open`'s parent and position, each round's coin count, its fresh tops' node counts (`tops`), its copies of a level-0 top (`level0`) and its message rows (`commits`: one, or none for a round without a free message) | constant | the pinned schedule's; the ZK server refuses any other. The coin server's record lists the streams by name, as the schedule does, never in the order the prover opened them. An `Open` may come any time before its stream's first round, so the ZK server keeps it and opens the stream at the coin server just before that round: neither the coin server's calls nor its record show whether or when the `Open` came, and a stream is listed from its first round |
+| the order of `Hello`, `Commit`, `Link` and `Finish` | constant | the ZK server itself refuses a `Commit` before `Hello` or after the first, a `Link` before `Commit` or after the first, and a `Finish` before the schedule's last round (counted from its own streams, never by reading the challenger), each before any call on the challenger: a request out of its place reaches the challenger as a plain stop at the same point |
+| stream names, `Open`'s parent and position, each round's coin count, its fresh tops' node counts (`tops`), its copies of a level-0 top (`level0`) and its message rows (`commits`: one, or none for a round without a free message) | constant | the pinned schedule's; the ZK server refuses any other. The challenger's record lists the streams by name, as the schedule does, never in the order the prover opened them. An `Open` may come any time before its stream's first round, so the ZK server keeps it and opens the stream at the challenger just before that round: neither the challenger's calls nor its record show whether or when the `Open` came, and a stream is listed from its first round |
 | how the session ends | `finish` or `stop` | every session served is written and counted toward `--sessions`, with `end` `finish` or `stop` (a refusal, or a session that ends without `Finish`: closed, reset or cut inside a frame), never why |
 | a request the ZK server cannot read, or the ZK server's own fault | refusal | any exception while handling a request stops the session (`FIREWALL-REFUSED: a request the firewall cannot read (…)`), never the ZK server |
 
@@ -759,7 +759,7 @@ a control character) and name no `coins`, each round must be its six fields and 
 at least one, must come in the schedule's order numbered 0, 1, … as many as its `rounds`. `flock-firewall`, which holds
 no registered top, also refuses a stream, or a copy of level 0's top, whose table has no root. The record says how its tops
 are salted (`"tops": "hm96-sha512/v1/node-row"`, `rec_live.TOPS`). A refusal (`FIREWALL-REFUSED: …`) stops the session: every later
-request is refused with the same reason, `Finish` answers not accepted, and only `public.json` (what the coin server had
+request is refused with the same reason, `Finish` answers not accepted, and only `public.json` (what the challenger had
 received, `end: "stop"`) is written.
 
 A salted node's opening (node and salt) is the prover's. V*'s inputs (`rec_vstar.tops`) read the clear tops from
@@ -767,14 +767,14 @@ A salted node's opening (node and salt) is the prover's. V*'s inputs (`rec_vstar
 record's tops are not salted. The outer circuit climbs to the committed tops: `rec_outer` registers each level's tops
 (`TopValue`) under the ZK server's very salts, and the verifier builds its entry from the recorded `b ‖ c` alone. A node is
 committed as a registered row is, so climbing costs `RecOpen` no hashing of its own: the verifier
-builds a registered value from the coin server's `b ‖ c` (one row a node, under the ZK server's salts), and each opening's
+builds a registered value from the challenger's `b ‖ c` (one row a node, under the ZK server's salts), and each opening's
 `out` reads the row of the node it climbs to. The ZK server pays one SHA-512 a node more than for a bare node (the row
 digest).
 
 The rule is also a Lean program, `Flock.Firewall.run` (`../../core/service/flock/Flock/Firewall.lean`, the executable
-`flock-firewall`): the pinned schedule, the worker's requests and the ZK server's salts in, the coin server's record out. Its
+`flock-firewall`): the pinned schedule, the worker's requests and the ZK server's salts in, the challenger's record out. Its
 message type is the contract: each message is the schedule's own value, a count it fixes, zeros, or commitments under the
-ZK server's salts, so nothing a worker sends reaches the coin server any other way. `tests/test_firewall_agreement.py` holds
+ZK server's salts, so nothing a worker sends reaches the challenger any other way. `tests/test_firewall_agreement.py` holds
 `rec_live`'s proxy to it byte for byte (the record without the coins it flipped), on an honest session and on every prefix,
 drop, duplicate, swap, forgery and seeded byte flip of one. One difference is deliberate: Lean's JSON keeps no number's
 spelling, so `flock-firewall` refuses any `Hello` with a fraction or an exponent, where the proxy compares Python's canonical
@@ -1150,9 +1150,9 @@ A recursive session is the inner phase's session and the outer phase's sessions,
 levels L0–L6 and the algebra). With §10.1 and §10.3, every message of a session that reaches the auditor is fixed, and so is
 their order: `Hello`, `Commit`, `Link`, each stream's `Open` and rounds, the proofs, `Finish` (`Ping` and `Register` change
 no record: the inner ZK server answers `Register` itself, with the full sample the record already holds). An inner `Open` may come any
-time before its stream's first round, but the ZK server passes it to the coin server only at that round (§10.3), so where it
+time before its stream's first round, but the ZK server passes it to the challenger only at that round (§10.3), so where it
 came never reaches the auditor. A `Commit`, `Link` or `Finish` out of its place is refused by the ZK server before any call
-on the coin server (§10.3), so it reaches the auditor as a plain stop. An outer session through the Lean session loop
+on the challenger (§10.3), so it reaches the auditor as a plain stop. An outer session through the Lean session loop
 (§10.4) is fixed the same way: `Register`, `Hello`, the first rep stream's `Open`, `Commit`, `Link`, then each rep stream's
 rounds and the next one's `Open`, the proofs, `Finish`, each frame that carries no coin once, at its place; anything else
 is refused before it reaches the auditor, a `Ping` never leaves, and after a stop or the session's `Finish` nothing
