@@ -62,7 +62,7 @@ def RelayEnvAt {Ω : Type} (spec : _root_.Flock.SessionSpec) (sts : Array _root_
 the protocol's randomness `ω`, the model's messages `model ω`, in order. -/
 def RelayReads {Ω : Type} (spec : _root_.Flock.SessionSpec) (ins : Ω → List (ByteArray × Relay.Env))
     (model : Ω → List Msg) : Prop :=
-  ∀ ω, Relay.EnvPre spec (Relay.relaySteps true (ins ω)) (model ω)
+  ∀ ω, Relay.EnvPre spec [] (Relay.relaySteps true (ins ω)) (model ω)
 
 /-- **`ZKOut` read at the deployed held relay**: at every setup `(spec, sts)`, for `(x, w) ∈ R`, every verifier `V*`
 of the protocol's `k(x)` rounds and tape `θ`, and the requests `ins ω` the relay reads at each of the protocol's
