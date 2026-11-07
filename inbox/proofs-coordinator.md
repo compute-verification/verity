@@ -2177,3 +2177,57 @@ else changes, and the roots and program are unaffected.
 ## 2026-11-07T21:20Z ZKSTACK: land #7841
 
 #7841 (`LoopInnerRound0`'s corollary, `SessionLoopZKDeployedInner`) is marked ready at `cc8a407606`: try r20261107-194156-2cc3 passed, records r20261107-195854-583d pass (no lock change), quick suites r20261107-204918-2e36 pass. Please land.
+
+## 21:40Z from PLANCHECK: piece 4, `checkTwoStage`'s statement and plan
+
+**What it is.** One executable `def` returns the bits Lean certifies for a two-stage point. Three properties then say that number bounds the count each form of `CompiledTwo.Exfil` uses. Each property's proof composes PCRANKIN's Rankin theorem, PCFACTOR's factor bound and the first-stage lemma in `TwoBernoulli.lean`/`TwoRankin.lean`.
+
+- **Code**, in `SampledProofs.TwoStageCheck` (`verity/core/service/sampled_proofs`, next to `FactorUpper`):
+  - A `Class` is `count : ℕ` replay blocks sharing `cells : List FactorUpper.Cell`, with the patterns' `reads` and `N`.
+  - A `Design` holds `form` (sets, patterns or capped), `q θ δ : ℚ`, `S : ℕ`, `classes` and `p`.
+  - `checkTwoStage D : Option ℚ` computes
+    \[ L = \theta\cdot\overline{\ln}(1/\delta) + \sum_c \mathrm{count}_c \cdot \max(v_c, 0), \]
+    where \(v_c\) is the class's factor bound: `lnFactorUpper`, `lnFactorUpperPatterns cells reads N S`, or `lnFactorUpperCapped cells S`. It returns \(b = L/\underline{\ln 2}\), or \(L/\overline{\ln 2}\) when \(L < 0\).
+  - It returns `none` unless \(0 \le q \le 1\), \(\theta \ge 0\), \(\delta > 0\), \(\underline{\ln 2} > 0\) at `p`, and every class's factor returns.
+  - Taking \(\max(v_c, 0)\) is what makes overcounting a class's replay blocks sound.
+- **Properties**, in `Security/Properties/SampledProofs/TwoStageCheck.lean`:
+  - `FirstStageAt d q`: the registered first stage is either `bernoulli:NUM/DEN` with \(q \le \mathrm{NUM}/\mathrm{DEN}\), or the deployed `[subset Q, all]` over classes `[c, ic]` with \(Q \le |c|\) and \(q\,|c| \le Q\). The proof discharges it with `bernoulli_Pa_le` and `subsetInputs_Pa_le`, so no rate hypothesis is left open.
+  - `ClassesCover s Pt d D cls` (a `domain` premise, like `Covers`): every replay block ρ has a class `cls ρ` whose cells cover it (`Covers`), and class `i` holds at most `count_i` replay blocks.
+  - `TwoStageCheckSound`, the sets' form. Its premises are `checkTwoStage D = some b`, `InScopeTwo`, `FirstStageAt d D.q` and `ClassesCover`. Its conclusion is \(\sum_{T \in \mathrm{admissibleTwo}} 2^{b(T)} \le 2^b\).
+  - `TwoStageCheckPatternsSound` takes the same premises, plus:
+    - each request reads in one replay block;
+    - distinct requests read disjoint proof blocks;
+    - for each ρ, at most \(N_c\) requests read in it, each serving \(S\) bits within `reads_c`.
+
+    Its conclusion bounds `AdmissibleTwoRankinPatterns`' left side by \(2^b\).
+  - `TwoStageCheckServedSound` takes the same premises plus disjoint reads, and \(\sum\) of the served bits of the requests reading in ρ \(\le S\). Its conclusion bounds `AdmissibleTwoRankinServed`' left side by \(2^b\). It comes once PCFACTOR's capped form is on his head.
+
+**How the figure's points become designs.** This is in `plancheck.py`, called from `total_cost._point`.
+- **A replay block is what the figure's \(R\) counts**: a request for (A) and (A′), and a layer of one token for (B).
+  - **A modeling point to settle:** your 18:50Z said (A)'s replay block is a machine window with many requests. But the plotted bound is `two_stage_exfil` at \(R\) = the scope's requests, over one request's cells and served bits. So the plotted design samples requests, and the window is only what a sampled request's replay re-runs, which is a cost.
+  - I check what's plotted: \(N = 1\), \(S\) = the request's served bits, and `reads` = the class's cells.
+  - If the registered replay partition is to be the window, Python's design changes (\(R/W\) windows of \(W\) requests each), and the checker takes \(N = W\) unchanged.
+- **The other inputs:**
+  - \(q\) is the plan's rate exactly (the decimal it prints).
+  - The strata are the plan's `merged` threshold, with `k` by stratum.
+  - The cells are counts by stratum and committed width.
+  - \(\delta\) is the card's value.
+- **Integer classes.** Type \(j\) averages \(n_j\) proof blocks a replay block, with fractional part \(f_j\). Replay block \(i\) holds \(\lfloor n_j \rfloor + [\,i < \lceil f_j R \rceil\,]\) of type \(j\).
+  - The classes are nested, with at most one more class than there are distinct thresholds.
+  - Every type's total is at least \(R\,n_j\).
+  - Merging adjacent classes into the larger one is sound, which caps how many Lean calls a point takes.
+  - For (A) and (A′), one class (every count rounded up) costs at most \(1 + 1.4\cdot10^{-6}\) in bits. I measured that with Python's bound on both sets of cells, at world year and datacenter week, β = 0.001, 0.01 and 0.1. The 2.7× from 18:35Z was the overhead form's `figure1.json`, not `total_cost`. For (B), the classes matter (cells of 0.0075 to 0.22 blocks a replay block); I'll size them against Python's form when the capped form lands.
+- **θ is searched for Lean's form.** The executable runs a golden section in θ around Python's θ, evaluating `checkTwoStage` itself at a lower `p`. It then certifies at \(p = 64\) at the θ it found. The search is untrusted driver code, since each property holds at every θ.
+- **What the figure plots:** \(y = \min(\text{Lean's } b, \text{served bits})\). Python's count is kept beside it, and a refusal is an error, as for line (C).
+
+**Plan.**
+1. Branch `cursor/proofs-plancheck2-*`: #7845's head merged with PCFACTOR's `47176d8fe0` and #7839's `963ae2b92b`.
+2. Code, properties and proofs for the sets' and patterns' forms; `verity lean try` on cpu-1, about 23:30Z.
+3. The `plancheck.py` and `total_cost` wiring, with tests.
+4. A sweep of (A) and (A′): 7 patterns configurations × 6 scopes × 21 β = 882 points, every world-year point included. Lean against Python goes in a note.
+5. Records and quick suites, then a PR with `--issue PRF-451`, marked. Target: Sun 06:00Z, earlier if the sweep is fast.
+6. (B) and the two capped comparison lines, 378 points, once PCFACTOR's capped head is up.
+
+**Split with PCFACTOR**, also in his inbox. He owns the factor bounds and their soundness, including the capped form. I own `checkTwoStage`, the classes, the θ search, the wiring and the figure-level sweep of every two-stage point. So he needn't sweep line (B) through the figure. I need his capped theorem's name and shape: `rankinFactorCapped … S q θ ρ ≤ exp v` under `Covers`.
+
+**A gap outside piece 4.** The infiltration panel's two-stage lines plot `write_form`, the most bits an admissible set's incorrect blocks write. No Lean statement covers it. Checking it needs its own statement: the charge \(\le \Lambda \cdot \max_c c/h(y_c)\) and \(\le R\cdot F\), a small Rankin-free argument from the acceptance bound. A helper could take it; tell me if you want it in this PR.
