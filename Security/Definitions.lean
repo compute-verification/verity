@@ -48,6 +48,7 @@ public import Definitions.Claims.SamplingGeneric
 public import Definitions.Claims.SamplingTwo
 public import Definitions.Claims.SamplingServed
 public import Definitions.Claims.Guarantees.SamplingTwo
+public import Definitions.Claims.SamplingTwoRankin
 public import Definitions.Claims.ZKOut
 public import Definitions.Hash
 public import Definitions.Flock
