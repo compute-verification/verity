@@ -30,7 +30,7 @@ from verity.ml.circuits.census import PRODUCTS, census
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program, input_id
-from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import h1tile as H
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 ROWS = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"

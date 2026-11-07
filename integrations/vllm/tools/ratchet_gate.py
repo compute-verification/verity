@@ -48,7 +48,9 @@ when:
   lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
   entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
-  lints with the base's pin.
+  lints with the base's pin.  A counted lint reads those replaced files too, as the base has them, so its violations in one
+  are counted again on the change's own copy, against the change's list: a lint module whose prose the change cleans, with
+  its entry dropped, passes, and one that keeps its sites without its entry fails, naming the change's own sites.
   So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
   fails, naming each violation the base's lint still finds, while tightening one passes once the change fixes what it
   finds.
@@ -131,7 +133,7 @@ import tokenize
 import tomllib
 import types
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
@@ -960,6 +962,46 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
     return ran, failures
 
 
+def replaced(c: Change, lints: Iterable[str]) -> set[str]:
+    """The files `base_lints`'s worktree for ``c`` holds as its base has them, not as the change does: each file of a lint
+    directory in ``lints``, and each ruff config, that the change edits or deletes (its allowlists hold the change's
+    entries)."""
+    out = git("diff", "--no-renames", "--name-only", "--diff-filter=DMT", "-z", c.lo, c.hi, "--", *lints, RUFF_CONFIG,
+              REPO_RUFF_CONFIG)
+    return {f for f in out.split("\0") if f and not is_ratchet(f)}
+
+
+def own_copies(c: Change, lints: Iterable[str], found: list[str]) -> tuple[list[str], list[str]]:
+    """(``found``, each counted lint's violations at a file `replaced` names judged on the change's own copy; the
+    violations that leave, as found).  A counted lint reads every file the worktree holds, so in a lint directory or a ruff
+    config it reads the base's text, which the change's tree doesn't hold: the change's copy is counted as the base's lint
+    counts it, against the change's list, and within it, its violations go; past it, the change's own sites replace them.
+    Another lint's violations there stay as found."""
+    at, names = replaced(c, lints), {s for s, *_ in COUNTED}
+    out, by = [], {}
+    for v in found:
+        s, m = v.partition(": ")[0], SITE.match(v)
+        if m and m[1] in at and s in names:
+            by.setdefault((s, m[1]), []).append(v)
+        else:
+            out.append(v)
+    gone = []
+    for (s, f), vs in by.items():
+        _, sites, noun = next(x for x in COUNTED if x[0] == s)
+        if (lint := counted_lint_at(c.lo, s, sites, noun)) is None:
+            out += vs
+            continue
+        holds, count = counter(lint, sites)
+        own = tree_files(c.hi, {f}).get(f) if holds(f) and not f.startswith(tuple(lint.LEFT_OUT)) else None
+        now = count(own.decode("utf-8", errors="replace"), f) if own is not None else []
+        listed, marked = counted_list(lint, s, c.hi)
+        if len(now) <= listed[f] or getattr(lint, "is_registry", lambda path, marks: False)(f, marked):
+            gone += vs
+        else:
+            out += [f"{s}: {f}: {len(now)} found, {listed[f]} allowed"] + [f"{s}: {f}:{line} {what}" for line, what in now]
+    return out, gone
+
+
 def violations(failures: list[dict]) -> list[str]:
     """Each violation a failing test names (its message's indented lines, else its first), or the error a test raised, by
     lint."""
@@ -1018,6 +1060,7 @@ def judge(c: Change, base: str) -> None:
         uncalled, public = public_callers(c)
     noqa_grows = c.noqa_added > c.noqa_removed
     inherited: list[str] = []
+    based: list[str] = []
     if c.touched and not (grown or bad or uncalled or noqa_grows):
         selection = {lint: s for lint in LINTS if (s := lint_selection(c.touched, lint)) is None or s}
         if selection:
@@ -1026,13 +1069,18 @@ def judge(c: Change, base: str) -> None:
             if found:
                 had = set(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]))
                 inherited, found = [v for v in found if v in had], [v for v in found if v not in had]
+                found, based = own_copies(c, selection, found)
     if not (grown or bad or uncalled or noqa_grows or found):
         c.verdict, c.why = "passed", "; ".join(
             ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
             + ([f"public, each run by its caller: {', '.join(public)}"] if public else [])
-            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints and not inherited else [])
+            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"]
+               if c.lints and not (inherited or based) else [])
             + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(inherited)} violation(s) its own tree already holds, "
-                f"which aren't this change's: {added_by(c.lo, inherited)}"] if inherited else []))
+                f"which aren't this change's: {added_by(c.lo, inherited)}"] if inherited else [])
+            + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(based)} violation(s) in the base's copy of "
+                f"{', '.join(sorted({SITE.match(v)[1] for v in based}))}, which it runs in place of the change's, and the "
+                f"change's own copy is within its list"] if based else []))
         return
     if is_revert(c):
         c.verdict, c.why = "exempt", "a revert"

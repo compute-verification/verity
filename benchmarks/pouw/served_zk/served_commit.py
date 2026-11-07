@@ -131,13 +131,13 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.circuit import pc8
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import pc8
 from verity.core.protocols.pouw.coins import Challenger as Coins
 from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening, coin_reason
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import draw as D
@@ -1268,7 +1268,7 @@ def _pass(pass_dir: Path):
     PD = _pd()
     raw = (pass_dir / "manifest.json").read_bytes()
     man = json.loads(raw)
-    if man.get("schema") not in PD.MANIFEST_SCHEMAS:
+    if man.get("schema") not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
         raise SystemExit(f"{pass_dir}: not a retained pass ({man.get('schema')!r})")
     calls = [u for u in man["matmuls"] if u["k"] == K and u["n"] == K]
     if not calls:
@@ -1541,7 +1541,7 @@ def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: s
     elif case != "resalted":
         raise ValueError(f"a coin variant is one of {', '.join(CASES)}")
     out = {k: v for k, v in man.items() if k != "beacon"}
-    return {**out, "schema": _pd().MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
+    return {**out, "schema": CC.MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
 
 
 def cmd_coin_variant(a) -> int:

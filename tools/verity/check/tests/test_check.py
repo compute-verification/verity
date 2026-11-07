@@ -140,6 +140,9 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert lean_audit[4].endswith("tools/verity/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
     assert "--regenerate" in lean_audit and "--regenerate" not in CHECK.lean_steps(out, regenerate=False)[2][1]
+    warn = CHECK.lean_steps(out, bookkeeping=True)[2][1]
+    assert "--bookkeeping" not in lean_audit and warn[warn.index("--bookkeeping") + 1] == "warn"
+    assert "--bookkeeping" not in CHECK.lean_steps(out, regenerate=False, bookkeeping=True)[2][1]
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
     assert CHECK.lean_steps(out)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
@@ -785,7 +788,7 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
         (tmp_path / built).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / built).write_bytes(b"x")
     assert CHECK.tracked_files(tmp_path) == [".gitignore", "a.txt"]
-    assert CHECK._env_key({"VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"VIRTUAL_ENV": "<tree>/.venv"}   # per-commit path
+    assert CHECK._env_key({"PYTHONPATH": f"{ROOT}/x", "VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"PYTHONPATH": "<tree>/x"}
 
 
 def test_the_agreement_is_not_required_for_docs_alone():
@@ -1284,6 +1287,30 @@ def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_pa
     assert CHECK.run(tmp_path, 2)[0] and marker.exists()
 
 
+def test_a_prebuild_that_fails_refuses_the_run_with_its_output_and_exit_status_even_under_keep_going(tmp_path, monkeypatch):
+    """The C++ models' prebuild ran with its output captured and its exit ignored, and fell back to building nothing where the
+    twins didn't import, so a check whose models didn't build ran on, each step compiling them untraced: it refuses now."""
+    import json
+
+    assert "except" not in CHECK.PREBUILD, "a prebuild whose models don't import fails, never falls back to building none"
+    marker = tmp_path / "ran"
+    touch = _py("open(__import__('sys').argv[1], 'w')", marker)
+    for keep_going in (False, True):
+        _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+        monkeypatch.setattr(CHECK, "PREBUILD", "import sys\nprint('compiling tc_model.cpp', flush=True)\nsys.exit('g++: not found')")
+        ok, done = CHECK.run(tmp_path, 2, keep_going=keep_going)
+        assert not ok and not marker.exists(), keep_going
+        assert [(s["step"], s["status"], s.get("rc")) for s in done] == [("preflight-lock", "passed", 0), ("prebuild", "failed", 1)]
+        assert done[1]["detail"].startswith("refused: the C++ models' prebuild exited 1 (g++: not found; prebuild.log)")
+        assert (tmp_path / "prebuild.log").read_text().splitlines() == ["compiling tc_model.cpp", "g++: not found"]
+        assert json.loads((tmp_path / "steps.jsonl").read_text().splitlines()[-1])["step"] == "prebuild"
+    _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+    monkeypatch.setattr(CHECK, "PREBUILD", "print('{\"tc_model\": \"libtc_model.so\"}')")
+    ok, done = CHECK.run(tmp_path, 2)
+    assert ok and marker.exists() and [s["step"] for s in done] == ["preflight-lock", "pytest"]
+    assert (tmp_path / "prebuild.log").read_text() == '{"tc_model": "libtc_model.so"}\n'
+
+
 def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, monkeypatch):
     """Every train's check runs with --keep-going: a failed preflight must still end it in seconds, not hold its slot."""
     marker = tmp_path / "ran"
@@ -1740,6 +1767,34 @@ def test_train_sh_hands_an_auto_shard_its_plan_and_refuses_one_without_it(tmp_pa
         assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
 
 
+def test_train_sh_hands_the_lock_runs_bookkeeping_flag_to_a_check_that_takes_it(tmp_path):
+    """Drive's lock run (`--deferred lean-audit --bookkeeping-warn`): the flag reaches check.py --record when the commit's
+    check.py takes it, and on a commit whose check.py predates it the run launches without it, saying so; with --no-regenerate,
+    --shard or without --deferred it is refused before anything launches."""
+    git, train, argv = _train_repo(tmp_path)
+    check = tmp_path / "repo" / "tools" / "verity" / "check" / "check.py"
+    check.parent.mkdir(parents=True)
+    check.write_text('BOOKKEEPING = "--bookkeeping-warn"\n')
+    git("add", "tools")
+    git("commit", "-q", "-m", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "lean-audit", "--bookkeeping-warn")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "lean-audit", "--bookkeeping-warn"], (
+        p.stderr, args)
+    check.write_text("\n")
+    git("commit", "-q", "-am", "older")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "lean-audit", "--bookkeeping-warn")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and "--bookkeeping-warn" not in args and "predates --bookkeeping-warn" in p.stdout, (p.stdout, args)
+    argv.unlink()
+    for flags in (["--bookkeeping-warn"], ["--deferred", "lean-audit", "--no-regenerate", "--bookkeeping-warn"],
+                  ["--deferred", "lean-audit", "--shard", "1/3", "--bookkeeping-warn"]):
+        p = train("HEAD", "vy-x", *flags)
+        assert p.returncode == 2 and "train: --bookkeeping-warn refused" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
 def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
     """On the control pod's NFS TMPDIR a train's tree can be left half removed and no longer a worktree, which `worktree remove`
     skips and `worktree add` refuses: every relaunch of that commit registered no run."""
@@ -1911,7 +1966,8 @@ def test_the_lints_are_keyed_by_the_committed_tree_and_unkeyed_on_any_change(tmp
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     e = {"PATH": "/usr/bin"}
     one = CHECK.lints_key(e)
-    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) != one
+    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) == one
+    assert CHECK.lints_key({**e, "VERITY_SLOW": "1"}) != one
     (tmp_path / "b.md").write_text("b\n")
     assert CHECK.lints_key(e) is None
     git("add", "-A")

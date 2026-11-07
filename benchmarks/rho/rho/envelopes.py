@@ -49,7 +49,7 @@ from typing import Any, Protocol
 
 from rho.hardware import Fleet, Location, MonitoringPeriod, Units
 from rho.params import Registry
-from rho.theorem import Blocks, Budget, Cut, Partition, ServingBlock
+from rho.theorem import Blocks, Budget, Cut, Partition, ServerBlock
 
 #: the routes of the uncertified gates, the prefix of each slack term's key (`ε_undecl`, `ε_skip`, `ε_break`, and
 #: Lean's `χ` as `exfil`)
@@ -181,7 +181,8 @@ class Detection:
             raise ValueError(f"sampled proofs need {unset}")
 
     def q(self) -> float:
-        """The detection probability per incorrect block: the proof share over the cost of proving a unit."""
+        """One minus the acceptance probability per incorrect block: the proof share over the cost of proving a
+        unit."""
         return self.proof_share / (self.overhead + self.replay) if self.sampled else 1.0
 
     def injected(self) -> float:
@@ -448,7 +449,7 @@ class Regime(Protocol):
 
 
 def _dark(ctx: Context) -> dict[str, float]:
-    return {"eps_dark": ctx.fleet.eps_dark, "dark_mfu": ctx.fleet.dark_mfu}
+    return {"eps_unreg": ctx.fleet.eps_unreg, "dark_mfu": ctx.fleet.dark_mfu}
 
 
 @dataclass(frozen=True)
@@ -459,7 +460,7 @@ class Unmonitored:
 
     def partition(self, ctx: Context) -> Partition:
         f, loc, h = ctx.fleet, ctx.location, ctx.period
-        return Partition((ServingBlock("server", loc.phi * h.seconds, f.count, (), mfu=f.mfu_train),), **_dark(ctx))
+        return Partition((ServerBlock("server", loc.phi * h.seconds, f.count, (), mfu=f.mfu_train),), **_dark(ctx))
 
     def delta(self, ctx: Context) -> Delta:
         return Delta({})
@@ -514,7 +515,7 @@ class Remote:
     def partition(self, ctx: Context) -> Partition:
         gates = ctx.location.phi * ctx.period.seconds
         layout = Cut("layout", (self.blocks(ctx, gates),), self.abiding(ctx, gates), self.CITES)
-        block = ServingBlock("server", gates, ctx.fleet.count, (self.inference(ctx, gates),), layout,
+        block = ServerBlock("server", gates, ctx.fleet.count, (self.inference(ctx, gates),), layout,
                              ctx.fleet.mfu_train)
         return Partition((block,), **_dark(ctx))
 
@@ -580,7 +581,7 @@ class Onsite(Remote):
         layout = Cut("layout", (self.blocks(ctx, budget.gates), Blocks("uncertified", uncertified, 1.0)), {},
                      self.cites())
         count = ctx.fleet.count * ctx.period.seconds / self.wipe.wipe_s
-        block = ServingBlock("serving-block", budget.gates, count, (self.inference(ctx, budget.gates), serving),
+        block = ServerBlock("serving-block", budget.gates, count, (self.inference(ctx, budget.gates), serving),
                              layout, ctx.fleet.mfu_train)
         return Partition((block,), **_dark(ctx))
 

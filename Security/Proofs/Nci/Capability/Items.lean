@@ -7,8 +7,6 @@ public import Proofs.Core.Formalism
 # Local bounds: what a block holds
 
 * `holds_mono`: more gates hold more;
-* `exists_selection`: the items a family of products reads, each among what its own gates hold, have a selection held by
-  any gates containing those products;
 * `Committed.recompute_congr`: a proof block's recomputation, on what it holds, reads only `X`'s values on its
   unregistered inputs;
 * `Circuit.bits_congr`: two runs agreeing on a bundle's gates give it the same bits.
@@ -28,18 +26,6 @@ theorem holds_mono {C : Circuit} {S T : Finset (Fin C.N)} (h : S ⊆ T) : holds 
   · by_cases haT : a ∈ T
     · exact Or.inl haT
     · exact Or.inr ⟨haT, g, h hg, hag⟩
-
-theorem exists_selection {C : Circuit} {ι α : Type} [DecidableEq ι] (X : Items C ι) (Q : Finset α) (f : α → ι)
-    (m : α → Finset (Fin C.N)) (S : Finset (Fin C.N)) (hread : ∀ q ∈ Q, ∃ c ∈ X.cells (f q), c ⊆ holds C (m q))
-    (hm : ∀ q ∈ Q, m q ⊆ S) :
-    ∃ σ : ι → Finset (Fin C.N), Selects X (Q.image f) σ ∧ ∀ i ∈ Q.image f, σ i ⊆ holds C S := by
-  have h : ∀ i ∈ Q.image f, ∃ c ∈ X.cells i, c ⊆ holds C S := by
-    intro i hi
-    obtain ⟨q, hq, rfl⟩ := mem_image.1 hi
-    obtain ⟨c, hc, hcs⟩ := hread q hq
-    exact ⟨c, hc, hcs.trans (holds_mono (hm q hq))⟩
-  choose! σ hσ using h
-  exact ⟨σ, fun i hi => (hσ i hi).1, fun i hi => (hσ i hi).2⟩
 
 end Nci.Capability
 

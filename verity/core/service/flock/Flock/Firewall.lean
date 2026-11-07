@@ -8,6 +8,7 @@ module
 public import Lean.Data.Json
 public import Flock.Hm96
 public import Flock.JsonParse
+public import Flock.CanonForm
 
 @[expose] public section
 
@@ -342,37 +343,6 @@ value: every later cap is a fresh top, whatever its value. -/
 def copiesOf (s : Schedule) (i : Nat) : Nat := ((roundSpec (s.rounds.getD i .null)).map (·.2.2.2.2.1)).getD 0
 
 /-! ## Canonical forms (`rec_live.canonical`) -/
-
-/-- One token of a JSON value as `Json.compress` writes it: a number as its text, an array's or object's members between
-its opening and `close`, each member of an object its `key` then its value, in key order. -/
-inductive Tok where
-  | null
-  | bool (b : Bool)
-  | num (text : String)
-  | str (s : String)
-  | arr
-  | obj
-  | key (k : String)
-  | close
-  deriving DecidableEq
-
-mutual
-/-- A value's canonical form, its tokens as `Json.compress` writes them, so that two values compress alike exactly when
-their canonical forms are equal. `compress` is a `partial def`, which no proof can unfold; `canonForm` is total. -/
-def canonForm : Json → List Tok
-  | .null => [.null]
-  | .bool b => [.bool b]
-  | .num n => [.num (toString n)]
-  | .str s => [.str s]
-  | .arr ⟨a⟩ => .arr :: canonFormList a ++ [.close]
-  | .obj ⟨⟨t⟩⟩ => .obj :: canonFormObj t ++ [.close]
-def canonFormList : List Json → List Tok
-  | [] => []
-  | j :: js => canonForm j ++ canonFormList js
-def canonFormObj : Std.DTreeMap.Internal.Impl String (fun _ => Json) → List Tok
-  | .leaf => []
-  | .inner _ k v l r => canonFormObj l ++ (.key k :: canonForm v) ++ canonFormObj r
-end
 
 /-- A string `JsonParse` reads back unescaped: no `"`, `\` or control character. -/
 def plainStr (s : String) : Bool := s.all fun c => c != '"' && c != '\\' && 0x20 ≤ c.val

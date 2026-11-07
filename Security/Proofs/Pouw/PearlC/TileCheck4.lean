@@ -1,8 +1,11 @@
 module
 
-public import Definitions.Pouw.PearlC.TileCheck4
 public import Proofs.Pouw.PearlC.TileCheck8
-public import Proofs.Pouw.PearlC.Tile4Circuit
+public import Definitions.Pouw.PearlC.WholeCircuit4
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Circuit
+import Proofs.Pouw.PearlC.Tile4Circuit
 
 /-!
 # `pc4`'s tile check: its units are its templates (proofs)

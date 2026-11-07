@@ -4,6 +4,8 @@ public import Definitions.Core.Accel.Isa
 public import Mathlib.Algebra.Order.Field.Rat
 public import Mathlib.Algebra.Order.Ring.NNRat
 public import Mathlib.Data.Fintype.Defs
+public import Mathlib.Data.NNRat.Defs
+import Mathlib.Data.Finset.Attr
 
 /-!
 # A device's figures, and registration's check of them against the auditor's estimates (trusted)

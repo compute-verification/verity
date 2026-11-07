@@ -152,8 +152,8 @@ def combine(st: M.Steps, S, lse, o):
     return B.batch(st._defs["cvt"], acc, axes=(0,))
 
 
-def head_split(st: M.Steps, S, block_of, unsplit, end, combine_def, q, k, v):
-    """`Fa2AttentionHeadSplit`'s body: ``unsplit`` at NS = 1; else every split's blocks (``block_of(nvis, first, check)``) and
+def head_split(st: M.Steps, S, tile_of, unsplit, end, combine_def, q, k, v):
+    """`Fa2AttentionHeadSplit`'s body: ``unsplit`` at NS = 1; else every split's blocks (``tile_of(nvis, first, check)``) and
     ``end``, an empty split (-inf, 0), and ``combine_def``."""
     B, T, NS, D, BN, MF = st.B, S.T, S.NS, S.D, S.BN, S.MASKED_FROM
     check_split_statics(T, NS, D)
@@ -179,7 +179,7 @@ def head_split(st: M.Steps, S, block_of, unsplit, end, combine_def, q, k, v):
                 kb = Coll(Array(BN, Array(D, st.bf16)), concat([kb.refs] + [row.refs] * (BN - hi + lo)))
                 vb = Coll(Array(BN, Array(D, st.bf16)), concat([vb.refs] + [row.refs] * (BN - hi + lo)))
             first = b == b1 - 1
-            blk = block_of(hi - lo, first, first or b >= MF)
+            blk = tile_of(hi - lo, first, first or b >= MF)
             if first:
                 z = st.word(0)
                 r = B.call(blk, q, kb, vb, z, array_of([z] * 4), array_of([z] * D))
@@ -227,11 +227,11 @@ def Fa2AttentionHeadSplit(B, S, q, k, v):
     """One query head over T keys in NS splits: `AttentionHead_v5` at NS = 1; else each split's `AttnBlock_v5`s last to first
     (FIRST and CHECK at its first visited block, CHECK at blocks >= MASKED_FROM, the sequence's last block zero-padded) and its
     `Fa2SplitEnd_v1{D, INV, SCALE=D^-1/2}`, an empty split's (-inf, 0), and `Fa2Combine_v1{NS, D}`."""
-    def block_of(nvis, first, check):
+    def tile_of(nvis, first, check):
         return bind(AttnBlockV5, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, CHECK=check)
     unsplit = bind(AttentionHeadV5, T=S.T, D=S.D, BN=S.BN, DOT=S.DOT, INV=S.INV, MASKED_FROM=S.MASKED_FROM)
     end = bind(Fa2SplitEnd, D=S.D, INV=S.INV, SCALE=S.D ** -0.5)
-    return head_split(SMS.word_steps(B), S, block_of, unsplit, end, bind(Fa2Combine, NS=S.NS, D=S.D), q, k, v)
+    return head_split(SMS.word_steps(B), S, tile_of, unsplit, end, bind(Fa2Combine, NS=S.NS, D=S.D), q, k, v)
 
 
 def _split_type(S, bf16=BF16):

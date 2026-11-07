@@ -25,7 +25,7 @@ hypothesis carries what the statement doesn't say yet: that the acceptance is th
 ## Soundness's assumptions (taken without proof)
 
 Soundness rests on five. Three are `Prop`s in `Assumptions.lean`, taken as hypotheses: SHA-512's
-collision resistance in two forms, and the Lean verifier's randomness for the unit sample. The fourth, A6,
+collision resistance in two forms, and the randomness of the challenger's coins the unit sample reads. The fourth, A6,
 is the coin server's randomness for the round coins, which the model embodies (A6, below). The fifth, `live-verifier`, is
 the record's custody (nothing in the record authenticates its writer): `--zk`'s soundness (`zk_session_sound_custody`) takes it as
 `Assumptions.Zk.RecordCustodyZK`, in `Assumptions/Zk.lean`. The table's last row is zero
@@ -102,16 +102,16 @@ sense, ePrint 2024/1434), for the audit's value layer.
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
 **A3. The operating system's randomness is independent uniform bytes** (`uniform/io-getrandombytes`), for the
-verifier's unit sample and the proof system's epoch salt, and, per test, for zero knowledge: the commitments' salts and
-the ZK server's tape.
+challenger's coins the unit sample reads and the proof system's epoch salt, and, per test, for zero knowledge: the
+commitments' salts and the ZK server's tape.
 
 - **Statement.** A byte source is a finite probability space and, on each outcome, the first `L i` bytes of each stream
   `i`. `UniformRandomBytes L t` says every event about those bytes has the probability it has for independent uniform
   bytes; the unit sample takes it. `UniformRandomBytesTest L t E η` (as A4 is) says one event `E` has it within
   `η`; zero knowledge takes it at the event each theorem bounds, and `η` enters the bound. A3 assumes the operating
-  system's reads are such a source, each call independent of the others: the verifier's `IO.getRandomBytes`
-  (Lean v4.34.0's runtime reads `/dev/urandom`), the ZK server's frame and tap, and the prover's and a registrant's
-  salts.
+  system's reads are such a source, each call independent of the others: the challenger's `IO.getRandomBytes`, which
+  it flips its coins from (Lean v4.34.0's runtime reads `/dev/urandom`), the ZK server's frame and tap, and the
+  prover's and a registrant's salts. The verifier has no randomness of its own.
 - **Why per test, and the rest.** Any source with fewer outcomes than byte strings refutes the every-event form, as
   Linux's CRNG does past 32 bytes: its zero idealizes the CSPRNG, and `η` is the CSPRNG's advantage against the
   theorem's test. `assumption-notes/a3-uniform-bytes.md` has the argument, why A3 isn't about `IO.getRandomBytes`, its
@@ -131,7 +131,7 @@ coins.
 - **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
   coins from `/dev/urandom` when it has no seed. A3 is about the byte sources the theorems read (the unit sample's, the
   salts' and the ZK server's tape), so it doesn't cover these bytes, which the model's coin nodes sample.
-- **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
+- **Seed coins are outside it.** By default the prover's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
   `live/src/coin_seed.rs`, through `verity.ml.randomness.derive`). Those sessions also rest on `prf/sha-512` (A4's claim)
   and on the seed commitment's hiding, and no headline covers them: the Lean verifier refuses such a session once every
   check has passed (`ProvedScope.SEED_COINS`).
@@ -200,8 +200,9 @@ The four `flock_e2e_*_hm96` theorems (`Binding/E2E.lean`) add the four:
 enters through `tr : StrictCR.TreeRewind`, a rewinding at the serving roots (the prover after its registration, with the
 unit sample in place of the proof coins) whose `covers` says that the executable accepting while the model at the
 registered leaves rejects is no likelier than a run opening a serving root off its plurality. That cover is the link from
-the executable's openings to the model's (R11), still open, so `tr` is a named hypothesis; the skeleton's `hExec` (every
-executable accept is the model's) gives one with no positions, at `δ_tree = 0` (`TreeRewind.ofNever`, `ofNever_bound`).
+the executable's openings to the model's (the refinement `ExecRefines`), still open, so `tr` is a named hypothesis; the
+skeleton's `hExec` (every executable accept is the model's) gives one with no positions, at `δ_tree = 0`
+(`TreeRewind.ofNever`, `ofNever_bound`).
 
 `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` (`Registered/E2E.lean`) are the sampled-proof-block
 and count forms with registered reads (`Flock.HmRow`): they add `δ_reg`, the event that a registered read's leaf
@@ -209,7 +210,7 @@ under the prover's registration is not the registrant's, so that off it the bind
 is the registrant's leaf. They take the layout's registered reads (`rd : Reads`: the held roots, the positions the
 verifier's program reads, and the registrant's openings, intended to prove), `hchk` (on every outcome the executable
 accepts, the registered check held at the model's leaves: `Flock.Registered.check_ok` read at `Layout.regLeaf`, the
-same link R11 that `tr` names, intended to prove) and `hR` (hardness: `SHA512CRStrict` for the registered-path finder at
+same link that `tr` names, intended to prove) and `hR` (hardness: `SHA512CRStrict` for the registered-path finder at
 budget `qR`).
 
 ## The headline
@@ -219,8 +220,8 @@ budget `qR`).
   (`pp : ProgPlaces`);
 - **the hash** is SHA-512 (`Refine.H512`, `Refine.enc512`), for the session's leaves and nodes and for the rows' commit
   strings, with the rows' value binding (`flock_e2e_count_hm96`);
-- **the sample** is the live one (`Law.execOS`: `Flock.Draw.drawOS`'s stratified sample on a byte source `src`), under A3
-  (`hA3`).
+- **the sample** is the live one (`Law.execOS`: `Flock.Draw.drawWith`'s stratified sample on a byte source `src`, the
+  challenger's coins), under A3 (`hA3`).
 
 It is proved under the assumptions its footprint lists. Its bound is `miss(K) + ksAvgStrict + δ_link + δ_tree`.
 
@@ -247,9 +248,9 @@ design, and the `_exec` forms at uniform byte tapes (`Binding/E2E.lean`). `flock
 and `hS`; the other three don't.
 
 **What it bounds.** The headline bounds incorrect proof blocks of the pinned rows circuit; "computes the Definition" also
-needs `RowsCert` per template and the Definition's Boolean semantics in Lean (The circuit and the certificate, below).
-Once every Definition lowers to a Boolean circuit over AND, XOR and NOT, a generic
-Boolean-semantics lemma replaces the per-template `RowsCert`.
+needs each template's rows to be its gate circuit's and the Definition's Boolean semantics in Lean, which no theorem
+states (The circuit and the certificate, below). Once every Definition lowers to a Boolean circuit over AND, XOR and
+NOT, one generic Boolean-semantics lemma can state it for every template.
 
 **Its coins.** The statement is for live uniform coins: the model's proof coins are uniform and sampled after the
 prover's message. M0's non-ZK session has them on the challenger's keyed coin tree under `FC_COINS=tree` on both sides
@@ -375,17 +376,15 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 
 - **The circuit and the certificate** (no hypothesis). The end-to-end theorems are about `C = Prog.circuit`, the circuit
   the statement's rows make, each unit its template's rows; "incorrect" is measured there. The headline bounds incorrect proof blocks
-  of the pinned rows circuit; "computes the Definition" additionally needs `RowsCert` per template and the Definition's
-  Boolean semantics in Lean. That is a separate theorem, `IsRowsUnit.computes_of_cert`
-  (`Certificate.lean`): when the unit's rows are the rows `GateRows.rows G L` derives from a gate circuit
-  `G` (`RowsCert`) and `G` computes a definition `D` (`∀ x, G.eval x = D x`, `G` being `D`'s lowering, which is in
-  Python, not Lean), a unit that is correct, with its constant 1, carries on each committed output wire `D`'s output
-  on its input wires. `RowsCert` is a fact about finite data; `∀ x, G.eval x = D x` is not, and nothing in Lean ties `D`
-  to a Definition until its Boolean semantics is stated there. `Types.Dag.layout_sound` (its type's outputs, for every
-  checked typed layout) and `GateRows.rows_sound` (for rows derived from any gate circuit and layout) prove
-  that rows satisfied with the constant 1 carry the gate circuit's outputs, checked in the kernel. Once every Definition
-  lowers to a Boolean circuit over AND, XOR and NOT, a generic Boolean-semantics lemma replaces the
-  per-template `RowsCert`.
+  of the pinned rows circuit; "computes the Definition" additionally needs each template's rows to be the rows
+  `GateRows.rows G L` derives from a gate circuit `G` at a layout `L`, `G` to compute a definition `D`
+  (`∀ x, G.eval x = D x`, `G` being `D`'s lowering, which is in Python, not Lean), and the Definition's Boolean
+  semantics in Lean, and no theorem carries them to a unit's committed output wires. The first is a fact about finite
+  data; `∀ x, G.eval x = D x` is not, and nothing in Lean ties `D` to a Definition until its Boolean semantics is
+  stated there. `Types.Dag.layout_sound` (its type's outputs, for every checked typed layout) and `GateRows.rows_sound`
+  (for rows derived from any gate circuit and layout) prove that rows satisfied with the constant 1 carry the gate
+  circuit's outputs, checked in the kernel. Once every Definition lowers to a Boolean circuit over AND, XOR and NOT,
+  one generic Boolean-semantics lemma can state it for every template.
 - **The statement's form** is no hypothesis: `verify` refuses forms the proof omits (`Flock.ProvedScope`).
 - **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
   read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` must fit inside the point. The
@@ -470,8 +469,7 @@ and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem
 So are the headline, `Prog.flock_headline` (its footprint is The headline, above), and the theorems the footprints cite
 as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_strict`, `ksAvgBE_le_strict`,
 `tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
-`expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`,
-and the certificate's `IsRowsUnit.computes_of_cert`.
+`expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`.
 The `cr/sha-512` restatements are guarantees beside them (`FlockSoundness.CROnly`: `expected_of_strict`, `linkCR_of_strict`,
 `linkBoundE_at_cube`, each `flock_e2e_*`, `uprog_e2e_*`, `prog_e2e_*` and `flock_headline`), and so is zero knowledge's
 `Hm96Hiding`, proved: `hm96Hiding_gap` (no hypothesis, at `δ₁` the hiding gap), the leftover hash lemma

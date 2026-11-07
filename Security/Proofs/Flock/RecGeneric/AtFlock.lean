@@ -1,12 +1,15 @@
 module
 
-public import Proofs.Flock.RecGeneric.Statement
+public import Definitions.Claims.RecursionGeneric
+public import Proofs.Flock.RecGeneric.Plans
+public import Proofs.Flock.RecGeneric.Outer
+public import Proofs.Flock.RecGeneric.ZK
 public import Proofs.Flock.Recursive.KSStatement
 
 /-!
 # Flock as the instance: the server, the inner protocol and the outer extraction
 
-The generic statements (`Proofs.Flock.RecGeneric.Statement`) at today's recursion:
+The generic statements (`Definitions.Claims.RecursionGeneric`) at today's recursion:
 
 * **the server** is hm96 at the bound key (`Server.ofBound`): 128-byte commit strings `b ‖ c` with `b = H(rowIn row) ⊕ Φy`
   and `c = H(p_salt ‖ y)`, opened as `Claims.Recursion.Bound.opens` opens. `Open(DE, S)` is the bound record's
@@ -32,9 +35,8 @@ every statement `Flock.Guarantees.RecursiveKSEveryAtRec`. The contract reads V\*
 accepts, and the deployed compiled verifier accepts only dense statements, so at the deployment every statement needs
 V\*'s dense facts alone.
 
-The link term is not traded for `FdevV`'s: `FdevV` searches its loop's reruns even where its first rerun gives nothing,
-which its declared cost doesn't charge, while the gated link's cost charges every rerun it names (`RunFinder.finder`),
-so bits read off `linkPlan` charge what they search.
+The link term is the gated link's on the composite's reruns (`linkPlan`), whose cost charges every rerun it names
+(`RunFinder.finder`), so bits read off it charge what they search.
 
 Statements only: definitions, no proofs.
 -/
@@ -78,6 +80,12 @@ def ConflictPlanIsF0 (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coi
   ∀ (H : Msg → Msg) (V : Verifier Coin) (k : Msg → ℕ) (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (A : Type) [Fintype A] [Nonempty A] (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (R : ℕ),
     (conflictPlan k R).PrAt H (runModel H V P x keep) x = PrF0 H V P x keep (k x) R
+
+/-- **The server's commitments open** (completeness, at a hash whose outputs are 64 bytes): a commit string the server
+makes for a row under a salt opens to that row under that salt. -/
+def Server.Opens (S : Server) : Prop :=
+  ∀ H : Msg → Msg, Out64 H → ∀ (row : Msg) (y : S.Salt),
+    ((S.opens ((S.commit row y).eval H).1 row y).eval H).1 = true
 
 section Instance
 
@@ -279,7 +287,8 @@ def ContractOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : B
       (compAt D Bd decI DO decO).Contract H ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)
         (fun v => (Proto.ofFlock Bd decI Cp).opens ((Server.ofBound Bd).openView v)) x
 
-/-- **L1 at Flock gives `KSLinkOn` at the statements `G` admits.** From the generic theorem, the element-level Flock's
+/-- **L1 at Flock gives `KSLinkOn` at the statements `G` admits.** From the generic theorem (`CompositionKS`), the
+element-level Flock's
 KS with no root (`KSFlockLin` at `DE`), each outer session's KS (`OuterKS`), the sessions' nonnegative table errors,
 the record's inner statement being the compiled one's, answers that decode to their coins, `DE`'s nonnegative table
 errors and last step free of its last coin (F8, `Bound.LastStepFree`, proved at the deployed reader and plain
@@ -293,7 +302,7 @@ contract's `own` evaluations are the staged statements' setup calls, true by eva
 at `0` at both its weights, and the gated link's term as it is. -/
 def RecoversLinkOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
-  _root_.Flock.Guarantees.GenericRecursiveKS → KSFlockLin H Bd.DE Cp →
+  CompositionKS → KSFlockLin H Bd.DE Cp →
     OuterKS H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO →
     TableErrNonneg (D.record Bd.IVStar) → (∀ x, D.xI x = Claims.Recursion.xI (D.record Bd.IVStar) x) →
     (∃ dec : Msg → Coin, ∀ c, dec (Bd.ans c) = c) → (∀ x, 0 ≤ Bd.DE.εtable x) →
@@ -325,7 +334,8 @@ def RecursiveKSEveryAtRec (D : Claims.Recursion.RecAt Coin) (rd : Msg → Option
     (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep fun _ => True
 
 /-- **Knowledge soundness of the recursive verifier at every statement, at the deployed reader**: `RecursiveKS` with
-no restriction to dense statements (`RecursiveKSEveryAtRec` at the deployment's record and values). -/
+no restriction to dense statements (`RecursiveKSEveryAtRec` at the deployment's record and values). It is the Flock
+instance of the generic composition (`Claims.RecGeneric.CompositionKS`): `RecoversLinkOn` takes it. -/
 def RecursiveKSEvery : Prop :=
   ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Accounting.TS.Fork
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # (I8) for a sampled window
