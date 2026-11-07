@@ -14,8 +14,9 @@ At an edge `tp_edge` drains, each rank holds:
 `digest` hashes a set of blocks layer by layer (per block, so two ranks or two runs can be compared down to the first
 block that differs), `dump` writes the blocks, `load` writes them back into a fresh engine at the same block ids and
 fills every other block with ``FILL`` (NaN in bf16 and in e4m3), so a read outside the set shows as a divergence, and
-`set_rng` puts the RNG back, keeping each restored request's served seed when the fresh worker adds it again
-(`SeedHook`). torch and numpy are imported inside the functions: the workers have them, the CPU tests stand in.
+`set_rng` puts the RNG back (and, for a restore that adds its requests to the fresh worker again rather than restoring
+the runner's rows, keeps each one's served seed: `SeedHook`). torch and numpy are imported inside the functions: the
+workers have them, the CPU tests stand in.
 """
 from __future__ import annotations
 
@@ -271,9 +272,10 @@ class SeedHook:
             self.sampling.add_request = self.orig
 
 
-def set_rng(worker: Any, rng: Mapping[str, Any]) -> dict[str, Any]:
-    """Put an `rng_state` back on this rank, and under V2 install a `SeedHook` for its requests' seeds. Returns the
-    state's digest as this rank now has it (the seeds excluded: the fresh worker has no requests yet)."""
+def set_rng(worker: Any, rng: Mapping[str, Any], seeds: bool = False) -> dict[str, Any]:
+    """Put an `rng_state` back on this rank, and with ``seeds`` (a restore that adds its requests to the fresh worker
+    again, rather than restoring the runner's rows) install a `SeedHook` for their V2 seeds. Returns the state's digest
+    as this rank now has it (the seeds excluded)."""
     import numpy as np
 
     kind, key, pos, has_gauss, gauss = rng["numpy"]
@@ -290,7 +292,7 @@ def set_rng(worker: Any, rng: Mapping[str, Any]) -> dict[str, Any]:
     except ImportError:
         pass
     runner = runner_of(worker)
-    if rng.get("seeds"):
+    if seeds and rng.get("seeds"):
         runner._verity_seed_hook = SeedHook(runner, {rid: s for rid, (s, _) in rng["seeds"].items()})
     now = {k: v for k, v in rng_state(worker).items() if k != "seeds"}
     return {"rank": rank_record(worker)["rank"], "rng_digest": rng_digest(now)}

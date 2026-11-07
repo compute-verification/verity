@@ -118,6 +118,7 @@ def test_rng_state_puts_back_every_generator(monkeypatch):
     assert (np.random.randint(0, 1 << 30, 4).tolist(), random.random(), torch.rand(3).tolist()) == want
     assert got["rng_digest"] == S.rng_digest({k: v for k, v in st.items() if k != "seeds"})
     assert st["runner"] == "v1" and "seeds" not in st
+    assert not hasattr(S.runner_of(w), "_verity_seed_hook")
 
 
 class V2:
@@ -157,7 +158,7 @@ def test_restored_requests_keep_their_served_seeds_and_new_ones_draw_as_served()
     served.add("c")
     np.random.seed(123)
     fresh = V2()
-    S.set_rng(NS(model_runner=fresh), st)
+    S.set_rng(NS(model_runner=fresh), st, seeds=True)
     hook = fresh._verity_seed_hook
     fresh.add("c"), fresh.add("a"), fresh.add("b", seed=5)
     assert {r: fresh.seed_of(r) for r in "abc"} == {r: served.seed_of(r) for r in "abc"}
