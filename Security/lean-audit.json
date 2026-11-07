@@ -4256,11 +4256,11 @@
    "unfolded_hash": "7be6fec7e43d2b4bcb904cee6032058522ad1fba91c837fd4cd448417c732e62"
   },
   "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod": {
-   "type_hash": "0f6b6a90c59a2b0b24b4991916a29d70afbd83aa91ecc1d9076f4613e50227c5",
+   "type_hash": "514a7aec3cc4e33e81ae87c8efd760c86424bcfa18b1e75b246b6d64e11bbdd2",
    "unfolded_hash": "7d61453c79f2ab6a4c03f89facbceb697990a7198d63abac3a05b5edb43e3ab8"
   },
   "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": {
-   "type_hash": "4281b075f13efe6fcb4bdf1a55358689c65c2f65cafa4845f9b06d9d5b1c9fa8",
+   "type_hash": "b36ccf1574d4991f403428d8b3cbb20397872b9f6341f217dfd141a2fdc5efe2",
    "unfolded_hash": "e178dc2b082c97762056fd509aba946c9323a0cda3356b2ac4864a5c6c642513"
   },
   "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced": {
@@ -6737,10 +6737,11 @@
    "type_hash": "e8b400450d3c19980f643db98a5972b9ea9e23db7e3226f5ae4d682ff5da96c4",
    "unfolded_hash": "295ff2b275db61eec6b74835e2ea643a84a1e92c45b2b682d88cd98f5a1dad5b"
   },
-  "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod": {
+  "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod": {
    "owner": "@compute-accounting",
    "signature": [
-    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod : Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod"
+    "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod :",
+    "  Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod"
    ],
    "assumptions": [],
    "premises": {
@@ -6760,14 +6761,14 @@
     ],
     "reads": []
    },
-   "type_hash": "0f6b6a90c59a2b0b24b4991916a29d70afbd83aa91ecc1d9076f4613e50227c5",
+   "type_hash": "514a7aec3cc4e33e81ae87c8efd760c86424bcfa18b1e75b246b6d64e11bbdd2",
    "unfolded_hash": "7d61453c79f2ab6a4c03f89facbceb697990a7198d63abac3a05b5edb43e3ab8"
   },
-  "Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod": {
+  "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": {
    "owner": "@compute-accounting",
    "signature": [
-    "Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod :",
-    "  Accounting.Guarantees.ComposePeriod.CircuitWorkMonitoringPeriod"
+    "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod :",
+    "  Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod"
    ],
    "assumptions": [],
    "premises": {
@@ -6787,7 +6788,7 @@
     ],
     "reads": []
    },
-   "type_hash": "4281b075f13efe6fcb4bdf1a55358689c65c2f65cafa4845f9b06d9d5b1c9fa8",
+   "type_hash": "b36ccf1574d4991f403428d8b3cbb20397872b9f6341f217dfd141a2fdc5efe2",
    "unfolded_hash": "e178dc2b082c97762056fd509aba946c9323a0cda3356b2ac4864a5c6c642513"
   },
   "Accounting.SecurityProofs.Composition": {
@@ -26517,24 +26518,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod": {
-    "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (Accounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.shareCone Sc Cd Np) j) wmax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.periodLayer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod": {
-    "instLENat.le Cd.units Np": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLTNat.lt 0 Cd.rounds": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin Np), Real.instLE.le (instHMul.hMul (instHMul.hMul ρ Np.cast) (Accounting.Compose.shareCone Sc Cd Np t)) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.shareCone Sc Cd Np) j) wmax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.periodLayer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -27431,7 +27414,7 @@
     "Accounting.Compose.zeroCone": "58f849d71562e10878a430f24a3620a57b61f64433b8abe48c5f61220b25ddd8"
    }
   },
-  "Definitions.Accounting.ComposePeriod": {
+  "Definitions.Accounting.ComposeMonitoringPeriod": {
    "digest": "c91f8789c578b019c24c0124fece047a770aafd7c6b93f034fffbd051c3db7f6",
    "definitions": {
     "Accounting.Compose.DeadConeDead": "ca2183fb0f093df1f54d1a511bac3482a6808e51a6b37b292fc94e8fc2c96bc7",
@@ -27966,11 +27949,11 @@
     "Accounting.Guarantees.Compose.CreditOfWork": "0420d0893a0a372a395a7dde30646251a656f7be658e03aa2f7e5a298fba89e6"
    }
   },
-  "Definitions.Accounting.Guarantees.ComposePeriod": {
-   "digest": "487d3b9e366347309329ddf48582230bc048cce86ddc8acd020a93ae58918984",
+  "Definitions.Accounting.Guarantees.ComposeMonitoringPeriod": {
+   "digest": "8b695ed209b61c4134031dbfa5caa9abae4df35fbc0239b4df7bfea79b991c47",
    "definitions": {
-    "Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod": "e1c18328e34245525bdb996c612db8dbbe16b63c51d7348122b8afd990e97dd7",
-    "Accounting.Guarantees.ComposePeriod.CircuitWorkMonitoringPeriod": "0462fe73df5b213691707265b611d4f2548024a4bd4eefdc23d33c5128c5f5e1"
+    "Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod": "c0ed7410a1081cb90e6e6c4eef93468f2f8a6e856fc971311fef6646ab2efb22",
+    "Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": "141376233e942cf339f38cbfc810f129ab6a7eeb470431d1dcc08d6b07fb1d08"
    }
   },
   "Definitions.Accounting.Guarantees.Confidence": {
@@ -30356,7 +30339,7 @@
    }
   },
   "Definitions.Claims.Sampling": {
-   "digest": "c2ec5b6765bf5ba227a843239c90697a5436fc448a1596e688f332c7a79b714c",
+   "digest": "e4d53fe028fa1b329bc42f42d90d4c30aad7a968d22dcd49fb26f62f8224bcd5",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
     "Claims.Sampling.AuditStatement.design": "91e2b9592fce2faa8cd2c622f9b00f2a3a45f4a39d15b8793549795948ce108d",
@@ -30516,12 +30499,12 @@
     "Claims.Sampling.nPU": "6cbbc62cbf668bc92f22a1bcc75d67f69669be7bf9ce86049bfb810157d692e5",
     "Claims.Sampling.ofOC": "cc4d72d8ce190fef0e99fbeb5fbf7123fa2ef704a6475af4fa84abb83aba0d25",
     "Claims.Sampling.ownLog": "3c1648c81b16516cbf42c72d7f980f84e3c87ea8c6d63985fb3eb17a6ad11196",
+    "Claims.Sampling.sizeClasses": "f898953555d0661bf8e2ce06a5df94403560e382191d0928ad74501c9770ab71",
     "Claims.Sampling.slack": "afea7a5c2c760e84006124e48340d3370c7d187d77c671553ed6159f6ead771f",
     "Claims.Sampling.strataPa": "44b2b7abfc5d2db01bc9e2a2bd6f1f600f8e38bb45b19a1a1b01202825ed4de4",
     "Claims.Sampling.strataSizes": "3e65e4ae902fc50503e561c9df3e8d1def7433f99dd2f385d8fe65e581ba6f67",
-    "Claims.Sampling.unitClass": "c3b46ba7dc28d55a350e20d697a814e4d67765dca7e8578f62f54dd7a17e79f7",
+    "Claims.Sampling.unitClass": "16f9b7da38b462edafe377f64af7c18d1139bd7ea4dab3e1e5fd306e2f3a00fb",
     "Claims.Sampling.unitClassMax": "cfd5d8c6c8bd005b894ca319d8f78f9808a91f83c0af6a3f2379d6369d60addb",
-    "Claims.Sampling.unitClasses": "89b7f705e4da346df3203df4f010562817bcec76189e97c1ce5d9ae80efad2d8",
     "Claims.Sampling.unitExt": "4acdac5454392d8016ed2235c448bef500633634b2b7b8b1e7fc719d6ce0039a",
     "Claims.Sampling.waitAccC": "4289b5c973a131a62d2b747925f1e67679d7c4623dd3ff7576cf86e64840b96c",
     "Claims.Sampling.window": "d11d808843864bb4dc6ce0ebb8a26c85eb2d72bf5f633396f7e6f269d091137d",
@@ -43081,7 +43064,7 @@
    }
   },
   "PouwCheck.Period": {
-   "digest": "55423ec1c29c222b3e94b9dd9cd3afd7ea12d6f1af6fcdd6e24e6ca717f27266",
+   "digest": "89eaf7aa19e8838e6e0ebb0968a69e73706f5518a79bea15352ef88fdcc4df5f",
    "definitions": {
     "PouwCheck.Period.COVERED_TILE": "aed2fb79f9e7b3aed134da815f88bb53ab4a0a58b78bef72e7a491e023d32e3f",
     "PouwCheck.Period.Commitment": "82328cca12a11746b5f6f1a48da7cfa313eadf501eda7a1a33b129204acc7952",
@@ -43108,7 +43091,7 @@
     "PouwCheck.Period.evidenceKeys": "0d253c4240d5740e11d563434d9b1609996d74743b10abaade884576771a0835",
     "PouwCheck.Period.evidenceOf": "6b44d18fb34e8ec541f765b09223ffbe96811e49810d6efb6403128285297d3f",
     "PouwCheck.Period.form": "cf713f4af9d21930b7c33de56f27c88692b423047564f3566d614258e794e558",
-    "PouwCheck.Period.manyStrata": "292a1c24743d1df6120ed83a2a357cdb4750b98a7a161e56ffd091de2a561e4b",
+    "PouwCheck.Period.manyStrata": "cd3179bb2fc66628ba0b1d3c8c5f24f472322895f61eca8673bbbea4715624e3",
     "PouwCheck.Period.notH1": "ec6b3be7f9e17ace2cfa874e41981996c2cc0d13ea930c34930cdea9d396ec63",
     "PouwCheck.Period.notV5": "24602a5515a6f6d39f380a023606203876028c81809e6b043798a3a2a45c7e17",
     "PouwCheck.Period.paramsKeys": "395868f541fc0f20d6f00afb58ed6f6356476f11c353a41868964a45d756e798",
