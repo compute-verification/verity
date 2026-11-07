@@ -2877,37 +2877,37 @@
   },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCapW1": {
    "owner": "@compute-accounting",
-   "digest": "b345e51168403a8d105b5b3f36e72c042f1e3ad766f5451e5105916acc1566b4",
+   "digest": "fcb25acfedf9419f8a05f328c1a44f15c4419000c1f468407f30f2447578c4ab",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnlyW1": {
    "owner": "@compute-accounting",
-   "digest": "f837c5c2ee04a14068654258804deda6c132425f776a5026f97062bbe182cc5e",
+   "digest": "736b6150e226ff857569ac76a89f63ee21bb00d71a4bed6db9560a6b0a417acb",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1": {
    "owner": "@compute-accounting",
-   "digest": "8c8bd3a595c6a82df052b7a73fff2dfc5b6e08bb6b47f10f09aeac960f779dc9",
+   "digest": "d4205fa6d017f402d221810cecd8cea4eb16f3b252ef264740b8876cc0022a16",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1": {
    "owner": "@compute-accounting",
-   "digest": "517a97fd17a69228c389be0594cf881a1e2510f673dd754dfb54d7d069a46ed7",
+   "digest": "a73283d0a161d6e60166c146206b66aeb0b4226996edc961d5772114b789f15e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnlyW1": {
    "owner": "@compute-accounting",
-   "digest": "3da58c0275c4b8764278163c4cf1ea8fd19283cc632944ae2116817d2999cdd4",
+   "digest": "13b4e2d318e62ec3114e6957a488ba3e8bf72206097e7374e6ee53675f31e358",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Pouw.PearlC.Assumptions.TTOutPearlCDevW1": {
    "owner": "@compute-accounting",
-   "digest": "9c80d831ac3401d95826d7d8c8fe9d1b7b04101edbb0a3a40001404adf1cb8a2",
+   "digest": "39407e42a6cb9f9ad368744eb1c82e9c2e6fce343a7767613bd7ab11c53eeaaa",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -2925,25 +2925,25 @@
   },
   "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCapW1": {
    "owner": "@compute-accounting",
-   "digest": "18c8998c1c687b7df9437b34088b22884c00d8471aed562a4dc40cd869f7e4f9",
+   "digest": "5ec813925617579e08bdff640c6e1cf719029793c86e2e6fcb913b56ff9b0cc2",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1": {
    "owner": "@compute-accounting",
-   "digest": "cb50d8211d2b01c94e228b44c39b49bcc38391692f42c455b2567663667ac92e",
+   "digest": "4e57dc514719cecf3e5352aed81aed5279bb6cf85e7334470654200561d4edc0",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1": {
    "owner": "@compute-accounting",
-   "digest": "2f6760bc8c23362ef6083a7acaa401e9cdf2f09e1b276a83e8299f68551acb5d",
+   "digest": "4f345d210c3331087992cb7382fed68ce46439f58c273989e24f5df822d574b3",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Pouw.PearlC.Assumptions.TTOutTilePearlCDevW1": {
    "owner": "@compute-accounting",
-   "digest": "e969b2670ec8c7f0015efec355aaa88627d3e0d6e5b10d462676d6cbea8c2b49",
+   "digest": "939c52222c95172b1049d047089973836b3b59709894af204bc42db2bda3b216",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3033,7 +3033,7 @@
   },
   "Pouw.PearlC.TileCheck.Accepts": {
    "owner": "@compute-accounting",
-   "digest": "55cff526c462141039eeb12883cd3cf28caddabf20c604e07f7d408991a72cd9",
+   "digest": "2dc9fee73096001da723f8ce4d60a61ba1689d1c74804dc5e90a8459e6f500c7",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3051,7 +3051,7 @@
   },
   "Pouw.Workload.InDomain": {
    "owner": "@compute-accounting",
-   "digest": "4c6906588d3bd24bfe0c02960ad2153360f4fb933cf00700cb76cb6c8a58df8e",
+   "digest": "b9f36075a6121271b85850df7177f8126690430e9d1c245693c5d6dcf73cadff",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -4219,19 +4219,19 @@
   },
   "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced": {
    "type_hash": "2eed0526fa5f4476b6ce1975b042190a9566a0568b57aee689ee3a023705ede8",
-   "unfolded_hash": "73d9e45d7a3f44e8ba50002f4d37cf4203a6d15633dcd6a6b1d7114a27fa5260"
+   "unfolded_hash": "3d54089a8b29cf26b32a65da0287ef7e5f5ef8a59ff05a06f0ce314f0eda0dad"
   },
   "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced": {
    "type_hash": "fabaf877067f5e46ea4a935870364484d98d0b161f650b5a356673fae8dfd82a",
-   "unfolded_hash": "98cf84d41b263280e1430d285501c9fdd191e61b2cbaa7c173ec451c758d40a8"
+   "unfolded_hash": "1011824b219e766a58b27537b5057ee59fe3b79faca722c26f773238295fb123"
   },
   "Accounting.SecurityProofs.ComputeOfPouw": {
    "type_hash": "dde82660e7599ddb7892eb0d5eac586a06536c297c7fdc330aa5c545e0fefd27",
-   "unfolded_hash": "65454f8240c0fe0693196211b04353f0124a0ea09b7d84b21636463b1b23e4e0"
+   "unfolded_hash": "b1ee09e3140c457b9f63ab214e54cc15a5a206b1584a3f86b2dc2e0136f7b45a"
   },
   "Accounting.SecurityProofs.ComputeOfPouwPerRun": {
    "type_hash": "c0bae848d5eca780c94a102c38a296194575afc01d1470ad366d262ecc166b42",
-   "unfolded_hash": "0cf1965755ceac9ceda41753d672bce71eaa7d8f9628894bb69297368dd1ec20"
+   "unfolded_hash": "77a5872f365790bab33cdabac8b682e599fb579f54cb7cd51521ddc49085c8d1"
   },
   "Accounting.SecurityProofs.CovertResidual": {
    "type_hash": "89a050fbdfa6a718cc71e69413c2ea03e70e9cb47076c42b6531b9acf5047a64",
@@ -5010,23 +5010,23 @@
   },
   "Pouw.SecurityProofs.PearlCSampledByDeadline": {
    "type_hash": "746b126f892a61cc8de0e4ddd67553bb0a219bb089c1caa0cb120afd9c255a68",
-   "unfolded_hash": "854ae744022588fd2c78694ef4dec6aa785680a50947df90477e00ec035a4d65"
+   "unfolded_hash": "24a44a83cb4e624fa264ce0c347ddc126aa974e8b3f85152c3e71861a95031fe"
   },
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384": {
    "type_hash": "7e7c94650e7907b062351bef5f110c0fb8003dc5c6d91ee66673fbdc6a247cea",
-   "unfolded_hash": "990d5d90509feacdc2e0d187813aeedf213221e842feb8e1842201b0ae23a0a1"
+   "unfolded_hash": "2ec9a44b7be4a980c2ac71aa9344705523ca14671131dbe6d742bf0368ecf3d3"
   },
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192": {
    "type_hash": "33d62aa0ada7e5b4271924247b387ae663be075789d2a0a285f149f697c2e9e8",
-   "unfolded_hash": "cf359c9cbc123fa09464d233a7bbebc16bec46c1fb09ae112248933fd4a446ee"
+   "unfolded_hash": "a53ee56297848a7a1cd8936654c4d00caeb2f0d3236b54c719c426c69cb0eab0"
   },
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": {
    "type_hash": "1c86a1eeaf0d1cade5918bf743e5fd50320e363c7e9d94263f53d3f4a51ea0f4",
-   "unfolded_hash": "036944d735d520eac5376a328e5fcf534597afa39b3fbdd96a8c456d913db638"
+   "unfolded_hash": "6a6cb3181fea7e961a8b68f343bb0436f8c86a465c4224a9e128c838221807d0"
   },
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": {
    "type_hash": "6db2b5f14eaa50ef363440f397e8532266bf9830364718fb5fd44faa6e14a9c2",
-   "unfolded_hash": "0e6b5f1a98d281062a1fb396fc59dad90e9789e47644db91ee256ee9d89f0c6c"
+   "unfolded_hash": "952aeaf4bc8124f20a0172f348908936571ba2008cc94e20eb26950e383b0341"
   },
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": {
    "type_hash": "9aeace18613a03bae9a9ace39729fe1820c7ce37c2b3548ba819ae8cb939143a",
@@ -5066,11 +5066,11 @@
   },
   "Pouw.SecurityProofs.SpareCapacityAtDeadline": {
    "type_hash": "3594d8805abf1f58d5952a6080b16acb0ce96995d0d67a7d5c820e099b09dc45",
-   "unfolded_hash": "4b9fc6537f07ce0d10b29f4cfdb69cec39971d90737b8a94b2f5f4425624e2a6"
+   "unfolded_hash": "d143bfc0ad4f56777a925c26b36431f2a092161aa8fb7af2f3747ce78607dd92"
   },
   "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline": {
    "type_hash": "91340f91f97e76024fe99b6313f85175f771c69ba355cd042cf23d1d01d660cf",
-   "unfolded_hash": "64bdbf88a52fc3b25acdcae4ae6c14fa0c086be9ace1f6016393ba09b77b603d"
+   "unfolded_hash": "f752b9accc70529c8b356903472e7b6297eec07416c9d1374466655cc2274878"
   },
   "Verity.SecurityProofs.BlockDescription": {
    "type_hash": "80baa463fd43086b3ca137b50dc78ace3b4400bfbabdb344ddc3c090d1f6dbeb",
@@ -6810,11 +6810,11 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Accounting.BudgetAbortPearlC", "Pouw.PearlC.Gγ", "Pouw.PearlC.Workload.InDomain"],
+    "open": ["Accounting.BudgetAbortPearlC", "Pouw.PearlC.GGap", "Pouw.PearlC.Workload.InDomain"],
     "reads": []
    },
    "type_hash": "2eed0526fa5f4476b6ce1975b042190a9566a0568b57aee689ee3a023705ede8",
-   "unfolded_hash": "73d9e45d7a3f44e8ba50002f4d37cf4203a6d15633dcd6a6b1d7114a27fa5260"
+   "unfolded_hash": "3d54089a8b29cf26b32a65da0287ef7e5f5ef8a59ff05a06f0ce314f0eda0dad"
   },
   "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced": {
    "owner": "@memory-accounting",
@@ -6825,11 +6825,11 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pouw.PearlC.GγPerCoin", "Pouw.PearlC.Workload.InDomain"],
+    "open": ["Pouw.PearlC.GGapPerCoin", "Pouw.PearlC.Workload.InDomain"],
     "reads": []
    },
    "type_hash": "fabaf877067f5e46ea4a935870364484d98d0b161f650b5a356673fae8dfd82a",
-   "unfolded_hash": "98cf84d41b263280e1430d285501c9fdd191e61b2cbaa7c173ec451c758d40a8"
+   "unfolded_hash": "1011824b219e766a58b27537b5057ee59fe3b79faca722c26f773238295fb123"
   },
   "Accounting.SecurityProofs.ComputeOfPouw": {
    "owner": "@memory-accounting",
@@ -6842,7 +6842,7 @@
     "reads": []
    },
    "type_hash": "dde82660e7599ddb7892eb0d5eac586a06536c297c7fdc330aa5c545e0fefd27",
-   "unfolded_hash": "65454f8240c0fe0693196211b04353f0124a0ea09b7d84b21636463b1b23e4e0"
+   "unfolded_hash": "b1ee09e3140c457b9f63ab214e54cc15a5a206b1584a3f86b2dc2e0136f7b45a"
   },
   "Accounting.SecurityProofs.ComputeOfPouwPerRun": {
    "owner": "@memory-accounting",
@@ -6855,7 +6855,7 @@
     "reads": []
    },
    "type_hash": "c0bae848d5eca780c94a102c38a296194575afc01d1470ad366d262ecc166b42",
-   "unfolded_hash": "0cf1965755ceac9ceda41753d672bce71eaa7d8f9628894bb69297368dd1ec20"
+   "unfolded_hash": "77a5872f365790bab33cdabac8b682e599fb579f54cb7cd51521ddc49085c8d1"
   },
   "Accounting.SecurityProofs.CovertResidual": {
    "owner": "@memory-accounting",
@@ -7931,13 +7931,13 @@
     "open": [
      "Accounting.BudgetAbortPearlC",
      "Accounting.CallsWithinPearlC",
-     "Pouw.PearlC.Gγ",
+     "Pouw.PearlC.GGap",
      "Pouw.PearlC.Workload.InDomain"
     ],
     "reads": []
    },
    "type_hash": "5580f497f2834e1184ec443923d18b04dd3cc28704c6df37f330206d35d0e139",
-   "unfolded_hash": "f7a2b08b811da02cde816261d89a6dcd7217b88705df713fa29941e33672537a"
+   "unfolded_hash": "218c030c070f93dda35f20d2b2da598431295bd0611425bc7a87210d4f0d6835"
   },
   "Accounting.SecurityProofs.PearlCStopEndToEndPerRun": {
    "owner": "@memory-accounting",
@@ -7946,11 +7946,11 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Accounting.CallsWithinPearlC", "Pouw.PearlC.GγPerCoin", "Pouw.PearlC.Workload.InDomain"],
+    "open": ["Accounting.CallsWithinPearlC", "Pouw.PearlC.GGapPerCoin", "Pouw.PearlC.Workload.InDomain"],
     "reads": []
    },
    "type_hash": "6cedd6501a14fec827a8babde06c27e2cd58a9806a0ee2db78ccfd26db65d101",
-   "unfolded_hash": "1f6d1d8eab26190fa141349ecd077226fd475fcf56c951a6a464a6fd195fdc37"
+   "unfolded_hash": "3098e0ca3ab67573b16636db9e5ac997cee9e0f9e1a38efa5322a118c4a47e31"
   },
   "Accounting.SecurityProofs.PouwEndToEndPerRun": {
    "owner": "@memory-accounting",
@@ -7963,7 +7963,7 @@
     "reads": []
    },
    "type_hash": "31c0943a819102e21c0f851f870d2ab5a9e93937491c328813e69182e5fccce1",
-   "unfolded_hash": "41de72a9242acd43e9a241f30b7cfe28fa5f4213c01a777cf3e11cf7ddfe2315"
+   "unfolded_hash": "5d5090792477034d7df1de801e867c7c0b4ad9aea3efd7d5eeef762037582fa1"
   },
   "Accounting.SecurityProofs.PouwLocalOff": {
    "owner": "@compute-accounting",
@@ -10250,7 +10250,7 @@
     ]
    },
    "type_hash": "906825a3b08429ff5792f39a31164d1d252f77a3bc93b02bd84df4c92d3386a9",
-   "unfolded_hash": "d80a26cb33683f3080bd986a50948c18a3e7208d0376af16e484b1950128006f"
+   "unfolded_hash": "b8c77ac9c95afd0c165e3f53b3d0838e9420587e023f8e3e4987e1a588d1f0be"
   },
   "Bandwidth.SecurityProofs.AuditInteractive": {
    "owner": "@memory-accounting",
@@ -18624,20 +18624,84 @@
    "owner": "@compute-accounting",
    "signature": ["Pouw.Fp8Atom.H1T.Proofs.h1tGap (hD : Pouw.Fp8Atom.H1T.DistinctLiveH1T) : Pouw.Fp8Atom.H1T.H1TGap"],
    "assumptions": ["Pouw.Fp8Atom.H1T.DistinctLiveH1T"],
-   "type_hash": "23ff769baea06829110fa539b7b8dba5c4874a2ddb2af4d404370c57a4f5c9c1"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Pouw.Fp8Atom.H1T.DistinctLiveH1T"],
+    "reads": [
+     "Pouw.Dimension.Embed.fpVal",
+     "Pouw.Dimension.H100.Floor",
+     "Pouw.Dimension.H100.H32",
+     "Pouw.Dimension.H100.Op100",
+     "Pouw.Dimension.H100.Op100.WFw",
+     "Pouw.Dimension.H100.Op100.casesOn",
+     "Pouw.Dimension.H100.Op100.ctorIdx",
+     "Pouw.Dimension.H100.Op100.fp32",
+     "Pouw.Dimension.H100.Op100.fp64",
+     "Pouw.Dimension.H100.Op100.int",
+     "Pouw.Dimension.H100.Op100.mma",
+     "Pouw.Dimension.H100.Op100.move",
+     "Pouw.Dimension.H100.Op100.operand",
+     "Pouw.Dimension.H100.Op100.other",
+     "Pouw.Dimension.H100.Op100.outs",
+     "Pouw.Dimension.H100.Op100.price",
+     "Pouw.Dimension.H100.Op100.rec",
+     "Pouw.Dimension.H100.Op100.wgmma",
+     "Pouw.Dimension.H100.Prices100",
+     "Pouw.Dimension.H100.Prices100.ffma",
+     "Pouw.Dimension.H100.Prices100.fp64",
+     "Pouw.Dimension.H100.Prices100.int32",
+     "Pouw.Dimension.H100.Prices100.mac",
+     "Pouw.Dimension.H100.Prices100.mk",
+     "Pouw.Dimension.H100.Prices100.other",
+     "Pouw.Dimension.H100.Prices100.tc",
+     "Pouw.Dimension.H100.Shape100",
+     "Pouw.Dimension.H100.Shape100.bf16F32",
+     "Pouw.Dimension.H100.Shape100.casesOn",
+     "Pouw.Dimension.H100.Shape100.ctorIdx",
+     "Pouw.Dimension.H100.Shape100.e4m3F16",
+     "Pouw.Dimension.H100.Shape100.e4m3F32",
+     "Pouw.Dimension.H100.Shape100.e5m2F16",
+     "Pouw.Dimension.H100.Shape100.e5m2F32",
+     "Pouw.Dimension.H100.Shape100.elems",
+     "Pouw.Dimension.H100.Shape100.f16F16",
+     "Pouw.Dimension.H100.Shape100.f16F32",
+     "Pouw.Dimension.H100.Shape100.k",
+     "Pouw.Dimension.H100.Shape100.rec",
+     "Pouw.Dimension.H100.Shape100.regPrice",
+     "Pouw.Dimension.H100.Shape100.s8",
+     "Pouw.Dimension.H100.Shape100.tf32",
+     "Pouw.Dimension.H100.cost100",
+     "Pouw.Dimension.H100.regs100",
+     "Pouw.Fp8Atom.H1T.H1TGap",
+     "Pouw.Fp8Atom.H1T.Idx",
+     "Pouw.Fp8Atom.H1T.MSalt",
+     "Pouw.Fp8Atom.H1T.mfree",
+     "Pouw.Fp8Atom.H1T.mword"
+    ]
+   },
+   "type_hash": "23ff769baea06829110fa539b7b8dba5c4874a2ddb2af4d404370c57a4f5c9c1",
+   "unfolded_hash": "5ab145e90035c0ad82e519fd075a4a15286ef2a26b9b6ed1247bfed0056be6e2"
   },
   "Pouw.NCP.GameProofs.gapFromTTNCP": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.NCP.GameProofs.gapFromTTNCP : Pouw.NCP.GamePinned.GapFromTTNCP"],
    "assumptions": [],
-   "type_hash": "39a6333de73a564cb6387635be8bd82e062c1724167c67e653c05f1472216bcc"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Pouw.NCP.Assumptions.TTNCP", "Pouw.NCP.GamePinned.GapFromTTNCP"]
+   },
+   "type_hash": "39a6333de73a564cb6387635be8bd82e062c1724167c67e653c05f1472216bcc",
+   "unfolded_hash": "76f4e200362be9d55a82835b0d7bd4c4200424c42fa97249fece9a435b825025"
   },
   "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192": {
    "owner": "@compute-accounting",
    "signature": [
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]",
     "  [Fintype S] (sha fetch : Rat) (salt : S → List Nat) (sem : Pouw.PearlC.PearlCSem Q R S)",
-    "  (HA : Pouw.PearlC.HiddenAudit Q R S) (ηzk : Nat → Real)",
+    "  (HA : Pouw.PearlC.HiddenAudit Q R S) (δzk : Nat → Real)",
     "  (hTT :",
     "    Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt",
     "      (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000))",
@@ -18647,14 +18711,14 @@
     "        (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "      (Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
     "        (instHSub.hSub (218 / 25) (8953 / 1000)))",
-    "      (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192) HA ηzk) :",
-    "  Pouw.PearlC.GγHidden (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt)",
+    "      (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192) HA δzk) :",
+    "  Pouw.PearlC.GGapHidden (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt)",
     "    (Pouw.PearlC.pearlCProtocolDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
     "      (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "    (Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000)",
     "      (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "    (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192) HA",
-    "    (1648180439 / 446072750000).cast Pouw.PearlC.εPearlC ηzk"
+    "    (1648180439 / 446072750000).cast Pouw.PearlC.δPearlC δzk"
    ],
    "assumptions": [],
    "premises": {
@@ -18669,15 +18733,15 @@
     ],
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1", "Pouw.PearlC.Assumptions.TileProofSound"]
    },
-   "type_hash": "7f2d668d96e1f5097f9e29147c9ec0ca635557fef356465ab6d8ca979a4dc3ab",
-   "unfolded_hash": "3b5fd02c37e175d5032537b273e12833238022247c804471f4eea0ce5f28804a"
+   "type_hash": "74e3da11bff9301200097b03fdb9b0de9a98ab64a1ef25d9c1ddeaa7481e95c0",
+   "unfolded_hash": "507fb03572a319ad07c133042c9fd96c2e7b9e6b40c419c30ed2b10da33f5235"
   },
   "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192": {
    "owner": "@compute-accounting",
    "signature": [
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q]",
     "  [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S) {sem sem' : Pouw.PearlC.PearlCSem Q R S}",
-    "  (HA : Pouw.PearlC.HiddenAudit Q R S) (ηzk : Nat → Real)",
+    "  (HA : Pouw.PearlC.HiddenAudit Q R S) (δzk : Nat → Real)",
     "  (hTT :",
     "    Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1 CM (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem",
     "      (1 / 1000))",
@@ -18691,8 +18755,8 @@
     "      (fun L =>",
     "        And (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192 L)",
     "          (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
-    "      HA ηzk) :",
-    "  Pouw.PearlC.GγHidden CM",
+    "      HA δzk) :",
+    "  Pouw.PearlC.GGapHidden CM",
     "    (Pouw.PearlC.pearlCProtocolDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000)",
     "      (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "    (Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000)",
@@ -18700,7 +18764,7 @@
     "    (fun L =>",
     "      And (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192 L)",
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
-    "    HA (1648180439 / 446072750000).cast (fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N 8192)) ηzk"
+    "    HA (1648180439 / 446072750000).cast (fun q N => Pouw.PearlC.δPearlC q (instHMul.hMul N 8192)) δzk"
    ],
    "assumptions": [],
    "premises": {
@@ -18735,15 +18799,15 @@
      "Pouw.PearlC.unitOfRow"
     ]
    },
-   "type_hash": "1286756681d58a59ea5b23fb6da7e40397ab900c9becf0d83b0536181a122ab3",
-   "unfolded_hash": "ff1fd321b1a342f8c3c274bd44e3918e89b1d8ff4eef39a40c039ae05e83091d"
+   "type_hash": "c1cbd9938159b42495b71961d192eee4dafaaaa00482d0efce18d6fa55f4fa39",
+   "unfolded_hash": "2f5e38246498aa870adda0a71a77d943d4eead4922e041513dc71c7e890ff65c"
   },
   "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192": {
    "owner": "@compute-accounting",
    "signature": [
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192 {Q R S : Type} [Fintype Q] [DecidableEq Q]",
     "  [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S) {sem sem' semC : Pouw.PearlC.PearlCSem Q R S}",
-    "  {π : Pouw.PearlC.Layout → Equiv Q Q} (HA : Pouw.PearlC.HiddenAudit Q R S) (ηzk : Nat → Real)",
+    "  {π : Pouw.PearlC.Layout → Equiv Q Q} (HA : Pouw.PearlC.HiddenAudit Q R S) (δzk : Nat → Real)",
     "  (hTT :",
     "    Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1 CM (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem",
     "      (1 / 1000))",
@@ -18758,8 +18822,8 @@
     "      (fun L =>",
     "        And (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192 L)",
     "          (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
-    "      HA ηzk) :",
-    "  Pouw.PearlC.GγHidden CM",
+    "      HA δzk) :",
+    "  Pouw.PearlC.GGapHidden CM",
     "    (Pouw.PearlC.pearlCProtocolDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000)",
     "      (instHSub.hSub (218 / 25) (8953 / 1000)))",
     "    (Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000)",
@@ -18767,7 +18831,7 @@
     "    (fun L =>",
     "      And (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) Pouw.PearlC.sh8192 L)",
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
-    "    HA (1648180439 / 446072750000).cast (fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N 8192)) ηzk"
+    "    HA (1648180439 / 446072750000).cast (fun q N => Pouw.PearlC.δPearlC q (instHMul.hMul N 8192)) δzk"
    ],
    "assumptions": [],
    "premises": {
@@ -18804,8 +18868,8 @@
      "Pouw.PearlC.unitOfRow"
     ]
    },
-   "type_hash": "10ffb094e0ad68273aa8d3335ca981b0cb8b72f1680e18dec4f91855620216e8",
-   "unfolded_hash": "994463e923bc5448fc9d9a353a5052efa47ab2f9377ff6fe8024a9b665b49b65"
+   "type_hash": "8faadafbd1f87063ec7189ef4adca4ca919fb0793e335fd6645c364b0fa488f5",
+   "unfolded_hash": "18caf59f47dc6f09d5227c2bb6ef405bf3268c2af7cdf43b360b2af697561994"
   },
   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256": {
    "owner": "@compute-accounting",
@@ -18815,13 +18879,14 @@
     "  {π : Pouw.PearlC.Layout → Equiv Q Q} (m : Nat)",
     "  (hTT : Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : Pouw.PearlC.RowSeedNoise sem sem')",
     "  (hC : Pouw.PearlC.CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :",
-    "  Pouw.PearlC.GγSampledDraw CM (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
+    "  Pouw.PearlC.GGapSampledDraw CM",
+    "    (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
     "    (fun L =>",
     "      And (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 { m := m, n := 6144, k := 256 } L)",
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
     "    (Pouw.PearlC.pearlCDrawRev1 Pouw.PearlC.devH100) (32437 / 2521000).cast fun q N =>",
-    "    Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
+    "    Pouw.PearlC.δPearlC q (instHMul.hMul N m)"
    ],
    "assumptions": [],
    "premises": {
@@ -18856,8 +18921,8 @@
      "Pouw.PearlC.unitOfRow"
     ]
    },
-   "type_hash": "b6f1266b3b0597c3e65f67e595129a36e72c2f0b6bcc710f413e3cf4371c7913",
-   "unfolded_hash": "234a8ab776f7c917475c3e338d3a2881b61c4c9fc5a00fe68269c6b9d8fd48a1"
+   "type_hash": "65e0f9e6b0171ccb250a8f507fd8ba148e3e41643bfcec1ea02fb0f5ebfb0be9",
+   "unfolded_hash": "2fb81f5ebfd295195002ead7457dfe7e85bd2f12d987d64229054c30154beaba"
   },
   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": {
    "owner": "@compute-accounting",
@@ -18867,14 +18932,14 @@
     "  {π : Pouw.PearlC.Layout → Equiv Q Q} (m : Nat)",
     "  (hTT : Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : Pouw.PearlC.RowSeedNoise sem sem')",
     "  (hC : Pouw.PearlC.CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :",
-    "  Pouw.PearlC.GγSampledDrawTolThreshold CM",
+    "  Pouw.PearlC.GGapSampledDrawTolThreshold CM",
     "    (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100))",
     "    (fun L =>",
     "      And (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 { m := m, n := 6144, k := 256 } L)",
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
     "    (Pouw.PearlC.pearlCDrawRev1 Pouw.PearlC.devH100) (32437 / 2521000).cast fun q N =>",
-    "    Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
+    "    Pouw.PearlC.δPearlC q (instHMul.hMul N m)"
    ],
    "assumptions": [],
    "premises": {
@@ -18909,8 +18974,8 @@
      "Pouw.PearlC.unitOfRow"
     ]
    },
-   "type_hash": "da0b40685f9de11c32470f5a00335cb067753050462f689bad196ece67d3a743",
-   "unfolded_hash": "803091a68b28b870baf835536b3b902a61bcb852898d0599dc73acbeb8fdacb2"
+   "type_hash": "990d9c4560669793765a1de8cb9e5258a8ea16a61977380a57fe2bec6ad97b0e",
+   "unfolded_hash": "4eb3183f3916e1971f474d4628543951edd35fd8484c238e4e75c83667b37381"
   },
   "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256": {
    "owner": "@compute-accounting",
@@ -18919,13 +18984,14 @@
     "  [Fintype S] (CM : Pouw.PearlC.CostModel Q R S) {sem sem' : Pouw.PearlC.PearlCSem Q R S} (m : Nat)",
     "  (hTT : Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : Pouw.PearlC.RowSeedNoise sem sem')",
     "  (hCM : CM.SplitClosed) :",
-    "  Pouw.PearlC.GγSampledDraw CM (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
+    "  Pouw.PearlC.GGapSampledDraw CM",
+    "    (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
     "    (fun L =>",
     "      And (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 { m := m, n := 6144, k := 256 } L)",
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
     "    (Pouw.PearlC.pearlCDrawRev1 Pouw.PearlC.devH100) (32437 / 2521000).cast fun q N =>",
-    "    Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
+    "    Pouw.PearlC.δPearlC q (instHMul.hMul N m)"
    ],
    "assumptions": [],
    "premises": {
@@ -18958,8 +19024,8 @@
      "Pouw.PearlC.unitOfRow"
     ]
    },
-   "type_hash": "463c89795112885024f7ab689e21f774603b015c7b66cd7fea72055a0b410fd3",
-   "unfolded_hash": "352d1d01f8d2e9b769ea6262d69db49fa980b4cf1eff774191bf586d9dd2eda8"
+   "type_hash": "2cf010228c9bf1f5bd19ea836890e1702e195b592a66119882281518e0d4f767",
+   "unfolded_hash": "45768ac8198706181626edcfbe759c283d0684c24f5823c7a41384e9f14bd52f"
   },
   "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol": {
    "owner": "@compute-accounting",
@@ -18968,14 +19034,14 @@
     "  [Fintype S] (CM : Pouw.PearlC.CostModel Q R S) {sem sem' : Pouw.PearlC.PearlCSem Q R S} (m : Nat)",
     "  (hTT : Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : Pouw.PearlC.RowSeedNoise sem sem')",
     "  (hCM : CM.SplitClosed) :",
-    "  Pouw.PearlC.GγSampledDrawTolThreshold CM",
+    "  Pouw.PearlC.GGapSampledDrawTolThreshold CM",
     "    (Pouw.PearlC.pearlCProtocolDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100))",
     "    (fun L =>",
     "      And (Pouw.PearlC.pearlCDomainDevAt Pouw.PearlC.devH100 { m := m, n := 6144, k := 256 } L)",
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
     "    (Pouw.PearlC.pearlCDrawRev1 Pouw.PearlC.devH100) (32437 / 2521000).cast fun q N =>",
-    "    Pouw.PearlC.εPearlC q (instHMul.hMul N m)"
+    "    Pouw.PearlC.δPearlC q (instHMul.hMul N m)"
    ],
    "assumptions": [],
    "premises": {
@@ -19008,8 +19074,8 @@
      "Pouw.PearlC.unitOfRow"
     ]
    },
-   "type_hash": "8d8e0fac632471f9dd593417808a54b73d2353214f54aae7021062ca6a43a748",
-   "unfolded_hash": "03daf06e10b0ed2730d3c8da5cac64982e9ca2c3a579ec42b19c803b0cb466a6"
+   "type_hash": "bb7b6c6139fa706475372000fd8f7386d8afefa01d3cb05021f1b9a5234bf181",
+   "unfolded_hash": "4f1a50ddaaf1f6cacca8e669d640336fdf1ee8c116859db708fa18086b14f9ef"
   },
   "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192": {
    "owner": "@compute-accounting",
@@ -19019,13 +19085,13 @@
     "  (hTT :",
     "    Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1 CM (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem (1 / 400))",
     "  (hN : Pouw.PearlC.RowSeedNoise sem sem') (hCM : CM.SplitClosed) :",
-    "  Pouw.PearlC.GγSampled CM",
+    "  Pouw.PearlC.GGapSampled CM",
     "    (Pouw.PearlC.pearlCProtocolDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400))",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400))",
     "    (fun L =>",
     "      And (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192 L)",
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
-    "    (16223 / 3177500).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N 8192)"
+    "    (16223 / 3177500).cast fun q N => Pouw.PearlC.δPearlC q (instHMul.hMul N 8192)"
    ],
    "assumptions": [],
    "premises": {
@@ -19055,8 +19121,8 @@
      "Pouw.PearlC.unitOfRow"
     ]
    },
-   "type_hash": "0ace96bc190a63f345cbb0ffac65aa2dcbdfbd4fc0fd8050c6720068b523fd10",
-   "unfolded_hash": "02610bff09e3f9c10391d0d92c47e123517cbf5112f74384bebc4a0e5cedcfae"
+   "type_hash": "6de5a8e07a0831e8f24485fde4fcc16141e5be0cfab5b91b92ff9ca7024d38cf",
+   "unfolded_hash": "1363de33bf93059ce2e8c560c0f7d9fce3681306c374da6c056fb2d1caf9500d"
   },
   "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192": {
    "owner": "@compute-accounting",
@@ -19066,13 +19132,13 @@
     "  (hTT :",
     "    Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1 CM (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem (1 / 1000))",
     "  (hN : Pouw.PearlC.RowSeedNoise sem sem') (hCM : CM.SplitClosed) :",
-    "  Pouw.PearlC.GγSampled CM",
+    "  Pouw.PearlC.GGapSampled CM",
     "    (Pouw.PearlC.pearlCProtocolDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000))",
     "    (Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000))",
     "    (fun L =>",
     "      And (Pouw.PearlC.pearlCDomainDevAt (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) Pouw.PearlC.sh8192 L)",
     "        (instLENat.le (Pouw.PearlC.rowsOf L) (instHPow.hPow 2 64)))",
-    "    (216793 / 59950000).cast fun q N => Pouw.PearlC.εPearlC q (instHMul.hMul N 8192)"
+    "    (216793 / 59950000).cast fun q N => Pouw.PearlC.δPearlC q (instHMul.hMul N 8192)"
    ],
    "assumptions": [],
    "premises": {
@@ -19102,8 +19168,8 @@
      "Pouw.PearlC.unitOfRow"
     ]
    },
-   "type_hash": "e93bbee92713b5b69adc87eed0a21be26519fb98fd49c63e94869b34619db632",
-   "unfolded_hash": "c61fbfac64123ea5d6cbc5ed86b0c54e51e7e206826badf9e6f54f868e7c5c14"
+   "type_hash": "db701ed287a7e3e3106dab9ae644604bd14a0d7239c570cfeae582ff7ad4a15f",
+   "unfolded_hash": "6597197cd72d99a894102682fe0d2bb74e13a8e65d45bb37bb750bec2fc9c17f"
   },
   "Pouw.Salt.keyed_leaf_binds": {
    "owner": "@compute-research",
@@ -19758,7 +19824,7 @@
     "reads": []
    },
    "type_hash": "5285cb8cbec9dd6a634d4653607b825be7d9eea4c260b93e29cb3fad67b09cee",
-   "unfolded_hash": "5e038806d7f7c9ee901a5597fa7473a82d17f3856c7d2b3d46f0edecbcfd7835"
+   "unfolded_hash": "7014d4f4899e80574999c123c0faea97a8d10467b89e4617a3d35bff4692c885"
   },
   "Pouw.SecurityProofs.EndToEndEps": {
    "owner": "@compute-research",
@@ -19809,7 +19875,14 @@
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.GapFromTT : Pouw.Guarantees.GapFromTT"],
    "assumptions": [],
-   "type_hash": "d3d32512ab23c8d09a6e13da0a45199f75fbc0f660bc7383f21083fd8be27984"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Pouw.Assumptions.TT", "Pouw.Pinned.GapFromTT"]
+   },
+   "type_hash": "d3d32512ab23c8d09a6e13da0a45199f75fbc0f660bc7383f21083fd8be27984",
+   "unfolded_hash": "ee70a65fc6d19673aafe0e009db593fe563448d47d30c39ad63d09df90dee8ec"
   },
   "Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1": {
    "owner": "@compute-research",
@@ -19821,19 +19894,40 @@
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.NCP.GapFromTTNCP_U : Pouw.NCP.RouteU.GapFromTTNCP_U"],
    "assumptions": [],
-   "type_hash": "860dd559274b9db9f808a11a85b69a8887bd882f673c08dc90295f5a10c85977"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Pouw.Adversary.Bounded", "Pouw.NCP.Assumptions.TTNCP_U", "Pouw.Workload.InDomain"],
+    "reads": []
+   },
+   "type_hash": "860dd559274b9db9f808a11a85b69a8887bd882f673c08dc90295f5a10c85977",
+   "unfolded_hash": "3713c1861313f54eabdc923571921e1a3e86c0edc133dfa9b3e77962fbccc0cb"
   },
   "Pouw.SecurityProofs.NCP.GapFromTTNCP_U_C2": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.NCP.GapFromTTNCP_U_C2 : Pouw.Guarantees.NCP.GapFromTTNCP_U_C2"],
    "assumptions": [],
-   "type_hash": "c10926f2536673c68e22738c1df9547178d57703aa198399e282e0676fee4dbb"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Pouw.Adversary.Bounded", "Pouw.NCP.Assumptions.TTNCP_U", "Pouw.Workload.InDomain"],
+    "reads": []
+   },
+   "type_hash": "c10926f2536673c68e22738c1df9547178d57703aa198399e282e0676fee4dbb",
+   "unfolded_hash": "76a2753e632bc6cb87e31239f41ac1cce68065d24342fd689548cd5edda2bbe4"
   },
   "Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1 : Pouw.Guarantees.NCP.GapFromTTNCP_U_v1"],
    "assumptions": [],
-   "type_hash": "b3b326448acf3fdcf28cc7e5930cef2ffbc265db7c658987895d4409fff5f10a"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Pouw.Adversary.Bounded", "Pouw.NCP.Assumptions.TTNCP_U", "Pouw.Workload.InDomain"],
+    "reads": []
+   },
+   "type_hash": "b3b326448acf3fdcf28cc7e5930cef2ffbc265db7c658987895d4409fff5f10a",
+   "unfolded_hash": "8947bb88ed76d4c1724aa9de188dcf35a5ec757550887e0b83716d731f22a8e5"
   },
   "Pouw.SecurityProofs.OnsiteFreed": {
    "owner": "@compute-research",
@@ -19987,25 +20081,69 @@
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GapFp4Sm120_16384 : Pouw.Guarantees.PearlC.GapFp4Sm120_16384"],
    "assumptions": [],
-   "type_hash": "635b94f45ef2d588795b75af9e30385b7192de46ed8ab4d382820ea42a0e2326"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutFp4Sm120W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutFp4W1", "Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "635b94f45ef2d588795b75af9e30385b7192de46ed8ab4d382820ea42a0e2326",
+   "unfolded_hash": "65080426c39cd53d04ba9aa39e1f23f039641cfb0682d94b97aafcfa998c1901"
   },
   "Pouw.SecurityProofs.PearlC.GapFp4Sm120_8192": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GapFp4Sm120_8192 : Pouw.Guarantees.PearlC.GapFp4Sm120_8192"],
    "assumptions": [],
-   "type_hash": "808f70edcbb2d07ceae703ea8a19d5312d23aa2d6504e1fd7539bd43f7886c6b"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutFp4Sm120W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutFp4W1", "Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "808f70edcbb2d07ceae703ea8a19d5312d23aa2d6504e1fd7539bd43f7886c6b",
+   "unfolded_hash": "cd91d94231a03b930d184fc802b4056aa43b1f3ab8ada4e0453f086ad9527a59"
   },
   "Pouw.SecurityProofs.PearlC.GapH100Rev1_16384": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GapH100Rev1_16384 : Pouw.Guarantees.PearlC.GapH100Rev1_16384"],
    "assumptions": [],
-   "type_hash": "1e298e64f95cfa25a8af1cb04660594c99fa163f206402876c4ccff70047f846"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCH100Rev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1", "Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "1e298e64f95cfa25a8af1cb04660594c99fa163f206402876c4ccff70047f846",
+   "unfolded_hash": "c1dc2bc1c0f9d5b0448ebe0c9635594ee9b93484899f0f5fdf7d16548cb80087"
   },
   "Pouw.SecurityProofs.PearlC.GapH100Rev1_8192": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GapH100Rev1_8192 : Pouw.Guarantees.PearlC.GapH100Rev1_8192"],
    "assumptions": [],
-   "type_hash": "545ec2add6b1496b801f2b1b06e45c4b635b619e74b12180f869c03cda5a343d"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCH100Rev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1", "Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "545ec2add6b1496b801f2b1b06e45c4b635b619e74b12180f869c03cda5a343d",
+   "unfolded_hash": "31b3834c90e1a6ba7f952383114f9b7011676ef065cf716203c022ff12cd89a6"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast16Rev1_8192": {
    "owner": "@compute-accounting",
@@ -20013,7 +20151,18 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v1Cast16Rev1_8192 : Pouw.Guarantees.PearlC.GapSm120v1Cast16Rev1_8192"
    ],
    "assumptions": [],
-   "type_hash": "00d6486cd2e401333c68298bb4c0551f937033f68de2d86452d6f187f0fe1ec9"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "00d6486cd2e401333c68298bb4c0551f937033f68de2d86452d6f187f0fe1ec9",
+   "unfolded_hash": "71367ecafa3fa1419c848dc8d3f5583738d82cd18bb35d515ee76e1a50074610"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast32p06ChainOnlyRev1_8192": {
    "owner": "@compute-accounting",
@@ -20022,7 +20171,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1Cast32p06ChainOnlyRev1_8192"
    ],
    "assumptions": [],
-   "type_hash": "bb2e8fc4b6012598a4b6dacd911ada02a414bdcbee58845d48eacaede39da515"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "bb2e8fc4b6012598a4b6dacd911ada02a414bdcbee58845d48eacaede39da515",
+   "unfolded_hash": "6638b12ec9a31ec98f270adb2febe6a449f55f86d9f261909da1f143ca1a25bf"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast32p06Rev1_8192": {
    "owner": "@compute-accounting",
@@ -20030,7 +20190,18 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v1Cast32p06Rev1_8192 : Pouw.Guarantees.PearlC.GapSm120v1Cast32p06Rev1_8192"
    ],
    "assumptions": [],
-   "type_hash": "e3a3895433daf9043dc17b8d21d9e26584ec7ffa7429cc76ee70598441fcf75a"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "e3a3895433daf9043dc17b8d21d9e26584ec7ffa7429cc76ee70598441fcf75a",
+   "unfolded_hash": "4d1c453769acee183dc3e7b767a26be03a397cf012e86639909003812c6ef1b2"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72ChainOnlyRev1_8192": {
    "owner": "@compute-accounting",
@@ -20039,7 +20210,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1Cast8p72ChainOnlyRev1_8192"
    ],
    "assumptions": [],
-   "type_hash": "732b6661a1cc588078f569fa042a7b3f8b089e1d082efbf3c08106daac65f650"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "732b6661a1cc588078f569fa042a7b3f8b089e1d082efbf3c08106daac65f650",
+   "unfolded_hash": "5d112f1a7c26766c18f24d70ae5289eae2588ca1e0ba7b825437a3f1533161c7"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_16384": {
    "owner": "@compute-accounting",
@@ -20048,7 +20230,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_16384"
    ],
    "assumptions": [],
-   "type_hash": "a28a309ecce998c877c93ef1b124125d04bf49cf4893b55d671bcbf12a84c6c3"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "a28a309ecce998c877c93ef1b124125d04bf49cf4893b55d671bcbf12a84c6c3",
+   "unfolded_hash": "fec6f0850943d3af7f1d63d9970ef24f8e3bb7eee8bda22fc700f1f649a080fa"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_8192": {
    "owner": "@compute-accounting",
@@ -20057,7 +20250,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "810f473c37879852810191281bf44af2939d933e46c017fffa6f0991c189858e"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "810f473c37879852810191281bf44af2939d933e46c017fffa6f0991c189858e",
+   "unfolded_hash": "8d0913e11315b9be20f7ec61f307c1a362433338c83f26192c4e7837234d3458"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_llama31_8b": {
    "owner": "@compute-accounting",
@@ -20066,7 +20270,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_llama31_8b"
    ],
    "assumptions": [],
-   "type_hash": "1e52422d666bac732a172ccd8171f3ae6e7d9d06e5d8f7934f7addfbc314c513"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "1e52422d666bac732a172ccd8171f3ae6e7d9d06e5d8f7934f7addfbc314c513",
+   "unfolded_hash": "39b2f965a4ce54e0b91f2ed6d9cc926efc2584a5ccbd39f5e1a4ffd91189c974"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n28672k4096": {
    "owner": "@compute-accounting",
@@ -20075,7 +20290,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n28672k4096"
    ],
    "assumptions": [],
-   "type_hash": "55270d93ea1c3b54d49268063802edd693aa174bcd6a15d96315029bef3fdecc"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "55270d93ea1c3b54d49268063802edd693aa174bcd6a15d96315029bef3fdecc",
+   "unfolded_hash": "3071524a62ca144511f12ef1ca11c26acf031e435ed5f03d4f3e76e7386a58d4"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n4096k14336": {
    "owner": "@compute-accounting",
@@ -20084,7 +20310,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n4096k14336"
    ],
    "assumptions": [],
-   "type_hash": "42509a08544b6dadcaabccb4f7ddd13636f8dd09bda59fa42c66ec7c74ef745c"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "42509a08544b6dadcaabccb4f7ddd13636f8dd09bda59fa42c66ec7c74ef745c",
+   "unfolded_hash": "81b8d21127c388be7fa2fd3663ef9f8a1c5dd6b7b52ccce2c24d014c2ec1f5fe"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n4096k4096": {
    "owner": "@compute-accounting",
@@ -20093,7 +20330,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n4096k4096"
    ],
    "assumptions": [],
-   "type_hash": "de7930c867a4af37cfd848d567365b0ce0398dc3be40592360167413a83529b3"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "de7930c867a4af37cfd848d567365b0ce0398dc3be40592360167413a83529b3",
+   "unfolded_hash": "103a4a1239349f968c3e0021d368bd6fbaf188c7037f14a44234e87114d249a5"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n6144k4096": {
    "owner": "@compute-accounting",
@@ -20102,7 +20350,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n6144k4096"
    ],
    "assumptions": [],
-   "type_hash": "1ae0cd36e15869e944bd3f3d12fb60daa98431a27eeb66a99a5d193abcabb2c0"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "1ae0cd36e15869e944bd3f3d12fb60daa98431a27eeb66a99a5d193abcabb2c0",
+   "unfolded_hash": "d22a4fb009469c270201f92b5b8e5c67e84d6e6e520a14dc62c72118419b337d"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1_16384": {
    "owner": "@compute-accounting",
@@ -20110,7 +20369,18 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1_16384 : Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1_16384"
    ],
    "assumptions": [],
-   "type_hash": "9289a87b9ebcaa63016badc7b1b1858e0a84831c369dde615e4d02ab41a3dcb1"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "9289a87b9ebcaa63016badc7b1b1858e0a84831c369dde615e4d02ab41a3dcb1",
+   "unfolded_hash": "048a5a8fadcc8a2f170751957a13f3ee045da2d39dcab97aba0d21507ef8566a"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1_8192": {
    "owner": "@compute-accounting",
@@ -20118,7 +20388,18 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1_8192 : Pouw.Guarantees.PearlC.GapSm120v1Cast8p72Rev1_8192"
    ],
    "assumptions": [],
-   "type_hash": "cafbb78525ad12fe80548ac9205030c04b18c82b26740ec6615499e16bdd4f00"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "cafbb78525ad12fe80548ac9205030c04b18c82b26740ec6615499e16bdd4f00",
+   "unfolded_hash": "5faeace2575da218230ccfb5b97e6992782e535d0a018ccda0b9a03224bed629"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast16Rev1_8192": {
    "owner": "@compute-accounting",
@@ -20126,7 +20407,18 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast16Rev1_8192 : Pouw.Guarantees.PearlC.GapSm120v1LoopCast16Rev1_8192"
    ],
    "assumptions": [],
-   "type_hash": "df271eea07685ccb55a4f3ac69f7b5c6ec75ff35c538d194b0c3dd73e8e41a89"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "df271eea07685ccb55a4f3ac69f7b5c6ec75ff35c538d194b0c3dd73e8e41a89",
+   "unfolded_hash": "7da74f54ad83c3ef2fd5a7f4dc5dbbf266886323b8ecebd7ae2408ff7f915067"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast32p06ChainOnlyRev1_8192": {
    "owner": "@compute-accounting",
@@ -20135,7 +20427,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1LoopCast32p06ChainOnlyRev1_8192"
    ],
    "assumptions": [],
-   "type_hash": "97b5d328896e5874529f03f9f8c3aa886dbb5c84d5bae8390d3a54aaba83ace3"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "97b5d328896e5874529f03f9f8c3aa886dbb5c84d5bae8390d3a54aaba83ace3",
+   "unfolded_hash": "32192a9749b97c32785ce2cf36729ae214901215f4a50a2862e89c945a09daf4"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast32p06Rev1_8192": {
    "owner": "@compute-accounting",
@@ -20143,7 +20446,18 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast32p06Rev1_8192 : Pouw.Guarantees.PearlC.GapSm120v1LoopCast32p06Rev1_8192"
    ],
    "assumptions": [],
-   "type_hash": "ee5a9ca6ec2a9a00b98d752f943d0bedcc91e3cee39e88d2b7be26e0be3e99bd"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "ee5a9ca6ec2a9a00b98d752f943d0bedcc91e3cee39e88d2b7be26e0be3e99bd",
+   "unfolded_hash": "b31f81f3b4417b2c0c63369cdc424cb5af5fdd409f8014971252599cef8a0ca9"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8Rev1_8192": {
    "owner": "@compute-accounting",
@@ -20151,7 +20465,18 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8Rev1_8192 : Pouw.Guarantees.PearlC.GapSm120v1LoopCast8Rev1_8192"
    ],
    "assumptions": [],
-   "type_hash": "4e0860f255f2780406c3af4241d8885521f2b2c970509e1f93316d9b6526f0d1"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "4e0860f255f2780406c3af4241d8885521f2b2c970509e1f93316d9b6526f0d1",
+   "unfolded_hash": "cc51375fe023b75f8060ef92b9ac5d39a4746466c701eb1b7e3ce45496643f22"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72ChainOnlyRev1_8192": {
    "owner": "@compute-accounting",
@@ -20160,7 +20485,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72ChainOnlyRev1_8192"
    ],
    "assumptions": [],
-   "type_hash": "20f213e0d740c53e95599a4474ed743e3c24a0f8bb3e561e6a54c70cb74b7b1b"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "20f213e0d740c53e95599a4474ed743e3c24a0f8bb3e561e6a54c70cb74b7b1b",
+   "unfolded_hash": "32fd9046bd383f5ab874d89cb79695a379e50f7a1dc2ed06054317d9c2f0c795"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_16384": {
    "owner": "@compute-accounting",
@@ -20169,7 +20505,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_16384"
    ],
    "assumptions": [],
-   "type_hash": "c445db421a8ce12c8cd68c88aa96fe2f01df8e42d22a1f87f1d79f0abfb8dd02"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "c445db421a8ce12c8cd68c88aa96fe2f01df8e42d22a1f87f1d79f0abfb8dd02",
+   "unfolded_hash": "2a79a3fdaf64c3830dd8e5749d9b8ba96dab6f146b7d46c6f6bbffc9dc6f1875"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400": {
    "owner": "@compute-accounting",
@@ -20178,7 +20525,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400"
    ],
    "assumptions": [],
-   "type_hash": "88b804825f95458219b5a4b160e53c69490e263236c4eea29471d4a216726643"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "88b804825f95458219b5a4b160e53c69490e263236c4eea29471d4a216726643",
+   "unfolded_hash": "7470f12e804fe797325178025f39f8734f4ae923d4a64a5916e35c2a802b6129"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192": {
    "owner": "@compute-accounting",
@@ -20187,7 +20545,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "b712736eba8aabdcce2e5205aab6635e828f9ffd8f5bcd6bcad8c1d9747bcc26"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "b712736eba8aabdcce2e5205aab6635e828f9ffd8f5bcd6bcad8c1d9747bcc26",
+   "unfolded_hash": "2e5b42a926633b884237b50b2660e84c4633a5e4503bbbff2de6ee9fc4fb0bb5"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400": {
    "owner": "@compute-accounting",
@@ -20196,7 +20565,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400"
    ],
    "assumptions": [],
-   "type_hash": "fbc17702140707098c23eb5c73fe0c39fded120c5e753749a7b2804cbad9b7e1"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "fbc17702140707098c23eb5c73fe0c39fded120c5e753749a7b2804cbad9b7e1",
+   "unfolded_hash": "270f45f485cf9c26c7e4cbb9a8bc555babffe6c1b37e2689a1b3a597bb8275ad"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_llama31_8b": {
    "owner": "@compute-accounting",
@@ -20205,7 +20585,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_llama31_8b"
    ],
    "assumptions": [],
-   "type_hash": "0d8987eaa57aa4a499bf0e9db68508ea6ba73221b2a07ba4cb94836856372b5a"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "0d8987eaa57aa4a499bf0e9db68508ea6ba73221b2a07ba4cb94836856372b5a",
+   "unfolded_hash": "4e3df3b875f2c5d0bd95435fdbd1c7fb82ca63347e72804eddbe7d3e5e99d89a"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n28672k4096": {
    "owner": "@compute-accounting",
@@ -20214,7 +20605,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n28672k4096"
    ],
    "assumptions": [],
-   "type_hash": "56897c845d069d5f8d74035e0d3e2ffaaf1dafb61dd4c823eedf688a54e471bc"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "56897c845d069d5f8d74035e0d3e2ffaaf1dafb61dd4c823eedf688a54e471bc",
+   "unfolded_hash": "3785d0ed0f9ca4a483cf633d65b7513db2a3c4f9f93d333853ff28357c0668b9"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n4096k14336": {
    "owner": "@compute-accounting",
@@ -20223,7 +20625,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n4096k14336"
    ],
    "assumptions": [],
-   "type_hash": "dfcf4c800ef84fcc25d5f51bc889a6c79102a57f0ab0926da250e52a0a71f770"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "dfcf4c800ef84fcc25d5f51bc889a6c79102a57f0ab0926da250e52a0a71f770",
+   "unfolded_hash": "f72493e1b3d9757354deb3dd076627adaa0fac818cded78547842ad6ad594fdd"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n4096k4096": {
    "owner": "@compute-accounting",
@@ -20232,7 +20645,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n4096k4096"
    ],
    "assumptions": [],
-   "type_hash": "105fd5f860322776b66f84619a37038129729c92b311d4522969cfc20b638900"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "105fd5f860322776b66f84619a37038129729c92b311d4522969cfc20b638900",
+   "unfolded_hash": "8cda85cefbc1cf9b38046835dda30bef4e06c9203a27ee363e8c5382625edcd6"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n6144k4096": {
    "owner": "@compute-accounting",
@@ -20241,7 +20665,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_n6144k4096"
    ],
    "assumptions": [],
-   "type_hash": "fcb9ef337de66262cc49484ce11b28fb1e2a630df8e77c168b8c68f1cbb94be2"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "fcb9ef337de66262cc49484ce11b28fb1e2a630df8e77c168b8c68f1cbb94be2",
+   "unfolded_hash": "9e3c0d9b8fbef88159f04691b5f61273c8d7fbc09332504c69cb52f2a135250d"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1_16384": {
    "owner": "@compute-accounting",
@@ -20249,7 +20684,18 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1_16384 : Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1_16384"
    ],
    "assumptions": [],
-   "type_hash": "58388768554db5bab051b3bac8513aab6c874fe0d8dfb65d3e23f2067a508e4d"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "58388768554db5bab051b3bac8513aab6c874fe0d8dfb65d3e23f2067a508e4d",
+   "unfolded_hash": "2f4a503e5d7d7169c23b267d76304c14dc5e0d2d7e4a6d6d9ec011cc0050bcc5"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1_8192": {
    "owner": "@compute-accounting",
@@ -20257,31 +20703,86 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1_8192 : Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1_8192"
    ],
    "assumptions": [],
-   "type_hash": "45c9acead859215ef70accb9947632dbeb6811c50c604c39f00e3b3b276c3961"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "45c9acead859215ef70accb9947632dbeb6811c50c604c39f00e3b3b276c3961",
+   "unfolded_hash": "e6de47c910cf94761a6d9574223ca345c0d10b5e9c7def3ddf1547ee42b9343d"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Rev1_16384": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GapSm120v1Rev1_16384 : Pouw.Guarantees.PearlC.GapSm120v1Rev1_16384"],
    "assumptions": [],
-   "type_hash": "fef9783ed3072562f699a47ee50d4d5e8d8e2932c7bc7b4e2344a867d259e5ed"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "fef9783ed3072562f699a47ee50d4d5e8d8e2932c7bc7b4e2344a867d259e5ed",
+   "unfolded_hash": "94d0f7efecbfc985aa2166007872ab301e0982a4d37998a92cb54317754d87d9"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v1Rev1_8192": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GapSm120v1Rev1_8192 : Pouw.Guarantees.PearlC.GapSm120v1Rev1_8192"],
    "assumptions": [],
-   "type_hash": "b7445c446672b4db9e64a1dc7a388861333ce0015c4f20079a6e81ba49a0d3b7"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "b7445c446672b4db9e64a1dc7a388861333ce0015c4f20079a6e81ba49a0d3b7",
+   "unfolded_hash": "8f945ed96912ac363d71db4b4b3899f6f14dfd8129e0b0473b090bed5f48bad2"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v2Cap1000_16384": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GapSm120v2Cap1000_16384 : Pouw.Guarantees.PearlC.GapSm120v2Cap1000_16384"],
    "assumptions": [],
-   "type_hash": "e06bb0844ee1cb8a969fc453c5717079dadb518b45839b88cf7d6de842daea92"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "e06bb0844ee1cb8a969fc453c5717079dadb518b45839b88cf7d6de842daea92",
+   "unfolded_hash": "82a0b66a85a2e6ac9b37254ecc490b45ae6e36df5a1c5e8cd1497e6ffef2728a"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v2Cap1000_8192": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GapSm120v2Cap1000_8192 : Pouw.Guarantees.PearlC.GapSm120v2Cap1000_8192"],
    "assumptions": [],
-   "type_hash": "c5db6452087b3a6361750e68a42528126539a57da24c4e68c40d6c109117bab4"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "c5db6452087b3a6361750e68a42528126539a57da24c4e68c40d6c109117bab4",
+   "unfolded_hash": "c95a5e884cede836b1d51d9e081351bd301d87825b24e60b96365023c66d7c52"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v2Cast16Cap1000_8192": {
    "owner": "@compute-accounting",
@@ -20289,7 +20790,18 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v2Cast16Cap1000_8192 : Pouw.Guarantees.PearlC.GapSm120v2Cast16Cap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "21030659b2225e5b122acbb187d94c4ed608e1717c7882e9b768a10f54d7e1e2"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "21030659b2225e5b122acbb187d94c4ed608e1717c7882e9b768a10f54d7e1e2",
+   "unfolded_hash": "3bb20e41a727efb2d42c860ceee86cf31fd6ee71e1f0af173214a34965f5dd98"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v2Cast8p72Cap1000_8192": {
    "owner": "@compute-accounting",
@@ -20297,7 +20809,18 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v2Cast8p72Cap1000_8192 : Pouw.Guarantees.PearlC.GapSm120v2Cast8p72Cap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "20c3a70fc07ea2bca1103b782bc3ef3dcc7fb7eebfe2e895647f7071b4548bb0"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "20c3a70fc07ea2bca1103b782bc3ef3dcc7fb7eebfe2e895647f7071b4548bb0",
+   "unfolded_hash": "413ccba4284ff601681061e6e8e3e18ac0b2767680a0d438f2eda74c9ab75124"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v2Cast8p72ChainOnlyCap1000_8192": {
    "owner": "@compute-accounting",
@@ -20306,7 +20829,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v2Cast8p72ChainOnlyCap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "3ecc4fdd6f90e01247dcd993ac7d16697145a9d2f414bfda9f13e7cbecb3afc0"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnlyW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "3ecc4fdd6f90e01247dcd993ac7d16697145a9d2f414bfda9f13e7cbecb3afc0",
+   "unfolded_hash": "cd32066da2cd2df698ee6556e446372ae745dac86fa335deede6b5281d92501a"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v2ChainCap1000_16384": {
    "owner": "@compute-accounting",
@@ -20314,7 +20848,22 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v2ChainCap1000_16384 : Pouw.Guarantees.PearlC.GapSm120v2ChainCap1000_16384"
    ],
    "assumptions": [],
-   "type_hash": "b87fab804e243e0f84908323583df07b56a3f4ab2f1294b633549bfa036ab605"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCapW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": [
+     "Pouw.PearlC.Assumptions.TTOutW1",
+     "Pouw.PearlC.chainCreditDev",
+     "Pouw.PearlC.pearlCProtocolDevChainCap"
+    ]
+   },
+   "type_hash": "b87fab804e243e0f84908323583df07b56a3f4ab2f1294b633549bfa036ab605",
+   "unfolded_hash": "35cfc19d3acd4006d12b432c26268418387f810f601ca866e8dd404d6a6000d7"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v2ChainCap1000_8192": {
    "owner": "@compute-accounting",
@@ -20322,7 +20871,22 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v2ChainCap1000_8192 : Pouw.Guarantees.PearlC.GapSm120v2ChainCap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "2e0ed176d30c32e0d1a4f779e6f83d670c846d7ed841418f6909e867a9694247"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCapW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": [
+     "Pouw.PearlC.Assumptions.TTOutW1",
+     "Pouw.PearlC.chainCreditDev",
+     "Pouw.PearlC.pearlCProtocolDevChainCap"
+    ]
+   },
+   "type_hash": "2e0ed176d30c32e0d1a4f779e6f83d670c846d7ed841418f6909e867a9694247",
+   "unfolded_hash": "91216373159cc6d63f688c2e8f3fe41cdb1111967709dd6e8149c382483b429e"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v2LoopCast16Cap1000_8192": {
    "owner": "@compute-accounting",
@@ -20330,7 +20894,18 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v2LoopCast16Cap1000_8192 : Pouw.Guarantees.PearlC.GapSm120v2LoopCast16Cap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "ea509075457ae238e844a3bae833b2c0552351b92f7dcdafbad4af9658e8be05"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "ea509075457ae238e844a3bae833b2c0552351b92f7dcdafbad4af9658e8be05",
+   "unfolded_hash": "1b6736af6fd7905dd6259175237881620194b71f1633e0e2537f7fff4f9cc9ba"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v2LoopCast8Cap1000_8192": {
    "owner": "@compute-accounting",
@@ -20338,7 +20913,18 @@
     "Pouw.SecurityProofs.PearlC.GapSm120v2LoopCast8Cap1000_8192 : Pouw.Guarantees.PearlC.GapSm120v2LoopCast8Cap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "4c029c66ee67a49f952cc5502658df600a43e7fd88ae1ddac9e63737d663e1dd"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "4c029c66ee67a49f952cc5502658df600a43e7fd88ae1ddac9e63737d663e1dd",
+   "unfolded_hash": "ba98e32b062e79d36ad15fb44d440d2c2dc1af18a8b8c5dc19b9805f378918c8"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v2LoopCast8p72Cap1000_8192": {
    "owner": "@compute-accounting",
@@ -20347,7 +20933,18 @@
     "  Pouw.Guarantees.PearlC.GapSm120v2LoopCast8p72Cap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "f7e5351f5c6b3626dda73fdd585d6d4374baf6c980c14c120530cc020b902783"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "f7e5351f5c6b3626dda73fdd585d6d4374baf6c980c14c120530cc020b902783",
+   "unfolded_hash": "1b4678227c278821c0835cc6565c0bf89e19970214872275ad155e6185018a41"
   },
   "Pouw.SecurityProofs.PearlC.GapSm120v2LoopCast8p72ChainOnlyCap1000_8192": {
    "owner": "@compute-accounting",
@@ -20356,13 +20953,37 @@
     "  Pouw.Guarantees.PearlC.GapSm120v2LoopCast8p72ChainOnlyCap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "f6bcb01c834a71f1a117d5d3e6663e889a150fa3898cf80b9084565522ba6846"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnlyW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "f6bcb01c834a71f1a117d5d3e6663e889a150fa3898cf80b9084565522ba6846",
+   "unfolded_hash": "220c3dcff8653d7e49f2f0ac7ff792aa1a21db97d7f5a5e0f9823b2d8b792979"
   },
   "Pouw.SecurityProofs.PearlC.GapUOnlySm120Rev1_8192": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GapUOnlySm120Rev1_8192 : Pouw.Guarantees.PearlC.GapUOnlySm120Rev1_8192"],
    "assumptions": [],
-   "type_hash": "98edd018d4d9d0a62b6aa8ea0915221a48e97c6d977046b608adbc12c9349f96"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Pouw.PearlC.Assumptions.TTOutPearlCDevUOnlyW1"],
+    "reads": [
+     "Pouw.PearlC.Assumptions.TTOutUW1",
+     "Pouw.PearlC.CorrectU",
+     "Pouw.PearlC.GGapU",
+     "Pouw.PearlC.WinsU",
+     "Pouw.PearlC.correctSetU"
+    ]
+   },
+   "type_hash": "98edd018d4d9d0a62b6aa8ea0915221a48e97c6d977046b608adbc12c9349f96",
+   "unfolded_hash": "2ba4b15178750008d6395b1f8fafe746db30b1e51037afea9f48defb2e359fe1"
   },
   "Pouw.SecurityProofs.PearlC.GapUOnlyUnpromotedCap1000_8192": {
    "owner": "@compute-accounting",
@@ -20370,7 +20991,20 @@
     "Pouw.SecurityProofs.PearlC.GapUOnlyUnpromotedCap1000_8192 : Pouw.Guarantees.PearlC.GapUOnlyUnpromotedCap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "17895fac871ec2ee7604ecaade085e73fcbded84ed8bee254dba2165caa2d450"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Pouw.PearlC.Assumptions.TTOutPearlCDevUOnlyW1"],
+    "reads": [
+     "Pouw.PearlC.Assumptions.TTOutUW1",
+     "Pouw.PearlC.CorrectU",
+     "Pouw.PearlC.GGapU",
+     "Pouw.PearlC.WinsU",
+     "Pouw.PearlC.correctSetU"
+    ]
+   },
+   "type_hash": "17895fac871ec2ee7604ecaade085e73fcbded84ed8bee254dba2165caa2d450",
+   "unfolded_hash": "a02cd2bc5817c31e302d62e1a28adba01b9fdabebdde18c016ee159b01a1e799"
   },
   "Pouw.SecurityProofs.PearlC.GapUnpromotedCap1000_8192": {
    "owner": "@compute-accounting",
@@ -20378,7 +21012,18 @@
     "Pouw.SecurityProofs.PearlC.GapUnpromotedCap1000_8192 : Pouw.Guarantees.PearlC.GapUnpromotedCap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "edb5cd553216302df30b07b1ebe1ec37e1254516881b5e8e85841060652ab784"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": ["Pouw.PearlC.Assumptions.TTOutW1"]
+   },
+   "type_hash": "edb5cd553216302df30b07b1ebe1ec37e1254516881b5e8e85841060652ab784",
+   "unfolded_hash": "c544f680ea12da2440a81e7c38c63c580f110c278314080665b3a4394a0ea07d"
   },
   "Pouw.SecurityProofs.PearlC.GapUnpromotedChainCap1000_8192": {
    "owner": "@compute-accounting",
@@ -20386,7 +21031,22 @@
     "Pouw.SecurityProofs.PearlC.GapUnpromotedChainCap1000_8192 : Pouw.Guarantees.PearlC.GapUnpromotedChainCap1000_8192"
    ],
    "assumptions": [],
-   "type_hash": "ce977e24e7cbcf47fc30f4709e41dda9ec3ece88dce12c461fd22d7b91057f85"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCapW1",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": [
+     "Pouw.PearlC.Assumptions.TTOutW1",
+     "Pouw.PearlC.chainCreditDev",
+     "Pouw.PearlC.pearlCProtocolDevChainCap"
+    ]
+   },
+   "type_hash": "ce977e24e7cbcf47fc30f4709e41dda9ec3ece88dce12c461fd22d7b91057f85",
+   "unfolded_hash": "834cfa917252bb63ebb42a8cdcb5a80ea37f50323b8be9832043f1507855fd4a"
   },
   "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": {
    "owner": "@compute-accounting",
@@ -20409,7 +21069,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "1e54f1c04ee114ed2c890933ced37f2e30c19cd92e5e38f76578dc52ab5daa1c",
-   "unfolded_hash": "bbe22a8d514e96036b62487cb578883c4de509385b459fece0e45d874537d752"
+   "unfolded_hash": "2908260473ff052baa58169ed5e8de3f88e263f8f5cbb7abd0fea2bddf0fc4aa"
   },
   "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384": {
    "owner": "@compute-accounting",
@@ -20426,7 +21086,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileFp4W1", "Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "63855f0d2fcf251342df5c12572e00df0c0334b0b15b0b422353db19e7907d7a",
-   "unfolded_hash": "cc992f98da40bf7a4cb88473d8a4e681a6c312142d8a53e5ca7e56e36fd80503"
+   "unfolded_hash": "82e40da4a6de574a4101edb3d0e1b11f200128fdd78679d7a2b989ac86108203"
   },
   "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192": {
    "owner": "@compute-accounting",
@@ -20443,7 +21103,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileFp4W1", "Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "7f5c86ff7e8461c527b2e590fab0e2953e3ab07a368fa5f28e6ae51fb277d1d2",
-   "unfolded_hash": "c2399cc78952a3f9960f55fd0dd714d87c4e212e6a2cda347d511e01e0f3a275"
+   "unfolded_hash": "1d1e3320c6aaaf28a6421a6a77edd67bd9615b89dc9d72b2c3d4c85081cfba98"
   },
   "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384": {
    "owner": "@compute-accounting",
@@ -20460,7 +21120,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1", "Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "ef6406d1ced0419944f82832232059df5d6ea5217a12ca004dc9e343ab848383",
-   "unfolded_hash": "80e9708ec2e34e971502b25f7079c132f91c51e13f04c8cb13502d96e56bd4df"
+   "unfolded_hash": "069373ec6baa93faad1e2e7fe1866237cecbc8aff103985240ac309a144a3ecc"
   },
   "Pouw.SecurityProofs.PearlC.SampledH100Rev1_8192": {
    "owner": "@compute-accounting",
@@ -20477,7 +21137,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1", "Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "ef73b0f25ecb5d071a303aed482f6583abca91ef3324df6c95df4a58620a5342",
-   "unfolded_hash": "f6ca8323c0f4333f545235612c675a8f2eb48f4e88443120aeb15ac5a5d48158"
+   "unfolded_hash": "36d87d4602af0022d519a092d44b6089fb8072de904d1c10f1a9f4b80b46317d"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_16384": {
    "owner": "@compute-accounting",
@@ -20497,7 +21157,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "b3ee6918b5ce6a00dad1f74aac77c7c75096b0a66c9784888d6604fc6d966c1e",
-   "unfolded_hash": "e83ab93b2d66773316c47b181dae41e2f789ee51878f2f77f98d8cab528f4b1d"
+   "unfolded_hash": "e88f9615eb3e62a28d4994a5f76410cfe56d6024ee58f6396c548efa40708ed4"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_8192": {
    "owner": "@compute-accounting",
@@ -20517,7 +21177,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "9c55eaa88f22bcf2bcbd8bbde06e6f5cbbc6936af2cb1e485e191c4dc51ed157",
-   "unfolded_hash": "75003fa435fa2f6a45f921c561ec3296a1379062c48c31b51cb2d134d43edcc4"
+   "unfolded_hash": "e4376b366524799c2a47b106779e8b68eb2a3e1b606ccbc4903b45f93a5f0a2a"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": {
    "owner": "@compute-accounting",
@@ -20537,7 +21197,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "4dbaadf5675fe78d5abece33e130a677254e89a13f4588632d96220c037fa475",
-   "unfolded_hash": "b723bc3686a4dfa56cdf9ead7eb6fb7c19c5530f9bae1aba410b1cde130f47cd"
+   "unfolded_hash": "d77ffa44c17fc921d994f9985ea488be34ac0b7cc22410aef558b65ff634b3e9"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n28672k4096": {
    "owner": "@compute-accounting",
@@ -20557,7 +21217,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "a3db30f394267822a48ede652f75eef4833faa9c10b2896d100fbffbe0b3c3df",
-   "unfolded_hash": "57d83c49baf81b7a18c602c6350a1b38b1ac7078839858d084e057c5a8d5cc7a"
+   "unfolded_hash": "854143d29996bd3e633135d6b3250dfae1225a15908ad3003e1e09591e8bcdc1"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336": {
    "owner": "@compute-accounting",
@@ -20577,7 +21237,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "e511debc534a1674040606a19bbfa5ee6e9d4b556bfef3da7b9d9d3a91231bbd",
-   "unfolded_hash": "ceb7f36ab37fb95f53d97b44514ac19d8a5f1a1242b404840def41622c5a9163"
+   "unfolded_hash": "66e3225b1ff0b5c001e5b2bd89d0c77bf403ab98e61abbde5948a41eb59fef67"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k4096": {
    "owner": "@compute-accounting",
@@ -20597,7 +21257,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "829bfa6deda4df25e2b510a372a2eeb96bf32acff3101873401a6d2a68f7ee57",
-   "unfolded_hash": "c195aba787e3bf7a793d0ce48815630e83b66c786a6c9189bb4de035daded413"
+   "unfolded_hash": "2dd6af1078422a70d68455e445f6ebee8973cdf76dddb7105ab529cea3b36cfd"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n6144k4096": {
    "owner": "@compute-accounting",
@@ -20617,7 +21277,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "489ea2bac00b6b559776877f63177680c045a9d4a6dabf08d605e4f36a33a811",
-   "unfolded_hash": "30dec3b82c007f5a0f0f18e4d7fa56e54f22c69244fc4731cf3a7a65c7a9aee2"
+   "unfolded_hash": "1fbe407df314d7f398c5d0368d513b07149d36121c968c37f4de7601c927457b"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384": {
    "owner": "@compute-accounting",
@@ -20636,7 +21296,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "83e02e96d4f951c3467c31f76d4ddd81ec46d4bb78f9f1e7756414211ffb5095",
-   "unfolded_hash": "1847b223f7078408d86dad40b4ee06f304d2bfec9c781c7c8a57cd4fdd04d614"
+   "unfolded_hash": "c5655a63724c8b0516452a17eafb704a636029a26fb424abd5b9f1e64ea97c2e"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192": {
    "owner": "@compute-accounting",
@@ -20655,7 +21315,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "cbb806bbbc7ca1afe27731f234457107959a34c1c2e5d2eb3759174ba44fafec",
-   "unfolded_hash": "1c8c4c8b2cf93e4f263bdf00506d6edd2f7fccc1ede0900fbc10a69b9f28928c"
+   "unfolded_hash": "a9b6300927ab3eb28ad39714052761a6ba417293a8359b284129fd6c2c8988f5"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_16384": {
    "owner": "@compute-accounting",
@@ -20675,7 +21335,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "ce3a92536884e39f2aab1304f75888f723ede70e5a22e07c937da9fbfebf8294",
-   "unfolded_hash": "8713e2fe27311be23b3e14958d6c80344f477820033e598f328aef2080f01ec1"
+   "unfolded_hash": "88010813ce72fe778655db944ba0056cede897237ce5f6f3e61a19cd612e665e"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192": {
    "owner": "@compute-accounting",
@@ -20695,7 +21355,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "3b22880a14d2152b7b97a013338e4ba53e6b71d25554dea4d94ea6c38eb61ad0",
-   "unfolded_hash": "df07ab7d0170629059ff57b292d9d35af1a21926b4020cfc6a01a5b5c913150a"
+   "unfolded_hash": "5a8728bed6ca26e774c78b4cd2625dfeff7e1aacb2f159a1d1417e181798ce87"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_llama31_8b": {
    "owner": "@compute-accounting",
@@ -20715,7 +21375,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "3680f4ecce52bd15c7b2a7ac197321913ca0fdbe634f47bcab56eaf9250980bb",
-   "unfolded_hash": "457e867306e9bf31d7c8e1e3d8ecb7251b8cd33599b9b4156b7d30aa529e47ce"
+   "unfolded_hash": "869523726544053872c5e4f5c48734c22849d8c345665259476a7a1c1898fa5c"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096": {
    "owner": "@compute-accounting",
@@ -20735,7 +21395,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "1e32e97d46c9c1b6fd6310f8822e6f50d10193ebd5e96dea0bb063cb59aeac2d",
-   "unfolded_hash": "a43547335b2cb700dd7d330655b6ab53df4173edd0e0c1c423d98768c61322e3"
+   "unfolded_hash": "7d6c80de9b4f3f64f338a3e376cb221281b040714f786d91361758d16ba8e6fe"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336": {
    "owner": "@compute-accounting",
@@ -20755,7 +21415,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "4022c6a3eae927170a711ba5580228367139cf9c363527ec35c7d6a0484a5753",
-   "unfolded_hash": "dce0c7a27ce8a27f5d6d1f01117ea7c9677ace32781e7d5231a0efa7472d0d76"
+   "unfolded_hash": "00fe20298526e4e57ee2454437f8f4d055989bda22a01d7e5f55f41ca321f44d"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096": {
    "owner": "@compute-accounting",
@@ -20775,7 +21435,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "208a988808be01de2f4225fc84353b21527a9eed7112db207ed3ffa493a8a366",
-   "unfolded_hash": "3445176ec4496d3b5a4ea0758ce05d199aa3eca0d5c1a08bf72a64aeca293ed5"
+   "unfolded_hash": "17d52e39ad13345091ef7ce84b5ed15d5758adbd476b02c6cdfe2bd6694767a3"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096": {
    "owner": "@compute-accounting",
@@ -20795,7 +21455,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "c2df6796f22f1f0d3c9df987df0aef955adc4dbce1376980c702c1a69c16b1fc",
-   "unfolded_hash": "3dbfd68b00dd63a4583b76632706af764306198278ef577379e3e8295bb2e6ff"
+   "unfolded_hash": "521479c9297b05c5c4e18fe076a6a7e51b80cffff2d7e6f1620b7e60633991c2"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384": {
    "owner": "@compute-accounting",
@@ -20815,7 +21475,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "b13fe417b6f6ed83867f2b6eb10ce0bdad5fb5e303bd7d807ef95f7a21bec94e",
-   "unfolded_hash": "e6fbb5cd6ea39236ea39098701e28ba1620f2fb45e38bc7bd36b276258a84e7b"
+   "unfolded_hash": "7ec8ee23db23d48768b52cf6504343a8102b50a33215cabc26cce6963268db2f"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192": {
    "owner": "@compute-accounting",
@@ -20835,7 +21495,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "7c82d8b8d34ffcf2c8ab8744b30664a27187bfd9a898226e02016b8ba541fe6b",
-   "unfolded_hash": "7950e36786ba8014c7a4bbab01d3dcaf328f4e5f32337c4dcf2f6ed90f3f8199"
+   "unfolded_hash": "45e4d6f800fdc8df2cfcc173998979605ecf7c0c2997e9b4bc28877393b120f7"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_16384": {
    "owner": "@compute-accounting",
@@ -20852,7 +21512,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "42b39aff57d71980c6ba4ab69b6d6b17b48b7acbf837c21934e429672f7cf82b",
-   "unfolded_hash": "0dfd77f133abe88e07429693c5f1ae8f498f7c934f5d17fd6c5ea94b77b09f40"
+   "unfolded_hash": "d0c31a77c0071ba3f2c3e250084564bbda12efb1d75b320378dae06ad9be04dc"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v1Rev1_8192": {
    "owner": "@compute-accounting",
@@ -20869,7 +21529,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "8eedd5cf7f26cfd77dcad5841fb99eab6aa181c289285d8f0306fbfd23a037d9",
-   "unfolded_hash": "eeb04a7877383f4ad9f447fe0e104c660b300015e98d2e70469e6c849070aaf2"
+   "unfolded_hash": "d549ee50b0b5253a5e4c757b61eff4e01b5d2c800f7b7969524950f5e3305132"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_16384": {
    "owner": "@compute-accounting",
@@ -20888,7 +21548,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "1fc58927ae9ce299dc2eb4a5dbb43e1027f96d1969bd50dc855ce0887dda1d6b",
-   "unfolded_hash": "69604cacdbad9e8468019807e8713191d7b67dec9717c67c9446829e28f733ad"
+   "unfolded_hash": "1b33173d0f5a666a4762fdc9b1b68a51996818eba98d9e99ae8bbc912373b023"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v2Cap1000_8192": {
    "owner": "@compute-accounting",
@@ -20907,7 +21567,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "325ec73844b87c1419a805632baf8c702b27546a97a1d9015ce40dcfff2f090a",
-   "unfolded_hash": "8e8b7bfcc8fe654d8edf9b788bdaf03507d4cdd94b23a817f9b9c5ad0e2ccbe6"
+   "unfolded_hash": "67a597d0f264b736a0b03946c3115dd7ff86fbbb9296c09c0976d99775e6346c"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_16384": {
    "owner": "@compute-accounting",
@@ -20931,7 +21591,7 @@
     ]
    },
    "type_hash": "95ff33348efb20ffcbbd0731a9c62ba51ff6b28d8b5353a1c8e2afdb61f62ec8",
-   "unfolded_hash": "1e33110d1ca11457e18e2e78d09998c7ac8f14c42d662e3e52d5a75f9cf99186"
+   "unfolded_hash": "d6e139776d56ee968945652ac7a0ca9aa267cfe0b096404eeba36ce003bf7874"
   },
   "Pouw.SecurityProofs.PearlC.SampledSm120v2ChainCap1000_8192": {
    "owner": "@compute-accounting",
@@ -20955,7 +21615,7 @@
     ]
    },
    "type_hash": "6ee5dc9229274fc71f39aaccd8980b0237c45f7ee6a9a074b3beabd25cf36469",
-   "unfolded_hash": "ad4b8c8487f75fdb88dc1d046863e05fb5ce52ac1534564131bd64e5dc98a4b0"
+   "unfolded_hash": "42a82fe7510cf0d70b45a19a7e806cfd8e839a70038afcaa58dbbdf2d745e168"
   },
   "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore": {
    "owner": "@compute-accounting",
@@ -20993,13 +21653,13 @@
     "open": [
      "Pouw.PearlC.Adversary.BoundedBy",
      "Pouw.PearlC.Assumptions.HonestClock",
-     "Pouw.PearlC.GγSampled",
+     "Pouw.PearlC.GGapSampled",
      "Pouw.PearlC.Workload.InDomain"
     ],
     "reads": []
    },
    "type_hash": "746b126f892a61cc8de0e4ddd67553bb0a219bb089c1caa0cb120afd9c255a68",
-   "unfolded_hash": "854ae744022588fd2c78694ef4dec6aa785680a50947df90477e00ec035a4d65"
+   "unfolded_hash": "24a44a83cb4e624fa264ce0c347ddc126aa974e8b3f85152c3e71861a95031fe"
   },
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384": {
    "owner": "@compute-accounting",
@@ -21019,7 +21679,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "7e7c94650e7907b062351bef5f110c0fb8003dc5c6d91ee66673fbdc6a247cea",
-   "unfolded_hash": "990d5d90509feacdc2e0d187813aeedf213221e842feb8e1842201b0ae23a0a1"
+   "unfolded_hash": "2ec9a44b7be4a980c2ac71aa9344705523ca14671131dbe6d742bf0368ecf3d3"
   },
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192": {
    "owner": "@compute-accounting",
@@ -21039,7 +21699,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "33d62aa0ada7e5b4271924247b387ae663be075789d2a0a285f149f697c2e9e8",
-   "unfolded_hash": "cf359c9cbc123fa09464d233a7bbebc16bec46c1fb09ae112248933fd4a446ee"
+   "unfolded_hash": "a53ee56297848a7a1cd8936654c4d00caeb2f0d3236b54c719c426c69cb0eab0"
   },
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": {
    "owner": "@compute-accounting",
@@ -21060,7 +21720,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "1c86a1eeaf0d1cade5918bf743e5fd50320e363c7e9d94263f53d3f4a51ea0f4",
-   "unfolded_hash": "036944d735d520eac5376a328e5fcf534597afa39b3fbdd96a8c456d913db638"
+   "unfolded_hash": "6a6cb3181fea7e961a8b68f343bb0436f8c86a465c4224a9e128c838221807d0"
   },
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": {
    "owner": "@compute-accounting",
@@ -21081,7 +21741,7 @@
     "reads": ["Pouw.PearlC.Assumptions.TTOutTileW1"]
    },
    "type_hash": "6db2b5f14eaa50ef363440f397e8532266bf9830364718fb5fd44faa6e14a9c2",
-   "unfolded_hash": "0e6b5f1a98d281062a1fb396fc59dad90e9789e47644db91ee256ee9d89f0c6c"
+   "unfolded_hash": "952aeaf4bc8124f20a0172f348908936571ba2008cc94e20eb26950e383b0341"
   },
   "Pouw.SecurityProofs.PeriodBindingPerProver": {
    "owner": "@compute-accounting",
@@ -21799,7 +22459,7 @@
     "reads": []
    },
    "type_hash": "3594d8805abf1f58d5952a6080b16acb0ce96995d0d67a7d5c820e099b09dc45",
-   "unfolded_hash": "4b9fc6537f07ce0d10b29f4cfdb69cec39971d90737b8a94b2f5f4425624e2a6"
+   "unfolded_hash": "d143bfc0ad4f56777a925c26b36431f2a092161aa8fb7af2f3747ce78607dd92"
   },
   "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline": {
    "owner": "@compute-accounting",
@@ -21817,7 +22477,7 @@
     "reads": []
    },
    "type_hash": "91340f91f97e76024fe99b6313f85175f771c69ba355cd042cf23d1d01d660cf",
-   "unfolded_hash": "64bdbf88a52fc3b25acdcae4ae6c14fa0c086be9ace1f6016393ba09b77b603d"
+   "unfolded_hash": "f752b9accc70529c8b356903472e7b6297eec07416c9d1374466655cc2274878"
   },
   "RecDeploy.HonestHalfFixture.honest_half_fixture": {
    "owner": "@proofs",
@@ -25056,8 +25716,8 @@
    "Flock.SecurityProofs.RanRegisteredRun": {
     "com.Opens rt p op₀": "com.Opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (b : β), acc b → com.Opens rt (prog b) (op b)": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (FlockSoundness.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "ENNReal.instLE.le (FlockSoundness.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.RecursiveCircuitIndist": {
     "honest o P w": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -25119,7 +25779,6 @@
    },
    "Flock.SecurityProofs.SampledKSLiveV5": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmIn.parse D.unroll) (Except.ok pi)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll pi I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -25128,7 +25787,8 @@
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so V5 reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so V5 reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -25195,7 +25855,6 @@
     "Real.instLE.le (instHAdd.hAdd Mr.cast Md.cast) (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ μ) C) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.DampenerRemote": {
-    "Real.instLE.le (Finset.univ.sum fun i => c i) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (instHMul.hMul Φ H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ω : Ω) (b : β), SetLike.instMembership.mem (bad ω) b → SetLike.instMembership.mem I (ident b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ω : Ω) (j : ι) (t : Real), Real.instLE.le ((Finset.filter (fun b => And (Eq (ident b) j) (And (Real.instLE.le t (τ b)) (Real.instLE.le (τ b) (instHAdd.hAdd t Δ)))) (bad ω)).sum fun b => w b) (instHMul.hMul Φ Δ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -25203,8 +25862,9 @@
     "Real.instLE.le (d.D.size d.D.computed).cast C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ω : Ω), instLENat.le (M ω) (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (Mu ω) (Mr ω)) T.M.card) (Mx ω))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ω : Ω), Real.instLE.le (Mu ω).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul mfu κ) U) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Ω), Real.instLE.le (Mr ω).cast (instHDiv.hDiv (instHMul.hMul κ (instHAdd.hAdd (instHAdd.hAdd (instHSub.hSub C (instHMul.hMul (instHSub.hSub 1 εW) W)) (Nci.Dampener.wrongCapacity c (wrong ω))) ((bad ω).sum fun b => w b))) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ω : Ω), Real.instLE.le (Mx ω).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (ω : Ω), Real.instLE.le (Mx ω).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Real.instLE.le (Finset.univ.sum fun i => c i) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (ω : Ω), Real.instLE.le (Mr ω).cast (instHDiv.hDiv (instHMul.hMul κ (instHAdd.hAdd (instHAdd.hAdd (instHSub.hSub C (instHMul.hMul (instHSub.hSub 1 εW) W)) (Nci.Dampener.wrongCapacity c (wrong ω))) ((bad ω).sum fun b => w b))) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.DampenerThreaded": {
     "Real.instLE.le (d.D.size d.D.computed).cast C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -25213,8 +25873,8 @@
     "Real.instLE.le Mr.cast (instHDiv.hDiv (instHMul.hMul κ (instHSub.hSub C W)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le Mx.cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (instHMul.hMul (instHMul.hMul n.cast F) H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMul.hMul (instHMul.hMul α F) L) R": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le e.cast (instHDiv.hDiv (instHMul.hMul T.reuse.cast (instHMul.hMul 2 R)) (instHMul.hMul (instHMul.hMul 4 dd.cast) b_w))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMul.hMul (instHMul.hMul α F) L) R": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (instHMul.hMul b_a (instHAdd.hAdd Mr.cast T.M.card.cast)) (instHMul.hMul (instHMul.hMul n.cast (Nat.ceil (instHDiv.hDiv H L)).cast) (instHMul.hMul (instHAdd.hAdd R (instHMul.hMul (instHMul.hMul α F) L)) (T.bound (instHAdd.hAdd R (instHMul.hMul (instHMul.hMul α F) L)) b_w dd e)))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.DampenerThreadedSlots": {
@@ -25224,8 +25884,8 @@
     "Real.instLE.le Mr.cast (instHDiv.hDiv (instHMul.hMul κ (instHSub.hSub C W)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le Mx.cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (instHMul.hMul (instHMul.hMul n.cast F) H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMul.hMul (instHMul.hMul α F) L) R": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le e.cast (instHDiv.hDiv (instHMul.hMul T.reuse.cast (instHMul.hMul 2 R)) (instHMul.hMul (instHMul.hMul 4 dd.cast) b_w))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMul.hMul (instHMul.hMul α F) L) R": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le (instHMul.hMul b_a (instHAdd.hAdd Mr.cast T.M.card.cast)) (instHMul.hMul (instHMul.hMul n.cast (Nat.ceil (instHDiv.hDiv H L)).cast) (instHMul.hMul (instHAdd.hAdd R (instHMul.hMul (instHMul.hMul α F) L)) (T.bound (instHAdd.hAdd R (instHMul.hMul (instHMul.hMul α F) L)) b_w dd e)))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.DampenerWindows": {
@@ -25260,8 +25920,8 @@
     "Real.instLT.lt (instHAdd.hAdd R (instHMul.hMul r ω.cast)) (instHMul.hMul Nstar.cast b_w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.HeldBudget": {
-    "∀ (U : Fin R.B → Finset ι) (σ : ι → Finset (Fin R.d.D.N)), (∀ (u : Fin R.B), And (Nci.Capability.Selects X (U u) σ) (∀ (i : ι), SetLike.instMembership.mem (U u) i → Finset.instPartialOrder.le (σ i) (Nci.Capability.holds R.d.D (R.P.gates u)))) → Exists fun e => And (instLENat.le e.length aBlk) (Verity.Evaluates M r t R e fun u T => Nci.Capability.selectionBits T (U u) σ)": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (U : Fin R.d.n → Finset ι) (σ : ι → Finset (Fin R.d.D.N)), (∀ (u : Fin R.d.n), And (Nci.Capability.Selects X (U u) σ) (∀ (i : ι), SetLike.instMembership.mem (U u) i → Finset.instPartialOrder.le (σ i) (Nci.Capability.holds R.d.D (R.d.𝓘.gates u)))) → Exists fun e => And (instLENat.le e.length aBlk) (Verity.Evaluates M r t R e fun u T => Nci.Capability.selectionBits T (U u) σ)": "brought by PRs on `next` beside the rule (#5805, #5125, #6636), inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (U : Fin R.d.n → Finset ι) (σ : ι → Finset (Fin R.d.D.N)), (∀ (u : Fin R.d.n), And (Nci.Capability.Selects X (U u) σ) (∀ (i : ι), SetLike.instMembership.mem (U u) i → Finset.instPartialOrder.le (σ i) (Nci.Capability.holds R.d.D (R.d.𝓘.gates u)))) → Exists fun e => And (instLENat.le e.length aBlk) (Verity.Evaluates M r t R e fun u T => Nci.Capability.selectionBits T (U u) σ)": "brought by PRs on `next` beside the rule (#5805, #5125, #6636), inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (U : Fin R.B → Finset ι) (σ : ι → Finset (Fin R.d.D.N)), (∀ (u : Fin R.B), And (Nci.Capability.Selects X (U u) σ) (∀ (i : ι), SetLike.instMembership.mem (U u) i → Finset.instPartialOrder.le (σ i) (Nci.Capability.holds R.d.D (R.P.gates u)))) → Exists fun e => And (instLENat.le e.length aBlk) (Verity.Evaluates M r t R e fun u T => Nci.Capability.selectionBits T (U u) σ)": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.IncompressibleContainedMatMulOn": {
     "Real.instLE.le (instHMul.hMul α Γ.cast) K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -25311,12 +25971,12 @@
     "Real.instLT.lt S (instHMul.hMul (instHAdd.hAdd E 1) b).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.ThreadedOfStateFmt2": {
+    "Finset.instPartialOrder.le (Finset.instSDiff.sdiff (d.D.into W) d.θ) (Finset.instUnion.union Sst Sin)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (a : d.D.Transcript), SetLike.instMembership.mem (Nci.admissible d θv) a → Exists fun s => Eq (Nci.values Sst a) (f s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Fin c.D.N), Eq (c.D.isInput g) Bool.true → SetLike.instMembership.mem d.θ (M.emb g) → SetLike.instMembership.mem c.θ g": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Fin c.D.N), SetLike.instMembership.mem c.θ g → SetLike.instMembership.mem d.θ (M.emb g) → Eq (BitVec.cast ⋯ (θv (M.emb g))) (θc g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Finset.instPartialOrder.le W d.D.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (d.D.size W) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Finset.instPartialOrder.le (Finset.instSDiff.sdiff (d.D.into W) d.θ) (Finset.instUnion.union Sst Sin)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (a : d.D.Transcript), SetLike.instMembership.mem (Nci.admissible d θv) a → Exists fun s => Eq (Nci.values Sst a) (f s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le (d.D.size W) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.VerdictLag": {
     "Real.instLE.le (instHMul.hMul Φ H) C": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -25564,20 +26224,20 @@
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "HA.ProverBounded σ q": "HA.ProverBounded taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "HA.ProverBounded σ q": "HA.ProverBounded taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "HA.ProverBounded σ q": "HA.ProverBounded taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "HA.ProverBounded σ q": "HA.ProverBounded taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "HA.ProverBounded σ q": "HA.ProverBounded taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "HA.ProverBounded σ q": "HA.ProverBounded taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -25864,29 +26524,61 @@
     "Pouw.Assumptions.TT": "6fc4a19042b6bbf0c1774bcd962e5804ae3d01752eea790c9954960ef3b7c2b7"
    }
   },
+  "Definitions.Pouw.Assumptions.NCP.GamePinned": {
+   "digest": "9e79e242da166e49a3a4eda5239196c6cfe4b7172d31e4db0bdc1b4510d04700",
+   "definitions": {
+    "Pouw.NCP.GamePinned.GapFromTTNCP": "c791355b578fd3a00b559566856570d3eb291c6cf9a4b30176201f329eb30faf"
+   }
+  },
   "Definitions.Pouw.Assumptions.NCP.RouteUAssumptions": {
    "digest": "ebeb29ba05ea7ed83a5263412dcf61300ee5dbbe5bb92622a6192410b5772867",
    "definitions": {
     "Pouw.NCP.Assumptions.TTNCP_U": "edc2604a3108c79ffa7ef9d7a26625b50d53c7ee67668d43d8d34fc99b48e1ff"
    }
   },
+  "Definitions.Pouw.Assumptions.PearlC.DeviceChainCap": {
+   "digest": "bfe7bfdb4068c280d5f800abf01b359ba1129c0bbbf4cfb5d179908c81d4265a",
+   "definitions": {
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCapW1": "fcb25acfedf9419f8a05f328c1a44f15c4419000c1f468407f30f2447578c4ab",
+    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCapW1": "5ec813925617579e08bdff640c6e1cf719029793c86e2e6fcb913b56ff9b0cc2"
+   }
+  },
+  "Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1": {
+   "digest": "cb5dbdad86bca9aa081cdb298ac7c6ef24dfd0111ab7679599ad7606a6524081",
+   "definitions": {
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnlyW1": "736b6150e226ff857569ac76a89f63ee21bb00d71a4bed6db9560a6b0a417acb",
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1": "d4205fa6d017f402d221810cecd8cea4eb16f3b252ef264740b8876cc0022a16"
+   }
+  },
   "Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1": {
-   "digest": "95043f79a3ac0462512c00e165b79120a1209477ebcdb7ea8b3fe7f7a8453fb5",
+   "digest": "bd6938e16c8367d473cc72a6f384a3cb4202fe23574188bcc6d5bf8663e791d8",
    "definitions": {
     "Pouw.PearlC.Assumptions.TTOutFp4Sm120W1": "11fbbc8e631ecb9b44f15770dce1d3f071b4cc0a57c467e03cf8cd3f08821e7a",
-    "Pouw.PearlC.Assumptions.TTOutFp4W1": "780af81080f7dae6022e268b16751d643c4fc974375e4970cbf3d6e657f598a3",
+    "Pouw.PearlC.Assumptions.TTOutFp4W1": "779da159775e9bf6e01b68aa8fcf864a31ca74449e0822e3b13b8d0561c6a5d4",
     "Pouw.PearlC.Assumptions.TTOutTileFp4Sm120W1": "f5c362fcaafa9a56b8b773e9a2ed90bae93c4c517a7892a0b5db8de4a5e2799d",
-    "Pouw.PearlC.Assumptions.TTOutTileFp4W1": "d3dd61908660d3ce56dc0caa7c22ef21ed5b629ec8ec011cf93ce5f8536ba479"
+    "Pouw.PearlC.Assumptions.TTOutTileFp4W1": "999cd654b50eee280e58c6d21d6be7d2b47d4df8e7562003aa736424f9d2564b"
+   }
+  },
+  "Definitions.Pouw.Assumptions.PearlC.TTOutRev1": {
+   "digest": "d593c029816790e6d1b355797cb033de23547d535c5fca46e7fc29aa99934b71",
+   "definitions": {
+    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1": "4e57dc514719cecf3e5352aed81aed5279bb6cf85e7334470654200561d4edc0"
+   }
+  },
+  "Definitions.Pouw.Assumptions.PearlC.TTOutUOnly": {
+   "digest": "1abd21c625a8d67a528e5826acb6319e5b4313bb50e630e858f4b162341c8158",
+   "definitions": {
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnlyW1": "13b4e2d318e62ec3114e6957a488ba3e8bf72206097e7374e6ee53675f31e358"
    }
   },
   "Definitions.Pouw.Assumptions.PearlC.TTOutW1": {
-   "digest": "8ad7572a112d2eceddb00644fc7f3510d28744ce29832664d6b7cbd0f2a3bf07",
+   "digest": "22f001778ad480f183c5ac01a7529fb48173b06de4af75afd2b9ee8f14b22fd0",
    "definitions": {
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1": "517a97fd17a69228c389be0594cf881a1e2510f673dd754dfb54d7d069a46ed7",
-    "Pouw.PearlC.Assumptions.TTOutPearlCDevW1": "9c80d831ac3401d95826d7d8c8fe9d1b7b04101edbb0a3a40001404adf1cb8a2",
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1": "a73283d0a161d6e60166c146206b66aeb0b4226996edc961d5772114b789f15e",
+    "Pouw.PearlC.Assumptions.TTOutPearlCDevW1": "39407e42a6cb9f9ad368744eb1c82e9c2e6fce343a7767613bd7ab11c53eeaaa",
     "Pouw.PearlC.Assumptions.TTOutPearlCH100Rev1W1": "adfa261d3299a7888c22b8be013ba946fdf4ef6f0e7d4d6946c0443e2728943a",
-    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1": "2f6760bc8c23362ef6083a7acaa401e9cdf2f09e1b276a83e8299f68551acb5d",
-    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevW1": "e969b2670ec8c7f0015efec355aaa88627d3e0d6e5b10d462676d6cbea8c2b49",
+    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1": "4f345d210c3331087992cb7382fed68ce46439f58c273989e24f5df822d574b3",
+    "Pouw.PearlC.Assumptions.TTOutTilePearlCDevW1": "939c52222c95172b1049d047089973836b3b59709894af204bc42db2bda3b216",
     "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1W1": "9df58bce6b2a066570e29c40d9ef15f15ad7434557aeb3f2202bc6af2e3fb801",
     "Pouw.PearlC.Assumptions.TTOutTileW1": "b0144b16d96b324c76ffe37c04479593580a477e5eb83f0ac9cc8a35455767cb",
     "Pouw.PearlC.Assumptions.TTOutW1": "c4d6029e62d5d84b450dbb229c099b1d1325caa30091b6c283108c853fbb3a7c"
@@ -26004,7 +26696,7 @@
    }
   },
   "Definitions.Pouw.Game.Defs": {
-   "digest": "1efbb56f12cff4f0d1cbb2f4e11df5704918a86e28164eaa65ad1591fa7fc55b",
+   "digest": "d4090d850fd7f34504d297bbd06a884f3cccbae994cb3e07f7fa92555de7760c",
    "definitions": {
     "Pouw.ActOK": "57df5c36d420d174dd1ebd0c6da6f2b1b1224f87e845887cad3141376edf8246",
     "Pouw.AdmitsRef": "18672cb8492b5f31c1d2409559ff52b617493363921150daeacc7c57395aa6fd",
@@ -26034,7 +26726,6 @@
     "Pouw.Layout.N": "9297eda572e2b04c2e6c21d6916ced7a02994c809e904b4297803cb1de4f4223",
     "Pouw.Layout.ShapesIn": "96a0ed2164168ade2a3d711c76786dfb8279471b12cc19c745407bbd78b37b3d",
     "Pouw.Layout.fixedId": "d22ac4b9b745b4a54649b43f4eaa4b3cbd0bcb675e3a6d9fdeaaed8e268c1316",
-    "Pouw.Layout.rowsOf": "2ec7d69048073ba4300053fb64ef02e8f90c46e272cac987f47c0f03d14a50bc",
     "Pouw.Layout.shape": "8430626bcd7f744f5d427e1fea19463ca0973dfefdd08dbccdbce0f30e96c720",
     "Pouw.OutOK": "24389dacf6503d45b12b0e6f9e77a6682fd910d7e61167d47403ab673f04225f",
     "Pouw.Protocol": "9de4d268fda0a18e2e12d7697292862e2d3e8288d384c1f47fe216527ae22573",
@@ -26071,6 +26762,20 @@
     "Pouw.Guarantees.NCP.EpsFromTTNCP_U_v1": "a50520b178abebbe563dd01a4a7f673ec25cefc38ad63207218520497a2a0454",
     "Pouw.Guarantees.PearlC.EpsFp4Sm120_8192": "81315e7d3aa377d601835a8cc0babda3366ffc92405f3fa17529c8f121d249b5",
     "Pouw.Guarantees.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192": "dc541fb1645f5b41016b724887be199471247203e633704567ad32faed173742"
+   }
+  },
+  "Definitions.Pouw.Guarantees.NCP": {
+   "digest": "e676986a4c7696ac20db74e11d13c044161418a32967c23d7eb171ffd0d88ffb",
+   "definitions": {
+    "Pouw.Guarantees.NCP.GapFromTTNCP_U_C2": "a71f4ced5e0105fc8b61e3dc848446d143cdfd3be2a59d08473480d110ed3c16",
+    "Pouw.Guarantees.NCP.GapFromTTNCP_U_v1": "bf1298b3ec1386650d42cfcb9b30a190d07ad31a84b76ed792b74098af4a7eca",
+    "Pouw.NCP.RouteU.GapFromTTNCP_U": "a17148971a1c27b772d039cb59eb7962d42c710d1b2be47d24e0e92434c52d4a"
+   }
+  },
+  "Definitions.Pouw.Guarantees.PearlCFlockTile": {
+   "digest": "152c0b1798ad3f204b5f2b3fe0bb6cbcbfc212401e0975f0a811b30864ff0f78",
+   "definitions": {
+    "Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "0187629268af06a4a34ab965b8d481611d2d1a0afa2550c7328227d1df6d6a14"
    }
   },
   "Definitions.Pouw.NCP.Defs": {
@@ -26219,7 +26924,7 @@
    }
   },
   "Definitions.Pouw.PearlC.DeviceFp4": {
-   "digest": "535ab968e8abaa537ed8c4eebf14e37beb2afd9f4f7af8666f97341355802800",
+   "digest": "53fe04bd50869e052fe4d11212a2c53f58562ba37dbbf2e3508edc26bfb982ab",
    "definitions": {
     "Pouw.PearlC.Fp4Dev.Fire4": "30b9898b21ff1a6d0b1809ad5a3901728d7cfbec1e2d3617fbf938ac1b99be98",
     "Pouw.PearlC.Fp4Dev.Op4": "fac14db9df452432138fc3e58c0abe9218e1f3697f2580bc5523740f16d79adc",
@@ -26297,7 +27002,7 @@
     "Pouw.PearlC.Fp4Sem.beta": "b1bfd5721c3acfec18c9e78abaa6b94d913a45d4d3b80d4447c353f730fde9de",
     "Pouw.PearlC.Fp4Sem.lines": "68df5f1f9818bdeaef3ba328d67b19686dee43f1e0d5a7c8ca18d16329b62f37",
     "Pouw.PearlC.Fp4Sem.passRows": "54019f1d9a38a25db813cc4cf65ec6a303604c7862cd2af214e1cd2b76c8433d",
-    "Pouw.PearlC.Fp4Sem.tileDebit": "ddc0de10f94f8417d83ea5e8f64ad0b51a885dc06b37da3f93fdf4cd1d5e83ae",
+    "Pouw.PearlC.Fp4Sem.tileDebit": "87b4e416af917ae3e39eaab714f90335d71a68738d63279d3e97892f4912914a",
     "Pouw.PearlC.Fp4Sem.unitDebit": "dd58ce7138843f8add1dd21dcbba3ef6af6a3a2e255ceea9626e4ab50c1e6eca",
     "Pouw.PearlC.Fp4Sem.unitForm": "6dc285cf86cea09d89da7952a61720ada1da11904a7e83e714e1d8b5d888296f",
     "Pouw.PearlC.Fp4Sem.unitUseful": "642091cae6e329936d7af26c8f8b45e533482d1fc9378d881b1de3d56f6d0383",
@@ -26475,7 +27180,7 @@
    }
   },
   "Definitions.Pouw.PearlC.Instance": {
-   "digest": "03b982d98a6941273bedef720cfdf85fbb2e73a069f3c89d62492318e1a321c4",
+   "digest": "81f277bb9eb6d2aeb9488bdf28b6fe4046f6a0768fde4698e194fa33b5f40067",
    "definitions": {
     "Pouw.PearlC.PearlCSem": "c879a2d9120f1622fccc70dbca3eb9ad653bd52d2511c2a269ce1a89098975e8",
     "Pouw.PearlC.PearlCSem.OperandOK": "05893d385010b3259347b66339d4c85ea03df42ad084bc332bce3522eb64e047",
@@ -26490,8 +27195,7 @@
     "Pouw.PearlC.bf16WordOf": "4c16502cb2ebfd22ba6bddacc3094f3772ec1f945025147c6efbc97cf23ae0fb",
     "Pouw.PearlC.codeBf16": "96682a0c5faec47aac555c7c01bb2cb5e2e778c5e9334a2dc6785a5021a2bfcd",
     "Pouw.PearlC.wordsVal": "c07093b8796e6dea8ecb3cc698b370726f6f6e31a450d1527e86540072036a46",
-    "Pouw.PearlC.δPearlC": "f359004141bd370a8bf856079a393c9be5217d14d97cf083a7bf05b897db369c",
-    "Pouw.PearlC.εPearlC": "dadfc5fa6bf5fba1cb898a5b5a9652b2133f9d73da1eb331dfec62d8216bceb8"
+    "Pouw.PearlC.δPearlC": "d59867555ea584f9dc1ae4ba8f6247384c1b116b37fbe1808efba06bbef504a8"
    }
   },
   "Definitions.Pouw.PearlC.PeelExact": {
@@ -26629,6 +27333,13 @@
     "Pouw.PearlC.sm120E4m3": "46fe445a03ea01e961de594d17fd2e537e12bfaf764f296745ced647bd757797",
     "Pouw.PearlC.sm120E4m3K32": "313fc54181e0834aed11b24d2ec50dfa0b5a2bfbd2dce390c2c6660068845b0a",
     "Pouw.PearlC.sm120Step": "4d41987d8760990c4db61e96d761db62a4ce809ae3308b0fb7126b80f4a24d2a"
+   }
+  },
+  "Definitions.Pouw.PearlC.TileDraw": {
+   "digest": "666170b5cc920f50efe2ae6c658386d8a6a0e8719a5ed13b2c9655239e38562c",
+   "definitions": {
+    "Pouw.PearlC.GGapSampledDraw": "1d7a50bd3a252b1588253fda7fd24e0208055e0649285d0843df1a7bb40c7123",
+    "Pouw.PearlC.GGapSampledDrawTolThreshold": "7803192e38518467d4fb06d6d1b8c7e6ec5d19ca5ab360e158a9be9d78cea1d1"
    }
   },
   "Definitions.Pouw.PearlC.W1": {
