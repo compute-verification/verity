@@ -10,7 +10,7 @@ public import Proofs.Flock.ZkAny.Generic
 
 An audit commits every proof block's values before any coin. The serving stack registers them with the ZK server's
 value service (`Verity.ValueSalts`), which derives their salts from its own key, and the loop admits the record the
-stack hands it. The sample is drawn after that from the verifier's live coins, and each sampled proof block's proof is
+stack hands it. The sample is sampled after that from the verifier's live coins, and each sampled proof block's proof is
 one session through the ZK server. The auditor sees the admitted record, the sample, and the sampled sessions' releases
 with their outcomes (each verdict, and where each session stopped).
 
@@ -134,7 +134,7 @@ open scoped ENNReal
 
 /-- **A sampled audit's view at any values, per outcome of its sampled sessions.** For every value service `sv` with
 finite keys, sessions, salts, tags and record tags, registration number `n`, number `m` of sessions the stack commits
-before it registers, values `v`, dummy values `v₀`, stack `st` and key `k₀`; every finite sample space `X` drawn
+before it registers, values `v`, dummy values `v₀`, stack `st` and key `k₀`; every finite sample space `X` sampled
 uniformly after the registration; and the sampled sessions' outcome `out` and released bytes `rel`, functions of the
 registration's randomness (the key and the `m` sessions), the sample and the sessions' own randomness:
 

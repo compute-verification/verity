@@ -10,19 +10,19 @@ public import Proofs.Properties.Verity.Sampled.Trees
 public import Std.Tactic.Do
 
 /-!
-# The device's log as v2's check reads it, and the draw it shows
+# The device's log as v2's check reads it, and the sample it shows
 
 Where the sampled check's read of the device's log (`coinsRead`) returns a log from what the prover sent, in an accepted
-composition whose v2 case accepts, the log shows the draw (`shows_logRead`): the read takes the challenger session's
-release log in v2's evidence line by line as v2's check does (`readLog`), with the draw's coins `ξ`
-(`SampledProofs.OneStageZk.coinsOf`) placed in order on the releases of the draw's family after the registration's
-digest, one coin of `COIN_BYTES` bytes each. So the read meets the draw's ask (`DrawRead`) with no premise
+composition whose v2 case accepts, the log shows the sample (`shows_logRead`): the read takes the challenger session's
+release log in v2's evidence line by line as v2's check does (`readLog`), with the sample's coins `ξ`
+(`SampledProofs.OneStageZk.coinsOf`) placed in order on the releases of the sample's family after the registration's
+digest, one coin of `COIN_BYTES` bytes each. So the read meets the sample's ask (`DrawRead`) with no premise
 (`drawRead_logRead`, `drawRead_coinsRead`).
 
 * **v2's challenger** (`drawCoins_ok`, `trustedSessionOf_ok`, `sessionNamed_ok`, `sessionOf_ok`, `releasedRootsOf_ok`,
-  `challengerStream_ok`): where v2 reads `ξ`, the session's log is a list of lines, the roots of the draw's family are
+  `challengerStream_ok`): where v2 reads `ξ`, the session's log is a list of lines, the roots of the sample's family are
   those its pairs' root lines show (`sel`), and `ξ` is `COIN_BYTES` bytes for each of them equal to the digest.
-* **What the read shows** (`fresh_readLog`, `countFresh_eq`, `chunks_flatten`): the read's coins of the draw's family
+* **What the read shows** (`fresh_readLog`, `countFresh_eq`, `chunks_flatten`): the read's coins of the sample's family
   after the digest are `ξ`'s coins, one for each such root, so their bits are `ξ`'s.
 * **The read in order** (`treeStep_some`, `specOf_streams`, `sampleLinkFirst_snoc`, `sampleLinkFirst_readTail`,
   `sampleLinkFirst_readLog`, `sampleLinkFirst_congr`): where the release log's lines after its head pass
@@ -33,18 +33,18 @@ digest, one coin of `COIN_BYTES` bytes each. So the read meets the draw's ask (`
   `logRead` by its own name (`coinsRead_eq_logRead`), tells a tree's line apart, finds its tree and its stream with v2's
   own Bool tests (`treeStep`), takes the trees over the whole log, its head included, and reads each session's record
   as v2's `treesHeld` does (`recordsOn`). v2's loops then show it a log wherever v2 accepts (`coinTreesOf_fold`,
-  `releasedRootsOf_pairsOk`, `treesHeld_records`), so it meets the draw's ask with no premise.
+  `releasedRootsOf_pairsOk`, `treesHeld_records`), so it meets the sample's ask with no premise.
 * **v2's case** (`caseOf_of`): in an accepted composition the case `caseOf` finds under v2's id is the one v2 accepted,
   since the composite's components have distinct ids (`components_nodup`).
 * **The session's law** (`law_of_setsUp`, `coupled_draw_setsUp`, `coupled_draw_coins_setsUp`): v2's parameters in the
   parameters sent are those its case accepted (`paramsAt_case`), so at the session v2 sets up on them (`SetsUp`) the
-  draw's law is the session's wherever its population is (`lawAt_of_lawOf`), and the draw's piece of `CouplingTarget`
+  sample's law is the session's wherever its population is (`lawAt_of_lawOf`), and the sample's piece of `CouplingTarget`
   needs only the population.
 * **The session's population** (`popHeld_of_checkBlobsAt`, `popOk_of_popHeld`, `n_of_popOk`, `n_of_popTied`,
   `coupled_draw_tied`, `coupled_draw_coins_tied`): v2 refuses a record whose population isn't its program's proof
   blocks in order (`popHeld`), and the session's population (`Live.hpop`) reads the same layout. So at a session whose
-  descriptor and query are v2's verifier's (`PopTied`, which `SetsUp`'s `params` implies) the draw's population is the
-  session's, and the draw's piece asks nothing of the session but its coins.
+  descriptor and query are v2's verifier's (`PopTied`, which `SetsUp`'s `params` implies) the sample's population is the
+  session's, and the sample's piece asks nothing of the session but its coins.
 
 Each fact about one of the challenger's monadic functions is a Hoare triple proved by `mvcgen`, read back at an `.ok`
 result (`of_triple`, in `SampledLog`).
@@ -65,7 +65,7 @@ open Properties.Challenger (bitsOf Draws)
 
 /-! ## v2's challenger -/
 
-/-! ### The session's files and the draw's coins -/
+/-! ### The session's files and the sample's coins -/
 
 theorem recordReason_spec (key : ChallengerKey) (record : Json) :
     ⦃⌜True⌝⦄ recordReason key record ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
@@ -359,7 +359,7 @@ theorem countFresh_eq (label : String) (after : ByteArray) :
   | [_] => rfl
   | [] => rfl
 
-/-- The bits of bytes, as the device's log reads them, are their bits as a draw reads them. -/
+/-- The bits of bytes, as the device's log reads them, are their bits as a sample reads them. -/
 theorem bitsOfBytes_eq (b : ByteArray) : Verity.bitsOfBytes b = bitsOf b := by
   rw [bitsOf_eq]
   rcases b with ⟨⟨l⟩⟩
@@ -807,7 +807,7 @@ theorem paramsAt_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
     {p' : _root_.SampledProofs.OneStageZk.Params} (h : ParamsAt s.params p') : p' = p :=
   (Sum.inl.inj (params_of_case hS hcase hacc.1 h)).symm
 
-/-- The law `lawAt` reads at the population `LawOf` names is the law `LawOf` names. -/
+/-- The sampling design `lawAt` reads at the population `LawOf` names is the sampling design `LawOf` names. -/
 theorem lawAt_of_lawOf {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
     {L : Flock.Draw.Law} {n : ℕ} (h : LawOf p c L n) : lawAt p.base.verifier n = .ok L := by
   obtain ⟨law, derived, fl, hd, -, hder, hfl, rfl⟩ := h
@@ -816,8 +816,8 @@ theorem lawAt_of_lawOf {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The session's law is the draw's** where the session's population is: at the session `A` v2 sets up on the
-parameters `θ` (`SetsUp`), a draw v2 made in a composition composite `k` accepted, on those parameters, over `A.n`
+/-- **The session's law is the sample's** where the session's population is: at the session `A` v2 sets up on the
+parameters `θ` (`SetsUp`), a sample v2 made in a composition composite `k` accepted, on those parameters, over `A.n`
 units, ran under `A.law`. -/
 theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray}
@@ -829,7 +829,7 @@ theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A
   rw [paramsAt_case hS hcase hacc hp', hn, lawAt_of_lawOf hL] at hlaw
   exact (Except.ok.inj hlaw).symm
 
-/-- **The draw's piece of `CouplingTarget` at the session v2 sets up**: `coupled_draw`, with the session's law read
+/-- **The sample's piece of `CouplingTarget` at the session v2 sets up**: `coupled_draw`, with the session's law read
 off `SetsUp` on the play's parameters. -/
 theorem coupled_draw_setsUp {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
@@ -907,12 +907,12 @@ theorem n_of_popOk {A : Live} {v : _root_.SampledProofs.Registration.Verifier} {
     simpa only [List.length_map, List.length_range] using this
 
 /-- **The session's descriptor and query are v2's verifier's** on the parameters `θ`: the tie under which the
-session's population is the draw's (`n_of_popTied`). `SetsUp`'s `params` implies it. -/
+session's population is the sample's (`n_of_popTied`). `SetsUp`'s `params` implies it. -/
 def PopTied (θ : ByteArray) (A : Live) : Prop :=
   ∃ p, ParamsAt θ p ∧ _root_.SampledProofs.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program ∧
     A.qr = p.base.verifier.query
 
-/-- **The session's population is the draw's**: a draw v2 made in a composition composite `k` accepted, on the
+/-- **The session's population is the sample's**: a sample v2 made in a composition composite `k` accepted, on the
 parameters `θ`, ran over the population of a session tied to v2's verifier there, since v2 refuses a record whose
 population isn't its program's proof blocks in order (`popHeld`). -/
 theorem n_of_popTied {θ : ByteArray} {A : Live} (ht : PopTied θ A) {k : Verity.Registration.Composite}
@@ -926,7 +926,7 @@ theorem n_of_popTied {θ : ByteArray} {A : Live} (ht : PopTied θ A) {k : Verity
   obtain ⟨-, -, -, -, -, pub, prof, hck⟩ := hacc
   exact n_of_popOk hdesc hq (popOk_of_popHeld (popHeld_of_checkBlobsAt hck) hn)
 
-/-- **The draw's piece of `CouplingTarget` at a session tied to v2's verifier**: `coupled_draw_setsUp`, with the
+/-- **The sample's piece of `CouplingTarget` at a session tied to v2's verifier**: `coupled_draw_setsUp`, with the
 session's population read off `PopTied`, so the piece asks nothing of the session but its coins. -/
 theorem coupled_draw_tied {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
@@ -1431,7 +1431,7 @@ theorem fresh_readLog (label : String) (after : ByteArray) (records : List Json)
     · rw [ite_eq_right ht] at h
       exact fresh_readTail label after records ls [] none ξ h
 
-/-- **Where the read returns a log, it shows the draw**: wherever composite `k` accepted what the prover sent and v2's
+/-- **Where the read returns a log, it shows the sample**: wherever composite `k` accepted what the prover sent and v2's
 case in it accepts at the coins `ξ` it read under the challenger `dr`, a log `logRead` returns has exactly `ξ`'s bits
 as its coins of `dr`'s family released after `dr`'s digest. -/
 theorem shows_logRead {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
@@ -1457,14 +1457,14 @@ theorem shows_logRead {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
   rw [hafter]
   exact hf ▸ List.prefix_refl _
 
-/-- **The read with v2's own tests shows the draw**, with no premise: `logRead` meets the draw's ask (`DrawRead`). -/
+/-- **The read with v2's own tests shows the sample**, with no premise: `logRead` meets the sample's ask (`DrawRead`). -/
 theorem drawRead_logRead (k : Verity.Registration.Composite) : DrawRead k logRead := by
   intro s a b e p c ev ξ dr hS hcase hacc
   obtain ⟨log, hlog⟩ := Option.isSome_iff_exists.1 (logRead_isSome hS hcase hacc)
   exact ⟨log, hlog, shows_logRead hS hcase hacc hlog⟩
 
-/-- **v2's read shows the draw**, with no premise: `coinsRead` is `logRead` (`coinsRead_eq_logRead`), so it meets the
-draw's ask (`DrawRead`). -/
+/-- **v2's read shows the sample**, with no premise: `coinsRead` is `logRead` (`coinsRead_eq_logRead`), so it meets the
+sample's ask (`DrawRead`). -/
 theorem drawRead_coinsRead (k : Verity.Registration.Composite) : DrawRead k coinsRead := by
   rw [coinsRead_eq_logRead]
   exact drawRead_logRead k

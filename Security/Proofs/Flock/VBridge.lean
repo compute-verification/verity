@@ -89,7 +89,7 @@ public import Proofs.Flock.VBridge.Sparse.Builder
 public import Proofs.Flock.VBridge.Sparse.Laid
 public import Proofs.Flock.VBridge.OpeningUnit
 
-/-! The bridge from V*, the C-Flock verifier as a circuit, to C-Flock's verifier of record: V*'s gadgets compute what the
-verifier of record computes. -/
+/-! The bridge from V*, the Flock verifier as a circuit, to Flock's verifier: V*'s gadgets compute what the
+verifier computes. -/
 
 @[expose] public section

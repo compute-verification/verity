@@ -43,9 +43,9 @@
 //   A_i . B_j within the same 2^22.
 // EPI=1 runs verity_int8's epilogue on the final word instead. The lanes, the sources, the fold's words and the fold are
 // layout.h's, which the CPU check (cpu_check.cc) also reads.
-// Coins: the certifier draws every coin raw once it holds root(A_j) and feeds them to the call (layout.h's feed): row i's
+// Coins: the certifier flips every coin raw once it holds root(A_j) and feeds them to the call (layout.h's feed): row i's
 // H = ceil((S + 3) / 32) words (a1[i, e] bit e, a_t[i] bit t + 2), then under TAG=1 column j's G word (four int8 G[e, j],
-// drawn by rejection), then under XU=1 row i's u word, over the call's pad_rows(m) rows and pad_cols(n) columns; a computed
+// sampled by rejection), then under XU=1 row i's u word, over the call's pad_rows(m) rows and pad_cols(n) columns; a computed
 // row or column past them reads zero coins. Nothing on the device derives a coin.
 // Operands are tiled: A' tile (64-row block, step) and B' tile (BN-column block, step) are contiguous, in dc.cuh's K-major
 // layout, so a step's tiles are one linear copy. Exported words: a block (row tile, column tile, step) of 64 x BN s32 in
@@ -1316,7 +1316,7 @@ static int time_all(int reps, int Mc, double budget_gb, const std::vector<int>& 
   // The certifier's link. A call sends root(A_j) (64 bytes, device to host) once it is computed and takes its feed back (host to
   // device) ahead of its forming; under BLC=1 on a copy stream, behind A_j (M K bytes, device to host, once A_j is ready),
   // with its lane coins back a chunk at a time ahead of the chunk's GEMM, into one of two buffers by call parity. The
-  // certifier's own hash of A_j, its draw and the network's latency aren't modelled.
+  // certifier's own hash of A_j, its sample and the network's latency aren't modelled.
   size_t lc_max = 0;
   for (const LinDev& d : lins) lc_max = std::max(lc_max, (size_t)(M / 64) * lc_steps(d.S) * d.n);
   u32 *hlc = nullptr, *dlc[2] = {nullptr, nullptr};

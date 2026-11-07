@@ -27,7 +27,7 @@ block makes `u` correct, and carries `true` on the constant (`UnitPlace.decode_o
 template's rows compute is not a hypothesis of it: rows derived from a gate circuit carry its outputs
 (`GateRows.rows_sound`), and no theorem carries that to a unit (`ASSUMPTIONS.md`).
 
-`UnitPlace` bundles a drawn unit's place in a table: its rows, its instance, its block and its
+`UnitPlace` bundles a sampled proof block's place in a table: its rows, its instance, its block and its
 columns, where every satisfying witness carries one value on the unit's inputs that share a gate.
 `UnitPlace.correct` is the compiled lowering for that unit.
 -/

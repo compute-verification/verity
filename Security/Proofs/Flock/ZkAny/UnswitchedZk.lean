@@ -6,7 +6,7 @@ public import Proofs.Flock.ZkAny.Deferred
 # The unswitched prover is zero knowledge, at any values
 
 The unswitched prover (`RefSession.unP`) sends, before the last coin, the round encoding of the unswitched cut (the
-workers' values on the drawn pads, rows or not), and after it the refusal `off`. Its zero knowledge needs no row of any
+workers' values on the sampled pads, rows or not), and after it the refusal `off`. Its zero knowledge needs no row of any
 table to hold: it never opens a hidden leaf, and its values read what the workers see (`ZkView.Seen`: the mask
 slots, level 0's hiding and level 0's salts) and never the pads, so with level 0's leaves real, a bijection of each
 table's base that keeps what they see makes its cut view the honest prover's (`card_unCutAt_real0`), and the hm96

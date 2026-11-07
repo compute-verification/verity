@@ -219,7 +219,7 @@ def test_lean_accepts_honest_links_and_refuses_each_cheat_and_links_without_the_
                      "--partition", str(d / "partition.json"))
     assert bad is None and "Linking needs the verifier's own program" in out, out
     # a one-layer class: staged with Wiring, no cut wire and no links, its units derived; staged without, as before (its
-    # template the unit class's own, so its units are taken as stated)
+    # template the size class's own, so its units are taken as stated)
     k = tp2.population
     ok, out = _lean("--circuit", str(flat / "honest" / "circuit.txt"), "--public", str(flat / "honest" / f"pub-{k}.bin"),
                     "--partition", str(flat / "partition.json"), "--program", str(flat / "program.desc"))

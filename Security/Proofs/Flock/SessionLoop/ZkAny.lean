@@ -13,7 +13,7 @@ public import Proofs.Flock.Claims.ZK.ExeLayout
 public import Definitions.Flock.ZK.AnyValues
 
 /-!
-# C-Flock's zero knowledge at any values, per outcome, at the session loop's own release and at the deployed held relay
+# Flock's zero knowledge at any values, per outcome, at the session loop's own release and at the deployed held relay
 
 `Flock.Guarantees.SessionLoopZKAny` states the session loop's release (`LeanRelease.ofLoop`, at the stops its own
 frames' refusals give, `LeanRelease.rfOf`) as `Claims.ZKOut` at its `Finish` verdict, for every worker and any values
@@ -111,9 +111,9 @@ theorem zkOutRelay_of_zkOut {W St : Type} {N Ω : Msg → Type} [∀ x, Fintype 
 namespace LeanRelease
 
 /-- **The transport's trusts at the unswitched prover, at every statement of `Rl`**: at each `(x, w) ∈ Rl`, the
-firewall's own link, the worker's frame rounds and the stand-in frame rounds are the unswitched prover's
-(`LinkRoundEqStop`, `LiveRoundEqStop`, `FillRoundEqStop`), the firewall's own `Finish` is the switched prover's last
-message (`FinalRoundEq`), and the `Finish` goes on only where the workers' rows hold at the drawn pads
+ZK server's own link, the worker's frame rounds and the stand-in frame rounds are the unswitched prover's
+(`LinkRoundEqStop`, `LiveRoundEqStop`, `FillRoundEqStop`), the ZK server's own `Finish` is the switched prover's last
+message (`FinalRoundEq`), and the `Finish` goes on only where the workers' rows hold at the sampled pads
 (`FinishRows`). -/
 def TrustsStop (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (H : Msg → Msg) (wk : L.toSrv.Worker) (Rl : Rel Flock.Wit) : Prop :=
@@ -188,7 +188,7 @@ def ZkAnyAt (T : CoinLayer.TableData) (vs : (CoinLayer.session loopNr T).SwVals)
 
 end Loop
 
-/-- **C-Flock's zero knowledge at any values, per outcome, at the session loop's own release and at the deployed held
+/-- **Flock's zero knowledge at any values, per outcome, at the session loop's own release and at the deployed held
 relay.** At every table data `T`, values `vs` whose unswitched round encoding is causal, repetition count `0 < t` and
 relation `Rl` at whose statements the session's table witnesses are valid, where the session meets the tables' side
 (`Tables`, `DummyReg`, `Causal`, `TapeOK`), at every `L₀` (the release's inner rounds), tables `real` and worker `wk`
@@ -211,7 +211,7 @@ def _root_.Flock.Guarantees.SessionLoopZKAny : Prop :=
     LeanRelease.TrustsStop (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH wk Rl →
     Loop.ZkAnyAt T vs L₀ real wk Rl t
 
-/-- **C-Flock's zero knowledge at any values, per outcome, at the deployed tables and the session loop's own link and
+/-- **Flock's zero knowledge at any values, per outcome, at the deployed tables and the session loop's own link and
 `Finish`**: `SessionLoopZKAny` at `Masked.dataE`, at `SessionLoopZKDeployed`'s release (`LeanRelease.ofLoopLink` at the
 loop's own tables, `Loop.realOf src`), where the session's other Props hold. In place of `SessionLoopZKDeployed`'s valid
 witness (`Flock.R`, through which the workers' rows hold at the values, `Loop.RowsOK`) and its switched causality, it is
@@ -243,7 +243,7 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **C-Flock's zero knowledge at any values, per outcome, at the session loop's own release and at the deployed held
+/-- **Flock's zero knowledge at any values, per outcome, at the session loop's own release and at the deployed held
 relay**: `LeanRelease.zk_finish_out` at `ofLoop`, with the loop's stops, check, `Hello` and last round from its own
 lemmas and hm96's hiding at its gap, and `zkOutRelay_of_zkOut`. -/
 theorem SessionLoopZKAny : Flock.Guarantees.SessionLoopZKAny := by
@@ -273,7 +273,7 @@ theorem SessionLoopZKAny : Flock.Guarantees.SessionLoopZKAny := by
   unfold Loop.ZkAnyAt
   exact ⟨hZ, zkOutRelay_of_zkOut hZ⟩
 
-/-- **C-Flock's zero knowledge at any values, per outcome, at the deployed tables and the session loop's own link and
+/-- **Flock's zero knowledge at any values, per outcome, at the deployed tables and the session loop's own link and
 `Finish`**: `SessionLoopZKAny` at `Masked.dataE` and `withFiles (withLink L₀ src) src`, where every table is one it sets
 up (`Masked.tables`), the dummy's table witnesses carry the public region data (`Masked.dummyReg`), the stopped plan is
 causal (`causal_encStop` at `causalExe`) and the tape is read with fibers of one size (`fibersEq_ofLayout`). -/

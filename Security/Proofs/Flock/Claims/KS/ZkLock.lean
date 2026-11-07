@@ -46,7 +46,7 @@ simulator's live outcome is `P`'s roots, the live link points, the rounds of its
 last message (`zk_liveOut_known`, `zkSim_liveOut`).
 
 * **The abort** (`zkSimAbortAt`): where `P`'s run at `zkΦ`'s coins is rejected that last message is empty
-  (`zkSim_proofs_nil`), and the verdict at the draw refuses an outcome without proof files (`not_accTxJ_nil`), so
+  (`zkSim_proofs_nil`), and the verdict at the sample refuses an outcome without proof files (`not_accTxJ_nil`), so
   `ZkSimAbortAt` holds at every statement.
 -/
 
@@ -773,7 +773,7 @@ theorem zkSim_liveOut {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec 
 
 /-! ## The abort -/
 
-/-- **The verdict at the draw refuses an outcome without proof files**: what `wrS` writes has the outcome's proof
+/-- **The verdict at the sample refuses an outcome without proof files**: what `wrS` writes has the outcome's proof
 files wherever `verify --zk` accepts it (`recordsLiveAtS_wrS`), and `verify --zk` refuses none (`not_acceptsAt_nil`). -/
 theorem not_accTxJ_nil (I : Discharge.Exec.Inputs) (d : Lean.Json) (j₀ : ℕ) (rootB₀ : Array ByteArray) {N : ℕ}
     (C : Fin N → List 𝔽) {J mPts : ℕ} {o : LiveOutJ J mPts} (h : o.proofs = #[]) : ¬ AccTxJ I d j₀ rootB₀ C o := by

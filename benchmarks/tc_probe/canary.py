@@ -46,7 +46,7 @@ import tc_probe as P  # noqa: E402
 from trust import REGRESSION_TILES, _load_discrepancies, subjects  # noqa: E402
 
 CANARY_SEED = 20260922
-CANARY_N_RANDOM = 64      # families() n_random for the canary draws: every family then has >= CANARY_TILES tiles
+CANARY_N_RANDOM = 64      # families() n_random for the canary samples: every family then has >= CANARY_TILES tiles
 CANARY_TILES = 4          # tiles kept per family (M x 8 elements each: 512 for mma, 2048 for wgmma)
 REPLAY_ROOTS = ("verity/ml/circuits/ops/tests/fixtures/golden", "verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07", "verity/ml/circuits/silicon/captures")
 
