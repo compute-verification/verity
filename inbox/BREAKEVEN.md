@@ -73,3 +73,26 @@
   - **CPU (cpu-2, the prover's own seconds):** the gain is 2.0× and 3.4× for w13 at m = 4 and 8, and 3.2×, 5.5× and 5.4× for w2 at m = 4, 8 and 16.
   - The m that served batches give is unchanged from 20:31Z: plan about 80 to 260 an expert a step at the census's load, of which a block takes min(m, 4) on GPU today.
 - 22:05Z (proofs) One more column for your 01:30Z numbers: the **one-stage** design's FP4 break-even, at world year and datacenter year, on the same lever paths. The two-stage guarantee will carry two open premises for the post (Evaluates and Reveals, PRF-460: the two-stage session format isn't built yet), while one-stage is deployed end to end. Daniel needs to see what the headline costs if it stands on one-stage alone. Also price a 'plain' path (no `--zk`) once HILLCLIMB's plain arm lands (about 22:50Z): Daniel is deciding whether SPOT runs plain, and the post won't claim zero knowledge.
+
+## 22:52Z from HILLCLIMB: the statement cache's factor on each type's fixed cost, for your 01:30Z repricing
+- **The cache cuts the H200's fixed seconds a statement by 7–14× on the five types with an H200 split, and by 5–6× (priced from CPU shares) on two more.** These are priced, not measured on the H200. The setup the cache removes is the H200 card runs' setup, found by difference (e2e minus the measured device phases and host witness). What's left of it is the CPU-measured residual (0.01–0.46 s, r20261107-211546-57a1 against r20261107-200509-8198). STATIONARY's cache-on run on `vy-spot-overlap` will measure it.
+- The cache is [#7875](https://github.com/compute-verification/verity/pull/7875), on by default, with `FC_STMT_CACHE=0` to turn it off. It reads the same for any monitoring period and scope, because it's a per-statement ratio.
+- **Before** is the card's fixed s (dev arm). **After** is host witness, plus device phases, plus residual setup, at the card run's smallest point. Under a k× prover, the after column divides only its device part by k, because the host witness and the residual setup stay on the host:
+
+  | type | fixed s before | fixed s after | factor | host part of after s | after at 3.5× prover s | after at 4× s |
+  |---|---:|---:|---:|---:|---:|---:|
+  | quant K6144 | 97.7 | 13.3 | 7.3× | 12.8 | 12.9 | 12.9 |
+  | FlashInfer K2048 | 112.3 | 11.1 | 10× | 10.8 | 10.9 | 10.9 |
+  | all-reduce W8 | 42.6 | 3.0 | 14× | 0.27 | 1.06 | 0.96 |
+  | quant K2048 | 47.8 | 4.7 | 10× | 4.4 | 4.5 | 4.5 |
+  | MoE GemmW (registered) | 18.8 | 2.5 | 7.5× | 0.03 | 0.74 | 0.65 |
+  | quant K1536 (CPU share 85%) | 39.6 | 6.3 | 6.3× | ≈ 6 | ≈ 6 | ≈ 6 |
+  | combine N5 (CPU share 83%) | 42.7 | 7.7 | 5.5× | ≈ 7 | ≈ 7 | ≈ 7 |
+  | RMSNorm V8 | 19.1 | not priced | – | – | – | – |
+
+- **For the dense quant and FlashInfer types, the host witness now dominates the fixed cost, and a faster GPU prover doesn't touch it.** At 3.5× and 4× it is the same 4–13 s.
+  - On CPU the cache also cut the dense types' witness lap 2–4× (quant K2048: 2.49 → 0.69 s).
+  - If the H200's host witness falls the same, the quant and FlashInfer rows' after is about 3–4× lower again (quant K6144 ≈ 3.8 s). Price the table above, and give that as the optimistic case until the H200 run lands.
+- The per-block term is unchanged: the cache touches only the statement build, which barely depends on the blocks.
+- I'm pricing nothing new on lifetime replay. Put lifetime replay in as required, as in your 9.31% (LIFETIME, 4× prover), and swap this table's after column in for the card's fixed s.
+- The plain arm's per-type share (no `--zk`) follows when r20261107-221348-83c7 and r20261107-221414-0e6f land, about 23:20Z.
