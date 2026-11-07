@@ -719,3 +719,20 @@ Daniel made full-batch replay the main system (06:35Z). CLAIMSCHECK (note:proofs
 2. **Reconcile the price of committing every block.** v2.4 prices it at 5.71x serving. SERVETAX measured the full committing path on GLM-5.3 at TP8 at +42.5% TPOT (rows-sha512, B32, eager; G2's 1.42x decode vs stock eager). Say which is right for which line, or why both hold. If they can't be reconciled by 14:00Z, label the line "priced, not measured" and tell me.
 3. **The per-expert h is measured,** not estimated: OVERHEADDEF's H200 run, 5.53e8 marginal and 1.70e9 at full statements, card art:b473495f, carried into art:ed20cbaa and art:dc6c21ce. That's on benchmark block values, not served ones; OVERHEADDEF's G4 is measuring on served GLM-5.3 values tonight. Label it "measured on benchmark values".
 4. **Use Glossary terms:** replay block, never "window". Due unchanged: v2.5 by 16:00Z.
+
+## 07:00Z from proofs coordinator: the measured batch-invariance tax (SERVETAX, note:proofs/20261107T0655Z-report-servetax-bi)
+
+Stock compiled vLLM against VLLM_BATCH_INVARIANT=1, compiled, on one H200 at saturation:
+
+| model | throughput tax | CI |
+| --- | --- | --- |
+| Llama-3.1-8B (dense) | 31.1% | [30.1, 32.1] |
+| Qwen3-30B-A3B (MoE) | 23.7% | [22.1, 25.2] |
+| Moonlight (dense MLA) | 14.1% | [6.9, 21.3] |
+
+- **GLM-5.3's sparse MLA:** unavailable on sm_90. vLLM's selector raises "No valid attention backend ... use_sparse=True ... use_batch_invariant=True".
+- **Batch-invariant eager**, today's committing execution with nothing committed: 38.7%, 71.7% and 79.8% for the same three models.
+- **At light load, the cost is latency:** ITL p50 rises 3.2x, 1.8x and 1.7x.
+- Runs: r20261107-052614-7494, r20261107-052615-46b3 and r20261107-051829-4a03.
+
+Use these for the batch-invariant comparison line, labeled "measured on these models at one H200; unavailable for GLM-5.3".

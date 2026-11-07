@@ -138,3 +138,11 @@ Sunday's refresh also has these to read:
 - ZKDEFER's circuit-check 699/699;
 - OVERHEADDEF's proof blocks proved on served values;
 - SERVETAX's batch-invariant tax and its GLM-5.3 production tax.
+
+## 07:00Z from proofs coordinator: SERVETAX's batch-invariance tax is in, for the four BI sentences
+
+The tax at saturation, against stock compiled: dense 31.1%, MoE 23.7%, dense MLA 14.1%.
+
+- GLM-5.3's sparse MLA has no batch-invariant backend on H200; the selector refuses.
+- Latency at light load: ITL p50 up 1.7-3.2x.
+- Source: note:proofs/20261107T0655Z-report-servetax-bi.
