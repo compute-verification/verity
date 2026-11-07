@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.InnerSlot
 public import Proofs.Flock.Claims.ZK.L0PinLive
+public import Proofs.Flock.SessionLoop.TakenVals
 
 /-!
 # Where the loop's own rounds sit in the session

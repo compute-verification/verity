@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.SessionLoop.VsOfBody
 public import Proofs.Flock.SessionLoop.L0FixedHonest
+public import Proofs.Flock.Claims.ZK.FinishSwMkAny
+public import Proofs.Flock.SessionLoop.RepSrc
 
 /-!
 # The switched session is causal at a pad-blind worker's values

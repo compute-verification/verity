@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SessionLoop.FinL0Vals
+public import Proofs.Flock.Claims.ZK.FinishSwRep
 
 /-!
 # The basis at a rep's Ligerito rounds, from the frame's coins
