@@ -884,6 +884,44 @@ def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_sto
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
+def test_inside_a_research_run_the_fixture_fetch_gets_its_custody_key_and_fetches_a_fixture_only_the_store_has(tmp_path):
+    """A run carries no store config, so the runner's own fetch read the public export alone, and a fixture registered since it
+    was made failed its suite before any test, though the tests reach the store with the run's custody key.  The fetch gets
+    that key too, and the fixture comes from the store."""
+    import json
+
+    from research.store import fixtures as F
+    from research.store.local import LocalStore, manifest_key, object_key
+    from research.store.remote import FsRemote
+
+    origin, remote = LocalStore(tmp_path / "origin"), FsRemote(tmp_path / "remote")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "big.proof").write_bytes(b"in the store alone\n")
+    art = origin.put_artifact(F.FIXTURE_KIND, {}, None, file=tmp_path / "src" / "big.proof")
+    for h, _ in origin.get_manifest(art).blobs():
+        remote.put(object_key(h), origin.object_path(h))
+    remote.put(manifest_key(art.split(":", 1)[1]), origin.manifest_path(art.split(":", 1)[1]))
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": "from pathlib import Path\n\ndef test_reads_it():\n    assert (Path(__file__).parent / 'fixtures' / "
+                                 "'big.proof').read_bytes() == b'in the store alone\\n'\n"})
+    (root / "fixtures").mkdir()
+    (root / "fixtures" / "artifacts.json").write_text(json.dumps({art: "pkg/tests/fixtures/big.proof"}))
+    (root / ".gitignore").write_text("pkg/tests/fixtures/big.proof\n")                  # as the root's lists each fetched entry
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "registered")
+    run, custody = tmp_path / "research" / "runs" / "r1", tmp_path / "research" / "requests" / "r1" / "custody"
+    run.mkdir(parents=True)
+    custody.mkdir(parents=True)
+    extra = {"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(run), "RESEARCH_STORE_CONFIG": "", "RESEARCH_PUBLIC_URL": "",
+             "HOME": str(tmp_path / "home")}
+    p = _run_suite(root, tmp_path, "--fresh", extra=extra)
+    assert p.returncode == 1 and "its fixtures could not be fetched: pkg/tests/fixtures/big.proof" in p.stdout, p.stdout + p.stderr
+    (custody / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "remote"}"\n')
+    (custody / "cred.json").write_text("{}")
+    p = _run_suite(root, tmp_path, "--fresh", extra=extra)
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
 def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_path, monkeypatch):
     """Sized to the whole node, each xdist worker of every lane run would run a thread per core, overloading the node:
     each test process's OpenMP, MKL, OpenBLAS and numexpr pools get the CPUs divided by --jobs, and a size the caller set stays."""

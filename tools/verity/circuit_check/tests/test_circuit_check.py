@@ -1,11 +1,10 @@
-"""circuit-check over every registered Definition and subcircuit template, a served workload's request Program, and the checks' own
-negatives (each check fires by name on a circuit built to break it).
+"""circuit-check's coverage of every registered Definition and subcircuit template, a served workload's request Program, and the
+checks' own negatives (each check fires by name on a circuit built to break it).  `circuit-check --all`, which `check` runs, is
+where every target is checked.
 
 A failure is a correctness or invariant violation, and fails its test: whether one may stay red is drive's policy
 (`research.policy`), never the checker's.  Redundant and dead gates are warnings: counted in the report, never a test failure
 here.
-The per-target tests are marked `circuit_suite` and collected only under `-m circuit_suite` (see conftest.py): `check` runs the
-same checks as `circuit-check --all`.
 
 The tests that read the suite (the `suite` fixture) or the Calls it gives (`targets.call_families`) are marked slow: the process
 that runs one builds circuit-check's catalog first (conftest.py), from the bindings' records when they count and binding by
@@ -84,7 +83,7 @@ def test_every_operation_is_checked_and_reaches_no_table_outside_the_library(cat
 
 
 def test_every_template_is_checked():
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     assert {sub.template.id for sub, _ in TEMPLATES.values()} == set(TM.TEMPLATES)
 
@@ -324,24 +323,7 @@ def test_a_target_with_a_record_static_parses_as_its_id_prints_it(suite):
         TG.definition("StepBody_v1{C={000000000000},T=4}")
 
 
-# --- the suite ----------------------------------------------------------------------------------------------------------------
-
-@pytest.mark.circuit_suite
-def test_definition(fid, suite, results):
-    e = CK.check_definition(suite[fid], OPTS, memo=MEMO, pins=PINS)
-    results.append({**e, "kind": "definition", "target": fid})
-    _clean(e)
-
-
-@pytest.mark.circuit_suite
-@pytest.mark.parametrize("label", sorted(TEMPLATES))
-def test_template(label, results):
-    sub, sts = TEMPLATES[label]
-    r = CK.check_subcircuit(sub, OPTS, instance_statics=sts, memo=MEMO, pins=PINS)
-    results.append({**r, "kind": "template", "target": label})
-    assert all(low["lowered"] or low.get("reason") for low in r["lowering"])
-    _clean(r)
-
+# --- a served workload ----------------------------------------------------------------------------------------------------------
 
 def _request_program(tmp_path: Path, **kw) -> Path:
     """The vLLM tests' synthetic request Program (per token Embedding -> RMSNorm -> Gemm -> RoPE -> SiluMul -> Gemm -> RMSNorm, per
@@ -357,9 +339,8 @@ def _request_program(tmp_path: Path, **kw) -> Path:
 
 
 @pytest.mark.slow
-def test_row(tmp_path, results):
+def test_row(tmp_path):
     r = CK.check_row(_request_program(tmp_path, rope=True), OPTS, memo=MEMO, pins=PINS)
-    results.append({**r, "kind": "row", "target": "synthetic request Program"})
     assert r["calls"] == 42 and len(r["definitions"]) >= 8
     _clean(r)
 
@@ -1122,8 +1103,12 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     [real] = json.loads(out.read_text())["targets"][0]["correspondence"]["realizations"]
     assert not real["lowered"] and real["reason"].endswith("over the whole-Definition budget (1)")
     capsys.readouterr()
-    fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"
-    assert cli.main([fp8, *call]) == 1                       # a failure drive's policy allows is still its real verdict
+    fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"           # no Call: its shared-scale form is served in its place
+    assert cli.main([fp8, *call]) == 0
+    with pytest.MonkeyPatch.context() as mp:                  # as a Call, its coordinates' copies of each scale product fail by name
+        mp.setattr(TG, "_CALLS", set())
+        mp.setitem(TG._SHORT, "words", TG.word_call_families() | {"ScaledMmFp8Block_v1"})
+        assert cli.main([fp8, *call]) == 1
     assert f"FAIL partition/gate-recomputed {fp8}" in capsys.readouterr().out
     assert cli.main([BOOL_RECOMPUTE, *call]) == 0
     assert "1 Boolean Call(s) recomputing 1120 gate(s) across units (Q_word v2)" in capsys.readouterr().out
@@ -1341,3 +1326,40 @@ def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
     assert CC.key({"target": "F32Mul_v1"}) == here
     monkeypatch.setenv("VERITY_REGRESSION", "1" if os.environ.get("VERITY_REGRESSION") != "1" else "0")
     assert CC.key({"target": "F32Mul_v1"}) != here
+
+
+def test_the_cache_key_is_the_same_on_every_node(monkeypatch, tmp_path):
+    """A report one node stored counts on every other node of the image (`check.py --plan`, `research merge --verdicts`): the key
+    names no host, kernel, working directory, home, PATH or check slot (each slot sets its own `VERITY_TEST_CACHE`,
+    `tools/verity/check/slot.py`), while the CPU, a variable that can change what a check computes and the request still key it."""
+    import platform
+
+    from circuit_check import cache as CC
+
+    def node(name: str) -> dict:
+        home = tmp_path / name
+        return {"HOME": str(home), "PATH": f"{home}/.local/bin:/usr/bin", "HOSTNAME": name, "TMPDIR": f"{home}/tmp",
+                "VIRTUAL_ENV": f"{home}/trees/{name}/.venv", "SSH_CONNECTION": f"10.0.0.{len(name)} 22", "CUDA_VISIBLE_DEVICES": "",
+                "VERITY_TEST_CACHE": f"{home}/.cache/verity/tests-slot-{name}", "CHECK_SLOT": name, "VERITY_REGRESSION": "0"}
+
+    def on(name: str) -> None:
+        for k, v in node(name).items():
+            monkeypatch.setenv(k, v)
+        (tmp_path / name).mkdir(exist_ok=True)
+        monkeypatch.chdir(tmp_path / name)
+        monkeypatch.setattr(platform, "node", lambda: name)
+        monkeypatch.setattr(platform, "release", lambda: f"6.{len(name)}.0-{name}")
+        monkeypatch.setattr(platform, "version", lambda: f"#1 SMP {name}")
+        monkeypatch.setattr(platform, "platform", lambda *a, **k: f"Linux-6.{len(name)}.0-{name}-x86_64")
+
+    on("vy-nebius-1")
+    here = CC.key({"target": "F32Mul_v1"})
+    on("vy-nebius-cpu-11")
+    assert CC.key({"target": "F32Mul_v1"}) == here
+    assert CC.key({"target": "F32Add_v1"}) != here
+    monkeypatch.setenv("VERITY_REGRESSION", "1")
+    assert CC.key({"target": "F32Mul_v1"}) != here
+    monkeypatch.undo()
+    here = CC.key({"target": "F32Mul_v1"})
+    monkeypatch.setattr(platform, "machine", lambda: "aarch64")
+    assert CC.key({"target": "F32Mul_v1"}) != here                  # a different CPU is a different machine

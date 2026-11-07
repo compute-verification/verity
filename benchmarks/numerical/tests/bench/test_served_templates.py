@@ -12,8 +12,8 @@ import pytest
 
 from verity_numerical.bench import census
 from verity_numerical.bench import generate as G
-from verity_numerical.bench import input_sets as IS
-from verity_numerical.bench import templates as TM
+from verity_flock import input_sets as IS
+from verity_flock import subcircuit_templates as TM
 
 pytest.importorskip("verity_vllm", reason="these templates evaluate through the vLLM integration's Definitions")
 
@@ -175,6 +175,15 @@ def test_fp8_block_coordinate_reads_its_scales():
     assert all(abs(f(b) - 2 * f(a)) <= abs(f(a)) * 2 ** -6 for a, b in zip(y, y2))    # sw x 2 doubles y (up to bf16 rounding)
     assert not ((draws[0].inputs["xq"] & 0x7F) == 0x7F).any()
     assert all(np.array_equal(draws[i].inputs["xq"], draws[0].inputs["xq"]) for i in range(8))
+
+
+@pytest.mark.parametrize("fam", ["ScaledMmFp8BlockSharedScale_v1", "ScaledMmFp8Block_v1"])
+def test_fp8_block_identifies_the_exporters_relation(fam):
+    """The FP8 coordinate relation the vLLM exporter writes (`ScaledMmFp8BlockSharedScale_v1`, `vu_export`), and the one input
+    sets written before it carry, identify as the coordinate template."""
+    rel = {"subcircuit": "ScaledMmFp8BlockCoordinate<256,128>", "definition": fam, "dot": "HopperE4m3QgmmaDot32_v1",
+           "statics": {"K": 256, "G": 128}}
+    assert TM.identify(rel).id == TM.subcircuit("scaled-mm-fp8-block-coordinate", K=256, G=128).id
 
 
 def test_scale_words_are_pinned():

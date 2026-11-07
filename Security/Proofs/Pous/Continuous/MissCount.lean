@@ -1,12 +1,11 @@
 module
 
-public import Mathlib.Analysis.SpecialFunctions.Exp
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
-public import Mathlib.Data.Fintype.BigOperators
-public import Mathlib.Logic.Equiv.Fin.Basic
-public import Mathlib.Order.ConditionallyCompleteLattice.Indexed
 public import Definitions.Pous.Game.Prob
-public import Proofs.Pous.Sanity
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.Pous.Sanity
 
 /-!
 # The counting step of the continuous audit

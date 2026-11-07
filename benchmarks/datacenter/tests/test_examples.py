@@ -41,7 +41,7 @@ def test_a_dpu_sits_between_the_nic_and_the_way_out_with_its_bmc_behind_it():
     dc = with_dpu(rtx_node("n"))
     assert dc.validate() == []
     dpu, bmc = dc.devices["n.dpu"], dc.devices["n.bmc"]
-    assert dc.block_of("n.dpu").name == dc.block_of("n.bmc").name == "n"
+    assert dc.zone_of("n.dpu").name == dc.zone_of("n.bmc").name == "n"
     assert [(e.a, e.b) for e in dc.links if "n.dpu" in (e.a, e.b)] == [("n.nic0", "n.dpu"), ("n.dpu", "n.bmc")]
     assert dpu.memory.value == 200 * GB and dpu.residual.value == pytest.approx(6.48 * GB)
     assert dpu.write is bmc.write is None                             # no write ceiling stated: a wipe fills at its links

@@ -22,7 +22,7 @@ reading the shards itself (`shard_set`), finds them a passing check of that clea
 commit's own `tools/verity/check/`, every part once, every job its `ci.toml` puts on the gate, no step failed) and the combine's
 steps theirs; a shard alone passes nothing.  A job off the gate (drive's policy, policy.toml's `off_gate`: circuit-check,
 ratchet-gate) is required of no check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
-there reverts its culprit.  With a usable remote the catalog's attempts are refreshed first, so an attempt
+there names its culprit.  With a usable remote the catalog's attempts are refreshed first, so an attempt
 recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
 ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: what the target gained is in REF already, as when a
@@ -215,7 +215,7 @@ def declared_jobs(repo: Path, commit: str) -> list[str] | str:
     """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` declares that are on the merge gate (every job but
     those ``commit``'s drive policy, `policy.toml`, names in `off_gate`, or its ci.toml marks `gate = false`), or why they
     can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's after-landing run, whose red
-    reverts its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
+    names its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
     from . import policy
 
     pol = policy.at(repo, commit)
@@ -259,8 +259,9 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     steps' parts its shard's parts; together, one N with K = 1..N once each, one list of every part and one auto plan's digest
     (or none), whose parts they make exactly once and which covers every job ``commit``'s `ci.toml` puts on the gate
     (`declared_jobs`: not circuit-check or ratchet-gate, which run after landing), and the same steps outside their parts (the
-    preflight), passed in each, but for an auto plan's builds a shard runs beside its parts.  The steps: those once, then each
-    part as its shard's step ran it."""
+    preflight), passed in each, but for the builds a shard runs beside its parts (an auto plan's, a hand plan's lean-build
+    beside lean-suites' parts), whose verdict is their own shard's.  The steps: those once, then each part as its shard's step
+    ran it."""
     if not ids or len(set(ids)) != len(ids):
         return None, "a set of shards names each shard's attempt once" if ids else "no shard is named"
     config = _git(repo, "rev-parse", "--verify", "-q", f"{commit}:tools/verity/check", check=False).stdout.strip()
@@ -310,7 +311,7 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     if len(plans) != 1:
         return None, ("the shards are of different plans (their N, every part they say an unsharded check covers, or their auto "
                       "plan's digest)")
-    (n, _, auto), = plans
+    (n, _, _), = plans
     if missing := [k for k in range(1, n + 1) if k not in shards]:
         return None, f"shard {', '.join(f'{k}/{n}' for k in missing)} is not among them"
     every = shards[1][1]["all"]
@@ -325,11 +326,11 @@ def shard_set(store, repo: Path, commit: str, ids: list[str], tool: str = "check
     if uncovered := [j for j in jobs if not any(p == j or p.startswith(j + ":") for p in every)]:
         return None, f"no shard runs {', '.join(uncovered)}, which {commit[:12]}'s ci.toml puts on the gate"
     names = {p.partition(":")[0] for p in every}
-    # an auto plan's shard runs the builds its parts need beside them (`tools/verity/check/shards.py`): a job's step outside its
-    # parts, passed or skipped like every step of a shard, whose part another shard holds
-    common = [[s["step"] for s in shards[k][2] if not s.get("parts") and not (auto and s["step"] in names)] for k in sorted(shards)]
-    if any(sorted(c) != sorted(common[0]) for c in common) or names & set(common[0]):
-        return None, "the shards ran different steps outside their parts, or a job outside its parts"
+    # a shard runs the builds its parts need beside them when another shard holds them (`tools/verity/check/shards.py`,
+    # `declaration.py`): a job's step outside its parts, passed or skipped like every step of a shard, whose part another holds
+    common = [[s["step"] for s in shards[k][2] if not s.get("parts") and s["step"] not in names] for k in sorted(shards)]
+    if any(sorted(c) != sorted(common[0]) for c in common):
+        return None, "the shards ran different steps outside their parts"
     out = [{"step": s, "status": "passed" if all(x.get("status") == "passed" for k in shards for x in shards[k][2] if x["step"] == s)
             else "skipped", "shards": [shards[k][0] for k in sorted(shards)]} for s in common[0]]
     part = {p: {"step": p, "status": s.get("status"), "shard": k, "run_id": shards[k][0], "seconds": s.get("seconds")}
@@ -459,6 +460,9 @@ def _under_run(path: str) -> str:
 
 #: the Lean check's report among a check's run files (`lean_audit.py`): its `regenerated` names each package's regenerated lock
 AUDIT = "lean-audit/audit.json"
+#: the files beside the locks that drive's lock run repairs (`lean_audit.py --bookkeeping warn`: its `UNREAD_CAPS` and
+#: `CAPS_TEST`), which the report's `repaired` names by their repository paths and drive commits with the locks
+REPAIRED = frozenset({"tools/verity/lean/unread-caps.json", "tests/test_lean_packages.py"})
 
 
 class Unreadable(Exception):
@@ -468,7 +472,8 @@ class Unreadable(Exception):
 
 def regenerated_records(store, run_id: str, dest: Path | None = None) -> dict[str, tuple[str, Path | None]] | None:
     """{package: (sha256 of its regenerated lock, the fetched file under ``dest`` or None)} of a check that passed its Lean
-    check by regenerating records (the report's `regenerated`), from its files in the store; empty when it regenerated none,
+    check by regenerating records (the report's `regenerated`), and the same of each file of `REPAIRED` its lock run repaired
+    (`repaired`) under its repository path, from its files in the store; empty when it regenerated none,
     None when the store holds no report of its Lean check (its files aren't there yet: a check still running).  `Unreadable`
     when the report is listed but can't be read, or names a record its files lack."""
     if not (art := _run_files(store, run_id)):
@@ -492,11 +497,16 @@ def regenerated_records(store, run_id: str, dest: Path | None = None) -> dict[st
 
 
 def _regenerated_in(run_id: str, audit) -> dict[str, str]:
-    """{package: its regenerated lock's path among the run's files} of a Lean check's report."""
+    """{package: its regenerated lock's path among the run's files} of a Lean check's report, and {a file of `REPAIRED`: its
+    repaired copy's path there} of its `repaired`; `Unreadable` for a `repaired` naming any other file."""
     regen = audit.get("regenerated") if isinstance(audit, dict) else None
-    if not isinstance(regen or {}, dict):
-        raise Unreadable(f"{run_id}'s {AUDIT} has a `regenerated` that isn't an object")
-    return {str(pkg): _under_run(str(p)) for pkg, p in (regen or {}).items()}
+    fixed = audit.get("repaired") if isinstance(audit, dict) else None
+    if not isinstance(regen or {}, dict) or not isinstance(fixed or {}, dict):
+        raise Unreadable(f"{run_id}'s {AUDIT} has a `regenerated` or `repaired` that isn't an object")
+    if odd := sorted(set(fixed or {}) - REPAIRED):
+        raise Unreadable(f"{run_id}'s {AUDIT} says it repaired {', '.join(odd)}, which no lock run repairs (`REPAIRED`)")
+    return {str(pkg): _under_run(str(p)) for pkg, p in (regen or {}).items()} | {
+        str(f): _under_run(str(p)) for f, p in (fixed or {}).items()}
 
 
 def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool = False) -> tuple[Path, dict] | None:
@@ -535,6 +545,25 @@ def live_records(rid: str, fetch=fetch_run) -> dict[str, tuple[str, Path | None]
     return {pkg: (hashlib.sha256((got[0] / p).read_bytes()).hexdigest(), got[0] / p) for pkg, p in want.items()}
 
 
+def bookkeeping_warnings(store, rid: str, fetch=fetch_run) -> list[str]:
+    """The warnings of lock run ``rid``'s bookkeeping repairs (its Lean report's `bookkeeping`), read from its files in the
+    store, else from its run dir on its node (``fetch``); empty when it has none or its report can't be read: drive tells
+    them and puts them in the lock commit, and nothing waits on them."""
+    try:
+        audit = None
+        if (art := _run_files(store, rid)) and AUDIT in {f["path"] for f in store.listing(art)}:
+            with tempfile.TemporaryDirectory() as d:
+                audit = json.loads((store.fetch(art, Path(d), paths=[AUDIT]) / AUDIT).read_text())
+        elif (got := fetch(rid, [AUDIT])) is not None:
+            audit = json.loads((got[0] / AUDIT).read_text())
+        warned = audit.get("bookkeeping") if isinstance(audit, dict) else None
+        return [str(w) for w in warned] if isinstance(warned, list) else []
+    except Exception as e:  # noqa: BLE001  (warnings only: no report, no warnings)
+        print(f"research merge: lock run {rid}'s bookkeeping warnings unread ({type(e).__name__}: {e}); its lock commit "
+              f"lists none", file=sys.stderr)
+        return []
+
+
 def _blob_sha256(repo: Path, commit: str, path: str) -> str:
     r = subprocess.run(["git", "-C", str(repo), "cat-file", "blob", f"{commit}:{path}"], capture_output=True)
     return hashlib.sha256(r.stdout).hexdigest() if r.returncode == 0 else ""
@@ -553,7 +582,8 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
                        maps=None, deferred: str | None = None, fetch=None) -> str | None:
     """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
     packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
-    regenerated, one for each package it regenerated, so the tree that lands is the one that check audited.
+    regenerated, one for each package it regenerated, so the tree that lands is the one that check audited.  A file of
+    `REPAIRED` it changes is held the same way, to the copy the lock run repaired (`--bookkeeping warn`).
 
     ``deferred`` is the lock run drive commits ``commit`` for on the parent (`Driver._unvouched`), a check of lean-audit
     alone, so no passing attempt of the whole check: it vouches when ``commit``'s `Checked:` trailer names it, it ran on the
@@ -567,7 +597,7 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
     files = _git(repo, "diff", "--name-only", "--no-renames", parent, commit).stdout.split()
     said = {f.strip() for f in _git(repo, "log", "-1", "--format=%(trailers:key=Regenerated,valueonly,separator=%x2C)",
                                      commit).stdout.replace("\n", ",").split(",") if f.strip()}
-    if not files or set(files) != said or not all(os.path.basename(f) == LOCK for f in files):
+    if not files or set(files) != said or not all(os.path.basename(f) == LOCK or f in REPAIRED for f in files):
         return None
     if deferred is not None:
         checked = re.findall(r"^Checked: (\S+)", _git(repo, "log", "-1", "--format=%B", commit).stdout, re.M)
@@ -575,7 +605,7 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
     else:
         tree = _git(repo, "rev-parse", f"{parent}^{{tree}}").stdout.strip()
         ids = passing(store, parent, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)
-    lock = {os.path.dirname(f) or ".": _blob_sha256(repo, commit, f) for f in files}
+    lock = {f if f in REPAIRED else os.path.dirname(f) or ".": _blob_sha256(repo, commit, f) for f in files}
     for rid in ids:
         try:
             recs = regenerated_records(store, rid)
@@ -1429,7 +1459,8 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
     open pull request uses.  Then the head branch of each pull request GitHub has as merged (its head on ``into``) or closed
     unmerged goes too, while it is still at that PR's head: never a fork's, one of `KEEP_BRANCHES`, one an open pull request
     uses as its head or base, a closed one's that is a lead's run branch (`RUN_BRANCH_RE`), or ``keep`` (the heads of PRs
-    drive closed as stale, which stay to be reopened: `research.stale`); GitHub keeps each one's commits under
+    drive closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`); GitHub
+    keeps each one's commits under
     `refs/pull/N/head`.  Idempotent: what it closed is no longer open, and what it retargeted is based on ``into``.  Returns
     (closed, retargeted) PR numbers, ascending."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
@@ -1528,7 +1559,8 @@ def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: 
     is on ``into`` and is a day idle (its content is there), and move each branch with unmerged work three days idle to
     `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
     run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
-    closed as stale, which stay to be reopened: `research.stale`).  At most ``limit`` of each, the longest idle first, each
+    closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`).  At most
+    ``limit`` of each, the longest idle first, each
     logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     now = time.time() if now is None else now

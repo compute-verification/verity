@@ -68,8 +68,8 @@ def check_combine_bound(static: int) -> None:
                          f"{W.LANES} lanes), which SparseMlaCombine does not state")
 
 
-def head_split(B, S, block_of, end, combine_of, zero, q, k, v):
-    """`AttentionHeadSplit`'s body: per split of `row_splits(T, BN, PER)` its blocks last to first (``block_of(nvis, first,
+def head_split(B, S, tile_of, end, combine_of, zero, q, k, v):
+    """`AttentionHeadSplit`'s body: per split of `row_splits(T, BN, PER)` its blocks last to first (``tile_of(nvis, first,
     check)``), ``end`` and then ``combine_of(nsplit)`` over the splits; ``zero(width)`` a zero word."""
     T, D, BN, MF, PER = S.T, S.D, S.BN, S.MASKED_FROM, S.PER
     nb = -(-T // BN)
@@ -93,7 +93,7 @@ def head_split(B, S, block_of, end, combine_of, zero, q, k, v):
                 kb = Coll(Array(BN, kb.type.elem), concat([kb.refs] + pad))
                 vb = Coll(Array(BN, vb.type.elem), concat([vb.refs] + pad))
             first = b == b1 - 1
-            blk = block_of(hi - lo, first, first or b >= MF)
+            blk = tile_of(hi - lo, first, first or b >= MF)
             if first:
                 z = zero(32)
                 st = B.call(blk, q, kb, vb, z, Coll(Array(4, z.type), concat([z.refs] * 4)), Coll(Array(D, z.type), concat([z.refs] * D)))
@@ -132,11 +132,11 @@ def AttentionHeadSplit(B, S, q, k, v):
     """One query row at position T-1 of FA3's split causal prefill over keys 0..T-1: per split of `row_splits(T, BN, PER)` its
     `AttnBlock_v4`s last to first (the split's first visited one FIRST, block b with `CHECK = FIRST or b >= MASKED_FROM`),
     `SparseMlaSplitEnd_v1{DV=D, INV, SCALE=D^-0.5}`, then `SparseMlaCombine_v1{NSPLIT, DV=D, INV}` over the row's splits."""
-    def block_of(nvis, first, check):
+    def tile_of(nvis, first, check):
         return bind(AttnBlockV4, D=S.D, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, CHECK=check)
     end = bind(W.SparseMlaSplitEnd, DV=S.D, INV=S.INV, SCALE=S.D ** -0.5)
     zeros = {16: lambda: B.call(ZERO16), 32: lambda: B.call(ZERO32)}
-    return head_split(B, S, block_of, end, lambda n: bind(W.SparseMlaCombine, NSPLIT=n, DV=S.D, INV=S.INV),
+    return head_split(B, S, tile_of, end, lambda n: bind(W.SparseMlaCombine, NSPLIT=n, DV=S.D, INV=S.INV),
                       lambda w: zeros[w](), q, k, v)
 
 

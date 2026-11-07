@@ -38,13 +38,13 @@ public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionLDecisive
 
 /-!
-# R11: flock-verify's acceptance and the audit as Lean defines it
+# The refinement: flock-verify's acceptance and the audit as Lean defines it
 
 The acceptance lemmas (`accepts_*`) are about public-output statements only: each takes `hh : hiddenOutputs = false`,
 since with hidden outputs flock-verify sets up its tables with `setupHidden`, about which nothing here is proved.
 
 * `Event`: flock-verify's verdict on a session directory (`Accepts`), the live audit whose outcome carries it
-  (`auditLive`), and R11 at one strategy pair (`ExecRefines`);
+  (`auditLive`), and the refinement at one strategy pair (`ExecRefines`);
 * `SessionL`: the batched session under a leaf scheme (`tableAfterL`, `sessionBL`, `batchedSessionL`), and over any
   table run (`sessionG`, `batchedSessionG`);
 * `Setup`: under a tag without hidden outputs, flock-verify's acceptance sets up each table with `setupH`
@@ -79,9 +79,9 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
 * `Headline`: the headline carried to the live audit through `ExecRefines` (`Prog.flock_headline_exec`,
   `flock_headline_exec_L`);
 * `HeadlineL`: the headline over the salted session (`Prog.flock_headline_L`, the bound of `Prog.flock_headline`), and
-  at the executable (`Prog.flock_headline_execL`), where only `hRef` stands for R11;
-* `Live`: R11 for one-table sessions of the challenger, with `bad = ⊥`, given `Decodes` (`execRefines_one`), and
-  the headline at flock-verify's verdict with no `bad` term (`Prog.flock_headline_live`);
+  at the executable (`Prog.flock_headline_execL`), where only `hRef` stands for the refinement;
+* `Live`: the refinement for one-table sessions of the challenger, with `bad = ⊥`, given `Decodes` (`execRefines_one`),
+  and the headline at flock-verify's verdict with no `bad` term (`Prog.flock_headline_live`);
 * `Decode`: two pieces of `DecodesAll`: a run on two lists is a run on one tape with those messages and coins
   (`Plays.toT`), and the accepted proof's cap is a function of `root_B` (`capOfRoot`, `verify_cap_hm96`);
 * `Emit`, `FramesLigerito`, `FramesRep`: the frames a run emits, round by round (`Emitted`, `chunks`), for each phase
@@ -98,8 +98,8 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
 * `Pts`: a `setupH` statement's link points, `mPtsOf` of the circuit's `g` and the units it proves (`setupH_facts`),
   for a drawn session the draw's proved units (`setupH_mPts_drawn`, `setupH_mPts_of_proved`), so equal at two draws
   that prove as many units (`setupH_mPts_eq`);
-* `LiveOn`: `Live`'s R11 and headline with the decoder right at the law's draws only (`DecodesOn`, `execRefines_on`,
-  `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`);
+* `LiveOn`: `Live`'s refinement and headline with the decoder right at the law's draws only (`DecodesOn`,
+  `execRefines_on`, `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`);
 * `LawDraw`: every draw of the live stratified law has `∑ s, k s` units, or is every unit where the run reads past the
   source's bytes (`execOS_draw_card`, `execOS_draw_card_or`), so a draw file with no closure sets up at
   `mPtsOf c.g (∑ s, k s)` or `mPtsOf c.g n` (`setupH_mPts_execOS`, `setupH_mPts_execOS_or`);

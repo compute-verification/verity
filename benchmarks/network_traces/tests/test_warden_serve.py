@@ -1,7 +1,7 @@
 """warden-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
 the offline check of a run whose network certifier is driven tick by tick on a `VirtualClock`, its records certified by
-an LMS key: the check accepts the run, whose server got each request with its release order under the run id
-`deployment.json` names, and refuses a record that isn't what was certified, a cell that reached its client in
+an LMS key: the check accepts the run, whose server got each request with its release order and bucket under the run
+id `deployment.json` names, and refuses a record that isn't what was certified, a cell that reached its client in
 another bucket, and a response that isn't the record's; a window in which the network certifier refused a connection is
 certified and signed nowhere; and a window's slow commit, which faults the next window when it runs in the network
 certifier's process, moves no tick in `serve`'s publisher process."""
@@ -22,7 +22,7 @@ import pytest
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, VirtualClock
 from verity.core.protocols.certifier.grid import Reason
-from verity.core.protocols.certifier.release import with_release
+from verity.core.protocols.certifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
 from verity.core.protocols.certifier.warden import (END, REFUSED, Shim, Warden, WardenParams, cells, read_cell,
                                                     reason_frame)
 
@@ -444,6 +444,30 @@ def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
     assert ws.dechunk(b"3\r\nabc\r\n2\r\nd") == (b"abcd", False)
 
 
+def test_the_fake_endpoint_reads_the_watermark_stream_to_its_end_and_answers_nothing():
+    """`rehearse --fake --watermark`: the network certifier's watermark stream (`release`'s `POST /verity/watermark`)
+    isn't a completion request, so the fake endpoint takes all of it, answers nothing and closes; `serve --watermark`
+    and `rehearse --watermark` both take the flag."""
+    stream = watermark_head(bytes(32)) + b"".join(watermark_chunk(t, n) for t, n in ((0, 0), (1, 2), (2, 2))) + \
+        watermark_chunk(3, 4, [2]) + WATERMARK_END
+
+    async def main() -> bytes:
+        server = await asyncio.start_server(lambda r, w: ws.fake_endpoint(r, w, sleep=_no_sleep), "127.0.0.1", 0)
+        reader, writer = await asyncio.open_connection("127.0.0.1", server.sockets[0].getsockname()[1])
+        writer.write(stream)
+        writer.write_eof()
+        data = await reader.read()
+        writer.close()
+        server.close()
+        return data
+
+    assert asyncio.run(main()) == b""
+    serve = ["serve", "--upstream", "h:1", "--listen", "h:0", "--out", "o", "--key", "k", "--session", "00",
+             "--windows", "1"]
+    assert [ws.parser().parse_args(serve + extra).watermark for extra in ([], ["--watermark"])] == [False, True]
+    assert ws.parser().parse_args(["rehearse", "--fake", "--out", "o", "--watermark"]).watermark
+
+
 def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_reads_it():
     """`rehearse --ids`: an `id_traffic` request, sent network-certifier-form (`active.id_request`), is answered with
     its `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;
@@ -604,10 +628,10 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
     servers: list[_Writer] = []
     warden = _run(out, key, requests, responses, servers=servers)
-    release = {e["ordinal"]: e["release"] for e in warden.log}
-    assert sorted(release.values()) == [0, 1, 2]
+    release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in warden.log}
+    assert sorted(n for n, _ in release.values()) == [0, 1, 2]
     assert [b"".join(d for _, d in s.writes) for s in servers] == \
-        [with_release(r, release[k + 1], warden.run_id) for k, r in enumerate(requests)]
+        [with_release(r, release[k + 1][0], warden.run_id, release[k + 1][1]) for k, r in enumerate(requests)]
     assert json.loads((out / "deployment.json").read_text())["run_id"] == warden.run_id.hex()
     result = ws.check(out)
     assert result["accepted"], result["problems"]

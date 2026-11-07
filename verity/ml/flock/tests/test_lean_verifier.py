@@ -55,16 +55,16 @@ def test_no_escape_hatches():
 
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
-AUDIT_STATEMENTS = PROOFS.parent / "Definitions" / "Flock" / "Guarantees" / "Audit.lean"
+AUDIT_STATEMENTS = PROOFS / "Flock" / "Lemmas" / "Audit.lean"
 AUDIT_IMPORTS = re.compile(r"(Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
-                           r"Proofs\.Flock\.Soundness\.Audit\.|Definitions\.Flock\.Guarantees\.Audit$)")
+                           r"Proofs\.Flock\.Soundness\.Audit\.|Proofs\.Flock\.Lemmas\.Audit$)")
 IMPORT = re.compile(r"(?:public )?(?:meta )?import (?:all )?(\S+)")
 
 
 def test_audit_layer_is_abstract():
     """The audit theorems import only the interaction model, Mathlib, each other, Flock's spec (`Definitions.Flock.*`, which
     the lock's layers hold to itself and Mathlib) and their lifted statements
-    (`Definitions.Flock.Guarantees.Audit`, which imports only Mathlib), so any backend can instantiate them
+    (`Proofs.Flock.Lemmas.Audit`, which imports only Mathlib), so any backend can instantiate them
     (`Security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
     `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
@@ -895,9 +895,9 @@ def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
     path's layout check does (R9c's refinement). A composed RoPE circuit is accepted; either change to it is refused."""
     pytest.importorskip("verity_numerical")
     from verity_flock import circuit as FC
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
@@ -939,9 +939,9 @@ def test_hm96_header_sizes_are_refused_before_their_powers(tmp_path):
 
     from verity_flock import circuit as FC
     from verity_flock.ir_lower import TABLES
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
@@ -1018,9 +1018,9 @@ def test_row_nets_are_the_verifiers(tmp_path):
     section is refused, naming the row."""
     pytest.importorskip("verity_numerical")
     from verity_flock import circuit as FC
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     s = InputSet.open(generate(TM.parse_subcircuit_id("rope-head/d64/neox-bf16"), 4, 20260926, tmp_path)["path"])
