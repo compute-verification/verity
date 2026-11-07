@@ -1,0 +1,6 @@
+# The DSA indexer's canonical top-k (README.md). Not a package: the plugin and the stress run in a node's pinned vLLM venv;
+# the suite tests the canonical row's definition, the torch reference against it, the wrappers' dispatch on stand-in ops,
+# and, where Triton is importable, the kernels in Triton's interpreter.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
