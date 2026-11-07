@@ -79,4 +79,33 @@ def TwoStageCheckPatternsSound : Prop :=
               (fun T r => lightOf s Pt (servedBits req r) (blocksTo s.prog Pt req T r)),
             2 ^ ∑ r, lightBits s Pt (servedBits req r) (p r) : ℕ) : ℝ) ≤ (2 : ℝ) ^ (b : ℝ)
 
+/-! ## The witnesses' points
+
+The guarantees' witnesses (`Properties.SampledProofs.SecurityProofs`) read these: `FactorUpperWitness.pairDesign`'s
+replay block and a million deployed-shaped ones as points, and a first stage that samples nothing. -/
+
+namespace TwoStageCheckWitness
+
+open FactorUpperWitness (pairCells honestCells emptyStmt)
+
+/-- `pairDesign`'s one replay block as one class, read by one request serving `2` bits: `q = 1/2`, `θ = 1`,
+`δ = 1/2`, precision `32`. -/
+def pairPoint (form : Form) : Point := ⟨form, 1 / 2, 1, 1 / 2, 2, [⟨1, pairCells, [[(2, 1)]], 1⟩], 32⟩
+
+/-- A million deployed-shaped replay blocks (`honestCells`: one stratum of 64 proof blocks of 16 bits, `k = 4`), each
+read by at most 4 requests reading 8 of its proof blocks and serving `64` bits: `q = 1/2`, `θ = 1`, `δ = 1/100`. -/
+def deployedPoint (form : Form) : Point :=
+  ⟨form, 1 / 2, 1, 1 / 100, 64, [⟨10 ^ 6, honestCells, [[(8, 16)]], 4⟩], 32⟩
+
+/-- One stratum of one proof block, `{0}`. -/
+def soloPart : Partition := ⟨[[[[0]]]]⟩
+
+/-- A first stage that samples nothing (`bernoulli:0/1`), over `soloPart`'s one replay block, `k = 1`. -/
+def nothingDesign : Design.Two := ⟨soloPart, ⟨[.bernoulli 0 1]⟩, [1]⟩
+
+/-- `emptyStmt`'s one output, read by one request. -/
+def oneReq : Fin emptyStmt.prog.outs.length → Unit := fun _ => ()
+
+end TwoStageCheckWitness
+
 end Properties.SampledProofs

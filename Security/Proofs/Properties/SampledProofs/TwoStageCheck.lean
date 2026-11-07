@@ -17,9 +17,10 @@ composes Rankin's bound (`Claims.Sampling.admissibleTwo_rankin`, `admissibleTwo_
 (`exp_le_two_rpow`).
 
 Each honest witness concludes its guarantee's premises at a replay block of two one-bit proof blocks sampled
-`bernoulli:1/2` (`FactorUpperProof.pairDesign`), where the point returns, and the kernel's evaluation returns a point
+`bernoulli:1/2` (`FactorUpperWitness.pairDesign`), where the point returns, and the kernel's evaluation returns a point
 of a million deployed-shaped replay blocks too. Each conclusion fails at a first stage that samples nothing
-(`nothingTwo`), at the `1` bit a point claiming the rate `1/2` there could return: the count is `3` (`_nontrivial`).
+(`TwoStageCheckWitness.nothingDesign`, which is `nothingTwo`), at the `1` bit a point claiming the rate `1/2` there
+could return: the count is `3` (`_nontrivial`).
 -/
 
 @[expose] public section
@@ -252,18 +253,11 @@ section Witnesses
 
 open Claims.Witness.SamplingGeneric
 open Claims.Witness.Sampling (toyStmt toyPart)
-open FactorUpperProof (pairStmt pairPart pairDesign pairCells honestCells pair_covers pair_readsCover)
+open FactorUpperWitness (pairStmt pairPart pairDesign emptyStmt)
+open FactorUpperProof (pair_covers pair_readsCover)
+open TwoStageCheckWitness
 
 namespace TwoStageCheckProof
-
-/-- `pairDesign`'s one replay block as one class, read by one request serving `2` bits: `q = 1/2`, `θ = 1`,
-`δ = 1/2`, precision `32`. -/
-def pairPoint (form : Form) : Point := ⟨form, 1 / 2, 1, 1 / 2, 2, [⟨1, pairCells, [[(2, 1)]], 1⟩], 32⟩
-
-/-- A million deployed-shaped replay blocks (`honestCells`: one stratum of 64 proof blocks of 16 bits, `k = 4`), each
-read by at most 4 requests reading 8 of its proof blocks and serving `64` bits: `q = 1/2`, `θ = 1`, `δ = 1/100`. -/
-def deployedPoint (form : Form) : Point :=
-  ⟨form, 1 / 2, 1, 1 / 100, 64, [⟨10 ^ 6, honestCells, [[(8, 16)]], 4⟩], 32⟩
 
 theorem pairStmt_inScope : InScopeTwo pairPart pairDesign pairStmt := inScopeTwo_rankin
 
@@ -296,15 +290,24 @@ theorem pair_requestsCover (form : Form) :
     exact ⟨(card_le_univ _).trans (by simp),
       fun ⟨⟩ _ => ⟨(by decide : servedBits (fun _ : Fin pairStmt.prog.outs.length => ()) () = 2), pair_readsCover⟩⟩
 
-theorem nothingTwo_patterns_count :
-    (∑ p ∈ (admissibleTwo toyPart nothingTwo (9 / 10)).image
-        (fun T r => lightOf toyStmt toyPart (servedBits toyReq r) (blocksTo toyStmt.prog toyPart toyReq T r)),
-        2 ^ ∑ r, lightBits toyStmt toyPart (servedBits toyReq r) (p r) : ℕ) = 3 := by
+/-- `nothingDesign` over `emptyStmt` and `soloPart` is `nothingTwo` over `toyStmt` and `toyPart`. -/
+theorem nothing_count :
+    (∑ T ∈ admissibleTwo soloPart nothingDesign (9 / 10), 2 ^ bitsOf emptyStmt soloPart T : ℕ) = 3 :=
+  (rfl : (∑ T ∈ admissibleTwo soloPart nothingDesign (9 / 10), 2 ^ bitsOf emptyStmt soloPart T : ℕ) =
+    ∑ T ∈ admissibleTwo toyPart nothingTwo (9 / 10), 2 ^ bitsOf toyStmt toyPart T).trans nothingTwo_count
+
+theorem nothing_patterns_count :
+    (∑ p ∈ (admissibleTwo soloPart nothingDesign (9 / 10)).image
+        (fun T r => lightOf emptyStmt soloPart (servedBits oneReq r) (blocksTo emptyStmt.prog soloPart oneReq T r)),
+        2 ^ ∑ r, lightBits emptyStmt soloPart (servedBits oneReq r) (p r) : ℕ) = 3 := by
   have himg : ∀ S : Finset (Finset ℕ), S = {∅, {0}} →
       S.image (fun T r => lightOf toyStmt toyPart (servedBits toyReq r) (blocksTo toyStmt.prog toyPart toyReq T r)) =
         {fun _ => none, fun _ => some none} := by
     rintro S rfl
     rw [image_insert, image_singleton, toy_pat_empty, toy_pat_zero]
+  change (∑ p ∈ (admissibleTwo toyPart nothingTwo (9 / 10)).image
+      (fun T r => lightOf toyStmt toyPart (servedBits toyReq r) (blocksTo toyStmt.prog toyPart toyReq T r)),
+      2 ^ ∑ r, lightBits toyStmt toyPart (servedBits toyReq r) (p r) : ℕ) = 3
   rw [himg _ (by rw [nothingTwo_admissible]; decide), sum_pair toy_pat_ne]
   simp [lightBits, toy_servedBits]
 
@@ -318,12 +321,12 @@ theorem twoStageCheckSound_honest :
       (checkTwoStage (pairPoint .sets)).isSome = true ∧ (checkTwoStage (deployedPoint .sets)).isSome = true :=
   ⟨pairStmt_inScope, pair_firstStage _, pair_classesCover _, by decide +kernel, by decide +kernel⟩
 
-/-- **`TwoStageCheckSound`'s conclusion fails** at a first stage that samples nothing (`nothingTwo`), at `1` bit: the
-count is `3`. -/
+/-- **`TwoStageCheckSound`'s conclusion fails** at a first stage that samples nothing (`nothingDesign`), at `1` bit:
+the count is `3`. -/
 theorem twoStageCheckSound_nontrivial :
-    ¬ ((∑ T ∈ admissibleTwo toyPart nothingTwo (9 / 10), 2 ^ bitsOf toyStmt toyPart T : ℕ) : ℝ) ≤
+    ¬ ((∑ T ∈ admissibleTwo soloPart nothingDesign (9 / 10), 2 ^ bitsOf emptyStmt soloPart T : ℕ) : ℝ) ≤
       (2 : ℝ) ^ (((1 : ℚ) : ℝ)) := by
-  rw [nothingTwo_count]
+  rw [nothing_count]
   norm_num
 
 /-- **`TwoStageCheckPatternsSound`'s honest witness**: `twoStageCheckSound_honest`'s, and the one request reading both
@@ -337,13 +340,14 @@ theorem twoStageCheckPatternsSound_honest :
   ⟨pairStmt_inScope, pair_firstStage _, pair_classesCover _, pair_requestsCover _, by decide +kernel,
     by decide +kernel⟩
 
-/-- **`TwoStageCheckPatternsSound`'s conclusion fails** at `nothingTwo`, with one request reading the one output, at
-`1` bit: the patterns' count is `3`. -/
+/-- **`TwoStageCheckPatternsSound`'s conclusion fails** at `nothingDesign`, with one request reading the one output,
+at `1` bit: the patterns' count is `3`. -/
 theorem twoStageCheckPatternsSound_nontrivial :
-    ¬ ((∑ p ∈ (admissibleTwo toyPart nothingTwo (9 / 10)).image
-          (fun T r => lightOf toyStmt toyPart (servedBits toyReq r) (blocksTo toyStmt.prog toyPart toyReq T r)),
-          2 ^ ∑ r, lightBits toyStmt toyPart (servedBits toyReq r) (p r) : ℕ) : ℝ) ≤ (2 : ℝ) ^ (((1 : ℚ) : ℝ)) := by
-  rw [nothingTwo_patterns_count]
+    ¬ ((∑ p ∈ (admissibleTwo soloPart nothingDesign (9 / 10)).image
+          (fun T r => lightOf emptyStmt soloPart (servedBits oneReq r) (blocksTo emptyStmt.prog soloPart oneReq T r)),
+          2 ^ ∑ r, lightBits emptyStmt soloPart (servedBits oneReq r) (p r) : ℕ) : ℝ) ≤
+      (2 : ℝ) ^ (((1 : ℚ) : ℝ)) := by
+  rw [nothing_patterns_count]
   norm_num
 
 end Witnesses
