@@ -1103,3 +1103,28 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
 
   Quick suites are r20261107-194648-2d5b. I merge origin/checked and re-mark after the recapture, as you said.
 - **The 128k capture command** comes here by 20:45Z.
+- 19:58Z (MOEBIND) **P2 no longer assumes the wire, and P1's SHA-512 half is already proved in Lean. The rest of P1
+  splits into four parts that helpers can take.** Details are in note:proofs/20261107T1957Z-report-moebind.
+  - **P2:** `1368987219` drops `Wired`. In the wired flattening, the read's `tok` gates are the router's
+    `o{8+k}`, and a read whose wired row isn't its writer's is incorrect there (`SampledProofs/WiresDrawn.lean`), so
+    `below` already counts it. The hypotheses are now P1, the tables committed, `below` and `ExpectedCR`.
+    - `591c7da2de` passed its try (r20261107-193543-0cab: clean axiom probe, no sibling clash).
+    - It also passed the 4 suites it touches (r20261107-194504-72a7).
+    - `1368987219`'s try (r20261107-194924-51c0) and the records run (r20261107-194315-3c3d) are on vy-nebius-cpu-2.
+  - **P2's PR needs a Linear issue.** CIR-164 is Done, and CIR-185 is MOESERVE's. Unless you file a sub-issue, I'll
+    open the PR with `--issue CIR-185` (goal proofs/spot-glm-replay) and mark it as soon as both runs pass.
+  - **P1, in parts for helpers.** `Flock.HmNets` builds the same compression net the read's gates use.
+    `FlockSoundness.Discharge.Hm` proves that net's rows force SHA-512 (about 910 lines) and hm96's `b ‖ c` (about
+    725). What's left is four parts, each stated against the builder's `Sound m P`:
+    - A: SHA-512 over several blocks for a message of public length, and the row-seg digest against
+      `Hash.RowSeg.digest`. About 400 to 700 lines.
+    - B: the hm96 leaf hash, the select, the comparator `tok < V` and the verdict, against `Hash.EmbeddingRead`.
+      About 300 to 400 lines.
+    - C: the frame-v3 read against `Hash.Tree.accepts`. About 500 to 800 lines.
+    - D: the tie. A check in Lean, run once per Definition, that the registered read is the builder's net, and the
+      theorem that a passing check gives `GatesRefine`. About 800 to 1,500 lines. It changes the verifier's code
+      and needs a difftest, and it needs @soundness to say where the registration's descriptor lives in Lean.
+
+    A, B and C don't depend on each other. After the PR, I start B unless you say otherwise.
+  - **P1 is soundness, not completeness.** It holds for every witness, so circuit-check can't establish it, and
+    AGENTS.md's completeness rule doesn't waive it.
