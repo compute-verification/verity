@@ -33,7 +33,10 @@ step's tensor of such a tap is held to the rows and width of the identity it bin
 
 The rank's manifest may require `run` values of an indexer layer's rows past INDEX_TOPK (`run_values`): their rows of
 `topk_indices_buffer` are copied after `_sparse_indexer_and_attn` returns and committed as their Waksman settings at the step's
-end, under the manifest's names (`commit.committer.run_values`; `own_names`, `targets_at`).  Nothing more is committed.
+end, under the manifest's names (`commit.committer.run_values`; `own_names`, `targets_at`).  Only the rows `forward_mqa` attended are
+read: past them are a CUDA-graph launch's padding, whose positions are stale and whose indices the indexer never wrote, and a
+dense-MHA prefill's rows, which have at most INDEX_TOPK keys.  A committer that never ends its sources' steps (`ends_source_steps`
+false: `hooks_only`, a plugin) is refused for such a manifest, naming the fields.  Nothing more is committed.
 """
 from __future__ import annotations
 
@@ -166,6 +169,10 @@ class AttentionSource:
             if (tl := call_tap(r)) is not None:
                 self.boundaries.setdefault((int(r.get("engine_step", r.get("step"))), *tl), []).append(r)
         self.run = RunValues(identities, {CM.at_layer(routes.site["module"], i): i for i in self.layers})
+        if self.run.names and not getattr(com, "ends_source_steps", False):
+            raise ValueError(f"attention: committer {getattr(com, 'name', type(com).__name__)} never ends a source's step (on_step_end), "
+                             f"where the manifest's run values are committed: {sorted(self.run.names)[:3]} (of {len(self.run.names)}) "
+                             f"would be missing; commit them with native_collect_v2b")
         self.own_names = self.run.names
         self._copies: list[Any] = []
         self._hooks = Hooks()
@@ -317,7 +324,7 @@ class AttentionSource:
                     if layer in me.names.get(TOPK, {}):
                         me._bind(TOPK, layer, mod.topk_indices_buffer[: int(a["q_c"].shape[0]), : int(me.width[TOPK])], job)
                         me._flush(TOPK)
-                    me.run.take(int(job.step), layer, a.get("positions"), getattr(mod, "topk_indices_buffer", None), int(a["q_c"].shape[0]))
+                    me.run.take(int(job.step), layer, a.get("positions"), getattr(mod, "topk_indices_buffer", None), me._mqa_rows)
                 return out
             return attend
         return make

@@ -158,6 +158,8 @@ class NativeCollectCommitter(NativeHostCommitter):
     M1 glue is `Fa2Wrap` -- no Python frame per producer; gather windows (P0/P1/P2 + step end) with 32 blocks per descriptor by default
     (size-adaptive, `auto_blocks`: up to 1024)."""
 
+    ends_source_steps = True
+
     def __init__(self, engine: Any, *, wrap: bool = True, profile: bool = False, build_dir: str | None = None, check_sizes: bool = True,
                  gather: bool = False, native_hooks: bool = False, auto_blocks: bool = False, native_worker: bool = False,
                  retain_levels: bool | None = None, commit_scheme: str | None = None,
