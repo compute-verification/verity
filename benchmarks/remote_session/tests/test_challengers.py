@@ -340,7 +340,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
 def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
              peer: str = "cpu-node", groups_per_coin: int = 1) -> tuple[list[dict], dict, bytes]:
     """A gate run of `plan`'s sessions in period p-1, which committed the descriptor of the verifier that ran them, its
-    verifier at the challenger host as `peer`, each session's windows drawn `groups_per_coin` a coin: the sessions,
+    verifier at the challenger host as `peer`, each session's windows sampled `groups_per_coin` a coin: the sessions,
     their registration and that descriptor."""
     desc = al.descriptor("ab" * 20)
     host.period(circuit=hashlib.sha512(desc).hexdigest())
@@ -509,7 +509,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
 def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
         host, tmp_path, monkeypatch):
     """`--groups-per-coin 4` at two windows in flight: `auditor_line`'s line of record over a gate run of an honest
-    session and a prover that skips half its reads, each paced in twelve windows drawn on three openings coins, which
+    session and a prover that skips half its reads, each paced in twelve windows sampled on three openings coins, which
     the gate reserves and releases (⌈12/4⌉). The period closes complete; the honest session, which the Lean accepts
     and whose record names g, is credited, its twelve windows' last roots read on the challenger's clock off its
     three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three draws

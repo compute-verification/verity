@@ -1,20 +1,20 @@
 """PoUB beside sbench's served arms on the GPU they share (`sbench.py --bw-passes GIB`, `dbw.py`).
 
 One process stands in for the auditor: PoUB's own verifier (`verity/core/protocols/remote_bandwidth/session/verifier.py`'s
-`Verifier`, its coins from an in-process challenger, the Lean verifier of record deciding) on a loopback socket. Its
+`Verifier`, its coins from an in-process challenger, the Lean verifier deciding) on a loopback socket. Its
 prover is `prover.py`, unmodified, on the GPU sbench leased (CUDA_VISIBLE_DEVICES inherited) and on --prover-cpus,
 over a store of GIB GiB of seeded payload under kv.cu's p1024 masked codec (`device.py`, the store `run.sh` registers on
 one GPU). That store stands in for the node's registered one: the engines' weights arenas that `node.py` registers can't
 share a GPU with sbench's arms. sbench sends one JSON line a command on stdin:
 
-    {"op": "session", "k": K, "paced": "1:1000:2773:W"}   session K, paced (`verifier.pace_of`), its first coin now
+    {"op": "session", "k": K, "paced": "1:1000:2773:W"}   run K, paced (`verifier.pace_of`), its first coin now
     {"op": "stop"}                                       the registration closed, the prover's bye, and exit
 
 and reads one JSON line an event on stdout, each with its `t_ns` on the host's monotonic clock (sbench's workers'
-too): `ready` (the registration, the prover's calibration, the round trips and the allowance A), `started` (session
+too): `ready` (the registration, the prover's calibration, the round trips and the allowance A), `started` (run
 K's first coin sent: its passes begin), `passes` (the prover's `closed`: its last pass is done), `ended` (K's verdict
 and failure, its pass timeline and memory lines; `dbw.session_of`), `stopped`, or `error`. The prover's plan (honest,
-skip:F, one session each) is fixed at its start. OUT/verifier.json is the verifier's record as `verifier.py` writes
+skip:F, one run each) is fixed at its start. OUT/verifier.json is the verifier's record as `verifier.py` writes
 it, and OUT/prover/ the prover's.
 """
 from __future__ import annotations
@@ -52,7 +52,7 @@ def emit(event: str, **kw) -> None:
 
 
 def lines(r: dict) -> dict:
-    """A session's verdict, pass timeline and memory lines, without its samples: what sbench's report reads."""
+    """A run's verdict, pass timeline and memory lines, without its samples: what sbench's report reads."""
     seen = r.get("windows_seen", [])
     passes = []
     for w in seen:
@@ -113,7 +113,7 @@ def main() -> int:
     plan = len(a.plan.split(","))
 
     def watch() -> None:
-        """The prover exits once its plan's last session has ended (`prover.py`), else only on an error."""
+        """The prover exits once its plan's last run has ended (`prover.py`), else only on an error."""
         rc = prover.wait()
         if not stopping.is_set() and not (rc == 0 and session["ended"] == plan):
             emit("error", why=f"the prover exited {rc} with its plan unfinished (OUT/prover.log)")

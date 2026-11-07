@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The ZK server's final round in Lean (firewall_finish_agree.py): one firewalled CPU `prove --zk` session (FC_FIREWALL=1
-# FC_HOST_WITNESS=1, through the Lean session loop of this tree, whose finish reads each table's level 0 from the loop, draws
+# FC_HOST_WITNESS=1, through the Lean session loop of this tree, whose finish reads each table's level 0 from the loop, samples
 # each rep's salts for levels ≥ 1 and holds the opening's and the inner proof's rounds itself) that dumps each table's roots
 # and requests and each rep's request and Lean proof file (FC_FINISH_DUMP), then `flock-firewall finish` on the requests;
 # the session's verifier must accept, every rep passing, and the Lean verifier (`flock-verify verify --zk`) pass every check
@@ -10,7 +10,7 @@
 # Every round in a device round's place is the loop's own (`Flock.Firewall.Frames`: `Skeleton.rounds`, then `Drive.openStep`).
 # The builds, the staging and their cache are benchmarks/pouw/hidden_zk/job.sh's (HZ_CACHE); the statement is one of its
 # configs (FF_CONFIG, default hidden:256: a hiding tile, whose rows are a form the soundness proof covers, where a plain
-# tile's are refused) over FF_N instances (default 1), all drawn, or h1:K, the H1 tile unit at contraction K with one
+# tile's are refused) over FF_N instances (default 1), all sampled, or h1:K, the H1 tile unit at contraction K with one
 # random instance (benchmarks/verifier_cost/flock_read.py), whose verifiers' verdicts are reported and not required: its
 # checks of record are h1_prove's, with the window's Program, partition and registered reads. Results in
 # $RESEARCH_RUN_DIR/out: result.json, the session's logs, the requests' sizes; never a request or a proof.

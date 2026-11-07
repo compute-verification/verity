@@ -1,6 +1,6 @@
 """85-rec-reprice's inner statement program (``85-rec-reprice.sh``): ``N`` instances of ``GemmCoordinate_v2{K, DOT}``, the
 population program of that template (`one_stage.partition.population_program`, instance i is unit i), cut by
-``Q_template_instance`` v0, as `rec_inner.stage` binds pod 80's RoPE d64 statement: the law's strata are the template's
+``Q_template_instance`` v0, as `rec_inner.stage` binds pod 80's RoPE d64 statement: the sampling design's strata are the template's
 instances and every unit is an instance of the circuit's own template, which Lean's verifier derives from the program.
 ``K`` and ``N`` come from the environment.
 
@@ -12,7 +12,7 @@ commits under its writer's output salt, and each a row of the link table V*'s li
     python -m verity_flock.class_statement --program-module rec_reprice.py:program --partition q-template-instance ...
                                          the inner statement, staged over that program
     python rec_reprice.py partition DIR  the verifier's copies beside DIR's circuit.txt: the partition object META binds
-                                         (partition.json), its program (program.json) and the full draw over them
+                                         (partition.json), its program (program.json) and the full sample over them
                                          (rec_live.full_draw, draw.json), over `chain_program` with REC_LINKS=1;
                                          prints the bindings
     python rec_reprice.py stage-chain DIR
@@ -76,7 +76,7 @@ def chain_program():
 
 
 def partition(d: Path, prog=None) -> dict:
-    """The partition object, program and full draw the inner statement in ``d`` binds, written beside it; refused unless META
+    """The partition object, program and full sample the inner statement in ``d`` binds, written beside it; refused unless META
     binds exactly that partition and program and the population is the statement's ``N`` units, and at an ``N`` the
     verifier refuses (`rec_budget.inner`). ``prog``: the program (default `chain_program` under REC_LINKS=1, else
     `program`)."""
@@ -108,7 +108,7 @@ def partition(d: Path, prog=None) -> dict:
 
 def chain_lanes(units, cl, tp, seed: str) -> tuple[list, list, list]:
     """Every unit's lanes in population order, each reading its writer's output as the program wires it, over root inputs
-    drawn once from ``seed`` (BF16 words of normal samples, so no product overflows); every row identity the instance's own."""
+    sampled once from ``seed`` (BF16 words of normal samples, so no product overflows); every row identity the instance's own."""
     import numpy as np
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU

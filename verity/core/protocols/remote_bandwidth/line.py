@@ -486,7 +486,7 @@ SHARED = ("a record drawn more than one window a coin (groups_per_coin) at one w
 
 
 def draws_of(g: int, ws: Sequence[Mapping]) -> list[tuple[int, int]]:
-    """The samples of a record drawn `g` windows a coin, as the pooled bound reads them (`audit.pooled_windows`): draw c is
+    """The samples of a record sampled `g` windows a coin, as the pooled bound reads them (`audit.pooled_windows`): draw c is
     windows cg … min((c + 1)g, W) − 1, its receipts U and its samples theirs summed."""
     return [(sum(receipts(w) for w in ws[a:a + g]), sum(w["drawn"] for w in ws[a:a + g])) for a in range(0, len(ws), g)]
 
@@ -497,7 +497,7 @@ def of_summary(record: Mapping, samples: int, seen: Sequence[Seen],
     request writes it) and what the auditor saw of each of its windows: group t is window t, its passes the record's
     and its times and reads `seen[t]`'s, and window t's receipts and draws are the record's (Σ lengths_t, drawn_t).
     Refused unless the auditor saw each of the record's windows and each window drew min(s, U_t) of its receipts at
-    the session's `samples` s, as the verifier's sample does. Drawn `g` > 1 windows a coin (`groups_per_coin`), the
+    the session's `samples` s, as the verifier's sample does. Sampled `g` > 1 windows a coin (`groups_per_coin`), the
     windows are the record's samples (`draws_of`), each refused unless it sampled min(s, U) of its U receipts and has fewer
     than `audit.RECEIPT_LIMIT` (2^64), as `receive` holds each window to: the memory model's sample reads at most
     2^64 − 1 receipts (`Properties.RemoteAudit.Line.receiptMax`), and a sample's windows' receipts need not be."""
@@ -558,7 +558,7 @@ def line_of_record(record: Mapping, *, registration: audit.Registration, samples
                    clock: str = "record") -> Line:
     """The line of an accepted session's record: `line` at its groups and windows (`of_summary`, at the record's
     `groups_per_coin` g, 1 when it doesn't name it: above 1 the windows are its samples) and its registered chunks (the
-    record's `blocks`, the registration the session ran on). Refused for a record drawn more than one window a coin at
+    record's `blocks`, the registration the session ran on). Refused for a record sampled more than one window a coin at
     one window in flight (`SHARED`), then for a record not of `registration` (`unregistered`, the Lean's
     `lineOfRegistered`), whose chunks the line would credit. On the record's `clock` the times seen are held to the
     record's, refused after `of_summary`'s refusals where they differ (`times_off`); on another (`CLOCKS`) the record

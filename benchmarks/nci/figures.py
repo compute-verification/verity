@@ -419,7 +419,7 @@ FIT_ROWS = [
     ("b_train", "bits stored per trained weight", {}, {"b": F.B_TRAIN["central"]}, num(F.B_TRAIN["floor"]),
      num(F.B_TRAIN["central"]), "fit.B_TRAIN: the C1 floor b_w to 16-bit training storage"),
 ]
-#: the smallest log10 swing in D a tornado draws (12%)
+#: the smallest log10 swing in D a tornado samples (12%)
 SHOWN = 0.05
 
 

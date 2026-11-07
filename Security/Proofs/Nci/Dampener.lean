@@ -249,7 +249,7 @@ theorem DampenerThreaded : Guarantees.DampenerThreaded := by
     hcap
 
 /-- **The bound is attained** (completeness, not a claim): at `κ = 2`, `C = 4`, `U = 0`, `W_cert = 3`, `ρ = 4`, `μ = 1`
-and `χ = 1/4`, with one counted multiplication in each of the residual, the declared computation and a faulty proof
+and `χ = 1/4`, with one counted multiplication in each of the residual, the declared computation and an incorrect proof
 block, every hypothesis of `Nci.Guarantees.Dampener` holds and `η = 3/4 = s + min(r, μ) + ν + χ`: the hypotheses can
 hold together, and the inequality is not loose there. -/
 theorem dampener_attained :

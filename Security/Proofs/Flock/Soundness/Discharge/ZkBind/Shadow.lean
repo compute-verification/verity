@@ -8,8 +8,8 @@ import Mathlib.Combinatorics.Matroid.Init
 # A `--zk` layout from a public one at the same statements
 
 `Binding.Layout` and `Binding.HmRows` are about plans of `TabSpec` tables, `LayoutZ` and `HmRowsZ` about plans of
-`TabZK` tables. Their facts read a drawn unit's table only through its statement and the witness a message packs. So a
-public layout at plan `planS` gives a `--zk` one at plan `planZ` whenever every drawn unit's `--zk` table has the
+`TabZK` tables. Their facts read a sampled proof block's table only through its statement and the witness a message packs. So a
+public layout at plan `planS` gives a `--zk` one at plan `planZ` whenever every sampled proof block's `--zk` table has the
 statement of its public table (`e`): the addresses move along `e` (`adr`), and every witness of the public table's
 statement is one a message packs (`wit_surj`, the `fast100` schedule's `m = 7 + k₀ + cols`), so a fact about every
 satisfying public message is one about every satisfying `--zk` message.
