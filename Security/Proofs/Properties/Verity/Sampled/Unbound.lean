@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled
-public import Proofs.Flock.Bridge.Unbound
+public import Proofs.Properties.Verity.Sampled.UnboundBridge
 public import Proofs.Flock.Bridge.PopMatches
 public import Proofs.Flock.Bridge.V5.Assembly
 public import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
