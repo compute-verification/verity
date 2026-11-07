@@ -319,8 +319,8 @@ class Scope:
         return f"{self.who} {self.period}"
 
 
-#: the post's headline scope, whose figures carry the bare file names, and its stretch scope, plotted beside it
-PRIMARY, SECONDARY = "datacenter year", "world year"
+#: the post's headline scope, whose figures carry the bare file names, and its secondary scope, plotted beside it
+PRIMARY, SECONDARY = "world year", "datacenter year"
 
 
 def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:

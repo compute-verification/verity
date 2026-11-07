@@ -141,10 +141,10 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   `figure3.py card` writes the hash loop's card from its `hash-loop.json`.
 - **Figure 4** (`figure4.py`), for 'Randomness is powerful': the sampling rate that keeps the model's FP4 weights in at
   δ = 2^-40, against a proof block's output bits. It is drawn in the simple form q = b ln(1/δ)/T and in the planner's
-  exact one-stage form, which adds location bits, over the headline and stretch scopes. Beside it is the rate a 10%
+  exact one-stage form, which adds location bits, over the headline and secondary scopes. Beside it is the rate a 10%
   total cost buys at each line's marginal proof overhead, counting proving alone.
-- The headline scope (`figure1.PRIMARY`, a datacenter year) gets the bare file names. Its exfiltration panel also
-  plots (A) over the stretch scope (`figure1.SECONDARY`, a world year).
+- The headline scope (`figure1.PRIMARY`, a world year) gets the bare file names. Its exfiltration panel also plots
+  (A) over the secondary scope (`figure1.SECONDARY`, a datacenter year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build
   on every rank and step of one request, one stratum per proof-block Definition; its `source` names the census.
 
