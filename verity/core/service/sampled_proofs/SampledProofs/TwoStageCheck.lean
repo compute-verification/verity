@@ -42,7 +42,7 @@ structure Class where
 
 /-- **A two-stage point**: its form, the first stage's rate `q`, Rankin's `θ`, the confidence `δ`, the bits `S` each
 request serves (the patterns' form), its classes of replay blocks and the precision `p`. -/
-structure Design where
+structure Point where
   form : Form
   q : Rat
   θ : Rat
@@ -53,10 +53,10 @@ structure Design where
   deriving Repr, Inhabited
 
 /-- The factor bound's parameters: `q`, `θ`, `optimize.CHORDS`' breakpoints and `p`. -/
-def Design.params (D : Design) : Params := ⟨D.q, D.θ, chords, D.p⟩
+def Point.params (D : Point) : Params := ⟨D.q, D.θ, chords, D.p⟩
 
 /-- At least `ln` of a replay block's factor in class `c`. -/
-def classFactor (D : Design) (c : Class) : Option Rat :=
+def classFactor (D : Point) (c : Class) : Option Rat :=
   match D.form with
   | .sets => lnFactorUpper c.cells D.params
   | .patterns => lnFactorUpperPatterns c.cells c.reads c.N D.S D.params
@@ -70,17 +70,17 @@ def classSum (f : Class → Option Rat) : List Class → Option Rat
     | _, _ => none
 
 /-- The point's numbers are in range: `0 ≤ q ≤ 1`, `θ ≥ 0`, `δ > 0`, and `ln 2`'s lower bound at `p` positive. -/
-def Design.valid (D : Design) : Bool :=
+def Point.valid (D : Point) : Bool :=
   decide (0 ≤ D.q) && decide (D.q ≤ 1) && decide (0 ≤ D.θ) && decide (0 < D.δ) && decide (0 < lnLower 2 D.p)
 
 /-- **At least `ln` of the count**, `θ ln(1/δ) + Σ_c count_c max(v_c, 0)`; `none` when the point is out of range or a
 class's factor bound doesn't return. -/
-def lnCount (D : Design) : Option Rat :=
+def lnCount (D : Point) : Option Rat :=
   if D.valid then (classSum (classFactor D) D.classes).map (D.θ * lnUpper (1 / D.δ) D.p + ·) else none
 
 /-- **The bits a two-stage point certifies**: `lnCount`'s `L` over `ln 2`, from above (`ln 2`'s lower bound at
 `L ≥ 0`, its upper one below). -/
-def checkTwoStage (D : Design) : Option Rat :=
+def checkTwoStage (D : Point) : Option Rat :=
   (lnCount D).map fun L => if 0 ≤ L then L / lnLower 2 D.p else L / lnUpper 2 D.p
 
 /-! ## Searching `θ` -/
@@ -110,7 +110,7 @@ def fibSearch (g : Nat → Option Rat) : Nat → Nat → Option Rat → Option R
 
 /-- **`θ` for the bound itself**, `lnCount` evaluated at precision `ps`: the least of `0` and `θ₀ 2^j` for `|j| ≤ span`;
 then, unless that is `0`, the least on a grid of `fib (n + 4)` steps from half of it to twice it. -/
-def searchTheta (D : Design) (θ₀ : Rat) (span n ps : Nat) : Rat :=
+def searchTheta (D : Point) (θ₀ : Rat) (span n ps : Nat) : Rat :=
   let at_ (θ : Rat) := lnCount { D with θ := θ, p := ps }
   let coarse := 0 :: if θ₀ ≤ 0 then [] else (List.range (2 * span + 1)).map fun i => θ₀ * 2 ^ i / 2 ^ span
   let best := ((coarse.map fun θ => (θ, at_ θ)).foldl (fun b x => if le x.2 b.2 then x else b) (0, none)).1

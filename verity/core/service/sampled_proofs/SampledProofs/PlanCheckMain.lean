@@ -73,7 +73,7 @@ def two (j : Json) : Except String Json := do
     | "patterns" => pure .patterns
     | f => throw s!"no form {f}"
   let classes ← (← j.getObjValAs? (Array Json) "classes").toList.mapM twoClass
-  let D : TwoStageCheck.Design := { form, q := ← rat (← str j "q"), θ := ← rat (← str j "theta"),
+  let D : TwoStageCheck.Point := { form, q := ← rat (← str j "q"), θ := ← rat (← str j "theta"),
                                     δ := ← rat (← str j "delta"), S := ← nat (← str j "S"), classes,
                                     p := ← nat (← str j "p") }
   let θ ← match j.getObjVal? "search" with

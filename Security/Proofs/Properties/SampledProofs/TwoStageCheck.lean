@@ -94,8 +94,10 @@ theorem rpow_neg_le {δ θ : ℚ} (p : ℕ) (hδ : 0 < δ) (hθ : 0 ≤ θ) :
   rw [Real.rpow_def_of_pos (by exact_mod_cast hδ)]
   refine Real.exp_le_exp.2 ?_
   have h : -Real.log δ ≤ ((lnUpper (1 / δ) p : ℚ) : ℝ) := by
-    have := lnUpperSound (1 / δ) p
-    rwa [Rat.cast_div, Rat.cast_one, one_div, Real.log_inv] at this
+    have h1 : Real.log ((1 / δ : ℚ) : ℝ) = -Real.log δ := by
+      rw [Rat.cast_div, Rat.cast_one, one_div, Real.log_inv]
+    rw [← h1]
+    exact lnUpperSound (1 / δ) p
   have hθ' : (0 : ℝ) ≤ θ := by exact_mod_cast hθ
   push_cast
   nlinarith [mul_le_mul_of_nonneg_left h hθ']
@@ -121,15 +123,15 @@ theorem exp_le_two_rpow (L : ℚ) (p : ℕ) (hlo : 0 < lnLower 2 p) :
     nlinarith [mul_le_mul_of_nonpos_left hu hL'.le]
 
 /-- A point `checkTwoStage` returns is in range. -/
-theorem valid_of_check {D : Design} {b : ℚ} (hb : checkTwoStage D = some b) :
+theorem valid_of_check {D : Point} {b : ℚ} (hb : checkTwoStage D = some b) :
     0 ≤ D.q ∧ D.q ≤ 1 ∧ 0 ≤ D.θ ∧ 0 < D.δ ∧ 0 < lnLower 2 D.p := by
   by_cases hv : D.valid = true
-  · simpa [Design.valid, and_assoc] using hv
+  · simpa [Point.valid, and_assoc] using hv
   · simp [checkTwoStage, lnCount, hv] at hb
 
 /-- **The count from Rankin's bound and the classes**: a count at most `δ^{−θ} ∏_ρ G_ρ`, each `G_ρ ≥ 0` at most
 `e^v` for its class's factor bound `v`, is at most `2^b` at `checkTwoStage`'s `b`. -/
-theorem bits_of_rankin {D : Design} {b : ℚ} (hb : checkTwoStage D = some b) {n : ℕ} {G : ℕ → ℝ} {C : ℝ}
+theorem bits_of_rankin {D : Point} {b : ℚ} (hb : checkTwoStage D = some b) {n : ℕ} {G : ℕ → ℝ} {C : ℝ}
     (cls : ℕ → ℕ) (hC : C ≤ (D.δ : ℝ) ^ (-(D.θ : ℝ)) * ∏ ρ ∈ range n, G ρ) (hG0 : ∀ ρ < n, 0 ≤ G ρ)
     (hG : ∀ ρ < n, ∀ c v, D.classes[cls ρ]? = some c → classFactor D c = some v → G ρ ≤ Real.exp v)
     (hcls : ∀ ρ < n, ∃ c, D.classes[cls ρ]? = some c)
@@ -256,11 +258,11 @@ namespace TwoStageCheckProof
 
 /-- `pairDesign`'s one replay block as one class, read by one request serving `2` bits: `q = 1/2`, `θ = 1`,
 `δ = 1/2`, precision `32`. -/
-def pairPoint (form : Form) : Design := ⟨form, 1 / 2, 1, 1 / 2, 2, [⟨1, pairCells, [[(2, 1)]], 1⟩], 32⟩
+def pairPoint (form : Form) : Point := ⟨form, 1 / 2, 1, 1 / 2, 2, [⟨1, pairCells, [[(2, 1)]], 1⟩], 32⟩
 
 /-- A million deployed-shaped replay blocks (`honestCells`: one stratum of 64 proof blocks of 16 bits, `k = 4`), each
 read by at most 4 requests reading 8 of its proof blocks and serving `64` bits: `q = 1/2`, `θ = 1`, `δ = 1/100`. -/
-def deployedPoint (form : Form) : Design :=
+def deployedPoint (form : Form) : Point :=
   ⟨form, 1 / 2, 1, 1 / 100, 64, [⟨10 ^ 6, honestCells, [[(8, 16)]], 4⟩], 32⟩
 
 theorem pairStmt_inScope : InScopeTwo pairPart pairDesign pairStmt := inScopeTwo_rankin
@@ -291,7 +293,8 @@ theorem pair_requestsCover (form : Form) :
       omega
     simp only [pairPoint, List.getElem?_cons_zero, Option.some.injEq] at hc
     subst hc
-    exact ⟨(card_le_univ _).trans (by simp), fun ⟨⟩ _ => ⟨by decide, pair_readsCover⟩⟩
+    exact ⟨(card_le_univ _).trans (by simp),
+      fun ⟨⟩ _ => ⟨(by decide : servedBits (fun _ : Fin pairStmt.prog.outs.length => ()) () = 2), pair_readsCover⟩⟩
 
 theorem nothingTwo_patterns_count :
     (∑ p ∈ (admissibleTwo toyPart nothingTwo (9 / 10)).image

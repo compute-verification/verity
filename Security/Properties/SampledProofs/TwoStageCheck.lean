@@ -30,7 +30,7 @@ How tight the bits are (the figure's driver measures them against `optimize.two_
 namespace Properties.SampledProofs
 
 open Claims.Sampling
-open _root_.SampledProofs.TwoStageCheck (Design Form checkTwoStage)
+open _root_.SampledProofs.TwoStageCheck (Point Form checkTwoStage)
 
 /-- **The registered first stage samples each replay block at a rate at least `q`**: `bernoulli:NUM/DEN` with
 `q ≤ NUM/DEN`, or `[subset Q, all]` over the replay partition's two classes, the population `c` and the inputs, with
@@ -42,7 +42,7 @@ def FirstStageAt (d : Design.Two) (q : ℝ) : Prop :=
 
 /-- **The point's classes cover the replay blocks**: replay block `ρ` is in class `cls ρ`, whose cells cover it, and
 class `i` holds at most its `count` replay blocks. -/
-def ClassesCover (s : AuditStatement) (Pt : Partition) (d : Design.Two) (D : Design) (cls : ℕ → ℕ) : Prop :=
+def ClassesCover (s : AuditStatement) (Pt : Partition) (d : Design.Two) (D : Point) (cls : ℕ → ℕ) : Prop :=
   (∀ ρ < d.part.blocks.length, ∃ c, D.classes[cls ρ]? = some c ∧ Covers s Pt d ρ c.cells) ∧
     ∀ i c, D.classes[i]? = some c → ((Finset.range d.part.blocks.length).filter (cls · = i)).card ≤ c.count
 
@@ -50,7 +50,7 @@ def ClassesCover (s : AuditStatement) (Pt : Partition) (d : Design.Two) (D : Des
 block, and in each replay block `ρ` at most its class's `N` requests read, each serving `D.S` bits and reading at most
 the class's `reads`. -/
 def RequestsCover (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R] [DecidableEq R]
-    (req : Fin s.prog.outs.length → R) (D : Design) (cls : ℕ → ℕ) : Prop :=
+    (req : Fin s.prog.outs.length → R) (D : Point) (cls : ℕ → ℕ) : Prop :=
   (∀ r, ∃ ρ, ∀ v ∈ blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r, replayOf Pt d.part v = some ρ) ∧
     (∀ r r', r ≠ r' → Disjoint (blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r)
       (blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r')) ∧
@@ -62,7 +62,7 @@ def RequestsCover (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Ty
 /-- **A sets' point's bits bound the count**: when `checkTwoStage D` returns `b`, every statement in scope whose first
 stage samples at `D.q` or more and whose replay blocks the classes cover has `Σ_{T admissible at δ} 2^{b(T)} ≤ 2^b`. -/
 def TwoStageCheckSound : Prop :=
-  ∀ (D : Design) (b : ℚ), checkTwoStage D = some b → D.form = .sets →
+  ∀ (D : Point) (b : ℚ), checkTwoStage D = some b → D.form = .sets →
     ∀ (s : AuditStatement) (Pt : Partition) (d : Design.Two) (cls : ℕ → ℕ), InScopeTwo Pt d s →
       FirstStageAt d D.q → ClassesCover s Pt d D cls →
         ((∑ T ∈ admissibleTwo Pt d D.δ, 2 ^ bitsOf s Pt T : ℕ) : ℝ) ≤ (2 : ℝ) ^ (b : ℝ)
@@ -71,7 +71,7 @@ def TwoStageCheckSound : Prop :=
 scope whose first stage samples at `D.q` or more, whose replay blocks the classes cover and whose requests read as
 they say has the admissible sets' patterns' sum at most `2^b`. -/
 def TwoStageCheckPatternsSound : Prop :=
-  ∀ (D : Design) (b : ℚ), checkTwoStage D = some b → D.form = .patterns →
+  ∀ (D : Point) (b : ℚ), checkTwoStage D = some b → D.form = .patterns →
     ∀ (s : AuditStatement) (Pt : Partition) (d : Design.Two) (R : Type) [Fintype R] [DecidableEq R]
       (req : Fin s.prog.outs.length → R) (cls : ℕ → ℕ), InScopeTwo Pt d s → FirstStageAt d D.q →
       ClassesCover s Pt d D cls → RequestsCover s Pt d req D cls →

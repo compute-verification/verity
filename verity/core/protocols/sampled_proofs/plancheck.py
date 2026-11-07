@@ -91,7 +91,7 @@ def work_design(g: Grain, target: float, delta: float) -> dict:
 def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: float, delta: float,
         served: float | None = None, union: bool = False, theta: float = 0.0, p: int = TWO_P,
         search: Mapping[str, int] | None = SEARCH) -> dict:
-    """`optimize.two_stage_exfil`'s point as the executable reads it (`TwoStageCheck.Design`): its `replay_blocks`
+    """`optimize.two_stage_exfil`'s point as the executable reads it (`TwoStageCheck.Point`): its `replay_blocks`
     replay blocks, rounded up, as one class, whose cell in each stratum holds its types' blocks by width, each count
     summed and rounded up and each width rounded up to whole bits, sampling `k` of them rounded down; the first stage's
     rate at most `q`.  Under `union`, the patterns' form, each replay block is read by one request, reading all of it
