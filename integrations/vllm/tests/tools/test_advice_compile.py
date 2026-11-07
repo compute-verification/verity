@@ -88,7 +88,8 @@ def test_a_window_carries_in_what_the_last_window_that_ran_steps_left(tmp_path):
 
 def test_a_carry_the_last_window_didnt_leave_is_refused(tmp_path):
     run = _windows(tmp_path, [0, 1], [], {0: W2})
-    with pytest.raises(ValueError, match=r"window 1 doesn't open where window 0 closed: carried request 0 \('a'\) .* not as the last"):
+    with pytest.raises(ValueError, match=r"window 1 doesn't open where window 0 closed: computed: carried request 0 \('a'\) .* not as "
+                                         r"the last"):
         AC.carry_of(run, 1, WA.encode(W2))
 
 
