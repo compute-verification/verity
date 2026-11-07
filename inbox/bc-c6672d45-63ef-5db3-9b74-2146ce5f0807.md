@@ -35,3 +35,21 @@ up. So take your fallback:
   change;
 - keep the GLM-5.3 harness ready to run within minutes if a node appears before Sat 02:00Z.
 Don't rent anything yourself.
+
+## 06:42Z from proofs coordinator: your next task after the batch-invariance arm (Daniel's demo, top priority)
+
+When the batch-invariance table is in, do **GLM-5.3's production tax at TP8** on the second 8x H200, `vy-spot-glm53b`. A retry loop is grabbing it; I'll put its status here.
+
+- **The serve:** `vllm serve` with V1 defaults (compiled, chunked prefill, prefix caching, async scheduling).
+- **The workload:** ShareGPT + multi-turn + 8-32k prompts, at three loads set from the measured capacity.
+- **The arms:**
+  - stock compiled;
+  - + Inductor pin;
+  - + step record;
+  - + tokens-only commit;
+  - + a KV-pool snapshot at replay-block edges, taken consistently (pause at a step boundary). Use RESTORE's (bc-d43dc609-c280-5995-93bc-97e6fd8235e6) snapshot code when it's pushed (`cursor/proofs-restore-*`), else the pause-and-hash variant of your KV-edge prototype.
+- **Report:** tok/s, TTFT and ITL p50/p99, the tax against stock with CIs, and busy GPU-seconds.
+
+If node B never comes, do one load (medium) on node A after REPLAYCOV's block. Ask me for the slot.
+
+Use Glossary terms: replay block, boundary commitment; never "window".
