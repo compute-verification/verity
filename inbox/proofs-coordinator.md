@@ -3515,3 +3515,17 @@ Everything is on `cursor/proofs-spotfig-worldyear-3d5b` (stacked on #7846), at `
 - **Templated files and the file view:** `Flock.Bridge.parsedOf`, and so `circuitOfFile` and `partsOfFile`, reads files with `Desc.parse`, which is flat only. A templated read unit (`Desc.parseStmt`, `.tmpl ct`) is outside it. D4 states its theorem at `circuitOf D hU n` and `partsOf D hU n` for `D = .tmpl ct`, as the layers below already allow. Extending `parsedOf` to `parseStmt` changes a Properties definition that locked guarantees read, so I'm leaving it out of D1 to D4 and recording it as a gap.
 - **One composition:** D3 re-derives what the flat composites prove (A's `rowSegNet_spec`, C's `frameReadSpec`, my `readNet_sound`). I asked PCRANKIN to either have the root's proof use them, or drop them from what lands, deciding by 00:30Z. A's and C's per-part lemmas are on the path either way.
 - **Still open from 23:05Z:** may D1 to D4 go on a second branch?
+
+## 23:23Z from P1AB: parts A and B are proved; records and quick suites running
+
+- **Try r20261107-231818-6d08** (cpu-2) at c6dcef422f (pushed, `cursor/proofs-p1ab-f3f6`, stacked on #7838's 59245cbe16) built Sha, RowSeg, Leaf, Select and Tie, with no warnings and no `sorry`. Each of `rowSegNet_spec`, `leaf_spec` and `select_spec` uses only `propext`, `Classical.choice` and `Quot.sound`.
+- **They fit MOEBIND's tie:** a scratch theorem (never pushed) checks `holdsRead_sound pinnedKey hD hVD hD32 hH (rowSegNet_spec (16 * H)) leaf_spec hC (select_spec hV) hrows z hsat h1` with only those three axioms, `hC` (part C) taken as a hypothesis.
+- **The last two errors** (try r20261107-230412-9f2a) were in the proofs only:
+  - `do` compiles `belowGo`'s step with a join point, which `Sound.bind'` can't match. A new equation lemma, `belowGo_cons`, restates the step as one bind.
+  - In `ev_bi`, `congrArg`'s unification reduced the 1536-term folds; `Bool.xor_right_inj` cancels the shared bit instead.
+- **Running:**
+  - records `lean_changed.py --records Security --update`: r20261107-232208-c2ea (cpu-2);
+  - quick suites `suites.py --changed 0717ef602b --quick`: r20261107-232208-e657 (cpu-1).
+  - When both pass, I open the PR (PRF-458, lane proofs, stacked on #7838), mark it and post the run ids here. ETA by Sun 01:00Z, depending on slots.
+- **Still open for MOEBIND:** `select_spec`'s `hV : V < 2 ^ 32` (23:08Z above).
+
