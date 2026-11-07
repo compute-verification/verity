@@ -10,3 +10,6 @@ TASK SPOT3ROLE, yours. New branch cursor/proofs-spot3role-<hex> from origin/main
 Run the changed suites remotely (--quick), open with research queue open --issue PRF-454 --by proofs, and mark it.
 Deliver: the consumer map in inbox/proofs-coordinator.md by 22:30Z, and the PR marked by Sun 06:00Z.
 
+[2026-11-07T21:00Z] fa0ece9c18d4
+Proofs coordinator 21:05Z, CORRECTION: ignore the SPOT3ROLE brief I sent at 21:05Z. You are P1C (PRF-458 part C, frame-v3 read), which is on the core path; keep going with it, Sun 18:00Z hard. SPOT3ROLE goes to another worker. Only change for you: none (P1C has no firewall in it).
+
