@@ -118,6 +118,12 @@ def trace_step(sched: Any) -> int | None:
     return None
 
 
+def in_flight(sched: Any) -> dict[str, int]:
+    """The running requests by phase at the edge: still prefilling (a chunked prefill part done) or decoding."""
+    pre = sum(1 for r in sched.running if r.num_computed_tokens < r.num_prompt_tokens)
+    return {"prefilling": pre, "decoding": len(sched.running) - pre}
+
+
 def scheduler_step(core: Any) -> int:
     return core.scheduler.current_step
 
@@ -206,7 +212,8 @@ class Edges:
         t3 = self.clock()
         rec = {"edge": edge, "current_step": sched.current_step, "trace_step": trace_step(sched),
                "sched_step_seq": sched.sched_step_seq,
-               "running": len(sched.running), "waiting": len(sched.waiting), "pool": pool_counts(pool), "ids": ids,
+               "running": len(sched.running), "in_flight": in_flight(sched), "waiting": len(sched.waiting),
+               "pool": pool_counts(pool), "ids": ids,
                "check": check, "rank_map": rank_map(recs), "layers": recs[0]["layers"],
                "ranks": [{k: r[k] for k in ("layer_digests", "rng_digest", "rng")} | {"rank": r["rank"]["rank"]}
                          for r in sorted(recs, key=lambda r: r["rank"]["rank"])],
