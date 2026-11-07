@@ -9,7 +9,7 @@ reference, else the reference), its input and output ports, and the ``relation``
 (``verity_vllm.pipeline.vu_export``), so a synthetic set and a captured set of one subcircuit have the same name,
 relation and ports.  :func:`identify` maps a set's ``relation`` back to its subcircuit, whichever wrote it.
 
-The templates of row #101 (Llama-3.2-1B) and their Definitions:
+The templates of row 101 (Llama-3.2-1B) and their Definitions:
 
   gemm-coordinate            GemmCoordinate_v2{K, DOT}          x[K], w[K] -> y            (``verity.ml.circuits.ops.gemm``)
   attention-head             AttentionHead_v3{T, D, BN}         q[D], k[T*D], v[T*D] -> out  (FA2; T varies per instance)
@@ -699,7 +699,7 @@ def _composite(path: str) -> Any:
     return getattr(importlib.import_module(mod), attr)
 
 
-#: A row's relation names its rule by the row kernels' module as it was when #101 captured them, in two literals so that a layout
+#: A row's relation names its rule by the row kernels' module as it was when row 101's were captured, in two literals so that a layout
 #: move leaves the text: the captured manifests record it, and their content digests cover it.
 ROW_RULE = "the registered row kernel of {} (verity_vllm.program" ".kernels.rows)"
 
@@ -1142,8 +1142,13 @@ def scaled_mm_fp8_block_coordinate(K: int, G: int = 128, semantics: str = "sm90.
                               "sx, sw": f"positive normal f32, exponent field in {list(SCALE_EXP)}, mantissa uniform"})
 
 
+#: the Definitions whose coordinate relation is `scaled_mm_fp8_block_coordinate`'s: the vLLM exporter's (`vu_export.DECOMPOSE`) and
+#: the one it replaced, whose input sets are still read
+FP8_BLOCK_DEFINITIONS = frozenset({"ScaledMmFp8BlockSharedScale_v1", "ScaledMmFp8Block_v1"})
+
+
 def _fp8_block_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
-    if rel.get("definition") != "ScaledMmFp8Block_v1":
+    if rel.get("definition") not in FP8_BLOCK_DEFINITIONS:
         return None
     return scaled_mm_fp8_block_coordinate(rel["statics"]["K"], rel["statics"]["G"])
 

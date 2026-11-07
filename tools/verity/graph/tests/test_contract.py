@@ -53,7 +53,7 @@ CASES = [
     ("inputs only, another env", A, "none", {}),
     ("inputs only, with the fields the key leaves out", {**A, "id": "test-file:elsewhere", "about": "run a.py", "env": "py",
                                                          "resources": {"cores": 2, "mem_gb": 3, "disk_gb": 4},
-                                                         "timeout_s": 60, "key": None}, "py", {}),
+                                                         "timeout_s": 60, "priority": 3, "key": None}, "py", {}),
 ]
 
 
@@ -127,9 +127,10 @@ def test_unicode_paths_sort_by_code_point_not_utf16(frozen):
     assert got == ["tests/\u00fc.py", "tests/\uff21.py", "tests/\U0001f600.py"]
 
 
-def test_the_key_leaves_out_about_resources_timeout_and_id():
+def test_the_key_leaves_out_about_resources_timeout_priority_and_id():
     fd, ed = file_digests(), env_digests()
-    other = {**A, "id": "test-file:b", "about": "x", "resources": {"cores": 9, "mem_gb": 9, "disk_gb": 9}, "timeout_s": 1}
+    other = {**A, "id": "test-file:b", "about": "x", "resources": {"cores": 9, "mem_gb": 9, "disk_gb": 9}, "timeout_s": 1,
+             "priority": 7}
     assert contract.key(A, fd, {}, ed["py"]) == contract.key(other, fd, {}, ed["py"])
     assert contract.key(A, fd, {}, ed["py"]) != contract.key({**A, "vars": {"x": ""}}, fd, {}, ed["py"])
 

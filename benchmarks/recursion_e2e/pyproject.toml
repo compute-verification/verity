@@ -10,14 +10,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_settings.py"]
 # settings.py declares the job's variables in a verity_config `Registry` and checks them with the harness's `check` (stdlib
-# only). figures.py reads the census's reference fleets and the monitoring periods (wipe_monitoring.PERIODS, with what its
-# package imports).
+# only).
 inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/settings.py", "tools/config/verity_config",
-          "verity/errors.py", "benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "verity/core/__init__.py",
-          "verity/core/claims/__init__.py", "verity/core/deploy", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/pous", "verity/core/wire", "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto",
-          "verity/ml/randomness",
-          "verity/__init__.py", "verity/settings.py"]
+          "verity/errors.py", "verity/__init__.py", "verity/settings.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

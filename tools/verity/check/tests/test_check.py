@@ -785,7 +785,7 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
         (tmp_path / built).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / built).write_bytes(b"x")
     assert CHECK.tracked_files(tmp_path) == [".gitignore", "a.txt"]
-    assert CHECK._env_key({"VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"VIRTUAL_ENV": "<tree>/.venv"}   # per-commit path
+    assert CHECK._env_key({"PYTHONPATH": f"{ROOT}/x", "VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"PYTHONPATH": "<tree>/x"}
 
 
 def test_the_agreement_is_not_required_for_docs_alone():
@@ -1284,6 +1284,30 @@ def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_pa
     assert CHECK.run(tmp_path, 2)[0] and marker.exists()
 
 
+def test_a_prebuild_that_fails_refuses_the_run_with_its_output_and_exit_status_even_under_keep_going(tmp_path, monkeypatch):
+    """The C++ models' prebuild ran with its output captured and its exit ignored, and fell back to building nothing where the
+    twins didn't import, so a check whose models didn't build ran on, each step compiling them untraced: it refuses now."""
+    import json
+
+    assert "except" not in CHECK.PREBUILD, "a prebuild whose models don't import fails, never falls back to building none"
+    marker = tmp_path / "ran"
+    touch = _py("open(__import__('sys').argv[1], 'w')", marker)
+    for keep_going in (False, True):
+        _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+        monkeypatch.setattr(CHECK, "PREBUILD", "import sys\nprint('compiling tc_model.cpp', flush=True)\nsys.exit('g++: not found')")
+        ok, done = CHECK.run(tmp_path, 2, keep_going=keep_going)
+        assert not ok and not marker.exists(), keep_going
+        assert [(s["step"], s["status"], s.get("rc")) for s in done] == [("preflight-lock", "passed", 0), ("prebuild", "failed", 1)]
+        assert done[1]["detail"].startswith("refused: the C++ models' prebuild exited 1 (g++: not found; prebuild.log)")
+        assert (tmp_path / "prebuild.log").read_text().splitlines() == ["compiling tc_model.cpp", "g++: not found"]
+        assert json.loads((tmp_path / "steps.jsonl").read_text().splitlines()[-1])["step"] == "prebuild"
+    _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+    monkeypatch.setattr(CHECK, "PREBUILD", "print('{\"tc_model\": \"libtc_model.so\"}')")
+    ok, done = CHECK.run(tmp_path, 2)
+    assert ok and marker.exists() and [s["step"] for s in done] == ["preflight-lock", "pytest"]
+    assert (tmp_path / "prebuild.log").read_text() == '{"tc_model": "libtc_model.so"}\n'
+
+
 def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, monkeypatch):
     """Every train's check runs with --keep-going: a failed preflight must still end it in seconds, not hold its slot."""
     marker = tmp_path / "ran"
@@ -1693,29 +1717,6 @@ def test_train_sh_refuses_an_empty_commit_and_one_origin_lacks(tmp_path):
     assert not argv.exists()
 
 
-def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tmp_path):
-    git, train, argv = _train_repo(tmp_path)
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x", "--agreement")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and {"--record", "--priority", "--keep-going", "--agreement"} <= set(args), args
-    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--no-cache", "--circuit-cache", "--no-regenerate")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "pytest,circuit-check", "--no-cache",
-                                                                     "--circuit-cache", "--no-regenerate"], args
-    p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", "2/3")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[-4:] == ["--deferred", "pytest", "--shard", "2/3"], args
-    assert "shard 2/3" in p.stdout and f"train-{git('rev-parse', 'HEAD')[:12]}-2of3.log" in p.stdout, p.stdout
-
-    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
-    (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
-    p = train("HEAD", "vy-x")
-    assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
-
-
 def test_train_sh_launches_the_records_step_alone_and_hands_a_shard_its_artifact(tmp_path):
     """Drive's sharded after-landing run: `--cc-records` launches circuit-check's records step alone, in a worktree of its own,
     and `--cc-records-from ART@SHA256` reaches a shard's check.py; either is refused where it doesn't belong."""
@@ -1934,7 +1935,8 @@ def test_the_lints_are_keyed_by_the_committed_tree_and_unkeyed_on_any_change(tmp
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     e = {"PATH": "/usr/bin"}
     one = CHECK.lints_key(e)
-    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) != one
+    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) == one
+    assert CHECK.lints_key({**e, "VERITY_SLOW": "1"}) != one
     (tmp_path / "b.md").write_text("b\n")
     assert CHECK.lints_key(e) is None
     git("add", "-A")

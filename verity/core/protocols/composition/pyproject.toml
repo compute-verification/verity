@@ -19,6 +19,9 @@ untraced = ["tests/test_composition_difftest.py", "tests/test_registration_difft
 # its whole run, slow tests included, takes about two hours on a loaded node, past check's default bound per suite
 # (`suites.py`'s SUITE_TIMEOUT_S, one hour), which killed it mid-run
 timeout_s = 10800
+# check runs it as three parts by test id (`lean-suites:verity-core-composition:K/3`, `suites.py`'s `id_part_of`), each
+# collecting every file and running the tests whose node id hashes to K, so that ci.toml's plans spread it over three shards
+parts = 3
 # Test-only: `lake` builds the registration log's check (`core-registration`, the core interface's) and the onsite and
 # remote packages beside this one (each product's executable, whose `serve` the
 # harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'
@@ -39,7 +42,7 @@ timeout_s = 10800
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/claims",
           "verity/core/protocols/record.py",
           "verity/core/difftest", "verity/core/protocols/__init__.py", "verity/core/protocols/profile.py",
-          "verity/core/protocols/registration.py", "verity/core/wire",
+          "verity/core/protocols/registration.py", "verity/core/site", "verity/core/wire",
           "verity/core/protocols/onsite", "verity/core/protocols/remote", "verity/core/protocols/interface",
           "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
           "verity/core/protocols/network", "verity/core/protocols/certifier",

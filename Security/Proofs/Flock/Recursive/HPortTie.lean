@@ -1,11 +1,33 @@
 module
 
-public import Proofs.Flock.C3.Compose.Tied
 public import Proofs.Flock.C3.Compose.HoloEncoded
-public import Proofs.Flock.C3.Sparse.SessionAt
-public import Proofs.Flock.VBridge.Family.Registrants
+public import Proofs.Flock.C3.RegLevels.AccReads
 public import Proofs.Flock.C3.RegLevels.SharedRows
-public import Std.Data.String.ToNat
+public import Proofs.Flock.C3.Sparse.SessionAt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.HoloValues.Shape
+import Proofs.Flock.C3.HoloValues.ZcLc
+import Proofs.Flock.C3.RegLevels.OpensRegs
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Refine.HoloRefines
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.VBridge.Sparse.Unit
+import Proofs.Flock.Verifier.HmNets
+import Std.Data.String.ToNat
 
 /-!
 # The sparse phase's `h` from the rep's, across two units' reads of one registered row
@@ -40,8 +62,8 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
 * `readsUnsegC3`: no read is of a segmented row (`VStmt.hscope`'s `v1Ports`).
 * `hKey_of_check`: at a copy of a unit `RecSparse.check` accepted, the key of `h`'s element `l`, bit `e` is bit
   `128 l + e` of the port named `h` (`rowsOk`'s row 0, `leavesOk`, `srcKey_inOrder`).
-* `srcHReads_of`: `SrcHReads` from those, the columns of the RecSparse circuit's `h` (`HCols`, which
-  `FlockC3.Sparse.hCols_of_check` proves at every unit `RecSparse.check` accepts) and the algebra unit's row of rep
+* `srcHReads_of`: `SrcHReads` from those, the columns of the RecSparse circuit's `h` (`HCols`, an obligation no theorem
+  discharges) and the algebra unit's row of rep
   `i`'s `h` (`HAlgRows`, which `FlockC3.Reps.hAlgRows_of_res` proves at a holo shape from the verifier's checks and
   the algebra parts' `ResZeroAtLH`).
 -/
@@ -355,7 +377,7 @@ def HPortReads (zs : (j : Fin S) → (Vs j).Outer Reg') (mp : List (String × �
             bitOf (x l) e
 
 /-- Obligation (W's `SparseCols`): each column of `h`'s element `l`, bit `e` in the RecSparse circuit is an input
-column a row reads. `FlockC3.Sparse.hCols_of_check` proves it at every unit `RecSparse.check` accepts. -/
+column a row reads. No theorem proves it. -/
 def HCols (V : VStmt) (mp : List (String × ℕ)) : Prop :=
   ∀ (l : Fin 64) (e : ℕ), e < 128 → ReadCol (FlockSoundness.Rows.ofNet V.hU) (rowCol mp 0 (128 * l.val + e))
 
@@ -513,8 +535,8 @@ theorem h_of_sessionAt {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂
   obtain ⟨s, un, j, hj, hun, hcp⟩ := hs
   exact h R ω t R₂ τ o hA i s un j hj c hcp hun
 
-/-- **A sparse session and its tied `h`, in the form `SparseRepTie` consumes**: the conjunction returned by
-`sparseSessionAt_of_zero` supplies `h_of_sessionAt`'s copy, including its `un.val = i.val` pin. -/
+/-- **A sparse session and its tied `h`, in the form `SparseRepTie` consumes**: a conjunction that supplies
+`h_of_sessionAt`'s copy, including its `un.val = i.val` pin. -/
 theorem session_h_of_sessionAt
     {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
@@ -729,7 +751,7 @@ theorem hSite_of_checked {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows
 
 /-- **`SrcHReads` from the verifier's checks** (`hSite_of_checked`, `readsUnsegC3`) and the pieces: the reads at the
 units' own rows (`ReadsOwnAt`, from `ReachedChecked` by `readsOwnAt_of`), the RecSparse circuit's `h` keys (`HCols`,
-`hCols_of_check`; its keys `hKey_of_check`) and the algebra unit's row of rep `i`'s `h` (`HAlgRows`,
+a hypothesis; its keys `hKey_of_check`) and the algebra unit's row of rep `i`'s `h` (`HAlgRows`,
 `hAlgRows_of_res`). -/
 theorem srcHReads_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Option (Array Flock.Registered.Port)}
     {wr : List (Cm × (ℐ).Coin) → Lean.Json × String} {reg : Lean.Json} (hchk : ChecksAccepted F rows wr reg)

@@ -2,6 +2,10 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
 public import Proofs.Flock.Soundness.Audit.FlockLink
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Seq
 
 /-!
 # The link theorem: `δ_link` under expected-time collision resistance (DESIGN.md §3)

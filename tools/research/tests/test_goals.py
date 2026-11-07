@@ -55,18 +55,6 @@ def test_wait_replaces_the_links_tier_overrides_the_derived_one_and_blockers_say
     assert goals.main(["set", "demos/both", "--wait", "partition"], fake) == 1
 
 
-def test_next_names_a_step_and_its_date_keeps_the_other_half_and_no_next_clears_it():
-    fake = Fake([GOAL])
-    assert goals.main(["set", "demos/both", "--next", "Run 2's verdicts", "--next-due", "2026-11-05T09:00-08:00"], fake) == 0
-    assert fake.posted[-1]["set"]["next"] == {"step": "Run 2's verdicts", "due": "2026-11-05T09:00-08:00"}
-    fake = Fake([GOAL | {"next": {"step": "Run 2's verdicts", "due": "2026-11-05"}}])
-    assert goals.main(["set", "demos/both", "--next-due", "2026-11-06"], fake) == 0
-    assert fake.posted[-1]["set"]["next"] == {"step": "Run 2's verdicts", "due": "2026-11-06"}
-    assert goals.main(["set", "demos/both", "--no-next"], fake) == 0
-    assert "next" not in fake.posted[-1]["set"]
-    assert goals.main(["set", "demos/both", "--next", "A step with no date"], Fake([GOAL])) == 1
-
-
 def test_a_new_goal_needs_title_status_and_due(capsys, tmp_path):
     fake = Fake()
     assert goals.main(["set", "infra/x", "--title", "Verity holds no infra"], fake) == 1
@@ -113,6 +101,21 @@ def test_a_refusal_is_one_line_naming_the_field(capsys):
     assert goals.main(["set", "demos/both", "--due", "Thursday"], fake) == 1
     err = capsys.readouterr().err.strip().splitlines()
     assert len(err) == 1 and "due must be a date" in err[0]
+
+
+def test_a_route_error_other_than_400_is_one_line_with_its_code(monkeypatch):
+    import io
+    import urllib.error
+
+    def refuse(*a, **k):
+        raise urllib.error.HTTPError(goals.GOALS, 403, "Forbidden", {}, io.BytesIO(b'{"error": "identity_refused"}'))
+
+    route = goals.Route()
+    monkeypatch.setattr(route._oidc, "send", lambda fn: fn("t"))
+    monkeypatch.setattr(goals, "http_json", refuse)
+    with pytest.raises(RouteError) as e:
+        route.call()
+    assert e.value.status == 403 and "HTTP 403 identity_refused" in str(e.value)
 
 
 @pytest.mark.parametrize("argv", [["set", "x", "--status", "maybe"], ["set", "x", "--wait", "goal:a", "--no-wait"],

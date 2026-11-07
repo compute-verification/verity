@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.ZkAny.Generic
 public import Proofs.Flock.Claims.ZK.Worker
+public import Proofs.Flock.Soundness.ZK.SHVZK
+public import Proofs.Flock.Soundness.ZK.Session
 
 /-!
 # One table's release behind the ZK server's check, at any values

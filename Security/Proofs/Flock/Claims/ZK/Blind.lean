@@ -3,6 +3,39 @@ module
 public import Proofs.Flock.Claims.ZK.Switched
 public import Proofs.Flock.Claims.ZK.Server
 public import Proofs.Flock.Claims.ZK.Capacity
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.Flock
+import Proofs.Flock.Soundness.CROnly.Hiding
 
 /-!
 # Zero knowledge at the reference session, at any values pad-blind workers supply
@@ -26,11 +59,11 @@ with the honest prover's simulator, and the server that runs pad-blind workers i
   **`Flock.zk_deployZk_sw`**: `Claims.Flock.ZKAt` at `swP vs`'s prover with `Flock.zkAt_deployZk_ref`'s simulator, `ε_zk`
   and `γ`: one simulator for every `vs`. It is `Flock.zkAt_sw` at `deployZk`; `zkAt_sw` holds at any masked record whose
   rounds on its relation are the session's, `refK x + 1`.
+* `RefSession.honestVals`, each table's own values: `swP_vals` (`swP` there is `refP`) and `swCausal_vals` (`Causal`
+  gives `SwCausal` there), so `Flock.zkAt_deployZk_ref_of_sw` recovers `Flock.zkAt_deployZk_ref` from `zk_deployZk_sw`.
 * `RefSession.SwCausalOn Ok vs`: `SwCausal vs` on one tape (each table's base, what the workers see and level 0's
   leaves' pairs from it, `tapePairs`), at the coin vectors `Ok` admits; `SwCausal` gives it at every `Ok`
   (`swCausalOn_of_swCausal`).
-* `RefSession.honestVals`, each table's own values: `swP_vals` (`swP` there is `refP`) and `swCausal_vals` (`Causal`
-  gives `SwCausal` there), so `Flock.zkAt_deployZk_ref_of_sw` recovers `Flock.zkAt_deployZk_ref` from `zk_deployZk_sw`.
 * **`Flock.zk_server_blind`**: for every pad-blind worker and any values `vs` whose round encoding is causal, the server
   that defers every stop to the last round (`ZkServer.nextD`), whose frame at the worker's values with its stand-ins in
   after a failed round is `swP vs`'s message wherever it releases one (`ZkServer.RefD`), releases, on every event, at
@@ -94,7 +127,7 @@ open Claims
 open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-! ## A table's switched view before the last coin -/
 
@@ -826,7 +859,7 @@ open Claims Claims.ZKMal
 open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **The ZK server at pad-blind workers, at `flock-circuit --zk`'s reference session**: the server defers every
 stop to the session's last round (`ZkServer.nextD`, live PROTOCOL.md §10.1: a failed check stops the session at its

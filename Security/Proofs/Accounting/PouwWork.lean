@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.PouwWork
 public import Definitions.Pouw.Guarantees.Game
+public import Proofs.Pouw.Lemmas.Game
 
 /-!
 # PoUW's work lower bound on an isolated node (proof)

@@ -1,7 +1,5 @@
 module
 
-public import CoreProtocol.Protocol
-public import CoreProtocol.Cli
 public import MemoryChallenger.Verdict
 
 /-!

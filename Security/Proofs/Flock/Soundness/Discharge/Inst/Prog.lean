@@ -1,7 +1,13 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Const.Inst
 public import Proofs.Flock.Soundness.Discharge.Inst.Place
 public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+public import Proofs.Flock.Soundness.Discharge.Placed.Setup
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # The program of the whole template instance, and its `ProgPlaces`

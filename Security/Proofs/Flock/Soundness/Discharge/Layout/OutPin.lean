@@ -1,9 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
-public import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+public import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
 public import Proofs.Flock.Soundness.Discharge.Layout.OutShape
-public import Properties.Flock.Circuit.Outs
+public import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+import Mathlib.Combinatorics.Matroid.Init
 
 @[expose] public section
 

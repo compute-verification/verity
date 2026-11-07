@@ -3,30 +3,33 @@
 predicate). What a recorded honest session meets is asserted; what none meets yet is asserted refused by name, so the
 change that closes it has to say so here. Two recorded sets, both fetched fixtures:
 
-* `rec-coins/16-16-8-n64` (a recorded inner statement and its honest inner session on the challenger's coin tree,
-  level 3's `pub.bin` and `registered.json` as staging recorded them, and an earlier recording's level-3 outer session),
-  with level 3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
-  `verity/flock-circuit`; the outer session was proved before the OS masks and the current coin schedule, over the level
-  of an earlier inner session of the same population, so only its draw is this level's, every identity refuses it at
-  its Hello, and only the checks that don't read the Hello are asserted on it. The inner description is not
-  registered (no staging runs `inner_registered register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags`
-  (`TagsOkZHJ`) takes them, and their shared-row public file passes `ScopeZR`, `Typable`'s statement check; the
-  public-output one-table checks, `TagsOk` and `ScopeZ`, refuse them.
-* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2, one firewalled
-  run of `benchmarks/recursion_e2e` (MODES=firewall) built, proved and verified it, its inner statement staged with
-  every instance's own rows under `Q_template_instance` (`85-rec-reprice.sh`'s `stage_inner`), its inner session on the
-  challenger's coin tree and V*'s statements staged with the inner program, RecCap's included (`85-rec-reprice.sh`
-  STEP=vcap and STEP=oprove); the fixture holds the files these tests read, the circuits and V*'s large programs
-  xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against the run's
-  own listing (`prover.sha256`) once decompressed. Lean's verifier
-  builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s ten staged statements
-  are the ones `outerStatementsAt` lists, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit,
-  and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved with the OS masks
-  in `verity/flock-circuit`'s `--zk` identity, and the verifier of record accepts them as `verity/flock-circuit`: the
-  gate is witnessed under the current identity. The event's last conjunct is shown in its executable form only: the honest
-  outputs are the circuit's, and a public file whose one output row is committed one bit off still sets up. That is
-  the executable fact `¬ holds` is about, not that Lean's `holds` flips there: no Lean lemma links execution to
-  `holds`, and the cheater's row not being the circuit's output is up to a SHA-512 second preimage for that row.
+* `rec-coins/16-16-8-n64` (a recorded inner statement and its honest inner session on the challenger's coin tree, and
+  an earlier recording's level-3 outer session), with level 3's statement restaged by `rec_vstage.stage` as
+  `test_lean_rec_coins` restages it (its `pub.bin` and `registered.json` too: the recorded ones register no opened
+  rows, which `Registered.checkComplete` refuses at setup), and checked as `verity/flock-circuit`; the outer session
+  was proved before the OS masks and the current coin schedule, over the level of an earlier inner session of the same
+  population, so only its draw is this level's, every identity refuses it at its Hello, and only the checks that don't
+  read the Hello are asserted on it. The inner description is not registered (no staging runs `inner_registered
+  register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags` (`TagsOkZHJ`) takes them, and their shared-row
+  public file passes `ScopeZR`, `Typable`'s statement check; the public-output one-table checks, `TagsOk` and
+  `ScopeZ`, refuse them.
+* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2, two firewalled
+  runs of `benchmarks/recursion_e2e` (MODES=firewall). The first staged its inner statement with every instance's own
+  rows under `Q_template_instance` (`85-rec-reprice.sh`'s `stage_inner`) and proved its inner session on the
+  challenger's coin tree; the second, over that inner session (`STAGE=0`, its partition, program and draw kept),
+  staged V*'s statements with the inner program, every level registering its opened rows and their siblings, RecCap's
+  included, and proved and verified them (`85-rec-reprice.sh` STEP=vstage, vcap, oprove and lean). The fixture holds
+  the files these tests read, the circuits and V*'s large programs xz-compressed, the inner transcript is tracked
+  beside it (`f1-gate-transcript`), and each is checked against the run's own listing (`prover.sha256`) once
+  decompressed. Lean's verifier builds the inner statement from its own partition object and program
+  (`AcceptsPublic`), V*'s ten staged statements are the ones `outerStatementsAt` lists, each session is one of them
+  byte for byte (`RecVStar.checkStmt`) and draws every unit, and the rate is below 1 at `k = 2^23` (at `2^21` for
+  these sessions). The sessions were proved with the OS masks in `verity/flock-circuit`'s `--zk` identity, and the
+  verifier of record accepts them as `verity/flock-circuit`: the gate is witnessed under the current identity. The
+  event's last conjunct is shown in its executable form only: the honest outputs are the circuit's, and a public file
+  whose one output row is committed one bit off still sets up. That is the executable fact `¬ holds` is about, not
+  that Lean's `holds` flips there: no Lean lemma links execution to `holds`, and the cheater's row not being the
+  circuit's output is up to a SHA-512 second preimage for that row.
 
 Each inner setup reads the 567 MB inner circuit (about a minute and 3 GB), the gate's files decompress to 2.3 GB, and its
 sessions take up to about 13 minutes each, run at once, so the module is slow; it catches what reading the theorems
@@ -47,10 +50,10 @@ from types import SimpleNamespace
 import keyed
 import numpy as np
 import pytest
-from test_lean_rec_coins import built, forged  # noqa: F401
+from test_lean_rec_coins import built, restaged  # noqa: F401
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation.reference import evaluate_call
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.program import Program
 from verity_flock import circuit as C
@@ -85,8 +88,8 @@ F1_STATEMENTS = (("rec-open/l64-h8", 436), ("rec-open/l16-h7", 212), ("rec-open/
                  ("rec-residuals/m27-k24-c8-p0", 2), ("rec-residuals/m27-k24-c8-p1", 2), ("rec-cap/n128-l1", 128),
                  ("rec-cap/n128-l2", 128), ("rec-cap/n64-l3", 64), ("rec-cap/n128", 128))
 #: the gate's level statements and the recorded level 3 were staged before a level registered its opened rows and their
-#: siblings, so their reads files name no `row`, and `Registered.checkComplete` refuses them at setup (PRF-421 re-records
-#: the gate and restages the recorded level)
+#: siblings, so their reads files name no `row`, and `Registered.checkComplete` refuses them at setup until the gate is
+#: re-recorded and the recorded level restaged
 UNREGISTERED_ROWS = pytest.mark.skip(reason="PRF-421: the reads file names no row port (staged before levels registered "
                                      "row and aux), so Registered.checkComplete refuses it before the checks this test reads")
 _STALE = ("L0", "L1", "L2", "L3")
@@ -126,14 +129,14 @@ def inner(once) -> dict[str, dict]:
 
 
 @pytest.fixture(scope="module")
-def level(inner, forged) -> list[str]:  # noqa: F811
-    """`flock-witness session`'s files and session at the recorded level, its statement restaged (`test_lean_rec_coins`'
-    `forged`, whose circuit, program and partition do not read the coefficients)."""
-    level = forged
+def level(inner, restaged) -> list[str]:  # noqa: F811
+    """`flock-witness session`'s files at the recorded level restaged (`test_lean_rec_coins`' `restaged`, which registers
+    every port the level's outputs read, so `Registered.checkComplete` passes it at setup), and the recorded session."""
+    level = restaged
     assert hashlib.sha512((level / "circuit.txt").read_bytes()).hexdigest() == CIRCUIT_SHA512
-    return ["--circuit", str(level / "circuit.txt"), "--public", str(SET / f"L{LEVEL}" / "pub.bin"), "--partition",
+    return ["--circuit", str(level / "circuit.txt"), "--public", str(level / "pub.bin"), "--partition",
             str(level / "partition.json"), "--program", str(level / "program.json"), "--registered",
-            str(SET / f"L{LEVEL}" / "registered.json"), "--session", str(SET / f"outer-L{LEVEL}" / "session")]
+            str(level / "registered.json"), "--session", str(SET / f"outer-L{LEVEL}" / "session")]
 
 
 @pytest.fixture(scope="module")

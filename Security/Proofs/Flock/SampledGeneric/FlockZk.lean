@@ -21,7 +21,8 @@ statement alone. So the server is a `Zk` (`FlockZk.server`), but what it meets i
   (`ZkServer.proverD`) against a verifier of the protocol's rounds (`FlockZk.Verifier`), the simulator's is `leaky1`'s.
 * `FlockZk.server_below`, `FlockZk.server_zkBelow`: `zk_server_lean_loop` in `Exp`'s terms, at the relation `LiveRel`, the
   statement's relation together with the live path's premises at the statement.
-* `FlockZk.audit_below`: the Flock instance, with every premise of `zk_server_lean_loop` carried as it states it.
+* `FlockZk.audit_below`: the Flock instance, with every premise of `zk_server_lean_loop` carried as it states it or as
+  one that gives it.
 -/
 
 @[expose] public section
@@ -224,9 +225,10 @@ noncomputable def err (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs 
       8 * t * (Stops T L pc fc).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
     4 * t * 3 ^ t * (Claims.Fork sha (((Stops T L pc fc).swP vs).prover w) v.Vs v.θ x).Pr sha)
 
-/-- **The live path's premises at `(x, w)`**, each as `zk_server_lean_loop` takes it: the transport's frame states
-(`ProgReads`), and the link, final, live and fill rounds' releases being the reference's (`LinkRoundEq`,
-`FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`). -/
+/-- **The live path's premises at `(x, w)`**, each `zk_server_lean_loop`'s or one that gives it: the transport's frame
+states (`ProgReads`), and the link, final, live and fill rounds' releases being the reference's (`LinkRoundEq`,
+`FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`). `LiveRoundEq` holds at every history and gives `LiveRoundEqOwn`, the
+worker's own (`LiveRoundEq.own`). -/
 abbrev Live (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (L : Release T) (wk : L.toSrv.Worker)
     (pc : PC T) (fc : FC T) (x : Claims.Msg) (w : Claims.Flock.Wit) : Prop :=
   Claims.ZKServer.LeanRelease.ProgReads (Sess T) L pc fc x ∧
@@ -244,9 +246,8 @@ abbrev LiveRel (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess
 /-- **`zk_server_lean_loop` in `Exp`'s terms**: at a statement in the relation with its live path's premises
 (`LiveRel`), the honest view is `2`-below the simulator's at the server's error, against every verifier of the server's
 rounds. The tables' side (`hS`, `hV`, `hD`, `hc`, `hsc`, `hT`), hm96's hiding (`hT1`, `hδ₁`) and the release at the
-session loop (`hL`) are the theorem's premises as it takes them, or give them: `SwCausal` gives `SwCausalOn` at every
-coin vector (`swCausalOn_of_swCausal`), which every stop rule's `StopsOk` takes in (`stopsOk_true`), and `LiveRoundEq`
-gives `LiveRoundEqOwn` (`LiveRoundEq.own`). -/
+session loop (`hL`) are the theorem's premises or give them: `SwCausal` gives `SwCausalOn` at every coin vector
+(`swCausalOn_of_swCausal`), which every stop rule's `StopsOk` takes in (`stopsOk_true`). -/
 theorem server_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (t : ℕ)
     (ht : 0 < t) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)
@@ -288,7 +289,7 @@ deployment's relation (`hR`) and meets the live path's premises there (`hPr`, `h
 view is `2`-below the simulator's at any fixed trace `X₀` (`auditSim`, at the server's simulator), at `2·ε_hide` plus
 the server's error averaged over the prover's commitment coins:
 $$\Pr_{\rm audit}[E]\le 2\Pr_{\rm sim}[E]+2\varepsilon_{\rm hide}+\mathbb E_r[\mathrm{err}(x_r,w_r,v)].$$
-Every other premise is `zk_server_lean_loop`'s, as it takes it. -/
+Every other premise is `zk_server_lean_loop`'s or gives it, as at `server_below`. -/
 theorem audit_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (t : ℕ)
     (ht : 0 < t) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)
