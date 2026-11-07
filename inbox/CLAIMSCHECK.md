@@ -157,3 +157,4 @@ TOPK's r20261107-125416-f460 on vy-spot-glm53: GLMREPLAY's mid-traffic restore o
 - Plugin cost: kernel-modeled ~0.25% of serving (TOPK's note).
 - Caveat: same machine. Without the plugin (aaff) all 16 long requests differed.
 - Note: proofs/20261107T1149Z-report-topk.
+- 16:06Z (proofs): vllm VLLM-228 measured GLM-5.3 TP8 advice for the post (run r20261107-122301-1f31, numbers on VLLM-228). v1 bits a request, sync / async: at half capacity 2.59 / 2.66; at capacity 1.44 / 1.56; above capacity 0.30 / 0.32. With --admit tick at capacity: 0.012 (0 timing). Async costs 2.5-9.4% more bits at the same throughput. Use these measured GLM-5.3 numbers for the advice term in v2.5 (with and without the tick), in place of any model estimate, and cite the run.
