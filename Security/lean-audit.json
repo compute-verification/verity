@@ -3284,13 +3284,13 @@
   "extra": {
    "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
     "Claims.ZKServer.Loop.Src": "the prover-side firewall's randomness, trusted for the zero-knowledge guarantees only: every input the firewall host takes from its operating system is the random tape, uniform (flock-firewall-os-src)",
-    "FlockSoundness.Assumptions.HashDerivedKey": "commitment hiding, trusted for the zero-knowledge guarantees only: the pinned hm96-sha512 key is not among the keys its hiding bound fails for (hash-derived-key)",
-    "FlockSoundness.Assumptions.KeyedStreamsUniform": "commitment hiding, trusted for the zero-knowledge guarantees only: the deployed salts' keyed SHA-512 streams pass a test as uniform bytes do, up to its advantage (prf/sha-512)"
+    "FlockSoundness.Assumptions.KeyedStreamsUniform": "commitment hiding, trusted for the zero-knowledge guarantees only: the deployed salts' keyed SHA-512 streams pass a test as uniform bytes do, up to its advantage (prf/sha-512)",
+    "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, trusted for the zero-knowledge guarantees only: hm96-sha512's salt key is not among the keys its hiding bound fails for, so a leaf hides at 2^-193 (hash-derived-key)"
    },
    "Flock.SecurityProofs.SessionLoopZKDeployed": {
     "Claims.ZKServer.Loop.Src": "the prover-side firewall's randomness, trusted for the zero-knowledge guarantees only: every input the firewall host takes from its operating system is the random tape, uniform (flock-firewall-os-src)",
-    "FlockSoundness.Assumptions.HashDerivedKey": "commitment hiding, trusted for the zero-knowledge guarantees only: the pinned hm96-sha512 key is not among the keys its hiding bound fails for (hash-derived-key)",
-    "FlockSoundness.Assumptions.KeyedStreamsUniform": "commitment hiding, trusted for the zero-knowledge guarantees only: the deployed salts' keyed SHA-512 streams pass a test as uniform bytes do, up to its advantage (prf/sha-512)"
+    "FlockSoundness.Assumptions.KeyedStreamsUniform": "commitment hiding, trusted for the zero-knowledge guarantees only: the deployed salts' keyed SHA-512 streams pass a test as uniform bytes do, up to its advantage (prf/sha-512)",
+    "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, trusted for the zero-knowledge guarantees only: hm96-sha512's salt key is not among the keys its hiding bound fails for, so a leaf hides at 2^-193 (hash-derived-key)"
    }
   }
  },
