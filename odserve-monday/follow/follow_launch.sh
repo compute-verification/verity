@@ -25,13 +25,17 @@
 # V3C_AUDIT_TIMEOUT, CERTIFIER_TIMEOUT, CERTIFIER_PERIOD_TIMEOUT and COMPOSITE_TIMEOUT, where set here, reach the
 # follow-on (--env) over reproof_follow.sh's and served_verdicts.sh's defaults; CAPS=FILE (Monday's settings-monday.env,
 # which the follow-on doesn't read) sets all four from FILE's assignments and refuses where one is missing.
+# On vy-nebius-cpu-12 the job runs in the node's `network` pool (--pool network), which infra keeps open while it drains
+# every other pool there: the pool's slot waits up to MEM_WAIT (--pool-wait) for and reserves MEM_GB, the --timeout counts
+# from taking it, and a job with no slot by then exits 75 without running. It refuses where NODE has no such pool. On
+# vy-nebius-cpu-11 it runs in no pool, its --mem-gb reserved at launch after up to MEM_WAIT (--mem-wait).
 # DRY=1 prints the command instead of running it.
 set -euo pipefail
 TREE=${1:?usage: follow_launch.sh TREE NODE NAME} NODE=${2:?NODE} NAME=${3:?NAME}
 K=$(cd "$(dirname "$0")" && pwd)
 case $NODE in
-  vy-nebius-cpu-11) REPROOF=${REPROOF:-1} IP=81.85.4.136 ;;
-  vy-nebius-cpu-12) REPROOF=${REPROOF:-0} IP=81.85.1.89 ;;
+  vy-nebius-cpu-11) REPROOF=${REPROOF:-1} IP=81.85.4.136 POOL= ;;
+  vy-nebius-cpu-12) REPROOF=${REPROOF:-0} IP=81.85.1.89 POOL=network ;;
   *) echo "REFUSED: $NODE is neither (i)'s follow-on node (vy-nebius-cpu-11) nor (ii)'s (vy-nebius-cpu-12)"; exit 3 ;;
 esac
 SERVE_REF=${SERVE_REF:-cursor/onsite-thu-pin-061a}
@@ -58,10 +62,12 @@ done
 [ "$REPROOF" = 1 ] && re=(--env "REPROOF_DEST=research@vy-nebius-cpu-3:$NAME/"
   --env "REPROOF_COPY=vy-nebius-cpu-3:/workspace/research/lanes/network-accounting/private/reproof/$NAME/")
 echo "TREE $head (= $PIN_REF), NODE $NODE, D $ROOT/$NAME, main.txt $(wc -l < "$K/main.txt") commits from" \
-     "$(head -c 11 "$K/main.txt") (holds $GATE_PIN), REPROOF $REPROOF, HOLD $HOLD${any:+, FOLLOW_ANY_TREE=1}${capped:+, caps$capped}"
+     "$(head -c 11 "$K/main.txt") (holds $GATE_PIN), REPROOF $REPROOF, HOLD $HOLD${any:+, FOLLOW_ANY_TREE=1}${capped:+, caps$capped}${POOL:+, POOL $POOL}"
 MEM_GB=${MEM_GB:-650}
+mem=(--mem-gb "$MEM_GB" --mem-wait "${MEM_WAIT:-900}")
+[ -z "$POOL" ] || mem=(--pool "$POOL" --pool-wait "${MEM_WAIT:-900}" --mem-gb "$MEM_GB")
 cmd=(research run --as network-accounting --on "$NODE" --project verity --source "$TREE" --cwd clone --timeout 108000
-  --mem-gb "$MEM_GB" --mem-wait "${MEM_WAIT:-900}" --custody-ttl 24h --env "D=$ROOT/$NAME" --env PP_CHALLENGER=gate:research@204.12.178.84
+  "${mem[@]}" --custody-ttl 24h --env "D=$ROOT/$NAME" --env PP_CHALLENGER=gate:research@204.12.178.84
   --env "PP_PEER=$NODE" --env "FOLLOW_HOLD=/workspace/ramlock/$HOLD" --env "V3C_LEAN_WORKERS=${V3C_LEAN_WORKERS:-1}"
   "${re[@]}" "${any[@]}" "${caps[@]}"
   --env "CERTIFIER_GATE=$CERTIFIER_GATE" --env "CERTIFIER_PIN=$CERTIFIER_PIN" --env "CERTIFIER_PEER=$CERTIFIER_PEER"
@@ -72,6 +78,15 @@ cmd=(research run --as network-accounting --on "$NODE" --project verity --source
 [ -z "${DRY:-}" ] || { printf '%q ' "${cmd[@]}"; echo; exit 0; }
 key=$(cd "$M" && python -c 'from research.pods.runpod import ssh_key; print(ssh_key())')
 kh=$(cd "$M" && python -c 'from research.pods.runpod import known_hosts; print(known_hosts())')
+if [ -n "$POOL" ]; then
+  slots=$(ssh -i "$key" -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -o "UserKnownHostsFile=$kh" \
+    "research@$IP" "f=/workspace/research/locks/$POOL/slots; if [ -f \$f ]; then awk '!/^#/ && NF {n++} END {print n+0}' \$f; else echo 0; fi") \
+    || { echo "REFUSED: couldn't reach $NODE to read its $POOL pool"; exit 3; }
+  [ "${slots:-0}" -ge 1 ] 2> /dev/null \
+    || { echo "REFUSED: $NODE has no $POOL pool (/workspace/research/locks/$POOL/slots), so the job would wait in no line:" \
+              "ask infra on INF-527, or run on vy-nebius-cpu-11"; exit 3; }
+  echo "POOL $POOL on $NODE: $slots slot(s)"
+fi
 held=$(ssh -i "$key" -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -o "UserKnownHostsFile=$kh" \
   "research@$IP" "f=/workspace/ramlock/$HOLD; if [ -e \$f ]; then head -c 300 \$f
     g=\$(python3 -c 'import json, sys; print(int(json.load(open(sys.argv[1]))[\"gb\"]))' \$f 2> /dev/null || echo 0)

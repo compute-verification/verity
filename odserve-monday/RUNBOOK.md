@@ -12,7 +12,7 @@ another head unless `WANT` names it: a later head only on the coordinator's word
 | What | Where |
 |---|---|
 | served node | vy-dc-h200-2, 204.12.188.151, one H200: settings, probe, preflight, serve, send, stock control, check, then stopped |
-| follow-on node | vy-nebius-cpu-12, 81.85.1.89 (`FOLLOW_NODE`; vy-nebius-cpu-11, 81.85.4.136, is the fallback): 645 GB, one 30 h job |
+| follow-on node | vy-nebius-cpu-12, 81.85.1.89 (`FOLLOW_NODE`), in its network pool (`--pool network`); vy-nebius-cpu-11, 81.85.4.136, in no pool, is the fallback: 645 GB, one 30 h job |
 | network certifier | vy-auditor-2 (`research@vy-auditor-2`, its gate pinned at `701c8c0073a6`); trust in it is `trusted-host` |
 | challenger gate | `research@204.12.178.84`, pinned at `f0c4b1355fb7`, lane network-accounting |
 | settings | `settings/settings-monday.env`, sha256 prefix `b610e7e37a9bc461`, installed as `/workspace/research/lanes/network-accounting/onsite/settings-monday.env` |
@@ -23,6 +23,22 @@ Monday's settings: V3c class `8,32,4,4,16` (CLASSES too), `OF_RECORD=1`, `PRODUC
 `CERTIFIER_TIMEOUT=4h`, `CERTIFIER_PERIOD_TIMEOUT=1h`, `COMPOSITE_TIMEOUT=6h`: 24 h together inside its job's
 `--timeout 108000` (30 h), which leaves about 6 h for the copy and the record. At 9068 `certifier_piece.py` takes no
 `--case-only`, so the period step runs in full, inside its 1 h cap.
+
+## Monday's machines
+
+infra set both on INF-527 (Slack thread `1794058364.015139` in #agent-coordination):
+
+- **vy-dc-h200-2**: infra's start loop tries from Mon 9 Nov 06:00Z and keeps trying until 12:00Z. It writes the
+  node's deadline, 16:00Z, as soon as ssh answers, and infra rings that thread when the node is up. So `END` is 15:00Z,
+  the deadline less the publish margin. `serve.sh` refuses with less than 4 h to `END`, so the serve launches by
+  11:00Z at the latest, with steps 3 to 5 before it. If the node comes up too late for that, tell the coordinator
+  before step 3 and launch nothing.
+- **vy-nebius-cpu-12**: from Mon 05:00Z new runs stop starting in every pool there, so the node is drained by 11:00Z
+  and stays held until Tue 17:00Z. The follow-on runs in a pool of its own, `network`: `follow.sh` (through
+  `follow/follow_launch.sh`) passes `--pool network --pool-wait 10800 --mem-gb 645` there. Its slot waits for and reserves the 645 GB, and the job's
+  30 h count from taking it, so a slot taken by 11:00Z ends inside the hold. Infra's memory hold (step 7's
+  `place-hold.sh`) is unneeded on cpu-12, and `place-hold.sh` prints `UNNEEDED` there. On the cpu-11 fallback, which
+  is not drained and runs in no pool, it is needed.
 
 ## Rules for the run
 
@@ -72,7 +88,8 @@ INODES MIN_FREE_INODES: yes
 
 ## 2. The served node is up
 
-infra starts vy-dc-h200-2 for the lease on INF-527. Then:
+infra's start loop brings vy-dc-h200-2 up between 06:00Z and 12:00Z and rings the INF-527 thread (Monday's machines,
+above). Then:
 
 ~~~bash
 bash node_probe.sh research@204.12.188.151 'uptime; nvidia-smi -L; df -i /workspace | tail -1'
@@ -143,8 +160,8 @@ Expect `STATE done`, `STATED tree: 9068336929e0...`, `GATE pinned at f0c4b1355fb
 
 ## 6. The serve
 
-`END` is the lease's end less an hour (the publish margin); the serve's timeout is the time to it, at most 8 h, and it
-refuses with less than 4 h left.
+`END` is the lease's end less an hour (the publish margin): the deadline is 16:00Z, so `END` is 15:00Z. The serve's
+timeout is the time to it, at most 8 h, and it refuses with less than 4 h left, so launch it by 11:00Z.
 
 ~~~bash
 END=2026-11-09T15:00:00Z bash serve.sh 2>&1 | tee -a ~/odserve-monday-logs/serve.txt
@@ -174,11 +191,13 @@ RUN: served_verdicts.sh exit 0 after ... min
 
 ## 7. The send
 
-While the serve runs, put the follow-on node's memory hold back, so its memory is free when the follow-on launches
-(`PLACED ...` or `ALREADY HELD ...`; `follow.sh` removes it as the job starts):
+On vy-nebius-cpu-12 there is no hold to place: infra's drain and the network pool's slot keep its memory for the
+follow-on, and `bash place-hold.sh` there prints `UNNEEDED on vy-nebius-cpu-12: ...` and touches nothing. Only on the
+cpu-11 fallback, while the serve runs, put that node's memory hold back, so its memory is free when the follow-on
+launches (`PLACED ...` or `ALREADY HELD ...`; `follow.sh` removes it as the job starts):
 
 ~~~bash
-bash place-hold.sh
+FOLLOW_NODE=vy-nebius-cpu-11 bash place-hold.sh
 ~~~
 
 Once the serve has ended with exit 0 and custody preserved:
@@ -193,8 +212,9 @@ D/private/rows.sha256`. Exit 79 means it is still copying: `bash runlog.sh h200-
 
 ## 8. The follow-on
 
-On vy-nebius-cpu-12 (or `FOLLOW_NODE=vy-nebius-cpu-11`, which then must be the send's node too), 645 GB, waiting up to
-3 h for its memory:
+On vy-nebius-cpu-12 in its network pool (or `FOLLOW_NODE=vy-nebius-cpu-11` in no pool, which then must be the send's
+node too), 645 GB, waiting up to 3 h for its memory. In the pool the run starts at once and waits for its slot inside
+the run, so its state reads running while it waits:
 
 ~~~bash
 bash follow.sh RID 2>&1 | tee -a ~/odserve-monday-logs/follow.txt
@@ -204,13 +224,20 @@ Expect:
 
 ~~~text
 CAPS .../settings/settings-monday.env b610e7e37a9bc461
-TREE 9068336929e0... (= cursor/onsite-push1b-061a), NODE vy-nebius-cpu-12, D /workspace/incoming/netacct/RID, main.txt ... commits from ... (holds f0c4b1355fb), REPROOF 0, HOLD netacct-inf458-thu.json, caps V3C_AUDIT_TIMEOUT=13h CERTIFIER_TIMEOUT=4h CERTIFIER_PERIOD_TIMEOUT=1h COMPOSITE_TIMEOUT=6h
-HOLD on vy-nebius-cpu-12: /workspace/ramlock/netacct-inf458-thu.json: ... removed      (or: absent)
+TREE 9068336929e0... (= cursor/onsite-push1b-061a), NODE vy-nebius-cpu-12, D /workspace/incoming/netacct/RID, main.txt ... commits from ... (holds f0c4b1355fb), REPROOF 0, HOLD netacct-inf458-thu.json, caps V3C_AUDIT_TIMEOUT=13h CERTIFIER_TIMEOUT=4h CERTIFIER_PERIOD_TIMEOUT=1h COMPOSITE_TIMEOUT=6h, POOL network
+POOL network on vy-nebius-cpu-12: ... slot(s)
+HOLD on vy-nebius-cpu-12: /workspace/ramlock/netacct-inf458-thu.json: absent      (or: ... removed)
 SHIM: the workload syncs the tree's venv before reproof_follow.sh
+research run: --pool network: --timeout 108000 s counts from taking a slot (slot.py --run-max); it waits up to 180 min for one (--pool-wait), then exits 75 without running
+research run: --pool network: --mem-gb 645 goes to the slot, which waits for and reserves the larger of its own mem= and that
 research: run FRID launched on vy-nebius-cpu-12 ...
 ~~~
 
-`REFUSED: infra's hold reserves less than MEM_GB` means the hold stays and nothing launched: ask infra on INF-458.
+On cpu-11 the TREE line ends at the caps, and neither the POOL line nor the two `--pool` lines appear.
+`REFUSED: vy-nebius-cpu-12 has no network pool` means infra's pool isn't there yet and nothing launched: ask on the
+INF-527 thread, or run on cpu-11 (step 7's hold first). A run that exits 75 got no slot in 3 h and never ran: tell the
+coordinator. `REFUSED: infra's hold reserves less than MEM_GB` means the hold stays and nothing launched: ask infra on
+INF-458.
 Check on it with `bash runlog.sh cpu-12 FRID follow`. Its first lines: `VENV: synced Python 3.12...`,
 `DISK: ... GB free under /workspace/incoming/netacct/RID (FOLLOW_DISK_GB 650)`, `COINS: V3c's audit on
 gate:research@204.12.178.84, peer vy-nebius-cpu-12, ...`, `CERTIFIER-KEY: .../certifier-key.json, the network
@@ -324,7 +351,7 @@ layout from that pin, and the record refuses a θ layout that differs: `LAYOUT .
 | `inodes.sh` | the class windows on h200-2, and their removal once copied and in custody |
 | `probe.sh`, `probe/` | `afa1_probe.sh` and `program_probe.sh`; then the preflight |
 | `serve.sh`, `rr/` | `rr/launch.sh` (store run ids) with `remote_run.sh`, `stated.txt`, `circuit.txt`, `scrub.sh`, `scan-out.py`, `retrace-row.sh`, `keys/challenger-key.json` |
-| `send.sh`, `follow.sh`, `place-hold.sh`, `follow/` | `reproof_send.sh`; `follow_launch.sh` (`--custody-ttl 24h`) with `reproof_follow.sh`, `reproof_copy.sh`, `reproof_files.py`, `circuits_out.py`, `certifier_key.py`, `challenger-key.json`, `shim/research` |
+| `send.sh`, `follow.sh`, `place-hold.sh`, `follow/` | `reproof_send.sh`; `follow_launch.sh` (`--custody-ttl 24h`; `--pool network` on cpu-12) with `reproof_follow.sh`, `reproof_copy.sh`, `reproof_files.py`, `circuits_out.py`, `certifier_key.py`, `challenger-key.json`, `shim/research` |
 | `stock.sh`, `check.sh`, `check/` | the same-engine stock control and the cost check |
 | `stop.sh` | the node gate (`"preserved": true` or `.fetched`) and vy-nebius-stop |
 | `record.sh`, `runlog.sh`, `steps-time.sh`, `node_probe.sh` | read-only: the record's checks, a run's lines, step times, ssh |

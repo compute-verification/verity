@@ -3,8 +3,10 @@
 # follow/follow_launch.sh at the run's tree, which is the serve's (SERVE_REF = PIN_REF = REF: no FOLLOW_ANY_TREE), with
 # MEM_GB 645 (a reservation, waited for up to MEM_WAIT, default 3 h), the four caps from settings-monday.env (CAPS: audit
 # 13h, chain 4h, period 1h, composite 6h, 24 h inside its --timeout of 108000 s), its custody key for 24 h, no re-proof copy
-# to cpu-3 (REPROOF 0) and follow/shim/research ahead on PATH (the clone's venv synced before reproof_follow.sh). It
-# removes infra's memory hold on the node (place-hold.sh's) as the job launches, and prints the run's launch.
+# to cpu-3 (REPROOF 0) and follow/shim/research ahead on PATH (the clone's venv synced before reproof_follow.sh). On
+# vy-nebius-cpu-12 follow_launch.sh runs it in the node's network pool (--pool network, whose slot waits for and reserves
+# MEM_GB), and refuses where the node has none; on vy-nebius-cpu-11 it runs in no pool. It removes any memory hold of
+# infra's on the node (place-hold.sh's) as the job launches, and prints the run's launch.
 #   [FOLLOW_NODE=vy-nebius-cpu-11] [MEM_WAIT=S] [DRY=1] bash follow.sh RID
 set -euo pipefail
 H=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
