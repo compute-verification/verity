@@ -252,6 +252,28 @@ def test_registration_refusals():
     assert len(codes) == 1 and set(next(iter(codes))) == {"R3-domain", "R3-leaves"}
 
 
+def test_the_window_runs_its_days_declared_circuit():
+    """R2 holds the record's program to the one circuit the registration log declares for the window's day, read off the
+    accepted log's view: another day's program is `R2-declared`, a day the log declares nothing for `R2-undeclared`, and
+    a day declared twice, which the log's own check refuses, `R2-declared-twice`. A verifier passes the day and the
+    declarations together, as the view writes them, or neither."""
+    from verity.core.protocols import registration as G
+    prog, q, rec = _registration(6)
+    bodies = [G.Declaration(0, rec["program"], (PAIR.id,)), G.Declaration(1, "0" * 128, (PAIR.id,))]
+    declared = G.check(G.Auditor(), "remote", G.chain("remote", bodies)).view().to_json()["declarations"]
+    assert _check(rec, prog, q).ok and _check(rec, prog, q, day=0, declarations=declared).ok
+    assert _check(rec, prog, q, day=1, declarations=declared).codes == ("R2-declared",)
+    assert _check(rec, prog, q, day=2, declarations=declared).codes == ("R2-undeclared",)
+    with pytest.raises(G.Refused, match="entry 2: duplicate-declaration"):
+        G.check(G.Auditor(), "remote", G.chain("remote", [*bodies, G.Declaration(0, "0" * 128)]))
+    twice = [*declared, {"blocks": [], "day": 0, "program": "0" * 128}]
+    assert _check(rec, prog, q, day=0, declarations=twice).codes == ("R2-declared-twice",)
+    for day, given in ((0, None), (None, declared), (-1, declared), (True, declared),
+                       (0, [{"day": 0, "program": rec["program"]}])):
+        with pytest.raises(ValueError, match="declar"):
+            _check(rec, prog, q, day=day, declarations=given)
+
+
 def test_window_domains_bind_program_partition_port_schema_leaves_and_run():
     from verity.ml.commitments.identity import identity_digest_sha512
     from verity.ml.commitments.indexed import RangeIndexedDomain

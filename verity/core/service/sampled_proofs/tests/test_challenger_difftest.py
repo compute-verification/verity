@@ -15,7 +15,10 @@ v1 session and inside a period of its lane, then a close, log or ledger entry ed
 another key, a ledger signed under its own key, one cut before the session's end, a second session for the window, a v1
 window, a v1 entry after a v2, a record leaf outside its session, an entry's or used twice, a period named twice, past
 its cap, committing no cap or circuit or closing with other windows, a record on another host or at another leaf, a log
-or refused hellos the ledger didn't seal, the ledger's published heads forked, each malformed form. The pins log's
+or refused hellos the ledger didn't seal, the ledger's published heads forked, each malformed form. A lane's days
+(`LEDGER`, `DAY`: `declared_day`) are a declaration in the ledger before the opens of each day it names, then a
+declaration malformed, v1 or in a session, a day declared twice, an open on a day its lane hasn't declared or on no day,
+and the day of a window no session opens, a v1 open's or a dayless one's. The pins log's
 (`PINNED`) are a session whose open seals the host's pins log and pins its commit, then a commit off main or pinned
 after the open, no pins log, a malformed one or line, one cut or with a sealed line edited, and an open sealing
 none. A sample's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `SampledProofs.ChallengerCoins`) are
@@ -581,6 +584,14 @@ def ledger(j: Any) -> Any:
     return _refusing(go)
 
 
+def day(j: Any) -> Any:
+    _request(j, ["key", "ledger", "window"])
+
+    def go():
+        return Ch.declared_day(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), lms_verify)
+    return _refusing(go)
+
+
 def head(j: Any) -> Any:
     _request(j, ["heads", "key"])
 
@@ -700,15 +711,18 @@ class Ledger:
     its end's (or at `leaves`, or under `signer`, an `edit(i, entry)` applied to each entry before it is signed).  When
     `two_step` (drawn when `s`'s id is a reserved one, unless set), every v2 session is reserved before it is opened, its
     open binding the reserve, and sometimes another reserve is never opened.  When `withheld`, `s`'s open marks it a
-    withheld session (`withheld: true`)."""
+    withheld session (`withheld: true`).  The older v1 session is drawn unless `v1` says.  When `declare`, `s`'s lane
+    declares its days (`declare_days`)."""
 
     def __init__(self, rng: random.Random, s: Session, closed: bool = True, period: str | None = None,
-                 two_step: bool | None = None, withheld: bool = False) -> None:
+                 two_step: bool | None = None, withheld: bool = False, v1: bool | None = None,
+                 declare: bool = False) -> None:
         self.rng, self.s, self.window = rng, s, _window(rng)
         self.two_step = (Ch._RESERVED_SESSION.fullmatch(s.id) is not None
                          and (rng.random() < 0.8 if two_step is None else two_step))
         self._ids = itertools.count()
         self.v1: list[dict] = []
+        self.declarations: list[dict] = []
         files = {Ch.LOG_FILE: Ch.log_digest(s.lines), Ch.HELLOS_FILE: Ch.log_digest(s.hellos),
                  Ch.RECORD_FILE: rng.randbytes(64).hex(), Ch.CLOSE_FILE: rng.randbytes(64).hex()}
         if rng.random() < 0.5:
@@ -743,12 +757,56 @@ class Ledger:
                 opens = [k for k, (kind, _, _) in enumerate(self.events) if kind == "open"]
                 at = rng.randint(max([self.index("end", s.id)] + opens) + 1, len(self.events))
                 self.events.insert(at, ("period-close", None, self.close_body(self.events[:at])))
-        if rng.random() < 0.3:
+        if v1 or v1 is None and rng.random() < 0.3:
             old = {"commit": rng.randbytes(64).hex(), "period": rng.choice(PERIODS)}
             self.v1 = [{"host": "challenger-host", "key_sha512": hashlib.sha512(s.pub).hexdigest(),
                         "pinned": rng.randbytes(20).hex(), "port": 7811, "window": old},
                        {"closed": True, "files": {}, "rc": 0}]
             self.events = [("open", "v1-0", self.v1[0]), ("end", "v1-0", self.v1[1])] + self.events
+        if declare:
+            self.declare_days()
+
+    def dated(self, sid: str) -> int:
+        """Session `sid`'s open's UTC day (`day_of`), first moving its start (and its reserve's) to one of 1970 or later
+        when it names none."""
+        rng, o = self.rng, self.events[self.index("open", sid)][2]
+        if (d := Ch.day_of(o.get("started_utc"))) is not None:
+            return d
+        start = rng.choice([t for t in STARTS if Ch.day_of(t) is not None])
+        if "reserve" in o:
+            r = self.events[self.index("reserve", sid)][2]
+            r.update(started_utc=start, expires_utc=Ch.later(start, r["minutes"]))
+            start = Ch.later(start, rng.randint(0, r["minutes"]))
+        o["started_utc"] = start
+        return Ch.day_of(start)
+
+    def declaration_body(self, lane: str, day: int, start: str) -> dict:
+        """Lane `lane`'s declaration of `day`, by the lane or by vy-admin for it, at a time no later than `start`'s day."""
+        rng = self.rng
+        body = rng.choice([{"by": lane}, {"by": "vy-admin", "for": lane}])
+        body.update(blocks=rng.choice([[], ["b0"], ["unit/0", "unit/1"], [rng.choice(NOTES)]]), day=day,
+                    declared_utc=rng.choice([start, "1970-01-01T00:00:00Z", f"{start[:10]}T00:00:00Z"]),
+                    pinned=rng.randbytes(20).hex(), program=rng.randbytes(64).hex())
+        return body
+
+    def declare_days(self) -> None:
+        """`s`'s lane declares each day an open of it after the declarations opens on (each dated first), together at a
+        drawn place after any v1 entry and before `s`'s open; sometimes the lane, or another that never opens, declares a
+        later day after every entry."""
+        rng, lane = self.rng, self.opened.get("for") or self.opened["by"]
+        at = rng.randint(2 if self.v1 else 0, self.index("open", self.s.id))
+        days: dict[int, str] = {}
+        for kind, sid, b in self.events[at:]:
+            if kind == "open" and (b.get("for") or b["by"]) == lane:
+                days.setdefault(self.dated(sid), b["started_utc"])
+        order = list(days)
+        rng.shuffle(order)
+        self.declarations = [self.declaration_body(lane, d, days[d]) for d in order]
+        self.events[at:at] = [("declaration", None, b) for b in self.declarations]
+        if rng.random() < 0.3:
+            d = max(days)
+            self.events.append(("declaration", None, self.declaration_body(rng.choice([lane, "other"]),
+                                                                           d + rng.randint(1, 3), days[d])))
 
     def open_body(self, window: dict, host: str, lane: str, public: bytes | None = None) -> dict:
         body = {"window": window, "host": host, "pinned": self.rng.randbytes(20).hex(),
@@ -975,10 +1033,26 @@ LEDGER_NAMES = ["honest", "no-ledger", "ledger-type", "line-type", "non-canonica
                 "request", "reused-leaf", "v1-ledger", "v1-after-v2", "record-outside", "record-entry", "record-twice",
                 "period-form", "period-v1", "period-twice", "period-close", "past-cap", "cap", "circuit", "no-cap",
                 "reserve-form", "reserve-again", "open-unbound", "open-request", "opened-by", "open-late",
-                "open-after-close", "one-step-after-reserve"]
+                "open-after-close", "one-step-after-reserve", "declaration-form", "declaration-v1", "declared-twice",
+                "undeclared-day", "dayless-open"]
 #: the cases whose ledger is two-step
 RESERVE_NAMES = {"reserve-form", "reserve-again", "open-unbound", "open-request", "opened-by", "open-late",
                  "open-after-close", "one-step-after-reserve"}
+#: the cases whose window's lane declares its days
+DECLARED_NAMES = {"declaration-form", "declaration-v1", "declared-twice", "undeclared-day", "dayless-open"}
+
+
+def _declaration_form(rng: random.Random, b: dict) -> dict:
+    """A change that leaves declaration `b` out of `DECLARATION_FORM`."""
+    after = "9999-12-31T23:59:59Z" if b["day"] < Ch.day_of("9999-12-31T00:00:00Z") else "1969-12-31T23:59:59Z"
+    return rng.choice([
+        {"by": rng.choice([None, "", ".x", 5, DROP])}, {"for": rng.choice([None, "", "a b", 5])},
+        {"program": rng.choice(["AB" * 64, "ab" * 63, "ab" * 65, None, 5, DROP])},
+        {"blocks": rng.choice([None, "b0", [1], [None], {"b0": "x"}, DROP])},
+        {"pinned": rng.choice(["ab" * 19, "AB" * 20, None, DROP])},
+        {"day": rng.choice([-1, True, "3", None, [3], DROP])},
+        {"declared_utc": rng.choice([after, "0001-01-01T00:00:00Z", "2026-02-30T00:00:00Z", "2026-10-20 12:00:00Z",
+                                     5, None, DROP])}])
 
 
 def _entry_edit(target: int, f):
@@ -997,7 +1071,9 @@ def ledger_case(rng: random.Random, name: str) -> Any:
     s = _ledger_session(rng, reserved=True if two else None)
     period = {"period-form": "closed", "period-twice": "open", "period-close": "closed", "past-cap": "open",
               "cap": "open", "circuit": "open", "no-cap": "open", "open-after-close": "open"}.get(name)
-    lg = Ledger(rng, s, closed=name != "unclosed", period=period, two_step=True if two else None)
+    lg = Ledger(rng, s, closed=name != "unclosed", period=period,
+                two_step=True if two else False if name == "dayless-open" else None,
+                declare=name in DECLARED_NAMES or name == "honest" and rng.random() < 0.5)
     j = {"key": s.key.to_json(), "ledger": None, "window": lg.window}
     i = rng.randrange(len(lg.events))
     o, end = lg.index("open", s.id), lg.index("end", s.id)
@@ -1247,8 +1323,78 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             j["ledger"] = lg.lines(events)
         case "one-step-after-reserve":
             j["ledger"] = lg.lines(edit=_body_edit(o, reserve=DROP))
+        case "declaration-form":
+            k = rng.choice([k for k, (kind, _, _) in enumerate(events) if kind == "declaration"])
+            b = events[k][2]
+            events[k] = (("declaration", rng.choice(["s-1", ""]), b) if rng.random() < 0.3
+                         else ("declaration", None, _body(b, **_declaration_form(rng, b))))
+            j["ledger"] = lg.lines(events)
+        case "declaration-v1":
+            b = lg.declaration_body(lg.lane, rng.randrange(1 << 22), "1970-01-01T00:00:00Z")
+            lg.v1 = lg.v1 + [b]
+            events.insert(0, ("declaration", None, b))
+            j["ledger"] = lg.lines(events)
+        case "declared-twice":
+            b = rng.choice(lg.declarations)
+            k = next(k for k, (_, _, x) in enumerate(events) if x is b)
+            who = {"by": b["for"], "for": DROP} if "for" in b else {"by": "vy-admin", "for": b["by"]}
+            again = _body(b, **rng.choice([{}, {"program": rng.randbytes(64).hex()}, who]))
+            events.insert(rng.randint(k + 1, len(events)), ("declaration", None, again))
+            j["ledger"] = lg.lines(events)
+        case "undeclared-day":
+            day = Ch.day_of(lg.opened["started_utc"])
+            b = next(b for b in lg.declarations if b["day"] == day)
+            j["ledger"] = lg.lines(events, edit=lambda _, e: e["body"] is b and e.update(
+                body=_body(b, day=day + rng.randint(1 << 22, 1 << 23))))
+        case "dayless-open":
+            j["ledger"] = lg.lines(edit=_body_edit(o, started_utc=rng.choice(
+                [DROP, None, "0001-01-01T00:00:00Z", "1969-12-31T23:59:59Z", "2026-02-30T12:00:00Z", 5])))
         case _:
             j["ledger"] = lg.lines()
+    return j
+
+
+DAY_NAMES = ["honest", "no-ledger", "ledger-refused", "no-open", "no-day", "v1-open", "window-form", "key-form",
+             "request"]
+
+
+def day_case(rng: random.Random, name: str) -> Any:
+    s = _ledger_session(rng)
+    lg = Ledger(rng, s, two_step=False if name == "no-day" else None, v1=True if name == "v1-open" else None,
+                declare=name == "ledger-refused" or name == "honest" and rng.random() < 0.7)
+    j = {"key": s.key.to_json(), "ledger": None, "window": lg.window}
+    o = lg.index("open", s.id)
+    events = list(lg.events)
+    match name:
+        case "honest":
+            lg.dated(s.id)
+            dated = [b["window"] for k, _, b in lg.events
+                     if k == "open" and "root" in b["window"] and Ch.day_of(b.get("started_utc")) is not None]
+            j["ledger"], j["window"] = lg.lines(), rng.choice(dated)
+        case "no-ledger":
+            pass
+        case "ledger-refused":
+            b = rng.choice(lg.declarations)
+            events.insert(rng.randint(events.index(("declaration", None, b)) + 1, len(events)), ("declaration", None, b))
+            j["ledger"] = lg.lines(events)
+        case "no-open":
+            j["ledger"] = lg.lines()
+            j["window"] = _window(rng)
+        case "no-day":
+            j["ledger"] = lg.lines(edit=_body_edit(o, started_utc=rng.choice(
+                [DROP, None, "0001-01-01T00:00:00Z", "1969-12-31T23:59:59Z", "2026-02-30T12:00:00Z", 5])))
+        case "v1-open":
+            j["ledger"], j["window"] = lg.lines(), {"root": lg.v1[0]["window"]["commit"]}
+        case "window-form":
+            j["ledger"] = lg.lines()
+            w = lg.window["root"]
+            j["window"] = rng.choice([{"root": w, "period": "p-0"}, {"root": w.upper()}, {"root": w[:-2]}, None, [w]])
+        case "key-form":
+            j["ledger"] = lg.lines()
+            j["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+        case "request":
+            j["ledger"] = lg.lines()
+            del j[rng.choice(sorted(j))]
     return j
 
 
@@ -2116,6 +2262,8 @@ RELEASED = D.Port(PIECES, "challenger_released", released, _cases(released_case,
                   of_record="lean")
 LEDGER = D.Port(PIECES, "challenger_ledger", ledger, _cases(ledger_case, LEDGER_NAMES), package=PACKAGE,
                 need_rejects=False, of_record="lean")
+DAY = D.Port(PIECES, "challenger_day", day, _cases(day_case, DAY_NAMES), package=PACKAGE, need_rejects=False,
+             of_record="lean")
 HEAD = D.Port(PIECES, "challenger_head", head, _cases(head_case, HEAD_NAMES), package=PACKAGE, need_rejects=False,
               of_record="lean")
 SESSION = D.Port(PIECES, "challenger_session", session, _cases(session_case, SESSION_NAMES), package=PACKAGE,
@@ -2140,7 +2288,7 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (REASON, reason_case, REASON_NAMES, 400), (ORDER, order_case, ORDER_NAMES, 400), (KEY, key_case, KEY_NAMES, 200),
         (RECORD, record_case, RECORD_NAMES, 200), (TRUSTED, trusted_case, TRUSTED_NAMES, 300),
         (CLOSE, close_case, CLOSE_NAMES, 200), (RELEASED, released_case, RELEASED_NAMES, 300),
-        (LEDGER, ledger_case, LEDGER_NAMES, 300), (HEAD, head_case, HEAD_NAMES, 100),
+        (LEDGER, ledger_case, LEDGER_NAMES, 300), (DAY, day_case, DAY_NAMES, 200), (HEAD, head_case, HEAD_NAMES, 100),
         (SESSION, session_case, SESSION_NAMES, 300), (CREDITED, credited_case, CREDITED_NAMES, 200),
         (PINNED, pinned_case, PINNED_NAMES, 200), (READ, read_case, READ_NAMES, 200),
         (DRAW_COINS, draw_coins_case, DRAW_COINS_NAMES, 200), (COIN_TREES, coin_trees_case, COIN_TREES_NAMES, 200),

@@ -667,17 +667,17 @@ class H1Windows:
                 "releasing": releasing, "unused": unused[:20]}
 
 
-def arm_of(opts: Any, llm: Any, com: Any, out: Path, flush: Callable[[], Any] | None = None) -> H1Windows | None:
+def arm_of(opts: Any, llm: Any, com: Any, out: Path, flush: Callable[[], Any] | None = None, day: Any = None) -> H1Windows | None:
     """The server's arm under ``--protocols`` over the served ``llm`` and its committer ``com`` (None without): T
     ``--max-num-batched-tokens`` and S ``--window-steps`` a window, each window's session through `sessions_of` (window
     0's reserved while the Program is declared), its prover state in ``--h1-prover``, its Commit record named by
-    ``--h1-window-commit`` (`serve_tie.WindowTie`, after ``flush``, the advice trace's drain) and its release on a
-    `worker` of its own, made ready (`H1Windows.ready`)."""
+    ``--h1-window-commit`` (`serve_tie.WindowTie`, after ``flush``, the advice trace's drain, each window naming ``day``,
+    `serve_day.Day`, when given) and its release on a `worker` of its own, made ready (`H1Windows.ready`)."""
     from verity_vllm.pipeline.serve_tie import WindowTie
 
     if not opts.protocols:
         return None
-    tie = WindowTie(opts.gate.h1_window_commit, out, flush=flush) if opts.gate.h1_window_commit else None
+    tie = WindowTie(opts.gate.h1_window_commit, out, flush=flush, day=day) if opts.gate.h1_window_commit else None
     sessions = sessions_of(opts)
     if sessions is not None:
         sessions.ahead_of(0)

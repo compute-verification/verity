@@ -146,6 +146,9 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   with W as the log, each value's words, W's entry of it and its row
   format (`tie`), on the stream too, which takes the values and W as its log (`stream_of`). Its proof blocks read the values
   as registered reads at W's roots (``registered``).
+* **A declared day** (``a.declared``, records_audit's ``--day``): the window's day and the registration log's declarations,
+  which the registration check takes (`declared`), so R2 refuses a program other than the day's declared one; a negative
+  moves the day's declaration to another program (``program-not-the-days-declared``). The stream doesn't take them.
 """
 from __future__ import annotations
 
@@ -234,6 +237,12 @@ def tie(a: argparse.Namespace) -> dict[str, Any]:
     ``--tie``): one-stage's ``log`` (that record), ``registered`` (each value's words), ``outputs`` (each value that
     record's) and ``schemas`` (their row formats), as `verifier.check` takes them; empty without one."""
     return dict(getattr(a, "tie", None) or {})
+
+
+def declared(a: argparse.Namespace) -> dict[str, Any]:
+    """The window's declared day (``a.declared``, records_audit's ``--day``): one-stage's ``day`` and ``declarations``, as
+    `verifier.check` takes them, so R2 holds the registration's program to the day's one declaration; empty without."""
+    return dict(getattr(a, "declared", None) or {})
 
 
 def registering(a: argparse.Namespace) -> dict[str, Any]:
@@ -742,7 +751,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary["link_points"] = link_points(drawn_law, n_all, members)
     leaf_layer = CS.leaf_layer(publics)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
-                                     **tie(a)).to_json()
+                                     **tie(a), **declared(a)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -951,6 +960,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         fewer = R2.program(defs, mixed=len(defs) > 1 or bool(taken), values=taken)
         v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, **tie(a))
         neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        if day := declared(a):
+            moved = [{**d, "program": "0" * 128} if d["day"] == day["day"] else d for d in day["declarations"]]
+            v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, **tie(a),
+                        day=day["day"], declarations=moved)
+            neg["program-not-the-days-declared (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
         other = CS.expected_ports(replace(mine, run="00" * 32))
         v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table, **tie(a))
         neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}

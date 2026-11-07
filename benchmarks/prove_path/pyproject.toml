@@ -22,14 +22,14 @@ inputs = ["verity", "integrations/vllm", "benchmarks/one_stage", "benchmarks/net
           "benchmarks/numerical/python/verity_numerical/bench/templates.py",
           # the network certifier's run the certifier piece kept, which window-commit's scan reads (`kept_scan`):
           # certifier_piece and warden_chain, what they import, and the site.json and host.json that served_session and
-          # auditor read on import
+          # auditor read on import; and serve.py, which the challenger's ledgers test_records_audit signs with auditor read
           "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py",
           "benchmarks/network_traces/warden_chain.py", "benchmarks/network_traces/certifier_serve.py",
           "benchmarks/network_traces/warden_serve.py", "benchmarks/network_traces/active_replay.py",
           "benchmarks/network_traces/covert.py", "benchmarks/network_traces/replay.py",
           "benchmarks/network_traces/load_relay.py", "benchmarks/network_traces/stall_probe.py",
           "benchmarks/network_traces/site.json", "benchmarks/live_challenger/auditor.py",
-          "benchmarks/live_challenger/host.json",
+          "benchmarks/live_challenger/host.json", "benchmarks/live_challenger/serve.py",
           # Pearl+'s verdict, whose W check (`verify_run.tie`) test_pearltie runs on its toy's passes: verify_run, what it
           # imports, and the settings registry it loads (`verity_config.settings.of`, which finds it beside pouw's pyproject)
           "benchmarks/pouw/pearl_c_vllm/verify_run.py", "benchmarks/pouw/pearl_c_vllm/fast_tile.py",

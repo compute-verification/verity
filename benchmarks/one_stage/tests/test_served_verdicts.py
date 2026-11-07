@@ -23,10 +23,12 @@ commit refused; its V3c then audits the commit H1 bound and makes none, and has 
 another, its audit tied to W at stratified:1 on a port for each proof block of R's sample; its preflight refuses H1_TIE
 without H1's prover state, without V3c, on a tree whose window-commit takes no --window-registration or whose records_audit
 takes no --tie, at a sampling design other than stratified:K, past the sample session's time, or for onsite on a node short
-of V3c's audit's memory. There
+of V3c's audit's memory. Under DAY its serve gives serve-openai the day's declaration and its V3c audit the day and the
+registration log, and nothing of either without DAY; its preflight refuses a DAY without its log or program, or on a tree
+without them. There
 step 6 defers the audit and the composite, leaving the follow-on's settings and its every input, listed and hashed, and
 nothing in $OUT but a line; the follow-on holds the copy to those sums, refuses another setting, a node short of the
-memory or another tree, and audits, records about the served node and composes, each saying it composed elsewhere, as
+memory or another tree, under DAY holds the day's log as the deferral copied it to the serve's declaration, and audits, records about the served node and composes, each saying it composed elsewhere, as
 the record says where it was composed and what was deferred. Its load, `serve_load.py
 --varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
 endpoint."""
@@ -56,6 +58,8 @@ from typing import Any
 
 import jsonschema
 import pytest
+from verity.core import site as SITE
+from verity.core.protocols import registration as RL
 from verity.core.protocols.pous import wipe_period as W
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 
@@ -2379,6 +2383,47 @@ def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_re
                                   else {"--law": "subset:1", "--tie": None, "--tie-prefix": None, "--ports": ports})
 
 
+DAYS = ("--day", "--day-log", "--day-params")
+
+
+def _day_tree(tmp_path: Path) -> str:
+    """A toy tree with serve-openai's --day (`serve_day`), and its records_audit.py, which takes --day."""
+    p = tmp_path / "tree" / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "serve_day.py"
+    p.parent.mkdir(parents=True)
+    p.write_text("")
+    return FAKE_RECORDS_AUDIT + '# "--day"\n'
+
+
+@pytest.mark.parametrize("extra, flags", [
+    ({}, {"--day": None, "--day-log": None, "--day-params": None}),
+    ({"DAY": "3", "DAY_LOG": "/l.json", "DAY_PROGRAM": "5d" * 64}, {"--day": "3", "--day-log": "/l.json", "--day-params": None}),
+    ({"DAY": "3", "DAY_LOG": "/l.json", "DAY_PROGRAM": "5d" * 64, "DAY_PARAMS": "/p.json"},
+     {"--day": "3", "--day-log": "/l.json", "--day-params": "/p.json"}),
+], ids=["off", "day", "day-params"])
+def test_under_day_v3cs_audit_holds_the_window_to_the_days_declaration(tmp_path, extra, flags):
+    """DAY hands V3c's audit the day and the registration log (records_audit's --day, --day-log, --day-params), whose
+    declarations R2 holds the window's registration to; without DAY the audit gets none of them."""
+    rc, lines, order, _limits = _v3c(tmp_path, records_audit=_day_tree(tmp_path), **extra)
+    assert rc == 0 and "audit" in order, (lines, order)
+    assert _audited(tmp_path, DAYS) == flags
+
+
+NO_DAY = ("PREFLIGHT: DAY=N declares day N's circuit: it needs DAY_LOG (the deployment's registration log) and DAY_PROGRAM "
+          "(the SHA-512, lowercase hex, of the program its windows register)")
+
+
+@pytest.mark.parametrize("extra, tree, line", [
+    ({"DAY": "3", "DAY_PROGRAM": "5d" * 64}, True, NO_DAY),
+    ({"DAY": "3", "DAY_LOG": "/l.json", "DAY_PROGRAM": "5D" * 64}, True, NO_DAY),
+    ({"DAY": "x", "DAY_LOG": "/l.json", "DAY_PROGRAM": "5d" * 64}, True, NO_DAY),
+    ({"DAY": "3", "DAY_LOG": "/l.json", "DAY_PROGRAM": "5d" * 64}, False,
+     "PREFLIGHT: DAY needs serve-openai's --day and records_audit's --day, which this tree hasn't"),
+], ids=["no-log", "upper-hex", "not-a-day", "old-tree"])
+def test_the_preflight_refuses_a_day_it_cant_declare_or_audit(tmp_path, extra, tree, line):
+    rc, lines, order, _limits = _v3c(tmp_path, records_audit=_day_tree(tmp_path) if tree else FAKE_RECORDS_AUDIT, **extra)
+    assert (rc, lines, order) == (3, [line], [])
+
+
 @pytest.mark.parametrize("extra, law", [({}, "subset:1"), ({"V3C_LAW": "stratified:1"}, "stratified:1")])
 def test_an_untied_v3c_registers_its_window_at_the_sampling_design_its_audit_samples_by(tmp_path, extra, law):
     """Untied, window-commit registers the window at V3C_LAW's sampling design and the audit samples by that one: R1 holds
@@ -3018,7 +3063,7 @@ def _deferred(tmp_path: Path, **extra: str | None) -> subprocess.CompletedProces
 def _deferral_settings(tmp_path: Path) -> dict[str, str]:
     """The settings `_deferred`'s deferral recorded for its follow-on (private/deferred/deferred.env), as bash reads them."""
     names = ("K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_PEER "
-             "DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE")
+             "DEFERRED_TREE COMPOSE_OFF_NODE COMPOSE_NODE DAY")
     said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
                            str(tmp_path / "serve" / "private" / "deferred" / "deferred.env")],
                           check=True, capture_output=True, text=True).stdout
@@ -3050,7 +3095,7 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     assert _deferral_settings(tmp_path) == {
         "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "V3C_CHALLENGER": "local",
         "DEVELOPMENT": "1", "H1_TIE": "1", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
-        "SERVED_PEER": "", "DEFERRED_TREE": SHA, "COMPOSE_OFF_NODE": off, "COMPOSE_NODE": "vy-auditor-2"}
+        "SERVED_PEER": "", "DEFERRED_TREE": SHA, "COMPOSE_OFF_NODE": off, "COMPOSE_NODE": "vy-auditor-2", "DAY": ""}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
     own = ["private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]
@@ -3141,6 +3186,96 @@ def test_a_follow_on_refuses_a_copy_unlike_the_served_nodes_another_setting_a_no
     elif change == "case.json":
         (d / "private" / "pouw" / "period" / "case.json").unlink()
     rc, lines, order, _limits = _follow(tmp_path, **extra)
+    assert (rc, lines, order) == (3, said, []), lines
+
+
+def _day_log(path: Path, program: str) -> RL.Declaration:
+    """A remote deployment's registration log at ``path`` declaring day 3's circuit ``program``: the declaration."""
+    log = RL.chain("remote", [RL.Declaration(3, program)])
+    path.write_bytes(RL.committed("remote", log))
+    return log[-1]
+
+
+def _day_deferred(tmp_path: Path, **extra: str | None) -> RL.Declaration:
+    """`_deferred`'s deferral under DAY=3: the serve dir's declaration.json as serve-openai's --day wrote it, its log
+    DAY_LOG and its parameters DAY_PARAMS outside the serve dir (``extra`` adds to the environment): the declaration."""
+    d, log, params = tmp_path / "serve", tmp_path / "day-log.json", tmp_path / "day-params.json"
+    entry = _day_log(log, "5d" * 64)
+    params.write_text(json.dumps(RL.params("remote", SITE.Auditor())))
+    d.mkdir()
+    (d / "declaration.json").write_text(json.dumps({"day": 3, "program": "5d" * 64, "blocks": [],
+                                                    "declaration": _named(entry), "head": entry.digest(),
+                                                    "log": str(log), "declared": "now", "entry": entry.to_json(),
+                                                    "file": "declaration.json"}))
+    run = _deferred(tmp_path, DAY="3", DAY_LOG=str(log), DAY_PARAMS=str(params), **extra)
+    assert run.returncode == 0, run.stderr
+    return entry
+
+
+def _named(entry: RL.Declaration) -> str:
+    """The digest serve-openai's declaration.json names ``entry`` by: its Declaration with no ``previous``."""
+    return RL.Declaration(entry.day, entry.program, entry.blocks).digest()
+
+
+def _held(entry: RL.Declaration, verdict: str) -> str:
+    return ("DAY-HELD: the serve dir's private/deferred/day-log.json, the day's registration log as the deferral copied "
+            f"it, holds the declaration the serve's declaration.json names: {verdict}")
+
+
+@pytest.mark.parametrize("extra", [{}, {"DAY_LOG": "/elsewhere.json", "DAY_PARAMS": "/elsewhere-params.json"}],
+                         ids=["copy", "this-nodes-ignored"])
+def test_a_deferral_under_day_carries_the_days_log_and_its_follow_on_audits_r2_against_that_copy(tmp_path, extra):
+    """The onsite run of record defers V3c's audit, so DAY rides the deferral: DAY in its settings, the day's log and
+    parameters copied into private/deferred and hashed with the serve's declaration.json, and the follow-on, once the
+    copy holds to the served node's sums and to the declaration declaration.json names by digest, hands records_audit
+    the copy (--day-log, --day-params), never a log of its own node's environment."""
+    entry = _day_deferred(tmp_path, COMPOSE_OFF_NODE="0")
+    d, dd = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred"
+    assert _deferral_settings(tmp_path)["DAY"] == "3"
+    assert (dd / "day-log.json").read_bytes() == (tmp_path / "day-log.json").read_bytes()
+    listed = (dd / "inputs.txt").read_text().splitlines()
+    assert {"declaration.json", "private/deferred/day-log.json", "private/deferred/day-params.json"} <= set(listed)
+    sums = {f: h for h, f in (x.split("  ", 1) for x in (dd / "inputs.sha256").read_text().splitlines())}
+    assert sums["private/deferred/day-log.json"] == hashlib.sha256((d / "private/deferred/day-log.json").read_bytes()).hexdigest()
+    rc, lines, order, _limits = _follow(tmp_path, records_audit=_day_tree(tmp_path), **extra)
+    assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
+    assert lines[1].endswith("(the serve dir's private/deferred/inputs.sha256): PASS")
+    assert lines[2] == _held(entry, f"PASS (day 3, program {'5d' * 8}…, declaration {_named(entry)[:16]}…)")
+    assert _audited(tmp_path, DAYS) == {"--day": "3", "--day-log": str(dd / "day-log.json"),
+                                        "--day-params": str(dd / "day-params.json")}
+
+
+@pytest.mark.parametrize("change", ["edited", "rehashed", "clash", "old-tree"])
+def test_a_follow_on_under_day_refuses_a_day_log_unlike_the_one_the_serve_declared_in(tmp_path, change):
+    """The follow-on audits no day the serve didn't declare: an edited copy of the day's log fails the served node's
+    sums before anything runs; one rehashed to pass them, declaring the day another program, fails DAY-HELD, the
+    declaration's digest the serve wrote; another DAY is a clash with the deferral's settings; and a tree whose
+    records_audit takes no --day is refused at the preflight."""
+    entry = _day_deferred(tmp_path)
+    dd = tmp_path / "serve" / "private" / "deferred"
+    extra: dict[str, str | None] = {}
+    tree = _day_tree(tmp_path)
+    if change == "edited":
+        (dd / "day-log.json").write_bytes((dd / "day-log.json").read_bytes() + b"\n")
+        said = [V3C_ENTRY, FOLLOW_FAIL]
+    elif change == "rehashed":
+        other = _day_log(dd / "day-log.json", "6e" * 64)
+        sums = (dd / "inputs.sha256").read_text().splitlines()
+        h = hashlib.sha256((dd / "day-log.json").read_bytes()).hexdigest()
+        (dd / "inputs.sha256").write_text("".join(
+            f"{h}  {f}\n" if f == "private/deferred/day-log.json" else f"{x}\n"
+            for x, f in ((x, x.split("  ", 1)[1]) for x in sums)))
+        assert _named(other) != _named(entry)
+        said = [V3C_ENTRY, FOLLOW_FAIL.replace("FAIL (the serve dir's private/deferred/check.log)", "PASS"),
+                _held(entry, f"FAIL (it holds no declaration of day 3 with digest {_named(entry)[:16]}…)")]
+    elif change == "clash":
+        extra = {"DAY": "4"}
+        said = [f"{CLASH} DAY: unset it"]
+    else:
+        tree = FAKE_RECORDS_AUDIT
+        said = ["PREFLIGHT: the deferral declared day 3, whose audit runs R2 with records_audit's --day, which this "
+                "tree's records_audit.py doesn't take"]
+    rc, lines, order, _limits = _follow(tmp_path, records_audit=tree, **extra)
     assert (rc, lines, order) == (3, said, []), lines
 
 
@@ -4330,6 +4465,24 @@ def test_the_engine_gets_one_token_budget_with_or_without_h1(tmp_path, env, budg
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
     assert argv.count("--max-num-batched-tokens") == 1 and argv[argv.index("--max-num-batched-tokens") + 1] == budget
     assert ("--protocols" in argv) == bool(env["H1_GATE"]) and "--h1-window-commit" not in argv
+
+
+DAY_PROGRAM = "5d" * 64
+
+
+@pytest.mark.parametrize("env, flags", [
+    ({}, []),
+    ({"DAY": "3", "DAY_LOG": "/l.json", "DAY_PROGRAM": DAY_PROGRAM},
+     ["--day", "3", "--day-log", "/l.json", "--day-program", DAY_PROGRAM]),
+    ({"DAY": "3", "DAY_LOG": "/l.json", "DAY_PROGRAM": DAY_PROGRAM, "DAY_BLOCKS": "a,b", "DAY_PARAMS": "/p.json"},
+     ["--day", "3", "--day-log", "/l.json", "--day-program", DAY_PROGRAM, "--day-blocks", "a,b", "--day-params", "/p.json"]),
+], ids=["off", "day", "day-blocks-params"])
+def test_serve_openai_declares_the_day_only_under_day(tmp_path, env, flags):
+    """DAY unset (the default) gives serve-openai no day option, so it writes what it wrote before; DAY gives it the day,
+    the log, the program and, where set, the blocks and the log's parameters."""
+    rc, argv = _serve_argv(tmp_path, {"H1_GATE": "", **env})
+    assert rc == 10 and [x for x in argv if x.startswith("--day")] == flags[::2], (rc, argv)
+    assert all(argv[argv.index(f) + 1] == v for f, v in zip(flags[::2], flags[1::2]))
 
 
 class _Response:
