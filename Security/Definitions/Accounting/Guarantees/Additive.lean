@@ -1,4 +1,6 @@
-import Definitions.Accounting.Additive
+module
+
+public import Definitions.Accounting.Additive
 
 /-!
 # Compute additivity's capacity from the machine model 𝓜 (trusted)
@@ -20,6 +22,8 @@ a period itself: a block of the runs `es` meets `AccelRate`'s hypothesis when `e
 
 The proofs are in `Security/Proofs/Accounting/Additive.lean`.
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

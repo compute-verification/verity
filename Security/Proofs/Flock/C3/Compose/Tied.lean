@@ -1,9 +1,11 @@
-import Proofs.Flock.C3.Compose.SrcClauses
-import Proofs.Flock.Recursive.ForkRuns
-import Proofs.Flock.C3.Reps.Tie
-import Proofs.Flock.C3.Sparse.SrcTie
-import Proofs.Flock.C3.Opening.SrcOpening
-import Proofs.Flock.C3.RegLevels.SrcTie
+module
+
+public import Proofs.Flock.C3.Compose.SrcClauses
+public import Proofs.Flock.Recursive.ForkRuns
+public import Proofs.Flock.C3.Reps.Tie
+public import Proofs.Flock.C3.Sparse.SrcTie
+public import Proofs.Flock.C3.Opening.SrcOpening
+public import Proofs.Flock.C3.RegLevels.SrcTie
 
 /-!
 # n7: the tied source, each stage's output its play's
@@ -19,6 +21,8 @@ sparse phase by its RecSparse unit (`SparseTie`, `plays_of_tie`), R's opening on
 its read fact's checks pass (`OpeningReadAt`), and R's Ligerito by its accepting run (`LevelTie`). A stage's message
 types follow from its kinds (`tysAt_of_kinds`) where the shape's are among `T`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

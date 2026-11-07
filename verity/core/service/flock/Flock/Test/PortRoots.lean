@@ -6,7 +6,12 @@ different roots. Two ports of different names have different registered roots at
 under one domain, neither a collision; under a hash with one value every pair of differently named ports is one, and
 `checkWith` refuses it. A refusal at SHA-512 is a file holding a SHA-512 collision.
 -/
-import Flock.PortRoots
+module
+
+public import Flock.PortRoots
+meta import Flock.PortRoots
+
+@[expose] public section
 
 namespace Flock.Test.PortRoots
 

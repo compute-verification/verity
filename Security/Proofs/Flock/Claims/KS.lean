@@ -1,176 +1,178 @@
-import Proofs.Flock.Claims.KS.Wait
-import Proofs.Flock.Claims.KS.Fork
-import Proofs.Flock.Claims.KS.Flock
-import Proofs.Flock.Claims.KS.Game
-import Proofs.Flock.Claims.KS.Deploy
-import Proofs.Flock.Claims.KS.Range
-import Proofs.Flock.Claims.KS.Joint
-import Proofs.Flock.Claims.KS.Trace
-import Proofs.Flock.Claims.KS.Width
-import Proofs.Flock.Claims.KS.ConflictOC
-import Proofs.Flock.Claims.KS.ConflictMerkle
-import Proofs.Flock.Claims.KS.ConflictWithin
-import Proofs.Flock.Claims.KS.PlainQueryRound
-import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.KS.ConflictTied
-import Proofs.Flock.Claims.KS.TableBound
-import Proofs.Flock.Claims.KS.Refit
-import Proofs.Flock.Claims.KS.Rounds
-import Proofs.Flock.Claims.KS.Mixture
-import Proofs.Flock.Claims.KS.SessionSC
-import Proofs.Flock.Claims.KS.SessionRaw
-import Proofs.Flock.Claims.KS.OffAlign
-import Proofs.Flock.Claims.KS.PlainOff
-import Proofs.Flock.Claims.KS.OffSim
-import Proofs.Flock.Claims.KS.PlainOffLive
-import Proofs.Flock.Claims.KS.PlainOffRd
-import Proofs.Flock.Claims.KS.CapChunk
-import Proofs.Flock.Claims.KS.PlainCapPrefix
-import Proofs.Flock.Claims.KS.PlainQueried
-import Proofs.Flock.Claims.KS.PlainBound
-import Proofs.Flock.Claims.KS.Trim
-import Proofs.Flock.Claims.KS.PlainKS
-import Proofs.Flock.Claims.KS.Escapes
-import Proofs.Flock.Claims.KS.OnAcc
-import Proofs.Flock.Claims.KS.PlainAcc
-import Proofs.Flock.Claims.KS.RoundsN
-import Proofs.Flock.Claims.KS.MixtureZk
-import Proofs.Flock.Claims.KS.ZkBound
-import Proofs.Flock.Claims.KS.ZkKS
-import Proofs.Flock.Claims.KS.JointJ
-import Proofs.Flock.Claims.KS.ZkTables
-import Proofs.Flock.Claims.KS.ZkBoundJ
-import Proofs.Flock.Claims.KS.ZkLiveJ
-import Proofs.Flock.Claims.KS.ZkAccJ
-import Proofs.Flock.Claims.KS.RoundsNZk
-import Proofs.Flock.Claims.KS.LevelZero
-import Proofs.Flock.Claims.KS.LevelZeroAcc
-import Proofs.Flock.Claims.KS.OffSC
-import Proofs.Flock.Claims.KS.Entries
-import Proofs.Flock.Claims.KS.DecodeSC
-import Proofs.Flock.Claims.KS.DecodeDeploy
-import Proofs.Flock.Claims.KS.DecodeHidden
-import Proofs.Flock.Claims.KS.PlainWrP
-import Proofs.Flock.Claims.KS.PlainEvent
-import Proofs.Flock.Claims.KS.LiveMix
-import Proofs.Flock.Claims.KS.PlainFirst
-import Proofs.Flock.Claims.KS.PlainThird
-import Proofs.Flock.Claims.KS.ForkSlack
-import Proofs.Flock.Claims.KS.PlainSimW
-import Proofs.Flock.Claims.KS.FnFork
-import Proofs.Flock.Claims.KS.PlainWire
-import Proofs.Flock.Claims.KS.PlainClashL
-import Proofs.Flock.Claims.KS.ForkCoupling
-import Proofs.Flock.Claims.KS.PlainDraw
-import Proofs.Flock.Claims.KS.PlainDrawAcc
-import Proofs.Flock.Claims.KS.PlainDrawDec
-import Proofs.Flock.Claims.KS.PlainDrawSim
-import Proofs.Flock.Claims.KS.PlainDrawKDefs
-import Proofs.Flock.Claims.KS.PlainDrawRCols
-import Proofs.Flock.Claims.KS.PlainDrawRColsE
-import Proofs.Flock.Claims.KS.PlainDrawK
-import Proofs.Flock.Claims.KS.PlainDrawAccK
-import Proofs.Flock.Claims.KS.PlainDrawDecK
-import Proofs.Flock.Claims.KS.PlainLeafDecK
-import Proofs.Flock.Claims.KS.PlainClashLaterK
-import Proofs.Flock.Claims.KS.PlainClash0K
-import Proofs.Flock.Claims.KS.PlainLeafClashK
-import Proofs.Flock.Claims.KS.PlainDrawJ
-import Proofs.Flock.Claims.KS.PlainDrawJMove
-import Proofs.Flock.Claims.KS.PlainDrawJRun
-import Proofs.Flock.Claims.KS.PlainDrawJCols
-import Proofs.Flock.Claims.KS.PlainSlackFit
-import Proofs.Flock.Claims.KS.PlainSim
-import Proofs.Flock.Claims.KS.PlainLock
-import Proofs.Flock.Claims.KS.PlainStep
-import Proofs.Flock.Claims.KS.PlainParts
-import Proofs.Flock.Claims.KS.PlainClash0
-import Proofs.Flock.Claims.KS.PlainLevels
-import Proofs.Flock.Claims.KS.LevelsAll
-import Proofs.Flock.Claims.KS.PlainClashLater
-import Proofs.Flock.Claims.KS.ForkSim
-import Proofs.Flock.Claims.KS.PlainFork
-import Proofs.Flock.Claims.KS.PlainForkClash
-import Proofs.Flock.Claims.KS.PlainCapsDep
-import Proofs.Flock.Claims.KS.ForkAlign
-import Proofs.Flock.Claims.KS.SlotDist
-import Proofs.Flock.Claims.KS.RepDist
-import Proofs.Flock.Claims.KS.RepDistDeploy
-import Proofs.Flock.Claims.KS.SlotLead
-import Proofs.Flock.Claims.KS.PlainAlign
-import Proofs.Flock.Claims.KS.PlainSched
-import Proofs.Flock.Claims.KS.SimLead
-import Proofs.Flock.Claims.KS.PlainLead
-import Proofs.Flock.Claims.KS.PlainLive
-import Proofs.Flock.Claims.KS.PlainLeafKS
-import Proofs.Flock.Claims.KS.PlainRawL
-import Proofs.Flock.Claims.KS.PlainRdRun
-import Proofs.Flock.Claims.KS.PlainKSLin
-import Proofs.Flock.Claims.KS.ZkPlanJ
-import Proofs.Flock.Claims.KS.ZkPlanHJ
-import Proofs.Flock.Claims.KS.ZkDrawJ
-import Proofs.Flock.Claims.KS.ZkDecJ
-import Proofs.Flock.Claims.KS.ZkXferJ
-import Proofs.Flock.Claims.KS.ZkSessionSC
-import Proofs.Flock.Claims.KS.ZkPads
-import Proofs.Flock.Claims.KS.ZkSessionW
-import Proofs.Flock.Claims.KS.ZkOffSC
-import Proofs.Flock.Claims.KS.ZkEntries
-import Proofs.Flock.Claims.KS.ZkDecodeW
-import Proofs.Flock.Claims.KS.ZkEvent
-import Proofs.Flock.Claims.KS.ZkFirst
-import Proofs.Flock.Claims.KS.FitsR
-import Proofs.Flock.Claims.KS.ZkFitsW
-import Proofs.Flock.Claims.KS.ZkBoundW
-import Proofs.Flock.Claims.KS.ZkLiveW
-import Proofs.Flock.Claims.KS.JointR
-import Proofs.Flock.Claims.KS.ZkXferW
-import Proofs.Flock.Claims.KS.ZkTrimW
-import Proofs.Flock.Claims.KS.ZkSimW
-import Proofs.Flock.Claims.KS.ZkAbortR
-import Proofs.Flock.Claims.KS.ZkAbortJR
-import Proofs.Flock.Claims.KS.ZkClashRaw
-import Proofs.Flock.Claims.KS.ZkSlackW
-import Proofs.Flock.Claims.KS.ZkSlackFit
-import Proofs.Flock.Claims.KS.ZkSim
-import Proofs.Flock.Claims.KS.ZkLock
-import Proofs.Flock.Claims.KS.ZkStep
-import Proofs.Flock.Claims.KS.ZkClash0
-import Proofs.Flock.Claims.KS.ZkLevelsAll
-import Proofs.Flock.Claims.KS.ZkPadsPair
-import Proofs.Flock.Claims.KS.ZkTauFork
-import Proofs.Flock.Claims.KS.ZkTauPair
-import Proofs.Flock.Claims.KS.ZkLevels
-import Proofs.Flock.Claims.KS.ZkClashL
-import Proofs.Flock.Claims.KS.ZkFork0
-import Proofs.Flock.Claims.KS.ZkPadsLog
-import Proofs.Flock.Claims.KS.ZkClashPads
-import Proofs.Flock.Claims.KS.TrimBridge
-import Proofs.Flock.Claims.KS.ZkFork
-import Proofs.Flock.Claims.KS.ZkAlign
-import Proofs.Flock.Claims.KS.RepDistZ
-import Proofs.Flock.Claims.KS.ZkSched
-import Proofs.Flock.Claims.KS.SlotBatch
-import Proofs.Flock.Claims.KS.PushSched
-import Proofs.Flock.Claims.KS.ZkBatch
-import Proofs.Flock.Claims.KS.BatchProj
-import Proofs.Flock.Claims.KS.BatchSteps
-import Proofs.Flock.Claims.KS.BatchSched
-import Proofs.Flock.Claims.KS.BatchMove
-import Proofs.Flock.Claims.KS.BatchSim
-import Proofs.Flock.Claims.KS.ZkLiveSched
-import Proofs.Flock.Claims.KS.ZkBatchSim
-import Proofs.Flock.Claims.KS.ZkForkClash
-import Proofs.Flock.Claims.KS.ZkPadsSlot
-import Proofs.Flock.Claims.KS.ZkKSAlign
-import Proofs.Flock.Claims.KS.SlotDistOn
-import Proofs.Flock.Claims.KS.ZkTauSlot
-import Proofs.Flock.Claims.KS.ZkUntrim
-import Proofs.Flock.Claims.KS.Extend
-import Proofs.Flock.Claims.KS.ZkExtend
-import Proofs.Flock.Claims.KS.PlainUntrim
-import Proofs.Flock.Claims.KS.ZkOuter
-import Proofs.Flock.Claims.KS.PlainAccPrR
+module
+
+public import Proofs.Flock.Claims.KS.Wait
+public import Proofs.Flock.Claims.KS.Fork
+public import Proofs.Flock.Claims.KS.Flock
+public import Proofs.Flock.Claims.KS.Game
+public import Proofs.Flock.Claims.KS.Deploy
+public import Proofs.Flock.Claims.KS.Range
+public import Proofs.Flock.Claims.KS.Joint
+public import Proofs.Flock.Claims.KS.Trace
+public import Proofs.Flock.Claims.KS.Width
+public import Proofs.Flock.Claims.KS.ConflictOC
+public import Proofs.Flock.Claims.KS.ConflictMerkle
+public import Proofs.Flock.Claims.KS.ConflictWithin
+public import Proofs.Flock.Claims.KS.PlainQueryRound
+public import Proofs.Flock.Claims.KS.ConflictRun
+public import Proofs.Flock.Claims.KS.ConflictTied
+public import Proofs.Flock.Claims.KS.TableBound
+public import Proofs.Flock.Claims.KS.Refit
+public import Proofs.Flock.Claims.KS.Rounds
+public import Proofs.Flock.Claims.KS.Mixture
+public import Proofs.Flock.Claims.KS.SessionSC
+public import Proofs.Flock.Claims.KS.SessionRaw
+public import Proofs.Flock.Claims.KS.OffAlign
+public import Proofs.Flock.Claims.KS.PlainOff
+public import Proofs.Flock.Claims.KS.OffSim
+public import Proofs.Flock.Claims.KS.PlainOffLive
+public import Proofs.Flock.Claims.KS.PlainOffRd
+public import Proofs.Flock.Claims.KS.CapChunk
+public import Proofs.Flock.Claims.KS.PlainCapPrefix
+public import Proofs.Flock.Claims.KS.PlainQueried
+public import Proofs.Flock.Claims.KS.PlainBound
+public import Proofs.Flock.Claims.KS.Trim
+public import Proofs.Flock.Claims.KS.PlainKS
+public import Proofs.Flock.Claims.KS.Escapes
+public import Proofs.Flock.Claims.KS.OnAcc
+public import Proofs.Flock.Claims.KS.PlainAcc
+public import Proofs.Flock.Claims.KS.RoundsN
+public import Proofs.Flock.Claims.KS.MixtureZk
+public import Proofs.Flock.Claims.KS.ZkBound
+public import Proofs.Flock.Claims.KS.ZkKS
+public import Proofs.Flock.Claims.KS.JointJ
+public import Proofs.Flock.Claims.KS.ZkTables
+public import Proofs.Flock.Claims.KS.ZkBoundJ
+public import Proofs.Flock.Claims.KS.ZkLiveJ
+public import Proofs.Flock.Claims.KS.ZkAccJ
+public import Proofs.Flock.Claims.KS.RoundsNZk
+public import Proofs.Flock.Claims.KS.LevelZero
+public import Proofs.Flock.Claims.KS.LevelZeroAcc
+public import Proofs.Flock.Claims.KS.OffSC
+public import Proofs.Flock.Claims.KS.Entries
+public import Proofs.Flock.Claims.KS.DecodeSC
+public import Proofs.Flock.Claims.KS.DecodeDeploy
+public import Proofs.Flock.Claims.KS.DecodeHidden
+public import Proofs.Flock.Claims.KS.PlainWrP
+public import Proofs.Flock.Claims.KS.PlainEvent
+public import Proofs.Flock.Claims.KS.LiveMix
+public import Proofs.Flock.Claims.KS.PlainFirst
+public import Proofs.Flock.Claims.KS.PlainThird
+public import Proofs.Flock.Claims.KS.ForkSlack
+public import Proofs.Flock.Claims.KS.PlainSimW
+public import Proofs.Flock.Claims.KS.FnFork
+public import Proofs.Flock.Claims.KS.PlainWire
+public import Proofs.Flock.Claims.KS.PlainClashL
+public import Proofs.Flock.Claims.KS.ForkCoupling
+public import Proofs.Flock.Claims.KS.PlainDraw
+public import Proofs.Flock.Claims.KS.PlainDrawAcc
+public import Proofs.Flock.Claims.KS.PlainDrawDec
+public import Proofs.Flock.Claims.KS.PlainDrawSim
+public import Proofs.Flock.Claims.KS.PlainDrawKDefs
+public import Proofs.Flock.Claims.KS.PlainDrawRCols
+public import Proofs.Flock.Claims.KS.PlainDrawRColsE
+public import Proofs.Flock.Claims.KS.PlainDrawK
+public import Proofs.Flock.Claims.KS.PlainDrawAccK
+public import Proofs.Flock.Claims.KS.PlainDrawDecK
+public import Proofs.Flock.Claims.KS.PlainLeafDecK
+public import Proofs.Flock.Claims.KS.PlainClashLaterK
+public import Proofs.Flock.Claims.KS.PlainClash0K
+public import Proofs.Flock.Claims.KS.PlainLeafClashK
+public import Proofs.Flock.Claims.KS.PlainDrawJ
+public import Proofs.Flock.Claims.KS.PlainDrawJMove
+public import Proofs.Flock.Claims.KS.PlainDrawJRun
+public import Proofs.Flock.Claims.KS.PlainDrawJCols
+public import Proofs.Flock.Claims.KS.PlainSlackFit
+public import Proofs.Flock.Claims.KS.PlainSim
+public import Proofs.Flock.Claims.KS.PlainLock
+public import Proofs.Flock.Claims.KS.PlainStep
+public import Proofs.Flock.Claims.KS.PlainParts
+public import Proofs.Flock.Claims.KS.PlainClash0
+public import Proofs.Flock.Claims.KS.PlainLevels
+public import Proofs.Flock.Claims.KS.LevelsAll
+public import Proofs.Flock.Claims.KS.PlainClashLater
+public import Proofs.Flock.Claims.KS.ForkSim
+public import Proofs.Flock.Claims.KS.PlainFork
+public import Proofs.Flock.Claims.KS.PlainForkClash
+public import Proofs.Flock.Claims.KS.PlainCapsDep
+public import Proofs.Flock.Claims.KS.ForkAlign
+public import Proofs.Flock.Claims.KS.SlotDist
+public import Proofs.Flock.Claims.KS.RepDist
+public import Proofs.Flock.Claims.KS.RepDistDeploy
+public import Proofs.Flock.Claims.KS.SlotLead
+public import Proofs.Flock.Claims.KS.PlainAlign
+public import Proofs.Flock.Claims.KS.PlainSched
+public import Proofs.Flock.Claims.KS.SimLead
+public import Proofs.Flock.Claims.KS.PlainLead
+public import Proofs.Flock.Claims.KS.PlainLive
+public import Proofs.Flock.Claims.KS.PlainLeafKS
+public import Proofs.Flock.Claims.KS.PlainRawL
+public import Proofs.Flock.Claims.KS.PlainRdRun
+public import Proofs.Flock.Claims.KS.PlainKSLin
+public import Proofs.Flock.Claims.KS.ZkPlanJ
+public import Proofs.Flock.Claims.KS.ZkPlanHJ
+public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkDecJ
+public import Proofs.Flock.Claims.KS.ZkXferJ
+public import Proofs.Flock.Claims.KS.ZkSessionSC
+public import Proofs.Flock.Claims.KS.ZkPads
+public import Proofs.Flock.Claims.KS.ZkSessionW
+public import Proofs.Flock.Claims.KS.ZkOffSC
+public import Proofs.Flock.Claims.KS.ZkEntries
+public import Proofs.Flock.Claims.KS.ZkDecodeW
+public import Proofs.Flock.Claims.KS.ZkEvent
+public import Proofs.Flock.Claims.KS.ZkFirst
+public import Proofs.Flock.Claims.KS.FitsR
+public import Proofs.Flock.Claims.KS.ZkFitsW
+public import Proofs.Flock.Claims.KS.ZkBoundW
+public import Proofs.Flock.Claims.KS.ZkLiveW
+public import Proofs.Flock.Claims.KS.JointR
+public import Proofs.Flock.Claims.KS.ZkXferW
+public import Proofs.Flock.Claims.KS.ZkTrimW
+public import Proofs.Flock.Claims.KS.ZkSimW
+public import Proofs.Flock.Claims.KS.ZkAbortR
+public import Proofs.Flock.Claims.KS.ZkAbortJR
+public import Proofs.Flock.Claims.KS.ZkClashRaw
+public import Proofs.Flock.Claims.KS.ZkSlackW
+public import Proofs.Flock.Claims.KS.ZkSlackFit
+public import Proofs.Flock.Claims.KS.ZkSim
+public import Proofs.Flock.Claims.KS.ZkLock
+public import Proofs.Flock.Claims.KS.ZkStep
+public import Proofs.Flock.Claims.KS.ZkClash0
+public import Proofs.Flock.Claims.KS.ZkLevelsAll
+public import Proofs.Flock.Claims.KS.ZkPadsPair
+public import Proofs.Flock.Claims.KS.ZkTauFork
+public import Proofs.Flock.Claims.KS.ZkTauPair
+public import Proofs.Flock.Claims.KS.ZkLevels
+public import Proofs.Flock.Claims.KS.ZkClashL
+public import Proofs.Flock.Claims.KS.ZkFork0
+public import Proofs.Flock.Claims.KS.ZkPadsLog
+public import Proofs.Flock.Claims.KS.ZkClashPads
+public import Proofs.Flock.Claims.KS.TrimBridge
+public import Proofs.Flock.Claims.KS.ZkFork
+public import Proofs.Flock.Claims.KS.ZkAlign
+public import Proofs.Flock.Claims.KS.RepDistZ
+public import Proofs.Flock.Claims.KS.ZkSched
+public import Proofs.Flock.Claims.KS.SlotBatch
+public import Proofs.Flock.Claims.KS.PushSched
+public import Proofs.Flock.Claims.KS.ZkBatch
+public import Proofs.Flock.Claims.KS.BatchProj
+public import Proofs.Flock.Claims.KS.BatchSteps
+public import Proofs.Flock.Claims.KS.BatchSched
+public import Proofs.Flock.Claims.KS.BatchMove
+public import Proofs.Flock.Claims.KS.BatchSim
+public import Proofs.Flock.Claims.KS.ZkLiveSched
+public import Proofs.Flock.Claims.KS.ZkBatchSim
+public import Proofs.Flock.Claims.KS.ZkForkClash
+public import Proofs.Flock.Claims.KS.ZkPadsSlot
+public import Proofs.Flock.Claims.KS.ZkKSAlign
+public import Proofs.Flock.Claims.KS.SlotDistOn
+public import Proofs.Flock.Claims.KS.ZkTauSlot
+public import Proofs.Flock.Claims.KS.ZkUntrim
+public import Proofs.Flock.Claims.KS.Extend
+public import Proofs.Flock.Claims.KS.ZkExtend
+public import Proofs.Flock.Claims.KS.PlainUntrim
+public import Proofs.Flock.Claims.KS.ZkOuter
+public import Proofs.Flock.Claims.KS.PlainAccPrR
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -676,3 +678,5 @@ its setup-dependent part is restated over one (`FlockDeploy.KS.Gen`), `deployZk`
 recursion's outer setup (`FlockDeploy.KS.SO`: the recursive setup, and the verdict's last refusals after the checks)
 the chain's instance is the outer verifier's record (`ZkOuter`: `FlockDeploy.KS.deployZk_SO`), so masked KS holds
 there with no premise (`FlockDeploy.KS.zk_KS_outer`). -/
+
+@[expose] public section

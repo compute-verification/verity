@@ -1,4 +1,6 @@
-import RemoteAudit.Basic
+module
+
+public import RemoteAudit.Basic
 
 /-!
 # Running ends and `bisectRight`
@@ -9,6 +11,8 @@ loop's invariant: everything below `lo` is at most `u`, everything from `hi` on 
 iterations left). So a position `u` below the total falls in exactly one length, `r = bisectRight ends u`, at offset
 `u − ends[r − 1]` (`locate`).
 -/
+
+@[expose] public section
 
 open RemoteAudit
 

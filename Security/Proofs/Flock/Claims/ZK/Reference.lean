@@ -1,12 +1,17 @@
-import Proofs.Flock.Claims.ZK.Deployed
-import Proofs.Flock.Claims.ZK.CoinBind
+module
+
+public import Proofs.Flock.Claims.ZK.Deployed
+public import Proofs.Flock.Claims.ZK.CoinBind
+public import Proofs.Flock.Claims.Recursion.DeployInputs
 
 /-!
 # The reference prover of `flock-circuit --zk`'s outer layer
 
-`Flock.zk_deployZk_of_tables_bind` takes a committed-coin protocol `G` and three Props of it. `RefSession.refP` is that `G`:
+`Flock.zkAt_of_tables_bind` takes a committed-coin protocol `G` and three Props of it. `RefSession.refP` is that `G`:
 the Lean reference prover, defined from the session's data (`RefSession`), what the ZK server releases on the witness and
-its own randomness. Its messages are the session's by definition:
+its own randomness. Its coin rounds `refK` are those of the masked session the statement sets up (`sessOf`): Flock's
+masked setup's at a Flock statement, where they are the deployed verifier's but the last message (`V_k_of_R`), and the
+recursive setup's at a V\* part's. Its messages are the session's by definition:
 
 * `Hello`, then before the last coin the round encoding `enc` of the session's pre-final view cut where it stops
   (`cutAt`), at the executable's leaves (`exeOf`), at the coins opened so far padded to a full vector (`RefSession.pad`);
@@ -19,7 +24,7 @@ The tables' randomness at a coin vector (`RefSession.randAt`) reads the same tap
 final message reveals is its leaf's (`baseWith`), so the real views' pre-final part is the cut view the round messages
 encode (`viewPre_viewExe`).
 
-What `zk_deployZk_of_tables_bind` asks of `G` is then a theorem about `refP`, from five Props of the session's data:
+What `zkAt_of_tables_bind` asks of `G` is then a theorem about `refP`, from five Props of the session's data:
 `RefSession.binding` (none: `Proto.binding_of_open`), `RefSession.tablesOK` (`Tables`: the tables are tables the
 session sets up, which `setupTable_planZHJ` proves of the hidden-output plan's), and `RefSession.msgLink` (`Complete`: the witness's table
 witnesses valid, the lowering's completeness; `DummyReg`: the dummy's carry the public region data; `Causal`: round `i`'s
@@ -29,6 +34,8 @@ encoding reads the coins before `i` only; `TapeOK`: the tape read with fibers of
 messages are `ZkTables.honestPR`'s (`RefSession.HonestMsgs`, a named Prop until it is proved). `Flock.zk_deployZk_ref` is its case
 at the deployed coin layer (`ZK.CoinLayer`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -95,8 +102,77 @@ theorem viewPre_viewExe {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkV
 
 /-! ## The reference session -/
 
-/-- The protocol's coin rounds at a statement: the deployed verifier's rounds but the last message. -/
-def refK (x : Msg) : ℕ := (FlockDeploy.V true).k x - 1
+/-- **The masked session a statement sets up**: Flock's masked setup's at a Flock statement, the recursive setup's at a
+V\* part's (`RecDeploy.setupO`), none elsewhere. No statement is both (`RecDeploy.decodeRec_none`). -/
+def sessOf (x : Msg) : Option (_root_.Flock.SessionSpec × Array _root_.Flock.Stmt) :=
+  match FlockDeploy.setupOf true x with
+  | some (_, spec, sts) => some (spec, sts)
+  | none => (RecDeploy.setupO x).map fun p => (p.2.1, p.2.2)
+
+/-- The protocol's coin rounds at a statement: its masked session's link message and recorded rounds, none where it
+sets up no session. At a Flock statement, the deployed verifier's rounds but the last message (`V_k_eq`); at a V\* part's,
+the outer verifier's (`RecDeploy.VO`). -/
+def refK (x : Msg) : ℕ :=
+  match sessOf x with
+  | some (spec, sts) => 1 + FlockDeploy.rounds true spec sts
+  | none => 0
+
+theorem sessOf_flock {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+    {sts : Array _root_.Flock.Stmt} (h : FlockDeploy.setupOf true x = some (s, spec, sts)) :
+    sessOf x = some (spec, sts) := by
+  unfold sessOf
+  rw [h]
+
+theorem sessOf_rec {x : Msg} {s : RecDeploy.RecIns} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    (h : RecDeploy.setupO x = some (s, spec, sts)) : sessOf x = some (spec, sts) := by
+  obtain ⟨w, hw⟩ := RecDeploy.decodeRec_of_setupO h
+  unfold sessOf
+  rw [RecDeploy.setupOf_none (RecDeploy.decode_none hw), h]
+  rfl
+
+theorem sessOf_none {x : Msg} (h₁ : FlockDeploy.setupOf true x = none) (h₂ : RecDeploy.setupO x = none) :
+    sessOf x = none := by
+  unfold sessOf
+  rw [h₁, h₂]
+  rfl
+
+theorem refK_of_sess {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    (h : sessOf x = some (spec, sts)) : refK x = 1 + FlockDeploy.rounds true spec sts := by
+  unfold refK
+  rw [h]
+
+theorem refK_of_flock {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+    {sts : Array _root_.Flock.Stmt} (h : FlockDeploy.setupOf true x = some (s, spec, sts)) :
+    refK x = 1 + FlockDeploy.rounds true spec sts :=
+  refK_of_sess (sessOf_flock h)
+
+theorem refK_none {x : Msg} (h : sessOf x = none) : refK x = 0 := by
+  unfold refK
+  rw [h]
+
+/-- **At a statement that is no V\* part's, the deployed masked verifier's rounds are the protocol's coin rounds and the
+last message.** -/
+theorem V_k_eq {x : Msg} (hd : RecDeploy.decodeRec x = none) : (FlockDeploy.V true).k x = refK x + 1 := by
+  rcases hs : FlockDeploy.setupOf true x with _ | ⟨s, spec, sts⟩
+  · rw [refK_none (sessOf_none hs (RecDeploy.setupO_none hd))]
+    simp only [FlockDeploy.V, hs]
+  · rw [refK_of_flock hs]
+    simp only [FlockDeploy.V, hs]
+    omega
+
+/-- A statement the deployed masked parser parses is Flock's, so no V\* part's. -/
+theorem decodeRec_none_of_parse {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation} {x : Msg}
+    {s : Claims.Flock.Stmt} (h : (FlockDeploy.deployZk rel).parse x = some s) : RecDeploy.decodeRec x = none := by
+  obtain ⟨r, hr⟩ := RecDeploy.read_of_parseOf (rel := rel) (rd := FlockDeploy.readOf true) h
+  obtain ⟨w, hw⟩ := RecDeploy.decode_of_readOf hr
+  exact RecDeploy.decodeRec_none hw
+
+/-- **At a statement in the relation, the deployed masked verifier's rounds are the protocol's coin rounds and the last
+message** (`V_k_eq`). -/
+theorem V_k_of_R {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation} {x : Msg} {w : Flock.Wit}
+    (hR : Flock.R (FlockDeploy.deployZk rel).parse x w) : (FlockDeploy.deployZk rel).V.k x = refK x + 1 := by
+  obtain ⟨s, hs, -⟩ := hR
+  exact V_k_eq (decodeRec_none_of_parse hs)
 
 /-- **The reference session of `flock-circuit --zk`'s outer layer**: what the reference prover reads. The coins, the
 coin tree each `Hello` commits, how a message is read as an opening at its round and as a coin (`Binding`'s data: two
@@ -217,6 +293,14 @@ noncomputable def refP (S : RefSession) : Proto Flock.Wit where
   sim _ _ _ _ := .ret []
 
 noncomputable instance instFintypeCoinWitRefP (S : RefSession) : Fintype S.refP.Coin := S.finCoin
+
+/-- At a statement in the relation, `refP`'s rounds are `Hello` and the deployed masked verifier's (`V_k_of_R`). -/
+theorem refP_k_of_R (S : RefSession) {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation} {x : Msg}
+    {w : Flock.Wit} (hR : Flock.R (FlockDeploy.deployZk rel).parse x w) :
+    S.refP.k x = (FlockDeploy.deployZk rel).V.k x + 1 := by
+  have := V_k_of_R hR
+  show refK x + 2 = _
+  omega
 
 /-! ## Its models -/
 
@@ -471,9 +555,11 @@ theorem Flock.zkAt_deployZk_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.P
       ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
       (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t :=
-  Flock.zk_deployZk_of_tables_bind H rel S.refP t ht (fun _ => rfl) hT1 hδ₁ (fun x ν => S.preModel H x ν)
-    (fun x _ c => S.coinModel x c) S.nLeaves S.nLeaves (fun _ _ => le_rfl) (fun x _ c => S.coinModel_size x c)
-    (S.msgLink H _ hV hD hc hT) (S.tablesOK H hS) (S.binding H)
+  Flock.zkAt_withK (fun _ _ hR => (V_k_of_R hR).symm)
+    (Flock.zkAt_of_tables_bind H ((FlockDeploy.deployZk rel).withK fun x => refK x + 1) S.refP t ht rfl
+      (fun _ => rfl) hT1 hδ₁ (fun x ν => S.preModel H x ν) (fun x _ c => S.coinModel x c) S.nLeaves S.nLeaves
+      (fun _ _ => le_rfl) (fun x _ c => S.coinModel_size x c) (S.msgLink H _ hV hD hc hT) (S.tablesOK H hS)
+      (S.binding H))
 
 /-- **The same at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`), with `Claims.Hm96Hiding` discharged. -/
 theorem Flock.zkAt_deployZk_ref_gap (H : Msg → Msg)
@@ -525,7 +611,7 @@ theorem Flock.zk_zkD_ref (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed �
     Claims.Flock.ZK H (S.zkD rel coinOf tapeOf t)
       (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t :=
-  zk_zkOf rel S.refP coinOf tapeOf _ (fun _ => by positivity) (deployZk_proto_k rel S.refP fun _ => rfl)
+  zk_zkOf rel S.refP coinOf tapeOf _ (fun _ => by positivity) (fun _ _ hR => S.refP_k_of_R hR)
     (S.honest_of_msgs H coinOf tapeOf hH) (Flock.zkAt_deployZk_ref H rel S t ht hT1 hδ₁ hS hV hD hc hT)
 
 /-- **The same at the pinned key's hiding gap** (`CROnly.hm96Hiding_gap`), with `Claims.Hm96Hiding` discharged. -/

@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS.Drawn
+module
+
+public import Definitions.Accounting.TS.Drawn
 
 /-!
 # A fixed word (trusted)
@@ -36,6 +38,8 @@ writer is always proved) and computed, while `S₀`, written after the product's
 unit's words are fixed only when every unit steering it was computed too. `DrawnLayer.Good` asks that of the whole
 late cone, so a good unit that is `Fixed` has fixed words.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

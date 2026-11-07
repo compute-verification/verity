@@ -1,6 +1,8 @@
-import Definitions.Nci.CoverFanOut
-import Mathlib.Basic.Real.Basic
-import Mathlib.Data.Finset.Union
+module
+
+public import Definitions.Nci.CoverFanOut
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Finset.Union
 
 /-!
 # The cover theorem's fan-in/fan-out tightening: the new premises
@@ -10,6 +12,8 @@ that what each costs is visible. `ColumnsIncompressible` prices the embedding lo
 `ValueReadHardness` prices each value a block spends at `f` bits, from the same bits as the updated parameters. Both
 are statements about the training circuit `C`, its products and a keyed token structure (`Keyed`), at block size `s`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Assumptions
 

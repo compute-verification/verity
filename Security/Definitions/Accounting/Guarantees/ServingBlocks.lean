@@ -1,4 +1,6 @@
-import Definitions.Accounting.ServingBlocks
+module
+
+public import Definitions.Accounting.ServingBlocks
 
 /-!
 # The serving-block bound
@@ -40,6 +42,8 @@ applies.
 
 The proofs are in `Security/Proofs/Accounting/ServingBlocks.lean`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.ServingBlocks
 

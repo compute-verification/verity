@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.InnerTauRep
+module
+
+public import Proofs.Flock.Claims.ZK.InnerTauRep
 
 /-!
 # `TauLig`: level 0's two lane rows, and `InnerTauVal`
@@ -14,6 +16,8 @@ level 0's record holds `czExe`'s coins (`ligeritoPZk_lanes`, at the rep's slots 
   that are the model's.
 * **`tauLig`**: `TauLig`; **`innerTauVal`**: `InnerTauVal` (`innerTauVal_of_tauLig`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK

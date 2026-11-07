@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
 
 /-!
 # The tables of a one-table hidden-output session at public inputs
@@ -11,6 +13,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
 * `DrawSetupHP.table`, `DrawSetupHP.refused`, `tableAtHP`, `planAtHP`, `tabAtHP`, `tablesAtHP`: `DrawSetupH.table`,
   `DrawSetupH.refused`, `tableAtH`, `planAtH`, `tabAtH`, `tablesAtH` at `own`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenExec
 

@@ -19,6 +19,17 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_auditor_line_lean.py",
+    "tests/test_challengers.py",
+    "tests/test_gate.py",
+    "tests/test_gate_lease.py",
+    "tests/test_gate_whatif.py",
+    "tests/test_lease.py",
+    "tests/test_session.py",
+    "tests/test_store_layout.py",
+]
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
           "verity/core/protocols/record.py",
@@ -46,3 +57,10 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "benchmarks/live_challenger/tests/stub_serve.py",
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
           "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/protocols/remote_bandwidth"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_gate_whatif.py"]
+paths = ["benchmarks/live_challenger/tests"]

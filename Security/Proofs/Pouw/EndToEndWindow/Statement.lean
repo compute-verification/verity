@@ -1,9 +1,11 @@
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.Assumptions.Game
-import Definitions.Pouw.Assumptions.NCP.Assumptions
-import Proofs.Flock.Soundness.Audit.Extraction
-import Proofs.Flock.Soundness.Audit.RegDraw
-import Proofs.Flock.Soundness.Audit.Window
+module
+
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.Assumptions.NCP.Assumptions
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Audit.RegDraw
+public import Proofs.Flock.Soundness.Audit.Window
 
 /-!
 # PoUW's work bound at the window audit (trusted)
@@ -74,6 +76,8 @@ C-Flock's audit definitions are still in the proofs package, so this module impo
 statement does C-Flock's; `Definitions.lean`, which the `security` package builds without `security_proofs`, does not
 import it. `TileWork` and `StraightLineExtraction` are named premises awaiting their card.
 -/
+
+@[expose] public section
 
 namespace Pouw.WindowWork
 

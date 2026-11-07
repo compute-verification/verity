@@ -1,6 +1,8 @@
-import Proofs.Core.AndSize
-import Proofs.Pouw.ServedValues
-import Proofs.Pouw.PeriodJ10R.Honest
+module
+
+public import Proofs.Core.AndSize
+public import Proofs.Pouw.ServedValues
+public import Proofs.Pouw.PeriodJ10R.Honest
 
 /-!
 # `RightValues` at an honest period, and against a verifier that accepts everything
@@ -20,6 +22,8 @@ size is `1` (`Verity.SecurityProofs.ToCircuitAnd`: C-Flock's `and a b` of two di
   the right values must cover `(1 − ε(n))₊·N_p·n > 0` AND gates once `Λ·ln(1/δ_s) < n`. So the conclusion's event
   holds on every path, and its probability `1` exceeds `δ_s < 1`.
 -/
+
+@[expose] public section
 namespace Properties.Pouw.ServedValues.SecurityProofs.HonestValues
 
 open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.ServedValues

@@ -1,4 +1,6 @@
-import Definitions.Accounting.CoinFlow
+module
+
+public import Definitions.Accounting.CoinFlow
 
 /-!
 # The coin rules give (H-μ)'s view independence (trusted)
@@ -24,6 +26,8 @@ which share the noised operand (a dithered row's words in every column). So the 
 needs is checked for every view built from the rest of the Program. A view holding a word that shares the operand still
 determines the skipped value, as `Accounting.Guarantees.HMu` says.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.CoinFlow
 

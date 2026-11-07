@@ -1,12 +1,16 @@
-import Proofs.Flock.Claims.Recursion.RecRecord
-import Proofs.Flock.Claims.Recursion.DeployHonest
-import Proofs.Flock.C3.VStarList.Accepts
-import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
-import Proofs.Flock.Soundness.Discharge.Layout.QSort
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.LayoutBTops
+module
+
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.C3.VStarList.Accepts
+public import Proofs.Flock.C3.PubRows.Check
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+public import Proofs.Flock.Soundness.Discharge.Layout.QSort
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+import all Init.Data.String.Defs
+import all Init.Data.Repr
 
 /-!
 # What a staged part's transcript shows is the record the verifier read in its own format
@@ -29,6 +33,8 @@ digest (`slotPub_table`). On the record's side, rep `x`'s `kc`-th `c_k` in the J
 schedule lists `kc`-th, and at a round with no salted tops it is the record's message `x · R + k + 1`
 (`cmt_of_rep`): the rounds open with the two reps' schedules (`scheduleOf_reps`), whose streams are apart (`rep_ne`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -68,7 +74,7 @@ theorem RecRaw.ins_commits {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) :
 
 theorem commits_parse_error {sh : RecVStar.Inner} {tt : String} {e : String} {r : Except String (Option String)}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {record : String} {cs : RecVStar.InnerCommits}
-    (hp : Json.parse tt = .error e) : RecSetup.commits (some sh) (.ok tt) r bound record ≠ .ok cs := by
+    (hp : Flock.JsonParse.parse tt = .error e) : RecSetup.commits (some sh) (.ok tt) r bound record ≠ .ok cs := by
   intro h
   unfold RecSetup.commits at h
   simp only [bind, Except.bind, pure, Except.pure, hp] at h
@@ -90,7 +96,7 @@ theorem commitsOf_reads {w : RecRaw} {src : Option RecCoins.Source}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {sh : RecVStar.Inner}
     {c : Option RecVStar.InnerCommits} {t : ByteArray} (ht : w.transcript = some t)
     (h : commitsOf w src bound (some sh) = .ok c) :
-    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Json.parse tt = .ok tr ∧
+    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Flock.JsonParse.parse tt = .ok tr ∧
       src.map (·.record) = some record ∧ RecSetup.checkReads sh tt tr record cs = .ok () := by
   unfold commitsOf at h
   rw [ht] at h
@@ -113,7 +119,7 @@ theorem commitsOf_reads {w : RecRaw} {src : Option RecCoins.Source}
         exact absurd hX commits_text_error
       | some tt =>
         rw [textOf, htx] at hX
-        cases hp : Json.parse tt with
+        cases hp : Flock.JsonParse.parse tt with
         | error e => exact absurd hX (commits_parse_error hp)
         | ok tr => exact ⟨cs, tt, tr, record, rfl, rfl, hp, rfl, FlockC3.VStarList.reads_of_commits hp hX⟩
 

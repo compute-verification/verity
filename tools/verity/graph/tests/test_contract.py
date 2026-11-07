@@ -99,6 +99,16 @@ def test_keys_reproduce_the_vectors(frozen):
         assert v["key"] == "sha512:" + hashlib.sha512(b"verity-key/v1\n" + v["canonical"].encode()).hexdigest(), v["name"]
 
 
+def test_the_listing_s_keyer_is_the_key(frozen):
+    fd = {f["path"]: f["digest"] for f in frozen["files"]}
+    key = contract.keyer(fd)
+    for v in frozen["keys"]:
+        assert key(v["task"], v["read_digests"], v["env_digest"]) == v["key"], v["name"]
+    for p in fd:
+        t = _task("test-file:x", "test-file", inputs=[p], argv=['"inputs":[', p], vars={"inputs": '"inputs":['})
+        assert key(t, {}, "e") == contract.key(t, fd, {}, "e"), p
+
+
 def test_the_vectors_are_the_cases(frozen):
     """The file is what CASES make: a change to either is a change to the contract, made with `--write`."""
     assert frozen == vectors()

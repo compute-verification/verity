@@ -1,4 +1,6 @@
-import Proofs.Accounting.CoinFlow.Flow
+module
+
+public import Proofs.Accounting.CoinFlow.Flow
 
 /-!
 # The coin rules' guarantees
@@ -8,6 +10,8 @@ fresh coins reach only its forward cone (rule (b)), a non-sink value reads the c
 (rule (a)), the forward cone is the one reader's, and so `CoinPointMass` holds of every view built from the rest of an
 admitted Program.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.CoinFlow
 

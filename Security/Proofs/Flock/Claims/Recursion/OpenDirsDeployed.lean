@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.Claims.Recursion.LabelsDeployed
-import Proofs.Flock.Claims.Recursion.PartsVStar
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.C3.RegLevels.OpensRegs
+public import Proofs.Flock.Claims.Recursion.LabelsDeployed
+public import Proofs.Flock.Claims.Recursion.PartsVStar
 
 /-!
 # Check 5's `dirs` tie at the deployed run
@@ -24,6 +26,8 @@ the table, not only the first two.
   coins (`DirsCoinR`, `PosTieR`'s statement); the staged tables' labels ascend (`LabelsAscendR`) at every stage, from the
   setup's checks (`labelsAscendR`, `CopySite.labels_staged`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenDirs
 

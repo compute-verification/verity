@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.DeployK
+module
+
+public import Proofs.Flock.Claims.KS.ConflictRun
+public import Proofs.Flock.Claims.DeployK
 
 /-!
 # Conflicts tied to collisions, at both records
@@ -22,6 +24,8 @@ The plain opening holds of every column a rep opens, before `distinctBelow` keep
 `plain_opening_raw`), so two such columns of one accepted run at one position that differ collide in its own log
 (`plain_selfClash_tied`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -167,7 +171,7 @@ theorem runOf_eq {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {
 /-- **What the verifier's decoder reads of each table's `root_B`**, whatever the hashes and `keep` (S5's parse). -/
 theorem decodeWithK_rootB (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
     {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
-    ∃ j l, Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧
+    ∃ j l, Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧
       List.Forall₂ (Claims.Bridge.Custody.RootField l) spec.tables.toList sess.rootB.toList := by
   unfold Record.decodeWithK Record.decodeJWithK at h
   dsimp only at h

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Release
-import Proofs.Flock.Claims.ZK.CoinOpen
-import Proofs.Flock.Claims.ZK.HelloLean
+module
+
+public import Proofs.Flock.Claims.ZK.Release
+public import Proofs.Flock.Claims.ZK.CoinOpen
+public import Proofs.Flock.Claims.ZK.HelloLean
 
 /-!
 # Toward the item-stream refinement at the reference session
@@ -24,9 +26,10 @@ opening that fails (`strat_eval_cons`).
   where that check is the session's (`CheckIs`): then the release refuses after any opening the session's check
   refuses, up to the protocol's last coin (`OpeningsRefused`, `openingsRefused_of_checkIs`), with `abort` the stop.
 * **The frame's coin stops read no tape** (`LeanRelease.refusesCoins_tape`): on the histories the transport's check
-  passes, the frame's refusal of the coins (`Masker.answer`) reads its configuration's layout and absorbed order alone
-  (`answer_congr`), never the pads or the root, and a rep's configuration takes both from its layout
-  (`answer_ofDraws`), so it is the same on every tape. A session, whose round encoding sees the coins and the cut view
+  passes, the frame's refusal of the coins (`Masker.answer`, `rankStop`) reads its configuration's layout, absorbed
+  order and mask slot alone (`answer_congr`, `rankStop_congr`), never the pads or the root, and a rep's configuration
+  takes them from its layout and the statement's slot (`answer_ofDraws`, `rankStop_ofDraws`), so it is the same on
+  every tape. A session, whose round encoding sees the coins and the cut view
   but not the tape, can stop where the frame does. The check itself reads the tape's nonce, as the session's does, so a
   live frame round asks its openings to pass under that nonce only (`checkIs_live`).
 * **The session with the frame's stops** (`RefSession.withStops`): `S` with every message `stop` at the coins and round
@@ -50,9 +53,10 @@ opening that fails (`strat_eval_cons`).
   session's (`LeanRelease.liveRoundEq_of_frames`, `liveRoundEq_of_honest`, `fillRoundEq_of_frames`).
 * **The stops of a transport that reads only the coins** (`LeanRelease.stopsAt_of_readsCoins`): where, on the histories
   its check passes, the round's rep's state and the coins handed to the frame are functions of the coins the openings
-  open (`ReadsCoins`), the frame's refusal at those coins (`refuseOf`, at any draws) is a stop rule (`rfOf`) that reads
-  the coins before its round only (`stopsCausal_rfOf`) and, where the check is the session's, is the release's refusals
-  (`StopsAt`).
+  open (`ReadsCoins`), the frame's refusal at those coins or at a prefix of them (`refuseOf` at any draws and the rep's
+  mask slot, `stopOf`: a
+  refusal stops the session for good) is a stop rule (`rfOf`) that reads the coins before its round only
+  (`stopsCausal_rfOf`) and, where the check is the session's, is the release's refusals (`StopsAt`).
 * **At the deployed coin layer** (`Flock.zk_server_lean_coinLayer`, at SHA-512): `S` is `CoinLayer.session nr T`,
   whose `Hello`, opening check and coin reading are `coin-tree/hm96-sha512/v2`'s and whose tables are `T`'s. Its
   premises on the transport are the transport's trusts alone, each a named hypothesis for a stated reason: the
@@ -76,6 +80,8 @@ opening that fails (`strat_eval_cons`).
   and first opening the check passes (`LeanRelease.opens_coinPass`), so the premises leave the frame rounds a history
   to be live at.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -137,18 +143,20 @@ theorem withStops_causal (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → 
 
 theorem withStops_swCausal (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (vs : S.SwVals) (hRf : S.StopsCausal Rf) (hc : S.SwCausal vs) : (S.withStops Rf stop).SwCausal vs := by
-  intro x w ν ω p c c' i h
+  intro x w ν ω s p c c' i h
   show (if Rf x c i = true then stop else if i = 0 then S.enc x c i _ else dropDom (S.enc x c i _)) =
     (if Rf x c' i = true then stop else if i = 0 then S.enc x c' i _ else dropDom (S.enc x c' i _))
   rw [hRf x c c' i h]
-  exact congrArg (fun m => if Rf x c' i = true then stop else if i = 0 then m else dropDom m) (hc x w ν ω p c c' i h)
+  exact congrArg (fun m => if Rf x c' i = true then stop else if i = 0 then m else dropDom m) (hc x w ν ω s p c c' i h)
 
 open Classical in
 /-- **Where the rule stops the coins, the session's switched message is the stop**, before the last coin and after
 it. -/
 theorem swMsgAt_withStops_stop (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, FlockSoundness.Discharge.ZkView.Seen (S.C x j).z) →
+      ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin)
     (hR : Rf x (S.pad cs) (min cs.length (refK x)) = true) : (S.withStops Rf stop).swMsgAt x wt v t cs = stop := by
   by_cases h : cs.length < refK x
   · rw [Nat.min_eq_left h.le] at hR
@@ -168,7 +176,9 @@ open Classical in
 `S`'s.** -/
 theorem swMsgAt_withStops_go (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, FlockSoundness.Discharge.ZkView.Seen (S.C x j).z) →
+      ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin)
     (hR : Rf x (S.pad cs) (min cs.length (refK x)) = false) (h0 : cs.length = 0 ∨ refK x ≤ cs.length) :
     (S.withStops Rf stop).swMsgAt x wt v t cs = S.swMsgAt x wt v t cs := by
   by_cases h : cs.length < refK x
@@ -196,7 +206,9 @@ open Classical in
 leading domain frame.** -/
 theorem swMsgAt_withStops_frame (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, FlockSoundness.Discharge.ZkView.Seen (S.C x j).z) →
+      ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin)
     (hR : Rf x (S.pad cs) cs.length = false) (h0 : 0 < cs.length) (h : cs.length < refK x) :
     (S.withStops Rf stop).swMsgAt x wt v t cs = dropDom (S.swMsgAt x wt v t cs) := by
   show (if cs.length < refK x then
@@ -242,6 +254,11 @@ theorem answer_congr {c c' : Cfg} (s : Masker) (cs : Array _root_.Flock.F128) (h
 theorem answer_ofDraws (s : Masker) (cs : Array _root_.Flock.F128) (l : _root_.Flock.Zk.PadLayout) (d d' : Draws)
     (m m' : Option MaskSlot) : s.answer (Cfg.ofDraws l d m) cs = s.answer (Cfg.ofDraws l d' m') cs :=
   answer_congr s cs rfl rfl
+
+/-- At a rep's configuration the rank stop reads its layout and mask slot alone, whatever its draws. -/
+theorem rankStop_ofDraws (l : _root_.Flock.Zk.PadLayout) (d d' : Draws) (m : Option MaskSlot) :
+    LeanRelease.rankStop (Cfg.ofDraws l d m) = LeanRelease.rankStop (Cfg.ofDraws l d' m) :=
+  funext fun s => LeanRelease.rankStop_congr s rfl rfl rfl
 
 namespace LeanRelease
 
@@ -324,13 +341,13 @@ theorem release_eq_abort_of_liveRefine (S : RefSession) (vs : S.SwVals)
     rfl
   exact he.symm.trans hm
 
-/-- Who takes the coins reads the configurations' layouts alone. -/
+/-- Who takes the coins reads the configurations' layouts alone, and the next round's rep's mask slot (`rankStop`). -/
 theorem takeAt_ofDraws (n : ℕ) (b : Bool) (lN lP : _root_.Flock.Zk.PadLayout) (dN dN' dP dP' : Draws)
-    (mN mN' mP mP' : Option MaskSlot) (s : Masker) (f : Except String Masker) (cs : Array _root_.Flock.F128) :
+    (mN mP mP' : Option MaskSlot) (s : Masker) (f : Except String Masker) (cs : Array _root_.Flock.F128) :
     takeAt n b (Cfg.ofDraws lN dN mN) (Cfg.ofDraws lP dP mP) s f cs =
-      takeAt n b (Cfg.ofDraws lN dN' mN') (Cfg.ofDraws lP dP' mP') s f cs := by
+      takeAt n b (Cfg.ofDraws lN dN' mN) (Cfg.ofDraws lP dP' mP') s f cs := by
   unfold takeAt
-  rw [answer_ofDraws s cs lN dN dN' mN mN', answer_ofDraws s cs lP dP dP' mP mP']
+  rw [answer_ofDraws s cs lN dN dN' mN mN, answer_ofDraws s cs lP dP dP' mP mP', rankStop_ofDraws lN dN dN' mN]
 
 /-- The frame's own taking of the coins is the same on every tape. -/
 theorem frameAnswer_tape {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : R) (h : List (Msg × Msg)) :
@@ -338,12 +355,17 @@ theorem frameAnswer_tape {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : 
   unfold frameAnswer cfg cfgAt
   cases h.getLast? with
   | none => rfl
-  | some _ => exact takeAt_ofDraws _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+  | some _ => exact takeAt_ofDraws _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+theorem tookEarlier_tape {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : R) (h : List (Msg × Msg)) :
+    L.tookEarlier x ρ h = L.tookEarlier x ρ' h :=
+  List.all_congr rfl fun _ => congrArg Except.isOk (L.frameAnswer_tape x ρ ρ' _)
 
 /-- On the histories the transport's coin check passes at both tapes, the coins the frame takes are the same. -/
 theorem answered_tape {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : R) (h : List (Msg × Msg))
     (ho : L.opens x ρ h = true) (ho' : L.opens x ρ' h = true) : L.answered x ρ h = L.answered x ρ' h := by
-  rw [L.answered_of_opens x ρ h ho, L.answered_of_opens x ρ' h ho', L.frameAnswer_tape x ρ ρ' h]
+  unfold answered
+  rw [ho, ho', L.tookEarlier_tape x ρ ρ' h, L.frameAnswer_tape x ρ ρ' h]
 
 /-- **The coin stops read no tape** past the transport's check: on a history the check passes at both tapes, the frame
 refuses the coins after it on both or on neither. The check reads the tape's nonce (`opens`), so off those histories
@@ -375,7 +397,8 @@ theorem refusesCoins_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Wo
 
 /-- **The rule's stops are the frame's refusals** at `x`: after every history past `Hello` of at most the protocol's
 `refK x` openings, all passing the coin-tree check, `Rf` at the coins they open, padded, at their round, is whether the
-frame refuses the last coins. After an opening that fails, the prover sends its `abort`, so the rule need not say there;
+release refuses the coins (`refusesCoins`: the frame refused the last coins or an earlier round's). After an opening
+that fails, the prover sends its `abort`, so the rule need not say there;
 past the last coin no frame round is live (`LeanRelease.live_lt_last`). -/
 def StopsAt (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (x : Msg) : Prop :=
@@ -705,24 +728,30 @@ def ReadsCoins (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.re
   ProgReads S L pc fc x ∧ CoinsRead S L cc x
 
 /-- **The frame's refusal at the coins `cs`** under the transport's reading `pc`, `fc`, `cc`: whether the frame refuses
-`cc x cs` where round `cs.length + 1` takes them (`takeAt`), at the states `pc x cs` and `fc x cs` and the layouts of
-the reps of rounds `cs.length` and `cs.length + 1`, at any draws (`takeAt_ofDraws`). -/
+`cc x cs` where round `cs.length + 1` takes them (`takeAt`), at the states `pc x cs` and `fc x cs`, the layouts of
+the reps of rounds `cs.length` and `cs.length + 1` and the mask slot of the latter, at any draws
+(`takeAt_ofDraws`). -/
 def refuseOf {W R Coin : Type} (L : LeanRelease W R) (pc : Msg → List Coin → Masker)
     (fc : Msg → List Coin → Except String Masker) (cc : Msg → List Coin → Array _root_.Flock.F128) (x : Msg)
     (cs : List Coin) : Bool :=
-  match takeAt (cs.length + 1) (decide (L.rep x (cs.length + 1) = L.rep x cs.length))
-      (Cfg.ofDraws (L.lay x (L.rep x (cs.length + 1))) default none)
-      (Cfg.ofDraws (L.lay x (L.rep x cs.length)) default none) (pc x cs) (fc x cs) (cc x cs) with
-  | .ok _ => false
-  | .error _ => true
+  !(takeAt (cs.length + 1) (decide (L.rep x (cs.length + 1) = L.rep x cs.length))
+      (Cfg.ofDraws (L.lay x (L.rep x (cs.length + 1))) default (L.slot x (L.rep x (cs.length + 1))))
+      (Cfg.ofDraws (L.lay x (L.rep x cs.length)) default none) (pc x cs) (fc x cs) (cc x cs)).isOk
 
-/-- **The stop rule of the transport's reading**: at the padded coins `c` and round `i`, the frame's refusal at `c`'s
+/-- **The transport's stop at the coins `cs`** under its reading: whether the frame refused the coins at `cs` or at one
+of its prefixes (`refuseOf`), as a refusal stops the session for good (`refusesCoins_of_take`). -/
+def stopOf {W R Coin : Type} (L : LeanRelease W R) (pc : Msg → List Coin → Masker)
+    (fc : Msg → List Coin → Except String Masker) (cc : Msg → List Coin → Array _root_.Flock.F128) (x : Msg)
+    (cs : List Coin) : Bool :=
+  (List.range (cs.length + 1)).any fun k => L.refuseOf pc fc cc x (cs.take k)
+
+/-- **The stop rule of the transport's reading**: at the padded coins `c` and round `i`, the transport's stop at `c`'s
 first `i`. -/
 def rfOf (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (pc : Msg → List S.Coin → Masker) (fc : Msg → List S.Coin → Except String Masker)
     (cc : Msg → List S.Coin → Array _root_.Flock.F128) :
     (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool :=
-  fun x c i => L.refuseOf pc fc cc x ((List.ofFn c).take i)
+  fun x c i => L.stopOf pc fc cc x ((List.ofFn c).take i)
 
 /-- The frame's taking of coins at a rep's configuration reads the history's length alone. -/
 theorem answer_cfg {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (s : Masker)
@@ -731,27 +760,61 @@ theorem answer_cfg {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : Li
   subst hn
   exact answer_ofDraws _ _ _ _ _ _ _
 
-/-- **Under the transport's reading, the frame refuses the coins where `refuseOf` does**, at every tape whose check
-passes the history. -/
-theorem refusesCoins_of_readsCoins (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+/-- **Under the transport's reading, the frame takes the coins after a history where `refuseOf` does not refuse
+them**, at every tape whose check passes the history. -/
+theorem frameAnswer_of_readsCoins (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (pc : Msg → List S.Coin → Masker) (fc : Msg → List S.Coin → Except String Masker)
     (cc : Msg → List S.Coin → Array _root_.Flock.F128) (x : Msg)
     (hT : ReadsCoins S L pc fc cc x) (ρ : S.refP.Nonce × S.refP.Rand) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg))
     (hl : ops.length ≤ refK x) (ho : L.opens x ρ ((m₀, ρ₀) :: ops) = true) :
-    L.refusesCoins x ρ ((m₀, ρ₀) :: ops) = L.refuseOf pc fc cc x (ops.map fun p => S.decOf p.2) := by
+    (L.frameAnswer x ρ ((m₀, ρ₀) :: ops)).isOk = !L.refuseOf pc fc cc x (ops.map fun p => S.decOf p.2) := by
   obtain ⟨hp, hf⟩ := hT.1 ρ m₀ ρ₀ ops hl ho
   have hc := hT.2 m₀ ρ₀ ops
-  unfold refusesCoins
-  rw [L.answered_of_opens x ρ _ ho]
   unfold frameAnswer refuseOf cfg cfgAt
   cases hg : ((m₀, ρ₀) :: ops).getLast? with
   | none => simp at hg
   | some p =>
     dsimp only
     rw [hp, hf, hc]
-    simp only [List.length_cons, List.length_map, Nat.add_sub_cancel]
-    exact congrArg (fun r : Except String Masker => match r with | .ok _ => false | .error _ => true)
-      (takeAt_ofDraws _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+    simp only [List.length_cons, List.length_map, Nat.add_sub_cancel, Bool.not_not]
+    exact congrArg Except.isOk (takeAt_ofDraws _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+
+/-- **Under the transport's reading, the release refuses the coins where the transport's stop does** (`stopOf`), at
+every tape whose check passes the history: the check passes each prefix (`opens_take`), and at each the frame's
+refusal is `refuseOf`'s. -/
+theorem refusesCoins_of_readsCoins (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (pc : Msg → List S.Coin → Masker) (fc : Msg → List S.Coin → Except String Masker)
+    (cc : Msg → List S.Coin → Array _root_.Flock.F128) (x : Msg)
+    (hT : ReadsCoins S L pc fc cc x) (ρ : S.refP.Nonce × S.refP.Rand) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg))
+    (hl : ops.length ≤ refK x) (ho : L.opens x ρ ((m₀, ρ₀) :: ops) = true) :
+    L.refusesCoins x ρ ((m₀, ρ₀) :: ops) = L.stopOf pc fc cc x (ops.map fun p => S.decOf p.2) := by
+  have hk : ∀ k, k ≤ ops.length → (L.frameAnswer x ρ (((m₀, ρ₀) :: ops).take (k + 1))).isOk =
+      !L.refuseOf pc fc cc x ((ops.map fun p => S.decOf p.2).take k) := fun k hk => by
+    rw [List.take_succ_cons, ← List.map_take]
+    exact frameAnswer_of_readsCoins S L pc fc cc x hT ρ m₀ ρ₀ (ops.take k) (by rw [List.length_take]; omega)
+      (L.opens_take x ρ ((m₀, ρ₀) :: ops) (k + 1) ho)
+  cases hr : L.refusesCoins x ρ ((m₀, ρ₀) :: ops) <;>
+    cases hs : L.stopOf pc fc cc x (ops.map fun p => S.decOf p.2)
+  · rfl
+  · obtain ⟨-, hall⟩ := (L.refusesCoins_eq_false x ρ _).1 hr
+    obtain ⟨k, hk', hkr⟩ := List.any_eq_true.1 hs
+    rw [List.mem_range, List.length_map] at hk'
+    have hkr' : L.refuseOf pc fc cc x ((ops.map fun p => S.decOf p.2).take k) = true := hkr
+    have h1 := hall (k + 1) (by simp only [List.length_cons]; omega)
+    rw [hk k (by omega), hkr'] at h1
+    exact absurd h1 (by decide)
+  · have hf : L.refusesCoins x ρ ((m₀, ρ₀) :: ops) = false := by
+      refine (L.refusesCoins_eq_false x ρ _).2 ⟨ho, fun j hj => ?_⟩
+      rcases j with _ | k
+      · rfl
+      · simp only [List.length_cons] at hj
+        rw [hk k (by omega)]
+        have h1 := (List.any_eq_false.1 hs) k (List.mem_range.2 (by rw [List.length_map]; omega))
+        rw [Bool.not_eq_true] at h1
+        simp only [h1, Bool.not_false]
+    rw [hf] at hr
+    cases hr
+  · rfl
 
 /-- **The stops of a transport that reads only the coins are the frame's refusals**: `StopsAt` at its rule, where its
 check is the session's, so that every history whose openings pass the session's check passes the transport's. -/
@@ -761,7 +824,7 @@ theorem stopsAt_of_readsCoins (S : RefSession) (L : LeanRelease Flock.Wit (S.ref
     (hT : ReadsCoins S L pc fc cc x) (hC : CheckIs S L H x) : StopsAt S (rfOf S L pc fc cc) L H x := by
   intro ν t m₀ ρ₀ ops hl hok
   rw [refusesCoins_of_readsCoins S L pc fc cc x hT (ν, t) m₀ ρ₀ ops hl ((hC ν t m₀ ρ₀ ops hl).trans hok)]
-  show _ = L.refuseOf pc fc cc x ((List.ofFn (S.pad (K := refK x) (ops.map fun p => S.decOf p.2))).take
+  show _ = L.stopOf pc fc cc x ((List.ofFn (S.pad (K := refK x) (ops.map fun p => S.decOf p.2))).take
     (min (ops.map fun p => S.decOf p.2).length (refK x)))
   rw [S.ofFn_pad_take (K := refK x) (ops.map fun p => S.decOf p.2) (by simpa using hl)]
 
@@ -771,7 +834,7 @@ theorem stopsCausal_rfOf (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Non
     (cc : Msg → List S.Coin → Array _root_.Flock.F128) :
     S.StopsCausal (rfOf S L pc fc cc) := by
   intro x c c' i h
-  show L.refuseOf pc fc cc x ((List.ofFn c).take i) = L.refuseOf pc fc cc x ((List.ofFn c').take i)
+  show L.stopOf pc fc cc x ((List.ofFn c).take i) = L.stopOf pc fc cc x ((List.ofFn c').take i)
   rw [RefSession.ofFn_take_congr c c' i h]
 
 /-! ## The transport's check at the deployed coin layer -/
@@ -791,9 +854,9 @@ def HelloParses (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
 
 /-- **`flock-firewall coins` reads the coin layer's `Hello` with its nonce** at `x`: at every nonce, `Hello.parse`
 reads `CoinLayer.helloD` (`coinHello`), and the nonce it reads is the nonce's bytes. A statement about Lean functions
-alone, and a named hypothesis only because the kernel cannot evaluate them: `Hello.parse` reads the JSON through
-`Lean.Json.parse`, whose parser (`Lean.Json.Parser.anyCore`, `strCore`, `objectCore`) is a `partial def` and so opaque
-to the kernel, and `CoinLayer.helloD` is itself built through it (`CoinLayer.helloJson`).
+alone, all total (`Hello.parse` reads the JSON through `Flock.JsonParse.parse`, and `CoinLayer.helloD` is itself built
+through it, `CoinLayer.helloJson`). The parser reads `canon`'s output back alike (`FlockComplete.JsonRT.parse_canon`);
+it stays a named hypothesis because `Hello.parse` accepting what it reads depends on the statement's own `Hello`.
 `verity/ml/flock/tests/test_lean_coin_open.py` runs it on the `Hello`s of the sessions Rust's `Checked` is held to
 (`verity/ml/flock/live/src/coin_open_vectors.json`). -/
 def HelloDParses (x : Msg) : Prop :=
@@ -876,13 +939,12 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- The deployed record's last round is one past the `Finish`, which is one past the protocol's last coin. -/
-theorem deployZk_last_eq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (x : Msg) :
+/-- At a statement in the relation, the deployed record's last round is one past the `Finish`, which is one past the
+protocol's last coin. -/
+theorem deployZk_last_eq {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation} {x : Msg}
+    {w : Flock.Wit} (hR : Flock.R (FlockDeploy.deployZk rel).parse x w) :
     (FlockDeploy.deployZk rel).V.k x + 1 = refK x + 2 := by
-  show (FlockDeploy.V true).k x + 1 = (FlockDeploy.V true).k x - 1 + 2
-  have : 1 ≤ (FlockDeploy.V true).k x := by
-    simp only [FlockDeploy.V]
-    split <;> omega
+  have := V_k_of_R hR
   omega
 
 /-- **`Flock.zk_server_lean` at the session with the frame's stops**: at a session `S` and a stop rule `Rf` that reads
@@ -927,13 +989,13 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
     (S.withStops_complete Rf L.stop hV) (S.withStops_dummyReg Rf L.stop hD) (S.withStops_causal Rf L.stop hRf hc)
     (S.withStops_swCausal Rf L.stop vs hRf hsc) (S.withStops_tapeOK Rf L.stop hT) L wk x w hR
     ⟨L.helloRefine_withStops S Rf vs H x w hH,
-      L.ownRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w (deployZk_last_eq rel x)
+      L.ownRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w (deployZk_last_eq hR)
         hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hLk hF,
       L.liveRefine_withStops S Rf vs H wk x w hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hE,
       L.fillRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w
-        (deployZk_last_eq rel x).le hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hEf,
+        (deployZk_last_eq hR).le hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hEf,
       L.stopRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w
-        (deployZk_last_eq rel x).le hst⟩ Vs θ hk Ev
+        (deployZk_last_eq hR).le hst⟩ Vs θ hk Ev
 
 /-- **`Flock.zk_server_lean_stops` at the deployed coin layer** (`CoinLayer.session nr T`), at SHA-512
 (`CoinOpen.shaH`), from the transport's trusts alone. `Hello`, the opening check (the keyed coin-tree walk at the round's place under

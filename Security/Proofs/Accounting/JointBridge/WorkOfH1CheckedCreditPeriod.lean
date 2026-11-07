@@ -1,6 +1,8 @@
-import Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
-import Proofs.Accounting.JointBridge.WorkOfCreditedWords
-import Proofs.Pouw.Period
+module
+
+public import Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+public import Proofs.Accounting.JointBridge.WorkOfCreditedWords
+public import Proofs.Pouw.Period
 
 /-!
 # Proof of the joint period's PoUW guarantee from H1's checked credit
@@ -11,6 +13,8 @@ acceptance with `n` times its fixed words below the check's credit, which is the
 `Pouw.pr` (`pr_le_prob_of_equiv` at the identity). The H200's instance is it at `Accounting.h200S8Price`,
 `receiptWordMacs R C` multiply-adds a word and `receiptUnitMacs K R C` a unit.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge
 

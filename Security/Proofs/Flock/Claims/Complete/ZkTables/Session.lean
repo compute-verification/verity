@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Zk.Json.Session
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Json.Session
 
 /-!
 # What the honest masked session returns and sends, at any number of tables
@@ -10,6 +12,8 @@ well-formed stream per rep stream; and its sends are the link of those `root_B`s
 streams' rounds in order (`SessionFactsJ`). Each table's masked commitment and reps are asked for what `ProverOkZk`
 asks of one table's.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 
@@ -32,7 +36,7 @@ def SessionFactsJ (h : ByteArray → ByteArray) (resp : ℕ → Claims.Msg) (spe
 /-- **The masked session's facts** at any number of tables, given each table's non-empty masked level-0 cap under
 `2^64` bytes and well-formed rep rounds on its extra claims at the link's points, every rep stream naming a table. -/
 theorem sessionPZk_factsJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims.Msg) {spec : SessionSpec}
-    {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Json.parse spec.hello = .ok own)
+    {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Flock.JsonParse.parse spec.hello = .ok own)
     {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (words : Array (List ℕ))
     (trs : Array Trace) (tape : TapeZk) (hC : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v → ∀ g extra lanePad salt cm,
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) st.merkle (v.1.levels.getD 0 default) v.2 g extra lanePad

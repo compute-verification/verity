@@ -2,7 +2,11 @@
 What the compression gadget's rows force (`Flock.HmNets.compress`): Σ and σ, the schedule, one round, the rounds by induction,
 and the feed-forward, each against `Spec`. No `decide` on any of it.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Word
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Word
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

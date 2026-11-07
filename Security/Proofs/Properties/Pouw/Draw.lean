@@ -1,4 +1,6 @@
-import Proofs.Properties.Pouw.Grid
+module
+
+public import Proofs.Properties.Pouw.Grid
 
 /-!
 # Proofs of the draw's properties (`Properties.Pouw`, "The draw")
@@ -12,6 +14,8 @@ decide is the exact answer and `missAtMost` is the integer comparison `a^k·dd �
 miss factor `(N − B − i)/(N − i)` is in `[0, 1 − p]` and the miss chance is at most `(1 − p)^K′ ≤ δ` (`missProb_le`);
 when `K′ = N` the draw takes every tile and the chance is 0 (`missProb_zero`).
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Window
 

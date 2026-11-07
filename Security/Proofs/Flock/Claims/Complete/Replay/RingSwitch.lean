@@ -1,17 +1,21 @@
-import Proofs.Flock.Claims.Complete.Replay.Lincheck
-import Proofs.Flock.Soundness.Refine.OpeningConverse
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Lincheck
+public import Proofs.Flock.Soundness.Refine.OpeningConverse
 
 /-!
 # The ring switch replays the honest prover's rounds
 
 `ringSwitchWith_of`: from the honest prover's ring switch (`ringSwitchP`) in the pure session, the verifier's ring switch
-(`ringSwitchWith`, PROTOCOL.md §12) replayed on rounds that carry the prover's returns the prover's batched value `T`
+(`ringSwitchWith`, `Flock.Opening`) replayed on rounds that carry the prover's returns the prover's batched value `T`
 and switched claims, consuming exactly the prover's rounds, when each claim's switched vector `s_k` (`switchVec`) meets
 its value, `Σ_v w_k[v]·s_k[v] = value_k` (the ring switch's algebra).
 
 * **The prover in closed form** (`ringSwitchP_go`): its ring switches (`Rs.proof`), `T` (`Rs.T`), its switched claims
   (`Rs.sws`) and transcript (`Rs.tEnd`), at the coins of the replies to its sends.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

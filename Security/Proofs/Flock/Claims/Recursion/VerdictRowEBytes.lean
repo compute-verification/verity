@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.VStarPartsSparse
-import Proofs.Flock.C3.RegLevels.OutRegs
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
-import Proofs.Flock.Soundness.Discharge.Hidden.Rows
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.VStarPartsSparse
+public import Proofs.Flock.C3.RegLevels.OutRegs
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
+public import Proofs.Flock.Soundness.Discharge.Hidden.Rows
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 
 /-!
 # A rec-open copy's `acc` and `acc_out` columns are its unit's rows
@@ -29,6 +31,8 @@ import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 `accOutBytes_hidden` doesn't. On the public-output path `HmRow.parse` refuses a run of no ports, which with
 `out_row_ports`' sum gives it too, but `parse_rowPorts` exposes only the sum.
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

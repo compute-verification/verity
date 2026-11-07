@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions.PackedTraining
-import Definitions.Nci.Dark
+module
+
+public import Definitions.Nci.Assumptions.PackedTraining
+public import Definitions.Nci.Dark
 
 /-!
 # NCI's partial-sum law with dark gates, on a chain with several products to a gate
@@ -8,6 +10,8 @@ import Definitions.Nci.Dark
 products and does not read `k`. The training form converts products off the books into dark gates, at most `k` to a
 gate, so its dark-gate term is `2 k #dark` where the per-product form's is `2 #dark`.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

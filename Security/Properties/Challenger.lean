@@ -1,7 +1,9 @@
-import CoreProtocol.Live
-import SampledProofs.ChallengerDraw
-import SampledProofs.OneStage
-import SampledProofs.OneStageZk
+module
+
+public import CoreProtocol.Live
+public import SampledProofs.ChallengerDraw
+public import SampledProofs.OneStage
+public import SampledProofs.OneStageZk
 
 /-!
 # Coins from the device's log: what a draw's coins are, stated against the code that reads them
@@ -19,7 +21,7 @@ what that record shows, for every input: the coins the challenger device drew, o
   own ledger opens withheld on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
   `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
 
-**The device's history** (`History`) is the proof service's challenger as `challenger.py` runs it. Under its key it runs
+**The device's history** (`History`) is the proof system's challenger as `challenger.py` runs it. Under its key it runs
 sessions, each a run (`Run`): it draws each coin and its salt by position, commits to the frame-v3 root over their live
 leaves (`Run.commitment`), writes its release log (its head the commitment, then each root it received and the coin it
 released after it), and signs its record before any coin opens and its close over the log once the run ends. A run its
@@ -50,6 +52,8 @@ Nothing is assumed of SHA-512 or LMS here. What the device releases when, and th
 device's behaviour on `trusted-host`, which these properties don't take: a soundness argument reads them off the device
 model.
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger
 
@@ -182,7 +186,7 @@ def fv3Message (tag : String) (parts : List ByteArray) : ByteArray :=
 
 /-- What `taggedSha512 tag manifest` hashes, when the manifest has a canonical form. -/
 def taggedMessage (tag : String) (manifest : Json) : List ByteArray :=
-  match Flock.canon manifest with
+  match Flock.canonUtf8 manifest with
   | .ok s =>
     let t := tag.toUTF8
     let b := s.toUTF8

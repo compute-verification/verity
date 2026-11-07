@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
 
 /-!
 # The statements: flock-verify's acceptance under either tag, hidden outputs included
@@ -16,6 +18,8 @@ tag; where it doesn't, the conclusion is the original's.
   `accepts_tables_hm96_of_leaf`, `accepts_verdict_hm96`.
 * `TableAtHOfAccepts`: Integrate's `tableAt_of_accepts` for the hidden tables (`tableAtH`, `Tables.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenExec
 

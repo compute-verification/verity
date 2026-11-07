@@ -1,6 +1,8 @@
-import Definitions.Accounting.ComposePeriod
-import Definitions.Accounting.Assumptions.Compose
-import PouwCheck
+module
+
+public import Definitions.Accounting.ComposePeriod
+public import Definitions.Accounting.Assumptions.Compose
+public import PouwCheck
 
 /-!
 # A period's work over the windows PoUW's deployed check accepts (`PouwCheck.protocol.check`)
@@ -9,7 +11,8 @@ PoUW's per-period statement about its deployed Lean code, for the all-protocols 
 each protocol, composed in the causal game, `Accounting.Guarantees.JointPeriodLive`). `Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod`
 is stated over the accounting model's abstract proofs (`Outcomes`): whether window `w`'s proof of its `i`-th drawn tile
 was accepted is a parameter. Here it is the deployed check's verdict on the window: `protocol.check` (`verity/pouw/v1`,
-`core_check.py`'s port, the `Core.Protocol` that `CoreOnsite` composes) on the window's registration and the proof
+`core_check.py`'s port, the `Core.Protocol` that `CoreRemote` composes; onsite composes the period's,
+`PouwCheck.Period.protocol`) on the window's registration and the proof
 service's answer. The check gives no partial credit (`Properties.Pouw.Check.AcceptMeans`: it accepts only when one-stage
 accepted the window's every drawn unit), so its verdict is every drawn proof's (`checkedRun`). The period is credited up
 to its first window the check refuses (`Executions.prefixLen`), on those windows' live words (`checkedLive`).
@@ -123,6 +126,8 @@ at its numbers with `SplitRateClosed` for `SplitRate` and `Pins` from `SaltIsLiv
 accepted window), and `Proofs.Pouw.Period.Honest` is a live-salt period of those windows meeting every premise of
 `H1CheckedCreditPeriod`.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Period
 

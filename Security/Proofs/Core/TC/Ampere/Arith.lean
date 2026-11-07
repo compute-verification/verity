@@ -1,4 +1,6 @@
-import Proofs.Core.TC.Proofs.Norm
+module
+
+public import Proofs.Core.TC.Proofs.Norm
 
 /-!
 # The Ampere adder's arithmetic (`W = 25`, `rho = 1`, `A = 26`, `B = 30`, `K = 35`, floor `-132`)
@@ -6,6 +8,8 @@ import Proofs.Core.TC.Proofs.Norm
 `Verity.SecurityProofs.TC.Proofs.Fold` and `Norm` for the Ampere/Ada pipeline: the term correspondence and
 `group_sum`'s folds with the rescale `1`, the 25-bit window of a 30-bit total, and the final shift against `K = 35`.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs.Ampere
 

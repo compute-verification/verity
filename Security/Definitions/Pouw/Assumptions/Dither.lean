@@ -1,5 +1,7 @@
-import Definitions.Claims
-import Definitions.Pouw.Dither
+module
+
+public import Definitions.Claims
+public import Definitions.Pouw.Dither
 
 /-!
 # The no-fold Dither protocol's work-soundness: its named premises (trusted)
@@ -34,6 +36,8 @@ as zero noise), advice that holds the un-noised product answers the check for fr
 `moment ≤ 1` holds against it. `κdeg B` is the probability of the dithers on which some advice of `B` bits beats the
 public best; it enters `κ` once a round.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 

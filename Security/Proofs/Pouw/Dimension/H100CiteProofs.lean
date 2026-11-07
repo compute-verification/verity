@@ -1,6 +1,8 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Cite
-import Proofs.Pouw.Dimension.H100FragProofs
-import Proofs.Pouw.Dimension.H100MeasuredProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Cite
+public import Proofs.Pouw.Dimension.H100FragProofs
+public import Proofs.Pouw.Dimension.H100MeasuredProofs
 
 /-!
 # How the H100 pins are cited: proofs
@@ -11,6 +13,8 @@ import Proofs.Pouw.Dimension.H100MeasuredProofs
   sum of the coordinates is dense for `LaneFns m 0` (`denseLaneWitness`), so it depends on no `m` lanes.
 * **Round 7's prices** (`distinctWritesMeasured`): `distinctWritesMH100On` with `h32Measured`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

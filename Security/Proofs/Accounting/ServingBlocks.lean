@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.ServingBlocks
-import Proofs.Core.Padding
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Accounting.Guarantees.ServingBlocks
+public import Proofs.Core.Padding
+public import Mathlib.Tactic.Linarith
 
 /-!
 # The serving-block bound: proofs
@@ -13,6 +15,8 @@ Each serving block's two caps are summed by `Verity.SecurityProofs.ServingBlockS
   wholly inside no inference block: an operation outside `U` is wholly inside the inference block holding its
   representative, which the per-block cap at `(c, k)` bounds.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.ServingBlocks
 

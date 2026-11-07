@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Algebra.Eval
-import Proofs.Flock.Soundness.Refine.Zerocheck
+module
+
+public import Proofs.Flock.VBridge.Algebra.Eval
+public import Proofs.Flock.Soundness.Refine.Zerocheck
 
 /-!
 # V*'s zerocheck residual is zero only when the zerocheck's checks pass
@@ -14,6 +16,8 @@ and the residual rounds' claim is `final_a · final_b`. The rounds are the fold 
 rep: when `GfResiduals`' residuals on the S `structureOf` builds and the v `verifierRows` gives are all zero, the checks
 hold on the messages w holds (`decoded`), at the points `verifierRows` returns.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

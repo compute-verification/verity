@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.TmplFoldClassOk
-import Flock.TmplSplit
+module
+
+public import Proofs.Flock.Soundness.TmplFoldClassOk
+public import Flock.TmplSplit
 
 /-!
 # The split fold's tables, valued
@@ -12,6 +14,8 @@ weight `f` is `hsum`: each entry's value times its key's weight.
 - `fold_val`: a fold over a table whose every step adds a known term adds their sum.
 - `eqHalf_at`, `eqTail_split_at`: the `eq` tables `walk` reads, split at a chunk boundary.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 

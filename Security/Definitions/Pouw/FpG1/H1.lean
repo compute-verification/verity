@@ -1,4 +1,6 @@
-import Definitions.Pouw.FpG1.Encoding
+module
+
+public import Definitions.Pouw.FpG1.Encoding
 
 /-!
 # FP8-g1 and W4A8-g1 on sm_120's record H1: the grids and a round's operand leaves (trusted)
@@ -23,6 +25,8 @@ round's leaves are committed.
 
 No Program checks `Leaves.Fp8` or `Leaves.W4a8`: they describe what an honest g1 prover commits.
 -/
+
+@[expose] public section
 
 namespace Pouw.FpG1
 

@@ -4,8 +4,12 @@ of a message before its last block, its `pad` inputs the last block and its salt
 outputs are the bits of `SHA-512(m) ⊕ M·y` and of `SHA-512(salt_prefix ‖ y)`. The chaining value before each block is
 `chainV` (`chainV_succ`: one compression per block, the form the sha512x3 slots compute).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Salt
-import Proofs.Flock.Soundness.Discharge.Hm.Top
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Salt
+public import Proofs.Flock.Soundness.Discharge.Hm.Top
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

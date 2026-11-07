@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.NextRFits
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRFits
 
 /-!
 # A fit's round `j` is fixed by the rows through round `j`
@@ -17,6 +19,8 @@ agree through round `j` have one `j`-th chunk.
 * **Skeleton and values** (`chunks_map_skel`, `repFrames_skel`, `RowsAt.vals_eq`): `p` with `p'`'s recursive caps has
   `p'`'s skeleton, and round `j`'s rows fix the values its chunk absorbs.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

@@ -1,5 +1,7 @@
-import Difftest
-import Flock.Sigma
+module
+
+public import Difftest
+public import Flock.Sigma
 
 /-!
 # The σ-lift check's difftest executable
@@ -9,6 +11,8 @@ Boolean one (`{"word", "bits"}`, each the descriptor's JSON), its report or its 
 is the Lean's own), and a descriptor either side's decoder refuses a reject; `bit-offsets` is `Flock.Sigma.bitOff` of a type
 at the given leaves.
 -/
+
+@[expose] public section
 
 namespace SigmaDifftest
 

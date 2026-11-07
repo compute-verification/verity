@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Tables.Session
+module
+
+public import Proofs.Flock.Soundness.Discharge.Tables.Session
 
 /-!
 # The headline at the executable, for sessions of `J` tables
@@ -19,6 +21,8 @@ The error term is `miss(K) + ksAvgStrict + linkBoundE`. None of the three grows 
 tables cost their worst table's, not a sum, at `J` per-table hypotheses (`hKS` at every table `j`); and `linkBoundE`
 reads the plan only through the positions the draw reads and `ρ`, a bound on every table's rate.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Tables
 

@@ -11,10 +11,14 @@ this fixes:
 * `openStep`: the rep's opening a round at a time, the scheduled rounds after the algebraic phase's
   (`Skeleton.rounds`), each the round in whose place a device round leaves; `opening` feeds it a stream's coins.
 * `reqs`: the frame's requests, **the one schedule**: rep 1's earlier rep's algebraic-phase coins (`prior`), each
-  scheduled round with the device's round in its place and its coins, each of the inner proof's rounds (the firewall's
-  own) with its coins, then `finish`.
+  scheduled round with the device's round in its place and its coins, each of the inner proof's rounds (the frame's
+  own, `Frame.ownRound`) with its coins, then `finish`.
 -/
-import Flock.Firewall.Skeleton
+module
+
+public import Flock.Firewall.Skeleton
+
+@[expose] public section
 
 namespace Flock.Firewall.Drive
 
@@ -138,8 +142,11 @@ def opening (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128)) (h
 
 /-- **A rep's requests to its frame**, the one schedule its frame is driven on: the earlier rep's algebraic-phase coins
 `prior` (rep 1's; none for rep 0), then each scheduled round `sched[k]` with the device's round `dev k` in its place and
-the stream's coins `coins[k]` for it, then each of the inner proof's rounds `own[j]`, the firewall's own, with its coins
-`coins[sched.size + j]`, then `finish`. -/
+the stream's coins `coins[k]` for it, then each of the inner proof's rounds `own[j]`, the frame's own, with its coins
+`coins[sched.size + j]`, then `finish`. The session loop sends an inner round at `.sched` of the frame's own round
+(`Frames.roundPlace`, `Frame.innerSched`) with the relayed round in the device's place (none at a round the loop's
+finish has not computed), which, relayed as the frame computed it, leaves the state `.own` leaves, and otherwise stops
+the rep. -/
 def reqs (prior : Array F128) (sched own : Array (ByteArray × Nat)) (dev : Nat → ByteArray)
     (coins : Array (Array F128)) : List Frame.Req :=
   let pre := if prior.isEmpty then [] else [Frame.Req.prior prior.size (Frame.wordBytes prior)]

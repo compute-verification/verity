@@ -1,9 +1,11 @@
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Finset.Powerset
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.Fintype.Sigma
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Finset.Powerset
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Sigma
+public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # The streamed-label wipe: the counting argument
@@ -22,6 +24,8 @@ A run that wins either answers at most `g` labels after every history it sees, a
 more than `g` after some round's history while keeping `z`, and is counted by compression at that round
 (`win_count`).
 -/
+
+@[expose] public section
 
 namespace PousStreamedWipe
 

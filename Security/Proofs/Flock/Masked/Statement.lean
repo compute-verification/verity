@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.DeployCode
-import Proofs.Flock.Claims.ZK.CoinLayer
-import Proofs.Flock.Claims.ZK.Split
+module
+
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.ZK.CoinLayer
+public import Proofs.Flock.Claims.ZK.Split
 
 /-!
 # C-Flock's masked knowledge soundness and zero knowledge at the deployed record (trusted)
@@ -16,6 +18,8 @@ C-Flock's deployed records (`FlockDeploy.deployZk`, `Claims.ZKMal.zkDeployed` at
 proofs package, so this module imports them from `Proofs.Flock.Claims`, and `Definitions.lean`, which the `security`
 package builds without `security_proofs`, does not import it: `Proofs.Flock.Masked` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

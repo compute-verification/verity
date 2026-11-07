@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlC.Cap.IntForm
+module
+
+public import Proofs.Pouw.PearlC.Cap.IntForm
 
 /-!
 # `_cap_constants` at pinned shapes
@@ -8,6 +10,8 @@ device's own `g`, prices and cap; one shape `_cap_constants` refuses; and `credi
 `verity/protocols/accounting/work/pouw/tests/test_cap_lean.py` reads these statements and checks each against `cap._cap_constants` and
 `PearlC(forming="v1").credit_of`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Cap
 

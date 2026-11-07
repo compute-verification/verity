@@ -4,7 +4,7 @@
   digests) is the one `data/sampling_split_digests.json` pins, at every statics a circuit-check target or pin, a kept record or
   manifest, or a served vocabulary uses, and each of the family's Definitions is still constructed by the module that
   constructed it.  The pins were written on the unsplit tree; a change to a Definition of the
-  family rewrites them (`python tests/program/test_sampling_split.py --write`, from `integrations/vllm`).
+  family rewrites them (this module's `--write`, run by `REWRITE`'s command).
 * The family's Definition modules import only the stdlib, numpy, `verity`, one another, and the two other families' modules
   they take Definitions from (`OTHER_DEFINITION_MODULES`), less the one listed exception: so they can move to `verity/ml/circuits/`, which
   imports only `verity`, with the Definitions they call.
@@ -25,6 +25,8 @@ VLLM = Path(__file__).resolve().parents[2]
 REPO = VLLM.parents[1]
 REG = Path(importlib.util.find_spec("verity.ml.definitions.registry").origin).parent
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
+REWRITE = ("a change meant to move the family's Definitions rewrites the pins with "
+           "`uv run python tools/verity/check/pins.py --write integrations/vllm/tests/program/data/sampling_split_digests.json`")
 TASKS = REPO / "tools" / "verity" / "circuit_check" / "tests" / "data" / "sampling_split_tasks.json"
 PKG = "verity.ml.definitions.registry"
 #: the catalog, where the layout move put core's Definitions and silicon models
@@ -166,19 +168,20 @@ def defs():
 
 
 def test_each_definition_is_constructed_where_it_was(defs):
-    assert {k: defining_module(d) for k, d in sorted(defs.items())} == _load()["modules"]
+    assert {k: defining_module(d) for k, d in sorted(defs.items())} == _load()["modules"], REWRITE
 
 
 @pytest.mark.parametrize("key", _params())
 def test_the_definition_id_and_digest_are_unchanged(key, defs):
     """The keys in `SLOW_TRACE` and those at a served (V, S) pair trace a Boolean Definition's body for over 5 s, so they are slow;
     the rest, served vocabularies included, stay quick."""
-    assert pin(key, defs) == _load()["pins"][key]
+    assert pin(key, defs) == _load()["pins"][key], REWRITE
 
 
 def test_the_pins_cover_every_circuit_check_target_of_the_family():
     have = set(_load()["pins"])
-    assert len(have) > 100 and {"GumbelTopPTokenSelect_v1{V=128256}", "TopPKeepWord_v1{V=16,S=4}", "GumbelSelectF32_v2{V=2}"} <= have
+    want = {"GumbelTopPTokenSelect_v1{V=128256}", "TopPKeepWord_v1{V=16,S=4}", "GumbelSelectF32_v2{V=2}"}
+    assert len(have) > 100 and want <= have, REWRITE
 
 
 # --- the boundary --------------------------------------------------------------------------------------------------------------

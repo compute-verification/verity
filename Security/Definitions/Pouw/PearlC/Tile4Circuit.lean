@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.TileCircuit
-import Definitions.Pouw.PearlC.DeviceFp4
+module
+
+public import Definitions.Pouw.PearlC.TileCircuit
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # Pearl-C4's tile unit as a core circuit (definitions only)
@@ -24,6 +26,8 @@ templates' descriptor digests pinned, by `tests/test_circuit_tile_lean.py`. The 
 order of a gate's reads and each primitive's semantics, here `nvf4Word` for the FP4 step (the primitive's three rules,
 with `Fp4Atom.step sm120Nvf4` on a finite accumulator and valid scale bytes).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TileCircuit
 

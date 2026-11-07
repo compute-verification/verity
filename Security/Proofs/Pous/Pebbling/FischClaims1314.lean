@@ -1,9 +1,11 @@
-import Proofs.Pous.Pebbling.B2Stacking
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Proofs.Pous.Pebbling.B2Stacking
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # Fisch 2018/702, Claims 13–14, proved
@@ -22,6 +24,8 @@ The definitions and statements are copies of the trusted ones (`Security/Definit
   The reverse rule at a node of `P` would need the next node of its green path pebbled first, which
   `green_before` forbids. So each node of `P` is pebbled forward, after its predecessor.
 -/
+
+@[expose] public section
 
 namespace PousFisch
 

@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.RowCircuit
+module
+
+public import Definitions.Pouw.PearlC.RowCircuit
 
 /-!
 # Pearl-C4's row units as core circuits (definitions only)
@@ -19,6 +21,8 @@ E2M1 nibbles; the statistics read `x` widened (`Wire.bf16`). Then:
 
 `tests/test_circuit_row_lean.py` checks every gate against the templates, as for `pc8`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 

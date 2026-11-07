@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
 
 /-!
 # The live `--zk` runs with the draw at accepted outcomes, and the coin server's draws at V*'s law
@@ -31,6 +33,8 @@ The draws come from the record's custody (`DrawFileZK`):
   (`setupTables_units`), so `drawOkZKHJ_of_file` holds at `kd / nTab I` units a table. `runsZCJH_live_subset` is
   `runsZCJH_liveA` at any law with that draw hypothesis discharged, V*'s full draw among them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
 
 /-!
 # C-Flock's one-stage audit under hidden outputs is zero knowledge (trusted)
@@ -11,6 +13,8 @@ C-Flock's definitions are still in its proofs package, so this module imports
 `Proofs.Flock.Soundness.Discharge.ZkHidden.View`, and `Definitions.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.ZeroKnowledgeHidden` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

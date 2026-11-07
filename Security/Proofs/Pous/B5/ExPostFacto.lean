@@ -1,14 +1,16 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Fintype.Option
-import Mathlib.Data.Fintype.Sum
-import Mathlib.Tactic.GCongr
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Fintype.Option
+public import Mathlib.Data.Fintype.Sum
+public import Mathlib.Tactic.GCongr
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # B5, Pietrzak's ex post facto reduction: a proof of `Pous.Guarantees.B5ExPostFacto(Bounded)`
@@ -38,6 +40,8 @@ The proof follows the draft's plan, with the encoding done as a union bound over
   `2^m·((|VC|·(Q + 1) + N)²/2^w)^(s+1)`. That is at most the pinned bound, since `N ≥ 1` whenever the event can
   happen. The parallel-query form follows from `work ≤ depth·width ≤ D·q`.
 -/
+
+@[expose] public section
 
 namespace PousB5
 

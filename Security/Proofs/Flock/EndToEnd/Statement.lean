@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 
 /-!
 # C-Flock's one-stage audit, end to end (trusted)
@@ -10,6 +12,8 @@ C-Flock's definitions are still in its proofs package, so this module imports
 `Proofs.Flock.Soundness.Discharge.Composed.PublicJ`, and `Definitions.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEnd` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.Recursion.HonestPartsR
-import Proofs.Flock.Claims.Recursion.DeployHonest
-import Proofs.Flock.Claims.Recursion.HonestWitR
-import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.CapPorts
-import Proofs.Flock.Claims.Recursion.RowsCover
-import Proofs.Flock.Claims.Recursion.SchedDense
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestPartsR
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.Claims.Recursion.HonestWitR
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.CapPorts
+public import Proofs.Flock.Claims.Recursion.RowsCover
+public import Proofs.Flock.Claims.Recursion.SchedDense
 
 /-!
 # What each V\* part's circuit accepts on the honest outer run, at the layout of record (`DeployedR.layR`)
@@ -34,6 +36,8 @@ the relation, dense), the run (accepted), the calls `layR` records beyond `layou
 check 5's) being true at the honest witness, no collision among the honest run's calls, and the honest witness holding
 the run's messages where the layout places them (held rounds, pieces, shared rows).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.CapOpens
-import Proofs.Flock.Claims.Recursion.FinOpen
-import Proofs.Flock.Claims.Recursion.BoundAccepts
+module
+
+public import Proofs.Flock.Claims.Recursion.CapOpens
+public import Proofs.Flock.Claims.Recursion.FinOpen
+public import Proofs.Flock.Claims.Recursion.BoundAccepts
 
 /-!
 # `PartOpensB` at `layoutBTops` and the coin server's record
@@ -23,6 +25,8 @@ So `PartOpensB` holds at `layoutBTops` and `cmtTr recRead` wherever the inner ve
 `bitsLin2_deployed_open` at `recRead` with `PartOpensB` dropped. What they still take: `PartChecksBV`, `DecompB`, the
 readers' `ReadersTrue`, and `recRead` reading the coin server's transcript back (`ReadsBackB`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

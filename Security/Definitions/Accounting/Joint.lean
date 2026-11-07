@@ -1,5 +1,7 @@
-import Definitions.Accounting.Device
-import Definitions.Pouw.Basic.Prob
+module
+
+public import Definitions.Accounting.Device
+public import Definitions.Pouw.Basic.Prob
 
 /-!
 # A joint audit's run, and what each audit's guarantee says about it (trusted)
@@ -27,6 +29,8 @@ certificate) on every one of the audit's own coins (`ComputeCovert`, `BandwidthC
 that does little charged work and a lot of covert work on a few of the compute coins is in neither event. A per-run
 reading, at the coins drawn, is not claimed yet; lane `ra-per-run` is proving it by truncation.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

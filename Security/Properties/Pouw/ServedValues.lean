@@ -1,5 +1,7 @@
-import Definitions.Core.Formalism
-import Properties.Pouw.PeriodJ10R
+module
+
+public import Definitions.Core.Formalism
+public import Properties.Pouw.PeriodJ10R
 
 /-!
 # The served PoUW's values in AND gates (`PouwCheck.Credit.window`, J10-R)
@@ -38,7 +40,7 @@ which adds SAK to H1.
   `(1 − ε_skip)₊·S`.
 
 *No algorithmic premise.* Being about values, it takes no SAK and no premise beyond H1's: `TileDrawIsCoin` (the draw),
-`TileServiceSound` (the proof service's soundness, open), `RegisteredBeforeDraw`, `SaltIsLiveCoin` and
+`TileServiceSound` (the proof system's soundness, open), `RegisteredBeforeDraw`, `SaltIsLiveCoin` and
 `SharedNoiseLucks`, with the structure H1 reads (`Scope`, the live share `ρ`, the game and its prefix, the binding at
 `δ_bind`). `SharedNoiseLucks` is its one computational premise: the fold receipts' detection, which is to be
 proved in the slot's model or designed away by the no-fold receipt, not assumed. It drops H1's `UnitFixed` (and
@@ -47,6 +49,8 @@ the play's `folded` words): it reads the right blocks themselves, not the play's
 Its `δ_s` is δ_coin and its `n·(δ_bind + δ_ks)` is δ_crypto. `BlockMap` is a named map from words to gates of the
 registered circuit, the unit the PoUW component's `Holds` is restated in.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.ServedValues
 

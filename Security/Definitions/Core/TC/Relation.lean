@@ -1,4 +1,6 @@
-import Definitions.Core.TC.Pipeline
+module
+
+public import Definitions.Core.TC.Pipeline
 
 /-!
 # The step relation: `verity.ml.tc.relation.check_step`
@@ -21,6 +23,8 @@ Where this differs from the Python:
   product of the "attained" chain) appear as those products, as in the Python, and the `MUL`s that check them against
   themselves are kept.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Relation
 

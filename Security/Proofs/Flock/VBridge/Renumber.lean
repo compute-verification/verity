@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.OfVStar
+module
+
+public import Proofs.Flock.VBridge.OfVStar
 
 /-!
 # A part of S, renumbered
@@ -14,6 +16,8 @@ S's residual `R[k]` (`resVal_renS`, with `res_renS`), when:
 
 The maps are the part's to choose. `VStar.parts` builds its own with HashMaps, but nothing here reads them.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

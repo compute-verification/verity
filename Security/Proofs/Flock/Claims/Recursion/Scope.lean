@@ -1,6 +1,8 @@
-import Definitions.Claims.Recursion
-import Proofs.Flock.Claims.DeployCode
-import Flock.RecSetup
+module
+
+public import Definitions.Claims.Recursion
+public import Proofs.Flock.Claims.DeployCode
+public import Flock.RecSetup
 
 /-!
 # `Claims.Recursion.ScopeMatches` at the compiled verifier's parser and scope check
@@ -31,6 +33,8 @@ statement's reader refuses an inner statement without a draw (`RecDeploy.innerOk
 at the shape (V*'s parts as many as the verifier's groups, a holo shape's `h` round in a group, R's opening's parts),
 and the parser refuses a shape where that fails, as the verifier's setup does.
 -/
+
+@[expose] public section
 
 namespace Flock.RecScope
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Sites
-import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
-import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
-import Proofs.Flock.Soundness.Discharge.Integrate.Headline
+module
+
+public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
+public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+public import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
 
 /-!
 # The headline at the executable, composed
@@ -22,3 +24,5 @@ with every guarantee the merged branches prove discharged and every other one a 
   and `hHm` (`rsAt_computes`, e2e-hm's `keyedRowsOuts_computes`) built, and `hdec` (e2e-exec), the circuit conditions
   `rs` takes and the assumptions of record taken as hypotheses.
 -/
+
+@[expose] public section

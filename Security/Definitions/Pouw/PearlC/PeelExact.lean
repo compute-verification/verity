@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.Defs
+module
+
+public import Definitions.Pouw.PearlC.Defs
 
 /-!
 # U's pinned order, bit-exact (trusted definitions)
@@ -26,6 +28,8 @@ A function returns `none` where the pin raises `NonFinite`, that is, where a ste
 
 The model follows the pin at `76134352`; a change to the pin needs the vectors regenerated and rechecked.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelExact
 

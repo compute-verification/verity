@@ -1,9 +1,11 @@
-import Proofs.Flock.VBridge.Algebra.BitsOk
-import Proofs.Flock.VBridge.Algebra.RingSwitch
-import Proofs.Flock.VBridge.PartS
-import Proofs.Flock.VBridge.Sparse.Gadgets
-import Proofs.Flock.Claims.Recursion.VerdictRowEDeployed
-import Proofs.Flock.Claims.Recursion.VerdictPieces
+module
+
+public import Proofs.Flock.VBridge.Algebra.BitsOk
+public import Proofs.Flock.VBridge.Algebra.RingSwitch
+public import Proofs.Flock.VBridge.PartS
+public import Proofs.Flock.VBridge.Sparse.Gadgets
+public import Proofs.Flock.Claims.Recursion.VerdictRowEDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
 
 /-!
 # The residuals don't see a shift of the running sums
@@ -22,6 +24,8 @@ elements. So a part's residuals (`RecResiduals.partS`) vanish at elements that a
 * `resZero_off`: a part's residuals vanish at `E` wherever they vanish at elements equal to `E` plus `offOf` on the
   part's w.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

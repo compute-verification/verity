@@ -18,6 +18,14 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_build.py",
+    "tests/test_graph.py",
+    "tests/test_invariants.py",
+    "tests/test_local.py",
+    "tests/test_test_file.py",
+]
 # The listing digests every file a task reads, which is most of the tree and some of its Markdown, and the invariants list the
 # whole tree: a listed `.md` keys its Markdown too (`suites.markdown`).
 inputs = [".", "tools/verity/graph/README.md"]

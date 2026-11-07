@@ -1,6 +1,8 @@
-import Proofs.Accounting.Headline.Whole
-import Mathlib.Analysis.Complex.ExponentialBounds
-import Mathlib.Analysis.SpecialFunctions.Log.Deriv
+module
+
+public import Proofs.Accounting.Headline.Whole
+public import Mathlib.Analysis.Complex.ExponentialBounds
+public import Mathlib.Analysis.SpecialFunctions.Log.Deriv
 
 /-!
 # `ε_jl` at `p = 7/8` with `ln(8/7) ≥ 2/15`
@@ -10,6 +12,8 @@ import Mathlib.Analysis.SpecialFunctions.Log.Deriv
 `ln(1 + 1/a) = Σ_k 2/(2k + 1)·(2a + 1)^-(2k+1)` at `a = 7`. sm_120's measured headline (`Headline/Sm120Measured.lean`)
 and the data-centre headlines' folded branch (`HeadlineDc/Branches.lean`) read it.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.Headline
 

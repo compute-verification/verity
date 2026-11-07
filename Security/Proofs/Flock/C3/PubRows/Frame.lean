@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.PubRows.Prefix
-import Proofs.Flock.C3.Compose.Honest
+module
+
+public import Proofs.Flock.C3.PubRows.Prefix
+public import Proofs.Flock.C3.Compose.Honest
 
 /-!
 # n1: the tape `decodeRun` reads, and its frame
@@ -11,6 +13,8 @@ step is a cap, its second the link points, and the stages are followed by one st
 stages' obligations reads a step past the openings, so at the honest family `HTape` is `HFrame` (`hTape_iff_frame`,
 `PubRows/Honest.lean`), an obligation on the decoder `dec`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.PubRows
 

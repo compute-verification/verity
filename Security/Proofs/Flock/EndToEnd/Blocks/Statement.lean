@@ -1,4 +1,6 @@
-import Proofs.Flock.EndToEnd.Period.Statement
+module
+
+public import Proofs.Flock.EndToEnd.Period.Statement
 
 /-!
 # The integrity audit per server-time block, and pooled over a monitoring period's blocks (trusted)
@@ -30,6 +32,8 @@ A wrong unit is counted in the session that holds it (`SamplingBlock.wrongSet`).
 statements say nothing of whether the value a session reads there is the one the block before committed;
 `IntegrityBlockCarried` and `IntegrityHorizonCarried` (`EndToEnd/Carry/Statement.lean`) do.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

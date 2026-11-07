@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
 /-!
 # The masked skeleton's goals discharged, at several tables
@@ -9,6 +11,8 @@ import Proofs.Flock.Claims.Complete.ZkTables.Scope
 * `schedules_goal` (`SchedulesZk`): `Zk.schedule` has a schedule at every table's `m` (`zkSchedule_ok`).
 * `proofCount_goal` (`ProofCountZk`): the masked session returns one proof file per rep stream (`sessionPZk_proofs`).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

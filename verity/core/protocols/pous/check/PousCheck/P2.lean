@@ -1,5 +1,7 @@
-import PousCheck.Params
-import PousCheck.Prim.Bytes
+module
+
+public import PousCheck.Params
+public import PousCheck.Prim.Bytes
 
 /-!
 P2's parameters and maps, as `verity/core/protocols/pous/schemes/p2.py` computes them for
@@ -19,6 +21,8 @@ Python's `_Field.square` reduces `a²` by two folds of `c0` and one conditional 
 `c0² < 2^w − 2·c0` or so; here `square` is the spec's `a² mod p`, and `tests/test_setup_difftest.py` keeps to widths
 where the two agree.
 -/
+
+@[expose] public section
 
 namespace PousCheck.P2
 

@@ -3,8 +3,13 @@ PROTOCOL.md §16.5: the verifier's public file (no rows), whose roots are frame-
 roots are checked here; the input ports' roots depend on the row leaf's schema and are the row leaf's check
 (`RowLeaf.checkPublic`).
 -/
-import Flock.Circuit
-import Flock.FV3
+module
+
+public import Flock.Circuit
+public import Flock.JsonParse
+public import Flock.FV3
+
+@[expose] public section
 
 namespace Flock
 
@@ -38,7 +43,7 @@ def Public.load (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
   let text ← match String.fromUTF8? (file.extract 0 nl) with
     | some s => pure s
     | none => throw "public file: header is not UTF-8"
-  let header ← match Json.parse text with
+  let header ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"public file: header: {e}"
   let ctx := "public file"

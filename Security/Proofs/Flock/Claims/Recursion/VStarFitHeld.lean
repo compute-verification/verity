@@ -1,8 +1,14 @@
-import Proofs.Flock.Claims.Recursion.VStarHh
-import Proofs.Flock.Claims.Recursion.VStarCap0
-import Proofs.Flock.Claims.Recursion.VStarPortsM
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.C3.Reps.RoundLinks
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarHh
+public import Proofs.Flock.Claims.Recursion.VStarCap0
+public import Proofs.Flock.Claims.Recursion.VStarPortsM
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.C3.Reps.RoundLinks
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
 
 /-!
 # The slots a part holds are fitted to their rounds' rows (`hfit_A0`)
@@ -22,6 +28,8 @@ the last that part `s`'s message reads at `layoutBTops` (`msgAt`) is as many hm9
 Part `s`'s stager accepts (`hok`) and its circuit is the staged one (`hS`, for `checkParsed` and the slots' input
 columns, `rowHidden_staged`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

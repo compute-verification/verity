@@ -1,9 +1,11 @@
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
-import Definitions.Pouw.PearlC.DeviceRev1
-import Definitions.Pouw.PearlC.DevicePrices
+module
+
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
+public import Definitions.Pouw.PearlC.DeviceRev1
+public import Definitions.Pouw.PearlC.DevicePrices
 
 /-!
 # The cap circuit's integer tests are rev1's per-tile cap
@@ -22,6 +24,8 @@ and the tests as `cap.py` writes them, and proves the tests decide the cap.
   `I32Eq` selection of the bound); `capTestsW_eq`: under `_cap_constants`' bounds they are `capTests`, since no sum
   they compute leaves 31 bits (`capSums_fit`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Cap
 

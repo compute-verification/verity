@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Soundness.Discharge.Exec.Tables
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+module
+
+public import Proofs.Flock.Recursive.Target
+public import Proofs.Flock.Soundness.Discharge.Exec.Tables
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 
 /-!
 # VBridge G: the compiled inner verifier accepts from both reps' accepting runs
@@ -19,6 +21,8 @@ openings with their salts (`tableTape`).
 * `flockInnerCL_rejects_short`: `flockInnerCL` accepts no transcript of at most `r` rounds, the rounds `Inner.game`
   plays: each of them ends with a coin, and the table ends with the openings' message.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.InnerAccepts
 

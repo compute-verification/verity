@@ -1,7 +1,9 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditDeployed
-import Proofs.Accounting.RateAudit.Deployed
-import Proofs.Accounting.RateAudit.DeployedSketch
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditDeployed
+public import Proofs.Accounting.RateAudit.Deployed
+public import Proofs.Accounting.RateAudit.DeployedSketch
 
 /-!
 # The deployed verbatim-sketch session with a shared query budget: queries add, grinding does not multiply them
@@ -35,6 +37,8 @@ union over a candidate family's query indices), `Device.pr_unpaid_rank_family_le
 form at the worst budget recovers the product form (`RemoteSessionConservationSketchDeployedProduct` in
 `DeployedSketch.lean` keeps that bound stated).
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 

@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Fmt
+module
+
+public import Definitions.Nci.Assumptions.Fmt
 
 /-!
 # NCI over threads, each thread charged by its work at a format's rate: the guarantees
@@ -8,6 +10,8 @@ place of both `WeightsSupport` and the threading premise `ThreadedInfo`: Theorem
 (`ThreadedReadsInfoFmt`), through a containment (`ThreadedContainedInfoFmt`), and for a set read by a state of `k` bits
 and an ingress (`ThreadedOfStateFmt`). The rate `b_a` is at most the format's `log₂ n` less the margin `μ`.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

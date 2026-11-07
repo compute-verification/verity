@@ -1,6 +1,8 @@
-import Mathlib.Data.ZMod.Basic
-import Definitions.Pous.Game.Prob
-import Definitions.Accounting.Tag.Sketch
+module
+
+public import Mathlib.Data.ZMod.Basic
+public import Definitions.Pous.Game.Prob
+public import Definitions.Accounting.Tag.Sketch
 
 /-!
 # The rate audit with a sketch-then-hash tag, for a device that reads sectors verbatim (trusted)
@@ -37,6 +39,8 @@ cannot be injective, and `fib` is the largest fiber of the sector's projection.
 **The oracle and the windows** are `RateAudit`'s: `H` at the window's fresh seed is a uniform function the device
 reaches only through `tag` queries, and its signs, stream, oracle and sample are fresh coins drawn after the layout.
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 

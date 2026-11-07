@@ -1,4 +1,6 @@
-import Definitions.Claims.Sampling
+module
+
+public import Definitions.Claims.Sampling
 
 /-!
 # The universal unit's gates run its private circuit
@@ -16,6 +18,8 @@ significant first, a word without a partner meeting the fill; each of the privat
   side's: the compiled unit's binding to its Definition.
 * `Universal_of`: `UniversalIs D` gives the claim `Universal D`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 
