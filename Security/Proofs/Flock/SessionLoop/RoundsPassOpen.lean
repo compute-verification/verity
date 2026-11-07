@@ -11,7 +11,7 @@ import all Init.Data.Array.Basic
 `LeanRelease.SchedTaken` at rep stream `2j + r`'s round after its PIOP (`Masked.repSlot` `0`), wherever the frame takes
 its coins (**`LeanRelease.schedTaken_openBind`**): the frame is past the algebraic phase there
 (`Bind.repState_opened`), the scheduled round on the rep's own table is the opening's binding and `z`'s squeeze
-(`ofLoop_sched_unrefused`, `Bind.sched_open`, `Loop.loopNr_l0`), and the frame takes it (`roundFree_openBind`). This is
+(`ofLoop_sched_unrefused`, `Bind.sched_openBind`, `Loop.loopNr_l0`), and the frame takes it (`roundFree_openBind`). This is
 `openBind_frame`'s argument with the frame's answer from `refusesCoins` in liveness's place. `midAll_openBind`: the
 binding's frames are none the inner proof's label.
 -/
@@ -47,7 +47,7 @@ set_option maxHeartbeats 4000000 in
 `2j + r`'s round after its PIOP (`Masked.repSlot` `0`), whose coins the loop's frame takes, on the loop's own tables
 where `src` samples the tape's level 0. The frame is past the algebraic phase there (`Bind.repState_opened`), the
 scheduled round is the opening's binding and `z`'s squeeze on the rep's own table (`ofLoop_sched_unrefused`,
-`Bind.sched_open`, `Loop.loopNr_l0`), and the frame takes it (`roundFree_openBind`). -/
+`Bind.sched_openBind`, `Loop.loopNr_l0`), and the frame takes it (`roundFree_openBind`). -/
 theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     {x : Msg} {w : Flock.Wit} (hx : Masked.Live x) (hSv : Loop.Serves x) (hS0 : Loop.Level0Src src x w)
@@ -239,7 +239,7 @@ theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     have := (Count.sched_rho htp).1
     omega
   have hn64 : tr.sch.n < 2 ^ 64 := by rw [hT2]; exact lt_trans hnn (by norm_num)
-  obtain ⟨hssz, _zc, _lc, -, T, -, hbody, -⟩ := Bind.sched_open hal' hs'' hdom' (by rw [hT1]; exact hdg) hcapR
+  obtain ⟨hssz, _zc, _lc, -, T, -, hbody, -⟩ := Bind.sched_openBind hal' hs'' hdom' (by rw [hT1]; exact hdg) hcapR
     hmT' (by rw [hT1]; exact hmkt) hXb (by rw [hT2]; exact hk0) (by rw [hT2]; exact hnn) (by rw [hT2]; exact hq)
     hn0r (by rw [Array.size_map, Array.size_range, hAA', hXS]; omega) hmT (p := a + 1) (by rw [hAA', hXS]; omega)
   have hlt' : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (i + 1)).2 < sched'.size := by
