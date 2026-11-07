@@ -3776,3 +3776,16 @@ Full report, with every file:line: note `20261108T0000Z-report-aote-lengthrule` 
 - **The pin's stop set:** the tokenizer's EOS ∪ the generation config's EOS ids ∪ the body's `stop_token_ids`, stop ids before the length cap (`vllm/v1/core/sched/utils.py:94-115`). For GLM-5.3: {154820, 154827, 154829}. G6's comment that vLLM checks max_tokens first is stale at the pin.
 - **Fix.** `StopRule_v1{L, STOP, FINISH}`: no stop id in the first L − 1, and the last a stop id iff `eos`. It costs under 100 ANDs an output, about 3.1M for a 32,768-token response. The request Program returns it as one of #7837's checks (`BuildResult.checks`, open), so that the verdict requires it. It spans `registry/io_shell.py`, `predict/build.py` and `predict/steps.py`, about 250 lines with tests (early truncation refused, extension refused). Not small, and it depends on #7837, so no PR yet. **On your yes** (or circuits' on CIR-162), I write it on `cursor/proofs-lengthrule-<hex>`, stacked on #7837, by Sun 18:00Z. The alternative is one comparison in the compact tie's `IoTieMatch`, the certifier's, but that tie isn't built.
 - **A process slip.** My four CIR-178 comments today went through the Linear connector, so they show Daniel as the author. From now on I post through `research msg linear comment --worker AOTE`.
+- 23:55Z (TWOSESS) **`Reveals`' commitment side fits TWOOPENS's 23:50Z format shape: Flock's registered read at the opening's port passes the deployed check (`opens_atPorts`, at SHA-512).** Details are in `inbox/TWOOPENS.md` at 23:55Z.
+  - **Clean.**
+    - r20261107-232903-f314: `Sampling/CommitAt.lean`, 12 theorems.
+    - r20261107-234012-6f6c: `Bridge/CommitAt.lean`, 2 theorems.
+    - In flight: r20261107-235241-3a91, for `AtPorts` and `opens_atPorts`.
+  - **Copy by path:** `git checkout origin/cursor/proofs-twosess-roots-a3c1 -- Security/Proofs/Flock/Claims/Sampling/CommitAt.lean Security/Proofs/Flock/Claims/Bridge/CommitAt.lean`. Then add two imports:
+    - `public import Proofs.Flock.Claims.Sampling.CommitAt` after `…Sampling.Bext` in `Claims/Sampling.lean`;
+    - `public import Proofs.Flock.Claims.Bridge.CommitAt` after `…Bridge.Transports` in `Claims/Bridge.lean`.
+  - **Blocking; needs TSVERIFY or you.** `SamplingDeploy.Code` has to adopt ports that read the run's roots (`ownAt`), or `Reveals` stays false at `code h`. The adoption touches:
+    - in `Claims/Sampling/Deployed.lean`, the generic lemmas that read `c.own`: `opens_calls_le`, `openCalls` and `openCallsLe_deployOf`, the two `commit` equations, and `sampling_assembled_of`;
+    - in `Claims/Bridge/Transports.lean`, `opens_sha512` and `opens_shaped`;
+    - one-stage's `LayoutIs`, which gains a conjunct.
+    - I can write it on my own branch if TSVERIFY hands it to me.
