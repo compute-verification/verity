@@ -214,7 +214,7 @@ theorem leakCheckSound : LeakCheckSound := by
   split_ifs at h with hc
   obtain ⟨hden, hnum, hrate⟩ := hc
   obtain rfl := Option.some.inj h
-  haveI : NeZero d.den := ⟨hden⟩
+  have : NeZero d.den := ⟨hden⟩
   refine ⟨inferInstance, FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.bern_certifies hnum
     (rateCovers_sound hden hnum hrate) ?_⟩
   have := locBits_le_upper d.units d.count
@@ -228,10 +228,10 @@ theorem lamOf_none {den : ℕ} {C : ℚ} : ∀ {ss : List Rate}, lamOf den C ss 
   | [], _ => by simp
   | r :: rs, h => by
     intro s hs hsn
-    simp only [lamOf] at h
-    split_ifs at h with hr
-    · simp at h
-    · rcases List.mem_cons.1 hs with rfl | hs
+    by_cases hr : r.num < den ∧ 0 < r.work
+    · simp [lamOf, hr] at h
+    · rw [lamOf, if_neg hr] at h
+      rcases List.mem_cons.1 hs with rfl | hs
       · by_contra hw; exact hr ⟨hsn, lt_of_not_ge hw⟩
       · exact lamOf_none h s hs hsn
 
@@ -273,7 +273,7 @@ theorem workCheckSound : WorkCheckSound := by
   intro d h
   simp only [checkWork, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at h
   obtain ⟨⟨⟨⟨⟨hden, hC⟩, hδ0⟩, -⟩, hall⟩, hlam⟩ := h
-  haveI : NeZero d.den := ⟨hden⟩
+  have : NeZero d.den := ⟨hden⟩
   refine ⟨inferInstance, fun n σ hσ B hB => ?_⟩
   have hst : ∀ u, (σ u).num ≤ d.den ∧ 0 ≤ (σ u).work := fun u => by simpa using hall _ (hσ u)
   have hD : (0 : ℝ) < d.den := by exact_mod_cast Nat.pos_of_ne_zero hden
@@ -285,7 +285,7 @@ theorem workCheckSound : WorkCheckSound := by
   · obtain ⟨u, hu, he⟩ := hfull
     rw [prod_eq_zero hu (by rw [he, div_self hD.ne', sub_self])]
     exact_mod_cast hδ0.le
-  push_neg at hfull
+  push Not at hfull
   have hlt : ∀ u ∈ B, (σ u).num < d.den := fun u hu => lt_of_le_of_ne (hst u).1 (hfull u hu)
   revert hlam
   cases hl : lamOf d.den d.target d.strata with
@@ -317,7 +317,7 @@ theorem workCheckSound : WorkCheckSound := by
         have h2 := Real.exp_le_exp.2 (neg_le_neg (hq u hu))
         linarith
     calc ∏ u ∈ B, (1 - ((σ u).num : ℝ) / d.den) ≤ ∏ u ∈ B, Real.exp (-((l : ℝ) * (σ u).work / d.target)) :=
-          prod_le_prod (fun u _ => hfac0 u) hfac
+          prod_le_prod₀ (fun u _ => hfac0 u) hfac
       _ = Real.exp (-((l : ℝ) / d.target * ∑ u ∈ B, ((σ u).work : ℝ))) := by
           rw [← Real.exp_sum, mul_sum, ← sum_neg_distrib]
           exact congrArg Real.exp (sum_congr rfl fun u _ => by ring)
