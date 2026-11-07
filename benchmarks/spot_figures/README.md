@@ -1,6 +1,6 @@
 # spot_figures
 
-The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
+The SPOT post's Figures 1-5 for one model, derived from the sampled-proofs planner
 (`verity.core.protocols.sampled_proofs.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
 plotted series.
@@ -11,6 +11,7 @@ uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # f
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
 uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4, from Figure 1's JSON
+uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path P]  # Figure 5, from break-even surfaces
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
 ~~~
 
@@ -143,6 +144,11 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   δ = 2^-40, against a proof block's output bits. It is drawn in the simple form q = b ln(1/δ)/T and in the planner's
   exact one-stage form, which adds location bits, over the headline and secondary scopes. Beside it is the rate a 10%
   total cost buys at each line's marginal proof overhead, counting proving alone.
+- **Figure 5** (`figure5.py`), where 10% comes from: the break-even total cost at the FP4 weights (serve tax plus
+  the β at which the bound reaches them) over the headline scope, along a path of levers from today's measured system.
+  Each step adds one lever to the ones before it. Beside it is the bound at a 10% total cost. It reads break-even
+  surfaces (`breakeven_surface.json`) and a path (`figure5.PATH` or `--path`) giving each step's status (measured,
+  modeled or assumed) and the surface case that prices it. A step no surface prices is drawn as pending.
 - The headline scope (`figure1.PRIMARY`, a world year) gets the bare file names. Its exfiltration panel also plots
   (A) over the secondary scope (`figure1.SECONDARY`, a datacenter year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build
