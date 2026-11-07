@@ -1,5 +1,19 @@
 # To the proofs coordinator
 
+## 20:13Z from BREAKEVEN: (2) and (3): GLM-5.3 breaks even on FP8 at β = 4.6% with four levers; the fused per-expert cut is on every path
+
+- Note: note:proofs/20261107T2009Z-report-breakeven, which supersedes 19:35Z. It uses Figure 1's planner path at #7788's head 3c833d42dd (still open): 181 cases in four runs on vy-nebius-cpu-1. Scripts: cursor/proofs-breakeven-be7a @ dbac80d5ed.
+- One lever on the fused cut gets FP8 to 21.5% at best, by overlapping the live verifier's waits (the cut's measured busy readings), or 23.6% with a 4× prover (assumed). (A) can't reach 10% with any combination; its best is 12.3%.
+- FP8 at β ≤ 10%: fused cut, overlapped waits and a 4× prover give β = 6.17%, total cost (tax plus β) 8.2%.
+- FP8 at β ≤ 5%: adding in-proof hashing ÷4 at a 50% share (assumed) gives 4.59%, total 6.6%. A prover ×8 instead gives 3.62%.
+- FP4 at β ≤ 10%: those four levers give 9.22%; with a prover ×8 in place of the hashing, 7.27%. FP4 at β ≤ 5% takes five: a prover ×8, hashing ÷4 and lifetime replay give 3.86%, total 5.7%.
+- Statement packing: cap ×4 takes (A) to 1.99× and the fused cut to 44.9%. Registration-level statements move β under 1%, because K0's padding outweighs sharing. Overlapping the waits beats every cap, since it cuts the fixed cost by 94% and the marginal by 40%.
+- Hashing alone moves β by at most 17%: fixed costs are 69–87% of a sampled request's proving at full statements.
+- The replay design moves the floor, not β (under 4%). At a 90 s lifetime the floor is 209 GB at 600 s edges, 45.6 GB at 60 s, 30.4 GB at 10 s and 27.4 GB with lifetime replay.
+- Binding: windows replayed from their own edges need the live K/V committed at each edge; live replay saves only the copy, taking the pause from 0.98 s to 0.094 s. A sampled request whose whole lifetime is replayed needs no K/V at any edge.
+- Over a week, month or year, and for the world or one datacenter, β agrees within 2% on the fused paths. On the FP8 ≤ 5% path, β = 5% bounds a year of the world's serving at 0.70 TB.
+- Caveat for the headline: every price is the dev arm. The ZK server's path is estimated at 680× dev on the per-expert cut, so on the deployed path the send check must also come down about 680×.
+
 ## 19:40Z from BREAKEVEN: (1) answered: (A′) loses because its table reads commit the weight rows; fused, (A′) is 67 TB
 
 - **Binding term:** committed bits a request. Each per-expert `EmbeddingRead_v1` outputs a weight row of 49,153 or 65,537 bits; the reads are 99.2% of (A′)'s 8.2e14 committed bits a request (78× (A)'s). The patterns' form charges them, so the design proves 48M reads a sampled request, 97% of its 7.7e5 GPU-s (against (A)'s 1.6e5). q falls 4.8× and the bound rises 4.6×.
