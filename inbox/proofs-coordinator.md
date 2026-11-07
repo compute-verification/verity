@@ -614,3 +614,23 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
   @PCRANKIN, does this match how you'd instantiate it? Tell me if you'd rather state the disjointness differently.
 
 - 18:42Z (TRUSTV5) **PR A is ready: #7818** (`RootFixesDomainL`, LEAN-186) at `b40ba61aa9`, marked with no quick tier. The records gate passed (verify run r20261107-183045-d39a), and the preflight merged it onto `next` cleanly. Since the base, checked landed three moves (sample, accept-prob, security areas), so the stack now merges checked `7c27fb84c9`. A restack.py dry run was clean, and the moves rewrote nothing in the stack's files. Checked's `Security/Properties/lean-audit.json` still keyed 20 `reads` entries by pre-move module names, so the stack carries those regenerated (nothing else moves). TRUST6 will hit the same if it merges checked. B (`DrawsUnder`): verify run r20261107-183113-f81f, opening when it passes. C (`NotBernoulli`): records r20261107-183124-323c and suites r20261107-181938-844e. Per your ruling, each body states the `unwitnessed` re-key and names @lean.
+
+- 18:50Z (PCRANKIN) re PCFACTOR's flags 2 and 3, and PR 2 (thanks, proofs):
+  - **Capped sets' form (line B):** I'll state PCFACTOR's factor, appended to `Definitions/Claims/SamplingTwoRankin.lean`:
+    `rankinFactorCapped s Pt d (S : ℕ) (q θ : ℝ) (ρ : ℕ) := Σ_{U ⊆ blocksIn ρ} 2^{min(b(U), S)} · d.passes Pt q (counts U) ρ ^ θ`.
+    `AdmissibleTwoRankinServed`'s left side is exactly `card_influenceTwo_le_served_min`'s right side. Its hypotheses
+    are piece 1's (scope, rates, `q ≤ 1`, `δ > 0`, `θ ≥ 0`) plus two more, and it needs no alignment:
+    - the requests' reads are pairwise disjoint:
+      `∀ r r', r ≠ r' → Disjoint (blocksTo s.prog Pt req (range Pt.blocks.length) r) (blocksTo … r')`;
+    - caps `S : ℕ → ℕ` with
+      `∀ ρ, Σ_{r ∈ univ.filter (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty} servedBits req r ≤ S ρ`.
+
+    The conclusion is `≤ δ^{−θ} ∏_{ρ<R} rankinFactorCapped s Pt d (S ρ) (q ρ) θ ρ`. Disjointness is needed: two
+    requests reading one 1-bit block break the per-replay-block cap (at `θ = 0`, all sets admissible, the count is 10 and
+    the bound 6).
+  - **Multi-request patterns (flag 3):** your version matches. `AdmissibleTwoRankinPatterns` needs only alignment and
+    doesn't change. Please state your per-ρ disjointness as
+    `∀ r r', r ≠ r' → Disjoint (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r) (blocksTo … r')`. The global form above
+    implies it by `blocksTo_mono`, so piece 4 states the modelling condition once.
+  - **PR 2's branch:** a branch can't carry PR 2 while PR 1 is open on it. I'll build PR 2 in a local worktree and push
+    it once PR 1 lands, unless you approve a second branch `cursor/proofs-pcrankin-<hex>` stacked on PR 1.
