@@ -8,7 +8,11 @@ keys above it all, and the rest from the tied keys, each once); whether the rows
 unpatched ones; and the pass's counters. ``stress.py compare DIR`` reads every ``check.*.json`` and writes
 ``DIR/summary.json``: per case the distinct digests unpatched and canonical across all processes and repetitions.
 ``stress.py time --out DIR`` writes ``DIR/time.json``: the median time of the op, the pass alone and both, by CUDA
-events, at decode and prefill shapes.
+events, at decode and prefill shapes. ``stress.py plugin --out DIR``, in a process whose ``PYTHONPATH`` holds the site
+`dsa_topk.site` wrote and with ``VERITY_DSA_TOPK=canonical``, loads the plugin as vLLM does (``load_general_plugins``)
+and runs each case through the indexer's own entry points (``vllm._custom_ops`` for the prefill and decode selectors,
+``torch.ops._C`` for the other two), writing ``DIR/plugin.json``: which ops the plugin wrapped, the wrapper's calls per
+op, and per case whether its outputs agree with each other and with the reference.
 """
 from __future__ import annotations
 
@@ -382,9 +386,40 @@ def time_(args) -> None:
     (out / "time.json").write_text(json.dumps(rec, indent=1) + "\n")
 
 
+def plugin(args) -> None:
+    from vllm.plugins import load_general_plugins
+    import vllm._custom_ops as ops
+
+    load_general_plugins()
+    canons = {op: vars(getattr(torch.ops._C, op)).get("dsa_topk_canon") for op in dsa_topk.OPS}
+    ns = SimpleNamespace(top_k_per_row_prefill=ops.top_k_per_row_prefill, top_k_per_row_decode=ops.top_k_per_row_decode,
+                         persistent_topk=lambda *a: torch.ops._C.persistent_topk(*a),
+                         cooperative_topk=lambda *a: torch.ops._C.cooperative_topk(*a))
+    rows = []
+    for di, dist in enumerate(args.dists.split(",")):
+        for case in cases(dist, 1000 * di):
+            ref = dsa_topk.reference_rows(case.x, case.lo, case.n, K)
+            got = [case.run(ns) for _ in range(args.reps)]
+            torch.cuda.synchronize()
+            rows.append({"case": case.name, "op": case.op, "dist": dist, "distinct": len({digest(g) for g in got}),
+                         "ref": all(torch.equal(g, ref) for g in got)})
+            print(json.dumps(rows[-1]), flush=True)
+            del case, got
+        torch.cuda.empty_cache()
+    canon = next((c for c in canons.values() if c is not None), None)
+    rec = {"wrapped": {op: c is not None for op, c in canons.items()}, "one_canon": len({id(c) for c in canons.values()}) == 1,
+           "canon": canon.record() if canon else None, "rows": rows}
+    rec["ok"] = (all(rec["wrapped"].values()) and rec["one_canon"]
+                 and all(rec["canon"]["calls"].get(op, 0) > 0 for op in dsa_topk.OPS)
+                 and all(r["distinct"] == 1 and r["ref"] for r in rows))
+    print(json.dumps({k: rec[k] for k in ("ok", "wrapped", "one_canon")}), json.dumps(rec["canon"]), flush=True)
+    Path(args.out).mkdir(parents=True, exist_ok=True)
+    (Path(args.out) / "plugin.json").write_text(json.dumps(rec, indent=1) + "\n")
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("mode", choices=("check", "compare", "time"))
+    p.add_argument("mode", choices=("check", "compare", "time", "plugin"))
     p.add_argument("--out", required=True)
     p.add_argument("--tag", default="0")
     p.add_argument("--reps", type=int, default=4)
@@ -392,9 +427,9 @@ def main() -> None:
     p.add_argument("--iters", type=int, default=50)
     p.add_argument("--variants", default="default", help="stress.py time: the pass's parameters (`variant`), by comma")
     args = p.parse_args()
-    if args.mode != "compare":
+    if args.mode in ("check", "time"):
         import vllm._custom_ops  # noqa: F401
-    {"check": check, "compare": compare, "time": time_}[args.mode](args)
+    {"check": check, "compare": compare, "time": time_, "plugin": plugin}[args.mode](args)
 
 
 if __name__ == "__main__":
