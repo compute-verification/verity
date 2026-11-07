@@ -55,12 +55,12 @@ import functools
 import hashlib
 import re
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import reduce
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from verity.ml.circuits import partition_object as PO
-from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by, required_values
+from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, runtime_rows
@@ -248,6 +248,9 @@ class Population:
                  query: str = QUERY_OF_RECORD) -> None:
         if query not in QUERIES:
             raise ValueError(f"unknown query {query!r}: one of {QUERIES}")
+        if P.checks:
+            # an output, not a required Value: nothing commits a check, and the replay evaluates it from the Values that are required
+            P = replace(P, outputs=tuple(v for v in P.outputs if v not in frozenset(P.checks)))
         self.P, self.corr, self.return_slots, self.query = P, corr, return_slots, query
         self.events = [c.id for c in P.calls if c.family in SAMPLING_EVENTS]
         if not self.events:
@@ -535,7 +538,7 @@ def query_header(profile: str, *, return_slots: bool, query: str = QUERY_OF_RECO
     """The manifest's query header; under Q_word, `partition` (`partition_of`) is the Program's `verity/partition/v1` object and digest,
     and `call_boundaries` says the manifest requires Values two Calls of one module body exchange."""
     word = query == Q_WORD_ID
-    text = (Q_WORD_TEXT if word else Q_MODULE_BODY_TEXT) + f"; policy: prescribed = record-typed inputs (weights); protocol = sampling-event outputs" + \
+    text = (Q_WORD_TEXT if word else Q_MODULE_BODY_TEXT) + "; policy: prescribed = record-typed inputs (weights); protocol = sampling-event outputs" + \
         (" + recorded return slots + returned tensors (every Value of an fx node's output at a step once any of them crosses the module body boundary)"
          ", neither of which is a Call lowered to no runtime tensor whose Values nothing reads" if return_slots else "") + \
         "; unreturned = the Calls whose Values nothing reads, the Program does not return and the policy does not require, listed by identity" + \
