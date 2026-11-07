@@ -1,6 +1,6 @@
-"""a0's Lean draw on a development challenger's coins (`a0.challenger_draw`): the verifier has no randomness of its
+"""a0's Lean sample on a development challenger's coins (`a0.challenger_draw`): the verifier has no randomness of its
 own, so `flock-verify draw` of fewer than every unit reads `--stream-file F`, F holding a challenger's coins opened
-after the registration's digest. F holds exactly the bytes the law reads in Lean's `Draw.drawOn` layout (no
+after the registration's digest. F holds exactly the bytes the sampling design reads in Lean's `Draw.drawOn` layout (no
 extension), and the record beside it replays them from the challenger's commitment, under no other registration digest
 or challenger. `flock-verify` is a stand-in that echoes its argv and F; the challenger's entropy is seeded."""
 from __future__ import annotations

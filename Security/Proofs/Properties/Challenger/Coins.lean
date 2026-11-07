@@ -5,7 +5,7 @@ public import Proofs.Properties.Pouw.LiveSalt.Coin
 public import Proofs.Properties.Pous.MemoryChallenger.Attest
 
 /-!
-# The coins a draw reads are the ones the run released
+# The coins a sample reads are the ones the run released
 
 `challengerStream` reads the segment's openings as its family's coins `start`, `start + 1`, … of the commitment it is
 given (`liveReason`), concatenates their coins, and requires their indices to be exactly those the family's roots, as
@@ -13,7 +13,7 @@ the run's release log shows them, released after `after` (`stream_ok`). So when 
 run's (`s.commitment`, `releasedRootsOf`), the stream is `Run.released`, the run's own coins at those indices
 (`stream_released`), or the fixed finder outputs a break. `drawCoins` reads the stream under the commitment and roots
 of the session the ledger opens (`drawCoins_ok`), and that commitment is its record's (`trustedSession_record`), so the
-coins a draw reads are any such run's released coins, or a break (`drawn_released`). `drawCoins` compares the segment's
+coins a sample reads are any such run's released coins, or a break (`drawn_released`). `drawCoins` compares the segment's
 label by `jsonStrIs`, a match the kernel reduces, so its check gives the label (`jsonStrIs_eq`).
 
 Each opening `liveReason` accepts climbs its path to the commitment's root (`Coin.reason_ok`). The run's root is
@@ -542,7 +542,7 @@ theorem stream_released {s : Run} {c : LiveCommitment} {roots : Roots} {r : Chal
       (fun _ hx => List.mem_append_left _ (opening_mem hr hst hop hp ho.1 hx)) ho.2
   rw [fold_coins openings.toList 0 os .empty hos', Nat.add_zero, Array.length_toList]
 
-/-! ## The draw -/
+/-! ## The sample -/
 
 open Std.Do
 open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple except_spec throw_spec ok_spec mapM_spec)
@@ -623,7 +623,7 @@ theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : drawCoins key
       · cases h
   · cases h
 
-/-- **The coins a draw reads are the ones its session released**: when `drawCoins` reads `ξ` from a segment of family
+/-- **The coins a sample reads are the ones its session released**: when `drawCoins` reads `ξ` from a segment of family
 `label`, `ξ` is the coins of `label` released after `after` by any run of the key's device whose commitment and roots
 are the session's, or the fixed finder outputs a break. -/
 theorem drawn_released {window : String} {after ξ : ByteArray} (h : drawCoins key window label after coins = .ok ξ) :

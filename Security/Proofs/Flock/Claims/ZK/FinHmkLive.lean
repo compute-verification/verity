@@ -41,17 +41,17 @@ import Proofs.Flock.Claims.ZK.L0PinCoins
 /-!
 # `hmk` from the proofs: a rep's masked values below `zp 64` are the request's plus its pads
 
-`tauFw_at`'s `hmk` asks that below `zp 64` the view's masked values be the firewall's request's values plus its pads.
+`tauFw_at`'s `hmk` asks that below `zp 64` the view's masked values be the ZK server's request's values plus its pads.
 The zerocheck and lincheck send every masked value below `zp 64` and return them as their proofs (`zerocheckCut_proof`,
 `lincheckCut_proof`): `round_1_ab`, `round_1_c`, the residual rounds, `final_a`, `final_b`, `final_c`, the lincheck's
-rounds and `z_partial`. `eraseZ` keeps both proofs. So where the firewall's rep at `vals` and `pads` (`repFwC`) and a cut
+rounds and `z_partial`. `eraseZ` keeps both proofs. So where the ZK server's rep at `vals` and `pads` (`repFwC`) and a cut
 rep from a source (`repCut`) both return, at proofs equal up to `eraseZ`, the source's masked values below `zp 64` are
 `vals + pads.h`, whatever answers either run.
 
 * `zcProofOf`, `lcProofOf`: the zerocheck's and lincheck's proofs at the masked values `mk`.
 * `mk_eq_of_proofs`: the two proofs at `mk'` and at `mk` agree only where `mk'` and `mk` agree below `zp 64`.
 * `piop_proofs`: a zerocheck, lincheck and ring switch answered by `asksCut` that returned have those proofs.
-* `repFwC_proofs`, `repCut_proofs`: so do a returned firewall's rep and a returned cut rep.
+* `repFwC_proofs`, `repCut_proofs`: so do a returned ZK server's rep and a returned cut rep.
 * **`masked_of_eraseZ`**: the source's masked values below `zp 64` are `vals + pads.h`.
 -/
 
@@ -199,7 +199,7 @@ theorem piop_proofs (coin : ℕ → ℕ → F128) (n : ℕ) {st : _root_.Flock.S
   rw [hkL] at elp
   exact ⟨e.1.1.1, elp⟩
 
-/-- **A returned firewall's rep has the PIOP proofs of its masked values `vals + pads.h`.** -/
+/-- **A returned ZK server's rep has the PIOP proofs of its masked values `vals + pads.h`.** -/
 theorem repFwC_proofs (coin : ℕ → ℕ → F128) (n : ℕ) (hs : _root_.Flock.Hashes PS) {st : _root_.Flock.Setup}
     (hm : 14 ≤ st.m) (hkL : st.fold.kLog = st.kLog) {sch : _root_.Flock.Schedule} {tPad rep : ℕ} {dom : ByteArray}
     {g : Array F128} {cm0 : FlockComplete.Commit} {extras : Array Claim} {pads : FlockComplete.PadsZk}
@@ -249,7 +249,7 @@ theorem repCut_proofs (coin : ℕ → ℕ → F128) (n : ℕ) (hs : _root_.Flock
   exact piop_proofs coin n hm hkL sch.k0
     (by rw [Array.size_append, FlockComplete.abcClaims_size]; omega) h₁ h₂ h₃'
 
-/-- **The source's masked values below `zp 64` are the firewall's `vals + pads.h`**: where the firewall's rep at `vals`
+/-- **The source's masked values below `zp 64` are the ZK server's `vals + pads.h`**: where the ZK server's rep at `vals`
 and `pads` and a cut rep from `src`, at one setup and any schedules (`k₀` places nothing below `zp 64`), both return,
 each answered by `asksCut` at any coins and stop, at proofs equal up to `eraseZ`. -/
 theorem masked_of_eraseZ (coin coin' : ℕ → ℕ → F128) (n n' : ℕ) (hs hs' : _root_.Flock.Hashes PS)

@@ -18,7 +18,7 @@
 // library's keys, as gpu.Kernels.keys gives them), the check of the expansion.
 //
 // flags, OR'd on the device and never fixed silently: bit 0 a t whose first candidate is >= p (decode_one's; the spec
-// draws the next candidate), bit 2 a block whose decode has more than 16,432 bits (not a codeword: the registered
+// samples the next candidate), bit 2 a block whose decode has more than 16,432 bits (not a codeword: the registered
 // reference refuses it), bit 3 a c >= p (refused there too). Payload bytes are written either way, so a check can compare
 // them with the reference's on any canonical c.
 #include <cstdint>

@@ -36,21 +36,21 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# C-Flock's session as a sampling statement
+# Flock's session as a sampling statement
 
-The C-Flock session's units, read as the sampling claims' statement, partition, commitment and witness
+The Flock session's units, read as the sampling claims' statement, partition, commitment and witness
 (`Claims.Sampling`), so a game-form bound over the live audit can conclude in the claims' relation `RelS`:
 
 * `progOf C κ`: the circuit's gates lowered to the Boolean profile's (`BGate`), in order; a row
   `(⊕ a) ∧ (⊕ b)` is three gates (the two XORs, then their AND), every other gate one. An input gate the constants
-  `κ` fix to `b` is the constant `.const b`, public circuit structure, which a proof unit reads with no opening. Wire
+  `κ` fix to `b` is the constant `.const b`, public circuit structure, which a proof block reads with no opening. Wire
   `g` sits at `posOf C g`, its last gate.
 * `partOf P κ ns`: one class, the population, in strata of sizes `ns`, each a run of consecutive slots
   (`List.splitLengths`). Slot `u` (`blockOf`) is unit `u`'s lowered gates (`unitGates`), then the position of each
   input row `u` owns (`insOf`): an input gate the constants `κ` don't fix, whose first reader is `u` (`owner`). **An
   input row is checked with the unit that owns it**, as the deployed verifier opens it: its session (`HmRow.drawn`)
-  opens only the rows its drawn units read, and registration opens none. An input no unit reads is in no slot.
-* `designOf r`: the population drawn by the one-stage design `r`.
+  opens only the rows its sampled proof blocks read, and registration opens none. An input no unit reads is in no slot.
+* `designOf r`: the population sampled by the one-stage design `r`.
 * `stmtOf P κ r desc q roots`: the statement of the program at constants `κ`, the query `q`, that design and the
   roots.
 * `commitOf pos bit val com cs`: an opening at wire `g`'s position passes when some opening of the registered commit
@@ -65,7 +65,7 @@ namespace Flock.Bridge
 
 open FlockSoundness.Audit
 
-/-- The Boolean-profile gates one C-Flock gate lowers to: three for a row, one for any other. -/
+/-- The Boolean-profile gates one Flock gate lowers to: three for a row, one for any other. -/
 def gateSize {N : ℕ} : Op N → ℕ
   | .row _ _ => 3
   | _ => 1
@@ -118,7 +118,7 @@ def partOf {C : Circuit} {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option 
     Claims.Sampling.Partition :=
   ⟨[ns.splitLengths ((List.finRange n).map (blockOf P κ))]⟩
 
-/-- **The design**: the population drawn by the one-stage design `r`. -/
+/-- **The design**: the population sampled by the one-stage design `r`. -/
 def designOf (r : Claims.Sampling.OneStage) : Claims.Sampling.Design := ⟨[r]⟩
 
 /-- **The statement**: `progOf`'s program at constants `κ` under the query `q` and the descriptor bytes `desc`, the

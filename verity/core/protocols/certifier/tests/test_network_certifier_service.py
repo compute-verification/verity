@@ -346,14 +346,14 @@ def test_the_proof_block_is_the_registered_template(tmp_path):
 
 
 def test_n2s_program_reads_no_registered_value(tmp_path):
-    """N2's verifier of record runs Lean without registered reads (`proofs.verify` with `registered` None), which
+    """N2's verifier runs Lean without registered reads (`proofs.verify` with `registered` None), which
     `proofs.verify` refuses for a program that reads registered values; N2's proof block reads none, so its proofs reach
     Lean."""
     assert not PF.reads_registered(Run(tmp_path).lw.program)
 
 
 def test_the_verdict_of_record_is_the_proofs(tmp_path):
-    """The verifier of record decides on the delivered proof and public inputs alone, and reads the opening only for
+    """The verifier decides on the delivered proof and public inputs alone, and reads the opening only for
     the debug comparison it is given. Each of these rejects an honest execution phase's sample: the Lean run rejecting
     the session, a circuit file other than the committed one, a public file whose instance is another proof block, the
     public or the output row's salt not the one committed, a proof on a head whose counts are off the profile (its
@@ -409,7 +409,7 @@ def test_a_proof_of_another_circuit_with_the_same_interface_is_refused(tmp_path)
     """Each head-check gate names its Definition's pinned circuit digest, so the proof block's Program, which the spec
     and each registration bind, binds the head check's circuit. A head check with the same id and signature that accepts
     every head has another circuit digest: the pinned gate doesn't expand to it, its own gate is another gate, and a
-    proof block holding that gate is another Program, whose proof the verifier of record refuses while it accepts one of
+    proof block holding that gate is another Program, whose proof the verifier refuses while it accepts one of
     the registered Program. A size class no sidecar pins names no digest, and no proof of its proof block is
     accepted."""
     run = Run(tmp_path)

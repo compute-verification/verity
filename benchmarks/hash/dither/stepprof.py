@@ -1,7 +1,7 @@
 """A served decode step by part, from an sbench `prof` capture under DITHER_NSYS=prof (nsys SQLite export).  As
 exactlin/steps.py: the step is the difference of the arm's two NVTX ranges (PROF_RANGE/<arm>/n<N1> and n<N2>, the same 32
 requests generating N1 and then N2 tokens) over N2 - N1, only the pushing process's kernels and memory ops count, and each
-gets a part.  Here a kernel's part is first the window phase (dither_one.PHASE_RANGE/<phase>) its launch call sat in on
+gets a part.  Here a kernel's part is first the Dither state's phase (dither_one.PHASE_RANGE/<phase>) its launch call sat in on
 the host thread (CUPTI's correlation id joins the launch to the kernel; a graph's nodes join to its cudaGraphLaunch,
 outside every phase, so they are the forward's), then, in the forward, the part its name matches (PARTS, else
 steps.CATEGORIES).  Each phase's host wall time a step is reported beside the parts, and the step's GPU idle time
