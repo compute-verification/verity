@@ -54,20 +54,20 @@ end FlockSoundness.Discharge.Layout
 
 namespace Flock.Bridge
 
-/-- **At no public input ports, the constants are `constsOf`'s**: the constant and the zero. -/
+/-- **At no public input ports, the constants are the constant wires'** (`constWiresOf`): the constant and the zero. -/
 theorem constsOfP_empty (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ) (pub : Flock.Public)
-    (g : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)) : constsOfP c hU n {} pub g = constsOf c hU n g := by
+    (g : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)) : constsOfP c hU n {} pub g = constWiresOf c hU n g := by
   unfold constsOfP
   rw [FlockSoundness.Discharge.Layout.keyPubOf_empty]
-  cases constsOf c hU n g <;> rfl
+  cases constWiresOf c hU n g <;> rfl
 
-/-- **The constants at a gate's index**: the constant at gate 0, the zero at gate 1. -/
-theorem constsOf_eq_ite (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ)
+/-- **The constant wires at a gate's index**: the constant at gate 0, the zero at gate 1. -/
+theorem constWiresOf_eq_ite (c : Flock.Circuit) (hU : FlockSoundness.Built c.unit) (n : ℕ)
     (g : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)) :
-    constsOf c hU n g = if g.val = 0 then some true else if g.val = 1 then some false else none := by
+    constWiresOf c hU n g = if g.val = 0 then some true else if g.val = 1 then some false else none := by
   have e1 : (FlockSoundness.Discharge.Layout.oneG (c := c) (hU := hU) (n := n)).val = 0 := rfl
   have e0 : (FlockSoundness.Discharge.Layout.zeroG (c := c) (hU := hU) (n := n)).val = 1 := rfl
-  unfold constsOf
+  unfold constWiresOf
   simp only [Fin.ext_iff, e1, e0]
 
 end Flock.Bridge
@@ -158,8 +158,9 @@ theorem P_heq : HEq (Flock.Bridge.keyPartition A.D A.hU A.n) A.P := by
 input ports. -/
 theorem consts_eq (g : Fin A.Cc.N) : Verity.parsedConsts (some ⟨A.D, A.hU, A.n⟩) g = A.κ g := by
   show _ = Flock.Bridge.constsOfP A.D.unroll A.hU A.n {} A.pub g
-  exact (Verity.parsedConsts_some ⟨A.D, A.hU, A.n⟩ g).trans ((Flock.Bridge.constsOf_eq_ite A.D.unroll A.hU A.n g).symm.trans
-    (Flock.Bridge.constsOfP_empty A.D.unroll A.hU A.n A.pub g).symm)
+  exact (Verity.parsedConsts_some ⟨A.D, A.hU, A.n⟩ g).trans
+    ((Flock.Bridge.constWiresOf_eq_ite A.D.unroll A.hU A.n g).symm.trans
+      (Flock.Bridge.constsOfP_empty A.D.unroll A.hU A.n A.pub g).symm)
 
 /-- **The session's constants fix only inputs.** -/
 theorem κ_isInput (g : Fin A.Cc.N) (b : Bool) (h : A.κ g = some b) : (A.Cc.op g).isInput = true :=
