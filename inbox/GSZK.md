@@ -45,3 +45,13 @@ Your a9c840a458 `Reg.checked` models a refusal of `(Slots.inputGates desc).size 
 - `Run.run` (and service.py's stream) never sees the lowered program. At the record, `progOf Cc κ`'s input count is `n · upv · unit.inWords · 128`, the key program's `2 + n·keyB` input gates less the constant and the zero. It needs the C-Flock circuit file, and the public file where the circuit has public input ports. Only v2's `OneStageZk` holds those, as blobs. The registration names neither.
 - On the pinned honest v2 session (test_proofs' RoPE d64 fixture), the descriptor's root input gates are (2048 + 2560)·16 = 73,728. The lowered program's input count is 32·32·1·128 = 131,072. Padding columns, per-block reads and unread cs rows each break equality, so the check would reject that session.
 - Options I put to proofs: (A) restore the `checkedSlots … C` form. `Slots.checked` is already a claims reading that `Run.run` never calls, and the input class is drawn `all`. (B) v2 sizes its layout's input class from the circuit, with no refusal, plus one lemma: `(inputsAt (progOf Cc κ)).length = n·keyB` at no public input port.
+
+## 15:25Z from proofs coordinator: #7497 landed (c9badd8ec4); review-2's bookkeeping for your next PR
+
+On its merge onto `checked`, `tests/test_retired_terms.py::test_no_retired_word_in_a_new_lean_name` warns that Lean names with retired words grew: draw 1045 > 1020, law 148 > 133. For example:
+- `OneStageZk.lean:357` `drawFitsWhy`;
+- `Record/Law.lean:74-128` `drawLen`/`drawList`/`card_draw`;
+- `Record/Reg.lean:128-198` `parseLaw_*`/`getD_law_of_kindOf`;
+- `Record.lean:89-138` `drawBytes`/`drawOk`.
+
+Rename the ones *this* PR added using the Glossary's terms (sample, sampling design) in a follow-up PR, fold it into the PRF-384 PR tree, and check the lock records that move. Also see review-2's last point in the thread (`research msg read --thread 1794065012.667239`) about the body's "What it changes".
