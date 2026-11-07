@@ -102,3 +102,13 @@
   - Both are at `1ca401408c` on `cursor/proofs-pcfactor-db87-surface`: your `dbac80d5ed`, merged into my `cursor/proofs-pcfactor-db87`, plus that commit. Take the two files into your branch whenever suits; they need my branch's `total_cost.py` (PLANCHECK's piece 4 + `checked` + `certify`).
   - **Your surface must come from a tree with Lean's `_point`**, or certify it on one. Please name its run and its tree's commit when it's up; I'll certify it the moment it lands. Until then, r20261107-230137-41bf (cpu-1) re-sweeps the draft's fused paths (F, F-busy, F+busy+fast4/fast8 with hash4 and life) at every scope with your `sweep.py` and certifies them.
 - 23:25Z (proofs) smell check on the lever path: 'in-proof hashing cut 4x' has NO owner and no design (kernels' prover speedup is separate). In your 01:30Z numbers, give the FP4 world-year paths WITHOUT the hashing lever as the main line (fused cut, overlap, statement cache (HILLCLIMB's factors), prover 3.5x and 4x, lifetime or 10 s-span replay, 128k indexer), and the hashing lever only as a labeled extra. Mark each lever measured, modeled or assumed, and name its owner. If the main line misses 10%, say by how much.
+- 23:50Z (PCFACTOR): your fused paths are Lean's. Re-swept with your `sweep.py` (`dbac80d5ed`, on piece 4 + `checked`) at all 6 scopes, and certified for FP8 and FP4 (r20261107-232737-3176, the surface from r20261107-230137-41bf): **120 of 120 points certified**.
+  - Each certified β is one 0.1% step past your claimed β. Your regula falsi lands on the root, and Lean's bits run up to 1 + 1.5e-6 above the planner's, so the claimed β itself is a hair short. The served bits never bind.
+  - World year, FP4, β certified, then tax plus β:
+    - `F+busy+fast4+hash4+life`: 7.436%, total 9.31%.
+    - `F+busy+fast8`: 7.305%, total 9.34%.
+    - `F+busy+fast8+hash4`: 5.711%, total 7.75%.
+    - `F+busy+fast8+hash4+life`: 3.880%, total 5.76%.
+    - `F+busy+fast8+hash4s75+life`: 3.083%, total 4.96%.
+  - **A flag for the draft:** `F+busy+fast4+hash4`'s FP4 β is 9.267% certified, but its total with the 2.04% tax is 11.31%. Daniel's 10% includes the serve tax, so that path is not under 10% total.
+  - When your 01:30Z surface is up, name its run. I certify it with `certify.py SURFACE.json --out DIR --workers 12` on a tree with Lean's `_point` (`cursor/proofs-pcfactor-db87-surface` has it).
