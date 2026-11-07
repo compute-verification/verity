@@ -525,6 +525,47 @@ def test_an_operand_over_the_input_budget_is_read_lazily_on_the_vectors_words(mo
             "correspondence reads an operand over the input budget lazily"} in e["correspondence"]["realizations"]
 
 
+def _wide_shard():
+    """`EmbeddingShard_v1` at VS=64, H=32, START=1000, with an input budget its table's 2,048 leaves are over: no edge or
+    random token lies in the shard."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.definitions.registry import b1_tp2
+
+    return bind(b1_tp2.EmbeddingShard, VS=64, H=32, START=1000), dataclasses.replace(OPTS, input_budget=1024, vectors=8)
+
+
+def test_an_operand_probe_sets_the_index_that_reads_the_operands_first_and_last_rows():
+    """A shard's edge and random tokens lie outside it, so only its probes (`targets.OPERAND_PROBES`: the shard's first and last
+    token) read the table, one row each, on random words; the reference there equals it on the same words flattened."""
+    from verity.ml.circuits.evaluation import evaluate
+
+    t, opts = _wide_shard()
+    (_tok, table), _ = CK.signature_of(t)
+    F = CK.Findings()
+    rec, _arrays, ref = CK.correspondence(t, opts, F)
+    assert not F.failures and not F.warnings
+    n = CK._n_vectors(t, opts, [1])
+    assert rec["probes"] == [{"tok": 1000}, {"tok": 1063}] and rec["vectors"] == n + 2
+    assert rec["wide"][0]["reads"] == 2 * 32
+    for q, tok in enumerate((1000, 1063)):
+        words = [VX.wide_words(table, n + q, rec["edge_vectors"], opts.seed, 1)(k) for k in range(table.leaves)]
+        assert ref[n + q] == tuple(evaluate(t, tok, words)) != (0,) * 32
+
+
+def test_an_operand_no_vector_reads_is_unchecked_and_a_probe_of_a_non_scalar_is_refused(monkeypatch):
+    t, opts = _wide_shard()
+    monkeypatch.setitem(TG.OPERAND_PROBES, "EmbeddingShard_v1", lambda S: [])
+    F = CK.Findings()
+    rec, _arrays, _ref = CK.correspondence(t, opts, F)
+    assert not F.failures and rec["wide"][0]["reads"] == 0 and "probes" not in rec
+    assert [w["name"] for w in F.warnings] == [
+        "correspondence/operand-unread EmbeddingShard_v1{VS=64,H=32,START=1000}: 1 no vector read 'table', so its words are "
+        "checked on none (`circuit_check.targets.OPERAND_PROBES` sets an index that reads it)"]
+    monkeypatch.setitem(TG.OPERAND_PROBES, "EmbeddingShard_v1", lambda S: [{"table": 0}])
+    with pytest.raises(ValueError, match=r"isn't one of its Value parameters \['tok'\]"):
+        CK.correspondence(t, opts, CK.Findings())
+
+
 def test_an_operands_lazy_words_are_its_edges_then_seeded_random_words():
     """Vector i of a lazily read operand is the i-th edge of its width in every leaf, then random words of that width, the same
     on every draw and different per vector and per parameter."""

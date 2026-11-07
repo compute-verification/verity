@@ -17,7 +17,8 @@
                      entries (`vectors.table_instances`), recorded under ``table`` with the words the vectors read; an
                      operand over the input budget (`targets.LAZY_OPERANDS`, a weight) takes its edge and random words one
                      vector at a time and is read lazily (`vectors.wide_words`), recorded under ``wide`` with the reads of
-                     its words; on both paths the kernels decline, as they take arrays, and the lowering takes every leaf
+                     its words, plus a random vector per index probe (`targets.OPERAND_PROBES`: a shard's or an expert
+                     count's first and last index), and one that no vector reads is a warning; on both paths the kernels decline, as they take arrays, and the lowering takes every leaf
     ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
                      as facts about a primitive: its reference on edge and random operands, each leaf of a bounded parameter
                      folded into its bound, returns every leaf within its interval; and a primitive's transfer, on drawn
@@ -270,9 +271,12 @@ def _unread_operand(t: Any, params: Sequence, wide: Sequence[int]) -> str | None
 def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Options, F: Findings) -> tuple[dict, None, list]:
     """The reference on the vectors of a Definition with operands over the input budget (`targets.LAZY_OPERANDS`): every
     parameter takes its edge and random words, the wide ones one vector at a time (`vectors.wide_words`), each read lazily as a
-    `RegisteredTable`.  No kernel takes them."""
+    `RegisteredTable`, then one random vector per index probe (`targets.OPERAND_PROBES`) with its index parameters set.  An
+    operand no vector reads is a warning.  No kernel takes them."""
     from verity.ml.circuits.evaluation import RegisteredTable
+    from verity.ml.circuits.types import Value
 
+    from .targets import operand_probes
     from .vectors import edges, wide_words
 
     n = _n_vectors(t, opts, wide)
@@ -282,6 +286,23 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
     n_edge = min(n, max([edge_count(other)] + [len(edges(params[j].homogeneous_width())) for j in wide]))
     names = [nm for nm, _ in resolve(t).signature()[0]]
     reads = dict.fromkeys(wide, 0)
+    probes = operand_probes(t)
+    at = {nm: k for k, nm in enumerate(names[j] for j in rest)}
+    scalars = sorted(nm for nm, k in at.items() if isinstance(other[k], Value))
+    for p in probes:
+        if not set(p) <= set(scalars):
+            raise ValueError(f"{t.id}: the operand probe {p} sets a parameter that isn't one of its Value parameters {scalars} "
+                             "(`circuit_check.targets.OPERAND_PROBES`)")
+    E0 = edge_count(other)
+    extra = vectors(other, E0 + len(probes), opts.seed + 1) if probes else []
+
+    def small(i: int) -> list:
+        if i < n:
+            return instance_args(other, arrays, i)
+        a = instance_args(other, extra, E0 + i - n)
+        for nm, v in probes[i - n].items():
+            a[at[nm]] = v
+        return a
 
     def lazily(j: int, word: Callable[[int], int]) -> Callable[[int], int]:
         def read(k: int) -> int:
@@ -289,11 +310,12 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
             return word(k)
         return read
 
+    total = n + len(probes)
     ref: list[tuple[int, ...] | None] = []
     raised: list[dict] = []
-    for i in range(n):
+    for i in range(total):
         args: list[Any] = [None] * len(params)
-        for j, a in zip(rest, instance_args(other, arrays, i)):
+        for j, a in zip(rest, small(i)):
             args[j] = a
         for j in wide:
             args[j] = RegisteredTable(f"operand:{names[j]}", lazily(j, wide_words(params[j], i, n_edge, opts.seed, j)),
@@ -303,11 +325,18 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
         except Exception as e:  # noqa: BLE001  (a partial reference: the finding)
             ref.append(None)
             raised.append({"instance": i, "args": _short(args), "error": f"{type(e).__name__}: {str(e)[:160]}"})
-    rec: dict[str, Any] = {"vectors": n, "edge_vectors": n_edge, "reference_raised": len(raised), "realizations": [],
+    rec: dict[str, Any] = {"vectors": total, "edge_vectors": n_edge, "reference_raised": len(raised), "realizations": [],
                            "wide": [{"param": j, "name": names[j], "leaves": params[j].leaves,
                                      "width": params[j].homogeneous_width(), "reads": reads[j]} for j in wide]}
+    if probes:
+        rec["probes"] = probes
     if raised:
-        F.fail("correspondence", "reference-not-total", t.id, f"raised on {len(raised)} of {n} vectors", examples=raised[:_EXAMPLES])
+        F.fail("correspondence", "reference-not-total", t.id, f"raised on {len(raised)} of {total} vectors",
+               examples=raised[:_EXAMPLES])
+    for j in wide:
+        if not reads[j]:
+            F.warn("correspondence", "operand-unread", t.id, 1, f"no vector read {names[j]!r}, so its words are checked on "
+                   "none (`circuit_check.targets.OPERAND_PROBES` sets an index that reads it)")
     lazy = ", ".join(repr(names[j]) for j in wide)
     for name in sorted(kernels(t)):
         rec["realizations"].append({"via": f"kernel:{name}", "declines": f"a kernel takes arrays, not {lazy} read lazily"})
