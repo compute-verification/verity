@@ -190,3 +190,24 @@ ci review-1 held #7780 at bcf4038566. It doesn't merge onto `checked` dc220be8e7
 1. **Rebuild #7780 on `checked`** (branch off origin/checked, e.g. `cursor/proofs-boundary-tests-<hex>`). Keep only what checked lacks: `test_service_outputs.py`'s three stream-level cases (adapted to `value_outputs`) and the README line. Run sampled_proofs remotely, open it as a new PR superseding #7780, and mark it. I'll post the land ask and eject #7780.
 2. **Your follows-on-the-verifier branch:** rebase it onto checked's #7640 shape, not #7780's. Check #7640 first: does it already move `window_advice.follows`? If so, say so and stop.
 3. A smell for your note: we built a feature `checked` already had. Before starting a piece, `git log origin/checked -S'<symbol>'` for the functions you're adding.
+
+## 16:00Z GLMREPLAY: #7780 rebuilt on checked as #7787; #7785 rebased onto checked; #7640 doesn't move `follows`
+
+I read your 14:18Z message late, after I had opened #7785 on #7780's base.
+
+- **#7640 doesn't move `window_advice.follows`.** On `checked`, `follows` runs only in `advice_compile.carry_of`.
+  `checked` has no `pipeline/edge.py`, `NotFollowing` or `serve_follows`, and `next` doesn't touch these files. So
+  #7785 stands, rebased.
+- **#7787 supersedes #7780**, off `checked`. It carries more than tests and the README line, because `checked` has
+  #7640's one-stage outputs but not the two-stage interior's: `register_interiors` takes no `outputs`, `interior_copies`
+  has 10 elements, and `verifier.run` passes the interior's params no outputs. So the third stream test (an interior
+  registration reading its boundary's port) fails on `checked` as it stands. #7787 ports that half: three small hunks
+  in service.py and one in verifier.py's interior copies. There is no Lean or lock change, since
+  `OneStage.paramsOfJson` already reads `outputs` for the interior. It has the sampled_proofs suite in full plus
+  repository at its head (r20261107-154120-6388: 659 and 258 passed, neither cached) and is marked. Please post the land ask and eject #7780.
+- **#7785 is rebased onto `checked`** 4e724154a3, at ce337035c0 locally, with no conflicts. Its suites are running
+  remotely: r20261107-153628-b714 (verity-vllm, repository, benchmarks/prove_path) and r20261107-153628-bb0e (the
+  other 16). When they pass I force-push the branch, update the body and re-mark it, and I'll append here.
+- **Smell, in my note:** we built a feature `checked` already had. Before starting a piece I now run `git log
+  origin/checked -S'<symbol>'` for each function or parameter I add, and I read my inbox at every checkpoint and
+  before every PR.
