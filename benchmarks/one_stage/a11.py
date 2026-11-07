@@ -649,19 +649,32 @@ def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_
 
 
 @contextlib.contextmanager
-def session_slot():
-    """With A11_SESSION_LOCK=FILE, one session at a time among the audits sharing FILE: each session's prover takes every core,
-    and two sessions' ZK servers and provers side by side outgrow the host."""
-    path = os.environ.get("A11_SESSION_LOCK")
-    if not path:
+def slot(phase: str):
+    """With A11_LOCK_DIR=DIR, at most N of the audits sharing DIR in `phase` at once (A11_SLOTS="session=1,lean=3", 1 a phase
+    it doesn't name): a session's prover takes every core, and side by side the sessions' ZK servers and provers, or the Lean
+    verifiers, outgrow the host."""
+    d = os.environ.get("A11_LOCK_DIR")
+    if not d:
         yield
         return
-    with open(path, "a") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+    n = int(dict(x.split("=") for x in os.environ.get("A11_SLOTS", "").split(",") if x).get(phase, 1))
+    Path(d).mkdir(parents=True, exist_ok=True)
+    files = [open(Path(d) / f"{phase}.{i}", "a") for i in range(n)]
+    try:
+        while not any(_try_lock(f) for f in files):
+            time.sleep(5)
+        yield
+    finally:
+        for f in files:
+            f.close()
+
+
+def _try_lock(f) -> bool:
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except BlockingIOError:
+        return False
 
 
 def session_port(base: int, j: int) -> int:
@@ -926,7 +939,7 @@ def main() -> int:
         sdir = out / f"session-{m['name']}"
         sdir.mkdir(parents=True, exist_ok=True)
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m["n"], "k": len(local), "units": local}, sort_keys=True))
-        with session_slot():
+        with slot("session"):
             t = time.time()
             record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{len(local)}", session_port(a.port, j), sdir,
                                       draw_file=sdir / "draw.json", zk=True)
@@ -943,8 +956,9 @@ def main() -> int:
                                                 and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
                                                 "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
-        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, zk=True),
-                                                "tool": "flock-verify verify --zk --archive --partition --program"}
+        with slot("lean"):
+            lean_v = a0.lean_verify(a.lean, m["st"], m["n"], sdir, zk=True)
+        verdicts[f"lean-verify/{m['name']}"] = {**lean_v, "tool": "flock-verify verify --zk --archive --partition --program"}
         statement[m["name"]] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                                 "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
                                 "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
@@ -1023,7 +1037,7 @@ def main() -> int:
                                                    "first output word flipped before commitment"},
                         leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))
         tcheck = V.check(trec, tprog, tq, tlaw, a0.SCHEME, twant, leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))
-        with session_slot():
+        with slot("session"):
             trecord, tlive = a0.session(a.bin, tst_d, tn, "subset:2", session_port(a.port, len(members) + 1), tdir / "session", zk=True)
         tlean = a0.lean_verify(a.lean, tst_d, tn, tdir / "session", zk=True)
         tm0 = ((trecord or {}).get("verdict") or {})
