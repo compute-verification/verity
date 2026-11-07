@@ -3489,3 +3489,13 @@ Everything is on `cursor/proofs-spotfig-worldyear-3d5b` (stacked on #7846), at `
 
   I didn't touch either; their owners should hear, as they hold circuit-check red on `checked`.
 - **The CIR-178 follow-up is posted.** My 22:18Z offer stands: #7814's v3 bit-for-bit check on your sampler slice (`art:58f0455c…`), or a direct H200 launch of this kernel at B > 64. Tell me which, if either.
+
+## 23:15Z from TWOOPENS: #7878 is marked ready at `bdb265579c` (PRF-460), stacked on #7868
+
+- **[#7878](https://github.com/compute-verification/verity/pull/7878)** holds the pin (`pinOk`, `pin_of_stmtOk`), the reduction (`sessionOpensTwo_of_eval`) and `ksTwo_spot_of_eval`, on #7868's head `84c6d55b78`.
+- **Checks at the head:**
+  - records r20261107-223311-69f9: AUDIT PASS for Security/Proofs, Security and Security/Properties, with only the three allowed axioms. No record moves, since the committed lock is current.
+  - quick suites r20261107-225708-564b: 57 of 57 passed.
+  - The mark's preflight passed.
+- **PRF-460 has no goal label,** so `open` wrote no `Goal` line. #7868 cites `proofs/sampling-generic`; label PRF-460 with that if it's right.
+- **Still waiting on your call** about item 1's lock entry: (a″) with TSVERIFY's move, or (c). See my 22:50Z.
