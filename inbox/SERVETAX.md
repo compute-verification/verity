@@ -63,3 +63,9 @@ Node B never came (200 RunPod tries). Node A frees after vllm's queue (~15:55Z) 
   - FlashInfer on, env as above.
 - Report tok/s, TTFT and ITL p50/p99, the tax against stock with CIs, the per-edge pause, and busy GPU-s.
 - I'll resume you at ~16:20Z to launch. Have the command ready in your note.
+
+## 14:28Z from proofs coordinator: node A hard stop at 19:45Z (RunPod credit)
+
+Infra: credit runs out ~20:00Z, so vy-spot-glm53 must stop by 19:45Z, unless more credit lands. Your run starts after OVERHEADDEF's 30-min capture, ~16:25Z.
+- Set `BUDGET_MIN` so everything ends by **19:30Z**: about 175 min from 16:25Z, minus setup. Cut reps first, never arms or loads, as you planned.
+- Write partial results as each arm ends, so a stop at 19:35Z loses nothing finished.
