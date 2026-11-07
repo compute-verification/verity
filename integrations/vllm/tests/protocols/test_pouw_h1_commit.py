@@ -560,6 +560,28 @@ def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_op
     assert PHC.manifest_reason(record) is None and CR.commit_of(c["commit"]) == (None, ("commit", CR.COMMIT_FORM))
 
 
+class _Unforeseen(Exception):
+    pass
+
+
+@pytest.mark.parametrize("raised,returned", [(ValueError, True), (_Unforeseen, False), (KeyboardInterrupt, False)],
+                         ids=["named-type", "other-type", "base-exception"])
+def test_a_failing_hook_is_the_windows_refusal_and_any_other_failure_is_recorded_then_raised(raised, returned):
+    """A ``commit_record`` that fails with a type `named` names is the window's refusal, which `bind` records and returns
+    for the release to raise (above). One that fails with any other type, a BaseException included, is recorded as the
+    same refusal and raised as it is."""
+    def hook(run):
+        raise raised("window-commit failed")
+    run = SimpleNamespace(entry=ENTRY, commit_record=hook, commits={}, details={})
+    if returned:
+        assert CT.bind(run) == f"{ENTRY}: the window names no Commit record: ValueError: window-commit failed"
+    else:
+        with pytest.raises(raised, match="window-commit failed"):
+            CT.bind(run)
+    assert run.commits["commit"] is None
+    assert run.details["commit_record"] == {"named": False, "reason": f"{raised.__name__}: window-commit failed"}
+
+
 def _kept_tables(monkeypatch) -> dict[str, np.ndarray]:
     """Each step's A table H1 commits, whole, by its name, as the window's served trees register it (`Served._register`)."""
     kept, register = {}, SV.Served._register

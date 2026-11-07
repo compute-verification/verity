@@ -416,16 +416,24 @@ def named(run: Any) -> tuple[str | None, dict[str, Any]]:
     """The Commit record ``run``'s ``commit_record`` names at the window's close (`pouw_h1.H1Run.finish`), its canonical
     JSON in hex as `credit.commit_of` reads it, and what the run records of it (``details.commit_record``): the digests
     of the window's registration and of the record; else None and why it can't be the window's (`reused`), or how
-    ``commit_record`` failed."""
+    ``commit_record`` failed. A failure of any other type is recorded in ``run`` as that refusal, as `bind` records one,
+    and raised."""
     try:
         window, record = run.commit_record(run)
         why = reused(run, window, record)
     except (ValueError, TypeError, KeyError, OSError, RuntimeError) as e:   # the window's refusal, not the server's
         why = f"{type(e).__name__}: {e}"
+    except BaseException as e:
+        run.commits["commit"], run.details["commit_record"] = None, _unnamed(f"{type(e).__name__}: {e}")
+        raise
     if why is not None:
-        return None, {"named": False, "reason": why[:500]}
+        return None, _unnamed(why)
     return canonical_json(dict(record)).hex(), {"named": True, "registration": REG.digest(window),
                                                 "record": REG.digest(record)}
+
+
+def _unnamed(why: str) -> dict[str, Any]:
+    return {"named": False, "reason": why[:500]}
 
 
 def ids_reason(run: Any, tap: CommitTap) -> str | None:
