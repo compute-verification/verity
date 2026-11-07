@@ -78,28 +78,7 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": "Definitions.Assumptions",
- "assumptions": {
-  "Verity.Vocab.PeriodsCouple": {
-   "owner": "@soundness",
-   "digest": "9b9104bef15bbb693a89d823254efc6ca9911c36423d3d5b98375234d0f2e089"
-  },
-  "Verity.Vocab.SubprotocolBound": {
-   "owner": "@soundness",
-   "digest": "1a4d2b3ea246dfa056c0ec2b3edc53f3eadc1d1f43645954fdb4b8a1aaa9b5ba"
-  },
-  "Verity.Vocab.UpFrontFor": {
-   "owner": "@soundness",
-   "digest": "28dd9f723c811dcf0725b2d0bcb064f66c0eb969d4544047538b20753c43b475"
-  },
-  "Verity.Vocab.WipeCoupling": {
-   "owner": "@soundness",
-   "digest": "76c34c31267421ba984076a5c46a5aeeb05af58bd6ec37763fc9c1e4d88e9a0e"
-  },
-  "Verity.Wipe.SurvivorBound": {
-   "owner": "@soundness",
-   "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
-  }
- },
+ "assumptions": {},
  "domain": {
   "Core.Protocol.Accepts": {
    "owner": "@lean",
@@ -779,6 +758,23 @@
    "digest": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  }
+ },
+ "open_seed": {
+  "Definitions.Core.Blocks": {
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "owner": "@soundness"
+  },
+  "Properties.Verity.Coupling": {
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "owner": "@soundness"
+  },
+  "Properties.Verity.Game": {
+   "issue": "LEAN-186",
+   "due": "2026-11-30",
+   "owner": "@soundness"
   }
  },
  "meaning": [
