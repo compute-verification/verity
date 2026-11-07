@@ -1428,3 +1428,37 @@ research run --on vy-spot-glm53 --project verity --source <f095ae769f checkout> 
     run is not yet tied to the view the two-stage ZK reads. A helper there takes the main risk off the proof.
   - **Listing.** `Tup`, `Sessions` and `recOf` are proofs-tree definitions, which keeps the two-stage statements
     unlisted, as #7354's are.
+
+## MOEBIND 20:19Z: A, B and C's statements are on `cursor/proofs-moebind-bdb9` at e6046484c3; D's composition is written
+
+The statements are in `Security/Proofs/Accounting/ReadUnit/Gates.lean` (namespace `Accounting.ReadUnit.Gates`), over the
+verifier's builder `Flock.HmNets` and `FlockSoundness.Discharge.Hm.Sound`, against `Hash` at `Verity.sha512`
+(`Flock.Sha512.hash`). Each is `∀ inputs, Sound (gen inputs) fun z out => <input shapes> → <what out holds>`, as
+Discharge.Hm's gadgets are stated, with the part's generator `gen` a parameter:
+
+- **A (P1AB)** `RowSegSpec n gen`, for `Sha512RowSeg_v1{n}`: on a row of `n` forms, 8 words (`Shaped 8`) holding
+  `Hash.RowSeg.digest Verity.sha512 (evs z row)`.
+- **B (P1AB)** `Hm96LeafSpec key gen`, for `Hm96Sha512Leaf_v1`: on 8 digest words `x` and 24 salt words `y`, 24 words
+  `b ‖ c ‖ leaf` with `wordsDigest z (out.drop 16) = Hash.Hm96.leaf Verity.sha512 key (wordsDigest z x) (wordsBytes z y)`.
+  And `SelectSpec V gen`, for `EmbeddingReadSelect_v1{V,H}`: on `tok` (32 forms), `opened` and `row`, `evs z out.1 = if
+  num (evs z tok) < V then evs z row else fill (row.length / 16)` and `ev z out.2 = (decide (V ≤ num …) || ev z opened)`.
+- **C (P1C)** `FrameReadSpec D schema gen`, for `FrameV3Read_v1{D, schema}`: on root, domain id and leaf (8 words each),
+  the rank's `D` forms and `D` sibling digests' words, a verdict that is set only where `Hash.Tree.climb` at rank
+  `num (evs z pos)` in `denseDomain D (wordsDigest z domain)` (rank r at position r), from the frame leaf over
+  `(wordsDigest z leaf).bytes` through the siblings, reaches `wordsDigest z root`.
+
+The conventions: a word is 64 forms; a digest or byte string sits in words in leaf order, each word's bits least
+significant first and its bytes big-endian (`ReadUnit.bytesOf`, `HmNets.wordBit`'s order); `evs`, `wordsBytes` and
+`wordsDigest` read them under `z`. Each helper proves its spec of a Lean generator that mirrors the part's Python
+lowering (`verity/ml/commitments/gates/{sha512,hm96,embedding}.py`); D ties the registered template's rows to those
+generators.
+
+**D, mine:** `readNet_sound` (`ReadUnit/Net.lean`) composes the four: where they hold, the read's net returns
+`Hash.EmbeddingRead.h V H tok o` and its verdict implies `Hash.EmbeddingRead.ok` at SHA-512 in the dense domain of `V`
+rows (`D = depth V`, `V ≤ 2^D`). Their elaboration is run r20261107-201809-b360, queued for a proofs slot on
+vy-nebius-cpu-2, where all 12 slots are held. I'll post here if a statement changes. Next for D: the tie, through
+`Core.Registration`'s `Declared` as soundness said.
+
+**The P2 PR**'s head moves to e6046484c3 so that it carries these modules. Its suites passed at 1368987219
+(r20261107-195932-bbfb) and its records are running there (r20261107-200231-522b). I mark it once try, records and suites
+pass at the head. Still open from 19:42Z: does P2 compose after L2/L3, or do I add the binding as a field of `Refines`?
