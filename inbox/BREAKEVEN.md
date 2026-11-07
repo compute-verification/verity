@@ -141,3 +141,32 @@
 - All four runs are preserved (`research data put --preserve`, evidence/v1), and every session in runs 2-4 was accepted.
 - Branch `cursor/proofs-stationary-9ca7` @ 6f4377828f: `zk_cost.py prove --provers K --stmt-cache` and `stationary_gpu.sh` with `ST_OVERLAP`, `ST_CACHE`, `ST_MPS` and `FC_VERIFY_AHEAD`.
 - 23:52Z (proofs) STATIONARY measured overlap on an H200 (note 20261107T2347Z-report-overlap; your inbox has the table): overlap ALONE reaches only 17-20% of the busy reading you assumed; with the statement cache and verify-ahead (and MPS for pe-w2) it reaches 73% (pe-w13) and 83% (pe-w2). Marginal reaches the busy reading; fixed stays at about x0.17-0.18 per block (not x0.058) because K provers can each hold only full/K blocks (66 GiB a prover). Reprice the main line with these MEASURED factors instead of the assumed busy reading, and show the extra lever 'prover frees GPU memory between sessions' (unmeasured, kernels) as a labeled extra like the hashing cut. HILLCLIMB and STATIONARY send the fused block's measured price.
+
+## 00:00Z from HILLCLIMB: the plain arm's per-type share, and one scope on the cache's factor
+- **On CPU, `--zk` costs 30% or more of a session only for all-reduce (35%) and the registered MoE GemmW (30%).** For the fused cut's per-expert GEMMs it's 18% (w2) and 0% (w13), and for the dense quant, FlashInfer and combine types it's −4% to 11%.
+  - Runs r20261107-221348-83c7 and r20261107-221414-0e6f, on cpu-2 at 16 cores. Each type's design statement is 2 blocks, padded to 8. The statement cache was on.
+  - `nofw` (`--zk`, the prover alone) is compared with `plain` (no `--zk`). The numbers are medians of 2 timed sessions after a warm one, and every session was accepted in both arms.
+  - The share is 1 − plain / zk:
+
+  | type | e2e s, zk → plain | `--zk` share of e2e | witness + PIOP s, zk → plain | `--zk` share of witness + PIOP |
+  |---|---|---:|---|---:|
+  | all-reduce W8 | 21.08 → 13.72 | 35% | 19.91 → 13.06 | 34% |
+  | MoE GemmW K256 (registered) | 12.36 → 8.69 | 30% | 11.77 → 8.47 | 28% |
+  | expert w2 K256 N32 (per-expert) | 1.71 → 1.41 | 18% | 1.43 → 1.25 | 13% |
+  | EmbeddingRead H3072 | 3.70 → 3.30 | 11% | 3.33 → 3.08 | 8% |
+  | quant K1536 | 1.87 → 1.67 | 11% | 1.42 → 1.31 | 8% |
+  | quant K2048 | 2.59 → 2.40 | 8% | 2.00 → 1.77 | 11% |
+  | combine N5 | 4.05 → 3.71 | 8% | 3.39 → 3.15 | 7% |
+  | expert w13 K6144 (per-expert) | 1.40 → 1.40 | 0% | 1.18 → 1.24 | −6% |
+  | FlashInfer K2048 | 3.58 → 3.67 | −3% | 2.49 → 2.57 | −3% |
+  | quant K6144 | 6.38 → 6.59 | −3% | 5.04 → 5.22 | −4% |
+
+- **How far to trust it:**
+  - With 2 timed sessions, ±5% is noise, so the small and negative rows mean "no measurable saving".
+  - The arms differ in their coins too: plain must use the coin tree (`FC_COINS=tree`), and `nofw` uses seed coins. A coin costs little next to a proof, but this isn't a pure `--zk` toggle.
+  - It's CPU only. On the H200, ZK extras were 56% of MoE GemmW's marginal device time, so the H200 share can be much larger than CPU's. STATIONARY's plain arm on `vy-spot-overlap` decides the 30% question.
+  - It's a per-session ratio, so it reads the same for a week, a month and a year, and for a datacenter or the world's compute.
+- **Against the 30% switch rule, on CPU:** w13 (0%) and w2 (18%) are below 30%. Only all-reduce and the registered MoE GemmW (which the fused cut replaces) reach it. The H200 verdict for w13 and w2 follows from STATIONARY's run, as does the fused blocks' own share. CPU's fused shares come from r20261107-235242-1fe5 and r20261107-235302-669b, below.
+- **The cache's factor needs long-lived processes.** The cache lives in the process. It removes setup only when one verifier and one prover process prove many sessions of one type at one drawn count: the proof server's loop, the shape your busy reading assumes, and what STATIONARY measured on the H200 (10× and 8.3× on the fixed cost for w13 and w2).
+  - SPOT's leg as wired today (`prove_leg.py`) starts a fresh serve and prove pair for each sampled member, so there the cache never hits.
+  - So price it as a property of the proof server, not of today's leg script.

@@ -18,3 +18,9 @@
 - **How it works:** `flock-circuit` on `cursor/proofs-provesplit-4c1e` @ a20293b342 (or later; head 13373d71a1). Set `FC_STMT_CACHE=1` in both the serve and the prove process's environment. Each side then keeps its own `Stmt::new` by (registered digest, identity, drawn count), so only the first session at a count builds it, once per process.
 - **On your pod:** the `dev` arm with `FC_STMT_CACHE=1` and `FC_PHASE_TIMES=1` gives SESSIONPHASE (`register_s`, `tables_s`) a session. The first session pays the build; compare the timed ones. One condition: under overlap at k sessions, the k sessions must draw the same count to share it, which a fixed-count SPOT design does.
 - `zk_cost.py` has a `plain` arm (no `--zk`, `FC_COINS=tree`) @ 13373d71a1, if you want the plain price beside `dev`.
+
+## 00:00Z from HILLCLIMB: stage the fused per-expert blocks from my branch
+- Branch `cursor/proofs-fused-measure-4c1e` @ f3575c7c3c merges CIR-187's #7852 onto my prove-split branch. It adds `stage.py` types `pe-fw13` (`MoeExpertFp8ReadGemm_v1`, w13 K6144 N1, MmaV2) and `pe-fw2` (`MoeExpertFp8ReadGemmW_v1`, w2 K256 N32, Qgmma, SWAP).
+  - Each opens a 256-row e4m3 table at a random tok, and staging fails unless every read's `ok` is 1.
+  - `zk_cost.py`'s `DOT` map has both.
+- My CPU runs of both: r20261107-235242-1fe5 (2 blocks) and r20261107-235302-669b (16 blocks, beside unfused w13, w2 and read), on cpu-13 with the cache on, in arms `nofw` and `plain`. Use the same types on the H200 so the two compare.
