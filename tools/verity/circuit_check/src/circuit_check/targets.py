@@ -443,7 +443,8 @@ def table_probe(fn: Any) -> Any:
 #: time and read lazily (`checks._wide_correspondence`, `vectors.wide_words`); a wide parameter in neither this nor
 #: `TABLE_PROBES` fails ``correspondence/unprobed-table``
 LAZY_OPERANDS: dict[str, tuple[str, ...]] = {
-    # weights: a linear's or a GEMM's [N][K], an MoE launch's every expert's, and the vocabulary's rows
+    # weights: a linear's or a GEMM's [N][K], an MoE launch's every expert's (with Marlin's per-32 group scales), and the
+    # vocabulary's rows
     "CublasSplitKGemmF32Out_v1": ("w",),
     "DeepGemmFp8Linear_v1": ("w",),
     "Embedding_v1": ("table",),
@@ -451,8 +452,8 @@ LAZY_OPERANDS: dict[str, tuple[str, ...]] = {
     "FlashInferFp8Linear_v1": ("w",),
     "GemmF32Out_v1": ("w",),
     "Gemm_v2": ("w",),
-    "MarlinMoeExpertGemm_v1": ("wq",),
-    "MarlinMoeExpertGemmW_v1": ("wq",),
+    "MarlinMoeExpertGemm_v1": ("wq", "ws"),
+    "MarlinMoeExpertGemmW_v1": ("wq", "ws"),
     "MoeExpertFp8Gemm_v1": ("w",),
     "MoeExpertFp8GemmW_v1": ("w",),
     "ScaledMmFp8BlockGrouped_v1": ("w",),
