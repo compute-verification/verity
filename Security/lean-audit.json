@@ -1453,6 +1453,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Claims.Sampling.SessionRuns": {
+   "owner": "@proofs",
+   "issue": "LEAN-186",
+   "due": "2026-11-08"
+  },
   "Claims.SamplingGeneric.Arg.KS": {
    "owner": "@proofs",
    "digest": "3c1a24cf577163684ee286a639b91a2e7f460eb0acf3c31997fde367092651dc",
@@ -1488,6 +1493,11 @@
    "digest": "b75b47678cd68dec4024450995083072fa2ed0fa5dda902d273c398682193b77",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "Claims.SamplingGeneric.SessionOpensTwo": {
+   "owner": "@proofs",
+   "issue": "LEAN-186",
+   "due": "2026-11-08"
   },
   "Claims.SamplingGeneric.ZkArg.ZK": {
    "owner": "@proofs",
@@ -3085,6 +3095,26 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "SamplingDeploy.Code.InteriorFixed": {
+   "owner": "@proofs",
+   "issue": "LEAN-186",
+   "due": "2026-11-08"
+  },
+  "SamplingDeploy.Code.RefusesTwo": {
+   "owner": "@proofs",
+   "issue": "LEAN-186",
+   "due": "2026-11-08"
+  },
+  "SamplingDeploy.RegMatchesTwo": {
+   "owner": "@proofs",
+   "issue": "LEAN-186",
+   "due": "2026-11-08"
+  },
+  "SamplingDeploy.SessionsIn": {
+   "owner": "@proofs",
+   "issue": "LEAN-186",
+   "due": "2026-11-08"
+  },
   "Verity.Accel.Card.Exact": {
    "owner": "@compute-research",
    "digest": "f13b0004040c17242c244b1336f78520617d481e56e477b018c872f9d707bafd",
@@ -4142,6 +4172,10 @@
   "Pouw.SecurityProofs.PeriodBindingPerProver": {
    "honest": ["Pouw.SecurityProofs.PeriodBindingPerProver_honest"],
    "nontrivial": "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial"
+  },
+  "Flock.SecurityProofs.SampledKSTwo": {
+   "honest": ["SamplingDeploy.sampledKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5654,7 +5688,8 @@
    "Proofs.Pouw.OnsiteFreed": "OnsiteFreed's witnesses read the toy instance's floor, certifier check and quiet prover (`twF`, `twNet`, `quiet`), proof-only beside it",
    "Proofs.Properties.Verity.Recursive": "the recursive audit (RecursiveAuditC3) states sampled proofs at the recursive configuration over the recursion's deployed record (`Dep`, `RecDeploy`), its session in the game (`SessionIn`) and verdict (`RecVerdict`), which read C-Flock's recursive model in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Flock.RecGeneric": "the generic recursion's proofs and its instance at Flock, on the recursive audit's model and C-Flock's; C-Flock is excepted until its spec is extracted",
-   "Proofs.Flock.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec"
+   "Proofs.Flock.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec",
+   "Proofs.Flock.SamplingGeneric": "the deployed two-stage guarantee (`Flock.Guarantees.SampledKSTwo`) states KS at the sampled verifier's code record at its round order (`SamplingDeploy.codeTwoAt`, `compiledTwo`) and that code's facts (`RegMatchesTwo`, `Code.RefusesTwo`, `SessionOpensTwo`), still in Proofs; C-Flock is excepted until its spec is extracted"
   }
  },
  "four_names": [
@@ -14548,6 +14583,9 @@
    "type_hash": "8aa10cc7e22e6a935407fa817c1bd6d0924244fdaf7afc7ec532b6790d1150d5",
    "unfolded_hash": "5b94d4d24d4e02de86ec9412d9263eb9d8a3b59acb969a1e4b7df94cdc67b70b"
   },
+  "Flock.SecurityProofs.SampledKSTwo": {
+   "owner": "@proofs"
+  },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.SamplingClaimsStated : Flock.Guarantees.SamplingClaimsStated"],
@@ -22678,6 +22716,9 @@
     "reads": ["RecDeploy.TopsAt"]
    },
    "type_hash": "e787b8fb274b742517a914116b032b0fa705fc3887b1eaa0d3071cbcf26061ef"
+  },
+  "SamplingDeploy.sampledKSTwo_honest": {
+   "owner": "@proofs"
   },
   "Verity.SecurityProofs.AdaEqAmpere": {
    "owner": "@proofs",
