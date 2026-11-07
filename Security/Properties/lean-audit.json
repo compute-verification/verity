@@ -84,6 +84,11 @@
  "assumptions_module": "Definitions.Assumptions",
  "assumptions": {},
  "domain": {
+  "Claims.Sampling.InScopeTwo": {
+   "owner": "@proofs",
+   "digest": "54d52ad10bb17118bb32e7c108b7b17656ea700c2e9d8830a07c2d76473e2c0c",
+   "why": "The statements the two-stage bound speaks of: a well-formed two-stage design over a topological program its partitions partition."
+  },
   "Core.Protocol.Accepts": {
    "owner": "@lean",
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
@@ -10895,6 +10900,18 @@
    },
    "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound": {
     "function": "SampledProofs.FactorUpper.lnFactorUpperCapped",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.twoStageCheckSound": {
+    "function": "SampledProofs.TwoStageCheck.checkTwoStage",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound": {
+    "function": "SampledProofs.TwoStageCheck.checkTwoStage",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound": {
+    "function": "SampledProofs.TwoStageCheck.checkTwoStage",
     "outcome": "accept"
    }
   },

@@ -564,6 +564,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
              f"({_size(sc['served_bits'])}), the trivial bound: the audit's {'count is' if one else 'counts are'} "
              f"above it, so {'that value is not a result' if one else 'those values are not results'} of the audit."
              if trivial else "")
+    exfil += (" Lean checks every two-stage point's design: its count is the bits Lean certifies there, at a θ Lean "
+              "searched." if out.get("lean") else "")
     bi = conf.get("tokens_bi")
     exfil += (family("tokens", "solid", f"serving commits {a.commits}, a replay block is {a.replay_block}, "
                      f"{priced('tokens')}; {patterns}")
@@ -578,7 +580,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
               f" {c.label} (dashed): serving commits {c.commits}, sampled one-stage, a statement a sampled proof "
               f"block, {priced('every_block')}; consumers.exfiltration_bound's form, which bits are incorrect and "
               "where, at most the served bits by the same count (an influence set is a set of served outputs; Lean "
-              "states it for two-stage only)" + (", each design checked by Lean" if out.get("lean") else "")
+              "states it for two-stage only)"
+              + (", each design checked by Lean" if out.get("lean") else "")
               + f": {_binds(betas, lines['exfiltration']['every_block']['binds'])}.")
     infil = (f" The write form: the bits the incorrect proof blocks write, each sampled request or layer charged at "
              f"most its footprint, at the design its exfiltration line plans. {a.label} (solid, dark to light: its "
@@ -595,7 +598,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
 def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
         workers: int = 1, lean: bool = True) -> dict:
     """Figure 1's JSON in its total-cost form over the scopes named (default all), planned on `workers` processes, with
-    Lean checking the one-stage line's designs unless `lean` is off."""
+    Lean checking every line's designs unless `lean` is off."""
     with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
         return _run(model_name, scope_names, request, pool.map if pool else map, lean)
 

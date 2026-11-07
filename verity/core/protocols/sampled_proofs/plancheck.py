@@ -29,11 +29,12 @@ from .optimize import Cell, Grain, leak_count
 EXE = "sampled-proofs-plancheck"
 #: the share by which a design's float rate is rounded up before Lean checks it
 SLACK = Fraction(1, 2**20)
-#: `TwoStageCheck.searchTheta`'s grid: θ₀ 2^j for |j| <= span, then a Fibonacci search over fib(n + 4) steps, each
-#: evaluated at precision p
-SEARCH = {"span": 2, "n": 12, "p": 32}
 #: the precision a two-stage point's bits are certified at
 TWO_P = 64
+#: `TwoStageCheck.searchTheta`'s grid: θ₀ 2^j for |j| <= span, then a Fibonacci search over fib(n + 4) steps, each
+#: evaluated at precision p.  p is the certifying precision: a coarser one can't resolve −ln(1 − q(1 − e^{−y})) at a
+#: small q, and its search settles on a θ that the certifying precision bounds far worse.
+SEARCH = {"span": 2, "n": 16, "p": TWO_P}
 
 
 def exact(x: float | int | Fraction) -> Fraction:
