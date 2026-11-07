@@ -5,7 +5,8 @@
 #     bash "$RESEARCH_RUN_DIR/inputs/spot_job.sh"
 #   ARM=... LOAD=... CAPTURE=DIR STEPS=s,... bash .../spot_job.sh   # only stage an earlier run's capture again (CPU only)
 # The engine's environment is the served one's: ENGINE_ENV=FILE (KEY=VALUE lines, a server's engine_env.txt) is exported,
-# and FLASHINFER=1 (the default, as production) puts $CUDA_HOME/bin on PATH for FlashInfer's JIT; OUT/engine_env.txt.
+# and FLASHINFER=1 (the default, as production) puts $CUDA_HOME/bin (default /usr/local/cuda-12.9) on PATH for FlashInfer's
+# JIT; OUT/engine_env.txt.
 # 1. The first-stage coin: one step of the window's with SMALL tokens (the FP8 linears' FlashInfer branch, the fused MNNVL
 #    all-reduce + norm) and one with BIG (DeepGEMM and its group quants, the multimem all-reduce, the fused add + RMSNorm at
 #    its 256-thread block, FA3 still split), each uniform over those steps, drawn here before the replay starts
@@ -47,7 +48,10 @@ if [ -n "${ENGINE_ENV:-}" ]; then
     [[ $k =~ ^[A-Z_][A-Z0-9_]*$ ]] && [ "$k" != CUDA_VISIBLE_DEVICES ] && [ "$v" != unset ] && export "$k=$v"
   done < "$ENGINE_ENV"
 fi
-[ "${FLASHINFER:-1}" = 1 ] && export PATH="${CUDA_HOME:-/usr/local/cuda}/bin:$PATH"
+if [ "${FLASHINFER:-1}" = 1 ]; then
+  [ -n "${CUDA_HOME:-}" ] || for c in /usr/local/cuda-12.9 /usr/local/cuda; do [ -x "$c/bin/nvcc" ] && { CUDA_HOME=$c; break; }; done
+  export CUDA_HOME PATH="${CUDA_HOME:?FLASHINFER=1 needs nvcc: set CUDA_HOME}/bin:$VENV/bin:$PATH"
+fi
 { for k in VLLM_USE_DEEP_GEMM VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME CUDA_VISIBLE_DEVICES; do echo "$k=${!k-unset}"; done
   echo "nvcc=$(command -v nvcc || echo none)"
   "$PY" -c 'import importlib.util as u; print("has_flashinfer=" + str(u.find_spec("flashinfer") is not None))'
