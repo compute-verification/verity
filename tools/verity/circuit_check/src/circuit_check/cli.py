@@ -1795,8 +1795,10 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
         rep["ranges"] = rs
         for r in rs:
             why = [f"{len(r['failed'])} failed"] * bool(r["failed"]) + [f"{len(r['missing'])} not checked"] * bool(r["missing"])
+            skipped = sorted({c for cs in r["unchecked"].values() for c in cs})
             print(f"circuit-check: range {r['rule']}: {len(r['spots'])} spot(s), "
-                  + ("holds" if r["holds"] else f"does not hold ({', '.join(why)}; --ranges checks them all)"))
+                  + ("holds" if r["holds"] else f"does not hold ({', '.join(why)}; --ranges checks them all)")
+                  + (f"; {len(r['unchecked'])} spot(s) passed without running {', '.join(skipped)}" if skipped else ""))
     if out:
         out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
     across = s.get("recomputed_across") or {}

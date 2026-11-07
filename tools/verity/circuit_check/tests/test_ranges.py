@@ -45,12 +45,24 @@ def test_a_rule_holds_where_the_run_checked_each_of_its_spots_and_each_passed():
                {"target": "Other_v1{N=4}", "failures": [{"name": "x"}]}]
     (got,) = RG.section(targets, [RULE])
     assert got == {"rule": TEXT, "sidecar": "m.circuit-check.py", "spots": list(RULE.spots), "missing": [], "failed": [],
-                   "holds": True}
+                   "holds": True, "unchecked": {}}
     (short,) = RG.section(targets[1:], [RULE])
     assert short["missing"] == [_id(1, 1)] and not short["holds"]
     (bad,) = RG.section([*targets[:2], {"target": _id(30, 2), "failures": [{"name": "y"}]}], [RULE])
     assert bad["failed"] == [_id(30, 2)] and not bad["holds"]
     assert RG.section(targets[3:], [RULE]) == []
+
+
+def test_a_spot_that_passed_without_running_a_check_is_named_beside_the_verdict():
+    """A partition over its leaf budget is a warning, which fails nothing (circuit-check's own verdict); the rule still holds,
+    and the section names the spot and the check it skipped, so a reader doesn't take it as checked."""
+    skip = {"check": "partition", "code": "unchecked"}
+    style = {"check": "redundant-gates", "code": "boolean"}
+    targets = [{"target": RULE.spots[0], "failures": [], "warnings": [style]},
+               {"target": RULE.spots[1], "failures": [], "warnings": [skip, style]},
+               {"target": RULE.spots[2], "failures": []}]
+    (got,) = RG.section(targets, [RULE])
+    assert got["holds"] and got["unchecked"] == {RULE.spots[1]: ["partition"]}
 
 
 def test_a_report_registers_an_id_by_its_own_target_else_by_a_holding_rule():

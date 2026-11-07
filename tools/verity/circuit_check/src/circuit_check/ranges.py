@@ -132,19 +132,24 @@ def spots(families: Iterable[str] = ()) -> list[str]:
 
 def section(targets: list[dict], rules: Iterable[Rule] | None = None) -> list[dict]:
     """The report's ``ranges``: each rule a spot of which is among ``targets``, with its spots, those not among them
-    (``missing``), those that failed, and whether it holds."""
+    (``missing``), those that failed, whether it holds, and {spot: the checks it passed without running} (``unchecked``: a
+    warning of code ``unchecked``, such as a partition over its leaf budget, which fails nothing, as circuit-check's own verdict
+    doesn't)."""
     out = []
     for rule in declared() if rules is None else rules:
         seen: dict[str, bool] = {}
+        skipped: dict[str, set[str]] = {}
         for t in targets:
             if (did := t.get("target")) in rule.spots:
                 seen[did] = seen.get(did, False) or bool(t.get("failures"))
+                skipped.setdefault(did, set()).update(w["check"] for w in t.get("warnings", []) if w.get("code") == "unchecked")
         if not seen:
             continue
         missing = [s for s in rule.spots if s not in seen]
         failed = [s for s in rule.spots if seen.get(s)]
         out.append({"rule": rule.text, "sidecar": rule.sidecar, "spots": list(rule.spots), "missing": missing, "failed": failed,
-                    "holds": not missing and not failed})
+                    "holds": not missing and not failed,
+                    "unchecked": {s: sorted(skipped[s]) for s in rule.spots if skipped.get(s)}})
     return out
 
 
