@@ -22,7 +22,8 @@ def test_a_rule_spans_the_statics_written_as_ranges_and_fixes_the_rest_by_their_
     assert [RULE.covers(i) for i in (_id(1, 4), _id(65, 1), _id(0, 1), _id(8, 5), _id(8, 1, d=32), _id(8, 1, scale="0.125"),
                                      "Fam_v2{T=8,NS=1,D=16,DOT=Dot_v1,SCALE=0.0625}", "Fam_v1{T=8,NS=1,D=16,DOT=Dot_v1}",
                                      "Fam_v1{T=8,NS=1,D=16,DOT=Dot_v1,SCALE=0.0625,X=1}",
-                                     "Fam_v1{NS=1,T=8,D=16,DOT=Dot_v1,SCALE=0.0625}", "Fam_v1")] == [True] + [False] * 10
+                                     "Fam_v1{NS=1,T=8,D=16,DOT=Dot_v1,SCALE=0.0625}", "Fam_v1",
+                                     "Fam_v1{T=x,NS=1,D=16,DOT=Dot_v1,SCALE=0.0625}")] == [True] + [False] * 11
 
 
 @pytest.mark.parametrize("text, spots, match", [

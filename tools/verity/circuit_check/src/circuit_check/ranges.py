@@ -23,6 +23,7 @@ from .targets import _split
 
 _ID = re.compile(r"([^{]+)\{(.*)\}")
 _SPAN = re.compile(r"(-?\d+)\.\.(-?\d+)")
+_INT = re.compile(r"-?\d+")
 
 
 @dataclass(frozen=True)
@@ -41,12 +42,10 @@ class Rule:
         if m is None or m[1] != self.family:
             return None
         got = _split(m[2])
-        if tuple(got) != self.order or any(got[k] != v for k, v in self.fixed):
+        if (tuple(got) != self.order or any(got[k] != v for k, v in self.fixed)
+                or not all(_INT.fullmatch(got[k]) for k, _, _ in self.over)):
             return None
-        try:
-            vals = {k: int(got[k]) for k, _, _ in self.over}
-        except ValueError:
-            return None
+        vals = {k: int(got[k]) for k, _, _ in self.over}
         return vals if all(lo <= vals[k] <= hi for k, lo, hi in self.over) else None
 
     def covers(self, did: str) -> bool:
@@ -87,7 +86,7 @@ def parse(text: str, spots: Iterable[str], sidecar: str = "") -> Rule:
     ids = []
     for spot in spots:
         got = _split(spot)
-        if set(got) != set(spanned) or not all(re.fullmatch(r"-?\d+", got[k]) for k in spanned):
+        if set(got) != set(spanned) or not all(_INT.fullmatch(got[k]) for k in spanned):
             raise ValueError(f"{where}RANGES rule {rule.text}: spot {spot!r} is not an integer for each of {spanned}")
         fixed = dict(rule.fixed)
         did = f"{rule.family}{{{','.join(f'{k}={int(got[k])}' if k in got else f'{k}={fixed[k]}' for k in rule.order)}}}"
