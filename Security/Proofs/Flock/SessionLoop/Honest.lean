@@ -146,7 +146,7 @@ theorem finalRoundEq_ofLoopLink (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit
     FinalRoundEq finS vs (ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w :=
   finalRoundEq_ofLoop Masked.dataE vs (withFiles (withLink L₀ src) src) (realOf src) _ wk x w
     tablesAdmitUnrefused_dataE (frameUnrefused_ofLoop _ _ _ _ wk x w hSv)
-    (Loop.finishIs vs L₀ src wk x w hsc hR hSv hL0 hSrc hE.own (finS.swCausalOn_of_swCausal vs _ hc))
+    (Loop.finishIs vs L₀ src wk x w hsc hR hSv hL0 hSrc hE hc)
 
 /-- **The transport's trusts at the honest session loop**: at the loop's own inner rounds (`withInner`, at the finish's
 rounds `fin`), link and `Finish`, at its own tables, the honest values and the honest worker (`valsWk`), `TrustsStop`
