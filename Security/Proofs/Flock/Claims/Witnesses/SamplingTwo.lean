@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Claims.SamplingTwo
+public import Definitions.Claims.SamplingServed
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Two
 public import Proofs.Flock.Claims.Deploy

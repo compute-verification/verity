@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Claims.SamplingTwo
+public import Definitions.Claims.SamplingServed
 
 /-!
 # The two-stage sampled audit's guarantees

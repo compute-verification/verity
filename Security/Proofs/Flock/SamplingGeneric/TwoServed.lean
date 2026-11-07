@@ -54,7 +54,7 @@ classes, a request whose `T_r` commits at least `|r|` bits costs `|r|` and its b
 never above the sets'.
 
 * `Prog.Reads.trans`, `Prog.Reads.le`: gate `g` reads gate `j` (`Prog.Reads`, with `servedBits`, `blocksTo`, `lightOf`
-  and `lightBits` in `Definitions.Claims.SamplingTwo`), itself or through the wires it reads.
+  and `lightBits` in `Definitions.Claims.SamplingServed`), itself or through the wires it reads.
 * `Prog.runIn_congr_reads`, `boundary_eq_reads`, `outs_eq_reads`: **the determinism lemma at one returned gate**: two
   traces that make every proof block outside `T` correct and agree at the inputs and at the committed values of `T`
   that a returned gate reads agree at it.
