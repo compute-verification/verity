@@ -2776,3 +2776,17 @@ Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdi
   That is the shape you expected. It sits in a local head on `22d3aa0148` + #7839's `963ae2b92b`; its records run is `r20261107-213538-80a2` (cpu-2). I push it to the branch when that passes.
 - **Line (B), factor level.** `r20261107-211154-88a9` (cpu-2) ran all 378 points at Python's θ, with cells rounded up. Lean's capped bound over Python's `_capped` lies in [1, 1 + 1.4e-6], with no `none`. By configuration the maxima are `tokens_sets` 1 + 2.9e-11, `layer_of_token` 1 + 3.6e-7 and `per_expert_sets` 1 + 1.4e-6. Lean took a median 2.7 s a point (16 processes sharing the machine). That covers the spot check; the figure-level sweep is yours.
 - **Next.** The suites run (`r20261107-201716-9fa9`) is at 73 of 74. Its two reds, `verity-vllm` (ruff F401 in `program/predict/build.py`, and class-G `test_steps`) and circuit-check's catalog-units test (MoE FP8 roots), come from `checked`'s landings that PCRANKIN's head merged, not from this branch. When it finishes I open and mark the PR (`--issue PRF-451`), so it can land before step 2's move.
+
+## 22:20Z from TSVERIFY: correction to 22:02Z. Option (a) is out; the witness routes that remain
+
+- **(a) can't be declared.** Every named assumption lives in `Definitions/Assumptions.lean`, whose package is Mathlib-only, so it can't name `setupOf`/`ZkIn`. `witnesses_assumed` holds only such definitions-tree premises (`Claims.ExpectedCR`). A parse-existence premise is therefore blocked by the trees rule, as the statement is.
+- **What remains for the honest witness:**
+  - (a′) **A degenerate honest `Held`, as `SampledKSTwo_honest`'s toy code is.** Take a registration whose first-stage selection fails before it reads a byte, so no unit is ever checked and `SessionsIn`/`SessionRuns` hold vacuously. Two costs:
+    - `Held.xS₀_ok` must weaken to "in scope when something is checked". That partly undoes item 2: `sessionsIn_code` gets the condition back as a case split, not a premise.
+    - The witness shows `Held` is inhabited, but not that a `Held` with a real circuit is.
+
+    About half a day of Lean, mostly the kernel evaluating `slotDesign`/`layout` on a tiny malformed registration.
+  - (c) **Defer the listing.** `ksTwo_spot` stays proved and unlisted, with the vacuity caveat in the PR body, until C-Flock's deploy spec is extracted. That extraction would open both the definitions-tree statement and a real assumption.
+  - (d) **Kernel-decide a real masked statement's parse.** `Meets.lean` says this is beyond the kernel (`HmRow.parse`).
+- **Placement, independent of the witness:** I'd move `SpotFlock/Code.lean` under `Proofs/Flock/Claims/` (the existing exception, no 41st entry) and add `def Flock.Guarantees.SpotKSTwo` beside it, plus `theorem Flock.SecurityProofs.SpotKSTwo`. It's ready to do on your word. It re-paths TWOSESS's and TWOOPENS's imports, so I'd do it once their branches have rebased onto `2351bcd5b8`.
+- **My recommendation:** items 1 and 2 land as they are (PRF-454), with (c) in the body. Do (a′) only if Daniel wants a lock entry before the spec extraction, knowing its honest witness is degenerate. Your call, or Daniel's, since it is what a listed guarantee rests on.
