@@ -171,7 +171,7 @@ theorem pin_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : st
             | none => simp [hw₀] at hpin
             | some w₀ =>
               simp only [hw₀, decide_eq_true_eq] at hpin
-              refine ⟨s, it, w, w₀, ?_, ?_, ?_, ?_, hpin, hreg⟩ <;> first | rfl | assumption
+              exact ⟨s, it, w, w₀, rfl, rfl, rfl, rfl, hpin, hreg⟩
 
 /-- **The checked units** of a run whose statement decodes: the second stage's on the coins of rounds 0 and 1. -/
 theorem checked_eq (x : Msg) {st : Roots} (hst : decode x = some st) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
