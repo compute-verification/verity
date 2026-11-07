@@ -31,3 +31,20 @@
 - 21:00Z (proofs) two new inputs, priced at FP4, **datacenter year** (the headline now). (1) Kernels' PRF-459 scope: a bit-exact prover speedup of about 3-4x (2.65 s to 0.6-0.95 s a session); 8x would need fewer statement bits or one rep, and we are not asking for one rep. Rerun the FP4 paths at prover 3x and 3.5x, with and without hashing cut 4x and lifetime replay, and say which reach total ≤ 10%. (2) Circuits' 128k scope (CIR-186): at 131k keys the DSA indexer logits cost about 2.2x the linears a decode token. Add the indexer's cost at the 128k serve's request mix (vllm's ctx128k plan, art:4a575e10; the measured serve when it lands, about 22:00Z) and say how much β the 128k context costs over the census request. Target Sun 01:30Z, so the numbers are in the draft at 02:00Z.
 - 21:05Z (proofs) **Daniel ruled (12:51 PM PST): SPOT has no firewall or ZK server.** The roles are an inference server (serves, commits), a proof server (replays and proves; the `dev` arm) and a verifier (challenger plus Lean verifier). The proof server talks only to the verifier, and bits to the verifier are not exfiltration. The `fw` arm and the send check belong to the recursion post. So drop the 'ZK server path costs 680x' caveat from every SPOT headline, table and caption: `dev` is SPOT's price, full stop. SPOT's ZK is `MaskedZK` (honest proof server, any verifier), which costs nothing beyond `dev` since `dev` already runs `--zk`.
 - 21:00Z (proofs) VLLM-242: with the tick, advice is 0 bits a window (prefix-cache hits are recomputed from the registered KV pool; r20261107-204341-1fd1). So the world-year line has no advice term with the tick. Give the FP4 break-even at world year beside datacenter year in your 01:30Z numbers, both with the tick's advice at 0.
+- 21:00Z (STATIONARY → BREAKEVEN) **A correction to 20:31Z: the cap a block is m ≤ 8 for w13 and m ≤ 16 for w2, not 16 and 32.**
+  - Staged slots (k_log) are larger than the Definitions' count:
+    - `st-w13` lays out at 24, 26 and 27 for M = 1, 4 and 8, and M = 16 is refused at compose (2^28 bits), on node A.
+    - `st-w2` lays out at 24, 25, 26 and 27 for M = 1, 4, 8 and 16.
+  - **On the H200 (dev arm, the card's e2e), stationary cuts h a row by a few times, not by about m.** Each row includes its weight and scale reads:
+
+    | form | marginal a row | full statement a row |
+    |---|---|---|
+    | w13 per-expert | 7.3 ms (h 1.2e9) | 21 ms (h 3.4e9) |
+    | `st-w13` M = 4 | 4.4 ms (h 7.0e8) | 15.6 ms (h 2.5e9) |
+    | w2 per-expert | 6.5 to 7.2 ms (h about 8e8) | 23 ms (h 2.8e9) |
+    | `st-w2` M = 8 | 2.0 ms (h 2.5e8) | 10.7 ms (h 1.3e9) |
+
+    The GEMM block itself gets worse a row with M:
+    - The prover pads a unit to 2^k_log, so w13's slot a row stays 2^24.
+    - The ZK server's per-session work grows with the unit's description, and the GPU idles while it waits: 6 s a session at k_log 24, 15 to 20 s at 26.
+  - M = 8 for w13 and 16 for w2 are proving on node A now. The report (proofs/<ts>-report-stationary) has the final tables.
