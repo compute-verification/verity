@@ -81,12 +81,17 @@ def repo(tmp_path, monkeypatch):
     return root
 
 
+def keys_at(root: Path, rev: str, work: Path):
+    """`lean_audit` as the fixture has it, and the keys of ``rev``'s `Security` and `Security/Proofs`."""
+    LA = _load(root / "tools/verity/lean/lean_audit.py", f"lean_audit_for_gate_test_{rev[:8]}")
+    LA.ROOT = G.archive(rev, work / rev)
+    return LA, {p: LA.key(p, G.tracked(rev), LA.FLAGS) for p in LA.UNREAD_FACTS}
+
+
 def keep_facts(root: Path, rev: str, work: Path) -> dict[str, str]:
     """The fixture's facts in the gate's cache under the keys of ``rev``'s `Security` and `Security/Proofs` (each the one
     file: `Facts` joins them by name); the keys."""
-    LA = _load(root / "tools/verity/lean/lean_audit.py", f"lean_audit_for_gate_test_{rev[:8]}")
-    LA.ROOT = G.archive(rev, work / rev)
-    keys = {p: LA.key(p, G.tracked(rev), LA.FLAGS) for p in LA.UNREAD_FACTS}
+    LA, keys = keys_at(root, rev, work)
     cache = LA.COMMON.cache_dir() / "unread-gate"
     cache.mkdir(parents=True, exist_ok=True)
     for k in keys.values():
@@ -152,7 +157,7 @@ def test_a_change_that_leaves_each_name_somewhere_or_that_a_lean_check_reads_pas
 
 
 def test_with_none_of_the_tree_s_facts_it_can_t_judge_and_with_main_s_it_judges_on_those(repo, tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(G, "stored", lambda keys, cache, recorded, commits: ({}, ["no store in this test"]))
+    monkeypatch.setattr(G, "stored", lambda keys, cache, recorded, **_: ({}, ["no store in this test"]))
     base = git(repo, "rev-parse", "HEAD")
     top = commit(repo, "drop the name", {"tools/lonely.py": ""})
     assert G.main([base, top]) == 2
@@ -176,7 +181,7 @@ def test_with_none_of_the_tree_s_facts_it_can_t_judge_and_with_main_s_it_judges_
 
 
 class Store:
-    """The few calls of `research.store.local.LocalStore` the lookup makes, over ``runs`` (newest first: (id, {path: (bytes,
+    """The few calls of `research.store.local.LocalStore` the lookups make, over ``runs`` (newest first: (id, {path: (bytes,
     the sha256 its listing names)})), each run of the commit ``of`` names, if any."""
 
     remote = None
@@ -185,8 +190,9 @@ class Store:
         self.runs = dict(runs)
         of = of or {}
         self.index = type("Index", (), {"sql": staticmethod(
-            lambda q, args: [(rid,) for rid, _ in runs if of.get(rid) in args] if "source_commit" in q
-            else [(rid,) for rid, _ in runs][:args[0]])})()
+            lambda q, args: [(c,) for c in dict.fromkeys(of.get(rid) for rid, _ in runs) if c in args]
+            if q.startswith("SELECT DISTINCT source_commit") else [(rid,) for rid, _ in runs if of.get(rid) in args]
+            if "source_commit" in q else [(rid,) for rid, _ in runs][:args[0]])})()
 
     def get_attempt(self, rid):
         return {"outputs": {"run_files": f"art:{rid}"}}
@@ -199,6 +205,41 @@ class Store:
             (to / p).parent.mkdir(parents=True, exist_ok=True)
             (to / p).write_bytes(self.runs[art[4:]][p][0])
         return to
+
+
+def test_with_neither_tree_s_facts_it_judges_on_the_newest_ancestor_s_a_check_published_says_they_are_stale_and_keeps_nothing(
+        repo, tmp_path, monkeypatch, capsys):
+    """No facts of a Lean are published until its lock run lands, about an hour after it, and the gate couldn't judge a PR
+    above it meanwhile.  With neither ``LO``'s nor `main`'s, it reads those of the newest commit below ``LO`` along first
+    parents, within `ANCESTORS`, that a recorded check published all of at; past the bound it can't judge."""
+    old = git(repo, "rev-parse", "HEAD")
+    _, keys = keys_at(repo, old, tmp_path / "keys")
+    core = (repo / "Security/Definitions/Core.lean").read_text()
+    lean = commit(repo, "a Lean change", {"Security/Definitions/Core.lean": core + "\n"})
+    _, partial = keys_at(repo, lean, tmp_path / "keys")
+    main = commit(repo, "another", {"Security/Definitions/Core.lean": core + "\n\n"})
+    top = commit(repo, "drop the name", {"tools/lonely.py": ""})
+    data = gzip.compress(FACTS.read_bytes())
+    at = "out/lean-audit/unread/{}.jsonl.gz".format
+    published = {at(k): (data, hashlib.sha256(data).hexdigest()) for k in keys.values()}
+    store = Store([("r2", {at(partial["Security"]): published[at(keys["Security"])]}), ("r1", published)],
+                  {"r2": lean, "r1": old})
+    monkeypatch.setattr(G, "evidence_store", lambda: store)
+    monkeypatch.setattr(G, "ANCESTORS", 1)
+    assert G.main([main, top]) == 2
+    err = capsys.readouterr().err
+    assert "can't judge" in err and f"within 1 below {main[:12]} along first parents" in err, err
+    assert f"{lean[:12]}: not all of its Lean's facts are kept or published" in err, "the newest check published one of two"
+    monkeypatch.setattr(G, "ANCESTORS", 2)
+    assert G.main([main, top, "--json"]) == 1
+    doc = json.loads(capsys.readouterr().out)
+    assert (doc["below"], doc["facts_from"], doc["stale"], doc["facts"]) == (main, old, True, keys)
+    assert [f["area"] for f in doc["failures"]] == ["Definitions/Dead", "Definitions/Gone"]
+    assert doc["notes"][0].startswith(f"judged on the stale facts of {old[:12]}'s Lean, below {main[:12]} along first parents")
+    assert doc["failures"][0]["why"].endswith(f"(on the stale facts of {old[:12]}'s Lean)")
+    monkeypatch.setattr(G, "judged", judged_again)
+    with pytest.raises(AssertionError, match="judged again"):
+        G.gate(main, top)
 
 
 def test_the_store_lookup_takes_the_newest_recorded_check_s_facts_of_each_key_whose_bytes_check_out(tmp_path):

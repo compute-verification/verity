@@ -126,7 +126,7 @@ It does not cover:
 - **A real link, or an auditor's host.** The rehearsal runs over loopback, its check plays the ZK server and the
   challenger in one process, and it publishes witness (the records and the certifier's salts) so that its check can be
   replayed. Off the gate the certifier is a process on whatever host ran the rehearsal. Against an endpoint on that
-  host's loopback, that host is the prover's node, not an auditor host; the report's `where` says which. `n2_zk` runs the
+  host's loopback, that host is the developer's node, not an auditor host; the report's `where` says which. `n2_zk` runs the
   prover, the ZK server and the verifier on one node.
 - **The model's size.** The report names the model as the plan does. The plan doesn't say whether the model was cut.
 

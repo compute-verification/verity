@@ -358,9 +358,9 @@ block can import information, spending its fresh bits, or reconstruct it, spendi
 - So verified work does little learning, and learning at scale has to run on the uncredited capacity, which PoUW keeps
   small.
 
-The per-block cap is about h·(k + c/g) weighted weight-uses, h the price of fresh weights the description premise lets a
-block hold (not a storage bound) and g the gates a use's certified upstream computation takes. When reconstructing that
-computation would expose updated weights priced above h, the cap falls to h·k.
+The per-block cap is about k + c/g served uses, g the gates a use's certified upstream computation takes. When
+reconstructing that computation would expose updated weights priced above h, the price of fresh weights the description
+premise lets a block hold (not a storage bound), the cap falls to k.
 
 **Assumes.** The learning rows of the table above, the hardware rows, and parts 1 to 5. Further premises can strengthen
 the local bound (an activation price, a joint price, a recoverable source), each a new hypothesis to earn;
@@ -369,8 +369,8 @@ the local bound (an activation price, a joint price, a recoverable source), each
 **Lean.**
 
 - The local bounds' caps `Nci.Guarantees.HeldBudget` (or, statistically, `Nci.Guarantees.StatHeldBudget`),
-  `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` and
-  `Nci.Guarantees.WeightedProductCap`, and the floor `Nci.Guarantees.CapabilityFloor`: **proved**
+  `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates` and `Nci.Guarantees.RecomputeByState`, and the
+  floor `Nci.Guarantees.CapabilityFloor`: **proved**
   (`Security/Proofs/Nci/Capability/`, `Security/Proofs/Accounting/Coverage.lean`), each from its premises. Every premise,
   structure and bound is surveyed in `Security/Definitions/Nci/Capability/README.md`.
 - Their premises, `Nci.Assumptions.CoversEfficientMethods`, `Nci.Assumptions.DescriptionHard` (or
@@ -449,7 +449,7 @@ Each is a named `Prop` in a lock's `assumptions` (`Security/lean-audit.json`, an
 for the `Properties.*` ones), one line in plain words, except `CoinsConfidential` (prose only). These are the named `Prop`s the statements above
 read; each theorem's full hypotheses are its Lean, among them `TagsOkZHJ`, `Built`, `StrictCR.Finder.CR`,
 `DrawnLayer.JointSound` and `.Pins` (which `CircuitCredit` also reads), and the local bounds' structural
-hypotheses `HeldPriceAtMost`, `SlotsRead`, `OverlapWeights` and `RequiresState`.
+hypotheses `HeldPriceAtMost`, `OverlapWeights` and `RequiresState`.
 
 Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
 
@@ -459,7 +459,7 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 - `Verity.Recursive.LiveCoins` (`live-verifier`), in the recursive form: each part's record holds the live run's coins.
 - `FlockSoundness.Assumptions.TableCRZAt` (`cr/sha-512`) and `FlockSoundness.Discharge.ZkLink.LinkCRZC`
   (`ecr/sha-512`): SHA-512 is collision resistant for the prover's table and link finders. The lock names the table
-  finders' premise `TableCRZAt`; the statement reads it through its abbreviation `TableCRZ`.
+  finders' assumption `TableCRZAt`; the statement reads it through its abbreviation `TableCRZ`.
 - `trusted-host` (`Verity.Assumptions.TrustedHost`, `Security/Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
   on an auditor host too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost` itself.
@@ -524,20 +524,21 @@ The local bounds (part 6):
 ## Results per monitoring period
 
 These figures come from a third route, neither part 6's displayed bound nor `DampenerRemote`: the slowdown
-calculator's partial-sum route. The calculator is `benchmarks/rho` (`verity bench rho`).
+calculator, `benchmarks/rho` (`verity bench rho`).
 Its `periods.py` gives the slowdown bound for monitoring periods of a week, a month and a year, over one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`
 (`uv run python benchmarks/rho/periods.py --scenario reference-remote-h200`):
 
 | Over | Week | Month | Year | Range (week, month, year) | Worst corner |
 |---|---|---|---|---|---|
-| one datacenter | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.9 | 1 |
-| the world | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.9 | 1 |
+| one datacenter | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.8 | 1 |
+| the world | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.8 | 1 |
 
 - **What the figures mean.** Each figure is the hardware multiple over the reference training algorithm at its MFU,
   MFU₀ (`Nci.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
-- **Their status.** They are draft and their premises contested. They come from the calculator's partial-sum route, not
-  from part 6's local bounds.
+- **Their status.** Draft. `output-premise` (`draft:E1-Prop6b`) sets them, `reference-remote-h200-pouw`'s and
+  `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, contested at its premise
+  `draft:E1-output-premise`. `cover` sets `reference-remote-h200-elementary`'s 1, contested via `output-premise`.
 - **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to
   98%).
 - **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all

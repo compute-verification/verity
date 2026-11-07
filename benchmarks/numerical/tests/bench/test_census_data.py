@@ -226,7 +226,7 @@ def test_workloads_are_the_regression_rows_template_mix() -> None:
     assert (r101.vus, gemm, r101.model.name, r101.serving.hardware_class) == (46558, 18400, "Llama-3.2-1B", "l40s")
 
 
-#: bench-spine's input-set generator keys on these template ids (cursor/bench-spine-5777, bench/templates.py); the census must
+#: bench-spine's input-set generator keys on these template ids (`verity_flock.subcircuit_templates`); the census must
 #: name them alike.
 BENCH_SPINE_TEMPLATES = {"gemm-coordinate", "attention-head", "rope-head", "rmsnorm-fused-cuda", "rmsnorm-triton", "silu-mul",
                          "gumbel-top-p-token-select"}
@@ -249,7 +249,7 @@ def test_the_l40s_line_is_the_datasheets_dense_peak() -> None:
     assert "accumulate" in bf16.methodology and bf16.name == "L40S"
 
 
-#: Bound subcircuit ids as bench-spine's generator writes them (bench/templates.py: GEMM, FA2 head, RoPE, the row templates with
+#: Bound subcircuit ids as bench-spine's generator writes them (`verity_flock.subcircuit_templates`: GEMM, FA2 head, RoPE, the row templates with
 #: a float EPS slug) and as the other census templates bind: every one must validate.
 BOUND_ID_EXAMPLES = (
     "gemm-coordinate/k1536/sm90-wgmma-e4m3", "gemm-coordinate/k2048/sm80-mma-bf16", "gemm-coordinate/k2560/sm90-wgmma-bf16",

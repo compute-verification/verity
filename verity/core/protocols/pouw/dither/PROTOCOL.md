@@ -21,8 +21,9 @@ Lean covers this document deletes it. The numbers are D6 v1.1's, and the segment
 
 **The receipt is no-fold.** Each segment's 16-bit noised prefix sums are committed as SHA-512
 hiding leaves before the check coin, and the sampled cells are opened after it; no word is folded into a keyed receipt.
-The served PoUW moves to this receipt, and `SharedNoiseLucks`, the premise its folds' detection rests on, has no place in
-Dither: detection rests on the value root's binding before the coin, SHA-512's extraction and the proved sampling rate.
+The served PoUW moves to this receipt, and `SharedNoiseLucks`, the assumption its folds' detection rests on, has no
+place in Dither: detection rests on the value root's binding before the coin, SHA-512's extraction and the proved
+sampling rate.
 
 Under "One proof system" (`AGENTS.md`), Dither owns what is committed, which proof blocks need proofs, the public Program
 each must pass, and what it does with the outcome. Coins, selection, timing, proving, verifying and the record are the
@@ -391,7 +392,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
     one in from outside and no key is needed for it. A multi-node replica's challenger is the certifier device of its
     lowest-numbered server, and its coins reach the other servers' certifiers only over the auditor's private links.
   - After the MVP, a challenger on a device of its own may reach the certifier only over a private link. A keyed path
-    across hosts the prover controls is open (see "Open"). A SHA-512 keystream with HMAC-SHA-512, at
+    across hosts the developer controls is open (see "Open"). A SHA-512 keystream with HMAC-SHA-512, at
     the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
     RTX PRO 6000 V4 replica's 24.0 GB/s.
   - The challenger's side is two premises, named as in `verity/core/protocols/sampled_proofs/README.md`:
@@ -423,7 +424,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
 - **Receipts are authenticated.** The challenger learns that roots are in only from the certifier's signed receipts,
   whose digests are in the coins' contexts and messages. A forged receipt would draw a check coin before the roots.
 - **A multi-node replica has one boundary**, carried by certifier-to-certifier traffic on auditor-private links under
-  `WitnessPathPrivate`, never through the prover's network, with the replica's certifiers keeping one count, each
+  `WitnessPathPrivate`, never through the developer's network, with the replica's certifiers keeping one count, each
   stamping its own server's ingress on its synced clock. Everything else crossing between its nodes counts.
   V4's replica is 12 H200s (1.5 nodes) or 17 RTX PRO 6000s (2.1 nodes). Counting its inter-node expert and KV traffic
   would fail honest replicas, and excluding that traffic by address would let an outside machine join as a node.
@@ -567,7 +568,7 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
   - μ¹, the honest period's duals at x = 1, published as a parameter, removes 37–40% of that on the H200 and 78–80% on
     the RTX PRO 6000. Its cost is the credited share: pub_μ¹ is 92.3–96.4% of pub_μ° on the H200 and 69.8–85.2% on the
     RTX PRO 6000.
-- **The premises**, named and unproved:
+- **The assumptions**, named and unproved:
   - `SAKMatmul` (`pouw-sak-matmul`): no program computes the committed values more cheaply at μ than the public best.
     It is false wherever a known cheaper route is missing from the menu.
   - `SAKSha` (`pouw-sha512-speed`): nobody hashes meaningfully faster than the pinned public SHA-512.

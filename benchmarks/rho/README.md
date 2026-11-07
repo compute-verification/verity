@@ -52,7 +52,7 @@ step's design in place of the FLOP model, after a table of the step beside it (`
 - `data/*.toml`, the registry (`params.py`): every number the model reads, addressed by a dotted key, each with
   `value`, `unit`, a plausible range (`low`, `high`, which the sweeps span), `source` and `status` (`datasheet`,
   `measured`, `declared`, `assumed`, `ruled`, `conjecture`, `derived`). `data/scenarios*.toml` and
-  `data/reference.toml` name the scenarios; `data/premises.toml` says where each named premise stands and up to what
+  `data/reference.toml` name the scenarios; `data/premises.toml` says where each assumption stands and up to what
   block size; `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
   counted products, and `circuit_properties`' `s_×`, `a_out` and `a_in`).
 - The Lean locks (`Security/lean-audit.json`, `Security/Properties/lean-audit.json`), which `lean.py` reads for each

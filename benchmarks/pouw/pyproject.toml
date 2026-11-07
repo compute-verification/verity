@@ -59,6 +59,8 @@ untraced = [
 # test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
 # before and after vllm's layout move.
+# test_pearl_c_sm90_overhead_arm reads the overhead door's schemes and linears (verity_bench's overhead.py), which name
+# pearl_c_sm90's arm.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
@@ -152,7 +154,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
           "benchmarks/hash/dither/hb_side.py", "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
-          "benchmarks/served_units/summarize.py",
+          "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py"]
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S

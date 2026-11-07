@@ -72,7 +72,7 @@ and so does a link that ends while `serve.py` still serves, because its tunnel e
 - **WitnessPathPrivate.** The coins leave the trusted host only inside the tunnel's ssh channel. That channel goes
   straight to the server's own sshd: the link sets `ProxyJump` and `ProxyCommand` to `none`, and refuses a peer whose
   line names a jump host or a proxy (`jump`). From the server's sshd to the prover's client is the server's loopback.
-  So the hop from the certifier to the server crosses no prover-controlled host beyond the server itself, and what the
+  So the hop from the certifier to the server crosses no developer-controlled host beyond the server itself, and what the
   server's sshd reads is exactly what the link released.
 
 ### What it rests on

@@ -204,18 +204,18 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "server block" for one server's proof blocks in one circuit, "server-time block" for the steps that circuit spans; `verity/blocks/v1`'s `server` and `server_time` keys, until a format version | a server's proof blocks; the circuit's steps |
 | "coverage", "materialization" and "work requirement" for what every successful training run must compute; η_cov's subscript | necessary subcomputation (the covering bounds and the inventory's coverage keep their names) |
 | "exclusion bound" and "exclusion" for the result; for the per-block step, "per-block limit", "per-block cap", "window cap", q, q_T(c, k), and `benchmarks/rho`'s `Cap`, until renamed | the slowdown lower bound; the server-block yield q_S, and the inference-block yield q(c, k) |
-| "registered computation" | the registered circuit |
+| "registered computation", "registered work" | the registered circuit |
 | "training class" for a premise set and the yield it gives; "allowance", "tier", "route" and "application" for a proof of the yields; `benchmarks/rho`'s `CLASSES` and `Allowance`, until renamed | pricing argument (`benchmarks/nci`'s tiers are mechanism sets, `benchmarks/rho`'s routes free-compute sources) |
 | "reference construction", "reference run", "reference circuit" | the reference training algorithm |
 | "dark" (compute, fleet, leaves), "unmonitored", "undeclared hardware", ε_dark, L_dark, and the Lean's `Nci.Dampener.unmonitoredShare` and `benchmarks/rho`'s `eps_dark` until renamed; "monitored" (compute, hardware, a server) | unregistered hardware, ε_unreg, L_unreg; registered hardware (the monitoring period keeps its name) |
-| "certified work", "credited work", "accounted compute", "declared compute", W_acc, W_cert for compute; W_cert in the Lean (`Nci.Dampener.residualShare`, `Accounting.Run.ComputeSound`) and the block record (`verity/block-record/v1`), `w_cert`, until renamed; "certified share", "declared utilization" | verified compute, V ("certified" stays for what a certifier certifies); utilization |
+| "certified work", "credited work", "accounted compute", "declared compute", W_acc, W_cert for compute; W_cert in the Lean (`Nci.Dampener.residualShare`, `Accounting.Run.ComputeSound`) and the block record (`verity/block-record/v2`), `w_cert`, until renamed; "certified share", "declared utilization" | verified compute, V ("certified" stays for what a certifier certifies); utilization |
 | "slack", "uncertified capacity", "uncertified gates", "unaccounted" (share, compute, gates), "undeclared compute", "skippable work", "residual compute", "monitored residual" (r, r̂) | free compute, U (its registered part is ε_undecl + ε_skip). "Slack" keeps its other senses |
 | "unregistered input", "unregistered input bits", "unregistered information", "novel information" | fresh input, fresh input bits (in(I) ∖ θ stays as notation) |
 | a for the protocol index: 𝒜_a, δ_a | p: 𝒜_p, δ_p (a is the initial state) |
 | G for the target or the acceptable outputs | 𝒴, and the task 𝒢 |
 | θ for a card's numbers | the card table (θ is the registered inputs) |
 | "envelope ISA", "envelope op"; `machine-model cover` and its `envelope` key, until renamed | the ACCEL ops (𝒜_p is the admissible set) |
-| "coverage premise", "coverage table"; `machine_model/data/cover/`, until renamed | the card premise, the opcode table (coverage is the inventory's) |
+| "coverage premise", "coverage table"; `machine_model/data/cover/`, until renamed | the card assumption, the opcode table (coverage is the inventory's) |
 | "words" for Dither's committed 16-bit sums | prefix sums |
 | "staging", "the staging decode" for copying a stored model's bytes into GPU memory and decoding them to the served weights; `benchmarks/torch_gpu/p2_stage`, until renamed | the store's load |
 | "post-landing run", "postland" | after-landing run |
@@ -231,6 +231,9 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
 | "proof service" | proof system |
 | "audit coin"; "the audit" as a step | challenger's coins; verification phase |
+| "prover" for the party: "the prover's node, machine, host or site", "a machine the prover doesn't control", "nothing the prover runs or hosts", "prover-controlled", "prover hardware", "the prover system" | the developer: the developer's node, machine, host or site, a machine the developer doesn't control, the developer's hardware ("prover" stays for the proving side of a proof: Flock's prover, a proof's messages, a cheating prover in a soundness statement) |
+| "deployment" for onsite or remote, "onsite deployment", "remote deployment" (a datacenter running Verity, a deployment record and `verity.core.deploy` keep the word) | composite protocol: onsite or remote, the Lean's `Composite` |
+| "named premise", and "premise" for a named `Prop`: "the card premise" | assumption, or a proposed assumption until a lock lists it: the card assumption ("premise" stays for a theorem's hypothesis) |
 | "before that period's coins exist"; "rejection dominates", "reject dominance" | before any coins are flipped; any rejection rejects |
 | tick(g) | t(g) |
 | D for the chosen-state budget | Λ (D is the registered circuit) |
@@ -247,8 +250,8 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - **The card table** is one SKU's numbers at its firmware maximum: its per-resource rates ρ, stores, formats and clock
   ceiling (`benchmarks/pouw/machine_model/`'s data).
 - **The ACCEL ops** are the ACCEL model's six instruction kinds (`Accel.Op`), each priced by a card's rates.
-- **The card premise** (`CardWithinAccel`): anything the card computes in time T, the ACCEL machine computes within T at
-  the card's rates. Its evidence is **the opcode table**, which places every opcode of the card on the ACCEL ops.
+- **The card assumption** (`CardWithinAccel`): anything the card computes in time T, the ACCEL machine computes within
+  T at the card's rates. Its evidence is **the opcode table**, which places every opcode of the card on the ACCEL ops.
 - **Segment**: L consecutive inner indices of one output cell, between two committed prefix sums. A Dither proof block is
   one segment of one cell.
 - **Noise period** L′: the period of Dither's noise along K, a length, not a time (Period); a segment is t = L/L′
@@ -369,12 +372,17 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **`next`**: drive's branch of admitted PRs, one merge each, above `main`, which fast-forwards to its reviewed prefix.
   - **Preflight**: `research queue ready`'s checks of a head merged onto `next`, before the mark; the sync runs none.
   - **Landing gate**: a script at `main` that every PR's merge onto `next` must pass.
+  - **Warn gate**: a script run as a landing gate is, whose failure keeps no PR out: drive lands it and tells its owner.
+  - **Warn step**: a step of the after-landing run whose red is never reverted (drive.toml's `warn_steps`: ratchet-gate):
+    drive rings each culprit's lane, which fixes it forward in its next PR.
   - **Low-risk lane**: drive landing a PR on `checked` on its ready mark alone, when its merge changes nothing drive.toml's
     `lowrisk_excludes` names (no Lean, lock or soundness-path change).
   - **Lock run**: drive's run of `lean-audit` alone on `checked`'s tip after a landing that changes Lean, a lock or the spec,
     which lands on its verdict like any other; drive commits the lock records it regenerated there (`Lock records regenerated
     for #N...`), and the after-landing run checks that commit.
   - **After-landing run**: the full check of `checked`'s tip after each landing; `main` moves only to tips that passed every step on the merge gate.
+  - **Culprit**: the one landing whose change touches what a red's failure names, never found by bisecting; its lane fixes
+    it forward within 2 h, or drive reverts it on `checked`, unless the red is a warn step's.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
     lands from `next` on its review, regenerated by drive on the tip below it and certified there.

@@ -184,8 +184,8 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
         raise ValueError(f"{len(leaves)} bytes of leaves are not {len(refs)} tile leaves")
     tree = MerkleTree(au.transcript_domain(epoch, len(refs), s.commitment_hash), {i: leaves[32 * i:32 * i + 32] for i in range(len(refs))},
                       lambda _: au.TILE_SCHEMA)
-    tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a, s.commitment_hash)
-    tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b, s.commitment_hash)
+    tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a, s.commitment_hash, public=True)
+    tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b, s.commitment_hash, public=True)
     real = call["real_rows"]
     fmap, done = _pool(workers, max(1, (real + n) // (4 * max(workers, 1))))
     try:

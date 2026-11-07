@@ -80,7 +80,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
-  named premise H-μ⁺, not yet in a lock.
+  assumption H-μ⁺ (`Accounting.Assumptions.TS.OperandHMu`).
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
   inside an execution phase, from its live challenge and the previous pass's root; and PoUW's
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the execution
@@ -100,9 +100,9 @@ The rules in force, each stated as itself; the friction skill has the standing r
   useful work near 1% of that effort, is ruled out as an answer; it stays on main only as a reference. Pearl+ is held
   to the same floor.
 - **Auditor-trusted devices.** The network certifiers and memory challengers sign what they see; what they sign is
-  witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the prover doesn't
-  control, never a process on the prover's node, and trust in it and its host is the named assumption `trusted-host`.
-  Nothing the prover runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
+  witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the developer doesn't
+  control, never a process on the developer's node, and trust in it and its host is the named assumption `trusted-host`.
+  Nothing the developer runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
   and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute
@@ -146,6 +146,10 @@ wait on the event or inject the clock; `tests/test_no_wall_clock.py`, its except
 deleted, not rerun. A test that adds more than about a minute to `check` says in its docstring what it catches that a
 cheaper test can't.
 
+Bookkeeping warns and a later PR fixes it: what can be put right after landing without any claim being false meanwhile. The root suite's bookkeeping tests (`BOOKKEEPING` in `tests/conftest.py`: lane text, retired terms, doc
+paths, naming, stale allowlists, Markdown caps) and ruff's style findings warn. Ruff's errors, a crashed scan and
+everything that can make a claim false or can't be undone still fail.
+
 ## Circuits
 
 A change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) passes
@@ -161,7 +165,7 @@ suite, test, target and step's real verdict. What gates, what may stay red and w
 `tools/verity/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
 which drive takes a failure as not red until it expires. `circuit-check` is off the merge gate until `circuit-check --all`
 fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it out, and it runs after
-landing on `checked`'s tip, where a red reverts its culprit at once and holds the PRs touching its inputs until it passes.
+landing on `checked`'s tip, where a red holds the PRs touching its inputs until it passes.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
@@ -170,12 +174,18 @@ A part's verdict is reused while a hash of its declared inputs, the base image a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
 only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, and its low-risk members (no Lean, lock or
 soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alone, runs the full check on its tip itself,
-and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate; a red step's culprit is
-reverted on `checked` (how a PR lands: the team skill). A ready mark admits a PR: the sync's own merge onto `next` (a
-conflict, drive.toml's `landing_gates`) is the only check before it joins, and a body naming no live goal draws a warning,
-never a refusal. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on
-`checked`'s tip (its lock run), commits the lock records it regenerated there, and checks that commit, so `main` moves only
-to a commit whose records are the regenerated ones and whose gated steps all passed on it.
+and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate (how a PR lands: the
+team skill). A red's culprit is the one landing whose change touches what its failure names (its files, the files declaring
+a Lean declaration it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it
+forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
+rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
+is the only check before it joins, and a body naming no live goal draws a warning, never a refusal. A change a `warn_gates`
+gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A red
+ratchet-gate step never reverts (drive.toml's `warn_steps`): drive rings the culprit's owner, who fixes it forward in their
+next PR. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s
+tip (its lock run), commits the lock records it regenerated there, and checks that commit, so `main` moves only to a commit
+whose records are the regenerated ones and whose gated steps all passed on it. The lock run never fails on a lock's
+bookkeeping: it repairs it in that commit, with a warning for each repair (The lock, under Lean).
 
 ## Lean
 
@@ -209,11 +219,16 @@ to a commit whose records are the regenerated ones and whose gated steps all pas
   only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
   premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
   named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean`, and every other premise is
-  open (`open`, with the Linear issue that discharges it and its due date), a list `--update` never adds to, unless it
-  is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it).
+  open (`open`, with the Linear issue that discharges it and its due date), a list a PR's `--update` never adds to, unless
+  it is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it).
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
-  A guarantee that only moved keeps its record (`--update --moved MOVES.json`).
+  A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
+  after a landing. A PR's own check still fails on it. Drive's lock run repairs it in its lock commit and
+  warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee
+  the witnesses rule holds to missing witnesses, a stale entry, a missing owner, or a cap of `unread-caps.json` or
+  `tests/test_lean_packages.py`. A cap more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
+  malformed lock always fail. Lock files never conflict on merge.
 - How to work on Lean (the edit loop, why two agents never share a writable `.lake`, `upstream` watch entries): the
   lean-proofs skill.
 
@@ -230,7 +245,7 @@ to a commit whose records are the regenerated ones and whose gated steps all pas
   delete dead and superseded code, and move data and logs to the evidence store.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
   procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, GLOSSARY.md, the
-  skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` fails on a doc
+  skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` warns on a doc
   naming a dead path.
 - Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
   `show-environment`.

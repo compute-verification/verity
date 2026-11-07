@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Verity x vLLM integration: runtime capture, definitions and Torch-derived Programs for vLLM, Match/Commit, the qualification sweep."
 requires-python = ">=3.12"
 dependencies = [
-    "research",
     "verity",
     "verity-config",
     "numpy>=1.26",
@@ -16,6 +15,9 @@ verity-vllm = "verity_vllm.pipeline.cli:main"
 [project.optional-dependencies]
 # The CPU half (compare / replay / gates / derivation tests) needs torch; the pod runtime adds vLLM through pod_bootstrap.sh.
 torch = ["torch>=2.4"]
+# The team's run and store tool, which the custody, telemetry and store paths (`pipeline/research*.py`, `source_identity.py`)
+# and their tests use; the workspace installs it with every member.
+research = ["research"]
 
 [build-system]
 requires = ["hatchling"]
@@ -45,35 +47,76 @@ markers = [
 ]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a shell): keyed on the suite's whole tree. A compiler
-# needs no entry: a file whose closure builds native code may start one (the test-file family's `compilers`)
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
+    "tests/check/test_pouw_ncp_v2_end_to_end.py",
+    "tests/check/test_replay_definitions.py",
+    "tests/check/test_sampled_replay.py",
+    "tests/check/test_sampled_replay_aliased_module.py",
+    "tests/check/test_sampled_replay_batched_gemm.py",
+    "tests/check/test_sampled_replay_cublas_gemm.py",
+    "tests/check/test_sampled_replay_fp8.py",
+    "tests/check/test_sampled_replay_stoch.py",
+    "tests/check/test_served_check.py",
+    "tests/check/test_weights_of_record.py",
+    "tests/commit/test_native_plans.py",
+    "tests/commit/test_row_tables_device.py",
+    "tests/commit/test_weights_pin_acceptance.py",
     "tests/lint/test_merge_allowlist.py",
     "tests/lint/test_ruff.py",
     "tests/migrate/test_superseded_quarantine.py",
     "tests/ops/test_epoch_row.py",
     "tests/ops/test_pod_bootstrap.py",
+    "tests/pipeline/test_admission_commit.py",
+    "tests/pipeline/test_advice_commit.py",
+    "tests/pipeline/test_advice_windows.py",
     "tests/pipeline/test_boundary_plan.py",
     "tests/pipeline/test_commit_group.py",
+    "tests/pipeline/test_commit_plan.py",
     "tests/pipeline/test_commit_tree_of_record.py",
+    "tests/pipeline/test_config_run.py",
+    "tests/pipeline/test_cublas_names.py",
     "tests/pipeline/test_experiment_index.py",
+    "tests/pipeline/test_fallback_reads.py",
     "tests/pipeline/test_gpu_lease.py",
+    "tests/pipeline/test_hot_commit.py",
+    "tests/pipeline/test_release_json.py",
     "tests/pipeline/test_research_tools.py",
     "tests/pipeline/test_row.py",
+    "tests/pipeline/test_row_group.py",
     "tests/pipeline/test_row_tables_stream.py",
+    "tests/pipeline/test_serve_advice.py",
     "tests/pipeline/test_serve_h1.py",
+    "tests/pipeline/test_serve_seal.py",
     "tests/pipeline/test_source_identity.py",
     "tests/pipeline/test_tp_gpu_lease.py",
+    "tests/pipeline/test_tp_post_load_tensors.py",
+    "tests/pipeline/test_tp_replay_deferred.py",
+    "tests/pipeline/test_tp_run_root.py",
+    "tests/program/predict/test_aot.py",
+    "tests/program/predict/test_aot_row.py",
+    "tests/program/predict/test_batch.py",
     "tests/program/predict/test_predict.py",
+    "tests/program/predict/test_steps.py",
+    "tests/program/test_dense_rows.py",
     "tests/program/test_derive_transfer.py",
+    "tests/program/test_derived_rows.py",
+    "tests/program/test_gemm_target_correspondence.py",
+    "tests/program/test_jit_build_dir.py",
     "tests/program/test_padded_commit_tiny.py",
+    "tests/program/test_twins.py",
+    "tests/properties/test_glm53_bf16_gemm_capture.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
     "tests/protocols/test_credit_gate.py",
+    "tests/protocols/test_pouw_device.py",
     "tests/protocols/test_pouw_h1.py",
     "tests/protocols/test_pouw_h1_commit.py",
     "tests/protocols/test_pouw_h1_live.py",
+    "tests/protocols/test_pouw_h1_registered_device.py",
+    "tests/protocols/test_pouw_h1_tables_device.py",
     "tests/protocols/test_pouw_pearl_c_served.py",
     "tests/protocols/test_rt4_h1_challenger.py",
+    "tests/test_target_family.py",
     "tests/tools/test_ratchet_gate.py",
     "tests/tools/test_scorecard.py",
     "tests/tools/test_suite_parts.py",

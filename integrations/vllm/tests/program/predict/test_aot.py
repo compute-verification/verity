@@ -20,8 +20,6 @@ from verity_vllm.program.predict.build import build_program
 
 from tests.program.predict.test_predict import TINY, _phi
 
-pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
-
 AOT = {"comparison": "r20261018-001500-aaaa", "trace": "art:" + "5" * 64}
 
 

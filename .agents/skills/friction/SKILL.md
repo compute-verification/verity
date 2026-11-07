@@ -143,8 +143,8 @@ Landing:
 - A `# noqa` is an exception too: in `integrations/vllm`, no
   change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
   retirement. The ratchet gate counts them, with no allowlist.
-- Outside `integrations/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each PR's changed Python,
-  as drive lands on `checked` before the suites run: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
+- Outside `integrations/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each landing's changed Python
+  after it lands, ringing its owner, never reverting: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
   list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
   `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
   the PR's base). No new swallowing handler: re-raise, record, or test first.
@@ -171,20 +171,20 @@ Protocols and claims:
   verifier, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
 - An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
   soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
-  premises outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
-- The prover controls the audited circuit's inputs and knows every coin once it is issued, so no defense assumes
+  assumptions outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
+- The developer controls the audited circuit's inputs and knows every coin once it is issued, so no defense assumes
   the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
-  trusted third party, salted after the commitment with secrets the prover never sees, as one deployment variant.
+  trusted third party, salted after the commitment with secrets the developer never sees, as one deployment variant.
 - No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
   bound on the named conjecture `EncodeChainHardness`, with the claims resting on it listed as conditional.
   (`EncodeChainHardness` is falsified, `EncodeChainRefuted`; the bound now rests on `SquaringFloor` and
   `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
 - Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
-  are for the whole node. PoUB treats the prover's resources as one pool (conservation, no identity
+  are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
-- PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
+- PoUW's guarantees, and only PoUW's, may rest on random-oracle assumptions for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
 - The deployed recursion's bound record states its inner claim at IVStar at the weight

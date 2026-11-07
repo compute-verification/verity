@@ -17,7 +17,7 @@ values, however the circuit is written.
 - A value is **token-indexed** when one of its dims changes with a token axis (a GEMM's result when its batch, m or n
   dim does), else **parameter-indexed** (a weight-shaped sum over tokens, as dW).
 - A **slot** is a storage the step reads that outlives it: a parameter, a buffer, an optimizer's state, an error-feedback
-  buffer (a graph attribute, `Trace.attrs`, or one the step's earlier steps wrote, `Trace.written_before`). A slot is
+  buffer (a graph attribute, `Capture.attrs`, or one the step's earlier steps wrote, `Capture.written_before`). A slot is
   **dependent** when its value is one the run produced: a parameter named in `updated` (when the caller passes it), a
   slot an earlier step wrote that this one doesn't, and every slot the step writes from a dependent slot (its own old
   value included: W ← W − u). Of the slots the step writes, the largest set closed under that rule is dependent, so a
@@ -47,7 +47,7 @@ values, however the circuit is written.
   (through casts). A circuit that sends its update through a sign bit with error feedback, a top-k list or low-rank
   factors has that cut; a dense update's is its elements at that width. `beta` is the cut over the step's updated MACs
   per token.
-- A program recorded from its start (a capture of several steps whose `Trace.region` names one) is measured at that
+- A program recorded from its start (a capture of several steps whose `Capture.region` names one) is measured at that
   step of its history, and its slots are whatever it carries: a value is update-dependent when it depends on an earlier step's token data
   (the run's weights, optimizer state and error feedback, kept in place, rebound or written by hand; a cache made from
   θ and this step's tokens is not), and the cut's sinks are the update-dependent values the step makes that the next
@@ -55,7 +55,7 @@ values, however the circuit is written.
 
 Dataflow follows storage: an in-place op (``add_``, a foreach optimizer kernel) makes a new version of the storage it
 writes, every view of it reads that version, and each element of a foreach list is its own value. A Python scalar read
-from a tensor (`Trace` from a recorded program, ``.item()``) carries its tensor's dependence into the ops it reaches.
+from a tensor (`Capture` from a recorded program, ``.item()``) carries its tensor's dependence into the ops it reaches.
 """
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ import numpy as np
 import torch
 
 from training_slowdown.capture.circuit import ATTR, CARRIED, COMPUTED, OTHER_INPUT, RANDOM, TOKEN_INPUT, Net, StepCircuit, measure
-from training_slowdown.capture.trace import BACKWARD, PHASE, CaptureRefused, Trace
+from training_slowdown.capture.trace import BACKWARD, PHASE, Capture, CaptureRefused
 from training_slowdown.flops import (ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, GATHERS, GEMM_LIKE, LINALG_NAMES, NOT_GEMM, SCALED_NAMES,
                            TOKEN_INDEX, _is_view, gather_macs)
 from training_slowdown.gates import kind_of, per_mac
@@ -588,7 +588,7 @@ class StepGraph:
 
     # -- building ---------------------------------------------------------------------------------------------------
     @classmethod
-    def build(cls, base: Trace, varied: list[Trace], axis_names: tuple[str, ...], *, updated, name: str) -> "StepGraph":
+    def build(cls, base: Capture, varied: list[Capture], axis_names: tuple[str, ...], *, updated, name: str) -> "StepGraph":
         nodes = list(base.gm.graph.nodes)
         vnodes = [list(t.gm.graph.nodes) for t in varied]
         for t, vn in zip(varied, vnodes):
@@ -603,7 +603,7 @@ class StepGraph:
         return cls._analyze(base, varied, axis_names, updated, name)
 
     @classmethod
-    def _analyze(cls, base: Trace, varied: list[Trace], axis_names, updated, name) -> "StepGraph":
+    def _analyze(cls, base: Capture, varied: list[Capture], axis_names, updated, name) -> "StepGraph":
         gm = base.gm
         nodes = list(gm.graph.nodes)
         pos = {n: i for i, n in enumerate(nodes)}
@@ -1030,7 +1030,7 @@ def _walks(a) -> bool:
 
 
 def _region_sinks(flow: _Flow, nodes: list, region: int, dep: list[bool]) -> dict[int, int]:
-    """A recorded program's new values (`Trace.region`): each update-dependent value the measured step made, or the next
+    """A recorded program's new values (`Capture.region`): each update-dependent value the measured step made, or the next
     step made before its forward, that the next step's forward reads; its capacity its elements at the narrowest of its
     own width and the widest the forward reads it at (through views and casts into a token-indexed op). The next step's
     forward is its token-indexed values and what they read through its own values outside backward and an optimizer's

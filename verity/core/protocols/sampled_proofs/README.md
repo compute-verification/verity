@@ -43,9 +43,9 @@ in as blobs (under "Where things are"), so a composite accepts there only where 
 carries a composite's acceptance to `SampledKSLiveV3`'s event.
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
-before any coin. In the remote protocol the coins come from the auditor's challenger, under three Lean premises,
-`ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`; onsite adds two prose premises, `CoinsConfidential`
-and `OneClock` ("Where things are").
+before any coin. In the remote protocol the coins come from the auditor's challenger, under three assumptions,
+`ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`; onsite adds two proposed assumptions,
+`CoinsConfidential` and `OneClock` ("Where things are").
 
 ## Outline
 
@@ -164,7 +164,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
   as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`).
-  - **Remote's coin path in Lean** (`Security/Definitions/Core/Challenger.lean`, premises in its `Assumptions/`, in the
+  - **Remote's coin path in Lean** (`Security/Definitions/Core/Challenger.lean`, assumptions in its `Assumptions/`, in the
     lock): the challenger logs every coin it releases (`ChallengerLogsCoins`) and flips each only after what it samples
     is recorded (`FlipsAfterRecorded`), and the verifier reads coins only from its log (`VerifierReadsLog`). Under them
     a logged coin's sample misses a set fixed before it at most as the sampling design allows (`SampleAfterRecorded`, proved).

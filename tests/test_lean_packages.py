@@ -9,6 +9,7 @@ import json
 import os
 import re
 import tomllib
+import warnings
 from collections import Counter
 from pathlib import Path
 from typing import NamedTuple
@@ -75,7 +76,7 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-UNWITNESSED = {"Security": 333, "Security/Properties": 192, "verity/core/service/flock": 7}
+UNWITNESSED = {"Security": 331, "Security/Properties": 191, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -231,7 +232,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 392 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"Security": 1057, "Security/Properties": 201, "verity/core/service/flock": 6}
+INLINE = {"Security": 1057, "Security/Properties": 132, "verity/core/service/flock": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -250,6 +251,24 @@ def test_the_inline_list_only_shrinks():
 ROOM = {"INLINE Security": 3, "INLINE Security/Properties": 20, "UNWITNESSED Security": 2, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG Security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT Security": 1, "UNWITNESSED Security/Properties": 3, "OVERLONG verity/core/protocols/pouw/lean/check": 3, "OVERLONG verity/core/service/flock": 4, "IMPORT_ALL_USES Security/Proofs": 1}
 
 
+def test_the_caps_the_lock_run_repairs_are_the_files_drive_commits():
+    """Drive's lock run (`lean_audit.py --bookkeeping warn`) repairs the unread caps and this file's caps on what the locks
+    list, and drive commits them beside the locks (`research.merge.REPAIRED`, which the merge gate holds to the run's copies):
+    the two name the same files, and each cap here is the one-line dict `lean_audit.held_caps` rewrites."""
+    import ast
+
+    def assigned(path: str) -> dict[str, ast.expr]:
+        return {t.id: n.value for n in ast.parse((ROOT / path).read_text()).body if isinstance(n, ast.Assign)
+                for t in n.targets if isinstance(t, ast.Name)}
+    audit, merge = assigned("tools/verity/lean/lean_audit.py"), assigned("tools/research/src/research/merge.py")
+    repaired = {ast.literal_eval(e) for e in merge["REPAIRED"].args[0].elts}
+    assert repaired == {ast.literal_eval(audit["UNREAD_CAPS"]), ast.literal_eval(audit["CAPS_TEST"])}
+    assert ast.literal_eval(audit["CAPS_TEST"]) == _rel(Path(__file__))
+    text = Path(__file__).read_text()
+    for name in ("ROOM", *(k.value for k in audit["LOCK_CAPS"].keys)):
+        assert re.search(rf"^{name} = \{{.*\}}$", text, re.M), f"{name} is no longer one line here: `held_caps` can't hold it"
+
+
 def _rel(p: Path) -> str:
     return str(p.relative_to(ROOT))
 
@@ -260,16 +279,17 @@ def _lock(pkg: Path) -> dict:
 
 def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: str) -> None:
     """``got``, a count by key, held to the cap ``caps`` (this file's ``name``), which equals it: a count above its cap
-    fails with ``fix``, and a cap above its count by more than its `ROOM` fails until the change that lowered the count
-    lowers the cap with it, so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
+    fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
+    change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
+    the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
     (`tools/verity/lean/merge.py --caps`) merges two changes to a cap as counters."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}
     assert not over, (f"{what} grew in {over}: {fix} (where two merged changes each lowered the cap for the same entry, "
                       f"raise it to the count)")
     loose = {k: got.get(k, 0) + ROOM.get(f"{name} {k}", 0) for k in caps
              if caps[k] > got.get(k, 0) + ROOM.get(f"{name} {k}", 0)}
-    assert not loose, "; ".join(f"{what} in {k} is {got.get(k, 0)}, under its cap of {caps[k]}: lower {name}[{k!r}] to {n} "
-                                f"in this change" for k, n in loose.items())
+    for k, n in loose.items():
+        warnings.warn(f"{what} in {k} is {got.get(k, 0)}, under its cap of {caps[k]}: lower {name}[{k!r}] to {n}", stacklevel=2)
 
 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
@@ -544,21 +564,23 @@ def test_every_cap_merges_as_a_counter():
     assert all(merge.CAP_LINE.match(s) for s in caps), [s for s in caps if not merge.CAP_LINE.match(s)]
 
 
-def test_a_cap_fails_above_its_count_and_below_it_beyond_its_room():
-    """`_held`'s two refusals, on toy counts: a count above its cap names the check's fix, and a cap above its count by
-    more than its room names the value to lower it to."""
+def test_a_cap_fails_above_its_count_and_warns_below_it_beyond_its_room():
+    """`_held` on toy counts: a count above its cap fails, naming the check's fix, and a cap above its count by more than
+    its room only warns, naming the value to lower it to."""
     import pytest
 
     with pytest.raises(AssertionError, match=r"`x` grew in \{'A': '3 > 2'\}: say less"):
         _held("CAP", {"A": 2}, {"A": 3}, "`x`", "say less")
-    with pytest.raises(AssertionError, match=r"`x` in A is 1, under its cap of 2: lower CAP\['A'\] to 1 in this change"):
+    with pytest.warns(UserWarning, match=r"`x` in A is 1, under its cap of 2: lower CAP\['A'\] to 1"):
         _held("CAP", {"A": 2}, {"A": 1}, "`x`", "say less")
-    with pytest.raises(AssertionError, match=r"`x` in B is 0, under its cap of 1"):
+    with pytest.warns(UserWarning, match=r"`x` in B is 0, under its cap of 1"):
         _held("CAP", {"A": 2, "B": 1}, {"A": 2}, "`x`", "say less")
     ROOM["CAP A"] = 1
     try:
-        _held("CAP", {"A": 2}, {"A": 1}, "`x`", "say less")
-        with pytest.raises(AssertionError, match=r"lower CAP\['A'\] to 1 in this change"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            _held("CAP", {"A": 2}, {"A": 1}, "`x`", "say less")
+        with pytest.warns(UserWarning, match=r"lower CAP\['A'\] to 1"):
             _held("CAP", {"A": 2}, {"A": 0}, "`x`", "say less")
     finally:
         del ROOM["CAP A"]

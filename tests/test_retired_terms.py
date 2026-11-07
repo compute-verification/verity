@@ -79,8 +79,17 @@ DOC_TERMS = {
     "builder, advice compiler, circuit builder": "registered compiler",
     "declared advice": "advice",
     "declared circuit": "registered circuit",
-    "declared work, declared workload, declares its advice": "registered work; the developer reports its advice, which the "
-                                                             "registered compiler turns into the execution block",
+    "declared work, declared workload, declares its advice": "registered circuit; the developer reports its advice, which "
+                                                             "the registered compiler turns into the execution block",
+    "registered work": "registered circuit (D)",
+    "the prover's node, machine, host or site, a machine the prover doesn't control, nothing the prover runs or hosts, "
+    "prover-controlled, the prover system":
+        "the developer's node, machine, host or site, a machine the developer doesn't control, nothing the developer runs "
+        "or hosts, developer-controlled, the developer's hardware (\"prover\" stays for the proving side of a proof: "
+        "Flock's prover, a proof's messages, a cheating prover)",
+    "onsite deployment, remote deployment": "composite protocol (onsite or remote, the Lean's `Composite`)",
+    "named premise, the card premise": "assumption, or a proposed assumption until a lock lists it; the card assumption (a "
+                                       "theorem's hypothesis stays a premise)",
     "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
     "C-Flock": "Flock (Succinct's is upstream Flock)",
     "netlist": "a private circuit, or the circuit's description",
@@ -118,7 +127,7 @@ DOC_TERMS = {
     "KV block": "KV page",
     "the accelerator model, the machine model": "the ACCEL model (`benchmarks/pouw/machine_model/` and its `machine-model` "
                                                 "command keep the name)",
-    "coverage premise, coverage table": "the card premise, the opcode table",
+    "coverage premise, coverage table": "the card assumption, the opcode table",
     "envelope ISA, envelope op": "the ACCEL ops",
     "server-time block, serving block, server-window": "server block",
     "overhead lower bound, exclusion bound": "the slowdown lower bound",
@@ -148,6 +157,10 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
                        rf"|integrity{_SPACE}periods?|execution{_SPACE}transcripts?"
                        rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
+                       rf"|registered{_SPACE}work|(?:named|card){_SPACE}premises?|(?:onsite|remote){_SPACE}deployments?"
+                       rf"|prover{_SPACE}systems?|prover-controlled|prover{_SPACE}runs{_SPACE}or{_SPACE}hosts"
+                       rf"|prover's{_SPACE}(?:own{_SPACE})?(?:nodes?|machines?|hosts?|sites?|datacenters?|servers?|GPUs?|hardware)"
+                       rf"|prover{_SPACE}(?:doesn't|does{_SPACE}not){_SPACE}control|(?:hosts?|machines?){_SPACE}the{_SPACE}prover{_SPACE}controls"
                        rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|(?:accelerator|machine){_SPACE}models?|coverage{_SPACE}(?:premises?|tables?)|envelope{_SPACE}(?:ISA|ops?)"
@@ -252,6 +265,9 @@ PENDING: dict[str, str] = {
     "verity/core/difftest/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/primitives/requirement/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/bandwidth/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    ".agents/skills/lean-proofs/SKILL.md": "queued PRs on next rewrite its lines naming named premises; the rename follows them",
+    "verity/core/devices/memory_challenger/README.md": "a queued PR on next adds it, naming the prover's node and site; the rename "
+                                                       "follows it",
     "verity/core/protocols/certifier/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/certifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/protocols/composition/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -581,6 +597,21 @@ def test_the_doc_scan_reads_each_form():
         ("a.md", 2, "IUs"), ("a.md", 2, "KV block"), ("a.md", 3, "legs"), ("a.md", 3, "leg"), ("a.md", 3, "leg"),
         ("b.md", 8, "thread block"), ("b.md", 9, "verity example"), ("b.md", 9, "verity bench|example"),
         ("b.md", 11, "verity example")]
+
+
+def test_the_doc_scan_reads_the_party_terms():
+    """The developer, the composite protocols, the registered circuit and assumptions, on toy files: the proving side's
+    prover, a theorem's premise, a deployment record, `verity.core.deploy` and a registered workload stay."""
+    docs = {
+        "a.md": "Nothing the prover runs or hosts; a machine the prover doesn't\ncontrol, the prover's node, a "
+                "prover-controlled host and the prover system. The remote deployment's registered work, under a named\n"
+                "premise and the card premise. Flock's prover, a cheating prover, a theorem's premise, a deployment record,"
+                " `verity.core.deploy` and a registered workload stay.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "prover runs or hosts"), ("a.md", 1, "prover doesn't control"), ("a.md", 2, "prover's node"),
+        ("a.md", 2, "prover-controlled"), ("a.md", 2, "prover system"), ("a.md", 2, "remote deployment"),
+        ("a.md", 2, "registered work"), ("a.md", 2, "named premise"), ("a.md", 3, "card premise")]
 
 
 def test_the_doc_scan_reads_the_protocol_terms():

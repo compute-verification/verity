@@ -253,6 +253,7 @@ def main(args: Options) -> int:
     kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k not in ("tensor_parallel_size",)})
     kw.update(parse_engine_args(args.engine_arg), worker_extension_cls=EXTENSION)
     print(f"[tp2commit] tp={args.tp} case={case} committer={args.committer} kwargs={ {k: v for k, v in kw.items() if k not in ('model', 'tokenizer')} }", flush=True)
+    engine_env.require_inductor(kw)
     llm, build_s, topo = PH.engine(lambda: LLM(**kw), args.tp, args.rpc_timeout, model=cp["repo"], enforce_eager=kw.get("enforce_eager"), case=case, max_num_seqs=args.max_num_seqs)
     TT.require_ranks(llm, target, args.rpc_timeout)
     served = SV.require(llm, wl, target, out, args.rpc_timeout)

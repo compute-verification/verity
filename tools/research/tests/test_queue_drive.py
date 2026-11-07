@@ -552,6 +552,22 @@ def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_ca
     assert f"argv: {'c' * 40} m1 --deferred ratchet-gate --base {'b' * 40} --ratchet-base {'a' * 40}" in tail, tail
 
 
+def test_the_lock_run_gives_train_sh_bookkeeping_warn_when_its_train_sh_takes_it(tmp_path):
+    """The lock run repairs bookkeeping and warns (`--bookkeeping-warn`) when the queue's clone's train.sh
+    takes the flag (`takes_bookkeeping`); a train.sh that predates it would refuse every lock run, so it isn't given it."""
+    from research.drive import takes_bookkeeping, train_launch
+
+    sh = tmp_path / "tools" / "verity" / "check" / "train.sh"
+    sh.parent.mkdir(parents=True)
+    assert not takes_bookkeeping(tmp_path)
+    sh.write_text('# --bookkeeping-warn\necho "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
+    assert takes_bookkeeping(tmp_path)
+    ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="lean-audit", bookkeeping_warn=True)
+    assert ids == ["r20261027-120000-aaaa"] and f"argv: {'c' * 40} m1 --deferred lean-audit --bookkeeping-warn" in tail, tail
+    sh.write_text('echo "argv: $*"\n')
+    assert not takes_bookkeeping(tmp_path)
+
+
 def test_the_after_landing_run_and_the_lock_run_take_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):
     """Each part of the after-landing run (a shard, circuit-check's records step) and the lock run ask for their check slot at
     `POSTLAND_SLOT_RANK` (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), whatever drive's own environment

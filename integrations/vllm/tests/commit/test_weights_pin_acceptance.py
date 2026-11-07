@@ -37,8 +37,6 @@ from tests.check.test_sampled_replay import v2_manifest
 from tests.check.test_weights_of_record import (PREFIX, _program, _served, _write_program, checkpoint,  # noqa: F401 (fixture)
                                                                 live_digests, write_safetensors)
 
-pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
-
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
 # the three panel shapes of one model: B1 = the envelope, B2 / B8 mixed (no request has both maxima -> the default shape is NOT a component)

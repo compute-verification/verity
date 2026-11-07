@@ -20,7 +20,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_plan as CP
 from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline.timeline import Timeline
-from tests.pipeline.test_row import _built, _row, gnu_timeout  # noqa: F401  (fixture)
+from tests.pipeline.test_row import _GNU_TIMEOUT, _built, _row
 
 
 def _commit_args(tmp_path: Path, **kw) -> types.SimpleNamespace:
@@ -136,7 +136,7 @@ def test_the_commit_s_parser_takes_the_call_boundary_plan(tmp_path):
 
 
 # ------------------------------------------------------------------------------------------------------------------ the row's Build
-@pytest.mark.usefixtures("gnu_timeout")
+@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
 def test_the_builds_check_leaves_the_plan_the_commit_stage_passes_under_the_commits_key(tmp_path, monkeypatch):
     """After a PASS Build the row's check is `boundary-plan` over the Programs the Commit reads: `call_boundaries.json` and the verdict
     line as before, and the plan keyed by the workload, manifest, Program digest and Programs the Commit stage names, which passes it."""
