@@ -19,6 +19,8 @@ draws theirs, and the rest carry the public seed rule's. A named ``--sampling`` 
 and nothing is seeded, so with no greedy or seeded row in a batch vLLM samples with FlashInfer's sampler and the CUDA
 generator. Each edge writes under ``--scratch``, because its blocks are tens of GB and stay out of the run's record. OUT
 gets each ``edge.json``, the step outputs from the first edge to the last, the client's records and the step trace.
+Once the last edge is written the server stops, unless ``--run-out``: nothing after it is compared, and the requests in
+flight then are recorded with the tokens they streamed.
 
 ``restore`` builds the served engine again in this process, from the served server's own argv and block count, and:
 - calls ``--loader`` (the scheduler's state and the runner's rows) with the engine core and the first edge's directory
@@ -47,6 +49,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -255,15 +258,30 @@ def serve(a: argparse.Namespace) -> int:
     t = time.monotonic()
     with open(srv / "server.log", "wb") as log:
         server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
+    finished = threading.Event()
+
+    def stop_after_last_edge() -> None:
+        while not finished.wait(1.0):
+            if len(list((scratch / "edges").glob("edge-*/edge.json"))) >= len(a.edges_at):
+                meta["stopped_after_last_edge_s"] = round(time.monotonic() - t, 1)
+                S.stop(server)
+                return
+
+    watcher = threading.Thread(target=stop_after_last_edge, name="tp-restore-last-edge", daemon=True)
     try:
         S.wait_ready(server, port, a.startup_s)
         meta["startup_s"] = round(time.monotonic() - t, 1)
+        if not a.run_out:
+            watcher.start()
         meta["load"] = drive(port, model.served, plan, a.rate, a.span_s, out / "load", a.drain_s, a.sampling, a.requests,
                              a.unseeded_share)
     except Exception as e:  # noqa: BLE001 -- the record says why the run stopped
         meta["error"] = f"{type(e).__name__}: {e}"
         rc = 1
     finally:
+        finished.set()
+        if watcher.is_alive():
+            watcher.join()
         meta["server_stop"] = S.stop(server)
         meta["edges"] = copy_edges(scratch / "edges", out / "edges")
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -668,6 +686,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--saver", action="append", default=[])
     s.add_argument("--startup-s", type=float, default=3600.0)
     s.add_argument("--drain-s", type=float, default=600.0)
+    s.add_argument("--run-out", action="store_true",
+                   help="serve the whole load and its drain; by default the server stops once the last edge is written")
     s.add_argument("--out", required=True)
     s.add_argument("--scratch", required=True)
     r = sub.add_parser("restore")
