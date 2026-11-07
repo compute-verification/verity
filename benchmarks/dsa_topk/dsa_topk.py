@@ -19,8 +19,8 @@ The canonical row's selection is the registered relation's top-k set (`verity.ml
 The device pass reads the fast kernel's selection only for a candidate k-th key ``tau``. Reading the row once, it
 writes the keys at or above ``tau`` in ascending order and counts them, then checks the candidate
 (``#{key > tau} < k <= #{key >= tau}``): with no tie across the k-th key the row stands as written; with one, the row
-is written again from the counts; a row whose candidate fails (a fast kernel that missed a larger key) is selected
-again by bisection over the keys. Every way the output is the row's canonical one. Rows of
+is written again from the counts; a row whose candidate fails (it isn't the k-th key) is selected again by bisection
+over the keys. Every way the output is the row's canonical one. Rows of
 ``n > k`` keys are a prefill's (``top_k_per_row_prefill``: keys ``[start, end)`` of the gathered row) or a decode's (the
 three decode selectors: keys ``[0, length)``).
 
