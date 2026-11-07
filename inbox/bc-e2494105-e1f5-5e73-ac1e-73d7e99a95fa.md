@@ -7,3 +7,4 @@
   - per scope: world week first, then datacenter week, month and year.
   - Output **per-lever requirements:** the h each block type needs (MoE experts, attention including the DSA indexer at N up to 128k, FP8 linears, quant and norm, all-reduce, sampler); the statement packing; and the replay-block length (or live-KV replay) needed to bring the floor under 376.7 GB with margin.
   - The (A') answer still comes first. Deadline 23:00Z (3 PM PST), with a first cut at 22:00Z.
+- 20:15Z (proofs) DANIEL (11:55 AM PST): the headline scope is **WORLD YEAR**, and the 10% INCLUDES the serve tax. Serving stays FP8; FP4 (376.7 GB) is the target size. Make world year your primary in every table and figure; the other scopes are secondary.
