@@ -1075,10 +1075,6 @@
   }
  },
  "unwitnessed": {
-  "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": {
-   "type_hash": "2a583093791e59e038a09a992ae9548be6ba1604e3a8b0fcc5e580fbafbe9b64",
-   "unfolded_hash": "6da2b5031a2332a1f1f3f65e8b350af5f57bc95da5a06cb59a1bd045fc58a89c"
-  },
   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
    "type_hash": "244896e8069c5fc7458985bb6a8bd223c15a40c28381c6930a8edda81523f263",
    "unfolded_hash": "bda88e46f7ad051190ff0ca6f12a2802ba39b83a2d5c88e6925fade635854044"
@@ -1111,6 +1107,7 @@
    "type_hash": "bd3cbe5d8c70108d7019cd861258345913eaed5d00114443d813668b395edfe2",
    "unfolded_hash": "b688d3cdc94be6a2dbd630c2222347e7d857758aebe1c9cec900ad2257953a8b"
   },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "33f7abc2366880d43c453c6ef7f93c829313485d13e4d3112049d6c68e127c27",
   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound": {
    "type_hash": "b9d92a07d544a61e756fa50dd15df63d86d8f6678bd749bc6faef73e060dde39",
    "unfolded_hash": "29fd4ee360ee2aa46333b340ecb9fcb1b8d6a5ba19141543012574d4775e7e44"
@@ -1170,6 +1167,12 @@
   "NciCheck.Properties.SecurityProofs.DescWitnesses": {
    "type_hash": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b",
    "unfolded_hash": "411b39e73316c5efe2044c66f5607e5fe9bf9c611a1c0603c8cdf0609638d528"
+  },
+  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
+   "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
+   "missing": "honest",
+   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov",
+   "unfolded_hash": "a3542435ff54bd5938833681b1cd6a586be267227fc78d1af103b0ee506a8a80"
   },
   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
    "type_hash": "8aa8ecb51505b589902534fa8fc4cde0e40a27635a7584af4e470d51c48addea",
@@ -1453,6 +1456,12 @@
    "type_hash": "30fd4da534ba9d9d1ac4d9f139c2caddb9c8062ac8d56b30d9bd1695fec59b6a",
    "unfolded_hash": "886e1a4446361385b29acb248b94643c3c24993a290636bea27053884eb7dc11"
   },
+  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
+   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
+   "missing": "honest",
+   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld",
+   "unfolded_hash": "be489eaff119bd8d9a10805374ef0eb7dedfd507fd72cd3bee7c56da645a6ce8"
+  },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
    "type_hash": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6",
    "unfolded_hash": "4d6ca0d165dc6a4581fbbf48c670e1e6887a45e0d7f9439256bb3947fa78b51b"
@@ -1504,6 +1513,10 @@
   "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": {
    "type_hash": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f",
    "unfolded_hash": "bcbba2fabc11e88d77c3f5df6fd6e24d3c0c1dbfc536474fdc66e3dfa762462a"
+  },
+  "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": {
+   "type_hash": "2a583093791e59e038a09a992ae9548be6ba1604e3a8b0fcc5e580fbafbe9b64",
+   "unfolded_hash": "6da2b5031a2332a1f1f3f65e8b350af5f57bc95da5a06cb59a1bd045fc58a89c"
   },
   "Properties.Pouw.Served.SecurityProofs.servedFreed": {
    "type_hash": "503b5b4232f83c7d7559aac6b44b71c1ac7d87dfd10390aa9784221d73009c89",
@@ -1585,6 +1598,18 @@
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09",
    "unfolded_hash": "4090f0b7b95f9743bbc8620c008f55a6955bdb34c1be55efa032c1332fd2a98c"
   },
+  "Properties.Remote.SecurityProofs.acceptComplies": {
+   "type_hash": "ef95cc7750100d943f75d3094ed74952a8c0428b1777f2562a2075e8f326e9d0",
+   "missing": "honest",
+   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record",
+   "unfolded_hash": "23d8e90dec9e6c2f39406846c5360e18ad2fe6f68612f81940bba72450a01fbc"
+  },
+  "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
+   "type_hash": "cb787233027c149c9cf3d23cbc2485781bdead41db68164723913059c512cde4",
+   "missing": "honest",
+   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record",
+   "unfolded_hash": "1cbdf00ba5dbe5e7e90c3c839923b6104892a82cc56f463e2667e0cf2b29c167"
+  },
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
    "type_hash": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
    "unfolded_hash": "b65d52df519b37adb74e6f1d1332a9eb51b0fb18d82efd523b06d3fa26562928"
@@ -1628,6 +1653,14 @@
   "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
    "type_hash": "065919af943ec94c405062fd23a3454f46e6dbfaaa8ab906f3ec0b37ec0f9773",
    "unfolded_hash": "0a576e28cac3f465d357deb52f962aff65e18f6825120c7ad81cc320632cd1ff"
+  },
+  "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
+   "type_hash": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738",
+   "unfolded_hash": "811e4c9c86efe74e50d7f8d6d0f361a3a3277b35c3bc48bfc42a707448949ae9"
+  },
+  "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
+   "type_hash": "e5be3f448a3a0cd511b5b692cd03aa865fa570e659e621fe25464cc53f957dd9",
+   "unfolded_hash": "2659f85f3c83b418933a8c3b39219163303da4f757f87e7a0b330fc4cae0125e"
   },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "type_hash": "d58f00149a369b5ec1020e9aea876e2297ca72f1b599e37357479afaffadf1ad",
@@ -1757,39 +1790,6 @@
   "Properties.SampledProofs.noAcceptAfterHalt": {
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
    "unfolded_hash": "e414354acd8918255fe2888c376780bcd6dd97919b29cea4883bfb2faffcf306"
-  },
-  "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "33f7abc2366880d43c453c6ef7f93c829313485d13e4d3112049d6c68e127c27",
-  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
-   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
-   "missing": "honest",
-   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld",
-   "unfolded_hash": "be489eaff119bd8d9a10805374ef0eb7dedfd507fd72cd3bee7c56da645a6ce8"
-  },
-  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
-   "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
-   "missing": "honest",
-   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov",
-   "unfolded_hash": "a3542435ff54bd5938833681b1cd6a586be267227fc78d1af103b0ee506a8a80"
-  },
-  "Properties.Remote.SecurityProofs.acceptComplies": {
-   "type_hash": "ef95cc7750100d943f75d3094ed74952a8c0428b1777f2562a2075e8f326e9d0",
-   "missing": "honest",
-   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record",
-   "unfolded_hash": "23d8e90dec9e6c2f39406846c5360e18ad2fe6f68612f81940bba72450a01fbc"
-  },
-  "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
-   "type_hash": "cb787233027c149c9cf3d23cbc2485781bdead41db68164723913059c512cde4",
-   "missing": "honest",
-   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record",
-   "unfolded_hash": "1cbdf00ba5dbe5e7e90c3c839923b6104892a82cc56f463e2667e0cf2b29c167"
-  },
-  "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
-   "type_hash": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738",
-   "unfolded_hash": "811e4c9c86efe74e50d7f8d6d0f361a3a3277b35c3bc48bfc42a707448949ae9"
-  },
-  "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
-   "type_hash": "e5be3f448a3a0cd511b5b692cd03aa865fa570e659e621fe25464cc53f957dd9",
-   "unfolded_hash": "2659f85f3c83b418933a8c3b39219163303da4f757f87e7a0b330fc4cae0125e"
   }
  },
  "layers": {
@@ -7844,13 +7844,66 @@
    "type_hash": "39ca6de2fab8b7a231cadcdf11fa2885a02274d917f6c45308920aa4068b8853"
   },
   "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound : Properties.SampledProofs.FactorUpperCappedSound"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Properties.SampledProofs.Covers"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "12340e04c926fd893867ff39f57f6eab3dea27a4eaec8ac657ef036c6feacacd",
+   "unfolded_hash": "f56ba4b625a0ce8476e83b49096010b48bbe1d97f76c71ccc25e7c4a0fecf4de"
   },
   "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_honest :",
+    "  And",
+    "    (Properties.SampledProofs.Covers Properties.SampledProofs.FactorUpperWitness.pairStmt",
+    "      Properties.SampledProofs.FactorUpperWitness.pairPart Properties.SampledProofs.FactorUpperWitness.pairDesign 0",
+    "      Properties.SampledProofs.FactorUpperWitness.pairCells)",
+    "    (And",
+    "      (Eq",
+    "        (SampledProofs.FactorUpper.lnFactorUpperCapped Properties.SampledProofs.FactorUpperWitness.pairCells 1",
+    "            Properties.SampledProofs.FactorUpperWitness.honestParams).isSome",
+    "        Bool.true)",
+    "      (Eq",
+    "        (SampledProofs.FactorUpper.lnFactorUpperCapped Properties.SampledProofs.FactorUpperWitness.honestCells 64",
+    "            Properties.SampledProofs.FactorUpperWitness.honestParams).isSome",
+    "        Bool.true))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "929fe8440de75dbfab059f8157977a480802c9d32848933be446dd5d36cb27aa"
   },
   "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.Sampling.rankinFactorCapped Properties.SampledProofs.FactorUpperWitness.emptyStmt",
+    "        Properties.SampledProofs.FactorUpperWitness.emptyPart Properties.SampledProofs.FactorUpperWitness.emptyDesign 64",
+    "        (1 / 2) 1 0)",
+    "      (Real.exp (-1)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d6bef3ba9fdd75b1e7cdf4eb52612cce1673f73612ec4f96b1648104a62c50f4"
   },
   "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
    "owner": "@proofs",
@@ -12868,11 +12921,12 @@
    }
   },
   "Definitions.Claims.SamplingTwoRankin": {
-   "digest": "b88d19e76037a0ff0189516c37858a979527ec310eb409e4d3a09b41b1d80247",
+   "digest": "f96f8076f76f614b234e0c06700b7e0b6aa99e36044478069e60cb10de8bd338",
    "definitions": {
     "Claims.Sampling.Design.Two.passes": "b1a8d94eaca0500eba283bd61246fab415eb1d427d2095f91a094082e56bef19",
     "Claims.Sampling.blocksIn": "72daacf89ce7fad980a9a3c7608922a8f992a403c67b357208dd1889968306ed",
     "Claims.Sampling.rankinFactor": "e287aa04eef2610430b6677637f6eca7097ad7ceb517f5372ad301f4bc83d79e",
+    "Claims.Sampling.rankinFactorCapped": "02c0b0b035f1c0434ff27e513d8882f449e38ef430b534ad97da6080fef403e8",
     "Claims.Sampling.rankinFactorPatterns": "0063b26a0c3809fe529fa6ebc2c4294db168cf62ca737bd170c1e1fbc8efa676"
    }
   },
@@ -21636,9 +21690,10 @@
    }
   },
   "Properties.SampledProofs.FactorUpper": {
-   "digest": "f485f6b9e31d6677ef3b8f918d117a9389590575c419eedcfd5d0139c3ddb0e9",
+   "digest": "e985bb313718dfaf43247c0592db50aa0f035ab38ebff6e097258228f8726d4f",
    "definitions": {
     "Properties.SampledProofs.Covers": "d1ea27fbfc48f3cf287d474f92748a46c1f1483191bcba393157a288a310f9e6",
+    "Properties.SampledProofs.FactorUpperCappedSound": "30d74cdeb4021906fcb18e8d2a7961f74615d58f81fa4bdef50a90338227c61d",
     "Properties.SampledProofs.FactorUpperPatternsSound": "05b108d5f63e741165a0b640932f7c70e05f321431eeb521c39141b5086950d9",
     "Properties.SampledProofs.FactorUpperSound": "89c02da178ee34ac94536847e7bfcb020323605b9e8198459c8254b4d0c5d1af",
     "Properties.SampledProofs.FactorUpperWitness.emptyDesign": "7a2dd231b6d369975370ac90dc6b19a3f09836e98be96ba8b72523ef4970aa04",
@@ -22978,7 +23033,7 @@
    }
   },
   "SampledProofs.FactorUpper": {
-   "digest": "9d351d09bb1bf4c9cae178276f8a4d108eede80210255c831fe2d2239bd894dc",
+   "digest": "dce1612f09d1032b3bce117134986f5cc975e64d5c21ee0f06e8ad37f64dd6c5",
    "definitions": {
     "SampledProofs.FactorUpper.Cell": "314b5f86863248904092946caf4f314d22fa725256a8143c8f89915a0788c1e7",
     "SampledProofs.FactorUpper.Cell.count": "9cfa8dfa68eef2cdaac13f39a31acb427db5938b9b458535ecb0d1ad2c228620",
@@ -23023,6 +23078,7 @@
     "SampledProofs.FactorUpper.expUp": "4f1bf26903b13f442ad4b6ad1edaa4eee75c99ed8410bccdc7a31ba312d3ad1f",
     "SampledProofs.FactorUpper.groupsOf": "c4efc5a0b9d9ebe0c1b46cb9a6b51b1c7695494491e251990b2aee62ba27f3ee",
     "SampledProofs.FactorUpper.hLower": "518e7e9a7549a29a4a58ad100a2cc9dd74f51093aa696a13a5aad7f5f2dc9731",
+    "SampledProofs.FactorUpper.heavyTail": "3212cf4400167aa2ca4820840997466992ad56f0ad0d477cbf7332dca2987388",
     "SampledProofs.FactorUpper.heavyY": "63c9a880a0f4dce538445489935d060000270f50b7e995b2155c3090db63d214",
     "SampledProofs.FactorUpper.increasing": "6c836801cbb3d91092ee9778bebedf47e5bdcc60ac31ee0d5eed2d499b8f65f7",
     "SampledProofs.FactorUpper.insertY": "b22acf75c5d348d98c7ea1e6d9aa54ced383471c1c773a0a3de7a317a4c66439",
@@ -23033,6 +23089,7 @@
     "SampledProofs.FactorUpper.lightSets": "39144a04df66a702d96cd23caf66f10be476cbb9b5098094dc17b37b1f0e4b44",
     "SampledProofs.FactorUpper.lnFactLower": "b9f3ea52126bb8ec4093d358801c3ffc95154fd79ea8cb322421575f6522048b",
     "SampledProofs.FactorUpper.lnFactorUpper": "70274b6ef50163fbf4a0154ec3c8146f08deb6873b5b6af075514750c098e73b",
+    "SampledProofs.FactorUpper.lnFactorUpperCapped": "727d15091a0da2cf5f01795aa75affd04bc1d03d36a0d1d8bda1efe6facacbe4",
     "SampledProofs.FactorUpper.lnFactorUpperPatterns": "3ab140b9b8d5c495ecab765041bdd63a5e08600fa35d0f5298b80bb3ee82104c",
     "SampledProofs.FactorUpper.lnHead": "c0e298839280b90ccf5369fefc061f33e271b7ad26acbe55dd19b0f2fcde4275",
     "SampledProofs.FactorUpper.lnOnePlus": "e47f0b9e516b29ece297fe2a897146f5c70ae601e017291d2170b160334774d2",
@@ -23046,6 +23103,8 @@
     "SampledProofs.FactorUpper.omin": "6bf26d9363e93a33e4d1e8e285df59c4c86efd693b791a8135908e684a4928ea",
     "SampledProofs.FactorUpper.readGroups": "ca062af6181d442df41125a4c409e1efa326fda5dfc62722aada19d8c174761e",
     "SampledProofs.FactorUpper.requestFac": "99c24c0d6ade82454b51c7aa9dbc9e54ee3e4e842efbeff1ea4a6f3bc74fc162",
+    "SampledProofs.FactorUpper.servedFac": "3fd3a096dcb1e962c893aab9ba7bb63b6ede43ff071a0c176a51203ff182544a",
+    "SampledProofs.FactorUpper.servedSets": "778ab03f6c2c1346fbcf3a558f1fcf5a0f601d329b825a8eb8366b46cf809150",
     "SampledProofs.FactorUpper.softplusUp": "72d7bcf8c334f9fa305770d42db99e94baab10fc2191e3e977c4a8cac6797b94",
     "SampledProofs.FactorUpper.split": "6a2c13f52031fa02859d7ac19a8ee8975462dc184baae726529ab1a3d32dc74b",
     "SampledProofs.FactorUpper.touchCount": "9ca27777210221f77a00b23aed06e0b5e8b5eb1246d48c4f50eebb080bc086b6",
