@@ -59,9 +59,6 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
 - `hb_side.py` (`dither-hb`), `hb_one.py` (`dither-1s-hb`) and `hb_peel.py` (`dither-1s-hbp`'s gate): those windows with
   `h1u.cu`'s proof blocks in place of `h1r.cu`'s or `h1o.cu`'s. `hb_sbench.py` and `hb_served.sh` run `sbench.py` with
   them on an H200 or a B200, building on a CPU node first.
-- `j10served.py` and `j10rtx.py`: the one-stream arms against their twins on J10's banded noise, served on
-  an H200 or a B200 (through `hb_sbench.py`) and at kernel level on the RTX PRO 6000. They are
-  measured only: nothing in them is served or credited.
 
 ## Kernels
 
@@ -80,10 +77,9 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
   its kernel to its reference on a full served step, then times it, on one leased RTX PRO 6000. `wrapcheck.py` holds the
   wrap correction to H1V3 on the CPU before `sbench.sh` asks for a GPU.
 - The references the gates hold kernels to, beside the Definition: `h1v3_ref.py` (H1V3 itself, from the tree on
-  `PYTHONPATH`), `h1v3_ca.py` (the unpeeled one-stream proof block), and `j10r_ca.py`, `j10b_ref.py` and `j10ca_ref.py`
-  (J10-R's call-scale noise, J10's banded noise and credit's banded reference).
+  `PYTHONPATH`).
 - `job.sh`: libraries built on a CPU node, then kernel benches on a leased H200 or B200, one mode a run: `hb_kbench.py`
-  (checked after by `verify.py`), `h1bench.py`, `h1ubench.py`, `h1zbench.py` (against `h1zref.cu`),
+  (checked after by `verify.py`), `h1bench.py`, `h1ubench.py`,
   `unitsbench.py`, `hb_prof.py` under ncu, and `benchmarks/pouw`'s partials tests on each build.
 - `kbench.sh` (`kbench.py`): the honest linear against vLLM's int8 GEMM and cuBLASLt on an RTX PRO 6000. `dmmsweep.py`:
   dither-a's GEMM configs at the decode shapes, each gated before it is timed. `native.sh` (`native.py`): vLLM serving the
