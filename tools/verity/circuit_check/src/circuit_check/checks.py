@@ -772,13 +772,13 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
         if t.id.startswith("TopPMaskWordx") and t.id not in IL.PIECES:
             return _topp_word(t, arrays, ref, F)
         if t.id not in IL.PIECES:
-            return {"lowered": False, "reason": f"C-Flock has no piece for {t.id}"}
+            return {"lowered": False, "reason": IL.no_piece([t.id])}
     elif t.gates > opts.lower_max_gates and not is_boolean(t):
         return {"lowered": False, "reason": f"{t.gates} IR gates: lowered as a template's units, not whole (budget {opts.lower_max_gates})"}
     else:
         used, missing, est = _pieces_used(t, pins)
         if missing:
-            return {"lowered": False, "reason": "C-Flock has no piece for " + ", ".join(sorted(missing))}
+            return {"lowered": False, "reason": IL.no_piece(sorted(missing))}
         if est > opts.lower_max_ands:
             return {"lowered": False, "reason": f"about {est} ANDs: over the whole-Definition budget ({opts.lower_max_ands})"}
         for p in used:
