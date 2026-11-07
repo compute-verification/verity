@@ -32,14 +32,15 @@ record, by the manifest's lookup of record.  The ahead-of-time compiler takes it
 proved with selection All, never sampled; every other unit is sampled as before.  The compiler lists them (``transfer_gates``: the
 templates whose units hold them, which its digest covers), and a ``work:K`` window samples by the work table
 `serving_rows.work_table_of` derives from that list and the window's own counts: each transfer-gate template works 0 with its
-floor all its units, so its whole stratum is in the sample, beside the rest's strata at the stratified share of K.  Core's work law
+floor all its units, so its whole stratum is in the sample, beside the rest's strata at the stratified share of K.  Core's work sampling design
 (`draw.work_k`) is the All stratum, with no new verifier form; both sides derive the table, the registration's law is expanded
 under it (R1), and the Stream registers with it.  A partition that leaves a transfer-gate template out, or samples it by another law,
 is refused by name.  Until COMPILER lists the I/O shell's units, the stand-in's list is given (``--transfer-gate``), a template
 Flock proves today: the toy Commit's ``RoPEHead_v1{D=64}`` (its egress render, ``TokenSelect_v1``, has no Flock lowering).
 
 The advice is I1's (``codec``, default `I1`): `of_advice` reads its bytes, which must be its canonical encoding, commits them and
-binds the root and the advice's length, ``total_bits``.  `advice_of_workload` is the stand-in's advice, the prover's, for a
+binds the root and the advice's length, ``total_bits``; `opened` recomputes that binding from an opening without the stand-in's
+requests, for a compiler that compiles the advice itself.  `advice_of_workload` is the stand-in's advice, the prover's, for a
 fixed-length workload; a served run's is ADVICE-SRC's, from the scheduler's step trace.
 
     verity-vllm advice-windows COMMIT_OUT --advice FILE --opening FILE --partition F --out O --build-root B [--ranks 0,1]
@@ -146,11 +147,16 @@ def of_advice(compiler: Any, data: bytes, codec: Any = None,
     (`requests_of`), the binding (`binding`: the root of `commit_advice` and the length, ``codec.total_bits``) and the commitment,
     whose rows and salts are the prover's."""
     c = codec_of(codec)
+    advice = _read(c, data)
+    reg = commit_advice(compiler, data, salts)
+    return requests_of(advice), binding(compiler, reg.root.hex(), int(c.total_bits(advice))), reg
+
+
+def _read(c: Any, data: bytes) -> Any:
     advice = c.decode(data)
     if c.encode(advice) != data:
         raise ValueError("the advice's bytes are not its canonical encoding")
-    reg = commit_advice(compiler, data, salts)
-    return requests_of(advice), binding(compiler, reg.root.hex(), int(c.total_bits(advice))), reg
+    return advice
 
 
 def report(compiler: Any, data: bytes, T: int, codec: Any = None) -> dict[str, Any]:
@@ -158,9 +164,7 @@ def report(compiler: Any, data: bytes, T: int, codec: Any = None) -> dict[str, A
     a registration would carry (fresh salts), the advice's charge per egress window of ``T`` buckets (``codec.bits_by_window``),
     and the requests the stand-in refuses (`refusals`), by id.  Nothing of the advice itself."""
     c = codec_of(codec)
-    advice = c.decode(data)
-    if c.encode(advice) != data:
-        raise ValueError("the advice's bytes are not its canonical encoding")
+    advice = _read(c, data)
     reg, refused = commit_advice(compiler, data), refusals(advice)
     return {"roundtrip": True, "bytes": len(data), "rows": len(reg.salts), "row_bits": ROW_BITS,
             "binding": binding(compiler, reg.root.hex(), int(c.total_bits(advice))), "T": int(T),
@@ -176,16 +180,25 @@ def opening(data: bytes, reg: AC.Committed) -> dict[str, Any]:
 
 
 def of_opening(compiler: Any, doc: Mapping[str, Any], codec: Any = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """The verifier's side of `opening`: the requests of the advice it opens and the binding it recomputes (`of_advice` under the
-    opening's salts), which `tp.serving_rows.source` holds the registration's to.  A malformed opening is a ValueError."""
+    """The verifier's side of `opening`: the requests of the advice it opens (`requests_of`) and the binding it recomputes
+    (`opened`), which `tp.serving_rows.source` holds the registration's to.  A malformed opening is a ValueError."""
+    advice, bound = opened(compiler, doc, codec)
+    return requests_of(advice), bound
+
+
+def opened(compiler: Any, doc: Mapping[str, Any], codec: Any = None) -> tuple[Any, dict[str, Any]]:
+    """The advice an opening opens, read by ``codec`` and refused unless its bytes are its canonical encoding, and the binding it
+    recomputes under the opening's salts (`binding`), without the stand-in's requests: a compiler that compiles the advice itself
+    (I2) refuses what it can't run.  A malformed opening is a ValueError."""
     if not isinstance(doc, Mapping) or doc.get("scheme") != SCHEME:
         raise ValueError(f"an advice opening is a {SCHEME} document")
     try:
         data, salts = bytes.fromhex(doc["advice"]), [bytes.fromhex(s) for s in doc["salts"]]
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"an advice opening holds the advice and its salts in hex: {e}") from e
-    reqs, bound, _reg = of_advice(compiler, data, codec, salts)
-    return reqs, bound
+    c = codec_of(codec)
+    advice = _read(c, data)
+    return advice, binding(compiler, commit_advice(compiler, data, salts).root.hex(), int(c.total_bits(advice)))
 
 
 def advice_of_workload(doc: Mapping[str, Any], codec: Any = None, drop: Sequence[str] = ()) -> Any:

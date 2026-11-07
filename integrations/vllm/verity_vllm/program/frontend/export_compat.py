@@ -153,10 +153,10 @@ def select_cuda_platform(world: int = 1, device_name: str | None = None) -> str:
     NVML-backed class when NVML answers, the torch-backed one when it does not), and `apply_target_profile` answers the target's
     capability on either.  The target is `world` such devices: the platform's `device_count()` answers `world`, not the host's visible
     count, so `ParallelConfig`'s "world size larger than the available GPUs" check passes on a GPU-free host and the executor backend
-    resolves to `mp`, as on a host with the `world` GPUs the Commit runs on.  `get_device_name()` answers `device_name` (the row's
-    class's, `engine.profiles.devices`), the key of vLLM's tuned fused-MoE configs, so the Build reads the class's GPU's file on any
-    host (one with no visible device has no name; without `device_name`, a GPU host answers its own).  Build path only: serving resolves
-    its platform and counts its devices as before.  Raises when `current_platform` already resolved to a non-CUDA platform."""
+    resolves to `mp`, as on a host with the `world` GPUs the Commit runs on.  `get_device_name()` answers `device_name` (the Build's
+    `--device-name`, else its row class's: `engine.profiles.devices`), the key of vLLM's tuned fused-MoE configs, on any host, so the
+    Build reads the target GPU's file; without one, a GPU host answers its own.  Build path only: serving resolves its platform and
+    counts its devices as before.  Raises when `current_platform` already resolved to a non-CUDA platform."""
     # vLLM freezes export knobs at import (`VLLM_USE_LAYERNAME` -> `torch_utils._USE_LAYERNAME`): pin them before importing vLLM here
     engine_env.pin(engine_env.EXPORT)
     loaded = sys.modules.get("vllm.platforms")

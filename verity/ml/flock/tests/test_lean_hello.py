@@ -1,7 +1,7 @@
-"""A firewalled session's `Hello` in Lean (`Flock/Firewall/Hello.lean`, `flock-firewall hello`), the one the ZK server's Lean
+"""A ZK server session's `Hello` in Lean (`Flock/Firewall/Hello.lean`, `flock-firewall hello`), the one the ZK server's Lean
 session loop sends in the prover's place (`Session.helloOf`): held byte for byte to the `Hello`s Rust's `SessionConfig::hello_with_nonce`
-sent in the recorded `--zk` sessions of `test_lean_zk.py`'s fixture (one table, two tables, m = 26 and a drawn session), at
-each record's nonce and draw; at a nonce of its own, a fresh one each session; and its protocol's refusals. A request is
+sent in the recorded `--zk` sessions of `test_lean_zk.py`'s fixture (one table, two tables, m = 26 and a sampled session), at
+each record's nonce and sample; at a nonce of its own, a fresh one each session; and its protocol's refusals. A request is
 `draw LEN [NONCE]` and `LEN` bytes of the verifier's sample; a statement the setup refuses is answered `refused WHY` and the
 session goes on, a malformed request `err WHY`, which ends it with exit 1."""
 from __future__ import annotations
@@ -75,7 +75,7 @@ def _record(root: Path, name: str) -> tuple[str, str, str]:
 @pytest.mark.parametrize("name, public, tables", [("selftest/honest", "pub-16.bin", 1), ("m26", "pub-32.bin", 1),
                                                    ("j2", "pub-32.bin", 2), ("drawn", "pub-32.bin", 1)])
 def test_the_recorded_hello_at_its_nonce(zk, name, public, tables):
-    """At a record's nonce and draw, Lean's `Hello` is the one Rust sent, byte for byte."""
+    """At a record's nonce and sample, Lean's `Hello` is the one Rust sent, byte for byte."""
     hello, nonce, draw = _record(zk, name)
     answers, rc = _hello(_args(zk, public, tables), _request(draw, nonce))
     assert rc == 0 and answers == [f"ok {hello}"], answers
@@ -83,7 +83,7 @@ def test_the_recorded_hello_at_its_nonce(zk, name, public, tables):
 
 @pytest.mark.slow
 def test_one_process_serves_every_draw(zk):
-    """One process answers sessions at several draws, each sample's statement set up once: the population's, a sample's, and the
+    """One process answers sessions at several samples, each sample's statement set up once: the population's, a sample's, and the
     population's again at another nonce."""
     m26, n26, null = _record(zk, "m26")
     drawn, nd, draw = _record(zk, "drawn")
@@ -94,7 +94,7 @@ def test_one_process_serves_every_draw(zk):
 
 @pytest.mark.slow
 def test_a_nonce_of_its_own(zk):
-    """Without a nonce in the request, each session's is 32 bytes the command draws: two sessions' differ, and each `Hello` is
+    """Without a nonce in the request, each session's is 32 bytes the command samples: two sessions' differ, and each `Hello` is
     the recorded one at its nonce."""
     hello, nonce, draw = _record(zk, "selftest/honest")
     answers, rc = _hello(_args(zk, "pub-16.bin"), _request(draw) + _request(draw))
@@ -105,7 +105,7 @@ def test_a_nonce_of_its_own(zk):
 
 @pytest.mark.slow
 def test_a_draw_the_setup_refuses_and_the_session_goes_on(zk):
-    """The drawn session's sample over the 16-unit population's public file names another population: refused, and the next
+    """The sampled session's sample over the 16-unit population's public file names another population: refused, and the next
     request is answered."""
     hello, nonce, null = _record(zk, "selftest/honest")
     _, _, draw = _record(zk, "drawn")

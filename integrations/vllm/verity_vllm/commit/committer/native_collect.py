@@ -949,8 +949,8 @@ class NativeCollectCommitter(NativeHostCommitter):
         return v
 
     def release_drawn(self, drawn: Mapping[int, Iterable[int]]) -> dict[str, Any]:
-        """The window's draw-gated release, once every subprotocol's draw over it is drawn: ``drawn`` names by step the leaves any of
-        them drew (with every leaf a drawn unit opens, its inputs included). Exactly those leaves' bytes are copied to host
+        """The window's draw-gated release, once every subprotocol's sample over it is sampled: ``drawn`` names by step the leaves any of
+        them drew (with every leaf a sampled proof block opens, its inputs included). Exactly those leaves' bytes are copied to host
         (`device_pool.gather`), every other retained byte of the window is dropped and its device pool pieces freed; the tree levels
         and salt keys stay. A later read of a dropped leaf is refused by name. Once only; waits for the window's steps first."""
         return release(self, drawn)

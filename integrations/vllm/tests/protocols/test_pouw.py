@@ -59,7 +59,7 @@ def _rng(seed=0):
 
 
 def _coins(seed=0):
-    """The epoch's challenger on a seeded entropy (a served one's is the Lean verifier of record's, `pouw.verifier.coins`)."""
+    """The epoch's challenger on a seeded entropy (a served one's is the Lean verifier's, `pouw.verifier.coins`)."""
     return Challenger(0, random.Random(seed).randbytes)
 
 
