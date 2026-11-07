@@ -1,14 +1,14 @@
 """The auditor's challenger for a test, in process: the only coins a `service.Stream` that reads coins takes are a
-challenger's (`coins.ChallengerCoins`), and the verifier's run accepts a draw only with the evidence that the challenger
-released them after the registration's digest, so a test's stream draws from this one.
+challenger's (`coins.ChallengerCoins`), and the verifier's run accepts a sample only with the evidence that the challenger
+released them after the registration's digest, so a test's stream samples from this one.
 
 `Challenger` is a `ChallengerCoins` each of whose commitments opens a session of its own: a `LiveChallenger` on
 seeded entropy whose record is signed under the pinned key (`test_remote.PINNED`) and which an auditor's ledger of its
 own opens for `WINDOW`, withheld (the verifier takes only a withheld session's coins, `challenger.withheld_on`), and
-ends once the draw is read, as a served session's would (`remote.open_session`, `remote.close_session`). `evidence(digest)` is then `coins.coins_reason`'s evidence for the draw after `digest`.
+ends once the sample is read, as a served session's would (`remote.open_session`, `remote.close_session`). `evidence(digest)` is then `coins.coins_reason`'s evidence for the sample after `digest`.
 `Stream` is a `service.Stream` over one, as a deployment drives it: `register` names the window, `select` commits the
 coins to the registration's digest first (a second stage's to the interior registration's), and `outcome` hands the
-verifier the draw's evidence (a two-stage sample's, both stages')."""
+verifier the sample's evidence (a two-stage sample's, both stages')."""
 
 from __future__ import annotations
 
@@ -58,9 +58,9 @@ class Challenger(T.ChallengerCoins):
         return super().commit(after)
 
     def evidence(self, digest: str) -> dict[str, Any] | None:
-        """The evidence for the draw after registration `digest` (hex): its session closed by its client, its release
+        """The evidence for the sample after registration `digest` (hex): its session closed by its client, its release
         log as a served challenger writes it (each root, then its coin's release, as `remote.serve` answers one open at a
-        time), and the ledger's end sealing it; None for a draw that read no coins."""
+        time), and the ledger's end sealing it; None for a sample that read no coins."""
         after = bytes.fromhex(digest)
         segment = next(s for s in reversed(self.segments) if s.after == after)
         if not segment.openings:
@@ -83,8 +83,8 @@ class Challenger(T.ChallengerCoins):
 class Stream(S.Stream):
     """A `service.Stream` on a test's own challenger (`coins`, a new `Challenger` unless given; none for a stream
     that reads no coins), driven as a deployment drives it: a registration names `WINDOW`'s root unless it names
-    another, a draw's coins are committed to its registration's digest before it is drawn, and an outcome's run is
-    given the draw's evidence unless the test gives its own (`coins`, None for none)."""
+    another, a sample's coins are committed to its registration's digest before it is sampled, and an outcome's run is
+    given the sample's evidence unless the test gives its own (`coins`, None for none)."""
 
     _NONE: Any = object()
 

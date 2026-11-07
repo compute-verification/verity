@@ -35,24 +35,24 @@ own Commit.
 * **Ready before it listens.** `H1Windows.ready`, before serve-openai listens, does what the first block's first step
   would otherwise do before its first token: the weights' roots (`pouw_h1_hooks.weight_roots`, which each install
   reuses), the call tables' GPU hasher built (`pouw_h1_tables_device.available`), every z/y kernel a step of up to T
-  rows runs compiled (`pouw_h1_hooks.warm_zy`), the Lean verifier of record built (`verifier.executable`, once a
-  process: in a fresh tree a minute's build, which in-process coins otherwise run at the first one's draw), and the wait
+  rows runs compiled (`pouw_h1_hooks.warm_zy`), the Lean verifier built (`verifier.executable`, once a
+  process: in a fresh tree a minute's build, which in-process coins otherwise run at the first one's sample), and the wait
   for that block's reserve (window 0's, which `arm_of` makes while the Program is declared). Round 0's open stays at the block's first admission: its open root binds that round's
-  requests, and the call tables are bound under the salt the open draws.
+  requests, and the call tables are bound under the salt the open samples.
 * **Off the engine loop.** At a window's close the loop takes only H1's hooks and tap off; its release (the empty
-  steps' calls, the manifest's commit, the draw coin, the session's close and the wait for its end entry) runs on
+  steps' calls, the manifest's commit, the sampling coin, the session's close and the wait for its end entry) runs on
   ``closer``, one thread in window order, while the next window serves. Each window still has its own session,
   coins and transcript, and its outcome is recorded in window order once its release ends. With ``--h1-prover`` each
   served call's prover state is copied off the device and written by the server's `pouw_h1_prover.Writer`, whose ring
   holds a window's bytes at most, and the window's release waits for its files: one not written is the window's error,
   ``kept`` in its outcome otherwise.
-* **Its draw, for the draw-gated release** (``--retain device --seal --release-after pouw``, `serve_release`). Once a
-  window's draw coin is open, its release puts H1's draw of the window under `DRAWER` (`H1Windows.drawn`): the proof
-  blocks core draws (`credit.drawn` over the window Program's layout, as `pouw_h1_challenger.drawn_of` draws them), each
+* **Its sample, for the draw-gated release** (``--retain device --seal --release-after pouw``, `serve_release`). Once a
+  window's sampling coin is open, its release puts H1's sample of the window under `DRAWER` (`H1Windows.drawn`): the proof
+  blocks core samples (`credit.drawn` over the window Program's layout, as `pouw_h1_challenger.drawn_of` samples them), each
   read as the Commit's values it opens (`drawn_reads`): its call's x_q and s_a rows of its row tile at the engine step its
   step maps to. With a gate session its stream is the window's open root and its K its period-open's ``draw_k``; with
   in-process coins (no open root, no period, nothing credited) its calls_root and the proof system's K
-  (`pouw_h1_challenger.draw_k`). A window whose draw can't be formed (it never opened, its close failed, no draw coin,
+  (`pouw_h1_challenger.draw_k`). A window whose sample can't be formed (it never opened, its close failed, no sampling coin,
   no period) refuses its release by name, so its seal fails visibly and never waits.
 
 Each window's outcome (`H1Windows.close`) is its ``windows.jsonl`` line's ``pouw_h1``: ROOTS1's verdict, the requests'
@@ -101,7 +101,7 @@ LISTEN_S = 0.1
 #: a session reserved ahead is opened only while its reserve has this long left before it expires (the gate refuses an
 #: expired reserve's open); else its window reserves another
 MARGIN = timedelta(minutes=5)
-#: the subprotocol H1's draw of each window is put under in serve-openai's draw-gated release (``--release-after``)
+#: the subprotocol H1's sample of each window is put under in serve-openai's draw-gated release (``--release-after``)
 DRAWER = "pouw"
 #: an s_a's bytes a row (f32)
 S_A_BYTES = 4
@@ -419,14 +419,14 @@ class H1Windows:
     weights' registration key (a fresh one when None); ``unit`` the Program's tile unit at each K (`h1window.tile_unit`
     when None); ``sessions`` each window's session on the auditor host's challenger (`GateSessions`; None: in-process
     coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`;
-    None: kept nowhere, so no drawn unit or round of it can be proved), the calls' state written by ``writer`` (a
+    None: kept nowhere, so no sampled proof block or round of it can be proved), the calls' state written by ``writer`` (a
     `pouw_h1_prover.Writer` whose ring holds the window's bytes, `pouw_h1_prover.kept_bytes`), whose files a window's
-    release waits for: a call's not written is its error, so its draw is refused, and the outcome's ``kept`` otherwise
+    release waits for: a call's not written is its error, so its sample is refused, and the outcome's ``kept`` otherwise
     (`pouw_h1_prover.Writer.wait`); ``receipts`` each window's `Served` registers each call's ``receipt@<c>``
     (``--h1-receipts``, `pouw_h1_receipts.Receipts.serving`). ``closer`` (a `worker`) runs each window's
     release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
     ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release puts its
-    draw under `DRAWER` (`drawn`) when it waits for one. ``clock`` times each part."""
+    sample under `DRAWER` (`drawn`) when it waits for one. ``clock`` times each part."""
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
@@ -488,7 +488,7 @@ class H1Windows:
     def ready(self) -> dict[str, Any]:
         """What window 0's first step would otherwise do before its first token, done now (the module's "Ready before it
         listens"): the weights' roots computed, the call tables' GPU hasher built, the z/y kernels compiled (with
-        ``receipts`` noise.cu loaded too), the Lean verifier of record built (the in-process coins' entropy and each
+        ``receipts`` noise.cu loaded too), the Lean verifier built (the in-process coins' entropy and each
         release's verdicts) and window 0's reserve ended (`GateSessions.settled`, made here unless made ahead already);
         ``readied``, with where each part's time went (``seconds``)."""
         from verity.core.protocols.pouw import verifier
@@ -616,7 +616,7 @@ class H1Windows:
     def _release(self, window: int, comp: Any, run: Any, held: dict[str, Any] | None, seconds: dict[str, float],
                  error: str | None, queued: float, off: bool = False) -> dict[str, Any]:
         """Window ``window``'s release: its option closed (the empty steps' calls, its manifest committed, the sampling coin
-        opened and its session closed), with ``draws`` its draw put (`drawn`), and, with ``sessions``, its end entry
+        opened and its session closed), with ``draws`` its sample put (`drawn`), and, with ``sessions``, its end entry
         waited for; its outcome, recorded in ``outcomes``, with ``error`` when any of it failed. ``off``: on ``closer``,
         one of the windows ``releasing``."""
         t0 = t1 = self.clock()
@@ -658,13 +658,13 @@ class H1Windows:
                     self.releasing -= 1
 
     def drawing(self, draws: Any) -> None:
-        """Put each window's draw into ``draws`` (`serve_release.Draws`) from now on, when it waits for `DRAWER`'s."""
+        """Put each window's sample into ``draws`` (`serve_release.Draws`) from now on, when it waits for `DRAWER`'s."""
         self.draws = draws if draws is not None and DRAWER in draws.protocols else None
 
     def drawn(self, window: int, run: Any, held: dict[str, Any] | None, error: str | None) -> dict[str, Any]:
-        """Window ``window``'s draw put into ``draws`` under `DRAWER` once its draw coin is open: the units its coin draws
+        """Window ``window``'s sample put into ``draws`` under `DRAWER` once its sampling coin is open: the units its coin samples
         (`drawn_units`, at `draw_of`'s K and stream) and the Commit's values they open (`drawn_reads`). Its record for the
-        outcome's ``draw``; ``refused`` when the window's release was refused instead (its close failed, or the draw
+        outcome's ``draw``; ``refused`` when the window's release was refused instead (its close failed, or the sample
         can't be formed or put), naming why."""
         try:
             if error is not None:
@@ -673,7 +673,7 @@ class H1Windows:
             units = drawn_units(run.commits, self.layout(), k, stream)
             reads = drawn_reads(run.served.tap, self.layout(), units, S_A_BYTES)
             self.draws.put(window, DRAWER, reads)
-        except (ValueError, KeyError, IndexError, TypeError, RuntimeError, OSError) as e:   # a seal never waits on a draw not coming
+        except (ValueError, KeyError, IndexError, TypeError, RuntimeError, OSError) as e:   # a seal never waits on a sample not coming
             why = f"{ENTRY}: window {window}'s draw: {type(e).__name__}: {e}"[:500]
             self.draws.refuse(window, why)
             return {"refused": why}
@@ -694,7 +694,7 @@ class H1Windows:
         return self._layout
 
     def draw_of(self, run: Any, held: dict[str, Any] | None) -> tuple[int, str, str]:
-        """The K a window is drawn at, its stream, and where that K comes from. A gate session's window: its period-open's
+        """The K a window is sampled at, its stream, and where that K comes from. A gate session's window: its period-open's
         ``draw_k`` (`credit.committed_k` of the gate's ledger, read once a period) and its open root. An in-process
         window has neither, and credits nothing: the proof system's K (`pouw_h1_challenger.draw_k`) and its calls_root.
         ValueError when the session joined no period or the ledger commits it no K."""

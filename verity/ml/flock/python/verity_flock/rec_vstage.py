@@ -12,13 +12,13 @@ With each level, that level's committed tops are staged too, every node held at 
     python -m verity_flock.rec_vstage stage-links CIRCUIT INST LINKS OUT [--forge link]
 
 ``stage`` refuses an inner session whose record holds no sample (`rec_live.inner_draw`, exit 2): the verifier refuses every
-session over it (`RecSetup.innerDrawn`), so the challenger answers ``Register`` with the verifier's full draw
+session over it (`RecSetup.innerDrawn`), so the challenger answers ``Register`` with the verifier's full sample
 (``rec_live --draw``).
 
 **The verifier's side** reads the inner session's public record and the inner statement, never the prover's records: the
 table's shape as its setup derives it (`shape`), each rep's coins (its stream's rounds), the fold points they give
 (`rec_algebra.fold_points`, ``points``), the extra claims at the link points and the comb at the fold points (``fold.json``,
-`InnerFold.lean`: the Lean verifier of record's `Stmt.extraClaims` and `CircuitFold.folded`, no proof read), then each rep's
+`InnerFold.lean`: the Lean verifier's `Stmt.extraClaims` and `CircuitFold.folded`, no proof read), then each rep's
 v, the final check's κ and its query rows (`rec_algebra.verifier_rows`), each opening's coefficients
 (`rec_outer.coefficients`, its position checked against `rec_vstar`'s), and the entries its reads files name: per round i that
 absorbs message elements, the value ``rec-c<i>`` rebuilt from that round's two ``c_k`` (`rec_residuals.commits_entry`), and
@@ -30,7 +30,7 @@ rep r's) under `rec_outer.session_program` of ``public.json``, which the chain s
 
 **Hidden unit circuits** (`verity_flock.rec_session`, ``fold.json``'s ``hidden``: ``InnerFold.lean --hide``): the comb is the
 public part's fold, the shape is holo (`rec_algebra.Shape.holo`), and h's round is one of the message rounds, its row
-registered as the others' are; z_partial's round draws no coins, which `rec_algebra.CoinSource` skips.
+registered as the others' are; z_partial's round flips no coins, which `rec_algebra.CoinSource` skips.
 
 **The sparse phase and R** (``--sparse``, with ``--circuit``): RecSparse over both reps' sparse streams (`stage_sparse`) and,
 when the session committed the stacked table R, R's levels as RecOpen statements, its openings on the chain after both
@@ -452,8 +452,8 @@ def inner_rows(meta_: dict, inst: Path) -> SimpleNamespace:
 
 
 def drawn_rows(seed: int, units: int, n_in: int, n_out: int, links: list) -> SimpleNamespace:
-    """A drawn population in `inner_rows`' form, for the link part's tests: ``units`` units of ``n_in`` input and ``n_out``
-    output rows, each row a drawn digest under a drawn salt with its ``b || c``, and each link's (`rec_links.LinkEntry`)
+    """A sampled population in `inner_rows`' form, for the link part's tests: ``units`` units of ``n_in`` input and ``n_out``
+    output rows, each row a sampled digest under a sampled salt with its ``b || c``, and each link's (`rec_links.LinkEntry`)
     reader row its writer's digest under its own salt."""
     import random
 
@@ -495,7 +495,7 @@ def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None =
     ``trow`` reads; each row's reader and writer rows are opened in the input and output rows' trees (`rec_link.Tree` over
     the rows' ``b || c``), a filler's at unit 0's row 0 of each; ``rin`` and ``rout`` are the verifier's own rows, the two
     roots (`rec_link.expected`), as `Flock.RecLinkPart.check` holds them. ``xyr``, ``raux``, ``xyw`` and ``waux`` are the
-    prover's own registrations ``rec-link-<port>`` under fresh salts, drawn port by port in that order, row by row, so the
+    prover's own registrations ``rec-link-<port>`` under fresh salts, sampled port by port in that order, row by row, so the
     reads file names every port of the part (`Registered.checkComplete`). These are `VStar.In.linkIn`'s port inputs, which the V*
     difftest (``part_in``) holds to this ``inst.bin``. With `rec_circuits`' cache the circuit text is built once per
     ``(UB, PB, N)``, and ``evaluate`` (the unit's replay against `rec_link.link_ref`) runs only when it is built.
@@ -621,7 +621,7 @@ def coefficients(vf: SimpleNamespace, queries: list[V.Query]) -> dict:
 
 
 def acc_salts(path: Path, n: int) -> list[bytes]:
-    """The running sums' ``n`` salts: drawn when ``path`` does not exist and kept there (the prover's), read back otherwise."""
+    """The running sums' ``n`` salts: sampled when ``path`` does not exist and kept there (the prover's), read back otherwise."""
     from verity.ml.commitments import hm96
 
     k = hm96.SHA512.salt_bytes

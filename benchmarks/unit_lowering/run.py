@@ -14,7 +14,7 @@ leaf (`lanes.py`), bound to the Program a served window's verifier derives for i
 META's ``k_log`` and AND rows (`scan`), and deleted.
 
 ``--k`` writes OUT/unit_lowering.json and prints one ``UNIT-LOWERING`` line. ``--guard`` lowers each shape of `PINS` (``--guard
-all``: and of `WIDE`) flat, holds its SHA-512 to `REFERENCE`'s and its ``k_log`` to C-Flock's 2^`K_MAX` block, writing
+all``: and of `WIDE`) flat, holds its SHA-512 to `REFERENCE`'s and its ``k_log`` to Flock's 2^`K_MAX` block, writing
 OUT/guard.json and exiting 1 naming each shape that fails. ``--pin-reference`` writes OUT/reference.json from this tree's
 lowering at `PINS` and `WIDE`, the guard's reference when this tree is the one pinned. ``--tree`` runs another checkout's
 lowering: its integrations/vllm and h1_lanes, its import roots first on the child's PYTHONPATH
@@ -48,7 +48,7 @@ UNITS = ("tile", "lane", "combine")
 PINS = (("tile", 64, 4, 8), ("tile", 256, 8, 8), ("lane", 448, 32, 32), ("combine", 448, 32, 32))
 #: pinned as well, and guarded only under ``--guard all``: a long K, and the leaf's own tile (40 and 56 GiB)
 WIDE = (("tile", 2048, 4, 8), ("tile", 64, 32, 32))
-#: C-Flock's largest block, 2^K_MAX bits (`verity_flock.circuit.K_MAX`): no file past it can be proved
+#: Flock's largest block, 2^K_MAX bits (`verity_flock.circuit.K_MAX`): no file past it can be proved
 K_MAX = 27
 #: ``H1_TMPL`` for each form (`h1unit.layout`)
 FORMS = {"flat": None, "structural": "structural"}
