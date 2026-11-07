@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["Definitions"],
  "proved_in": ["Proofs"],
  "assumptions_module": "Definitions.Assumptions",
@@ -3370,9 +3371,6 @@
    "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
   ],
   "Flock.SecurityProofs.SampledKSLiveV5": [
-   "Flock.Bridge.DrawsUnder",
-   "Flock.Bridge.NotBernoulli",
-   "Flock.Bridge.RootFixesDomainL",
    "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
    "FlockSoundness.Built",
    "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
