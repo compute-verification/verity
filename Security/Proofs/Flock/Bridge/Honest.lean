@@ -47,7 +47,8 @@ that those files parse (`Flock.Bridge.Assumptions.ServedFilesParse`): inputs `I`
 digests, at `verity/flock-circuit`'s tags with one table and no session tables, at which the circuit file parses to `D`,
 `D`'s unit is built (`Built`), the public file loads with no shared-row tables, `D` is in `scopeOkH`, and the tags are
 the ones the statements take (`TagsOkZHJ`). The finders' collision resistance is no hypothesis of these: the statements
-take it as the named assumptions `Assumptions.TableCRZAt` and `Assumptions.LinkCRZCAt`.
+take it as `Assumptions.TableCRZAt` and `Assumptions.LinkCRZCAt`, the named assumptions `SHA512CRStrict` and
+`SHA512CRExpected` at the prover's finders.
 -/
 
 @[expose] public section
