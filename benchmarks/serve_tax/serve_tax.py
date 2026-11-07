@@ -302,13 +302,18 @@ def scrape(port: int) -> dict[str, float]:
         return counters(r.read().decode())
 
 
-def stop(server: subprocess.Popen) -> str:
-    """Stop the server and every process of its group (the engine core): ``killed`` if any of the group was left after
-    the server exited, else ``exited``."""
+# `research cancel` and `--timeout` SIGKILL the job 20 s after its SIGTERM, and the server runs in a session of its own:
+# a terminated arm kills the server's group before then, or the engine core and its workers keep the GPUs
+TERM_GRACE_S = 5.0
+
+
+def stop(server: subprocess.Popen, grace_s: float = 120.0) -> str:
+    """Stop the server and every process of its group (the engine core), the server given ``grace_s`` to exit on SIGINT:
+    ``killed`` if any of the group was left after the server exited, else ``exited``."""
     if server.poll() is None:
         server.send_signal(signal.SIGINT)
         try:
-            server.wait(120)
+            server.wait(grace_s)
         except subprocess.TimeoutExpired:
             server.kill()
             server.wait()
@@ -528,7 +533,13 @@ def edge_config(arm: Arm, model: Model, a: argparse.Namespace, rates: dict[str, 
 
 
 def run(a: argparse.Namespace) -> int:
-    signal.signal(signal.SIGTERM, lambda s, f: (_ for _ in ()).throw(SystemExit(128 + s)))
+    termed: list[int] = []
+
+    def on_term(s: int, _frame: object) -> None:
+        termed.append(s)
+        raise SystemExit(128 + s)
+
+    signal.signal(signal.SIGTERM, on_term)
     nofile = open_files()
     arm, model = ARMS[a.arm], MODELS[a.model_id]
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
@@ -592,7 +603,7 @@ def run(a: argparse.Namespace) -> int:
         print(f"[serve-tax] {a.arm}: FAILED {meta['error']}", flush=True)
         rc = 1
     finally:
-        meta["server_stop"] = stop(server)
+        meta["server_stop"] = stop(server, TERM_GRACE_S if termed else 120.0)
         meta["server_rc"] = server.returncode
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
         shutil.rmtree(out / ".site", ignore_errors=True)

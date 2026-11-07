@@ -426,3 +426,35 @@ def test_a_tax_against_one_rep_has_no_interval():
     assert one["value"] == pytest.approx(1000 / 900 - 1) and one["n"] == [3, 1] and "ci95" not in one
     assert "ci95" in S.tax(S.summary([1000.0, 1010.0, 990.0]), S.summary([900.0, 910.0]))
     assert S._tax(one) == "+11.1%"
+
+
+class Server:
+    """A server that ignores SIGINT: `stop` waits its grace, kills it, then kills its group."""
+
+    pid = 4242
+
+    def __init__(self):
+        self.calls = []
+
+    def poll(self):
+        return None
+
+    def send_signal(self, s):
+        self.calls.append(("signal", s))
+
+    def wait(self, timeout=None):
+        self.calls.append(("wait", timeout))
+        if timeout is not None:
+            raise S.subprocess.TimeoutExpired("vllm", timeout)
+
+    def kill(self):
+        self.calls.append(("kill",))
+
+
+def test_a_terminated_arm_kills_its_servers_group_within_the_runners_grace(monkeypatch):
+    groups = []
+    monkeypatch.setattr(S.os, "killpg", lambda pid, s: groups.append((pid, s)))
+    server = Server()
+    assert S.stop(server, S.TERM_GRACE_S) == "killed"
+    assert server.calls == [("signal", S.signal.SIGINT), ("wait", S.TERM_GRACE_S), ("kill",), ("wait", None)]
+    assert groups == [(4242, S.signal.SIGKILL)] and S.TERM_GRACE_S < 20
