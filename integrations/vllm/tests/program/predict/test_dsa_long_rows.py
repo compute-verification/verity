@@ -187,13 +187,14 @@ def _step(*rows: tuple[int, int, int, int]):
 
 @pytest.mark.slow
 def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_path):
-    """Class G (about half a minute): A (a 3-token prompt, 5 outputs: its rows past INDEX_TOPK from position 4) and B (2 and 3,
-    within it) whole in one window are, call for call, their Programs in the window that leaves A at position 6 and B at 3, then
-    in the next, which carries both in. A's rows read the indexer's keys and scales past INDEX_TOPK, so the edge carries them for
-    A alone: the first window's A returns its samples and its checks (rows 4 and 5), then every layer's latent rows, index-K slots
-    and scales so far, out-ports `edge.kv`, `edge.ik`, `edge.iks` and `edge.last`; the next reads them as A's history, `edge.ik`
-    and `edge.iks` one field each, A's, while B's index-K history stays its own unread Inputs. Each window's `run` holds the
-    orders of the rows it computes. What no cheaper test can: that a window's edge carries a request past INDEX_TOPK whole."""
+    """Class G (about 40 s): A (a 3-token prompt, 5 outputs: its rows past INDEX_TOPK from position 4) and B (2 and 3, within it)
+    whole in one window are, call for call, their Programs across three: the first leaves A at position 6 and B at 3, the second
+    runs B's last row with A carried through it idle, and the third runs A's last. A's rows read the indexer's keys and scales
+    past INDEX_TOPK, so the edges carry them for A alone: the first window's A returns its samples and its checks (rows 4 and 5),
+    then every layer's latent rows, index-K slots and scales so far, out-ports `edge.kv`, `edge.ik`, `edge.iks` and `edge.last`,
+    while B's index-K history stays its own unread Inputs; the idle window passes A's fields through to its own edge, and the
+    third reads them as A's history, `edge.ik` and `edge.iks` one field each. Each window's `run` holds the orders of the rows it
+    computes. What no cheaper test can: that a window's edges carry a request past INDEX_TOPK whole, through a window it idles in."""
     from verity.ml.circuits.types import field_types
     from verity_vllm.pipeline import window_advice as WA
     from verity_vllm.program.predict.steps import Registered, compile_steps
@@ -203,32 +204,38 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
     a, b = WA.RequestAdvice("a", 3, 5, "length"), WA.RequestAdvice("b", 2, 3, "length")
     steps = [_step((0, 3, 0, 3), (1, 2, 0, 2)), _step((0, 3, 3, 1), (1, 2, 2, 1)), _step((0, 3, 4, 1)), _step((0, 3, 5, 1)),
-             _step((0, 3, 6, 1), (1, 2, 3, 1))]
+             _step((1, 2, 3, 1)), _step((0, 3, 6, 1))]
+    carried_a = WA.Carried(0, 6, 4, ((0, 6),))
     out = WA.Advice((a, b), tuple(steps[:4]), (0,) * 6)
-    into = WA.Advice((a, b), tuple(steps[4:]), (0, 0), (WA.Carried(0, 6, 4, ((0, 6),)), WA.Carried(0, 3, 2, ((0, 3),))))
-    assert WA.follows(out, into) is None
+    idle = WA.Advice((a, b), (steps[4],), (0,), (carried_a, WA.Carried(0, 3, 2, ((0, 3),))))
+    into = WA.Advice((a,), (steps[5],), (0,), (carried_a,))
+    assert WA.follows(out, idle) is None and WA.follows(idle, into) is None
     ingress = {"a": {**GREEDY, "max_tokens": 5, "prompt": [1, 2, 3]}, "b": {**GREEDY, "max_tokens": 3, "prompt": [4, 5]}}
-    cs = [compile_steps(reg, adv, ingress) for adv in (WA.Advice((a, b), tuple(steps), (0,) * 8), out, into)]
-    assert all(c.batch_rule is None for c in cs)
-    progs = [[c.programs[u.digest] for u in c.requests] for c in cs]
+    cs = [compile_steps(reg, adv, {q.id: ingress[q.id] for q in adv.requests})
+          for adv in (WA.Advice((a, b), tuple(steps), (0,) * 8), out, idle, into)]
+    assert all(c.batch_rule is None for c in cs) and cs[2].idle == (0,)
+    prog = [{u.request: c.programs[u.digest] for u in c.requests if u is not None} for c in cs]
     for r in (0, 1):
-        assert [n.fn.id for n in progs[0][r].fn.body.nodes] == [n.fn.id for p in progs[1:] for n in p[r].fn.body.nodes]
+        assert [n.fn.id for n in prog[0][r].fn.body.nodes] == [n.fn.id for p in prog[1:] if r in p for n in p[r].fn.body.nodes]
     assert [u.edge for u in cs[1].requests] == [("prefix", "prefix_ik", "prefix_iks"), ("prefix",)]
-    ret = field_types(progs[1][0].fn.signature()[1])
+    ret = field_types(prog[1][0].fn.signature()[1])
     assert ret[1] == Array(3 * 2, BIT) and ret[2:] == (Array(4, Array(6, Array(576, Value(16)))), Array(3, Array(6, Array(128, Value(8)))),
                                                        Array(3, Array(6, Value(32))))
     wls = [c.workload for c in cs]
+    assert field_types(wls[1].fn.signature()[1])[0] == TupleT(Array(4, I32), Array(6, BIT))
     assert wls[1].edge.outs == wls[2].edge.ins and [[g for g, _, _ in gs] for _, gs in wls[2].edge.ins] == [
         ["prefix", "prefix_ik", "prefix_iks", "last_token"], ["prefix", "last_token"]]
-    params, wret = wls[2].fn.signature()
-    assert wls[2].ports == ("edge.kv", "edge.ik", "edge.iks", "edge.last")
-    assert [len(field_types(dict(params)[p])) for p in wls[2].ports] == [2, 1, 1, 2]
-    assert [t.leaves for t in field_types(dict(params)["edge.ik"])] == [ret[3].leaves]
-    assert field_types(wls[1].fn.signature()[1])[0] == TupleT(Array(4, I32), Array(6, BIT))
-    rids = [r.request_id for r in wls[2].requests]
-    assert [n for n, _ in params if n.startswith("request[") and ".peers_" not in n] == [
-        f"request[{rids[0]}].prompt", f"request[{rids[0]}].run", f"request[{rids[1]}].prompt", f"request[{rids[1]}].prefix_ik",
-        f"request[{rids[1]}].prefix_iks"]
-    for p, pos in zip(progs, ({4, 5, 6}, {4, 5}, {6})):
-        assert {int(re.findall(r"\d+", f)[-1]) for f, _ in dict(p[0].fn.signature()[0])["run"].fields} == pos
-        assert "run" not in dict(p[1].fn.signature()[0])
+    assert wls[2].edge.outs == wls[2].edge.ins[:1] == wls[3].edge.ins, "the idle window hands A's fields on as they came in"
+    rids = {w: [r.request_id for r in wls[w].requests] for w in (2, 3)}
+    for w, held in ((2, [2, 1, 1, 2]), (3, [1, 1, 1, 1])):
+        params = dict(wls[w].fn.signature()[0])
+        assert wls[w].ports == ("edge.kv", "edge.ik", "edge.iks", "edge.last")
+        assert [len(field_types(params[p])) for p in wls[w].ports] == held
+        assert [t.leaves for t in field_types(params["edge.ik"])] == [ret[3].leaves]
+    names = [n for n, _ in wls[2].fn.signature()[0] if n.startswith("request[") and ".peers_" not in n]
+    assert names == [f"request[{rids[2][0]}].{g}" for g in ("prompt", "prefix_ik", "prefix_iks")], "B's index-K history is its own"
+    assert [n for n, _ in wls[3].fn.signature()[0] if n.startswith("request[") and ".peers_" not in n] == [
+        f"request[{rids[3][0]}].{g}" for g in ("prompt", "run")]
+    for p, pos in zip(prog, ({4, 5, 6}, {4, 5}, set(), {6})):
+        assert {int(re.findall(r"\d+", f)[-1]) for f, _ in dict(p[0].fn.signature()[0])["run"].fields} == pos if 0 in p else not pos
+        assert 1 not in p or "run" not in dict(p[1].fn.signature()[0])
