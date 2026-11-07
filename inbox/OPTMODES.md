@@ -516,3 +516,93 @@ Do this before more v2.4 work, since #7652 (v2.3) can't land until #7626 does:
 - Re-run the suites review-1 named, re-mark #7626, then restack #7652 on the new #7626 head and re-mark it. Give me both
   land asks and a 2-line note for review-1.
 Never merge `next` or #7539.
+
+
+## 2026-11-07T00:35Z from OVERHEADDEF (proofs): the census types (A) samples, measured on an H200
+
+Fourteen of the registered types no card measured are now measured on one H200 with the deployed prover:
+
+- ten of the fourteen at the top of (A)'s computed share;
+- four spares from just below them.
+
+The combined card, extended with them, replaces art:b92517ea:
+
+`uv run python benchmarks/spot_figures/cards.py fetch art:ed20cbaa160701d757cd17f1e71516ee16cca638388efe91b82a7f132ab78e60 --replaces art:b92517eadfd0731c4ae150b15b1573a245d32d2cb0ae26fc864eac8de2cac365`
+
+**90% isn't reachable on a 1x H200 pod.** Four of the fourteen can't be proved there. Their provers need more than the
+pod's 251 GB of host memory, at about 86 bytes a matrix entry:
+
+- SparseMlaSplitPart T=64: at least 3.2G entries;
+- Fp8GroupQuant K=6144: 3.4G;
+- FlashInfer K=2048: 3.1G;
+- FlashInfer K=6144: 9.3G.
+
+They carried 0.160 of (A)'s 0.465 computed share. They need a host with more memory per GPU (a vy-dc-h200, through
+@vllm), and I didn't ask for one.
+
+**What changes.** These are rank_computed's numbers on v2.3's planner: beta 1%, world week, the figures branch's own
+inputs.
+
+| line | computed share, before | after | proving s a sampled replay block, before | after |
+|---|---:|---:|---:|---:|
+| tokens (A) | 0.465 | 0.229 | 300 | 491 |
+| per_expert | 0.467 | 0.225 | 440 | 719 |
+| layer_of_token | 0.492 | 0.244 | 323 | 422 |
+
+- **The measured types.** By your ranking they carried 0.280 of (A)'s 0.465 computed share, 60% of it. They are now
+  0.444 of (A)'s proving: 218 s of a sampled replay block's 491, up from 84 s of 300.
+- **What stays computed.** 0.229 of (A)'s proving: 0.199 is the four types above, and 0.031 is 54 small types. The
+  computed rule refits on the card's measured blocks, so the four went from 48 to 97 s a sampled replay block.
+- **h.** (A)'s h moves from 1.389e10 to 1.398e10. These types' marginals are a small part of h. Their cost is the
+  fixed seconds a statement, which a sampled request pays once per type.
+- **Where a small statement's time goes.** The prover's busy time is 0.1 to 4.5 s a session at 2 and 64 blocks. The
+  rest of the 10 to 90 s is the prover waiting on the ZK server, plus the statement's setup. That is the target if
+  sampled-request proving must come down.
+
+Per type, in the dev arm (SPOT's prover), end to end, with a warm prover. A `*` marks a marginal that takes the
+computed rule (below).
+
+| type | k_log | 2-block statement, s | marginal, ms a block | s a sampled replay block, before | after |
+|---|---:|---:|---:|---:|---:|
+| AllReduceMultimem | 27 | 42.7 | 14.13* | 19.7 | 42.7 |
+| ResidualAdd N=6144 | 26 | 16.9 | 31.97 | 12.9 | 13.7 |
+| Fp8GroupQuant K=2048 | 24 | 47.8 | 1.77* | 10.2 | 39.3 |
+| Fp8GroupQuant K=1536 | 24 | 39.6 | 1.77* | 8.7 | 39.6 |
+| DsaRMSNorm N=2048 | 25 | 24.2 | 3.53* | 6.5 | 9.8 |
+| SparseMlaCombine | 25 | 43.1 | 194.34 | 5.7 | 19.9 |
+| AllReduceResidualMnnvl | 27 | 59.4 | 14.13* | 5.5 | 16.6 |
+| DsaRMSNorm N=512 | 23 | 11.6 | 0.88* | 4.7 | 6.2 |
+| RmsNormMnnvl N=6144 | 27 | 90.2 | 14.13* | 3.6 | 16.4 |
+| CublasSplitKGemmF32Out K=6144 | 25 | 10.3 | 3.53* | 2.7 | 2.3 |
+| BatchedGemm K=512 (spare) | 22 | 1.2 | 2.71 | 1.4 | 1.2 |
+| ScaledMmFp8 K=1536 (spare) | 23 | 2.2 | 0.88* | 0.9 | 0.4 |
+| FlashInferFp8Linear K=256 (spare) | 22 | 12.6 | 0.44* | 0.8 | 7.0 |
+| Fp8GroupQuant K=256 (spare) | 22 | 5.2 | 0.44* | 0.7 | 2.6 |
+
+- **Marginals.** Statements of 2 and 64 blocks resolve a marginal of a few ms a block at best. Eleven types fitted one
+  below the computed rule (1.05e-10 s a witness bit times 2^k_log), or were proved at 2 blocks only. Each of them takes
+  the rule's marginal, and its fixed seconds from its 2-block median.
+- **Two high marginals.** SparseMlaCombine's and ResidualAdd's fitted marginals (194 and 32 ms) are kept. Their 64-block
+  points ran while other types were staging on the same host, so they may be high. The planner takes under one block of
+  each a sampled replay block, so they move it by under 0.1 s.
+- **fw at 2 blocks.** I measured it directly on Fp8GroupQuant K=1536 and DsaRMSNorm N=512. It costs 3.4 and 2.6 times
+  the send-check law's increment. Their once-a-statement term is 9.4 µs a slot bit, against the law's 3.02.
+  - The card prices dev only.
+  - The evidence's `out/census.json` gives fw for every type both ways: by the law (`fw_estimated`) and by the direct
+    term (`fw_direct_rule`). Use the direct term for fw at small statements.
+- **nofw.** nofw ran within session noise of dev where measured (four types and three spares). dev stands in for it on
+  the rest.
+- **Priced by Definition only.** The MoE expert blocks with SWAP=false and the MmaV2 dot take the registered cut's
+  SWAP=true Qgmma blocks of the same Definition and K. That was 16% of (A)'s proving before and 9.9% now. It is
+  "measured" in `priced` but not by name.
+- **Lean.** flock-verify checked 12 of the 14 types at their largest statement. Each passed every check, then was
+  refused only for lacking the Program, which these staged statements don't carry. The runs' deadline cut ResidualAdd's
+  and SparseMlaCombine's verifies.
+- **Tests.** The figures' four test files pass with this card at 84ece3f881 (61 tests), with no test change. The branch
+  is now 996905af3a, which changes nothing under benchmarks/spot_figures, and `cards.py check` passes there.
+
+GPU: our RunPod, 1x H200 SXM, $5.29/h. It ran from 21:27Z until I terminated it at 00:12Z, 2.74 h, about $14.50. No
+vy-dc-h200-* was used.
+
+Evidence art:de299e8e145b5c5bd8109c6a3ce612b40210c420e7b06b1bf5d589a618dcea4c. It and the card are preserved. Report
+note:proofs/20261106T1424Z-report-overheaddef-task2, section "The census types, measured".
