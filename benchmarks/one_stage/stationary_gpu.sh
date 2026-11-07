@@ -16,6 +16,7 @@
 #      the points of full/K and full/(2K) blocks; give the type counts down to full/(2 max K), e.g. pe-w13@2048,1024,512,256,128;
 #      unset: one)  ST_CACHE=1 (then FC_STMT_CACHE=1 on each type's largest point at one prover and its best point and K;
 #      only: every point and K with it on, none with it off; both: every point and K off, then on)
+#      ST_MPS=1 (the provers through NVIDIA's MPS, one control daemon for the job: their kernels run at once, not time-sliced)
 #      ST_KEEP_BIN (a path the built prover is copied to)  ST_BIN (a prover built so: no build)
 #      ST_CPU=1 (no CUDA: the CPU prover, `prove --zk` without --gpu, for checking the runner on a CPU node)
 # Kept in $OUT: per type and count its stage.json, the sessions' prove.out, prove.err and serve.log, and the records;
@@ -28,8 +29,9 @@ mkdir -p "${ST_EXEC_WORK:-/workspace/tmp}" && X=$(mktemp -d "${ST_EXEC_WORK:-/wo
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 HOLD=${ST_HOLD:-}; DEADLINE=${ST_DEADLINE:-0}
 MINE="proofs stationary ${RESEARCH_RUN_ID:-local}: GPU ${ST_GPU:-0}$( [ "$DEADLINE" = 0 ] || date -u -d "@$DEADLINE" +' until %H:%MZ')"
-STAGERS=()
+STAGERS=(); MPS=
 cleanup() {
+  [ -n "$MPS" ] && echo quit | nvidia-cuda-mps-control && log "MPS: control daemon stopped"
   for p in "${STAGERS[@]}"; do pkill -P "$p" 2>/dev/null; kill "$p" 2>/dev/null; done
   [ -n "$HOLD" ] && [ "$(cat "$HOLD" 2>/dev/null)" = "$MINE" ] && rm -f "$HOLD" && log "released $HOLD"
   rm -rf "$W" "$X"
@@ -90,6 +92,12 @@ else
 fi
 sha256sum "$BIN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 export CUDA_VISIBLE_DEVICES=${ST_GPU:-0} FC_PHASE_TIMES=1
+if [ "${ST_MPS:-0}" = 1 ] && [ $GPU = 1 ]; then
+  export CUDA_MPS_PIPE_DIRECTORY=$X/mps-pipe CUDA_MPS_LOG_DIRECTORY=$X/mps-log
+  mkdir -p "$CUDA_MPS_PIPE_DIRECTORY" "$CUDA_MPS_LOG_DIRECTORY"
+  nvidia-cuda-mps-control -d && MPS=1 && log "MPS: control daemon up (the provers share one device context)"
+  [ -n "$MPS" ] || { log "MPS: the control daemon didn't start"; exit 1; }
+fi
 CPUFLAG=(); [ $GPU = 1 ] || CPUFLAG=(--cpu)
 
 # zk P [ARGS]: plan point P's warm process (zk_cost.py prove), its ZKCOST lines into job.log
