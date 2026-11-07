@@ -82,7 +82,7 @@ def _rows(V, T, rng):
 
 
 def test_lowering_the_keep_word_names_the_word_gate_keep_word():
-    """No one circuit holds the keep word, so C-Flock has no piece for it, and lowering it names what to bind instead."""
+    """No one circuit holds the keep word, so Flock has no piece for it, and lowering it names what to bind instead."""
     from verity.ml.definitions.registry import sampling as SM
     from verity_flock import gf2
     from verity_flock import ir_lower as IL
@@ -129,7 +129,7 @@ def _primitives(d) -> dict:
 @pytest.mark.parametrize("S", TW.SPLIT_COUNTS)
 def test_the_word_gate_keep_word_has_a_piece_for_every_gate(S):
     """What a served top-p select is proved through: at each split count the word-gate keep word (`TopPKeepWord_v2{V,S}`)
-    holds only gates C-Flock has a piece for, so a partition cuts it into proof blocks of word gates."""
+    holds only gates Flock has a piece for, so a partition cuts it into proof blocks of word gates."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import dead_free as DF
     from verity_flock import ir_lower as IL

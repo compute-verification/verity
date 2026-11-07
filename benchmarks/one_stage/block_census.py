@@ -5,7 +5,7 @@ step (step 0) and the decode steps, per token and per request.
 A row's cut is its own Definition, or else a unit template for each slot of its split (`serving_rows.unit_templates`):
 a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``SPLITS`` row's split parts and combine are a slot each; a
 ``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, and a ``KCHUNKS`` row's slot is its
-coordinate or its K-chunks of one width. A unit template fits when it binds, C-Flock has a piece for every leaf, its block
+coordinate or its K-chunks of one width. A unit template fits when it binds, Flock has a piece for every leaf, its block
 (`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.unit_class`). The
 row itself is taken when it fits, else each slot's coarsest fitting option; a row with a slot that has none is a gap, with
 its finest option's reason. A row whose Definition has no gate (a gather) or no input (a constant) is no proof block.

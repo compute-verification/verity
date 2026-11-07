@@ -43,7 +43,7 @@ with the current code, and the two are diffed as canonical JSON on every field t
                           and the attribution table of match_decomp.json recomputed over the 0.6-5.8 GB fold record by the v2 path
                           (observe.iter_observations -> resolve -> resolve_decomp; batch_decomp.Projection / compare_steps wrapped)     STRONG   T1
     replay_partition      the sampled-replay PARTITION of sampled_replay_p0.json (population by family / not-evaluable by name / strata
-                          sizes / lifetime split / not-executed split / the seeded draw's per-stratum counts and picks per
+                          sizes / lifetime split / not-executed split / the seeded sample's per-stratum counts and picks per
                           (request, step) / phase anchors) recomputed over the Programs + manifest of record; the evaluations
                           themselves (binding map, vault only) are carried as facts, not recomputed                                   STRONG   T1
 

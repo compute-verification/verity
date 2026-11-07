@@ -48,8 +48,8 @@ import Proofs.Flock.VBridge.Pinned
 The links bind (`Claims.Recursion.LinkBindsAt`) when an accepted run whose extracted witness fails the link clause gives
 a collision among what the link finder reads. This file holds the outer side's pieces that chain reads:
 
-* `Claims.Recursion.EO_judged_of_E`: where `E*` extracts, `E_O` gave outer witnesses at its judged draw (else the inner
-  view there is rejected and the inner `E^rep` stops), so the link finder reads them off the first draw.
+* `Claims.Recursion.EO_judged_of_E`: where `E*` extracts, `E_O` gave outer witnesses at its judged sample (else the inner
+  view there is rejected and the inner `E^rep` stops), so the link finder reads them off the first sample.
 * `collision_of_collides`, `commit_bind`: the verifier's `Collides` pair is a `Collision` of the deployed SHA-512, and two
   equal commit strings are one row or a collision of the row's or the salt's evaluations.
 * `linkName_inj`, `linkName_params`, `linkParams_of_check`: the name `rec-link/u<UB>-p<PB>` determines `UB` and `PB`
@@ -76,8 +76,8 @@ private theorem evalBindFst {R α β : Type} (H : Msg → Msg) (run : R → Trac
     ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 :=
   (RP.eval_bind H run p f).1
 
-/-- **Where `E*` extracts, `E_O` gave outer witnesses at its judged draw**: else `dec` reads a rejected inner view there
-and the inner `E^rep` stops at its judged draw. -/
+/-- **Where `E*` extracts, `E_O` gave outer witnesses at its judged sample**: else `dec` reads a rejected inner view there
+and the inner `E^rep` stops at its judged sample. -/
 theorem EO_judged_of_E (H : Msg → Msg) (A : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r₀ : Fin (A.V.k x) → Coin)
     (c : (E H A I DO decO).C x) {w : W} (h : ((E H A I DO decO).eval H P x ω r₀ c).1 = some w) :

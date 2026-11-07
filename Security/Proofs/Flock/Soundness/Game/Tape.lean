@@ -5,10 +5,10 @@ public import Definitions.Flock.Game.Seq
 public import Proofs.Flock.Soundness.Game.Prob
 
 /-!
-# Drawing a strategy's coins ahead
+# Sampling a strategy's coins ahead
 
-The tapes of `Definitions.Flock.Game.Tape`, drawn uniformly, have uniform and independent coins, so drawing the tape
-first and then reading the play off it gives every event the probability it has when each coin is drawn as the play
+The tapes of `Definitions.Flock.Game.Tape`, sampled uniformly, have uniform and independent coins, so sampling the tape
+first and then reading the play off it gives every event the probability it has when each coin is flipped as the play
 reaches it (`prob_bind_tape`). For games one after another (`seqG`), an event of game `k`'s output has the probability,
 over `seqG`'s coins, that it has over the tape of the games before it and game `k`'s own coins, played with the strategy
 left there (`prob_seqG`). A strategy may read every coin it has seen, so this is how a bound for one game played alone
@@ -86,7 +86,7 @@ section Tape
 
 variable (f : α → Game β) (T : (a : α) → Strategy (f a) → Type)
 
-/-- **Drawing the tape first**: when each continuation's event has the probability of an average `V` over its tape, the
+/-- **Sampling the tape first**: when each continuation's event has the probability of an average `V` over its tape, the
 bind's has the average over the whole tape of `V` where the tape lands. -/
 theorem prob_bind_tape (p : β → Prop) (hT : ∀ a s, Fintype (T a s)) (hN : ∀ a s, Nonempty (T a s))
     (V : (a : α) → (s : Strategy (f a)) → T a s → ℝ≥0∞)

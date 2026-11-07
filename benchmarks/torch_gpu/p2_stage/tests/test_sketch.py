@@ -1,4 +1,4 @@
-"""The bandwidth audit's receipts beside the staging decode (`sketch.py`) on the CPU's host twins against serve.py's
+"""The bandwidth audit's receipts beside the store's load (`sketch.py`) on the CPU's host twins against serve.py's
 fixture: each block's π, σ however the decode's chunks fall, y and the chained roots; a pass refuses a unit it didn't
 read and rows that don't hold whole units; `full.py --receipts` over the toy's encoded store gives the fixture's root,
 and `bw_ref.py` passes the kept pass and refuses one changed."""

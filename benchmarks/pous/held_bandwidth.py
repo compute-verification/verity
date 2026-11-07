@@ -113,7 +113,7 @@ class Held:
         return sk.sigma
 
     def _spot(self, seed: bytes, sigma: Any, ys: np.ndarray) -> int:
-        """The plan's first and last positions and `spot` drawn from the seed: σ held to `p2.Sketcher` on the unit's
+        """The plan's first and last positions and `spot` sampled from the seed: σ held to `p2.Sketcher` on the unit's
         bytes and y to hashlib."""
         plan, sk = self.plan, p2.Sketcher(seed, self.registration.rows)
         rng = np.random.default_rng(int.from_bytes(seed[:8], "big"))

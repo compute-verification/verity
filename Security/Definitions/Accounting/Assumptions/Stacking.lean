@@ -39,8 +39,8 @@ codec and the coins of the appends before it, every layout `slot` of `N` distinc
   `Pr_{ω,κ}[appendCoinBlocks enc choose slot (ω, κ) ∈ ev] ≤ Pr_E[E ∈ ev] + δ`.
 
 `ω` is the codec in the ideal encoding model (its rounds' random function, below). The coins are the appends'
-(remote_bandwidth's PROTOCOL.md §3–§4), drawn at the node's one live registration and after: the registration is
-append `0`, whose coin is the seed, drawn after its payload root; every other append's coin `c_a` is 32 bytes, drawn
+(remote_bandwidth's PROTOCOL.md §3–§4), sampled at the node's one live registration and after: the registration is
+append `0`, whose coin is the seed, sampled after its payload root; every other append's coin `c_a` is 32 bytes, sampled
 once, when the append's root arrives, after that root has committed every digest. A registered block is its payload
 encoded under the seed's key. An appended block is its payload `p_j` encoded with the bound tweak
 `b_j(c_a) = H(DOMAIN ‖ seed ‖ j ‖ d_j ‖ c_a)`, `d_j = sha512/row/v2(p_j)`, added to every round, and it decodes only
@@ -56,12 +56,12 @@ random function on pairs `{x, p − x}` to even residues `e`, the round's output
 Under it a word's encoding, given its key, tweak and payload, is uniform on `[0, p)`: its last round's input lies in a
 fresh pair, which takes a fresh value `e`, and its sign is uniform given the pair. Two words' encodings are independent
 unless some round's inputs agree up to sign. An appended block's tweak reads its append's coin, uniform over `2^256`
-values and drawn after its payload: whatever the writers chose from `ω` and the earlier coins, the tweak is one they
+values and sampled after its payload: whatever the writers chose from `ω` and the earlier coins, the tweak is one they
 could not aim at (it is 64 bytes, so `2^512` of the `p` values), and the block is uniform and independent of the other
 blocks and of the earlier coins. What its payload carries about other blocks is a carrier (`RateSketch.Carrier`),
 charged apart. So `δ` is the writers' advantage at anticipating an append's tweak before its coin (an unbounded writer
 gains about the bits it chooses over `2^256`), the chance that some round's inputs agree up to sign, and the words'
-values `p` and above (`2^n − p` of `2^n`, at `p = 2^n − c`). Not covered: a second registration redraws the seed, a
+values `p` and above (`2^n − p` of `2^n`, at `p = 2^n − c`). Not covered: a second registration resamples the seed, a
 choice among the registrations, which the one live registration rules out; and a layout chosen from the encodings
 after the coins, which the stacked guarantees fix before. Under the seed's key alone a writer picks an appended
 block's encoding by writing its decoding: measured in
@@ -82,7 +82,7 @@ the layout `layout c y` puts at positions of appends after the registration) bes
 and the codec and the append coins `y`, the session `A c y`'s device at candidate `g`. The carrier's provenance is
 `W`'s over a set `I` of at most `L` of the audit `Aud`'s windows, `L` the lifetime cap itself: its inputs are at most
 `W`'s run-input bits there, and its encodes, at the gate model's `encodeBitsCost` for the deployed codec (p1024,
-3 rounds) in the restricted class (`B` operand bits, more than `εnum/εden` of the draws), cost at most `W`'s nonlinear
+3 rounds) in the restricted class (`B` operand bits, more than `εnum/εden` of the samples), cost at most `W`'s nonlinear
 units there, its budgeted units and its data products (`RateSketch.Provenance.OfCircuit`). Rebuilds of registered tiles (append `0`: the weights, the pool's
 filler) are not bounded, so a guarantee that reads this credits no registered block.
 
@@ -91,13 +91,13 @@ rebuilding it: computing it from memory whose contents are a circuit's values. T
 for, beyond the declared circuit's own, are `X`: the squaring ceiling's bits a pass (`b·F/(rounds·c_root)`,
 `SquaringCeiling` with `WorkHardness`, within the pass's deadline). Every other rebuild of an appended block comes from
 memory the declared circuit wrote, a credited KV page, so its provenance is `W`'s computation. An appended block's key
-reads its append's coin, drawn after its payload is committed (`KeyBinding`), so what was computed before that coin
+reads its append's coin, flipped after its payload is committed (`KeyBinding`), so what was computed before that coin
 carries nothing about its encoding, and only work after the coin helps rebuild it. Two claims about the code back the
 rest:
 
 * no pass reads an append's blocks `L` or more windows after the one it joined (remote_bandwidth's `lifetime`,
   `Properties.RemoteAudit.LifetimeCapped`, proved), whose game form is this premise's hypothesis;
-* a re-key appends the block again and draws a fresh coin (`Properties.RemoteAudit.AppendsInOrder`, proved
+* a re-key appends the block again and samples a fresh coin (`Properties.RemoteAudit.AppendsInOrder`, proved
   with the live coins uniform): each append has its own uniform coin, as in the game's coins.
 
 So the work that helps rebuild an appended tile a pass reads lies in the `L` windows ending at the pass, counting the

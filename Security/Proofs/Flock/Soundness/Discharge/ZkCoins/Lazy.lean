@@ -10,9 +10,9 @@ import Proofs.Flock.Soundness.Game.Basic
 # Lazy sampling of committed rounds
 
 A committed prover whose strategy does not depend on the rounds' leaves (`s : CStrat Salt g` fixed) and whose rounds
-are drawn from a product law with uniform blocks (`μ j`'s block marginal is uniform, whatever the salts' law) does no
+are sampled from a product distribution with uniform blocks (`μ j`'s block marginal is uniform, whatever the salts' law) does no
 better than the optimal prover against live coins, provided no path opens a round twice (`lazy`): each round's block
-is then drawn when it is opened.
+is then sampled when it is opened.
 -/
 
 @[expose] public section
@@ -66,7 +66,7 @@ theorem sum_uniform_blocks {μ : I → Blk × Salt → ℝ≥0∞}
   simp only [hμ, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
   exact ENNReal.mul_inv_cancel (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
 
-/-- **Lazy sampling**: on rounds drawn from a product law whose block marginals are uniform, a strategy fixed in
+/-- **Lazy sampling**: on rounds sampled from a product distribution whose block marginals are uniform, a strategy fixed in
 advance succeeds with probability at most the optimal prover's against live coins, when no path opens a round
 twice. -/
 theorem lazy (p : α → Prop) (μ : I → Blk × Salt → ℝ≥0∞)

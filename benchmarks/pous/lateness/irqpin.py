@@ -79,7 +79,7 @@ def discover(src: bytes, to: str, pings: int) -> dict:
 def receive_channels(disc: dict, pings: int) -> dict[int, int | None]:
     """Each port's receive channel. A port's pings raise two channels' interrupts above the channel's median over all
     ports (the background): its receive channel, fixed by the 4-tuple's RSS hash, and its transmit channel, which each
-    new socket draws at random (no XPS map here). Each port is timed twice from new sockets, so its receive channel is
+    new socket samples at random (no XPS map here). Each port is timed twice from new sockets, so its receive channel is
     the one raised both times; None where that is not exactly one channel."""
     chans = sorted({int(k.removeprefix("mlx5_comp")) for p in disc["ports"] for k in p["delta"]})
     def get(p: dict, ch: int) -> int:
