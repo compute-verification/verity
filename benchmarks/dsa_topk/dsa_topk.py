@@ -172,7 +172,7 @@ class Canon:
         args = (logits, ls0, ls1, out, out.stride(0), a, b, ncols, next_n)
         const = dict(K=k, KP2=next_pow2(k), BLOCK=self.block, MODE=mode, num_warps=self.num_warps)
         if seg == 1:
-            K["canon_row"][(rows,)](*args, stats, HW=os.environ.get("TRITON_INTERPRET") != "1", **const)
+            K["canon_row"][(rows,)](*args, stats, HW=logits.is_cuda, **const)
             return
         ws = self.workspace(dev, rows * (2 * seg + 1))
         K["count_seg"][(rows, seg)](*args, ws, seg, **const)
@@ -293,16 +293,21 @@ def log_to(canon: Canon, d: str) -> None:
     atexit.register(write)
 
 
+def settings() -> tuple[str, str]:
+    """The plugin's two variables, read here only: ``VERITY_DSA_TOPK`` and ``VERITY_DSA_TOPK_LOG`` ("" when unset)."""
+    return os.environ.get(ENV, ""), os.environ.get(LOG_ENV, "")
+
+
 def register() -> None:
     """The plugin: with ``VERITY_DSA_TOPK=canonical``, `install` on ``torch.ops._C`` in this process."""
-    mode = os.environ.get(ENV, "")
+    mode, log = settings()
     if mode in ("", "0"):
         return
     if mode != "canonical":
         raise ValueError(f"{ENV}: 'canonical' or unset, not {mode!r}")
     canon = install()
-    if os.environ.get(LOG_ENV):
-        log_to(canon, os.environ[LOG_ENV])
+    if log:
+        log_to(canon, log)
 
 
 def site(d: Path) -> Path:
