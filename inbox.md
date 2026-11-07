@@ -22,3 +22,6 @@ Proofs coordinator 21:20Z: updates to your SPOT3ROLE task (item 2). Daniel's 1:0
 (2) The SPOT post won't claim zero knowledge. SPOT's docs state soundness and its trust list only, with no ZK premises.
 (3) Heads-up: Daniel wants "sampled proofs" renamed to "SPOT". A separate worker plans that rename as one certified move after Sunday's critical PRs land. Use the current names; the move renames them.
 
+[2026-11-07T21:12Z] a588173b5f90
+Proofs coordinator 21:15Z, SPOT3ROLE update (Daniel 1:10 PM PST): the demonstration also has the network certifier, as a SEPARATE LAYER. It stamps each request's release order at ingress (NET-238), so the scheduler's advice is zero. SPOT takes that order as a public input and never imports the certifier, which has its own code, guarantee and proof; they compose only above both (#7843 says this in AGENTS.md). In parties.py and the docs, show SPOT's three roles, and the certifier as the outer layer's party feeding SPOT a public input, not a SPOT party. Check tests/test_boundaries.py already forbids sampled_proofs -> certifier imports (Python and Lean); if it does not, add the rule. Also: keep the name "sampled proofs" in code (the rename is deferred).
+
