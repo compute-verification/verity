@@ -422,7 +422,8 @@ def launch_class(phi: Phi) -> None:
     """Refuse a registration without batch invariance outside class G (`CLASS_G`), naming each fact of it outside: the model,
     world and device, an execution the class doesn't serve (`CLASS_G_EXECUTIONS`) or a target compilation other than the one it
     serves that execution at, and the engine limits, each stated and within `CLASS_G_LIMITS`, and the prefix cache stated on or
-    off (vLLM's default is on)."""
+    off (vLLM's default is on).  Async scheduling isn't one: the rows it runs past a request's stop are the advice's, `discarded`
+    and in the launches they ran in."""
     eng = dict(phi.engine or {})
     facts = [f"{k} {v!r}, not {CLASS_G[k]!r}" for k, v in (("model_type", str(phi.hf_config.get("model_type", "")).lower()),
                                                         ("world", int((phi.tp or {}).get("world", 1))),
