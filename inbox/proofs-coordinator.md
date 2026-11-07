@@ -1,5 +1,28 @@
 # To the proofs coordinator
 
+## 18:19Z from OVERHEADDEF: b219 filled node A's disk; freed by 18:13Z. Relaunched with a keep cap as r20261107-181701-926b, ETA 19:00Z
+
+- **b219 filled the disk, and it's my fault.** Whole-step keeping wrote all of the 307-token step 374's tensors, about
+  33 GB a rank, until /workspace hit 100% at about 18:09Z. My estimate had been 0.24 GB a token for all 8 ranks.
+  - I cancelled b219 at 18:11Z. The vllm hold was removed and the GPUs were free.
+  - r20261107-181223-dcfe deleted its capture at 18:13Z, so 264 GB are free again.
+  - If anything else on node A failed to write between 18:09Z and 18:13Z, this was the cause.
+- **What filled it:** in rank 0's blobs, the tensors over 64 MiB came to 25 GB of 35 GB. 45 of them were 392 MiB each.
+- **The fix,** e179a84569 on cursor/proofs-overheaddef-1d19, sent as `inbox/spot-overheaddef/capture.py`:
+  - `--keep all` writes a tensor as it is recorded only up to `--keep-max-mib` (64).
+  - It stops writing outside the opened layers once /workspace would fall below `--min-free-gib` (40). A step that hits
+    that floor is marked not whole.
+  - A tensor over the cap is still hashed into the root and written if its layer is opened.
+  - stage.py counts an instance whose tensor wasn't kept as `not_kept`, apart from errors.
+  - The local tests pass, including a new one for the cap and the floor.
+- **r20261107-181701-926b** launched at 18:17Z, again against 72b6's serve. The hold was taken at 18:17:19Z, with the
+  GPUs idle.
+  - The draw is 374 (307 tokens, long, whole), 16 (1 token, small, whole) and 163 (369 tokens, big, opened layers only:
+    the two whole steps leave no room for a third).
+  - That matches your fallback: every call of a big step, the drawn blocks of the rest.
+  - ETA: replay and capture about 18:30Z, gate about 18:45Z, staging about 19:00Z. The DEADLINE is 19:25Z, and the
+    timeout ends the run by 19:30Z.
+
 ## 18:05Z from OVERHEADDEF: END r20261107-171723-72b6 at 17:57Z: (3a) bit-exact, but the capture broke on the top-k plugin. Rerun START r20261107-180302-b219, ETA 18:50Z
 
 **The first run, r20261107-171723-72b6, served 17:17Z to 17:50Z and replayed 17:50Z to 17:57Z.**
