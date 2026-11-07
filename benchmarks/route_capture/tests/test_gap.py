@@ -66,23 +66,44 @@ def test_production_steps_name_each_gap(tmp_path, launches):
     need = gap.needs(launches, CLASS_G_STEP, flashinfer_sampler=False)
     g = gap.gap(_capture(tmp_path, [CLASS_G_STEP, DECODE_PADDED, MIXED_8192]), _check({n.id for n in need}), phi=launches.phi)
     rows = {(r["definition"], r["status"]): r for r in g["gaps"]}
-    radix = rows[("radix-topk", "radix top-k")]
-    assert radix["owner"] == "circuits + kernels" and radix["exists"] == "no" and radix["statics"] == "TOPK=2048, KEYS=2100..30150 (188 values)"
+    topk = rows[("kernel-topk-order", "kernel top-k order")]
+    assert topk["owner"] == "vllm" and topk["statics"] == "TOPK=2048, KEYS=2100..30150 (188 values)"
+    assert rows[("DsaWaksmanRows_v1", "unregistered")]["route"] == "mla-sparse-attention"
     assert rows[("DsaMqaLogits_v3", "unregistered")]["owner"] == "circuits"
     assert rows[("allreduce-pynccl_comm", "no capture")]["statics"] == "N=6144, M=8192"
     assert rows[("cublas-linear", "no capture")]["owner"] == "kernels"
     assert rows[("prefill-call", "dense-MHA prefill")]["statics"] == "ROWS=2000, KEYS=2000"
     assert rows[("prefill-call", "sparse-MQA prefill")]["statics"].startswith("ROWS=2096..4066")
     assert sum(n["blocks"] for n in g["needs"]) == g["blocks"] == sum(r["blocks"] for r in g["gaps"] + g["covered"])
-    assert sum(n["blocks"] for n in g["needs"] if n["id"].startswith("radix-topk{")) == radix["blocks"]
+    assert sum(n["blocks"] for n in g["needs"] if n["id"].startswith("kernel-topk-order{")) == topk["blocks"]
     assert rows[("MoeRouterSigmoidBias_v1", "unregistered")]["statics"].endswith("KERNEL='warp'")
     assert rows[("select-random", "unseeded sampling")]["owner"] == "vllm"
     assert rows[("select-top_k", "top-k sampling")]["owner"] == "circuits"
     assert ("flashinfer-sampler", "FlashInfer sampler") in rows
-    assert set(g["engine"]) >= {"CUDA graphs (eager in class G)", "launch padded past its rows", "prefix-cache hit (off in class G)",
-                                "more tokens than class G's max_num_batched_tokens", "a sequence past class G's max_model_len"}
+    assert set(g["engine"]) == {"CUDA graphs (eager in class G)", "launch padded past its rows", "prefix-cache hit (off in class G)",
+                                "a row past INDEX_TOPK keys served without the canonical top-k",
+                                "more tokens than class G's max_num_batched_tokens (served: 2,048)",
+                                "a sequence past class G's max_model_len (served: 2,048)",
+                                "a prefill chunk past class G's long_prefill_token_threshold (registered and served: 256)"}
     assert g["engine"]["launch padded past its rows"]["tokens"] == 200
-    assert "| dsa-topk | radix-topk (radix top-k) |" in gap.markdown(g)
+    assert g["engine"]["a sequence past class G's max_model_len (served: 2,048)"]["tokens"] == 200 + 8192
+    assert "| dsa-topk | kernel-topk-order (kernel top-k order) |" in gap.markdown(g)
+
+
+def test_a_capture_served_under_the_canonical_top_k(tmp_path, launches):
+    """A capture whose engine ran under class G's canonical top-k has its rows past INDEX_TOPK keys as Definitions (the order,
+    its check and the routed rows), unregistered here, and no top-k refusal or engine fact; a later report's verdict wins."""
+    cap = _capture(tmp_path, [DECODE_PADDED])
+    (tmp_path / "engine_env.txt").write_text("VLLM_USE_FLASHINFER_SAMPLER=unset\nVERITY_DSA_TOPK=canonical\n")
+    assert gap.canonical_topk_on(cap)
+    ids = {n.id for n in gap.needs(launches, CLASS_G_STEP, flashinfer_sampler=True)}
+    g = gap.gap(cap, [_check(ids, failing=ids), _check(ids)], phi=launches.phi)
+    rows = {(r["definition"], r["status"]) for r in g["gaps"]}
+    assert {("DsaWaksmanOrder_v1", "unregistered"), ("DsaTopKLongRow_v1", "unregistered"), ("DsaWaksmanRows_v1", "unregistered")} <= rows
+    assert not any(s in ("kernel top-k order", "fails circuit-check") for _, s in rows) and g["canonical_topk"]
+    assert "a row past INDEX_TOPK keys served without the canonical top-k" not in g["engine"]
+    (tmp_path / "engine_env.txt").write_text("VERITY_DSA_TOPK=radix\n")
+    assert not gap.canonical_topk_on(cap)
 
 
 def test_vllms_warmup_is_not_served(tmp_path, launches):
