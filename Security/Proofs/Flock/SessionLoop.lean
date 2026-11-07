@@ -46,6 +46,7 @@ public import Proofs.Flock.SessionLoop.SampledAudit
 public import Proofs.Flock.SessionLoop.SampledRelay
 public import Proofs.Flock.SessionLoop.AnyErrBound
 public import Proofs.Flock.SessionLoop.SampledAuditTwo
+public import Proofs.Flock.SessionLoop.SampledChosenTwo
 
 /-!
 # Proof of Flock's zero knowledge at the session loop's own frames
