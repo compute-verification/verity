@@ -1330,12 +1330,13 @@ def _carried(tmp_path: Path, monkeypatch, w1: WA.Advice, w0: WA.Advice = W0) -> 
 
 def test_a_served_window_s_carried_requests_follow_from_the_last_window_s_close(tmp_path, monkeypatch):
     """The verifier reads a served window's advice as `window_advice`'s, so a window may carry requests in, and holds them to
-    the close of the window before it, opened under that window's registration: each carried request at its place in that
-    window's edge (`edge.carried`)."""
+    the close of the window before it, opened under that window's registration: each carried request at its field in each of
+    that window's edge ports (`edge.carried`)."""
     c = _carried(tmp_path, monkeypatch, W1)
     assert PP.serve_window(str(c.s.run), 1).last.window == 0 and PP.serve_window(str(c.s.run), 0).last is None
-    assert c.v["ok"] and c.v["detail"]["follows"] == {"last": 0, "carried": [{"id": "a", "edge": 0, "computed": 4},
-                                                                            {"id": "b", "edge": 1, "computed": 3}]}
+    assert c.v["ok"] and c.v["detail"]["follows"] == {
+        "last": 0, "carried": [{"id": "a", "computed": 4, "fields": {"edge.kv": 0, "edge.last": 0}},
+                               {"id": "b", "computed": 3, "fields": {"edge.kv": 1, "edge.last": 1}}]}
     assert c.bound["advice"]["bits"] == WA.total_bits(W1) and PP.served_advice(c.a)[1] == c.bound
     assert PP.serve_check_of(c.s.a, PP.compiled(c.s.a)[2])["detail"]["follows"] == {"last": None, "carried": []}
 

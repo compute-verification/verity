@@ -692,10 +692,10 @@ def serve_follows(s: SimpleNamespace, compiler: Mapping[str, str], data: bytes) 
     (``s.last``) opens, under the verifier's ``compiler`` (its name and digest), the root and length its own registration binds
     (`last_advice`), and ``data``'s carried requests are that window's close, each at the state it left it in (`edge.carried`),
     every one it left with outputs still to keep among them. A window no earlier one ran before carries nothing in.
-    -> {ok, detail}: ``detail`` names that window (``last``) and, where ``data`` follows it, each carried request's place in
-    its edge (``carried``); else what doesn't follow, by name (``code``): `window_advice.FOLLOWS`'s (with ``request``, the
-    request's id), ``advice`` where ``data`` isn't a window's advice, or ``opening`` where the window before has no opening of
-    the root its registration binds, and ``why``."""
+    -> {ok, detail}: ``detail`` names that window (``last``) and, where ``data`` follows it, each carried request's field in
+    each of its edge's ports (``carried``); else what doesn't follow, by name (``code``): `window_advice.FOLLOWS`'s (with
+    ``request``, the request's id), ``advice`` where ``data`` isn't a window's advice, or ``opening`` where the window before
+    has no opening of the root its registration binds, and ``why``."""
     at = {"last": None if s.last is None else s.last.window}
     try:
         advice = WA.decode(data)
@@ -709,7 +709,7 @@ def serve_follows(s: SimpleNamespace, compiler: Mapping[str, str], data: bytes) 
         carried = E.carried(last, advice)
     except WA.NotFollowing as e:
         return {"ok": False, "detail": {**at, "code": e.code, "request": e.request, "why": str(e)}}
-    return {"ok": True, "detail": {**at, "carried": [{"id": x.id, "edge": x.edge, "computed": x.computed} for x in carried]}}
+    return {"ok": True, "detail": {**at, "carried": [{"id": x.id, "computed": x.computed, "fields": dict(x.fields)} for x in carried]}}
 
 
 def last_advice(last: SimpleNamespace, compiler: Mapping[str, str]) -> WA.Advice:
