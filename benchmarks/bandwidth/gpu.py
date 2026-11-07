@@ -18,7 +18,7 @@
 runs honest windows through `audit.Verifier` on the generated test store (`reference.block`, filled on the device) at
 `--deadline-ns` (default the largest `audit.Params` allows).  The store is this device's: the challenger reads the id
 of `--gpu` from the driver itself (`challenger_device`: `audit.read_device`, then the tagger must run on that GPU), and
-a fresh secret, never written out, draws the store's salt for it (`audit.draw_salt` under `reference.COMMITMENT`) and
+a fresh secret, never written out, samples the store's salt for it (`audit.draw_salt` under `reference.COMMITMENT`) and
 every window's key; the store's leaves under that salt are computed here (`reference.store_leaves`, on `--workers`
 processes), and the store's one challenger state is made in the challenger's state directory, `--state-dir`, under the
 name the store gives it (`audit.state_name`).  Then negative controls that tag only part of the

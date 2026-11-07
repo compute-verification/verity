@@ -6,7 +6,7 @@ type is the contract (live PROTOCOL.md §10.3): each message is the schedule's o
 ZK server's salts, so agreement means nothing else leaves the proxy.
 
 Under ``rec_live --lean`` the send check is Lean's own (`rec_live.LeanFirewall`, ``flock-firewall live``): on every case
-and every whole placement the coin server's record and calls are `Flock.Firewall.run`'s at the salts the live session drew,
+and every whole placement the challenger's live-coin part's record and calls are `Flock.Firewall.run`'s at the salts the live session drew,
 so the live mode's steps are `run`'s loop and the proxy relays what Lean sent and nothing else. On the challenger's coin
 tree (``rec_live --coin-tree``) the same holds with the tree's spec given to Lean (``coin_tree``, `Flock.Firewall.treeHello`),
 on the honest session and on every Hello a worker can name the tree with."""
@@ -77,15 +77,15 @@ def honest3(tables=("aux", "circuit")) -> list[bytes]:
     return r
 
 
-#: how `Flock.Firewall.calls` writes each call the proxy makes on the coin server
+#: how `Flock.Firewall.calls` writes each call the proxy makes on the challenger's live-coin part
 CALL = {"start": lambda a: ["start"], "commit": lambda a: ["commit"], "y": lambda a: ["y"],
         "open": lambda a: ["open", a[0], a[1], a[2]], "round": lambda a: ["round", a[0], a[3]]}
 
 
 def proxy_session(schedule: dict, reqs: list[bytes], lean: RL.LeanFirewall | None = None,
                   tree: CT.Spec | None = None) -> tuple[dict, list]:
-    """The coin server's record and every call made on it, in order, refused or not, while the proxy handles ``reqs``
-    (relaying them through ``lean`` when it is given; on a coin tree of spec ``tree`` this host draws, when it is given)."""
+    """The challenger's live-coin part's record and every call made on it, in order, refused or not, while the proxy handles ``reqs``
+    (relaying them through ``lean`` when it is given; on a coin tree of spec ``tree`` this host samples, when it is given)."""
     coins = RL.CoinServer(_coins) if tree is None else RL.CoinServer(_coins, tree, RL.OsTree(_coins))
     salts, calls = iter(SALTS), []
     for name, show in CALL.items():
@@ -221,7 +221,7 @@ def built():
 
 def lean_run(cs: list[tuple[str, dict, list[bytes]]], salts: list[list[bytes]], tree: CT.Spec | None = None) -> list[dict]:
     """`flock-firewall` on each case at its salts (on the coin tree of spec ``tree``, when it is given): its record and the
-    coin server's calls."""
+    challenger's live-coin part's calls."""
     on = {} if tree is None else {"coin_tree": tree.to_json()}
     lines = "".join(json.dumps({"schedule": s, "requests": [b.hex() for b in r], "salts": [x.hex() for x in y],
                                 "calls": True, **on}) + "\n" for (_, s, r), y in zip(cs, salts))
@@ -232,7 +232,7 @@ def lean_run(cs: list[tuple[str, dict, list[bytes]]], salts: list[list[bytes]], 
 
 @pytest.fixture(scope="module")
 def lean_runs(built):
-    """Every case and every placement through `flock-firewall`: each one's record and the coin server's calls."""
+    """Every case and every placement through `flock-firewall`: each one's record and the challenger's live-coin part's calls."""
     cs = cases() + placements()
     return cs, lean_run(cs, [SALTS] * len(cs))
 
@@ -284,7 +284,7 @@ def test_the_proxy_sends_what_the_lean_firewall_sends(lean_runs):
 
 
 def test_the_coin_server_never_sees_where_an_open_was_sent(lean_runs):
-    """The coin server is the auditor's, so its calls, not only its record, must not show where the worker sent each Open:
+    """The challenger's live-coin part is the auditor's, so its calls, not only its record, must not show where the worker sent each Open:
     `Flock.Firewall.run` opens a stream there just before its first round. Every placement of
     the two Opens gives the honest session's calls, and every cut of one a prefix of them."""
     cs, lean = lean_runs
@@ -334,7 +334,7 @@ def test_copies_are_by_position_never_by_value(lean_records):
 def test_commit_takes_the_tables_in_the_schedules_order_only(built, lean_records):
     """Commit's table order is the schedule's (its roots' names, sorted), never the worker's, so the order carries
     nothing: under a schedule of two tables whose ``roots`` lists them in another order, the session naming them in the
-    schedule's order finishes, and the same session naming them out of it stops at Commit, the coin server shown no
+    schedule's order finishes, and the same session naming them out of it stops at Commit, the challenger's live-coin part shown no
     link, in the proxy, in `Flock.Firewall.run` and in the relay through ``flock-firewall live``."""
     cs, lean = lean_records
     got = {name: rec for (name, _, _), rec in zip(cs, lean)}
@@ -397,7 +397,7 @@ def test_a_schedule_of_another_form_is_refused(lean_runs):
 
 
 def test_the_relay_sends_what_run_sends_at_the_salts_it_drew(relayed):
-    """``rec_live --lean`` on every case and whole placement: the coin server's record and calls, in order, are
+    """``rec_live --lean`` on every case and whole placement: the challenger's live-coin part's record and calls, in order, are
     `Flock.Firewall.run`'s on the same requests at the salts ``flock-firewall live`` drew."""
     cs, got, lean = relayed
     differ = [name for (name, _, _), (rec, calls, _), want in zip(cs, got, lean) if {"record": rec, "calls": calls} != want]
@@ -438,8 +438,8 @@ class More(RL.LeanFirewall):
 ], ids=["another commitment", "a salt more", "a salt fewer", "a message fewer"])
 def test_a_proxy_that_parts_from_the_lean_firewall_stops_the_session(built, monkeypatch, edit, more, why):
     """The relay delivers only what Lean sent, in its order, with its salts: a proxy whose Commit would send another
-    commitment, draw a salt Lean did not, or leave one of Lean's salts or messages unused stops the session at Commit, and
-    the coin server is never shown the link exchange."""
+    commitment, sample a salt Lean did not, or leave one of Lean's salts or messages unused stops the session at Commit, and
+    the challenger's live-coin part is never shown the link exchange."""
     for name, f in edit.items():
         monkeypatch.setattr(RL, name, f)
     lean = RL.LeanFirewall(BIN, SCHEDULE) if more is None else More(more, BIN, SCHEDULE)
@@ -505,9 +505,9 @@ def tree_cases() -> list[tuple[str, dict, list[bytes]]]:
 
 def test_on_the_coin_tree_the_proxy_and_the_relay_send_what_the_lean_firewall_sends(built):
     """On the challenger's coin tree, the proxy alone (its Python send check), the relay through ``flock-firewall live``
-    and `Flock.Firewall.run` with the tree's spec (`treeHello`) give the coin server the same record and calls, case by
+    and `Flock.Firewall.run` with the tree's spec (`treeHello`) give the challenger's live-coin part the same record and calls, case by
     case; the honest session finishes, and each edited Hello other than its nonce and its spelling stops it before the
-    coin server sees anything."""
+    challenger's live-coin part sees anything."""
     cs = tree_cases()
     plain = [dict(zip(("record", "calls"), proxy_session(s, r, tree=TREE))) for _, s, r in cs]
     assert lean_run(cs, [SALTS] * len(cs), TREE) == plain
@@ -523,7 +523,7 @@ def test_on_the_coin_tree_the_proxy_and_the_relay_send_what_the_lean_firewall_se
 
 def test_serve_relays_each_session_through_its_own_lean_firewall(built, tmp_path):
     """``serve(lean=…)``: a session Lean refuses (a Hello field of the prover's choosing) stops with Lean's reason and is
-    written as a stop, and the next, honest one is held and written whole, on a firewall of its own."""
+    written as a stop, and the next, honest one is held and written whole, on a ZK server of its own."""
     from test_rec_live_firewall import HELLO as FW_HELLO
     from test_rec_live_firewall import _held, _refusal, _run, _schedule, _serve, _Wire
 
@@ -547,7 +547,7 @@ FLAT = Path(__file__).resolve().parent / "fixtures" / "hidden-outputs" / "flat" 
 
 def test_a_real_provers_session_passes_the_lean_firewall_as_run_does(built):
     """The flat GEMM selftest's honest session (the fetched fixture `test_rec_vstage` replays), at `schedule_for`'s schedule
-    of its shape, relayed through ``flock-firewall live``: it finishes, and its coin server record is `Flock.Firewall.run`'s
+    of its shape, relayed through ``flock-firewall live``: it finishes, and its live-coin part record is `Flock.Firewall.run`'s
     at the salts the live session drew. The cases above are synthetic; this is the unmodified prover's own rounds."""
     assert (FLAT / "records-cpu" / "honest.json").is_file(), (
         f"{FLAT} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")

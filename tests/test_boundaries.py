@@ -5,8 +5,7 @@
     workloads' Definitions (ml.definitions) on the catalog and the kernels, and the protocols' circuit builders
     (ml.protocols) on the catalog and their protocols;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
-    ``ALLOWED``, and no third-party package;  a verifier imports no ml: until a protocol's verifier of
-    record is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
+    ``ALLOWED``, and no third-party package;  a verifier imports no ml: until a protocol's verifier is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
     ``SOUNDNESS_PATH``, and both only shrink;  ml never imports core;  no unit imports
     another distribution of the workspace (Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
     imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``;
@@ -81,7 +80,7 @@ ALLOWED = {
     "core.protocols.registration": {"core.wire", "core.site"},
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof system's challenger
-    # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
+    # samples with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
     # Its challenger, ZK server, workers and verifier are
     # parties of the deployment layer (`parties`), their messages the wire's.
     "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
@@ -96,7 +95,7 @@ ALLOWED = {
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.core.deploy.stream`).
     # The remote bandwidth audit commits receipts in frame-v3-sha512
-    # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
+    # trees, samples from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
     # proof system's one challenger's (`sampled_proofs.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
     # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
@@ -167,7 +166,7 @@ ML_IMPORTS_CORE = {
                                 "`active`, `served_rows`, ...)",
 }
 #: A verifier imports no ``verity.ml`` code (AGENTS.md "Design rules"): Lean is the definition and the
-#: verifier of record, and ml's Python mirrors it.  Until a protocol's verifier of record is its Lean (the switch procedure,
+#: verifier, and ml's Python mirrors it.  Until a protocol's verifier is its Lean (the switch procedure,
 #: ``.agents/skills/friction/SKILL.md``), its Python verifier keeps the ml edges ``ALLOWED`` gave it when they were frozen here,
 #: and gains none; a core unit not listed has none.  When ``ALLOWED`` drops an edge, drop it here too.
 CORE_ML_EDGES = {
@@ -181,7 +180,7 @@ CORE_ML_EDGES = {
 }
 #: The units of ``verity.ml`` core's Python verifiers read, directly or through one another (what ``ALLOWED`` lets core
 #: reach): their verdicts rest on them, so they are on the soundness path, and AGENTS.md names each.  Frozen
-#: with ``CORE_ML_EDGES``: it only shrinks, as each protocol's verifier of record becomes its Lean.  The rest of ml (the
+#: with ``CORE_ML_EDGES``: it only shrinks, as each protocol's verifier becomes its Lean.  The rest of ml (the
 #: catalog, the kernels, the protocols' circuit builders, Flock's prover, the private circuits) is not on it.
 SOUNDNESS_PATH = {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"}
 #: What a test that refuses a new core -> ml edge says.

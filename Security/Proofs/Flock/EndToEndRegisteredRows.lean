@@ -21,7 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 
 @[expose] public section
 
-/-- **C-Flock's one-stage audit, end to end, with the rows link, at the drawn units**
+/-- **Flock's one-stage audit, end to end, with the rows link, at the sampled proof blocks**
 (`Flock.Guarantees.EndToEndRegisteredRows`). -/
 theorem Flock.SecurityProofs.EndToEndRegisteredRows : Flock.Guarantees.EndToEndRegisteredRows :=
   FlockSoundness.Discharge.ZkReg.EndToEndRegisteredRows_of_rowsLink FlockSoundness.Discharge.ZkReg.rowsLinkLe

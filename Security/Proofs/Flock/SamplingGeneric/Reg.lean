@@ -65,7 +65,7 @@ registration.
   with probability at most `N·√Pr[conflict]`.
 * `pr_unfound_le`: the sessions' bound at the selection `selReg` (the first slot of the sample whose block is in
   `Freg`), averaged by Jensen's inequality.
-* `ksReg_of_sessionKS`, `compilerKSReg_of`: **`KSReg`**: the union of the three, and on the draw, a set refused at `δ`
+* `ksReg_of_sessionKS`, `compilerKSReg_of`: **`KSReg`**: the union of the three, and on the sample, a set refused at `δ`
   missed with probability at most `P_a ≤ δ` (`Sessions.draws`).
 -/
 

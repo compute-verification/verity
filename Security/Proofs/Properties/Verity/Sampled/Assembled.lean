@@ -13,12 +13,12 @@ public import Proofs.Properties.Verity.Sampled.Digest
 bound digests' two-continuation finder (`Constructions.withBind`), the projection at the sample-coupled coin maps
 (`Constructions.withProject` at `sampleMaps`) and the messages' two-continuation finders (`Constructions.withMessages`),
 cut at the binding's property of the play, the log v2's check read is the device's (`Binding.Logged Binding.readsV2`),
-and at the digest's: v2 draws at the strategy's `afterAt` (`SampledDigest`).
+and at the digest's: v2 samples at the strategy's `afterAt` (`SampledDigest`).
 
 * **(a), the binding** (`Binding.logged_le`): an accepted play whose log v2 read isn't the device's is at most as likely
   as the read finder's collision plus the forger's forgery, wherever the device printed each play's log
   (`Binding.binds_of_prints`, at `Lines.PrintsLog`).
-* **(a'), the digest** (`digestBound_of`): an accepted play whose draw doesn't answer `afterAt` is at most as likely as
+* **(a'), the digest** (`digestBound_of`): an accepted play whose sample doesn't answer `afterAt` is at most as likely as
   the square root of the bound digests' finder's success, a SHA-512 collision on `bind`'s messages
   (`prob_not_sampledDigest_le`).
 * **(b), the logged coupling** (`couplingTarget_withProject_of_sample`), off the openings' empty classes (`linkEmpty`,
@@ -253,7 +253,7 @@ the deployed device), the sample's coins are uniform (`hκ`), the openings' gaps
 most the hiding term (`hε`, which four gaps a stop meet wherever `2(1 + A.N) ≤ maxLeaves`, `Live.stops_le_hidingTerm`),
 `A` is the session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`), the session's writer keeps
 an accepted transcript's view (`hW`), and on the joint law's support off the empty classes the outcomes beside accepted
-plays whose log v2 read is the device's and whose draw answers the strategy's `afterAt` are the writer's at the moves
+plays whose log v2 read is the device's and whose sample answers the strategy's `afterAt` are the writer's at the moves
 v2's files decode to (`hM`). -/
 theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Properties.Challenger.History)
     (rd : Readings)

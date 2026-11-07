@@ -134,7 +134,7 @@ def test_replay_declares_r1_rows_and_its_workers_give_the_serial_transcript(tmp_
 
 def test_replay_refuses_a_b_tilde_keyed_by_another_salt(tmp_path):
     """D-SK in the device replay: a B̃ formed under another epoch's salt, or under none (`stale_b`), fails the checked
-    values of a drawn tile, as it fails the work law's (`test_b_tilde_is_keyed_by_this_jobs_salt`)."""
+    values of a sampled tile, as it fails the work sampling design's (`test_b_tilde_is_keyed_by_this_jobs_salt`)."""
     s = V.scheme("nvfp4", True)
     for n, salt in enumerate((b"another epoch's salt", b"")):
         device_dump(tmp_path / str(n), T.stale_b(s, salt))

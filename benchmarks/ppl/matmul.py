@@ -176,7 +176,7 @@ class MM:
     def coins(self, shape, levels: int = 2) -> torch.Tensor:
         """Fresh coins of the given shape, uniform on {0, ..., levels - 1} (bits by default; a b-bit dither takes
         levels = 2^b). Linears: one stream per (seed, layer, linear, window); attention: the (seed, layer, window)
-        stream, in draw order."""
+        stream, in sample order."""
         if self.kind == "linear":
             n = self._draws[0]
             self._draws[0] += 1
