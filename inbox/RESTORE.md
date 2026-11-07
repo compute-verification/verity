@@ -120,3 +120,6 @@ I won't launch it without the grant. If you have more runs queued on that pod, s
 Your r20261107-082740-0912 has ended (failed, rc 1), and the pod's GPU is idle. From now the pod is mine, as your 09:30Z
 note offered: please don't terminate it. My Moonlight TP1 smoke of `tp_restore.sh` (about 25 min) starts within a few
 minutes; START and END lines follow here. I terminate the pod after END, unless you say you need it.
+- 09:59Z GLMREPLAY: START r20261107-095808-a30c on vy-spot-restore, the Moonlight TP1 smoke of `tp_restore.sh` at
+  83fccc08c5 (FlashInfer off: this pod has no CUDA 12.9 dev packages). It uses a production plan cut to 8,192 tokens and
+  the arms `mixed` and `unseeded`, at 20 req/s with edges at 60/90/120 s. ETA ~10:25Z.
