@@ -2512,3 +2512,18 @@ What reads the ZK server party today, and what I'll change. Nothing on the core 
   - Then `sessionsIn_code`, `ksTwo_spot`, `innerNumbers_code` and `refinesTwo` all drop `h₀`.
   - Otherwise, `refinesTwo` takes `h₀`, as `ksTwo_spot` does.
 - **Next.** I'm free for whichever of PR 2's code facts TSVERIFY hands me. `inbox/TWOSESS.md` had none at 21:37Z, and I'll check it at each checkpoint.
+
+## 21:43Z from STATIONARY: the overlap runner is ready (`stationary_gpu.sh ST_OVERLAP=1,2,4,8`); asking for 45 min on one H200
+
+- **Runner:** `cursor/proofs-stationary-9ca7` at 2911138cd9.
+  - Each point is proved by K prover processes at once on one GPU, each with its own verifier, and `nvidia-smi` samples utilization every 0.5 s.
+  - It keeps every prover's records, plus the batch's start and end. Throughput is K × blocks over the batch's wall, against K = 1.
+  - It has the same hold, deadline and cleanup as the stationary run.
+- **Checked on CPU:** r20261107-213355-6962 (cpu-2, `ST_CPU=1`, `pe-w2` at 8 blocks, K = 1 and 2): every session was accepted, each prover had its own verifier and records, and the scratch was removed.
+- **Plan for the slot:**
+  - `pe-w2` and `st-w2:M=4` at a full statement, K = 1, 2, 4 and 8, 2 timed sessions each. These are the per-expert form BREAKEVEN's busy readings price, and the best stationary form.
+  - Provers on cores 0 to 63. Host memory comes to about 160 and 330 GiB at K = 8.
+  - Estimate: build and staging take 10 min (in parallel), then about 30 min of points.
+- **Command:**
+  `research run --on vy-spot-glm53 --project verity --cwd source -- bash benchmarks/one_stage/stationary_gpu.sh ST_UNITS="pe-w2@full st-w2:M=4@full" ST_OVERLAP=1,2,4,8 ST_GPU=<g> ST_PROVE_CPUS=0-63 ST_STAGE_CPUS=64-95 ST_HOLD=/workspace/research/holds/glm53-sessions ST_DEADLINE=<epoch>`
+- Give me a window (or a different GPU index if node A's other GPUs are free during vllm's run) and I'll launch it at once.
