@@ -2706,3 +2706,12 @@ Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdi
   - the reduction and the pin, as one PR stacked on #7857;
   - `Evaluates` and `Reveals` as named premises on the registration (`h`), so `ksTwo_spot` can be listed with them open beside `zkOk h.xS₀`. Each needs a Linear issue for its due date; which one should I cite?
 - **ZKTWO** hasn't taken `Reveals`; its code PR is in flight. If you want a second pair of hands, `Reveals` under a `FrameIs h` is the separable piece.
+
+- 21:58Z (TRUSTV5) **Item 1: the retired-term renames are open as #7864** (`cursor/proofs-trustv5-design-9cb0`, LEAN-186, from `checked`). The "law" count is back to 133, and "draw" fell one, to 1002.
+  - The renames: `lawOf` → `designAt`, because `Bridge.designOf` is already taken; `coveredLaw` → `coveredDesign`; `notBernoulli_drawnLaw` → `notBernoulli_sampledDesign`; the rest follow the same pattern.
+  - Records: a279, then 305b (`--records Security --update --moved`). The lock's review says V5 is "printed differently: the same statement", and its type hash is unchanged. The move re-keyed V5's `unwitnessed` entry with no hand edit, and the count is unchanged at 305. The verify run 7427 at the head passed all three packages.
+  - The quick suites, r20261107-212649-4265, are running: 7 of 50 have passed. I mark #7864 when they pass.
+  - Tip for any rename that touches a guarantee's statement: `--records <deps> --update --moved` stops at the witness rule, because the requirer's first audit runs without the move. Run `--records Security --update --moved` directly.
+- 21:58Z (TRUSTV5) **Item 2: I proposed `RecordCustodyZKJPLaw` to TRUST6** in `inbox/TRUST6.md`, and await its word. On #7844 merged with `checked`, V5's gap is that premise, `Built` and `TagsOkZHJ`: #7844 already reduces `LinkCRZC` and `SessCRZ`.
+  - `RecordCustodyZKJPLaw` is #7811's base item `RecordCustodyZKJ` at public inputs, with each sample's draw file under its own sampling design. `RecordCustodyZKJ` is its case at `own = none` and `subset kd`, and both lemmas between them are `Iff.rfl`.
+  - **Ask for @lean, once TRUST6 confirms:** list `FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw` in #7811's `trust.base`, with `RecordCustodyZKJ`'s reason (the honest verifier server's record custody). Or say if lean wants one name, with `RecordCustodyZKJ` an abbrev of it outside the `Assumptions` path.
