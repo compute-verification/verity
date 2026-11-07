@@ -34,7 +34,8 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   committed) is registered and proved on its own (``subset:2``), and the Lean verifier must refuse it.
 * **Statement form.** Each template is a flat statement (its unit's whole netlist in the circuit file, which the verifier
   reads line by line), or with ``--layout MODE`` (``iv/hybrid/4``) a templated one (`UnitStager`'s ``layout``, statement
-  ``verity/flock-circuit/tmpl``), whose scope the verifier checks on its template and which `verify` refuses last as a
+  ``verity/flock-circuit/tmpl``; with ``--structural``, `struct_lower`'s template, which not every Definition lowers yet),
+  whose scope the verifier checks on its template and which `verify` refuses last as a
   version it doesn't serve (`ProvedScope.servedForm`): the sampled audit's knowledge-soundness form (`KsScope.check`)
   reads only a flat file. The prover reads a templated unit's rows at their positions from ``--tmpl-unit-bin``
   (`flock-tmpl-unit`, which unrolls the template; no part of the verifier).
@@ -773,6 +774,7 @@ def main() -> int:
     ap.add_argument("--values-only", action="store_true", help="stop after staging values (no registration or proofs)")
     ap.add_argument("--layout", default=None, help="a layout mode (iv/hybrid/4): each template a templated statement; default flat")
     ap.add_argument("--tmpl-unit-bin", default=None, help="flock-tmpl-unit, which places a templated unit's rows for the prover")
+    ap.add_argument("--structural", action="store_true", help="with --layout, struct_lower's template, the flat unit never built")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -851,7 +853,7 @@ def main() -> int:
         kv0 = rows_of_kind[tpl["kinds"][0]]
         with K.no_cyclic_gc():
             st = CS.UnitStager(tpl["defn"], f"unit/a11-{tag}", kv0["rows_spec"], K.out_rows(len(kv0["outs"])),
-                               circuit=sdir / "circuit.txt", bind=bound, layout=a.layout)
+                               circuit=sdir / "circuit.txt", bind=bound, layout=a.layout, structural=a.structural)
         form = templated(st, sdir, a.tmpl_unit_bin)
         tpl["stager"], t_build = st, round(time.time() - t0, 1)
         cap = a6.chunk_cap(st.meta)
@@ -1008,7 +1010,8 @@ def main() -> int:
         with K.no_cyclic_gc():
             tst = CS.UnitStager(tdef, f"unit/a11-tampered-{tm['kind']}", rows_of_kind[tm["kind"]]["rows_spec"],
                                 K.out_rows(len(rows_of_kind[tm["kind"]]["outs"])), circuit=tdir / "circuit.txt",
-                                bind={"partition": P.digest(tpart), "program": tpart["program"]}, layout=a.layout)
+                                bind={"partition": P.digest(tpart), "program": tpart["program"]}, layout=a.layout,
+                                structural=a.structural)
         d, set_name = tdir / "set", f"{tst.iset.name}-tampered"
         stage_tampered(tst, {r: v[:tn] for r, v in tm["rows"].items()}, d, tm["salt_key"], range(tn), set_name)
         (d / "inst.bin").rename(d / f"inst-{tn}.bin")
