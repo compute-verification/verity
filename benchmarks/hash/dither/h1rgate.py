@@ -11,7 +11,7 @@ two counts, so some calls have a dead row tile.
              (`receipts.gated_reference`) on chosen units (K = 4096 and 14336, first and last, a dead one); a no-write control
              (nowrite: the poison must survive and be refused); the launch captured as a CUDA graph and replayed into a fresh
              poison, then under a second salt written into the same device buffer (as a served step does), each against
-             receipts.py on sampled units
+             receipts.py on sampled proof blocks
     time     each version's graph, replayed in turn REPS times between CUDA events: the step's receipts, per live unit, at
              T = 64 and T = 256
 

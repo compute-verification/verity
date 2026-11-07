@@ -11,7 +11,7 @@ set_option Elab.async false
 
 `runsZCJH_liveI` at `own`: `RunsOnZCJA` at flock-verify `--zk --public-inputs`'s acceptance (`AcceptsZKP I own`), at the
 tables `planZHJP`, from the record's custody at that acceptance (`RecordsLiveZKJA` at `setupOfP (zkInputs I) own`) and
-the coin server's draws (`DrawOkZKHJP`). `decodesOnZKJA_of_runsOnZCJA` turns it into the decoder `simZJA` reads.
+the challenger's live-coin part's samples (`DrawOkZKHJP`). `decodesOnZKJA_of_runsOnZCJA` turns it into the decoder `simZJA` reads.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden

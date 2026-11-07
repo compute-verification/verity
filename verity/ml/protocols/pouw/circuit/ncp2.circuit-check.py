@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _pouw_roots() -> list[Any]:
-    """`ncp-v2`'s unit templates at k = 64, and the smallest whole call, its weight side and a window of two calls on it, for
+    """`ncp-v2`'s unit templates at k = 64, and the smallest whole call, its weight side and an execution phase of two calls on it, for
     both P's (`ncp-v2`'s word P and `ncp-v2-shift24`); the package's own tests check their template partitions and the Z
     separator. Seven of these families take statics (`NcpDigest_v1`, `NcpFormX_v1`, `NcpFormY_v1`, `NcpTile_v1`,
     `NcpWeight_v1`, `NcpLinear_v1`, `NcpWindow_v1`), so they are checked only at the ids bound here: a listing that binds a

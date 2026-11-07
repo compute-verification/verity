@@ -61,7 +61,7 @@ def correct (R : Reg) (Xv : vb.Pos → vb.Val) (u : Fin n) : Prop :=
   RightRegZc A P planZ tab vb canon R (XlayerZC A P planZ tab vb Xv) u
 
 /-- **Flock's expected-time extractor** at `k` accepted reruns and the knowledge bound `a`: its knowledge term is
-`a/(1 − N₀/(ek))` at the proof block's table, and its link term `linkTermZC` at the trace's value layer. -/
+`a/(1 − N₀/(ek))` at the proof block's table, and its binding error `linkTermZC` at the trace's value layer. -/
 noncomputable def extractor (k : ℕ)
     (a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ) :
     SampledGeneric.Extractor (proofSystem A Hs planZ) (binding A P planZ tab vb) where
@@ -123,7 +123,7 @@ theorem errOf_trials (L : Law n) (k Rw : ℕ) (t' ρ : ℝ) (R : Reg) (τ : Cont
   · exact absurd h2 h1
   · rfl
 
-/-- **The link term transfers to the trials**: the link theorem against any value layer (`zk_linkSoundC_at`), at the
+/-- **The binding error transfers to the trials**: the link theorem against any value layer (`zk_linkSoundC_at`), at the
 value layer of a fixed trace. -/
 theorem trials_transfers (hlow : LoweringSoundZK A P planZ tab decode) {k Rw : ℕ} (hRw : 1 ≤ Rw) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)

@@ -54,7 +54,7 @@ theorem setupTables_named (tags : Tags) (circuitFile publicFile : ByteArray) (co
     Returns (Stmt.setupTables tags circuitFile publicFile coins count tables draw partition program work stratified closure
       publicInputs) fun r => ∀ st ∈ r.2, st.merkle.Named := by
   unfold Stmt.setupTables
-  -- the draw checks' continuations, each proved once and closed at every call
+  -- the sample checks' continuations, each proved once and closed at every call
   extract_lets setup splits names count1 pubIn work1 strat1
   have hsetup : ∀ t d, Returns (setup t d) fun st => st.merkle.Named := by
     intro t d

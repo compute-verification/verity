@@ -141,7 +141,7 @@ class Rng:
         return seq[self.below(len(seq))]
 
     def sample(self, n: int, k: int, exclude: frozenset[int] | set[int] = frozenset()) -> list[int]:
-        """``k`` distinct values of ``range(n)`` outside ``exclude``, in draw order."""
+        """``k`` distinct values of ``range(n)`` outside ``exclude``, in sample order."""
 
         if k > n - len(exclude):
             raise ValueError("not enough values to sample")
@@ -403,7 +403,7 @@ class Safetensors:
 
 # --- the real-instance plan -------------------------------------------------------------------------------------------------------
 
-#: Weight rows drawn per activation row beyond the seed's own: 24 x (1 + ROWS_PER_X) = 3,456 real instances.
+#: Weight rows sampled per activation row beyond the seed's own: 24 x (1 + ROWS_PER_X) = 3,456 real instances.
 ROWS_PER_X = 143
 
 
@@ -417,9 +417,9 @@ class RealSpec:
 
 def plan_real(seeds: Sequence[Seed]) -> tuple[list[RealSpec], dict[tuple[str, str], list[int]]]:
     """Round 0: the 24 seeds (x, W[j]); rounds 1..ROWS_PER_X: for every seed in order, (x, W[j'_r]) with ``j'`` the
-    r-th row drawn for the seed's (family, layer) group -- seeds sharing a layer/op share the same drawn rows, so the
+    r-th row sampled for the seed's (family, layer) group -- seeds sharing a layer/op share the same sampled rows, so the
     set also contains "same weight row, different activation" pairs.  Rows are sampled by ``Rng("rows", family, layer)``
-    from ``[0, N)`` excluding the group's seed rows.  Returns the specs in id order and the drawn rows per group."""
+    from ``[0, N)`` excluding the group's seed rows.  Returns the specs in id order and the sampled rows per group."""
 
     groups: dict[tuple[str, str], list[int]] = {}
     for i, s in enumerate(seeds):
