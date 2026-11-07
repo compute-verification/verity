@@ -1,8 +1,8 @@
-"""Lane text in the tree's prose, held to ``allowlists/repo_lane_text.json``: S5 of the quality rollout, a tree that says what
-is true now.  Prose is every comment and docstring in code (Python's comments and string statements, read by ``tokenize``;
-Lean's ``--``, ``/- -/`` and ``/-- -/`` comments; the ``#`` comments of shell, TOML, YAML and unit files; the ``//`` and
-``/* */`` comments of Rust, C, C++ and CUDA) and every Markdown file, whole.  Code's string literals are not prose and are
-not read.  Lane text is what records how the tree got here or who is working on it, which the tree can't keep true:
+"""Lane text in the tree's prose, held to ``allowlists/repo_lane_text.json``, so the tree says what is true now.  Prose is
+every comment and docstring in code (Python's comments and string statements, read by ``tokenize``; Lean's ``--``, ``/- -/``
+and ``/-- -/`` comments; the ``#`` comments of shell, TOML, YAML and unit files; the ``//`` and ``/* */`` comments of Rust,
+C, C++ and CUDA) and every Markdown file, whole.  Code's string literals are not prose and are not read.  Lane text is what
+records how the tree got here or who is working on it, which the tree can't keep true:
 
 * ``attribution``: a parenthetical holding a date, ``(Daniel, 18 Oct)``, ``(12 Oct 06:20Z)``, ``(2026-10-12)``, or a date
   that follows ``Daniel``;

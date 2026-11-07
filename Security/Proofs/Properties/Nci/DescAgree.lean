@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Nci
-public import Properties.NciDesc
+public import Properties.Nci.Desc
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal

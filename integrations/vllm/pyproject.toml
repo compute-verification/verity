@@ -68,7 +68,6 @@ untraced = [
     "tests/pipeline/test_tp_gpu_lease.py",
     "tests/program/predict/test_predict.py",
     "tests/program/test_derive_transfer.py",
-    "tests/program/test_padded_commit_tiny.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
     "tests/protocols/test_credit_gate.py",
     "tests/protocols/test_pouw_h1.py",
@@ -176,6 +175,7 @@ tests = [
     "tests/observe/test_gen_batch_engine_arg.py",
     "tests/pipeline/test_replay_plan.py",
     "tests/pipeline/test_tp_build_width.py",
+    "tests/pipeline/test_workload_fetch.py",
     "tests/pipeline/test_workload_file.py",
 ]
 paths = ["integrations/vllm/verity_vllm/pipeline"]
