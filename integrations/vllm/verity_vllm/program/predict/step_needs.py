@@ -107,7 +107,10 @@ class StepNeeds:
         """One engine step at this rank -> each Need with its calls. `tokens` rows run in a launch of `launch` tokens (the graph's
         padded size, else `tokens`); `prefills` holds each prefilling request's (query rows, computed tokens) and `decodes` each
         decoding request's key count; `requests` sequences are sampled, `sampling` counting them by kind (`greedy`, `seeded`,
-        `random`) and modifier (`top_k`, `min_p`, `penalties`); `flashinfer_sampler` is whether vLLM sampled with FlashInfer's."""
+        `random`) and modifier (`top_k`, `top_p`, `min_p`, `penalties`); `flashinfer_sampler` is whether vLLM's FlashInfer sampler
+        is on, which samples a step's unseeded requests only when some request filters by top-k or top-p and none is seeded (one
+        request's generator sends the whole batch to the native sampler); an unseeded request's select is refused once, as
+        FlashInfer's or as unseeded."""
         from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
         calls = [(int(q), int(done)) for q, done in prefills] + [(1, int(k) - 1) for k in decodes]
         keys: Counter[int] = Counter()
@@ -257,14 +260,14 @@ class StepNeeds:
         out = [(self._cublas(n_seq, "lm_head"), n_seq), (self.kind("all_gather", WORLD=W, N=V), n_seq)]
         if sampling.get("greedy"):
             out.append((self.kind("token_select", V=V * W), sampling["greedy"]))
-        for tag, gap in (("random", "unseeded sampling"), ("top_k", "top-k sampling"), ("min_p", "min-p sampling"),
-                         ("penalties", "penalties")):
-            if sampling.get(tag):
-                out.append((Need("token-select", _id(f"select-{tag}", V=V * W), gap, "no"), sampling[tag]))
-        seeded = sampling.get("seeded", 0)
+        seeded, unseeded = sampling.get("seeded", 0), sampling.get("random", 0)
         if seeded:
             out.append((self.kind("token_select_stochastic", V=V * W, CONSTRUCTION=self.tp.effective_sampler_construction()), seeded))
-        stochastic = seeded + sampling.get("random", 0)
-        if stochastic and flashinfer_sampler:
-            out.append((Need("token-select", _id("flashinfer-sampler", V=V * W), "FlashInfer sampler", "no"), stochastic))
+        if unseeded:
+            fi = flashinfer_sampler and not seeded and bool(sampling.get("top_k") or sampling.get("top_p"))
+            out.append((Need("token-select", _id("flashinfer-sampler" if fi else "select-random", V=V * W),
+                             "FlashInfer sampler" if fi else "unseeded sampling", "no"), unseeded))
+        for tag, gap in (("top_k", "top-k sampling"), ("min_p", "min-p sampling"), ("penalties", "penalties")):
+            if sampling.get(tag):
+                out.append((Need("token-select", _id(f"select-{tag}", V=V * W), gap, "no"), sampling[tag]))
         return out

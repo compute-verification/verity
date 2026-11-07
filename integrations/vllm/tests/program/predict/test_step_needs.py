@@ -29,19 +29,32 @@ def test_production_sizes_refuse_by_name(S):
     """Past class G's limits each refusal `dsa` would raise is its own Need, and the step's other calls are still counted: a row
     past INDEX_TOPK keys refuses its top-k (the radix selection) but keeps its logits, the 8,192-token launch has no captured
     all-reduce (vLLM's NCCL route) or indexer cuBLAS route, a 2,000-row prefill takes the dense-MHA backend and one past
-    INDEX_TOPK keys the sparse-MQA one, and the unseeded, top-k and FlashInfer-sampled requests have no select."""
+    INDEX_TOPK keys the sparse-MQA one, and the unseeded and top-k requests have no select (a seeded request in the batch keeps
+    FlashInfer's sampler off)."""
     need = S.step(8192, 8192, [(2000, 0), (4000, 16000)], [5000] + [100] * 191, 194,
                   {"greedy": 180, "seeded": 4, "random": 10, "top_k": 2}, True)
     assert _gaps(need) == {
         ("dsa-topk", "radix-topk", "radix top-k"), ("tp-allreduce", "allreduce-pynccl_comm", "no capture"),
         ("cublas-bf16-gemm", "cublas-linear", "no capture"), ("router-gemm", "cublas-router", "no capture"),
         ("fa3-prefill-attention", "prefill-call", "dense-MHA prefill"), ("dsa-sparse-prefill", "prefill-call", "sparse-MQA prefill"),
-        ("token-select", "select-random", "unseeded sampling"), ("token-select", "select-top_k", "top-k sampling"),
-        ("token-select", "flashinfer-sampler", "FlashInfer sampler")}
+        ("token-select", "select-random", "unseeded sampling"), ("token-select", "select-top_k", "top-k sampling")}
     ids = Counter({n.id: c for n, c in need.items()})
     assert ids["DsaMqaLogits_v3{N=5000,H=32,D=128}"] == 21 and ids["radix-topk{TOPK=2048,KEYS=5000}"] == 21
     assert ids["prefill-call{ROWS=2000,KEYS=2000}"] == 78 * 2000
     assert ids["MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL='warp'}"] == 75 * 8192
+
+
+def test_flashinfer_samples_only_unseeded_filtered_steps(S):
+    """vLLM's FlashInfer sampler takes a step's unseeded requests only when one filters by top-k or top-p and none is seeded; each
+    unseeded request's select is refused once, and a seeded one's is the stochastic select's Definition."""
+    def refused(sampling, on=True):
+        return {n.id.split("{")[0]: c for n, c in S.step(8, 8, [], [100] * 8, 8, sampling, on).items() if n.gap}
+
+    assert refused({"greedy": 2, "random": 6, "top_p": 6}) == {"flashinfer-sampler": 6}
+    assert refused({"greedy": 2, "random": 6, "top_p": 6}, on=False) == {"select-random": 6}
+    assert refused({"seeded": 1, "random": 5, "top_p": 6}) == {"select-random": 5}
+    assert refused({"random": 8}) == {"select-random": 8}
+    assert refused({"seeded": 8, "top_p": 8}) == {}
 
 
 @pytest.mark.slow
