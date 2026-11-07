@@ -631,11 +631,14 @@ def test_class_g_plans_a_long_prompt_as_its_prefill_chunks_each_at_the_launch_it
                                                          (33, 64, 4)]
     summary = {"compiler": "c", "requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch(),
                                               "chunks": list(u.chunks), "digest": f"d{u.request}"} for u in plan.requests]}
+    (long,) = trace_commands({"requests": [{**summary["requests"][0], "LP": 2300, "T": 16}]}, reg, "/t")
+    assert long[long.index("--max-model-len") + 1] == "2316"
     cmds = trace_commands(summary, reg, str(tmp_path))
     assert [c[c.index("--out") + 1] for c in cmds] == [str(tmp_path / trace_dir(u)) for u in plan.requests]
     assert trace_dir(plan.requests[2]) == trace_dir(summary["requests"][2]) != trace_dir({**summary["requests"][2], "chunks": []})
     for u, c in zip(plan.requests, cmds):
         assert c[c.index("--device-name") + 1] == reg.phi.target["device_name"] == "NVIDIA H200"
+        assert c[c.index("--max-model-len") + 1] == str(max(2048, u.LP + u.T))
         ctx = parse_launch_context(c[c.index("--launch-context") + 1])
         assert (ctx.get("chunks", []), len(ctx["batch_by_step"])) == (list(u.chunks), len(u.launch))
         assert LC.bad_chunks(ctx, "request", u.LP, u.T, u.C) is None
@@ -881,9 +884,10 @@ def test_a_class_g_long_prompt_compiles_as_its_chunks_each_at_its_launch(tmp_pat
 def test_a_class_g_chunked_prompts_traced_build_is_its_compiled_program(tmp_path):
     """The chunked prompt above (q0's 20 prompt tokens in chunks of 8, 8 and 4 beside q1, then two decodes), compiled at rank 0,
     and its trace: the command `trace_commands` gives it (the Build's chunked request wrapper at its launch context, as a served
-    window's trace runs it), run on the pinned vLLM with GLM-5.3's config of record. `compare` finds the two digests equal. What no
-    cheaper test can: that the Build's chunked request wrapper traces the Program the compiler predicts. It needs the pinned vLLM
-    (a pod's venv), so it skips without it; its Build takes minutes on one core."""
+    window's trace runs it), run on the pinned vLLM with GLM-5.3's config of record and no CUDA device visible, as the row driver
+    runs a Build (`gpu_lease.hide_devices`; vLLM keeps Triton then). `compare` finds the two digests equal. What no cheaper test
+    can: that the Build's chunked request wrapper traces the Program the compiler predicts. It needs the pinned vLLM (a pod's
+    venv), so it skips without it; its Build takes minutes on one core."""
     pytest.importorskip("vllm")
     advice, ingress = _session([(20, 3, {**GREEDY, "max_tokens": 3, "ignore_eos": True}),
                                 (6, 2, {**GREEDY, "max_tokens": 2, "ignore_eos": True})], _scheduled([(0, 20, 3), (1, 6, 2)], 16, 8))
@@ -892,7 +896,7 @@ def test_a_class_g_chunked_prompts_traced_build_is_its_compiled_program(tmp_path
     (cmd,) = trace_commands(s, reg, str(tmp_path / "traces"))
     assert json.loads(cmd[cmd.index("--launch-context") + 1])["chunks"] == [8, 8, 4]
     subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", *cmd[1:]], check=True,
-                   env={**os.environ, "HF_HUB_CACHE": str(tmp_path / "hub")})
+                   env={**os.environ, "HF_HUB_CACHE": str(tmp_path / "hub"), "CUDA_VISIBLE_DEVICES": ""})
     got = compare(s, str(tmp_path / "traces"))
     assert (got["equal"], got["mismatches"]) == (1, 0), got["units"]
 
