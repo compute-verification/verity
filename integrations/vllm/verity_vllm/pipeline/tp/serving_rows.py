@@ -3,7 +3,7 @@ window per rank in ``<dir>/rank<r>/``, which the rank's own process commits (`ra
 committed store, its registered weight shards and its Programs of record with `pipeline.serving_rows.after_commit`, and ``<dir>/tp.json``
 over the world.  The driver calls `commit` in the first instrumented run once every rank's root is final and the TP run root is fixed,
 and before sampling: the challenge, the population openings and the cross-rank picks all come after it, and every rank's C2 replay is
-deferred (`require`), since an in-process replay draws its seed inside finalize.
+deferred (`require`), since an in-process replay samples its seed inside finalize.
 
 Rank ``r``'s window binds ``run = <TP run root hex>/rank<r>`` (`run_of`): the TP run root fixes every rank's rows-sha512 root, and the rank
 keeps two ranks' ports, whose population, partition and leaf counts can coincide, in distinct domains.  A rank that writes no window,

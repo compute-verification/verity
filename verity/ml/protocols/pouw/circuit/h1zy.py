@@ -39,8 +39,8 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   `Security/Proofs/Accounting/TS/CheckedSound.lean`, binds ok only through a port of ``own``). A lane's and a combine's ok take the same
   form: each statement's ok port (``o0``, its one output) reads the verifier's own ``ok``, one row of the word 1 a
   statement under its public salt, beside the ``partials`` ports.
-* **A leaf's lanes** (option A: the served path keeps one receipt a 32 × 32 leaf, and a drawn leaf is proved as its 32
-  lanes and their combine). Option A is a proof strategy, not a new Served form: a drawn leaf is one Cd
+* **A leaf's lanes** (option A: the served path keeps one receipt a 32 × 32 leaf, and a sampled leaf is proved as its 32
+  lanes and their combine). Option A is a proof strategy, not a new Served form: a sampled leaf is one Cd
   unit and meets Served as `PouwH1TileZy_v1` does, and `Accounting.Guarantees.TS.LeafLanesSound`'s linked realization carries the 33 statements to it.
   CP-W's receipt is the XOR over the leaf's lanes of their partials (`h1tile.fold`). The partials are proof-layer values,
   not Cd inputs: the prover commits them after the sample under hiding leaves, like a proof's own outputs, one row per lane
@@ -48,7 +48,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   commitment as registered ports of the verifier's own, lane l's ``partials`` at row l and the combine's ``p0`` .. ``p31``
   at rows 0 .. 31 (`pouw.leaf_lanes.reads`; each statement's ok is its ``o0``), since a port ``own`` doesn't name
   is free in ``CheckedSessionSound``'s relation. A partial is 2 (KS + m) u32 (8,320 bits at K = 4096), so it is an
-  input, never an output, and a row of 8 (KS + m) bytes. The combine reads only those rows and the receipt, and C-Flock
+  input, never an output, and a row of 8 (KS + m) bytes. The combine reads only those rows and the receipt, and Flock
   proves a statement only with a row that compresses before its last block, so `combine` is staged only at K >= 384
   (`LEAST_K`: 112-byte rows, whose padding spills into a second block); `lane` takes any positive K. Both stage only a
   leaf whose R is a multiple of 16, since a lane reads the R admit bits as one row of whole 16-bit words.
@@ -60,7 +60,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   dead leaf's partials are zero. ok is 1 exactly when its partials row is those words and its 32 cells of the record
   (`lane_cells`: by row slot, then column slot) pass `PouwZyCheck_v1{4, 8}` at its rows' z (TILE's v1 or v3 form) and
   scales, a dead leaf's cells too (z = 0, y = dq(0, +0, s_w)). The index l is a public input, one 16-bit word (`LANE`:
-  C-Flock's public rows are whole 16-bit words): each noise block's counter and each of the lane's cells is picked from
+  Flock's public rows are whole 16-bit words): each noise block's counter and each of the lane's cells is picked from
   the leaf's by a `PouwMuxBit` tree over its low `lane_bits` bits, so one Definition at each K is every lane of a leaf,
   and ok is 0 at an l past the leaf's lanes (any higher bit set: their `PouwOrBit`s select a 0 by a `PouwMuxBit`, 16 -
   `lane_bits` ANDs). ok is a sink (`Out(sink=True)`): a Definition with a coin and a
@@ -68,7 +68,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   unit, would be one. `PouwH1Combine_v1{TILE}` reads the 32 ``partials`` rows and the leaf's committed ``receipt`` and
   returns ok, 1 exactly when the rows' XOR is the receipt word by word, so the 33 oks hold the receipt as the tile unit's
   receipt output does. The XOR is free and the equality is 64 (KS + m) - 1 ANDs (8,319 at K = 4096, 895 at K = 384).
-* **A lane in chunks.** A lane past K = `CHUNK_MAX` (4096, whose lane fills C-Flock's 2^27 block) outgrows the block, so
+* **A lane in chunks.** A lane past K = `CHUNK_MAX` (4096, whose lane fills Flock's 2^27 block) outgrows the block, so
   it is proved as `chunks`(K) = n statements along K (`lane_statements`): `PouwH1LaneZyChunk_v1{TILE, CHUNKS = n,
   CHUNK = c}` over entries [c K_c, (c + 1) K_c), K_c = K / n a multiple of `CHUNK_ALIGN` (6144: 2 × 3072, 12288: 3 × 4096,
   14336: 4 × 3584, 16384: 4 × 4096). A chunk reads its 4 A and 8 B rows at its entries, each with the row's scale
@@ -86,18 +86,18 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   token row's chunks agree on its scale. The carries are proof-layer values, committed after the sample like the partials,
   never outputs; the partials and the combine are the whole lane's, so such a leaf is 32 n + 1 statements. Over v1 only:
   v3's z corrects O' and the digits over every segment of K.
-* **The unit on chunk rows.** A window at such a K binds `PouwH1TileZyChunks_v1{UNIT, CHUNKS = n}` (`window_unit`), UNIT
+* **The unit on chunk rows.** An execution phase at such a K binds `PouwH1TileZyChunks_v1{UNIT, CHUNKS = n}` (`window_unit`), UNIT
   the K's `PouwH1TileZy_v1` over `PouwH1Tile_v1`: the same parameters (``a``, ``b``, ``zy``, ``salt``, ``position``,
   ``roots``) and outputs (``receipt``, ``ok``), its ``a`` the n R chunk rows of its R A rows (`ROW`(K_c), row i's chunk c
   at n i + c, as its table commits them) and its ``b`` the n C of its B rows. It is UNIT on the whole rows, each its
   chunks' codes in turn at chunk 0's scale, and its ok is UNIT's AND every later chunk's scale equal to chunk 0's (as a
-  lane's chunks hold each row's scale to the carried one), (n - 1)(R + C) `PouwEq32`s more. Its drawn leaf is UNIT's
+  lane's chunks hold each row's scale to the carried one), (n - 1)(R + C) `PouwEq32`s more. Its sampled leaf is UNIT's
   leaf, proved as above, so a chunked K is refused over v3 and v4. Over J10-R's tiles (`J10R_TILES`, v5 and v6) the
   unit on chunk rows is `PouwH1TileZyChunks_v2{UNIT, CHUNKS = n}`: v1's body with UNIT's ``call`` and ``blocks`` after
   ``roots``, passed on as they are. UNIT runs on the whole rows at the whole K, so its noise is the call-scale stream's
   rows and columns from ``blocks`` (`h1tile.j10r_blocks` at the call's slot and the whole K, `Layout`(R, C, K)'s RB and
   CB), `h1tile.j10r_reference`'s word for word: chunking cuts the committed rows, never the noise stream.
-* **A J10-R leaf's lanes.** A drawn per-call unit over `PouwH1Tile_v5` is proved as v1's leaf is, its 32 lanes and their
+* **A J10-R leaf's lanes.** A sampled per-call unit over `PouwH1Tile_v5` is proved as v1's leaf is, its 32 lanes and their
   combine, a lane past `CHUNK_MAX` in `chunks`(K) chunks: `PouwH1LaneZy_v2{TILE}` and `PouwH1LaneZyChunk_v2{TILE, CHUNKS,
   CHUNK}` are v1's lane and lane chunk with the unit's ``call`` and ``blocks`` after ``roots`` (`PUBLIC_J10R`), and
   `PouwH1Combine_v2{TILE}` is v1's combine that also folds the leaf's 32 n statements' oks into its own (an AND tree):
@@ -116,7 +116,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
 combine's ok; `lane_chunk_carries` a lane's honest carries in chunks, and `lane_chunk_reference` a chunk's ok (each a
 lane's, with ``j10r``: over J10-R's v5).
 `statement_rows` is a lane's, a chunk's and the combine's input rows as `class_statement.unit_lowering` takes them, and
-`statement_ports` their C-Flock ports, each input's and the output's bits in its port's row, which Lean states as
+`statement_ports` their Flock ports, each input's and the output's bits in its port's row, which Lean states as
 `PouwWindow.Lanes` (with each port's registered row, and each unit input wire's port and bit) for proofs' decoders: v1's
 lane and combine, and J10-R's lane, lane chunks and combine (`chunkPorts`, `combine2Ports`); not v1's lane chunks.
 """
@@ -306,7 +306,7 @@ PouwMuxBit = definition("PouwMuxBit", 2, lambda C_, s, a, b: [a[0] ^ C_.AND(s[0]
                         doc="b where s is 1, else a, on bits: PouwMuxBit_v1")
 
 
-#: a lane's public index: one 16-bit word, since C-Flock's public rows are whole 16-bit words
+#: a lane's public index: one 16-bit word, since Flock's public rows are whole 16-bit words
 LANE = Array(16, BIT)
 
 
@@ -558,7 +558,7 @@ PouwH1Combine2 = CompositeDefinition(
 
 def _leaf(tile: Any) -> int:
     """``tile``'s K, if its leaf's lanes and combine are staged; else ValueError. A leaf has a positive K (`leaf_lanes`'
-    word order), and a lane reads its R admit bits as one row, which C-Flock takes only as whole 16-bit words
+    word order), and a lane reads its R admit bits as one row, which Flock takes only as whole 16-bit words
     (`class_statement.unit_lowering`), so its R is a multiple of 16 (the served leaf's is 32)."""
     a = tile.signature()[0][0][1]
     r, k = int(a.n), int(a.elem.n)
@@ -581,7 +581,7 @@ def lane(tile: Any) -> Any:
 def combine(tile: Any) -> Any:
     """`PouwH1Combine` over ``tile``, the leaf's H1 tile (v1 over PouwH1Tile_v1 and _v3, v2, which folds the leaf's
     statements' oks, over J10-R's PouwH1Tile_v5), at an R `_leaf` takes and a K of at least `LEAST_K`: the combine
-    reads only the partials and the receipt, 8 (KS + m)-byte rows, and C-Flock proves a statement only with a row that
+    reads only the partials and the receipt, 8 (KS + m)-byte rows, and Flock proves a statement only with a row that
     compresses before its last block (``no row has a compression before its last block``, `verity_flock.circuit`'s and
     `Flock.HmRow`'s), a row of at least 112 bytes, whose 17 bytes of SHA-512 padding spill past its first block."""
     k = _leaf(tile)
@@ -899,7 +899,7 @@ CHUNKED = (PouwH1TileZyChunks, PouwH1TileZyChunks2)
 
 
 def window_unit(tile: Any) -> Any:
-    """The tile unit a window binds at ``tile``'s K, whose rows are the ones a table at K commits (`chunk_leaves`): `unit`
+    """The tile unit an execution phase binds at ``tile``'s K, whose rows are the ones a table at K commits (`chunk_leaves`): `unit`
     at `chunks`(K) = 1, else `unit_chunks` on its n = `chunks`(K) chunk rows. ValueError at a K `chunks` refuses, and past
     `CHUNK_MAX` on any tile but PouwH1Tile_v1 over GemmAccumulatorS8_v2 and J10-R's (`J10R_TILES`)."""
     n = chunks(tile.signature()[0][0][1].elem.n)
@@ -952,7 +952,7 @@ def statement_rows(d: Any) -> list[tuple[str, list[str]]]:
 
 
 def statement_ports(d: Any) -> list[tuple[str, list[tuple[str, int, int]]]]:
-    """The C-Flock ports of a leaf's lane or combine statement (``d`` as `statement_rows` takes it, at any K), in order:
+    """The Flock ports of a leaf's lane or combine statement (``d`` as `statement_rows` takes it, at any K), in order:
     each input row of `statement_rows` with its fields ``(path, first bit, bits)`` in its bit row, the Definition's inputs
     it holds, their leaves concatenated in signature order (`class_statement.unit_lowering`; ``a[0].codes`` the codes of
     row 0 of ``a``), and last the output port ``o0``, ``ok``. Lean states it as `PouwWindow.Lanes`."""

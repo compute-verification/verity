@@ -1,4 +1,4 @@
-"""stage.py ROLE K N OUT: one Pearl-C4 unit class over N instances, staged for Flock by `class_statement.stage_unit` with
+"""stage.py ROLE K N OUT: one Pearl-C4 size class over N instances, staged for Flock by `class_statement.stage_unit` with
 PoUW's rows (`leaves.statement_rows`) and, for a row unit, its anchors as public input ports (`anchors.public_ports`).
 
     row_a  Pc4RowA_v1{K}: x (bf16, row-seg) -> A'_i's codes, scales, P_A,i (nvfp4-p, v2) and ok; public e, fa, fb

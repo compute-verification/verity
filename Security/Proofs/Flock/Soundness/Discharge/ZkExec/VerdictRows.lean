@@ -44,7 +44,7 @@ values are the claim checks, `openingZK_plays'`) and level 0's two lane rows (`l
   inner openings.
 * `zk_inner_of_rep`: at `ZkRepAccepts`'s hypotheses, every result of the compiled rep does (`plays_det`).
 * `zk_inner_qpos`, `zk_qpos_of_rep`: the position a result of the compiled rep records for inner query `jj` is the
-  table's `pos` at the rounds' last coin `jj`, the query word `Zk.verifyInner` draws.
+  table's `pos` at the rounds' last coin `jj`, the query word `Zk.verifyInner` samples.
 -/
 
 @[expose] public section

@@ -28,7 +28,7 @@ ROLES = {"x": ROLE_X, "w": ROLE_W}
 #: one short segment and of several), the tile digests, the ok rows, the cap's rows: the salt-dead counts (row-seg, one
 #: short segment and two), a word's C̃ ‖ U, its flags row with padding (k = 256) and without (8,192), a tile row's chunk
 #: digests at TN = 32 (one, then zeros) and 64 (two; the case's k is TN), a tile row's sums, and a strip's row; and
-#: the row_k cut's six rows in both trees, and the audit window's side rows (fp8-pi) in both trees, in role X one short
+#: the row_k cut's six rows in both trees, and the audit execution phase's side rows (fp8-pi) in both trees, in role X one short
 #: segment and several
 CASES = tuple((f"{row}-{role}-{k}", row, role, k) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p")
               for role in ("x", "w") for k in (64, 4096)) + (

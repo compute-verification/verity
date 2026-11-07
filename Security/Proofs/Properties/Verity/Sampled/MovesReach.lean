@@ -9,14 +9,14 @@ public import Proofs.Properties.Verity.Sampled.SpecTie
 # `MovesReach`, clause by clause
 
 On the joint law's support off the held-off events (`ReachesOff`), each outcome is the writer's at the widened sample's
-draw, the decoded registration and a live session's outcome (`reachesOff_out`). What v2's files decode to in the play on
+sample, the decoded registration and a live session's outcome (`reachesOff_out`). What v2's files decode to in the play on
 the tape beside it, clause by clause of `MovesOf`:
 
 * **The play from the first stop** (`ReachesOff.out_reaches`): the play beside an outcome is one the first stop
   reaches (`firstStop_playReaches`), at the widened sample and the link points the outcome is the writer's at.
-* **The record's draw** (`ReachesOff.recordDraw`, clause (i)): at the sample-coupled coin map, where the play's sampled
+* **The record's sample** (`ReachesOff.recordDraw`, clause (i)): at the sample-coupled coin map, where the play's sampled
   verdict accepts, the log v2 read is the device's, v2 reads the sample's coins of the family `label` answering `after`,
-  and every release of that family precedes every opening, the record decodes to the session's draw file at the
+  and every release of that family precedes every opening, the record decodes to the session's sample file at the
   outcome's sample (`recordDraw_firstStop`, `sample_extend`).
 * **An answered stop's round** (`stop_round`, toward clause (iv)): a stop the trace answers on the first table's rep
   `r` stream, at that stream's `k`-th opening, submits the record's round `k` of that stream, as `roundOf` makes it of
@@ -82,11 +82,11 @@ theorem ReachesOff.out_reaches {V : Vocab d α} {θ : ByteArray} {F : Array Byte
   obtain ⟨_, h1, -⟩ := hr.out
   exact ⟨ω, pts, _, hL, h1, firstStop_playReaches V θ F c A rd σ M ω hr⟩
 
-/-- **The record's draw on the joint law's support** (`MovesOf`'s clause (i)): at the sample-coupled coin map, an
+/-- **The record's sample on the joint law's support** (`MovesOf`'s clause (i)): at the sample-coupled coin map, an
 outcome on the joint law's support off `BL` and `B` is the writer's at the widened sample `ω`, and where the play beside
 it ends where the sampled verdict accepts, the log v2 read is the device's, v2 reads the sample's coins of the family
 `label` answering `after`, and every release of that family precedes every opening, its record decodes to the session's
-draw file at `ω`'s sample (`ReachesOff.out_reaches`, `recordDraw_firstStop`). -/
+sample file at `ω`'s sample (`ReachesOff.out_reaches`, `recordDraw_firstStop`). -/
 theorem ReachesOff.recordDraw (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray}
     {c : ByteArray} {k : Verity.Registration.Composite} {A : Live} {rd : Reading A.rounds}
     {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg} {BL : LinkHold A.mP} {B : RoundHold}
