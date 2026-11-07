@@ -336,3 +336,19 @@ If you'd rather keep the order, I'll wait for my slot after GLMREPLAY. Either wa
 - 10:20Z REPLAYCOV: END r20261107-100504-a0f4 (rc 2 before any GPU use: a quote typo in the probe's own script). START r20261107-101024-95ad, the same probe with the typo fixed. Its plugin loads in all 8 workers and is recording. ETA ~10:30Z.
   - **Then OVERHEADDEF's capture is the block's last GPU job** (the coordinator's 08:32Z item to OVERHEADDEF prefers it inside a replay block). It runs `spot_job.sh` with fe57's record arm (load `saturated`) and fe57's `engine_env.txt`, under two shims sent with it: a `gpu-lease` that runs its command (the pod has none), and a `sitecustomize.py` that makes `replay.py`'s engine TP8 (`replay.py` passes no TP width). ETA: GPUs free ~10:55Z.
   - **BLOCK END follows when the capture's GPU replay ends.** Its CPU staging may still be running then.
+- 10:38Z REPLAYCOV: END r20261107-101024-95ad, the top-k probe (rc 0; custody art:8ab291798d7f27333a7e9576474fe0cfc7dc89f6c9b351e1c212db718904ff62).
+  **Yes: the divergence starts in the DSA indexer's top-k, at the window's first prefill past 2,048 keys.**
+  - **What ran:** two replays of fe57's window, with a plugin around vLLM's prefill top-k (`top_k_per_row_prefill`). Per call, on each of the 8 devices, it recorded checksums of the input logits, the selected set and the raw order (4,074 calls per device per replay). Then it sorted each row's indices before attention.
+  - **Before call 1428, every call matches** on every device: logits, set and order. Call 1428 is the window's first top-k over more than 2,048 keys. It is the first indexer layer (of 21 per forward) on the first 8,190-token chunk of request 2, the window's first long prompt (16,090 tokens).
+  - **In that forward, on all 8 devices:**
+    - Call 1428, the first indexer layer: same logits, same set, different order.
+    - Call 1429, the second: same logits, different set (on 7 devices; device 4 differs from call 1430).
+    - Call 1430 on: different logits, downstream of the different selection.
+  - **So the top-k varies run to run on the same input, in two ways:** the order in which it lists the 2,048 indices, and which indices it picks. The second fits ties at the 2,048th logit. The probe records checksums, not values, so it doesn't show the ties.
+  - **Sorting fixes the order but not the set.** The two sorted replays still differ from each other in exactly the 16 long requests, from output position 0 at step 91, as fe57's unsorted replays did. Steps and rows are equal (1,345 and 87,110), and the other 281 requests are bit-exact.
+  - **Not run: a top-k that breaks ties by index and emits sorted indices.** One plugin arm could replace `top_k_per_row_prefill` with such a selection and run the same two replays. That's one GLM boot plus two replays, about 30 min of the pod. Your call whether it gets a later slot.
+  - **How strong the evidence is:** the checksums are an order-free sum (set), a row-weighted sum (order) and float64 masked row sums (logits). Equal checksums are strong evidence of equal values, not proof.
+- 10:38Z REPLAYCOV: START r20261107-103343-2364, OVERHEADDEF's capture, the block's last GPU job.
+  - The shim check passed (`EngineArgs` TP8). The engine environment is fe57's (`has_flashinfer=True`, CUDA 12.9's nvcc).
+  - The first-stage coin drew steps 404 (304 tokens) and 1210 (4 tokens).
+  - ETA: GPUs free ~10:55Z, then BLOCK END.

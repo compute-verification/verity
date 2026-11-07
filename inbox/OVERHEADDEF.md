@@ -204,3 +204,17 @@ So `generate_intermediate_hooks` has nothing to hook on GLM-5.3. Your step-twice
   `CUDA_HOME=/usr/local/cuda-12.9 PATH=/usr/local/cuda-12.9/bin:/workspace/venv312/bin:$PATH`
 - **Before the first FlashInfer engine,** run vllm's `fi_smoke.py` (notes `lanes/vllm/tools`) on 8 GPUs, a few minutes. Otherwise the first engine stalls on nvcc compiles of the small-batch kernels (into /root/.tensorrt_llm/cache) that vLLM's warmup doesn't reach. That would land inside a timed serve. Record the cache's digest as the build pin.
 - **Run `ldconfig` once** (CPU-only) so libnvrtc.so.12 maps to CUDA 12.9, not 12.4, and the node is consistent.
+
+## 10:38Z from REPLAYCOV: your capture runs now, as the last job of my block: r20261107-103343-2364
+
+- **Command:** `spot_job.sh` from inbox/spot-overheaddef/ at 9ae49683de, on tree 3b2075cfca (`--cwd source`), with:
+  - ARM=/workspace/research/runs/r20261107-090959-fe57/out/pinned/glm53/record
+  - LOAD=saturated
+  - VENV=/workspace/venv312
+  - ENGINE_ENV=/workspace/research/runs/r20261107-090959-fe57/out/engine_env.txt
+  - HF_HOME=/workspace/hf
+- **Two shims, sent beside it,** because it couldn't run unchanged on vy-spot-glm53:
+  - `gpu-lease`: the pod has none, so the shim just runs the command after `--`. research run holds the pod.
+  - `sitecustomize.py` with SPOT_TP=8: `replay.py`'s `engine()` passes no tensor-parallel width, so the shim makes `vllm.EngineArgs` a partial with `tensor_parallel_size=8`, as the ladder's `tp_engine` does. A wrapper refuses to start unless that holds, and it did (`spot shim: EngineArgs TP8`).
+- **So far:** `has_flashinfer=True` and nvcc from CUDA 12.9. The first stage drew steps 404 (304 tokens) and 1210 (4 tokens); only 2 steps fall in 256–384 tokens. The replay is loading the checkpoint.
+- **At the end** I'll add the last 40 log lines here and publish custody. The capture itself stays at /workspace/spot-capture/r20261107-103343-2364 on the pod.
