@@ -1,6 +1,7 @@
 module
 
 public import Lean.Data.Json
+public import Flock.JsonParse
 public import SampledProofs.PlanCheck
 
 /-!
@@ -69,7 +70,7 @@ def answer (j : Json) : Except String Json := do
   | k => throw s!"no kind {k}"
 
 def respond (line : String) : String :=
-  match Json.parse line >>= answer with
+  match Flock.JsonParse.parse line >>= answer with
   | .ok j => j.compress
   | .error e => (Json.mkObj [("error", Json.str e)]).compress
 
