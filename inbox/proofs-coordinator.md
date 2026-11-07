@@ -344,3 +344,22 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
   flags it, I'll rekey that one `shape.inline` entry by hand (same count, same hypothesis) and say so in the PR.
   Stacking: B restates the same def A does, so B stacks on A's branch (`cursor/proofs-trustv5-eaeb`). B's branch is
   `cursor/proofs-trustv5-8129`. C stacks on B.
+
+- 17:25Z (TSVERIFY), re your 17:05Z ask (two-stage lock; plan note:proofs/20261107T1555Z-plan-twolock):
+  **PR 1 status:** all four changed modules elaborate on cpu-3. The axiom probe is clean on every new theorem. The lock lists `Flock.SecurityProofs.SampledKSTwo` and `Claims.SecurityProofs.InfluenceTwoPatterns`, both with witnesses. The records run (r20261107-171836-2b9d) and the quick suites (r20261107-171836-d830) are running on checked's tip `da5b069afd`, ETA about 17:50Z. Then I push, open and mark, ahead of 22:00Z. Both guarantees go under `shape.frozen` with reasons, as SampledKSLiveV3 and V5 are, because their premises are not in a `shape.premises` module and they name no verifier function. That entry is a claims change, and the landing DM will show it.
+
+  **PR 3 sizing.** The key fact is in `Reference/DeployedCode.lean`'s docstring. `SampledProofs.Run.run` takes the session's statement and the verdicts as inputs, and nothing in Lean composes a session's statement or runs Flock. So `SessionRuns` and `SessionOpensTwo` are assumed everywhere today, one-stage included: `Instance.lean`, `SampledAuditInstance.lean`, and the one-stage `SessWit` and `SessScope` are all premises. Either route has to put the session composition (`service.Stream`) into Lean.
+  - **Route A: on `SamplingDeploy`, about 1,800 to 2,400 lines.** It has four pieces, which run in parallel once piece 1's interface (the Lean `V` and `session` definitions) is fixed.
+    1. **The deployed composition as a `Code`.** A public-coin `V` that registers, draws stage 1, takes the interiors, draws stage 2, runs one Flock session over the sampled blocks and gives the outcome, from `Run.run` plus `FlockDeploy.deployZk`'s `V` on the session's rounds. With it come `session`, `rounds` and `reveal`, and a Lean `Stream.session` (the one session's statement over the sampled proof blocks), difftested against Python's `service.Stream`. About 500 to 700 Lean lines plus about 150 of difftest.
+    2. **`SessionRuns` at that code.** The embedding of Flock's rounds, accepts-iff, the seen equality and vLog inclusion, by the run's step structure. About 500 lines.
+    3. **`SessionOpensTwo`.** From Flock's check at the session statement (the readable relation) to `Correct` on each proof block at its replay block's revealed boundary and interior values. This needs the statement's relation to be "every sampled block's circuit holds at its committed values", and the reveal to be the commitment's openings. About 600 to 1,000 lines, and the riskiest piece.
+    4. **PR 2's four facts at the same code.** `RegMatchesTwo`, `RefusesTwo`, `InteriorFixed` and `SessionsIn`, with the Bool checks in `Run.run` and their difftests. About 300 to 400 lines. This is mine and in progress.
+  - **Route B: restate in SampledKSLiveV3's live game with a two-stage draw, at least 3,000 lines.** The live game draws once before the sessions. Route B needs the interior registration as a prover message between two draws, and a two-stage assembly of its Bridge (about 12,000 lines for one stage today). It also inherits V3's five premises outside trust, which are TRUST6's, instead of two code facts. I recommend route A.
+  - **Workers for route A:** two now and one later.
+    - I write piece 1's interface tonight (`V`, `session`, `reveal` as definitions, statements of pieces 2 and 3 as sorry-free premises), by about 23:00Z.
+    - Worker **TWOSESS** takes piece 2.
+    - Worker **TWOOPENS** takes piece 3.
+    - Optionally, a third (**STREAMLEAN**) takes piece 1's Lean `Stream.session` and its difftest, if I keep `V` and the Code.
+    - I keep piece 4 and the lock.
+    - Branches stack on PR 1's `cursor/proofs-twolock-a81f`.
+    - Realistic finish with three or four workers: Mon 22:00Z for pieces 2 and 3, Sun 22:00Z for 1 and 4. With me alone, route A is several days.
