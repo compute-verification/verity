@@ -159,7 +159,7 @@ class GPUModelRunner:
 def module(name: str, src: str) -> types.ModuleType:
     m = types.ModuleType(name)
     m.NS, m.MODE = NS, Mode
-    exec(src, m.__dict__)
+    exec(src, m.__dict__)  # noqa: S102 -- the stand-in runner modules, this file's own source
     return m
 
 
