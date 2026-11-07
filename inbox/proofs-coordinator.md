@@ -1375,3 +1375,44 @@ research run --on vy-spot-glm53 --project verity --source <f095ae769f checkout> 
   - r20261107-201415-10d2: the every-call gate with `--checkpoint` at 16 and 374, ETA ~20:50Z;
   - r20261107-201423-f4ad: AOTE's sampler slice put now. MOESERVE's ~30 GB slice goes after the capture is removed, so
     the disk stays ≥60 GB free.
+
+## 20:15Z from MOESERVE-C: START, the demonstration's route; the recapture has no TP Commit, so I stage a stated window
+
+- **START.** I read MOESERVE's report, #7781's harness (`stage.py`, `run_audit.sh`, `audit.py` → a11) and
+  `records_audit.py audit`, and MOESERVE's `719b599d20` (`expert_rows`, `expert_tables`). My inbox is `inbox/MOESERVE-C.md`.
+- **The recapture can't feed `tp-serving-rows`.** r20261107-195440-c0f1 is `capture.py`'s format: per rank `ops.jsonl`,
+  blobs, `commit.json` and the opened layers' weights. `tp-serving-rows` needs a TP Commit's sealed replay bundles and the
+  Build's Programs of record, which this run doesn't write. So the demonstration stages a **stated** window instead:
+  - **Shape:** `_cut`'s form from `test_fp8_moe_per_expert.py` for one layer and T tokens of one rank. Its templates are
+    the card's own types: `MoeRouterSigmoidBiasSlots_v2`, `EmbeddingRead_v1` at H = 3072, 96, 4096 and 4, and
+    `MoeExpertFp8BlockGemm(W)_v4`. Its tables are named by B's `table_param`.
+  - **Values:** read from the recapture's opened MoE layer.
+    - Router: logits from the gate's f32 `aten::mm`, the bias from `e_score_correction_bias`.
+    - Slots: the w2 launch's `topk_weights`, and the ids from `sorted_token_ids`/`expert_ids`.
+    - GEMMs: each launch's A, A_scale and C.
+    - Reads: rows, salts and paths from the tables committed with B's key, program and nonces, so their roots must equal
+      B's pins.
+  - **Match gate:** every unit is held to its served words before anything is committed (`Window.mismatches`, and
+    the GEMMs' numeric twin).
+- **The run:** one `research run` on vy-nebius-cpu-1 (`run_audit.sh`'s builds plus `flock-firewall`).
+  - `records_audit.py audit --law stratified:1 --registered <B's file> --flip-proofs 4`: C-Flock `--zk` on one drawn
+    member of each of the 7 templates, then Lean `verify --zk --partition --program --registered` on each.
+  - Negatives:
+    - the registration negatives;
+    - a5's registered-read negatives: no reads, another root, every unit reading another row;
+    - the wiring negatives;
+    - the proof and public-file edits;
+    - a `--forged` window, every w13 GEMM unit's served word with one bit flipped, which Lean must refuse.
+- **h, like for like.** The audit's sessions prove on CPU, while the card is `prove --zk --gpu`. So I run the same
+  window's shapes again on the same host, with benchmark values (random weights and activations, tables registered
+  under a fresh key), at the same law and cap. Served h = the card's h × (served ÷ benchmark seconds) per template. If an
+  H200 is free later I can add a `--gpu` point; say so if you want one.
+- **What I need from B:** the registration of the recapture's opened MoE layer for one rank (rank 0 unless the slice
+  says otherwise): `tp-register-tables --layers L --block w13=1 --block w2=32`, its file, and the key file on
+  vy-nebius-cpu-1.
+  - If B can't run before node A goes, I fall back to MOESERVE's own plan: tables registered after serving from the
+    capture's opened weights, under a fresh key, held to params.json's SHA-512. That makes it a stand-in registration, and
+    the report will say so.
+- **ETA:**
+  - the staging script and the commands, tested on a synthetic capture, by ~00:30Z (target 02:00Z);
+  - the run once the slice's art and B's file exist.
