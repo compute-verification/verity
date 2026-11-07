@@ -20,7 +20,7 @@ is recomputed from the merged definitions (`audit.module_digest`). A side writte
 (`pins`) is read under today's names (`audit.as_guarantees`), and a side whose `reads` groups still list their readers
 (`audit.READER_KEYS`) is read without them, so a branch from before the lock dropped them merges with one from after.
 
-The merge never refuses (Daniel, 6 Nov: lock files never conflict on merge). What the build determines is the records
+The merge never refuses: lock files never conflict on merge. What the build determines is the records
 `check.py --update` writes from it, which the lock run after landing rewrites on the merged tree whenever they differ
 (`audit.RECORD_DIFFERENCE`, `audit.regenerated`): a guarantee's record (signature, named assumptions, type hash: restated
 on both sides, the merged tree's statement decides it), each `reads` group (which definitions the guarantees read, and
@@ -1113,7 +1113,7 @@ def main(argv: list[str]) -> int:
         try:
             merged, clashes = merge(docs.get("base", {}), docs["ours"], docs["theirs"], candidate)
             why += clashes
-        except Exception as e:                                  # the driver never refuses: theirs stands as the candidate
+        except Exception as e:  # noqa: BLE001  (the driver never refuses: theirs stands as the candidate)
             merged, candidate = docs["theirs"], []
             why.append(f"the merge failed ({type(e).__name__}: {e}): took theirs")
     for w in why:
