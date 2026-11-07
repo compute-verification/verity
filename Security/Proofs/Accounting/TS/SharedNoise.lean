@@ -1,7 +1,8 @@
 module
 
-public import Definitions.Accounting.Guarantees.TS.SharedNoise
 public import Proofs.Accounting.TS.Grind
+public import Proofs.Accounting.Lemmas.TS.SharedNoise
+public import Proofs.Accounting.Lemmas.TS.Grind
 
 /-!
 # One noise seed a call: proofs

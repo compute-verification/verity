@@ -2,9 +2,41 @@ module
 
 public import Proofs.Flock.Claims.Recursion.VStarParts
 public import Proofs.Flock.Claims.Recursion.DeployReg
-public import Proofs.Flock.VBridge.OpeningUnit
 public import Proofs.Flock.VBridge.Sparse.Laid
-public import Proofs.Flock.VBridge.Sparse.Unit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.VBridge.OpeningUnit
+import Proofs.Flock.VBridge.Sparse.Unit
 
 /-!
 # V*'s parts at the holo shape
@@ -54,7 +86,7 @@ lemma. Which template each part uses:
   climbs from different values collide, at `Br`'s setup evaluations or among the recorded calls.
 * **At the holo shape**: `vstarAccepts_holo_of_links` (`VStarAcceptsR`), and the bundles `vstarParts_holo_of_links` and
   `vstarPartsStaging_holo_of_links`, what `codeFacts_of_parts`, `ksA_deployed_parts` and `KS_of_parts` read, with each
-  part a holo part (`HoloPart`, the counterpart of M's `DensePart`: `PartsLinksOr`, and `LogsNil` or `PartsLogLinks`;
+  part a holo part (`HoloPart`: `PartsLinksOr`, and `LogsNil` or `PartsLogLinks`;
   `holoPart_of_open` from M's level links, `holoPart_of_nil` at a part without calls). At
   `deployRec` over the outer record `deployZkRec relation` (`vstarAccepts_holo_deployRec`, `vstarParts_holo_deployRec`,
   `vstarPartsStaging_holo_deployRec`), the outer record parses at `parseOf relation readOfO` by definition, and
@@ -547,7 +579,7 @@ theorem partOpens_holo {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Co
 
 /-! ## A part at the holo shape -/
 
-/-- **Part `s` at the holo shape** (the holo counterpart of M's `DensePart`): its links for its check or a collision
+/-- **Part `s` at the holo shape**: its links for its check or a collision
 the finders charge (`PartsLinksOr`, any kind of part), and for its calls either none where its coins are shown (the
 algebra, opening and sparse parts, `LogsNil`) or a level's links for them (`PartsLogLinks`). -/
 def HoloPart (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T)

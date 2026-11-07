@@ -1,8 +1,44 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Zk.Level0Pad
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
 public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
+import Flock.With.Eq
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The verifier's masked Ligerito returns on the model's rounds
@@ -349,6 +385,8 @@ theorem finalProgZ_of {p : LigeritoProof} {basisAt : Array F256 → ℕ → Arra
 
 /-! ## The walk -/
 
+-- one proof down `Zk.ligeritoWith`'s unfolded rounds against the masked model, `omega` on the round indices at each
+-- step
 set_option maxHeartbeats 4000000 in
 /-- **The masked verifier's Ligerito returns** on rounds `R` that carry the masked model's from `t.k` on: from a
 transcript that has recorded its rounds, at a proof with the lengths fast100's `R + 1 ≥ 2` levels fix, whose level-0 cap

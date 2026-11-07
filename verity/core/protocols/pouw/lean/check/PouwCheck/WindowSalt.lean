@@ -1,7 +1,6 @@
 module
 
 public import PouwCheck.Pass
-public import Identity.Domains
 
 /-!
 # A live window's salt (`core_check.window_salt`)
@@ -142,7 +141,7 @@ def windowSaltReason (p : Params) (c : Registration) (salt : Option Json) : Opti
       | .error (_, why) => some why
 
 /-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
-written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+written: tied here to its entry of the table (`Randomness.Domains`), it reads the entry at its next record change. -/
 example : ANCHORED_EPOCH_TAG = Domains.POUW_ANCHORED_EPOCH_OPEN.toUTF8 := rfl
 example : VALUES_TAG = Domains.POUW_PERIOD_VALUES.toUTF8 := rfl
 

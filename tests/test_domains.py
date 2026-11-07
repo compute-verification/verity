@@ -1,4 +1,4 @@
-"""The one table of domain separators (`verity.ml.commitments.domains`, Lean `Identity.Domains`): the two are equal, entry for
+"""The one table of domain separators (`verity.ml.commitments.domains`, Lean `Randomness.Domains`): the two are equal, entry for
 entry; the protocols that read it (``READERS``) carry no literal of it; and every entry is read, or still written somewhere
 by an owner whose code doesn't read the table yet."""
 
@@ -12,7 +12,7 @@ from pathlib import Path
 from verity.ml.commitments import domains
 
 ROOT = Path(__file__).resolve().parents[1]
-LEAN = ROOT / "verity/core/primitives/identity/Identity/Domains.lean"
+LEAN = ROOT / "verity/core/primitives/randomness/Randomness/Domains.lean"
 PYTHON = ROOT / "verity/ml/commitments/domains.py"
 #: The protocols whose code reads every separator from the table, Python and Lean, outside their tests and scripts. It
 #: only grows: a protocol joins in the change that makes its code read the table. A Lean definition a lock reads keeps
@@ -39,7 +39,7 @@ def test_lean_and_python_are_one_table():
     lean = lean_entries()
     assert len({n for n, _ in lean}) == len(lean), "a name appears twice in the Lean table"
     assert lean == list(domains.TABLE.items()), (
-        "the Lean table (Identity/Domains.lean) and the Python one (verity/ml/commitments/domains.py) differ: write each "
+        "the Lean table (Randomness/Domains.lean) and the Python one (verity/ml/commitments/domains.py) differ: write each "
         "entry in both, in the same order")
 
 
@@ -131,7 +131,7 @@ def test_readers_carry_no_literal_of_the_table():
             found += [f"{rel}:{line}: {v!r} is `{by_value[v.rstrip(chr(0))]}`" for line, v in literals
                       if v.rstrip("\0") in by_value]
     assert not found, ("a protocol that reads the table writes a separator of it as a literal; read it from "
-                       "`verity.ml.commitments.domains` (Python) or `Domains` (Lean, `import Identity.Domains`; a "
+                       "`verity.ml.commitments.domains` (Python) or `Domains` (Lean, `import Randomness.Domains`; a "
                        "definition a lock reads keeps its literal, tied in its file by `example : … Domains.NAME … := "
                        "rfl`):\n"
                        + "\n".join(found))

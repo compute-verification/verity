@@ -6,7 +6,7 @@ public import Definitions.Nci.Guarantees.Remote
 # The compute dampener, remote protocol, over a monitoring period: the statement
 
 `DampenerRemote` over a monitoring period of `T` windows (results are per monitoring period), with its
-three premises on the protocols, `PouwSound`, `SampledDetection` and the thread bound's `Complies`, replaced by what
+three premises on the protocols, `PouwSound`, `SampledDetection` and the thread bound's `CompliesRate`, replaced by what
 each protocol's own guarantee gives on live coins. A window is one round of the verifier's live coins: window `t`'s
 coins `Ω t` are uniform and independent of the other windows', and a run of the period is `ξ : (t : Fin T) → Ω t`. Each
 leg is stated as `Proofs.Flock.Soundness.Audit.Periods` states a period's bound: at any value of the other windows'
@@ -39,17 +39,17 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   `Properties.SampledProofs` proves what it does (`FleetHaltIsFinal`, `NoAcceptAfterHalt`), but not this form: it halts
   an operator at its `budget`-th failure, not its first (`budget ≥ 1`); it ends the operator's registrations, not its
   hardware's use; and nothing states the verdict's time `Δ` after the detected block.
-* **The inference-only policy** (in place of `Complies` and `ThreadedThrottled`'s premises): each declared run `i` meets
-  `NciCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ (k / c) Λ_i size(d_i)`, which
+* **The inference-only policy** (in place of `CompliesRate` and `ThreadedThrottled`'s premises): each declared run `i`
+  meets `NciCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ (k / c) Λ_i size(d_i)`, which
   `NciCheck.Properties.DescThrottles` gives for every declaration a verdict of compliance of the check of record lays
   out (`NciCheck.Baseline.evaluate`, whose verdict is `Desc.evaluate`'s), at `c = gamma` and the rate `k / c = num/den`,
-  under `ThetaRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs
-  the code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is not a
+  under `ThetaRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs the
+  code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is not a
   premise here: it is a guarantee, proved (`NciCheck.Properties.SecurityProofs.DescThrottles` in `Security/Properties`'
   lock) from `DescAgrees` (`SecurityProofs.DescAgrees`, itself proved from `Novel.readsExact`) and the gate-by-gate
   check's `Throttles`, and the check of record's verdict is `Desc.evaluate`'s (`SecurityProofs.baseline_desc`). What is
-  open on this leg is the bridge from those verdicts to this premise, that each declared run `i` is a declaration such
-  a verdict lays out, with the threading `Th_i` the premise reads: it is not stated. The cover theorem's factor on the
+  open on this leg is the bridge from those verdicts to this premise, that each declared run `i` is a declaration such a
+  verdict lays out, with the threading `Th_i` the premise reads: it is not stated. The cover theorem's factor on the
   same verdicts, `NciCheck.Properties.CheckedCoverTraining` (proved), would replace `ρ_T = b_a/((k / c) Λ)` by its own.
 
 Every other premise is `DampenerRemote`'s: the model's accounting of the four sources of counted multiplications, the
@@ -62,6 +62,8 @@ every certificate, every other premise holds while PoUW's per-window bound and t
 -/
 
 @[expose] public section
+
+open Verity.Game renaming prPMFReal → prob
 
 namespace Nci.Guarantees
 

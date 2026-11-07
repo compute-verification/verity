@@ -113,7 +113,7 @@ def test_identities_sample_through_the_picker():
     assert all(0 <= pick(i, 7) < 7 for i in range(100))
 
 
-def test_non_legacy_replay_sample_is_the_former_proof_unit_draw():
+def test_non_legacy_replay_sample_is_the_former_proof_block_draw():
     key = CH.replay_key(AUDITOR_KEY, ROOT)
     assert key == derive(AUDITOR_KEY, "verity/sampled-proofs/vu-sample/v1", {"run_root": ROOT})
     picked, strata, _ = SR.sample(_vus(), 3, 0, key=key)

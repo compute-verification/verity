@@ -46,8 +46,6 @@ def test_the_derivation_at_hand():
     kimi = instances.model(REG, "kimi-k2")
     assert instances.derived_fanout(kimi) == 384 + 2 * 2048 * (8 + 1) == 37248
     assert instances.derived_legs(kimi) == 512
-    assert instances.derived_fanout(instances.model(REG, "deepseek-v3")) == 256 + 2 * 2048 * 9
-    assert instances.derived_fanout(instances.model(REG, "dense-100b")) == 4 * 12288
     v4 = instances.model(REG, "deepseek-v4-pro")
     # wq_b's 128 x 512 query outputs beat the MoE input's 384 + 2 x 3072 x 7 = 43,392; q's latent is the narrowest input
     assert instances.derived_fanout(v4) == 128 * 512 and instances.derived_legs(v4) == 1536

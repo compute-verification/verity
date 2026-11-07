@@ -1,8 +1,23 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedOne
-public import Proofs.Flock.Soundness.Discharge.Inst.Order
-public import Proofs.Flock.Soundness.ExecLookup
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Level3.LookupRows
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.ExecLookup
 
 /-!
 # Every pinned bit of an accepted statement is a linear row

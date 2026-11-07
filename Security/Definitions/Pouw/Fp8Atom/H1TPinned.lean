@@ -1,9 +1,8 @@
 module
 
-public import Mathlib.Data.Fintype.Card
+public import Definitions.Pouw.Fp8Atom.H1TVectors
 public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Data.Fintype.Sum
-public import Definitions.Pouw.Fp8Atom.H1TVectors
 
 /-!
 # H-1T's pinned statements (trusted)
@@ -11,10 +10,10 @@ public import Definitions.Pouw.Fp8Atom.H1TVectors
 The map `DistinctLiveH1T` is about (`Pouw.Fp8Atom.H1T`), the facts
 about it that do not need the Target A proof, and the FP32 lemmas that proof uses.
 
-The map is checked against three other computations (`verity/protocols/accounting/work/pouw/lean/scripts/h1t_vectors.py`;
+The map is checked against three other computations (`verity/core/protocols/pouw/lean/scripts/h1t_vectors.py`;
 `Definitions/Pouw/Fp8Atom/H1TCoverage.json`).
 The generator checks every expected value below against an exact transcription of §3.1 over fractions,
-`h1t_ref` and `chain` (`h1_tagged.py`, the pinned map), and a float16 simulation of the kernel `h1t_form_xq`, before
+`h1t_ref` and `chain` (the module `h1_tagged`, the pinned map), and a float16 simulation of the kernel `h1t_form_xq`, before
 it writes them.
 
 * **`H1TFormTable`**: `formReal` on every finite code, both signs and every `F` in {1/4, 1/2, 1, 2, 4}: 2,540 lanes.

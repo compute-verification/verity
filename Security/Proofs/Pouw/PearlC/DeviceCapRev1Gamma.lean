@@ -1,9 +1,13 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
-public import Proofs.Pouw.PearlC.UOnlyGamma
 public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
 public import Proofs.Pouw.PearlC.TTOutW1
+public import Proofs.Pouw.PearlC.UOnlyGamma
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.KernelWrefGamma
+import Proofs.Pouw.Prob
 
 /-!
 # v1 under rev1 at a stricter cap, and γ there (FP8 security's file)

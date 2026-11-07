@@ -5,9 +5,10 @@ public import Proofs.Flock.Bridge.Canon
 /-!
 # A drawn unit's openings are canonical (`Bridge.OpeningsCanonTarget`, proved)
 
-`OpeningsCanonTarget` asks `canonAt` at every committed wire of a drawn unit: at the constant `oneG` and the zero
-`zeroG` (`Bridge.constsOf`), the opening's bit is the constant; at any other wire, the opening is canonical
-(`canonOpen`), which asks the wire to have a row.
+`OpeningsCanonTarget` asks `canonAt` at every committed wire of a drawn unit: at a constant (`Bridge.constsOf`), the
+opening's bit is the constant; at any other wire, the opening is canonical (`canonOpen`), which asks the wire to have a
+row. A drawn unit's committed constants are the constant `oneG` and the zero `zeroG`: an input no unit reads is in no
+unit's `io` (`Bridge.owner_ne_none_of_io`).
 
 * `Bridge.canonOpenH rows g v y`: `g` has no row, or the opening is canonical there (`canonOpen`);
 * `Bridge.OpeningsCanonTargetH`: `OpeningsCanonTarget`'s second clause at `canonOpenH`;
@@ -20,7 +21,7 @@ public import Proofs.Flock.Bridge.Canon
   (`Layout.single_gate`; a computed one is a returned output's, `OutsOut`, so an output row's bit);
 * `Bridge.openingsCanon_const`: at the constant and the zero, the opening's bit is the decoder's (`opening_spec`), which
   reads the unit's constant column, 1, or a zero column, 0, at the public place (`UnitPlace.decode_one`,
-  `constCols_keyProgH`, `zeroCols_keyProgH`);
+  `constCols_keyProgH`, `zeroCols_keyProgH`); a constant input no unit reads isn't the unit's;
 * `Bridge.openingsCanon : Bridge.OpeningsCanonTarget`.
 -/
 
@@ -38,6 +39,19 @@ def canonOpenH {N W : ℕ} (rows : Fin N → Option RowAt) (g : Fin N) (v : Floc
 theorem bytesAt_length {m N : ℕ} (z) (a : Fin N → Fin 8 → Fin (2 ^ m)) :
     (FlockSoundness.Binding.bytesAt (m := m) z a).length = N := by
   simp [FlockSoundness.Binding.bytesAt]
+
+/-- **A committed input of unit `u` has an owner**: an input wire in `u`'s `io` is one `u` reads. -/
+theorem owner_ne_none_of_io {C : FlockSoundness.Audit.Circuit} {n : ℕ} {P : FlockSoundness.Audit.Partition C n}
+    {u : Fin n} {g : Fin C.N} (hg : g ∈ P.io u) (hin : P.unit g = none) : owner P g ≠ none := by
+  unfold FlockSoundness.Audit.Partition.io at hg
+  obtain ⟨-, hgu | ⟨h, hh, hga⟩⟩ := Finset.mem_filter.1 hg
+  · rw [hin] at hgu
+    cases hgu
+  · intro ho
+    unfold owner at ho
+    have := List.find?_eq_none.1 ho u (List.mem_finRange u)
+    simp only [decide_eq_true_eq, not_exists, not_and] at this
+    exact this h hh hga
 
 end Flock.Bridge
 
@@ -195,7 +209,18 @@ theorem _root_.Flock.Bridge.openingsCanon_const
       (Discharge.Layout.outsOf D.unroll hU n) S R u hu c (by rw [hc, h1]; exact Finset.mem_singleton_self _)
     rw [← hc, hone]
     exact UnitPlace.decode_one _ hz
-  · cases hb
+  · rcases h2 with h2 | ⟨hlt, hown⟩
+    swap
+    · exact absurd hown (Bridge.owner_ne_none_of_io hg
+        (Discharge.Layout.unit_uniform_input (k := Discharge.Placed.inGates n (Discharge.Layout.keyB D.unroll hU))
+          (R := Discharge.Placed.circuitRows D.unroll hU)
+          (ins := Discharge.Placed.insOf n (Discharge.Layout.keyB D.unroll hU)
+            (Discharge.Aliased.keyIdx D.unroll (Discharge.Layout.keyB D.unroll hU)))
+          (one := Discharge.Placed.oneGate n (Discharge.Layout.keyB D.unroll hU))
+          (hone := Discharge.Placed.insOf_ne_one n (Discharge.Layout.keyB D.unroll hU)
+            (Discharge.Aliased.keyIdx D.unroll (Discharge.Layout.keyB D.unroll hU)))
+          n g hlt))
+    cases hb
     have hzero := FlockSoundness.Discharge.HiddenExec.zeroCols_keyProgH hU
       (sitesShHJ_parse (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope)
       (Discharge.Layout.outsOf D.unroll hU n) S R u hu c (by rw [hc, h2]; exact Finset.mem_singleton_self _) _ hz
@@ -226,7 +251,7 @@ theorem _root_.Flock.Bridge.openingsCanon : Bridge.OpeningsCanonTarget := by
         (FlockSoundness.Discharge.Hidden.parse_untyped (FlockSoundness.Discharge.ZkBind.zkTyped ht)
           (Flock.Desc.parse_flat hD)).1
         (Discharge.Layout.scopeOkH_spec hU hscope).1 (Discharge.Layout.scopeOkH_spec hU hscope).2.2)
-      hu hg h1 h2 ?_
+      hu hg h1 (fun e => h2 (Or.inl e)) ?_
     simpa [rows] using h
   · exact h
 

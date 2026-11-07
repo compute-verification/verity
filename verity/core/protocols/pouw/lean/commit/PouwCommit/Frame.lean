@@ -4,7 +4,7 @@ public import Flock.Hash
 public import Flock.Bytes
 public import Identity.Tagged
 public import PouwCommit.Tagged
-public import Identity.Domains
+public import Randomness.Domains
 
 /-!
 # frame-v3 trees (`verity.ml.commitments.merkle`) over range positions
@@ -145,7 +145,7 @@ def Domain.verify (d : Domain) (root : ByteArray) (rank : Nat) (value : ByteArra
   return digest == root
 
 /-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
-written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+written: tied here to its entry of the table (`Randomness.Domains`), it reads the entry at its next record change. -/
 example : ("veritor/tagged-sha256/v1" : String) = Domains.TAGGED_SHA256 := rfl
 example : FRAME = Domains.FRAME_V3.toUTF8.push 0 := rfl
 example : ("veritor/indexed-domain/range/v1" : String) = Domains.INDEXED_RANGE := rfl

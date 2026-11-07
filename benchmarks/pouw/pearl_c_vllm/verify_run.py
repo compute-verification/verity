@@ -27,7 +27,7 @@
 Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
 ``--transcript`` takes it), writes ``verify.json`` beside the manifest, and exits 0 only on acceptance, or with
 ``--expect-reject`` (a negative control's pass) only on rejection.  An ACCEPT is replay-verified (development shortcut; the
-protocol's check is a ZK proof, PROTOCOL.md).
+protocol's check is a ZK proof, PouwCheck).
 """
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw.coins import CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
 from verity_vllm.protocols.pouw import pearl_c as PD
 from verity_config.settings import of
 

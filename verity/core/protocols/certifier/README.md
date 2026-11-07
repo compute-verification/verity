@@ -10,7 +10,7 @@ A spec-level reference for network accounting's timing channel:
 - one execution phase's certificates through the proof system (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
   its fields, its counts against the public occupancy profile, and its record digest under the certifier's salt
-  against the digest its certificate signs), with a host-side verifier of record (no proof of the
+  against the digest its certificate signs), with a host-side verifier (no proof of the
   check yet) that compares no grid in the clear. Its claim is counts only: on every execution phase the head check holds
   the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
   is at the profile. Nothing here holds the frames, the rest of the egress grid (N3, the content check prototyped in
@@ -108,7 +108,7 @@ A spec-level reference for network accounting's timing channel:
   (`free_width`), and the charge is ℓ_w;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
-  the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceBlocks_v1`). `leaf_ok`
+  the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceRowGroups_v1`). `leaf_ok`
   holds a proof block's row b‖c to its registered leaf, as the advice's ``adv`` row is held,
   and `reads_port` is the same read as the Lean verifier's registered reads take it. It takes the advice registration's
   hiding commitments from `verity`;
@@ -158,8 +158,13 @@ A spec-level reference for network accounting's timing channel:
   runs it;
 - the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
   0-based place in its run's release order) and `x-verity-release-run: ID` on the server's copy of each request it
-  releases, for `serve-openai --admit release-order`. The headers never appear in a cell or record, so nothing
-  certified changes;
+  releases, for `serve-openai --admit release-order`. The network certifier adds `x-verity-release-bucket: a`, the
+  bucket of the request's `END`. With `Warden(watermark=…)` it also sends the server a watermark stream:
+  one chunked `POST /verity/watermark` carrying one line `t n l…` a tick, meaning bucket t has closed, the releases of
+  buckets ≤ t are exactly N < n, and each l is one of bucket t's that its server connection lost. Line t goes out once
+  each release of bucket t is written or lost. An engine that admits at a logical time in certifier buckets waits on
+  that line and on each N < n it doesn't name.
+  The headers and the stream never appear in a cell or record, so nothing certified changes;
 - the network certifier's cells as rows (`warden_rows`): each execution phase's cells committed one `hm96-sha512/row/v2`
   row a bucket, padding and empty slots included, under a frame-v3-sha512 root the network certifier signs with the
   certifier's signer, beside a salted digest of the window's wiring. The registration is what a proof block's
@@ -179,7 +184,7 @@ A spec-level reference for network accounting's timing channel:
   committed as a registered read of the network certifier's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
   ingress link ℓ (its frame parameter row, the warden's registered row; with ``first``, `IngressScanFirst` holds bucket
   0), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.BoundaryGates`); its
-  format is `verity/boundary/v3`. `refusal`, the verifier's check before it draws, checks that the layout fits the
+  format is `verity/boundary/v3`. `refusal`, the verifier's check before it samples, checks that the layout fits the
   circuit (`NetTiming.BoundaryGates.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
   grain, which contains the gate grain's, held to `prog_fits`, `BoundaryGates.Fits` itself on a flattened program; the scan's
   state and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits`
@@ -196,7 +201,7 @@ A spec-level reference for network accounting's timing channel:
   record whose ``blocks`` state a server, server time or transfers (`PRIVATE`), an ``ingress`` declaration, a
   registered read or table of no registered parameter, a load (every registered parameter but the scan's state) read
   in other than whole rows of one width, by no unit, at an external port or by a table over part of it, and an external
-  input port whose rows aren't each read exactly once from the scan's state (`ingress_scan.SCAN_STATE`), the host's one
+  input port whose rows aren't each read exactly once from the scan's state (`blocks.SCAN_STATE`), the host's one
   ingress. `pins` gives the verifier's pinned roots of the loads from their certificates alone (`certified`: each
   load's registration on the host's uplink, ingress, in the session's first execution phase, kind ``load``), so the
   interface's ``input_count`` under them and the scan's state's root has no free input;
@@ -260,18 +265,21 @@ A spec-level reference for network accounting's timing channel:
   `NetworkIngressTieBucket` (one gate
   naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
   (`warden_rows.bucket_port`) and its lanes and output row off values the verifier registers at known content
-  (`IngressTie.known`), decided by the verifier of record on its own lanes from the advice and the warden's
+  (`IngressTie.known`), decided by the verifier on its own lanes from the advice and the warden's
   release, and `IngressTie.tie`, which builds `IoTieVerdict` on the link and the stream's registrations from the
   stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the verifier's own tie source,
   which gives the verdict only on its own link. A size class no sidecar pins has no accepted proof.
 
-It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
-`tagged_sha512` and `canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's
+It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha512` and
+`canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's
 Definition, and in `active` the proof system's registration and receipt, which `reveal` reads, and the pair link's
 AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
 and their evaluator.
+The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `compile_slice_v2`,
+`compile_slice_v3`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
+`verity.ml.protocols.certifier`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
@@ -320,7 +328,7 @@ counts to the occupancy profile on every link-window (on a served link, to the o
 the declared sync), beside the proved timing bound (provisional). N3, the content check,
 is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
-N2's verifier of record, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
+N2's verifier, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
 block (`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of Flock's Lean
 verifier accepts the proof, the proof's public row opens to its own copy of the proof block's public arguments, the
 output row's verdict and deadline bits are 1, the certificates verify on their public fields (`LinkWindows.certified`),

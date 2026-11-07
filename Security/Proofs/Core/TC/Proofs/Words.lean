@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Core.TC.Proofs.SemGroup
+public import Definitions.Core.TC.Bridge
 
 /-!
 # The FP32 word at the boundary

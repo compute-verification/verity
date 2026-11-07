@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.Moves
-public import Proofs.Properties.Verity.Sampled.Project
+public import Proofs.Properties.Verity.Sampled.CoinMap
 public import Proofs.Flock.Recursive.Witness
 public import Proofs.Flock.Soundness.Refine.Walk
 public import Proofs.Flock.Soundness.Refine.Lookups
@@ -11,8 +11,9 @@ public import Proofs.Properties.NetworkCertifier.Bytes
 /-!
 # Sampled proofs' acceptance: v2's verdict is flock-verify `--zk`'s on the session's files
 
-The decoders' premise of the logged coupling (`Decodes`) asks that on the joint law's support an accepted play is
-beside an outcome flock-verify `--zk` accepts (`LiveAcceptsZKP`), which judges the writer's transcript with `AcceptsZKP`.
+The decoders' premise of the logged coupling (`Decodes`) asks that on the joint law's support, off the events at the
+stops it is held off, an accepted play is beside an outcome flock-verify `--zk` accepts (`LiveAcceptsZKP`), which
+judges the writer's transcript with `AcceptsZKP`.
 v2 judges the session's files on the blobs sent with `flock-verify --zk` as `SampledProofs.OneStageZk.run` runs it. They
 are one check on one pair of byte strings, and the writer carries the acceptance to what it writes:
 
@@ -40,8 +41,8 @@ are one check on one pair of byte strings, and the writer carries the acceptance
   (`MovesOf`), is accepted.
 * **The pointwise acceptance** (`play_ends`, `MovesReach`, `decodes_of`, `filesOn_play`, `decodes_of_digests`): a
   play of the period's game ends at its parameters and committed files, so `Decodes` holds wherever v2 reads `A`'s
-  files on the accepted plays (at the vocabulary's digests and tables) and the outcomes on the joint law's support are
-  the writer's at moves v2's files decode to (`MovesReach`, the decoders' and the coin map's).
+  files on the accepted plays (at the vocabulary's digests and tables) and the outcomes on the joint law's support off
+  the held-off events are the writer's at moves v2's files decode to (`MovesReach`, the decoders' and the coin map's).
 -/
 
 @[expose] public section
@@ -222,17 +223,6 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## v2's files are the vocabulary's -/
 
-/-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the lookup tables as v2 does**: under
-v2's parameters in `θ`, the bytes v2's hex digests of the circuit file and the public file decode to are the
-vocabulary's `programDigest θ` and `publicDigest θ`, and the vocabulary reads the pinned MUFU tables off the committed
-files as v2 reads them off the blobs (`SampledProofs.OneStageZk.tablesOf`). -/
-structure DigestsAt (V : Vocab d α) (θ : ByteArray) : Prop where
-  circuit : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.circuit = .ok dg →
-    V.programDigest θ = some fun i => dg.data.getD i.val 0
-  publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
-    V.publicDigest θ = some fun i => dg.data.getD i.val 0
-  tables : ∀ F, (V.read θ F).tables = _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F)
-
 theorem getD_inj {a b : ByteArray} (ha : a.size = 64) (hb : b.size = 64)
     (h : (fun i : Fin 64 => a.data.getD i.val 0) = fun i => b.data.getD i.val 0) : a = b := by
   apply ByteArray.ext
@@ -396,22 +386,12 @@ theorem run_reaches {β : Type} : ∀ (g : Verity.Game β) (s : Verity.Game.Stra
   | .send _ k, s, x => run_reaches (k s.1) s.2 x
   | @Verity.Game.coin _ _ _ _ k, s, x => ⟨x.1, run_reaches (k x.1) (s x.1) (x.2 x.1)⟩
 
-/-- An output a play of `g.bind f` reaches is one a play of some `f b` reaches. -/
-theorem playReaches_bind {β γ : Type} {f : β → Verity.Game γ} {o : γ} :
-    ∀ (g : Verity.Game β) (s : Verity.Game.Strategy (g.bind f)), Verity.Game.PlayReaches (g.bind f) s o →
-      ∃ b, ∃ s' : Verity.Game.Strategy (f b), Verity.Game.PlayReaches (f b) s' o
-  | .ret b, s, h => ⟨b, s, h⟩
-  | .send _ k, s, h => playReaches_bind (k s.1) s.2 h
-  | @Verity.Game.coin _ _ _ _ k, s, h => by
-    obtain ⟨c, hc⟩ := h
-    exact playReaches_bind (k c) (s c) hc
-
 /-- **A play of the period's game ends at its parameters and its committed files.** -/
 theorem play_ends (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (x : Verity.Game.CoinTape (V.game θ F c) σ) :
     (Verity.Game.CoinTape.run (V.game θ F c) σ x).params = θ ∧
       (Verity.Game.CoinTape.run (V.game θ F c) σ x).files = F := by
-  obtain ⟨log, s, h⟩ := playReaches_bind (f := finish (V.signer θ) θ F c σ.1)
+  obtain ⟨log, s, h⟩ := Verity.Game.PlayReaches.of_bind (f := finish (V.signer θ) θ F c σ.1)
     (releases (frames (V.families θ)) (V.families θ) []) σ.2 (run_reaches (V.game θ F c) σ x)
   obtain ⟨ρ, ho⟩ : ∃ ρ : Fin (V.signer θ).draws → Bool, Verity.Game.CoinTape.run (V.game θ F c) σ x =
       ⟨θ, F, c, σ.1, log, s.1, List.ofFn ρ, (V.signer θ).signatures σ.1 log s.1 (List.ofFn ρ), (s.2 ρ).1.1,
@@ -420,14 +400,15 @@ theorem play_ends (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : B
   exact ⟨rfl, rfl⟩
 
 /-- **The outcomes on the joint law's support are the writer's at moves v2's files decode to** (the decoders' and the
-coin map's premise): on the joint law's support, beside a tape whose play's sampled verdict at `k` accepts, that misses
-at no round and not at the record, and whose play `P` holds of, the outcome is the writer's at a draw `S`, a
-registration `R` and an outcome `out` of the live session whose moves are those v2's files decode to in what the prover
-sent (`MovesOf`). -/
+coin map's premise): on the joint law's support off the held-off events `BL` and `B`, beside a tape whose play's sampled
+verdict at `k` accepts, that misses at no round and not at the record, and whose play `P` holds of, the outcome is the
+writer's at a draw `S`, a registration `R` and an outcome `out` of the live session whose moves are those v2's files
+decode to in what the prover sent (`MovesOf`). -/
 def MovesReach (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (k : Verity.Registration.Composite)
     (P : Verity.Exchange → Prop) (A : Live) (rd : Reading A.rounds) (σ : Verity.Game.Strategy (V.game θ F c))
-    (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) : Prop :=
-  ∀ o, Verity.Game.PlayReaches (jointG V θ F c A rd σ D M) (jointS V θ F c A rd σ D M) o →
+    (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (BL : LinkHold A.mP)
+    (B : RoundHold) : Prop :=
+  ∀ o, ReachesOff V θ F c A rd σ D M BL B o →
     V.Verdict k .sampled (Verity.Game.CoinTape.run (V.game θ F c) σ o.2) ∧ NoMiss V θ F c rd σ o.2 ∧
       P (Verity.Game.CoinTape.run (V.game θ F c) σ o.2) →
     ∃ (S : Finset (Fin A.n)) (R : A.Reg) (out : LiveOutJ (A.J S R) A.mP), o.1 = (R, S, A.wr S R out) ∧
@@ -435,16 +416,16 @@ def MovesReach (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : Byte
 
 /-- **The decoders' premise, pointwise** (`Decodes`): where `A` is the session v2 sets up on the parameters and the
 committed files, v2 reads `A`'s files on the blobs of each accepted play,
-the session's writer keeps an accepted transcript's view (`WritesView`) and the outcomes on the joint law's support are
-the writer's at moves v2's files decode to (`MovesReach`), every accepted play there that misses nowhere and that `P`
-holds of is beside an outcome flock-verify `--zk` accepts at `A.own`. -/
+the session's writer keeps an accepted transcript's view (`WritesView`) and the outcomes on the joint law's support off
+`BL` and `B` are the writer's at moves v2's files decode to (`MovesReach`), every accepted play there that misses
+nowhere and that `P` holds of is beside an outcome flock-verify `--zk` accepts at `A.own`. -/
 theorem decodes_of {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {P : Verity.Exchange → Prop} {A : Live} {rd : Reading A.rounds}
     {σ : Verity.Game.Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}
-    {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hA : SetsUp V θ F A)
+    {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} {BL : LinkHold A.mP} {B : RoundHold} (hA : SetsUp V θ F A)
     (hF : ∀ x, V.Verdict k .sampled (Verity.Game.CoinTape.run (V.game θ F c) σ x) →
       FilesOn A (Verity.Game.CoinTape.run (V.game θ F c) σ x).sent)
-    (hW : WritesView A) (hM : MovesReach V θ F c k P A rd σ D M) : Decodes V θ F c k P A rd σ D M := by
+    (hW : WritesView A) (hM : MovesReach V θ F c k P A rd σ D M BL B) : Decodes V θ F c k P A rd σ D M BL B := by
   intro o ho hacc
   obtain ⟨S, R, out, h1, hmo⟩ := hM o ho hacc
   rw [h1]
@@ -466,13 +447,14 @@ theorem filesOn_play {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
 
 /-- **The decoders' premise, pointwise, at the vocabulary's digests** (`decodes_of` with `filesOn_play`): where v2's
 parameters name the vocabulary's digests and the vocabulary reads the lookup tables as v2 does (`DigestsAt`), `Decodes`
-holds wherever the writer keeps an accepted transcript's view and the outcomes on the joint law's support are the
-writer's at moves v2's files decode to. -/
+holds wherever the writer keeps an accepted transcript's view and the outcomes on the joint law's support off the
+held-off events are the writer's at moves v2's files decode to. -/
 theorem decodes_of_digests {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {P : Verity.Exchange → Prop} {A : Live} {rd : Reading A.rounds}
     {σ : Verity.Game.Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}
-    {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hA : SetsUp V θ F A) (hD : DigestsAt V θ)
-    (hW : WritesView A) (hM : MovesReach V θ F c k P A rd σ D M) : Decodes V θ F c k P A rd σ D M :=
+    {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} {BL : LinkHold A.mP} {B : RoundHold} (hA : SetsUp V θ F A)
+    (hD : DigestsAt V θ) (hW : WritesView A) (hM : MovesReach V θ F c k P A rd σ D M BL B) :
+    Decodes V θ F c k P A rd σ D M BL B :=
   decodes_of hA (fun _ hv => filesOn_play hA hD hv) hW hM
 
 end Verity.Sampled

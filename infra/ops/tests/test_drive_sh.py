@@ -1,5 +1,5 @@
 """infra/control/drive.sh's checkout: `drive.sh merge` runs `research merge` on branch main, which it refuses on a detached HEAD
-(CI-169, 25 Oct: every `drive.sh merge` was refused), while the tick and `drive.sh queue` keep a detached checkout of origin's main."""
+(else every `drive.sh merge` is refused), while the tick and `drive.sh queue` keep a detached checkout of origin's main."""
 import os
 import re
 import subprocess
@@ -43,7 +43,7 @@ def checkout(repo, verb):
 
 
 def test_store_links_puts_the_stores_bulk_on_the_volume_and_keeps_what_it_held(tmp_path):
-    """objects/ and attempts/ become links into the volume's copy (they took the pod's root to 94%, 26 Oct); a real directory
+    """objects/ and attempts/ become links into the volume's copy (they can fill the pod's root); a real directory
     already there is merged in first, so nothing it held is lost, and the catalog stays where it is."""
     store, vol = tmp_path / "store", tmp_path / "volume"
     (store / "objects" / "sha256" / "ab").mkdir(parents=True)
@@ -85,6 +85,19 @@ def test_start_seeds_the_clones_before_its_push_check():
 def test_locked_calls_checkout_with_its_verb():
     body = re.search(r"^locked\(\) \{\n(.*?)^\}\n", DRIVE.read_text(), re.M | re.S).group(1)
     assert 'checkout "$1" || exit 1' in body and "--detach" not in body
+
+
+@pytest.mark.parametrize("args, runs", [(("queue", "promote"), "unlocked"), (("queue", "baseline", "abc", "--by", "ci"), "unlocked"),
+                                        (("queue", "eject", "5"), "locked"), (("merge", "--push"), "locked")])
+def test_queue_baseline_and_promote_run_beside_a_tick(args, runs):
+    """`queue baseline` and `queue promote` only fast-forward main and write nothing of drive's, so they wait for no tick (one
+    holds its lock an hour and more, and main would wait with them) and check nothing out under one; every other verb does."""
+    arms = "".join(re.search(rf"^  {verb}\) .*;;\n", DRIVE.read_text(), re.M).group(0) for verb in ("queue", "merge"))
+    stubs = 'locked() { echo locked "$@"; }; unlocked() { echo unlocked "$@"; }; '
+    out = subprocess.run(["sh", "-c", f"{stubs}case $1 in\n{arms}esac", "sh", *args], capture_output=True, text=True).stdout.strip()
+    assert out == f"{runs} {' '.join(args)}"
+    body = function("unlocked")
+    assert "flock" not in body and "checkout" not in body and "RESEARCH_DRIVE=1" in body
 
 
 def test_merge_checks_out_branch_main_at_origin(repo):

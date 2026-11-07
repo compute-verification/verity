@@ -54,11 +54,11 @@ public import Proofs.Flock.Claims.ZK.InnerTauRep
 public import Proofs.Flock.Claims.ZK.InnerTauLig
 public import Proofs.Flock.Claims.ZK.Assemble
 public import Proofs.Flock.Claims.ZK.Sent
-public import Proofs.Flock.Claims.ZK.Round1
+public import Proofs.Flock.Claims.Complete.ZkTables.Round1
+public import Proofs.Flock.Claims.Complete.Zk.Json.Runs
 public import Proofs.Flock.Claims.ZK.Round1Pads
 public import Proofs.Flock.Claims.ZK.Round1Root
-public import Proofs.Flock.Claims.ZK.Round1Enc
-public import Proofs.Flock.Claims.ZK.Round2
+public import Proofs.Flock.Claims.Complete.ZkTables.Round2
 public import Proofs.Flock.Claims.ZK.Round3Vals
 public import Proofs.Flock.Claims.ZK.SimZerocheck
 public import Proofs.Flock.Claims.ZK.SimPiopGo
@@ -109,7 +109,7 @@ public import Proofs.Flock.Claims.ZK.FrameRep
 public import Proofs.Flock.Claims.ZK.FrameInner
 public import Proofs.Flock.Claims.ZK.FrameZK
 public import Proofs.Flock.Claims.ZK.FrameLive
-public import Proofs.Flock.Claims.ZK.PadsRoot
+import Init.Data.Nat.Power2.Basic
 public import Proofs.Flock.Claims.ZK.NonVacuous
 public import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 public import Proofs.Flock.Claims.ZK.Compose
@@ -354,11 +354,8 @@ public import Proofs.Flock.Claims.ZK.RepRet
   `Flock.zk_deployZk_masked_exe_sent_gap` asks the encoding there against that run (`hstep`): that the session sends
   past the openings and the encoding is its next body, or that it stops within them and the encoding is `[]`
   (`Masked.honestPR_stopped`), as where table `0`'s extra claims throw right after the link message.
-* `Round1`: round `1` of that run at a live statement (`Masked.liveRun_round1`): where table `0`'s extra claims at the
-  link points throw, the session stops after the link message; else its second body is table `0` rep `0`'s first
-  zerocheck squeeze, of the domain's transcript with the digest, the level-0 cap and the pads' root absorbed
-  (`FlockComplete.sessionPZk_go_round1`).
-* `Round1Pads`: toward that body on the model's side, a live table's rep `r` pads leaf at tree position `p` commits
+* `Round1Pads`: toward round `1`'s body (table `0` rep `0`'s first zerocheck squeeze, with the pads' root absorbed:
+  `FlockComplete.sessionPZk_go_round1`) on the model's side, a live table's rep `r` pads leaf at tree position `p` commits
   `padColAt` at `X = p + 1`, each pad at its layout index and padding symbol `j` at `len + j`, at every coin vector
   (`Masked.colPAt_tabC`), so its digest reads no coin (`Masked.digOf_pads`); a cut's pads leaf at tree position `q`
   (`Masked.leafAtP_cutAt`).
@@ -366,15 +363,6 @@ public import Proofs.Flock.Claims.ZK.RepRet
   (`FlockComplete.innerCommitP_root_layerOf`); at the executable's layout each is the executable's pads leaf of the cut's
   view at that tree position (`Masked.exeOf_pads`), so table `j`'s rep `r` pads root is `layerOf`'s of the cut's pads
   leaves by tree position (`Masked.innerRoot_exe`).
-* `Round1Enc`: round `1`'s encoding (`Masked.enc1`): that body of the cut's level-0 and pads leaves by tree position, at
-  the link points of round `0`'s coin, and `[]` where the extra claims there throw. It reads round `0`'s coin only
-  (`Masked.enc1_causal`), and at the executable's layout it is round `1`'s `hstep` (`Masked.honest_round1_exe`), so
-  `Flock.zk_deployZk_masked_exe_round1_gap` asks `hstep` after the second round only.
-* `Round2`: round `2` of that run (`Masked.liveRun_round2`): where table `0`'s extra claims return, its third body is
-  table `0` rep `0`'s outer zerocheck point squeeze, the header of `m − 13` coins of kind `2` alone, which reads no
-  value, commitment or coin; its encoding (`Masked.enc2`) reads round `0`'s coin only (`Masked.enc2_causal`) and is
-  round `2`'s `hstep` at every tape (`Masked.honest_round2_exe`), so `Flock.zk_deployZk_masked_exe_round2_gap` asks
-  `hstep` after the third round only.
 * `Round3Vals`: toward round `3` (`SimPiop`'s zerocheck), the clear values a cut masks at `round1_ab`'s and
   `round1_c`'s layout indices are the executable's `round1_ab` and `round1_c` at the draw's zerocheck vector, on a trace
   whose bits are the model's tables (`Composed.honestAt_r1ab_exe`, `Composed.honestAt_r1c_exe`, from
@@ -498,7 +486,8 @@ public import Proofs.Flock.Claims.ZK.RepRet
   a pad-blind worker sees of every table, `RefSession.seenOf`), with `refP`'s simulator, which never reads the prover's messages (`Proto.simulatorE_msg`):
   **`Flock.zk_deployZk_sw`**, `Claims.Flock.ZKAt` at the same `ε_zk`, `γ` and simulator as `Flock.zkAt_deployZk_ref`
   for any values whose round encoding is causal (`RefSession.SwCausal`), `Flock.zkAt_deployZk_ref` its case at the
-  tables' own values (`Flock.zkAt_deployZk_ref_of_sw`); and **`Flock.zk_server_blind`**, the server that defers every
+  tables' own values (`Flock.zkAt_deployZk_ref_of_sw`), and the same from the switched prover's message links alone
+  (`Flock.zkAt_sw_of_links`), each causal at one tape (`Proto.TPreModel.SwCausal`); and **`Flock.zk_server_blind`**, the server that defers every
   stop to the session's last round (`ZkServer.zk_deferred`) at every pad-blind worker within a factor 2 of the
   simulator that guesses whether it stops (one bit a session; over a stream, `log₂ ∑_{i ≤ b} C(m, i)` bits,
   `stream_leak_deferred`), with no term for the masked checks, and at a
@@ -540,7 +529,11 @@ public import Proofs.Flock.Claims.ZK.RepRet
   (`LeanRelease.liveRefine_withStops`, `fillRefine_withStops`; the deferred server takes no worker value past the
   `Finish`, `LeanRelease.live_lt_last`), its `HelloRefine` and `OwnRefine` from the server's `Hello`, the firewall's
   link and its `Finish` being the session's (`HelloEq`, `LinkRoundEq`, `FinalRoundEq`: `helloRefine_withStops`,
-  `ownRefine_withStops`), so `Flock.zk_server_lean_stops` assumes no part of `ItemsRefine`. A transport that reads the
+  `ownRefine_withStops`), so `Flock.zk_server_lean_stops` assumes no part of `ItemsRefine`. It asks the round encoding
+  to be causal only where the session with stops computes a round (`RefSession.SwCausalOn` at an `Ok` with
+  `RefSession.StopsOk`, `Flock.zk_deployZk_sw_stops`): its models before the last coin and off the tables' coins are at
+  the coins cut at the last round the rule doesn't stop (`RefSession.cutCoins`, `swPreCut`, `swOffCut`), with the
+  simulator unchanged. A transport that reads the
   history only through the decoded coins on the histories its check passes (`LeanRelease.ReadsCoins`) gives the rule
   and `StopsAt` (`LeanRelease.rfOf`, `stopsAt_of_readsCoins`). `Flock.zk_server_lean_coinLayer` is it at the deployed
   coin layer (`CoinLayer.session`) at SHA-512 from the transport's trusts alone, each named for its reason:
@@ -980,9 +973,6 @@ public import Proofs.Flock.Claims.ZK.RepRet
   firewall's (`ofLoop_ownMsg_link`), and the history of `Hello`, the link and rep 0's first round is live at the honest
   worker through rep 0's second round wherever the deployed frame's check passes those device rounds at the loop's
   states (`ofLoop_live_three`).
-* `PadsRoot`: the frame's pads root (`padsRoot`, `treeRoot` of its leaves) is `layerOf`'s (`treeRoot_layerOf`), so at a
-  frame rep's draws of `drawBytes` bytes it is the root `innerCommitP` commits the masked prover's pads under on
-  `tapeOfDraws` (`padsRoot_tapeOfDraws`).
 * `NonVacuous`: the claim is not vacuous. A prover that makes no calls has `Fork.Pr = 0`, so the simulator that hashes a
   collision and outputs the empty transcript fails `ZKmalR` at every `ε_zk < 1` and every `γ` (`not_zkmalR_collSim`),
   a prover that sends its witness has no simulator at `ε_zk < 1/2` (`not_zkmalR_leak`), and both fail `ZKAt` at

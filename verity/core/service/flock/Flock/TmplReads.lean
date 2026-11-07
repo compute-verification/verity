@@ -15,7 +15,8 @@ the unit's gates.
 -/
 module
 
-public import Flock.TmplOrder
+public import Flock.Tmpl
+import Flock.TmplOrder
 
 @[expose] public section
 

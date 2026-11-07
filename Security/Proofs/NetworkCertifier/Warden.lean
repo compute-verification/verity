@@ -1,8 +1,16 @@
 module
 
 public import Definitions.NetworkCertifier.Warden
-public import Mathlib.Data.Finset.Option
-public import Mathlib.Data.Fintype.BigOperators
+public import Aesop.BuiltinRules
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.Nat.Basic
+import Mathlib.Order.Basic
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # The warden's code is the client view

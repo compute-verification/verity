@@ -11,7 +11,7 @@ submitter ships (never a node-local copy), so a job's kind is resolved at the co
     disk_gb = 20                    # optional: the disk it writes (DISK_GB when absent); the machine holds it near full
 
 A registered kind supplies a job's defaults: its shape's GPUs, CPUs and memory, its `max_wall_min`, its question. The rules
-on kinds are warnings for now, never refusals (infra's hold, 30 Sep): an unregistered kind, a job with no question, a shape
+on kinds are warnings for now, never refusals: an unregistered kind, a job with no question, a shape
 off the menu, a GPU kind over 60 minutes or not preemptible, no declared outputs.
 """
 from __future__ import annotations
@@ -23,10 +23,10 @@ from pathlib import Path
 
 SHAPES: dict[str, dict[str, int | bool]] = {
     "cpu-s": {"gpus": 0, "cpus": 2, "memory_gib": 8},
-    "cpu-test": {"gpus": 0, "cpus": 4, "memory_gib": 16},     # an agent's suite or build (`research run --on auto`, 18 Oct)
+    "cpu-test": {"gpus": 0, "cpus": 4, "memory_gib": 16},     # an agent's suite or build (`research run --on auto`)
     "cpu-m": {"gpus": 0, "cpus": 8, "memory_gib": 32},
     "cpu-l": {"gpus": 0, "cpus": 32, "memory_gib": 128},
-    "cpu-xl": {"gpus": 0, "cpus": 32, "memory_gib": 280},      # a whole Security Lean build (~260 GB peak, lean 16 Oct)
+    "cpu-xl": {"gpus": 0, "cpus": 32, "memory_gib": 280},      # a whole Security Lean build (~260 GB peak)
     "gpu1": {"gpus": 1, "cpus": 8, "memory_gib": 64},
     "gpu2": {"gpus": 2, "cpus": 16, "memory_gib": 128},
     "gpu8-timed": {"gpus": 8, "cpus": 0, "memory_gib": 1024, "quiet": True},

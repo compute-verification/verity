@@ -17,7 +17,7 @@ Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated ove
 * **a round** of a commit-then-check protocol (`RoundProto`): the words the prover computes after the first coin, their
   commitment (the SHA-512 Merkle root over the words' leaves), and the check, parametric in the protocol,
   with the no-fold protocol as one instance (`NoFold`, `noFoldRound`) whose knobs are parameters, so protocol v1 and
-  v2 are instances, and the served sampling block, checked where its selection coin picks it (`ditherSelected`);
+  v2 are instances, and its selected form, checked where its selection coin picks it (`ditherSelected`);
 * **a round program's moments** (`wordsMoment`, `commitMoment`): the moment bounds of the two "public best" premises,
   SAK(matmul) on the words and SHA-512's speed on their commitment (`Definitions.Pouw.Assumptions.Dither`'s
   `SAKMatmul`, `SAKSha`), in units of priced cost, outside a degenerate set of dithers;
@@ -33,9 +33,14 @@ Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated ove
 * **a replica's moment** (`MomentSound`): the probability form before its Markov step, which a fleet pools at its
   luck (`fleetLuck`);
 * the error (`epsWorkSound`, `ε_skip`).
+
+`noFoldRound` and `ditherSelected` are the only round protocols the Lean defines, so the headline's only instances are
+the no-fold round's, and it doesn't cover Dither v3.2's proof block, which no guarantee states yet.
 -/
 
 @[expose] public section
+
+open Claims renaming Ex → avg
 
 namespace Pouw.Dither
 
@@ -225,7 +230,7 @@ def noFoldRound (k : NoFold) : RoundProto where
 def noFoldHonest (k : NoFold) (a : (noFoldRound k).Inst) (d : (noFoldRound k).Draw) : (noFoldRound k).Tr :=
   fun i j b => noFoldWord k (k.noise a d) i j b
 
-/-- **The served Dither sampling block: selected or not**. The no-fold round at its knobs `k`, its check coin
+/-- **The no-fold round, selected or not**. The no-fold round at its knobs `k`, its check coin
 carrying a selection coin `Sel` beside the cells' coin: the block is checked where its
 selection coin is `picked`, with probability `π = Pr[picked]`, and then on the `s` cells its cells' coin selects, as
 in `noFoldRound`; where it isn't picked, `ok`, `opens` and `accept` hold with no cell checked. The selection is decided
@@ -248,9 +253,6 @@ def ditherSelected (k : NoFold) (Sel : Type) [Fintype Sel] (picked : Sel → Pro
 end Round
 
 section Moments
-
-/-- The uniform average of `f`. -/
-noncomputable def avg {Ω : Type} [Fintype Ω] (f : Ω → ℝ) : ℝ := (∑ ω, f ω) / Fintype.card Ω
 
 /-- **A shortfall** against a public best: `(pub − cost)₊`, how far a program's priced cost falls short of the public
 best's `pub`, in the same units (the prices `μ`). -/

@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Binding.Layout
 public import Proofs.Flock.Soundness.Audit.FlockLinked
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # The decoder's bits, read at fixed addresses
