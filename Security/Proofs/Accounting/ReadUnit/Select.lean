@@ -66,14 +66,15 @@ theorem sound_belowStep (bound i : ℕ) (b lt : Lin) :
         pure (r ^^^ Lin.one)
       else Flock.HmNets.and (b ^^^ Lin.one) lt)
       fun z r => ev z r = (if bound.testBit i then (!ev z b || ev z lt) else (!ev z b && ev z lt)) := by
-  by_cases h : bound.testBit i = true
-  · rw [ite_eq_left h, ite_eq_left h]
-    refine Sound.bind' (sound_and _ _) fun r => Sound.pure' fun z hr => ?_
-    rw [ev_xor, hr, ev_xor, ev_one, ev_one]
-    cases ev z b <;> cases ev z lt <;> rfl
-  · rw [ite_eq_right h, ite_eq_right h]
+  cases bound.testBit i
+  · show Sound (Flock.HmNets.and (b ^^^ Lin.one) lt) fun z r => ev z r = (!ev z b && ev z lt)
     refine Sound.mono (sound_and _ _) fun z r hr => ?_
     rw [hr, ev_xor, ev_one]
+    cases ev z b <;> cases ev z lt <;> rfl
+  · show Sound (Flock.HmNets.and b (lt ^^^ Lin.one) >>= fun r => pure (r ^^^ Lin.one)) fun z r =>
+      ev z r = (!ev z b || ev z lt)
+    refine Sound.bind' (sound_and _ _) fun r => Sound.pure' fun z hr => ?_
+    rw [ev_xor, hr, ev_xor, ev_one]
     cases ev z b <;> cases ev z lt <;> rfl
 
 /-- The comparator from bit `i` on: where the bits below `i` read `N` and `lt` says whether `N` is below `bound`'s low
@@ -150,8 +151,8 @@ theorem select_spec {V : ℕ} (hV : V < 2 ^ 32) : SelectSpec V (Flock.ReadNet.se
       if num (evs z tok) < V then ev z row[i] else ev z (ff[i]'(by rw [hffl]; exact hi)) := by
     intro i hi
     have hb := hbits i (by rw [hzl]; exact hi)
-    simp only [FlockSoundness.Discharge.Hm.bit, List.getElem?_eq_getElem (by rw [hlen, hzl]; exact hi),
-      Option.getD_some, List.getElem_zip] at hb
+    have hi' : i < h.length := by rw [hlen, hzl]; exact hi
+    simp only [FlockSoundness.Discharge.Hm.bit, List.getElem?_eq_getElem hi', Option.getD_some, List.getElem_zip] at hb
     rw [hb, xor_and_sel, hin]
     by_cases hlt : num (evs z tok) < V <;> simp [hlt]
   refine ⟨?_, ?_⟩
