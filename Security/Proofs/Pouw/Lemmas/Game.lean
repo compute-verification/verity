@@ -14,7 +14,7 @@ audited with the proofs: no record pins it.
 
 namespace Pouw.Guarantees
 
-open Pouw.Pinned Finset
+open Pouw.GameStatements Finset
 
 /-- **(b) Theorem 1** (§3.5). If `G_γ` holds with error `η` and, for an adversary within `(T, q)`, the audit (any
 coins `C` drawn independently of `H` and `s`, any acceptance predicate) satisfies
