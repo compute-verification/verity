@@ -3,6 +3,8 @@ does, and on stand-in block pools; the snapshot itself on stand-in ranks holding
 from __future__ import annotations
 
 import json
+import sys
+import types
 from collections import deque
 from types import SimpleNamespace as NS
 
@@ -143,6 +145,38 @@ def test_the_plugin_config_needs_out_and_an_edge_and_savers_resolve():
         E.resolve("tp_edge.live_blocks")
     with pytest.raises(ValueError, match="no edge"):
         E.Edges("/o")
+
+
+def test_the_plugin_puts_edges_once_on_the_core_whose_construction_loads_it(monkeypatch):
+    class EngineCore(Core):
+        def __init__(self, work):
+            E.register()  # vLLM's load_general_plugins(), on EngineCore.__init__'s first lines
+            super().__init__(work)
+
+    class EngineCoreProc(EngineCore):
+        def run_busy_loop(self):
+            for _ in range(30):
+                self.step_fn()
+
+    class DPEngineCoreProc(EngineCoreProc):
+        pass
+
+    mod = types.ModuleType("vllm.v1.engine.core")
+    mod.EngineCore, mod.EngineCoreProc, mod.DPEngineCoreProc = EngineCore, EngineCoreProc, DPEngineCoreProc
+    for name in ("vllm", "vllm.v1", "vllm.v1.engine"):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+    monkeypatch.setitem(sys.modules, "vllm.v1.engine.core", mod)
+    monkeypatch.setattr(E, "_PLUGIN", [])
+    monkeypatch.setenv(E.ENV, json.dumps({"out": "/unused", "steps": [4, 7]}))
+    seen = []
+    monkeypatch.setattr(E.Edges, "snapshot", lambda self, c, edge: seen.append(edge))
+    served = EngineCoreProc(work=10)
+    served.run_busy_loop()
+    assert seen == [4, 7]
+    later = EngineCoreProc(work=10)
+    assert later._verity_edges is not served._verity_edges
+    later.run_busy_loop()
+    assert seen == [4, 7, 4, 7]
 
 
 def test_an_edge_at_a_time_falls_on_the_first_step_after_it():

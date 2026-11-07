@@ -292,20 +292,38 @@ def resolve(name: str) -> Callable[..., Any]:
 
 
 def register() -> None:
-    """vLLM general plugin: every ``EngineCore`` this process builds gets `Edges` from ``VERITY_TPEDGE``. Idempotent."""
+    """vLLM general plugin: every ``EngineCore`` this process builds gets `Edges` from ``VERITY_TPEDGE``, once.
+    ``EngineCore.__init__`` loads the general plugins itself, so the core whose construction runs this gets its edges
+    when its busy loop starts (``EngineCoreProc.run_busy_loop``, and the data-parallel one's); a core built after it, at
+    the end of its ``__init__``. Idempotent."""
     cfg = config()
     if cfg is None or _PLUGIN:
         return
-    from vllm.v1.engine.core import EngineCore
+    from vllm.v1.engine.core import DPEngineCoreProc, EngineCore, EngineCoreProc
+
+    def edges_on(core: Any) -> None:
+        if getattr(core, "_verity_edges", None) is not None:
+            return
+        edges = install(core, Edges(cfg["out"], cfg.get("steps", ()), cfg.get("at_s", ()), cfg.get("dump", 1),
+                                    [resolve(n) for n in cfg.get("savers", ())]))
+        if cfg.get("outputs"):
+            record_outputs(core, edges)
 
     orig = EngineCore.__init__
 
     def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
         orig(self, *args, **kwargs)
-        edges = install(self, Edges(cfg["out"], cfg.get("steps", ()), cfg.get("at_s", ()), cfg.get("dump", 1),
-                                    [resolve(n) for n in cfg.get("savers", ())]))
-        if cfg.get("outputs"):
-            record_outputs(self, edges)
+        edges_on(self)
+
+    def loop(run: Callable[..., Any]) -> Callable[..., Any]:
+        def run_busy_loop(self: Any, *args: Any, **kwargs: Any) -> Any:
+            edges_on(self)
+            return run(self, *args, **kwargs)
+        return run_busy_loop
 
     EngineCore.__init__ = __init__
-    _PLUGIN.append(orig)
+    loops = {cls: cls.__dict__["run_busy_loop"] for cls in (EngineCoreProc, DPEngineCoreProc)
+             if "run_busy_loop" in cls.__dict__}
+    for cls, run in loops.items():
+        cls.run_busy_loop = loop(run)
+    _PLUGIN.append((orig, loops))
