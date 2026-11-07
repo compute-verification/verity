@@ -2033,7 +2033,8 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     drawn units are proved in one session, `oneSession`); rejected by the session's own verdict when its files are not
     a statement's; refused before the session is verified when its coins are not a tree the challenger logged, or the
     public file is not the registration's (`publicHeld`, its codes Python's `matches_public`'s), or its ``units.indices``
-    are not the population's units in order (`indicesHeld`): a header rewritten after the draw, its pin with it, to
+    are not its member's units in order (`indicesHeld`; without ``members``, the population's): a header rewritten after
+    the draw, its pin with it, to
     credit an honest instance as the drawn unit, or naming none; refused for a layout of the window (``members``) that
     isn't one, doesn't count the population, splits the draw between two members (`memberOf`), keys the drawn member by
     no template of the program whose units it holds (`memberInProgram`), or whose drawn member's slice of the

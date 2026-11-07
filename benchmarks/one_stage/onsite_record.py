@@ -509,7 +509,9 @@ CHECKED = {
                       "draw isn't the pin's, nor is a pin rewritten to it, nor a completed entry whose body isn't its "
                       "member's staged one so completed; the completed header is the audit's own, and v2 "
                       "holds its fields to what was fixed before the coin, publicHeld its scheme, roots, domains, "
-                      "population and units.indices (instance i is unit i), and flock-verify its circuit_sha512 to the "
+                      "population and units.indices to the slice of the registration of the member the draw lands in "
+                      "under θ's layout (proofs.members, `OneStageZk.memberOf`; instance i is unit base + i), and "
+                      "flock-verify its circuit_sha512 to the "
                       "circuit file θ names, its classes to that circuit's class and its shared_rows to the roots "
                       "publicHeld holds. It holds where no composite of the "
                       "run reads the case. Where either doesn't hold the network verdict is not established and there "
@@ -1677,7 +1679,7 @@ def completed_from(key: str, entry: Mapping[str, Any], public: Path) -> str | No
     staged file (`a5.complete_drawn`, `flock_inputs.complete`), else None. Its body is the staged body, or, where
     completing the member re-lays it (the staged entry's ``relaid``: an instance-major member's), the staged body re-laid
     port-major under identity refs (`flock_inputs.relay`), its ``instances`` read off its header: either way by SHA-512
-    the staged ``body`` R4 holds to the registration. Its header v2 holds to the registration (``publicHeld``)."""
+    the staged ``body`` R4 holds to the registration. Its header v2 holds to its member's slice of the registration (``publicHeld``)."""
     from verity.ml.windows import flock_inputs as FI
 
     if not isinstance(relaid := entry.get("relaid"), bool):
