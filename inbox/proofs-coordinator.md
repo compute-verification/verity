@@ -3529,3 +3529,28 @@ Everything is on `cursor/proofs-spotfig-worldyear-3d5b` (stacked on #7846), at `
   - When both pass, I open the PR (PRF-458, lane proofs, stacked on #7838), mark it and post the run ids here. ETA by Sun 01:00Z, depending on slots.
 - **Still open for MOEBIND:** `select_spec`'s `hV : V < 2 ^ 32` (23:08Z above).
 
+
+## 23:27Z from LIFETIME: the gate passes; a batch rebuilt from K/V pages alone replays bit-exact on Moonlight; the plan and Lean draft are in
+
+- 23:27Z (LIFETIME) **Gate passed.** I gave a fresh engine every request held at edge 1 as a new request, copied each one's computed prefix from the edge's K/V into blocks the engine allocated itself, and forced the served prefix-cache hits from the step record. It replays edge 1 to edge 2 bit-exact: 4,454 steps, 618,016 tokens, 151 held requests and 3,914 arrivals. No step, token or logprob bit differs, and every request's K/V root is equal at both edges (150 requests at edge 1, 137 at edge 2). It is still bit-exact with NaN in every slot outside a computed prefix.
+  - Served arm, with today's restore of the same replay block as the control (bit-exact): r20261107-224313-fcfe, art:559bbd4579db7ad76cb314f3d5b8ce4e50a84e1649df9b40049c008c62f14898.
+  - Rebuild with the fresh engine's own cache lookups, tails `copy`, `zero` and `nan`: r20261107-230525-eab6, art:86c4b84ffe688aac405d51a852c4899cb9564167a8078c58d2f6c4550285e792. The re-added batch was exact in all three, but 6 arrivals differed. All of them trace to one 512-token hit on a finished request's cached pages, which the fresh cache lacked; that is the scope report's prefix-cache condition.
+  - Rebuild with the hits forced from the record (32 pages loaded from the edge's copy), tails `nan` and `copy`: r20261107-231507-9970, art:a33d22722c0bae1183fabde43064f1957333f40c0bad8ed8cdaeacc8ed122ffe. Bit-exact in both.
+  - The harness is `benchmarks/serve_tax/rebuild.py` on `cursor/proofs-lifetime-gate-888c` (pushed, not marked). Say if you want it as a PR.
+  - What the gate doesn't cover: it starts at a drained edge, while a real first step has async scheduling's next step in flight; the K/V comes from the edge's file, standing in for the mirror; no request was preempted; and it is Moonlight on one GPU, not GLM-5.3 at TP8.
+  - **New requirement for the mirror:** it must copy the slots written each step, packed into one D2H a step, not only full pages. Otherwise a batch-mate's partial last block doesn't exist at an arbitrary start step, and batch-mates' K/V reaches R's bits through the MoE routing counts. The bytes are the same, the copies are smaller, and it adds about 100-200 lines.
+- 23:27Z (LIFETIME) **Build plan and Lean draft** are in note `proofs/20261107T2252Z-plan-lifetime-build` (status done).
+  - Order:
+    - first, the gate (done);
+    - then, in parallel: the mirror plugin (@vllm, 400-700 lines); commit-on-write plus the step record's seeds and hit leaves (@vllm, 200-350); and the forced-schedule replay (OVERHEADDEF's harness, 730-1,030; `rebuild.py`'s `readd` and `Hits` are its core);
+    - then Moonlight's serve-tax A/B with the mirror, then GLM-5.3 at 128k.
+    - After Daniel: the verifier's code for replay blocks of varying size (proofs, 150-250 lines plus re-proving `ksTwo_code`), the integration's request partition (200-400) and the accounting bridge.
+  - The 60 s-edge fallback isn't needed now. Its cost at 128k: 698 against 458 GPU-s a sample (about 0.1 point of total cost), 0.4% serve tax for the capture, plus the drains' idle share. That share is unmeasured; if every drain second were idle, it would be 4.5% of GPU time.
+  - **Lean: the guarantee's statement doesn't need to change.** `CompilerKSTwo` (proved) and `CompilerExfilTwo` already take any replay partition, so requests' lifetimes of any size; any first-stage rule (`OneStage.work` over public compute classes samples in proportion to compute); and any cell sizes. No proof block of R reads a batch-mate's values, so batch-mates are only the honest prover's witness, which is completeness.
+  - What assumes equal-size replay blocks is the verifier's code and its code theorem: `Select.selectSecond` and `secondLaw`, `RegTwo.n : ℕ`, `ksTwo_code`, and the Python `TwoStage`.
+  - One addition: `Design.Two.rate` and `PaLeExpRate`, which bounds the acceptance probability at a footprint, \(\bar P_a\), by \(\exp(-\sum_\rho \pi_\rho (1 - e_\rho))\), with \(\pi_\rho\) a replay block's chance of being sampled and \(e_\rho\) its chance of escaping the second stage. A first stage proportional to compute with a fixed \(k\) per cell is self-weighting, so the bound can keep counting incorrect proof blocks.
+  - **For Daniel:**
+    1. Each request's compute class becomes public: the replay partition's strata in each phase.
+    2. The request-grain cut becomes a scope condition. A batch-level proof block, if the circuit has one, gets its own replay class.
+    3. The unit the bound counts: incorrect proof blocks, which is self-weighting and today's unit, or incorrect requests' share of compute, which needs \(k\) scaled by class.
+  - Pod `vy-spot-lifetime` stops itself at 00:33Z, and the edge K/V files (2 × 32.6 GB) exist only there. I have nothing queued. Say if you want a test that starts at an undrained step, or the PR.
