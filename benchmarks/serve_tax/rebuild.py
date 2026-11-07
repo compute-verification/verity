@@ -14,6 +14,12 @@ prefix: the served bytes (``copy``), zeros (``zero``), or NaN, with every other 
 (``nan``: then nothing outside a computed prefix may be read). The served arm must have kept the K/V file of both edges
 (serve_tax's ``--save-kv FROM,TO``).
 
+The fresh engine's prefix cache holds only the re-added requests' pages, so a request the served engine served from a
+finished request's cached pages would miss. ``--hits forced`` (the default) takes each request's prefix-cache hit from
+the step record instead, as lifetime replay's schedule does: its lookup is cut to the served hit, and a hit page the
+fresh cache lacks is loaded from the edge's K/V, the block the served pool cached under its hash (`Hits`).
+``--hits engine`` leaves the lookups to the fresh engine.
+
 rebuild.json compares, from edge to edge: the schedule step by step (at the first step the re-added requests are new to
 the fresh engine, so they are left out of its ``new`` and ``cache_hit``), every sampled token and its logprob's bits, and
 at both edges each request's K/V over its computed tokens, a SHA-512 root per request against the served edge's K/V file.
@@ -123,8 +129,68 @@ def live_spans(sched: Any, kvm: Any) -> dict[str, tuple[list[int], int]]:
     return {rid: (kvm.get_block_ids(rid)[0], r.num_computed_tokens) for rid, r in sched.requests.items() if r.num_computed_tokens > 0}
 
 
+def recorded_hits(steps: dict[int, dict]) -> dict[str, int]:
+    """Each request's prefix-cache hit, in tokens, at the step the served engine first scheduled it (0 for none)."""
+    out: dict[str, int] = {}
+    for s in sorted(steps):
+        for rid in steps[s].get("new") or ():
+            out.setdefault(rid, (steps[s].get("cache_hit") or {}).get(rid, 0))
+    return out
+
+
+class Hits:
+    """The served engine's prefix-cache hits, forced on the fresh engine as lifetime replay's schedule takes them from
+    the step record: a request's lookup (`lookup`, around `get_computed_blocks`) is cut to the hit the served engine took,
+    and before a request is scheduled, each page of its served hit the fresh cache lacks is loaded (`seed`) from the
+    edge's K/V, the block the served pool cached under that hash, into a block held for the replay (never evicted)."""
+
+    def __init__(self, kvm: Any, rows: list[Any], layers: list[Any], served_pool: dict[str, Any], want: dict[str, int],
+                 block_size: int) -> None:
+        self.kvm, self.pool, self.rows, self.layers = kvm, kvm.block_pool, rows, layers
+        self.served, self.want, self.bs = served_pool, want, block_size
+        self.held: list[Any] = []
+        self.cut, self.short, self.missing = 0, [], 0
+
+    def seed(self, q: Any) -> None:
+        import numpy as np
+        import torch
+        from vllm.v1.core.kv_cache_utils import make_block_hash_with_group_id
+
+        for i in range(self.want.get(q.request_id, 0) // self.bs):
+            key = make_block_hash_with_group_id(q.block_hashes[i], 0)
+            if self.pool.cached_block_hash_to_block.get_one_block(key) is not None:
+                continue
+            src = self.served["cache"].get(key)
+            if src is None:
+                self.missing += 1
+                continue
+            src = src if isinstance(src, int) else next(iter(src.values()))
+            (blk,) = self.pool.get_new_blocks(1)
+            for f, dst in zip(self.layers, self.rows, strict=True):
+                dst[blk.block_id].copy_(torch.from_numpy(np.asarray(f[src])).to(dst.device))
+            self.pool._insert_block_hash(key, blk, self.served["hash_tokens"][src])
+            self.held.append(blk)
+
+    def lookup(self, orig: Any) -> Any:
+        def wrapped(request: Any, *a: Any, **kw: Any) -> Any:
+            blocks, n, *rest = orig(request, *a, **kw)
+            want = self.want.get(request.request_id)
+            if want is not None and n > want:
+                blocks = self.kvm.create_kv_cache_blocks(tuple(g[: want // self.bs] for g in blocks.blocks))
+                n, self.cut = want, self.cut + 1
+            elif want is not None and n < want:
+                self.short.append([request.request_id, n, want])
+            return (blocks, n, *rest)
+        return wrapped
+
+    def report(self) -> dict[str, Any]:
+        return {"requests_with_hits": sum(1 for v in self.want.values() if v), "pages_loaded": len(self.held),
+                "pages_not_cached_at_edge": self.missing, "lookups_cut": self.cut, "lookups_short": len(self.short),
+                "short_first": self.short[:20]}
+
+
 def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], layers: list[Any], block_size: int,
-          tail: str) -> dict[str, Any]:
+          tail: str, fresh: Any = None) -> dict[str, Any]:
     """Every request ``st`` (the served edge's state) holds, added to the fresh engine as `rebuild`'s docstring says;
     what it loaded."""
     import numpy as np
@@ -165,6 +231,8 @@ def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], lay
             q.append_output_token_ids(outs)
         n = min(r.num_computed_tokens, q.num_tokens - 1)
         if n <= 0:
+            if fresh is not None:
+                fresh(q)
             continue
         if kvm.allocate_slots(q, 0, num_external_computed_tokens=n, delay_cache_blocks=True) is None:
             raise SystemExit(f"no room in the fresh pool for {rid}'s {n} tokens")
@@ -252,7 +320,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     if kv.layout() != st0["kv_layout"]:
         raise SystemExit("the fresh engine's KV pool is laid out unlike the served one's")
     near_file = kv_file(files[a.from_edge], st0["kv_layout"])
-    out["rebuilt"] = readd(eng, core, st0, arrived, near_file, bs, a.tail)
+    hits = Hits(kvm, kv.rows, near_file, st0["pool"], recorded_hits(w["steps"]), bs) if a.hits == "forced" else None
+    out["rebuilt"] = readd(eng, core, st0, arrived, near_file, bs, a.tail, hits.seed if hits else None)
     readded = set(out["rebuilt"].pop("order"))
     trace.scheduled = st0["next_step"]
     t = time.monotonic()
@@ -268,12 +337,16 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     hooks = Hooks(tag="serve-tax-rebuild")
     hooks.wrap(sched, "update_from_output", step_outputs_hook(trace, lambda rec: outs.__setitem__(rec["step"], rec["out"]),
                                                               lambda: True))
+    if hits:
+        hooks.wrap(kvm, "get_computed_blocks", hits.lookup)
     pending = sorted(w["arrive"], key=lambda r: r["before_step"])
 
     def add_due() -> None:
         while pending and pending[0]["before_step"] == trace.scheduled:
             r = pending.pop(0)
             eng.add_request(r["engine_id"], {"prompt_token_ids": r["prompt_ids"]}, R.params(r))
+            if hits:
+                hits.seed(sched.requests[r["engine_id"]])
         if pending and pending[0]["before_step"] < trace.scheduled:
             raise SystemExit(f"the replay passed step {pending[0]['before_step']} before {pending[0]['engine_id']} arrived")
 
@@ -319,6 +392,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     out["bit_exact"] = (out["near_edge"]["differing"] == 0 and out["near_edge"]["compared"] == out["near_edge"]["requests_served"]
                         and out["schedule"]["steps_differing"] == 0 and out["outputs"]["first"] is None
                         and out["far_edge"]["roots_equal"])
+    out["hits"] = hits.report() if hits else {"mode": "engine"}
     hooks.uninstall()
     with open(a.out / "rebuild_outputs.jsonl", "w") as f:
         for s in sorted(outs):
@@ -338,6 +412,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--kv-dir", type=Path, required=True, help="where the served arm kept both edges' K/V files and states")
     ap.add_argument("--checkpoint", type=Path)
     ap.add_argument("--tail", choices=TAILS, default="copy")
+    ap.add_argument("--hits", choices=("forced", "engine"), default="forced",
+                    help="the served prefix-cache hits forced, their pages from the edge's K/V (`Hits`), or the fresh "
+                         "engine's own lookups")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if sys.flags.hash_randomization:
@@ -352,8 +429,8 @@ def main(argv: list[str] | None = None) -> int:
                       "steps_differing": rec["schedule"]["steps_differing"], "outputs_first": rec["outputs"]["first"],
                       "readded_tokens_differing": rec["outputs_by_kind"]["readded"]["request_steps_tokens_differing"],
                       "arrived_tokens_differing": rec["outputs_by_kind"]["arrived"]["request_steps_tokens_differing"],
-                      "far_roots_equal": rec["far_edge"]["roots_equal"], "far_differing": rec["far_edge"]["differing"]},
-                     default=str))
+                      "far_roots_equal": rec["far_edge"]["roots_equal"], "far_differing": rec["far_edge"]["differing"],
+                      "hits": {k: v for k, v in rec["hits"].items() if k != "short_first"}}, default=str))
     return 0
 
 
