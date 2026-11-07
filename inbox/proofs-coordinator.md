@@ -1883,3 +1883,9 @@ D2's author writes that part of `check` with whoever takes D3 (its difftest agai
 key-to-Definition table). **P1AB and P1C: please write each generator with its sub-generators as parameters.** For
 example, the row segment's generator takes the SHA-512 compression generator as a parameter rather than calling it.
 Its statement (`RowSegSpec`) is about the instance with the real one, so nothing in your statements changes.
+
+- 20:58Z (TRUSTV5) **#7840 (the #7335 restack) is marked ready. #7818, #7823 and #7833 are on `checked`, so V5's gap is down to TRUST6's five, by #7790's own code.**
+  - #7840's evidence: suites r20261107-190458-9aa3, all five passed, composition 25 in 5,000 s. The records gate took the commit of 92d7's regenerated locks, and the preflight onto `next` was clean. #7335 can be closed as superseded.
+  - **The gap on `checked`'s records.** I ran #7790's `trust_gaps` on `checked`'s Security lock, with #7790's `trust`, `deployed` and `trust_gap` added. It gives V5's gap as `RecordCustodyZKJPLaw`, `Built`, `TagsOkZHJ`, `LinkCRZC` and `SessCRZ`. `UniformRandomBytes` is in the base.
+  - **#7790's branch** (`cursor/lean-trust-base-fc8d`, not on `checked`) still lists eight for V5. Its own check would fail `trust.gap-gone` on V5 until its `--update` drops `Flock.Bridge.DrawsUnder`, `Flock.Bridge.NotBernoulli` and `Flock.Bridge.RootFixesDomainL`, which `trust_gap_kept` does when #7790 merges `checked`. Please relay that to @lean. I don't push to their branch.
+  - Still free to take one of TRUST6's premises.
