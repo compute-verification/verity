@@ -9,13 +9,13 @@
 #                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
 #                (STAGE_FROM=DIR: another job's data/$TAG, both stagings; STAGE=0: neither, the caller filled
 #                data/$TAG/stage: circuit.txt, inst-N.bin, pub-N.bin, partition.json, program.json and draw.json, and with
-#                an own-partition file there the later steps keep its partition, program and draw; REC_LINKS=1: the wired
+#                an own-partition file there the later steps keep its partition, program and sample; REC_LINKS=1: the wired
 #                inner statement, rec_reprice.py stage-chain, with its links file links.json beside)
 #   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0) against the rec proxy
 #                (verity_flock.rec_live, the inner phase's ZK server: salted tree tops, the schedule of the statement's public
-#                shape, rec_live --schedule-for; every coin the challenger's coin tree, drawn at Hello and opened round by
+#                shape, rec_live --schedule-for; every coin the challenger's coin tree, sampled at Hello and opened round by
 #                round, rec_live --coin-tree (from TREE_FROM) with the prover, its statement and its replay under INNER_COINS; Register
-#                answered with the verifier's full draw, rec_live.full_draw over the
+#                answered with the verifier's full sample, rec_live.full_draw over the
 #                inner statement's program and partition, data/$TAG/stage/draw.json; WARM + RUNS sessions), upstream's
 #                replay of the last one and V*'s hashing
 #                reference (rec_vstar) over it, and over two forged copies of its private.json (a round's top: one node one
@@ -42,7 +42,7 @@
 #                session vstage staged V* over), which STEP=lean verifies with. MODES=firewall alone, WARM=0 RUNS=1: each
 #                statement fixed before any session starts gets exactly one independent session, never sampled again, every
 #                exit recorded (out/oprove/statements.sha512, exits.tsv), and the challenger keeps the run's record
-#                (v-sess/rec-run.jsonl): the staging before any session, each V* part's coin server (serve --rec-run) logging
+#                (v-sess/rec-run.jsonl): the staging before any session, each V* part's challenger (serve --rec-run) logging
 #                every Hello it answers, the close after the last session
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs oprove fixed (the
@@ -79,14 +79,14 @@
 #              server and in the run's record; a negative control, whose composition lean_verdicts.py requires refused)
 #      GPU=1 (0: the CPU prover end to end: built GPU=0, no CUDA, no lease, prove without --gpu; for a small K and N)
 #      NEG_INNER="challenge query" (lean: each honest V* session verified again over a copy of the inner session with one
-#              coin of rep 0 flipped in its session.json and its coin server's record alike, rec_inner.py forge --what W,
+#              coin of rep 0 flipped in its session.json and its challenger's record alike, rec_inner.py forge --what W,
 #              as part forged-inner-W-<name>; the parts that read the flipped coin refuse it, and lean_verdicts.py requires
 #              one to; the step refuses a W none of the parts it checks reads: challenge needs an alg part, query L0;
 #              empty: none)
 #      REC_COINS=0 (oprove, lean; 1: the inner statement set up once per inner session, flock-verify rec-coins, and each verify given
 #              that record, --rec-inner-coins, rather than the inner circuit it would parse again)
-#      TREE_FROM= (inner: the challenger's device, HOST:PORT, each inner session's coin tree drawn and opened there, rec_live
-#              --tree-from; TREE_SECRET_FILE= its session secret, hex; empty: this host's OS draws them, rec_live --tree-test-os,
+#      TREE_FROM= (inner: the challenger's device, HOST:PORT, each inner session's coin tree sampled and opened there, rec_live
+#              --tree-from; TREE_SECRET_FILE= its session secret, hex; empty: this host's OS samples them, rec_live --tree-test-os,
 #              a test's coins, never the challenger's, out/inner/tree-source.txt says which)
 #              TREE_FROM=local: the challenger started on this node beside the run (pod/challenger.sh: its key and session
 #              secret in a scratch directory none of the prover's), its records under out/inner/challenger, and
@@ -358,7 +358,7 @@ print("--parts", ",".join(r["parts"]), "--release-windows-ms", ",".join(map(str,
     mkdir -p $DD/inner/s0 && for f in $DD/inner/*; do case ${f##*/} in s0|schedule.json) ;; *) mv $f $DD/inner/s0/ ;; esac; done
   fi
   # TREE_FROM=local: the challenger exits once rec_live closed its session; every session's coins are its tree's, as the
-  # challenger's signed release log shows it sampled and opened them after what rec_live's coin server recorded
+  # challenger's signed release log shows it sampled and opened them after what rec_live's live-coin part recorded
   # (rec_inner.py tree-held), into out/inner/tree-held.json
   if [ $own = 1 ]; then
     TREE_FROM=local
@@ -568,9 +568,9 @@ fold_build() {
 }
 
 # stage_inner NAME PLAIN: the inner statement (N instances of GemmCoordinate_v2{K}, the population program of that template
-# under Q_template_instance, rec_reprice.py: the partition's every unit, so the full draw over it proves every unit of the
+# under Q_template_instance, rec_reprice.py: the partition's every unit, so the full sample over it proves every unit of the
 # statement, which check 5 requires) staged into $DD/NAME from its cache $DD/NAME-cache, its trees' leaves plain SHA-512 when
-# PLAIN is 1; its records in $O/NAME. Never tiled (FLOCK_GEMM_TILE): a tile's circuit names its unit class as its template,
+# PLAIN is 1; its records in $O/NAME. Never tiled (FLOCK_GEMM_TILE): a tile's circuit names its size class as its template,
 # which no template query lists, and at K = 4096 a 4x4 tile does not fit a block anyway. Every instance's own rows
 # (FLOCK_OWN_ROWS): Lean covers a shared-row public file only in a registered --zk session (ProvedScope.sharedRowsOk), and
 # the population program's instances share no row, so the rows committed are the same. REC_LINKS=1: the wired chain
@@ -744,7 +744,7 @@ EOF
   ;;
 icheck)
   # (CPU) the inner's last proxied session: upstream's replay, V*'s hashing reference over the salted tops (rec_vstar), that
-  # the coin server's record holds none of the clear tops, and the tree-top controls (rec_inner.py forge: a top that is not
+  # the challenger's record holds none of the clear tops, and the tree-top controls (rec_inner.py forge: a top that is not
   # the committed one, a record of unsalted tops), each of which V*'s inputs must refuse by name
   D=$DD/stage; SESS=${INNER:-$DD/inner/s$((NS - 1))}
   [ -f $SESS/session/session.json ] || { echo "run STEP=inner first"; exit 1; }
@@ -960,7 +960,7 @@ for c in sorted(p.parent for p in v.rglob("inst.bin")):
 EOF
   # MODES=firewall: the challenger's record of the run (rec-run.jsonl, verity/rec-run/v1's events a line): the staging of
   # rows.json and the shared set every V* part is given (rec_compose.shared_of_args) before any session, then each V* part's
-  # coin server logs every Hello it answers as an open of that part (serve --rec-run), a forgery's in a record of its own
+  # challenger logs every Hello it answers as an open of that part (serve --rec-run), a forgery's in a record of its own
   # (rec-run-<name>.jsonl), and the close after the last session; RETRY's second session is logged as any other's
   REC_RUN=
   if [ "$MODES" = firewall ]; then
@@ -1032,7 +1032,7 @@ EOF
       case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
       LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk || rc=$?
-      # RETRY's negative control: a second session of the statement on a fresh coin server, logged in the run's record as
+      # RETRY's negative control: a second session of the statement on a fresh challenger, logged in the run's record as
       # any other; the first one stays the part's
       if [ "$l" = "${RETRY:-}" ]; then
         local KEEP=$LAST; again loopback $n-retry $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk; echo "$n: retried (RETRY), exit $?"; LAST=$KEEP

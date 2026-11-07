@@ -1,11 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Prob
-public import Mathlib.Algebra.BigOperators.Fin
-public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-public import Mathlib.Data.Fin.Tuple.Basic
-public import Mathlib.Data.Fintype.Powerset
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+public import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # The monitoring period: adaptive per-period bounds over `T` periods
@@ -32,7 +29,7 @@ probability at most `p` over its own coins" is `∀ ω, prCoin (fun a => E t (Fu
   own coins decide gets only the count bounds: an adversary short on a `p`-share of each period's coins, where it is
   accepted, is accepted in every period and short in `Binomial(T, p)` of them.
 
-`Audit.Law`'s pooled escape (`Pooled.lean`) is the instance at uniform `kd`-subset draws.
+`Audit.Law`'s pooled escape (`Pooled.lean`) is the instance at uniform `kd`-subset samples.
 -/
 
 @[expose] public section

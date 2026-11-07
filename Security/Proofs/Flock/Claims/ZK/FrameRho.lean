@@ -7,7 +7,7 @@ import all Init.Data.Range.Basic
 /-!
 # The frames refuse dependent `ρ₀, ρ₁` (`FrameUnrefused`'s `ρ` fault)
 
-The firewall's own masked Ligerito (`Finish.ligeritoPZk`), which the rep's schedule runs live (`Drive.openStep`, through
+The ZK server's own masked Ligerito (`Finish.ligeritoPZk`), which the rep's schedule runs live (`Drive.openStep`, through
 `Loop.schedSoFar`), stops at `ρ₀, ρ₁` dependent over F128, right after `ρ₁`'s squeeze. So a schedule that runs to its
 end on the stream's coins was answered independent `ρ₀, ρ₁`, at Ligerito's rounds `k₀ + 2` and `k₀ + 3`, past the ring
 switch's:
@@ -130,10 +130,6 @@ theorem ow_mono {α : Type} {A A' : Got → Hist → Prop} {B B' : α → Got �
 theorem ow_pure {α : Type} {A : Got → Hist → Prop} {B : α → Got → Hist → Prop} (a : α)
     (h : ∀ g hs, A g hs → B a g hs) : OW A B (pure a : TMW OpenM α) :=
   fun _ got hs hA => h got hs hA
-
-theorem ow_throw {α : Type} {A : Got → Hist → Prop} {B : α → Got → Hist → Prop} (e : String) :
-    OW A B (throw e : TMW OpenM α) :=
-  fun _ _ _ _ => trivial
 
 /-- A property of the answers that more answers keep holds wherever any program ends. -/
 theorem ow_any {α : Type} (R : Hist → Prop) (hR : ∀ hs cs, R hs → R (hs ++ [cs])) (p : TMW OpenM α) :

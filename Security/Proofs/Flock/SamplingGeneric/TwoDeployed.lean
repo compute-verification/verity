@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Flock.SamplingGeneric.Masked
+public import Definitions.Claims.SamplingTwo
+import Proofs.Flock.Masked
+import Proofs.Flock.SamplingGeneric
+import Proofs.Flock.SamplingGeneric.Two
 
 /-!
 # The two-stage compiler at the deployed sampled record
@@ -27,7 +31,7 @@ block correct on its replay block's values, under the interior roots the run sho
   `runs_ofDeploy`).
 * `ksTwo_compiled`: `CompiledTwo.KS` from Flock's KS at `F` and its decoder's list bound, the commitment's binding and
   the contract (`compilerKSTwo` over `flockArgKS`).
-* `ksTwo_masked`: at C-Flock's masked record and SHA-512, with Flock's KS, the list bound and the binding proved
+* `ksTwo_masked`: at Flock's masked record and SHA-512, with Flock's KS, the list bound and the binding proved
   (`MaskedKS`, `listWithin_deployZk`, `commit_binds`), as `ks_masked`.
 -/
 
@@ -65,14 +69,14 @@ open Claims.Sampling (AuditStatement InScopeTwo forkOn cell escCell)
 
 /-! ## The sampled verifier's two-stage code facts -/
 
-/-- **Replay draws**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
+/-- **Replay samples**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
 def Code.ReplayDraws (c : Code) (two : AuditStatement → Option Claims.Sampling.Design.Two)
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
     ∀ T ⊆ Finset.range d.part.blocks.length,
       Pr (fun r : Fin (c.V.k x) → FlockDeploy.Coin => ∀ ρ ∈ rs x r, ρ ∉ T) ≤ d.replay.Pa d.part T
 
-/-- **Second draws**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
+/-- **Second samples**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
 def Code.SecondDraws (c : Code) (two : AuditStatement → Option Claims.Sampling.Design.Two)
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
@@ -133,7 +137,7 @@ theorem ksTwo_compiled (H : Msg → Msg) (hKS : Claims.Flock.KS H F)
 
 end CompiledTwo
 
-/-- **The deployed two-stage sampled verifier over C-Flock's masked record is knowledge sound at SHA-512**:
+/-- **The deployed two-stage sampled verifier over Flock's masked record is knowledge sound at SHA-512**:
 `ksTwo_compiled` at `deployZk`, with Flock's KS by `MaskedKS`, the list bound by `listWithin_deployZk`, binding by
 `commit_binds` and the inner numbers by `innerNumbers_deploy`. It takes the sampled verifier's two-stage code facts and
 its sessions' runs, scope (`SessionsIn`) and openings at a replay block. -/

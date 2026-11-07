@@ -1,9 +1,9 @@
 module
 
-public import Batteries.Tactic.OpenPrivate
 public import Properties.RemoteAudit.Live
-public import Proofs.Properties.RemoteAudit.Order
 public import Proofs.Properties.RemoteAudit.SharedLink
+import Batteries.Tactic.OpenPrivate
+import Proofs.Properties.RemoteAudit.Window
 
 /-!
 # The verifier's process accepts what `Shared.run g` accepts (`liveIsRun`)
@@ -434,7 +434,7 @@ theorem awaiting_some {s : State} {t : Int} {w : WindowRecord} {d : Array (Nat �
     · cases h
       exact ⟨by omega, by omega, rfl, rfl⟩
 
-/-- What a run from `State.init` keeps from a point `sV` of it to a later one `s`: the invariant, each drawn window's
+/-- What a run from `State.init` keeps from a point `sV` of it to a later one `s`: the invariant, each sampled window's
 draws in its plans (`Shared.DrawsIn`), `Frz`, and the registration. -/
 theorem srun_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration} {c a : Array ByteArray} {nb : Nat}
     {es₀ es₂ : List Event} {rs₀ rs₂ : Array Result} {sV s : State} (hm : 1 ≤ params.minPasses)

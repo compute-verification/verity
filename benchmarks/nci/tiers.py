@@ -14,9 +14,8 @@ proved.
   ``residual_mfu``, the reference-efficiency assumption: free compute runs no better than the reference). A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
   K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; counting them by
-  information, which a wipe would bound, is open: ``ThreadedOfState`` rests on the falsified WeightsSupport,
-  ``ThreadedOfStateFmt`` on the falsified WeightsSupportFmt and ``ThreadedOfStateFmt2`` on its restatement
-  WeightsSupportFmt2, not yet signed off), declared or not. The state is all memory,
+  information, which a wipe would bound, is open: its first two support forms were falsified, and
+  ``ThreadedOfStateFmt2`` rests on their restatement WeightsSupportFmt2, not yet signed off), declared or not. The state is all memory,
   disks included unless they're unplugged; after a wipe, the wipe residual R_wipe: memory the fill doesn't reach, the proof of
   space's slack on the filled memory, and what helpers refill within the read deadline; under exhaustion, the HBM the
   declared computation doesn't hold plus the slack. The slack is 1 - delta^(1/k) for k timed rounds (1/19 at k = 86 and
@@ -24,7 +23,7 @@ proved.
   The novel intake is line rate or, under network accounting, side channels plus certified timing plus the declared
   computation's novel intake, alpha F under the inference-only policy once the count check is in the ZK flow.
 * 1/rho_NCI: the declared computation trains at the thread bound, rho_T = b_a / (alpha Lambda(K)) declared gates per
-  counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum law rho_PS when no dark
+  counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum rule rho_PS when no dark
   compute can sum the inference blocks' partial sums. The residual reads them on the server for free; unmonitored compute
   reads them through the export (line rate, or side channels plus readable export under network accounting). A relay op
   reads 2 b_p bits, and the developer relays only as many partial sums as buy more registered work than the relay's gates
@@ -75,7 +74,7 @@ REFERENCE_THREADED = (10.0, 37248.0)
 #: the clock's ceiling 2430 MHz), pinned from Security/Definitions/Core/Accel/Sm120.lean;
 #: tests/test_tiers.py holds the pin to the file
 CARD = {"sms": 188, "tensor": 1024, "clock_hz": 2430e6}
-#: the clock PoUW credits on sm_120 (H1's SM120 record, verity/core/protocols/pouw/circuit/h1device.py: 2430 MHz)
+#: the clock PoUW credits on sm_120 (H1's SM120 record, verity/ml/protocols/pouw/circuit/h1device.py: 2430 MHz)
 CREDITED_CLOCK_HZ = 2430e6
 #: a server's GPUs at the table's FP8 dense peak, 2 FLOP a MAC
 GPU_FLOPS = 2 * CARD["sms"] * CARD["tensor"] * CARD["clock_hz"]
@@ -124,7 +123,7 @@ SPEC = [
     {"key": "residual", "main": True, "label": "Monitored compute residual r-hat on the GPUs, their share outside the certificate (floor credit at the locked clock 0.323, with an attested clock 0.213; best plausible design 0.01; nothing credited today: 1)", "unit": "", "min": 1e-12, "max": 1, "log": True, "zero": True},
     {"key": "eps_w", "label": "PoUW's deficit eps_W: the share of certified work a certificate that isn't wrong may credit without its running, which charges eps_W W_cert/C to r (CircuitCredit 0.744%; best plausible design 0.06-0.25%)", "unit": "", "min": 1e-4, "max": 0.1, "log": True, "zero": True},
     {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (1e-4 with per-window failure 3 x 2^-40 gives the theorem's delta of 2.7e-8; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
-    {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (0: PoUW credits 2,430 MHz, the card table's ceiling and the SKU's maximum, CMP-165; above 0 only on a card whose SKU or firmware reaches past its table)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
+    {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (0: PoUW credits 2,430 MHz, the card table's ceiling and the SKU's maximum; above 0 only on a card whose SKU or firmware reaches past its table)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
     {"key": "host_share", "label": "Host CPUs' compute, as a share of server compute at the card table's peak: 0 under hosts carry no compute; without that assumption, at datasheet peak (Xeon 6776P INT8 AMX 12.6%; hosts without matrix units, two EPYC 9015s, 0.22%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
     {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (deployed 111; 1/19 needs 86; streamed labels make 74,000 cheap)", "unit": "", "min": 10, "max": 1e6, "log": True},
     {"key": "unfilled_gb", "main": True, "label": "Memory the fill doesn't reach, per server (measured gaps 51 plus about 7 of DPU, BMC and flash; on-chip alone 3.05)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},
@@ -162,7 +161,7 @@ SPEC = [
     {"key": "kappa", "label": "Model: kappa, twice the counted multiplications over the training circuit's gates (Kimi K2's pretraining schedule 0.60; adversarial 0.5; kappa.py)", "unit": "", "min": 0.05, "max": 1, "log": False},
     {"key": "thread_bits", "label": "Model: reads up to which one inference block is held to (d, e)-threading, only (1, 0) above (ThreadedOfLayered certifies a Dot16 reference circuit 17 - E legs below E + 1 lookup columns, none at 17: 17 x 163,840 x 16 bits = 4.46e7 at the bf16 embeddings ReferenceLayered states; at C1's 2.5-bit floor 7.0e6, below K, so a reference circuit C1 allows may get no (d, e) at K; the whole embedding table at 2.5 bits, 2.9e9, needs a refined layered theorem). The certified legs fall to 1 near it, which matters only to a pool too small to fill one block", "unit": "bit", "min": 1e6, "max": 1e11, "log": True},
     {"key": "block_mults", "label": "Model: counted multiplications one inference block can hold, as a share of its gates (1 with no premise; kappa/2 if each block's counted share were the recipe's)", "unit": "", "min": 0.05, "max": 1, "log": False},
-    {"key": "kappa_chain", "label": "Model: kappa on the proved chain, one forward path (Kimi K2 0.0695); 0 turns the partial-sum law off, as its support premises (PartialSumsSupport, ActivationsSupport) are falsified", "unit": "", "min": 0.01, "max": 1, "log": True, "zero": True},
+    {"key": "kappa_chain", "label": "Model: kappa on the proved chain, one forward path (Kimi K2 0.0695); 0 turns the partial-sum law off, as its support-form premises are falsified", "unit": "", "min": 0.01, "max": 1, "log": True, "zero": True},
     {"key": "d_chain", "label": "Model: chain's smallest inner dimension", "unit": "", "min": 64, "max": 65536, "log": True},
     {"key": "e_chain", "label": "Model: chain's largest fan-out", "unit": "", "min": 1e3, "max": 1e6, "log": True},
     {"key": "b_p", "label": "Model: partial-sum width a relay op reads", "unit": "bit", "min": 4, "max": 64, "log": True},
@@ -182,36 +181,36 @@ TIERS = {
 
 #: what each step of the model rests on
 STATUS = [
-    ("Declared computation, thread bound", "ThreadedThrottled is proved in Lean (draft #2343) when the declaration "
+    ("Declared computation, thread bound", "ThreadedThrottled is proved in Lean when the declaration "
      "contains the reference circuit gate for gate, and with dark gates (T1', ThreadedThrottledOn) on a branch. It rests "
      "on WeightsIncompressible and Threaded (d, e). (10, 37248) is ReferenceThreaded's for a reference circuit written "
      "in Dot16 steps, as the declarations are (17 legs less 7 bf16 embedding columns; 2,328 steps of 16 products), under "
      "the open conjecture ReferenceLayered, whose lookups need the embedding columns to be inputs: a run that trains its "
      "embedding reads them as updated weights, so the default is the structural d = 1 until Layered's lookups may read "
      "weight columns."),
-    ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): ContainedTraining and PS' rest on "
-     "PartialSumsSupport and ActivationsSupport, which NCI-FALSIFY reproduced as false."),
+    ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): its support-form premises were reproduced as false, and "
+     "IncompressibleContainedTraining, which states it under TrainingIncompressible, carries no estimate yet."),
     ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as Nci.Guarantees.DampenerRemote states it "
-     "(#3646). PoUW's deficit epsilon_W = 0.744% (CircuitCredit, draft #2638) is a share of credited work, evaluated "
+     "in Lean. PoUW's deficit epsilon_W = 0.744% (CircuitCredit) is a share of credited work, evaluated "
      "with its premises granted. Under the floor credit r-hat = 0.449: GPU floor time 0.323 (honest kernels at 1.72 "
-     "times the floor; run r20261017-123922-e558 has no published outputs), the clock 0 (PoUW credits the card "
-     "table's 2,430 MHz, the SKU's maximum, CMP-165; the premise that a node's cards are that SKU and firmware is "
+     "times the floor, unpublished), the clock 0 (PoUW credits the card "
+     "table's 2,430 MHz, the SKU's maximum; the premise that a node's cards are that SKU and firmware is "
      "unattested) and host CPUs at INT8 AMX peak 0.126. eps' = 1e-4 is what the theorem's delta of 2.7e-8 costs "
      "(Markov over the windows)."),
-    ("Memory cap", "ThreadedRuntime and ThreadedRate (draft #2343) give the closed form's shape; its value needs Threaded "
+    ("Memory cap", "ThreadedRuntime and ThreadedRate give the closed form's shape; its value needs Threaded "
      "at window scale, which fails. The fit bound (FitBoundSlots under ReachSlots and FitsSlots, adopted for dense "
-     "recipes by ASK-68) replaces it at token threads, conditional on F1 and F4 per parameter slot, F3, NET-35 (intake "
-     "held to alpha F), WipeFullUse (not yet stated) and an information form; it charges each server's first window "
+     "recipes) replaces it at token threads, conditional on F1 and F4 per parameter slot, F3, intake "
+     "held to alpha F, WipeFullUse (not yet stated) and an information form; it charges each server's first window "
      "(fitBoundSlots_init, fit.py's left_out). A token-routed MoE has no fit rung: ReachSlots at its active count (54 "
      "at 6 GB for Kimi K2's 32B) needs a measured floor on the active count that reaches the target."),
-    ("Wipe residual", "Streamed labels (MEM-51) replace the reference permutation, which is refuted (a developer passes "
+    ("Wipe residual", "Streamed labels replace the reference permutation, which is refuted (a developer passes "
      "from 1.53% of the store); the slack is proved only for an ideal permutation. Memory outside the fill is measured as "
      "gaps (on-chip 3.05 GB, the GPUs' own about 1.6 GB; GPU reserve 18.4 GB; host 29.5 GB). No theorem bounds help "
      "during a wipe; the helper term is an attack."),
     ("Exhaustion", "Lemma M is proved and locked per audit, and Held for snapshots; nothing bounds memory at every "
      "instant, which the memory cap needs."),
     ("Cheating share", "The bound on accepted incorrect proof blocks over the deployment is proved "
-     "(Population.Exfil.tail_cumPrev, open #2687; the cumulative harm budget over adaptive rounds on a branch, PRF-86). "
+     "(Population.Exfil.tail_cumPrev; the cumulative harm budget over adaptive rounds on a branch). "
      "Each injected bit is worth at most the chord of one inference block's thread bound, 5.76e7 counted "
      "multiplications, with (1, 0)-threading above thread_bits. chi grows with the identities a detection doesn't end and "
      "shrinks with the fleet, so detection must be terminal (J = 1)."),

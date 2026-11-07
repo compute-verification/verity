@@ -2,9 +2,10 @@
 
 A *twin* re-implements one registered composite (`verity/ml/definitions/registry/b1.py`) for speed — numpy over whole operands,
 or the C++ models of `cpp/` through ctypes — and is admissible only where its output words are IDENTICAL to
-`verity.ml.circuits.evaluate.evaluate_call` on the registered body.  A twin never redefines a body: where it cannot be exact it
-declines the input (`Declined`, the gate path is the fallback) or does not claim the specialisation (`covers`).  Twins
-are core `verity.ml.circuits.evaluation` kernels (`KERNEL`) of their Definitions, checked against the reference by core `self_check`:
+`verity.ml.circuits.evaluation.reference.evaluate_call` on the registered body.  A twin never redefines a body: where it
+cannot be exact it declines the input (`Declined`, the gate path is the fallback) or does not claim the specialisation
+(`covers`).  Twins are core `verity.ml.circuits.evaluation` kernels (`KERNEL`) of their Definitions, checked against the
+reference by core `self_check`:
 
     covers(spec, KERNEL)                   # None when a twin claims spec (e.g. `Gemm_v1{K=576,N=960}`), else why not
     words = instance(spec, KERNEL)(*args, **spec.statics)
@@ -126,13 +127,19 @@ def rms_twin():
 
 
 def preload() -> dict[str, Any]:
-    """Build/load the three C++ models and the MUFU tables now.  The tables are reconstructed from int8 deltas with
+    """Build/load every C++ model of `cpp/` and the MUFU tables now, and give each model's library by name (`LIBRARIES`);
+    raises where a model does not build.  `fa2_twin` and `rms_twin` only import their models, and `dense_rows.k16_lib`
+    builds its own on first use: left to them, the first check to run a model compiles it, which circuit-check's tracer
+    cannot see.  The tables are reconstructed from int8 deltas with
     int64 cumsum temporaries (~0.25 GB transient over the 0.22 GB they occupy, shared with the gate primitives); doing
     this before the fold's Program and the checkpoint fields are resident keeps the process high-water mark lower and
     lets the freed transient space be reused (laptop: 1.4 GB -> ~1.1 GB on M1 tier b)."""
+    from verity.ml.definitions.numerics import dense_rows
+
     _tc_lib()
-    fa2_twin()
-    rms_twin()
+    fa2_twin()[0].lib()
+    rms_twin()[0].lib()
+    LIBRARIES["k16_chain"] = str(dense_rows.k16_build())
     silu_table()
     return dict(LIBRARIES)
 
@@ -744,7 +751,7 @@ def _mismatch(m: tuple) -> dict:
 
 def check_instances(cls: type[Twin], statics_of: Callable[[np.random.Generator], dict], rng: np.random.Generator, n: int,
                     kinds: tuple[str, ...]) -> dict:
-    """`n` random instances of twin family `cls` (statics drawn per instance, `kinds` in turn), each compared with the
+    """`n` random instances of twin family `cls` (statics sampled per instance, `kinds` in turn), each compared with the
     reference by core `self_check`; an instance the twin declines is counted under its reason."""
     rep: dict[str, Any] = {"n": 0, "n_declined": 0, "statics": [], "kinds": Counter(), "mismatches": [], "words": 0}
     for i in range(n):

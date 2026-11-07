@@ -55,7 +55,7 @@ def HeldBudgetNontrivial : Prop :=
     ¬ Assumptions.DescriptionHard R1 (Y2 6) M () 0 1 ∧
     ¬ HeldPriceAtMost R1 (Y2 6) (((1 + Nat.clog 2 R1.d.n + 3 : ℕ) : ℝ) + 1)
 
-/-- **`StatHeldBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `Λ = 0`, the token drawn
+/-- **`StatHeldBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `Λ = 0`, the token sampled
 uniformly and the product's value priced one bit. -/
 def StatHeldBudgetHonest : Prop :=
   R1.d.𝓘.IsCK R1.d 2 1 ∧ (∀ a ∈ μ.support, R1.Honest a) ∧ Assumptions.MinEntropyHard R1 (Y 1) μ 0

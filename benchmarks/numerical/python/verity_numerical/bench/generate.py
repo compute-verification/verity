@@ -1,14 +1,14 @@
-"""Synthetic input sets from the IR: seeded draws of a subcircuit's inputs, each with the output the IR evaluator computes.
+"""Synthetic input sets from the IR: seeded samples of a subcircuit's inputs, each with the output the IR evaluator computes.
 
     python -m verity_numerical.bench.generate --list
     python -m verity_numerical.bench.generate --template gemm-coordinate --param K=2048 --param semantics=sm80.mma.m16n8k16.bf16 \\
         --n 4096 --seed 20260926 --out DIR [--procs P] [--register]
     python -m verity_numerical.bench.generate --subcircuit rope-head/d64/neox-bf16 --n 1024 --seed 1 --out DIR
 
-The key is ``verity.ml.randomness.derive(SOURCE, DOMAIN, {"subcircuit": id, "seed": seed})``; draw ``j`` is
+The key is ``verity.ml.randomness.derive(SOURCE, DOMAIN, {"subcircuit": id, "seed": seed})``; sample ``j`` is
 ``Subcircuit.draw(key, j)`` (``templates``: every port's words from the counter stream at ``(port, j)``), evaluated by
 ``verity.ml.circuits.evaluation.evaluate_batch`` on the subcircuit's IR target.  A sample is admitted when its outputs are inside the
-subcircuit's domain (``Subcircuit.admitted``: every BF16 output word finite), and instance ``i`` is the ``i``-th admitted draw
+subcircuit's domain (``Subcircuit.admitted``: every BF16 output word finite), and instance ``i`` is the ``i``-th admitted sample
 (``index.json`` ``sub.draw``), so a larger set extends a smaller one of the same key: the first ``n`` instances are the same.
 The set is written in the captured sets' layout (``input_sets``, schema ``input-set/v1``) under ``<out>/sets/<name>/``, its
 provenance holding the recipe, the Definition's Program digests and the software versions.  ``--register`` puts it in the
@@ -32,13 +32,15 @@ import numpy as np
 
 from verity.ml.randomness import Key, derive
 
-from . import input_sets as IS
-from . import templates as TM
+from verity_flock import input_sets as IS
+from verity_flock import subcircuit_templates as TM
 
 SOURCE = b"verity input-set synthetic"
 DOMAIN = "verity/input-sets/synthetic/v1"
 MAX_DRAW_FACTOR = 4
-_SOURCES = ("templates.py", "generate.py", "input_sets.py")
+#: the sources a set's recipe depends on, each by its path under its import package
+_SOURCES = {"verity_flock/subcircuit_templates.py": TM.__file__, "verity_numerical/bench/generate.py": __file__,
+            "verity_flock/input_sets.py": IS.__file__}
 
 
 def key_for(sub: TM.Subcircuit, seed: int) -> Key:
@@ -64,13 +66,13 @@ def _versions() -> dict[str, Any]:
         except (OSError, subprocess.SubprocessError):
             head = None
     return {"git_head": head, "python": platform.python_version(), "numpy": np.__version__,
-            "source_sha256": {f"verity_numerical/bench/{f}": hashlib.sha256((here / f).read_bytes()).hexdigest() for f in _SOURCES}}
+            "source_sha256": {k: hashlib.sha256(Path(f).read_bytes()).hexdigest() for k, f in _SOURCES.items()}}
 
 
 def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: int = 1, chunk: int = 64,
              provenance: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """Write the first ``n`` admitted draws of ``sub`` under key (``sub``, ``seed``) as set ``<out>/sets/<sub.set_name>``; returns the
-    summary (``input_sets.write``'s, plus the path, draws and rejected draws)."""
+    """Write the first ``n`` admitted samples of ``sub`` under key (``sub``, ``seed``) as set ``<out>/sets/<sub.set_name>``; returns the
+    summary (``input_sets.write``'s, plus the path, samples and rejected samples)."""
     if n <= 0:
         raise ValueError("n must be positive")
     key = key_for(sub, seed)

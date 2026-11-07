@@ -1,5 +1,5 @@
-"""The inner session's proxy and coin server (`verity_flock.rec_live`): the wire codec, how a round's frames are sorted into
-caps and the private free message, the message rows' and tops' salted commitments, that the coin server is shown nothing
+"""The inner session's proxy and live-coin part (`verity_flock.rec_live`): the wire codec, how a round's frames are sorted into
+caps and the private free message, the message rows' and tops' hiding commitments, that the challenger's live-coin part is shown nothing
 of the hidden statement or a tree top while the proxy's session record keeps what the live server's would, and the ZK server's
 refusals (a session off its pinned schedule, a nonzero ``y``)."""
 from __future__ import annotations
@@ -250,7 +250,7 @@ def test_a_session_off_its_pinned_schedule_is_refused_before_the_coin_server_see
     s["rounds"][1]["n"] = 2
     proxy = _proxy(s)
     _session(proxy)
-    assert len(proxy.coins.rounds) == 1, "the off-schedule round never reached the coin server"
+    assert len(proxy.coins.rounds) == 1, "the off-schedule round never reached the challenger"
 
 
 def test_a_link_whose_y_is_not_zero_is_refused():
@@ -361,7 +361,7 @@ def test_on_the_coin_tree_every_coin_opens_the_challengers_root_and_the_record_n
 
 def test_on_the_coin_tree_each_round_is_opened_after_the_coin_servers_record_of_what_it_answers():
     """The source opens the link points after ``Commit``'s salted tops and each round after its record without the coins,
-    so a release log of the openings binds them to the coin server's record."""
+    so a release log of the openings binds them to the challenger's live-coin part's record."""
     coins = _tree_coins()
     _tree_session(_proxy(coins=coins))
     rec = coins.record()
@@ -372,7 +372,7 @@ def test_on_the_coin_tree_each_round_is_opened_after_the_coin_servers_record_of_
 
 
 class _Released(_Logged):
-    """`_Logged` that writes the device's release log of each tree it draws and each round it opens
+    """`_Logged` that writes the device's release log of each tree it samples and each round it opens
     (`challenger.coin_trees_of`'s lines)."""
 
     def __init__(self, rand):
@@ -405,7 +405,7 @@ def test_the_challengers_release_log_holds_an_inner_session_on_its_tree_and_refu
     _tree_session(proxy)
     pub, tree = json.loads(RL.record_bytes(coins.record())), proxy.session_record()["coin_tree"]
     assert RL.tree_held_reason(src.log, [("s0", tree, pub)]) is None
-    # the Rust server's form opens after root_F and the message, which rec_live's coin server doesn't answer
+    # the Rust server's form opens after root_F and the message, which rec_live's live-coin part doesn't answer
     rec = proxy.session_record()
     assert "link points are not the coins" in C.sessions_tree_reason(C.coin_trees_of(src.log),
                                                                       [("s0", dict.fromkeys(rec["link"]["root_b"]), rec)])
@@ -465,8 +465,8 @@ def test_the_coin_server_draws_no_coin_tree_of_its_own():
 
 
 def test_a_session_that_stops_after_hello_reports_the_coin_tree_the_challenger_drew(tmp_path):
-    """The challenger logs every tree it draws, and an audit refuses a logged tree no session reports: a session that ends
-    without Finish keeps its tree's record (``coin_tree.json``) beside the coin server's."""
+    """The challenger logs every tree it samples, and an audit refuses a logged tree no session reports: a session that ends
+    without Finish keeps its tree's record (``coin_tree.json``) beside the challenger's live-coin part's."""
     import socket
     import threading
 

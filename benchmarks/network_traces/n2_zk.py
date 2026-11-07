@@ -28,12 +28,12 @@ comparison to each verdict, which decides nothing.
   member's proofs refuse
   (`expected`).
 * **The period** (``--draw K``): each member's windows sampled rather than all proved: every window's salted root
-  committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and only those
+  committed, then K of them sampled on the verifier's own coins (`LinkWindows.period_draw`), and only those
   registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
-  stream's δ, on the Lean verifier of record's sample. ``tampered`` then changes every window (`every_count`), which any
-  draw refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
+  stream's δ, on the Lean verifier's sample. ``tampered`` then changes every window (`every_count`), which any
+  sample refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
   window accepted, which the network verdict refuses by name (``period-draw``).
-* **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_unit` lowered once (the registered unit with each
+* **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_block` lowered once (the registered unit with each
   gate the Definition its pinned digest names), bound to the registered partition and Program. Each execution phase is a
   statement of its own with one instance, proof block 0: rows ``pub`` and ``wit`` (`LinkWindows.layout`,
   `LinkWindows.row`) and the output row ``o0``, the verdict and deadline bits. The lowering evaluates every instance at
@@ -41,7 +41,7 @@ comparison to each verdict, which decides nothing.
   the verifier's opening of its ``pub`` and ``o0`` rows is checked on the staged public file before anything is proved.
 * **A round** (`member`), per execution phase in order: register, select, one live `prove --zk` session behind the ZK
   server on the statement (the server serving the stream's sample), deliver, and the outcome of record. Per window:
-  prove (the session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run,
+  prove (the session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier's run,
   Lean included). Then the link's network verdict (`LinkWindows.network_verdict`). The members' rounds run one after
   another: outer proofs go through the ZK server one at a time (`ONE_SESSION`), so ``--jobs`` is 1 and more is refused.
 * **What the verifier receives**, per execution phase, kept under ``<member>/verifier/`` (`RECEIVED`): the registration
@@ -107,7 +107,7 @@ def log(msg: str) -> None:
     print(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
 
-#: the verifier of record's own Lean runs (`proofs.verify`'s findings and refusal), by the proof's public file, so each
+#: the verifier's own Lean runs (`proofs.verify`'s findings and refusal), by the proof's public file, so each
 #: window records what decided it: a rejected outcome's public outputs are the service's, which say nothing
 LEAN_RUNS: dict[str, tuple] = {}
 
@@ -157,7 +157,7 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
     where the proof block takes no instance), each end's head check's failed parts (`head_check.reference_parts`) and
     the proof block's output word by the gates' references (`LinkWindows.outputs`); and the certifier's certificates,
     which the verifier receives from the certifier. ``edit(lw, w, pair)``: the records the prover commits in place of
-    the certified ones. ``expect``: the verdict the verifier of record should reach on an honest proof of the opening.
+    the certified ones. ``expect``: the verdict the verifier should reach on an honest proof of the opening.
     With ``warden``, ``run`` is an active network certifier's run (`warden_link`), its records and certificates the
     network certifier's own and no sync declared.
 
@@ -357,7 +357,7 @@ def _one_stage():
 
 
 def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
-    """The one circuit: `LinkWindows.proof_unit` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
+    """The one circuit: `LinkWindows.proof_block` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
     to the registered partition and Program, which are written beside it as the verifier's own. Its ports are
     `service.PORTS`, each the length the verifier opens (`LinkWindows.bits`)."""
     rows = [(r, M.V2, lw.bits(r), list(lw.layout[r])) for r in SVC.ROWS]
@@ -368,7 +368,7 @@ def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
     t, was = time.time(), gc.isenabled()
     gc.disable()
     try:
-        st = M.CS.UnitStager(lw.proof_unit, "unit/n2-link-window", rows, [(M.V2, (0,))], circuit=out / "circuit.txt",
+        st = M.CS.UnitStager(lw.proof_block, "unit/n2-link-window", rows, [(M.V2, (0,))], circuit=out / "circuit.txt",
                              bind=bound)
         st.pin
     finally:
@@ -476,10 +476,10 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     listens on ``port + j``, or with ``port`` 0 on a port the OS picks free.
 
     With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root is
-    committed first, then `coins` draw K of the windows, and only those are registered, proved and
+    committed first, then `coins` sample K of the windows, and only those are registered, proved and
     decided; the sample is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
     with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`), on the sample of
-    record: the Lean verifier of record's (``--lean``) sample on the coins the period flip read (`service.lean_draw`),
+    record: the Lean verifier's (``--lean``) sample on the coins the period flip read (`service.lean_draw`),
     which the windows proved must be. Coins with a ``drawn`` (the challenger's, `a5_coins.RankCoins`) end their turn
     on the session once the sample has read them, and the result's ``segment`` is what they released. ``forge``, a
     negative, is the prover's: of the period sample, the K windows it registers and proves instead, under a sample
@@ -658,10 +658,10 @@ def prove(a) -> int:
     M.PF.executable = lambda: Path(a.lean)
     _record_lean_runs(M.PF)
     sg = stager(M, lw0, out / "stager")
-    summary["stager"] = {"unit": lw0.proof_unit.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
+    summary["stager"] = {"unit": lw0.proof_block.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
                          "circuit_sha512": sg.circuit_sha512, "bits": {p: lw0.bits(p) for p in SVC.PORTS},
                          "ands": sg.st.low.layout.counts["ands"]}
-    log(f"stager: {lw0.proof_unit.id}, {sg.lower_s} s, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, "
+    log(f"stager: {lw0.proof_block.id}, {sg.lower_s} s, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, "
         f"pin {sg.st.pin[:16]}")
     summary["staging"] = stage(M, sg, members, os.urandom(32), out)
     log(f"staged: {summary['staging']}")

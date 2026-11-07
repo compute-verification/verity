@@ -11,10 +11,10 @@ public import Proofs.Pouw.Copy
 
 * **The honest words are proved.** `honestWords_devRev1K` gives every reference value an FP32 word, so the honest
   prover's committed words are the reference's (`wordOf_spec`). The workload's weights pass the rules (completeness's
-  hypothesis `Workload.WeightsOK`), so a drawn tile of a committed unit is good exactly when its replayed debit is
+  hypothesis `Workload.WeightsOK`), so a sampled tile of a committed unit is good exactly when its replayed debit is
   within the cap.
-* **The cap is assumed at its measured rate.** `HonestTileCapRate` bounds one draw's failure by `ε`, an upper confidence
-  limit on the measured rate; the union bound over the `t` draws gives `t·ε`.
+* **The cap is assumed at its measured rate.** `HonestTileCapRate` bounds one sample's failure by `ε`, an upper confidence
+  limit on the measured rate; the union bound over the `t` samples gives `t·ε`.
 * **The served models** at v1's record under rev1 at the cap 1/1,000, the honest cast at 8.72: Llama-3.1-8B's and
   Qwen3-8B's served layouts (`pearlCDomainDevShapes`), whose units are at most `2^16` deep.
 -/
@@ -33,7 +33,7 @@ theorem wordOf_spec {v : Option ℚ} (h : ∃ w, wordQ w = v) : wordQ (wordOf v)
   split_ifs
   exact Classical.choose_spec h
 
-/-- An event on one of `t` independent draws has at most that draw's probability. -/
+/-- An event on one of `t` independent samples has at most that sample's probability. -/
 theorem pr_coord_le {α β T : Type} [Fintype α] [Fintype β] [Fintype T] {t : ℕ} (i : Fin t) (P : α × β × T → Prop) :
     pr (fun x : α × β × (Fin t → T) => P (x.1, x.2.1, x.2.2 i)) ≤ pr P := by
   classical
@@ -83,7 +83,7 @@ theorem mem_blankTiles_honest (P : Protocol Q R S) (TR : TileRules Q R S) (U : W
 
 /-- **Completeness from the honest words and the measured cap rate.** If every reference value of a unit of an
 in-domain workload is an FP32 word's and every tile's columns are columns of its unit, `HonestTileCapRate` at `ε` gives
-`CompleteSampled` at `ε` per draw. -/
+`CompleteSampled` at `ε` per sample. -/
 theorem completeSampled_of_rate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ u < U.layout.N, ∀ (H : Q → R) (s : S) (act : Codes) (i j : ℕ),
@@ -118,11 +118,11 @@ theorem completeSampled_of_rate [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
           (hR U hU hWU act hS w κ hκ hw)
     _ = t * ε := by simp
 
-/-- **The sampled audit's completeness at a device record on a step `⟨[32], w, z⟩` with `w ≥ 24`**, under rev1 with the
+/-- **The sampled audit's completeness at a device record on a step `⟨[32], w, z⟩` of any width**, under rev1 with the
 honest kernel's `W_ref`, on any domain within `pearlCDomainDev` (so every unit is at most `2^16` deep): the measured
-cap rate `HonestTileCapRate` at `ε` gives `CompleteSampled` at `ε` per draw. The honest words are proved
+cap rate `HonestTileCapRate` at `ε` gives `CompleteSampled` at `ε` per sample. The honest words are proved
 (`honestWords_devRev1K`); the cap rate is the one assumption. -/
-theorem completeSampledDevRev1K [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {w : ℕ} (hw : 24 ≤ w) (z : ℤ)
+theorem completeSampledDevRev1K [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {w : ℕ} (z : ℤ)
     (G : ℕ) (pr : Prices) (sem : PearlCSem Q R S) (ρ c : ℚ) (D : Layout → Prop)
     (hD : ∀ L, D L → pearlCDomainDev (devAt ⟨[32], w, z⟩ G pr) L) (Served : Workload → (ℕ → Codes) → Prop)
     (ε : ℝ)
@@ -134,12 +134,12 @@ theorem completeSampledDevRev1K [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
     (fun _ _ _ hj => lt_of_lt_of_le (Finset.mem_Ico.1 hj).2 (min_le_right _ _)) hR
   intro U hU u hu H s act i j
   have hk : (U.layout.shape u).k ≤ 2 ^ 16 := ((hD _ hU.2) u hu).2.2.2.2.2
-  exact honestWords_devRev1K hw z G pr sem ρ c H s U u act
+  exact honestWords_devRev1K z G pr sem ρ c H s U u act
     (lt_of_le_of_lt (Nat.div_le_self _ _) (lt_of_le_of_lt hk (by norm_num))) i j
 
 /-- **The sampled audit's completeness at v1's record under rev1 at the cap 1/1,000 on Llama-3.1-8B's served layout**,
 the honest cast at 8.72: on the population `Served`, the measured cap rate at `ε` gives `CompleteSampled` at `ε`
-per draw. -/
+per sample. -/
 theorem pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_llama31_8b [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (sem : PearlCSem Q R S) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ)
     (hR : HonestTileCapRate (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -148,11 +148,11 @@ theorem pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_llama31_8b [Fintype Q] [Dec
     CompleteSampled (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCDomainDevShapes (devSm120v1 Prices.sm120Loop) llama31_8bLinears) Served ε :=
-  completeSampledDevRev1K (w := 26) (by norm_num) (-133) 4 Prices.sm120Loop sem _ _ _ (fun _ hL => hL.1) Served ε hR
+  completeSampledDevRev1K (w := 26) (-133) 4 Prices.sm120Loop sem _ _ _ (fun _ hL => hL.1) Served ε hR
 
 /-- **The sampled audit's completeness at v1's record under rev1 at the cap 1/1,000 on Qwen3-8B's served layout**, the
 honest cast at 8.72: on the population `Served`, the measured cap rate at `ε` gives `CompleteSampled` at `ε` per
-draw. -/
+sample. -/
 theorem pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (sem : PearlCSem Q R S) (Served : Workload → (ℕ → Codes) → Prop) (ε : ℝ)
     (hR : HonestTileCapRate (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
@@ -161,6 +161,6 @@ theorem pearlCCompleteSm120v1LoopCast8p72Rev1Cap1000_qwen3_8b [Fintype Q] [Decid
     CompleteSampled (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
       (pearlCDomainDevShapes (devSm120v1 Prices.sm120Loop) qwen3_8bLinears) Served ε :=
-  completeSampledDevRev1K (w := 26) (by norm_num) (-133) 4 Prices.sm120Loop sem _ _ _ (fun _ hL => hL.1) Served ε hR
+  completeSampledDevRev1K (w := 26) (-133) 4 Prices.sm120Loop sem _ _ _ (fun _ hL => hL.1) Served ε hR
 
 end Pouw.PearlC

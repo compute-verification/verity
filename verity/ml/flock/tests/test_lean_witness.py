@@ -8,7 +8,7 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   `test_lean_rec_coins` restages it (its `pub.bin` and `registered.json` too: the recorded ones register no opened
   rows, which `Registered.checkComplete` refuses at setup), and checked as `verity/flock-circuit`; the outer session
   was proved before the OS masks and the current coin schedule, over the level of an earlier inner session of the same
-  population, so only its draw is this level's, every identity refuses it at its Hello, and only the checks that don't
+  population, so only its sample is this level's, every identity refuses it at its Hello, and only the checks that don't
   read the Hello are asserted on it. The inner description is not registered (no staging runs `inner_registered
   register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags` (`TagsOkZHJ`) takes them, and their shared-row
   public file passes `ScopeZR`, `Typable`'s statement check; the public-output one-table checks, `TagsOk` and
@@ -16,16 +16,16 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
 * `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2, two firewalled
   runs of `benchmarks/recursion_e2e` (MODES=firewall). The first staged its inner statement with every instance's own
   rows under `Q_template_instance` (`85-rec-reprice.sh`'s `stage_inner`) and proved its inner session on the
-  challenger's coin tree; the second, over that inner session (`STAGE=0`, its partition, program and draw kept),
+  challenger's coin tree; the second, over that inner session (`STAGE=0`, its partition, program and sample kept),
   staged V*'s statements with the inner program, every level registering its opened rows and their siblings, RecCap's
   included, and proved and verified them (`85-rec-reprice.sh` STEP=vstage, vcap, oprove and lean). The fixture holds
   the files these tests read, the circuits and V*'s large programs xz-compressed, the inner transcript is tracked
   beside it (`f1-gate-transcript`), and each is checked against the run's own listing (`prover.sha256`) once
   decompressed. Lean's verifier builds the inner statement from its own partition object and program
   (`AcceptsPublic`), V*'s ten staged statements are the ones `outerStatementsAt` lists, each session is one of them
-  byte for byte (`RecVStar.checkStmt`) and draws every unit, and the rate is below 1 at `k = 2^23` (at `2^21` for
+  byte for byte (`RecVStar.checkStmt`) and samples every unit, and the rate is below 1 at `k = 2^23` (at `2^21` for
   these sessions). The sessions were proved with the OS masks in `verity/flock-circuit`'s `--zk` identity, and the
-  verifier of record accepts them as `verity/flock-circuit`: the gate is witnessed under the current identity. The
+  verifier accepts them as `verity/flock-circuit`: the gate is witnessed under the current identity. The
   event's last conjunct is shown in its executable form only: the honest outputs are the circuit's, and a public file
   whose one output row is committed one bit off still sets up. That is the executable fact `¬ holds` is about, not
   that Lean's `holds` flips there: no Lean lemma links execution to `holds`, and the cheater's row not being the
@@ -53,7 +53,7 @@ import pytest
 from test_lean_rec_coins import built, restaged  # noqa: F401
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation.reference import evaluate_call
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.program import Program
 from verity_flock import circuit as C
@@ -76,7 +76,7 @@ CIRCUIT_SHA512 = ("27aded67e57a39ba5ccc3dbfff854d0de705cd2fd858261e281749a0fe580
 #: the gate run's files these tests read, a file `f` stored as `f.xz` when large, and `prover.sha256`: their lines of
 #: the run's own listing
 F1 = HERE / "fixtures" / "f1-gate"
-#: the gate's inner transcript, the coin server's record of its inner session (the gate run's `inner/s0/public.json`,
+#: the gate's inner transcript, the challenger's live-coin part's record of its inner session (the gate run's `inner/s0/public.json`,
 #: xz-compressed, and its line of the run's listing), tracked: a check's pod fetches a registered fixture only once `main`
 #: registers it
 F1_TRANSCRIPT = HERE / "fixtures" / "f1-gate-transcript"
@@ -88,8 +88,8 @@ F1_STATEMENTS = (("rec-open/l64-h8", 436), ("rec-open/l16-h7", 212), ("rec-open/
                  ("rec-residuals/m27-k24-c8-p0", 2), ("rec-residuals/m27-k24-c8-p1", 2), ("rec-cap/n128-l1", 128),
                  ("rec-cap/n128-l2", 128), ("rec-cap/n64-l3", 64), ("rec-cap/n128", 128))
 #: the gate's level statements and the recorded level 3 were staged before a level registered its opened rows and their
-#: siblings, so their reads files name no `row`, and `Registered.checkComplete` refuses them at setup (PRF-421 re-records
-#: the gate and restages the recorded level)
+#: siblings, so their reads files name no `row`, and `Registered.checkComplete` refuses them at setup until the gate is
+#: re-recorded and the recorded level restaged
 UNREGISTERED_ROWS = pytest.mark.skip(reason="PRF-421: the reads file names no row port (staged before levels registered "
                                      "row and aux), so Registered.checkComplete refuses it before the checks this test reads")
 _STALE = ("L0", "L1", "L2", "L3")
@@ -165,14 +165,14 @@ def test_no_recorded_inner_description_is_registered(inner):
 @pytest.mark.parametrize("check", ["tags_ok_zhj", "scope_zr", "scope_ok", "full_draw"])
 def test_the_recorded_level_meets(outer, check):
     """`TagsOkZHJ` (`ZkOuterR.hTags`), `ScopeZR` (the event's statement check and `Typable`'s, with the registered reads),
-    `VStmt.hscope`, and the full draw `RecordCustody` reads."""
+    `VStmt.hscope`, and the full sample `RecordCustody` reads."""
     assert outer[check]["ok"], outer[check].get("why")
 
 
 @UNREGISTERED_ROWS
 def test_the_recorded_level_is_refused_at_its_hello(outer):
     """`AcceptsZKR` refuses the level's session as `verity/flock-circuit` at its Hello: its prover (505b9bfb1) lacked
-    the OS masks (`osMasks`) and drew its coins at an earlier schedule."""
+    the OS masks (`osMasks`) and flipped its coins at an earlier schedule."""
     assert (outer["accepts_zkr"]["ok"], outer["accepts_zkr"].get("why")) == (False, S2_R7)
 
 
@@ -312,7 +312,7 @@ def f1_inner(f1_gate, once) -> dict[str, dict]:
 
 def _f1_draw() -> dict:
     """The verifier's sample of the gate's inner session (`rec_live.full_draw`, as `rec_reprice.py partition` writes it):
-    the stratified law at K = the population over its own population program and template query, every unit."""
+    the stratified sampling design at K = the population over its own population program and template query, every unit."""
     t = bind(G.GemmCoordinate, K=4096, **G.GEMM_HOPPER)
     return RL.full_draw(P.population_program(t, 2), P.template_instance_query(t))
 
@@ -391,7 +391,7 @@ def test_f1_the_session_meets(f1, part):
     """V*'s statement `j` at its session: `checkStmt` (`AcceptsZKV`'s second conjunct, so the session's circuit file is
     Lean's own `RecVStar.circuitFile` under the verifier's bindings, byte for byte, and its registered reads pass
     `checkOwn`, `checkRows`, `checkAcc` and `checkAccReads`), `TagsOkZHJ` (`ZkOuterR.hTags`), `ScopeZR`, `VStmt.hscope`,
-    and the full draw over its population (`RecordCustody`)."""
+    and the full sample over its population (`RecordCustody`)."""
     w, j = f1[part, STATEMENT], F1_PARTS.index(part)
     assert w["accepts_zkv"]["part"] == j
     assert "check_stmt" not in w["accepts_zkv"], w["accepts_zkv"]["check_stmt"]
@@ -402,7 +402,7 @@ def test_f1_the_session_meets(f1, part):
 
 @pytest.mark.parametrize("part", [pytest.param(p, marks=UNREGISTERED_ROWS) if p in _STALE else p for p in F1_PARTS])
 def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
-    """`AcceptsZKR`, and so `AcceptsZKV`, accepts every gate session as `verity/flock-circuit`, the verifier of record's
+    """`AcceptsZKR`, and so `AcceptsZKV`, accepts every gate session as `verity/flock-circuit`, the verifier's
     `--zk` identity with the OS masks, which the gate's prover had."""
     w = f1[part, STATEMENT]
     for check in ("accepts_zkr", "accepts_zkv"):
@@ -411,13 +411,13 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
 
 @pytest.mark.parametrize("part", [pytest.param("L3", marks=UNREGISTERED_ROWS), "cap"])
 def test_f1_verify_accepts_the_session(built, f1_gate, f1, once, part):  # noqa: F811
-    """`flock-verify verify --zk`, the verifier of record, accepts level 3 (`rec-open/l16-h4`, 106 units, the smallest
+    """`flock-verify verify --zk`, the verifier, accepts level 3 (`rec-open/l16-h4`, 106 units, the smallest
     level) and RecCap (`rec-cap/n128`, `RecCoins.checkCap`) with the verifier's own V* inputs, the inner statement and
-    session its coefficients are checked against, the verifier's full draw of that session (`_f1_draw`), and the coin
-    server's inner transcript (`inner/s0/public.json`), whose link points, level-3 tops and `root_B` the unit is held to
+    session its coefficients are checked against, the verifier's full sample of that session (`_f1_draw`), and the challenger's
+    live-coin part's inner transcript (`inner/s0/public.json`), whose link points, level-3 tops and `root_B` the unit is held to
     (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as `85-rec-reprice.sh`'s STEP=lean runs it: through every check and
     every refusal the verdict runs last (the form's, a draw-less session's, a V* session's short of every unit,
-    `RecSetup.fullDraw`, and one over an inner session whose record holds no draw, `RecSetup.innerDrawn`), and not as a
+    `RecSetup.fullDraw`, and one over an inner session whose record holds no sample, `RecSetup.innerDrawn`), and not as a
     private circuit's. The checks above are the model's predicates; this is the shipped verdict, so a refusal added to it
     that an honest V* session meets fails here and nowhere else. About two minutes, beside the gate's witness runs."""
     g, d = f1_gate, f1["inputs"]

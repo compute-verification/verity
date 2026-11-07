@@ -11,8 +11,11 @@ import all Init.Data.ToString.Basic
 * `Registration.Entry.refusal_eq_none_iff`: an entry is refused exactly when it is invalid, so a refusal names a check
   the entry fails, the first in `Entry.Valid`'s order (a site entry's: `Site.Entry.refusal_eq_none_iff`).
 * `Registration.valid_append_singleton`: a log with one more entry is valid exactly when the log is and the entry is
-  valid against it and registers no item it registers, so a log is checked one entry at a time; and every prefix of a valid log is valid
-  (`Registration.Valid.of_prefix`).
+  valid against it and registers no item and declares no day it registers or declares, so a log is checked one entry
+  at a time (`Registration.valid_append_singleton_iff_refusal`, by the log's refusal); and every prefix of a valid log
+  is valid (`Registration.Valid.of_prefix`).
+* `Registration.Valid.days_nodup`: a valid log declares each day at most once; and a day's declaration stays the day's as
+  the log grows (`Registration.declared_prefix`).
 * `Site.ofLog_prefix`: the Site grows along the log, a prefix's sheets, locations and links being a prefix of every
   extension's; and what an id names in a prefix's Site it names in every extension's (`Site.loc?_ofLog_prefix`,
   `Site.kind?_ofLog_prefix`), so a later entry changes nothing already registered.
@@ -20,8 +23,9 @@ import all Init.Data.ToString.Basic
   tree, each location under a registered parent of a kind its own allows.
 * A small onsite site and a later entry for each check, each refused by that check's name
   (`Registration.Example.onsite_refusals`), and the same entries on a remote site, which accepts the two that only an
-  onsite site refuses (`Registration.Example.remote_refusals`); and a device's model read off the Site
-  (`Registration.Example.gpu0_device`).
+  onsite site refuses (`Registration.Example.remote_refusals`); a device's model read off the Site
+  (`Registration.Example.gpu0_device`); and the onsite site with day 0 declared, a second declaration of the day refused
+  (`Registration.Example.declaration_refusals`).
 -/
 
 @[expose] public section
@@ -119,6 +123,23 @@ theorem Entry.refusal_eq_none_iff {S : Site} {head : String} {e : Entry} :
   | information _ _ =>
     unfold Entry.refusal Entry.Valid Entry.kindRefusal Entry.Checks
     split_ifs <;> simp_all
+  | declaration _ _ =>
+    unfold Entry.refusal Entry.Valid Entry.kindRefusal Entry.Checks
+    split_ifs <;> simp_all
+
+/-- **The log's refusal decides validity**: the log refuses its next entry exactly when the entry is invalid against it,
+registers an item twice or declares a day it declares. -/
+theorem refusal_eq_none_iff {l : Registration} {e : Entry} :
+    refusal D A c l e = none ↔ e.Valid D A c (Site.ofLog l) (head D c l) ∧ e.Once l := by
+  unfold refusal Entry.Once
+  rw [Option.or_eq_none_iff, Entry.refusal_eq_none_iff]
+  split_ifs <;> simp_all
+
+@[simp] theorem days_nil : days [] = [] := rfl
+
+theorem days_concat (l : Registration) (e : Entry) :
+    days (l ++ [e]) = days l ++ (e.declared?.map (·.day)).toList := by
+  cases h : e.declared? <;> simp [days, List.filterMap_append, h]
 
 @[simp] theorem head_nil : head D c [] = D.genesis c := rfl
 
@@ -154,6 +175,40 @@ theorem Valid.of_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) (hv : Val
   have := hv i (by simp; omega)
   simpa [List.getElem_append_left hi, List.take_append_of_le_length (Nat.le_of_lt hi)] using this
 
+/-- **A valid log with one more entry is valid exactly when the log refuses no entry**: the check of a log is its
+refusal of each entry in turn. -/
+theorem valid_append_singleton_iff_refusal {l : Registration} {e : Entry} :
+    Valid D A c (l ++ [e]) ↔ Valid D A c l ∧ refusal D A c l e = none := by
+  rw [valid_append_singleton, refusal_eq_none_iff]
+
+/-- **A valid log declares each day at most once.** -/
+theorem Valid.days_nodup {l : Registration} (h : Valid D A c l) : (days l).Nodup := by
+  induction l using List.reverseRecOn with
+  | nil => simp
+  | append_singleton l e ih =>
+    obtain ⟨hl, -, ho⟩ := valid_append_singleton.mp h
+    have ho : e.DayOnce l := ho.2
+    rw [days_concat, List.nodup_append]
+    refine ⟨ih hl, ?_, ?_⟩
+    · cases e.declared? <;> simp
+    · intro a ha b hb
+      cases hd : e.declared? with
+      | none => simp [hd] at hb
+      | some d =>
+        have hn : d.day ∉ days l := ho d hd
+        simp [hd] at hb
+        rintro rfl
+        exact hn (hb ▸ ha)
+
+/-- **A day's declaration stays the day's**: once the log declares a circuit for day `j`, every extension of it declares
+the same circuit for day `j`, and in a valid log it is the only declaration of the day (`Valid.days_nodup`). -/
+theorem declared_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) {j : ℕ} {d : Declared}
+    (hd : declared l₁ j = some d) : declared l₂ j = some d := by
+  obtain ⟨t, rfl⟩ := h
+  unfold declared at hd ⊢
+  rw [List.findSome?_append, hd]
+  rfl
+
 /-- **A valid log registers each id once**, the outside's among them. -/
 theorem Valid.ids_nodup {l : Registration} (h : Valid D A c l) : (Site.ofLog l).ids.Nodup := by
   induction l using List.reverseRecOn with
@@ -164,6 +219,7 @@ theorem Valid.ids_nodup {l : Registration} (h : Valid D A c l) : (Site.ofLog l).
     cases e with
     | site _ s => exact he.1.1
     | information _ _ => simpa [Entry.added] using ih hl
+    | declaration _ _ => simpa [Entry.added] using ih hl
 
 /-- **A valid log's Site is a tree**: each location's parent is registered, and of a kind the location's own allows. -/
 theorem Valid.parents {l : Registration} (h : Valid D A c l) :
@@ -175,6 +231,7 @@ theorem Valid.parents {l : Registration} (h : Valid D A c l) :
     obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
     cases e with
     | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | declaration _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
     | site _ s => ?_
     have hpre : (Site.ofLog l).locs <+: ((Site.ofLog l).add s).locs := by simp [Site.add, List.prefix_append]
     rw [Site.ofLog_concat, Entry.added]
@@ -246,7 +303,7 @@ def remote : Entry := .site "genesis"
 def next (locs : List Loc) (links : List Link := []) (sheets : List Sheet := []) (previous := "genesis+") : Entry :=
   .site previous ⟨sheets, locs, links⟩
 
-/-- A later entry for each check, with the refusal it draws on the onsite site. -/
+/-- A later entry for each check, with the refusal it samples on the onsite site. -/
 def later : List (Entry × Option Refusal) :=
   [(next [device "gpu2" "node0" sheetB, memory "hbm2" "gpu2" .hbm (128 * 2 ^ 30),
       memory "nvme1" "node0" .disk (2 ^ 40)], none),
@@ -294,6 +351,34 @@ theorem remote_refusals :
     later.map (fun x => x.1.refusal digests auditor .remote (Site.ofLog [remote]) (head digests .remote [remote])) =
       later.map (fun x => if x.2 = some .uncertified ∨ x.2 = some .challengerReach then none else x.2) := by
   decide +kernel
+
+/-- Day 0's circuit: a program and its one block Definition. -/
+def day0 : Declared := ⟨0, "program0", ["block0"]⟩
+
+/-- The onsite site, then its declaration of day 0. -/
+def declaredLog : Registration := [onsite, .declaration "genesis+" day0]
+
+/-- The onsite site with day 0 declared is valid, and day 0's declared circuit is `day0`, a nonempty one. -/
+theorem declaredLog_valid : Valid digests auditor .onsite declaredLog ∧ declared declaredLog 0 = some day0 ∧
+    day0.blocks ≠ [] := by
+  refine ⟨by decide +kernel, rfl, by simp [day0]⟩
+
+/-- A second declaration of day 0 is refused, by `duplicateDeclaration`, and a declaration of day 1 is not; a
+declaration that follows no head is refused by `previous` first. -/
+theorem declaration_refusals :
+    [Entry.declaration "genesis++" ⟨0, "program1", ["block0"]⟩, .declaration "genesis++" ⟨1, "program1", ["block1"]⟩,
+      .declaration "genesis+" ⟨0, "program1", ["block0"]⟩].map (refusal digests auditor .onsite declaredLog) =
+      [some .duplicateDeclaration, none, some .previous] := by
+  decide +kernel
+
+/-- A window within day 0 of a monitoring period cut into days runs day 0's declared program, and runs no other. -/
+theorem runsDeclared_day0 (m : MonitoringPeriod) (cut : m.span.Cut 1) :
+    RunsDeclared declaredLog m cut (cut.part 0) "program0" ∧ ¬RunsDeclared declaredLog m cut (cut.part 0) "program1" := by
+  refine ⟨⟨0, ⟨le_refl _, le_refl _⟩, day0, rfl, rfl⟩, ?_⟩
+  rintro ⟨j, -, d, hd, hp⟩
+  obtain rfl : j = 0 := Subsingleton.elim _ _
+  obtain rfl : d = day0 := Option.some_injective _ (hd.symm.trans rfl)
+  simp [day0] at hp
 
 end Example
 

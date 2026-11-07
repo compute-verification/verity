@@ -2,6 +2,8 @@ module
 
 public import Definitions.Flock.Holo
 public import Definitions.Flock.Compiled
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The holographic table, compiled: caps, and the openings after the last coin

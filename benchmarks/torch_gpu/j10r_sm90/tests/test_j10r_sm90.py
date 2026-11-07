@@ -1,5 +1,5 @@
 """The fixtures' inputs and their writer and reader, on the CPU: the restated served weights equal the seeded generator
-(values read from its module), the step's unit positions and sampled units, and `fixtures.expected` at a shrunken linear
+(values read from its module), the step's unit positions and sampled proof blocks, and `fixtures.expected` at a shrunken linear
 against `h1tile.j10r_reference` called directly, with a tampered array refused by `fixtures.load`."""
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import shape as S
 
 import fixtures as F
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 #: per linear: B's row 0 [:4], its last row [-4:], and its first and last channel scales' f32 words, from the generator's
 #: weights module at the frozen shape

@@ -4,7 +4,6 @@ public import Definitions.Nci.Guarantees.Threads
 public import Proofs.Core.Circuit
 public import Proofs.Nci.Pull
 public import Proofs.Nci.Fit
-public import Proofs.Nci.Rate
 
 /-!
 # Proofs of NCI's guarantees over threads
@@ -436,57 +435,20 @@ theorem ThreadedTrainingOn_rate :
   have h2 := mul_le_mul_of_nonneg_left hs hba.le
   nlinarith
 
-/-! ## At `(c, k)`
+theorem ThreadedThrottled : Guarantees.ThreadedThrottled := ThreadedThrottled_rate
 
-Each guarantee over the policy at `(c, k)` is its rate form at `α = k / c` (`compliesRate_of_complies`), where
-`α c = k` (`rate_mul`). -/
+theorem ThreadedThrottledOn : Guarantees.ThreadedThrottledOn := ThreadedThrottledOn_rate
 
-theorem ThreadedThrottled : Guarantees.ThreadedThrottled := by
-  intro c k b_w b_a r d T dd e M hc hbw hba hdd hd hB hT hW
-  have h := ThreadedThrottled_rate c (k / c) b_w b_a r d T dd e M (by positivity) hbw hba hdd
-    (compliesRate_of_complies hd) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
-  rwa [rate_mul _ hc] at h
+theorem ThreadedThrottledDark : Guarantees.ThreadedThrottledDark := ThreadedThrottledDark_rate
 
-theorem ThreadedThrottledOn : Guarantees.ThreadedThrottledOn := by
-  intro c k b_w b_a r d T dd e M hc hbw hba hdd hd hB hT hW
-  have h := ThreadedThrottledOn_rate c (k / c) b_w b_a r d T dd e M (by positivity) hbw hba hdd
-    (compliesRate_of_complies hd) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
-  rwa [rate_mul _ hc] at h
+theorem ThreadedThrottledSlots : Guarantees.ThreadedThrottledSlots := ThreadedThrottledSlots_rate
 
-theorem ThreadedThrottledDark : Guarantees.ThreadedThrottledDark := by
-  intro c k b_w b_a r d T dd e M hc hbw hba hdd hd hB hT hW
-  have h := ThreadedThrottledDark_rate c (k / c) b_w b_a r d T dd e M (by positivity) hbw hba hdd
-    (compliesRate_of_complies hd) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
-  rwa [rate_mul _ hc] at h
+theorem ThreadedThrottledOnSlots : Guarantees.ThreadedThrottledOnSlots := ThreadedThrottledOnSlots_rate
 
-theorem ThreadedThrottledSlots : Guarantees.ThreadedThrottledSlots := by
-  intro c k b_w b_a r d T σ dd e M hc hbw hba hdd hd hB hT hW
-  have h := ThreadedThrottledSlots_rate c (k / c) b_w b_a r d T σ dd e M (by positivity) hbw hba hdd
-    (compliesRate_of_complies hd) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
-  rwa [rate_mul _ hc] at h
+theorem ThreadedThrottledDarkSlots : Guarantees.ThreadedThrottledDarkSlots := ThreadedThrottledDarkSlots_rate
 
-theorem ThreadedThrottledOnSlots : Guarantees.ThreadedThrottledOnSlots := by
-  intro c k b_w b_a r d T σ dd e M hc hbw hba hdd hd hB hT hW
-  have h := ThreadedThrottledOnSlots_rate c (k / c) b_w b_a r d T σ dd e M (by positivity) hbw hba hdd
-    (compliesRate_of_complies hd) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
-  rwa [rate_mul _ hc] at h
+theorem ThreadedTraining : Guarantees.ThreadedTraining := ThreadedTraining_rate
 
-theorem ThreadedThrottledDarkSlots : Guarantees.ThreadedThrottledDarkSlots := by
-  intro c k b_w b_a r d T σ dd e M hc hbw hba hdd hd hB hT hW
-  have h := ThreadedThrottledDarkSlots_rate c (k / c) b_w b_a r d T σ dd e M (by positivity) hbw hba hdd
-    (compliesRate_of_complies hd) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
-  rwa [rate_mul _ hc] at h
-
-theorem ThreadedTraining : Guarantees.ThreadedTraining := by
-  intro c k b_w b_a κ r d T dd e M hc hbw hba hdd hd hB hT hW hκ
-  have h := ThreadedTraining_rate c (k / c) b_w b_a κ r d T dd e M (by positivity) hbw hba hdd
-    (compliesRate_of_complies hd) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc]) hκ
-  rwa [rate_mul _ hc] at h
-
-theorem ThreadedTrainingOn : Guarantees.ThreadedTrainingOn := by
-  intro c k b_w b_a κ r d T dd e M hc hbw hba hdd hd hB hT hW hκ
-  have h := ThreadedTrainingOn_rate c (k / c) b_w b_a κ r d T dd e M (by positivity) hbw hba hdd
-    (compliesRate_of_complies hd) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc]) hκ
-  rwa [rate_mul _ hc] at h
+theorem ThreadedTrainingOn : Guarantees.ThreadedTrainingOn := ThreadedTrainingOn_rate
 
 end Nci.SecurityProofs

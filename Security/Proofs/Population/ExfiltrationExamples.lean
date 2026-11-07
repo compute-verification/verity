@@ -1,20 +1,28 @@
 module
 
-public import Proofs.Population.Exfiltration
-public import Proofs.Population.Determinacy
+public import Definitions.Population.Dataflow
+public import Definitions.Population.Exfiltration
+meta import Lean.Meta.Tactic.NormCast
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
+import Proofs.Population.Determinacy
+import Proofs.Population.Exfiltration
 
 /-!
 # Exfiltration before detection: tightness, and what fails without each assumption
 
 * `tight_cum`, `tight_exists`: **the stopping-time bound is attained.** A strategy that leaks `ℓ` every window and
   escapes each window with mass exactly `exp (-κ ℓ)` reaches `(j + 1) ℓ` with probability exactly `exp (-κ j ℓ)`, which
-  is `tail_cum`'s bound at `x = (j + 1) ℓ`; for every `κ ≥ 0` and `ℓ > 0` there is such a draw.
-* `no_pressure_cum`, `not_pressure_univ`: **without detection pressure** (a leak no draw catches: no faulty proof block,
-  a draw known before the commitment, or an uncertified link) `n` windows leak `n ℓ` with probability one.
+  is `tail_cum`'s bound at `x = (j + 1) ℓ`; for every `κ ≥ 0` and `ℓ > 0` there is such a sample.
+* `no_pressure_cum`, `not_pressure_univ`: **without detection pressure** (a leak no sample catches: no incorrect proof block,
+  a sample known before the commitment, or an uncertified link) `n` windows leak `n ℓ` with probability one.
 * `no_halt_cumUpTo`, `pressure_empty`: **without a halt**, a strategy caught in every window still leaks `n ℓ`, and it
   meets detection pressure at every `κ`.
 * `seedCopy_checked`, `seed_egress`: **without bound inputs**, a checked population whose units copy a prover-chosen
-  seed to the egress shows all `2 ^ k` values with no faulty proof block, so no draw sees it.
+  seed to the egress shows all `2 ^ k` values with no incorrect proof block, so no sample sees it.
 * `not_trustedModel_of_reveal`: **without a trusted model**, an honest model whose outputs determine the target gives it
   to any guesser.
 -/
@@ -89,13 +97,13 @@ theorem tight_tail (hμ : IsDist μ) {κ ℓ : ℝ} (hℓ : 0 < ℓ) {s : Finset
   rw [tight_cum hμ hℓ s n j h hj, hs, ← Real.exp_nat_mul]
   ring_nf
 
-/-- The two-coin draw that catches with probability `1 - a`. -/
+/-- The two-coin sample that catches with probability `1 - a`. -/
 noncomputable def coin (a : ℝ) : Bool → ℝ := fun b => if b then a else 1 - a
 
 theorem coin_isDist {a : ℝ} (h0 : 0 ≤ a) (h1 : a ≤ 1) : IsDist (coin a) :=
   ⟨fun b => by cases b <;> simp [coin] <;> linarith, by simp [coin]⟩
 
-/-- **The bound is tight for every `κ ≥ 0` and `ℓ > 0`**: some draw and some strategy meet detection pressure `κ` and the
+/-- **The bound is tight for every `κ ≥ 0` and `ℓ > 0`**: some sample and some strategy meet detection pressure `κ` and the
 per-window bound `ℓ`, and reach `(j + 1) ℓ` with probability exactly `tail_cum`'s bound, at every horizon `n > j`. -/
 theorem tight_exists {κ ℓ : ℝ} (hκ : 0 ≤ κ) (hℓ : 0 < ℓ) :
     ∃ (μ : Bool → ℝ) (A : Strategy Bool), IsDist μ ∧ DetectionPressure μ κ A ∧ LeakBounded ℓ A ∧
@@ -109,7 +117,7 @@ theorem tight_exists {κ ℓ : ℝ} (hκ : 0 ≤ κ) (hℓ : 0 < ℓ) :
 
 /-! ## Without detection pressure -/
 
-/-- **No draw catches it**: a strategy that escapes on every coin leaks `ℓ` in each of the `n` windows. -/
+/-- **No sample catches it**: a strategy that escapes on every coin leaks `ℓ` in each of the `n` windows. -/
 theorem no_pressure_cum (ℓ : ℝ) : ∀ (n : ℕ) (h : List Ω) (cs : Fin n → Ω),
     (constStrategy ℓ univ).cum n h cs = n * ℓ
   | 0, _, _ => by simp [Strategy.cum]
@@ -197,8 +205,8 @@ theorem seedCopy_checked (k : ℕ) : (seedCopy k).Checked := by
     rw [hsw] at hsr
     cases hsr
 
-/-- **No faulty proof block, every seed on the egress**: with the seed slots left to the prover (`X` = the inputs), the
-assignments with no faulty proof block show all `2 ^ k` egress values. -/
+/-- **No incorrect proof block, every seed on the egress**: with the seed slots left to the prover (`X` = the inputs), the
+assignments with no incorrect proof block show all `2 ^ k` egress values. -/
 theorem seed_egress (k : ℕ) :
     2 ^ k ≤ ((seedCopy k).egress (seedFns k) (fun _ => false) (seedCopy k).input (univ.image Sum.inr) ∅).card := by
   classical

@@ -107,6 +107,7 @@ research merge --canary [--tool check] [--json]                    # the gates' 
 research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
+research lean-times ...  # Lean tasks' p95
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
@@ -131,8 +132,8 @@ and fast-forwards to the longest prefix that passed.
 
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain, in a scratch
 worktree, onto the remote's `--into` or a train ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
-refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the markdown caps
-among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
+refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the repository's
+lints) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
 `tools/verity/check/train.sh BRANCH MACHINE` checks it (`auto`: the node
 `check.py --slots` picks), and `research merge BRANCH` lands it.
 

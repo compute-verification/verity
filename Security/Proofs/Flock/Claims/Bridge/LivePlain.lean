@@ -1,7 +1,40 @@
 module
 
 public import Proofs.Flock.Claims.Bridge.LiveZk
-public import Proofs.Flock.Soundness.Discharge.Tables.Session
+import Flock.With.Deployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Game.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The live plain session decided by flock-verify, and the old salted transfer
@@ -9,7 +42,7 @@ public import Proofs.Flock.Soundness.Discharge.Tables.Session
 `LiveZk` without `--zk`: the live session (`Live.liveV`) decided by flock-verify's verdict on the transcript `wr x o`
 the outcome is written as, every SHA-512 call of the verdict an oracle query (`Hashes.oc`, `DeployOC`):
 
-* `verdictPL I t`: `Accepts`' steps as an `OC` program: the session's statement set up from `I` and the record's draw,
+* `verdictPL I t`: `Accepts`' steps as an `OC` program: the session's statement set up from `I` and the record's sample,
   then `verifyWithM Hashes.oc`. `verdictPL_eval`: against `H`, it accepts exactly when `verifyWith (hOf H)` does;
   `verdictPL_sha`: against SHA-512 (`shaH`), exactly when `Accepts` holds.
 * `Pr_acc_plain`: `Claims.run`'s acceptance with an event `Q` of the outcome, against SHA-512, is `liveSession`'s

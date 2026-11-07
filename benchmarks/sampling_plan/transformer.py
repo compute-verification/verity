@@ -28,8 +28,8 @@ plan's certificate means the same whatever the cut, where a count of incorrect p
 incorrect proof blocks (`IntegrityPeriod`'s W) are reported beside it. The cost is Flock's, fitted from its zero-knowledge
 sessions on sm_120 (`inputs.observations`, `costfit`), in GPU-seconds of an RTX PRO 6000, with every serve-time
 commitment of the block: every unit's outputs, the requests' bytes, the carried KV cache at the block's close, PoUW's
-CP-W receipts (h1, assumed) and the bandwidth audit's receipts (`serve`), and the replay of each drawn request
-(`Serving.replay`). A plan is a stratified law, k units of each subcircuit; the chosen one is the cheapest certifying at
+CP-W receipts (h1, assumed) and the bandwidth audit's receipts (`serve`), and the replay of each sampled request
+(`Serving.replay`). A plan is a stratified sampling design, k units of each subcircuit; the chosen one is the cheapest certifying at
 most `TARGET_SHARE` of the block's ANDs incorrect. `recertify` recomputes its certificate from the sizes alone through
 core's `Stratified.harm_bound` and `count_bound`, and `pooled` bounds the incorrect proof blocks over a monitoring period of many
 blocks. `handoff` is the plan as the GPU loop registers it: one `IntegrityPeriod` window a subcircuit, or the block as one
@@ -49,7 +49,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import I, KEY, observations  # noqa: E402
+from inputs import CARDS, I, observations  # noqa: E402
 
 from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
@@ -188,7 +188,7 @@ def _group(name: str, child: Shape, count: int, rows: tuple[int, ...]) -> Shape:
                  parts=((child, count),))
 
 
-class Dag:
+class DefinitionGraph:
     """The block's Definition DAG: `ops` maps each op to its root shape and its instances a block, and `ids` each real
     Definition's shape id to its descriptor id (the circuit record's subcircuit id); a stub has none."""
 
@@ -340,7 +340,7 @@ class Dag:
 @dataclass(frozen=True)
 class Serving:
     """The block's serving, for its serve-time commitments and replay: `block_s` seconds, `audit_store` bytes under
-    the bandwidth audit with `audit_passes` passes a block, `replay` GPU-s to rebuild one drawn request's witnesses
+    the bandwidth audit with `audit_passes` passes a block, `replay` GPU-s to rebuild one sampled request's witnesses
     (its positions re-run from its committed bytes; the loop is batch-invariant), and `step_s`, the decode step when
     the requests a block are derived from it."""
 
@@ -369,18 +369,19 @@ def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
     return tuple(Commitment(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
 
 
-def costs(m: Model, s: Serving) -> CostModel:
-    """Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
-    `request` replay grain."""
-    obs = observations()
+def costs(m: Model, s: Serving, card: str = "rtx-pro-6000") -> CostModel:
+    """Flock's model fitted on `card`'s observations (`inputs.CARDS`; the RTX PRO 6000's is int8_llama's fit) with the
+    commitment rate, the block's serve-time commitments and the `request` replay grain."""
+    obs = observations(card)
+    key, cpu = CARDS[card]
     fitted = Fitted(fit(obs, "prove", ["one", "ands", "ands*staged", "ands*drawn"]),
                     fit(obs, "verify", ["one", "ands", "ands*staged", "ands*drawn"]),
-                    fit(obs, "stage", ["one", "ands", "ands*staged"]), I["cpu"].value, KEY)
+                    fit(obs, "stage", ["one", "ands", "ands*staged"]), I[cpu].value, key)
     return replace(fitted.model(), commit_per_bit=I["commit_per_byte"].value / 8, serve=serve(m, s),
                    replay={"request": ReplayGrain(m.requests, s.replay)})
 
 
-def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
+def candidates(dag: DefinitionGraph, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
     """`candidates.cuts` on each op, every subcircuit in the `request` replay grain: its alternatives, each its units
     by Definition."""
     out, alts = [], {}
@@ -393,8 +394,8 @@ def candidates(dag: Dag, cm: CostModel, objective: Objective, grid: int = 21) ->
 
 def plans(m: Model, s: Serving, delta: float = DELTAS[0], *, grid: int = 61, cut_grid: int = 21):
     """The block's DAG, its cost model, objective and candidates, and the frontier of expected cost against certified
-    faulty proof blocks (screened by `density_bound`)."""
-    dag = Dag(m)
+    incorrect proof blocks (screened by `density_bound`)."""
+    dag = DefinitionGraph(m)
     objective = Objective(delta)
     cm = costs(m, s)
     cands, alts = candidates(dag, cm, objective, cut_grid)
@@ -408,7 +409,7 @@ def chosen(cands: list[Candidate], cm: CostModel, objective: Objective, front: l
 
 
 def law(plan: Plan, cands: list[Candidate]) -> Stratified:
-    """The plan's stratified law: one stratum a subcircuit, k_s of n_s drawn."""
+    """The plan's stratified sampling design: one stratum a subcircuit, k_s of n_s sampled."""
     return Stratified(tuple(Stratum(c.template, c.units, plan.sizes[c.template]) for c in cands
                             if c.template in plan.sizes))
 
@@ -441,7 +442,7 @@ def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, a
 
 def horizon(plan: Plan, cands: list[Candidate], delta: float) -> float:
     """`IntegrityHorizon`'s bound on the incorrect proof blocks over any number of windows, each a subcircuit's window of a block
-    (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws, ln(1/delta) the planner's `ln_upper`."""
+    (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window samples, ln(1/delta) the planner's `ln_upper`."""
     return float(ln_upper(delta) / min(Fraction(plan.sizes[c.template], c.units) for c in cands
                                        if c.template in plan.sizes))
 
@@ -460,7 +461,7 @@ def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int =
     return rows
 
 
-def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
+def handoff(plan: Plan, cands: list[Candidate], dag: DefinitionGraph) -> dict:
     """The plan as a GPU loop registers it (a `circuit_record(..., law, cap)`), each subcircuit
     a Definition's descriptor id (a stub's id until its Definition lands) with its units:
 
@@ -470,11 +471,11 @@ def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
       outside delta every window has fewer than its K0 units incorrect;
     * `record`, the block as one window: every subcircuit under the `work:1` law whose work table's floors are the plan's
       k, which `draw.derive` expands to exactly those k (`work_k`). It needs one `cap` for every subcircuit, so it carries
-      the least statement size; `IntegrityPeriod` covers only a uniform subset, not this law.
+      the least statement size; `IntegrityPeriod` covers only a uniform subset, not this sampling design.
 
     The planner's strata are its ops' subcircuits, so two ops cut to one Definition (attention's QK and PV matmuls both to
     `F2fpBf16_v1`, say) are two of its strata and one of the record's: merged, at the higher of their rates, which only
-    raises each one's sample. A merged subcircuit's units are credited one work, as the work law needs."""
+    raises each one's sample. A merged subcircuit's units are credited one work, as the work sampling design needs."""
     groups: dict[str, list[Candidate]] = {}
     for c in cands:
         if c.template in plan.sizes:
@@ -500,7 +501,7 @@ def handoff(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
             "statement_units": statement, "stubs": sorted(t for t, _ in templates if t.startswith("stub:"))}
 
 
-def summary(plan: Plan, cands: list[Candidate], dag: Dag) -> dict:
+def summary(plan: Plan, cands: list[Candidate], dag: DefinitionGraph) -> dict:
     rows = [{"template": dag.template_id(c), "op": c.op, "units": c.units, "k": plan.sizes[c.template],
              "statement": plan.statement_size[c.template], "work": c.work,
              "ands": c.ands + sum(row_ands(r) for r in c.rows)} for c in cands if c.template in plan.sizes]
@@ -522,7 +523,7 @@ LARGE_SEQUENCES = 1023
 #: its decode step, estimated by their sizing script, not measured: the INT8 GEMMs at 85% of peak (86% of the step)
 #: and decode attention's KV read
 LARGE_STEP_S = 0.195
-#: its replay of a drawn request, estimated: under 10 s for about 1,000 requests batched on one GPU
+#: its replay of a sampled request, estimated: under 10 s for about 1,000 requests batched on one GPU
 LARGE_REPLAY_S = 0.01
 LARGE = Model(layers=70, width=8192, heads=128, mlp=32768, context=32, prompt=8, sequences=LARGE_SEQUENCES,
               requests=requests_per_block(LARGE_SEQUENCES, LARGE_STEP_S, 31))

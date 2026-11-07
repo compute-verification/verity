@@ -14,10 +14,10 @@ import numpy as np
 import pytest
 
 from verity_numerical.bench import generate as G
-from verity_numerical.bench import input_sets as IS
-from verity_numerical.bench import templates as TM
+from verity_flock import input_sets as IS
+from verity_flock import subcircuit_templates as TM
 
-DATA = Path(__file__).parent / "data" / "captured-101"
+DATA = Path(__file__).parent.parent.parent.parent.parent / "verity" / "ml" / "flock" / "tests" / "data" / "captured-101"
 CAPTURED = sorted((DATA / "manifests").glob("*.json"))
 SLICES = sorted(d for d in (DATA / "slices").iterdir() if d.is_dir())
 CENSUS = Path(__file__).resolve().parents[3] / "census"
@@ -111,7 +111,7 @@ def test_generation_is_deterministic_and_prefix_stable(tmp_path):
 
 
 def test_draw_format_is_pinned():
-    """Instance words are a function of (key, draw) alone: the counter stream's bytes and the word rule, fixed here."""
+    """Instance words are a function of (key, sample) alone: the counter stream's bytes and the word rule, fixed here."""
     sub = TM.subcircuit("gemm-coordinate", K=64)
     k = G.key_for(sub, 1)
     assert k.stream(("x", 0), 8).hex() == "cbfb52e4ff385132"

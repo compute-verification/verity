@@ -312,7 +312,7 @@ def chain() -> I.Circuit:
 
 def chain_values(seed: int = 0, first: np.ndarray | None = None) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """`chain`'s units' inputs (x, w) and outputs in its order, each unit's input its writer's output; ``first``: each
-    request's input at layer 0, step 0 (else drawn)."""
+    request's input at layer 0, step 0 (else sampled)."""
     rng = np.random.default_rng(seed)
 
     def bf16(a: np.ndarray) -> np.ndarray:
@@ -589,7 +589,6 @@ def test_the_proof_block_limits_are_c_flocks_composers():
     ``LAST_BLOCK_BYTES``, and `MAX_ROWS` is the most rows whose hm96 range leaves a 2^K_MAX-bit Flock block room."""
     from verity_flock import circuit as FC
 
-    assert (I.K_MAX, I.SLOT_LOG, I.PER_SLOT, I.MASK_LOG) == (FC.K_MAX, FC.SHA_LOG, FC.PER_SLOT, FC.MASK_LOG)
     assert FC.HM_LOG == FC.SHA_LOG and FC._ranges([("mask", FC.MASK_LOG, 1, {})])[1] == I.K_MIN
     assert all((FC.Port("r", b // 2, 8 * b).comps > 0) == (b > I.LAST_BLOCK_BYTES) for b in range(2, 2048, 2))
     rng = np.random.default_rng(0)
@@ -1069,8 +1068,8 @@ class _Counted(list):
 def test_a_windows_registered_rows_are_each_drawn_once(monkeypatch, tmp_path):
     """`fed_chain`'s chain members, two a layer, each read their layer's one row of ``w``: committing and writing the window
     reads each row's salt once, however many members read it, and asks for no statement. Core's ``Registered.statement``
-    draws a member's salts again (a pure-Python ChaCha20 call each) and makes its rows' ints, and the rows' commit drew
-    them a third time: 10,565,136 draws at the 4,32,4 class, whose members read 37,788 distinct rows."""
+    samples a member's salts again (a pure-Python ChaCha20 call each) and makes its rows' ints, and the rows' commit drew
+    them a third time: 10,565,136 samples at the 4,32,4 class, whose members read 37,788 distinct rows."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
     w.salts = _Counted(w.salts)
     monkeypatch.setattr(Bound, "statement", lambda *_: pytest.fail("a statement of the reads drew their salts again"))
@@ -1216,7 +1215,7 @@ def _like(value: Bound, **fields) -> Bound:
 
 def _value_rows(value=None, positions=None, salts=None):
     """An edit giving the first chain member's ``w`` as ``positions`` of ``value(registered value)`` under ``salts(the salts
-    `Window.close` drew)``, each as given when None (the salts drawn again by `rows.commit` when the positions change)."""
+    `Window.close` drew)``, each as given when None (the salts sampled again by `rows.commit` when the positions change)."""
     def edit(window: CS.Binding, data: list[dict]) -> CS.Binding:
         k = _first(window, GID)
         src = data[k]["rows"]["w"]

@@ -3,13 +3,13 @@ packages whose passes can't be reused, with dependencies kept warm.
 
     python tools/verity/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR] [--package PKG]...
                                                       (only those packages: a shard's share, `check.py --shard`)
-                                                      [--regenerate] (a train's check: record differences pass, and
-                                                      audit.json's `regenerated` names the records the train commits)
+                                                      [--regenerate] (the Lean check of `next`: record differences pass,
+                                                      and audit.json's `regenerated` names the records drive commits)
                                                       [--bundle] (a recorded check: the module versions it built, for other nodes)
     python tools/verity/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/verity/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/verity/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
-    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT`, `REPLAYS_KEPT`, `RECORDS_KEPT` or one per `build` slot, artifacts)
+    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT` and `BUILDS_MAX_GB`, `REPLAYS_KEPT`, `RECORDS_KEPT` or one per `build` slot, artifacts, `UNREAD_KEPT`)
 
 A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
 each file under its path relative to its package (a module's is its name), never the package's own path:
@@ -61,6 +61,18 @@ modules go through the kernel once per change of their `.olean` files. With `--f
 the scratch tree's, so the packages of one run share it and nothing outlives the run. Lean gets this
 machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
 
+The audits of `Security` and `Security/Proofs` (`UNREAD_FACTS`) also write what each constant of the analysis mentions
+(`check.py`'s `unread_facts`), and their passes are stored, and reused, only with those facts beside them (`unread/` in
+the cache, `UNREAD_KEPT` last used kept). After the audits, the run joins both packages' facts, this run's or the reused
+passes', and runs the ratchet on wholly unread modules (`unread_ratchet`, `unread.py`): an area of the analysis whose
+wholly unread modules, or their declarations, rose above its cap in `unread-caps.json` fails the run (`unread` in
+`audit.json`'s `failed`), and one that came down leaves the lowered caps in `unread/` under ``--out``. It builds nothing
+and takes seconds. `unread.py` and the caps are out of every key (`NOT_READ`), so a change to either reruns no audit. The
+seeds it reads outside Lean (code that names a declaration or a module, the documents a lock names) are in no key either,
+so each run leaves the facts it read under ``--out`` as `unread/K.jsonl.gz`, by the package's key (`facts_file`), which a
+recorded check publishes: drive's landing gate (`unread_gate.py`) runs the ratchet from them on a change to those seeds
+before it lands.
+
 A machine without a package's dependencies restores them from the evidence store instead of cloning them from GitHub, which
 throttles anonymous clones from shared addresses. `lean-deps.json` pins one bundle per `lake-manifest.json`'s fetched entries + `lean-toolchain`
 (`deps_key`; a `path` entry changes no key) by sha256; the launcher sends a presigned URL for each (`--urls`, `check.py --record`), and a bundle is used only when its
@@ -71,6 +83,7 @@ directory, custody puts them on R2, and `--pin RUN` pins them.
 from __future__ import annotations
 
 import argparse
+import base64
 import fcntl
 import gzip
 import hashlib
@@ -107,6 +120,7 @@ def _module(path: Path, name: str):
 #: contract, which `module_keys` loads (`test_lean_audit.py` holds it)
 COMMON = _module(ROOT / "tools" / "verity" / "check" / "common.py", "check_common_for_lean_audit")
 MK = _module(Path(__file__).resolve().parent / "module_keys.py", "lean_module_keys_for_lean_audit")
+SETTINGS = _module(Path(__file__).resolve().parent / "settings.py", "lean_settings_for_lean_audit")
 #: the task graph's contract, which `module_keys` keys each module with (`module_keys.CONTRACT`)
 CONTRACT = "tools/verity/graph/verity_graph/contract.py"
 
@@ -162,8 +176,109 @@ NOT_READ = {
     "run_daily.py": "the build cache's daily publish",
     "tool.py": "the store's declarations of the scheduled runs",
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
+    "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
+    "unread-caps.json": "the ratchet's caps, which `unread.py` reads",
+    "unread_gate.py": "drive's landing gate on the seeds the ratchet reads, which runs `main`'s copy of this tool",
     "pyproject.toml": "the tools/verity/lean suite's settings",
 }
+
+#: the packages whose audits write `Unread.lean`'s facts (`check.py`'s `UNREAD_FACTS`): a pass of one is reused only with
+#: the facts it wrote, kept beside it, and the ratchet on wholly unread modules joins theirs (`unread_ratchet`)
+UNREAD_FACTS = ("Security", "Security/Proofs")
+UNREAD = "tools/verity/lean/unread.py"
+UNREAD_SCHEMA = "lean-unread-facts/v1"
+#: the facts entries a node keeps beside the passes (`unread/` in the cache), last stored or reused first: Security/Proofs'
+#: are some 6 MB each, and a pass whose facts went is audited again
+UNREAD_KEPT = 64
+
+
+def reusable(cache: Path, pkg: str, k: str) -> bool:
+    """Whether ``pkg``'s pass under ``k`` is kept in ``cache`` with what its reuse needs: the pass, and for a package of
+    `UNREAD_FACTS` the facts its audit wrote."""
+    return (cache / f"{k}.json").is_file() and (pkg not in UNREAD_FACTS or (cache / "unread" / f"{k}.json").is_file())
+
+
+def keep_facts(cache: Path, pkg: str, k: str, rep: dict, out: Path) -> bool:
+    """Store the facts ``pkg``'s audit wrote (its report's `unread_facts`, under ``out``) beside its pass: `unread/K.json`,
+    a `.json` entry so that a verdict pack carries it. False when the audit wrote none."""
+    f = rep.get("unread_facts") or {}
+    src = out / str(f.get("file", ""))
+    if not f or not src.is_file() or _sha(src) != f.get("sha256"):
+        return False
+    d = cache / "unread"
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = d / f".{k}.tmp"
+    tmp.write_text(json.dumps({"schema": UNREAD_SCHEMA, "package": pkg, "key": k, "sha256": f["sha256"],
+                               "facts": base64.b64encode(src.read_bytes()).decode()}))
+    os.replace(tmp, d / f"{k}.json")
+    return True
+
+
+def kept_facts(cache: Path, pkg: str, k: str, out: Path, log=print) -> Path | None:
+    """The facts kept beside ``pkg``'s pass under ``k``, written out to ``out`` (`unread/K.jsonl.gz`, `facts_file`), or None
+    when there are none or (logged) they don't read or their bytes aren't the ones the entry's sha256 names."""
+    entry = cache / "unread" / f"{k}.json"
+    if not entry.is_file():
+        return None
+    try:
+        doc = json.loads(entry.read_text())
+        data = base64.b64decode(doc["facts"], validate=True)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        log(f"lean-audit: {pkg}: the facts kept under {k[:12]} don't read ({type(e).__name__}: {e})")
+        return None
+    if doc.get("schema") != UNREAD_SCHEMA or hashlib.sha256(data).hexdigest() != doc.get("sha256"):
+        log(f"lean-audit: {pkg}: the facts kept under {k[:12]} aren't {UNREAD_SCHEMA} bytes of the sha256 they name")
+        return None
+    dst = facts_file(out, k)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_bytes(data)
+    os.utime(entry)
+    return dst
+
+
+def facts_file(out: Path, k: str) -> Path:
+    """Where a run leaves the facts the ratchet read of the package whose key is ``k``: `unread/K.jsonl.gz` under ``out``,
+    which a recorded check publishes, so that drive's landing gate (`unread_gate.py`) finds them by the key alone."""
+    return out / "unread" / f"{k}.jsonl.gz"
+
+
+def prune_facts(cache: Path, kept: int = UNREAD_KEPT) -> int:
+    """Remove all but the ``kept`` facts entries of ``cache`` (its `unread/`) last stored or reused; the number removed."""
+    return prune_replays(cache / "unread", kept)
+
+
+def unread_ratchet(pkgs: list[str], failed: list[str], facts: dict[str, Path], files: list[str], out: Path,
+                   log=print) -> dict | None:
+    """The ratchet on wholly unread modules (`unread.check`, against `unread-caps.json`) on the facts the audits of
+    `UNREAD_FACTS` wrote, joined, with no build: its result, or None where it doesn't run. It runs where both packages are
+    audited or reused: a shard's run that has only one leaves it to the shard that audits the spec, which audits its
+    provers beside it; and a failed audit of either fails the run already."""
+    if missing := [p for p in UNREAD_FACTS if p not in pkgs]:
+        log(f"lean-audit: unread: not run here: {', '.join(missing)} is another run's (the ratchet joins the facts of "
+            f"{' and '.join(UNREAD_FACTS)})")
+        return None
+    if bad := [p for p in UNREAD_FACTS if p in failed]:
+        log(f"lean-audit: unread: not run: the audit of {', '.join(bad)} failed, so the facts the ratchet reads are not there")
+        return None
+    if lack := [p for p in UNREAD_FACTS if p not in facts]:
+        return {"failures": [f"unread: {', '.join(lack)} passed with no facts for the ratchet (check.py's `unread_facts` "
+                             f"writes them in each audit of {' and '.join(UNREAD_FACTS)} that replays)"]}
+    try:
+        u = _module(ROOT / UNREAD, "lean_unread_for_lean_audit")
+        r = u.check(ROOT, files, [facts[p] for p in UNREAD_FACTS], out / "unread")
+    except (OSError, EOFError, ValueError, LookupError, TypeError, AttributeError, ImportError, SyntaxError) as e:
+        return {"failures": [f"unread: {type(e).__name__}: {e}"]}  # anything else raises, which fails the step too
+    for f in r["failures"]:
+        log(f"lean-audit: FAIL: {f}")
+    if r["lower"]:
+        log(f"lean-audit: unread: an area's wholly unread modules came down: {out / 'unread' / 'unread-caps.json'} holds "
+            f"the caps at the counts, to copy over {u.CAPS.relative_to(ROOT)} (or `unread.py --caps "
+            f"{u.CAPS.relative_to(ROOT)} --update-caps`)")
+    if not r["failures"]:
+        n, d = (sum(v["count"][k] for v in r["areas"].values()) for k in ("modules", "declarations"))
+        log(f"lean-audit: unread: PASS in {r['seconds']} s: {n} wholly unread modules ({d} declarations), no area above "
+            f"its cap")
+    return r
 
 
 def tool_files(files: list[str]) -> list[str]:
@@ -537,6 +652,9 @@ def prune(pkg: Path) -> int:
 #: (dozens of them fill a 200 GB disk). Each package's newest stays past it (`WarmBuilds.evict`): a cap below the ~30
 #: packages would have every check evict some and rebuild them cold
 BUILDS_KEPT = 48
+#: the GB the kept builds may take on a node before its least recently used go, whatever their number: a Security/Proofs
+#: build is about 17 GB, so `BUILDS_KEPT` of them alone would fill a node's root disk. Each package's newest stays past it too
+BUILDS_MAX_GB = SETTINGS.BUILDS_MAX_GB
 #: the kept dependency trees (one per manifest and toolchain, `deps_key`) a node holds before its least recently used go:
 #: Security/Proofs' is about 35k files, so two dozen of them take some 800k inodes
 DEPS_KEPT = 8
@@ -553,8 +671,8 @@ class WarmBuilds:
     never comes back. The audit still checks every statement against these `.olean` files and replays every declaration
     through the kernel. The newest `kept` by use stay (`evict`)."""
 
-    def __init__(self, store: Path, kept: int = BUILDS_KEPT):
-        self.store, self.kept = store, kept
+    def __init__(self, store: Path, kept: int = BUILDS_KEPT, max_gb: float | None = BUILDS_MAX_GB):
+        self.store, self.kept, self.max_gb = store, kept, max_gb
 
     def _lock(self, k: str):
         self.store.mkdir(parents=True, exist_ok=True)
@@ -606,15 +724,30 @@ class WarmBuilds:
         return {name for _, name in newest.values()}
 
     def evict(self) -> int:
-        """Remove all but the `kept` builds last given back or copied from, never a package's newest (`evict_lru`); the number
-        removed."""
-        return evict_lru(self.store, self.kept, keep=self.newest_per_package())
+        """Remove all but the `kept` builds last given back or copied from, and then the least recently used until they take at
+        most `max_gb`, never a package's newest (`evict_lru`); the number removed."""
+        max_bytes = None if self.max_gb is None else int(self.max_gb * 1e9)
+        return evict_lru(self.store, self.kept, keep=self.newest_per_package(), max_bytes=max_bytes)
 
 
-def evict_lru(store: Path, kept: int, keep: set[str] = frozenset()) -> int:
+def tree_bytes(path: Path) -> int:
+    """The bytes ``path``'s files take on disk (their allocated blocks, as `du` counts them), not following links: one `lstat`
+    per entry, some seconds for a build of tens of thousands of files."""
+    total = 0
+    for root, dirs, files in os.walk(path):
+        for name in (*dirs, *files):
+            try:
+                total += os.lstat(os.path.join(root, name)).st_blocks * 512
+            except OSError:                            # removed while walked
+                pass
+    return total
+
+
+def evict_lru(store: Path, kept: int, keep: set[str] = frozenset(), max_bytes: int | None = None) -> int:
     """Remove all but the ``kept`` directories of ``store`` last used (a rename keeps a directory's mtime, so each use sets
-    it), and never one named in ``keep``, each only when its lock (`NAME.lock` beside it) is free: a run holding it is taking
-    it or giving it back. The number removed."""
+    it), and with ``max_bytes`` then the least recently used until the rest take at most that (`tree_bytes`); never one named
+    in ``keep``, and each only when its lock (`NAME.lock` beside it) is free: a run holding it is taking it or giving it back.
+    The number removed."""
     held = []
     for home in store.iterdir() if store.is_dir() else ():
         try:
@@ -622,18 +755,31 @@ def evict_lru(store: Path, kept: int, keep: set[str] = frozenset()) -> int:
                 held.append((home.stat().st_mtime, home))
         except OSError:                                # taken while listed
             pass
-    n = 0
-    for _, home in sorted(held, reverse=True)[kept:]:
-        if home.name in keep:
-            continue
+    def remove(home: Path) -> bool:
         with open(store / f"{home.name}.lock", "w") as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                continue
-            if home.is_dir():
-                shutil.rmtree(home, ignore_errors=True)
-                (store / f"{home.name}.pkg").unlink(missing_ok=True)
+                return False
+            if not home.is_dir():
+                return False
+            shutil.rmtree(home, ignore_errors=True)
+            (store / f"{home.name}.pkg").unlink(missing_ok=True)
+            return True
+
+    newest = sorted(held, reverse=True)
+    n = 0
+    for _, home in newest[kept:]:
+        if home.name not in keep and remove(home):
+            n += 1
+    if max_bytes is not None:
+        rest = [(home, tree_bytes(home)) for _, home in newest[:kept] if home.is_dir()]
+        total = sum(b for _, b in rest)
+        for home, b in reversed(rest):                 # the least recently used first
+            if total <= max_bytes:
+                break
+            if home.name not in keep and remove(home):
+                total -= b
                 n += 1
     return n
 
@@ -1090,8 +1236,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
            log, urls: dict[str, str] | None = None, comps: dict | None = None,
            regenerate: bool = False, bundle: bool = False) -> tuple[list[str], list[str]]:
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
-    ``regenerate`` (`check.py --regenerate`, a train's check) passes a package whose every failure is a record difference;
-    such a pass is never stored, since its lock changes when the train commits the record.  Each passing package's build in
+    ``regenerate`` (`check.py --regenerate`, the Lean check of `next`) passes a package whose every failure is a record
+    difference; such a pass is never stored, since its lock changes when drive commits the record.  Each passing package's build in
     the sandbox goes into the artifact cache (`LakeArtifacts.put`), and ``bundle`` (a recorded check) writes the module versions it
     indexed to ``out`` for other nodes (`LakeArtifacts.bundle`).  Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
@@ -1134,6 +1280,9 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             rep["package"] = p
             reports[p] = rep
             if not rep["failures"] and not rep.get("settled") and r.returncode in (0, 1) and p in keys and not fresh:
+                if p in UNREAD_FACTS and not keep_facts(cache, p, keys[p], rep, out):
+                    log(f"lean-audit: {p}: its pass is not stored: its audit wrote no facts for the ratchet (`unread_facts`)")
+                    continue
                 cache.mkdir(parents=True, exist_ok=True)
                 tmp = cache / f".{keys[p]}.tmp"
                 tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep,
@@ -1161,6 +1310,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             builds.give_back(work, kept)
             if n := prune_replays(cache.parent / "lean-replay"):
                 log(f"lean-audit: {n} old replay entries removed")
+            if n := prune_facts(cache):
+                log(f"lean-audit: {n} old facts entries removed")
         shutil.rmtree(work, ignore_errors=True)
     return failed, audited
 
@@ -1190,10 +1341,15 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     comps = {p: components(p, files, FLAGS) for p in pkgs}
     keys = {p: key_of(c) for p, c in comps.items()}
     out.mkdir(parents=True, exist_ok=True)
-    reports, cached = {}, {}
+    reports, cached, facts = {}, {}, {}
     for p, k in keys.items():
         entry = cache / f"{k}.json"
         if not fresh and entry.is_file():
+            if p in UNREAD_FACTS:
+                if (f := kept_facts(cache, p, k, out, log)) is None:
+                    log(f"lean-audit: {p}: its pass ({k[:12]}) is kept without the facts the ratchet reads: audited again")
+                    continue
+                facts[p] = f
             reports[p] = {**json.loads(entry.read_text())["report"], "package": p}      # it may have passed elsewhere, before a move
             cached[p] = k
             log(f"lean-audit: {p}: PASS reused ({k[:12]}): every file its audit reads is unchanged")
@@ -1212,12 +1368,21 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     failed += [p for p in pkgs if p not in reports and p not in failed]
     regenerated = {p: reports[p]["regenerated"] for p in pkgs if reports.get(p, {}).get("settled")}
     for p, f in regenerated.items():
-        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which the train commits over {p}/lean-audit.json")
+        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which drive commits over {p}/lean-audit.json")
     for rep in reports.values():                        # a pass cached before check.py reported codes has none to list
         rep.setdefault("failure_codes", [None] * len(rep.get("failures", [])))
+    for p in UNREAD_FACTS:
+        f = (reports.get(p) or {}).get("unread_facts") or {}
+        if p not in facts and p not in cached and f.get("file") and (out / f["file"]).is_file():
+            facts[p] = facts_file(out, keys[p])
+            facts[p].parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(out / f["file"], facts[p])
+    unread = unread_ratchet(pkgs, failed, facts, files, out, log)
+    if unread and unread["failures"]:
+        failed.append("unread")
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "cached": cached,
                                                 "packages": [reports[p] for p in pkgs if p in reports],
-                                                "regenerated": regenerated}, indent=1) + "\n")
+                                                "regenerated": regenerated, "unread": unread}, indent=1) + "\n")
     log(f"lean-audit: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}: {len(cached)} of {len(pkgs)} packages reused")
     if export is not None:
         ok = {p: k for p in pkgs if p in reports and not reports[p].get("failures") and (k := deps_key(ROOT / p))}
@@ -1362,7 +1527,8 @@ def main(argv: list[str]) -> int:
         root = Path(argv[argv.index("--cache") + 1]).parent if "--cache" in argv else COMMON.cache_dir()
         got = {"lean-deps": WarmDeps(root / "lean-deps").evict(), "lean-builds": WarmBuilds(root / "lean-builds").evict(),
                "lean-replay": prune_replays(root / "lean-replay"), "lean-records": prune_records(root / "lean-records"),
-               "lean-artifacts": LakeArtifacts(root / "lean-artifacts").prune()}
+               "lean-artifacts": LakeArtifacts(root / "lean-artifacts").prune(),
+               "lean-audit/unread": prune_facts(root / "lean-audit")}
         print("lean-audit --prune: removed " + ", ".join(f"{v} from {k}" for k, v in got.items()) + f" (under {root})")
         return 0
     if argv[:1] == ["--explain"] and len(argv) in (2, 4):
@@ -1378,7 +1544,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--urls", type=Path, help=f"{URLS}: presigned URLs for the pinned bundles ({PIN})")
     ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")
     ap.add_argument("--package", action="append", metavar="PKG", help="audit only this package (repeatable): a shard's share")
-    ap.add_argument("--regenerate", action="store_true", help="a train's check: `check.py --regenerate`, so a package whose "
+    ap.add_argument("--regenerate", action="store_true", help="the Lean check of `next`: `check.py --regenerate`, so a package whose "
                     "every failure is a record difference passes and audit.json's `regenerated` names its record; not in the "
                     "cache key, and such a pass is never stored")
     ap.add_argument("--bundle", action="store_true", help="a recorded check's audit: write the module versions it added to the "

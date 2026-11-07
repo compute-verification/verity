@@ -104,7 +104,7 @@ def test_a_program_of_registered_definitions_has_census_values_work_and_its_eval
 
 @pytest.mark.slow
 def test_each_blocks_computed_claim_rests_on_its_proof_units_under_the_registered_partition(setup):
-    """The sampled proofs draw proof blocks from the Program's partition, which one-stage registers with the Program (the
+    """The sampled proofs sample proof blocks from the Program's partition, which one-stage registers with the Program (the
     record names the query's digest, the partition's and the population). A block's proof blocks are that partition's
     whose gates run there, read with the verifier's copy of the query and held to the record (proofs, review 4): under
     Q_word v1 at X = 16 each linear is 32 units, one a coordinate, so each stage's block rests its `Computed` claim on its
@@ -142,8 +142,8 @@ def test_pouws_compiled_program_is_placed_with_its_salt_entering_at_the_blocks_c
     import sys
     from pathlib import Path
 
-    from verity.core.protocols.pouw.circuit import compile as pouw
-    from verity.core.protocols.pouw.circuit import h1tile
+    from verity.ml.protocols.pouw.circuit import compile as pouw
+    from verity.ml.protocols.pouw.circuit import h1tile
     from datacenter.models import s8_grid
 
     spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")
@@ -182,8 +182,8 @@ def test_pouws_one_stream_program_is_placed_and_credits_z_at_its_k():
     import sys
     from pathlib import Path
 
-    from verity.core.protocols.pouw.circuit import compile as pouw
-    from verity.core.protocols.pouw.circuit import h1tile
+    from verity.ml.protocols.pouw.circuit import compile as pouw
+    from verity.ml.protocols.pouw.circuit import h1tile
     from datacenter.models import s8_grid
 
     spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[2] / "pouw/proved_ticks.py")

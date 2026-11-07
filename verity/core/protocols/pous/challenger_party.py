@@ -1,4 +1,4 @@
-"""PoUS's memory challenger as a party of its own, so it runs on a host the prover doesn't control (the challenger host,
+"""PoUS's memory challenger as a party of its own, so it runs on a host the developer doesn't control (the challenger host,
 `trusted-host`) while the prover stays on its node.
 
 The challenger listens and the prover connects. Each round is one frame each way: the challenger sends `u64be index`
@@ -6,23 +6,23 @@ The challenger listens and the prover connects. Each round is one frame each way
 time); `u64be 2^64 − 1` ends the session, after its last round or a late one. Before round 0 the challenger sends
 `WARMUPS` frames on `WARMUP_INDEX`, which no coin chose, and discards their answers: nothing times, records or signs them,
 so the first timed round doesn't pay for waking both processes and the prover's memory path after the session's setup.
-The challenger draws its coins on its own host, designates the session id from them, the node and the setup's root
+The challenger flips its coins on its own host, designates the session id from them, the node and the setup's root
 (`period.SESSION_DOMAIN`), signs under its own key and claims the id in its own session log. It reports `{"host",
 "public_key", "session", "session_id", "warmups"}`.
 
-That id is a request's that names no audit (`period.audit`'s), whose salt is drawn where setup ran. An audit's two coins
+That id is a request's that names no audit (`period.audit`'s), whose salt is sampled where setup ran. An audit's two coins
 are the challenger's, the setup's salt and the session's:
 
 - **The salt.** Before setup encodes `C*`, the prover's side sends `{"salt": {"audit", "commitment"}}`: the audit's
-  64-byte binding and the commitment to `W` that setup will publish. The challenger draws the salt's source from its
+  64-byte binding and the commitment to `W` that setup will publish. The challenger samples the salt's source from its
   host's OS after it (`give_salt`), logs the audit, the commitment and the salt (`setup.draw_salt` of that source) in its
   salt log (`memory_challenger.SaltLog`, which holds one salt an audit), and prints `{"source": HEX}`, which setup takes
   as its salt source (`salt`).
 - **The session.** A request naming its audit (`audit`, and `published`, setup's published outputs) runs under
-  `session_id(audit, commitment, salt)`, derived from what the challenger logged and never drawn. The challenger
+  `session_id(audit, commitment, salt)`, derived from what the challenger logged and never sampled. The challenger
   refuses it (`designate`) unless the published outputs carry exactly the logged commitment and salt and the session
   binds the root they publish; its session log refuses a second session under the id. So an audit has one salt and one
-  session, and a retry is a visible failure, never a redraw. The verifier computes the id from the audit's binding and
+  session, and a retry is a visible failure, never a resample. The verifier computes the id from the audit's binding and
   what setup published, never from the report, so a session under any other id is refused.
 
 A refusal prints `{"refused": REASON}` and exits 1 before the side listens.
@@ -203,7 +203,7 @@ def session_id(audit: bytes, commitment: bytes, salt: bytes) -> bytes:
 
 
 def give_salt(salts: mc.SaltLog, request: Mapping[str, Any], draw: Callable[[int], bytes] = os.urandom) -> bytes:
-    """The challenger's answer to a salt request `{"audit", "commitment"}`: a source drawn from `draw` after the
+    """The challenger's answer to a salt request `{"audit", "commitment"}`: a source sampled from `draw` after the
     commitment, its salt (`setup.draw_salt`) logged under the audit in `salts` before the source is returned. Refused
     (`Refusal`) when the audit has a salt already."""
     audit, commitment = bytes.fromhex(request["audit"]), bytes.fromhex(request["commitment"])
@@ -253,7 +253,7 @@ class Challenger:
         self.c: mc.MemoryChallenger | None = None
         self.sid: bytes | None = None
         self._drawn: list[bytes] = []
-        self.session: R.Session | None = None
+        self.session: R.ChallengePhaseRecord | None = None
         self._reading: int | None = None
         self._block: bytes | None = None
         self._warm = 0
@@ -298,7 +298,7 @@ class Challenger:
         return [_read_clock()]
 
     def _coins(self, body: bytes) -> list[Any]:
-        """The session's coins, then the coin tree's hiding key, then each round's salt, each drawn in turn; once all
+        """The session's coins, then the coin tree's hiding key, then each round's salt, each sampled in turn; once all
         are in, the session's challenger."""
         q, self._drawn = self.request, [*self._drawn, body]
         if len(self._drawn) < q["k"] + 2:
@@ -333,7 +333,7 @@ class Challenger:
         self.c.receive(block)
         if not self.c.done:
             return [_read_clock()]
-        self.session = R.Session(self.c.close(), self.c.commitment, self.c.openings())
+        self.session = R.ChallengePhaseRecord(self.c.close(), self.c.commitment, self.c.openings())
         return [Send(PROVER, Message("End")),
                 Finish({"session": self.session.to_json(), "session_id": self.sid.hex()}, kind="private")]
 
@@ -375,7 +375,7 @@ PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger, PROVER: Prover})
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,
           domain: str, salts: mc.SaltLog | None = None, clock: Callable[[], int] = time.perf_counter_ns,
-          warmups: int = WARMUPS, draw: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.Session]:
+          warmups: int = WARMUPS, draw: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.ChallengePhaseRecord]:
     """The challenger's side of one session over the connection `f`: `Challenger` on `coins` and `clock`, under its
     audit's id from `salts` when `request` names one, else the id designated under `domain`, its coin tree's hiding key
     and salts from `draw`, `warmups` untimed exchanges first, the session signed by `signer`, with the collector paused
@@ -401,7 +401,7 @@ def answer(f: BinaryIO, block_bytes: int, respond: Callable[[int], bytes]) -> in
     return done.outcome
 
 
-def report(sid: bytes, session: R.Session, public_key: bytes, warmups: int = WARMUPS) -> dict[str, Any]:
+def report(sid: bytes, session: R.ChallengePhaseRecord, public_key: bytes, warmups: int = WARMUPS) -> dict[str, Any]:
     return {"host": socket.gethostname(), "public_key": public_key.hex(), "session": session.to_json(),
             "session_id": sid.hex(), "warmups": warmups}
 
@@ -420,7 +420,7 @@ def side_of(period: Mapping[str, Any], node: str, device: str | Path) -> Side:
 
 def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
-    machine the prover doesn't control, which is never the prover's node."""
+    machine the developer doesn't control, which is never the developer's node."""
     held = host != node
     return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
             PREMISE: (f"holds: the memory challenger ran on {host}, not the prover's {node}" if held else
@@ -440,7 +440,7 @@ def session(side: Side, request: Mapping[str, Any], respond: Callable[[int], byt
 
 
 def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:
-    """The salt's source for the audit `audit`, which the challenger's side `side` draws after `commitment` and logs
+    """The salt's source for the audit `audit`, which the challenger's side `side` samples after `commitment` and logs
     (`give_salt`); RuntimeError with the side's refusal, or when it answers anything else or exits nonzero."""
     p = subprocess.Popen(list(side.command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
     try:

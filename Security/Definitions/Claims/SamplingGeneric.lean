@@ -3,6 +3,37 @@ module
 public import Definitions.Claims.Sampling
 public import Definitions.Claims.Recursion
 public import Definitions.Claims.ZKOut
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Claims: the sampled audit as a compiler, generic in the proof system for proof blocks
@@ -45,7 +76,7 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    their bounds on `Arg`'s `γ` per round (`γb` over the shape's rounds; a session's fork finder is the compiled
    verifier's `B` at a round guess among `k(x)`); `ε_bind = Pr[B_ext]`.
 5. **The contract** (`Compiled.Sessions`): the code facts the compiler theorems read, the generic forms of those
-   `Claims.Sampling`'s proofs take at Flock: the second stage draws the sample by the design (`draws`), in at most
+   `Claims.Sampling`'s proofs take at Flock: the second stage samples the sample by the design (`draws`), in at most
    `n_PU` slots (`slots`); the verifier refuses what is out of scope (`refuses`); the interior roots precede the second
    stage (`interior`); the sample precedes its sessions (`fixed`); each sampled proof block's session, at the block's
    shape and within its error bounds, accepts whenever the run does and is a run of a prover against `Arg`'s verifier
@@ -513,7 +544,7 @@ noncomputable def εreg (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : 
 
 /-- **KS, the committed form** (the registered form of `Claims.Sampling`'s period bounds, generic), on the statements in
 scope, at every prover: the run accepts with a sampled proof block in the committed trace's incorrect set (`Freg`, which
-the prover's tape fixes before the window's coins) with probability at most `ε_reg` (`εreg`); so, by the draw, it
+the prover's tape fixes before the window's coins) with probability at most `ε_reg` (`εreg`); so, by the sample, it
 accepts with that set outside `M_δ` with probability at most `δ + ε_reg`, at every `δ ≥ 0`. The sampling term is the
 acceptance probability of a set fixed before the coins, `P_a(Freg)`, as a monitoring period's pooling reads it.
 

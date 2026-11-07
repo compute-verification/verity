@@ -23,7 +23,7 @@ stated on these objects.
   the string `bits X l`.
 * The **AND count** `C.andSize S` (`andSize`) is the number of AND gates (`IsAnd`: an operation gate whose function is
   not affine over GF(2)) among `S`, and `C.andSize C.computed` is the circuit's multiplicative complexity, the gates
-  C-Flock pays for. Credit and reporting count `andSize`; Theorem 3 and the `(c, k)`-partition count `size`.
+  Flock pays for. Credit and reporting count `andSize`; Theorem 3 and the `(c, k)`-partition count `size`.
 * **Credit** (`creditSize lower d`) is the AND count of the registered declared circuit under one public lowering,
   pinned at registration.
 * The **committed registered circuit** `R` (`Committed`) is the committed trace, the values the developer committed in
@@ -39,11 +39,11 @@ stated on these objects.
   partition, is private. An inference block is a unit of a
   `Partition`; training's instance calls them serving blocks. No ordering of the inference blocks is required: Lemma 1
   and Theorem 3 read none, so the draft's "inter-block edges point forward" is dropped.
-* A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every inference block has exactly `c` gates, padding
-  included, and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size `c · B` for `B` inference blocks.
-  Inference blocks of at most `c` gates become exactly `c` by a `Pad`: registered padding gates in each inference block, read by
-  nothing of `d`.
-* The **size ratio** relative to a reference of size `T₀` is `|C| / T₀` (`slowdown`), a ratio of circuit sizes.
+* A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every inference block has at most `c` gates,
+  `|I| ≤ c`, and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size at
+  most `c · B` for `B` inference blocks.
+* The **size ratio** of `B` inference blocks of budget `c` relative to a reference of size `T₀` is `c · B / T₀`
+  (`slowdown`), each inference block priced at `c` gates: at least `|C| / T₀`.
 * **Local description length** (§4): `LDL M t r y` is the length of a shortest program on which the decoder `M`, with
   indexed access to the registered information `r`, outputs `y` within `t` steps, and `⊤` when none does. Side
   information `z` is registered information paired with it, `LDL M t (r, z) y`. The decoder is a parameter (`Decoder`):
@@ -81,19 +81,19 @@ def bits (C : Circuit) (X : C.Transcript) (l : List (Fin C.N)) : List Bool :=
 def bitZ {n : ℕ} (x : BitVec n) : ZMod 2 := if x.getLsbD 0 then 1 else 0
 
 /-- Gate `g` computes an **affine** function over GF(2) of the gates it reads: its bit is a constant plus the XOR of the
-bits of some of them. On a Boolean circuit these are the gates of an XOR/NOT basis, which C-Flock proves for free. -/
+bits of some of them. On a Boolean circuit these are the gates of an XOR/NOT basis, which Flock proves for free. -/
 def Affine (C : Circuit) (g : Fin C.N) : Prop :=
   ∃ (S : Finset (Fin C.N)) (c : ZMod 2), S ⊆ C.reads g ∧ ∀ v, bitZ (C.op g v) = c + ∑ a ∈ S, bitZ (v a)
 
 /-- **An AND gate** of a Boolean circuit: an operation gate whose function of the gates it reads is not affine over
-GF(2). `Verity.Circuit`'s gate functions carry no tag, so AND is this predicate on the function. C-Flock's `and a b`
+GF(2). `Verity.Circuit`'s gate functions carry no tag, so AND is this predicate on the function. Flock's `and a b`
 (`a ≠ b`) and its rows `(⊕ a) ∧ (⊕ b)` whose two XORs differ are AND gates, and its XOR, NOT and input gates are not
 (`Verity.Guarantees.ToCircuitAnd`). -/
 def IsAnd (C : Circuit) (g : Fin C.N) : Prop := C.isInput g = false ∧ ¬ C.Affine g
 
 open Classical in
 /-- **The AND count** of the gates `S`, the number of AND gates among them: on `C.computed`, the circuit's
-multiplicative complexity, the gates C-Flock pays for. Credit (`creditSize`) and every reported count are stated in
+multiplicative complexity, the gates Flock pays for. Credit (`creditSize`) and every reported count are stated in
 `andSize`. Exclusion results are not converted to ANDs: they are reported as `N` counted operations (FP8 MACs, say),
 each labelled with that operation's canonical AND count, since converting them to ANDs of hidden work would need a
 ceiling on ANDs per resource unit over all programs, which is vacuous. All-gate counts (the `(c, k)`-partition, the
@@ -112,27 +112,16 @@ that `S` reads is among them. -/
 def RegisteredCircuit.unregistered (d : RegisteredCircuit) (S : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
   d.D.into S \ d.θ
 
-/-- **A `(c, k)`-partition** of a Boolean declaration's operation gates: every inference block has exactly `c` gates and at
+/-- **A `(c, k)`-partition** of a Boolean declaration's operation gates: every inference block has at most `c` gates and at
 most `k` unregistered input bits. -/
 structure Partition.IsCK (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (c k : ℕ) : Prop where
   boolean : d.D.Boolean
-  card : ∀ u, (P.gates u).card = c
+  card : ∀ u, (P.gates u).card ≤ c
   reads : ∀ u, (d.unregistered (P.gates u)).card ≤ k
 
-/-- **A padding** of the partition `P` of `d` to the partition `P'` of `d'`, with as many inference blocks: `d'`'s circuit
-contains `d`'s (`M`), with the same registered gates among `d`'s, every gate of `d` stays in its inference block, and every
-other gate of `d'`, the padding, is a registered input gate or reads registered gates only. Padding is fixed and
-input-independent, so each inference block reads the unregistered gates it read before (`Verity.Pad.unregistered`).
-It completes the accounting; it is not evidence that hardware evaluated anything. -/
-structure Pad (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (d' : RegisteredCircuit) (P' : Partition d'.D B) where
-  M : Containment d.D d'.D
-  θ_emb : ∀ g, M.emb g ∈ d'.θ ↔ g ∈ d.θ
-  unit_emb : ∀ g, P'.unit (M.emb g) = P.unit g
-  pad_input : ∀ g', g' ∉ Set.range M.emb → d'.D.isInput g' = true → g' ∈ d'.θ
-  pad_reads : ∀ g', g' ∉ Set.range M.emb → ∀ a ∈ d'.D.reads g', a ∈ d'.θ
-
-/-- **The size ratio** of `C` relative to a reference circuit of size `T₀`: `|C| / T₀`. -/
-noncomputable def slowdown (C : Circuit) (T₀ : ℝ) : ℝ := ((C.size C.computed : ℕ) : ℝ) / T₀
+/-- **The size ratio** of `B` inference blocks of budget `c` relative to a reference circuit of size `T₀`: `c · B / T₀`,
+each inference block priced at `c` gates. -/
+noncomputable def slowdown (c B : ℕ) (T₀ : ℝ) : ℝ := ((c * B : ℕ) : ℝ) / T₀
 
 /-- **The committed registered circuit**: the committed trace (`trace`, the values committed in the execution phase,
 in commitment order), the registered circuit `d`, whose circuit `C`, registered inputs `θ`, partition `𝓘` into `d.n`

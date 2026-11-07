@@ -4,7 +4,8 @@ The call that commits a serving step's proof-block outputs: every proof block's 
 under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence slot, so a sampled proof block opens by
 replaying its own request. `slots.py` is the CPU reference, and its docstring states the format: a row's leaf, the three
 trees (proof block, slot and step) and their domains. `slots_gpu.py` runs the same call on the GPU (or on its host twin)
-on the SHA-512 engine (`benchmarks/torch_gpu/sha512_rows/`). `fixtures/commit-slots-v1.json` is the interface's fixture.
+on the SHA-512 engine (`benchmarks/torch_gpu/sha512_rows/`).
+`verity/ml/commitments/tests/fixtures/commit-slots-v1.json` is the interface's fixture.
 
 ## The call
 

@@ -13,12 +13,14 @@ and the escape slack on sampled proofs catching each faulty block whatever came 
 
 @[expose] public section
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.Assumptions
 
 open Nci.Dampener
 
 /-- **PoUW's certificates are sound** ([POUW-SOUND]; PoUW's `CircuitCredit`): over the outcomes `Ω` of a
-deployment, drawn from `μ` (the verifier's coins, the developer's strategy fixed), the certificate of each of the `N`
+deployment, sampled from `μ` (the verifier's coins, the developer's strategy fixed), the certificate of each of the `N`
 windows is wrong (`wrong ω i`: it credits more of that window's work than ran, beyond its deficit `ε`) with probability
 at most `p`, `3 · 2⁻⁴⁰` per window. It bounds each window's marginal only: it says nothing about how windows depend on
 one another.
@@ -31,11 +33,11 @@ def PouwSound {Ω : Type} [Fintype Ω] (μ : PMF Ω) {N : ℕ} (wrong : Ω → F
   ∀ i, prob μ (fun ω => wrong ω i) ≤ p
 
 /-- **Detection is terminal** ([TERMINAL-DETECTION]): a detected cheat ends the identity and takes its hardware out of
-use, with the verdict at most `Δ` after the detected block. Of the faulty proof blocks `bad`, block `b` run by identity
-`ident b` at time `τ b`, those `detected` (drawn, and failing their proof): no faulty block of a detected block's
+use, with the verdict at most `Δ` after the detected block. Of the incorrect proof blocks `bad`, block `b` run by identity
+`ident b` at time `τ b`, those `detected` (sampled, and failing their proof): no faulty block of a detected block's
 identity runs at or after it by more than `Δ`, the identity having halted.
 
-It holds under sampled proofs (T5) too: a faulty block that isn't drawn is accepted and isn't `detected`, so it
+It holds under sampled proofs (T5) too: a faulty block that isn't sampled is accepted and isn't `detected`, so it
 constrains nothing, and the faulty blocks an identity runs before its first detection (`escaped`) are charged under
 `SampledDetection`. When every proof block is proved (tiers T1–T4) every faulty block fails its own proof, `detected`
 holds them all, and it says that any two faulty blocks of one identity run within `Δ` of each other. -/
@@ -43,15 +45,15 @@ def TerminalDetection {β ι : Type} (bad detected : Finset β) (ident : β → 
   ∀ b ∈ bad, b ∈ detected → ∀ b' ∈ bad, ident b = ident b' → τ b ≤ τ b' → τ b' ≤ τ b + Δ
 
 /-- **Sampled proofs catch each faulty block with probability at least `q`, whatever came before**
-([SAMPLED-DETECTION]): over the outcomes `Ω`, drawn from `μ`, a block `b` that is faulty (`bad`) with no other faulty
+([SAMPLED-DETECTION]): over the outcomes `Ω`, sampled from `μ`, a block `b` that is faulty (`bad`) with no other faulty
 block of its identity detected at or before it (`noDetectionBefore`) is not detected itself with probability at most
 `(1 − q)` times that of the condition: `P(b faulty, none earlier detected, b undetected) ≤ (1 − q) P(b faulty, none
 earlier detected)`, for each block `b`.
 
-`q` is the sampled share (tiers' `share/(overhead + replay)`) times one less the luck `p` of a drawn faulty block. The
-coins that draw a proof block and check it are live: drawn after the commitment of every block at or before it, so
+`q` is the sampled share (tiers' `share/(overhead + replay)`) times one less the luck `p` of a sampled faulty block. The
+coins that sample a proof block and check it are live: sampled after the commitment of every block at or before it, so
 after whether `b` is faulty and whether the earlier blocks are is fixed, and independently of the coins of the other
-blocks. Whatever happened before, a faulty block is then drawn with probability at least the share and, drawn, fails its
+blocks. Whatever happened before, a faulty block is then sampled with probability at least the share and, sampled, fails its
 proof but with the luck `p`. With every proof block proved the share is 1 and `q = 1 − p`. It is each block's
 conditional chance only: it says nothing about how identities depend on one another. -/
 def SampledDetection {Ω β ι : Type} [Fintype Ω] (μ : PMF Ω) (bad detected : Ω → Finset β) (ident : β → ι) (τ : β → ℝ)
@@ -71,9 +73,9 @@ def PouwPerWindow {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t
   ∀ t (ξ : (t : Fin T) → Ω t), prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p
 
 /-- **Sampled proofs' per-window bounds** (in place of `SampledDetection`): a window's faulty blocks `bad` (block `b` in
-window `win b`) are fixed before its coins, and the units it draws (`drawn`) and the faulty blocks it detects
-(`detected`) read only its coins and the earlier windows'; its draw misses its `m` faulty blocks with probability at most
-`(1 − q)^m` (`Flock.Guarantees.HiddenWindow.drawMiss_le`, under A3), and it detects none of them while drawing one with
+window `win b`) are fixed before its coins, and the units it samples (`drawn`) and the faulty blocks it detects
+(`detected`) read only its coins and the earlier windows'; its sample misses its `m` faulty blocks with probability at most
+`(1 − q)^m` (`Flock.Guarantees.HiddenWindow.drawMiss_le`, under A3), and it detects none of them while sampling one with
 probability at most `ks t` (`HiddenWindow.accepted_drawnWrong_le`). That the deployment's windows are such windows is not
 stated. -/
 def SampledPerWindow {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)] {β : Type}

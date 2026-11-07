@@ -1,15 +1,37 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
-public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
-# The decoder is right at the headline's draws
+# The decoder is right at the headline's samples
 
 `decodesOn_exec`: `DecodesOn` at the plain headline's tables, from `decodesOnOfRuns`. At an outcome flock-verify
 accepts:
 
-* `accepts_reps`: the one table's statement `st` (setupH at the record's draw), and for each rep its stream, its decoded
+* `accepts_reps`: the one table's statement `st` (setupH at the record's sample), and for each rep its stream, its decoded
   proof, its run on the stream's coins with the proof's messages (`accepts_verdict_hm96`), the stream's rounds retaining
   `repFrames`' chunks (`accepts_rep_rounds`), and the salted verdict on the two runs.
 * `tableAt_of_accepts` puts `stmtOf st` at the headline's table, `tableAt_ptLocal` its link layout at
@@ -27,7 +49,7 @@ open FlockSoundness.Discharge.Integrate
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **flock-verify's acceptance of a one-table session, rep by rep**: setupH's statement `st` at the record's draw,
+/-- **flock-verify's acceptance of a one-table session, rep by rep**: setupH's statement `st` at the record's sample,
 the record's spec and session, the table's `fast100` schedule, and at `st`'s link claims: each rep's stream and decoded
 proof, its run on the stream's coins with the proof's messages, its stream's rounds retaining `repFrames`' chunks, and
 the salted verdict on the two runs at `capOfRoot` of the table's root and `opnOf` of the two proof files. -/
@@ -91,7 +113,7 @@ theorem accepts_reps {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutpu
   · exact ⟨e₁, f₁, T₁, hf₁, hq₁, hpl₁, hl₁, hr₁⟩
   · omega
 
-/-- The headline's tables put the link claims at `PT_LOCAL`, at a draw that sets up and at a refused one. -/
+/-- The headline's tables put the link claims at `PT_LOCAL`, at a sample that sets up and at a refused one. -/
 theorem tableAt_ptLocal {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) (S : Finset (Fin n)) :
     (tableAt ht dj x₀ S).T.ptLocal = PT_LOCAL := by

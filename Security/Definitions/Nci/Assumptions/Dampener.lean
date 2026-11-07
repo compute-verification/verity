@@ -18,17 +18,17 @@ namespace Nci.Assumptions
 
 open Verity
 
-/-- **A window is `L` ticks at the rate**: at `(k / c) F` bits a tick, a window of `L` ticks takes in `R` bits, as much as
-the state a wipe leaves. -/
-def WindowLength (c k : ℕ) (F L R : ℝ) : Prop :=
-  (k / c : ℝ) * F * L = R
+/-- **A window is `L` ticks at the rate**: at `α F` bits a tick, a window of `L` ticks takes in `R` bits, as much as the
+state a wipe leaves. -/
+def WindowLength (α F L R : ℝ) : Prop :=
+  α * F * L = R
 
 /-- **The servers' windows hold the residual and the declared computation**: summed over `n` servers' `⌈H / L⌉` windows,
-each reading at most `K = R + (k / c) F L` bits and holding at most `K Λ(K) / b_a` counted multiplications of `T`'s
-bound, `b_a (M_r + |M|) ≤ n ⌈H / L⌉ K Λ(K)`. -/
-def WindowsHold {r : RegisteredCircuit} (T : Threading r) (c k Mr n : ℕ) (F H L R b_w b_a : ℝ) (dd e : ℕ) : Prop :=
+each reading at most `K = R + α F L` bits and holding at most `K Λ(K) / b_a` counted multiplications of `T`'s bound,
+`b_a (M_r + |M|) ≤ n ⌈H / L⌉ K Λ(K)`. -/
+def WindowsHold {r : RegisteredCircuit} (T : Threading r) (Mr n : ℕ) (α F H L R b_w b_a : ℝ) (dd e : ℕ) : Prop :=
   b_a * ((Mr : ℝ) + T.M.card) ≤
-    n * ⌈H / L⌉₊ * ((R + (k / c : ℝ) * F * L) * T.bound (R + (k / c : ℝ) * F * L) b_w dd e)
+    n * ⌈H / L⌉₊ * ((R + α * F * L) * T.bound (R + α * F * L) b_w dd e)
 
 /-- **The parts fit in the monitored compute**: `∑ x_i ≤ C`, for PoUW's windows' capacities or the declared runs'
 sizes. -/
@@ -36,7 +36,7 @@ def WithinCompute {ι : Type} [Fintype ι] (x : ι → ℝ) (C : ℝ) : Prop :=
   ∑ i, x i ≤ C
 
 /-- **Every counted multiplication has a source**: `M ≤ M_U + M_r + M_d + M_χ`, unmonitored compute, the monitored
-residual, the declared computation and faulty proof blocks. -/
+residual, the declared computation and incorrect proof blocks. -/
 def SourcesCover (M Mu Mr Md Mx : ℕ) : Prop :=
   M ≤ Mu + Mr + Md + Mx
 
@@ -51,7 +51,7 @@ of the monitored compute `C` is certified correctly, less the wrong windows' cap
 def ResidualAtMost (Mr : ℕ) (κ C εW W wc skipped : ℝ) : Prop :=
   (Mr : ℝ) ≤ κ * (C - (1 - εW) * W + wc + skipped) / 2
 
-/-- **Faulty proof blocks inject at most the cheating share** `χ`: `M_χ ≤ χ κ (C + U) / 2`. -/
+/-- **Incorrect proof blocks inject at most the cheating share** `χ`: `M_χ ≤ χ κ (C + U) / 2`. -/
 def CheatingAtMost (Mx : ℕ) (κ χ C U : ℝ) : Prop :=
   (Mx : ℝ) ≤ κ * χ * (C + U) / 2
 

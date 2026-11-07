@@ -1,12 +1,15 @@
 module
 
+public import Definitions.Flock.Game.Expect
 public import Proofs.Core.Game.Runs
 public import Proofs.Flock.Soundness.Game.Expect
+import Mathlib.Algebra.CharP.Defs
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
-# C-Flock's game library is Core's: `Runs`
+# Flock's game library is Core's: `Runs`
 
-Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Runs`, so C-Flock's soundness proofs
+Every name here is an alias (`export`) of Core's declaration in `Proofs.Core.Game.Runs`, so Flock's soundness proofs
 and every other protocol's read one game library.
 -/
 

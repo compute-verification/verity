@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `verity example vllm [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM demo's runs, started by `research run` on the
+# `verity demo vllm [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM demo's runs, started by `research run` on the
 # node placement.toml places it on, with that node's paths and the run's own variables as its environment, and the model the
 # demo's workload names (placement.toml's `row`, the integration's file integrations/vllm/workloads/<row>.json, fetched by
 # its art id and checked against that directory's SHA256SUMS: `model`, `case` and `engine.revision`):
@@ -7,7 +7,7 @@
 #            benchmarks/one_stage/served_verdicts.sh: the endpoint committing under the workload's Build of record
 #            (`predict row`, held to the traced workload dir placement.toml's COMMIT_RUN names), its requests
 #            (serve_load.py --varied), every closed sampling block sealed, the sampling
-#            block's sampled proofs (C-Flock --zk behind the Lean firewall, and the Lean verifier's verdict), PoUW, the
+#            block's sampled proofs (Flock --zk behind the Lean ZK server, and the Lean verifier's verdict), PoUW, the
 #            bandwidth audit, PoUS and the network certifier where each has its piece, and one record of every verdict
 #   commit   once per workload: its Build, Match and Commit with its sealed replay bundle (commit.sh), a workload dir under
 #            LLAMA_ROOT (placement.toml's COMMIT_RUN names the one `window` and `serve` use)

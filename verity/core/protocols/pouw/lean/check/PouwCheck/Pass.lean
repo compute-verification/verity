@@ -1,12 +1,8 @@
 module
 
-public import Flock.Draw
-public import PouwCommit.Draws
 public import PouwWindow.Rounds
 public import PouwCheck.Inputs
-public import SampledProofs.ChallengerRecord
 public import SampledProofs.ChallengerSession
-public import Identity.Domains
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
@@ -14,35 +10,35 @@ import all Init.Data.Array.DecidableEq
 import all Init.Data.String.Defs
 
 /-!
-# The pass's epoch and the window's draw (`core_check.py`, "the pass's epoch and the window's draw")
+# The pass's execution phase and the execution phase's sample (`core_check.py`, "the pass's execution phase and the execution phase's sample")
 
-`passEpoch` is `core_check.pass_epoch`: the window's pass's manifest re-starts its epoch under the challenger's own coin
-commitment, and the window's context names the pass by its SHA-512. A pass salted by epoch coins (`MANIFEST_SCHEMA`)
-carries the epoch's commitment, which must be the challenger's, and its salt coin's opening, opened after the weights'
+`passEpoch` is `core_check.pass_epoch`: the execution phase's pass's manifest re-starts its execution phase under the challenger's own coin
+commitment, and the execution phase's context names the pass by its SHA-512. A pass salted by execution-phase coins (`MANIFEST_SCHEMA`)
+carries the execution phase's commitment, which must be the challenger's, and its salt coin's opening, opened after the weights'
 root (`coinReasonAt`); a live Pearl-C pass, whose manifest's coins are a live session's, took its salt coin from a
-salt-only session of the auditor host's challenger opened on its salt epoch's root, which its verifier reads only through
+salt-only session of the auditor host's challenger opened on its salt execution phase's root, which its verifier reads only through
 the auditor's ledger and the session's own files (`{key, ledger, main, pins, session}`, `livePassSalt`), never the
-pass's word; a pass recorded before epoch coins (`MANIFEST_RECORDED`, read only in a replay) carries a beacon. Either
-way the manifest's salt must be the epoch's. A certified window's verifier holds the network certifier's salt for
-the PoUW window its context names (`windowOf`), the window's stream and prover, and what PoUW recorded with the certifier
+pass's word; a pass recorded before the execution phase's coins (`MANIFEST_RECORDED`, read only in a replay) carries a beacon. Either
+way the manifest's salt must be the execution phase's. A certified execution phase's verifier holds the network certifier's salt for
+the PoUW execution phase its context names (`windowOf`), the execution phase's stream and prover, and what PoUW recorded with the certifier
 before its salt (`pouwRecord`, `salt.pouw_record`), and passes only a pass salted by them (`MANIFEST_CERTIFIED`, the salt
 `pouwSalt`, `salt.pouw_salt`); no other verifier passes such a pass. A refusal is `coin` (the coin rule's, Python's
-`DomainError`) or `manifest` (a manifest it can't read, or not the window's pass), with Python's words.
+`DomainError`) or `manifest` (a manifest it can't read, or not the execution phase's pass), with Python's words.
 
-`drawCheck` is `core_check.draw`: the epoch's draw coin opens after the registration, and the drawn units are
+`drawCheck` is `core_check.draw`: the execution phase's sampling coin opens after the registration, and the sampled proof blocks are
 `Flock.Draw.subset` of the stream `"draw"` of the key the coin derives under the stream, the registration and its
 receipt.
 
 `liveSaltCheck` is `core_check.live_salt` (LIVESALT2, stated in `Properties.Pouw.LiveSalt`), the Pearl-C form of
-`saltCheck` (`PouwCheck.Rounds`): the session's root is the pass's salt epoch's root (`epochOpenRoot` of its weights'
-root W and its `pass_index`), not a window's open root, and the session counts only when it is reserved for the salt coin alone (`PouwWindow.SALT_FAMILIES`) and the ledger ends it
+`saltCheck` (`PouwCheck.Rounds`): the session's root is the pass's salt execution phase's root (`epochOpenRoot` of its weights'
+root W and its `pass_index`), not an execution phase's open root, and the session counts only when it is reserved for the salt coin alone (`PouwWindow.SALT_FAMILIES`) and the ledger ends it
 complete, having released that coin. It sits here, not beside `saltCheck`, because `passEpoch` reads it and
 `PouwCheck.Rounds` imports this module. `saltSession` is the session both read.
 
 Both read the coin versions of `coinVersion`: the current one, whose binding and weights' root are `tagged`'s whole
 SHA-512, and, only in a replay of a recorded pass, the e2e-service passes', which keep its first 32 bytes. A replay of a
-recorded draw also reads the e2e-service's first coin commitments, named as the current one but on SHA-256 as core was
-then: bound by `taggedSha256`, after the current binding, and drawn by `deriveV1` and `streamV1`.
+recorded sample also reads the e2e-service's first coin commitments, named as the current one but on SHA-256 as core was
+then: bound by `taggedSha256`, after the current binding, and sampled by `deriveV1` and `streamV1`.
 -/
 
 @[expose] public section
@@ -135,14 +131,14 @@ def openingOf (j : Json) : Except String CoinOpening := do
 def taggedSha256 (tag : String) (parts : List PouwCommit.Part) : ByteArray :=
   Flock.Sha256.hash (parts.foldl (fun acc p => acc ++ PouwCommit.frame p) (tag.toUTF8.push 0))
 
-/-- `core_check.derive_v1`: `derive` as it was (`verity/randomness/derive/v1`, SHA-256), `COIN_EARLY`'s draw key. -/
+/-- `core_check.derive_v1`: `derive` as it was (`verity/randomness/derive/v1`, SHA-256), `COIN_EARLY`'s sample key. -/
 def deriveV1 (source : ByteArray) (domain : String) (context : List (String × PouwCommit.Part)) : ByteArray :=
   let ctx := ((context.toArray.qsort fun a b => a.1 < b.1).toList.foldl
     (fun acc kv => acc ++ PouwCommit.frame (.str kv.1) ++ PouwCommit.frame kv.2) ByteArray.empty)
   Flock.Sha256.hash (Domains.RANDOMNESS_DERIVE_V1.toUTF8.push 0 ++ PouwCommit.frame (.bytes source) ++
     PouwCommit.frame (.str domain) ++ PouwCommit.frame (.bytes ctx))
 
-/-- `core_check.stream_v1`: `Key.stream` as it was (`verity/randomness/stream/v1`, SHA-256 blocks), `COIN_EARLY`'s draw
+/-- `core_check.stream_v1`: `Key.stream` as it was (`verity/randomness/stream/v1`, SHA-256 blocks), `COIN_EARLY`'s sample
 stream. -/
 def streamV1 (key : ByteArray) (index : List PouwCommit.Part) (n : Nat) : ByteArray :=
   let head := Domains.RANDOMNESS_STREAM_V1.toUTF8.push 0 ++ key ++ FlockSoundness.Randomness.frames index
@@ -172,8 +168,8 @@ def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArr
   (·.1) <$> coinVersionAt c o label after false
 
 /-- `tagged` of `tag` and each `(id, root)` by ascending id, its first `keep` bytes: `core_check.weights_root`
-(`audit.weights_root`, an epoch's, under a scheme's version) and `Credit.weightsRoot` (`weights.weights_root`, the
-weights' root a live H1 window's open root binds). -/
+(`audit.weights_root`, an execution phase's, under a scheme's version) and `Credit.weightsRoot` (`weights.weights_root`, the
+weights' root a live H1 execution phase's open root binds). -/
 def weightsRootAt (keep : Nat) (tag : String) (roots : List (Nat × ByteArray)) : ByteArray :=
   let sorted := roots.mergeSort fun a b => a.1 ≤ b.1
   (tagged tag (sorted.flatMap fun (w, r) => [.int w, .bytes r])).extract 0 keep
@@ -228,19 +224,19 @@ def checkWorkload (us : List Matmul) (roots : List (Nat × ByteArray)) : R Unit 
   let want := (dims.map (·.1)).mergeSort (· ≤ ·)
   if held != want then coin "every weight of the workload is committed, and only those"
 
-/-- `salt.window_of`: the PoUW window a context names, `<prefix>/pouw-window/<p>/<manifest SHA-512>`. -/
+/-- `salt.window_of`: the PoUW execution phase a context names, `<prefix>/pouw-window/<p>/<manifest SHA-512>`. -/
 def windowOf (context : String) : Option Nat :=
   let parts := context.splitOn "/"
   let n := parts.length
   let d := parts.getD (n - 2) ""
   if 3 ≤ n && parts.getD (n - 3) "" == WINDOW_SEGMENT && isDecimal d && d.toNat! < 2 ^ 64 then some d.toNat! else none
 
-/-- `salt.pouw_salt`: the salt PoUW applies in window `p` for the registration of `stream` and `prover`,
+/-- `salt.pouw_salt`: the salt PoUW applies in execution phase `p` for the registration of `stream` and `prover`,
 SHA-512(`SALT_TAG` ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), every part fixed-width (64, 8, 64 and 64 bytes). -/
 def pouwSalt (reveal : ByteArray) (p : Nat) (stream prover : ByteArray) : ByteArray :=
   Flock.Sha512.hash (SALT_TAG ++ reveal ++ PouwCommit.be8 p ++ stream ++ prover)
 
-/-- `salt.pouw_record`: what PoUW records with the certifier for a window before its salt,
+/-- `salt.pouw_record`: what PoUW records with the certifier for an execution phase before its salt,
 SHA-512(`RECORD_TAG` ‖ weights' root ‖ stream ‖ prover), every part 64 bytes. -/
 def pouwRecord (weights stream prover : ByteArray) : ByteArray :=
   Flock.Sha512.hash (RECORD_TAG ++ weights ++ stream ++ prover)
@@ -251,21 +247,21 @@ def sessionId? (s : String) : Bool :=
   let ok := fun (c : Char) => c.isAlphanum || c == '.' || c == '_' || c == ':' || c == '-'
   1 ≤ s.length && s.length ≤ 64 && s.all ok && s.front.isAlphanum
 
-/-- `salt.window_open_root`: a live window's open root, what its session opens on and its salt coin opens after,
+/-- `salt.window_open_root`: a live execution phase's open root, what its session opens on and its salt coin opens after,
 SHA-512(`WINDOW_OPEN_TAG` ‖ weights' root ‖ round-0 request table's root ‖ SHA-512(the session's ASCII id)), every part
 64 bytes. -/
 def windowOpenRoot (weights requests : ByteArray) (session : String) : ByteArray :=
   Flock.Sha512.hash (WINDOW_OPEN_TAG ++ weights ++ requests ++ Flock.Sha512.hash session.toUTF8)
 
-/-- `salt.epoch_open_root`: a Pearl-C salt epoch's open root, what its salt-only session opens on and its salt coin opens
-after, SHA-512(`EPOCH_OPEN_TAG` ‖ the weights' root ‖ u64be(`k`)), `k` the epoch's number among the weights' root's
-epochs (the manifest's `pass_index`). -/
+/-- `salt.epoch_open_root`: a Pearl-C salt execution phase's open root, what its salt-only session opens on and its salt coin opens
+after, SHA-512(`EPOCH_OPEN_TAG` ‖ the weights' root ‖ u64be(`k`)), `k` the execution phase's number among the weights' root's
+execution phases (the manifest's `pass_index`). -/
 def epochOpenRoot (weights : ByteArray) (k : Nat) : ByteArray :=
   Flock.Sha512.hash (EPOCH_OPEN_TAG ++ weights ++ PouwCommit.be8 k)
 
-/-- `_certified_salt`: a certified window's pass under the window's `stream` and `prover`: `committed`, what the
-certifier recorded before it drew the window's salt, is `pouwRecord` of the pass's weights' root, the stream and the
-prover, and the pass's salt is `pouwSalt` of the certifier's reveal for the PoUW window the window's context names. -/
+/-- `_certified_salt`: a certified execution phase's pass under the execution phase's `stream` and `prover`: `committed`, what the
+certifier recorded before it drew the execution phase's salt, is `pouwRecord` of the pass's weights' root, the stream and the
+prover, and the pass's salt is `pouwSalt` of the certifier's reveal for the PoUW execution phase the execution phase's context names. -/
 def certifiedSalt (m : Json) (reveal : ByteArray) (context : String) (committed stream prover : Option ByteArray) :
     R (ByteArray × String) := do
   let schema := at? m "schema"
@@ -320,7 +316,7 @@ def LIVE_SESSION : String :=
   "the pass's session is not the gate's answer, without its secret, for the session the auditor's ledger opened on " ++
     "its epoch's root: its session, seq, root and commitment"
 
-/-- `core_check.PASS_FORM` and `CALL_RANGE`: a live pass's manifest that names no salt epoch, or a call index that -h3's
+/-- `core_check.PASS_FORM` and `CALL_RANGE`: a live pass's manifest that names no salt execution phase, or a call index that -h3's
 row seed can't take. -/
 def PASS_FORM : String :=
   "the pass's manifest names no epoch: `pass_index` is an integer in [0, 2^64), its epoch's number among its " ++
@@ -358,7 +354,7 @@ example : sameCommitment ⟨"verity/live", 3, [("pouw/salt", 1)], ⟨#[1, 2]⟩�
     = false := by decide
 
 /-- `core_check.live_salt` (LIVESALT2, `Properties.Pouw.LiveSalt`): a live Pearl-C pass's salt, `saltCheck`'s rule with
-the pass's epoch's root R in place of a window's open root, its session and commitment read from the auditor's ledger
+the pass's execution phase's root R in place of an execution phase's open root, its session and commitment read from the auditor's ledger
 and the session's own files, never the manifest `m`. The manifest is `MANIFEST_SCHEMA`'s, its every call index below
 2^32 (`CALL_RANGE`), W the weights' root of its workload and k its `pass_index`, a natural below 2^64 (`PASS_FORM`):
 R is `epochOpenRoot W k`, computed here, never read from the manifest. The session is the one `saltSession` reads for
@@ -423,7 +419,7 @@ def livePassSalt (m live : Json) : R (ByteArray × String) := do
     fun (code, e) => (if code == "manifest" || code == "error" then code else "coin", e)
   pure (salt, "live coin")
 
-/-- `core_check._coin_salt`: a pass salted by epoch coins the verifier holds as a commitment (`coinsOf`), its salt coin
+/-- `core_check._coin_salt`: a pass salted by execution-phase coins the verifier holds as a commitment (`coinsOf`), its salt coin
 opened against them after the weights' root. -/
 def coinPassSalt (m coins : Json) (recorded : Bool) (us : List Matmul) (roots : List (Nat × ByteArray)) :
     R (ByteArray × String) := do
@@ -472,8 +468,8 @@ def epochSalt (m : Json) (coins : Json) (recorded : Bool) (reveal : Option ByteA
 
 /-- `core_check.pass_epoch`: how the pass's salt was had, or the refusal. A live Pearl-C pass, whose manifest's coins are
 a live session's, is read only through the verifier's `live` inputs (`livePassSalt`), never `coins`. A certified
-window's verifier holds `reveal`, `committed`, what PoUW recorded with the certifier before it drew that salt, and the
-window's `stream` and `prover`. -/
+execution phase's verifier holds `reveal`, `committed`, what PoUW recorded with the certifier before it drew that salt, and the
+execution phase's `stream` and `prover`. -/
 def passEpoch (coins : Json) (raw : Option ByteArray) (context : String) (recorded : Bool)
     (reveal committed stream prover : Option ByteArray) (live : Json) : R String := do
   let some raw := raw | coin "the window names no pass, whose epoch the challenger re-starts from its manifest"
@@ -508,10 +504,10 @@ def SEEDED_PINNED : String :=
   "the window's parameters pin a challenger key, so its draw's coins are that challenger's signed record, " ++
     "not seeded coins"
 
-/-- `core_check.draw`: none when `units` are the window's draw, else the refusal. Seeded coins (`coinsOf`) have their
-`draw` coin, and are refused (`coin-key`) when the window's parameters pin a challenger key; live ones
-(`PouwWindow.LIVE_SCHEME`, a certified window's) are read only from its draw session's (`PouwWindow.DRAW_FAMILIES`)
-signed record with the key it is signed under, `{key, record}`: that key must be `key`, the challenger key the window's parameters pin (`coin-key`, so a
+/-- `core_check.draw`: none when `units` are the execution phase's sample, else the refusal. Seeded coins (`coinsOf`) have their
+`draw` coin, and are refused (`coin-key`) when the execution phase's parameters pin a challenger key; live ones
+(`PouwWindow.LIVE_SCHEME`, a certified execution phase's) are read only from its sample session's (`PouwWindow.DRAW_FAMILIES`)
+signed record with the key it is signed under, `{key, record}`: that key must be `key`, the challenger key the execution phase's parameters pin (`coin-key`, so a
 record the prover signed under a key of its own, over coins it holds, is refused), this check verifies the record under
 it (`SampledProofs.Challenger.recordReason`; a bare live commitment is refused, `SIGNED_LIVE`), and they have their
 `pouw/draw` coin 0 (`SampledProofs.Challenger.liveReason`). -/
@@ -572,7 +568,7 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
     | _ => false
   if !same then throw ("draw", s!"the units are not the draw coin's subset:{k} over {n}")
 
-/-- `core_check.work_units`: `drawCheck`'s rule under the law `work:k`, the units the draw coin `coin` draws over the
+/-- `core_check.work_units`: `drawCheck`'s rule under the sampling design `work:k`, the units the sampling coin `coin` samples over the
 work strata `strata`, ascending. Stratum s is `Flock.Draw.subset` of its `k_s` over its units on the stream
 `["draw", template]` of the key the coin derives under the stream's digest, the registration and the receipt's
 (`receiptDigest`), its local index j its j-th unit (`Flock.Draw.stratified`); `none` when a stream runs out. -/

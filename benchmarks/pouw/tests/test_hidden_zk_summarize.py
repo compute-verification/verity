@@ -25,11 +25,11 @@ def _staged(out: Path, role: str = "tile") -> Path:
 #: a tile's verdict when every check has passed: its rows are a form the soundness proof does not cover
 TILE_FORM = ("refused: rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all "
              "unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of "
-             "16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each: a "
+             "16 · words bits whose segments end in their last block, one output port per output row: a "
              "statement form the soundness proof does not cover")
 #: a session's verdict, once every check has passed, when it has no sample
 NO_DRAW = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
-#: a drawn session's verdict, once every check has passed, without the verifier's program (`ProvedScope.NO_PROGRAM`)
+#: a sampled session's verdict, once every check has passed, without the verifier's program (`ProvedScope.NO_PROGRAM`)
 NO_PROGRAM = ("refused: a session without the verifier's program (--program): a verifier that cannot read the Program "
               "cannot know what the statement computes, nor which of its values are registered")
 
@@ -91,7 +91,7 @@ def test_a_hiding_tile_is_covered_and_drawn_so_its_honest_checks_are_refused_onl
         "honest-own": ("REFUSED", "REFUSED"), "st-honest": ("REFUSED", "REFUSED"),
         "st-output_claim_false": ("REJECT", "REJECT")}
     # no other verdict is a pass for it: not an acceptance a verifier without the Program gave, nor a session without a
-    # draw (D12), nor its rows' form
+    # sample (D12), nor its rows' form
     for why in (True, NO_DRAW, TILE_FORM):
         _proved(d, {"honest-own": why})
         assert _summary(tmp_path, "hidden-k64")["lean"]["honest-own"]["pass"] is False

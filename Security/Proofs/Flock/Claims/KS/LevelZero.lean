@@ -1,13 +1,24 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Rep
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Basis
+import Proofs.Flock.Soundness.Refine.Final
+import Proofs.Flock.Soundness.Refine.Lincheck
+import Proofs.Flock.Soundness.Refine.Opening
+import Proofs.Flock.Soundness.Refine.Plays
+import Proofs.Flock.Soundness.Refine.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # Level 0's request in an accepted Ligerito run
 
 `ligerito_refines` leaves the model's requests as ones that passed their Merkle checks (`ReqOK`), which does not fix
 their positions. Here the same run also says which request comes first: level 0's, at the positions of the coins of the
-round Ligerito draws them from, `k0 + 6` rounds in (`ligerito_refines_req0`, `ligerito_accepts_req0`,
+round Ligerito samples them from, `k0 + 6` rounds in (`ligerito_refines_req0`, `ligerito_accepts_req0`,
 `ligerito_accepts_opening_req0`).
 -/
 

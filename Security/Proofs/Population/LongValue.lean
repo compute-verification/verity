@@ -1,7 +1,12 @@
 module
 
 public import Definitions.Population.LongValue
-public import Proofs.Population.Leakage
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Proofs.Population.Determinacy
+import Proofs.Population.Egress
+import Proofs.Population.Leakage
+import Proofs.Population.Work
 
 /-!
 # Long values buy nothing
@@ -18,12 +23,12 @@ of its width (or the run holds a collision), the verifier's view of it is ⊥, a
   `optCorrect_of_opened`, `opened_of_optCorrect`: a unit's proof holds exactly when the unit is correct in the view.
   `long_value_wrong`: the writer and every reader of a long value's slot are wrong.
 * **⊥ is weakly dominated by a short wrong value.** `wrong_fill_subset`: putting any value of the slot's width in place
-  of every ⊥ gives an assignment whose wrong units are among the ⊥ assignment's (`fill_mem_egressAt`: within the same
+  of every ⊥ gives an assignment whose incorrect proof blocks are among the ⊥ assignment's (`fill_mem_egressAt`: within the same
   budget, and showing the same values wherever the ⊥ assignment shows one). A unit that reads or writes ⊥ is wrong
   (`mem_optWrong_of_read_none`, `mem_optWrong_of_write_none`).
 * **T1–T4 over `Option V`.** `liftFns f` applies `f` when every read holds a value and writes ⊥ otherwise; a unit
   correct over `Option V` is correct under it (`wrong_lift_subset`), so the population theorems hold over `Option V`
-  with the wrong units of `optWrong`: robust determinacy and the cone (`opt_eq_of_writes`, `opt_eq_off_down`,
+  with the incorrect proof blocks of `optWrong`: robust determinacy and the cone (`opt_eq_of_writes`, `opt_eq_off_down`,
   `opt_eq_honest_off_down`), the egress count with `|V| + 1` for `|V|` (`card_optEgress_le`, `card_optEgressAt_le`,
   `card_optEgressAt_le_reach`), leakage beyond the honest egress (`opt_card_leak_le_coneEgress`,
   `opt_card_leak_le_reach`), and the skipped work (`opt_skipped_work_le_wt`, `opt_skipped_work_le_wt_of_luck`). The
@@ -129,7 +134,7 @@ theorem holds_fill {V : Type} {a : S → V} {X : Finset S} {σ : S → Option V}
     P.Holds a X (fill d σ) :=
   fun s hs hsX => fill_of_some (h s hs hsX)
 
-/-- **Within the same budget**: an assignment over `Option V` with at most `m` wrong units, ⊥ filled with any short
+/-- **Within the same budget**: an assignment over `Option V` with at most `m` incorrect proof blocks, ⊥ filled with any short
 values, is an assignment the population's count already covers. -/
 theorem fill_mem_egressAt [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) {a : S → V}
     {X O : Finset S} {m : ℕ} {σ : S → Option V} (d : S → V) (hσa : P.OptHolds a X σ)
@@ -140,7 +145,7 @@ theorem fill_mem_egressAt [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.
 /-! ## T1: robust determinacy and the cone over `Option V` -/
 
 /-- **Robust determinacy over `Option V`**: an assignment is determined by its inputs and the writes of a set
-containing its wrong units, ⊥ included. -/
+containing its incorrect proof blocks, ⊥ included. -/
 theorem opt_eq_of_writes [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} (f : P.Fns V) {B : Finset U}
     {σ τ : S → Option V} (hin : ∀ s ∈ P.input, σ s = τ s) (hσ : P.optWrong f σ ⊆ B) (hτ : P.optWrong f τ ⊆ B)
     (hB : ∀ u ∈ B, ∀ s ∈ P.writes u, σ s = τ s) : σ = τ :=
@@ -152,7 +157,7 @@ theorem opt_eq_off_down [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type}
     ∀ v, v ∉ P.down B → ∀ s ∈ P.writes v, σ s = τ s :=
   P.eq_off_down hc ha (P.liftFns f) hin (P.wrong_lift_subset.trans hσ) (P.wrong_lift_subset.trans hτ)
 
-/-- **Integrity against the honest run over `Option V`**: off the downstream cone of the wrong units, every slot holds
+/-- **Integrity against the honest run over `Option V`**: off the downstream cone of the incorrect proof blocks, every slot holds
 its honest value, never ⊥. -/
 theorem opt_eq_honest_off_down [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
     {honest : S → V} {σ : S → Option V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)
@@ -187,7 +192,7 @@ theorem card_optEgress_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acycl
   rw [← Fintype.card_option]
   exact (card_le_card (P.optEgress_subset f a X O B)).trans (P.card_egress_le hc ha (P.liftFns f) _ hX)
 
-/-- **The capacity with at most `m` wrong units over `Option V`**. -/
+/-- **The capacity with at most `m` incorrect proof blocks over `Option V`**. -/
 theorem card_optEgressAt_le [Fintype U] [Fintype S] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     (f : P.Fns V) (a : S → V) {X O : Finset S} (hX : ∀ s ∈ X, s ∉ P.up O) (m w : ℕ)
     (hw : ∀ u, (P.writes u).card ≤ w) :
@@ -219,7 +224,7 @@ theorem card_image_some_le {ι : Type} {O : Finset S} {V : Type} [Fintype V] [De
   rw [this]
   exact card_image_le
 
-/-- **The uniform form over `Option V`**: with at most `m` wrong units and every unit's cone egress `E(u) ≤ E`, the
+/-- **The uniform form over `Option V`**: with at most `m` incorrect proof blocks and every unit's cone egress `E(u) ≤ E`, the
 egress takes at most `#honest · C(|U|, m) · (|V| + 1) ^ (m E)` values. -/
 theorem opt_card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     [DecidableEq V] (f : P.Fns V) (O : Finset S) {m E : ℕ} (hmU : m ≤ Fintype.card U)
@@ -269,7 +274,7 @@ theorem skipsLucky_lift {V : Type} {f : P.Fns V} {honest : S → V} {σ : S → 
   fun u hu hr hc => hl u hu hr
     (P.optCorrect_of_correct_lift (fun r => by rw [hr r.1 r.2]; rfl) hc)
 
-/-- **The skipped work over `Option V`**: at most `F · wt(wrong)` plus the lucky work, the wrong units those of
+/-- **The skipped work over `Option V`**: at most `F · wt(wrong)` plus the lucky work, the incorrect proof blocks those of
 `optWrong`, the readers and writers of ⊥ among them. -/
 theorem opt_skipped_work_le_wt [Fintype U] [DecidableEq U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V)
     {honest : S → V} {σ : S → Option V} (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u)

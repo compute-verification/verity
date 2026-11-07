@@ -1,6 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+public import Flock.With.Eq
+public import Flock.With.VerifyE
+public import Proofs.Flock.Soundness.Refine.Frames
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 
 /-!
 # flock-verify's acceptance through `keep`, at the record's parsed value

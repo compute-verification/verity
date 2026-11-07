@@ -1,13 +1,14 @@
 module
 
 public import Proofs.Flock.Soundness.Session
-public import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Several tables in one batched session (`Flock.Record`)
 
 The protocol batches tables. `Commit` sends every table's level-0 cap, the link points are one
-draw for all tables, and then every table's reps and openings run concurrently (`sessionB`). The
+sample for all tables, and then every table's reps and openings run concurrently (`sessionB`). The
 session accepts when every table accepts (`acceptedB`).
 
 For each table `j`, everything after `Commit` is a batch with table `j` at position `j` and the
@@ -73,13 +74,13 @@ noncomputable def gamesB (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     List ((Fin 2 → Fin mPts → F) → Game (OutC F D)) :=
   List.ofFn fun i => (ts.get i).after A H E (caps i)
 
-/-- After `Commit`: one link-point draw, then the games concurrently. -/
+/-- After `Commit`: one link-point sample, then the games concurrently. -/
 noncomputable def sessAfterB (fs : List ((Fin 2 → Fin mPts → F) → Game (OutC F D))) :
     Game (List (OutC F D)) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts => batch (fs.map (· pts))
 
 /-- **A batched session** (`Flock.Record`): `Commit` sends every table's level-0 cap, then one
-link-point draw, then every table's reps and openings concurrently. -/
+link-point sample, then every table's reps and openings concurrently. -/
 noncomputable def sessionB (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (ts : List (TabSpec mPts)) : Game (List (OutC F D)) :=
   Game.send (Fin ts.length → Cap D) fun caps => sessAfterB (gamesB A H E ts caps)

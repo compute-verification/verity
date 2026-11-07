@@ -4,10 +4,10 @@ public import Proofs.Flock.Claims.ZK.FinishSwVals
 public import Proofs.Flock.Claims.ZK.FinishInnerAt
 
 /-!
-# The switched source's cut at its inner proof's first round, from the firewall's rep
+# The switched source's cut at its inner proof's first round, from the ZK server's rep
 
 `swSrcE_repCut_v` reads the masked values below `zp 64` at every pad, `final_c`'s included. Here `final_c`'s is left
-out (`hmkV` but at `fc`): the firewall's rep returning places the cut from the switched source at the inner proof's
+out (`hmkV` but at `fc`): the ZK server's rep returning places the cut from the switched source at the inner proof's
 first round (`repCut_fw_inner_at`), which then carries the source's own masked `final_c`. The rest of the chain is
 `swSrcE_repCut_v`'s; the inner proof's premise `hinner` is not needed, since the cut stops before the inner proof reads
 anything past its first round.
@@ -31,7 +31,8 @@ namespace Masked
 set_option maxHeartbeats 1000000 in
 /-- **`swSrcE_repCut_v` but at `final_c`, at the inner proof's first round**: where table `j`'s masked values below
 `zp 64` but at `final_c`'s pad are the request's values plus its pads (`hmkV`) and, wherever the source's PIOP returns,
-from `zp 64` to `h_ab` level 0's `l0Clear` at the coins plus the pads (`hl0`), the firewall's rep returning places the cut
+from `zp 64` to `h_ab` level 0's `l0Clear` at the coins plus the pads (`hl0`), the ZK server's rep, at extra lanes and
+lane paddings that are the tape's within level 0's sizes (`hex`, `hlp`), returning places the cut
 from the switched source at `v`, answered after `CutEq.innerAt l.size` bodies, past its Ligerito opening with no pending
 bytes, where it sends the inner proof's first body at the source's masked `final_c`. -/
 theorem swSrcE_repCut_fc_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
@@ -45,7 +46,11 @@ theorem swSrcE_repCut_fc_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : 
       q.vals[k]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).h[k]!)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (hg : g = ligTab x w τ j) (cm0 : FlockComplete.Commit)
-    (ic : FlockComplete.InnerCommit) (salt : ℕ → ℕ → ByteArray)
+    (ic : FlockComplete.InnerCommit) (extra lanePad : ℕ → ℕ → _root_.Flock.F128)
+    (hex : ∀ e i, i < 2 ^ (lv0 x j).cols → extra e i = (UE.tapeZk τ).extra j.val e i)
+    (hlp : ∀ l i, l < 2 ^ (lv0 x j).lanes + _root_.Flock.Zk.EXTRA_LANES → i < (zkTab x j).tPad →
+      lanePad l i = (UE.tapeZk τ).lanePad j.val l i)
+    (salt : ℕ → ℕ → ByteArray)
     (hsalt : ∀ i, 1 ≤ i → i < (zkTab x j).sch.levels.size → ∀ q < 2 ^ ((zkTab x j).sch.levels.getD i default).d,
       salt i q = (UE.tapeZk τ).salt j.val r.val i q)
     {t₀ : _root_.Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array Msg}
@@ -61,8 +66,8 @@ theorem swSrcE_repCut_fc_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : 
     {p : _root_.Flock.Zk.ZkProof} {t : _root_.Flock.Transcript} {l' : Array Msg}
     (h : ((_root_.Flock.Firewall.Finish.repFwC (FlockComplete.asksCut (ligCoin c) n)
       (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) st (zkTab x j).sch (zkTab x j).tPad r.val dom g cm0
-      extras (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic q.vals ((UE.tapeZk τ).extra j.val)
-      ((UE.tapeZk τ).lanePad j.val) salt).run t₀).go l = (.ok (p, t), l')) :
+      extras (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic q.vals extra lanePad salt).run t₀).go l =
+        (.ok (p, t), l')) :
     ∃ (t₄ : _root_.Flock.Transcript) (L : Array Msg), t₄.pending = ByteArray.empty ∧
       L.size = FlockComplete.CutEq.innerAt l.size st (zkTab x j).sch extras ∧
       ((FlockComplete.repCut (FlockComplete.asksCut (ligCoin c) L.size)
@@ -120,7 +125,7 @@ theorem swSrcE_repCut_fc_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : 
     unfold FlockComplete.piopRoundsZk
     rw [hesz]
     omega
-  -- the firewall's PIOP returned, so it sent all its bodies before the stop
+  -- the ZK server's PIOP returned, so it sent all its bodies before the stop
   have hP0 : ligP0 x j r ≤ n := by
     obtain ⟨_, _, _, _, _, _, _, hpf⟩ := _root_.Flock.Firewall.Finish.repFwC_piopFw h
     obtain ⟨-, hl₃, hn₃⟩ := FlockComplete.piopFw_at hm14 hpf (trsE x w (UE.tapeZk τ))[j.val]!
@@ -136,7 +141,7 @@ theorem swSrcE_repCut_fc_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : 
       ((swSrcE x c w v τ j.val).rep r.val).masked i =
         q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := fun i hi hne =>
     hmkV i (by rw [← hLyE]; exact hi) (by rw [← hLyE]; exact hne)
-  -- the switched vectors at the firewall's zerocheck and lincheck
+  -- the switched vectors at the ZK server's zerocheck and lincheck
   have hsv : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
       ((FlockComplete.zerocheckCut (FlockComplete.asksCut (ligCoin c) n) st.m st.digest (FlockComplete.flat cm0.cap)
           ic.root (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
@@ -217,11 +222,10 @@ theorem swSrcE_repCut_fc_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : 
     subst hst
     exact schOk_of (zkTab x j)
   refine _root_.Flock.Firewall.Finish.repCut_fw_inner_at (ligCoin c) n st hmerk (zkTab x j).sch (zkTab x j).tPad
-    r.val dom (ligTab x w τ j) cm0 extras (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic q.vals
-    ((UE.tapeZk τ).extra j.val) ((UE.tapeZk τ).lanePad j.val) salt
-    ((swSrcE x c w v τ j.val).rep r.val) (priorE c j.val r.val)
+    r.val dom (ligTab x w τ j) cm0 extras (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic q.vals extra lanePad
+    salt ((swSrcE x c w v τ j.val).rep r.val) (priorE c j.val r.val)
     (Composed.maskWordsOf (stsOf x)[j.val]!) t₀ l hSch hln hkL hmk hpiop ?_ h
-  -- level 0's opening: the firewall's PIOP ends at `ligP0` and switched `swsE`
+  -- level 0's opening: the ZK server's PIOP ends at `ligP0` and switched `swsE`
   intro zp lp ss T sws t₃ l₃ h₃
   have hPC := _root_.Flock.Firewall.Finish.piopCut_fw_fc (ligCoin c) n st _ (ligTab x w τ j) _
     ((swSrcE x c w v τ j.val).rep r.val) _ _ extras (priorE c j.val r.val) (Composed.maskWordsOf (stsOf x)[j.val]!)
@@ -238,7 +242,7 @@ theorem swSrcE_repCut_fc_v (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : 
   have H := swSrcE_ligHyp_E_v x hx w hw τ c n hnr s spec hs j r extras he v q (hl0 _ _ _ hPC)
   unfold ligBasis at H
   rw [show ligSt x j = st from (tabsOf_stAt x j).trans hst.symm, ← hLyE] at H
-  exact H.ofSalt hsalt
+  exact (H.ofSalt hsalt).ofLanes (fun e i hi => hex e i (hi.trans_eq (tabS_ligTab_size _ _ x w τ j))) hlp r.isLt
 
 /-- **The inner proof's first round of table `j`'s rep `r`** is the session's slot `innerOff 0` past its PIOP: from the
 rep's first round, `CutEq.innerAt` bodies at the session's table, schedule and extra claims. -/

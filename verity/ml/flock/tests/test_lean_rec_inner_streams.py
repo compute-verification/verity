@@ -5,7 +5,7 @@ record (`public.json`) and the prover's record (`prover/session.json`, the one c
 Hello, R's top registered at staging, R's shape in META and each sparse phase's claim its last round): the circuit table's two reps (95 rounds each in the transcript, 94 in the prover's
 record, which keeps z_partial's round 40 whole), both reps' sparse phases (34 each) and the stacked table R (36), whose root
 is no Hello table's but the top its stream's binding round commits. The reps' coins are checked against the prover's record,
-the sparse streams and R's are the coin server's alone; `session/session.json` is the relay's record, which is refused. The
+the sparse streams and R's are the challenger's alone; `session/session.json` is the relay's record, which is refused. The
 verifier holds every stream's `c_k` and tops, and refuses the session with a stream missing, a top another stream
 committed, or its table named as a sparse phase's or R's stream (`sparse`, `stacked`). R has no root at `Commit`, so
 its salted top is registered at staging (the entry `stacked` of the
@@ -167,7 +167,7 @@ def test_a_stream_missing_is_refused(tmp_path, change, why):
 
 
 def test_the_sparse_streams_and_rs_are_the_coin_servers_alone(tmp_path):
-    """The prover's record holds the reps only, so whether the session committed R is the coin server's record's to say,
+    """The prover's record holds the reps only, so whether the session committed R is the challenger's record's to say,
     held to the registration: a transcript with R's stream gone from its rounds and its declarations is read as a session
     without R when no registration names R, and refused as a downgrade when the one META binds does."""
     bad = _changed(tmp_path, _drop_stacked_everywhere)
@@ -552,7 +552,7 @@ def _statement(d: Path, transcript: Path | None = None) -> subprocess.CompletedP
 @pytest.mark.slow
 def test_a_rec_sparse_statements_message_rows_are_the_sparse_streams_c_k(sparse, tmp_path):
     """`RecVStar.checkPubRows` on RecSparse (`fixedRow`'s `rec-sparse-<p>`): `rec-c3-inner`'s statement, about 300 MB at
-    n18-e13-s6-t0, is the only RecSparse statement whose message rows a coin server recorded, so nothing smaller shows
+    n18-e13-s6-t0, is the only RecSparse statement whose message rows a live-coin part recorded, so nothing smaller shows
     the verifier reads `sparse/rep<x>`'s rounds at the ports' order. `statement` with the inner transcript sets it up
     (its `rec-sparse-v` compared with no round), and refuses it at a transcript whose `sparse/rep1`
     `c_k` of `u` (the round before the claim's) is one bit off; without the transcript it sets up as before. Its reads file
@@ -592,7 +592,7 @@ def _shape(tmp_path: Path, sparse=SPARSE, stacked=R_SHAPE, holo=True) -> list[st
 
 
 def _own(tmp_path: Path, d: Path) -> Path:
-    """`d`'s coin server's record in its own format (`rec_live.record_bytes`), which the verifier reads at its inner
+    """`d`'s challenger's record in its own format (`rec_live.record_bytes`), which the verifier reads at its inner
     shape (`RecSetup.checkReads`): the fixtures' records predate it."""
     from verity_flock import rec_live as RL
 
@@ -688,7 +688,7 @@ def _bit_off(h: str) -> str:
 @pytest.mark.parametrize("d", [C3, PLAIN], ids=["c3", "plain"])
 def test_the_records_link_points_are_the_coin_servers(tmp_path, d):
     """`RecVStar.innerLink`: check 5 takes the extra claims at the inner session record's link points (the prover's record),
-    so they must be the ones the coin server drew after `root_B` (the transcript's `link.points`, `points × m` coins in
+    so they must be the ones the challenger's live-coin part drew after `root_B` (the transcript's `link.points`, `points × m` coins in
     point order). `rec-c3-inner`'s and rec-coins' sessions pass; a transcript whose first link coin is one bit off is refused, and so
     is a record whose last coin is, or whose two points are swapped."""
     assert _read(_fixture(d))[0] == 0
@@ -784,8 +784,8 @@ def _python_off(t: dict, shape: dict) -> bool:
 
 
 def _bypassed(tmp_path: Path, change, declare: bool = True) -> tuple[Path, Path]:
-    """The plain session as one that bypassed the proxy leaves it: ``change`` on circuit/rep0's rounds in the coin
-    server's record (which still ends ``finish``, and declares the stream's new count when ``declare``), and the
+    """The plain session as one that bypassed the proxy leaves it: ``change`` on circuit/rep0's rounds in the challenger's
+    live-coin part's record (which still ends ``finish``, and declares the stream's new count when ``declare``), and the
     prover's record holding the same coins at every round, so the reps' coins are the record's (`innerCommits`)."""
     t = json.loads((_fixture(PLAIN) / "public.json").read_text())
     r = json.loads((PLAIN / "session" / "session.json").read_text())
@@ -811,7 +811,7 @@ def _transcript_of(transcript: Path, record: Path, shape: dict | None, tmp_path:
 
 def test_the_honest_records_are_on_the_verifiers_schedule(tmp_path):
     """`RecVStar.checkSchedule` and its mirror `rec_live.on_schedule` pass the plain session's record and `rec-c3-inner`'s at
-    their inner shapes, round for round, and both read in the coin server's own format as their JSON readers read
+    their inner shapes, round for round, and both read in the challenger's live-coin part's own format as their JSON readers read
     them (`RecSetup.checkReads`)."""
     t = json.loads((_fixture(PLAIN) / "public.json").read_text())
     assert not _python_off(t, PLAIN_SHAPE)
@@ -831,7 +831,7 @@ NOT_OWN_FORMAT = ("rec inner transcript: the coin server's record does not read 
     lambda t: json.dumps({"rounds": t["rounds"], **t, "hello": dict(reversed(t["hello"].items()))}, indent=1),
 ], ids=["compact", "indent-2", "hello-reordered"])
 def test_a_record_not_in_the_coin_servers_format_is_refused(tmp_path, write):
-    """`RecSetup.checkReads`: the recursion's transcript model reads the coin server's record in its own format
+    """`RecSetup.checkReads`: the recursion's transcript model reads the challenger's record in its own format
     (`RecRecord.readFull`), so the verifier reads it so too. The plain session's record with its values unchanged,
     written compactly, at another indent or with Hello's keys in another order, passes every check of the transcript
     read without the verifier's inner shape, and is refused at that shape."""
@@ -858,7 +858,7 @@ def _coin_count(rs: list) -> None:
 ], ids=["extra-round", "missing-round", "coin-count"])
 def test_a_finished_record_off_the_verifiers_schedule_is_refused(tmp_path, change, declare, why):
     """`RecVStar.checkSchedule`, held to its mirror `rec_live.on_schedule`: the proxy that holds a session to its
-    schedule runs on the prover's side, so a session that bypassed it has a coin server's record that ends ``finish``
+    schedule runs on the prover's side, so a session that bypassed it has a challenger's record that ends ``finish``
     with any rounds, and the prover's record to match. The plain session with an extra round, a missing round or a
     round of another coin count, in both records, passes every other check of the transcript (read without the
     verifier's inner shape) and is refused at the verifier's inner shape, by both."""
@@ -950,7 +950,7 @@ NO_END = "rec inner transcript: the coin server's record names no end; only a fi
 
 @pytest.mark.parametrize("d", [C3, PLAIN], ids=["c3", "plain"])
 def test_a_stopped_sessions_record_is_refused(tmp_path, d):
-    """`RecVStar.checkFinished`: the coin server's record of a session that ran every round and then stopped (a refusal, or
+    """`RecVStar.checkFinished`: the challenger's record of a session that ran every round and then stopped (a refusal, or
     a connection that ended without `Finish`) is the finished one's but for `end`, and is refused as no inner proof; so is a
     record that names no end."""
     t = json.loads((_fixture(d) / "public.json").read_text())
@@ -963,8 +963,8 @@ def test_a_stopped_sessions_record_is_refused(tmp_path, d):
 
 
 def test_the_record_rec_live_writes_for_a_stopped_session_is_refused(tmp_path):
-    """A session `rec_live`'s ZK server stops (here at a `Link` whose `y` is not the schedule's length) still gets the coin
-    server's record, ending `stop` (`test_rec_live_firewall`); presented as the inner transcript, it is refused as no inner
+    """A session `rec_live`'s ZK server stops (here at a `Link` whose `y` is not the schedule's length) still gets the challenger's
+    live-coin part's record, ending `stop` (`test_rec_live_firewall`); presented as the inner transcript, it is refused as no inner
     proof before anything else is read. The same session run to `Finish` ends `finish` and is refused, if at all, for
     something else."""
     import test_rec_live_firewall as F

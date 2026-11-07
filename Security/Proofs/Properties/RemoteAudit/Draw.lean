@@ -1,8 +1,9 @@
 module
 
 public import Properties.RemoteAudit
-public import Proofs.Properties.RemoteAudit.Bisect
-public import Proofs.Properties.RemoteAudit.Sort
+import Proofs.Properties.RemoteAudit.Bisect
+import Proofs.Properties.RemoteAudit.Sort
+import Std.Data.HashMap.Lemmas
 
 /-!
 # The window's draws (`DrawIsSubset`)
@@ -57,7 +58,7 @@ theorem uniformOn_lt {m : Nat} {s : ByteArray} {r : Nat} (h : FlockSoundness.Ran
 def swapAt (sw : Std.HashMap Nat Nat) (i r : Nat) : Std.HashMap Nat Nat :=
   (sw.insert i (sw.getD (i + r) (i + r))).insert (i + r) (sw.getD i i)
 
-/-- `Key.subset`'s loop as a list recursion, swap `i` drawing from `S i`. -/
+/-- `Key.subset`'s loop as a list recursion, swap `i` sampling from `S i`. -/
 def loopSwK (n : Nat) (S : Nat → ByteArray) : List Nat → Std.HashMap Nat Nat → Option (Std.HashMap Nat Nat)
   | [], sw => some sw
   | i :: is, sw => match FlockSoundness.Randomness.uniformOn (n - i) (S i) with

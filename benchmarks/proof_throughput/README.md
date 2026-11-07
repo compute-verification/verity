@@ -18,7 +18,7 @@ verity bench proof_throughput zk                              configuration 2: w
 ## What a point is
 
 A point is B coordinates of one workload per session, sampled afresh from its frozen population of `n_max` instances by the
-stratified law the Lean verifier's soundness covers:
+stratified sampling design the Lean verifier's soundness covers:
 
 1. **Prover run** (`job.sh`, a `research run --queue --on vy-nebius-1 --gpu-host` job, tool `proof_throughput_prover`): builds
    `flock-circuit` with CUDA for sm_120, stages the whole population (the same staged statement for every B) and checks its
@@ -26,7 +26,7 @@ stratified law the Lean verifier's soundness covers:
    by `gpu-lease` (the kernel-engineering skill's sharing rule), with live coins from a loopback `flock-circuit serve`
    on the challenger's keyed coin tree (`FC_COINS=tree`, `serve --tree-from`: `70-class-sweep.sh` gives the server its own
    challenger and accepts the point only if the challenger's audit holds every session's record to its release log, which the
-   bundle carries). The server samples each session's B units at its Register by the verifier's law (`serve --draw-law`,
+   bundle carries). The server samples each session's B units at its Register by the verifier's sampling design (`serve --draw-law`,
    `law.json`: core's `one_stage.draw.derive` of `stratified:B` over the population's program and its
    `Q_template_instance` partition), and the session proves those units only. ZK is off. The statement gives every
    coordinate its own rows (`FLOCK_OWN_ROWS=1`), x included: the verifiers refuse a plain statement whose public file shares
@@ -38,7 +38,7 @@ stratified law the Lean verifier's soundness covers:
    builds the compiled Lean verifier (`flock-verify`, `verity/core/service/flock/`), runs `flock-verify verify --coins tree
    --program P --stratified B --partition F` on every session of the bundle one at a time under `/usr/bin/time`, with its
    own copies of the population's program and of the `verity/partition/v1` object the circuit binds (derived from the
-   workload, checked against the circuit's META, not taken from the bundle). The verifier derives the stratified law for B
+   workload, checked against the circuit's META, not taken from the bundle). The verifier derives the stratified sampling design for B
    itself and refuses a session whose sample was taken by any other. It writes the point's result of record: the prover's
    measurements and the Lean verifier's. It passes only when the live verifier accepted every session and the Lean
    verifier accepted every timed one.
@@ -82,7 +82,8 @@ the sweep's results, `table --baseline` renders it, and a candidate is `compare`
 
 R_native is the H200's dense peak for the workload's number format. The census has no H200 line, and the H200 has the
 H100 SXM5's tensor cores and clocks (it differs in memory), so the profiles' anchors are the H100 SXM5's dense peaks:
-`bf16-hopper-mma-draft/2026-09-22` (989.4 TFLOPS bf16) and `fp8-hopper-wgmma-draft/2026-09-22` (1978.9 TFLOPS e4m3).
+the frozen bf16 and fp8 Hopper input sets, `workloads.BF16` (989.4 TFLOPS bf16) and `workloads.FP8` (1978.9 TFLOPS
+e4m3).
 
 ## The verifier's profile
 
@@ -112,7 +113,7 @@ staging them through `benchmarks/served_units/stage.py` is the next workload's w
 `proof-throughput/v2`, one population per workload, pinned by `instances/<workload>.json`
 (`verity_proof_throughput/instances.py`): `n_max` independent instances of the workload's VU Definition (core's
 `population_program` at v0, whose digest every lane is derived from, `verity_proof_throughput/population.py`), each
-instance one proof block of `Q_template_instance` v0, so the population is one stratum and the stratified law samples B
+instance one proof block of `Q_template_instance` v0, so the population is one stratum and the stratified sampling design samples B
 of its proof blocks uniformly. The lanes are those Flock's class sweep
 gives that proof-block class at seed 0. The manifest pins every lane's digest and the population's; the prover run recomputes
 them before proving, and the result names the manifest by its SHA-256. The words are uniform 16-bit encodings: at K = 6144

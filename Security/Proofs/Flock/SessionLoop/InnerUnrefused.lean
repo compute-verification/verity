@@ -1,9 +1,47 @@
 module
 
-public import Proofs.Flock.SessionLoop.InnerSlot
-public import Proofs.Flock.SessionLoop.LiveInner
-public import Proofs.Flock.SessionLoop.CutPiopLive
-public import Proofs.Flock.Claims.ZK.FrameZK
+public import Proofs.Flock.SessionLoop.Inner
+public import Proofs.Flock.SessionLoop.TakenVals
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Claims.ZK.FrameBeta
+import Proofs.Flock.Claims.ZK.FrameOuter
+import Proofs.Flock.Claims.ZK.FrameRankFault
+import Proofs.Flock.Claims.ZK.FrameRho
+import Proofs.Flock.Claims.ZK.FrameTaken
+import Proofs.Flock.SessionLoop.CutPiopLive
+import Proofs.Flock.SessionLoop.InnerSlot
+import Proofs.Flock.SessionLoop.LiveInner
 
 /-!
 # The loop's frames refuse every coin fault shown below the inner proof's rounds
@@ -22,7 +60,7 @@ At `Loop.InnerAt` the history stands at a rep's inner round, within the rep's ro
   length. The rep's rank check and `ρ` pair hold where the loop's state at the rep's inner round 0 is inside the inner
   proof or owes coins (`rank_of_prog`, `rho_of_prog`): past round 0 the frame took that round's coins
   (`coins_taken_of_live`); at round 0 the frame's check put the frame in the inner proof (`check_inner0_inner`), and the
-  loop's state one round on is the check's (`ofLoop_progChecks_sizes`, at `withInner`'s round 0, the firewall's own:
+  loop's state one round on is the check's (`ofLoop_progChecks_sizes`, at `withInner`'s round 0, the ZK server's own:
   `LoopInnerRound0Own`).
 -/
 
@@ -42,7 +80,7 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 namespace Loop
 
 /-- **The inner proof's round 0 puts the frame in the inner proof**: where the frame's check of a device round against
-the firewall's own round 0 returns, whether the device's round passed or the round stood in, the frame is at the inner
+the ZK server's own round 0 returns, whether the device's round passed or the round stood in, the frame is at the inner
 proof's round 0. -/
 theorem check_inner0_inner {c : Cfg} {m s' : Masker} {w' : ByteArray} (hw : w'.size = 16) {n : ℕ}
     {v r out : ByteArray} {why : Option String}
@@ -135,7 +173,7 @@ the rep's inner round 0 is inside the inner proof or owes coins (`rank_of_prog`,
 took that round's coins (`coins_taken_of_live`); at round 0, the history's next round, the frame's check of the round in
 the device round's place, `withInner`'s round 0 (`scheduled_innerAt`), leaves the frame in the inner proof
 (`check_inner0_inner`), and the loop's state one round on is that check's (`ofLoop_progChecks_sizes`, its round 0 the
-firewall's own: `LoopInnerRound0Own`). -/
+ZK server's own: `LoopInnerRound0Own`). -/
 theorem innerAt_unrefused
     (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))

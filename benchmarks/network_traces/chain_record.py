@@ -29,7 +29,7 @@
   the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
   `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
-  summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled draw's
+  summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled sample's
   (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
   run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes
   the gate's warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece
@@ -39,7 +39,7 @@
   before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan isn't
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
   N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each tampered run
-  that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's draw
+  that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's sample
   and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With ``--period-answer``
   (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``, its case
   ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
@@ -439,8 +439,8 @@ def on_warden(step: dict, doc: dict | None, run_id: str | None, what: str) -> di
 
 
 def escaped(name: str, m: dict, s: dict) -> dict | None:
-    """A negative member the sampled draw accepted because none of its incorrect windows (those its reference expects
-    refused) was among the windows drawn: the draw's sampling error, which its ``wrong_units`` at δ bounds, not a
+    """A negative member the sampled sample accepted because none of its incorrect windows (those its reference expects
+    refused) was among the windows sampled: the sample's sampling error, which its ``wrong_units`` at δ bounds, not a
     failure of the run. None for honest, a member refused, or a period not sampled."""
     net = m.get("network") or {}
     units = (((s.get("sampled") or {}).get(name) or {}).get("draw") or {}).get("units") or (m.get("period") or {}).get(
@@ -453,7 +453,7 @@ def escaped(name: str, m: dict, s: dict) -> dict | None:
 
 def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
     """What keeps an N2 driver's member from its ``ok``: the conditions `n2_zk` holds it to, but
-    a negative's acceptance when it escaped the draw (`escaped`). A witness piece counts when the scan reads it
+    a negative's acceptance when it escaped the sample (`escaped`). A witness piece counts when the scan reads it
     ``leaked`` (`leak_scan.classify`); a ``structured`` find is listed, not counted, as the drivers decide."""
     wins, net, rec = m.get("windows") or [], m.get("network") or {}, m.get("received") or {}
     return ([f"windows {[w.get('window') for w in wins if not w.get('as_expected')]} not as expected"]
@@ -595,7 +595,7 @@ def audit_of(d: Path) -> dict:
     """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its proof
     blocks, the proof blocks its sampling design samples (a subset design's ``k``, a stratified design's ``Σ k``, as
     `NetworkCheck.Period` counts them), the
-    least rate it draws a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs
+    least rate it samples a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs
     (`free_inputs`); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts exactly, and J the offsets
     within a bucket."""
     reg = json.loads((d / "registration.json").read_text())
@@ -684,7 +684,7 @@ SCOPES = ("link", "datacenter", "world")
 def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     """K, the bits the network certifier's accepted transcripts can carry about the secret, per monitoring period on
     the warden run ``run`` (a fetched gate run: its ``end.json`` and ``deployment.json``), for the scan's class
-    (`scan_zk.CLASS`) and its draw of every proof block, by `leak_bounds` (`SCOPES`): one link certifying the run's own
+    (`scan_zk.CLASS`) and its sample of every proof block, by `leak_bounds` (`SCOPES`): one link certifying the run's own
     request rate (`leak_bounds.per_link`), and as many identical links summed as the census's reference datacenter has
     machines (`leak_bounds.datacenter_links`) and as the adversary resource model's compute fills
     (`leak_bounds.world`). Each count is in both forms, the per-period form (`PeriodLeakAccepted`'s count) and the
@@ -692,7 +692,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
-    from verity.core.protocols.certifier import ingress_scan as IS, warden as W
+    from verity.ml.protocols.certifier import ingress_scan as IS
+    from verity.core.protocols.certifier import warden as W
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}
@@ -793,8 +794,8 @@ def leak_markdown(doc: dict) -> str:
 
 
 def merged_n2(paths: list[str] | None) -> dict | None:
-    """N2's summaries of one period's members proved in several runs (``--n2 A B …``, each run's draw on its own
-    challenger session, every one of the same population and K): one summary, its members and sampled draws their
+    """N2's summaries of one period's members proved in several runs (``--n2 A B …``, each run's sample on its own
+    challenger session, every one of the same population and K): one summary, its members and sampled samples their
     union, ``ok`` only when every run's is, and each run's challenger session kept."""
     docs = [d for d in map(_json, [paths] if isinstance(paths, str) else paths or []) if d]
     if len(docs) < 2:

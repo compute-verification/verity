@@ -6,7 +6,7 @@ public import Definitions.Nci.Guarantees.Remote
 # The compute dampener, remote protocol, over a monitoring period: the statement
 
 `DampenerRemote` over a monitoring period of `T` windows (results are per monitoring period), with its
-three premises on the protocols, `PouwSound`, `SampledDetection` and the thread bound's `Complies`, replaced by what
+three premises on the protocols, `PouwSound`, `SampledDetection` and the thread bound's `CompliesRate`, replaced by what
 each protocol's own guarantee gives on live coins. A window is one round of the verifier's live coins: window `t`'s
 coins `Ω t` are uniform and independent of the other windows', and a run of the period is `ξ : (t : Fin T) → Ω t`. Each
 leg is stated as `Proofs.Flock.Soundness.Audit.Periods` states a period's bound: at any value of the other windows'
@@ -18,15 +18,15 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   play, for a run whose window `t` at each value of the other windows' coins is a play meeting `CircuitCredit`'s
   premises; that bridge is not stated. `ComposePeriod.CircuitCreditPeriod` credits live words over a period's
   accepted prefix, not time, so it does not give `wrong`'s form.
-* **Sampled proofs** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its wrong
-  units at registration, `wrongRegZ`), and its draw and verdict read its coins and the past. Two per-window bounds,
-  each of which a window of `Flock.Guarantees.IntegrityPeriod` has at the strategy that plays it: the draw misses all
+* **Sampled proofs** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its incorrect
+  proof blocks at registration, `wrongRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds,
+  each of which a window of `Flock.Guarantees.IntegrityPeriod` has at the strategy that plays it: the sample misses all
   `m` of the window's faulty blocks with probability at most `(1 − q)^m` (`Flock.Guarantees.HiddenWindow.drawMiss_le`,
   under A3: a uniform `kd`-subset of `n` units misses `m` fixed units with probability
-  `C(n − m, kd)/C(n, kd) ≤ (1 − kd/n)^m`), and the window is accepted with a drawn faulty block with probability at most
+  `C(n − m, kd)/C(n, kd) ≤ (1 − kd/n)^m`), and the window is accepted with a sampled faulty block with probability at most
   `ε_ks,t + δ_link,t` (`HiddenWindow.accepted_drawnWrong_le`, from `Flock.SecurityProofs.EndToEndHiddenDrawn`). That
   the deployment's window `t`, at each value of the other windows' coins, is such a window with its faulty blocks as
-  its wrong units is a bridge not stated either: `IntegrityPeriod` plays the windows as one sequential game, not over a
+  its incorrect proof blocks is a bridge not stated either: `IntegrityPeriod` plays the windows as one sequential game, not over a
   product of window coins. No guarantee implies `SampledDetection`'s per-block form: it conditions each block on its
   own window's other blocks, and it folds the knowledge term into `q`, where the protocol's is additive per window. The
   statement does not need it: a block's time is its window's, and each identity's escaped blocks are bounded at the
@@ -35,21 +35,21 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   bound, so the escape term needs no Markov's inequality: `J (1 − q)^(K+1)` at an escape share `J K B/C`, against
   `DampenerRemote`'s `J ((1 − q)/q) B/(θC)`.
 * **The halt**: `TerminalDetection` stays a named premise. The halt is code (`Fleet`'s R5-all in
-  `verity/core/protocols/sampled_proofs/service.py`, its verifier of record `SampledProofs.Fleet`), and
+  `verity/core/protocols/sampled_proofs/service.py`, its verifier `SampledProofs.Fleet`), and
   `Properties.SampledProofs` proves what it does (`FleetHaltIsFinal`, `NoAcceptAfterHalt`), but not this form: it halts
   an operator at its `budget`-th failure, not its first (`budget ≥ 1`); it ends the operator's registrations, not its
   hardware's use; and nothing states the verdict's time `Δ` after the detected block.
-* **The inference-only policy** (in place of `Complies` and `ThreadedThrottled`'s premises): each declared run `i` meets
-  `NciCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ (k / c) Λ_i size(d_i)`, which
+* **The inference-only policy** (in place of `CompliesRate` and `ThreadedThrottled`'s premises): each declared run `i`
+  meets `NciCheck.Properties.Throttled`'s conclusion, `b_a |M_i| ≤ (k / c) Λ_i size(d_i)`, which
   `NciCheck.Properties.DescThrottles` gives for every declaration a verdict of compliance of the check of record lays
   out (`NciCheck.Baseline.evaluate`, whose verdict is `Desc.evaluate`'s), at `c = gamma` and the rate `k / c = num/den`,
-  under `ThetaRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs
-  the code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is not a
+  under `ThetaRegistered` and `WeightsIncompressible`, which the check does not see. Reading the check itself needs the
+  code (package `security_properties`), so the statement takes its verdict's conclusion. `DescThrottles` is not a
   premise here: it is a guarantee, proved (`NciCheck.Properties.SecurityProofs.DescThrottles` in `Security/Properties`'
   lock) from `DescAgrees` (`SecurityProofs.DescAgrees`, itself proved from `Novel.readsExact`) and the gate-by-gate
   check's `Throttles`, and the check of record's verdict is `Desc.evaluate`'s (`SecurityProofs.baseline_desc`). What is
-  open on this leg is the bridge from those verdicts to this premise, that each declared run `i` is a declaration such
-  a verdict lays out, with the threading `Th_i` the premise reads: it is not stated. The cover theorem's factor on the
+  open on this leg is the bridge from those verdicts to this premise, that each declared run `i` is a declaration such a
+  verdict lays out, with the threading `Th_i` the premise reads: it is not stated. The cover theorem's factor on the
   same verdicts, `NciCheck.Properties.CheckedCoverTraining` (proved), would replace `ρ_T = b_a/((k / c) Λ)` by its own.
 
 Every other premise is `DampenerRemote`'s: the model's accounting of the four sources of counted multiplications, the
@@ -63,22 +63,24 @@ every certificate, every other premise holds while PoUW's per-window bound and t
 
 @[expose] public section
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.Guarantees
 
 open Verity Nci.Dampener
 
 /-- **The compute dampener, remote protocol, over a monitoring period.** A monitoring period of `T` windows, window `t`
 with its own uniform coins `Ω t`, independent of the others' (a window is a round of live coins: the deployment's
-window, or a finer cut of it where its PoUW and sampled-proofs coins are drawn at different times). Every bound on a
+window, or a finer cut of it where its PoUW and sampled-proofs coins are flipped at different times). Every bound on a
 window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t ↦ a]`, `a` uniform on `Ω t`).
 
 * PoUW certifies window `t` at capacity `cap_t ≥ 0`, `∑ cap_t ≤ C`, its certificate wrong (`wrong t`) with probability
   at most `p ≥ 0`: `CircuitCredit`'s conclusion at window `t`'s play.
-* Sampled proofs: the developer's faulty proof blocks `bad ξ` (block `b` in window `win b`, skipping `0 ≤ w_b ≤ B` of
-  declared work) are fixed before their window's coins; the units the window draws (`drawn`) and the faulty blocks it
-  detects (`detected`, those of a window flock-verify rejects) read only its coins and the earlier windows'. The draw
+* Sampled proofs: the developer's incorrect proof blocks `bad ξ` (block `b` in window `win b`, skipping `0 ≤ w_b ≤ B` of
+  declared work) are fixed before their window's coins; the units the window samples (`drawn`) and the faulty blocks it
+  detects (`detected`, those of a window flock-verify rejects) read only its coins and the earlier windows'. The sample
   misses the window's `m` faulty blocks with probability at most `(1 − q)^m`, `0 ≤ q ≤ 1` (A3, `q ≤ kd/n`), and the
-  window detects none of them while it draws one with probability at most `ks t` (`EndToEndHiddenDrawn`,
+  window detects none of them while it samples one with probability at most `ks t` (`EndToEndHiddenDrawn`,
   `ks t = ε_ks + δ_link`).
 * Window `t` is run by identity `idW t`, one of the `J = |I|` the developer controls, at time `τw t`; a block runs at
   its window's time, and each identity's windows run in their order. Detection is terminal at a lag `Δ ≥ 0`
@@ -91,7 +93,7 @@ window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t 
 * The counted multiplications `M` are as in `DampenerRemote`, with the declared runs' `∑ |M_i|`: unmonitored compute at
   `MFU₀ ∈ (0, 1]` (`M_U ≤ MFU₀ κ U/2`), the residual outside the work certified correctly and run
   (`M_r ≤ κ (C − (1 − ε_W) W_cert + wrongCapacity + skipped)/2`, `W_cert` the period's certified work, `ε_W` PoUW's
-  deficit), and faulty proof blocks within the cheating share `χ`.
+  deficit), and incorrect proof blocks within the cheating share `χ`.
 
 Then, for any `ε' > 0` and `K`, with probability at least `1 − δ` over the period's coins,
 `δ = p/ε' + J (1 − q)^(K+1) + ∑_t ks t`, the compute efficiency is at most
@@ -110,7 +112,7 @@ def DampenerRemotePeriod : Prop :=
     (dd e : ℕ),
     -- PoUW, per window
     0 ≤ p → 0 < ε → (∀ t, 0 ≤ cap t) → Assumptions.WithinCompute cap C → Assumptions.PouwPerWindow wrong p →
-    -- sampled proofs, per window: faulty blocks fixed before the window's coins, its draw and verdict read them
+    -- sampled proofs, per window: faulty blocks fixed before the window's coins, its sample and verdict read them
     Assumptions.SampledPerWindow bad drawn detected win q ks → 0 ≤ q → q ≤ 1 →
     -- the identities and the halt
     Assumptions.IdentitySchedule bad win I idW τw w Φ Δ H C B → 0 < H → 0 ≤ Δ →
@@ -141,7 +143,7 @@ def DampenerRemotePeriod : Prop :=
 /-- **`DampenerRemotePeriod`'s premises hold where its conclusion says something**: an instance meets every premise with
 the failure probability `δ = p/ε' + J (1 − q)^(K+1) + ∑_t ks t` at most `10⁻⁶`, and on every run the overhead bound on
 the hardware multiple (`remoteDampener`'s value) exceeds 1 while the run's own hardware multiple meets it. The proof's
-instance is an honest developer over one window, run by its one identity: its PoUW certificate right, no faulty proof
+instance is an honest developer over one window, run by its one identity: its PoUW certificate right, no incorrect proof
 block, no declared run, its monitored compute all certified work and its counted multiplications on its unmonitored
 compute at `MFU₀ = 1/2`, at the remote reference's `p = 3 · 2⁻⁴⁰` (`CircuitCredit`'s `δ_s + δ_bind + δ_ks`) and
 `ε' = 2p/δ` at the pooled `δ = 10⁻⁶`, with every proof block proved (`q = 1`, `K = 0`). -/
@@ -157,7 +159,7 @@ def DampenerRemotePeriod_honest : Prop :=
     0 ≤ p ∧ 0 < ε ∧ (∀ t, 0 ≤ cap t) ∧ ∑ t, cap t ≤ C ∧
     (∀ t (ξ : (t : Fin T) → Ω t),
       prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p) ∧
-    -- sampled proofs, per window: faulty blocks fixed before the window's coins, its draw and verdict read them
+    -- sampled proofs, per window: faulty blocks fixed before the window's coins, its sample and verdict read them
     (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → ∀ b, win b = t → (b ∈ bad ξ ↔ b ∈ bad ξ')) ∧
     (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s ≤ t → ξ s = ξ' s) → ∀ b, win b = t →
       (b ∈ drawn ξ ↔ b ∈ drawn ξ') ∧ (b ∈ detected ξ ↔ b ∈ detected ξ')) ∧
@@ -198,7 +200,7 @@ noncomputable section
 
 /-! **`AcceptAll`, a PoUW verifier that accepts every certificate**: one window, its coins a bit, run by the one
 identity at time 0, whose certificate, for all of the monitored compute, is wrong and accepted on every run. It has no
-faulty proof block and no declared run, all of the monitored compute is certified work, and the run's one counted
+incorrect proof block and no declared run, all of the monitored compute is certified work, and the run's one counted
 multiplication is in the residual. `DampenerRemotePeriod_nontrivial` is stated at it, its numbers written in place. -/
 namespace AcceptAll
 
@@ -208,7 +210,7 @@ abbrev cap : Fin 1 → ℝ := fun _ => 1
 /-- The window's certificate is wrong on every run. -/
 abbrev wrong : Fin 1 → (Fin 1 → Bool) → Prop := fun _ _ => True
 
-/-- No faulty proof block: none drawn, none detected, and the knowledge-soundness bound 0. -/
+/-- No incorrect proof block: none sampled, none detected, and the knowledge-soundness bound 0. -/
 abbrev bad : (Fin 1 → Bool) → Finset Empty := fun _ => ∅
 abbrev drawn : (Fin 1 → Bool) → Finset Empty := fun _ => ∅
 abbrev detected : (Fin 1 → Bool) → Finset Empty := fun _ => ∅

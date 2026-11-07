@@ -18,7 +18,7 @@ tile, so every step moves both chains: a step is absorbed only when f·s is unde
 follows w's high bits and one lane's step can be absorbed, which saves an issue slot only if all 32 lanes of its warp
 absorb that step at once. No chain of a tile overflows for |w| < 2^29 (`WORD_BOUND`).
 At the tile's end the li fold absorbs bits(x) and bits(y) as two more words of its last segment, so LI-CP-W's last
-checkpoint commits them and the check that recomputes a drawn tile recomputes them with it (PinnedFillBlocksDeficit).
+checkpoint commits them and the check that recomputes a sampled tile recomputes them with it (PinnedFillBlocksDeficit).
 
 Every FMA is `verity.ml.circuits.ops.fp32.F32FmaV2`, the registered FFMA: the exact rational a·b + c rounded once to
 nearest even, subnormals kept (`fma.rn.f32` without `.ftz`, SASS `FFMA`), every NaN result 0x7FFFFFFF, the word sm_90

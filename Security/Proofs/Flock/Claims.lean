@@ -96,10 +96,8 @@ public import Proofs.Flock.Claims.Recursion.LastBindsClosed
 public import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
 public import Proofs.Flock.Claims.Recursion.VStarParts
 public import Proofs.Flock.Claims.Recursion.VStarPartsHolo
-public import Proofs.Flock.Claims.Recursion.VStarPartsDense
 public import Proofs.Flock.Claims.Recursion.DeployReg
 public import Proofs.Flock.Claims.Recursion.VStarPartsSparse
-public import Proofs.Flock.Claims.Recursion.VStarPartsSparseDeploy
 public import Proofs.Flock.Claims.Recursion.VStarLinks
 public import Proofs.Flock.Claims.Recursion.PartsVStar
 public import Proofs.Flock.Claims.Recursion.VStarBDeploy
@@ -108,7 +106,6 @@ public import Proofs.Flock.Claims.Recursion.LayoutBDeployed
 public import Proofs.Flock.Claims.Recursion.VStarCross
 public import Proofs.Flock.Claims.Recursion.DeployChecked
 public import Proofs.Flock.Claims.Recursion.DeployLayout
-public import Proofs.Flock.Claims.Recursion.SchedHolo
 public import Proofs.Flock.Claims.Recursion.SchedCount
 public import Proofs.Flock.Claims.Recursion.InnerForm
 public import Proofs.Flock.Claims.Recursion.SchedDense
@@ -132,7 +129,6 @@ public import Proofs.Flock.Claims.Recursion.CoinTie
 public import Proofs.Flock.Claims.Recursion.CoinPos
 public import Proofs.Flock.Claims.Recursion.CapOpens
 public import Proofs.Flock.Claims.Recursion.TopsOpens
-public import Proofs.Flock.Claims.Recursion.KSLin2E
 public import Proofs.Flock.Claims.Recursion.PartAccepts
 public import Proofs.Flock.Claims.Recursion.VStarPartsB
 public import Proofs.Flock.Claims.Recursion.PartsCompose
@@ -185,7 +181,8 @@ public import Proofs.Flock.Claims.Recursion.RestElemR
 public import Proofs.Flock.Claims.Recursion.RestOpenedSized
 public import Proofs.Flock.Claims.Recursion.RestVerdictBases
 public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
-public import Proofs.Flock.Claims.Recursion.RestVerdictDraw
+public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
 public import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
 public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
@@ -208,7 +205,6 @@ public import Proofs.Flock.Claims.KS.PlainR
 public import Proofs.Flock.Claims.Recursion.LastBindsR
 public import Proofs.Flock.Claims.Recursion.KSLin2R
 public import Proofs.Flock.Claims.Recursion.RoundSizes
-public import Proofs.Flock.Claims.Recursion.DecRRecJ
 public import Proofs.Flock.Claims.Recursion.LayoutBAcc
 public import Proofs.Flock.Claims.Recursion.LastCallsR
 public import Proofs.Flock.Claims.Recursion.CallsLe
@@ -224,7 +220,6 @@ public import Proofs.Flock.Claims.Recursion.InnerExtras
 public import Proofs.Flock.Claims.Recursion.VVTieOf
 public import Proofs.Flock.Claims.Recursion.ResTieVV
 public import Proofs.Flock.Claims.Recursion.RowDLevels
-public import Proofs.Flock.Claims.Recursion.RowDMerkle
 public import Proofs.Flock.Claims.Recursion.RowDAccept
 public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
 public import Proofs.Flock.Claims.Recursion.CapLower
@@ -264,7 +259,6 @@ public import Proofs.Flock.Claims.Recursion.VStarCapL
 public import Proofs.Flock.Claims.Recursion.HhHeld
 public import Proofs.Flock.Claims.Recursion.VStarPortsM
 public import Proofs.Flock.Claims.Recursion.VStarFitHeld
-public import Proofs.Flock.Claims.Recursion.VStarFitPin
 public import Proofs.Flock.Claims.Recursion.VStarFitRow
 public import Proofs.Flock.Claims.Recursion.VStarFinal
 public import Proofs.Flock.Claims.Recursion.SlotsDeployed
@@ -285,7 +279,7 @@ public import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
 public import Proofs.Flock.Claims.Recursion.LabelsFull
 public import Proofs.Flock.Claims.Recursion.VerdictRowECommit
 public import Proofs.Flock.Claims.Recursion.VerdictRowEInner
-public import Proofs.Flock.Claims.Recursion.BoundDeployOuter
+public import Proofs.Flock.Claims.KS.ZkOuter
 public import Proofs.Flock.Claims.Counted
 public import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
 public import Proofs.Flock.Claims.Recursion.BoundReaders
@@ -300,7 +294,6 @@ public import Proofs.Flock.Claims.Scope
 public import Proofs.Flock.Claims.DeployOC
 public import Proofs.Flock.Claims.DeployInputs
 public import Proofs.Flock.Claims.JsonEq
-public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Flock.Claims.CanonEq
 public import Proofs.Flock.Claims.Deploy
 public import Proofs.Flock.Claims.DeployE
@@ -323,17 +316,16 @@ public import Proofs.Flock.Claims.DeployK
 public import Proofs.Flock.Claims.DeployEfficient
 public import Proofs.Flock.Claims.Assembled
 public import Proofs.Flock.Claims.ZK
-public import Proofs.Flock.Claims.KS.ZkAcceptsAt
-public import Proofs.Flock.Claims.KS.ZkAcceptsRun
+public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ConflictRun
+public import Proofs.Flock.Claims.KS.PlainWrP
 public import Proofs.Flock.Claims.CompleteFails
 public import Proofs.Flock.Claims.Sampling
 public import Proofs.Flock.Claims.KS.ZkAccepts
 public import Proofs.Flock.Claims.Witnesses
-public import Proofs.Flock.Claims.WrongUnits
 public import Proofs.Flock.Claims.Recursion.OutTopRows
 public import Proofs.Flock.Claims.Recursion.ResPiecesD
 public import Proofs.Flock.Claims.Recursion.SideCapPos
-public import Proofs.Flock.Claims.Recursion.ResLowJD
 public import Proofs.Flock.Claims.Recursion.ResLowerD
 public import Proofs.Flock.Claims.Recursion.ResLowerDA
 public import Proofs.Flock.Claims.Recursion.ResSiteD
@@ -354,6 +346,7 @@ public import Proofs.Flock.Claims.Recursion.ResNextW
 public import Proofs.Flock.Claims.Recursion.ResAccEnd
 public import Proofs.Flock.Claims.Recursion.OpenCoefTie
 public import Proofs.Flock.Claims.ZKOut
+public import Proofs.Flock.Claims.Recursion.BaseParses
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.

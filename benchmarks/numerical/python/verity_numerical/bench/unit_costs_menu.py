@@ -20,13 +20,13 @@ for each (bucket, B), its templates by proofs' ``buckets.template`` at the cap a
 log2 D, from proofs' ``vstar_c3.py`` and ``buckets.py`` in VSTAR_DIR (art:4e9ff89a).
 
 **The choice** (:func:`pick`): of the B whose inner session is in range (k_log ≤ 27), fits one node (peak ≤
-:data:`~unit_costs_prover.NODE_GIB`), has D within the law's fitted range (≤ 2^:data:`D_FIT_LOG`) and whose outer proof
+:data:`~unit_costs_prover.NODE_GIB`), has D within the sampling design's fitted range (≤ 2^:data:`D_FIT_LOG`) and whose outer proof
 fits one node, the least public inner + outer hours (ties to the smaller B). Without ``--outer`` it chooses on the public
 inner hours alone, and the output says so. Openings are not batched across sessions.
 
 **One session per shape** (:func:`one_session_per_shape`): a model's
 entries that share a shape, (slots, bound), all take the largest inner session among them (a smaller entry's units are
-costed in it by the law) and the largest outer proof, and are priced at them. V*'s statements are public, so a shape
+costed in it by the sampling design) and the largest outer proof, and are priced at them. V*'s statements are public, so a shape
 whose entries had different sessions would tell which entry a session holds. B is still chosen per bucket, before the
 shapes are merged.
 
@@ -51,12 +51,12 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from . import templates as TM
+from verity_flock import subcircuit_templates as TM
 from . import unit_costs_padding as P
 from . import unit_costs_prover as U
 
 B_MENU = (1, 4, 16, 64, 256, 1024)
-#: the law's largest fitted D: 2^35 (a 4096-instance session, r20261003-073948-0e7d)
+#: the sampling design's largest fitted D: 2^35 (a 4096-instance session, r20261003-073948-0e7d)
 D_FIT_LOG = 35
 
 
@@ -100,7 +100,7 @@ def inner(N: int, K: int, b: Mapping[str, Any], B: int, rho: Mapping[str, float]
 def excluded(o: Mapping[str, Any], gib: float = U.NODE_GIB) -> str | None:
     """Why option ``o`` (``inner``'s, with its outer row's ``outer_rss_gib`` when there is one) cannot run, or None."""
     if not o["in_range"]:
-        return f"k_log {o['k_log']} > {U.K_LOG_MAX}"
+        return f"k_log {o['k_log']} > {U.K_MAX}"
     if o["peak_gib"] > gib:
         return f"inner {o['peak_gib']:.0f} GiB > {gib:.0f}"
     if o["inner_m"] > D_FIT_LOG:
@@ -334,7 +334,7 @@ def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | Non
         tot["refused_entries"] = sum(bool(e["outer_refused"]) and e["sessions_public"] > 0 for e in entries)
         models.append({"workload": W["workload"], "N": W["N"], "cap": W["cap"], "entries": entries, "totals": tot})
     return {"format": "verity/f6-menu/v1", "K": K, "b_menu": list(B_MENU), "node_gib": U.NODE_GIB,
-            "k_log_max": U.K_LOG_MAX, "d_fit_log": D_FIT_LOG,
+            "k_log_max": U.K_MAX, "d_fit_log": D_FIT_LOG,
             "chosen_on": ("public inner + outer hours (outer per (bucket, B) from the input)" if outer is not None else
                           "public inner hours alone: no outer input, so the outer proof's cost and memory are not counted"),
             "outer_sha512": outer_sha512, "openings_batched": False,

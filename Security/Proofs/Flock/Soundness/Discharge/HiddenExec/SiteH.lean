@@ -1,18 +1,39 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 public import Proofs.Flock.Soundness.Discharge.Hidden.Committed
+public import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
-public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
-public import Proofs.Flock.Soundness.Discharge.Layout.OutPin
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
+import Proofs.Flock.Soundness.Discharge.Hm.Bc
+import Proofs.Flock.Soundness.Discharge.Hm.Site
+import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 
 @[expose] public section
 
 set_option Elab.async false
 
 /-!
-# A drawn unit's site in its hidden-output table's accepted statement
+# A sampled proof block's site in its hidden-output table's accepted statement
 
 `Layout/Site.lean`, `Hm/Site.lean` and `Layout.col_val_comp` at `AcceptedH T`. At template instance `g` of block `o`:
 
@@ -128,7 +149,7 @@ theorem bytesAt_siteH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) 
 
 /-! ## The registered `b ‖ c` at a site -/
 
-/-- **What `bc_site_ofH` reads at a site**: block `o` and template instance `g` of an accepted statement whose draw `d`
+/-- **What `bc_site_ofH` reads at a site**: block `o` and template instance `g` of an accepted statement whose sample `d`
 decodes to `D`, whose proved units are in its population; whose block R1CS's regions (`a.regs`) contain the
 executable's; whose public file `HmOut.loadPublic` loads to `pop`, with or without shared rows; with `g` below
 `2^⌊log₂ c.g⌋`; and whose proved unit at rank `o · c.g + g` is `u`. -/
@@ -138,7 +159,7 @@ def BcSiteH (a : AcceptedH T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) :
     HmOut.loadPublic a.tags a.st.c a.pf = .ok pop ∧ g < 2 ^ a.st.c.g.log2 ∧
     D.proved[o.val * a.st.c.g + g]? = some u
 
-/-- **The `b ‖ c` at a drawn unit's site is the population's** (`Hidden.bc_drawnS_unpin`), at a `BcSiteH`, for every row
+/-- **The `b ‖ c` at a sampled proof block's site is the population's** (`Hidden.bc_drawnS_unpin`), at a `BcSiteH`, for every row
 `p`. -/
 theorem bc_site_ofH {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSiteH a pop o g u)
     {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
@@ -154,7 +175,7 @@ theorem bc_site_ofH {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u 
 
 /-! ## Copies at a site -/
 
-/-- **A drawn unit's message-keyed input holds its row's bit**: in a satisfying witness of an accepted statement, at
+/-- **A sampled proof block's message-keyed input holds its row's bit**: in a satisfying witness of an accepted statement, at
 block `o` and template instance `g`, the template instance's stacked unit input `x` whose Δ key is message bit `bit` of
 byte `byte` of row `q` holds the witness's bit at that message column (`Typed.msgCol`), when the column is in the block.
 -/
@@ -195,7 +216,7 @@ theorem col_val_compH (a : AcceptedH T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a
   rw [Fin.val_cast]
   exact a.L.col_val_comp a.regs hg hu' h1 h2 x hx
 
-/-- **A drawn unit's returned output holds its output row's message bit**: in a satisfying witness of an accepted
+/-- **A sampled proof block's returned output holds its output row's message bit**: in a satisfying witness of an accepted
 statement whose statement circuit (`HmOut.unrolled` of its committed one) is `c`, whose unit returns the outputs and
 whose rows are covered (`hrf`), at block `o` and template instance `g`, copy `u'`'s logical computed column
 `outCol j t` of `c` (its output `j`, bit `t`) holds the witness's bit at output row `nIn + jo`'s message column for bit
@@ -290,7 +311,7 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
   have hz0 := Hidden.Any.sat_flatF L L0 F0 hda hrf.1 hz
   exact Hidden.Any.row_bc_tgtS L0 F0 rfl hupv (hz0.ex _) o hg hp (hrf.kind hp)
 
-/-- **A row's `b ‖ c` at a drawn unit's site**: in a satisfying witness of an accepted statement with a unit per VU
+/-- **A row's `b ‖ c` at a sampled proof block's site**: in a satisfying witness of an accepted statement with a unit per VU
 (`hupv`) and whose rows are each fit or `sha512/row-seg/v1` (`hrf`), at block `o`, template instance `g` and row `p`, the
 128 bytes at the `hm96` slot's output (`bcCol`) are the commit string of the bytes the row hashes for the `2 · words`
 bytes at its message columns (`Typed.msgCol`, `Hidden.Any.rowMsg`), under the 192 bytes at `saltCol`. -/

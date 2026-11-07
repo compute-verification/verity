@@ -1,6 +1,38 @@
 module
 
 public import Definitions.Hash
+public import Definitions.Hash.EmbeddingRead
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The hash area's guarantee statements
@@ -44,14 +76,14 @@ Scope:
   the vLLM row tables, A6's `x` port, the clear sampled audit's rows) or `hm96-sha512/row/v2` leaves (`v2`: H1's tables
   and registered weights, serving's step rows, the chunked templates' `w`, `in<g>` and `o0` rows, the remote audit's
   receipts). A row cut into several leaves (H1's chunk rows past K = 4096, n leaves a row) is bound leaf by leaf, at each
-  leaf's rank; which leaves form a row is the layout's. Leaves under `hm96-sha512/row/v1` (C-Flock's default ports, M0's
+  leaf's rank; which leaves form a row is the layout's. Leaves under `hm96-sha512/row/v1` (Flock's default ports, M0's
   serving rows) are outside it: a row/v1 format adds role, word width and word count to the prefix.
 * **Domain.** `V.domain` is free, and RowBinding holds for every domain. It does not say that a root is a rows tree. The
   schema doesn't separate them: PoUW's tile-digest trees write `hm96-sha512/row-seg/v1` too, with `x` the 64-byte digest
   itself, and there a row's leaf equals the leaf of its own row-seg digest with no collision. Only the domain's binding
   (`weight_binding`/`activation_binding` against `transcript_binding` in `verity/core/protocols/pouw/audit.py`)
   separates them, so a consumer establishes that `V.domain` is a rows domain from its binding.
-* **Relation to C-Flock.** `FlockSoundness.Binding.ExplicitLeaf.rowSeg` already proves row-seg binding at the hm96 leaf,
+* **Relation to Flock.** `FlockSoundness.Binding.ExplicitLeaf.rowSeg` already proves row-seg binding at the hm96 leaf,
   in explicit-pair form, over `SegRow l`, `List UInt8` digests and one hash. RowBinding's hm96 and row-seg part is the
   same property in this area's types, from a frame root. No lemma relates `RowSeg.digest` to `HmRow.segDigest` or
   `Hm96.leaf` to `Hm96.Default512` yet. A later bridge connects them, and states the break as a search over the listed
@@ -68,9 +100,9 @@ rank below the domain's count and paths of `merkle_depth count` siblings (`Tree.
 node messages (each framing the domain id, its level and index, and its children) that the two path checks hashed have
 one digest under `H`.
 
-Its reader is the step from a serving root to the registered leaf. C-Flock takes the hm96 leaf per position as given
+Its reader is the step from a serving root to the registered leaf. Flock takes the hm96 leaf per position as given
 (`FlockSoundness.Binding.Layout.regLeaf`), and the frame-v3 tree above it is outside its proof. TreeBinding binds a root
-that a record pins to that leaf, which is the content main doesn't have. It is not about C-Flock's own column trees
+that a record pins to that leaf, which is the content main doesn't have. It is not about Flock's own column trees
 (`leafOfId`, nodes "SHA-512 of the pair"), so it feeds neither `TableCRL` nor `SessCRL`. -/
 def TreeBinding : Prop :=
   ∀ (H : Msg → Digest) (D : Tree.Domain) (root : Digest) (rank : ℕ) (l₁ l₂ : Digest) (sibs₁ sibs₂ : List Digest),

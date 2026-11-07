@@ -1,11 +1,11 @@
 """A point's ``result.json``: the campaign contract's (``verity_numerical.bench.contract``), used as it is.
 
-One point is sessions of one workload that each prove the B coordinates a loopback ``flock-circuit serve`` draws from the
-workload's population by the stratified law (``instances``), proved by Flock's native prover with live coins, warm
+One point is sessions of one workload that each prove the B coordinates a loopback ``flock-circuit serve`` samples from the
+workload's population by the stratified sampling design (``instances``), proved by Flock's native prover with live coins, warm
 ``warm`` times and timed ``runs`` times, then each timed session verified by the compiled Lean verifier (``flock-verify
-verify --stratified B``, its own law). The VU is one coordinate (K MACs, 2K FLOP), ``vu.count`` = B. The fingerprint's
+verify --stratified B``, its own sampling design). The VU is one coordinate (K MACs, 2K FLOP), ``vu.count`` = B. The fingerprint's
 ``instances`` is null (the contract's names the B ids a statement proves, which a sample doesn't fix); ``population`` names the
-frozen population and ``draw`` the law.
+frozen population and ``draw`` the sampling design.
 
 - ``t.total``: the median timed statement's prover seconds, the witness wait plus both reps (``statement_seconds``, the
   hill-climb's T_prove); its buckets are both reps' device phases. ``t.total_live`` adds the waits on the live verifier
@@ -17,7 +17,7 @@ frozen population and ``draw`` the law.
 - ``transcript.bytes``: both directions of the session (``net.bytes_out`` the prover's, ``net.bytes_in`` the verifier's);
   ``proof_bytes`` the proof the prover sent, both reps.
 - ``verifier.seconds``: the Lean verifier's wall seconds on one timed session (median), ``verify.cpu_s`` its CPU seconds,
-  its setup (the drawn statement, once per distinct draw) included; the live verifier's own ``verify_s`` is
+  its setup (the sampled statement, once per distinct sample) included; the live verifier's own ``verify_s`` is
   ``verify.live_s``. ``verifier.cpu_seconds_per_vu`` and ``verifier.cores_per_gpu`` are the contract's ``verifier_rates``.
 - ``fixed.setup_seconds``: staging the population (lowering, lanes, witness and public files), done once for every B.
 
@@ -103,7 +103,7 @@ def prover_measurements(w: Workload, B: int, rec: Mapping[str, Any], gpu_peak_mi
 
 #: The Lean verifier's refusal of a session without a sample, issued only once every check has passed and the statement's form is
 #: covered (``Flock.ProvedScope``, D12). A session counts toward throughput only when the Lean verifier
-#: accepts it (the proofs ruling of 17 Oct): a point whose sessions meet this refusal fails, labelled ``D12_LABEL``, and gives
+#: accepts it: a point whose sessions meet this refusal fails, labelled ``D12_LABEL``, and gives
 #: no headline. Its result still counts them (``verify.lean_drawless``).
 DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 D12_LABEL = "checks pass, refused under D12 (no draw)"

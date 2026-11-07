@@ -1,17 +1,22 @@
 module
 
 public import Definitions.Core.Draw
-public import Definitions.Population.Exfiltration
+public import Mathlib.Data.Fintype.Powerset
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
 
 /-!
-# The deployed draw: `k` of the `n` units, uniformly and without replacement
+# The deployed sample: `k` of the `n` units, uniformly and without replacement
 
-`Definitions.Population.Exfiltration`'s game over the draw the audit makes: each window's coin is a `k`-subset of the
+`Definitions.Population.Exfiltration`'s game over the sample the audit makes: each window's coin is a `k`-subset of the
 `n` units (`Verity.Draw.Subset n k`), every one of the `C(n, k)` subsets equally likely, and a window escapes when its
-coin misses every one of the window's wrong units.
+coin misses every one of the window's incorrect proof blocks.
 
 * `uniformDraw n k` is the uniform weight on the coins.
-* `missing n k B` is the draws that miss the wrong set `B`: a window whose wrong units are `B` escapes on them.
+* `missing n k B` is the samples that miss the wrong set `B`: a window whose incorrect proof blocks are `B` escapes on them.
 -/
 
 @[expose] public section
@@ -20,10 +25,10 @@ namespace Population.Exfil
 
 open Finset
 
-/-- The uniform weight on the draws: each of the `C(n, k)` draws has weight `1 / C(n, k)`. -/
+/-- The uniform weight on the samples: each of the `C(n, k)` samples has weight `1 / C(n, k)`. -/
 noncomputable def uniformDraw (n k : ℕ) (_ : Verity.Draw.Subset n k) : ℝ := 1 / n.choose k
 
-/-- The draws that miss the wrong set `B`. -/
+/-- The samples that miss the wrong set `B`. -/
 def missing (n k : ℕ) (B : Finset (Fin n)) : Finset (Verity.Draw.Subset n k) := univ.filter fun s => Disjoint s.1 B
 
 end Population.Exfil

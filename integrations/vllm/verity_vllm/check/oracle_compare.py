@@ -805,7 +805,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             # a PADDING entry (a padded record's inactive stratum, LIFTING-SPEC v0.7 B9.1) materializes an
             # identity the executed prefix of record left INACTIVE: nothing executed, so the Match oracle holds no value for it and its
             # (step, request) pair is not one request attribution can or must verify -- its word is checked against bot_word by the
-            # inactive-stratum check (`padded_population`), not here.  Counted apart, per Q(P) family, never as 'identity without a byte
+            # padded Commit's inactive-stratum check, not here.  Counted apart, per Q(P) family, never as 'identity without a byte
             # range' nor as an unverified attribution pair (the first #3 pod run graded 'partial' on exactly these 7,665 + 21 pairs).
             padding_not_cmp[str(e.get("family") or _query_family_of(e))] += 1   # a padding entry carries its Q(P) family (padding_entries)
             padding_pairs.add((step, str(ident.get("request_id", "r0"))))

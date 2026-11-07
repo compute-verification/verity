@@ -11,7 +11,7 @@ import all Init.Data.Repr
 /-!
 # Sampled proofs' coupling: the live audit's typed moves, from what v2 reads
 
-The logged coupling reads a play of the period's game as a play of C-Flock's live audit (`Live.game`): the prover sends
+The logged coupling reads a play of the period's game as a play of Flock's live audit (`Live.game`): the prover sends
 its registration, the tables' roots `rootB`, a submission (`SubmitJ`) for each round of a rep stream, and the proof
 files. In the period's game those moves are only in the evidence, and the messages piece (`Reading`) fixes each one at
 its cut. This module reads them back, from what v2 reads of the evidence and from the messages the evidence reveals,
@@ -104,7 +104,7 @@ UTF-8 (`SampledProofs.OneStageZk.step`). -/
 def sessionRecord (e : _root_.SampledProofs.OneStageZk.Evidence) (bs : _root_.Core.Blobs) : Option String :=
   e.sessions[0]?.bind fun s => (bs.get s.record s!"session {s.name}'s record").toOption.bind String.fromUTF8?
 
-/-- **The session's proof files as v2 reads them** on the blobs `bs`: at the session v2 sets up at its record's draw
+/-- **The session's proof files as v2 reads them** on the blobs `bs`: at the session v2 sets up at its record's sample
 (`SampledProofs.OneStageZk.setupAt`) on the parameters' statement, circuit and public files and registered reads, the
 blob the session names for each rep stream (`SampledProofs.OneStageZk.filesOf`), as `SampledProofs.OneStageZk.run`
 hands them to `Flock.Zk.verify`. -/
@@ -292,7 +292,7 @@ theorem verdictOf_ok {I : Flock.Witness.Inputs} {scope ksFiles population : Floc
   exact ⟨proofs, spec, tabs, rest, hf, hst, hv⟩
 
 /-- **One session's `step` after a run that accepted so far, where every session accepted**: its record is a blob,
-UTF-8, set up at its own draw, its proof files the blobs it names, and `Flock.Zk.verify` accepts them. -/
+UTF-8, set up at its own sample, its proof files the blobs it names, and `Flock.Zk.verify` accepts them. -/
 theorem step_verified {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads}
     {bs : _root_.Core.Blobs} {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
     {s : _root_.SampledProofs.OneStageZk.RunFiles} {r : _root_.SampledProofs.OneStageZk.Run}
@@ -315,16 +315,22 @@ theorem step_verified {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneS
   · cases h
 
 /-- **v2's run on one session, where it accepted**: the statement's tags, the circuit and public files and the
-registered reads, and the session's `step` from the empty run, which ends with the run. -/
+registered reads, the session's `step` from the empty run at the population check of the public file
+(`FilePart.check`), which ends with the run, and, at the units `want` v1 proved where the run accepted every session,
+the run's proved units held to them (`provedHeld`). -/
 theorem run_verified {p : _root_.SampledProofs.OneStageZk.Own} {s : _root_.SampledProofs.OneStageZk.RunFiles}
     {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.SampledProofs.OneStageZk.Run}
     (h : _root_.SampledProofs.OneStageZk.run p #[s] pu bs = .ok r) :
     ∃ tags0 circuitB pubB rd, Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
       _root_.SampledProofs.OneStageZk.readsOf p.registered = .ok rd ∧
-      ∃ scope ksFiles population programSha want,
+      ∃ scope ksFiles programSha want,
         _root_.SampledProofs.OneStageZk.step (_root_.SampledProofs.OneStageZk.inputsOf tags0 p circuitB pubB bs) rd bs
-          scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s = .ok r := by
+          scope ksFiles
+          (_root_.SampledProofs.FilePart.check p.program (_root_.SampledProofs.getD p.partition "query") pubB)
+          programSha want ⟨#[], #[], #[], true⟩ s = .ok r ∧
+        ∀ want', pu = some want' → r.all = true →
+          _root_.SampledProofs.OneStageZk.provedHeld r.proved want' = .ok () := by
   unfold _root_.SampledProofs.OneStageZk.run at h
   dsimp only at h
   split at h
@@ -335,19 +341,32 @@ theorem run_verified {p : _root_.SampledProofs.OneStageZk.Own} {s : _root_.Sampl
     obtain ⟨pubB, hp, h⟩ := ebind_ok h
     obtain ⟨rd, hrd, h⟩ := ebind_ok h
     obtain ⟨r', hr', h⟩ := ebind_ok h
-    have e : r' = r := by
-      repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
-      all_goals simpa only [pure, Except.pure, Except.ok.injEq] using h
-    subst e
-    exact ⟨tags0, circuitB, pubB, rd, htags, hc, hp, hrd, _, _, _, _, _, foldlM_single hr'⟩
+    have e : r' = r ∧ ∀ want', pu = some want' → r'.all = true →
+        _root_.SampledProofs.OneStageZk.provedHeld r'.proved want' = .ok () := by
+      cases pu with
+      | none =>
+        refine ⟨?_, fun _ hw => by cases hw⟩
+        simpa only [pure, Except.pure, Except.ok.injEq] using h
+      | some want =>
+        refine ⟨?_, fun want' hw hall => ?_⟩
+        · repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
+          all_goals simpa only [pure, Except.pure, Except.ok.injEq] using h
+        · cases hw
+          simp only [hall, ↓reduceIte] at h
+          obtain ⟨⟨⟩, hu, -⟩ := ebind_ok h
+          exact hu
+    obtain ⟨rfl, hw⟩ := e
+    exact ⟨tags0, circuitB, pubB, rd, htags, hc, hp, hrd, _, _, _, _, foldlM_single hr', hw⟩
   · cases h
 
-/-- **v2's check at the coins `ξ` accepts only where its run on the evidence's one session accepted it**. -/
+/-- **v2's check at the coins `ξ` accepts only where its run on the evidence's one session accepted it**, on the public
+file v2 held to the registration (`publicHeld`). -/
 theorem checkBlobsAt_run {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.SampledProofs.OneStage.Public} {prof : _root_.Core.Integrity}
     (h : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
-    ∃ r, e.sessions.size = 1 ∧
+    ∃ r pubB, e.sessions.size = 1 ∧ bs.get p.own.pub "public file" = .ok pubB ∧
+      _root_.SampledProofs.OneStageZk.publicHeld c.record pubB = .ok () ∧
       _root_.SampledProofs.OneStageZk.run p.own e.sessions (some e.base.provedUnits) bs = .ok r ∧ r.all = true := by
   unfold _root_.SampledProofs.OneStageZk.checkBlobsAt at h
   dsimp only at h
@@ -356,11 +375,12 @@ theorem checkBlobsAt_run {p : _root_.SampledProofs.OneStageZk.Params} {c : _root
   · rename_i r hr
     obtain ⟨_, h1, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
+    obtain ⟨⟨⟩, -, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
     obtain ⟨_, -, hr⟩ := ebind_ok hr
-    obtain ⟨_, -, hr⟩ := ebind_ok hr
-    obtain ⟨_, -, hr⟩ := ebind_ok hr
-    refine ⟨r, ?_, hr, ?_⟩
+    obtain ⟨pubB, hpub, hr⟩ := ebind_ok hr
+    obtain ⟨⟨⟩, hph, hr⟩ := ebind_ok hr
+    refine ⟨r, pubB, ?_, hpub, hph, hr, ?_⟩
     · unfold _root_.SampledProofs.OneStageZk.oneSession at h1
       split at h1
       · rename_i hs
@@ -380,7 +400,7 @@ theorem checkBlobsAt_run {p : _root_.SampledProofs.OneStageZk.Params} {c : _root
 
 /-- **What v2's check verified of the evidence `e` on the blobs `bs`**: its one session `rs`, the statement's tags, the
 parameters' circuit and public files and registered reads, the session's record `record` (`sessionRecord`), the session
-`(spec, tabs)` v2 sets up at its draw, and its proof files `proofs`, which `Flock.Zk.verify` accepts. -/
+`(spec, tabs)` v2 sets up at its sample, and its proof files `proofs`, which `Flock.Zk.verify` accepts. -/
 def V2Verified (p : _root_.SampledProofs.OneStageZk.Params) (e : _root_.SampledProofs.OneStageZk.Evidence)
     (bs : _root_.Core.Blobs) (record : String) (spec : SessionSpec) (tabs : Array Flock.Setup) (rest : Json × Json)
     (proofs : Array ByteArray) : Prop :=
@@ -419,10 +439,10 @@ theorem checkBlobsAt_verified {p : _root_.SampledProofs.OneStageZk.Params}
     {bs : _root_.Core.Blobs} {pub : _root_.SampledProofs.OneStage.Public} {prof : _root_.Core.Integrity}
     (h : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ record spec tabs rest proofs, V2Verified p e bs record spec tabs rest proofs := by
-  obtain ⟨r, hsz, hrun, hall⟩ := checkBlobsAt_run h
+  obtain ⟨r, _, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run h
   have hs := eq_single hsz
   rw [hs] at hrun
-  obtain ⟨tags0, circuitB, pubB, rd, ht, hc, hp, hrd, _, _, _, _, _, hstep⟩ := run_verified hrun
+  obtain ⟨tags0, circuitB, pubB, rd, ht, hc, hp, hrd, _, _, _, _, hstep, -⟩ := run_verified hrun
   obtain ⟨recB, record, spec, tabs, rest, proofs, hb, hrec, hst, hf, hv⟩ := step_verified hstep hall
   exact ⟨record, spec, tabs, rest, proofs, e.sessions[0], tags0, circuitB, pubB, rd, hs, ht, hc, hp, hrd,
     sessionRecord_eq hs hb hrec, hst, hf, hv⟩
@@ -583,8 +603,8 @@ theorem eq_viewZP {I : FlockSoundness.Discharge.Exec.Inputs} {own : Option ByteA
   funext j r
   exact hR j r
 
-/-- **The session's writer keeps an accepted transcript's view**: what `A.wr` writes, at a draw `S` and a registration
-`R`, for the view of a transcript `AcceptsZKP A.I A.own` accepts whose record carries the draw `A.dj S`, is accepted.
+/-- **The session's writer keeps an accepted transcript's view**: what `A.wr` writes, at a sample `S` and a registration
+`R`, for the view of a transcript `AcceptsZKP A.I A.own` accepts whose record carries the sample `A.dj S`, is accepted.
 `wrZP` does (`writesView_wrZP`); the writer the period's record names is to. -/
 def WritesView (A : Live) : Prop :=
   ∀ (S : Finset (Fin A.n)) (R : A.Reg) (t : FlockSoundness.Discharge.Exec.Transcript), AcceptsZKP A.I A.own t →
