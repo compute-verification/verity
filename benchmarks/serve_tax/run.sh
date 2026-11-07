@@ -21,7 +21,8 @@
 # inputs/fi_smoke.py before the first engine so that its JIT lands outside the served traffic; OUT/engine_env.txt records
 # the toolkit, has_flashinfer and FlashInfer's caches' digests (fi_cache) before the arms and after each. LDCONFIG=1 refreshes the
 # linker cache first. BUDGET_MIN bounds the arms' minutes: each arm after the first serves the reps of REPS that still fit
-# (serve_tax.py fit, from the arm before it), and none if no rep does (OUT/arms.txt says what was cut).
+# (serve_tax.py fit, from the arm before it), and one if none does, since reps are cut and never an arm (OUT/arms.txt says
+# what was cut).
 # Each restore arm keeps the KV bytes and states of SAVE_KV's edges in KV_DIR/<arm> (KV_DIR by default a fresh directory
 # under the node's scratch, removed at the end); RESTORE=FROM:TO then restores each RESTORE_ARM's edge FROM into a fresh
 # engine (warmed first on RESTORE_WARM of the replay block's prompts) and replays to edge TO (restore.py) into
@@ -124,7 +125,7 @@ if [ "${1:-}" = leased ]; then
       left=$((BUDGET_MIN * 60 - ($(date +%s) - t_leased)))
       reps=$("$PY" "$here/serve_tax.py" fit "$OUT/$last" --budget-s "$left" --reps "$REPS") || reps=$REPS
       [ "$reps" -lt "$REPS" ] && echo "== $arm: $reps of $REPS reps fit the $((left / 60)) min left of BUDGET_MIN=$BUDGET_MIN" | tee -a "$OUT/arms.txt"
-      [ "$reps" -lt 1 ] && continue
+      [ "$reps" -lt 1 ] && { reps=1; echo "== $arm: serving 1 rep anyway (reps are cut, never an arm)" | tee -a "$OUT/arms.txt"; }
     fi
     echo "== $arm $(date -u +%FT%TZ)"
     "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" --rates "$RATES" --reps "$reps" --span-s "$SPAN_S" \
