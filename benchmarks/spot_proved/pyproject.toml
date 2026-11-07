@@ -7,9 +7,21 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # stage.py binds each block through verity_vllm's serving templates to its registered Definition, which the tests evaluate and
 # hold to the numpy model of FlashInfer's kernel (`tp_allreduce_check`); verity_vllm's imports reach the one-stage protocol and
-# verity.ml's commitments, crypto, windows and the tc kernel
+# verity.ml's commitments, crypto, windows and the tc kernel; moe_window.py commits its tables as PoUW H1's registered values
+# (`verity_vllm.protocols.pouw.h1.registered`), whose imports reach PoUW's core and ml protocols, the claims, the integrity
+# profile and the one challenge derivation
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/definitions",
           "verity/ml/commitments", "verity/ml/crypto", "verity/ml/windows", "verity/ml/kernels/__init__.py",
-          "verity/ml/kernels/tc.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/one_stage",
-          "integrations/vllm/verity_vllm"]
+          "verity/ml/kernels/tc.py", "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw", "verity/ml/randomness",
+          "verity/core/__init__.py", "verity/core/claims", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/profile.py", "verity/core/protocols/record.py",
+          "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
+          "verity/core/protocols/sampled_proofs/remote.py", "verity/core/protocols/sampled_proofs/one_stage",
+          "integrations/vllm/verity_vllm", "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py",
+          "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/core_check.py",
+          "verity/core/protocols/pouw/credit.py", "verity/core/protocols/pouw/grind.py",
+          "verity/core/protocols/pouw/leaf_lanes.py", "verity/core/protocols/pouw/live_reads.py",
+          "verity/core/protocols/pouw/protocol.py", "verity/core/protocols/pouw/registration.py",
+          "verity/core/protocols/pouw/salt.py", "verity/core/protocols/pouw/serving.py",
+          "verity/core/protocols/pouw/verifier.py", "verity/core/protocols/pouw/weights.py",
+          "verity/core/protocols/pouw/window.py", "verity/core/protocols/pouw/lean/check/models.json"]
