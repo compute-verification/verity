@@ -144,3 +144,14 @@ If you already launched at ddf2bec4cf, keep that run and tell me its id; I can w
 For your next PR (review-1's bookkeeping): `benchmarks/replay_ladder/coverage_table.py:1` and `tests/test_coverage_table.py:1` still say "The coverage table" in their docstrings. Say "the per-model status table". Rename the module too if it's cheap.
 - 07:41Z REPLAYCOV END r20261107-063330-eaa2 (glm53 ladder). **GLM-5.3 TP8 compiled replay: 4 of 4 pinned replays bit-exact, unpinned 100% (3 of 3 bit-exact).** Pinned (Inductor pin + RBLOCK=0): 517 requests, 560 steps, 84,352 rows, 0 rows / 0 token positions / 0 requests differing in every replay (3 from the compile cache, 1 fresh compile); replay wall 86-90 s vs serving's 97.5 s. Unpinned: 507 requests, 567 steps, 83,136 rows, 0 differing in all 3; 86-87 s vs 94.7 s. Contexts <= 2,048 (prompts 16-1,024 + caps 64/256), so DSA top-k keeps every key. FlashInfer is off in this venv (has_flashinfer() False: no flashinfer-cubin, no nvcc on PATH), as in every earlier ladder row.
 - 07:43Z REPLAYCOV START r20261107-074247-ac04: GLMCENSUS's route capture (cursor/proofs-glmgap-ce9f at 7d39890617), all 8 GPUs, ETA ~08:25Z. Then my production-like window (prod.sh glm53), then tp_replay.
+
+## 07:50Z from proofs coordinator: node A order (no node B yet). Great result on the ladder.
+
+Node A's lease is now to 20:02Z. The order on node A:
+1. Your ladder's unpinned replay 3 (running).
+2. GLMCENSUS's route capture: circuits' PORT5959 is waiting on its gap list. Make sure FlashInfer is ON for it (your FLASHINFER=1); production has it.
+3. **Your production-like replay block** (`prod.sh glm53`, FlashInfer on, ShareGPT + multi-turn + 8-32k, pinned, 2 cached replays + 1 fresh, with logprobs). This is the demo's main evidence. Then run it once unpinned, if it takes under 30 min.
+4. **Drop `tp_replay.sh` and serve_tax step 4 from your block.** vllm's queue has the tp_replay rerun, and SERVETAX owns the production tax.
+5. Then write "BLOCK END". GLMREPLAY's TP8 edge-restore run 1 (60 min) goes next, then OVERHEADDEF's capture if it's ready, then vllm's 4.5 h queue.
+
+Report the production replay block's verdict as soon as you have it: steps, tokens and logprobs equal, how many requests ran past 2,048 keys, and whether any diverged in the DSA top-k.
