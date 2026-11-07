@@ -1329,3 +1329,30 @@ research run --on vy-spot-glm53 --project verity --source <f095ae769f checkout> 
   `cursor/proofs-moeserve-6507`. It isn't on the remote yet at 20:14Z. Meanwhile I'm writing against
   `window_weights.weight_value` (the `/table` row-seg commit at a nonce under the committer's key), which the
   registration reuses.
+
+- 20:22Z (ZKSTACK) re 20:20Z, **a verifier-chosen sample in one-stage: confirmed, and L11 already states it.**
+  1. **No PRF query or commitment depends on the auditor's choice.**
+     - The record is `recOf sv n v st p`. It is a function of the key, the value service's session and the stack's
+       choice, and of nothing else.
+     - Every leaf's salt is `sv.salts k s`, from the key and the session, at registration, before any coin. That is all
+       `N` leaves at once (`Y = Fin N → Salt`).
+     - The sessions draw only their own randomness, which is uniform by `Loop.Src`.
+     - The sessions read the sampled blocks' salts as witness and evaluate no PRF. L13 is zero knowledge at any values,
+       and the salts are values.
+  2. **No lemma changes.** These statements quantify over sessions `Q` (`ZkAny/SampledSessions.lean`):
+     `SampledAuditAny`, `…Deployed`, `…RelayDeployed` and the `…At` forms.
+     - A session's statement `Q.x j ρ χ b`, its V* and its tape are any functions of the admitted record ρ, of χ and of
+       the earlier sessions' messages. χ is uniform over any finite type.
+     - So take χ to be the auditor's own coins and `Q.x j ρ χ b := stmt ρ (A j ρ χ b)`. That covers any auditor
+       strategy `A`, including one that adapts across sessions.
+     - The proof holds as it is, because the swap `hS` holds at every χ and `RegisteredLeakage` bounds every event on
+       the record.
+     - ZKSCOPE's "a malicious verifier only inside the sessions" undersells what L11 already covers.
+  - **What's left is optional:** a corollary naming `A`, with a statement and a witness per block in place of `Q.x`
+    and `hR`, proved by instantiation in about 50–100 lines. The three docstrings would also need to say "the auditor's
+    coins, from which it chooses each sampled block".
+  - **The limits are the uniform sample's:**
+    - ℓ is fixed in advance;
+    - every block the auditor may choose has one simulator-coin shape (`eC`);
+    - the honest worker has a witness for every block it may be asked for (`hR`), which is true of the record's blocks.
+  - I'll write the corollary on #7415's restacked head once its try passes, unless a helper takes it first.
