@@ -43,7 +43,7 @@ import Proofs.Flock.Claims.Recursion.VVTieOf
 # `ResLoweredPD` at the deployed constants (`resLowered_D`)
 
 The site facts need part `s`'s own decision at its staged statement (`PartDec`: table 0 labels its instances `0..n-1`
-only at a full draw, which only the decision checks), and a joint acceptance at arbitrary witnesses carries none. So the
+only at a full sample, which only the decision checks), and a joint acceptance at arbitrary witnesses carries none. So the
 decision travels beside the staged statement, in what each part shows (`showsDec`: `showsPart` and `PartDec` wherever
 the statement sets up). The chain's commit ties between two parts read both parts' setups and a collision with the
 verifier's own evaluations there (`accCommit_eq`), so `ResLoweredPD` is `ResLoweredP` at `JointV` over `showsDec` (the

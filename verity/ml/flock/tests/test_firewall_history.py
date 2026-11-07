@@ -167,7 +167,7 @@ def _drive(cls, state: Path, seed: int, steps: int, long: bool = False) -> tuple
     """A fixed stream of `steps` ops by three `cls` objects on `state`, with the record and the index damaged and repaired
     between them as the stream says, and events another process appends: each step's result or exception, and the
     record's digest after it; and of the reads of the record, how many the index answered and how many there were.
-    `long` draws session names past `KEY_MAX` too."""
+    `long` samples session names past `KEY_MAX` too."""
     rng, fws = random.Random(seed), [cls(state) for _ in range(3)]
     log, index, out, sids = state / "record.jsonl", state / "index-py", [], ["r9999"]
     long_sid = "r" * (FW.KEY_MAX + 1)
@@ -244,7 +244,7 @@ def _drive(cls, state: Path, seed: int, steps: int, long: bool = False) -> tuple
                   "slot": lambda: _slot(fw, sid, part, rng.random()), "appended": lambda: _appended(state, ev)}[op]
             try:
                 got = ("result", op, fn())
-            except Exception as e:  # noqa: BLE001 - the two firewalls are compared on what they raise too
+            except Exception as e:  # noqa: BLE001 - the two ZK servers are compared on what they raise too
                 got = ("raise", op, type(e).__name__, str(e))
             if op == "open" and got[0] == "result":
                 sids.append(got[2])

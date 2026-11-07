@@ -2,7 +2,7 @@
 Boolean form's builder (`verity.ml.circuits.boolean.table`, through `ir_lower._boolean_build`): the entry at the index's low bits
 at every index and on random tables, in (2^IB - 1) * 16 EW ANDs over the unit's own input bits and no lookup; a read of a table
 past `BT.MAX_WORDS` has no piece; and a Program whose reads share one registered table lowers under `Q_word` with every unit
-lowered and each unit equal to the reference on synthetic draws."""
+lowered and each unit equal to the reference on synthetic samples."""
 from __future__ import annotations
 
 import random
@@ -73,7 +73,7 @@ def test_a_read_of_a_table_past_max_words_has_no_piece():
 
 def test_reads_of_one_registered_table_lower_unit_by_unit():
     """Four reads of one registered `exp2_lut127`-shaped table (2^8 entries of two words), each entry added to the next: under
-    `Q_word` every unit lowers, the reads' units are the read's ANDs, and every unit equals the reference on synthetic draws."""
+    `Q_word` every unit lowers, the reads' units are the read's ANDs, and every unit equals the reference on synthetic samples."""
     read = _word(8, 2)
     idx_t, tab_t, I32 = read.params[0][1], read.params[1][1], Value(32)
     K = 4

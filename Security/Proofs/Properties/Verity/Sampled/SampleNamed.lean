@@ -6,9 +6,9 @@ public import Proofs.Properties.Composition
 /-!
 # v2 reads the sample's coins of one family and one digest
 
-The record's draw (`recordDraw_firstStop`) and the sample-coupled coin map (`sampleMap`) take a family `label` and a
+The record's sample (`recordDraw_firstStop`) and the sample-coupled coin map (`sampleMap`) take a family `label` and a
 digest `after` fixed by the parameters, the committed files, the commitment and the strategy, before any coin, and v2's
-draw in every play the sampled verdict accepts at them (`SampleNamed`). v2 draws under the challenger its parameters
+sample in every play the sampled verdict accepts at them (`SampleNamed`). v2 samples under the challenger its parameters
 name, at the coins of its family released after the registration's digest (`source_of`):
 
 * **The family** (`draw_label`, `labelAt`): the parameters' challenger family, a function of the parameters `θ` alone,
@@ -18,7 +18,7 @@ name, at the coins of its family released after the registration's digest (`sour
   `afterAt`, bounded by a SHA-512 collision on `bind`'s messages).
 
 So `SampleNamed` holds at the family `labelAt θ` and the digest `after` on every accepted play that meets the clause
-that v2 draws at `after` (`sampleNamed_layout`, the form `movesReach_layout`'s `hN` takes on the coupling's cut, where
+that v2 samples at `after` (`sampleNamed_layout`, the form `movesReach_layout`'s `hN` takes on the coupling's cut, where
 `after` is the strategy's `afterAt`). The logged reading isn't needed.
 -/
 
@@ -47,8 +47,8 @@ theorem labelAt_eq {θ : ByteArray} {p : _root_.SampledProofs.OneStageZk.Params}
   rw [ParamsAt.unique hp' hp, hc] at hc'
   exact (Prod.mk.inj (Option.some.inj hc')).2.symm
 
-/-- **v2 draws at the parameters' family**: where composite `k` accepted what the prover sent and v2's case in it
-accepts at the draw `dr`, `dr`'s family is the one v2's parameters in what was sent name. -/
+/-- **v2 samples at the parameters' family**: where composite `k` accepted what the prover sent and v2's case in it
+accepts at the sample `dr`, `dr`'s family is the one v2's parameters in what was sent name. -/
 theorem draw_label {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
     {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws}
@@ -63,7 +63,7 @@ theorem draw_label {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e 
 /-! ## At the cut -/
 
 /-- **`movesReach_layout`'s `hN`** at the family `labelAt θ` and a digest `after`, on the plays that meet the clause
-that v2 draws at `after` (`SampledDigest`, the cut's at `afterAt`); it reads nothing of the logged reading. -/
+that v2 samples at `after` (`SampledDigest`, the cut's at `afterAt`); it reads nothing of the logged reading. -/
 theorem sampleNamed_layout {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray}
     {F : Array ByteArray} {c : ByteArray} {A : Live} (hA : SetsUp V θ F A) {σ : Strategy (V.game θ F c)}
     {after : ByteArray} :
