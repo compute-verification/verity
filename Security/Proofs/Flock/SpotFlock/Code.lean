@@ -10,7 +10,7 @@ public import Definitions.Claims.SamplingTwo
 `SpotFlock.code h`: the sampled verifier's code (`SamplingDeploy.Code`) for a two-stage registration whose copies the
 auditor holds (`h`, a `Held`), its sessions run by Flock's deployed masked verifier (`FlockDeploy.V true`); and what the
 two-stage compiler reads beside it: the design (`two h`), the replay sample of record (`rs h`) and the interior
-registration's roots (`iroots h`). This is the deployment's layer: the compiler's theorem (`ksTwo_atOrder`) holds at
+registration's roots (`iroots`). This is the deployment's layer: the compiler's theorem (`ksTwo_atOrder`) holds at
 these definitions from the premises it names, and nothing here imports a proof.
 
 **The auditor's copies** (`Held`), fixed before the run and never the prover's: the registration's program (its
