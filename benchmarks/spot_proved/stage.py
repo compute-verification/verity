@@ -288,7 +288,7 @@ def moe_instances(cap: Capture, profile):
             if why:
                 raise LookupError(f"moe_launch (seq {e['seq']}): {why}")
             spec = T.moe_expert_fp8_gemm_spec(profile, E, K, 1, G, kb, swap, BM=bm, BN=bn, WARPS=warps, routed=routed)
-            topk = a["topk_weights"]["shape"][1]
+            topk = a["topk_weights"]["shape"][1] if routed else int(a["top_k"])
             dot = re.search(r"DOT=(\w+?)Dot", spec.id)
             kind = "MoeExpertFp8GemmW" if routed else "MoeExpertFp8Gemm"
             label = f"{kind}_K{K}_{'swap' if swap else 'noswap'}_{dot[1] if dot else 'dot'}"
@@ -300,10 +300,11 @@ def moe_instances(cap: Capture, profile):
 
 def moe_args(cap: Capture, r: int, e: dict, j: int, col: int) -> list:
     """Pair j's operands: its A row (the w13 launch reads token j // top_k's), its expert, the w2 launch's routed weight, and
-    weight column `col` with its scale block."""
+    weight column `col` with its scale block. The w13 launch has no routed weight (vLLM passes ``topk_weights=None``) and
+    its ``top_k`` is the slots a token."""
     a = e["in"]
     routed = bool(a.get("mul_routed_weight"))
-    t = j if routed else j // a["topk_weights"]["shape"][1]
+    t = j if routed else j // int(a["top_k"])
     A, As = cap.tensor(r, a["A"]), cap.tensor(r, a["A_scale"])
     B, Bs = cap.tensor(r, a["B"]), cap.tensor(r, a["B_scale"])
     ids = cap.tensor(r, a["expert_ids"]).reshape(-1)

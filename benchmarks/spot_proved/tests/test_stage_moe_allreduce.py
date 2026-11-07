@@ -58,7 +58,7 @@ def _launch(t: dict, seq: int, routed: bool) -> dict:
            "A_scale": _ref(t, 0, f"{w}.As", rng.random((rows, K // 128), dtype=np.float32)),
            "B": _ref(t, 0, f"{w}.B", rng.integers(0, 255, (E, N, K), dtype=np.uint8)),
            "B_scale": _ref(t, 0, f"{w}.Bs", rng.random((E, N // 128, K // 128), dtype=np.float32)),
-           "topk_weights": _ref(t, 0, f"{w}.g", rng.random((M, TOPK), dtype=np.float32)),
+           "topk_weights": _ref(t, 0, f"{w}.g", rng.random((M, TOPK), dtype=np.float32)) if routed else None,
            "expert_ids": _ref(t, 0, f"{w}.ids", rng.integers(0, E, M * TOPK)),
            "mul_routed_weight": routed, "top_k": 1 if routed else TOPK, "config": CFG}
     out = {"C": _ref(t, 0, f"{w}.C", rng.integers(0, 2 ** 16, (M, TOPK, N), dtype=np.uint16))}
