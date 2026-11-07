@@ -5,14 +5,15 @@
 # files are what the verifier pins (records_audit.py audit --registered) and what the rank's windows commit their tables under.
 #   TABLES_CHECKPOINT=DIR the checkpoint, TABLES_MODEL and TABLES_REVISION its checkpoints.json entry, which pins its shards (rank
 #     0 hashes every one); TABLES_SERVED=DIR holds params-rank<r>.json; TABLES_WORLD the TP world; TABLES_KEY=FILE the committer's
-#     32-byte key, made here (mode 0600) when absent, never under $OUT; TABLES_STACKS=S,.. only those expert stacks (default every
+#     32-byte key, minted here when absent (expert_tables.mint_key: mode 0600, with its sidecar FILE.nonces, without which every
+#     rank refuses the key), never under $OUT; TABLES_STACKS=S,.. only those expert stacks (default every
 #     one); TABLES_BLOCKS the projections' block rows (default "w13=1 w2=32"); TABLES_WORKERS processes a rank (default 2).
 #   Out: $OUT/tables-rank<r>.json and its log, every rank at once.
 set -euo pipefail
 : "${TABLES_CHECKPOINT:?}" "${TABLES_MODEL:?}" "${TABLES_REVISION:?}" "${TABLES_SERVED:?}" "${TABLES_WORLD:?}" "${TABLES_KEY:?}" "${OUT:?}"
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 case "$(realpath -m "$TABLES_KEY")" in "$(realpath -m "$OUT")"/*) echo "TABLES_KEY is under \$OUT: the key never leaves the committer" >&2; exit 2;; esac
-[ -e "$TABLES_KEY" ] || (umask 077 && head -c 32 /dev/urandom > "$TABLES_KEY.tmp" && mv -n "$TABLES_KEY.tmp" "$TABLES_KEY")
+[ -e "$TABLES_KEY" ] || "$REPO/.venv/bin/python" -c 'import sys; from verity_vllm.pipeline.expert_tables import mint_key; mint_key(sys.argv[1])' "$TABLES_KEY"
 blocks=()
 for b in ${TABLES_BLOCKS:-w13=1 w2=32}; do blocks+=(--block "$b"); done
 stacks=()

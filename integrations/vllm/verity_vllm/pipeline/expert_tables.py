@@ -4,10 +4,10 @@ of the weight as `check.weights_of_record` composes it from the checkpoint's sha
 ``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows under the committer's secret key, at the rank's program (`program`)
 and the table's nonce (`nonces`), written before the first window's coins as the record `records.expert_tables.ExpertTables`:
 the ``{program, values}`` the verifier pins (``records_audit.py audit --registered``), so a window's table read and opening count
-registered exactly where the window's root for the table is this one.  The key never leaves the committer; a window's committer
-commits the tables it serves under the same key at the program and nonces the record names (`expert_rows.committer`,
-`serving_rows.after_commit`'s ``tables``), so a table served as registered has its registered root and any other's reads are
-free.
+registered exactly where the window's root for the table is this one.  The key is minted for these nonces (`mint_key`, whose
+sidecar `key_of` requires) and never leaves the committer; a window's committer commits the tables it serves under the same key at
+the program and nonces the record names (`expert_rows.committer`, `serving_rows.after_commit`'s ``tables``), so a table served as
+registered has its registered root and any other's reads are free.
 
 A stack's tables are its e4m3 weight's blocks of ``blocks[proj]`` rows (n, a power of two dividing N) and its f32 scales' rows, as
 the partition's read templates read them: a block of rows of ``H = n K / 2`` words, a scale row of ``H = 2 K / G``.  Without a Build,
@@ -34,11 +34,15 @@ from verity_vllm.pipeline.expert_rows import table_param, table_words
 from verity_vllm.records import expert_tables as XT
 from verity_vllm.records.expert_tables import SCHEMA
 
-__all__ = ["SCHEMA", "TABLES_NONCE", "entries", "nonces", "program", "register", "served_fields", "tables_of"]
+__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "entries", "key_of", "mint_key", "nonces", "program", "register", "served_fields",
+           "tables_of"]
 
 #: the salt nonces of the tables under the committer's key start here, a rank's 2^32 apart (`nonces`): above every weight
 #: parameter's and the state's (`program.predict.window_weights.WEIGHTS_NONCE` and on)
 TABLES_NONCE = 3 << 61
+#: the nonce scheme `nonces` draws (a table's field's place in the source's weight-field order), which a key's sidecar names
+#: (`mint_key`, `key_of`): a key whose tables were drawn at another scheme's nonces is refused
+NONCES = "field-order"
 BITS = {"float8_e4m3fn": 8, "uint8": 8, "bfloat16": 16, "float16": 16, "float32": 32}
 
 
@@ -83,6 +87,37 @@ def nonces(tables: Mapping[str, Sequence[tuple[int, str, str, int]]], order: Seq
                 raise ValueError(f"{param}: field {at[label]} or block {b} past the nonce's 14 and 18 bits")
             out[param] = TABLES_NONCE + (int(rank) << 32) + (at[label] << 18) + b
     return out
+
+
+def _minted(key: bytes) -> dict[str, str]:
+    """What a key's sidecar (``KEY.nonces``) holds: the nonce scheme its tables are drawn at (`NONCES`) and the key it was minted
+    with, as SHA-512 under a tag, so a sidecar copied beside another key names none."""
+    return {"nonces": NONCES, "key": hashlib.sha512(b"verity-vllm expert tables committer key\0" + key).hexdigest()}
+
+
+def mint_key(path: str) -> bytes:
+    """A fresh committer's key at ``path``, 32 OS bytes (mode 0600), with its sidecar ``path.nonces`` (`_minted`, mode 0600):
+    the one key `key_of` reads.  Refused where either file exists: a key is minted once."""
+    side = Path(f"{path}.nonces")
+    if Path(path).exists() or side.exists():
+        raise UsageError(f"--new-key: {path} or {side.name} exists; a committer's key is minted once, so give --key a new path")
+    key = os.urandom(32)
+    for p, data in ((path, key), (side, (json.dumps(_minted(key)) + "\n").encode())):
+        with os.fdopen(os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as f:
+            f.write(data)
+    return key
+
+
+def key_of(path: str) -> bytes:
+    """The committer's key at ``path``, refused unless `mint_key` minted it for this nonce scheme, as its sidecar says.  Tables
+    committed under the key at another scheme's nonces (by hand, or before a nonce was its field's place) can hold a nonce this
+    scheme draws for another table, and then two tables draw one salt."""
+    key, side = Path(path).read_bytes(), Path(f"{path}.nonces")
+    if not side.is_file() or json.loads(side.read_text()) != _minted(key):
+        raise UsageError(f"--key {path}: not minted for {NONCES!r} nonces (no {side.name} beside it naming them and this key): its "
+                         "tables may repeat a nonce these tables draw, two tables under one salt; run with --new-key and a new "
+                         "--key path")
+    return key
 
 
 def _prefix(prog: dict[str, Any], ck: Any) -> str:
@@ -211,7 +246,8 @@ class Options:
     world: int | None = option("--world", type=int, default=None, help="with --served: the TP world")
     rank: int | None = option("--rank", type=int, default=None, help="with --served: the TP rank")
     checkpoint_dir: str = option("--checkpoint-dir", help="the checkpoint of record")
-    key: str = option("--key", help="the committer's 32-byte secret key file (the one its windows commit the tables under)")
+    key: str = option("--key", help="the committer's 32-byte secret key file (the one its windows commit the tables under), minted "
+                      "with --new-key: refused without its sidecar KEY.nonces")
     block: list[str] = option("--block", action="append", default=[], help="PROJ=n: the stacks' PROJ weights in blocks of n rows")
     out: str = option("--out", help="the registration's file")
     stacks: str | None = option("--stacks", default=None, help="comma-separated expert stacks, e.g. model.layers.5.mlp.experts "
@@ -220,7 +256,8 @@ class Options:
     model: str | None = option("--model", default=None, help="the checkpoint's repo (its checkpoints.json entry)")
     revision: str | None = option("--revision", default=None, help="the checkpoint's revision")
     no_verify_shards: bool = option("--no-verify-shards", default=False, action="store_true", help="skip the shard sha256")
-    new_key: bool = option("--new-key", default=False, action="store_true", help="write 32 fresh OS bytes to --key first (mode 0600)")
+    new_key: bool = option("--new-key", default=False, action="store_true",
+                           help="mint --key first: 32 fresh OS bytes and its sidecar KEY.nonces (mode 0600; mint_key)")
     workers: int = option("--workers", type=int, default=1, help="processes, one a stack at a time")
 
 
@@ -235,13 +272,8 @@ def main(o: Options) -> int:
         raise UsageError("give each projection's block rows: --block w13=n --block w2=n")
     if (o.program_dir is None) == (o.served is None) or (o.served is not None and (o.world is None or o.rank is None)):
         raise UsageError("give --program-dir, or --served with --world and --rank")
-    if o.new_key:
-        if Path(o.key).exists():
-            raise UsageError(f"--new-key: {o.key} exists; a committer's key is written once")
-        fd = os.open(o.key, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(os.urandom(32))
-    doc = register(o.program_dir, o.checkpoint_dir, Path(o.key).read_bytes(), blocks, served=o.served, world=o.world, rank=o.rank,
+    key = mint_key(o.key) if o.new_key else key_of(o.key)
+    doc = register(o.program_dir, o.checkpoint_dir, key, blocks, served=o.served, world=o.world, rank=o.rank,
                    stacks=o.stacks.split(",") if o.stacks else None, checkpoints_manifest=o.checkpoints_manifest,
                    model=o.model, revision=o.revision, verify_shards=not o.no_verify_shards, workers=o.workers)
     Path(o.out).write_text(json.dumps(doc, indent=1) + "\n")

@@ -1,8 +1,8 @@
 """`expert_tables`: a TP rank's registration of the per-expert cut's tables, on a synthetic block-FP8 MoE checkpoint (E = 8 experts,
 two MoE layers, TP2).  Each registered entry is the one a window's committer commits for the same served weights
 (`expert_rows.commit_tables` under `expert_rows.committer`'s key, program and nonces); a table served with another byte has another
-root; the two ranks are distinct values; and a registration's file is the record a window's committer reads
-(`records.expert_tables`, `expert_rows.of_request`)."""
+root; the two ranks are distinct values; a registration's file is the record a window's committer reads
+(`records.expert_tables`, `expert_rows.of_request`); and a key not minted for these nonces refuses (`key_of`)."""
 from __future__ import annotations
 
 import gzip
@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.config import UsageError
 from verity_vllm.pipeline import expert_rows as ER
 from verity_vllm.pipeline import expert_tables as ET
 from verity_vllm.records import expert_tables as XT
@@ -201,6 +202,47 @@ def test_without_a_build_the_served_parameters_name_the_tables_and_pin_the_bytes
                     checkpoints_manifest=ckpt["man"])
     with pytest.raises(ValueError, match="TP world and rank"):
         ET.register(None, ckpt["dir"], KEY, BLOCKS, served=str(tmp_path / "params.json"), checkpoints_manifest=ckpt["man"])
+
+
+def test_a_key_not_minted_for_these_nonces_refuses_with_its_fix(tmp_path):
+    """A key without its sidecar naming this nonce scheme (32 bytes written by hand, as the tables committed at the older
+    layer-and-kind nonces were) refuses, saying to run with --new-key; so does one beside another key's sidecar.  A minted key
+    reads back, both files mode 0600, and is minted once."""
+    old = tmp_path / "old.key"
+    old.write_bytes(KEY)
+    with pytest.raises(UsageError, match="run with --new-key"):
+        ET.key_of(str(old))
+    new = tmp_path / "new.key"
+    key = ET.mint_key(str(new))
+    side = tmp_path / "new.key.nonces"
+    assert ET.key_of(str(new)) == key and len(key) == 32 and json.loads(side.read_text())["nonces"] == ET.NONCES
+    assert {p.stat().st_mode & 0o777 for p in (new, side)} == {0o600}
+    with pytest.raises(UsageError, match="minted once"):
+        ET.mint_key(str(new))
+    (tmp_path / "old.key.nonces").write_bytes(side.read_bytes())
+    with pytest.raises(UsageError, match="run with --new-key"):
+        ET.key_of(str(old))
+
+
+def test_the_command_registers_only_under_a_key_minted_for_its_nonces(ckpt, regs, tmp_path):
+    """``tp-register-tables --key`` refuses a key not minted for its nonces before it reads the checkpoint, and writes nothing;
+    ``--new-key`` mints one and registers under it, and the minted key then serves another run."""
+    old, out = tmp_path / "old.key", tmp_path / "tables.json"
+    old.write_bytes(KEY)
+
+    def run(key: str, new_key: bool = False) -> int:
+        return ET.main(ET.Options(program_dir=ckpt["progs"][0], checkpoint_dir=ckpt["dir"], key=key, block=["w13=1", "w2=32"],
+                                  out=str(out), checkpoints_manifest=ckpt["man"], new_key=new_key))
+
+    with pytest.raises(UsageError, match="run with --new-key"):
+        run(str(old))
+    assert not out.exists()
+    assert run(str(tmp_path / "new.key"), new_key=True) == 0
+    doc = json.loads(out.read_text())
+    assert XT.ExpertTables.of(doc, "registration").program == regs[0]["program"] and set(doc["values"]) == set(regs[0]["values"])
+    assert doc["values"] != regs[0]["values"]
+    out.unlink()
+    assert run(str(tmp_path / "new.key")) == 0 and json.loads(out.read_text()) == doc
 
 
 def test_of_request_reads_the_ranks_file(tmp_path, regs):
