@@ -95,8 +95,8 @@ def drop_worktree(wt: str, cwd: str | None) -> None:
         else:
             try:
                 func(path)
-            except OSError:
-                pass
+            except OSError as e:
+                print(f"restack.py: left {path} in the scratch worktree: {e}", file=sys.stderr)
 
     if os.path.lexists(wt):
         shutil.rmtree(wt, **({"onexc": writable} if sys.version_info >= (3, 12) else {"onerror": writable}))
