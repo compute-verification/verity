@@ -78,6 +78,22 @@ def test_launch_tokens_and_keys_read_the_step_and_refuse_another_requests_batch(
         TG.launch_tokens(1, 0, TG.parse_launch_context("conflict"))
 
 
+def test_under_breakable_graphs_a_steps_captured_kernels_run_at_its_capture_size():
+    """vLLM pads a step of n tokens to the least capture size of at least n (`acquire.served.dispatch`), and runs one past the
+    largest uncaptured; the logits, outside the graphs, stay at the sequences."""
+    sizes = (1, 2, 4, 8, 16)
+    assert [TG.graph_tokens(n, sizes) for n in (1, 3, 5, 9, 16, 17, 67)] == [1, 4, 8, 16, 16, 17, 67]
+    assert TG.graph_tokens(3) == 3
+    ctx = TG.parse_launch_context({"batch": [[[1, 17], [1, 231], [1, 5]], [[1, 18], [1, 232], [1, 6], [2, 0]]]})
+    assert TG.launch_tokens(1, 0, ctx, capture_sizes=sizes) == 4 and TG.launch_tokens(1, 1, ctx, capture_sizes=sizes) == 8
+    assert TG.launch_tokens(1, 1, ctx, sampled=True, capture_sizes=sizes) == 4
+    assert TG.launch_tokens(3, 0, None, capture_sizes=sizes) == 4 and TG.launch_tokens(3, 0, None, sampled=True, capture_sizes=sizes) == 3
+    from verity_vllm.program.predict.common import _Launch
+    launch = _Launch(capture_sizes=sizes).with_batch([[[1, 17], [1, 231], [1, 5]]])
+    assert launch.capture_sizes == sizes and launch.tokens(1) == 4 and launch.tokens(1, sampled=True) == 3
+    assert _Launch([[[1, 17], [1, 231], [1, 5]]]).tokens(1) == 3
+
+
 def test_batch_dispatch_is_a_multi_request_row_without_batch_invariance():
     reqs = [(64, 3, 0), (300, 2, 1)]
     assert LC.batch_dispatch(_wl(reqs, batch_invariant=False))

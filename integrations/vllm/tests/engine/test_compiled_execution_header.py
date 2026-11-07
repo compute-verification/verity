@@ -75,6 +75,32 @@ def test_target_mismatches_refuse_a_mislabelled_execution(monkeypatch):
     assert A.target_mismatches(_engine(dev.with_overrides(compilation="piecewise-emu"), _llm(False, emulate=True))) == []
 
 
+def test_a_breakable_profile_needs_vllms_breakable_graphs_at_its_capture_sizes(monkeypatch):
+    """The `breakable` profile: mode NONE under VLLM_USE_BREAKABLE_CUDAGRAPH, FULL_AND_PIECEWISE at its capture sizes; a torch.compile
+    engine, an engine without the switch or one capturing other sizes is refused by name, and `piecewise` refuses a breakable engine."""
+    dev = TargetProfile.default()
+    monkeypatch.setattr(B.torch.cuda, "get_device_properties",
+                        lambda i: types.SimpleNamespace(major=dev.compute_capability[0], minor=dev.compute_capability[1], multi_processor_count=dev.num_sms))
+    monkeypatch.setattr(B, "observed_flash_attn_version", lambda model: 2)
+    breakable = dev.with_overrides(compilation="breakable")
+
+    def llm(mode=_Mode.NONE, sizes=(1, 2, 4, 8, 16)):
+        out = _llm(False, _CG.FULL_AND_PIECEWISE, sizes)
+        out.llm_engine.vllm_config.compilation_config.mode = mode
+        return out
+
+    monkeypatch.setenv("VLLM_USE_BREAKABLE_CUDAGRAPH", "1")
+    assert A.compilation_facts(llm())["breakable_cudagraph"] is True
+    assert A.target_mismatches(_engine(breakable, llm())) == []
+    assert A.target_mismatches(_engine(breakable, llm(sizes=(1, 2, 4)))) == [
+        "profile declares capture sizes [1, 2, 4, 8, 16], engine captures [1, 2, 4]"]
+    assert any("breakable CUDA graphs False" in b for b in A.target_mismatches(_engine(dev.with_overrides(compilation="piecewise"), llm())))
+    monkeypatch.setenv("VLLM_USE_BREAKABLE_CUDAGRAPH", "0")
+    bad = A.target_mismatches(_engine(breakable, llm(_Mode.VLLM_COMPILE)))
+    assert any("CompilationMode 'NONE', engine runs 'VLLM_COMPILE'" in b for b in bad)
+    assert any("breakable CUDA graphs True, engine runs VLLM_USE_BREAKABLE_CUDAGRAPH=False" in b for b in bad)
+
+
 _WRAPPER = """# AOT ID: ['0_inference']
 from torch._inductor.async_compile import AsyncCompile
 async_compile = AsyncCompile()

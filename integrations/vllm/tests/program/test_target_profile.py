@@ -165,6 +165,22 @@ def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
     assert parse_target_arg('{"compilation": "piecewise"}').execution_label == "bi-compiled"
 
 
+def test_breakable_profile_applies_vllms_breakable_graphs_at_its_capture_sizes():
+    """`compilation="breakable"`: execution label `compiled`, engine args the CUDA-graph mode and capture sizes (no Inductor config),
+    VLLM_USE_BREAKABLE_CUDAGRAPH set, and a declared engine block of mode NONE at those capture sizes for GM-01."""
+    b = TargetProfile(batch_invariant=False, compilation="breakable")
+    assert b.execution_label == "compiled" and b.env()["VLLM_USE_BREAKABLE_CUDAGRAPH"] == "1"
+    assert b.engine_args() == {"enforce_eager": False, "compilation_config": {"cudagraph_mode": "FULL_AND_PIECEWISE",
+                                                                              "cudagraph_capture_sizes": [1, 2, 4, 8, 16]}}
+    assert b.engine_args(execution=False) == {}
+    me = b.modelled_engine()
+    assert me["enforce_eager"] is False and me["compilation"]["profile"] == "breakable"
+    assert {k: me["compilation"][k] for k in ("mode", "cudagraph_mode", "capture_sizes")} == \
+        {"mode": "NONE", "cudagraph_mode": "FULL_AND_PIECEWISE", "capture_sizes": [1, 2, 4, 8, 16]}
+    assert "VLLM_USE_BREAKABLE_CUDAGRAPH" not in TargetProfile(batch_invariant=False, compilation="piecewise").env()
+    assert TargetProfile.from_json(b.to_json()) == b
+
+
 def test_fp8_block_gemm_declares_the_cutlass_kernel_and_keeps_undeclared_digests():
     """`fp8_block_gemm='cutlass'` applies VLLM_USE_DEEP_GEMM=0 and requires the read-back kernel class; an undeclared profile
     serialises exactly as before (no key), so every earlier profile digest and artifact identity is unchanged."""

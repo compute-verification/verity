@@ -269,6 +269,8 @@ def effective_compilation(llm: Any) -> dict[str, Any]:
         "mode": str(getattr(cc, "mode", None)),
         "cudagraph_mode": str(getattr(cc, "cudagraph_mode", None)),
         "enforce_eager": bool(vc.model_config.enforce_eager),
+        "breakable_cudagraph": os.environ.get("VLLM_USE_BREAKABLE_CUDAGRAPH") == "1",
+        "capture_sizes": sorted(int(s) for s in (getattr(cc, "cudagraph_capture_sizes", None) or [])),
         "model_runner": "v2" if vc.use_v2_model_runner else "v1",
         "custom_ops": list(getattr(cc, "custom_ops", [])),
         "optimization_level": int(getattr(vc, "optimization_level", -1)),
