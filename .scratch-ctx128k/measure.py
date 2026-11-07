@@ -45,10 +45,23 @@ def main():
 
     import mask_form as MF
 
+    from verity.ml.circuits.ops.boolean import elementwise as EW
+    from verity.ml.circuits.types import Array
+
     K = 2048
     item("DsaMqaLogit_v4{H=32,D=128}", lambda: ands(bind(BD.DsaMqaLogitV4, H=32, D=128)))
+    # DsaMqaLogits_v4 is `flat`: one traced circuit a binding, N x ~0.92M ANDs inlined.  Its exact count at small N (any sharing
+    # across keys the trace finds shows as a + bN), and the batch it flattens counted off its descriptors at the brief's N.
+    for N in (1, 2, 4):
+        item(f"DsaMqaLogits_v4{{N={N},H=32,D=128}} (flat trace)", lambda N=N: ands(bind(BD.DsaMqaLogitsV4, N=N, H=32, D=128)))
+    E4M3, F32 = BD.E4M3, BD.F32
+    batch = EW.on_bits("DsaMqaLogits", 4, ["N", "H", "D"],
+                       lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.N, Array(S.D, E4M3))),
+                                   ("ks", Array(S.N, F32))), Array(S.N, F32)),
+                       BD._logits_contracted, BD.D.DsaMqaLogitsV3, register=False)
     for N in (4096, 32768, 131072):
-        item(f"DsaMqaLogits_v4{{N={N},H=32,D=128}}", lambda N=N: ands(bind(BD.DsaMqaLogitsV4, N=N, H=32, D=128)))
+        item(f"DsaMqaLogits_v4{{N={N},H=32,D=128}} (batch of DsaMqaLogit_v4, unflattened)",
+             lambda N=N: ands(bind(batch, N=N, H=32, D=128)))
     for N in (2049, 32768, 131072):
         item(f"waksman_switches({N},{K})", lambda N=N: T.waksman_switches(N, K))
         item(f"DsaWaksmanRows_v2{{N={N},K={K},W=576,E=16}}", lambda N=N: ands(bind(BT.DsaWaksmanRowsV2, N=N, K=K, W=576, E=16)))
