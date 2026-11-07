@@ -219,9 +219,9 @@ def interpreted(monkeypatch):
     return torch
 
 
-@pytest.mark.parametrize("seg_min_keys", [1 << 20, 24])
+@pytest.mark.parametrize("path,seg_min_keys", [("bits", 1 << 20), ("scan", 1 << 20), ("bits", 24)])
 @pytest.mark.parametrize("dist", ["randn", "int", "edge"])
-def test_kernels_canonicalize_in_interpreter(monkeypatch, dist, seg_min_keys):
+def test_kernels_canonicalize_in_interpreter(monkeypatch, dist, path, seg_min_keys):
     torch = interpreted(monkeypatch)
     rng = random.Random(3)
     k, rows, cols = 12, 10, 90
@@ -230,7 +230,7 @@ def test_kernels_canonicalize_in_interpreter(monkeypatch, dist, seg_min_keys):
     lo_t, n_t = torch.tensor(lo, dtype=torch.int32), torch.tensor(n, dtype=torch.int32)
     ref = dsa_topk.reference_rows(x, lo, n, k)
     for how in ("atomic", "wrong", "garbage"):
-        canon = dsa_topk.Canon(seg_min_keys=seg_min_keys, block=16)
+        canon = dsa_topk.Canon(seg_min_keys=seg_min_keys, block=16, path=path)
         canon._sms[x.device] = 64
         assert (canon.segments(x.device, rows, cols) > 1) == (seg_min_keys < cols)
         out = fast_selection(torch, x, lo, n, k, how, rng)

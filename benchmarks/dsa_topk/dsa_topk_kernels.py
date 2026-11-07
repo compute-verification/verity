@@ -148,6 +148,72 @@ def canon_one(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
 
 
 @triton.jit
+def _popc(x):
+    u = x.to(tl.uint32, bitcast=True)
+    u = u - ((u >> 1) & 0x55555555)
+    u = (u & 0x33333333) + ((u >> 2) & 0x33333333)
+    u = (u + (u >> 4)) & 0x0F0F0F0F
+    return ((u * 0x01010101) >> 24).to(tl.int32)
+
+
+@triton.jit
+def canon_bits(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, NW, stats,
+               K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, WBLOCK: tl.constexpr):
+    # one program a row: the row's counts against the fast kernel's smallest selected key, one read with no scan; when
+    # that key is the k-th with no tie across it and the selection is k distinct indices, the selection is the
+    # canonical set, put in ascending order through a bitmap of the row (ws: NW words, then their prefix counts);
+    # otherwise the row is emitted from the counts, or bisected
+    r = tl.program_id(0)
+    lo, n = _bounds(r, A, B, ncols, next_n, MODE)
+    if n > K:
+        row = logits + r.to(tl.int64) * ls0 + lo.to(tl.int64) * ls1
+        orow = out + r.to(tl.int64) * os0
+        offs = tl.arange(0, KP2)
+        sel = tl.load(orow + offs, mask=offs < K, other=-1)
+        ok = (sel >= 0) & (sel < n)
+        x = tl.load(row + tl.where(ok, sel, 0).to(tl.int64) * ls1, mask=ok, other=0.0)
+        key = tl.where(ok, _ordered(x), 2147483647)
+        tau = tl.min(key, axis=0)
+        n_ok = tl.sum(ok.to(tl.int32), axis=0)
+        n_gt, n_eq = _count(row, 0, n, tau, ls1, BLOCK)
+        tl.atomic_add(stats + 0, 1)
+        if (n_gt < K) & (n_gt + n_eq >= K):
+            if n_gt + n_eq > K:
+                tl.atomic_add(stats + 1, 1)
+            emit = 1
+            if (n_gt + n_eq == K) & (n_ok == K):
+                bm = ws + r.to(tl.int64) * (2 * NW)
+                pf = bm + NW
+                nw = tl.cdiv(n, 32)
+                for wb in range(0, nw, WBLOCK):
+                    wi = wb + tl.arange(0, WBLOCK)
+                    tl.store(bm + wi, tl.zeros([WBLOCK], dtype=tl.int32), mask=wi < nw)
+                tl.debug_barrier()
+                tl.atomic_or(bm + (sel >> 5), 1 << (sel & 31), mask=offs < K)
+                tl.debug_barrier()
+                carry = n * 0
+                for wb in range(0, nw, WBLOCK):
+                    wi = wb + tl.arange(0, WBLOCK)
+                    m = wi < nw
+                    c = _popc(tl.load(bm + wi, mask=m, other=0, cache_modifier=".cg"))
+                    tl.store(pf + wi, carry + tl.cumsum(c, axis=0) - c, mask=m)
+                    carry += tl.sum(c, axis=0)
+                tl.debug_barrier()
+                if carry == K:
+                    emit = 0
+                    w = tl.load(bm + (sel >> 5), mask=offs < K, other=0, cache_modifier=".cg").to(tl.uint32, bitcast=True)
+                    p = tl.load(pf + (sel >> 5), mask=offs < K, other=0, cache_modifier=".cg")
+                    below = (tl.full([KP2], 1, tl.uint32) << (sel & 31).to(tl.uint32)) - 1
+                    tl.store(orow + p + _popc(w & below), sel, mask=offs < K)
+            if emit:
+                _emit(row, orow, 0, n, tau, n_eq - (K - n_gt), n * 0, n * 0, ls1, BLOCK)
+        else:
+            tl.atomic_add(stats + 2, 1)
+            if _bisect(row, orow, n, ls1, K, BLOCK):
+                tl.atomic_add(stats + 1, 1)
+
+
+@triton.jit
 def count_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, SEG,
               K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr):
     # ws per row: SEG (gt, eq) pairs, then the candidate

@@ -50,6 +50,8 @@ BLOCK = 4096
 NUM_WARPS = 8
 #: programs a multiprocessor should get before a row is split
 FILL = 2
+#: a call of one program a row: ``bits`` (count, then order the fast kernel's selection by a bitmap) or ``scan``
+PATH = "bits"
 #: `log_to` rewrites its record every this many calls (a device sync), since vLLM's workers may never reach atexit
 FLUSH_EVERY = 4096
 
@@ -119,7 +121,8 @@ def kernels() -> dict[str, Any]:
         import importlib
 
         mod = importlib.import_module("dsa_topk_kernels")
-        _KERNELS.update(canon_one=mod.canon_one, count_seg=mod.count_seg, emit_seg=mod.emit_seg)
+        _KERNELS.update(canon_one=mod.canon_one, canon_bits=mod.canon_bits, count_seg=mod.count_seg,
+                        emit_seg=mod.emit_seg)
     return _KERNELS
 
 
@@ -128,10 +131,12 @@ class Canon:
     ``logits`` (float32, rows x columns) in place."""
 
     def __init__(self, seg_min_keys: int = SEG_MIN_KEYS, block: int = BLOCK, num_warps: int = NUM_WARPS,
-                 fill: int = FILL) -> None:
+                 fill: int = FILL, path: str = PATH) -> None:
         if not 0 < block < 1 << 15 or block & (block - 1):
             raise ValueError(f"block: a power of two below 2**15, not {block}")
-        self.seg_min_keys, self.block, self.num_warps, self.fill = seg_min_keys, block, num_warps, fill
+        if path not in ("bits", "scan"):
+            raise ValueError(f"path: 'bits' or 'scan', not {path!r}")
+        self.seg_min_keys, self.block, self.num_warps, self.fill, self.path = seg_min_keys, block, num_warps, fill, path
         self.calls = {op: 0 for op in OPS}
         self.launches: dict[str, int] = {op: 0 for op in OPS}
         self._stats: dict[Any, Any] = {}
@@ -176,8 +181,12 @@ class Canon:
         seg = self.segments(dev, rows, ncols)
         args = (logits, ls0, ls1, out, out.stride(0), a, b, ncols, next_n)
         const = dict(K=k, KP2=next_pow2(k), BLOCK=self.block, MODE=mode, num_warps=self.num_warps)
-        if seg == 1:
+        if seg == 1 and self.path == "scan":
             K["canon_one"][(rows,)](*args, stats, **const)
+            return
+        if seg == 1:
+            nw = -(-ncols // 32)
+            K["canon_bits"][(rows,)](*args, self.workspace(dev, rows * 2 * nw), nw, stats, WBLOCK=1024, **const)
             return
         ws = self.workspace(dev, rows * (2 * seg + 1))
         K["count_seg"][(rows, seg)](*args, ws, seg, **const)
