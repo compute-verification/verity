@@ -750,6 +750,7 @@ section Patterns
 variable {s : AuditStatement} {Pt : Partition} {d : Design.Two} {ρ : ℕ} {cs : List Cell}
   {R : Type} [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R} {S : ℕ}
 
+omit [DecidableEq R] in
 theorem mem_actOf {r : R} : r ∈ actOf s Pt d req ρ ↔ (Dr s Pt d req ρ r).Nonempty := by
   simp [actOf]
 
@@ -761,6 +762,7 @@ theorem lsets_empty : lsets s Pt S ∅ = ∅ := by
   rintro ⟨rfl, hne, -⟩
   exact Finset.not_nonempty_empty hne
 
+omit [Fintype R] [DecidableEq R] in
 theorem patOf_sub {U : Finset ℕ} (hU : U ⊆ blocksIn Pt d.part ρ) (r : R) :
     blocksTo s.prog Pt req U r ⊆ Dr s Pt d req ρ r := blocksTo_subset hU r
 
@@ -936,6 +938,7 @@ section Sums
 variable {s : AuditStatement} {Pt : Partition} {d : Design.Two} {ρ : ℕ} {cs : List Cell}
   {R : Type} [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R} {S : ℕ}
 
+omit [DecidableEq R] in
 theorem Dr_empty {r : R} (hr : r ∉ actOf s Pt d req ρ) : Dr s Pt d req ρ r = ∅ := by
   rw [mem_actOf, Finset.not_nonempty_iff_eq_empty] at hr; exact hr
 
@@ -1147,6 +1150,7 @@ variable {s : AuditStatement} {Pt : Partition} {d : Design.Two} {ρ : ℕ} {cs :
   {reads : List (List (ℕ × ℕ))} {R : Type} [Fintype R] [DecidableEq R] {req : Fin s.prog.outs.length → R}
   {S N p : ℕ}
 
+omit [Fintype R] [DecidableEq R] in
 theorem fin_keys_req (hc : Properties.SampledProofs.Covers s Pt d ρ cs) {r : R}
     (hr : Properties.SampledProofs.ReadsCover s Pt d req ρ reads r) :
     (∀ v ∈ finOf Pt cs (Dr s Pt d req ρ r), keyOf s Pt v ∈ finKeys cs reads) ∧

@@ -78,11 +78,11 @@ theorem expLo_le_exp (x : ℚ) (p : ℕ) : (expLo x p : ℝ) ≤ Real.exp x := b
   · push_cast; exact (Real.exp_pos _).le
   · exact expLowerSound x p
 
-theorem log_le_lnUpper {y : ℚ} (hy : (0 : ℝ) < y) (p : ℕ) : Real.log y ≤ (lnUpper y p : ℝ) :=
-  lnUpperSound y p (by exact_mod_cast hy)
+theorem log_le_lnUpper {y : ℚ} (_hy : (0 : ℝ) < y) (p : ℕ) : Real.log y ≤ (lnUpper y p : ℝ) :=
+  lnUpperSound y p
 
-theorem lnLower_le_log {y : ℚ} (hy : (0 : ℝ) < y) (p : ℕ) : (lnLower y p : ℝ) ≤ Real.log y :=
-  lnLowerSound y p (by exact_mod_cast hy)
+theorem lnLower_le_log {y : ℚ} (_hy : (0 : ℝ) < y) (p : ℕ) : (lnLower y p : ℝ) ≤ Real.log y :=
+  lnLowerSound y p
 
 /-- `x ≤ e^{ln⁺ x}` for an upper bound on `ln x`, `x > 0`. -/
 theorem le_exp_lnUpper {y : ℚ} (hy : (0 : ℝ) < y) (p : ℕ) : (y : ℝ) ≤ Real.exp (lnUpper y p) := by
