@@ -1,8 +1,21 @@
-import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Soundness.Assumptions.Recursive
-import Proofs.Flock.VBridge.Algebra.Ligerito
-import Proofs.Flock.VBridge.Algebra.Zerocheck
-import Proofs.Flock.VBridge.Algebra.Lincheck
+module
+
+public import Proofs.Flock.Recursive.Target
+public import Proofs.Flock.Soundness.Assumptions.Recursive
+public import Proofs.Flock.VBridge.Algebra.Build
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # VBridge G: `Flock.Assumptions.VBridge` at the compiled inner protocol
@@ -31,6 +44,8 @@ statement about V* or the verifier, so that each can be proved on its own agains
 
 The composition itself is proved here; nothing in it is assumed beyond the hypotheses.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Compiled
 

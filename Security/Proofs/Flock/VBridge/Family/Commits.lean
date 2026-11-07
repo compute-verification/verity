@@ -1,7 +1,21 @@
-import Proofs.Flock.VBridge.Family.Rep
-import Proofs.Flock.VBridge.Family.Openings
-import Proofs.Flock.VBridge.Family.ReadTransfer
-import Proofs.Flock.Soundness.Audit.FlockPublic
+module
+
+public import Proofs.Flock.VBridge.Family.Openings
+public import Proofs.Flock.VBridge.Family.ReadTransfer
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.VBridge.Algebra.BitsOk
 
 /-!
 # The family's commit strings, digests and messages
@@ -24,6 +38,8 @@ every wire of a stage row is read (`RowsRead`). `RowsRead` fails at V*'s padded 
 `VDecodesRead` restate `VFull` and `VDecodes` at the wires some unit reads, and hold without it (`vFullRead_of`, at
 V*'s full draw, and `vDecodesRead_of`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

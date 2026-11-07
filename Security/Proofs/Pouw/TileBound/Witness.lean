@@ -1,4 +1,10 @@
-import Proofs.Pouw.TileBound.Proofs
+module
+
+public import Proofs.Pouw.TileBound.Proofs
+import Mathlib.Data.Nat.Totient
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.ContinuousFunctionalCalculus
+import Mathlib.Tactic.NormNum.GCD
 
 /-!
 # The chain's satisfiability witness (a later bundle; outside the 36 merged pins)
@@ -13,6 +19,8 @@ proves it:
   one live product, so the chain covers a real program. The pin states it existentially, so that it reads only
   `Defs.lean`.
 -/
+
+@[expose] public section
 
 namespace Pouw.TileBound
 

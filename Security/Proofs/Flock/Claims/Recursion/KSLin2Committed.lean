@@ -1,5 +1,38 @@
-import Proofs.Flock.Claims.Recursion.KSLin2
-import Proofs.Flock.Claims.Bridge.CommittedNil
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin2
+public import Proofs.Flock.Claims.Bridge.CommittedNil
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # `KSLin2On` at Hello-committed coins
@@ -13,6 +46,8 @@ accepts at most as often as `KSLin2On`'s extractor, run on the prover with `S`'s
 (`Bridge.simProverM`), recovers a witness, plus `KSLin2On`'s bound at that prover (`lin2Rhs`) and `2 · k(x) · δ₁`.
 `ksLin2OnC_of_ksLin2On` derives it from `KSLin2On` (`Bridge.Pr_acc_runCM_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

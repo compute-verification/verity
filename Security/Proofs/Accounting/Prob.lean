@@ -1,5 +1,11 @@
-import Proofs.Pouw.Prob
-import Definitions.Pous.Game.Prob
+module
+
+public import Definitions.Pous.Game.Prob
+public import Definitions.Pouw.Basic.Prob
+public import Mathlib.Data.Fintype.Prod
+public import Proofs.Pouw.Prob
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # A sure-bound guarantee against advice, over the product of the coins
@@ -12,6 +18,8 @@ account is short of the certificate on every one of its own coins.
 PoUS's and the bandwidth audit's probability (`Pous.pr`, in `ℝ≥0∞`) is the same fraction as PoUW's (`Pouw.pr`, in `ℝ`):
 `pr_eq_toReal`.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

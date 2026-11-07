@@ -1,5 +1,12 @@
+module
+
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
+public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.TileUOnlyGamma
-import Definitions.Pouw.PearlC.DevicePricesLoop
+import Proofs.Pouw.PearlC.UOnlyGamma
 
 /-!
 # U-only binding at sm_120's in-loop prices (staged)
@@ -13,6 +20,8 @@ Every γ here is an upper bound on the in-loop γ: `Prices.sm120Loop` rounds the
 exact 1.047 the values are those of `DeviceSm120KernelGamma`'s `…LoopCast8…` pins (0.51105% and 0.36218%), which state
 them under (C̃, U) binding; no pin states them under U-only binding.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

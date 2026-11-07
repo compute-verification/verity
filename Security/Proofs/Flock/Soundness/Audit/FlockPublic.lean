@@ -1,4 +1,9 @@
-import Proofs.Flock.Soundness.Audit.FlockLinked
+module
+
+public import Proofs.Flock.Soundness.Audit.FlockLinked
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # Public wires: the constant and the zero are the statement's, not the prover's
@@ -23,6 +28,8 @@ zero; and `vals` elsewhere.
 This discharges the end-to-end theorem's `hOne` and the zero's binding (`E2E.lean`): no hypothesis on the prover's
 committed values remains in their place, only these two facts about the statement.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOut
-import Definitions.Pouw.PearlC.DeviceRev1
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Definitions.Pouw.PearlC.DeviceRev1
 
 /-!
 # The named assumption TT_OUT, rev1 (trusted; `Prop`s taken as hypotheses, never `axiom`s)
@@ -10,6 +12,8 @@ tile. It asserts less than the granted rows: a unit correct under rev1 is correc
 credit (`ttOutPearlCDevRev1_of_granted`). That is an implication only: the granted rows are falsified by the
 first-promotion skip (rating D), so it carries no evidence for rev1, whose rating B rests on its own review alone.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 
@@ -28,7 +32,7 @@ per word, not `k/(32·G)`), and any later one debited (`laterZeroPromos`). The g
   promotions on the H100 atom, none measured on sm_120) and moves no γ.
 - **The other promotion adds stay credited.** Folding add `g ≥ 2` into the tensor-core chain (window `g` started from
   `T_{g−1}` instead of `+0`) changes the word on 1.6–85% of words at sm_120 and 40–100% at H100 (six families, one
-  64 × 64 tile each at `k = 256` and `1,024`, `pearlc_promotion_fusion.py`), so no tile stays correct. Telling which
+  64 × 64 tile each at `k = 256` and `1,024`), so no tile stays correct. Telling which
   words it leaves right costs a per-word FP32 or INT32 operation, no cheaper than the add. `TT_OUT` asserts that nothing
   else skips them.
 - **The cost model prices a tensor-core instruction by its whole fragment** (`w1-complete/<device>`; working decision

@@ -7,6 +7,7 @@ defaultTargets = ["CoreRemote", "remote"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"
@@ -34,7 +35,7 @@ path = "../pouw/lean/check"
 name = "nci_check"
 path = "../network/nci/lean"
 
-# Integrity: sampled proofs in the form its params name, one-stage v1's audit or the recursive audit, V*'s compiled
+# Integrity: sampled proofs in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled
 # check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).
 [[require]]
 name = "core_vstar_recursive"

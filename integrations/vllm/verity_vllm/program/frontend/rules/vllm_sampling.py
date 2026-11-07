@@ -10,7 +10,7 @@ an explicit `seed`, no penalties / logit bias / min_p / logprobs):
     _gumbel_sample_kernel:    y = logits32 + g(tl.randint(seed, pos))     # Gumbel-max; `pos` = positions[logits_indices]
     token = first index of max_v y[v]                            # block argmax + torch.argmax + gather
 
-Operand roles (the coordinator's rulings): `seed` is a RUNTIME input of the Program (a forward
+Operand roles: `seed` is a RUNTIME input of the Program (a forward
 input of the wrapper, `request[r].seed` in the workload Program); `temperature`, `top_p` and `pos` are STRUCTURAL (the declared policy
 and the step's row position, constants of the Program: `Const32[f32 bits]`, `Const64[pos]`); `S` (splits) is a DERIVED input of the
 workload -- S_t = SplitsFor_v1(|live(t)|, num_SMs) (registry/topp_split.py) -- that the request wrapper reads from its request-owned

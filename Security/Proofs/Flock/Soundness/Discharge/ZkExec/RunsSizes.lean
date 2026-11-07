@@ -1,5 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # A decoded `--zk` proof's lengths
@@ -9,6 +24,8 @@ is a `u64`. The reader is stepped through as `DecodeZL.decodeProof_sizes` steps 
 `DecodeZL`'s `Post` lemmas; after the pair come level 0's hiding messages (an `Option` tag) and the inner proof, whose
 `Y` is a `vecAny` (`yields_vecAny_size`, `post_inner_y`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

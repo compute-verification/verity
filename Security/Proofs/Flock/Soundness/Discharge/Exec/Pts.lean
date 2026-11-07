@@ -1,5 +1,13 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
+module
+
+public import Aesop.BuiltinRules
+public import Flock.HmRow
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecParse
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The link points' count of a `setupH` statement
@@ -11,6 +19,8 @@ draws that prove as many units set up at the same `m_pts` (`setupH_mPts_eq`), na
 units (`setupH_mPts_of_proved`). A draw's proved units include its closure, so under a law with a closure `m_pts` can
 differ between draws of the same size.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -107,7 +117,7 @@ theorem setupH_facts (h : Stmt.setupH tags cf pf coins tables draw partition pro
   exact ⟨hc, fun d hd => ⟨pop, hpub d hd⟩, rfl⟩
 
 set_option maxHeartbeats 4000000 in
-/-- **A drawn public file has the draw's proved units** (§16.1): its units are `UnitDraw.proved`, the drawn units and
+/-- **A drawn public file has the draw's proved units** (`Flock.Statement`): its units are `UnitDraw.proved`, the drawn units and
 their closure. -/
 theorem drawn_n {c : Circuit} {pop pub : Public} {d : Json} (h : HmRow.drawn c pop d = .ok pub) :
     ∃ ud, Draw.UnitDraw.ofJson d = .ok ud ∧ pub.n = ud.proved.size := by

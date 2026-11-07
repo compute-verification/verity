@@ -1,8 +1,30 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
-import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
+public import Proofs.Flock.Soundness.Discharge.Layout.InRegion
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
-import Proofs.Flock.Soundness.Discharge.Layout.InRegion
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The registered `b ‖ c` at a drawn unit, at public inputs
@@ -12,6 +34,8 @@ import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 population's public file (`bc_drawnWP`, `bc_drawnW` at `Hidden.SpecP`), and the public word the in regions hold at a
 proved slot's public leaf is the unit's public input word there (`inVal_drawnP`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

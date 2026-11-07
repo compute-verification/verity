@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Types.ProgramPlaces
-import Proofs.Flock.Soundness.Audit.FlockPublic
+module
+
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The end-to-end theorem on a program of units, carried to its Boolean circuit (verified-lowering phase 1, S4d)
@@ -21,6 +24,8 @@ so no claim may read their profile as being about the zero padding. The `_classe
 forced-zero row of its class (`hzr`, what 1d and 1e give from the verifier's Δ): a column on `zer` is an input column,
 since computed columns are the unit's own gates and the constant's is on `one`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

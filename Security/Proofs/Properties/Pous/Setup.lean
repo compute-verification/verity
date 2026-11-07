@@ -1,5 +1,7 @@
-import Properties.Pous
-import Proofs.Properties.Identity
+module
+
+public import Properties.Pous
+public import Proofs.Properties.Identity
 
 /-!
 # Proofs of the setup check's two properties (`Properties.Pous`): `acceptsDecodes` and `publishesRoot`
@@ -17,6 +19,8 @@ a state represents the message it absorbed (`Properties.Identity.Rep`), so absor
 segment finalize alike. `publishesRoot`: the published root is `Merkle.root` over the loop's leaves, which are
 `leaves salt C`, and valid parameters give `C*` a block (`validate_ok`), so the root exists.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Properties.SecurityProofs
 
@@ -107,13 +111,6 @@ theorem drop_flatten_chunks {α : Type} (n : Nat) :
     rw [List.flatten_cons, List.drop_append, List.drop_eq_nil_of_le (by rw [hx, Nat.succ_mul]; omega), List.nil_append,
       hx, show (j + 1) * n - n = j * n by rw [Nat.succ_mul]; omega,
       drop_flatten_chunks n xs j fun y hy => h y (List.mem_cons_of_mem _ hy), List.drop_succ_cons]
-
-/-- Chunk `j` of a flattening of `n`-element chunks is its `n` elements from `j · n`. -/
-theorem take_drop_flatten_chunks {α : Type} (n : Nat) (xs : List (List α)) (j : Nat) (hj : j < xs.length)
-    (h : ∀ x ∈ xs, x.length = n) : (xs.flatten.drop (j * n)).take n = xs[j] := by
-  rw [drop_flatten_chunks n xs j h, List.drop_eq_getElem_cons hj, List.flatten_cons,
-    List.take_append_of_le_length (Nat.le_of_eq (h _ (List.getElem_mem hj)).symm),
-    List.take_of_length_le (Nat.le_of_eq (h _ (List.getElem_mem hj)))]
 
 /-! ## The decoder -/
 

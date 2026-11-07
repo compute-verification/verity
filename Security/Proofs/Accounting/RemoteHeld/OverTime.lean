@@ -1,7 +1,11 @@
-import Proofs.Accounting.RemoteHeld
+module
+
+public import Definitions.Accounting.Guarantees.RemoteHeld
+public import Mathlib.Order.Lattice.Nat
+public import Proofs.Accounting.RemoteHeld
+import Mathlib.Algebra.BigOperators.Intervals
 import Mathlib.Combinatorics.Enumerative.DoubleCounting
-import Mathlib.Order.Lattice.Nat
-import Mathlib.Tactic.Ring
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The time a remote audit shows held
@@ -24,6 +28,8 @@ Every pass of a group whose window the block is absent from throughout reads it 
 rebuilds, disk reads and links bring in over `[s_0, s_C + L)` (`Routed`), one interval of at most `Σ + 2·L` ticks: at
 most `(s/E + β + βl)·(Σ + 2·L) + (Br + Bd + Bl)` by the token buckets.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote.Absence
 

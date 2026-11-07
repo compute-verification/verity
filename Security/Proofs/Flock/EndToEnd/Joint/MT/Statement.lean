@@ -1,21 +1,23 @@
-import Proofs.Flock.EndToEnd.Joint.MT.Draw
-import Proofs.Flock.EndToEnd.Period.Run
-import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
-import Proofs.Flock.Soundness.Assumptions.Zk
-import Flock.Desc
+module
+
+public import Proofs.Flock.EndToEnd.Joint.MT.Draw
+public import Proofs.Flock.EndToEnd.Period.Run
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Flock.Desc
 
 /-!
 # The joint stratified bound over sampling blocks of several tables (trusted)
 
 `JointStratified` and `JointStratifiedHorizon` (`Joint/Statement.lean`) at sampling blocks proved in `J` tables in
 parallel. A sampling block is one hidden-output `--zk` session of `J` tables over `n` proof units, whose units the
-verifier draws by one live stratified draw (`Flock.Draw.drawOS` at `.stratified`, `Law.execOS`): stratum `s` holds
-`n_s` of the sampling block's units, `k_s` of them are drawn uniformly without replacement, independently across strata,
-and the strata run over every table's units, so a table's subcircuits are strata of the one draw. `verify --zk
---session-tables J` proves the drawn units in `J` equal consecutive parts, table `j` part `j` (`drawJ`, `partS`); when
-the units are laid out table by table and every table's strata draw the same number of units, part `j` is table `j`'s
-own stratified draw. The record's custody is `RecordCustodyZKJS` (`live-verifier` at the stratified law); that the
-parts are proved and set up with the session's link points is flock-verify's own arithmetic
+challenger's coins sample by one live stratified draw (`Flock.Draw.drawWith` at `.stratified`, `Law.execOS`): stratum
+`s` holds `n_s` of the sampling block's units, `k_s` of them are drawn uniformly without replacement, independently
+across strata, and the strata run over every table's units, so a table's subcircuits are strata of the one draw.
+`verify --zk --session-tables J` proves the drawn units in `J` equal consecutive parts, table `j` part `j` (`drawJ`,
+`partS`); when the units are laid out table by table and every table's strata draw the same number of units, part `j` is
+table `j`'s own stratified draw. The record's custody is `RecordCustodyZKJS` (`live-verifier` at the stratified law);
+that the parts are proved and set up with the session's link points is flock-verify's own arithmetic
 (`ZkHidden.drawOkZKHJ_of_accepts_stratified`).
 
 `StratifiedBlockMT` is such a sampling block, with every binder of `EndToEndHidden` but the prover and its law, as
@@ -38,6 +40,8 @@ and `Flock.SecurityProofs.JointStratifiedHorizonMT` (`Joint/MT/Bound.lean`).
 
 C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -113,8 +117,8 @@ open Classical
 
 variable (w : StratifiedBlockMT)
 
-/-- The sampling block's draw: `Flock.Draw.drawOS`'s stratified draw on the verifier's byte sources, over every
-table's units. -/
+/-- The sampling block's draw: `Flock.Draw.drawWith`'s stratified draw on the challenger's coins, over every table's
+units. -/
 def L : Law w.n := Law.execOS (n := w.n) w.src (.stratified w.Kd (Array.ofFn w.St)) w.pop
 
 /-- The stratified law the draw is held to under A3 (`Law.execOS_escape_le`): `ks s` of stratum `s`'s units, uniform

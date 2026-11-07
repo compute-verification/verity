@@ -1,11 +1,13 @@
-import Difftest
-import RemoteAudit.Line
-import RemoteAudit.P2
-import RemoteAudit.P2Session
-import RemoteAudit.Registry
-import RemoteAudit.Schedule
-import RemoteAudit.Store
-import RemoteAudit.Wire
+module
+
+public import Difftest
+public import RemoteAudit.Line
+public import RemoteAudit.P2
+public import RemoteAudit.P2Session
+public import RemoteAudit.Registry
+public import RemoteAudit.Schedule
+public import RemoteAudit.Store
+public import RemoteAudit.Wire
 
 /-!
 # The difftest's Lean half
@@ -27,6 +29,10 @@ and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); an
 `p2_party.py` runs it (`p2_session`, `RemoteAudit.P2Session`), on the registration file's bytes and the prover's lines.
 `remote-audit-difftest` serves them.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Difftest
 
@@ -658,7 +664,7 @@ private def natsOfN (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do
   if xs.size ≠ n then throw s!"{ctx}: {n} integers"
   xs.mapM (J.asNat · ctx)
 
-private def blockOf (j : Json) : V Schedule.Block := do
+private def blockOf (j : Json) : V Schedule.Chunk := do
   match j with
   | .null => pure none
   | v =>

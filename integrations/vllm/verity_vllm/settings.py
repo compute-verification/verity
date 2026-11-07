@@ -150,7 +150,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_GATHER_DESC_DEV", flag, True, VALUE, "the gather kernel reads its descriptors from device memory (native_collect.cpp)"),
     S("VERITY_HI_PRIO", one, True, VALUE, "1: native hooks stage on a high-priority stream (empty: off)", empty=True),
     S("VERITY_INLINE_D2H", one, False, VALUE, "1: the host committer copies device to host inline, not on its worker"),
-    S("VERITY_LEAFHASH_BUILD", str, None, WHERE, "the leaf-hash extension's build directory (default: torch's)"),
     S("VERITY_LEARN_HOST_BUDGET_MB", float, 4096.0, VALUE, "the host budget in MiB the windowed collector learns its ring in"),
     S("VERITY_MEMTRACE", present, False, DEBUG, "the host committer prints its memory trace (any value, 0 included)"),
     S("VERITY_PIN", one, False, VALUE, "1: the host committer's worker pins its CPU affinity"),
@@ -182,7 +181,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_DUMP_STEP", str, None, DEBUG, "the Commit dumps this step's values"),
     S("VERITY_HOT_RESTART_REASON", str, None, WHERE, "why the hot worker restarted (it sets it for its child)"),
     S("VERITY_HOT_SUBMIT", one, False, WHERE, "1: the Commit submits itself to the pod's hot worker"),
-    S("VERITY_SOURCE_IDENTITY_DIR", str, None, WHERE, "where the source identity is written (the Commit sets it)"),
     S("VERITY_SWITCH", float, None, DEBUG, "the interpreter's switch interval in seconds (a GIL-interference experiment)"),
     S("VERITY_TRACEDUMP", float, None, DEBUG, "every so many seconds, dump every thread's traceback"),
     S("VERITY_VU_EXPORT_DIR", str, None, WHERE, "where pair 0's replay exports its VU sample (`commit --vu-export-dir`)"),
@@ -208,6 +206,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_REPLAY_DUMP_MAX", int, 1024, DEBUG, "the most values the replay dumps"),
     S("VERITY_REPLAY_FORK_GC_FREEZE", not_off, True, VALUE, "the replay freezes the GC before it forks its workers"),
     S("VERITY_RESEARCH", str, None, WHERE, "the research tree a row's stages import (the row sets it)"),
+    S("VERITY_TICK", json.loads, None, VALUE, "the certified tick under vLLM's own OpenAI server (`pipeline.tick_plugin`), a JSON "
+      "object: the registered bucket_us, sat_us and free_us, hold_ms, the feed file and the gate's log directory; unset, none"),
     S("VERITY_TIMELINE", str, None, WHERE, "the stage telemetry file"),
     S("VERITY_TREE", str, None, WHERE, "the source tree that runs (the mixed-tree refusal)"),
     S("VERITY_UNIT_RULE_CACHE", str, None, WHERE, "the host's unit-rule cache directory (`sweep --unit-rule-cache`)"),
@@ -231,7 +231,6 @@ SETTINGS: dict[str, Setting] = _declare(
     S("HOT_RELEASE_JSON", str, "/workspace/cp/RELEASE.json", WHERE, "the release (tag, commit) of the tree on the pod"),
     S("RELEASING_STALE_S", float, 900.0, WHERE, "seconds after which a release marker nobody refreshed is stale"),
     S("NATIVE_COLLECT_BUILD", str, None, WHERE, "the parent directory of the native collector's builds"),
-    S("HIDDEN_GPU_BUILD", str, None, WHERE, "the directory of the hidden-GPU committer's builds"),
     # ---- the program (program/)
     S("VERITY_DENSE_THREADS", str, None, VALUE, "the dense chain's thread cap, read at import; not a positive integer, no cap"),
     S("VERITY_NUMERICS_BUILD_DIR", str, None, WHERE, "where the numerics' JIT-built libraries live"),
@@ -252,6 +251,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("TOKENIZERS_PARALLELISM", str, None, WHERE, "the tokenizers library's threads, true or false (`engine.env.EXPORT` sets false); "
       "a Build records it"),
     S("TORCHINDUCTOR_CACHE_DIR", str, None, WHERE, "Inductor's output-code cache; unset, torch's default"),
+    S("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", str, None, VALUE, "1, torch's default: Inductor picks a reduction kernel's tiling per "
+      "process at its first launch; an engine pins 0 (`engine.env.ENGINE`) and refuses another"),
     S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it)"),
     S("TRITON_CACHE_DIR", str, None, WHERE, "Triton's compiled-kernel cache; unset, ~/.triton/cache"),
     S("VLLM_API_KEY", str, None, VALUE, "the key vLLM's OpenAI-compatible server asks of its clients (its family's role): a "
@@ -292,7 +293,7 @@ VERITY_REGRESSION_RECORD_ACTUAL VERITY_REGRESSION_ROWS_ROOT VERITY_REGRESSION_SC
 VERITY_REGRESSION_TIERS VERITY_REGRESSION_VERIFY_ALL VERITY_REPIN VERITY_RESEARCH_POSTGRES VERITY_RMS_TABLES VERITY_SESSION_SO
 VERITY_SKIP_STORE VERITY_SLOW VERITY_STORE_REQUIRED VERITY_TC_PROBE_FP4_NVCC VERITY_TEST_CACHE VERITY_TEST_CACHE_MIN_S
 VERITY_TRACE_DIR VERITY_VEC_IN VERITY_VEC_OUT VERITY_VLLM_BOOLEAN_NORMS_FULL VERITY_VLLM_BOOLEAN_SWEEPS
-VERITY_VLLM_INT8_K_SCALES VERITY_VLLM_TANH_EXHAUSTIVE VERITY_VSTAR_STAGE VERITY_VSTAR_STAGE_OUT
+VERITY_VLLM_CLASS_G_WINDOW VERITY_VLLM_INT8_K_SCALES VERITY_VLLM_TANH_EXHAUSTIVE VERITY_VSTAR_STAGE VERITY_VSTAR_STAGE_OUT
 """.split())
 
 #: ``VERITY_*`` names the library spells out that are not environment variables: the C preprocessor macros of the tap builds.

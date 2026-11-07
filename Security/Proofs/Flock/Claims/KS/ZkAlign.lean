@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.ForkAlign
-import Proofs.Flock.Claims.KS.RepDistZ
-import Proofs.Flock.Claims.KS.SlotPost
-import Proofs.Flock.Claims.KS.ZkFork
+module
+
+public import Proofs.Flock.Claims.KS.ForkAlign
+public import Proofs.Flock.Claims.KS.RepDistZ
+public import Proofs.Flock.Claims.KS.SlotPost
+public import Proofs.Flock.Claims.KS.ZkFork
 
 /-!
 # The masked simulated fork's alignment at the caps, from the slot's coin count
@@ -35,6 +37,8 @@ session's leaves record the cap of the entry they hold:
   fork bound and the pads' premises, hold where the primed simulated strategy reaches each cap's slot after
   `zkRd j i` coins.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 
@@ -106,7 +110,7 @@ omit [Inhabited D] [Inhabited Sl] in
 open Classical in
 /-- **An opened position at a rep's cap is one of its openings there.** -/
 theorem opRZ_mem {H : List UInt8 → D} {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D H}
-    {sch : Accounting.Schedule} {r ℓ : ℕ} {cap : Model.Cap D} {out : OutZC 𝔽 D Sl}
+    {sch : FlockSoundness.Accounting.Schedule} {r ℓ : ℕ} {cap : Model.Cap D} {out : OutZC 𝔽 D Sl}
     {p : Fin (2 ^ (lvOf sch ℓ).logLen)} (h : (opRZ H E Lf sch r ℓ cap out p).isSome) :
     ∃ x ∈ slotOpensZ out r ℓ (lvOf sch ℓ).queries, x.1 = p.val := by
   unfold opRZ Exec.opOfL at h
@@ -235,7 +239,7 @@ theorem advRSZ_le_forkC (A : Model.Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Ta
 
 /-- **The filtered conflict is `0` at a run rejecting a table up to `n`.** -/
 theorem ind_conflictAcc_dead (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H)
-    (sch : Accounting.Schedule) (n r ℓ : ℕ) (d : Model.Cap D) {b b' : List (OutZC 𝔽 D Sl)}
+    (sch : FlockSoundness.Accounting.Schedule) (n r ℓ : ℕ) (d : Model.Cap D) {b b' : List (OutZC 𝔽 D Sl)}
     (h : ¬ AccUpTo n b ∨ ¬ AccUpTo n b') :
     ind (fun x : List (OutZC 𝔽 D Sl) × List (OutZC 𝔽 D Sl) => ∃ p,
       Rewinding.ConflictAt (opRAccZ H E Lf sch n r ℓ d) x p) (b, b') = 0 := by

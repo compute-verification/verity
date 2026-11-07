@@ -1,5 +1,7 @@
-import Properties.Pouw.ServedWork
-import Proofs.Pouw.PeriodJ10R
+module
+
+public import Properties.Pouw.ServedWork
+public import Proofs.Pouw.PeriodJ10R
 
 /-!
 # Proof of `ServedWork`
@@ -14,6 +16,8 @@ import Proofs.Pouw.PeriodJ10R
   window's right words at `p` each, less `lam`. So the event is inside the words guarantee's event or some window's
   degenerate salts: `δ_s + n·(δ_bind + δ_ks)` plus `n·κ_deg(B)`.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Served.SecurityProofs
 
@@ -31,7 +35,7 @@ theorem prob_false_eq {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0
   simp
 
 /-- An event whose every slice at the first coordinate has probability at most `κ ≥ 0` has probability at most `κ`. -/
-theorem prob_le_of_slices_fst {α β : Type*} [Fintype α] [Fintype β] (E : α × β → Prop) {κ : ℝ} (hκ : 0 ≤ κ)
+theorem prob_le_of_slices_fst {α β : Type} [Fintype α] [Fintype β] (E : α × β → Prop) {κ : ℝ} (hκ : 0 ≤ κ)
     (h : ∀ a, prob (fun b => E (a, b)) ≤ κ) : prob E ≤ κ := by
   rw [prob_equiv (Equiv.prodComm α β) E]
   exact prob_le_of_slices _ hκ fun a => h a

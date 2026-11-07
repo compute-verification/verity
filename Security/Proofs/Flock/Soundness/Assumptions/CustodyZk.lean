@@ -1,5 +1,19 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The `--zk` session's record custody at a law's draws
@@ -10,6 +24,8 @@ file at every draw of the live law proves the drawn units and sets the statement
 and `RecordCustodyZKHJLaw` at `J`. `RecordCustodyZK` and `RecordCustodyZKJ` (`Assumptions.Zk`) state the draw fact as
 the draw file being `flock-verify draw`'s instead.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions.Zk
 

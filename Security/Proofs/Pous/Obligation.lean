@@ -1,8 +1,14 @@
-import Properties.Pous.Obligation
-import Definitions.Pous.Guarantees.Obligation
+module
+
+public import Definitions.Pous.Guarantees.Obligation
+public import Mathlib.Topology.Path
+public import Proofs.Pous.P2.Rounds
+public import Proofs.Pous.Thm1.Theorem1ii
+public import Properties.Pous.Obligation
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.Period
-import Proofs.Pous.P2.Rounds
-import Proofs.Pous.Thm1.Theorem1ii
+import Proofs.Pous.Sanity
+import Proofs.Pouw.Prob
 
 /-!
 # Proofs of PoUS as an obligation: tag freshness, the snapshot reduction, and the per-window guarantee
@@ -16,6 +22,8 @@ those keys, and `PeriodHeld` at the snapshot for the deployed check. The demo's 
 `norm_num`. A block's offset absorbs its content by translating the offset's element by the difference of the contents'
 elements.
 -/
+
+@[expose] public section
 
 namespace Pous.Mutable.SecurityProofs
 

@@ -1,9 +1,11 @@
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Pouw.PearlC.W1
 
 /-!
 # W1 doesn't truncate
 
-`BudgetAbortPearlC` is `Accounting.BudgetAbort`'s statement over Pearl-C's `CostModel` (ra-per-run's hypothesis for the
+`BudgetAbortPearlC` is `Accounting.BudgetAbort`'s statement over Pearl-C's `CostModel` (the hypothesis of the
 per-run bound). W1 (`Pouw.PearlC.W1.w1`) fails it whenever its prices are positive (`Positive`), because a correct
 unit's operand fetches are free and whether a unit is correct is decided on the final transcript under the oracle,
 which no W1 program reads.
@@ -21,6 +23,8 @@ which no W1 program reads.
 Without the refund, W1's charge is fixed by the run's path and fetches, but its language still has no free abort: an
 `ite`'s continuation is shared by both branches, and moving it into them taints it. That case is open here.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1BudgetAbort
 

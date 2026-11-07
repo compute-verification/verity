@@ -1,6 +1,24 @@
-import Proofs.Flock.Soundness.PadCode
-import Proofs.Flock.Soundness.LigeritoPhase
-import Definitions.Flock.LigeritoPad
+module
+
+public import Definitions.Flock.LigeritoPad
+public import Proofs.Flock.Soundness.LigeritoDecode
+public import Proofs.Flock.Soundness.LigeritoPhase
+public import Proofs.Flock.Soundness.PadCode
+import ArkLib.Data.CodingTheory.JohnsonBound.Family
+import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Probability
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Accounting.Numbers
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.LigeritoWeights
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.NovelBasis
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.Rounds
 
 /-!
 # The padded level 0: lane rounds, extra lanes, and decoding
@@ -20,6 +38,8 @@ The pieces of `ligeritoPad`'s level 0 that differ from `ligerito`'s:
   column agrees with the encoding of `G` on `(1 − γ')·2^d` positions, then `G` is `padFold` of a
   family in the list. The padding correction `ybar` is then the family's folded padding.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

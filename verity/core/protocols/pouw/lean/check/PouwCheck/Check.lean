@@ -1,11 +1,6 @@
-import CoreProtocol.Protocol
-import PouwWindow.Grid
-import PouwWindow.Draw
-import PouwWindow.Public
-import PouwWindow.Length
-import PouwCheck.Inputs
-import PouwCheck.WindowSalt
-import Identity.Domains
+module
+
+public import PouwCheck.WindowSalt
 
 /-!
 # PoUW's rule (`core_check.py`, "the check")
@@ -23,6 +18,8 @@ this order, with `core_check.py`'s reason.
 The service's reject is a reject and its undecided is undecided. On acceptance PoUW publishes `window.PUBLIC` and the
 profile is the service's `Core.Integrity`, passed through.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 

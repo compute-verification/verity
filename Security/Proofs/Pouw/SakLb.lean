@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dither
+module
+
+public import Definitions.Pouw.Assumptions.Dither
 
 /-!
 # SAK(matmul) from a pointwise work premise: what is proved, and the residual
@@ -28,6 +30,10 @@ So the trust that `SAKMatmul` asks of programs is `SAKResidual`'s, at the cost o
 headline's slack, and the rate condition is a theorem about the check. Nothing here is a new premise of a guarantee:
 `SAKResidual` is a proof-only definition, a hypothesis of these lemmas.
 -/
+
+@[expose] public section
+
+open Claims renaming Ex → avg
 
 namespace Pouw.SakLb
 

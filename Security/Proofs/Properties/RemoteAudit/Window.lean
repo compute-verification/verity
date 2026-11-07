@@ -1,4 +1,7 @@
-import Properties.RemoteAudit
+module
+
+public import Properties.RemoteAudit
+import Std.Data.HashMap.Lemmas
 
 /-!
 # Proofs of the window's properties
@@ -17,6 +20,8 @@ window's draws there (`checkWindow_extract`), and `checkWindowChunked`'s chunks,
 (`chunks_cover`): its first chunk that rejects holds the window's first rejection (`chunkedIsWhole`). A spawned task's
 value is its function's (`Task.spawn`'s definition), so the threads change nothing.
 -/
+
+@[expose] public section
 
 open RemoteAudit
 

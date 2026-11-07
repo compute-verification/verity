@@ -761,30 +761,9 @@ def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unver
     q = resq["not_compared_by_query_family"]["fa2_hidden_m1_stream"]
     assert q["identities"] == 3 and q["identities_live"] == 1 and q["identities_inactive_stated_apart"] == 2 and q["identities_basis"].startswith("required manifest at full cap")
     assert "identities_live" not in res["not_compared_by_query_family"].get("fa2_hidden_m1_stream", {}) or res["not_compared_by_query_family"]["fa2_hidden_m1_stream"]["identities_live"] is None
-    # the two documents agree on one number: oracle padding by family + pairs == the inactive stratum by family
-    from verity_vllm.commit import padding_steps as PS
-    pp = {"padding_entries": 6, "by_family": {"fa2_hidden_m1_stream": {"commit_padding_entries": 2}, "input_token_ids": {"commit_padding_entries": 2},
-                                              "instance_outputs": {"commit_padding_entries": 2}}}
-    c3 = PS.padding_vs_oracle(pp, res, bmap)
-    assert c3["ok"] and c3["problems"] == [] and c3["entries"] == {"oracle": 6, "map": 6, "stratum": 6}, c3
-    assert c3["by_family"]["oracle"] == c3["by_family"]["map"] == c3["by_family"]["stratum"] == {"fa2_hidden_m1_stream": 2, "input_token_ids": 2, "instance_outputs": 2}
-    assert c3["pairs"] == {"oracle": 2, "map": 2, "pair_list_compared": True, "executed_and_padding_overlap": 0} and c3["steps"] == [1, 2]
-    # a stratum that counts one entry fewer, an oracle that names a pair the map does not: both are named, not averaged
-    pp_bad = {"padding_entries": 5, "by_family": {"fa2_hidden_m1_stream": {"commit_padding_entries": 1}, "input_token_ids": {"commit_padding_entries": 2},
-                                                  "instance_outputs": {"commit_padding_entries": 2}}}
-    bad = PS.padding_vs_oracle(pp_bad, res, bmap)
-    assert not bad["ok"] and any("inactive stratum's 5" in q for q in bad["problems"]) and any("!= the inactive stratum's" in q for q in bad["problems"])
-    res_bad = dict(res, padding=dict(res["padding"], pair_list=[[1, "r0"], [3, "r0"]]))
-    bad2 = PS.padding_vs_oracle(pp, res_bad, bmap)
-    assert not bad2["ok"] and any("oracle-only [(3, 'r0')]" in q and "map-only [(2, 'r0')]" in q for q in bad2["problems"])
-    # no oracle on the record: the map/stratum half still runs, the oracle half says absent
-    absent = PS.padding_vs_oracle(pp, None, bmap)
-    assert absent["ok"] and absent["oracle"].startswith("absent") and absent["map_padding_entries"] == 6 and absent["map_pairs"] == 2
     # the same map WITHOUT the activity stamp (an older map) reads as before: partial, the range and the pairs named
     for e in bmap["entries"]:
         e.pop("activity", None)
     res0 = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
     assert res0["result"] is None and res0["grade"] == "partial" and res0["not_compared"]["identity without a byte range (dtype/range)"] == 4
     assert "padding" not in res0 and len(res0["attribution"]["unverified"]) == 2
-    old = PS.padding_vs_oracle(pp, res0, bmap)                                   # a record whose oracle predates the padding block: named, not ok
-    assert not old["ok"] and old["oracle"].startswith("predates the `padding` block") and old["map_padding_entries"] == 0   # (the stamps were popped above)

@@ -1,7 +1,21 @@
-import Proofs.Flock.Recursive.Sessions
-import Proofs.Flock.Recursive.Premises
-import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
-import Flock.Firewall
+module
+
+public import Proofs.Flock.Recursive.Sessions
+public import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
+public import Flock.Firewall
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # (ii) at the firewall and V*'s code
@@ -27,6 +41,8 @@ two halves, and the commitments V*'s sessions read).
 Its proof is `Flock.SecurityProofs.RecursiveFirewallPrivate` (`Proofs.Flock.Recursive.FirewallZK`).
 -/
 
+@[expose] public section
+
 namespace Flock.Guarantees
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
@@ -34,7 +50,7 @@ open Game
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **The commit strings the firewall sends under live inner coins**, at the salt bytes `ys`: string `i` is message
 `i`'s SHA-512 under `ys i` (`Default512.commitString`), where message `i`, `msgs i l`, reads the strings `l` the

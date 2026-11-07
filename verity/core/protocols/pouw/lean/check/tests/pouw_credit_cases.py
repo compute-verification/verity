@@ -44,7 +44,8 @@ tile's A and B ports at its K's values and their registered roots); its mutation
 a call the manifest lacks, prove units the prover chose under its own stream, fail or drop a sampled proof block, break K's form
 or give one past the window's units, pass a `credited` refusal through, and break the descriptor (`DESC_NAMES`): its
 form, its program function's record, a template, a K no linear has, the root's nodes, the record's layout, a record
-naming another layout over the same nodes (``alt-layout``), or an H1 window's whole descriptor with a linear, so a
+naming another layout over the same nodes (``alt-layout``), a template's A or B row of bits reading the root's 16-bit
+input words (``reinterpret``, the decoder's ``E_REINTERPRET``), or an H1 window's whole descriptor with a linear, so a
 tile, at a K the tile's proof doesn't cover (``tile-k``: 2^17 or past, or no multiple of 32). Its mutations of the
 composed check present a round log the challenger never received (``never-received``, its coins carried as if opened
 after its roots and its sample root over it, so only `core_check.rounds` refuses it), a round coin opened after another
@@ -139,7 +140,7 @@ from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import live_reads as LR
+from verity.core.protocols.pouw import live_reads as LR
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -306,11 +307,9 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
     return entries, _log(steps, values, [_hex(rng) for _ in range(steps)]), true
 
 
-def commit_record(rng: random.Random, true: dict[str, dict], steps: int, off: str | None = None) -> str:
-    """The served Commit's record (`credit.COMMIT_FORMAT`) in hex of its canonical JSON: its registered values `true`'s
-    A tables and ids tables (`_a_log`'s) under the Commit's names (`credit.commit_rows` of each A table's round and K,
-    and `credit.commit_ids`), among values of its own; ``commit-missing`` drops one of them and ``commit-twice``
-    registers one twice."""
+def commit_names(true: dict[str, dict]) -> dict[str, str]:
+    """`true`'s A tables and ids tables (`_a_log`'s) by the Commit's names for them: `credit.commit_rows` of each A
+    table's round and K, and `credit.commit_ids`."""
     names = {}
     for v in true:
         s, a = Cr.ids_step(v), Cr.a_value(v)
@@ -318,6 +317,14 @@ def commit_record(rng: random.Random, true: dict[str, dict], steps: int, off: st
             names[v] = Cr.commit_ids(s)
         elif a is not None and a[1] is not None:
             names[v] = Cr.commit_rows(int(a[1]), int(a[0]))
+    return names
+
+
+def commit_record(rng: random.Random, true: dict[str, dict], steps: int, off: str | None = None) -> str:
+    """The served Commit's record (`credit.COMMIT_FORMAT`) in hex of its canonical JSON: its registered values `true`'s
+    A tables and ids tables under the Commit's names (`commit_names`), among values of its own; ``commit-missing`` drops
+    one of them and ``commit-twice`` registers one twice."""
+    names = commit_names(true)
     reg = [{**e, "value": names[v]} for v, e in sorted(true.items()) if v in names]
     if reg and off == "commit-missing":
         del reg[rng.randrange(len(reg))]
@@ -393,7 +400,8 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
                   program: str | None = None,
                   other: str | None = None, calls: list[int] | None = None, prefix: str | None = None,
                   weights: list[dict] | None = None, off: str | None = None, rounds: int | None = None, m: int = 1,
-                  served: list | None = None, t: int | None = None) -> tuple[dict, rc.Session]:
+                  served: list | None = None, t: int | None = None,
+                  commit: Callable[[dict, int, str, str], str] | None = None) -> tuple[dict, rc.Session]:
     """An honest served window of `rows` manifest rows (one to five when None), each call's served rows ``served[i]``
     (`credit.SERVED_ROWS`; `MISSING` drops it) when given, whose sampling coin opened after its sample root
     (none for ``no-draw``) in its own sampling session (`window.DRAW_FAMILIES`, ``draw``'s ``session``, the window
@@ -401,8 +409,8 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     `draw_leaf`, its window session `sid` signing its record at `leaf`. Its round log and entries are `_a_log`'s at
     the contractions `ks` (and `calls`, a round count dividing theirs) under the circuit `program` (random ones when
     None), `other`, `prefix`, `weights`, `off` and the A slot `m`, and its Commit record `commit_record`'s over their
-    true tables, bound under its sample root, over `rounds` rounds (one to three dividing the calls
-    when None); with `weights`, its open root is `salt.window_open_root` of their
+    true tables (``commit(true, rounds, circuit, open root)``'s when given), bound under its sample root, over `rounds`
+    rounds (one to three dividing the calls when None); with `weights`, its open root is `salt.window_open_root` of their
     `weights_root` (`fold`), round 0's ``requests`` and `sid`, else a random one. Round 0's ``requests`` is
     `credit.requests_root` of its ``request_table`` (a random root) and its input-ids table's (`IDS0_NAMES` break
     it), or the bare table's when it registers none; with `t` it registers the live units' tables (`_a_log`). Each
@@ -425,12 +433,15 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
         return opened["window"]["root"]
 
     ks = rng.sample([64, 4096, 14336], rng.randint(1, 2)) if ks is None else ks
-    entries, log, true = _a_log(rng, rounds, ks, _hex(rng) if program is None else program, open_root, other,
-                                calls, prefix, weights, off, sid, m, table, t)
+    circuit = _hex(rng) if program is None else program
+    entries, log, true = _a_log(rng, rounds, ks, circuit, open_root, other, calls, prefix, weights, off, sid, m, table,
+                                t)
     window = opened["window"]
     log[0]["requests"], log[0]["request_table"] = opened["requests"], table
     d = {"salt": _hex(rng), "calls": [_row(rng, i) for i in range(rng.randint(1, 5) if rows is None else rows)],
-         "served": rng.choice([None, _hex(rng)]), "commit": commit_record(rng, true, rounds, off),
+         "served": rng.choice([None, _hex(rng)]),
+         "commit": (commit_record(rng, true, rounds, off) if commit is None
+                    else commit(true, rounds, circuit, window["root"])),
          "draw": {"receipts": _hex(rng)}, "entries": entries}
     for row, ms in zip(d["calls"], served or []):
         row[Cr.SERVED_ROWS] = ms
@@ -942,6 +953,14 @@ def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, ti
             desc["program_fn"] = record(tiles, _alt_layout(rng, lay))
         case "tile-k":
             desc = window_desc(rng, _off_k(lay, rng), j10r=j10r, tile=tile)
+        case "reinterpret":
+            words = [i for i, x in enumerate(root) if desc["callees"][x["fn"]] == "Input16_v1"]
+            x = rng.choice([x for x in root if desc["callees"][x["fn"]] == tid])
+            arg = x["args"][rng.randrange(2)]
+            (space, i, at, *_s, n), word = arg["refs"]["strided"], ["n", rng.choice(words), 0]
+            bits = {"strided": [space, i, at, 1, 0, 0, n - 1]}
+            arg["refs"] = rng.choice([{"strided": [*word, 1, 0, 0, n]}, {"concat": [bits, {"affine": [*word, 1]}]}])
+            return desc_bytes(desc).hex()
         case _:
             raise ValueError(name)
     return desc_bytes(_wired(desc)).hex()
@@ -949,7 +968,7 @@ def _break_desc(rng: random.Random, lay: dict, name: str, j10r: bool = False, ti
 
 #: each way a window's committed descriptor is no H1 window's, or not the one its record says
 LAYOUT_DESC_NAMES = ["descriptor-form", "not-window", "template", "tile-ks", "body", "layout-form", "record-layout",
-                     "alt-layout"]
+                     "alt-layout", "reinterpret"]
 #: and an H1 window's, its record and its nodes alike, with a tile at a K its proof doesn't cover
 DESC_NAMES = [*LAYOUT_DESC_NAMES, "tile-k"]
 
@@ -1525,7 +1544,8 @@ def _mutate_live(rng: random.Random, d: dict, name: str) -> None:
 def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", leaf: int = rc.RECORD_LEAF,
                   draw_leaf: int = rc.DRAW_LEAF, lay: dict | None = None, desc: str | None = None, prefix: str | None = None,
                   weights: list[dict] | None = None, t: int | None = None, length: list[int] | None = None,
-                  j10r: bool = False) -> tuple[dict, rc.Session]:
+                  j10r: bool = False, commit: Callable[[dict, int, str, str], str] | None = None
+                  ) -> tuple[dict, rc.Session]:
     """An honest served window (`honest_credit`) of the circuit `desc` (`descriptor` of its layout `lay`, a random one
     when None), its weights `weights` (`weights_of` when None, its open root over them, ``d["weights"]``), a K it can be
     sampled at, its period's table rows T `t` (``rows``, `table_rows` when None) and each step's served rows at most T,
@@ -1534,7 +1554,8 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     live@<s> proof outcome at its step's m_s. Its A rows are its rounds' A tables of each K, as main's served form
     registers them
     (`h1window.table`), beside each round's input-ids table, over rounds that call each linear once (one round under
-    `TWO_CALLS`), and its Commit record registers each of them (`commit_record`); under `AROW_NAMES`
+    `TWO_CALLS`), and its Commit record registers each of them (`commit_record`, or `commit`'s: `honest_credit`'s);
+    under `AROW_NAMES`
     one of them is not the Commit's. Its calls' served rows are the schedule of the fixed length `length`
     (`fixed_length` when None, aimed at ``length-past`` and ``length-early``; `length_rows`), then `ROWS_NAMES`'
     mutation, ``d["length"]`` the ``{max_tokens, stop}`` its period's open commits. ``layout`` is the layout, which the verifier
@@ -1559,7 +1580,7 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
                          other=other,
                          calls=[k_of[lin] for lin, _blk in lay["calls"]], prefix=prefix, weights=weights,
                          off=name if name in [*AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, *LIVE_TABLE_NAMES] else None,
-                         m=lay["m"], rounds=steps, t=t,
+                         m=lay["m"], rounds=steps, t=t, commit=commit,
                          served=served_rows(rng, t, len(lay["calls"]), steps, name, length_rows(rng, length, steps, t)))
     d["length"] = {"max_tokens": length, "stop": Wd.STOP_FIXED}
     d["layout"], d["k"], d["descriptor"], d["weights"], d["rows"] = lay, _k(rng, lay), desc, weights, t
@@ -1791,15 +1812,17 @@ def _drawn(s: rc.Session, o: dict) -> list[tuple[str, str | None, dict]]:
 def period_instance(rng: random.Random, name: str = "honest", committed_too: dict | None = None, *,
                     period_pin: str | None = None, pin_floor: int | None = None,
                     stale_window: int | None = None, j10r: bool = False, nks: int | None = None,
-                    tile: int | None = None, program_fn: str | None = None) -> dict:
+                    tile: int | None = None, program_fn: str | None = None, windows: int | None = None,
+                    commit: Callable[[dict, int, str, str], str] | None = None) -> dict:
     """One `period` case: one to three honest windows in one period of the auditor's ledger, each proving the circuit
     whose SHA-512 the period's open committed (one window layout's descriptor, `descriptor`), presented in its close's
     order, and a window of no period opened after the close; then mutation `name`. The period's open commits
     `committed_too` too.  `period_pin`, `pin_floor` and `stale_window` override the period's open pin, its freshness floor
     and which window runs the oldest logged pin (MAIN[4]), for the test that pushes main past the floor. `j10r`, `nks`
     and `tile` make its circuits J10-R's, at `nks` K, over ``PouwH1Tile_v<tile>`` (`layout`, `descriptor`), and
-    `program_fn` replaces its circuit's program function."""
-    n = rng.randint(2 if name in ("order", "other-sw", "zero-codes") else 1, 3)
+    `program_fn` replaces its circuit's program function. With `windows` it has that many windows, and with `commit`
+    each of them (not the foreign one) has `commit`'s Commit record (`honest_credit`)."""
+    n = rng.randint(2 if name in ("order", "other-sw", "zero-codes") else 1, 3) if windows is None else windows
     pname = rng.choice(rc.PERIODS)
     lay = layout(rng, nks=nks)
     t = table_rows(rng, lay)
@@ -1829,7 +1852,7 @@ def period_instance(rng: random.Random, name: str = "honest", committed_too: dic
     wins = [honest_window(rng, "never-received" if i == bad and name == "never-received" else "honest", sid=f"s-{i + 1}",
                           leaf=8 * i + 2, draw_leaf=8 * i + 6, lay=lay, desc=odd if i == bad else desc,
                           prefix=odd_prefix if i == bad else prefix, weights=odd_weights if i == bad else weights, t=t,
-                          length=length)
+                          length=length, commit=commit)
             for i in range(n)]
     foreign = honest_window(rng, sid="o-1", leaf=8 * n + 3, draw_leaf=8 * n + 7, lay=lay, desc=desc, prefix=prefix,
                             weights=weights, t=t, length=length)

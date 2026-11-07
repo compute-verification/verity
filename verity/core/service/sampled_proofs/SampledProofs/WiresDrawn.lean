@@ -1,4 +1,6 @@
-import SampledProofs.WiresSound
+module
+
+public import SampledProofs.WiresSound
 
 /-!
 The wire check on the drawn units alone: a reader unit is faulty in the wired flattening when its outputs are not its
@@ -11,6 +13,8 @@ and the unit's rows (`Wire.rowsAt`). `drawnOk_iff`: the drawn check accepts exac
 wires cover (`checkRef`'s entries) whose unit is drawn is its writer's row, `same` being the comparison of two rows' public
 strings (`b ‖ c`) the leaf layer binds.
 -/
+
+@[expose] public section
 
 namespace SampledProofs.Wires
 
@@ -69,7 +73,7 @@ theorem mem_rowsAt {w : Wire} (hc : 1 ≤ w.cuts) (hd : w.units % w.cuts = 0) {t
 
 /-- **The drawn check is the reference's on the drawn units**: it accepts exactly when every reader row the expanded
 wires cover whose unit is drawn is its writer's row. -/
-theorem drawnOk_iff {c : Circuit} {S : Summary} (h : check c = .ok S)
+theorem drawnOk_iff {c : Wiring} {S : Summary} (h : check c = .ok S)
     (same : (String × Nat × String × Nat) → (String × Int × String) → Bool) (drawn : List (String × Nat)) :
     S.drawnOk same drawn = true ↔
       ∀ e ∈ c.wires.flatMap Wire.entries, (e.1.1, e.1.2.1) ∈ drawn → same e.1 e.2 = true := by
@@ -101,10 +105,10 @@ def keyLt (a b : Key) : Bool :=
 
 def keyJson (k : Key) : Json := Json.arr #[toJson k.1, toJson k.2.1, toJson k.2.2.1, toJson k.2.2.2]
 
-def drawnInstance (j : Json) : Except String (Circuit × List (String × Nat) ×
+def drawnInstance (j : Json) : Except String (Wiring × List (String × Nat) ×
     (Key → (String × Int × String) → Bool)) := do
   sameKeys j ["templates", "cuts", "wires", "drawn", "reads", "writes"] "an instance"
-  let c ← Circuit.ofJson j
+  let c ← Wiring.ofJson j
   let drawn ← (← arrOf "drawn" (← field j "drawn")).mapM fun d => do
     match ← arrOf "a drawn unit" d with
     | [a, b] => pure (← strOf "a drawn unit's template" a, ← natOf "a drawn unit" b)

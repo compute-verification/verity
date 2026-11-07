@@ -1,5 +1,14 @@
-import Mathlib.LinearAlgebra.Matrix.Rank
-import Definitions.Pouw.PearlC.Fp4
+module
+
+public import Definitions.Pouw.PearlC.Fp4
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Algebra.Field.Defs
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Data.Rat.Defs
+import Mathlib.Data.Nat.Totient
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.ContinuousFunctionalCalculus
+import Mathlib.Tactic.NormNum.GCD
 
 /-!
 # The FP4-tile model (trusted definitions)
@@ -40,6 +49,8 @@ bit-exact. A cheaper computation of an exact matrix product in this model is a p
 * **Statement content kept here, not in the proofs:** the per-block index sets `LiveIn` and `SideIn`, the unit form
   `unitForm`, and the honest program `honest`.
 -/
+
+@[expose] public section
 
 namespace Pouw.TileBound
 

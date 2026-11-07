@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Defs
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ
-import Proofs.Flock.Soundness.Discharge.Tables
-import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ
+public import Proofs.Flock.Soundness.Discharge.Tables
+public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 
 /-!
 # One `--zk` sampled session of `J` tables: the pieces `zk_session_soundJ` reads
@@ -24,6 +26,8 @@ tables, each the one-table piece's counterpart:
 * `TagsOkZJ`, `RecordsLiveZKJ`, `DrawOkZKJ`: `TagsOk` without `count ≤ 1`, and `RecordsLiveZK`, `DrawOkZK` at `J` tables.
 * `runsZCJ_live`: `runsZC_live` at `J` tables.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -432,7 +436,7 @@ noncomputable def simZJ (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fin cap
       (Strategy.ofMap (wr (L.draw ω) τ.1) _
         (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)))))⟩
 
-/-- **R11 at `--zk` for sessions of `J` tables** (`execRefines_tables` at the compiled `--zk` tables). -/
+/-- **The refinement at `--zk` for sessions of `J` tables** (`execRefines_tables` at the compiled `--zk` tables). -/
 theorem execRefinesZK_tables (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) :
     ExecRefines (auditLive L Reg (liveOfZJ dg planZ N wr)) τ (LiveAcceptsZK I) (fun _ => False)

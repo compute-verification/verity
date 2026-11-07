@@ -1,6 +1,42 @@
-import Proofs.Flock.Claims.ZK.Refine
-import Flock.Firewall.SessionPlan
-import Flock.Firewall.Frames
+module
+
+public import Proofs.Flock.Claims.ZK.Refine
+public import Flock.Firewall.Frames
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The release at the session loop (`flock-firewall session`)
@@ -9,7 +45,8 @@ The session loop (`Flock.Firewall.Session`, live PROTOCOL.md §10.4) decides wha
 of the statement's setup (`Flock.Firewall.SessionPlan`): the `Hello` (`Hello.msg`), what its coin check reads of it
 (`helloOf`: the tree, the link points and the nonce), each opening's stream and count (`planOf`, `reqAt`), and when
 `Finish` leaves (`State.finish`: once the schedule's last opening has). `LeanRelease.loop` is a release with those, at the
-statement `x`'s setup (`FlockDeploy.setupOf`), and here the transport's trusts on them are theorems:
+masked session the statement `x` sets up (`sessOf`: Flock's setup, else the recursive statement's), and here the
+transport's trusts on them are theorems:
 
 * `LeanRelease.loop_helloIs`: its `Hello` is `CoinLayer.helloMsg`, by `rfl`.
 * `LeanRelease.loop_helloParses`: its coin check reads the tape's nonce, and reads no `Hello` only where the schedule has no
@@ -29,6 +66,8 @@ runs at `x`'s setup: the loop sets up from the auditor's draw (`Hello.Setup.setu
 (`FlockDeploy.Ins.setup`).
 -/
 
+@[expose] public section
+
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
@@ -37,7 +76,7 @@ open _root_.Flock.Firewall.Session (INNER_CONS replayCoins ligeritoCoins repCoin
 open _root_.Flock.Firewall.Frame (Cfg Masker Draws MaskSlot)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace Loop
 
@@ -277,12 +316,6 @@ theorem rounds_eq {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.St
   have e3 := foldl_add (fun st => 2 * FlockDeploy.repRounds true spec st) sts.toList 0
   rw [e1, e2, ← Array.foldl_toList, e3, Nat.zero_add]
 
-theorem refK_of_setup {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
-    (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) : refK x = 1 + FlockDeploy.rounds true spec sts := by
-  unfold refK
-  simp only [FlockDeploy.V, hs]
-  omega
-
 /-! ## The streams -/
 
 theorem streamsOk_eq {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
@@ -292,10 +325,10 @@ theorem streamsOk_eq {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock
   simp only [streamsOk, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
   exact ⟨h.1.1, h.1.2, h.2⟩
 
-theorem refK_plan {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
-    {ct : _root_.Flock.CoinTree.Spec} (hs : FlockDeploy.setupOf true x = some (s, spec, sts))
+theorem refK_plan {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    {ct : _root_.Flock.CoinTree.Spec} (hs : sessOf x = some (spec, sts))
     (hok : streamsOk spec sts ct = true) : refK x = 1 + (planOf spec sts).size := by
-  rw [refK_of_setup hs, rounds_eq (streamsOk_eq hok).2.2, plan_size]
+  rw [refK_of_sess hs, rounds_eq (streamsOk_eq hok).2.2, plan_size]
 
 theorem repName_eq {spec : _root_.Flock.SessionSpec} {k : ℕ} (hk : k < spec.repStreams.size) :
     repName spec k = spec.repStreams[k].2.2 := by
@@ -329,15 +362,15 @@ theorem ne_session {spec : _root_.Flock.SessionSpec} {ct : _root_.Flock.CoinTree
 
 /-! ## The schedule's places -/
 
-theorem slot_zero {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
-    {ct : _root_.Flock.CoinTree.Spec} (hs : FlockDeploy.setupOf true x = some (s, spec, sts))
+theorem slot_zero {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    {ct : _root_.Flock.CoinTree.Spec} (hs : sessOf x = some (spec, sts))
     (hc : spec.coinTree = some ct) (hok : streamsOk spec sts ct = true) :
     CoinLayer.slot x 0 = some (spec, ct, 0, 0) := by
   unfold CoinLayer.slot
   simp only [hs, hc, hok, ↓reduceIte]
 
-theorem slot_succ {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
-    {ct : _root_.Flock.CoinTree.Spec} (hs : FlockDeploy.setupOf true x = some (s, spec, sts))
+theorem slot_succ {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    {ct : _root_.Flock.CoinTree.Spec} (hs : sessOf x = some (spec, sts))
     (hc : spec.coinTree = some ct) (hok : streamsOk spec sts ct = true) (j : ℕ) :
     CoinLayer.slot x (j + 1) = some (spec, ct,
       ct.streams.toList.idxOf (repName spec (CoinLayer.locate (roundsOf spec sts) 0 j).1),
@@ -362,20 +395,26 @@ theorem fst_plan {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stm
 
 /-! ## The loop's requests -/
 
-/-- **The loop's request for opening `j`** at `x`: `reqAt` at the plan and link points `x`'s setup gives. -/
+/-- **The loop's request for opening `j`** at `x`: `reqAt` at the plan and link points of the masked session `x` sets up
+(`sessOf`). -/
 def reqOf (x : Msg) (j : ℕ) : String × ℕ :=
-  match FlockDeploy.setupOf true x with
-  | some (_, spec, sts) => reqAt (planOf spec sts) (spec.points * spec.mPts) j
+  match sessOf x with
+  | some (spec, sts) => reqAt (planOf spec sts) (spec.points * spec.mPts) j
   | none => ("", 0)
 
 /-- The coin counts the loop requests: rep round `j`'s, `reqOf`'s. -/
 def loopNr (x : Msg) (j : ℕ) : ℕ := (reqOf x j).2
 
-theorem reqOf_eq {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
-    (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) (j : ℕ) :
+theorem reqOf_sess {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    (hs : sessOf x = some (spec, sts)) (j : ℕ) :
     reqOf x j = reqAt (planOf spec sts) (spec.points * spec.mPts) j := by
   unfold reqOf
   rw [hs]
+
+theorem reqOf_eq {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) (j : ℕ) :
+    reqOf x j = reqAt (planOf spec sts) (spec.points * spec.mPts) j :=
+  reqOf_sess (sessOf_flock hs) j
 
 /-- The streams' indices in the tree of the first `j` openings `req` asks for. -/
 def openedAt (ct : _root_.Flock.CoinTree.Spec) (req : ℕ → String × ℕ) (j : ℕ) : List ℕ :=
@@ -386,8 +425,8 @@ theorem count_succ_map (l : List ℕ) (k : ℕ) : (l.map (· + 1)).count (k + 1)
   | nil => rfl
   | cons a l ih => simp [List.count_cons, ih]
 
-theorem count_opened {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
-    {ct : _root_.Flock.CoinTree.Spec} (hs : FlockDeploy.setupOf true x = some (s, spec, sts))
+theorem count_opened {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    {ct : _root_.Flock.CoinTree.Spec} (hs : sessOf x = some (spec, sts))
     (hok : streamsOk spec sts ct = true) {i : ℕ} (hi : i < (roundsOf spec sts).sum) :
     (openedAt ct (reqOf x) (i + 1)).count ((CoinLayer.locate (roundsOf spec sts) 0 i).1 + 1) =
       (CoinLayer.locate (roundsOf spec sts) 0 i).2 := by
@@ -396,7 +435,7 @@ theorem count_opened {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.Sessio
       0 :: ((List.range i).map fun i' => (CoinLayer.locate (roundsOf spec sts) 0 i').1).map (· + 1) := by
     unfold openedAt
     rw [List.range_succ_eq_map, List.map_cons, List.map_map, List.map_map]
-    have h0 : (reqOf x 0).1 = _root_.Flock.Firewall.Coins.SESSION := by rw [reqOf_eq hs]; rfl
+    have h0 : (reqOf x 0).1 = _root_.Flock.Firewall.Coins.SESSION := by rw [reqOf_sess hs]; rfl
     rw [h0, idx_session hst]
     congr 1
     apply List.map_congr_left
@@ -407,14 +446,14 @@ theorem count_opened {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.Sessio
       have := locate_lt (roundsOf spec sts) 0 i' hlt
       simpa [roundsOf] using this
     simp only [Function.comp, Nat.succ_eq_add_one]
-    rw [reqOf_eq hs]
+    rw [reqOf_sess hs]
     show ct.streams.toList.idxOf ((planOf spec sts).getD i' ("", 0)).1 = _
     rw [fst_plan hlt, idx_repName hst hnd hk]
   rw [e, List.count_cons, count_succ_map, count_locate _ 0 i hi]
   simp
 
-theorem follows_head {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
-    {ct : _root_.Flock.CoinTree.Spec} (hs : FlockDeploy.setupOf true x = some (s, spec, sts))
+theorem follows_head {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    {ct : _root_.Flock.CoinTree.Spec} (hs : sessOf x = some (spec, sts))
     (hc : spec.coinTree = some ct) (hok : streamsOk spec sts ct = true) (j : ℕ)
     (hj : j < (planOf spec sts).size + 1) :
     CoinLayer.place loopNr x j = CoinOpen.placeOf ct (ct.streams.toList.idxOf (reqOf x j).1)
@@ -424,7 +463,7 @@ theorem follows_head {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.Sessio
   cases j with
   | zero =>
     rw [CoinOpen.place_eq (slot_zero hs hc hok)]
-    have h0 : (reqOf x 0).1 = _root_.Flock.Firewall.Coins.SESSION := by rw [reqOf_eq hs]; rfl
+    have h0 : (reqOf x 0).1 = _root_.Flock.Firewall.Coins.SESSION := by rw [reqOf_sess hs]; rfl
     rw [h0, idx_session hst]
     simp [openedAt]
   | succ i =>
@@ -433,14 +472,14 @@ theorem follows_head {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.Sessio
       have := locate_lt (roundsOf spec sts) 0 i hi
       simpa [roundsOf] using this
     have h1 : (reqOf x (i + 1)).1 = repName spec (CoinLayer.locate (roundsOf spec sts) 0 i).1 := by
-      rw [reqOf_eq hs]
+      rw [reqOf_sess hs]
       exact fst_plan hi
     rw [CoinOpen.place_eq (slot_succ hs hc hok i), h1, idx_repName hst hnd hk, ne_session hst hnd hk,
       count_opened hs hok hi]
     simp [loopNr]
 
-theorem follows_gen {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
-    {ct : _root_.Flock.CoinTree.Spec} (hs : FlockDeploy.setupOf true x = some (s, spec, sts))
+theorem follows_gen {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    {ct : _root_.Flock.CoinTree.Spec} (hs : sessOf x = some (spec, sts))
     (hc : spec.coinTree = some ct) (hok : streamsOk spec sts ct = true) :
     ∀ (ms : List Msg) (j : ℕ), j + ms.length ≤ (planOf spec sts).size + 1 →
       CoinOpen.Follows (CoinLayer.place loopNr x) ct (spec.points * spec.mPts) j (openedAt ct (reqOf x) j)
@@ -457,11 +496,11 @@ theorem follows_gen {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.Session
 
 /-! ## The loop's `Hello` -/
 
-/-- **What the loop's coin check reads of the session's `Hello`** at `x` and the nonce `ν`: `helloOf` at `x`'s setup and
-the nonce's bytes. -/
+/-- **What the loop's coin check reads of the session's `Hello`** at `x` and the nonce `ν`: `helloOf` at the masked
+session `x` sets up (`sessOf`) and the nonce's bytes. -/
 def helloChkAt (x : Msg) (ν : CoinLayer.Nonce) : Except String _root_.Flock.Firewall.Coins.Hello :=
-  match FlockDeploy.setupOf true x with
-  | some (_, spec, sts) =>
+  match sessOf x with
+  | some (spec, sts) =>
     match helloOf spec sts ⟨(CoinLayer.nb ν).toArray⟩ with
     | some hl => .ok hl
     | none => .error "the session has no coin tree of its own streams"
@@ -469,11 +508,11 @@ def helloChkAt (x : Msg) (ν : CoinLayer.Nonce) : Except String _root_.Flock.Fir
 
 theorem helloChkAt_ok {x : Msg} {ν : CoinLayer.Nonce} {hl : _root_.Flock.Firewall.Coins.Hello}
     (h : helloChkAt x ν = .ok hl) :
-    ∃ s spec sts ct, FlockDeploy.setupOf true x = some (s, spec, sts) ∧ spec.coinTree = some ct ∧
+    ∃ spec sts ct, sessOf x = some (spec, sts) ∧ spec.coinTree = some ct ∧
       streamsOk spec sts ct = true ∧
       hl = { spec := ct, links := spec.points * spec.mPts, nonce := CoinLayer.nb ν } := by
   unfold helloChkAt at h
-  rcases hs : FlockDeploy.setupOf true x with _ | ⟨s, spec, sts⟩
+  rcases hs : sessOf x with _ | ⟨spec, sts⟩
   · simp only [hs] at h
     cases h
   · simp only [hs, helloOf] at h
@@ -482,7 +521,7 @@ theorem helloChkAt_ok {x : Msg} {ν : CoinLayer.Nonce} {hl : _root_.Flock.Firewa
       cases h
     · by_cases hok : streamsOk spec sts ct = true
       · simp only [hc, hok, ↓reduceIte, Except.ok.injEq] at h
-        exact ⟨s, spec, sts, ct, rfl, hc, hok, by rw [← h]⟩
+        exact ⟨spec, sts, ct, rfl, hc, hok, by rw [← h]⟩
       · simp only [hc, hok, ↓reduceIte, Bool.false_eq_true] at h
         cases h
 
@@ -490,7 +529,7 @@ theorem helloChkAt_error {x : Msg} {ν : CoinLayer.Nonce} {e : String} (h : hell
     CoinLayer.slot x 0 = none := by
   unfold helloChkAt at h
   unfold CoinLayer.slot
-  rcases hs : FlockDeploy.setupOf true x with _ | ⟨s, spec, sts⟩
+  rcases hs : sessOf x with _ | ⟨spec, sts⟩
   · rfl
   · simp only [hs, helloOf] at h
     simp only
@@ -507,8 +546,8 @@ theorem helloChkAt_error {x : Msg} {ν : CoinLayer.Nonce} {e : String} (h : hell
 the plan's size `+ 2`. Where `x` sets up no session with a tree of its own streams no opening leaves, and neither does
 `Finish`; the round is then the protocol's. -/
 def lastOf (x : Msg) : ℕ :=
-  match FlockDeploy.setupOf true x with
-  | some (_, spec, sts) =>
+  match sessOf x with
+  | some (spec, sts) =>
     match spec.coinTree with
     | some ct => if streamsOk spec sts ct then (planOf spec sts).size + 2 else refK x + 1
     | none => refK x + 1
@@ -542,7 +581,7 @@ theorem feedOf_rd (n : ℕ) (m : Msg) :
 
 theorem lastOf_eq (x : Msg) : lastOf x = refK x + 1 := by
   unfold lastOf
-  rcases hs : FlockDeploy.setupOf true x with _ | ⟨s, spec, sts⟩
+  rcases hs : sessOf x with _ | ⟨spec, sts⟩
   · rfl
   · simp only
     rcases hc : spec.coinTree with _ | ct
@@ -601,7 +640,7 @@ theorem loop_helloParses (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     | .error _ => CoinLayer.slot x 0 = none)
   cases h : Loop.helloChkAt x ν with
   | ok hl =>
-    obtain ⟨_, _, _, _, _, _, _, rfl⟩ := Loop.helloChkAt_ok h
+    obtain ⟨_, _, _, _, _, _, rfl⟩ := Loop.helloChkAt_ok h
     exact rfl
   | error e => exact Loop.helloChkAt_error h
 
@@ -611,7 +650,7 @@ theorem loop_reqsFollow (T : CoinLayer.TableData)
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand)) (x : Msg) :
     ReqsFollow Loop.loopNr T (loop Loop.loopNr T L₀) x := by
   intro ν t hl h ms hms
-  obtain ⟨s, spec, sts, ct, hs, hc, hok, rfl⟩ := Loop.helloChkAt_ok h
+  obtain ⟨spec, sts, ct, hs, hc, hok, rfl⟩ := Loop.helloChkAt_ok h
   rw [Loop.refK_plan hs hok] at hms
   exact Loop.follows_gen hs hc hok ms 0 (by omega)
 
@@ -638,7 +677,8 @@ theorem Flock.zk_server_lean_loop
     (hS : (CoinLayer.session Loop.loopNr T).Tables)
     (hV : (CoinLayer.session Loop.loopNr T).Complete (Flock.R (FlockDeploy.deployZk rel).parse))
     (hD : (CoinLayer.session Loop.loopNr T).DummyReg) (hc : (CoinLayer.session Loop.loopNr T).Causal)
-    (hsc : (CoinLayer.session Loop.loopNr T).SwCausal vs) (hT : (CoinLayer.session Loop.loopNr T).TapeOK)
+    (Ok : (x : Msg) → (Fin (refK x) → (CoinLayer.session Loop.loopNr T).Coin) → Prop)
+    (hsc : (CoinLayer.session Loop.loopNr T).SwCausalOn Ok vs) (hT : (CoinLayer.session Loop.loopNr T).TapeOK)
     (L₀ L : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
     (hL : L = LeanRelease.loop Loop.loopNr T L₀)
@@ -646,6 +686,8 @@ theorem Flock.zk_server_lean_loop
     (pc : Msg → List (CoinLayer.session Loop.loopNr T).Coin → Masker)
     (fc : Msg → List (CoinLayer.session Loop.loopNr T).Coin → Except String Masker)
     (hPr : LeanRelease.ProgReads (CoinLayer.session Loop.loopNr T) L pc fc x)
+    (hOk : (CoinLayer.session Loop.loopNr T).StopsOk
+      (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) Ok)
     (hLk : LeanRelease.LinkRoundEq (CoinLayer.session Loop.loopNr T) vs L x w)
     (hF : LeanRelease.FinalRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
     (hE : LeanRelease.LiveRoundEq (CoinLayer.session Loop.loopNr T) vs L CoinOpen.shaH wk x w)
@@ -675,8 +717,8 @@ theorem Flock.zk_server_lean_loop
                 (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T) L pc fc Loop.readCoins) L.stop).swP vs).prover w) Vs θ x).Pr
               CoinOpen.shaH) := by
   subst hL
-  exact Flock.zk_server_lean_coinLayer rel Loop.loopNr T vs t ht hT1 hδ₁ hS hV hD hc hsc hT _ wk x w hR
-    (LeanRelease.loop_last Loop.loopNr T L₀ x) pc fc Loop.readCoins ⟨hPr, LeanRelease.loop_coinsRead Loop.loopNr T L₀ x⟩
+  exact Flock.zk_server_lean_coinLayer rel Loop.loopNr T vs t ht hT1 hδ₁ hS hV hD hc Ok hsc hT _ wk x w hR
+    (LeanRelease.loop_last Loop.loopNr T L₀ x) pc fc Loop.readCoins hOk ⟨hPr, LeanRelease.loop_coinsRead Loop.loopNr T L₀ x⟩
     (LeanRelease.loop_helloIs Loop.loopNr T L₀ x)
     (LeanRelease.loop_helloParses Loop.loopNr T L₀ x) (LeanRelease.loop_reqsFollow T L₀ x) hLk hF hE hEf Vs θ hk Ev
 

@@ -1,5 +1,9 @@
-import Definitions.Core.Blocks
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Definitions.Core.Blocks
+public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The streamed-label wipe on the device model (trusted)
@@ -34,6 +38,8 @@ at a time and reads each label back under a deadline.
   `E`. The network certifier's guarantee bounds it (`NetTiming.Guarantees.SampledLeakAccepted`: except with probability
   `δ + ε_ks + ε_bind`, the accepted observation sequences number at most `2^bits`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Wipe
 

@@ -17,15 +17,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "pouw" / "tests"))
 import clear_work as CW  # noqa: E402
 import test_circuit_cap as T  # noqa: E402
-from verity.core.protocols.pouw.circuit import cap  # noqa: E402
+from verity.ml.protocols.pouw.circuit import cap  # noqa: E402
 from verity.ml.circuits.evaluation import evaluate  # noqa: E402
 from verity.core.protocols.pouw.protocol import Matmul, Shape, Tile  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_work import UnitRecord  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES  # noqa: E402
+from verity.ml.protocols.pouw.schemes.pearl_c_work import UnitRecord  # noqa: E402
 
 H100 = DEVICES["h100"]
-H3, H0 = C.PearlC(forming="v1", device=H100, hashing="h3"), C.PearlC(forming="v1", device=H100)
+H3, H0 = C.PearlC(forming="v1", device=H100, hashing="h3"), C.PearlC(forming="v1", device=H100, hashing="h0")
 #: GLM-5.3's down projection's n, in tiles of 8 rows and 16 columns: a flagged atom-word debits 40 units, a cell earns 420
 #: at k = 256 and 1,392 at k = 1,024, so a row's cap at k = 256 is 16.8 at ρ = 1/400 and 67.2 at 4ρ, and 55.68 at ρ at
 #: k = 1,024; the tile's is 134.4 at k = 256

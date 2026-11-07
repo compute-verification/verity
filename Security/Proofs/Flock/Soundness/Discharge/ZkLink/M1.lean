@@ -1,5 +1,24 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
-import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 
 /-!
 # The live `--zk` tables are at C-Flock ZK's parameters
@@ -15,6 +34,8 @@ Every `--zk` table `tableAtZK` builds meets `TabZK.M1`, from what `verify --zk` 
 A draw's table carries setupH's regions (`table_M1`), a refused draw's `contra`'s two (`refused_M1`), so both are in
 range; `tableAtZK_M1` is either.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

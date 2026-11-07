@@ -1,7 +1,10 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Model
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Witnesses
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Witnesses
+import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.TwoStage
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Witnesses
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Witnesses
 
 /-!
 # The partitioning guarantees are not vacuous
@@ -28,6 +31,8 @@ so it meets every target. Two more show that `RiskConcave`'s hypotheses can't be
 * `nestedEscape`: under `nested` with two replay units of two proof units, `k = 1` and `p = 1/2`, one wrong proof unit
   escapes with probability `3/4`, strictly between `1 − p` and 1.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.Witness
 

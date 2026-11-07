@@ -1,5 +1,8 @@
-import Properties.Nci
-import NciCheck.Desc
+module
+
+public import Properties.Nci
+public import NciCheck.Desc
+import Mathlib.Data.NNRat.Floor
 
 /-!
 # The description-sized NCI check's property, stated against the Lean functions
@@ -17,6 +20,8 @@ import NciCheck.Desc
   `Properties.NciDesc.Verdict` restates `Reports`, `Witnesses` and the thread bounds of `NciCheck.Desc.evaluate` from it,
   and `Properties.NciDesc.Cover` states the cover theorem's factor of the check of record's verdict.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties
 

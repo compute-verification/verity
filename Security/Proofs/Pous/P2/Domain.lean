@@ -1,4 +1,29 @@
-import Proofs.Pous.P2.Rows
+module
+
+public import Proofs.Pous.P2.Rows
+public import Proofs.Pous.P2.Count
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Pous.Sanity
+import Proofs.Pous.Thm1.Theorem1iTimed
+import Proofs.Pous.TrackA.A3Prime
 
 /-!
 # The abstract model `m1p` on `[0, p)`: `Meets` for `Pous.m1p`, at any payload width `b`
@@ -35,6 +60,8 @@ The generic count (`PousGen`) is `Security/Proofs/Pous/P2/Count.lean`, the certi
 plumbing (`PousP2`, up to `meets_m1_of_row`) is `Security/Proofs/Pous/P2/Rows.lean`, and
 A3′ is `PousTrackA.a3_prime_lam`. This module's own part is `PousP2p`.
 -/
+
+@[expose] public section
 
 /-! ## M1 on P2's exact domain `[0, p)`: `Pous.m1p` -/
 

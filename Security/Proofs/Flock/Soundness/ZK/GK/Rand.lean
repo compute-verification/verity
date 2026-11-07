@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Game.Seq
+module
+
+public import Proofs.Flock.Soundness.Game.Seq
 
 /-!
 # Zero knowledge: programs on finitely many uniform coins
@@ -15,6 +17,8 @@ expectation of `f` at its output.
 * `avgR`, `avgR_ind_eq_prCoin`: one coin's average, and its link to `prCoin`;
 * `avgR_le_of_events`: a bound on every event's probability bounds every test with values in `[0, 1]`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.GK
 
@@ -50,14 +54,6 @@ theorem avgR_nonneg {f : C → ℝ} (h : ∀ c, 0 ≤ f c) : 0 ≤ avgR f :=
 
 theorem avgR_le_one [Nonempty C] {f : C → ℝ} (h : ∀ c, f c ≤ 1) : avgR f ≤ 1 :=
   (avgR_mono h).trans (avgR_const 1).le
-
-theorem abs_avgR_le [Nonempty C] {f : C → ℝ} {a : ℝ} (h : ∀ c, |f c| ≤ a) : |avgR f| ≤ a := by
-  rw [abs_le]
-  constructor
-  · have := avgR_mono (f := fun _ => -a) (g := f) fun c => (abs_le.1 (h c)).1
-    rwa [avgR_const] at this
-  · have := avgR_mono (f := f) (g := fun _ => a) fun c => (abs_le.1 (h c)).2
-    rwa [avgR_const] at this
 
 /-- A coin's average of a two-valued function: the probability of the condition weighs the two values. -/
 theorem avgR_ite [Nonempty C] (p : C → Prop) [DecidablePred p] (a b : ℝ) :
@@ -222,14 +218,6 @@ theorem ev_le_one {f : α → ℝ} (h : ∀ a, f a ≤ 1) (r : Rand α) : ev f r
   have := ev_mono h r
   rwa [ev_const] at this
 
-theorem abs_ev_le {f : α → ℝ} {c : ℝ} (h : ∀ a, |f a| ≤ c) (r : Rand α) : |ev f r| ≤ c := by
-  rw [abs_le]
-  constructor
-  · have := ev_mono (f := fun _ => -c) (fun a => (abs_le.1 (h a)).1) r
-    rwa [ev_const] at this
-  · have := ev_mono (g := fun _ => c) (fun a => (abs_le.1 (h a)).2) r
-    rwa [ev_const] at this
-
 theorem abs_ev_sub_le {f g k : α → ℝ} (h : ∀ a, |f a - g a| ≤ k a) : ∀ r : Rand α, |ev f r - ev g r| ≤ ev k r
   | .ret a => h a
   | @Rand.coin _ _ _ _ k' => abs_avgR_sub_le fun c => abs_ev_sub_le h (k' c)
@@ -254,10 +242,6 @@ theorem ev_le_of_All {P : α → Prop} {f g : α → ℝ} (hfg : ∀ a, P a → 
 
 /-- The probability of an event: the expectation of its indicator. -/
 noncomputable def pr (p : α → Prop) (r : Rand α) : ℝ := ev (Game.ind p) r
-
-/-- A drawn value, returned. -/
-theorem ev_draw (f : α → ℝ) (C : Type) [Fintype C] [Nonempty C] (x : C → α) :
-    ev f (.coin C fun c => .ret (x c)) = avgR fun c => f (x c) := rfl
 
 /-! ## A program is a game with nothing for the prover to play -/
 

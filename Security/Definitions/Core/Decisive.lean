@@ -1,4 +1,8 @@
-import Definitions.Core.Game
+module
+
+public import Definitions.Core.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Decisive games, and batches that read only one way
@@ -20,6 +24,8 @@ verdict game may need messages the honest prover never sends and coins that fall
 accepts every table, satisfiable or not. Decisiveness says nothing about how often the honest prover, or any prover, is
 accepted.
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

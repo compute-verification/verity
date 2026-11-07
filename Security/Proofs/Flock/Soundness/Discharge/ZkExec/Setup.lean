@@ -1,3 +1,8 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
@@ -13,6 +18,8 @@ there):
 * `acceptsZK_retained : AcceptsZKRetained`: under tags that retain rounds, every stream of the record retained every
   round's bytes.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

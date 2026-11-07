@@ -1,4 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.EmbedAssumptions
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.EmbedAssumptions
+public import Definitions.Pouw.Assumptions.Dimension.OpenPipe
 
 /-!
 # M4090 and the embedding theorem (trusted statements; draft semantics)
@@ -36,6 +39,8 @@ program text is free) but must not over-price it.
   value that `fpSem` never outputs, `A1_fp` holds at `γ = 0` on that instance. `PerWordM4090Gap`: then every `M4090`
   program pays 16 per checked word, with no A1 and no MinRank.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Embed
 

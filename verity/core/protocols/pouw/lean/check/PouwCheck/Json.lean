@@ -1,6 +1,7 @@
-import Lean.Data.Json
-import Flock.Canon
-import PouwWindow.Json
+module
+
+public import Flock.Canon
+public import PouwWindow.Json
 
 /-!
 # JSON as `core_check.py` reads it
@@ -8,6 +9,8 @@ import PouwWindow.Json
 An object's keys sorted (Python's `sorted(dict)`), a string, a value's canonical string (`_canon`, which the check
 compares registered items by), and a field of an object whose keys were already checked.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 

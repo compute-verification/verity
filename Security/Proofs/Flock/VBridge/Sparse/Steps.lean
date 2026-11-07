@@ -1,4 +1,26 @@
-import Proofs.Flock.VBridge.Sparse.Values
+module
+
+public import Proofs.Flock.VBridge.Sparse.Values
+public import Proofs.Flock.VBridge.Verifier
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.List.GetD
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import VCVio.Prelude.Core
 
 /-!
 # The sparse-phase unit's steps
@@ -10,6 +32,8 @@ rows hold, if the message ports' first elements carry `w`, the `v` port carries 
 bridge's `residualForms_eq` to `sound_residualForms` (`rval`); the two claim chains are loops over a range
 (`sound_chain`); Φ's product, the type-selected sum and H4 are the gadgets' (`Gadgets.lean`, `Values.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

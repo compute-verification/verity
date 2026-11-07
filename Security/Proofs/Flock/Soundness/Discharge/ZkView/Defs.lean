@@ -1,8 +1,29 @@
-import Proofs.Flock.Soundness.CROnly
-import Proofs.Flock.Soundness.Discharge.Hm.Mask
-import Proofs.Flock.Verifier.Hash
-import Flock.Zk
-import Proofs.Flock.Level3.ArithFacts
+module
+
+public import Definitions.Flock.ZK.RealView
+public import Flock.Zk
+public import Proofs.Flock.Level3.ArithFacts
+public import Proofs.Flock.Soundness.CROnly
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+public import Proofs.Flock.Soundness.Discharge.Hm.Hash
+public import Proofs.Flock.Soundness.Discharge.Hm.Mask
+public import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import VCVio.Prelude.Core
 
 /-!
 # The `--zk` tables at the executable's leaves, and the honest prover's pre-final messages
@@ -26,6 +47,8 @@ a level-0 leaf is `MerkleScheme.hm96Sha512.leaf` of its row (68 lanes: the `2^kâ
   session stops at `c`'s coins, with the leaves at each position given; `honest T out hc` is the prover as a strategy
   against an adaptive verifier, `Causal` saying that its message `i` reads the answers before `i` only.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 

@@ -30,14 +30,14 @@ At f ≥ 1 no KV is credited.
   statics key is a callee's id, a `Family{k=v,..}` its family and statics match, or a family, and a key that names no callee
   is refused.
 - `share.py --model NAME=UNITS.json,MIX.json ... --out share.json` combines units with a served trace
-  (the serve-bandwidth benchmark's `mix.json`). It computes R_cap per node (busy-time mean and peak 1 s window), M_dyn, and f
-  for each E, L and R_in, as built and under each lever, cumulatively:
+  (a `mix.json`: each engine step's timed span and rows, the trace's arguments, the KV pool). It computes R_cap per node
+  (busy-time mean and peak 1 s window), M_dyn, and f for each E, L and R_in, as built and under each lever, cumulatively:
   - K' quantized once at the KV write (its cost leaves every key a step reads for one write a token row);
   - V' stored once with a static scale (likewise);
   - an int8 LM head;
   - static activation scales.
 
-  It also gives the units a token by primitive over the trace, held to the step model's total, and the declared-circuit
+  It also gives the units a token by primitive over the trace, held to the step model's total, and the registered-circuit
   witness (`Witness.lean`'s `bounds_8b`, `bounds_70b`): c = R_cap over the certified bytes a second, the life its thresholds
   allow at each E, and the c the stated life allows (the witness's `c ≤ 0.442`, `E ≥ 364,497` restated at the new E).
 - `job.sh` builds the exact-int8 8B request Program (LP=256, T=31) on one GPU and runs `units.py` on it (`DESCRIPTOR=PATH`
@@ -69,7 +69,7 @@ What is measured and what is modeled:
 | units/callee, 70B TP8 | modeled: the 8B callees bound at one rank's statics, plus the TP all-reduces |
 | T, K, decoding requests, step spans | measured: the served trace (vLLM's scheduler output) |
 | Q, n, X | exact from the trace's requests; prefill per step at the trace's means; split prompts bounded |
-| M_dyn | measured: vLLM's KV blocks × block × bytes a token × tp |
+| M_dyn | measured: vLLM's KV pages × tokens a page × bytes a token × tp |
 | data products | modeled from the attention row's statics: Q′K′ᵀ H·D a (query row, key) pair, P V′ H·D a key with a row's keys padded to 32; the 8B decoder's are held to the Program's own count (`products_pass.py`) |
 | E | `share.E_WORD`, in nonlinear units: SquaringFloor and ChainSum at 2^-40 and 2^-20 (conjectured), and the cheapest construction found (the seam square); none is proved |
 

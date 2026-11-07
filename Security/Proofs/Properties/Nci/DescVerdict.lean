@@ -1,6 +1,24 @@
-import Proofs.Properties.Nci
+module
+
+public import Proofs.Properties.Nci
+public import Properties.NciDesc.Verdict
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Properties.Nci.Agrees
-import Properties.NciDesc.Verdict
 
 /-!
 # What a verdict of the description-sized check carries, from `DescAgrees`
@@ -10,6 +28,8 @@ Each statement of `Properties.NciDesc.Verdict` is its `Properties.Nci` counterpa
 thread bounds from `Throttles` and its forms, which `Proofs.Nci.DescVerdict` (package `security_proofs`) supplies.
 `DescReports` and `DescWitnesses` are the guarantees, from `SecurityProofs.DescAgrees` (`Proofs.Properties.Nci.Agrees`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs
 

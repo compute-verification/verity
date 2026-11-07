@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.FlockKSAbort
-import Proofs.Flock.Claims.Recursion.Hybrid
-import Proofs.Flock.Claims.Bridge.Coins
+module
+
+public import Proofs.Flock.Claims.Recursion.FlockKSAbort
+public import Proofs.Flock.Claims.Recursion.Hybrid
+public import Proofs.Flock.Claims.Bridge.Coins
 
 /-!
 # The abort-law table bound from the table bound with escapes on accepted runs
@@ -24,6 +26,8 @@ message (`Refusable`). So Flock meets `Inner.KSAbort` at `Inner.ofFlock` from th
 * **The bound** (`tableBoundθAbort_of_onAcc`): the refuser's bound, averaged over `g`, with its escapes on accepted runs
   read at the runs as they abort (each fork event's root by Jensen).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -525,13 +529,6 @@ def TableBoundθOnAcc (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg �
       accPr H D.V P x ω ≤ D.εtable x + e.term ω +
         Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
           ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen 0) p.val = some u ∧ u ≠ C p
-
-omit [Nonempty Coin] in
-theorem tableBoundθ_of_onAcc {H : Msg → Msg} {D : Flock.Deploy Coin Col T} {N : Msg → ℕ} {Ok : Msg → Col → Prop}
-    (h : TableBoundθOnAcc H D N Ok) : TableBoundθ H D N Ok := by
-  intro x Ω _ _ P
-  obtain ⟨e, -, hf, hb⟩ := h x Ω P
-  exact ⟨e, hf, hb⟩
 
 /-- **The refuser's escapes read at the runs as they abort**: the same rounds and weights, each event a collision among
 the aborted runs' verifier calls. -/

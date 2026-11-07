@@ -1,5 +1,24 @@
-import Proofs.Flock.VBridge.Family
-import Proofs.Flock.VBridge.Runs.Rep
+module
+
+public import Proofs.Flock.VBridge.Algebra.LigeritoConverse
+public import Proofs.Flock.VBridge.Family
+public import Proofs.Flock.VBridge.Runs.Rep
+import all Init.Data.Repr
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Defs
 
 /-!
 # The family's table files: `HSch`, `HFiles`, `HRuns`
@@ -22,6 +41,8 @@ named `Prop`s, one per fact no check here establishes: the inner statement's set
 (`TableSrc.TranscriptIs`), the rounds' coin counts (`TableSrc.Coins`), the reps' extra claims and combs
 (`TableSrc.ExtrasAre`, `CombFolds`), and the Ligerito openings (`OpenedAll`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

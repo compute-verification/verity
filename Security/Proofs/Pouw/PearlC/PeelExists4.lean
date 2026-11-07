@@ -1,5 +1,11 @@
+module
+
+public import Proofs.Pouw.PearlC.TileCheck4Words
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.PeelExists
-import Proofs.Pouw.PearlC.TileCheck4Words
+import Proofs.Pouw.PearlC.RowStats
 
 /-!
 # The FP4 peel's rows exist (proofs)
@@ -24,6 +30,8 @@ import Proofs.Pouw.PearlC.TileCheck4Words
 `pc4EntryOK_of_rows` is `Pc4EntryOK` from the two rows' `Row4OK`, so `TileCheckWords`' `tileCheck4_computesWords`
 names no hypothesis at an entry.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelExists
 

@@ -4,6 +4,10 @@ c577423f9580e2d2e5943d57e92770a98d875d95a87861e32525d3db97df811f) at the bf16 wo
 `0x0000` to `0x417F`, then the 16,768 words `0x8000` to `0xC17F`, each two bytes little-endian, base64. `Evaluate.Act` reads
 them; that they are the table's is checked on every bf16 word against the Python table.
 -/
+module
+
+@[expose] public section
+
 namespace Evaluate.Act
 
 /-- The table's words at the bf16 words of magnitude below 16, base64. -/

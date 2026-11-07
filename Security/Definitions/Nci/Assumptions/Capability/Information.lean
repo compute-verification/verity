@@ -1,8 +1,10 @@
-import Definitions.Nci.Capability
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Probability.ProbabilityMassFunction.Basic
-import Mathlib.Basic.ENNReal.Real
-import Mathlib.Basic.Real.ENatENNReal
+module
+
+public import Definitions.Nci.Capability
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Probability.ProbabilityMassFunction.Basic
+public import Mathlib.Basic.ENNReal.Real
+public import Mathlib.Basic.Real.ENatENNReal
 
 /-!
 # Local bounds: information premises
@@ -20,8 +22,10 @@ The two measures make different scientific claims:
 
 `SourceHard` with `Recovers` derives a bound on a block's outputs from a hard source they reveal, rather than assuming
 one. Each premise's meaning is its item family's: updated slots (update hardness), operand scalars (activation hardness),
-or both in one budget (`Items.sum`, joint hardness).
+or both in one budget (one family holding both, joint hardness).
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 
@@ -42,8 +46,8 @@ often a block reuses it; and it is time-bounded. Its meaning is its item family'
 * **operand occurrences** (activation hardness): covers operands a block produces itself from what it holds, so a block
   that imports updated weights and cheaply generates many operands refutes it; a code rate for one tensor is not such a
   bound, and the exact-decoding experiments refute several uniform rates;
-* **both together** (`Items.sum`, joint hardness): stronger than the two separately, since the same bits can describe
-  both families; it is what an additive budget rests on.
+* **both together** (one family holding both, joint hardness): stronger than the two separately, since the same
+  bits can describe both families; it is what an additive budget rests on.
 
 Each decoder found gives an upper bound and can refute a price; failing to find a shorter one is evidence, not proof. -/
 def DescriptionHard (R : Committed) {ι : Type} (X : Items R.d.D ι) {ρ : Type} (M : Decoder ρ) (r : ρ) (t : ℕ)
@@ -86,7 +90,7 @@ not shorten the complement one coordinate each (for an exact linear map the rank
 bound on the candidates is not a decoder within `τ`, and inputs the recovery needs must be among what `SourceHard`'s
 decoder is given. -/
 def Recovers (R : Committed) {ρ : Type} (M : Decoder ρ) (r : ρ) (τ : ℕ) (e : List Bool)
-    (z : R.d.D.Transcript → List Bool) (ℓz βv amb : ℝ) (J : Fin R.B → ℕ) : Prop :=
+    (z : R.d.D.Transcript → List Bool) (ℓz βv amb : ℝ) (J : Fin R.d.n → ℕ) : Prop :=
   ∀ a, R.Honest a → ∀ u, ∃ s : List Bool, (s.length : ℝ) ≤ ℓz - βv * J u + amb ∧
     M.run r (blockProgram R e (R.d.D.eval a) u ++ s) τ = some (z (R.d.D.eval a))
 

@@ -1,6 +1,7 @@
-import Flock.Witness
-import Flock.ProvedScope
-import Flock.Desc
+module
+
+public import Flock.Witness
+public import Flock.Desc
 
 /-!
 # The deployed session's files parse
@@ -10,6 +11,8 @@ public file that loads at it with no shared-row tables, and `scopeOkH` at `D`. W
 computation on a 97 MB circuit file, which the kernel can't run, so it is one named premise, stated with the verifier's
 own functions on the files `verify --zk` reads, each pinned by its SHA-512, and checked by running the verifier on them.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge.Assumptions
 

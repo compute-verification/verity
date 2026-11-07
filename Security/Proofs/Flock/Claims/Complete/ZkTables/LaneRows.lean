@@ -1,7 +1,43 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Level0
-import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
-import Proofs.Flock.Claims.Complete.Replay.LigeritoSync
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
+import Proofs.Flock.Level3.LookupRows
+import Proofs.Flock.Soundness.Refine.Arith
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Level 0's lane rows vanish at the honest pads
@@ -17,6 +53,8 @@ twice a value (`lane_close`).
   coin is multiplication by it).
 * `ev2_claim0`: the first claim `T + β·y₀` is `Σ t·(b + β·eq(z))` where `T = ⟨t, b⟩`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

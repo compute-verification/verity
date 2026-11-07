@@ -1,5 +1,10 @@
+module
+
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.DeviceChainCapGamma
-import Definitions.Pouw.PearlC.DevicePricesLoop
 
 /-!
 # v2 at the chain cap 1/1,000 at sm_120's in-loop prices (staged)
@@ -14,6 +19,8 @@ Every γ here is an upper bound on the in-loop γ: `Prices.sm120Loop` rounds the
 exact 1.047 the chain cap's per-unit values are 0.35980% and 0.35484%, which no pin states; the per-tile rows' exact
 values are `DeviceSm120KernelGamma`'s `pearlCSampledSm120v2LoopCast8Cap1000_…`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

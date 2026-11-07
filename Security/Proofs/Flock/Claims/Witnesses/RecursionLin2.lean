@@ -1,4 +1,44 @@
-import Proofs.Flock.Claims.Witnesses.RecursionLin
+module
+
+public import Definitions.Claims.RecursionLin
+public import Proofs.Flock.Claims.Witnesses.Recursion
+public import Proofs.Flock.Claims.Witnesses.RecursionLin
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
 # The witnesses of the recursion's claims with the inner Flock's roots linear
@@ -12,6 +52,8 @@ there `κ < 1/6` (`ksD_κ_lt_sixth`), so `λ₂ > 0` (`ksB_lamLin2_pos`). Their 
 `KSBound`'s: the claims read the same decoders. The toy records stage no V\* statement, so `B_I` and `Fdev` over the
 draws' evaluations (`BinnerV`, `FdevV`) find nothing either (`drawCalls_noCalls`).
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.Recursion
 
@@ -120,7 +162,7 @@ theorem fdevV_pr_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Dep
   rw [Pr_congr fun s => iff_false_intro ?_]
   · exact Pr_false
   · rintro ⟨u, v, h, -⟩
-    simp only [FdevV, linkOutV, drawCalls_noCalls H D hc hs, List.append_nil, findColl, reduceCtorEq] at h
+    simp only [FdevV, linkOutV, drawCalls_noCalls H D hc hs, List.append_nil, findColl, ite_self, reduceCtorEq] at h
 
 theorem prBinnerV_noCalls [DecidableEq Col'] (H : Msg → Msg) (D : Recursion.Deploy Coin)
     (hc : ∀ x (r : Fin (D.V.k x) → Coin) ws, D.callsAt H x r ws = []) (hs : ∀ x ps, D.vstar x ps = []) (I : Recursion.Inner Coin W)

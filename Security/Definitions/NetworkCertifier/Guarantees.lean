@@ -1,11 +1,11 @@
-import Definitions.NetworkCertifier
-import Definitions.NetworkCertifier.Assumptions
-import Mathlib.Data.Sym.Card
-import Mathlib.Data.Set.Card
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Order.Interval.Finset.Fin
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
+module
+
+public import Definitions.NetworkCertifier
+public import Definitions.NetworkCertifier.Assumptions
+public import Definitions.NetworkCertifier.Ingress
+public import Definitions.NetworkCertifier.Schedule
+public import Mathlib.Data.Set.Card
+import Mathlib.Data.Sym.Sym2.Init
 
 /-!
 # The network certifier's guarantees
@@ -18,6 +18,8 @@ counting bound among them, are in `Proofs.NetworkCertifier.Lemmas`, under the sa
 `docs/network-transparency/timing-channel.md`: Proposition 2 (§2.3), Theorem 1(b) (§2.2), Theorem 3 (§2.4), and the
 ingress bound (§2.5, "Ingress content"; §3.2).
 -/
+
+@[expose] public section
 
 namespace NetTiming.Guarantees
 

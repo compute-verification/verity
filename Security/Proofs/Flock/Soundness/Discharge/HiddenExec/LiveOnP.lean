@@ -1,5 +1,24 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
-import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
+public import Proofs.Flock.Soundness.Binding.RowsX
+public import Proofs.Flock.Soundness.Discharge.Exec.Live
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.Headline
+import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The execution refinement for one-table sessions at the verifier's public inputs
@@ -10,6 +29,8 @@ the same bound. At `own = none` each is the deployed one (`acceptsP_none`). The 
 the refinement (`exec_le_of_refines`), so `flock_headline_live_onXP` is `Prog.flock_headline_LX` at the simulated
 prover, carried to the live audit by `execRefines_onP`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

@@ -1,5 +1,11 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Dense
-import Proofs.Pouw.Dimension.H100WProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Dense
+public import Proofs.Pouw.Dimension.H100WProofs
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.EmbedProofs
 
 /-!
 # Dense words and the legacy k8 class in `MH100w`: proofs
@@ -11,6 +17,8 @@ import Proofs.Pouw.Dimension.H100WProofs
   matching only `Lo` has an accumulator that is not free, so it matches a further element of `H` or `Lo`. Apart targets
   give distinct elements throughout, so the program pays for `|T₁| + |T₂|` registers plus one per such target.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

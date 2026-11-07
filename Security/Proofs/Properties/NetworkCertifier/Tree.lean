@@ -1,5 +1,7 @@
-import Proofs.Properties.NetworkCertifier.Bytes
-import Proofs.Properties.NetworkCertifier.Strings
+module
+
+public import Proofs.Properties.NetworkCertifier.Bytes
+public import Proofs.Properties.NetworkCertifier.Strings
 
 /-!
 # The frame tree binds its frames
@@ -8,6 +10,8 @@ Where SHA-512 has no collision on the strings a tree hashes (`FramesString`), it
 (`framesRoot_inj`): no level's node is its level's empty subtree, so a level determines the one below (`pairs_inj`), and
 the top of a tree of at most `2^D` leaves is one node or none.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open Flock
@@ -99,10 +103,6 @@ theorem pairs_ne_nil (lv : Nat) : ∀ {L : List ByteArray}, L ≠ [] → pairs l
 theorem levelAt_ne_nil : ∀ (k : Nat) {L : List ByteArray}, L ≠ [] → levelAt k L ≠ []
   | 0, _, h => h
   | k + 1, _, h => pairs_ne_nil k (levelAt_ne_nil k h)
-
-theorem levelAt_nil : ∀ k : Nat, levelAt k [] = []
-  | 0 => rfl
-  | k + 1 => by simp only [levelAt, levelAt_nil k]; rfl
 
 theorem levelAt_length_le : ∀ (k : Nat) (L : List ByteArray) (m : Nat), L.length ≤ 2 ^ k * m →
     (levelAt k L).length ≤ m

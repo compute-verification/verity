@@ -1,4 +1,13 @@
-import Proofs.Flock.Soundness.TmplFoldClass
+module
+
+public import Proofs.Flock.Soundness.TmplFoldClass
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Level3.Nodes
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.TmplFoldDef
+import Proofs.Flock.Soundness.TmplFoldRef
 
 /-!
 # A class's fold is its copies' reference value
@@ -11,6 +20,8 @@ import Proofs.Flock.Soundness.TmplFoldClass
   (`sum_step`; a run of lanes through `laneSum_eq`).
 - `fold_refVal`: the unit's fold at entry `s` is the root copy's `refVal` plus the constant's row.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

@@ -1,7 +1,6 @@
-import CoreProtocol.Live
-import SampledProofs.ChallengerDraw
-import SampledProofs.OneStage
-import SampledProofs.OneStageZk
+module
+
+public import SampledProofs.OneStageZk
 
 /-!
 # Coins from the device's log: what a draw's coins are, stated against the code that reads them
@@ -50,6 +49,8 @@ Nothing is assumed of SHA-512 or LMS here. What the device releases when, and th
 device's behaviour on `trusted-host`, which these properties don't take: a soundness argument reads them off the device
 model.
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger
 
@@ -182,7 +183,7 @@ def fv3Message (tag : String) (parts : List ByteArray) : ByteArray :=
 
 /-- What `taggedSha512 tag manifest` hashes, when the manifest has a canonical form. -/
 def taggedMessage (tag : String) (manifest : Json) : List ByteArray :=
-  match Flock.canon manifest with
+  match Flock.canonUtf8 manifest with
   | .ok s =>
     let t := tag.toUTF8
     let b := s.toUTF8

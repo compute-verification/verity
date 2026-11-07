@@ -1,6 +1,9 @@
-import Properties.Pouw
-import Proofs.Properties.Pouw.Grid
-import Proofs.Properties.Pouw.Draw
+module
+
+public import Properties.Pouw
+public import Proofs.Properties.Pouw.Grid
+public import Proofs.Properties.Pouw.Draw
+import Std.Data.DTreeMap.Internal.Operations
 
 /-!
 # Proofs of PoUW's window properties (`Properties.Pouw`)
@@ -8,6 +11,8 @@ import Proofs.Properties.Pouw.Draw
 The served numbers, by evaluation in the kernel (`decide +kernel`: no compiled code, only the kernel's reduction), and
 the refusals, by unfolding. The grid's properties are in `Proofs.Properties.Pouw.Grid` and K′'s in `Proofs.Properties.Pouw.Draw`.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Window
 

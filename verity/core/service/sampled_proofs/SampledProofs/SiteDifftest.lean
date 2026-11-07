@@ -1,6 +1,6 @@
-import Lean.Data.Json
-import Flock.Canon
-import CoreProtocol.Site
+module
+
+public import CoreProtocol.Site
 
 /-!
 # The Site's difftest: `Core.Site` behind `Difftest.serve`
@@ -16,6 +16,10 @@ on the JSON `verity.core.site` writes, with the deployed digests (`Registration.
   each of its locations' ids, `outside` and `nowhere`, its `sheet`, `device` (at ticks of `tick` seconds, with no CUDA-core
   ops, oracle queries or side channels), `node`, `tiers`, `boundary`, `registered` and `host`.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.SiteDifftest
 

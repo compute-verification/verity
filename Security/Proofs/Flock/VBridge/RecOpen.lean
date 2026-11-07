@@ -1,6 +1,27 @@
-import Proofs.Flock.VBridge.Open
-import Proofs.Flock.VBridge.Residuals
-import Proofs.Flock.Soundness.Refine.Paths
+module
+
+public import Proofs.Flock.VBridge.Open
+public import Proofs.Flock.VBridge.Residuals
+public import Proofs.Flock.Soundness.Refine.Paths
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Data.List.GetD
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import VCVio.Prelude.Core
 
 /-!
 # V*'s opening, both outputs
@@ -20,6 +41,8 @@ carries `a[k] + Σ_l c[k · LANES + l] · r[l]` for `k = 0, 1` (`rec_open.acc_re
 is `MerkleScheme.rowBytes`, each element's 16 bytes `le64(lo) ‖ le64(hi)`, which puts bit `j` of element `i` at bit
 `128 i + j`, where `sound_residualForms` reads it (`bitL_rowBytes`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

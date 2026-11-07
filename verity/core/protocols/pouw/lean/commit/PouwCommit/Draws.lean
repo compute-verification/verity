@@ -1,6 +1,7 @@
-import Randomness
-import PouwCommit.Coins
-import Identity.Domains
+module
+
+public import PouwCommit.Coins
+public import Identity.Domains
 
 /-!
 # The salts and draws PoUW derives (`verity.core.protocols.pouw.audit`; the clear audit's draws, `benchmarks/pouw/clear`)
@@ -23,6 +24,8 @@ epoch's draw coin. A key's source is nonempty bytes, which `derive` refuses othe
 as it needs; the port reads `DRAW_WORDS` words of it and throws past them, which an exact draw reaches with probability
 below `2^(-64·DRAW_WORDS)`.
 -/
+
+@[expose] public section
 
 namespace PouwCommit
 

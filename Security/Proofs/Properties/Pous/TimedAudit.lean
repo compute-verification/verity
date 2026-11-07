@@ -1,5 +1,9 @@
-import Properties.Pous.TimedAudit
-import Proofs.Properties.NetworkCertifier.Bytes
+module
+
+public import Properties.Pous.TimedAudit
+public import Proofs.Properties.NetworkCertifier.Bytes
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The timed audit's property, proved
@@ -9,6 +13,8 @@ import Proofs.Properties.NetworkCertifier.Bytes
 audit (`verdictOf_accepted`, `audit_ok`). Two trees over leaves of 64 bytes with one root have the same leaves unless
 two of their inner nodes' inputs collide (`mth_binds`), which ties each answer's leaf to `C*`'s.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Properties.SecurityProofs
 
@@ -263,27 +269,28 @@ theorem gate_refused_nil {s : Certificate.Store} {k delta rtt : Nat} (h : (Certi
   unfold Certificate.gate Certificate.p2 at *
   by_cases hp : (s.w, s.c0, s.blocksPerSegment) = Certificate.POINT
   · simp only [hp, beq_self_eq_true, ite_true] at h ⊢
-    simp only [Certificate.Certificate.refusals, Certificate.deadlineRefusals, Certificate.Certificate.effectiveRounds,
-      List.append_eq_nil_iff, ite_eq_right_iff, reduceCtorEq, imp_false, not_lt] at h
+    simp only [Certificate.CapacityBound.refusals, Certificate.deadlineRefusals,
+      Certificate.CapacityBound.effectiveRounds, List.append_eq_nil_iff, ite_eq_right_iff, reduceCtorEq, imp_false,
+      not_lt] at h
     obtain ⟨⟨hk, hd⟩, hδ, hr⟩ := h
     have hd' : ¬ (delta + rtt) / Certificate.ROOT_CALL_NS > 0 := fun hc => by simp [hc] at hd
     have hδ' : delta = Certificate.DELTA_NS := by simpa using hδ
     have hlt : Certificate.DELTA_NS + rtt < Certificate.ROOT_CALL_NS := by
       unfold Certificate.ROOT_CALL_NS at hd'; rw [← hδ']; unfold Certificate.ROOT_CALL_NS; omega
     refine ⟨trivial, hk, hδ', hr, ?_⟩
-    simp [Certificate.Certificate.refusals, Certificate.deadlineRefusals, Certificate.Certificate.effectiveRounds,
+    simp [Certificate.CapacityBound.refusals, Certificate.deadlineRefusals, Certificate.CapacityBound.effectiveRounds,
       Certificate.CERT_BLOCKS, Certificate.POINT, hlt, hδ', Nat.not_lt.2 hk, Nat.not_lt.2 hr]
   · simp [hp] at h
 
 /-! ## The verdict -/
 
-theorem fault_null (t : String) : (Json.mkObj [("fault", .str t)]).getObjValD "accepted" = .null := rfl
+theorem fault_null (t : String) : (Json.mkObj [("fault", .str t)]).getObjValD "accepted" = .null := (rfl)
 
-theorem refused_null (t : String) : (Json.mkObj [("refused", .str t)]).getObjValD "accepted" = .null := rfl
+theorem refused_null (t : String) : (Json.mkObj [("refused", .str t)]).getObjValD "accepted" = .null := (rfl)
 
 theorem verdict_accepted (a b c d e f g : Json) :
     (Json.mkObj [("k", a), ("limit_ns", b), ("gaps", c), ("audits", d), ("audits_accepted", e), ("accepted", f),
-      ("profile", g)]).getObjValD "accepted" = f := rfl
+      ("profile", g)]).getObjValD "accepted" = f := (rfl)
 
 theorem verdict_ok {ready : Json} {leafBytes : ByteArray} {doc : Json} (h : TimedAuditAccepted ready leafBytes doc) :
     ∃ v, TimedAudit.verdictOf ready leafBytes doc = .ok v ∧ v.getObjValD "accepted" = .bool true := by

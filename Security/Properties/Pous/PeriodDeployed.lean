@@ -1,4 +1,7 @@
-import Properties.Pous.Period
+module
+
+public import Properties.Pous.Period
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS over one period at the deployed ring budget
@@ -40,6 +43,8 @@ the instantiation in reduction form (`Instantiates`, `pous-ring-instantiation` a
 strategy. Both are stated for every prover strategy, and the ring game's server is the fixed extractor's
 (`Pous.Period.extract`), never a witness the prover picks.
 -/
+
+@[expose] public section
 
 namespace Pous.Period
 

@@ -1,8 +1,9 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Bernoulli
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Rungs
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Rungs
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Bernoulli
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Witnesses
 
 /-!
 # Optimal partitioning against exfiltration: the proofs
@@ -20,6 +21,8 @@ The proofs of the exfiltration statements of `Partitioning.Guarantees`.
 The statements of their witnesses, `Witness.exfiltration` and `Witness.refinement`, are `Exfil.witness_exfiltration`
 and `Exfil.witness_refinement`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs
 

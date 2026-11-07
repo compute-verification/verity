@@ -1,8 +1,15 @@
-import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
-import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
-import Proofs.Flock.Soundness.Discharge.Layout.Outs
-import Proofs.Flock.Soundness.Discharge.Const
-import Proofs.Flock.Soundness.Discharge.Zero
+module
+
+public import Proofs.Flock.Soundness.Discharge.Const
+public import Proofs.Flock.Soundness.Discharge.Const.Keyed
+public import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
+public import Proofs.Flock.Soundness.Discharge.Layout.Outs
+public import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
+public import Proofs.Flock.Soundness.Discharge.Zero
+public import Proofs.Flock.Soundness.Discharge.Zero.Uniform
+import Mathlib.Combinatorics.Matroid.Init
+
+@[expose] public section
 
 set_option Elab.async false
 

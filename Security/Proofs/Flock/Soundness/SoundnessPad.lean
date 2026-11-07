@@ -1,6 +1,17 @@
-import Proofs.Flock.Soundness.LigeritoPadSound
-import Proofs.Flock.Soundness.Soundness
-import Proofs.Flock.Soundness.Accounting.PaddedNumbers
+module
+
+public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
+public import Proofs.Flock.Soundness.LigeritoPadLevel0
+public import Proofs.Flock.Soundness.LigeritoPadSound
+public import Proofs.Flock.Soundness.LigeritoPhase
+public import Proofs.Flock.Soundness.LinkSound
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.RepSound
 
 /-!
 # Soundness of a table with C-Flock ZK's padded level 0
@@ -17,6 +28,8 @@ It is `table_sound` with the padded level 0, for any padding `t` and extra lanes
 * Ligerito is `ligeritoPad_sound` for each rep's list, which the rep's families' witness lanes
   send into `padWits` (`padWit_mem_padWits`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

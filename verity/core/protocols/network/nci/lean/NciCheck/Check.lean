@@ -1,11 +1,13 @@
-import Std.Data.HashSet
-import Flock.Program
+module
+
+public import Std.Data.HashSet
+public import Flock.Program
 
 /-!
 # The NCI policy's check of a declared division
 
-`Nci.Complies Γ α` (`Security/Definitions/Nci.lean`) holds of a declaration `(D, θ)` when `D`'s computed gates divide
-into isolation units (IUs) of at most `Γ` gates, each reading at most `α` bits of novel information per gate:
+`Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`) holds of a declaration `(D, θ)` when `D`'s computed gates
+divide into isolation units (IUs) of at most `Γ` gates, each reading at most `α` bits of novel information per gate:
 `novelReads R = width(into(R) \ θ) ≤ α · size R`. The verifier's side is the check of one declared division: `evaluate`
 decides that it is a partition of the computed gates into IUs (`Verity.Partition`) and that every IU meets both bounds,
 and reports per IU its size and novel reads, and the first IU that fails, with the rule it fails.
@@ -44,6 +46,8 @@ then gate by gate `owner-entry`: neither `"input"` nor a natural, `input-in-iu`,
 `check` writes a refusal as `{"error": code}`, with a `message` giving the fix where one is the declaration's to make
 (`fixOf`), or for a `program` refusal of a reinterpretation, where (`refusalOf`).
 -/
+
+@[expose] public section
 
 namespace NciCheck
 

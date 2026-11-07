@@ -1,4 +1,6 @@
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
 
 /-!
 # Candidate 3's inner schedule, and where its transcript holds each fixed value
@@ -18,6 +20,8 @@ which the guarantee's record map (`holoMap`, `Recursive/HoloMap.lean`) reads:
 A round's `SchedRound` is `rec_live`'s tuple with its absorbed elements read as whether it absorbs a message, as
 `RecVStar.repRounds` has it.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

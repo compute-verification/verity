@@ -18,6 +18,9 @@
 //   units_* on an sm_90 card, the slow-path bodies ptxas builds for sm_90a in kernels' units.cu, from copies of its kernels
 //          (units_checks): sqrt on all 2^32 x; rmsnorm's division on 2^32 weighted pairs and its one / mean; softmax's,
 //          whose numerator its body loads, at 1.0 on all 2^32 divisors and at 1024 weighted numerators on weighted divisors
+//   norm_* on an sm_90 card, the div.rn bodies ptxas builds for sm_90a with hash_decode.cuh's constant numerator 8192 folded
+//          in, as pd_commit's two divisions build it (norm_two) and pd_tree's one (norm_one): 8192 / b on all 2^32 b, whose
+//          quotient is never subnormal
 // Division by zero and INT_MIN / -1 are outside the domain, counted as skipped. NaN results compare equal whatever their
 // payload; everything else bit for bit. Prints one JSON line for the device, then one per check.
 //   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a --no-compress [FLAGS] ieee_pin.cu -o ieee_pin
@@ -463,6 +466,34 @@ extern "C" __global__ void __launch_bounds__(SR) units_soft(const u16* __restric
 #endif
 }
 
+// ---- hash_decode.cuh's line codes as ptxas builds them for sm_90a ---------------------------------------------------------
+// A line's scale divides the constant PD_NORM_E (8192) by its norm, and ptxas folds a function's constant numerator into its
+// copy of the div slow path, which is then pinned for 8192 alone (sass_pins.json "numerators"): norm_two's two divisions
+// build the body pd_commit's take, and norm_one's one, behind a trap on words read back from shared memory as
+// pd_level_template's check of its node messages is, the body pd_tree's take (k = 0: the check is there for its build
+// alone). Each divides 8192 by every word x[j]; only an sm_90a build has its body.
+extern "C" __global__ void norm_two(u32* y, const u32* x, int n) {
+#if UNITS
+  const u64 j = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  y[j] = __float_as_uint(__fdiv_rn(8192.0f, __uint_as_float(x[j])));
+  y[j + n] = __float_as_uint(__fdiv_rn(8192.0f, __uint_as_float(x[j + n])));
+#endif
+}
+extern "C" __global__ void __launch_bounds__(128) norm_one(u32* y, const u32* x, const u64* g, int k) {
+#if UNITS
+  __shared__ u64 s[96 * 8];
+  if ((int)threadIdx.x < k) {
+    u64* w = s + 96 * threadIdx.x;
+    for (int t = 0; t < 96; t++) w[t] = g[96 * threadIdx.x + t];
+    for (int t = 0; t < 48; t++)
+      if ((w[t] ^ w[48 + t]) != (t == 16 ? 1ull << 40 : 0ull)) __trap();
+  }
+  __syncthreads();
+  const u64 j = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  y[j] = __float_as_uint(__fdiv_rn(8192.0f, __uint_as_float(x[j])));
+#endif
+}
+
 // the operands: a[j] = base + j (every word, when `all`) or pick(base + j, sa), b[j] = pick(base + j, sb)
 __global__ void units_fill(uint32_t* a, uint32_t* b, uint64_t base, uint64_t n, bool all, uint32_t sa, uint32_t sb) {
   EACH(j, n) {
@@ -517,10 +548,11 @@ static void print(const char* check, const Tally& t) {
 
 // units.cu's bodies: units_sqrt on all 2^32 words; units_rms on 2^32 weighted (total, count) pairs, rows of 8 words, with
 // one = pick(chunk) and eps = -0, so its second division is one / mean; units_soft at rows of one key with k = -0, one = 1.0
-// on all 2^32 divisors, then 2^32 weighted divisors at 1024 numerators pick(chunk)
+// on all 2^32 divisors, then 2^32 weighted divisors at 1024 numerators pick(chunk); and hash_decode.cuh's: norm_two and
+// norm_one 8192 / all 2^32 divisors
 static void units_checks(int grid, Tally* t) {
   const uint64_t n = 1ull << 24, all = 1ull << 32;
-  const uint32_t neg0 = 0x80000000u, one = 0x3f800000u;
+  const uint32_t neg0 = 0x80000000u, one = 0x3f800000u, norm = 0x46000000u;
   uint32_t *a, *b, *y, *y2;
   uint16_t *x, *w, *out;
   int* lens;
@@ -560,6 +592,20 @@ static void units_checks(int grid, Tally* t) {
     units_div_check<<<grid, 256>>>(t, nullptr, num, b, y, nullptr, 0u, m);
   }
   done(); print("units_soft_div", t[0]);
+  memset(t, 0, 2 * sizeof(Tally));
+  for (uint64_t base = 0; base < all; base += 2 * m) {
+    units_fill<<<grid, 256>>>(b, nullptr, base, 2 * m, true, 0, 0);
+    norm_two<<<(unsigned)(m / 128), 128>>>(y, b, (int)m);
+    units_div_check<<<grid, 256>>>(t, nullptr, norm, b, y, nullptr, 0u, 2 * m);
+  }
+  done(); print("norm_two", t[0]);
+  memset(t, 0, 2 * sizeof(Tally));
+  for (uint64_t base = 0; base < all; base += m) {
+    units_fill<<<grid, 256>>>(b, nullptr, base, m, true, 0, 0);
+    norm_one<<<(unsigned)(m / 128), 128>>>(y, b, nullptr, 0);
+    units_div_check<<<grid, 256>>>(t, nullptr, norm, b, y, nullptr, 0u, m);
+  }
+  done(); print("norm_one", t[0]);
   CK(cudaFree(a)); CK(cudaFree(b)); CK(cudaFree(y)); CK(cudaFree(y2)); CK(cudaFree(x)); CK(cudaFree(out)); CK(cudaFree(w));
   CK(cudaFree(lens));
 }

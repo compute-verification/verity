@@ -1,4 +1,9 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Model
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Model
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Two laws for the free-compute proofs
@@ -9,6 +14,8 @@ import Proofs.Flock.Soundness.Audit.Partitioning.Model
 * `restrict L S` is `L` seen on the units of `S` alone, numbered in increasing order. Its escape of `B` is `L`'s escape
   of `B`'s image (`restrict_escape`), so its expected number of draws is `∑_{u ∈ S} incl(u)` (`meanDraws_restrict`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal
 

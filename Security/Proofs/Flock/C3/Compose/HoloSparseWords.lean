@@ -1,5 +1,23 @@
+module
+
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.VBridge.Sparse.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.C3.Compose.HoloEncoded
 import Proofs.Flock.C3.Compose.HoloSparseRounds
-import Proofs.Flock.Level3.ArithFacts
 import Proofs.Flock.C3.VStarList.Range
 
 /-!
@@ -16,6 +34,8 @@ verifier's (`repFormsAt`, `repForms`): past both reps' rounds (`heldBefore_rep_f
 inside the phase's `sparseForms`, every one `none`. `repFormsAt_holoAt` is `hA` where the inner statement's class
 checks pass and the inner shape is the statement's (`checkInnerStmt`), at its claims `2 · regions + 2` (`hcl`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

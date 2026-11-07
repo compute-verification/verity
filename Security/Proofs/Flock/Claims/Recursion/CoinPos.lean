@@ -1,4 +1,42 @@
-import Proofs.Flock.Claims.Recursion.CoinTie
+module
+
+public import Proofs.Flock.Claims.Recursion.CoinTie
+import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployHonest
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.OpensReads
 
 /-!
 # The coin server's round the coin tie names is the only one of its stream and round number
@@ -18,6 +56,8 @@ such round of `R`. This file proves that from what the verifier checks, with no 
 `staged_coinTie` and `staged_coinTie_drawn` with each round `g` unique.
 -/
 
+@[expose] public section
+
 namespace RecDeploy.CoinPos
 
 open Flock Lean
@@ -25,11 +65,8 @@ open Claims (Msg Out)
 open FlockDeploy (Coin)
 open RecDeploy.CoinTie
 
-theorem qsort_perm {α : Type} (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Perm as := by
-  unfold Array.qsort
-  split
-  · exact ⟨List.Perm.refl _⟩
-  · exact FlockSoundness.Audit.DrawExec.sort_perm lt _ _ _ _ _ _ _ rfl
+theorem qsort_perm {α : Type} (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Perm as :=
+  FlockSoundness.Audit.DrawExec.qsort_perm as lt
 
 theorem utf8_inj {s t : String} (h : s.toUTF8.toList = t.toUTF8.toList) : s = t := by
   rw [byteArray_toList_eq, byteArray_toList_eq] at h

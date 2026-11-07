@@ -1,7 +1,9 @@
-import Flock.Hm96
-import PouwCommit.Frame
-import PouwCommit.Py
-import Identity.Domains
+module
+
+public import Flock.Hm96
+public import PouwCommit.Frame
+public import PouwCommit.Py
+public import PouwCommit.Tagged
 
 /-!
 # The epoch coins' check (`verity.core.protocols.pouw.coins`)
@@ -19,6 +21,8 @@ opening against the root, in Python's order and words; `none` when it is. It thr
 as `CoinCommitment.from_json` and `CoinOpening.from_json` read them, refusing what they refuse. Lean also refuses, where
 Python would compare it, an opening whose epoch is not a JSON integer or whose label is not a string.
 -/
+
+@[expose] public section
 
 namespace PouwCommit
 

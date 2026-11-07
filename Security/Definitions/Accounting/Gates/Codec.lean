@@ -1,10 +1,9 @@
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Data.Finset.Prod
-import Mathlib.Order.Interval.Finset.Nat
-import Mathlib.Order.Lattice.Nat
-import Mathlib.Data.ENat.Lattice
-import Definitions.Accounting.Gates.Model
+module
+
+public import Definitions.Accounting.Gates.Model
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Data.ENat.Lattice
+public import Mathlib.Data.Fintype.Pi
 
 /-!
 # The word codec in the circuit model: what computing a block's encoding means (trusted)
@@ -39,6 +38,8 @@ circuit of the model (`Model.lean`) computing its words is:
 * **The encode bound** (`EncodeBound F k B E ε`): every such circuit, run inputs allowed, pays `E` nonlinear units a
   word, or `n − 1` run-input bits. A root is `Field.squarings` sequential squarings (1,021 at p1024).
 -/
+
+@[expose] public section
 
 namespace Accounting.Gates
 

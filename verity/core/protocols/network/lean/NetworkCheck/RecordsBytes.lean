@@ -1,3 +1,6 @@
+module
+
+public import NetworkCheck.Records
 import NetworkCheck.RecordsGrid
 
 /-!
@@ -15,6 +18,8 @@ of the evidence agree, and so do the grids, the clock and the frame-size check t
   (through `expectedGrids` and `RecordsGrid.expectedGrids_eq`);
 - `unitSync_toEvidence` and `frameBytes_toEvidence`: the unit's clock and the frame-size refusal are v4's.
 -/
+
+@[expose] public section
 
 namespace NetworkCheck.RecordsBytes
 

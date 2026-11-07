@@ -1,7 +1,24 @@
-import Proofs.Flock.Recursive.CompileRuns
-import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Recursive.ForkInner
-import Proofs.Flock.Soundness.Assumptions.Recursive
+module
+
+public import Proofs.Flock.Recursive.CompileRuns
+public import Proofs.Flock.Recursive.ForkInner
+public import Proofs.Flock.Recursive.Target
+public import Proofs.Flock.Soundness.Assumptions.Recursive
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Recursive.ForkRuns
+import Proofs.Flock.Soundness.Accounting.Numbers
 
 /-!
 # Recursion: the compile gap
@@ -25,6 +42,8 @@ and the interactive table's error as its inner term. Every declaration is proved
   V*'s bridge as VBridge G (`vbridge_compiled`) concludes it, the inner fork, and the inner term the table's error;
   `recursive_sound_compiled_fast100` at `2^-205`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

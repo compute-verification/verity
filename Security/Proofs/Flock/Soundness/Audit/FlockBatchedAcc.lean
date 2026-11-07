@@ -1,5 +1,12 @@
-import Proofs.Flock.Soundness.Audit.FlockBatched
-import Proofs.Flock.Soundness.SessionBatchAcc
+module
+
+public import Proofs.Flock.Soundness.Audit.FlockBatched
+public import Proofs.Flock.Soundness.SessionBatchAcc
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The batched Flock audit with the expected-time extractor (DESIGN.md §3)
@@ -23,6 +30,8 @@ its own bound averaged over the draw (`flock_batched_knowledgeSoundE`), with no 
 The link term stays named (`LinkSound`), for the link theorem under expected-time collision
 resistance (`Assumptions.SHA512CRExpected`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

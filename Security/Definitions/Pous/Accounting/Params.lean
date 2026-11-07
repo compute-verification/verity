@@ -1,10 +1,14 @@
-import Mathlib.Algebra.Order.Floor.Semiring
-import Mathlib.Data.Rat.Floor
-import Definitions.Pous.Model.Audit
+module
+
+public import Mathlib.Algebra.Order.Floor.Semiring
+public import Mathlib.Data.Rat.Floor
+public import Definitions.Pous.Model.Audit
 
 /-!
 # The problem statement's parameters, and the requirement at them
 -/
+
+@[expose] public section
 
 namespace Pous
 

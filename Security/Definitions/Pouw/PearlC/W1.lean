@@ -1,8 +1,10 @@
-import Definitions.Pouw.PearlC.DevicePrices
-import Definitions.Pouw.PearlC.DevicePricesLoop
-import Definitions.Pouw.PearlC.DeviceFp4
-import Definitions.Pouw.PearlC.DeviceFp4Issue
-import Definitions.Pouw.PearlC.Sha512
+module
+
+public import Definitions.Pouw.PearlC.Device
+public import Definitions.Pouw.PearlC.DeviceFp4Issue
+public import Definitions.Pouw.PearlC.DevicePrices
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.PearlC.Sha512
 
 /-!
 # The accounting W1 as a cost model (trusted; definitions only)
@@ -111,6 +113,8 @@ that tree is not a program (`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`). The 
 programs a machine can hold. A deployed program is far inside it: W1 has no loops, so an honest code tree has about one
 node per instruction a run executes, and `2^64` instructions is far more than a device runs in a window.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1
 

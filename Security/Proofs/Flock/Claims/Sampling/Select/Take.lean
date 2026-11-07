@@ -1,6 +1,11 @@
-import Proofs.Flock.Claims.Sampling.Select.Seq
-import SampledProofs.Draw
-import Init.Internal.Order.While
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Seq
+public import SampledProofs.Draw
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+
+@[expose] public section
 
 open SampledProofs
 

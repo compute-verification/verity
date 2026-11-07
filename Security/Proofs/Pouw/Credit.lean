@@ -1,13 +1,52 @@
-import Properties.Pouw.Credit
-import Proofs.Properties.Pouw
-import Proofs.Properties.Pouw.Strata
-import Proofs.Flock.Soundness.ExecStratified
-import Proofs.Flock.Soundness.Audit.Work
-import Proofs.Flock.VBridge.Full
-import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Claims.Sampling.Select.Misses
+module
+
+public import Definitions.Core.Game
+public import Proofs.Flock.Claims.Sampling.Select.Misses
+public import Proofs.Pouw.Credit.Lanes
+public import Proofs.Properties.Pouw
+public import Proofs.Properties.Pouw.Strata
+public import Properties.Pouw.Credit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.Order.Interval.Finset.Box
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Served
-import Proofs.Pouw.Period.Accept
+import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.VBridge.Full
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # Proofs: the ε a served window's credit reports (`WorkDrawMisses`, `EpsAtSound`, `EstablishedSound`)
@@ -21,6 +60,8 @@ that may be zero), and `B`'s work (`unitWork`) is at most `Σ_s w_s m_s` (`unitW
 escapes with at most `(1 − εC/W)^K ≤ (1 − εC/W)^K′ ≤ δ` (`kPrimeLeast`) when `K′ < W`; at `K′ = W ≤ K` every stratum
 doing work draws all its units, and a set of positive work escapes never.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Credit.SecurityProofs
 
@@ -448,27 +489,8 @@ theorem groupedDrawMisses : GroupedDrawMisses := by
 
 /-! ## `GroupedDrawMisses`'s witnesses
 
-The compiled `strata` and `law` run on the lanes window in the kernel (`decide +kernel`, through the `DecidableEq` the
-draw's structures derive here), past `strata`'s key sort, which the kernel doesn't reduce (`keys_lanes`, as
-`Proofs.Pouw.Period.Accept` reads H1's items); `kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
-
-deriving instance DecidableEq for Flock.Draw.Stratum
-deriving instance DecidableEq for Flock.Draw.WorkStratum
-
-theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
-  cases x <;> simp_all [Except.toOption]
-
-theorem keys_lanes : PouwCheck.keys lanesLayout = some PouwCheck.Credit.LAYOUT_KEYS :=
-  Properties.Pouw.Period.SecurityProofs.Accept.keys_of (by decide) (by decide +kernel)
-
-theorem strata_lanes : PouwCheck.Credit.strata lanesLayout = .ok lanesStrata := by
-  apply ok_of_toOption
-  unfold PouwCheck.Credit.strata
-  rw [keys_lanes]
-  decide +kernel
-
-theorem law_lanes : PouwCheck.Credit.law lanesStrata (toJson lanesK) = .ok lanesLaw :=
-  ok_of_toOption (by decide +kernel)
+The compiled `strata` and `law` on the lanes window are `Proofs.Pouw.Credit.Lanes`'s (`strata_lanes`, `law_lanes`);
+`kPrime`'s `K′` is pinned by `kPrime_least` as `Accept` pins H1's. -/
 
 /-- **`K′ ≤ 8` at ε = 1/2 and δ = 1/256 over the whole window's work**: `q = 1/2`, and `q^8 = δ`. -/
 theorem kPrime_lanes : ∃ k', PouwWindow.kPrime (1 / 2) (1 / 256) (Flock.Draw.totalWork lanesStrata)

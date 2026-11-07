@@ -1,11 +1,44 @@
-import Proofs.Flock.Recursive.LinksBind
-import Proofs.Flock.Verifier.RecLinks
-import Proofs.Flock.Verifier.Hash
+module
+
+public import Proofs.Flock.Recursive.LinksBind
+public import Proofs.Flock.Verifier.RecLinks
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployChecked
 import Proofs.Flock.Claims.Recursion.InnerSetupSame
 import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Claims.Recursion.DeployChecked
-import Proofs.Flock.Claims.KS.TableBound
+import Proofs.Flock.Claims.Scope.InScope
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The link clause's inner half: an accepted link row binds the inner witness's rows
@@ -24,6 +57,8 @@ two of a short list of strings (`innerMsgs`), each a function of the row's words
 * `inner_link`: the chain, `RecLinkBind.link_binding` (the openings), `innerSetup_rows` (the files' rows are the
   setup's), `InnerRows.rows_commit_check` (the witness commits them) and `commitString_binding`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Links
 

@@ -1,11 +1,8 @@
+module
+
+public import Definitions.Pouw.PearlC.Defs
 import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.Abel
-import Mathlib.Tactic.GCongr
-import Definitions.Pouw.PearlC.Defs
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
@@ -55,6 +52,8 @@ What this does not prove: that a program must *spend* the work of a live term, w
 and TT_OUT's; the error of the FP32 factors before their cast (the fused `A′·F_B` chain's and the Gram order's own FP32
 steps), and of `C̃` against `A′·B̃ᵀ`, which pass through additively; and the wgmma K16 step's `ε` (see (b)).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Peel
 

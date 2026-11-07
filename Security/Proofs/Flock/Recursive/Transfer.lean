@@ -1,5 +1,25 @@
-import Proofs.Flock.Recursive.ZkReg.Vals
-import Proofs.Flock.Recursive.Fork
+module
+
+public import Proofs.Flock.Recursive.ZkReg.Vals
+public import Proofs.Flock.Recursive.Fork
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Recursion: a stage's committed values against a candidate, for the compiled `--zk` session
@@ -26,6 +46,8 @@ reference, which no finder at a budget computes, so `stage_bind` bounds that pro
   hidden-output tables, at the committed values their simulation decodes (`XplurZC` at `simZHJ … τ`, the value binding
   `vbHJ`), as `zk_session_regValsR` is `zk_flock_regValsC_cr` there; `candTermZC_le` puts its bound in `htr`'s shape.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

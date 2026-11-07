@@ -1,6 +1,9 @@
-import Definitions.Accounting.Physical
-import Proofs.Accounting.Actual.Split
+module
+
+public import Definitions.Accounting.Physical
+public import Proofs.Accounting.Actual.Split
 import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # The physical assumptions' first consequences
@@ -16,6 +19,8 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
 * `state_eq_stateIn_add_compl`: the state is its part in `G` plus its part outside `G`, so memory at a tick bounds
   the part in any `G` there (`stateIn_le_of_memoryAt`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Actual
 

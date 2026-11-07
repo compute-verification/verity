@@ -1,5 +1,8 @@
-import Definitions.Accounting.Remote.Held
-import Definitions.Accounting.Remote.Sketch
+module
+
+public import Definitions.Accounting.Remote.Held
+public import Definitions.Accounting.Remote.Sketch
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # What deriving the receipts' sketch bound assumes (trusted)
@@ -22,6 +25,8 @@ and these premises, each a named `Prop` taken as a hypothesis:
 
 The signs' rank tail is `Accounting.Assumptions.SketchRank`, evaluated outside Lean.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions
 

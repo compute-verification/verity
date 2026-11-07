@@ -1,8 +1,51 @@
-import Proofs.Flock.Claims.ZK.L0PinChain
-import Proofs.Flock.Claims.ZK.FrameRho
-import Proofs.Flock.Claims.ZK.FrameReal
-import Proofs.Flock.Claims.ZK.FrameInner
-import Proofs.Flock.Claims.ZK.FrameOuter
+module
+
+public import Proofs.Flock.Claims.ZK.FramePlan
+public import Proofs.Flock.Claims.ZK.FrameRho
+public import Proofs.Flock.Claims.ZK.FrameZK
+public import Proofs.Flock.Claims.ZK.L0PinChain
+public import Proofs.Flock.Claims.ZK.L0PinRec
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.ZK.FrameBeta
+import Proofs.Flock.Claims.ZK.FrameRankFault
+import Proofs.Flock.Claims.ZK.FrameTaken
+import Proofs.Flock.Claims.ZK.L0PinBind
+import Proofs.Flock.Claims.ZK.L0PinLive
 
 /-!
 # Level 0 at the session loop
@@ -17,6 +60,8 @@ level 0's are the binding and level 0's bodies at the rep's own table and draws 
   (`Loop.wordsAt_take`).
 * The bodies' coins are the opened coins from the binding's (`Loop.l0Body_clean`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 
@@ -315,6 +360,8 @@ theorem answered_ok_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Wor
   | error e => rw [hA] at hp; cases hp
   | ok m => exact ⟨m, rfl⟩
 
+-- one proof of a few hundred lines down `FlockComplete.piopRoundsZk`'s unfolded rounds, `rw` and `omega` on the round
+-- indices
 set_option maxHeartbeats 2000000 in
 /-- **The loop's level-0 messages**: at a `Live` statement the loop serves, on a live history of `refK x` openings
 whose last coins the frame takes, whose messages are the release's own and whose tables are the loop's (`RealTabs`),

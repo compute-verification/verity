@@ -1,6 +1,13 @@
-import Batteries.Tactic.OpenPrivate
-import Properties.Pouw.LiveSalt
-import Std.Data.String.ToNat
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Properties.Pouw.LiveSalt
+public import SampledProofs.Challenger
+public import Std.Data.String.ToNat
+import all Init.Data.Array.QSort.Basic
+import all Init.Data.Int.Repr
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 
 /-!
 # The coins' binding has one canonical form per layout
@@ -12,6 +19,10 @@ import Std.Data.String.ToNat
 `canonStr_split`), and the families' list item by item, each a string and a numeral (`fam_split`).
 -/
 
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
+
 open private hex4 from Flock.Canon
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
@@ -22,7 +33,7 @@ open SampledProofs.Challenger (familiesJson)
 
 /-! ## Sorting three keys in order -/
 
-theorem loop02 {β : Type} (lt : β → β → Bool) (x y z : β) (hxy : lt x y = true) (hzy : lt z y = false) :
+private theorem loop02 {β : Type} (lt : β → β → Bool) (x y z : β) (hxy : lt x y = true) (hzy : lt z y = false) :
     Array.qpartition.loop (n := 3) lt 0 2 (by omega) y #v[x, z, y] 0 0 = (⟨1, by omega⟩, #v[x, y, z]) := by
   rw [Array.qpartition.loop.eq_def]
   simp (config := {decide := true}) [hxy]
@@ -31,19 +42,19 @@ theorem loop02 {β : Type} (lt : β → β → Bool) (x y z : β) (hxy : lt x y 
   rw [Array.qpartition.loop.eq_def]
   simp (config := {decide := true})
 
-theorem loop01 {β : Type} (lt : β → β → Bool) (x y z : β) (hyx : lt y x = false) :
+private theorem loop01 {β : Type} (lt : β → β → Bool) (x y z : β) (hyx : lt y x = false) :
     Array.qpartition.loop (n := 3) lt 0 1 (by omega) x #v[y, x, z] 0 0 = (⟨0, by omega⟩, #v[x, y, z]) := by
   rw [Array.qpartition.loop.eq_def]
   simp (config := {decide := true}) [hyx]
   rw [Array.qpartition.loop.eq_def]
   simp (config := {decide := true})
 
-theorem sort_self {β : Type} (lt : β → β → Bool) {n : Nat} (v : Vector β n) (i : Nat) (h : i < n) :
+private theorem sort_self {β : Type} (lt : β → β → Bool) {n : Nat} (v : Vector β n) (i : Nat) (h : i < n) :
     Array.qsort.sort lt v i i (by omega) h h = v := by
   rw [Array.qsort.sort.eq_def]
   simp
 
-theorem sort01 {β : Type} (lt : β → β → Bool) (x y z : β) (hxx : lt x x = false) (hyx : lt y x = false)
+private theorem sort01 {β : Type} (lt : β → β → Bool) (x y z : β) (hxx : lt x x = false) (hyx : lt y x = false)
     (hxy : lt x y = true) :
     Array.qsort.sort (n := 3) lt #v[x, y, z] 0 1 = #v[x, y, z] := by
   rw [Array.qsort.sort.eq_def]

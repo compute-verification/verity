@@ -1,8 +1,9 @@
-import Std.Data.HashMap
-import Flock.Canon
-import RemoteAudit.P2
-import RemoteAudit.Pooled
-import RemoteAudit.Session
+module
+
+public import Flock.Canon
+public import RemoteAudit.P2
+public import RemoteAudit.Pooled
+public import RemoteAudit.Session
 
 /-!
 # A session over a P2 store, of record: `p2_party.py`
@@ -27,6 +28,10 @@ line out of form rejects the session `malformed` at the window filling (`fail`),
 read the prover's message. The registration's C* is too large to read whole: what is checked of it is each opened
 unit's four blocks, on the registered vk root.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.P2Session
 

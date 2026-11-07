@@ -1,5 +1,26 @@
-import Proofs.Flock.VBridge.RecOpen
-import Proofs.Flock.Soundness.Discharge.Hm.Laid
+module
+
+public import Proofs.Flock.VBridge.RecOpen
+public import Proofs.Flock.Soundness.Discharge.Hm.Laid
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.List.GetD
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import VCVio.Prelude.Core
 
 /-!
 # V*'s opening as one laid-out net
@@ -20,6 +41,8 @@ freshness hypothesis: every builder `recOpen` runs adds rows only as `fresh` doe
 `colsHold_words`: columns that hold the bits of 16-bit words, bit `q % 16` of word `q / 16`, hold the bytes of the
 elements those words are the limbs of: bit `k` of element `i` is bit `k % 16` of word `8 i + k / 16` (`bitOf_limb`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

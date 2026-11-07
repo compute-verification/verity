@@ -9,9 +9,9 @@ consume are read from the checkpoint and OPENED against the committed weights ro
 (`weights_of_record.compose`, in its registered dtype) must hash to its tensor root in the committed tree, the tree must fold to the
 root of record, and a tensor that does not open fails the replay by name (`weights_check.equal` False).  The registered buffers and
 engine constants no checkpoint holds are the bundle's bytes, opened against the same root.  A tensor the checkpoint cannot compose is
-not served (a relation that reads it is not evaluated, named).  The tree is opened under the scheme its root of record was
-registered under (`tree_refusal`): rows-sha512's SHA-512 rows (`step_rows.tensor_root`), or, for a registration recorded under
-vllm-v1, its SHA-256 chunk leaves; a tree of the other scheme is refused by name.
+not served (a relation that reads it is not evaluated, named).  The tree is rows-sha512's, its tensors SHA-512 rows
+(`step_rows.tensor_root`) under a 64-byte root of record; a tree of another scheme, or under another root, is refused by name
+(`tree_refusal`).
 
 Then the same C2 as the in-process Commit (`pipeline.c2_replay.run`), and the run's verdict (`check.verdict.commit_verdict`): the
 row in `runs.jsonl`, `summary.json` and `verdict.json` are rewritten with the replay on the record and `commit.weights_attest`.
@@ -55,7 +55,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.commit import scheme, step_rows
+from verity_vllm.commit import step_rows
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
 from verity_vllm.pipeline import c2_replay as C2
@@ -145,21 +145,14 @@ def undecided(c: dict[str, Any], bundle: str) -> None:
         vc["result"] = None
 
 
-def tensor_root(raw: np.ndarray, chunk: int) -> bytes:
-    """A vllm-v1 tree's tensor root: SHA-256 pos_leaf leaves over ``chunk``-byte pieces, folded."""
-    mv = memoryview(raw).cast("B")
-    return scheme.fold([scheme.pos_leaf(mv[o:o + chunk]) for o in range(0, len(mv), chunk)])
-
-
-def tree_scheme(tree: dict[str, Any]) -> str:
-    """The scheme a weights tree was registered under: its ``scheme``, vllm-v1 for a tree recorded before trees named one."""
-    return tree.get("scheme", scheme.NAME)
+def tree_scheme(tree: dict[str, Any]) -> str | None:
+    """The scheme a weights tree was registered under: its ``scheme``, None for a tree recorded before trees named one."""
+    return tree.get("scheme")
 
 
 def root_scheme(root_of_record: str | None) -> str | None:
-    """The scheme a committed weights root of record was registered under, by its size: 64 bytes rows-sha512's, 32 vllm-v1's."""
-    n = len(root_of_record or "") // 2
-    return step_rows.NAME if n == step_rows.ROOT_BYTES else scheme.NAME if n == 32 else None
+    """The scheme a committed weights root of record was registered under, by its size: rows-sha512 for 64 bytes, else None."""
+    return step_rows.NAME if len(root_of_record or "") // 2 == step_rows.ROOT_BYTES else None
 
 
 def tensor_key_of(tree: dict[str, Any], i: int) -> bytes | None:
@@ -172,21 +165,17 @@ def tensor_key_of(tree: dict[str, Any], i: int) -> bytes | None:
 
 
 def tensor_root_of(tree: dict[str, Any], i: int, raw: np.ndarray) -> bytes:
-    """Tensor ``i``'s root under the tree's scheme (`step_rows.keyed_tensor_root` under `tensor_key_of`, or vllm-v1's `tensor_root`)."""
-    if tree_scheme(tree) == step_rows.NAME:
-        ks = tensor_key_of(tree, i)
-        if ks is None:
-            raise KeyError(f"registered tensor {i} ({tree['names'][i][0]}): the slim keep carries no salt key for it")
-        return step_rows.keyed_tensor_root(bytes.fromhex(tree["geo_digest"]), i, tree["names"][i], memoryview(raw).cast("B"), ks)
-    return tensor_root(raw, int(tree["chunk"]))
+    """Tensor ``i``'s root (`step_rows.keyed_tensor_root` under `tensor_key_of`)."""
+    ks = tensor_key_of(tree, i)
+    if ks is None:
+        raise KeyError(f"registered tensor {i} ({tree['names'][i][0]}): the slim keep carries no salt key for it")
+    return step_rows.keyed_tensor_root(bytes.fromhex(tree["geo_digest"]), i, tree["names"][i], memoryview(raw).cast("B"), ks)
 
 
 def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
-    """The weights tree a slim keep carries, which is published: under rows-sha512 never the registration's ``Kw`` (every weights leaf's
-    salt derives from it), only ``step_rows.tensor_key(Kw, t)`` of each tensor ``opened`` names (those the replay consumed and opened),
-    and the bundle's bytes of those alone; a vllm-v1 tree, unsalted, as the bundle carries it."""
-    if tree_scheme(tree) != step_rows.NAME:
-        return tree
+    """The weights tree a slim keep carries, which is published: never the registration's ``Kw`` (every weights leaf's salt derives
+    from it), only ``step_rows.tensor_key(Kw, t)`` of each tensor ``opened`` names (those the replay consumed and opened), and the
+    bundle's bytes of those alone."""
     at, keep_ = {e[0]: i for i, e in enumerate(tree["names"])}, set(opened)
     keys = {str(at[n]): tensor_key_of(tree, at[n]).hex() for n in sorted(keep_ & at.keys(), key=at.get)}
     return {k: v for k, v in tree.items() if k not in ("key", "tensor_keys", "extra")} | {
@@ -194,9 +183,9 @@ def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
 
 
 def folded_root(tree: dict[str, Any]) -> str:
-    """The root the tree's tensor roots fold to under its scheme."""
-    geo, nd, roots = bytes.fromhex(tree["geo_digest"]), scheme.names_digest(tree["names"]), [bytes.fromhex(r) for r in tree["tensor_roots"]]
-    return (step_rows.weights_root(geo, nd, roots) if tree_scheme(tree) == step_rows.NAME else scheme.weights_root(geo, nd, roots)).hex()
+    """The root the tree's tensor roots fold to."""
+    roots = [bytes.fromhex(r) for r in tree["tensor_roots"]]
+    return step_rows.weights_root(bytes.fromhex(tree["geo_digest"]), step_rows.names_digest(tree["names"]), roots).hex()
 
 
 def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str, int] | None = None, rw: Any = None,
@@ -211,7 +200,7 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str,
 
     name, dt, shape, nb = tree["names"][i]
     src = "bundle" if name in (tree.get("extra") or {}) else "checkpoint"
-    if tree_scheme(tree) == step_rows.NAME and tensor_key_of(tree, i) is None:
+    if tensor_key_of(tree, i) is None:
         return src, None, "the slim keep carries no salt key for it", False
     if src == "bundle":
         raw = np.fromfile(bundle / "weights" / "extra" / f"{i}.bin", dtype=np.uint8)
@@ -261,13 +250,16 @@ def opener(bundle: Path, tree: dict[str, Any], ck: Any, *, tp: dict[str, int] | 
 
 
 def tree_refusal(tree: dict[str, Any], root_of_record: str | None) -> tuple[str, str | None]:
-    """(the root the tree's tensor roots fold to, why the tree is not the committed weights root's tree: None when it is).  A tree is
-    read under the scheme the root of record was registered under (`root_scheme`), so a vllm-v1 tree is read only for a recorded
-    vllm-v1 registration, and refused by name under a SHA-512 root of record."""
+    """(the root the tree's tensor roots fold to, why the tree is not the committed weights root's tree: None when it is).  Only a
+    rows-sha512 tree under a rows-sha512 root of record (`root_scheme`) is read: a tree of another scheme, or one recorded before trees
+    named theirs, is refused by name before anything opens, and so is a root of record of another size."""
     have, want = tree_scheme(tree), root_scheme(root_of_record)
-    if want is not None and have != want:
-        return "", (f"the bundle's weights tree is {have}'s, and the committed weights root is {want}'s: a {have} tree is read only "
-                    f"for a registration recorded under {have}")
+    if have != step_rows.NAME:
+        named = "names no scheme" if have is None else f"is {have}'s"
+        return "", f"the bundle's weights tree {named}: only a {step_rows.NAME} tree is read"
+    if root_of_record is not None and want is None:
+        return "", (f"the committed weights root is {len(root_of_record) // 2} bytes, not a {step_rows.NAME} root: only a "
+                    f"{step_rows.NAME} registration is read")
     folded = folded_root(tree)
     return folded, ("the bundle's weights tree does not fold to its root" if folded != tree["root"] else
                     f"the bundle's weights root {tree['root'][:16]} is not the committed weights root {str(root_of_record)[:16]}"
@@ -287,7 +279,7 @@ def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None,
     servable = [i for i, (_n, dt, _s, _b) in enumerate(names) if dt in WORDS]
     open_one = opener(bundle, tree, ck, tp=tp, roles=roles)
     with ThreadPoolExecutor(max(1, threads)) as pool:
-        opened = list(pool.map(lambda i: (i, *open_one(i)), servable))
+        opened = list(pool.map(lambda i: (i, *open_one(i)), servable)) if tree_scheme(tree) == step_rows.NAME else []
     words: dict[str, np.ndarray] = {}
     mismatched, unopened, by_src = [], [], {"checkpoint": 0, "bundle": 0}
     for i, src, raw, why, read in opened:

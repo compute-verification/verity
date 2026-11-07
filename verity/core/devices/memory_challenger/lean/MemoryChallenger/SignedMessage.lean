@@ -1,5 +1,6 @@
-import Lms.Verify
-import MemoryChallenger.Records
+module
+
+public import MemoryChallenger.Records
 
 /-!
 # The message a memory challenger's session record signs
@@ -9,6 +10,8 @@ import MemoryChallenger.Records
 is the session id framed once, and framed again as the context. `Lms.Verify` checks a signature over it, and the
 tests sign it with `Lms.signAt`.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger
 

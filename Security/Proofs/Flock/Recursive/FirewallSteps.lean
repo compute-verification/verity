@@ -1,7 +1,8 @@
-import Flock.Firewall.Honest
-import Proofs.Flock.Recursive.FirewallTemplate
+module
+
+public import Proofs.Flock.Recursive.FirewallObj
+public import Proofs.Flock.Recursive.FirewallRun
 import Proofs.Flock.Recursive.FirewallWire
-import Proofs.Flock.Recursive.FirewallObj
 
 /-!
 # The firewall's steps on requests it takes
@@ -12,6 +13,8 @@ order, and changes nothing else, its result and the rows' commit strings `P`. `G
 takes every request of `reqs` from `st`, ending at `t`. Each `run_*` is one request the firewall takes, at the state
 after it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallSteps
 

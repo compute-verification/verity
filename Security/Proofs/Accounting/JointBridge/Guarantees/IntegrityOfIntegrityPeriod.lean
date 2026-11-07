@@ -1,5 +1,20 @@
-import Definitions.Accounting.JointPeriod
-import Proofs.Flock.EndToEnd.Period.Statement
+module
+
+public import Definitions.Accounting.JointPeriod
+public import Proofs.Flock.EndToEnd.Period.Statement
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The integrity audit of a period is C-Flock's integrity audit over a monitoring period's sampling blocks (trusted)
@@ -14,6 +29,8 @@ then `PeriodRun.Sound` for the sampled audit at error `δ + Σ_t (ε_ks,t + δ_l
 C-Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityHorizon`, this module imports
 them.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

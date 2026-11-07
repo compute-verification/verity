@@ -1,4 +1,23 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The statements: flock-verify's acceptance under either tag, hidden outputs included
@@ -16,6 +35,8 @@ tag; where it doesn't, the conclusion is the original's.
   `accepts_tables_hm96_of_leaf`, `accepts_verdict_hm96`.
 * `TableAtHOfAccepts`: Integrate's `tableAt_of_accepts` for the hidden tables (`tableAtH`, `Tables.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenExec
 

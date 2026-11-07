@@ -1,9 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Headline
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
-import Proofs.Flock.Soundness.Discharge.DecodeZL
-import Proofs.Flock.Soundness.Discharge.HiddenDec
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ
-import Proofs.Flock.Soundness.Discharge.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Assemble
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The headlines with R11b's message half discharged
@@ -22,8 +35,10 @@ openings, single coins, no final messages and `capOfRoot` at the values the deco
 
 `FailClosed.flock_headline_exec_dec` and `_hidden_dec` take none of the hypotheses on the statement's form
 (`c.outNet = c.unitNet`, `scopeOk`, the parse and load, retained rounds and leaves), which flock-verify refuses a statement
-failing (PROTOCOL.md §16.15).
+failing (`Flock.ProvedScope`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HdecCor
 

@@ -1,4 +1,4 @@
-"""The closure-draw plan (`verity.core.protocols.pouw.circuit.plan`): closures, the law seam, openings and the profile."""
+"""The closure-draw plan (`verity.ml.protocols.pouw.circuit.plan`): closures, the law seam, openings and the profile."""
 from __future__ import annotations
 
 from fractions import Fraction
@@ -8,8 +8,8 @@ import pytest
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.ml.randomness import derive
 
-from verity.core.protocols.pouw.circuit import ncp2
-from verity.core.protocols.pouw.circuit import plan as PL
+from verity.ml.protocols.pouw.circuit import ncp2
+from verity.ml.protocols.pouw.circuit import plan as PL
 
 
 def _key(tag: bytes = b"r"):
@@ -37,7 +37,7 @@ def test_the_strata_are_the_verifiers_own():
     """One stratum per template, its units as merged ranges, in the order of their first unit (`Flock/Draw.lean` `strataOf`
     over core's evaluation of the partition query), covering the population exactly."""
     from verity.ml.circuits import partition_object as PO
-    from verity.core.protocols.pouw.circuit import partition as P
+    from verity.ml.protocols.pouw.circuit import partition as P
 
     shape = ncp2.Shape(32, 64, 32)
     lay = PL.layout(shape)
@@ -100,20 +100,20 @@ def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
     assert len(tiles) == 2 and len(plan.drawn) == 2 + len(lay.strata) - 1   # each other stratum at its floor of one
 
 
-def test_the_work_table_and_law_object_are_362s():
+def test_the_work_table_and_design_object_are_362s():
     """`work_table` is the verifier's `--work-table` (W_ref per tile, 0 elsewhere, and each template's floor f_s);
-    `law_object` is the law `flock-verify draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
+    `design_object` is the law `flock-verify draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
     verifier's table raises a zero-work stratum's draws to it."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile, deq = _by_role(lay)["tile"], _by_role(lay)["dequant"]
     table = PL.work_table(lay)
     assert table == {s.name: {"work": lay.tile_work() if s is tile else 0, "floor": 1} for s in lay.strata}
-    law = PL.law_object(lay, PL.WorkLaw(3))
+    law = PL.design_object(lay, PL.WorkLaw(3))
     assert law == {"law": "work", "k": 3, "strata": [{"template": s.name, "units": s.ranges(), "work": table[s.name]["work"],
                                                       "floor": 1, "k": 3 if s is tile else 1} for s in lay.strata]}
     floored = PL.WorkLaw(3, floors=((deq.name, 5),))
     assert PL.work_table(lay, floored)[deq.name] == {"work": 0, "floor": 5}
-    assert {s["template"]: (s["floor"], s["k"]) for s in PL.law_object(lay, floored)["strata"]}[deq.name] == (5, 5)
+    assert {s["template"]: (s["floor"], s["k"]) for s in PL.design_object(lay, floored)["strata"]}[deq.name] == (5, 5)
 
 
 def test_openings_are_one_leaf_per_row():
@@ -139,8 +139,8 @@ def test_traced_as_is_the_compositions_entry_point():
     """What the vLLM integration's PoUW adapter calls: the circuit for `ncp-v2`, nothing for a scheme without one."""
     import pytest
 
-    from verity.core.protocols.pouw.circuit import partition as P
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import partition as P
+    from verity.ml.protocols.pouw.circuit import traced_as
     from verity.core.protocols.pouw.protocol import DomainError
 
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
@@ -163,7 +163,7 @@ def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
     assert laws[0].budget(lay.strata) == -(-PL.RECORD_K // 10_000) == 3
     deq = _by_role(lay)["dequant"]                                   # y's floor ⌈K_y·1,024/(10,000·1,024)⌉ (option B)
     assert laws[0].sizes(lay.strata) == {s.name: 3 if s in (tile, deq) else 1 for s in lay.strata}
-    assert PL.law_object(lay, laws[0])["k"] == 3                     # the work law at the call's share
+    assert PL.design_object(lay, laws[0])["k"] == 3                     # the work law at the call's share
     assert sum(law.sizes(lay.strata)[tile.name] for law in laws) <= PL.RECORD_K + 10_000 * len(lay.strata)
 
 
@@ -192,7 +192,7 @@ def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
         assert k_c == min(n_c, f_c) and (k_c * big_n >= PL.RECORD_K * n_c or k_c == n_c)
         tile = _by_role(lay)["tile"].name
         assert law.sizes(lay.strata)[tile] == tiled.sizes(lay.strata)[tile]
-        assert PL.law_object(lay, law)["strata"][[s.name for s in lay.strata].index(deq.name)]["floor"] == f_c
+        assert PL.design_object(lay, law)["strata"][[s.name for s in lay.strata].index(deq.name)]["floor"] == f_c
         ks.append(k_c)
     assert PL.RECORD_K <= sum(ks) <= PL.RECORD_K + len(lays)
     rng = random.Random(105)
@@ -223,7 +223,7 @@ def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
     two = dataclasses.replace(lay, strata=tuple(dataclasses.replace(s, work=len(s.units)) if s is deq else s
                                                  for s in lay.strata))
     for refused in (lambda: PL.work_table(two), lambda: PL.WorkLaw().sizes(two.strata), lambda: PL.window_laws([lay, two]),
-                    lambda: PL.law_object(two, PL.WorkLaw()), lambda: PL.draw(_key(), two, PL.WorkLaw())):
+                    lambda: PL.design_object(two, PL.WorkLaw()), lambda: PL.draw(_key(), two, PL.WorkLaw())):
         with pytest.raises(ValueError, match="one stratum"):
             refused()
     a, b = PL.StratumSpec("a", "tile", (0, 1, 2, 3), 2 * 4), PL.StratumSpec("b", "tile", (4, 5), 5 * 2)
@@ -358,7 +358,7 @@ def test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused():
     (`Traced.check_layout`) and by `draw`'s own check."""
     from dataclasses import replace
 
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import traced_as
     from verity.core.protocols.pouw.protocol import DomainError
 
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
@@ -379,7 +379,7 @@ def test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused():
 
 
 def _anchors(call, **kw):
-    from verity.core.protocols.pouw.circuit.anchors import Anchors
+    from verity.ml.protocols.pouw.circuit.anchors import Anchors
 
     f = {"forward": call.forward, "layer": call.layer, "site": call.site, **kw}
     return Anchors(call.salt, f["forward"], f["layer"], f["site"], call.weight, tuple(call.rowids), tuple(call.colids))
@@ -392,7 +392,7 @@ def _window(t, anchors, source=bytes(range(32)), commitments=None):
     import hashlib
     from unittest import mock
 
-    from verity.core.protocols.pouw.circuit import anchors as A
+    from verity.ml.protocols.pouw.circuit import anchors as A
 
     cs = commitments or [hashlib.sha512(repr(an).encode()).digest() for an in anchors]
     receipt = A.Receipt(tuple((an, t.shape, c) for an, c in zip(anchors, cs)))
@@ -405,7 +405,7 @@ def test_equal_calls_under_one_key_draw_different_tiles():
     a window, under its one key, draw different tiles, and one call draws the same tiles under that key every time. The
     strata stay one per template of the call's partition; only the randomness is per call."""
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import traced_as
 
     call = F.call(64, 64, 64)
     t, law = traced_as("ncp-v2-shift24", 64, 64, 64), PL.WorkLaw(4)
@@ -424,7 +424,7 @@ def test_the_verifier_draws_over_its_own_layout():
     import inspect
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import Traced, traced_as
+    from verity.ml.protocols.pouw.circuit import Traced, traced_as
 
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
@@ -444,9 +444,9 @@ def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
     import pytest
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import plan as plan_module
-    from verity.core.protocols.pouw.circuit import traced_as
-    from verity.core.protocols.pouw.circuit.anchors import Anchors, Receipt
+    from verity.ml.protocols.pouw.circuit import plan as plan_module
+    from verity.ml.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit.anchors import Anchors, Receipt
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
@@ -484,9 +484,9 @@ def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
     import pytest
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import anchors as A
-    from verity.core.protocols.pouw.circuit import plan as plan_module
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import anchors as A
+    from verity.ml.protocols.pouw.circuit import plan as plan_module
+    from verity.ml.protocols.pouw.circuit import traced_as
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
@@ -532,8 +532,8 @@ def test_a_caller_built_ledger_has_no_key():
     import pytest
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import traced_as
-    from verity.core.protocols.pouw.circuit.anchors import Ledger
+    from verity.ml.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit.anchors import Ledger
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
@@ -557,7 +557,7 @@ def test_an_opened_ledger_s_key_cannot_be_reassigned():
     import pytest
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import traced_as
 
     call = F.call(32, 64, 32)
     t, an = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call)
@@ -579,8 +579,8 @@ def test_an_opened_ledger_s_receipt_cannot_be_swapped():
     import pytest
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import traced_as
-    from verity.core.protocols.pouw.circuit.anchors import Receipt
+    from verity.ml.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit.anchors import Receipt
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
@@ -604,17 +604,17 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
 
     import circuit_fixtures as F
     from verity.core.protocols.pouw import audit
-    from verity.core.protocols.pouw.circuit import traced_as
-    from verity.core.protocols.pouw.circuit.anchors import Ledger
+    from verity.ml.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit.anchors import Ledger
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
     t, an = traced_as("ncp-v2-shift24", 32, 64, 32), _anchors(call)
     rows = [bytes(v & 0xFF for v in r) for r in call.a]
     binding = audit.activation_binding(call.salt, 7)
-    domain = audit.rows_domain(binding, 7, len(rows))
-    tree = audit.commit_rows(binding, 7, rows)
-    other = audit.commit_rows(binding, 7, [bytes(len(r)) for r in rows])
+    domain = audit.rows_domain(binding, 7, len(rows), audit.HM96)
+    tree = audit.commit_rows(binding, 7, rows, salt_key=bytes(32), nonce=7)
+    other = audit.commit_rows(binding, 7, [bytes(len(r)) for r in rows], salt_key=bytes(32), nonce=7)
     _receipt, window = _window(t, [an], commitments=[tree.commitment.root])
     assert window.commitment(an) == tree.commitment.root
     plan = t.draw(PL.WorkLaw(2), an, window)
@@ -638,8 +638,8 @@ def test_the_record_keeps_the_source_once_the_draw_is_sent():
     import pytest
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import traced_as
-    from verity.core.protocols.pouw.circuit.anchors import replay_key
+    from verity.ml.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit.anchors import replay_key
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)
@@ -667,8 +667,8 @@ def test_each_window_s_source_is_fresh():
     import inspect
 
     import circuit_fixtures as F
-    from verity.core.protocols.pouw.circuit import anchors as A
-    from verity.core.protocols.pouw.circuit import traced_as
+    from verity.ml.protocols.pouw.circuit import anchors as A
+    from verity.ml.protocols.pouw.circuit import traced_as
 
     call = F.call(32, 64, 32)
     t = traced_as("ncp-v2-shift24", 32, 64, 32)
@@ -687,7 +687,7 @@ def test_the_call_s_y_is_linked_to_the_weight_program():
 
     import circuit_fixtures as F
     from verity.ml.circuits.evaluation import evaluate
-    from verity.core.protocols.pouw.circuit import ncp2, traced_as
+    from verity.ml.protocols.pouw.circuit import ncp2, traced_as
     from verity.core.protocols.pouw.protocol import DomainError
 
     call = F.call(32, 64, 32)

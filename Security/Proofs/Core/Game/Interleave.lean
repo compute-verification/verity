@@ -1,4 +1,11 @@
-import Proofs.Core.Game.Basic
+module
+
+public import Definitions.Core.Game
+public import Proofs.Core.Game.Basic
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
 
 /-!
 # Two interactions run concurrently
@@ -13,6 +20,8 @@ The verifier accepts only if both interactions accept.
 probability that both interactions accept is at most the product of the two values, whatever the
 schedule. With a sound single rep, two reps on independent live coins therefore square the error.
 -/
+
+@[expose] public section
 
 namespace Verity
 

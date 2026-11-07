@@ -1,5 +1,25 @@
-import Proofs.Flock.VBridge.Unit
-import VStar.Unit
+module
+
+public import Proofs.Flock.VBridge.Unit
+public import VStar.Unit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import VCVio.Prelude.Core
 
 /-!
 # The bridge over V*'s circuits as core code
@@ -19,6 +39,8 @@ This file proves that its builders are the ones this bridge reasons about, and r
   record's), `laid_recOpenUnit` (the laid-out unit's rows hold, so its output columns are) and `unit_recOpenUnit` (a copy
   of the unit in a unit of any partition), each over `VStar`'s definitions.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

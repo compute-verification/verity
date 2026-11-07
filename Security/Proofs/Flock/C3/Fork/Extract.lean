@@ -1,7 +1,24 @@
-import Proofs.Flock.Recursive.AuditC3
-import Proofs.Flock.Recursive.ForkInnerC
-import Proofs.Flock.Recursive.Multi
+module
+
+public import Proofs.Flock.Recursive.AuditC3
+public import Proofs.Flock.Recursive.ForkLast
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.Fork.Runs
 import Proofs.Flock.C3.Fork.Sound
+import Proofs.Flock.Recursive.ForkInner
+import Proofs.Flock.Recursive.ForkRuns
 
 /-!
 # Recursion: the extraction at the word the prover's runs open
@@ -19,6 +36,8 @@ position (`RunOpensReg`): both are runs of `σ` at `ω`, so the two are an inner
 * `innerAtLeavesL_reg`: `innerAtLeavesL_of_forkOn`'s argument at each draw on `holo_runs_sound` at that draw's
   `regStmt`, its `RegClash` cases by `regClash_fork`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

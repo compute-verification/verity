@@ -1,7 +1,12 @@
-import Definitions.Pouw.Assumptions.Dimension.RouteU
-import Proofs.Pouw.Dimension.Proofs
-import Proofs.Pouw.Dimension.MixingProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.RouteU
+public import Proofs.Pouw.Dimension.MixingProofs
+import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Dimension.CausalProofs
+import Proofs.Pouw.NCP.GameProofs
+import Proofs.Pouw.NCP.RelationWitness
 import Proofs.Pouw.NCP.RouteUProofs
 import Proofs.Pouw.NCP.RouteUWordProofs
 
@@ -18,6 +23,8 @@ import Proofs.Pouw.NCP.RouteUWordProofs
 * `a1U`: both spans are complements of `V₀` in `T ⊔ V₀` (the modular law), so A1 transfers; then `algBound4090U`.
 * `algWitnessU`, `algSharpU`, `alg4090WitnessU`, `algWrappedWitnessU`: one priced instruction at 16 per route-U word.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.RouteUProofs
 

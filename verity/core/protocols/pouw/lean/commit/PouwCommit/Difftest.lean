@@ -1,7 +1,8 @@
-import PouwCommit.Coins
-import PouwCommit.Draws
-import PouwCommit.Rows
-import Lean.Data.Json
+module
+
+public import PouwCommit.Draws
+public import PouwCommit.Rows
+public import Lean.Data.Json.Parser
 
 /-!
 # The difftest: the Python held to PoUW's commitments in Lean, its verifier of record, on generated cases
@@ -24,6 +25,8 @@ is not it, naming the Lean's. The kinds:
 * `sampled`, `pearl_draw`: the clear audit's work-weighted draws over given tickets, `Sampled.select`'s and
   `clear_work.draw`'s (`benchmarks/pouw/clear`).
 -/
+
+@[expose] public section
 
 namespace PouwCommit.Difftest
 
@@ -97,7 +100,7 @@ def outcome (kind : String) (i : Json) : E Json := do
       | .str s => pure (some (← unhex s))
       | _ => throw "salt_key is hex or null"
     return hexJ (← commitRows (← unhexField i "binding") (← int i "owner") (← hexes i "rows") (← str i "hash") key
-      (← nat i "nonce") (← bool i "digests"))
+      (← nat i "nonce") (← bool i "digests") (← bool i "public"))
   | "transcript" =>
     return hexJ (← transcriptRoot (← unhexField i "salt") (← unhexField i "weights_root") (← hexes i "digests")
       (← str i "hash") (← unhexField i "salt_key"))

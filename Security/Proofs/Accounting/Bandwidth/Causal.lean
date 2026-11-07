@@ -1,8 +1,47 @@
-import Mathlib
-import Proofs.Accounting.Bandwidth.Ticked
+module
+
+public import Proofs.Accounting.Bandwidth.Ticked
+public import Proofs.Accounting.Defs.Actual.Source
+public import Definitions.Accounting.Guarantees.Bandwidth.Causal
+public import Mathlib.Logic.Encodable.Pi
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Actual.Transducer
-import Proofs.Accounting.Defs.Actual.Source
-import Definitions.Accounting.Guarantees.Bandwidth.Causal
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # B3 on a strategy causal from every tick: the chip as a `Ticked.Chip`
@@ -41,6 +80,8 @@ with only `HearsChip` (HBM's ports deliver a function of the store and of what t
 and the bound holds at `βm T` in place of `∑ wd`. The four are the guarantees `Bandwidth.Guarantees.B3`, `B3RO`,
 `B3Capacity` and `B3CapacityRO` (`Security/Definitions/Accounting/Guarantees/Bandwidth/Causal.lean`).
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 

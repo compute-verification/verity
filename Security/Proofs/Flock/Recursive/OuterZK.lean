@@ -1,9 +1,25 @@
-import Proofs.Flock.Recursive.Sessions
-import Proofs.Flock.Recursive.Private
-import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+module
+
+public import Proofs.Flock.Recursive.Sessions
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.Setup
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
-import Proofs.Flock.Recursive.OuterAbort
+import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.Session
 
 /-!
 # Recursion: V*'s outer sessions are zero knowledge, (ii)'s `_hOuter`
@@ -40,13 +56,15 @@ Left to the instance at V*'s staging: that each session's table is `coinedOf` at
 (`Honest`, which (ii)'s `honest` carries).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.Recursion.OuterZK
 
 open Game Composed ZkView Model Flock ZkEveryCoin ZkLink
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **Under the abort interface, the honest prover is `outExe`.** -/
 theorem honestOut_eq {prover : TableProver} (hP : SelfCheckSilent prover) {C : CoinedSetup}

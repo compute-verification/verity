@@ -1,4 +1,6 @@
-import Properties.NetworkRecords
+module
+
+public import Properties.NetworkRecords
 
 /-!
 # The check without the grid: the proof
@@ -8,6 +10,8 @@ accepted (`egress_noGrid`); an ingress link-window's is the same function's. So 
 the egress grid comparison (`verdicts_noGrid`), and `evaluateNoGrid` refuses where `evaluate` does, and a raw or
 committed egress record besides (`uncertifiedEgress_iff`): `noGridMeans`, `noGridAcceptsMore`.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check (Params LinkWindow manifestSet)

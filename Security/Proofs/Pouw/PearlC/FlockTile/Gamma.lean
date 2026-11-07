@@ -1,5 +1,8 @@
-import Proofs.Pouw.PearlC.FlockTile.Statement
-import Proofs.Pouw.PearlC.HiddenTileGame
+module
+
+public import Definitions.Pouw.Guarantees.PearlCFlockTile
+public import Proofs.Pouw.PearlC.FlockTile.Audit
+public import Proofs.Pouw.PearlC.HiddenTileGame
 
 /-!
 # Pearl-C's γ under C-Flock's hidden audit, conditional on T3 and the binding
@@ -11,7 +14,8 @@ import Proofs.Pouw.PearlC.HiddenTileGame
   `hzk` is discharged there, and v1 under rev1 per tile at 1/1,000, 8192³ keeps 0.36949% under C-Flock's hidden audit
   at W1, given `TTOutTilePearlCDevRev1W1`, T3 and the binding.
 * `Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`: the guarantee
-  `Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192` (`FlockTile.Statement`), which is the last.
+  `Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192` (`Definitions.Pouw.Guarantees.PearlCFlockTile`),
+  which is the last.
 
 Both open obligations are about TileRead, whose Definition and C-Flock soundness are not in Lean yet; the session is a
 parameter (`TileReadSession`). A γ under this audit is cited only beside the theorem that the honest prover, at its stated
@@ -19,6 +23,8 @@ parameter (`TileReadSession`). A γ under this audit is cited only beside the th
 every strategy the honest batch prover induces on a tile's proof game meets the session's `Cls` at every tile whose
 proof game it is. It needs the honest TileRead prover, which is not in Lean yet either.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FlockTile
 

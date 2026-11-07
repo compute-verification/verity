@@ -5,8 +5,8 @@ A window (`CommitWindows`) opens at the first engine step after the engine was i
 again (once it holds ``idle_close_steps`` steps), or after ``window_steps`` steps; each is one Commit, with its own run
 root. The record is the served path's and COMMIT-ARB's one record, `commit.served_record`: the committer carries a
 `served_record.SamplerInputsSource`, which binds each sampled row's seed and position beside the sampled ids and keeps
-the step's rows, and at each close `served_record.Record.absorb` reads the window back from the committed bytes into one
-`RequestRecord` per engine request. A finished request is checked by `Record.check` against what was streamed for it,
+the step's rows, and at each close `served_record.BlockValues.absorb` reads the window back from the committed bytes into one
+`RequestRecord` per engine request. A finished request is checked by `BlockValues.check` against what was streamed for it,
 the seed it carried into the engine (the client's, or the served default, `engine.served_seed`) and how its stream
 ended; one its client aborted ends at the k ids streamed before the abort, its finish ``abort`` with ``k``, and passes when
 those are the committed ids' prefix. The finish says who ended it: ``by`` ``client``, or ``server`` for a request still
@@ -56,7 +56,7 @@ from typing import Any
 
 from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SRW
-from verity_vllm.commit.served_record import Record, base_id, served_rows, window_commit
+from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 
@@ -272,7 +272,7 @@ class CommitWindows:
         self.eos_ids, self.decode = [int(x) for x in eos_ids], decode
         self.known: dict[str, str] = {}                  # every admitted engine id -> its HTTP id; rows past a finish still map
         self.names: dict[str, str] = {}                  # every admitted engine id -> its name in a sealed window (`user`, else HTTP id)
-        self.record = Record(known=self.known)
+        self.record = BlockValues(known=self.known)
         self.window, self.open_s, self.is_open = -1, 0.0, False
         self.step_t: dict[int, float] = {}               # the open window's committed steps -> when their engine step ended
         self.ledgers: dict[str, LiveRequest] = {}
@@ -661,7 +661,7 @@ class CommitWindows:
             self.sealer.submit(run, int(rec.get("committed_bytes") or 0))
 
     def check(self, led: LiveRequest) -> dict[str, Any]:
-        """``led``'s record against what was served: `Record.check` with the seed it carried and its finish."""
+        """``led``'s record against what was served: `BlockValues.check` with the seed it carried and its finish."""
         params = led.ingress.get("params") or {}
         finish = None if led.finish is None else {**led.finish, "max_tokens": params.get("max_tokens"),
                                                   "min_tokens": params.get("min_tokens") or 0, "eos_ids": self.eos_ids}

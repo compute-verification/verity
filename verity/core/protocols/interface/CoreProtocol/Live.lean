@@ -5,14 +5,18 @@ from its evidence (`coins`), the challenger's signed record of them under the ke
 * `Live P`: `P`'s check factors through the coins (`factors`): `check` is `checkAt` at what `coins` reads, and refuses
   with its reason when nothing reads;
 * `Protocol.answerAt`: `Protocol.answer` with `checkAt` at coins `ξ` in place of `check`, the verdict the protocol
-  gives when its challenger drew `ξ`.
+  gives when its challenger flipped `ξ`.
 
-A soundness argument reasons about `answerAt` at the coins the challenger drew. That `answer` accepts only what
+A soundness argument reasons about `answerAt` at the coins the challenger flipped. That `answer` accepts only what
 `answerAt` accepts at the coins its evidence's record shows follows from `factors`; that those are the coins the device
-drew, or the run carries a break, is each reader's property (`Security/Properties`). A protocol without live coins
+flipped, or the run carries a break, is each reader's property (`Security/Properties`). A protocol without live coins
 needs none of this: `Protocol` and `Protocol.answer` are unchanged.
 -/
-import CoreProtocol.Protocol
+module
+
+public import CoreProtocol.Protocol
+
+@[expose] public section
 
 namespace Core
 

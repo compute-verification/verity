@@ -1,7 +1,12 @@
-import Proofs.Pouw.PearlC.DeviceGamma
-import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
-import Definitions.Pouw.Guarantees.PearlC
+module
+
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.DeviceGamma
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.PearlC.TileGamma
+import Proofs.Pouw.Prob
 
 /-!
 # rev1: it asserts less than the granted TT_OUT, and γ from it
@@ -21,6 +26,8 @@ Staged; nothing pinned.
   `_16384`). The granted values were `281273/52340000` (0.53740%) and `536953/103540000` (0.51860%): the credit and
   `W_ref` drop by the same add.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -1,8 +1,10 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditRemote
-import Proofs.Accounting.RateAudit.Conservation
-import Proofs.Accounting.RateAudit.Interactive
-import Proofs.Accounting.RateAudit.Windows
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditRemote
+public import Proofs.Accounting.RateAudit.Conservation
+public import Proofs.Accounting.RateAudit.Interactive
+public import Proofs.Accounting.RateAudit.Windows
 
 /-!
 # Chained passes: the proof
@@ -28,6 +30,8 @@ sequencing (`Chain.pr_pass_le`, with no sample: `pr_coins_le`), and a union boun
 (`GrindChain.exists_unpaid`), and each such chain's pass is bounded by sequencing (`Chain.pr_unpaid_pass_le`): a union
 bound over the passes and the `G` candidates gives `P·G` times the per-pass error (`GrindChain.pr_unpaid_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 
@@ -94,7 +98,7 @@ def Short (A : Chain P N b h ρ S L q r s) (cTag cEnc F fl : ℕ) (j : Fin P)
 /-- **Sequencing**: an event of pass `j`'s device and its game's coins has at most the game's error for the devices
 the earlier passes' coins pick. -/
 theorem pr_pass_le (A : Chain P N b h ρ S L q r s)
-    (Q : InteractiveDevice N b h ρ S L q → Store N b × Coins N b h ρ s → Prop) (ε : ℝ≥0∞) (j : Fin P)
+    (Q : InteractiveProver N b h ρ S L q → Store N b × Coins N b h ρ s → Prop) (ε : ℝ≥0∞) (j : Fin P)
     (hε : ∀ η, pr (Q (A.device j η)) ≤ ε) :
     pr (fun x : Store N b × (Fin P → PassCoins N b h ρ r s) =>
       Q (A.dev j x.2) (x.1, (x.2 j).1, A.oracle j x.1 x.2, (x.2 j).2.2)) ≤ ε := by

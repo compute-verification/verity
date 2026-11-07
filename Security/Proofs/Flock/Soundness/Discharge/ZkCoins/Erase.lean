@@ -1,4 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # The session on committed coins, drawn live, is the live session
@@ -8,6 +12,8 @@ balanced decoders. Then `g` drawn live (`erase`) has `G`'s value for every event
 by `bind`, `interleave`, `batch`, `tagRep` and `coinAt`. So `sessionZKC`, drawn live, has `sessionZK`'s value
 (`er_sessionZKC`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkCoins
 

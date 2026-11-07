@@ -1,7 +1,28 @@
-import Proofs.Flock.Recursive.Firewall
-import Proofs.Flock.Recursive.OuterZK
+module
+
+public import Proofs.Flock.Recursive.Firewall
+public import Proofs.Flock.Recursive.OuterZK
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Recursive.Guarantees
+import Proofs.Flock.Recursive.Private
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.Discharge.Hm.Commit
+import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
 import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
-import Proofs.Flock.Soundness.ZK.HidingAdaptive
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Proof of (ii) at the firewall and V*'s code
@@ -25,6 +46,8 @@ with the inner coins live: message `i` reads the commit strings before it, so T1
   registration's hiding (`regLeaves_hides`), each at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`). The
   simulated view is `private_enc`'s by definition.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 
@@ -68,7 +91,7 @@ open Game
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 theorem firewallPairs_eq {nh : ℕ} (m : (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (y : Fin nh → ZkView.Salt)
     (i : Fin nh) :
@@ -323,7 +346,7 @@ open Game
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **(ii) at the firewall and V*'s code.** -/
 theorem RecursiveFirewallPrivate : Flock.Guarantees.RecursiveFirewallPrivate := by

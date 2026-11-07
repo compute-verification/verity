@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditDeployed
-import Proofs.Accounting.RateAudit.Session
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditDeployed
+public import Proofs.Accounting.RateAudit.Session
 
 /-!
 # The remote bandwidth audit as deployed: the proof
@@ -20,6 +22,8 @@ draws are causal over the monitoring period (`Horizon.pr_causal_le'`, `Horizon.p
 
 **The readings.** `K = ⌊(1 − d̄)·n·P·N⌋` and `K_w = ⌊(1 − d_w)·P·N⌋` turn the counts into the fractions of `γ`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 
@@ -304,7 +308,7 @@ variable {N b h ρ S L q : ℕ}
 
 /-- The interactive device that simulates a pass device, its link carrying `L + X` bits: its side sources also answer
 the completed bits from the store. -/
-noncomputable def toInteractive (A : PIDevice N b h ρ S L q) (X : ℕ) : InteractiveDevice N b h ρ S (L + X) q where
+noncomputable def toInteractive (A : PIDevice N b h ρ S L q) (X : ℕ) : InteractiveProver N b h ρ S (L + X) q where
   state := A.state
   mem := A.mem
   side E R O := PIChip.sideOf E (A.side E R O)
@@ -330,7 +334,7 @@ theorem toInteractive_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (X : ℕ) (tie
     (by unfold completed at hX; omega) hb.2
   refine ⟨?_, fun t => h₂ t, h₄⟩
   have ht : (A.toInteractive X).tags E R O = A.tags E R O := h₁
-  simp only [InteractiveDevice.correct, PIDevice.correct, ht]
+  simp only [InteractiveProver.correct, PIDevice.correct, ht]
 
 namespace TimeBudget
 

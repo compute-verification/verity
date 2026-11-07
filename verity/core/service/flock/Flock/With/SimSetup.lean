@@ -8,9 +8,13 @@ With the oracles of `Flock.With.Log`: forgetting the log gives back setup at `h`
 the log's length is `Stmt.setupCalls h`, the number of SHA-512 calls a run with the counting oracle makes
 (`Stmt.setupLogged_size`).
 -/
-import Flock.With.SimWalk
-import Flock.With.Setup
-import Flock.With.Log
+module
+
+public import Flock.With.Log
+public import Flock.With.Setup
+public import Flock.With.SimWalk
+
+@[expose] public section
 
 namespace Flock.With
 

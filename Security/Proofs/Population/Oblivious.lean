@@ -1,6 +1,9 @@
-import Definitions.Population.Oblivious
+module
+
+public import Definitions.Population.Oblivious
+public import Proofs.Population.Pointer
+import Mathlib.Tactic.Bound.Init
 import Proofs.Population.Determinacy
-import Proofs.Population.Pointer
 
 /-!
 # Which programs are as good as circuits
@@ -34,6 +37,8 @@ A program's trace is a `DynPopulation`. Three facts decide what the population t
   run's own frozen dataflow, with the same wrong units. `wrong_padOver_of_mem`: a run that a full check confines to a
   set `C` is an assignment of the padding over `C`.
 -/
+
+@[expose] public section
 
 namespace Population
 

@@ -1,7 +1,25 @@
-import Proofs.Flock.Soundness.Discharge.PlainReg
-import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
-import Proofs.Flock.Soundness.Discharge.FailClosed.General
-import Proofs.Flock.Soundness.Discharge.FailClosed.Design
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Design
+public import Proofs.Flock.Soundness.Discharge.PlainReg
+public import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
+public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Registered.ReadsX
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 
 /-!
 # The hidden-output headlines without `--zk`, over what `verify --registered F` accepts
@@ -21,6 +39,8 @@ with the registered reads checked:
 At public outputs the check with `--registered F` is the check without it (`ScopeR.scope`), so what `verify --registered
 F` accepts there `verify` accepts (`verifies_of_R`), and `FailClosed.Exec`'s public headlines cover it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 

@@ -1,7 +1,26 @@
-import Proofs.Flock.EndToEnd.Period.Statement
-import Proofs.Flock.EndToEnd.Period.Union
-import Proofs.Flock.EndToEndHidden
-import Proofs.Flock.Soundness.Audit.Pooled
+module
+
+public import Proofs.Flock.EndToEnd.Period.Statement
+public import Proofs.Flock.EndToEnd.Period.Union
+public import Proofs.Flock.EndToEndHidden
+public import Proofs.Flock.Soundness.Audit.Pooled
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Flock.Soundness.Game.Union
 
 /-!
@@ -18,6 +37,8 @@ import Proofs.Flock.Soundness.Game.Union
   `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.drawMiss_le`; `Law.execOS_subset_escape_le`,
   `Law.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

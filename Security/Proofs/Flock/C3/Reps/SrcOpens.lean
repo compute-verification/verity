@@ -1,7 +1,21 @@
-import Proofs.Flock.C3.Reps.Maps
-import Proofs.Flock.C3.Reps.OpensRead
-import Proofs.Flock.VBridge.Family.Opened
-import Proofs.Flock.VBridge.Renumber
+module
+
+public import Proofs.Flock.C3.Reps.Maps
+public import Proofs.Flock.C3.Reps.OpensRead
+public import Proofs.Flock.VBridge.Family.Opened
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The reps' openings at G's values, read from the layers' read wires
@@ -17,6 +31,8 @@ input columns its rows read, so at `W` every position the masked layer has them,
 * `RepMaps.OpenCols` (the hypothesis, `OpenKeys`' form): every `row` and `aux` column of each level's unit is an input
   column a row reads. `srcOpensOfLayers` and `opensReadAt` follow at any `b` whose openings are `ligOfRead`'s.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

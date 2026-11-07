@@ -1,8 +1,28 @@
-import Proofs.Flock.Recursive.Stage
-import Proofs.Flock.VBridge.InnerUnit
-import Proofs.Flock.VBridge.Keyed
-import Proofs.Flock.VBridge.PartS
-import Flock.RecAlgebra
+module
+
+public import Proofs.Flock.Recursive.Stage
+public import Proofs.Flock.VBridge.InnerUnit
+public import Proofs.Flock.VBridge.Keyed
+public import Proofs.Flock.VBridge.PartS
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+import Proofs.Flock.Soundness.Lowering
+import Proofs.Flock.Verifier.HmNets
 
 /-!
 # VBridge G item 3: V*'s port columns, decoded from the registered reads
@@ -30,6 +50,8 @@ to the layer itself. Only `RegAgree` is read: the unit theorems hold at any tran
 Which columns of V*'s units are registered reads, and the registrant's values there, are facts about the concrete V*
 statement; they enter as `RegBit` hypotheses about one unit.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Decode
 

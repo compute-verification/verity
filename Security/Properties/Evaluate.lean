@@ -1,11 +1,9 @@
-import Evaluate.Scalar
-import Evaluate.Fp32
-import Evaluate.Casts
-import Evaluate.TC.Dots
-import Evaluate.Prims
-import Definitions.Core.Scalar
-import Definitions.Core.Fp32
-import Definitions.Core.Prims
+module
+
+public import Evaluate.Prims
+public import Definitions.Core.Scalar
+public import Definitions.Core.Fp32
+public import Definitions.Core.Prims
 
 /-!
 # The evaluator's primitives: each is the definition of `Definitions.Core` it copies
@@ -31,6 +29,8 @@ Mathlib and this module imports none of it: the gates' equality to the Boolean c
 the FP8 and FP4 steps (`Pouw.Fp8Atom`, `Pouw.PearlC.Fp4`) and the PoUW words (`Pouw.NCP`, `Pouw.Basic`,
 `Pouw.PearlC.RowCircuit`).
 -/
+
+@[expose] public section
 
 namespace Properties.Evaluator
 

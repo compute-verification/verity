@@ -1,4 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -17,6 +24,7 @@ namespace FlockSoundness.Discharge.Layout
 
 open Flock Refine
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A drawn statement's public file is the drawn units' over the population's**: setupH loads the population's public
 file and takes `HmRow.drawn` of it at the draw. -/
@@ -33,6 +41,7 @@ theorem setupH_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins :
     subst h
     exact ⟨_, ‹_›, ‹_›⟩
 
+-- `walk_step` down the unfolded do-block that puts the sample in the population's header, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`HmRow.drawn`'s statement**: the draw parses (`D`), its population is the registered one, its instances are the
 proved units, and its `b ‖ c` are the proved units' (a shared-row file keeps its tables). -/
@@ -113,6 +122,7 @@ theorem extract_size {b : ByteArray} {i K O : ℕ} (hb : b.size = HmRow.BC_BYTES
   simp only [ByteArray.size_extract, HmRow.BC_BYTES] at hb ⊢
   omega
 
+-- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **The population's `b ‖ c`**: a public file without shared rows holds `n · np` of them, each 128 bytes long (its
 length check, then consecutive `BC_BYTES`-long pieces of its body). -/
@@ -154,6 +164,7 @@ theorem of_not_not_true {b : Bool} (h : ¬ (!b) = true) : b = true := by simpa u
 theorem of_not_or_not_true {a b : Bool} (h : ¬ (a || !b) = true) : b = true := by
   cases a <;> cases b <;> simp_all
 
+-- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A draw's units are in its population**: `UnitDraw.ofJson` checks the drawn units, and a closure's units, against
 `[0, population)`. -/

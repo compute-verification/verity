@@ -1,5 +1,7 @@
-import VStar.Trace
-import Flock.ProvedScope
+module
+
+public import VStar.Trace
+public import Lean.Data.Json.Parser
 
 /-!
 # `vstar-trace`'s command: the trace assigner's side of its difftest
@@ -11,6 +13,8 @@ words (`full_rows`, `VStar.Trace.fullRows`, which the port lemma's row width rea
 ranges' (`ranges`), hex. `flock-trace` (`verity/ml/flock/live/src/bin/flock-trace.rs`) prints the same of the witness the
 deployed prover assigns; `tests/test_vstar_trace_difftest.py` holds the two equal.
 -/
+
+@[expose] public section
 
 namespace VStar.TraceCli
 

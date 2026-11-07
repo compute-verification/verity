@@ -1,5 +1,7 @@
-import Properties.Nci
-import Mathlib.Tactic
+module
+
+public import Properties.Nci
+public import Mathlib.Tactic
 
 /-!
 # Lemmas about `NciCheck`'s functions
@@ -7,6 +9,8 @@ import Mathlib.Tactic
 Each step of the check, characterized: the folds over a range in `Except`, `gateOf` and `circuitOf`, `thetaStep`,
 `ownerOf` and `divisionOf`, `tally` and `ius`, `failure`, `parse` and `evaluate`.
 -/
+
+@[expose] public section
 
 set_option linter.unusedSimpArgs false
 set_option linter.unnecessarySeqFocus false
@@ -944,7 +948,7 @@ theorem card_filter_fin (N : ℕ) (p : ℕ → Prop) [DecidablePred p] :
 
 /-- The setting of a verdict: the Program's circuit `c`, the checked division `dv`, a declaration `d` the Program lays
 out with the baseline θ names, and a partition `U` that the owners are. -/
-structure Setting (P : Prog) (theta owner : Array Json) (c : GateTable) (dv : Division) (d : Verity.Declaration)
+structure Setting (P : Prog) (theta owner : Array Json) (c : GateTable) (dv : Division) (d : Verity.RegisteredCircuit)
     (n : ℕ) (U : Verity.Partition d.D n) : Prop where
   hc : circuitOf P = .ok c
   hd : divisionOf c theta owner = .ok dv
@@ -954,7 +958,7 @@ structure Setting (P : Prog) (theta owner : Array Json) (c : GateTable) (dv : Di
 
 namespace Setting
 
-variable {P : Prog} {theta owner : Array Json} {c : GateTable} {dv : Division} {d : Verity.Declaration} {n : ℕ}
+variable {P : Prog} {theta owner : Array Json} {c : GateTable} {dv : Division} {d : Verity.RegisteredCircuit} {n : ℕ}
   {U : Verity.Partition d.D n} (S : Setting P theta owner c dv d n U)
 include S
 

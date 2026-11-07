@@ -1,5 +1,39 @@
+module
+
+public import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
+public import Proofs.Flock.Recursive.KSStatement
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Recursive.KSProved
-import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 
 /-!
 # `Pr[acc ∧ ¬R] ≤ κ + t·ε` at the deployed reader
@@ -8,12 +42,16 @@ import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 deployment's dense statements `Pr[acc ∧ ¬R] ≤ κ + t·ε`, `κ` once a session and `ε` once per SHA-512 call of the
 prover's run, under `StrictBirthday` at `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, the named SHA-512
 collision assumptions. `recursiveBitsK_deployed` evaluates it at the deployment's sizes (`SizesAt` at the session's
-brings, call bounds `n, v ≤ 2^32`) with `kappa_eps_deployed`: `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}`.
+brings, call bounds `n, v ≤ 2^32`) with `kappa_eps_deployed`: `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}`. Every
+statement the compiled verifier accepts is at those sizes and calls, so `recursiveBitsK_tight` (`BitsKTight`) states
+the bound with neither as a premise.
 
 Both are stated at the brings `b` (`RecursiveBitsKAt`, `RecursiveBitsKBoundAt`), as `Flock.Guarantees.RecursiveKSAt`
 is, and hold at `deployedB b`. A statement that writes `{ deployedB b with … }` itself carries a `let`, which the
 elaborator's `let`-to-`have` pass type-checks through the deployed records past the heartbeat limit.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

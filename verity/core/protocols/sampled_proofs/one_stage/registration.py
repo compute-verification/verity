@@ -16,7 +16,8 @@
   - R1: the format and protocol are these, the sampling design is the verifier's own expanded over its program and query
     (`draw.derive`, with its own work table for `work`) as canonical bytes, and `window.kind` is `served` or `stand-in`;
   - R2: the program, query and partition digests and the population are the verifier's own (an explicit partition
-    object must be over the verifier's program);
+    object must be over the verifier's program), and for a verifier that reads the registration log's declarations
+    (Declared day), the program is the one circuit the log declares for the window's day;
   - R3: the scheme is the verifier's, and the roots are exactly the ports its layout derives, each exactly
     `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain;
   - R4: the leaf layer is the digest of the verifier's copy, so a null one is refused when the verifier holds one;
@@ -26,8 +27,8 @@
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
-  to the record. That they are the proved rows' is flock-verify's check of the public file (`checkPublic`), stated by
-  the Lean guarantee `FailClosed.flock_verify_public_ties`; flock-verify reads no `scheme` from the header, only META's.
+  to the record. That they are the proved rows' is `flock-verify`'s check of the public file (`checkPublic`), stated by
+  the Lean guarantee `FailClosed.flock_verify_public_ties`; `flock-verify` reads no `scheme` from the header, only META's.
 * **`window`** is provenance, apart from the binding it names (Binding). `kind` says whether the roots are what the integration
   committed as it ran (`served`) or a fresh commitment to values captured from its run (`stand-in`, whose link to the run's
   root is provenance, not proof).
@@ -53,6 +54,13 @@
   under public salts). R7 recomputes its root and refuses a record that names another (`R7-supplied`); it is the
   record's own, so no earlier record holds it. The window is otherwise provenance: R6 takes one record a window, so a
   salt bound to it is one salt a window.
+* **Declared day** (`day`, `declarations`): the prover declares one circuit a day, before the day's first coin, in the
+  registration log (`verity/registration/declaration/v1`, `verity.core.protocols.registration`). The verifier passes
+  the window's day, by its index among the monitoring period's days on its own clock, and the declarations of the log
+  it holds when it draws (its view's `declarations`: `{"day", "program", "blocks"}` each). R2 refuses a day with no
+  declaration (`R2-undeclared`), a day declared twice (`R2-declared-twice`, which the log's own check refuses as
+  `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`), as R2's Lean does
+  (`SampledProofs.Registration.declaredCode`), which `verifier.check` runs beside it.
 * **Binding** (`binding`: `{"stream", "prover"}`, the verifier's stream digest and the identity it registered the prover
   under): R6 also holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them,
   so a tile seeded for one prover's stream is refused in any other's, in the same window or not.
@@ -117,10 +125,16 @@ def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], s
     return rec
 
 
+def record_digest(tag: str, canon: bytes) -> bytes:
+    """The one registration digest, `SHA-512(tag || 0 || canon)`, over a record's canonical bytes: `digest`'s, and PoUW's
+    over the bytes it was handed (`pouw.core_check.digest`)."""
+    return hashlib.sha512(tag.encode() + b"\0" + canon).digest()
+
+
 def digest(rec: Mapping[str, Any]) -> str:
     """`SHA-512(format || 0 || canon(record))`, the record's own format (v1 or v2) as the tag."""
     tag = FORMAT_V2 if rec.get("format") == FORMAT_V2 else FORMAT
-    return hashlib.sha512(tag.encode() + b"\0" + canonical_json(dict(rec))).hexdigest()
+    return record_digest(tag, canonical_json(dict(rec))).hex()
 
 
 def held_roots(log: Iterable[Mapping[str, Any]]) -> dict[tuple[str, str], str]:
@@ -148,7 +162,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           binding: Mapping[str, str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None,
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-          held: Sequence[str] | None = None) -> Verdict:
+          held: Sequence[str] | None = None, day: int | None = None,
+          declarations: Sequence[Mapping[str, Any]] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -172,9 +187,12 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     across windows: `held` (registered values, the weights, say), and its pinned, supplied and output values
     (`registered.domain`).  So a per-window value registered in one window is held to nothing in the next, and a root of
     another window's opens under no domain R7 takes.  Without `window_root`, a value it doesn't hold across windows that
-    the log registered under the domain it takes now is a ValueError (`unwindowed`).  R3 reads `ports` by name, so its codes come in the ports' sorted
+    the log registered under the domain it takes now is a ValueError (`unwindowed`).  `day` and `declarations`: the
+    window's day and the registration log's declarations (Declared day), both or neither; R2 holds the record's program
+    to the day's one declaration (`_declared`).  R3 reads `ports` by name, so its codes come in the ports' sorted
     order whatever order the mapping has, as the Lean port reads them."""
     c = _Collect()
+    days = _declarations(day, declarations)
     v2 = bool(registered)
     sup = G.sources(supplied if supplied is not None else {})
     if supplied is not None and not v2:
@@ -198,7 +216,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     except (P.QueryRefused, ValueError) as e:
         c.fail("R1-law", {"registered": rec["law"], "verifier": f"{dict(law)} does not apply: {e}"})
     else:
-        if not D.same_law(rec["law"], mine):
+        if not D.same_design(rec["law"], mine):
             c.fail("R1-law", {"registered": rec["law"], "verifier": mine})
     if not isinstance(rec["window"], Mapping) or rec["window"].get("kind") not in KINDS:
         c.fail("window", rec["window"])
@@ -221,6 +239,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     else:
         if rec["population"] != population:
             c.fail("R2-population", {"registered": rec["population"], "verifier": population})
+    if days is not None:
+        _declared(c, rec["program"], *days)
     # R3
     if rec["scheme"] != scheme:
         c.fail("R3-scheme", {"registered": rec["scheme"], "verifier": scheme})
@@ -384,6 +404,34 @@ def _pins(pinned: Mapping[str, str] | None, registered: Mapping[str, int], suppl
     return dict(pinned)
 
 
+def _declarations(day: int | None, declarations: Sequence[Mapping[str, Any]] | None
+                  ) -> tuple[int, list[Mapping[str, Any]]] | None:
+    """The window's day and the log's declarations (Declared day): both or neither, the day a natural number and each
+    declaration an object of exactly `blocks`, `day` and `program`, as the registration log's view writes it, with a
+    natural day and a string program; ValueError otherwise."""
+    if day is None and declarations is None:
+        return None
+    if type(day) is not int or day < 0 or not isinstance(declarations, (list, tuple)):
+        raise ValueError(f"a declared day is a natural day and the log's declarations, both or neither: {day!r}, "
+                         f"{declarations!r}")
+    for d in declarations:
+        if not (isinstance(d, Mapping) and set(d) == {"blocks", "day", "program"} and type(d["day"]) is int
+                and d["day"] >= 0 and isinstance(d["program"], str)):
+            raise ValueError(f"a declaration is the registration log view's {{blocks, day, program}}: {d!r}")
+    return day, list(declarations)
+
+
+def _declared(c: _Collect, program: Any, day: int, declarations: Sequence[Mapping[str, Any]]) -> None:
+    """R2's declared day: the window's day has exactly one declaration, and the record's program is its program."""
+    mine = [d for d in declarations if d["day"] == day]
+    if not mine:
+        c.fail("R2-undeclared", {"day": day})
+    elif len(mine) > 1:
+        c.fail("R2-declared-twice", {"day": day, "programs": [d["program"] for d in mine]})
+    elif program != mine[0]["program"]:
+        c.fail("R2-declared", {"day": day, "registered": program, "declared": mine[0]["program"]})
+
+
 def _binding(binding: Mapping[str, str] | None) -> dict[str, str] | None:
     """The verifier's binding: exactly `stream`, its stream's digest (lowercase hex of 64 bytes), and `prover`, the identity
     it registered the prover under (lowercase hex of whole bytes); ValueError otherwise, which the Lean verifier refuses
@@ -482,5 +530,5 @@ def matches_public(rec: Mapping[str, Any], scheme: str, roots: Mapping[str, str]
 registered_entries = G.registered_entries
 
 __all__ = ["FORMAT", "FORMAT_V2", "KINDS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest", "held_roots",
-           "matches_public", "query_digest", "receipt", "record", "refuse_unwindowed", "registered_entries", "unwindowed",
-           "window_domain"]
+           "matches_public", "query_digest", "receipt", "record", "record_digest", "refuse_unwindowed",
+           "registered_entries", "unwindowed", "window_domain"]

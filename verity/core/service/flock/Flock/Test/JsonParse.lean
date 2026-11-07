@@ -5,8 +5,18 @@ refusal string, byte for byte. The cases cover each refusal of the source (its r
 pairs, numbers, nesting, whitespace, multi-byte characters (offsets are bytes) and trailing input. The kernel evaluates
 `parseList` (`decide +kernel`), on a value and on a refusal.
 -/
-import Flock.JsonParse
-import Lean.Data.Json
+module
+
+public import Flock.JsonParse
+public import Lean.Data.Json
+public import Lean.Data.Json.Parser
+public import Lean.Data.Json.Printer
+import all Init.Data.Ord.String
+import all Init.Data.Repr
+meta import Flock.JsonParse
+meta import Lean.Data.Json
+
+@[expose] public section
 
 namespace Flock.Test.JsonParse
 

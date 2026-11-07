@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
-import SampledProofs.Run
+module
+
+public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
+public import SampledProofs.Run
 
 /-!
 # The sampled verifier's sessions at the code with its Lean draw
@@ -17,8 +19,11 @@ and `SessionRuns`, `SessionOpens` and `InnerNumbers` are one statement about the
 And of `SampledProofs.Run.run` itself, `run_decided`: a run that doesn't refuse (a `{"step", "codes"}` object) passed
 the population and R1–R7 (`Registration.check`) under the law of the rule over the population (`Select.Rule.over`), ran
 the draw of record (`Select.select`, under `Select.resolve`'s rule) on the challenger's bytes (`source`) and held it to
-the registration (`Draw.checkDraw`), and its `draw` and `read` are that draw's.
+the registration (`Draw.checkDraw`), and its `draw` and `read` are that draw's (under a two-stage rule, the first
+stage's, with the second stage's after them).
 -/
+
+@[expose] public section
 
 namespace SamplingDeploy
 
@@ -108,7 +113,7 @@ theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
   · left; rw [ite_eq_left_of_eq_true _ _ (eq_true hc)] at h; exact ⟨hc, Except.ok.inj h⟩
   · right; rw [ite_eq_right_of_eq_false _ _ (eq_false hc)] at h; exact ⟨hc, h⟩
 
--- `run` unfolds to 48 decided leaves under one `match` or `if` per step; splitting them takes about 3 minutes.
+-- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
 /-- **A decided run passed its registration and ran the draw of record**: `run` either refuses at a step or passed the
 population, R1–R7 under the law of the rule over it (`Rule.over`, a rate law's `subset:K`), and the draw's own check,
@@ -124,8 +129,8 @@ theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
         ∃ draw rest read, Select.select resolved i.params.verifier.program i.params.verifier.query
             i.params.verifier.workTable i.closure i.source = .ok (draw, rest, read) ∧
           ¬(!(Draw.checkDraw draw (getD i.record "population") derived).isEmpty) = true ∧
-          ∃ receipt symbol pub audit, j = Json.mkObj [("receipt", receipt), ("draw", draw),
-            ("read", Lean.toJson read), ("symbol", symbol), ("public", pub), ("audit", audit)] := by
+          ∃ receipt symbol pub audit staged, j = Json.mkObj ([("receipt", receipt), ("draw", draw),
+            ("read", Lean.toJson read), ("symbol", symbol), ("public", pub), ("audit", audit)] ++ staged) := by
   unfold run at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat'
@@ -135,6 +140,6 @@ theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     | (obtain ⟨_, h⟩ | ⟨_, h⟩ := ite_eq_ok h; exact Or.inl ⟨_, _, h.symm⟩)
     | exact Or.inl ⟨_, _, (Except.ok.inj h).symm⟩
     | exact Or.inr ⟨_, _, _, by assumption, by assumption, by assumption, by assumption, by assumption, _,
-        by assumption, _, by assumption, _, _, _, by assumption, by assumption, _, _, _, _, (Except.ok.inj h).symm⟩
+        by assumption, _, by assumption, _, _, _, by assumption, by assumption, _, _, _, _, _, (Except.ok.inj h).symm⟩
 
 end SampledProofs.Run

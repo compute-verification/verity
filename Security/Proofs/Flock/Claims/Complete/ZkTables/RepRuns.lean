@@ -1,5 +1,50 @@
-import Proofs.Flock.Claims.Complete.ZkTables.View
-import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.InnerGo
+public import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+public import Proofs.Flock.Claims.Complete.ZkTables.Table
+public import Proofs.Flock.Claims.Complete.ZkTables.View
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Goals
+import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
+import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
+import Proofs.Flock.Claims.Complete.Zk.Count
+import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+import Proofs.Flock.Claims.Complete.ZkTables.Trace
 
 /-!
 # The masked prover's rep: its round count
@@ -9,6 +54,8 @@ import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
   rounds. The verifier's masked Ligerito, on the prover's rounds, ends where the prover's did (`Level0.Verifier`),
   which is `k_0 + 7 + 11 R` rounds on (`zkLigeritoWith_pos`), and the inner proof adds four.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

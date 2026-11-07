@@ -1,7 +1,27 @@
+module
+
+public import Proofs.Flock.Recursive.ForkInner
+public import Proofs.Flock.Recursive.ForkLast
+public import Proofs.Flock.Recursive.LeafFinder
+public import Proofs.Flock.Recursive.TopFinder
+public import Proofs.Flock.Recursive.ValueFinder
+public import Proofs.Flock.Recursive.ValueSrc
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Recursive.ForkInnerC
-import Proofs.Flock.Recursive.ValueFinder
-import Proofs.Flock.Recursive.LeafFinder
-import Proofs.Flock.Recursive.SaltFinder
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Recursion: gap 2 off a registrant's row off a verifier's value
@@ -16,6 +36,8 @@ row under the held salts and a held top other than the registered one let the di
 probability `0` (`prob_valueColl_le`, `prob_leafColl_le`, `prob_saltColl_le`, `prob_topCollAt_le`, `prob_regColl_le` at
 no budget).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

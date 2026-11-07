@@ -1,5 +1,6 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Definitions.Pouw.PearlC.DeviceFp4
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 
 /-!
 # TT_OUT-FP4 at W1 (trusted; named assumptions, `Prop`s taken as hypotheses, never `axiom`s)
@@ -29,6 +30,8 @@ assumptions are vacuous. So, unlike the FP8 forms at `NoiseSha512.sha512Sem`, th
 until D-SK and the lines are stated over SHA-512 (an `Fp4Sem` whose lines a W1 program computes with `sha`
 instructions, `pearl_c4.line`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

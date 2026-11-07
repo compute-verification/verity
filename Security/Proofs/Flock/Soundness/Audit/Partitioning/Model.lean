@@ -1,6 +1,7 @@
-import Proofs.Flock.Soundness.Audit.Harm
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Analysis.SpecialFunctions.Log.Base
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Log.Base
+public import Definitions.Flock.Audit.Harm
 
 /-!
 # Optimal partitioning: the model
@@ -25,6 +26,8 @@ the definitions the partitioning guarantees (`Partitioning.Guarantees`) read:
   units, each replay unit with probability `a / b`, then `k` of its proof units uniformly; and `wrongIn B i`, the number
   of proof units of `B` in replay unit `i`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning
 

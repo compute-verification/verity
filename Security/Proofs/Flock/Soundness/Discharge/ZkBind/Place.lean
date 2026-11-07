@@ -1,6 +1,28 @@
-import Proofs.Flock.Soundness.Discharge.Placed
-import Proofs.Flock.Soundness.Discharge.ZkExec
-import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+public import Proofs.Flock.Soundness.Discharge.Const.Inst
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Placed.Setup
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # `--zk` unit placements: each drawn unit's `UnitPlace` from setupH's accept
@@ -18,6 +40,8 @@ e2e-placed's `Placed.Sites.progPlaces_keyProg`, for plans of `TabZK` tables:
   from the sites and the parse alone: its rows the program's (W6 from the parse), its instance the program's own
   (`Const.Prog.instC`), its block the site's (`SitesZ.placeKey_spec`), aliased as Δ copies.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

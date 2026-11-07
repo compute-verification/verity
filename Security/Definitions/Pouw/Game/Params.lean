@@ -1,8 +1,14 @@
-import Definitions.Pouw.Game.Defs
+module
+
+public import Mathlib.Basic.Real.Basic
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # The chain's parameters (trusted)
 -/
+
+@[expose] public section
 
 namespace Pouw
 

@@ -1,5 +1,24 @@
-import Proofs.Pous.P2.Margin
+module
+
+public import Definitions.Pous.Guarantees.P2
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Pous.FreeBlocks.P2
+import Proofs.Pous.P2.Domain
+import Proofs.Pous.P2.Margin
 
 /-!
 # P2's `m1p` families up to `2^64` blocks
@@ -11,6 +30,8 @@ family extends with the same `c` and margin `m`: below `2^23` it is the proved f
 `n = 64`. A store of `2^64` blocks of 2,056 bytes is far beyond any device; the cap is the one a 64-bit block index
 gives.
 -/
+
+@[expose] public section
 
 namespace PousP2Wide
 

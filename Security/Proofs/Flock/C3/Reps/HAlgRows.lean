@@ -1,9 +1,28 @@
+module
+
+public import Proofs.Flock.Recursive.HPortTie
+public import Proofs.Flock.VBridge.Family.PartKeys
+public import Proofs.Flock.C3.Reps.WithReads
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.C3.Reps.AtList
 import Proofs.Flock.C3.Reps.ReadWhole
 import Proofs.Flock.C3.Reps.RoundLinks
-import Proofs.Flock.Recursive.HPortTie
-import Proofs.Flock.VBridge.Family.PartKeys
-import Proofs.Flock.VBridge.Algebra.RingSwitch
+import Proofs.Flock.C3.VStarList.Shape
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.VBridge.Sparse.Unit
 
 /-!
 # The algebra unit reads rep `i`'s `h` at `m<hr>` (`hAlgRows_of_res`)
@@ -22,6 +41,8 @@ decoder tie `AlgebraDecodes` is proved from (`RepMaps.algebraDecodes`):
   (`hOfW`) is `w`'s at `wi`, so the part's row at unit `i` holds it; `hAlgRows_withReads` at the reads' decoder
   (`RepMaps.withReads`, `resZeroAtLH_wRead`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

@@ -1,5 +1,10 @@
-import Proofs.Flock.Soundness.ExecStratified
+module
+
+public import Proofs.Flock.Soundness.ExecStratified
+import Batteries.Tactic.OpenPrivate
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The strata the verifier accepts are a partition's
@@ -19,6 +24,10 @@ on the statement's form: they follow from the verifier accepting.
 * At a work law: `StrataExec.ofJson_work`, `ofJson` checks that `workProblem` finds nothing, and
   `StrataExec.workProblem_chain`, which checks that the ranges, sorted by their starts, chain from `0` to `pop`.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace FlockSoundness.Audit
 
@@ -120,10 +129,7 @@ theorem chain_covers : ∀ {a b : ℕ} {l : List (ℕ × ℕ)}, Chain a b l → 
       exact ⟨r', List.mem_cons_of_mem _ hr', h⟩
 
 theorem qsort_perm {α : Type} (lt : α → α → Bool) (as : Array α) : (as.qsort lt).toList.Perm as.toList := by
-  unfold Array.qsort
-  split
-  · exact List.Perm.refl _
-  · exact Array.perm_iff_toList_perm.1 (DrawExec.sort_perm lt _ _ _ _ _ _ _ rfl)
+  exact Array.perm_iff_toList_perm.1 (DrawExec.qsort_perm as lt)
 
 theorem loopA {β : Type} (l : List β) (b : β → Option (Option String) × Unit → Id (ForInStep (Option (Option String) × Unit)))
     (hb : ∀ i, b i (none, ()) = ForInStep.yield (none, ()) ∨ ∃ m, b i (none, ()) = ForInStep.done (some (some m), ())) :

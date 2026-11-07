@@ -1,5 +1,12 @@
-import Properties.Pous.MemoryChallenger
-import Proofs.Properties.NetworkCertifier.Bytes
+module
+
+public import Properties.Pous.MemoryChallenger
+public import Proofs.Properties.NetworkCertifier.Bytes
+import Mathlib.Algebra.Order.Group.Nat
+import Mathlib.Algebra.Ring.Parity
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.SetLike
 
 /-!
 # The records tree binds its values
@@ -9,6 +16,8 @@ pairs below (`next`, `lev`, `levels_eq`). Every node and leaf is SHA-512 of a fr
 under no collision among the strings two trees hash (`treeStrings`, `CF`) one root gives one level below it, down to the
 leaves, and one leaf one value (`tree_bind`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties.SecurityProofs.Tree
 

@@ -1,5 +1,13 @@
-import Proofs.Flock.VBridge.Algebra.Lincheck
-import Proofs.Flock.Soundness.Refine.Opening
+module
+
+public import Proofs.Flock.Soundness.Refine.Opening
+public import Proofs.Flock.VBridge.Algebra.Eval
+public import Proofs.Flock.VBridge.Algebra.Lincheck
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.VBridge.Algebra.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # V*'s ring-switch residuals are zero only when ring switching's checks pass
@@ -15,6 +23,8 @@ transposes (`Refine.tOf`) of the ring switches.
 a rep: each claim's value check, and Ligerito's `T` (the one w holds, which V*'s last residual compares with the batched
 sum) the verifier's `T` at the rep's coins.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

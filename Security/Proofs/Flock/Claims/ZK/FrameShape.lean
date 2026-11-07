@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameParse
+module
+
+public import Proofs.Flock.Claims.ZK.FrameParse
 
 /-!
 # The frame reads a round's shape alone
@@ -23,6 +25,8 @@ a bytes frame's size, an observe's length and the configuration's layout, and no
   inside the inner proof too (whose `innerOwn` reads the round's values), the same state and offsets.
 -/
 
+@[expose] public section
+
 namespace Claims.ZKServer
 
 open _root_.Flock (V F128)
@@ -35,11 +39,6 @@ def RelM {α β : Type} (f : α → β) : V α → V α → Prop
   | .ok a, .ok b => f a = f b
   | .error e, .error e' => e = e'
   | _, _ => False
-
-theorem relM_refl {α β : Type} (f : α → β) (x : V α) : RelM f x x := by
-  cases x
-  · exact (rfl : _ = _)
-  · exact (rfl : _ = _)
 
 theorem relM_bind {α β γ δ : Type} {f : α → γ} {g : β → δ} {x y : V α} {k k' : α → V β} (h : RelM f x y)
     (hk : ∀ a b, x = .ok a → y = .ok b → f a = f b → RelM g (k a) (k' b)) : RelM g (x >>= k) (y >>= k') := by

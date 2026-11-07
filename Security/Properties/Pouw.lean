@@ -1,4 +1,8 @@
-import PouwWindow
+module
+
+public import PouwWindow
+public import PouwWindow.Draw
+public import PouwWindow.Public
 
 /-!
 # PoUW's window: what its Lean code (`PouwWindow`) does
@@ -17,6 +21,8 @@ one of `K′` indices drawn uniformly without replacement from `[0, N)`, which i
 under its named assumptions (the operating system's bytes are uniform, `UniformRandomBytes`, and the service draws a
 uniform subset of them); nothing here models the draw.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Window
 

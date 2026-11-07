@@ -1,5 +1,7 @@
-import Flock.Derive
-import Proofs.Flock.Soundness.Audit.Circuit
+module
+
+public import Flock.Derive
+public import Proofs.Flock.Soundness.Audit.Circuit
 
 /-!
 # Derived rows compute their circuit type (flat types)
@@ -16,6 +18,8 @@ import Proofs.Flock.Soundness.Audit.Circuit
 Both are about the executed `derive`. The layout's geometry comes from `derive`'s own check (`geoOk`), so nothing here is
 about how `place` arranges groups. Calls, exported inputs and reads come later.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Types
 
@@ -411,9 +415,6 @@ theorem compose_complete {t : CircuitType} {inSplit outSplit : List ℕ} {d : De
 
 theorem nodup_map_of_inj {l : List ℕ} {f : ℕ → ℕ} (hl : l.Nodup) (h : ∀ i ∈ l, ∀ j ∈ l, f i = f j → i = j) :
     (l.map f).Nodup := List.Nodup.map_on h hl
-
-theorem disjoint_of_lt {l m : List ℕ} {B : ℕ} (hl : ∀ x ∈ l, x < B) (hm : ∀ y ∈ m, B ≤ y) : l.Disjoint m :=
-  fun x hx hx' => by have := hl x hx; have := hm x hx'; omega
 
 /-- **`order` has no repeats**: the input bits, the constant, the AND rows and the output copy rows sit at distinct
 columns. -/

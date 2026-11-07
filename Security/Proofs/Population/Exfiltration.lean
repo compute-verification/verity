@@ -1,4 +1,12 @@
-import Definitions.Population.Exfiltration
+module
+
+public import Definitions.Population.Exfiltration
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
 
 /-!
 # Exfiltration before detection: the stopping-time bounds
@@ -17,6 +25,8 @@ leaking what its wrong units' cones carry, and the deployment halting at the fir
   set `B` escape with probability at most `exp (-Σ_{u ∈ B} a u)`; with `a u ≥ κ E(u)` that is detection pressure for the
   leak `Σ_{u ∈ B} E(u)`.
 -/
+
+@[expose] public section
 
 namespace Population.Exfil
 

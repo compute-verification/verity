@@ -32,13 +32,13 @@ from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw.audit import Epoch, Workload, commit_rows, weight_binding, weights_root
+from verity.core.protocols.pouw.audit import HM96_WEIGHTS, Epoch, Workload, commit_rows, weight_binding, weights_root
 from verity.core.protocols.pouw.coins import coin_reason
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import ncp
+from verity.ml.protocols.pouw.schemes import ncp
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.service import Registration
+from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
 
 EGRESS = GridParams(buckets=6, allocation=3, frame_bytes=512)
 INGRESS = GridParams(buckets=6, allocation=2, frame_bytes=512)
@@ -69,19 +69,19 @@ def signed(c: Proxy, p: int, record: bytes, sign=SIGN, context: bytes | None = N
     return sign(active.weights_message(c.bucketer.certifier.link, p, record, ctx))
 
 
-def registration(p: int, ctx: str | None = None, window: dict | None = None) -> Registration:
+def registration(p: int, ctx: str | None = None, window: dict | None = None) -> WindowCommitmentRecord:
     """PoUW's registration of window p as the proof system returns it: a record whose served window's context names p,
     with its receipt and digest."""
     w = {"kind": "served", "context": PS.context("served-zk/test", p, MANIFEST) if ctx is None else ctx, "public": {}}
     record = {"window": w if window is None else window}
-    return Registration(record, R.receipt(record, "test", received=str(p)), R.digest(record), p)
+    return WindowCommitmentRecord(record, R.receipt(record, "test", received=str(p)), R.digest(record), p)
 
 
 def certifier(windows: int, records: dict[int, bytes] | None = None, clock=lambda: 0.0,
               **kwargs) -> tuple[Proxy, dict[int, bytes]]:
     """The certifier with PoUW's reader and the prover's key, the stream its context, on clock `clock`, handed `records`
     by PoUW window before its first tick (`commit_weights`, signed by the prover), after `windows` certifier windows of
-    ingress ticks, and the salts it sampled by PoUW window: what the prover's server receives in-band."""
+    ingress ticks, and the salts it sampled by PoUW window: what the developer's server receives in-band."""
     drawn: dict[int, bytes] = {}
 
     def source(p: int, n: int) -> bytes:
@@ -366,7 +366,7 @@ def setup():
     rng = random.Random(3)
     work = Workload((Matmul(0, Shape(32, 64, 64), 7),))
     rows = [ncp.int7_bytes([rng.randint(-64, 63) for _ in range(64)]) for _ in range(64)]
-    return work, {7: commit_rows(weight_binding(7), -2, rows).commitment.root}
+    return work, {7: commit_rows(weight_binding(7), -2, rows, salt_key=bytes(32), nonce=HM96_WEIGHTS + 7).commitment.root}
 
 
 def test_a_certified_epoch_applies_its_pouw_windows_salt():
@@ -583,9 +583,9 @@ def test_a_certified_window_credits_only_units_that_read_its_salt():
     """`unit_reason` refuses the served-zk window's sampled proof block, `Pc8TileSide`, which reads two committed side rows and
     no salt (it declares no port), and passes the compiled Program's H1 tile (`PouwH1Tile`), whose ``salt`` is a coin
     port over the 64-byte salt; anything without a signature is refused."""
-    from verity.core.protocols.pouw.circuit import compile as C
-    from verity.core.protocols.pouw.circuit import h1tile as H
-    from verity.core.protocols.pouw.circuit import pc8
+    from verity.ml.protocols.pouw.circuit import compile as C
+    from verity.ml.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import pc8
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
 

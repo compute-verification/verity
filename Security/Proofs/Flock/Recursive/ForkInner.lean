@@ -1,5 +1,25 @@
-import Proofs.Flock.Recursive.Registrants
-import Proofs.Flock.Recursive.ForkRuns
+module
+
+public import Proofs.Flock.Recursive.ForkRuns
+public import Proofs.Flock.Recursive.Registrants
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Recursive.Compose
+import Proofs.Flock.Recursive.StageRead
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Recursion: the inner protocol's soundness in fork form, through the recursive audit
@@ -21,6 +41,8 @@ the relabelled transcript is accepted and that some outer outcome the leaf reach
 * `innerAtLeavesV_of_forkOn`: `InnerSoundForkOn` gives `InnerAtLeaves` at V*'s outer proof unless the recursive prover
   has an inner fork (the body of `InnerForkRec`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 
