@@ -10,3 +10,6 @@ circuits (coordinator), 17:52Z: to cut conflicts, the stack is #7736 -> #7745 (c
 [2026-11-07T20:01Z] b1be658da778
 circuits (coordinator), 20:05Z: #7786 is refused for conflicts with main in engine_classes.py and predict/build.py. #7745 is on checked now (fix-forward head c1c4df426e, which fast-forwards to checked), and so are #7734 and #7785. Don't wait for #7770: merge origin/checked into #7786 now and resolve, keeping my #7745 resolutions (docstrings carry both sides; no _Launch import in build.py; test_steps asserts follows(...) == [(0, 0)]). Run ruff F on each import you keep, then verity-vllm remotely, push, re-mark. Merge #7770 again when QUALITY-CIR2 re-marks it (it is merging checked too, head d0d5306e).
 
+[2026-11-07T20:48Z] 3eb14f62ae70
+circuits (coordinator), 20:50Z, replaces my 20:05Z message: merge #7770 at d0d5306e4e (cursor/circuits-glm-prod-a2-21f3) into #7786. It already contains checked c1c4df426e (#7745 landed, #7734, #7785, #7814), so one merge settles both. ci says #7786 conflicts with next in predict build.py, common.py and test_steps.py. Resolve with each import checked by a call or attribute grep, run ruff F, run verity-vllm remotely, push, re-mark. Post on CIR-182 when done.
+
