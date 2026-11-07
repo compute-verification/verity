@@ -353,8 +353,7 @@ The run then judges the policy's checks again on that lock, so whatever else fai
 an axiom beyond the standard three, `sorry`, `native_decide`, a kernel bypass and a malformed lock. `lean_audit.py` also
 repairs the caps, in copies that audit.json's `repaired` names (`raised_unread`, `held_caps`): an unread area over its cap,
 and a lock count over its cap in `tests/test_lean_packages.py` (UNWITNESSED, INLINE), are raised to the count, and such a
-cap more than its `ROOM` above its count is lowered to the count and its room. Anywhere else, a cap more than its `ROOM` above its count only warns (`_held`), so a change that lowers
-a count never fails a check; a count above its cap fails a PR's check. Each repair is one
+cap more than its `ROOM` above its count is lowered to the count and its room. Elsewhere a loose cap only warns (`_held`), so lowering a count never fails a check. Each repair is one
 warning naming the entry and its owner, in audit.json's `bookkeeping`. Drive commits the repaired files with the locks
 (`research.merge.REPAIRED`, held byte for byte to the run's copies), lists the warnings in the lock commit, and tells the
 Lean lane and each owner they name; the next PR fixes them. No other check takes the flag.
