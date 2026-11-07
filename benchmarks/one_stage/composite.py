@@ -21,8 +21,8 @@ composition README's formats), the blobs' paths
 query, digests, profile and reason are private too (a partition's digest is the query), so ``--public-out`` gets only
 ``composite.json``: the product, the composite's commitment, each case's id, params digest (SHA-512 of its canonical
 params) and commitment, what is missing, and each piece's and Lean's outcome (`outcome`: the id, the verdict and the
-refusal's name) and its stated exceptions (`EXCEPTIONS`: the policy's v0, composed in the clear for one run of record
-only); and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT
+refusal's name) and its stated exceptions (`EXCEPTIONS`: the policy's v0, in the clear for the demos' runs until v1's
+private form replaces it); and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT
 ID VERDICT [NAME]`` and ``EXCEPTION LINE`` lines, which it also prints. Before writing them it refuses (exit 65) public bytes that share 64 bytes or more
 with any case's evidence, raw or hex, the cases' commitments and digests aside. The public directory may not be or
 contain the private one.
@@ -63,9 +63,8 @@ COMPONENTS = {
 EXCEPTIONS = {
     "verity/inference-only/v0": (
         "stated exception: verity/inference-only/v0 publishes the declared division and each inference block's profile "
-        "in the clear, composed for the run of record of 28 Oct only (Daniel's ruling, 27 Oct, 9:39 PM PDT: \"Let's run "
-        "it in the clear tonight as a stated exception.\"); v1's private form (division committed under hiding leaves, "
-        "compliance proved, padded profile) replaces it after 15:00Z on 28 Oct"),
+        "in the clear, composed for the demos' runs, remote's and onsite's, rehearsals and runs of record alike, until "
+        "v1's private form (division committed under hiding leaves, compliance proved, padded profile) replaces it"),
 }
 USAGE = 64
 LEAK = 65
